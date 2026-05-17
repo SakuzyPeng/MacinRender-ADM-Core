@@ -141,8 +141,10 @@ int main(int argc, char** argv) {
 
     // ── inspect ───────────────────────────────────────────────────────────────
     std::string inspect_input;
+    bool inspect_xml{false};
     auto* inspect_cmd = app.add_subcommand("inspect", "Print ADM scene metadata from a BWF file");
     inspect_cmd->add_option("file", inspect_input, "ADM BWF/WAV input path")->required();
+    inspect_cmd->add_flag("--xml", inspect_xml, "Dump raw AXML chunk instead of parsed summary");
 
     // ── backends ──────────────────────────────────────────────────────────────
     auto* backends_cmd = app.add_subcommand("backends", "List available renderer backends and supported layouts");
@@ -181,12 +183,21 @@ int main(int argc, char** argv) {
     }
 
     if (*inspect_cmd) {
-        auto result = mradm::io::import_scene(inspect_input);
-        if (!result.has_value()) {
-            spdlog::error("{}", result.error().message);
-            return EXIT_FAILURE;
+        if (inspect_xml) {
+            auto result = mradm::io::get_axml(inspect_input);
+            if (!result.has_value()) {
+                spdlog::error("{}", result.error().message);
+                return EXIT_FAILURE;
+            }
+            fmt::print("{}", result.value());
+        } else {
+            auto result = mradm::io::import_scene(inspect_input);
+            if (!result.has_value()) {
+                spdlog::error("{}", result.error().message);
+                return EXIT_FAILURE;
+            }
+            print_scene(inspect_input, result.value());
         }
-        print_scene(inspect_input, result.value());
     }
 
     if (*backends_cmd) {

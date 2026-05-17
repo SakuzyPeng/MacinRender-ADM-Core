@@ -193,4 +193,17 @@ Result<AdmScene> import_scene(const std::string& path) {
     }
 }
 
+Result<std::string> get_axml(const std::string& path) {
+    try {
+        auto reader = bw64::readFile(path);
+        const auto axml = reader->axmlChunk();
+        if (!axml || axml->size() == 0) {
+            return make_error(ErrorCode::io_error, "axml chunk 缺失或为空", "input=" + path);
+        }
+        return axml_to_string(*axml);
+    } catch (const std::exception& e) {
+        return make_error(ErrorCode::io_error, std::string("读取 AXML 失败：") + e.what(), "input=" + path);
+    }
+}
+
 } // namespace mradm::io

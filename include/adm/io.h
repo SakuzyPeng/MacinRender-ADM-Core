@@ -12,4 +12,7 @@ namespace mradm::io {
 // or the axml chunk is absent.
 Result<AdmScene> import_scene(const std::string& path);
 
+// Return the raw AXML chunk content as a UTF-8 string without parsing.
+Result<std::string> get_axml(const std::string& path);
+
 } // namespace mradm::io
