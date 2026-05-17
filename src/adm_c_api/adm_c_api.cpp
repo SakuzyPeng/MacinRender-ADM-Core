@@ -1,4 +1,5 @@
 #include <memory>
+#include <new>
 #include <string>
 
 #include "adm/c_api.h"
@@ -6,7 +7,7 @@
 
 namespace {
 
-const char* stage_name(mradm::RenderStage stage) {
+const char* stage_name(mradm::RenderStage stage) noexcept {
     switch (stage) {
     case mradm::RenderStage::validating:
         return "validating";
@@ -26,7 +27,7 @@ const char* stage_name(mradm::RenderStage stage) {
     return "unknown";
 }
 
-adm_error_code_t map_error(mradm::ErrorCode code) {
+adm_error_code_t map_error(mradm::ErrorCode code) noexcept {
     switch (code) {
     case mradm::ErrorCode::ok:
         return ADM_ERROR_OK;
@@ -74,15 +75,25 @@ struct adm_render_result_t {
     std::string message;
 };
 
-int adm_api_version_major(void) { return ADM_API_VERSION_MAJOR; }
-int adm_api_version_minor(void) { return ADM_API_VERSION_MINOR; }
-int adm_api_version_patch(void) { return ADM_API_VERSION_PATCH; }
-
-adm_context_t* adm_create_context(void) {
-    return new adm_context_t{};
+int adm_api_version_major(void) noexcept {
+    return ADM_API_VERSION_MAJOR;
+}
+int adm_api_version_minor(void) noexcept {
+    return ADM_API_VERSION_MINOR;
+}
+int adm_api_version_patch(void) noexcept {
+    return ADM_API_VERSION_PATCH;
 }
 
-void adm_destroy_context(adm_context_t* context) {
+adm_context_t* adm_create_context(void) noexcept {
+    try {
+        return new (std::nothrow) adm_context_t{};
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void adm_destroy_context(adm_context_t* context) noexcept {
     delete context;
 }
 
@@ -91,7 +102,7 @@ adm_error_code_t adm_render_file(adm_context_t* context,
                                  const char* output_path,
                                  adm_progress_cb progress,
                                  void* user_data,
-                                 adm_render_result_t** result) {
+                                 adm_render_result_t** result) noexcept {
     if (result != nullptr) {
         *result = nullptr;
     }
@@ -99,40 +110,48 @@ adm_error_code_t adm_render_file(adm_context_t* context,
         return ADM_ERROR_INVALID_ARGUMENT;
     }
 
-    mradm::RenderRequest request;
-    request.input_path = input_path;
-    if (output_path != nullptr && output_path[0] != '\0') {
-        request.output_path = output_path;
-    }
+    try {
+        mradm::RenderRequest request;
+        request.input_path = input_path;
+        if (output_path != nullptr && output_path[0] != '\0') {
+            request.output_path = output_path;
+        }
 
-    CallbackProgressSink progress_sink(progress, user_data);
-    mradm::NullLogSink log_sink;
-    mradm::RenderResult cpp_result = context->service.render(request, progress_sink, log_sink);
+        CallbackProgressSink progress_sink(progress, user_data);
+        mradm::NullLogSink log_sink;
+        mradm::RenderResult cpp_result = context->service.render(request, progress_sink, log_sink);
 
-    auto c_result = std::make_unique<adm_render_result_t>();
-    c_result->code = map_error(cpp_result.error.code);
-    c_result->message = cpp_result.error.message;
-    const adm_error_code_t code = c_result->code;
+        const adm_error_code_t code = map_error(cpp_result.error.code);
+        if (result == nullptr) {
+            return code;
+        }
 
-    if (result != nullptr) {
+        auto c_result = std::unique_ptr<adm_render_result_t>(new (std::nothrow) adm_render_result_t{});
+        if (!c_result) {
+            return ADM_ERROR_INTERNAL;
+        }
+        c_result->code = code;
+        c_result->message = cpp_result.error.message;
         *result = c_result.release();
-    }
 
-    return code;
+        return code;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
 }
 
-void adm_destroy_render_result(adm_render_result_t* result) {
+void adm_destroy_render_result(adm_render_result_t* result) noexcept {
     delete result;
 }
 
-adm_error_code_t adm_render_result_error_code(const adm_render_result_t* result) {
+adm_error_code_t adm_render_result_error_code(const adm_render_result_t* result) noexcept {
     if (result == nullptr) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     return result->code;
 }
 
-const char* adm_render_result_message(const adm_render_result_t* result) {
+const char* adm_render_result_message(const adm_render_result_t* result) noexcept {
     if (result == nullptr) {
         return "result is null";
     }
