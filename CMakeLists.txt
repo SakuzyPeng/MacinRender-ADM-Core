@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 
 project(
     MacinRenderADMCore
-    VERSION 0.1.0
+    VERSION 1.0.0
     DESCRIPTION "Cross-platform ADM rendering core for MacinRender"
     LANGUAGES C CXX
 )
@@ -146,6 +146,10 @@ target_sources(
 )
 
 target_link_libraries(mr_adm_c_api PUBLIC MacinRender::ADMEngine)
+set_target_properties(mr_adm_c_api PROPERTIES
+    VERSION   ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+)
 mr_adm_core_apply_warnings(mr_adm_c_api)
 mr_adm_core_apply_static_analysis(mr_adm_c_api)
 

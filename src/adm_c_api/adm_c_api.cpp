@@ -74,6 +74,10 @@ struct adm_render_result_t {
     std::string message;
 };
 
+int adm_api_version_major(void) { return ADM_API_VERSION_MAJOR; }
+int adm_api_version_minor(void) { return ADM_API_VERSION_MINOR; }
+int adm_api_version_patch(void) { return ADM_API_VERSION_PATCH; }
+
 adm_context_t* adm_create_context(void) {
     return new adm_context_t{};
 }
