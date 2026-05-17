@@ -61,6 +61,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     plan.input_path = request.input_path.string();
     plan.output_path = output_path;
     plan.output_layout = request.options.output_layout.empty() ? "0+2+0" : request.options.output_layout;
+    plan.scene = std::move(*scene_result);
 
     // Render.
     auto render_res = renderer->render(plan, progress, logs);

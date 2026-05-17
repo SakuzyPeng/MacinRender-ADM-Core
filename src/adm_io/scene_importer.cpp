@@ -45,6 +45,60 @@ std::map<std::string, uint16_t> make_uid_map(const std::shared_ptr<bw64::ChnaChu
     return result;
 }
 
+// Extract first AudioBlockFormatObjects from each AudioChannelFormat in the UID's pack format.
+std::vector<SceneObjectBlock> extract_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid) {
+    std::vector<SceneObjectBlock> blocks;
+    const auto pf = uid->getReference<adm::AudioPackFormat>();
+    if (!pf) {
+        return blocks;
+    }
+    for (const auto& cf : pf->getReferences<adm::AudioChannelFormat>()) {
+        const auto raw_blocks = cf->getElements<adm::AudioBlockFormatObjects>();
+        if (raw_blocks.empty()) {
+            continue;
+        }
+        const auto& raw = raw_blocks.front();
+        SceneObjectBlock block;
+
+        if (raw.has<adm::CartesianPosition>()) {
+            const auto& pos = raw.get<adm::CartesianPosition>();
+            block.position.cartesian = true;
+            block.position.x = static_cast<float>(pos.get<adm::X>().get());
+            block.position.y = static_cast<float>(pos.get<adm::Y>().get());
+            block.position.z = static_cast<float>(pos.get<adm::Z>().get());
+        } else if (raw.has<adm::SphericalPosition>()) {
+            const auto& pos = raw.get<adm::SphericalPosition>();
+            block.position.cartesian = false;
+            block.position.azimuth = static_cast<float>(pos.get<adm::Azimuth>().get());
+            block.position.elevation = static_cast<float>(pos.get<adm::Elevation>().get());
+            if (pos.has<adm::Distance>()) {
+                block.position.distance = static_cast<float>(pos.get<adm::Distance>().get());
+            }
+        } else {
+            continue;
+        }
+
+        if (raw.has<adm::Gain>()) {
+            block.gain = static_cast<float>(raw.get<adm::Gain>().get());
+        }
+        if (raw.has<adm::Diffuse>()) {
+            block.diffuse = static_cast<float>(raw.get<adm::Diffuse>().get());
+        }
+        if (raw.has<adm::Width>()) {
+            block.width = static_cast<float>(raw.get<adm::Width>().get());
+        }
+        if (raw.has<adm::Height>()) {
+            block.height = static_cast<float>(raw.get<adm::Height>().get());
+        }
+        if (raw.has<adm::Depth>()) {
+            block.depth = static_cast<float>(raw.get<adm::Depth>().get());
+        }
+
+        blocks.push_back(std::move(block));
+    }
+    return blocks;
+}
+
 std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& doc,
                                          const std::map<std::string, uint16_t>& uid_map) {
     std::vector<SceneObject> result;
@@ -61,7 +115,7 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
             if (it != uid_map.end()) {
                 ref.channel_index = it->second;
             }
-            // channel_index remains nullopt if UID has no CHNA entry
+            ref.blocks = extract_blocks(uid);
             out.tracks.push_back(std::move(ref));
         }
         result.push_back(std::move(out));

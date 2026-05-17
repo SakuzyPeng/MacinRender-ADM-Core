@@ -10,6 +10,7 @@
 #include "adm/logging.h"
 #include "adm/options.h"
 #include "adm/progress.h"
+#include "adm/scene.h"
 
 namespace mradm {
 
@@ -26,11 +27,12 @@ struct RenderResult {
     [[nodiscard]] bool success() const noexcept { return error.ok(); }
 };
 
-// Input to a renderer backend: file paths + output layout identifier.
+// Input to a renderer backend: file paths, output layout, and pre-parsed scene metadata.
 struct RenderPlan {
     std::string input_path;
     std::string output_path;
     std::string output_layout;
+    AdmScene scene; // populated by RenderService; backends must not re-parse ADM
 };
 
 // Abstract renderer backend interface.

@@ -14,11 +14,34 @@ struct SceneInfo {
     std::string file_path;
 };
 
+// Spatial position from one AudioBlockFormatObjects (polar or Cartesian).
+struct SceneBlockPosition {
+    bool cartesian{false};
+    float azimuth{0.0f};
+    float elevation{0.0f};
+    float distance{1.0f};
+    float x{0.0f};
+    float y{0.0f};
+    float z{0.0f};
+};
+
+// Rendering metadata from one AudioBlockFormatObjects.
+struct SceneObjectBlock {
+    SceneBlockPosition position;
+    float gain{1.0f};
+    float diffuse{0.0f};
+    float width{0.0f};
+    float height{0.0f};
+    float depth{0.0f};
+};
+
 // Reference from a SceneObject to a specific track in the BW64 file.
 struct SceneTrackRef {
     // 0-based channel index; nullopt when the UID has no matching CHNA entry.
     std::optional<uint16_t> channel_index;
     std::string track_uid; // AudioTrackUID identifier (e.g. "ATU_00000001")
+    // First block from each AudioChannelFormat under the UID's pack format.
+    std::vector<SceneObjectBlock> blocks;
 };
 
 struct SceneObject {
