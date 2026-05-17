@@ -64,6 +64,19 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_TAG 0.14.0
             GIT_SHALLOW TRUE
         )
+    elseif(package_name STREQUAL "libear")
+        # libear has no official release tags; pin to a known-good commit (2026-04-09).
+        # libear vendors Eigen and xsimd by default; only Boost headers are required externally.
+        set(EAR_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+        set(EAR_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(EAR_USE_INTERNAL_EIGEN ON CACHE BOOL "" FORCE)
+        set(EAR_USE_INTERNAL_XSIMD ON CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            libear
+            GIT_REPOSITORY https://github.com/ebu/libear.git
+            GIT_TAG 2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15
+            GIT_SHALLOW FALSE
+        )
     else()
         message(FATAL_ERROR "Unknown dependency: ${package_name}")
     endif()
@@ -77,3 +90,4 @@ mr_adm_core_find_or_fetch(CLI11 CLI11::CLI11)
 mr_adm_core_find_or_fetch(tl-expected tl::expected)
 mr_adm_core_find_or_fetch(libbw64 libbw64)
 mr_adm_core_find_or_fetch(libadm adm)
+mr_adm_core_find_or_fetch(libear ear)
