@@ -316,6 +316,143 @@ bool verify_direct_speakers_blocks_fixture() {
     return ok;
 }
 
+// Build a document with one Objects AudioObject and one DirectSpeakers AudioObject
+// sharing a single AudioContent and AudioProgramme.
+// Returns {doc, objects_uid_str, ds_uid_str}.
+std::tuple<std::shared_ptr<adm::Document>, std::string, std::string> make_mixed_doc() {
+    auto doc = adm::Document::create();
+
+    // Objects chain
+    auto obj_cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"MixObjCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        obj_cf->add(block);
+    }
+    doc->add(obj_cf);
+    auto obj_pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"MixObjPF"}, adm::TypeDefinition::OBJECTS);
+    obj_pf->addReference(obj_cf);
+    doc->add(obj_pf);
+    auto obj_sf =
+        adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"MixObjSF"}, adm::FormatDefinition::PCM);
+    obj_sf->setReference(obj_cf);
+    doc->add(obj_sf);
+    auto obj_tf =
+        adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"MixObjTF"}, adm::FormatDefinition::PCM);
+    obj_tf->setReference(obj_sf);
+    obj_sf->addReference(obj_tf);
+    doc->add(obj_tf);
+    auto obj_uid = adm::AudioTrackUid::create();
+    obj_uid->setReference(obj_tf);
+    obj_uid->setReference(obj_pf);
+    doc->add(obj_uid);
+    auto obj_audio_object = adm::AudioObject::create(adm::AudioObjectName{"MixObjObject"});
+    obj_audio_object->addReference(obj_uid);
+    doc->add(obj_audio_object);
+
+    // DirectSpeakers chain
+    auto ds_cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"MixDsCF"},
+                                                 adm::TypeDefinition::DIRECT_SPEAKERS);
+    {
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::SphericalSpeakerPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
+        block.add(adm::SpeakerLabel{"M+030"});
+        ds_cf->add(block);
+    }
+    doc->add(ds_cf);
+    auto ds_pf =
+        adm::AudioPackFormat::create(adm::AudioPackFormatName{"MixDsPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    ds_pf->addReference(ds_cf);
+    doc->add(ds_pf);
+    auto ds_sf =
+        adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"MixDsSF"}, adm::FormatDefinition::PCM);
+    ds_sf->setReference(ds_cf);
+    doc->add(ds_sf);
+    auto ds_tf =
+        adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"MixDsTF"}, adm::FormatDefinition::PCM);
+    ds_tf->setReference(ds_sf);
+    ds_sf->addReference(ds_tf);
+    doc->add(ds_tf);
+    auto ds_uid = adm::AudioTrackUid::create();
+    ds_uid->setReference(ds_tf);
+    ds_uid->setReference(ds_pf);
+    doc->add(ds_uid);
+    auto ds_audio_object = adm::AudioObject::create(adm::AudioObjectName{"MixDsObject"});
+    ds_audio_object->addReference(ds_uid);
+    doc->add(ds_audio_object);
+
+    // Shared content and programme
+    auto content = adm::AudioContent::create(adm::AudioContentName{"MixedContent"});
+    content->addReference(obj_audio_object);
+    content->addReference(ds_audio_object);
+    doc->add(content);
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"MixedProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc,
+            adm::formatId(obj_uid->get<adm::AudioTrackUidId>()),
+            adm::formatId(ds_uid->get<adm::AudioTrackUidId>())};
+}
+
+bool verify_mixed_blocks_fixture() {
+    bool ok = true;
+    auto [doc, obj_uid_str, ds_uid_str] = make_mixed_doc();
+    auto path = std::filesystem::temp_directory_path() / "mr_adm_io_mixed_fixture.wav";
+    FileGuard guard{path};
+
+    {
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{
+            bw64::AudioId(1, obj_uid_str, "", ""), bw64::AudioId(2, ds_uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
+        auto writer = bw64::writeFile(path.string(), 2U, 48000U, 24U, chna, axml);
+        (void) writer;
+    }
+
+    auto result = mradm::io::import_scene(path.string());
+    if (!result.has_value()) {
+        std::cerr << "FAIL: mixed import failed: " << result.error().message << "\n";
+        return false;
+    }
+
+    const auto& scene = result.value();
+    ok &= check(scene.objects.size() == 2, "mixed doc: 2 objects");
+
+    const mradm::SceneObject* obj_scene_obj = nullptr;
+    const mradm::SceneObject* ds_scene_obj = nullptr;
+    for (const auto& o : scene.objects) {
+        if (!o.tracks.empty()) {
+            if (!o.tracks[0].blocks.empty()) {
+                obj_scene_obj = &o;
+            }
+            if (!o.tracks[0].ds_blocks.empty()) {
+                ds_scene_obj = &o;
+            }
+        }
+    }
+
+    ok &= check(obj_scene_obj != nullptr, "mixed: Objects object found");
+    if (obj_scene_obj != nullptr) {
+        ok &= check(obj_scene_obj->tracks[0].blocks.size() == 1, "mixed Objects track: 1 block");
+        ok &= check(obj_scene_obj->tracks[0].ds_blocks.empty(), "mixed Objects track: no DS blocks");
+    }
+
+    ok &= check(ds_scene_obj != nullptr, "mixed: DirectSpeakers object found");
+    if (ds_scene_obj != nullptr) {
+        ok &= check(ds_scene_obj->tracks[0].ds_blocks.size() == 1, "mixed DS track: 1 DS block");
+        ok &= check(ds_scene_obj->tracks[0].blocks.empty(), "mixed DS track: no Objects blocks");
+        if (!ds_scene_obj->tracks[0].ds_blocks.empty()) {
+            const auto& blk = ds_scene_obj->tracks[0].ds_blocks[0];
+            const auto has_label =
+                std::ranges::find(blk.speaker_labels, "M+030") != blk.speaker_labels.end();
+            ok &= check(has_label, "mixed DS block: label M+030");
+        }
+    }
+
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -323,6 +460,7 @@ int main() {
     ok &= verify_minimal_fixture();
     ok &= verify_objects_blocks_fixture();
     ok &= verify_direct_speakers_blocks_fixture();
+    ok &= verify_mixed_blocks_fixture();
 
     if (ok) {
         std::cout << "adm_io fixture test passed\n";

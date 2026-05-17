@@ -320,6 +320,157 @@ bool verify_direct_speakers_render_fixture(const mradm::RenderService& service,
     return ok;
 }
 
+// Write a 2-channel BW64 fixture with one Objects UID (ch0) and one DS UID (ch1).
+std::filesystem::path write_mixed_input_fixture(const std::shared_ptr<adm::Document>& doc,
+                                                const std::string& obj_uid_str,
+                                                const std::string& ds_uid_str) {
+    auto path = std::filesystem::temp_directory_path() / "mr_ear_mixed_fixture_in.wav";
+
+    std::ostringstream xml_buf;
+    adm::writeXml(xml_buf, doc);
+
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{
+        bw64::AudioId(1U, obj_uid_str, "", ""), bw64::AudioId(2U, ds_uid_str, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+
+    constexpr uint32_t k_frames = 1000U;
+    auto writer = bw64::writeFile(path.string(), 2U, 48000U, 24U, chna, axml);
+    std::vector<float> samples(static_cast<std::size_t>(k_frames) * 2U);
+    for (uint32_t frame = 0; frame < k_frames; ++frame) {
+        const auto base = static_cast<std::size_t>(frame) * 2U;
+        samples[base] = 0.5F;       // Objects channel
+        samples[base + 1U] = 0.4F; // DS channel
+    }
+    writer->write(samples.data(), k_frames);
+
+    return path;
+}
+
+bool verify_mixed_render_fixture(const mradm::RenderService& service,
+                                 mradm::ProgressSink& progress,
+                                 mradm::LogSink& logs) {
+    // Build mixed Objects (center) + DirectSpeakers (M+030) document.
+    auto doc = adm::Document::create();
+
+    auto obj_cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"MixObjCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        obj_cf->add(block);
+    }
+    doc->add(obj_cf);
+    auto obj_pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"MixObjPF"}, adm::TypeDefinition::OBJECTS);
+    obj_pf->addReference(obj_cf);
+    doc->add(obj_pf);
+    auto obj_sf =
+        adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"MixObjSF"}, adm::FormatDefinition::PCM);
+    obj_sf->setReference(obj_cf);
+    doc->add(obj_sf);
+    auto obj_tf =
+        adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"MixObjTF"}, adm::FormatDefinition::PCM);
+    obj_tf->setReference(obj_sf);
+    obj_sf->addReference(obj_tf);
+    doc->add(obj_tf);
+    auto obj_uid = adm::AudioTrackUid::create();
+    obj_uid->setReference(obj_tf);
+    obj_uid->setReference(obj_pf);
+    doc->add(obj_uid);
+    auto obj_audio_object = adm::AudioObject::create(adm::AudioObjectName{"MixObjObject"});
+    obj_audio_object->addReference(obj_uid);
+    doc->add(obj_audio_object);
+
+    auto ds_cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"MixDsCF"},
+                                                 adm::TypeDefinition::DIRECT_SPEAKERS);
+    {
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::SphericalSpeakerPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
+        block.add(adm::SpeakerLabel{"M+030"});
+        ds_cf->add(block);
+    }
+    doc->add(ds_cf);
+    auto ds_pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"MixDsPF"},
+                                              adm::TypeDefinition::DIRECT_SPEAKERS);
+    ds_pf->addReference(ds_cf);
+    doc->add(ds_pf);
+    auto ds_sf =
+        adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"MixDsSF"}, adm::FormatDefinition::PCM);
+    ds_sf->setReference(ds_cf);
+    doc->add(ds_sf);
+    auto ds_tf =
+        adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"MixDsTF"}, adm::FormatDefinition::PCM);
+    ds_tf->setReference(ds_sf);
+    ds_sf->addReference(ds_tf);
+    doc->add(ds_tf);
+    auto ds_uid = adm::AudioTrackUid::create();
+    ds_uid->setReference(ds_tf);
+    ds_uid->setReference(ds_pf);
+    doc->add(ds_uid);
+    auto ds_audio_object = adm::AudioObject::create(adm::AudioObjectName{"MixDsObject"});
+    ds_audio_object->addReference(ds_uid);
+    doc->add(ds_audio_object);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"MixedContent"});
+    content->addReference(obj_audio_object);
+    content->addReference(ds_audio_object);
+    doc->add(content);
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"MixedProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+    adm::reassignIds(doc);
+
+    const std::string obj_uid_str = adm::formatId(obj_uid->get<adm::AudioTrackUidId>());
+    const std::string ds_uid_str = adm::formatId(ds_uid->get<adm::AudioTrackUidId>());
+
+    const auto in_path = write_mixed_input_fixture(doc, obj_uid_str, ds_uid_str);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_ear_mixed_fixture_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest request;
+    request.input_path = in_path;
+    request.output_path = out_path;
+    request.options.output_layout = "0+2+0";
+    request.options.renderer = mradm::RendererSelection::ear;
+
+    const mradm::RenderResult result = service.render(request, progress, logs);
+    bool ok = true;
+
+    if (!result.success()) {
+        std::cerr << "FAIL: mixed render failed: " << result.error.message << "\n";
+        return false;
+    }
+
+    try {
+        auto out_reader = bw64::readFile(out_path.string());
+
+        ok &= check(out_reader->channels() == 2U, "mixed output: 2 channels");
+        ok &= check(out_reader->sampleRate() == 48000U, "mixed output: sample rate 48000");
+        ok &= check(out_reader->numberOfFrames() == 1000U, "mixed output: 1000 frames");
+
+        if (ok) {
+            const auto n_frames = static_cast<std::size_t>(out_reader->numberOfFrames());
+            std::vector<float> out_samples(n_frames * 2U);
+            out_reader->read(out_samples.data(), out_reader->numberOfFrames());
+
+            double sum_l = 0.0;
+            double sum_r = 0.0;
+            for (std::size_t f = 0; f < n_frames; f++) {
+                sum_l += std::fabs(static_cast<double>(out_samples[2U * f]));
+                sum_r += std::fabs(static_cast<double>(out_samples[(2U * f) + 1U]));
+            }
+            // Objects at center contributes equally to L and R; both must be non-silent.
+            ok &= check(sum_l > 0.0, "mixed output: left channel non-silent");
+            ok &= check(sum_r > 0.0, "mixed output: right channel non-silent");
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "FAIL: cannot open mixed output: " << e.what() << "\n";
+        return false;
+    }
+
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -330,6 +481,7 @@ int main() {
     bool ok = true;
     ok &= verify_objects_render_fixture(service, progress, logs);
     ok &= verify_direct_speakers_render_fixture(service, progress, logs);
+    ok &= verify_mixed_render_fixture(service, progress, logs);
 
     if (ok) {
         std::cout << "ear_render fixture test passed\n";
