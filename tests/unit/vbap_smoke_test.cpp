@@ -161,6 +161,116 @@ bool verify_vbap_render_fixture(ObjectPositionMode mode, const char* label) {
     }
 }
 
+// Verify MDAP spread: Objects with width=0.8 rendered to 4+5+0 (9ch, has
+// elevated speakers at ±45°) should distribute energy to elevated channels.
+// Compare against the same source with width=0 (pure VBAP) to confirm spread
+// actually changes the gain distribution.
+bool verify_mdap_spread_fixture() {
+    // Build two ADM docs: one with width=0 (no spread), one with width=0.8.
+    auto make_doc = [](float width) {
+        auto doc = adm::Document::create();
+        auto cf =
+            adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"MdapCF"}, adm::TypeDefinition::OBJECTS);
+        {
+            adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+            block.set(adm::Gain{1.0F});
+            block.set(adm::Width{width});
+            cf->add(block);
+        }
+        doc->add(cf);
+        auto pf =
+            adm::AudioPackFormat::create(adm::AudioPackFormatName{"MdapPF"}, adm::TypeDefinition::OBJECTS);
+        pf->addReference(cf);
+        doc->add(pf);
+        auto sf =
+            adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"MdapSF"}, adm::FormatDefinition::PCM);
+        sf->setReference(cf);
+        doc->add(sf);
+        auto tf =
+            adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"MdapTF"}, adm::FormatDefinition::PCM);
+        tf->setReference(sf);
+        sf->addReference(tf);
+        doc->add(tf);
+        auto uid = adm::AudioTrackUid::create();
+        uid->setReference(tf);
+        uid->setReference(pf);
+        doc->add(uid);
+        auto obj = adm::AudioObject::create(adm::AudioObjectName{"MdapObj"});
+        obj->addReference(uid);
+        doc->add(obj);
+        auto content = adm::AudioContent::create(adm::AudioContentName{"MdapContent"});
+        content->addReference(obj);
+        doc->add(content);
+        auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"MdapProg"});
+        prog->addReference(content);
+        doc->add(prog);
+        adm::reassignIds(doc);
+        return std::make_pair(doc, adm::formatId(uid->get<adm::AudioTrackUidId>()));
+    };
+
+    auto render_and_sum_elevated = [&](float width, double& out_elevated_sum) -> bool {
+        auto [doc, uid_str] = make_doc(width);
+        auto path_in = std::filesystem::temp_directory_path() / "mr_vbap_mdap_in.wav";
+        FileGuard in_guard{path_in};
+        {
+            std::ostringstream xml_buf;
+            adm::writeXml(xml_buf, doc);
+            auto chna =
+                std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+            auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+            constexpr uint32_t k_frames = 1000U;
+            auto writer = bw64::writeFile(path_in.string(), 1U, 48000U, 24U, chna, axml);
+            std::vector<float> samples(k_frames, 0.5F);
+            writer->write(samples.data(), k_frames);
+        }
+
+        auto path_out = std::filesystem::temp_directory_path() / "mr_vbap_mdap_out.wav";
+        FileGuard out_guard{path_out};
+
+        mradm::RenderRequest req;
+        req.input_path = path_in;
+        req.output_path = path_out;
+        req.options.output_layout = "4+5+0"; // 9ch: ch0-4 horizontal, ch5-8 elevated
+        req.options.renderer = mradm::RendererSelection::saf;
+
+        mradm::RenderService service;
+        mradm::NullProgressSink progress;
+        mradm::NullLogSink logs;
+        const auto res = service.render(req, progress, logs);
+        if (!res.success()) {
+            std::cerr << "FAIL: MDAP render (width=" << width << ") failed: " << res.error.message << "\n";
+            return false;
+        }
+
+        auto reader = bw64::readFile(path_out.string());
+        constexpr std::size_t k_num_ch = 9U;
+        const auto n_frames = static_cast<std::size_t>(reader->numberOfFrames());
+        std::vector<float> samples(n_frames * k_num_ch);
+        reader->read(samples.data(), reader->numberOfFrames());
+
+        // Channels 5–8 are the elevated speakers (elevation ±45°).
+        out_elevated_sum = 0.0;
+        for (std::size_t f = 0; f < n_frames; f++) {
+            for (std::size_t ch = 5U; ch < k_num_ch; ch++) {
+                out_elevated_sum += std::fabs(static_cast<double>(samples[f * k_num_ch + ch]));
+            }
+        }
+        return true;
+    };
+
+    double elevated_no_spread = 0.0;
+    double elevated_with_spread = 0.0;
+    bool ok = true;
+    ok &= render_and_sum_elevated(0.0F, elevated_no_spread);
+    ok &= render_and_sum_elevated(0.8F, elevated_with_spread);
+    if (!ok) {
+        return false;
+    }
+    ok &= check(elevated_with_spread > elevated_no_spread,
+                "MDAP spread: elevated channels get more energy with width=0.8 than width=0");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -209,6 +319,7 @@ int main() {
 
     ok &= verify_vbap_render_fixture(ObjectPositionMode::polar_front, "polar front");
     ok &= verify_vbap_render_fixture(ObjectPositionMode::cartesian_front, "cartesian front");
+    ok &= verify_mdap_spread_fixture();
 
     if (ok) {
         std::cout << "vbap smoke test passed\n";

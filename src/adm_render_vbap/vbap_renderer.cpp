@@ -124,30 +124,47 @@ struct SafFree {
     return {static_cast<float>(std::atan2(-x, y) * rad_to_deg), static_cast<float>(std::atan2(z, xy) * rad_to_deg)};
 }
 
+// Map ADM Objects extent parameters to a MDAP spread angle in degrees.
+// Port of ADMVBAPMDAPSpreadDegreesForExtent from the ObjC renderer.
+// 2D layouts pass spread=0 to the SAF API (2D VBAP has no spread parameter).
+[[nodiscard]] float mdap_spread_degrees(const SceneObjectBlock& block) {
+    const float distance = block.position.cartesian
+        ? std::sqrt(block.position.x * block.position.x +
+                    block.position.y * block.position.y +
+                    block.position.z * block.position.z)
+        : block.position.distance;
+    const float spread_scale = std::clamp(1.0F / std::max(0.4F, distance), 0.5F, 2.5F);
+    const float w = std::max(0.0F, block.width)  * 60.0F * spread_scale;
+    const float h = std::max(0.0F, block.height) * 45.0F * spread_scale;
+    const float d = std::max(0.0F, block.depth)  * 20.0F * spread_scale;
+    return std::min(180.0F, std::sqrt(w * w + h * h + d * d));
+}
+
 [[nodiscard]] Result<std::vector<float>> calculate_vbap_gains(const SceneObjectBlock& block, const LayoutSpec& layout) {
     auto speakers = flatten_layout(layout);
     const auto src = source_direction(block.position);
     std::vector<float> source{src.azimuth, src.elevation};
 
     const auto speaker_count = static_cast<int>(layout.speakers.size());
+    const bool use_3d = !is_2d_layout(layout);
+    const float spread_deg = use_3d ? mdap_spread_degrees(block) : 0.0F;
     int table_size = 0;
     int simplex_count = 0;
     float* raw_table = nullptr;
 
-    if (is_2d_layout(layout)) {
+    if (!use_3d) {
         generateVBAPgainTable2D_srcs(
             source.data(), 1, speakers.data(), speaker_count, &raw_table, &table_size, &simplex_count);
     } else {
         constexpr int k_omit_large_triangles = 1;
         constexpr int k_enable_dummies = 1;
-        constexpr float k_spread_degrees = 0.0F;
         generateVBAPgainTable3D_srcs(source.data(),
                                      1,
                                      speakers.data(),
                                      speaker_count,
                                      k_omit_large_triangles,
                                      k_enable_dummies,
-                                     k_spread_degrees,
+                                     spread_deg,
                                      &raw_table,
                                      &table_size,
                                      &simplex_count);
