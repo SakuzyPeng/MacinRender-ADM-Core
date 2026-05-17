@@ -1,0 +1,8 @@
+# Project-local cppcheck suppressions.
+#
+# Keep this file small. Prefer fixing warnings or narrowing the CMake target
+# scope before adding suppressions here.
+
+missingIncludeSystem
+functionStatic:*/src/adm_core/render_service.cpp
+*:*/_deps/*

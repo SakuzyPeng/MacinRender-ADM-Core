@@ -1,0 +1,30 @@
+# Build outputs
+build/
+cmake-build-*/
+out/
+bin/
+lib/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# Local editor/system files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test and coverage outputs
+Testing/
+*.profraw
+*.profdata
+coverage/
+
+# Local environment
+.env
+.env.*
