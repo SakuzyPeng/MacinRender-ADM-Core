@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -31,6 +32,59 @@ class FileGuard {
   private:
     std::filesystem::path path_;
 };
+
+// Build a full Objects-chain document: uid → packformat → channelformat → block.
+// az=30 el=10 gain=0.8 — non-default values that survive the round-trip through AdmScene.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"TestCF"},
+                                              adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{
+            adm::SphericalPosition{adm::Azimuth{30.0f}, adm::Elevation{10.0f}}};
+        block.set(adm::Gain{0.8f});
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"TestPF"},
+                                           adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    // AudioStreamFormat + AudioTrackFormat are required for a valid UID reference chain.
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"TestSF"},
+                                             adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"TestTF"},
+                                            adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"TestObject"});
+    object->addReference(uid);
+    doc->add(object);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"TestContent"});
+    content->addReference(object);
+    doc->add(content);
+
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"TestProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
 
 // Build a minimal ADM document: 1 programme → 1 content → 1 object → 1 uid.
 // Returns the document and the UID string (e.g. "ATU_00000001") for use in CHNA.
@@ -133,6 +187,42 @@ int main() {
             ok &= check(ref.channel_index.has_value(), "channel_index mapped from CHNA");
             if (ref.channel_index.has_value()) {
                 ok &= check(*ref.channel_index == 0, "channel_index == 0 (first track)");
+            }
+        }
+    }
+
+    // --- Section 2: SceneObjectBlock population from a full Objects chain ---
+    {
+        auto [doc2, uid2_str] = make_objects_doc();
+        auto path2 = std::filesystem::temp_directory_path() / "mr_adm_io_blocks_fixture.wav";
+        FileGuard guard2{path2};
+
+        {
+            auto chna2 = std::make_shared<bw64::ChnaChunk>(
+                std::vector<bw64::AudioId>{bw64::AudioId(1, uid2_str, "", "")});
+            auto axml2 = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc2));
+            auto writer2 = bw64::writeFile(path2.string(), 1U, 48000U, 24U, chna2, axml2);
+            (void) writer2;
+        }
+
+        auto result2 = mradm::io::import_scene(path2.string());
+        if (!result2.has_value()) {
+            std::cerr << "FAIL: objects import failed: " << result2.error().message << "\n";
+            return EXIT_FAILURE;
+        }
+
+        const auto& s2 = result2.value();
+        ok &= check(s2.objects.size() == 1, "objects doc: 1 object");
+        if (s2.objects.size() == 1 && s2.objects[0].tracks.size() == 1) {
+            const auto& track = s2.objects[0].tracks[0];
+            ok &= check(track.blocks.size() == 1, "objects track: 1 block");
+            if (!track.blocks.empty()) {
+                const auto& blk = track.blocks[0];
+                ok &= check(!blk.position.cartesian, "position is polar");
+                ok &= check(std::fabs(blk.position.azimuth - 30.0f) < 0.01f, "azimuth ≈ 30");
+                ok &= check(std::fabs(blk.position.elevation - 10.0f) < 0.01f, "elevation ≈ 10");
+                ok &= check(std::fabs(blk.position.distance - 1.0f) < 0.01f, "distance ≈ 1 (default)");
+                ok &= check(std::fabs(blk.gain - 0.8f) < 0.01f, "gain ≈ 0.8");
             }
         }
     }
