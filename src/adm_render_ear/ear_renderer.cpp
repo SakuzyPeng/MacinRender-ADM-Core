@@ -94,10 +94,10 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         const auto& info = plan.scene.info;
 
         if (info.sample_rate > std::numeric_limits<uint16_t>::max()) {
-            return make_error(ErrorCode::unsupported,
-                              fmt::format("sample rate {} Hz is not supported by the current BW64 writer",
-                                          info.sample_rate),
-                              "input=" + plan.input_path);
+            return make_error(
+                ErrorCode::unsupported,
+                fmt::format("sample rate {} Hz is not supported by the current BW64 writer", info.sample_rate),
+                "input=" + plan.input_path);
         }
 
         const ear::Layout layout = ear::getLayout(layout_id);
@@ -124,9 +124,10 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
                               "input=" + plan.input_path);
         }
 
-        logs.log(LogLevel::info,
-                 "ear",
-                 fmt::format("rendering {} tracks → {} channels, {} frames", gain_matrix.size(), num_out_ch, num_frames));
+        logs.log(
+            LogLevel::info,
+            "ear",
+            fmt::format("rendering {} tracks → {} channels, {} frames", gain_matrix.size(), num_out_ch, num_frames));
 
         progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
 

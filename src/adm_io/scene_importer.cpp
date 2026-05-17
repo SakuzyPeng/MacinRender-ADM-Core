@@ -94,7 +94,7 @@ std::vector<SceneObjectBlock> extract_blocks(const std::shared_ptr<adm::AudioTra
             block.depth = static_cast<float>(raw.get<adm::Depth>().get());
         }
 
-        blocks.push_back(std::move(block));
+        blocks.push_back(block);
     }
     return blocks;
 }
