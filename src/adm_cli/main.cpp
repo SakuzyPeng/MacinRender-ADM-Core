@@ -56,11 +56,10 @@ mradm::RendererSelection parse_renderer(const std::string& value) {
 void print_scene(const std::string& path, const mradm::AdmScene& scene) {
     const auto& info = scene.info;
     fmt::print("File: {}\n", path);
-    fmt::print("  Sample rate: {} Hz  Channels: {}  Frames: {}\n",
-               info.sample_rate, info.num_channels, info.num_frames);
+    fmt::print(
+        "  Sample rate: {} Hz  Channels: {}  Frames: {}\n", info.sample_rate, info.num_channels, info.num_frames);
     if (info.sample_rate > 0 && info.num_frames > 0) {
-        fmt::print("  Duration:    {:.2f} s\n",
-                   static_cast<double>(info.num_frames) / info.sample_rate);
+        fmt::print("  Duration:    {:.2f} s\n", static_cast<double>(info.num_frames) / info.sample_rate);
     }
 
     fmt::print("\nProgrammes ({}):\n", scene.programmes.size());
@@ -92,15 +91,25 @@ void print_scene(const std::string& path, const mradm::AdmScene& scene) {
                 const auto& blk = track.blocks[bi];
                 if (blk.position.cartesian) {
                     fmt::print("      block[{}]: x={:.3f} y={:.3f} z={:.3f}  gain={:.3f}\n",
-                               bi, blk.position.x, blk.position.y, blk.position.z, blk.gain);
+                               bi,
+                               blk.position.x,
+                               blk.position.y,
+                               blk.position.z,
+                               blk.gain);
                 } else {
                     fmt::print("      block[{}]: az={:.1f} el={:.1f} dist={:.3f}  gain={:.3f}\n",
-                               bi, blk.position.azimuth, blk.position.elevation,
-                               blk.position.distance, blk.gain);
+                               bi,
+                               blk.position.azimuth,
+                               blk.position.elevation,
+                               blk.position.distance,
+                               blk.gain);
                 }
-                if (blk.diffuse > 0.0f || blk.width > 0.0f || blk.height > 0.0f) {
+                if (blk.diffuse > 0.0F || blk.width > 0.0F || blk.height > 0.0F) {
                     fmt::print("               diffuse={:.3f}  w={:.1f} h={:.1f} d={:.1f}\n",
-                               blk.diffuse, blk.width, blk.height, blk.depth);
+                               blk.diffuse,
+                               blk.width,
+                               blk.height,
+                               blk.depth);
                 }
             }
         }
