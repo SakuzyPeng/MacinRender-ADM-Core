@@ -111,7 +111,7 @@ mr_adm_core_apply_static_analysis(mr_adm_render_ear)
 
 # ── adm_render_vbap ───────────────────────────────────────────────────────────
 # SAF-backed VBAP renderer. SAF types are confined to this target.
-# M7 skeleton: render() returns unsupported; SAF dependency added in M7.B.
+# M7.B scope: Objects-to-loudspeaker rendering through SAF VBAP.
 
 add_library(mr_adm_render_vbap)
 add_library(MacinRender::ADMRenderVBAP ALIAS mr_adm_render_vbap)
@@ -127,7 +127,14 @@ target_sources(
             include/adm/render_vbap.h
 )
 
-target_link_libraries(mr_adm_render_vbap PUBLIC MacinRender::ADMCore)
+target_link_libraries(mr_adm_render_vbap
+    PUBLIC MacinRender::ADMCore
+    PRIVATE libbw64 saf
+)
+target_include_directories(mr_adm_render_vbap
+    SYSTEM PRIVATE
+        "${saf_SOURCE_DIR}/modules/saf_vbap"
+)
 mr_adm_core_apply_warnings(mr_adm_render_vbap)
 mr_adm_core_apply_static_analysis(mr_adm_render_vbap)
 
@@ -224,7 +231,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_vbap_smoke_tests tests/unit/vbap_smoke_test.cpp)
     target_link_libraries(mr_adm_vbap_smoke_tests
-        PRIVATE MacinRender::ADMEngine MacinRender::ADMRenderVBAP)
+        PRIVATE
+            MacinRender::ADMEngine
+            MacinRender::ADMRenderVBAP
+            libbw64
+            adm
+    )
     mr_adm_core_apply_warnings(mr_adm_vbap_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_vbap_smoke_tests)
     add_test(NAME mr_adm_vbap_smoke_tests COMMAND mr_adm_vbap_smoke_tests)

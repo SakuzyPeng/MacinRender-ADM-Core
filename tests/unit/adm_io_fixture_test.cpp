@@ -333,12 +333,10 @@ std::tuple<std::shared_ptr<adm::Document>, std::string, std::string> make_mixed_
     auto obj_pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"MixObjPF"}, adm::TypeDefinition::OBJECTS);
     obj_pf->addReference(obj_cf);
     doc->add(obj_pf);
-    auto obj_sf =
-        adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"MixObjSF"}, adm::FormatDefinition::PCM);
+    auto obj_sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"MixObjSF"}, adm::FormatDefinition::PCM);
     obj_sf->setReference(obj_cf);
     doc->add(obj_sf);
-    auto obj_tf =
-        adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"MixObjTF"}, adm::FormatDefinition::PCM);
+    auto obj_tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"MixObjTF"}, adm::FormatDefinition::PCM);
     obj_tf->setReference(obj_sf);
     obj_sf->addReference(obj_tf);
     doc->add(obj_tf);
@@ -351,8 +349,8 @@ std::tuple<std::shared_ptr<adm::Document>, std::string, std::string> make_mixed_
     doc->add(obj_audio_object);
 
     // DirectSpeakers chain
-    auto ds_cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"MixDsCF"},
-                                                 adm::TypeDefinition::DIRECT_SPEAKERS);
+    auto ds_cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"MixDsCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
     {
         adm::AudioBlockFormatDirectSpeakers block{
             adm::SphericalSpeakerPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
@@ -364,12 +362,10 @@ std::tuple<std::shared_ptr<adm::Document>, std::string, std::string> make_mixed_
         adm::AudioPackFormat::create(adm::AudioPackFormatName{"MixDsPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
     ds_pf->addReference(ds_cf);
     doc->add(ds_pf);
-    auto ds_sf =
-        adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"MixDsSF"}, adm::FormatDefinition::PCM);
+    auto ds_sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"MixDsSF"}, adm::FormatDefinition::PCM);
     ds_sf->setReference(ds_cf);
     doc->add(ds_sf);
-    auto ds_tf =
-        adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"MixDsTF"}, adm::FormatDefinition::PCM);
+    auto ds_tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"MixDsTF"}, adm::FormatDefinition::PCM);
     ds_tf->setReference(ds_sf);
     ds_sf->addReference(ds_tf);
     doc->add(ds_tf);
@@ -391,9 +387,8 @@ std::tuple<std::shared_ptr<adm::Document>, std::string, std::string> make_mixed_
     doc->add(programme);
 
     adm::reassignIds(doc);
-    return {doc,
-            adm::formatId(obj_uid->get<adm::AudioTrackUidId>()),
-            adm::formatId(ds_uid->get<adm::AudioTrackUidId>())};
+    return {
+        doc, adm::formatId(obj_uid->get<adm::AudioTrackUidId>()), adm::formatId(ds_uid->get<adm::AudioTrackUidId>())};
 }
 
 bool verify_mixed_blocks_fixture() {
@@ -403,8 +398,8 @@ bool verify_mixed_blocks_fixture() {
     FileGuard guard{path};
 
     {
-        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{
-            bw64::AudioId(1, obj_uid_str, "", ""), bw64::AudioId(2, ds_uid_str, "", "")});
+        auto chna = std::make_shared<bw64::ChnaChunk>(
+            std::vector<bw64::AudioId>{bw64::AudioId(1, obj_uid_str, "", ""), bw64::AudioId(2, ds_uid_str, "", "")});
         auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
         auto writer = bw64::writeFile(path.string(), 2U, 48000U, 24U, chna, axml);
         (void) writer;
@@ -444,8 +439,7 @@ bool verify_mixed_blocks_fixture() {
         ok &= check(ds_scene_obj->tracks[0].blocks.empty(), "mixed DS track: no Objects blocks");
         if (!ds_scene_obj->tracks[0].ds_blocks.empty()) {
             const auto& blk = ds_scene_obj->tracks[0].ds_blocks[0];
-            const auto has_label =
-                std::ranges::find(blk.speaker_labels, "M+030") != blk.speaker_labels.end();
+            const auto has_label = std::ranges::find(blk.speaker_labels, "M+030") != blk.speaker_labels.end();
             ok &= check(has_label, "mixed DS block: label M+030");
         }
     }
