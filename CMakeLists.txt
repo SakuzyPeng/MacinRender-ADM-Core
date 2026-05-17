@@ -109,6 +109,28 @@ target_link_libraries(mr_adm_render_ear
 mr_adm_core_apply_warnings(mr_adm_render_ear)
 mr_adm_core_apply_static_analysis(mr_adm_render_ear)
 
+# ── adm_render_vbap ───────────────────────────────────────────────────────────
+# SAF-backed VBAP renderer. SAF types are confined to this target.
+# M7 skeleton: render() returns unsupported; SAF dependency added in M7.B.
+
+add_library(mr_adm_render_vbap)
+add_library(MacinRender::ADMRenderVBAP ALIAS mr_adm_render_vbap)
+
+target_sources(
+    mr_adm_render_vbap
+    PRIVATE
+        src/adm_render_vbap/vbap_renderer.cpp
+    PUBLIC
+        FILE_SET HEADERS
+        BASE_DIRS include
+        FILES
+            include/adm/render_vbap.h
+)
+
+target_link_libraries(mr_adm_render_vbap PUBLIC MacinRender::ADMCore)
+mr_adm_core_apply_warnings(mr_adm_render_vbap)
+mr_adm_core_apply_static_analysis(mr_adm_render_vbap)
+
 # ── adm_engine ────────────────────────────────────────────────────────────────
 # Orchestration layer: implements RenderService, selects backends.
 
@@ -123,7 +145,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP
 )
 mr_adm_core_apply_warnings(mr_adm_engine)
 mr_adm_core_apply_static_analysis(mr_adm_engine)
@@ -199,6 +221,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_io_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_io_fixture_tests)
     add_test(NAME mr_adm_io_fixture_tests COMMAND mr_adm_io_fixture_tests)
+
+    add_executable(mr_adm_vbap_smoke_tests tests/unit/vbap_smoke_test.cpp)
+    target_link_libraries(mr_adm_vbap_smoke_tests
+        PRIVATE MacinRender::ADMEngine MacinRender::ADMRenderVBAP)
+    mr_adm_core_apply_warnings(mr_adm_vbap_smoke_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_vbap_smoke_tests)
+    add_test(NAME mr_adm_vbap_smoke_tests COMMAND mr_adm_vbap_smoke_tests)
 
     # Smoke test: non-existent file → io_error via full engine stack.
     add_executable(mr_adm_ear_smoke_tests tests/unit/ear_render_smoke_test.cpp)

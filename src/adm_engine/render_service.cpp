@@ -5,6 +5,7 @@
 #include "adm/io.h"
 #include "adm/render.h"
 #include "adm/render_ear.h"
+#include "adm/render_vbap.h"
 
 namespace mradm {
 
@@ -48,6 +49,8 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     std::unique_ptr<IRenderer> renderer;
     if (sel == RendererSelection::ear || sel == RendererSelection::automatic) {
         renderer = create_ear_renderer();
+    } else if (sel == RendererSelection::saf) {
+        renderer = create_vbap_renderer();
     } else {
         const auto msg = fmt::format("renderer '{}' is not available in this build", static_cast<int>(sel));
         return {{ErrorCode::unsupported, msg, {}}, std::nullopt, {{LogLevel::error, msg}}};
