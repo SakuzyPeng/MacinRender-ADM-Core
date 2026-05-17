@@ -214,6 +214,22 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_ear_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_ear_fixture_tests)
     add_test(NAME mr_adm_ear_fixture_tests COMMAND mr_adm_ear_fixture_tests)
+
+    if(MR_ADM_CORE_BUILD_CLI)
+        add_executable(mr_adm_cli_smoke_tests tests/unit/adm_cli_smoke_test.cpp)
+        target_compile_definitions(mr_adm_cli_smoke_tests PRIVATE
+            "ADM_EXE_PATH=\"$<TARGET_FILE:adm_exe>\""
+        )
+        target_link_libraries(mr_adm_cli_smoke_tests
+            PRIVATE
+                MacinRender::ADMIo
+                libbw64
+                adm
+        )
+        mr_adm_core_apply_warnings(mr_adm_cli_smoke_tests)
+        mr_adm_core_apply_static_analysis(mr_adm_cli_smoke_tests)
+        add_test(NAME mr_adm_cli_smoke_tests COMMAND mr_adm_cli_smoke_tests)
+    endif()
 endif()
 
 # ── Install ───────────────────────────────────────────────────────────────────
