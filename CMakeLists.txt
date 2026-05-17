@@ -158,6 +158,8 @@ if(MR_ADM_CORE_BUILD_CLI)
         adm_exe
         PRIVATE
             MacinRender::ADMEngine
+            MacinRender::ADMIo
+            MacinRender::ADMRenderEar
             CLI11::CLI11
             spdlog::spdlog
     )
