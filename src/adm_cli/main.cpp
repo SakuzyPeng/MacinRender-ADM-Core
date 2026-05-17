@@ -112,6 +112,25 @@ void print_scene(const std::string& path, const mradm::AdmScene& scene) {
                                blk.depth);
                 }
             }
+            for (std::size_t bi = 0; bi < track.ds_blocks.size(); ++bi) {
+                const auto& blk = track.ds_blocks[bi];
+                fmt::print("      ds_block[{}]: labels=", bi);
+                if (blk.speaker_labels.empty()) {
+                    fmt::print("<none>");
+                } else {
+                    for (std::size_t li = 0; li < blk.speaker_labels.size(); ++li) {
+                        fmt::print("{}{}", li == 0 ? "" : ",", blk.speaker_labels[li]);
+                    }
+                }
+                fmt::print(
+                    "  pack={}  gain={:.3f}\n", blk.pack_format_id.empty() ? "<unset>" : blk.pack_format_id, blk.gain);
+                if (blk.has_position) {
+                    fmt::print("                   az={:.1f} el={:.1f} dist={:.3f}\n",
+                               blk.azimuth,
+                               blk.elevation,
+                               blk.distance);
+                }
+            }
         }
     }
 }

@@ -45,19 +45,9 @@ std::map<std::string, uint16_t> make_uid_map(const std::shared_ptr<bw64::ChnaChu
     return result;
 }
 
-// Extract first AudioBlockFormatObjects from each AudioChannelFormat in the UID's pack format.
-std::vector<SceneObjectBlock> extract_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid) {
-    std::vector<SceneObjectBlock> blocks;
-    const auto pf = uid->getReference<adm::AudioPackFormat>();
-    if (!pf) {
-        return blocks;
-    }
-    for (const auto& cf : pf->getReferences<adm::AudioChannelFormat>()) {
-        const auto raw_blocks = cf->getElements<adm::AudioBlockFormatObjects>();
-        if (raw_blocks.empty()) {
-            continue;
-        }
-        const auto& raw = raw_blocks.front();
+void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat>& cf, SceneTrackRef& ref) {
+    const auto raw_blocks = cf->getElements<adm::AudioBlockFormatObjects>();
+    for (const auto& raw : raw_blocks) {
         SceneObjectBlock block;
 
         if (raw.has<adm::CartesianPosition>()) {
@@ -94,9 +84,59 @@ std::vector<SceneObjectBlock> extract_blocks(const std::shared_ptr<adm::AudioTra
             block.depth = static_cast<float>(raw.get<adm::Depth>().get());
         }
 
-        blocks.push_back(block);
+        ref.blocks.push_back(block);
     }
-    return blocks;
+}
+
+void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat>& cf,
+                                           const std::shared_ptr<adm::AudioPackFormat>& pf,
+                                           SceneTrackRef& ref) {
+    const auto raw_blocks = cf->getElements<adm::AudioBlockFormatDirectSpeakers>();
+    for (const auto& raw : raw_blocks) {
+        SceneDirectSpeakersBlock block;
+
+        if (pf) {
+            block.pack_format_id = adm::formatId(pf->get<adm::AudioPackFormatId>());
+        }
+
+        if (raw.has<adm::SpeakerLabels>()) {
+            for (const auto& label : raw.get<adm::SpeakerLabels>()) {
+                block.speaker_labels.push_back(label.get());
+            }
+        }
+
+        if (raw.has<adm::SphericalSpeakerPosition>()) {
+            const auto& pos = raw.get<adm::SphericalSpeakerPosition>();
+            block.has_position = true;
+            block.azimuth = static_cast<float>(pos.get<adm::Azimuth>().get());
+            block.elevation = static_cast<float>(pos.get<adm::Elevation>().get());
+            if (pos.has<adm::Distance>()) {
+                block.distance = static_cast<float>(pos.get<adm::Distance>().get());
+            }
+        }
+
+        if (raw.has<adm::Gain>()) {
+            block.gain = static_cast<float>(raw.get<adm::Gain>().get());
+        }
+
+        ref.ds_blocks.push_back(std::move(block));
+    }
+}
+
+void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid, SceneTrackRef& ref) {
+    const auto pf = uid->getReference<adm::AudioPackFormat>();
+    if (!pf) {
+        return;
+    }
+
+    for (const auto& cf : pf->getReferences<adm::AudioChannelFormat>()) {
+        const auto type = cf->get<adm::TypeDescriptor>();
+        if (type == adm::TypeDefinition::OBJECTS) {
+            append_objects_blocks_from_cf(cf, ref);
+        } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
+            append_direct_speakers_blocks_from_cf(cf, pf, ref);
+        }
+    }
 }
 
 std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& doc,
@@ -115,7 +155,7 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
             if (it != uid_map.end()) {
                 ref.channel_index = it->second;
             }
-            ref.blocks = extract_blocks(uid);
+            populate_track_blocks(uid, ref);
             out.tracks.push_back(std::move(ref));
         }
         result.push_back(std::move(out));

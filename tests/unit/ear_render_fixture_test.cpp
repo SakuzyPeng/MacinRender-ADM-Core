@@ -1,3 +1,4 @@
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -97,6 +98,76 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc() {
     return {doc, uid_str};
 }
 
+struct DirectSpeakersDoc {
+    std::shared_ptr<adm::Document> doc;
+    std::array<std::string, 2> uids;
+};
+
+struct SpeakerSetup {
+    const char* label;
+    float azimuth;
+};
+
+DirectSpeakersDoc make_direct_speakers_doc() {
+    auto doc = adm::Document::create();
+    std::vector<std::shared_ptr<adm::AudioTrackUid>> uids;
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"DirectSpeakersObject"});
+
+    constexpr std::array<SpeakerSetup, 2> speakers{{{"M+030", 30.0F}, {"M-030", -30.0F}}};
+
+    for (const auto& speaker : speakers) {
+        const auto suffix = std::to_string(uids.size() + 1U);
+        auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DsCF" + suffix},
+                                                  adm::TypeDefinition::DIRECT_SPEAKERS);
+        {
+            adm::AudioBlockFormatDirectSpeakers block{adm::SphericalSpeakerPosition{
+                adm::Azimuth{speaker.azimuth}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
+            block.add(adm::SpeakerLabel{speaker.label});
+            cf->add(block);
+        }
+        doc->add(cf);
+
+        auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"DsPF" + suffix},
+                                               adm::TypeDefinition::DIRECT_SPEAKERS);
+        pf->addReference(cf);
+        doc->add(pf);
+
+        auto sf =
+            adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"DsSF" + suffix}, adm::FormatDefinition::PCM);
+        sf->setReference(cf);
+        doc->add(sf);
+
+        auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"DsTF" + suffix}, adm::FormatDefinition::PCM);
+        tf->setReference(sf);
+        sf->addReference(tf);
+        doc->add(tf);
+
+        auto uid = adm::AudioTrackUid::create();
+        uid->setReference(tf);
+        uid->setReference(pf);
+        doc->add(uid);
+        obj->addReference(uid);
+        uids.push_back(uid);
+    }
+
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"DirectSpeakersContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"DirectSpeakersProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+
+    return {doc,
+            {adm::formatId(uids.at(0)->get<adm::AudioTrackUidId>()),
+             adm::formatId(uids.at(1)->get<adm::AudioTrackUidId>())}};
+}
+
 std::filesystem::path write_input_fixture(const std::string& uid_str, const std::shared_ptr<adm::Document>& doc) {
     auto path = std::filesystem::temp_directory_path() / "mr_ear_fixture_in.wav";
 
@@ -116,9 +187,33 @@ std::filesystem::path write_input_fixture(const std::string& uid_str, const std:
     return path;
 }
 
-} // namespace
+std::filesystem::path write_direct_speakers_input_fixture(const DirectSpeakersDoc& fixture) {
+    auto path = std::filesystem::temp_directory_path() / "mr_ear_ds_fixture_in.wav";
 
-int main() {
+    std::ostringstream xml_buf;
+    adm::writeXml(xml_buf, fixture.doc);
+    const std::string xml_str = xml_buf.str();
+
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{
+        bw64::AudioId(1U, fixture.uids[0], "", ""), bw64::AudioId(2U, fixture.uids[1], "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml_str);
+
+    auto writer = bw64::writeFile(path.string(), 2U, 48000U, 24U, chna, axml);
+    constexpr uint32_t k_frames = 1000U;
+    std::vector<float> samples(static_cast<std::size_t>(k_frames) * 2U);
+    for (uint32_t frame = 0; frame < k_frames; ++frame) {
+        const auto base = static_cast<std::size_t>(frame) * 2U;
+        samples[base] = 0.5F;
+        samples[base + 1U] = 0.25F;
+    }
+    writer->write(samples.data(), k_frames);
+
+    return path;
+}
+
+bool verify_objects_render_fixture(const mradm::RenderService& service,
+                                   mradm::ProgressSink& progress,
+                                   mradm::LogSink& logs) {
     auto [doc, uid_str] = make_objects_doc();
     const auto in_path = write_input_fixture(uid_str, doc);
     FileGuard in_guard{in_path};
@@ -126,26 +221,20 @@ int main() {
     const auto out_path = std::filesystem::temp_directory_path() / "mr_ear_fixture_out.wav";
     FileGuard out_guard{out_path};
 
-    // Render via RenderService (full engine stack)
     mradm::RenderRequest request;
     request.input_path = in_path;
     request.output_path = out_path;
     request.options.output_layout = "0+2+0";
     request.options.renderer = mradm::RendererSelection::ear;
 
-    mradm::RenderService service;
-    mradm::NullProgressSink progress;
-    mradm::NullLogSink logs;
     const mradm::RenderResult result = service.render(request, progress, logs);
-
     bool ok = true;
 
     if (!result.success()) {
         std::cerr << "FAIL: render failed: " << result.error.message << "\n";
-        return EXIT_FAILURE;
+        return false;
     }
 
-    // Open and verify output (use auto: bw64 reader type name is internal)
     try {
         auto out_reader = bw64::readFile(out_path.string());
 
@@ -154,7 +243,6 @@ int main() {
         ok &= check(out_reader->numberOfFrames() == 1000U, "output frame count == 1000");
 
         if (ok) {
-            // Read output samples; verify non-silence and L≈R symmetry for center object.
             const auto n_frames = static_cast<std::size_t>(out_reader->numberOfFrames());
             std::vector<float> out_samples(n_frames * 2U);
             out_reader->read(out_samples.data(), out_reader->numberOfFrames());
@@ -168,14 +256,80 @@ int main() {
             ok &= check(sum_l > 0.0, "left channel is not silent");
             ok &= check(sum_r > 0.0, "right channel is not silent");
 
-            // Center object (az=0) → equal L and R gains (within 5%)
             const double ratio = (sum_l > 0.0) ? (sum_r / sum_l) : 0.0;
             ok &= check(ratio > 0.95 && ratio < 1.05, "L≈R energy for center object");
         }
     } catch (const std::exception& e) {
         std::cerr << "FAIL: cannot open output: " << e.what() << "\n";
-        return EXIT_FAILURE;
+        return false;
     }
+
+    return ok;
+}
+
+bool verify_direct_speakers_render_fixture(const mradm::RenderService& service,
+                                           mradm::ProgressSink& progress,
+                                           mradm::LogSink& logs) {
+    const auto ds_fixture = make_direct_speakers_doc();
+    const auto ds_in_path = write_direct_speakers_input_fixture(ds_fixture);
+    FileGuard ds_in_guard{ds_in_path};
+
+    const auto ds_out_path = std::filesystem::temp_directory_path() / "mr_ear_ds_fixture_out.wav";
+    FileGuard ds_out_guard{ds_out_path};
+
+    mradm::RenderRequest ds_request;
+    ds_request.input_path = ds_in_path;
+    ds_request.output_path = ds_out_path;
+    ds_request.options.output_layout = "0+2+0";
+    ds_request.options.renderer = mradm::RendererSelection::ear;
+
+    const mradm::RenderResult ds_result = service.render(ds_request, progress, logs);
+    bool ok = true;
+
+    if (!ds_result.success()) {
+        std::cerr << "FAIL: DirectSpeakers render failed: " << ds_result.error.message << "\n";
+        return false;
+    }
+
+    try {
+        auto ds_reader = bw64::readFile(ds_out_path.string());
+
+        ok &= check(ds_reader->channels() == 2U, "DS output has 2 channels");
+        ok &= check(ds_reader->sampleRate() == 48000U, "DS output sample rate == 48000");
+        ok &= check(ds_reader->numberOfFrames() == 1000U, "DS output frame count == 1000");
+
+        if (ok) {
+            const auto n_frames = static_cast<std::size_t>(ds_reader->numberOfFrames());
+            std::vector<float> ds_samples(n_frames * 2U);
+            ds_reader->read(ds_samples.data(), ds_reader->numberOfFrames());
+
+            double sum_l = 0.0;
+            double sum_r = 0.0;
+            for (std::size_t f = 0; f < n_frames; f++) {
+                sum_l += std::fabs(static_cast<double>(ds_samples[2U * f]));
+                sum_r += std::fabs(static_cast<double>(ds_samples[(2U * f) + 1U]));
+            }
+            ok &= check(sum_l > 0.0, "DS left channel is not silent");
+            ok &= check(sum_r > 0.0, "DS right channel is not silent");
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "FAIL: cannot open DirectSpeakers output: " << e.what() << "\n";
+        return false;
+    }
+
+    return ok;
+}
+
+} // namespace
+
+int main() {
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+
+    bool ok = true;
+    ok &= verify_objects_render_fixture(service, progress, logs);
+    ok &= verify_direct_speakers_render_fixture(service, progress, logs);
 
     if (ok) {
         std::cout << "ear_render fixture test passed\n";

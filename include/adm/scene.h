@@ -35,13 +35,26 @@ struct SceneObjectBlock {
     float depth{0.0f};
 };
 
+// Rendering metadata from one AudioBlockFormatDirectSpeakers.
+struct SceneDirectSpeakersBlock {
+    std::vector<std::string> speaker_labels;
+    std::string pack_format_id;
+    float azimuth{0.0f};
+    float elevation{0.0f};
+    float distance{1.0f};
+    bool has_position{false};
+    float gain{1.0f};
+};
+
 // Reference from a SceneObject to a specific track in the BW64 file.
 struct SceneTrackRef {
     // 0-based channel index; nullopt when the UID has no matching CHNA entry.
     std::optional<uint16_t> channel_index;
     std::string track_uid; // AudioTrackUID identifier (e.g. "ATU_00000001")
-    // First block from each AudioChannelFormat under the UID's pack format.
+    // Objects blocks from each AudioChannelFormat under the UID's pack format.
     std::vector<SceneObjectBlock> blocks;
+    // DirectSpeakers blocks from each AudioChannelFormat under the UID's pack format.
+    std::vector<SceneDirectSpeakersBlock> ds_blocks;
 };
 
 struct SceneObject {

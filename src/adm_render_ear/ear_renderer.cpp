@@ -21,10 +21,11 @@ struct ChannelGainInfo {
 };
 
 // Build a static gain matrix from pre-parsed scene metadata.
-// Uses the first block from each track; M3/M4 scope: Objects only.
+// Uses imported block metadata from each track; M6 scope: Objects + DirectSpeakers.
 std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear::Layout& layout) {
     std::vector<ChannelGainInfo> result;
-    ear::GainCalculatorObjects calc{layout};
+    ear::GainCalculatorObjects objects_calc{layout};
+    ear::GainCalculatorDirectSpeakers direct_speakers_calc{layout};
     const std::size_t num_out = layout.channels().size();
 
     for (const auto& obj : scene.objects) {
@@ -63,7 +64,34 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
                 info.input_channel = in_ch;
                 info.direct_gains.resize(num_out, 0.0);
                 std::vector<double> diffuse_gains(num_out, 0.0);
-                calc.calculate(meta, info.direct_gains, diffuse_gains);
+                objects_calc.calculate(meta, info.direct_gains, diffuse_gains);
+
+                result.push_back(std::move(info));
+            }
+
+            for (const auto& block : track.ds_blocks) {
+                ear::DirectSpeakersTypeMetadata meta;
+                meta.speakerLabels = block.speaker_labels;
+                if (!block.pack_format_id.empty()) {
+                    meta.audioPackFormatID = block.pack_format_id;
+                }
+                if (block.has_position) {
+                    meta.position = ear::PolarSpeakerPosition{
+                        static_cast<double>(block.azimuth),
+                        static_cast<double>(block.elevation),
+                        static_cast<double>(block.distance),
+                    };
+                }
+
+                ChannelGainInfo info;
+                info.input_channel = in_ch;
+                info.direct_gains.resize(num_out, 0.0);
+                direct_speakers_calc.calculate(meta, info.direct_gains);
+
+                const auto block_gain = static_cast<double>(block.gain);
+                std::ranges::transform(info.direct_gains, info.direct_gains.begin(), [block_gain](double gain) {
+                    return gain * block_gain;
+                });
 
                 result.push_back(std::move(info));
             }
@@ -104,9 +132,8 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         const auto gain_matrix = build_gain_matrix(plan.scene, layout);
 
         if (gain_matrix.empty()) {
-            return make_error(ErrorCode::render_failed,
-                              "no renderable Objects tracks found in ADM document",
-                              "input=" + plan.input_path);
+            return make_error(
+                ErrorCode::render_failed, "no renderable tracks found in ADM document", "input=" + plan.input_path);
         }
 
         const auto num_out_ch = static_cast<uint16_t>(layout.channels().size());
@@ -185,7 +212,7 @@ CapabilityReport ear_capabilities() {
     r.backend_name = "libear";
     r.backend_version = "0.9.0";
     r.supports_objects = true;
-    r.supports_direct_speakers = false;
+    r.supports_direct_speakers = true;
     r.supports_hoa = false;
     r.supported_layouts = {
         {"0+2+0", "Stereo"},
