@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <cstddef>
+#include <limits>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -105,7 +107,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const std::shared_ptr<adm::Docume
                 }
 
                 if (block.has<adm::Gain>()) {
-                    meta.gain = static_cast<double>(block.get<adm::Gain>().get());
+                    meta.gain = block.get<adm::Gain>().get();
                 }
                 if (block.has<adm::Diffuse>()) {
                     meta.diffuse = static_cast<double>(block.get<adm::Diffuse>().get());
@@ -137,9 +139,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const std::shared_ptr<adm::Docume
 class EarRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
-    [[nodiscard]] Result<void> render(const RenderPlan& plan,
-                                      ProgressSink& progress,
-                                      LogSink& logs) override;
+    [[nodiscard]] Result<void> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override;
 };
 
 CapabilityReport EarRenderer::capabilities() const {
@@ -159,9 +159,7 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
 
         const auto axml = reader->axmlChunk();
         if (!axml || axml->size() == 0) {
-            return make_error(ErrorCode::io_error,
-                              "AXML chunk missing or empty",
-                              "input=" + plan.input_path);
+            return make_error(ErrorCode::io_error, "AXML chunk missing or empty", "input=" + plan.input_path);
         }
 
         const std::string xml_str = axml_to_string(*axml);
@@ -182,38 +180,53 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         }
 
         const auto num_out_ch = static_cast<uint16_t>(layout.channels().size());
-        const auto num_in_ch = static_cast<uint16_t>(reader->channels());
+        const auto num_in_ch = reader->channels();
         const auto sample_rate = reader->sampleRate();
         const auto num_frames = reader->numberOfFrames();
 
-        logs.log(LogLevel::info, "ear",
-                 fmt::format("rendering {} tracks → {} channels, {} frames",
-                             gain_matrix.size(), num_out_ch, num_frames));
+        if (sample_rate > std::numeric_limits<uint16_t>::max()) {
+            return make_error(ErrorCode::unsupported,
+                              fmt::format("sample rate {} Hz is not supported by the current BW64 writer", sample_rate),
+                              "input=" + plan.input_path);
+        }
+
+        const auto invalid_channel =
+            std::ranges::find_if(gain_matrix, [num_in_ch](const auto& cg) { return cg.input_channel >= num_in_ch; });
+        if (invalid_channel != gain_matrix.end()) {
+            return make_error(ErrorCode::render_failed,
+                              fmt::format("track channel index {} is outside input channel count {}",
+                                          invalid_channel->input_channel,
+                                          num_in_ch),
+                              "input=" + plan.input_path);
+        }
+
+        logs.log(
+            LogLevel::info,
+            "ear",
+            fmt::format("rendering {} tracks → {} channels, {} frames", gain_matrix.size(), num_out_ch, num_frames));
 
         progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
 
         // libbw64 writeFile takes uint16_t for sampleRate; cast explicitly.
-        auto writer = bw64::writeFile(plan.output_path, num_out_ch,
-                                      static_cast<uint16_t>(sample_rate), uint16_t{24});
+        auto writer = bw64::writeFile(plan.output_path, num_out_ch, static_cast<uint16_t>(sample_rate), uint16_t{24});
 
-        constexpr uint64_t kBlockSize = 1024;
-        std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * kBlockSize);
-        std::vector<float> out_block(static_cast<std::size_t>(num_out_ch) * kBlockSize);
+        constexpr uint64_t k_block_size = 1024;
+        std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
+        std::vector<float> out_block(static_cast<std::size_t>(num_out_ch) * k_block_size);
         uint64_t frames_done = 0;
 
         while (frames_done < num_frames) {
-            const uint64_t frames_now = std::min(kBlockSize, num_frames - frames_done);
+            const uint64_t frames_now = std::min(k_block_size, num_frames - frames_done);
             const std::size_t out_samples = static_cast<std::size_t>(num_out_ch) * frames_now;
 
             reader->read(in_block.data(), frames_now);
-            std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0f);
+            std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
             for (const auto& cg : gain_matrix) {
                 for (std::size_t f = 0; f < frames_now; f++) {
-                    const float in_s = in_block[f * num_in_ch + cg.input_channel];
+                    const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
                     for (std::size_t out_ch = 0; out_ch < num_out_ch; out_ch++) {
-                        out_block[f * num_out_ch + out_ch] +=
-                            in_s * static_cast<float>(cg.direct_gains[out_ch]);
+                        out_block[(f * num_out_ch) + out_ch] += in_s * static_cast<float>(cg.direct_gains[out_ch]);
                     }
                 }
             }
@@ -221,14 +234,12 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
             writer->write(out_block.data(), frames_now);
             frames_done += frames_now;
 
-            const double frac = 0.3 + 0.6 * (static_cast<double>(frames_done) /
-                                              static_cast<double>(num_frames));
+            const double frac = 0.3 + (0.6 * (static_cast<double>(frames_done) / static_cast<double>(num_frames)));
             progress.on_progress({RenderStage::rendering, frac, "rendering"});
         }
 
         progress.on_progress({RenderStage::finished, 1.0, "done"});
-        logs.log(LogLevel::info, "ear",
-                 fmt::format("wrote {} frames to {}", num_frames, plan.output_path));
+        logs.log(LogLevel::info, "ear", fmt::format("wrote {} frames to {}", num_frames, plan.output_path));
 
         return {};
 
@@ -238,9 +249,7 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
                           fmt::format("unsupported output layout '{}': {}", layout_id, e.what()),
                           "layout=" + layout_id);
     } catch (const std::exception& e) {
-        return make_error(ErrorCode::io_error,
-                          std::string("render failed: ") + e.what(),
-                          "input=" + plan.input_path);
+        return make_error(ErrorCode::io_error, std::string("render failed: ") + e.what(), "input=" + plan.input_path);
     }
 }
 

@@ -18,8 +18,7 @@ int main() {
         return EXIT_FAILURE;
     }
     if (result.error.code != mradm::ErrorCode::io_error) {
-        std::cerr << "expected io_error, got code "
-                  << static_cast<int>(result.error.code) << "\n";
+        std::cerr << "expected io_error, got code " << static_cast<int>(result.error.code) << "\n";
         return EXIT_FAILURE;
     }
     if (result.error.message.empty()) {

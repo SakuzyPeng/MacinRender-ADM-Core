@@ -38,9 +38,7 @@ class IRenderer {
   public:
     virtual ~IRenderer() = default;
     [[nodiscard]] virtual CapabilityReport capabilities() const = 0;
-    [[nodiscard]] virtual Result<void> render(const RenderPlan& plan,
-                                              ProgressSink& progress,
-                                              LogSink& logs) = 0;
+    [[nodiscard]] virtual Result<void> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) = 0;
 };
 
 class RenderService {

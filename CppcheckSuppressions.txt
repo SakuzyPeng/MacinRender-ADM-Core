@@ -5,4 +5,5 @@
 
 missingIncludeSystem
 functionStatic:*/src/adm_core/render_service.cpp
+functionStatic:*/src/adm_engine/render_service.cpp
 *:*/_deps/*

@@ -48,32 +48,26 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc() {
     auto doc = adm::Document::create();
 
     // AudioChannelFormat (OBJECTS) with a single block at center position
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"TestCF"},
-                                              adm::TypeDefinition::OBJECTS);
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"TestCF"}, adm::TypeDefinition::OBJECTS);
     {
         // AudioBlockFormatObjects requires a position in its constructor.
-        adm::AudioBlockFormatObjects block{
-            adm::SphericalPosition{adm::Azimuth{0.0f}, adm::Elevation{0.0f}}
-        };
-        block.set(adm::Gain{1.0f});
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::Gain{1.0F});
         cf->add(block);
     }
     doc->add(cf);
 
     // AudioPackFormat (OBJECTS)
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"TestPF"},
-                                           adm::TypeDefinition::OBJECTS);
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"TestPF"}, adm::TypeDefinition::OBJECTS);
     pf->addReference(cf);
     doc->add(pf);
 
     // AudioStreamFormat and AudioTrackFormat (required for complete ADM)
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"TestSF"},
-                                             adm::FormatDefinition::PCM);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"TestSF"}, adm::FormatDefinition::PCM);
     sf->setReference(cf);
     doc->add(sf);
 
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"TestTF"},
-                                            adm::FormatDefinition::PCM);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"TestTF"}, adm::FormatDefinition::PCM);
     tf->setReference(sf);
     sf->addReference(tf);
     doc->add(tf);
@@ -103,23 +97,21 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc() {
     return {doc, uid_str};
 }
 
-std::filesystem::path write_input_fixture(const std::string& uid_str,
-                                          const std::shared_ptr<adm::Document>& doc) {
+std::filesystem::path write_input_fixture(const std::string& uid_str, const std::shared_ptr<adm::Document>& doc) {
     auto path = std::filesystem::temp_directory_path() / "mr_ear_fixture_in.wav";
 
     std::ostringstream xml_buf;
     adm::writeXml(xml_buf, doc);
     const std::string xml_str = xml_buf.str();
 
-    auto chna = std::make_shared<bw64::ChnaChunk>(
-        std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_str);
 
     // 1 channel, 48 kHz, 1 000 frames: 0.5f DC offset for easy energy checking
     auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
-    constexpr uint32_t kFrames = 1000U;
-    std::vector<float> samples(kFrames, 0.5f);
-    writer->write(samples.data(), kFrames);
+    constexpr uint32_t k_frames = 1000U;
+    std::vector<float> samples(k_frames, 0.5F);
+    writer->write(samples.data(), k_frames);
 
     return path;
 }
@@ -171,7 +163,7 @@ int main() {
             double sum_r = 0.0;
             for (std::size_t f = 0; f < n_frames; f++) {
                 sum_l += std::fabs(static_cast<double>(out_samples[2U * f]));
-                sum_r += std::fabs(static_cast<double>(out_samples[2U * f + 1U]));
+                sum_r += std::fabs(static_cast<double>(out_samples[(2U * f) + 1U]));
             }
             ok &= check(sum_l > 0.0, "left channel is not silent");
             ok &= check(sum_r > 0.0, "right channel is not silent");
