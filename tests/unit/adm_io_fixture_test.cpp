@@ -38,29 +38,24 @@ class FileGuard {
 std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc() {
     auto doc = adm::Document::create();
 
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"TestCF"},
-                                              adm::TypeDefinition::OBJECTS);
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"TestCF"}, adm::TypeDefinition::OBJECTS);
     {
-        adm::AudioBlockFormatObjects block{
-            adm::SphericalPosition{adm::Azimuth{30.0f}, adm::Elevation{10.0f}}};
-        block.set(adm::Gain{0.8f});
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{10.0F}}};
+        block.set(adm::Gain{0.8F});
         cf->add(block);
     }
     doc->add(cf);
 
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"TestPF"},
-                                           adm::TypeDefinition::OBJECTS);
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"TestPF"}, adm::TypeDefinition::OBJECTS);
     pf->addReference(cf);
     doc->add(pf);
 
     // AudioStreamFormat + AudioTrackFormat are required for a valid UID reference chain.
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"TestSF"},
-                                             adm::FormatDefinition::PCM);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"TestSF"}, adm::FormatDefinition::PCM);
     sf->setReference(cf);
     doc->add(sf);
 
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"TestTF"},
-                                            adm::FormatDefinition::PCM);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"TestTF"}, adm::FormatDefinition::PCM);
     tf->setReference(sf);
     sf->addReference(tf);
     doc->add(tf);
@@ -198,8 +193,8 @@ int main() {
         FileGuard guard2{path2};
 
         {
-            auto chna2 = std::make_shared<bw64::ChnaChunk>(
-                std::vector<bw64::AudioId>{bw64::AudioId(1, uid2_str, "", "")});
+            auto chna2 =
+                std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid2_str, "", "")});
             auto axml2 = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc2));
             auto writer2 = bw64::writeFile(path2.string(), 1U, 48000U, 24U, chna2, axml2);
             (void) writer2;
@@ -219,10 +214,10 @@ int main() {
             if (!track.blocks.empty()) {
                 const auto& blk = track.blocks[0];
                 ok &= check(!blk.position.cartesian, "position is polar");
-                ok &= check(std::fabs(blk.position.azimuth - 30.0f) < 0.01f, "azimuth ≈ 30");
-                ok &= check(std::fabs(blk.position.elevation - 10.0f) < 0.01f, "elevation ≈ 10");
-                ok &= check(std::fabs(blk.position.distance - 1.0f) < 0.01f, "distance ≈ 1 (default)");
-                ok &= check(std::fabs(blk.gain - 0.8f) < 0.01f, "gain ≈ 0.8");
+                ok &= check(std::fabs(blk.position.azimuth - 30.0F) < 0.01F, "azimuth ≈ 30");
+                ok &= check(std::fabs(blk.position.elevation - 10.0F) < 0.01F, "elevation ≈ 10");
+                ok &= check(std::fabs(blk.position.distance - 1.0F) < 0.01F, "distance ≈ 1 (default)");
+                ok &= check(std::fabs(blk.gain - 0.8F) < 0.01F, "gain ≈ 0.8");
             }
         }
     }
