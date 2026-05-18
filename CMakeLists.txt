@@ -138,6 +138,31 @@ target_include_directories(mr_adm_render_vbap
 mr_adm_core_apply_warnings(mr_adm_render_vbap)
 mr_adm_core_apply_static_analysis(mr_adm_render_vbap)
 
+# ── adm_render_hoa ────────────────────────────────────────────────────────────
+# HOA encode renderer: Objects → HOA bed (ACN/SN3D).
+# Output order is selected via output_layout ("hoa3" = 3rd order, 16ch).
+
+add_library(mr_adm_render_hoa)
+add_library(MacinRender::ADMRenderHOA ALIAS mr_adm_render_hoa)
+
+target_sources(
+    mr_adm_render_hoa
+    PRIVATE
+        src/adm_render_hoa/hoa_renderer.cpp
+    PUBLIC
+        FILE_SET HEADERS
+        BASE_DIRS include
+        FILES
+            include/adm/render_hoa.h
+)
+
+target_link_libraries(mr_adm_render_hoa
+    PUBLIC MacinRender::ADMCore
+    PRIVATE libbw64
+)
+mr_adm_core_apply_warnings(mr_adm_render_hoa)
+mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
+
 # ── adm_engine ────────────────────────────────────────────────────────────────
 # Orchestration layer: implements RenderService, selects backends.
 
@@ -152,7 +177,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA
 )
 mr_adm_core_apply_warnings(mr_adm_engine)
 mr_adm_core_apply_static_analysis(mr_adm_engine)
@@ -259,6 +284,18 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_ear_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_ear_fixture_tests)
     add_test(NAME mr_adm_ear_fixture_tests COMMAND mr_adm_ear_fixture_tests)
+
+    # Fixture test: Objects ADM → HOA3 (16ch, ACN/SN3D) encode.
+    add_executable(mr_adm_hoa_encode_fixture_tests tests/unit/hoa_encode_fixture_test.cpp)
+    target_link_libraries(mr_adm_hoa_encode_fixture_tests
+        PRIVATE
+            MacinRender::ADMEngine
+            libbw64
+            adm
+    )
+    mr_adm_core_apply_warnings(mr_adm_hoa_encode_fixture_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_hoa_encode_fixture_tests)
+    add_test(NAME mr_adm_hoa_encode_fixture_tests COMMAND mr_adm_hoa_encode_fixture_tests)
 
     if(MR_ADM_CORE_BUILD_CLI)
         add_executable(mr_adm_cli_smoke_tests tests/unit/adm_cli_smoke_test.cpp)

@@ -10,6 +10,7 @@ enum class RendererSelection {
     automatic,
     ear,
     saf,
+    hoa,
     apple,
 };
 
