@@ -128,16 +128,13 @@ struct SafFree {
 // Port of ADMVBAPMDAPSpreadDegreesForExtent from the ObjC renderer.
 // 2D layouts pass spread=0 to the SAF API (2D VBAP has no spread parameter).
 [[nodiscard]] float mdap_spread_degrees(const SceneObjectBlock& block) {
-    const float distance = block.position.cartesian
-        ? std::sqrt(block.position.x * block.position.x +
-                    block.position.y * block.position.y +
-                    block.position.z * block.position.z)
-        : block.position.distance;
+    const float distance = block.position.cartesian ? std::hypot(block.position.x, block.position.y, block.position.z)
+                                                    : block.position.distance;
     const float spread_scale = std::clamp(1.0F / std::max(0.4F, distance), 0.5F, 2.5F);
-    const float w = std::max(0.0F, block.width)  * 60.0F * spread_scale;
+    const float w = std::max(0.0F, block.width) * 60.0F * spread_scale;
     const float h = std::max(0.0F, block.height) * 45.0F * spread_scale;
-    const float d = std::max(0.0F, block.depth)  * 20.0F * spread_scale;
-    return std::min(180.0F, std::sqrt(w * w + h * h + d * d));
+    const float d = std::max(0.0F, block.depth) * 20.0F * spread_scale;
+    return std::min(180.0F, std::hypot(w, h, d));
 }
 
 [[nodiscard]] Result<std::vector<float>> calculate_vbap_gains(const SceneObjectBlock& block, const LayoutSpec& layout) {

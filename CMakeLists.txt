@@ -111,7 +111,7 @@ mr_adm_core_apply_static_analysis(mr_adm_render_ear)
 
 # ── adm_render_vbap ───────────────────────────────────────────────────────────
 # SAF-backed VBAP renderer. SAF types are confined to this target.
-# M7.B scope: Objects-to-loudspeaker rendering through SAF VBAP.
+# M7 scope: Objects-to-loudspeaker rendering through SAF VBAP/MDAP.
 
 add_library(mr_adm_render_vbap)
 add_library(MacinRender::ADMRenderVBAP ALIAS mr_adm_render_vbap)
@@ -288,10 +288,10 @@ install(
 )
 
 # mr_adm_c_api and all targets that depend on FetchContent ADM/rendering
-# libraries (libbw64, libadm, libear) cannot be in the export set until those
+# libraries (libbw64, libadm, libear, SAF) cannot be in the export set until those
 # libraries provide proper installed CMake configs. Install binaries and headers
 # without export; re-integrate post-M3.
-install(TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_engine FILE_SET HEADERS)
+install(TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_engine FILE_SET HEADERS)
 
 install(
     EXPORT MacinRenderADMCoreTargets
