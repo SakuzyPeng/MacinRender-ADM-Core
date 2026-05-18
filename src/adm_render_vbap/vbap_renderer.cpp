@@ -2,10 +2,12 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <numbers>
 #include <optional>
 #include <saf_vbap.h>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -23,6 +25,7 @@ namespace {
 struct SpeakerDirection {
     float azimuth{0.0F};
     float elevation{0.0F};
+    std::string label; // BS.2051 label, e.g. "M+030"; empty = unlabelled
 };
 
 struct LayoutSpec {
@@ -43,51 +46,61 @@ struct SafFree {
 };
 
 [[nodiscard]] std::optional<LayoutSpec> layout_spec(std::string_view layout_id) {
+    // Azimuth convention: positive = left (ADM / ITU-R BS.2051).
+    // Labels follow BS.2051 naming: layer prefix (M/U/B) + sign + three-digit angle.
     if (layout_id == "0+2+0") {
-        return LayoutSpec{{{-30.0F, 0.0F}, {30.0F, 0.0F}}};
+        return LayoutSpec{{{-30.0F, 0.0F, "M-030"}, {30.0F, 0.0F, "M+030"}}};
     }
     if (layout_id == "0+5+0") {
-        return LayoutSpec{{{-30.0F, 0.0F}, {30.0F, 0.0F}, {0.0F, 0.0F}, {-110.0F, 0.0F}, {110.0F, 0.0F}}};
+        return LayoutSpec{{{-30.0F, 0.0F, "M-030"},
+                           {30.0F, 0.0F, "M+030"},
+                           {0.0F, 0.0F, "M+000"},
+                           {-110.0F, 0.0F, "M-110"},
+                           {110.0F, 0.0F, "M+110"}}};
     }
     if (layout_id == "0+7+0") {
-        return LayoutSpec{{{-30.0F, 0.0F},
-                           {30.0F, 0.0F},
-                           {0.0F, 0.0F},
-                           {-90.0F, 0.0F},
-                           {90.0F, 0.0F},
-                           {-150.0F, 0.0F},
-                           {150.0F, 0.0F}}};
+        return LayoutSpec{{{-30.0F, 0.0F, "M-030"},
+                           {30.0F, 0.0F, "M+030"},
+                           {0.0F, 0.0F, "M+000"},
+                           {-90.0F, 0.0F, "M-090"},
+                           {90.0F, 0.0F, "M+090"},
+                           {-150.0F, 0.0F, "M-150"},
+                           {150.0F, 0.0F, "M+150"}}};
     }
     if (layout_id == "4+5+0") {
-        return LayoutSpec{{{-30.0F, 0.0F},
-                           {30.0F, 0.0F},
-                           {0.0F, 0.0F},
-                           {-110.0F, 0.0F},
-                           {110.0F, 0.0F},
-                           {-45.0F, 45.0F},
-                           {45.0F, 45.0F},
-                           {-135.0F, 45.0F},
-                           {135.0F, 45.0F}}};
+        return LayoutSpec{{{-30.0F, 0.0F, "M-030"},
+                           {30.0F, 0.0F, "M+030"},
+                           {0.0F, 0.0F, "M+000"},
+                           {-110.0F, 0.0F, "M-110"},
+                           {110.0F, 0.0F, "M+110"},
+                           {-45.0F, 45.0F, "U-045"},
+                           {45.0F, 45.0F, "U+045"},
+                           {-135.0F, 45.0F, "U-135"},
+                           {135.0F, 45.0F, "U+135"}}};
     }
     if (layout_id == "4+7+0") {
-        return LayoutSpec{{{-30.0F, 0.0F},
-                           {30.0F, 0.0F},
-                           {0.0F, 0.0F},
-                           {-90.0F, 0.0F},
-                           {90.0F, 0.0F},
-                           {-150.0F, 0.0F},
-                           {150.0F, 0.0F},
-                           {-45.0F, 45.0F},
-                           {45.0F, 45.0F},
-                           {-135.0F, 45.0F},
-                           {135.0F, 45.0F}}};
+        return LayoutSpec{{{-30.0F, 0.0F, "M-030"},
+                           {30.0F, 0.0F, "M+030"},
+                           {0.0F, 0.0F, "M+000"},
+                           {-90.0F, 0.0F, "M-090"},
+                           {90.0F, 0.0F, "M+090"},
+                           {-150.0F, 0.0F, "M-150"},
+                           {150.0F, 0.0F, "M+150"},
+                           {-45.0F, 45.0F, "U-045"},
+                           {45.0F, 45.0F, "U+045"},
+                           {-135.0F, 45.0F, "U-135"},
+                           {135.0F, 45.0F, "U+135"}}};
     }
     if (layout_id == "9+10+3") {
-        return LayoutSpec{{{-30.0F, 0.0F},   {30.0F, 0.0F},    {0.0F, 0.0F},    {-90.0F, 0.0F},   {90.0F, 0.0F},
-                           {-150.0F, 0.0F},  {150.0F, 0.0F},   {180.0F, 0.0F},  {-30.0F, 30.0F},  {30.0F, 30.0F},
-                           {0.0F, 30.0F},    {-90.0F, 30.0F},  {90.0F, 30.0F},  {-150.0F, 30.0F}, {150.0F, 30.0F},
-                           {180.0F, 30.0F},  {-30.0F, -30.0F}, {30.0F, -30.0F}, {0.0F, -30.0F},   {-110.0F, -30.0F},
-                           {110.0F, -30.0F}, {180.0F, -30.0F}}};
+        // ITU-R BS.2159 22.2: labels follow BS.2051 layer/azimuth convention.
+        return LayoutSpec{{{-30.0F, 0.0F, "M-030"},   {30.0F, 0.0F, "M+030"},    {0.0F, 0.0F, "M+000"},
+                           {-90.0F, 0.0F, "M-090"},   {90.0F, 0.0F, "M+090"},    {-150.0F, 0.0F, "M-150"},
+                           {150.0F, 0.0F, "M+150"},   {180.0F, 0.0F, "M+180"},   {-30.0F, 30.0F, "U-030"},
+                           {30.0F, 30.0F, "U+030"},   {0.0F, 30.0F, "U+000"},    {-90.0F, 30.0F, "U-090"},
+                           {90.0F, 30.0F, "U+090"},   {-150.0F, 30.0F, "U-150"}, {150.0F, 30.0F, "U+150"},
+                           {180.0F, 30.0F, "U+180"},  {-30.0F, -30.0F, "B-030"}, {30.0F, -30.0F, "B+030"},
+                           {0.0F, -30.0F, "B+000"},   {-110.0F, -30.0F, "B-110"},{110.0F, -30.0F, "B+110"},
+                           {180.0F, -30.0F, "B+180"}}};
     }
     return std::nullopt;
 }
@@ -105,6 +118,24 @@ struct SafFree {
         result.push_back(speaker.elevation);
     }
     return result;
+}
+
+// Find the speaker index closest to (azimuth, elevation) by squared Euclidean
+// distance in az/el space.  Good enough for speaker-routing fallback; not used
+// for panning, so full great-circle accuracy is unnecessary.
+[[nodiscard]] std::size_t nearest_speaker_index(const LayoutSpec& layout, float azimuth, float elevation) {
+    std::size_t best = 0;
+    float best_sq = std::numeric_limits<float>::max();
+    for (std::size_t i = 0; i < layout.speakers.size(); ++i) {
+        const float daz = azimuth - layout.speakers[i].azimuth;
+        const float del = elevation - layout.speakers[i].elevation;
+        const float sq = daz * daz + del * del;
+        if (sq < best_sq) {
+            best_sq = sq;
+            best = i;
+        }
+    }
+    return best;
 }
 
 [[nodiscard]] SpeakerDirection source_direction(const SceneBlockPosition& pos) {
@@ -178,26 +209,60 @@ struct SafFree {
     return gains;
 }
 
-[[nodiscard]] Result<std::vector<ChannelGainInfo>> build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout) {
+[[nodiscard]] Result<std::vector<ChannelGainInfo>> build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout,
+                                                                       LogSink& logs) {
     std::vector<ChannelGainInfo> result;
+    const auto num_out = layout.speakers.size();
 
     for (const auto& obj : scene.objects) {
         for (const auto& track : obj.tracks) {
-            const auto channel_index = track.channel_index;
-            if (!channel_index.has_value()) {
+            if (!track.channel_index.has_value()) {
                 continue;
             }
+            const uint16_t in_ch = track.channel_index.value();
+
+            // Objects blocks → VBAP panning.
             for (const auto& block : track.blocks) {
                 auto gains = calculate_vbap_gains(block, layout);
                 if (!gains) {
                     return make_error(
                         gains.error().code, gains.error().message, fmt::format("track_uid={}", track.track_uid));
                 }
+                result.push_back({in_ch, std::move(*gains)});
+            }
 
-                ChannelGainInfo info;
-                info.input_channel = channel_index.value();
-                info.gains = std::move(*gains);
-                result.push_back(std::move(info));
+            // DirectSpeakers blocks → label match, then nearest-speaker fallback.
+            for (const auto& ds : track.ds_blocks) {
+                std::vector<float> gains(num_out, 0.0F);
+
+                bool matched = false;
+                for (const auto& lbl : ds.speaker_labels) {
+                    for (std::size_t i = 0; i < num_out; ++i) {
+                        if (!layout.speakers[i].label.empty() && layout.speakers[i].label == lbl) {
+                            gains[i] = ds.gain;
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (matched) {
+                        break;
+                    }
+                }
+
+                if (!matched) {
+                    const float az = ds.has_position ? ds.azimuth : 0.0F;
+                    const float el = ds.has_position ? ds.elevation : 0.0F;
+                    if (!ds.has_position && !ds.speaker_labels.empty()) {
+                        logs.log(LogLevel::warning,
+                                 "saf-vbap",
+                                 fmt::format("DirectSpeakers label '{}' not in output layout — "
+                                             "routing to nearest speaker",
+                                             ds.speaker_labels.front()));
+                    }
+                    gains[nearest_speaker_index(layout, az, el)] = ds.gain;
+                }
+
+                result.push_back({in_ch, std::move(gains)});
             }
         }
     }
@@ -228,13 +293,14 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
 
     const auto& info = plan.scene.info;
 
-    auto gain_matrix = build_gain_matrix(plan.scene, *layout);
+    auto gain_matrix = build_gain_matrix(plan.scene, *layout, logs);
     if (!gain_matrix) {
         return make_error(gain_matrix.error().code, gain_matrix.error().message, gain_matrix.error().context);
     }
     if (gain_matrix->empty()) {
-        return make_error(
-            ErrorCode::render_failed, "no renderable Objects tracks found in ADM document", "input=" + plan.input_path);
+        return make_error(ErrorCode::render_failed,
+                          "no renderable Objects or DirectSpeakers tracks found in ADM document",
+                          "input=" + plan.input_path);
     }
 
     const auto num_out_ch = static_cast<uint16_t>(layout->speakers.size());
@@ -253,11 +319,12 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
     }
 
     try {
-        logs.log(
-            LogLevel::info,
-            "saf-vbap",
-            fmt::format(
-                "rendering {} Objects tracks → {} channels, {} frames", gain_matrix->size(), num_out_ch, num_frames));
+        logs.log(LogLevel::info,
+                 "saf-vbap",
+                 fmt::format("rendering {} tracks (Objects + DirectSpeakers) → {} channels, {} frames",
+                             gain_matrix->size(),
+                             num_out_ch,
+                             num_frames));
         progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
 
         auto reader = bw64::readFile(plan.input_path);
@@ -314,7 +381,7 @@ CapabilityReport vbap_capabilities() {
     r.backend_name = "saf-vbap";
     r.backend_version = "1.3.4";
     r.supports_objects = true;
-    r.supports_direct_speakers = false;
+    r.supports_direct_speakers = true;
     r.supports_hoa = false;
     r.supported_layouts = {
         {"0+2+0", "Stereo"},
