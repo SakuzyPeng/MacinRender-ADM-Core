@@ -2,6 +2,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <numbers>
 #include <vector>
@@ -78,6 +79,8 @@ Hoa3Coeffs encode_cartesian(float xc, float yc, float zc) noexcept {
 struct ChannelGainInfo {
     uint16_t input_channel{0};
     Hoa3Coeffs gains{};
+    uint64_t start_sample{0};
+    uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
 };
 
 std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene) {
@@ -97,7 +100,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene) {
 
                 std::ranges::transform(sh, sh.begin(), [gain = block.gain](float c) { return c * gain; });
 
-                result.push_back({in_ch, sh});
+                result.push_back({in_ch, sh, block.start_sample, block.end_sample});
             }
         }
     }
@@ -174,6 +177,10 @@ Result<void> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress,
 
             for (const auto& cg : gain_matrix) {
                 for (std::size_t f = 0; f < frames_now; ++f) {
+                    const uint64_t abs_frame = frames_done + f;
+                    if (abs_frame < cg.start_sample || abs_frame >= cg.end_sample) {
+                        continue;
+                    }
                     const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
                     std::size_t out_index = f * k_num_out;
                     for (const float gain : cg.gains) {

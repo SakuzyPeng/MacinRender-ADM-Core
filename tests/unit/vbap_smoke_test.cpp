@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -108,6 +109,59 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(ObjectPo
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
+std::pair<std::shared_ptr<adm::Document>, std::string> make_time_varying_objects_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"VbapTimedCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects left_block{adm::SphericalPosition{adm::Azimuth{-30.0F}, adm::Elevation{0.0F}}};
+        left_block.set(adm::Gain{1.0F});
+        left_block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
+        left_block.set(adm::Duration{adm::Time{std::chrono::milliseconds{500}}});
+        cf->add(left_block);
+
+        adm::AudioBlockFormatObjects right_block{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}}};
+        right_block.set(adm::Gain{1.0F});
+        right_block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{500}}});
+        right_block.set(adm::Duration{adm::Time{std::chrono::milliseconds{500}}});
+        cf->add(right_block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"VbapTimedPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"VbapTimedSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"VbapTimedTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"VbapTimedObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"VbapTimedContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"VbapTimedProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
 std::pair<std::shared_ptr<adm::Document>, std::string> make_direct_speakers_doc(const char* label, float azimuth) {
     auto doc = adm::Document::create();
 
@@ -155,7 +209,10 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_direct_speakers_doc(
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
-std::filesystem::path write_input_fixture(const std::shared_ptr<adm::Document>& doc, const std::string& uid_str) {
+std::filesystem::path write_input_fixture(const std::shared_ptr<adm::Document>& doc,
+                                          const std::string& uid_str,
+                                          uint16_t sample_rate = 48000U,
+                                          uint32_t frames = 1000U) {
     auto path = std::filesystem::temp_directory_path() / "mr_vbap_fixture_in.wav";
 
     std::ostringstream xml_buf;
@@ -164,10 +221,9 @@ std::filesystem::path write_input_fixture(const std::shared_ptr<adm::Document>& 
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
 
-    constexpr uint32_t k_frames = 1000U;
-    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
-    std::vector<float> samples(k_frames, 0.5F);
-    writer->write(samples.data(), k_frames);
+    auto writer = bw64::writeFile(path.string(), 1U, sample_rate, 24U, chna, axml);
+    std::vector<float> samples(frames, 0.5F);
+    writer->write(samples.data(), frames);
 
     return path;
 }
@@ -337,6 +393,68 @@ bool verify_vbap_render_fixture(ObjectPositionMode mode, const char* label) {
     return ok;
 }
 
+bool verify_time_varying_objects_blocks() {
+    auto [doc, uid_str] = make_time_varying_objects_doc();
+    const auto in_path = write_input_fixture(doc, uid_str, 1000U, 1000U);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_vbap_timed_blocks_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest request;
+    request.input_path = in_path;
+    request.output_path = out_path;
+    request.options.output_layout = "0+2+0";
+    request.options.renderer = mradm::RendererSelection::saf;
+    request.options.peak_limit = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const mradm::RenderResult result = service.render(request, progress, logs);
+    if (!result.success()) {
+        std::cerr << "FAIL: time-varying Objects render failed: " << result.error.message << "\n";
+        return false;
+    }
+
+    auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!reader_res) {
+        std::cerr << "FAIL: cannot open time-varying output: " << reader_res.error().message << "\n";
+        return false;
+    }
+    auto& reader = *reader_res;
+    bool ok = true;
+    ok &= check(reader.channels() == 2U, "time-varying output is stereo");
+    ok &= check(reader.sample_rate() == 1000U, "time-varying output sample rate == 1000");
+    ok &= check(reader.frame_count() == 1000U, "time-varying output frame count == 1000");
+    if (!ok) {
+        return false;
+    }
+
+    std::vector<float> samples(static_cast<std::size_t>(reader.frame_count()) * 2U);
+    reader.read(samples.data(), reader.frame_count());
+
+    double first_left = 0.0;
+    double first_right = 0.0;
+    double second_left = 0.0;
+    double second_right = 0.0;
+    for (std::size_t frame = 0; frame < 500U; ++frame) {
+        first_left += std::fabs(static_cast<double>(samples[2U * frame]));
+        first_right += std::fabs(static_cast<double>(samples[(2U * frame) + 1U]));
+    }
+    for (std::size_t frame = 500U; frame < 1000U; ++frame) {
+        second_left += std::fabs(static_cast<double>(samples[2U * frame]));
+        second_right += std::fabs(static_cast<double>(samples[(2U * frame) + 1U]));
+    }
+
+    constexpr double k_leak_tolerance = 1.0e-3;
+    ok &= check(first_left > 0.0, "first timed block renders to left speaker");
+    ok &= check(first_right < k_leak_tolerance, "first timed block does not leak into right speaker");
+    ok &= check(second_right > 0.0, "second timed block renders to right speaker");
+    ok &= check(second_left < k_leak_tolerance, "second timed block does not leak into left speaker");
+    return ok;
+}
+
 bool verify_direct_speakers_label_routing() {
     auto [doc, uid_str] = make_direct_speakers_doc("M+030", 30.0F);
     const auto in_path = write_input_fixture(doc, uid_str);
@@ -479,6 +597,7 @@ int main() {
 
     ok &= verify_vbap_render_fixture(ObjectPositionMode::polar_front, "polar front");
     ok &= verify_vbap_render_fixture(ObjectPositionMode::cartesian_front, "cartesian front");
+    ok &= verify_time_varying_objects_blocks();
     ok &= verify_direct_speakers_label_routing();
     ok &= verify_direct_speakers_position_fallback_wrap();
     ok &= verify_mdap_spread_fixture();
