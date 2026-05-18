@@ -1,13 +1,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <ebur128.h>
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
-#include <ebur128.h>
 #include <fmt/format.h>
 #include <tl/expected.hpp>
 
@@ -26,11 +26,11 @@ struct EburFree {
 using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
 
 // Pass 1: measure integrated loudness (BS.1770-4 gated) in LUFS.
-// Returns nullopt for silence, files too short for gating, or I/O errors.
-std::optional<double> measure_lufs(const std::string& path) {
+// Returns nullopt for silence or files too short for gating.
+Result<std::optional<double>> measure_lufs(const std::string& path) {
     auto reader_res = audio::FloatWavReader::open(path);
     if (!reader_res) {
-        return std::nullopt;
+        return tl::unexpected{reader_res.error()};
     }
     auto& reader = *reader_res;
 
@@ -39,7 +39,7 @@ std::optional<double> measure_lufs(const std::string& path) {
 
     EburStatePtr st{ebur128_init(num_ch, sample_rate, EBUR128_MODE_I)};
     if (!st) {
-        return std::nullopt;
+        return make_error(ErrorCode::internal_error, "failed to initialise loudness meter", "path=" + path);
     }
 
     constexpr std::size_t k_block = 4096;
@@ -50,9 +50,11 @@ std::optional<double> measure_lufs(const std::string& path) {
         const uint64_t n = std::min(static_cast<uint64_t>(k_block), left);
         const uint64_t got = reader.read(buf.data(), n);
         if (got == 0) {
-            break;
+            return make_error(ErrorCode::io_error, "short read while measuring integrated loudness", "path=" + path);
         }
-        ebur128_add_frames_float(st.get(), buf.data(), static_cast<std::size_t>(got));
+        if (ebur128_add_frames_float(st.get(), buf.data(), static_cast<std::size_t>(got)) != EBUR128_SUCCESS) {
+            return make_error(ErrorCode::internal_error, "failed to feed loudness meter", "path=" + path);
+        }
         left -= got;
     }
 
@@ -95,7 +97,7 @@ std::optional<double> measure_lufs(const std::string& path) {
                 const uint64_t n = std::min(static_cast<uint64_t>(k_block), left);
                 const uint64_t got = reader.read(buf.data(), n);
                 if (got == 0) {
-                    break;
+                    return make_error(ErrorCode::io_error, "short read while applying loudness gain", "path=" + path);
                 }
                 const std::size_t samples = static_cast<std::size_t>(num_ch) * static_cast<std::size_t>(got);
                 for (std::size_t i = 0; i < samples; ++i) {
@@ -112,38 +114,40 @@ std::optional<double> measure_lufs(const std::string& path) {
         return {};
 
     } catch (const std::exception& e) {
-        return make_error(ErrorCode::io_error,
-                          std::string("loudness gain rewrite failed: ") + e.what(),
-                          "path=" + path);
+        return make_error(
+            ErrorCode::io_error, std::string("loudness gain rewrite failed: ") + e.what(), "path=" + path);
     }
 }
 
 } // namespace
 
 Result<void> apply_loudness_norm(const std::string& path, float target_lufs, LogSink& logs) {
-    const auto measured = measure_lufs(path);
-    if (!measured.has_value()) {
+    const auto measured_res = measure_lufs(path);
+    if (!measured_res) {
+        return tl::unexpected{measured_res.error()};
+    }
+    const auto measured_opt = *measured_res;
+    if (!measured_opt.has_value()) {
         logs.log(LogLevel::warning,
                  "loudness",
-                 "integrated loudness measurement failed (silence or too short) — skipping normalization");
+                 "integrated loudness unavailable (silence or too short) — skipping normalization");
         return {};
     }
+    const double measured = measured_opt.value();
 
-    const double target = static_cast<double>(target_lufs);
+    const auto target = static_cast<double>(target_lufs);
     logs.log(LogLevel::info,
              "loudness",
-             fmt::format("integrated loudness: {:.1f} LUFS, target: {:.1f} LUFS", *measured, target));
+             fmt::format("integrated loudness: {:.1f} LUFS, target: {:.1f} LUFS", measured, target));
 
-    const double gain_db = target - *measured;
+    const double gain_db = target - measured;
     if (std::abs(gain_db) < 0.1) {
         logs.log(LogLevel::info, "loudness", "integrated loudness within tolerance — no gain applied");
         return {};
     }
 
     const auto gain = static_cast<float>(std::pow(10.0, gain_db / 20.0));
-    logs.log(LogLevel::info,
-             "loudness",
-             fmt::format("applying gain {:.4f} ({:.2f} dB)", gain, gain_db));
+    logs.log(LogLevel::info, "loudness", fmt::format("applying gain {:.4f} ({:.2f} dB)", gain, gain_db));
 
     return apply_gain(path, gain);
 }
