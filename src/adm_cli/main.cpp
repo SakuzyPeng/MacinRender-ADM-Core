@@ -162,6 +162,8 @@ int main(int argc, char** argv) {
     std::string output;
     std::string layout{"binaural"};
     std::string renderer{"auto"};
+    bool no_peak_limit{false};
+    float peak_limit_dbtp{-1.0F};
     bool verbose{false};
 
     auto* render_cmd = app.add_subcommand("render", "Render an ADM BWF file");
@@ -170,6 +172,9 @@ int main(int argc, char** argv) {
     render_cmd->add_option("--output-layout", layout, "Output layout identifier");
     render_cmd->add_option("--renderer", renderer, "Renderer backend: auto, ear, saf, hoa, apple")
         ->check(CLI::IsMember({"auto", "ear", "saf", "hoa", "apple"}));
+    render_cmd->add_flag("--no-peak-limit", no_peak_limit, "Disable True Peak limiting");
+    render_cmd->add_option("--peak-limit-dbtp", peak_limit_dbtp, "True Peak target in dBTP")
+        ->check(CLI::Range(-60.0F, 0.0F));
     render_cmd->add_flag("-v,--verbose", verbose, "Enable verbose logs");
 
     // ── inspect ───────────────────────────────────────────────────────────────
@@ -201,6 +206,8 @@ int main(int argc, char** argv) {
         }
         request.options.output_layout = layout;
         request.options.renderer = parse_renderer(renderer);
+        request.options.peak_limit = !no_peak_limit;
+        request.options.peak_limit_dbtp = peak_limit_dbtp;
 
         mradm::RenderService service;
         ConsoleProgressSink progress;

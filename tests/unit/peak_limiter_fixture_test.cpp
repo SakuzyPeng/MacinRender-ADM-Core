@@ -1,10 +1,12 @@
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <numbers>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -48,7 +50,8 @@ void write_sine_wav(float amplitude, const std::filesystem::path& path) {
 
     std::vector<float> samples(k_frames);
     for (uint32_t n = 0; n < k_frames; ++n) {
-        samples[n] = amplitude * std::sin(2.0F * std::numbers::pi_v<float> * k_freq * static_cast<float>(n) / static_cast<float>(k_sr));
+        samples[n] = amplitude * std::sin(2.0F * std::numbers::pi_v<float> * k_freq * static_cast<float>(n) /
+                                          static_cast<float>(k_sr));
     }
     writer->write(samples.data(), static_cast<uint64_t>(k_frames));
 }
@@ -63,9 +66,11 @@ double max_abs_sample(const std::filesystem::path& path) {
     while (left > 0) {
         const uint64_t n = std::min(static_cast<uint64_t>(k_block), left);
         reader->read(buf.data(), n);
-        for (std::size_t i = 0; i < static_cast<std::size_t>(n_ch) * static_cast<std::size_t>(n); ++i) {
-            max_val = std::max(max_val, std::abs(static_cast<double>(buf[i])));
-        }
+        const auto samples = static_cast<std::size_t>(n_ch) * static_cast<std::size_t>(n);
+        max_val = std::accumulate(
+            buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(samples), max_val, [](double current, float sample) {
+                return std::max(current, std::abs(static_cast<double>(sample)));
+            });
         left -= n;
     }
     return max_val;

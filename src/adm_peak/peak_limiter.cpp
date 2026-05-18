@@ -1,13 +1,14 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <ebur128.h>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include <bw64/bw64.hpp>
-#include <ebur128.h>
 #include <fmt/format.h>
 
 #include "adm/peak.h"
@@ -61,10 +62,15 @@ using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
         const auto num_ch = reader->channels();
         const auto num_frames = reader->numberOfFrames();
         const auto sample_rate = reader->sampleRate();
+        if (sample_rate > std::numeric_limits<uint16_t>::max()) {
+            return make_error(ErrorCode::unsupported,
+                              fmt::format("sample rate {} Hz is not supported by the current BW64 writer", sample_rate),
+                              "path=" + path);
+        }
 
         const auto tmp_path = path + ".peak_tmp";
         {
-            auto writer = bw64::writeFile(tmp_path, num_ch, sample_rate, uint16_t{24});
+            auto writer = bw64::writeFile(tmp_path, num_ch, static_cast<uint16_t>(sample_rate), uint16_t{24});
 
             constexpr std::size_t k_block = 4096;
             std::vector<float> buf(static_cast<std::size_t>(num_ch) * k_block);
@@ -108,8 +114,9 @@ Result<void> apply_peak_limit(const std::string& path, float target_dbtp, LogSin
         return {};
     }
 
-    const float gain = static_cast<float>(target_linear / *peak_linear);
-    logs.log(LogLevel::info, "peak-limit", fmt::format("applying gain {:.4f} ({:.2f} dB)", gain, 20.0F * std::log10(gain)));
+    const auto gain = static_cast<float>(target_linear / *peak_linear);
+    logs.log(
+        LogLevel::info, "peak-limit", fmt::format("applying gain {:.4f} ({:.2f} dB)", gain, 20.0F * std::log10(gain)));
 
     return apply_gain(path, gain);
 }
