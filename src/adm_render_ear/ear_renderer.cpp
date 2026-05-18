@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -18,6 +19,8 @@ namespace {
 struct ChannelGainInfo {
     uint16_t input_channel{0};
     std::vector<double> direct_gains;
+    uint64_t start_sample{0};
+    uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
 };
 
 // Build a static gain matrix from pre-parsed scene metadata.
@@ -63,6 +66,8 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
                 ChannelGainInfo info;
                 info.input_channel = in_ch;
                 info.direct_gains.resize(num_out, 0.0);
+                info.start_sample = block.start_sample;
+                info.end_sample = block.end_sample;
                 std::vector<double> diffuse_gains(num_out, 0.0);
                 objects_calc.calculate(meta, info.direct_gains, diffuse_gains);
 
@@ -173,6 +178,10 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
 
             for (const auto& cg : gain_matrix) {
                 for (std::size_t f = 0; f < frames_now; f++) {
+                    const uint64_t abs_frame = frames_done + f;
+                    if (abs_frame < cg.start_sample || abs_frame >= cg.end_sample) {
+                        continue;
+                    }
                     const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
                     for (std::size_t out_ch = 0; out_ch < num_out_ch; out_ch++) {
                         out_block[(f * num_out_ch) + out_ch] += in_s * static_cast<float>(cg.direct_gains[out_ch]);

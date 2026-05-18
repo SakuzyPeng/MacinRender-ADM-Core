@@ -1,3 +1,5 @@
+#include <cstdint>
+#include <limits>
 #include <map>
 #include <sstream>
 #include <stdexcept>
@@ -51,13 +53,35 @@ std::map<std::string, uint16_t> make_uid_map(const std::shared_ptr<bw64::ChnaChu
 // common case for single-programme documents).
 uint64_t time_to_samples(const adm::Time& t, uint32_t sample_rate) {
     const int64_t ns = t.asNanoseconds().count();
-    if (ns <= 0) {
+    if (ns <= 0 || sample_rate == 0) {
         return 0;
     }
-    return (static_cast<uint64_t>(ns) * sample_rate) / 1'000'000'000ULL;
+    constexpr uint64_t k_ns_per_second = 1'000'000'000ULL;
+    const auto max = std::numeric_limits<uint64_t>::max();
+    const auto ns_u = static_cast<uint64_t>(ns);
+    const uint64_t seconds = ns_u / k_ns_per_second;
+    const uint64_t remainder = ns_u % k_ns_per_second;
+    if (seconds > max / sample_rate) {
+        return max;
+    }
+    const uint64_t whole_samples = seconds * sample_rate;
+    const uint64_t fractional_samples = (remainder * sample_rate) / k_ns_per_second;
+    if (max - whole_samples < fractional_samples) {
+        return max;
+    }
+    return whole_samples + fractional_samples;
 }
 
-void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat>& cf, SceneTrackRef& ref,
+uint64_t saturating_add(uint64_t lhs, uint64_t rhs) {
+    const auto max = std::numeric_limits<uint64_t>::max();
+    if (max - lhs < rhs) {
+        return max;
+    }
+    return lhs + rhs;
+}
+
+void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat>& cf,
+                                   SceneTrackRef& ref,
                                    uint32_t sample_rate) {
     const auto raw_blocks = cf->getElements<adm::AudioBlockFormatObjects>();
     for (const auto& raw : raw_blocks) {
@@ -101,7 +125,7 @@ void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat
         block.start_sample = time_to_samples(raw.get<adm::Rtime>().get(), sample_rate);
         if (raw.has<adm::Duration>()) {
             const uint64_t dur = time_to_samples(raw.get<adm::Duration>().get(), sample_rate);
-            block.end_sample = block.start_sample + dur;
+            block.end_sample = saturating_add(block.start_sample, dur);
         }
         // else: end_sample remains UINT64_MAX (extends to end of file)
 
@@ -144,8 +168,7 @@ void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChann
     }
 }
 
-void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid, SceneTrackRef& ref,
-                           uint32_t sample_rate) {
+void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid, SceneTrackRef& ref, uint32_t sample_rate) {
     const auto pf = uid->getReference<adm::AudioPackFormat>();
     if (!pf) {
         return;
