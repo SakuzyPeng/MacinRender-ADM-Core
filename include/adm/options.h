@@ -6,6 +6,12 @@
 
 namespace mradm {
 
+enum class OutputBitDepth {
+    f32, // WAVE_FORMAT_IEEE_FLOAT — default; preserves headroom above 0 dBFS
+    i24, // 24-bit integer PCM
+    i16, // 16-bit integer PCM
+};
+
 enum class RendererSelection {
     automatic,
     ear,
@@ -20,6 +26,7 @@ struct RenderOptions {
     bool measure_loudness{true};
     bool peak_limit{true};
     float peak_limit_dbtp{-1.0F}; // True Peak target in dBTP (broadcast standard)
+    OutputBitDepth output_bit_depth{OutputBitDepth::f32};
 };
 
 struct RenderRequest {

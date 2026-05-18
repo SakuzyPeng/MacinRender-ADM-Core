@@ -13,6 +13,7 @@
 #include <adm/write.hpp>
 #include <bw64/bw64.hpp>
 
+#include "adm/audio_io.h"
 #include "adm/render.h"
 #include "adm/render_vbap.h"
 
@@ -154,11 +155,15 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_mdap_doc(float width
 }
 
 double sum_elevated_channels(const std::filesystem::path& path) {
-    auto reader = bw64::readFile(path.string());
+    auto reader_res = mradm::audio::FloatWavReader::open(path.string());
+    if (!reader_res) {
+        return 0.0;
+    }
+    auto& reader = *reader_res;
     constexpr std::size_t k_num_ch = 9U;
-    const auto n_frames = static_cast<std::size_t>(reader->numberOfFrames());
+    const auto n_frames = static_cast<std::size_t>(reader.frame_count());
     std::vector<float> samples(n_frames * k_num_ch);
-    reader->read(samples.data(), reader->numberOfFrames());
+    reader.read(samples.data(), reader.frame_count());
 
     // Channels 5-8 are the elevated speakers (elevation +/-45 degrees).
     double elevated_sum = 0.0;
@@ -220,34 +225,34 @@ bool verify_vbap_render_fixture(ObjectPositionMode mode, const char* label) {
         return false;
     }
 
-    try {
-        auto out_reader = bw64::readFile(out_path.string());
-        bool ok = true;
-        ok &= check(out_reader->channels() == 2U, "VBAP output has 2 channels");
-        ok &= check(out_reader->sampleRate() == 48000U, "VBAP output sample rate == 48000");
-        ok &= check(out_reader->numberOfFrames() == 1000U, "VBAP output frame count == 1000");
-
-        if (ok) {
-            const auto n_frames = static_cast<std::size_t>(out_reader->numberOfFrames());
-            std::vector<float> out_samples(n_frames * 2U);
-            out_reader->read(out_samples.data(), out_reader->numberOfFrames());
-
-            double sum_l = 0.0;
-            double sum_r = 0.0;
-            for (std::size_t frame = 0; frame < n_frames; frame++) {
-                sum_l += std::fabs(static_cast<double>(out_samples[2U * frame]));
-                sum_r += std::fabs(static_cast<double>(out_samples[(2U * frame) + 1U]));
-            }
-            ok &= check(sum_l > 0.0, "VBAP left channel is not silent");
-            ok &= check(sum_r > 0.0, "VBAP right channel is not silent");
-            const double ratio = (sum_l > 0.0) ? (sum_r / sum_l) : 0.0;
-            ok &= check(ratio > 0.95 && ratio < 1.05, "VBAP front object has L≈R energy");
-        }
-        return ok;
-    } catch (const std::exception& e) {
-        std::cerr << "FAIL: cannot open VBAP output: " << e.what() << "\n";
+    auto out_reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!out_reader_res) {
+        std::cerr << "FAIL: cannot open VBAP output: " << out_reader_res.error().message << "\n";
         return false;
     }
+    auto& out_reader = *out_reader_res;
+    bool ok = true;
+    ok &= check(out_reader.channels() == 2U, "VBAP output has 2 channels");
+    ok &= check(out_reader.sample_rate() == 48000U, "VBAP output sample rate == 48000");
+    ok &= check(out_reader.frame_count() == 1000U, "VBAP output frame count == 1000");
+
+    if (ok) {
+        const auto n_frames = static_cast<std::size_t>(out_reader.frame_count());
+        std::vector<float> out_samples(n_frames * 2U);
+        out_reader.read(out_samples.data(), out_reader.frame_count());
+
+        double sum_l = 0.0;
+        double sum_r = 0.0;
+        for (std::size_t frame = 0; frame < n_frames; frame++) {
+            sum_l += std::fabs(static_cast<double>(out_samples[2U * frame]));
+            sum_r += std::fabs(static_cast<double>(out_samples[(2U * frame) + 1U]));
+        }
+        ok &= check(sum_l > 0.0, "VBAP left channel is not silent");
+        ok &= check(sum_r > 0.0, "VBAP right channel is not silent");
+        const double ratio = (sum_l > 0.0) ? (sum_r / sum_l) : 0.0;
+        ok &= check(ratio > 0.95 && ratio < 1.05, "VBAP front object has L≈R energy");
+    }
+    return ok;
 }
 
 // Verify MDAP spread: Objects with width=0.8 rendered to 4+5+0 (9ch, has

@@ -104,7 +104,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_ear
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 adm ear
+    PRIVATE libbw64 adm ear MacinRender::ADMAudio
 )
 mr_adm_core_apply_warnings(mr_adm_render_ear)
 mr_adm_core_apply_static_analysis(mr_adm_render_ear)
@@ -129,7 +129,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_vbap
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 saf
+    PRIVATE libbw64 saf MacinRender::ADMAudio
 )
 target_include_directories(mr_adm_render_vbap
     SYSTEM PRIVATE
@@ -158,10 +158,34 @@ target_sources(
 
 target_link_libraries(mr_adm_render_hoa
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64
+    PRIVATE libbw64 MacinRender::ADMAudio
 )
 mr_adm_core_apply_warnings(mr_adm_render_hoa)
 mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
+
+# ── adm_audio ─────────────────────────────────────────────────────────────────
+# Float32 WAV I/O via dr_wav. DR_WAV_IMPLEMENTATION defined here only.
+
+add_library(mr_adm_audio)
+add_library(MacinRender::ADMAudio ALIAS mr_adm_audio)
+
+target_sources(
+    mr_adm_audio
+    PRIVATE
+        src/adm_audio/audio_io.cpp
+    PUBLIC
+        FILE_SET HEADERS
+        BASE_DIRS include
+        FILES
+            include/adm/audio_io.h
+)
+
+target_link_libraries(mr_adm_audio
+    PUBLIC MacinRender::ADMCore
+    PRIVATE dr_wav::dr_wav libbw64
+)
+mr_adm_core_apply_warnings(mr_adm_audio)
+mr_adm_core_apply_static_analysis(mr_adm_audio)
 
 # ── adm_peak ──────────────────────────────────────────────────────────────────
 # True Peak measurement (ITU-R BS.1770-4) via libebur128 + global gain rewrite.
@@ -182,8 +206,11 @@ target_sources(
 
 target_link_libraries(mr_adm_peak
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 ebur128
+    PRIVATE ebur128 MacinRender::ADMAudio
 )
+# libebur128 uses legacy include_directories() that does not propagate via the
+# target; use the EBUR128_INCLUDE_DIR cache variable it exports instead.
+target_include_directories(mr_adm_peak SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
 mr_adm_core_apply_warnings(mr_adm_peak)
 mr_adm_core_apply_static_analysis(mr_adm_peak)
 
@@ -201,7 +228,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMPeak
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMPeak MacinRender::ADMAudio
 )
 mr_adm_core_apply_warnings(mr_adm_engine)
 mr_adm_core_apply_static_analysis(mr_adm_engine)
@@ -285,6 +312,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMRenderVBAP
+            MacinRender::ADMAudio
             libbw64
             adm
     )
@@ -304,6 +332,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_ear_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
+            MacinRender::ADMAudio
             libbw64
             adm
     )
@@ -318,6 +347,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMPeak
+            MacinRender::ADMAudio
             libbw64
             adm
     )
@@ -330,6 +360,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_hoa_encode_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
+            MacinRender::ADMAudio
             libbw64
             adm
     )
@@ -369,7 +400,7 @@ install(
 # libraries provide proper installed CMake configs. Install binaries and headers
 # without export; re-integrate post-M3.
 install(
-    TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_render_hoa mr_adm_peak mr_adm_engine
+    TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_render_hoa mr_adm_peak mr_adm_engine mr_adm_audio
     FILE_SET HEADERS
 )
 

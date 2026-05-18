@@ -14,6 +14,7 @@
 #include <adm/write.hpp>
 #include <bw64/bw64.hpp>
 
+#include "adm/audio_io.h"
 #include "adm/render.h"
 #include "adm/render_hoa.h"
 
@@ -103,10 +104,14 @@ std::filesystem::path write_fixture(const std::shared_ptr<adm::Document>& doc, c
 
 // Read per-channel RMS energy from a 16ch HOA3 output file.
 std::vector<double> read_channel_rms(const std::filesystem::path& path) {
-    auto reader = bw64::readFile(path.string());
-    const auto n_frames = static_cast<std::size_t>(reader->numberOfFrames());
+    auto reader_res = mradm::audio::FloatWavReader::open(path.string());
+    if (!reader_res) {
+        return std::vector<double>(k_hoa3_channels, 0.0);
+    }
+    auto& reader = *reader_res;
+    const auto n_frames = static_cast<std::size_t>(reader.frame_count());
     std::vector<float> samples(n_frames * k_hoa3_channels);
-    reader->read(samples.data(), reader->numberOfFrames());
+    reader.read(samples.data(), reader.frame_count());
 
     std::vector<double> rms(k_hoa3_channels, 0.0);
     for (std::size_t f = 0; f < n_frames; ++f) {
@@ -144,11 +149,16 @@ bool verify_front_source() {
         return false;
     }
 
-    auto reader = bw64::readFile(out_path.string());
+    auto hdr_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!hdr_res) {
+        std::cerr << "FAIL: cannot open HOA3 output: " << hdr_res.error().message << "\n";
+        return false;
+    }
+    auto& hdr = *hdr_res;
     bool ok = true;
-    ok &= check(reader->channels() == k_hoa3_channels, "HOA3 output has 16 channels");
-    ok &= check(reader->sampleRate() == 48000U, "HOA3 output sample rate == 48000");
-    ok &= check(reader->numberOfFrames() == k_frames, "HOA3 output frame count == 1000");
+    ok &= check(static_cast<int>(hdr.channels()) == k_hoa3_channels, "HOA3 output has 16 channels");
+    ok &= check(hdr.sample_rate() == 48000U, "HOA3 output sample rate == 48000");
+    ok &= check(hdr.frame_count() == k_frames, "HOA3 output frame count == 1000");
     if (!ok) {
         return false;
     }

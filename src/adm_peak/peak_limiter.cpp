@@ -3,14 +3,13 @@
 #include <cstddef>
 #include <ebur128.h>
 #include <filesystem>
-#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include <bw64/bw64.hpp>
 #include <fmt/format.h>
 
+#include "adm/audio_io.h"
 #include "adm/peak.h"
 
 namespace mradm {
@@ -25,9 +24,13 @@ using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
 // Pass 1: feed all samples from path into a libebur128 state for True Peak.
 // Returns the maximum True Peak in linear amplitude across all channels.
 [[nodiscard]] std::optional<double> measure_true_peak(const std::string& path) {
-    auto reader = bw64::readFile(path);
-    const auto num_ch = reader->channels();
-    const auto sample_rate = reader->sampleRate();
+    auto reader_res = audio::FloatWavReader::open(path);
+    if (!reader_res) {
+        return std::nullopt;
+    }
+    auto& reader = *reader_res;
+    const auto num_ch = reader.channels();
+    const auto sample_rate = reader.sample_rate();
 
     EburStatePtr st{ebur128_init(num_ch, sample_rate, EBUR128_MODE_TRUE_PEAK)};
     if (!st) {
@@ -36,11 +39,11 @@ using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
 
     constexpr std::size_t k_block = 4096;
     std::vector<float> buf(static_cast<std::size_t>(num_ch) * k_block);
-    uint64_t frames_left = reader->numberOfFrames();
+    uint64_t frames_left = reader.frame_count();
 
     while (frames_left > 0) {
         const uint64_t n = std::min(static_cast<uint64_t>(k_block), frames_left);
-        reader->read(buf.data(), n);
+        reader.read(buf.data(), n);
         ebur128_add_frames_float(st.get(), buf.data(), static_cast<std::size_t>(n));
         frames_left -= n;
     }
@@ -58,19 +61,22 @@ using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
 // Pass 2: rewrite path with all samples scaled by gain.
 [[nodiscard]] Result<void> apply_gain(const std::string& path, float gain) {
     try {
-        auto reader = bw64::readFile(path);
-        const auto num_ch = reader->channels();
-        const auto num_frames = reader->numberOfFrames();
-        const auto sample_rate = reader->sampleRate();
-        if (sample_rate > std::numeric_limits<uint16_t>::max()) {
-            return make_error(ErrorCode::unsupported,
-                              fmt::format("sample rate {} Hz is not supported by the current BW64 writer", sample_rate),
-                              "path=" + path);
+        auto reader_res = audio::FloatWavReader::open(path);
+        if (!reader_res) {
+            return tl::unexpected{reader_res.error()};
         }
+        auto& reader = *reader_res;
+        const auto num_ch = reader.channels();
+        const auto num_frames = reader.frame_count();
+        const auto sample_rate = reader.sample_rate();
 
         const auto tmp_path = path + ".peak_tmp";
         {
-            auto writer = bw64::writeFile(tmp_path, num_ch, static_cast<uint16_t>(sample_rate), uint16_t{24});
+            auto writer_res = audio::FloatWavWriter::open(tmp_path, num_ch, sample_rate);
+            if (!writer_res) {
+                return tl::unexpected{writer_res.error()};
+            }
+            auto& writer = *writer_res;
 
             constexpr std::size_t k_block = 4096;
             std::vector<float> buf(static_cast<std::size_t>(num_ch) * k_block);
@@ -78,12 +84,12 @@ using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
 
             while (frames_left > 0) {
                 const uint64_t n = std::min(static_cast<uint64_t>(k_block), frames_left);
-                reader->read(buf.data(), n);
+                reader.read(buf.data(), n);
                 const std::size_t samples = static_cast<std::size_t>(num_ch) * static_cast<std::size_t>(n);
                 for (std::size_t i = 0; i < samples; ++i) {
                     buf[i] *= gain;
                 }
-                writer->write(buf.data(), n);
+                writer.write(buf.data(), n);
                 frames_left -= n;
             }
         }

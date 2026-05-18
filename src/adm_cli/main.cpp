@@ -164,6 +164,7 @@ int main(int argc, char** argv) {
     std::string renderer{"auto"};
     bool no_peak_limit{false};
     float peak_limit_dbtp{-1.0F};
+    std::string output_bit_depth_str{"f32"};
     bool verbose{false};
 
     auto* render_cmd = app.add_subcommand("render", "Render an ADM BWF file");
@@ -175,6 +176,8 @@ int main(int argc, char** argv) {
     render_cmd->add_flag("--no-peak-limit", no_peak_limit, "Disable True Peak limiting");
     render_cmd->add_option("--peak-limit-dbtp", peak_limit_dbtp, "True Peak target in dBTP")
         ->check(CLI::Range(-60.0F, 0.0F));
+    render_cmd->add_option("--output-bit-depth", output_bit_depth_str, "Output bit depth: f32, i24, i16")
+        ->check(CLI::IsMember({"f32", "i24", "i16"}));
     render_cmd->add_flag("-v,--verbose", verbose, "Enable verbose logs");
 
     // ── inspect ───────────────────────────────────────────────────────────────
@@ -208,6 +211,12 @@ int main(int argc, char** argv) {
         request.options.renderer = parse_renderer(renderer);
         request.options.peak_limit = !no_peak_limit;
         request.options.peak_limit_dbtp = peak_limit_dbtp;
+        if (output_bit_depth_str == "i24") {
+            request.options.output_bit_depth = mradm::OutputBitDepth::i24;
+        } else if (output_bit_depth_str == "i16") {
+            request.options.output_bit_depth = mradm::OutputBitDepth::i16;
+        }
+        // default f32 is already set
 
         mradm::RenderService service;
         ConsoleProgressSink progress;

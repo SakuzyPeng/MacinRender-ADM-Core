@@ -12,6 +12,7 @@
 
 #include <bw64/bw64.hpp>
 
+#include "adm/audio_io.h"
 #include "adm/logging.h"
 #include "adm/peak.h"
 
@@ -57,15 +58,19 @@ void write_sine_wav(float amplitude, const std::filesystem::path& path) {
 }
 
 double max_abs_sample(const std::filesystem::path& path) {
-    auto reader = bw64::readFile(path.string());
-    const auto n_ch = reader->channels();
+    auto reader_res = mradm::audio::FloatWavReader::open(path.string());
+    if (!reader_res) {
+        return 0.0;
+    }
+    auto& reader = *reader_res;
+    const auto n_ch = reader.channels();
     constexpr std::size_t k_block = 4096;
     std::vector<float> buf(static_cast<std::size_t>(n_ch) * k_block);
-    uint64_t left = reader->numberOfFrames();
+    uint64_t left = reader.frame_count();
     double max_val = 0.0;
     while (left > 0) {
         const uint64_t n = std::min(static_cast<uint64_t>(k_block), left);
-        reader->read(buf.data(), n);
+        reader.read(buf.data(), n);
         const auto samples = static_cast<std::size_t>(n_ch) * static_cast<std::size_t>(n);
         max_val = std::accumulate(
             buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(samples), max_val, [](double current, float sample) {

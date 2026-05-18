@@ -2,7 +2,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
-#include <limits>
 #include <memory>
 #include <numbers>
 #include <optional>
@@ -13,6 +12,7 @@
 #include <bw64/bw64.hpp>
 #include <fmt/format.h>
 
+#include "adm/audio_io.h"
 #include "adm/render.h"
 #include "adm/render_vbap.h"
 
@@ -227,12 +227,6 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
     }
 
     const auto& info = plan.scene.info;
-    if (info.sample_rate > std::numeric_limits<uint16_t>::max()) {
-        return make_error(
-            ErrorCode::unsupported,
-            fmt::format("sample rate {} Hz is not supported by the current BW64 writer", info.sample_rate),
-            "input=" + plan.input_path);
-    }
 
     auto gain_matrix = build_gain_matrix(plan.scene, *layout);
     if (!gain_matrix) {
@@ -246,7 +240,7 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
     const auto num_out_ch = static_cast<uint16_t>(layout->speakers.size());
     const auto num_in_ch = info.num_channels;
     const auto num_frames = info.num_frames;
-    const auto sample_rate = static_cast<uint16_t>(info.sample_rate);
+    const auto sample_rate = info.sample_rate;
 
     const auto invalid_channel =
         std::ranges::find_if(*gain_matrix, [num_in_ch](const auto& cg) { return cg.input_channel >= num_in_ch; });
@@ -267,7 +261,11 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
         progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
 
         auto reader = bw64::readFile(plan.input_path);
-        auto writer = bw64::writeFile(plan.output_path, num_out_ch, sample_rate, uint16_t{24});
+        auto writer_res = audio::FloatWavWriter::open(plan.output_path, num_out_ch, static_cast<uint32_t>(sample_rate));
+        if (!writer_res) {
+            return tl::unexpected{writer_res.error()};
+        }
+        auto& writer = *writer_res;
 
         constexpr uint64_t k_block_size = 1024;
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
@@ -290,7 +288,7 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
                 }
             }
 
-            writer->write(out_block.data(), frames_now);
+            writer.write(out_block.data(), frames_now);
             frames_done += frames_now;
 
             const double frac = 0.3 + (0.6 * (static_cast<double>(frames_done) / static_cast<double>(num_frames)));

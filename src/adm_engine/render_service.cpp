@@ -2,7 +2,9 @@
 
 #include <fmt/format.h>
 
+#include "adm/audio_io.h"
 #include "adm/io.h"
+#include "adm/options.h"
 #include "adm/peak.h"
 #include "adm/render.h"
 #include "adm/render_ear.h"
@@ -81,6 +83,16 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         auto limit_res = apply_peak_limit(output_path, request.options.peak_limit_dbtp, logs);
         if (!limit_res) {
             return {limit_res.error(), std::nullopt, {{LogLevel::error, limit_res.error().message}}};
+        }
+    }
+
+    // Final bit depth conversion (after all post-processing).
+    if (request.options.output_bit_depth != OutputBitDepth::f32) {
+        const uint16_t depth = (request.options.output_bit_depth == OutputBitDepth::i16) ? 16U : 24U;
+        logs.log(LogLevel::info, "engine", fmt::format("converting to {}-bit integer PCM", depth));
+        auto conv_res = audio::downconvert_to_int(output_path, depth);
+        if (!conv_res) {
+            return {conv_res.error(), std::nullopt, {{LogLevel::error, conv_res.error().message}}};
         }
     }
 

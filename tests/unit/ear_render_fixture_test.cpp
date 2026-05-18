@@ -13,10 +13,11 @@
 #include <adm/utilities/id_assignment.hpp>
 #include <adm/write.hpp>
 
-// libbw64 – write and read BW64 files
+// libbw64 – write BW64 input fixtures (integer PCM)
 #include <bw64/bw64.hpp>
 
 // Our engine
+#include "adm/audio_io.h"
 #include "adm/render.h"
 
 namespace {
@@ -235,33 +236,33 @@ bool verify_objects_render_fixture(const mradm::RenderService& service,
         return false;
     }
 
-    try {
-        auto out_reader = bw64::readFile(out_path.string());
-
-        ok &= check(out_reader->channels() == 2U, "output has 2 channels");
-        ok &= check(out_reader->sampleRate() == 48000U, "output sample rate == 48000");
-        ok &= check(out_reader->numberOfFrames() == 1000U, "output frame count == 1000");
-
-        if (ok) {
-            const auto n_frames = static_cast<std::size_t>(out_reader->numberOfFrames());
-            std::vector<float> out_samples(n_frames * 2U);
-            out_reader->read(out_samples.data(), out_reader->numberOfFrames());
-
-            double sum_l = 0.0;
-            double sum_r = 0.0;
-            for (std::size_t f = 0; f < n_frames; f++) {
-                sum_l += std::fabs(static_cast<double>(out_samples[2U * f]));
-                sum_r += std::fabs(static_cast<double>(out_samples[(2U * f) + 1U]));
-            }
-            ok &= check(sum_l > 0.0, "left channel is not silent");
-            ok &= check(sum_r > 0.0, "right channel is not silent");
-
-            const double ratio = (sum_l > 0.0) ? (sum_r / sum_l) : 0.0;
-            ok &= check(ratio > 0.95 && ratio < 1.05, "L≈R energy for center object");
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "FAIL: cannot open output: " << e.what() << "\n";
+    auto out_reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!out_reader_res) {
+        std::cerr << "FAIL: cannot open output: " << out_reader_res.error().message << "\n";
         return false;
+    }
+    auto& out_reader = *out_reader_res;
+
+    ok &= check(out_reader.channels() == 2U, "output has 2 channels");
+    ok &= check(out_reader.sample_rate() == 48000U, "output sample rate == 48000");
+    ok &= check(out_reader.frame_count() == 1000U, "output frame count == 1000");
+
+    if (ok) {
+        const auto n_frames = static_cast<std::size_t>(out_reader.frame_count());
+        std::vector<float> out_samples(n_frames * 2U);
+        out_reader.read(out_samples.data(), out_reader.frame_count());
+
+        double sum_l = 0.0;
+        double sum_r = 0.0;
+        for (std::size_t f = 0; f < n_frames; f++) {
+            sum_l += std::fabs(static_cast<double>(out_samples[2U * f]));
+            sum_r += std::fabs(static_cast<double>(out_samples[(2U * f) + 1U]));
+        }
+        ok &= check(sum_l > 0.0, "left channel is not silent");
+        ok &= check(sum_r > 0.0, "right channel is not silent");
+
+        const double ratio = (sum_l > 0.0) ? (sum_r / sum_l) : 0.0;
+        ok &= check(ratio > 0.95 && ratio < 1.05, "L≈R energy for center object");
     }
 
     return ok;
@@ -291,30 +292,30 @@ bool verify_direct_speakers_render_fixture(const mradm::RenderService& service,
         return false;
     }
 
-    try {
-        auto ds_reader = bw64::readFile(ds_out_path.string());
-
-        ok &= check(ds_reader->channels() == 2U, "DS output has 2 channels");
-        ok &= check(ds_reader->sampleRate() == 48000U, "DS output sample rate == 48000");
-        ok &= check(ds_reader->numberOfFrames() == 1000U, "DS output frame count == 1000");
-
-        if (ok) {
-            const auto n_frames = static_cast<std::size_t>(ds_reader->numberOfFrames());
-            std::vector<float> ds_samples(n_frames * 2U);
-            ds_reader->read(ds_samples.data(), ds_reader->numberOfFrames());
-
-            double sum_l = 0.0;
-            double sum_r = 0.0;
-            for (std::size_t f = 0; f < n_frames; f++) {
-                sum_l += std::fabs(static_cast<double>(ds_samples[2U * f]));
-                sum_r += std::fabs(static_cast<double>(ds_samples[(2U * f) + 1U]));
-            }
-            ok &= check(sum_l > 0.0, "DS left channel is not silent");
-            ok &= check(sum_r > 0.0, "DS right channel is not silent");
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "FAIL: cannot open DirectSpeakers output: " << e.what() << "\n";
+    auto ds_reader_res = mradm::audio::FloatWavReader::open(ds_out_path.string());
+    if (!ds_reader_res) {
+        std::cerr << "FAIL: cannot open DirectSpeakers output: " << ds_reader_res.error().message << "\n";
         return false;
+    }
+    auto& ds_reader = *ds_reader_res;
+
+    ok &= check(ds_reader.channels() == 2U, "DS output has 2 channels");
+    ok &= check(ds_reader.sample_rate() == 48000U, "DS output sample rate == 48000");
+    ok &= check(ds_reader.frame_count() == 1000U, "DS output frame count == 1000");
+
+    if (ok) {
+        const auto n_frames = static_cast<std::size_t>(ds_reader.frame_count());
+        std::vector<float> ds_samples(n_frames * 2U);
+        ds_reader.read(ds_samples.data(), ds_reader.frame_count());
+
+        double sum_l = 0.0;
+        double sum_r = 0.0;
+        for (std::size_t f = 0; f < n_frames; f++) {
+            sum_l += std::fabs(static_cast<double>(ds_samples[2U * f]));
+            sum_r += std::fabs(static_cast<double>(ds_samples[(2U * f) + 1U]));
+        }
+        ok &= check(sum_l > 0.0, "DS left channel is not silent");
+        ok &= check(sum_r > 0.0, "DS right channel is not silent");
     }
 
     return ok;
@@ -461,31 +462,31 @@ bool verify_mixed_render_fixture(const mradm::RenderService& service,
         return false;
     }
 
-    try {
-        auto out_reader = bw64::readFile(out_path.string());
-
-        ok &= check(out_reader->channels() == 2U, "mixed output: 2 channels");
-        ok &= check(out_reader->sampleRate() == 48000U, "mixed output: sample rate 48000");
-        ok &= check(out_reader->numberOfFrames() == 1000U, "mixed output: 1000 frames");
-
-        if (ok) {
-            const auto n_frames = static_cast<std::size_t>(out_reader->numberOfFrames());
-            std::vector<float> out_samples(n_frames * 2U);
-            out_reader->read(out_samples.data(), out_reader->numberOfFrames());
-
-            double sum_l = 0.0;
-            double sum_r = 0.0;
-            for (std::size_t f = 0; f < n_frames; f++) {
-                sum_l += std::fabs(static_cast<double>(out_samples[2U * f]));
-                sum_r += std::fabs(static_cast<double>(out_samples[(2U * f) + 1U]));
-            }
-            // Objects at center contributes equally to L and R; both must be non-silent.
-            ok &= check(sum_l > 0.0, "mixed output: left channel non-silent");
-            ok &= check(sum_r > 0.0, "mixed output: right channel non-silent");
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "FAIL: cannot open mixed output: " << e.what() << "\n";
+    auto out_reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!out_reader_res) {
+        std::cerr << "FAIL: cannot open mixed output: " << out_reader_res.error().message << "\n";
         return false;
+    }
+    auto& out_reader = *out_reader_res;
+
+    ok &= check(out_reader.channels() == 2U, "mixed output: 2 channels");
+    ok &= check(out_reader.sample_rate() == 48000U, "mixed output: sample rate 48000");
+    ok &= check(out_reader.frame_count() == 1000U, "mixed output: 1000 frames");
+
+    if (ok) {
+        const auto n_frames = static_cast<std::size_t>(out_reader.frame_count());
+        std::vector<float> out_samples(n_frames * 2U);
+        out_reader.read(out_samples.data(), out_reader.frame_count());
+
+        double sum_l = 0.0;
+        double sum_r = 0.0;
+        for (std::size_t f = 0; f < n_frames; f++) {
+            sum_l += std::fabs(static_cast<double>(out_samples[2U * f]));
+            sum_r += std::fabs(static_cast<double>(out_samples[(2U * f) + 1U]));
+        }
+        // Objects at center contributes equally to L and R; both must be non-silent.
+        ok &= check(sum_l > 0.0, "mixed output: left channel non-silent");
+        ok &= check(sum_r > 0.0, "mixed output: right channel non-silent");
     }
 
     return ok;
