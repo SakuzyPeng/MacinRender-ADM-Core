@@ -4,6 +4,7 @@
 
 #include "adm/audio_io.h"
 #include "adm/io.h"
+#include "adm/loudness.h"
 #include "adm/options.h"
 #include "adm/peak.h"
 #include "adm/render.h"
@@ -76,6 +77,14 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     auto render_res = renderer->render(plan, progress, logs);
     if (!render_res) {
         return {render_res.error(), std::nullopt, {{LogLevel::error, render_res.error().message}}};
+    }
+
+    // Post-process: loudness normalisation first (may raise gain), then clamp True Peak.
+    if (request.options.measure_loudness) {
+        auto lufs_res = apply_loudness_norm(output_path, request.options.loudness_target_lufs, logs);
+        if (!lufs_res) {
+            return {lufs_res.error(), std::nullopt, {{LogLevel::error, lufs_res.error().message}}};
+        }
     }
 
     // Post-process: True Peak limiting.

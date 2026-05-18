@@ -1,4 +1,6 @@
+#include <cmath>
 #include <cstdlib>
+#include <limits>
 #include <string>
 
 #include <CLI/CLI.hpp>
@@ -183,6 +185,7 @@ int main(int argc, char** argv) {
     bool no_peak_limit{false};
     float peak_limit_dbtp{-1.0F};
     std::string output_bit_depth_str{"f32"};
+    float loudness_target{std::numeric_limits<float>::quiet_NaN()};
     bool verbose{false};
 
     auto* render_cmd = app.add_subcommand("render", "Render an ADM BWF file");
@@ -196,6 +199,9 @@ int main(int argc, char** argv) {
         ->check(CLI::Range(-60.0F, 0.0F));
     render_cmd->add_option("--output-bit-depth", output_bit_depth_str, "Output bit depth: f32, i24, i16")
         ->check(CLI::IsMember({"f32", "i24", "i16"}));
+    render_cmd->add_option("--loudness-target", loudness_target,
+                           "Normalise integrated loudness to this LUFS target (enables loudness normalisation)")
+        ->check(CLI::Range(-70.0F, 0.0F));
     render_cmd->add_flag("-v,--verbose", verbose, "Enable verbose logs");
 
     // ── inspect ───────────────────────────────────────────────────────────────
@@ -230,6 +236,10 @@ int main(int argc, char** argv) {
         request.options.peak_limit = !no_peak_limit;
         request.options.peak_limit_dbtp = peak_limit_dbtp;
         request.options.output_bit_depth = parse_output_bit_depth(output_bit_depth_str);
+        if (!std::isnan(loudness_target)) {
+            request.options.measure_loudness = true;
+            request.options.loudness_target_lufs = loudness_target;
+        }
 
         mradm::RenderService service;
         ConsoleProgressSink progress;

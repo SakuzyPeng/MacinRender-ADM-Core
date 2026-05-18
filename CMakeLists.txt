@@ -214,6 +214,31 @@ target_include_directories(mr_adm_peak SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
 mr_adm_core_apply_warnings(mr_adm_peak)
 mr_adm_core_apply_static_analysis(mr_adm_peak)
 
+# ── adm_loudness ──────────────────────────────────────────────────────────────
+# Integrated loudness normalisation (EBU R128 / ITU-R BS.1770-4).
+
+add_library(mr_adm_loudness)
+add_library(MacinRender::ADMLoudness ALIAS mr_adm_loudness)
+
+target_sources(
+    mr_adm_loudness
+    PRIVATE
+        src/adm_loudness/loudness_normalizer.cpp
+    PUBLIC
+        FILE_SET HEADERS
+        BASE_DIRS include
+        FILES
+            include/adm/loudness.h
+)
+
+target_link_libraries(mr_adm_loudness
+    PUBLIC MacinRender::ADMCore
+    PRIVATE ebur128 MacinRender::ADMAudio
+)
+target_include_directories(mr_adm_loudness SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
+mr_adm_core_apply_warnings(mr_adm_loudness)
+mr_adm_core_apply_static_analysis(mr_adm_loudness)
+
 # ── adm_engine ────────────────────────────────────────────────────────────────
 # Orchestration layer: implements RenderService, selects backends.
 
@@ -228,7 +253,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMPeak MacinRender::ADMAudio
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio
 )
 mr_adm_core_apply_warnings(mr_adm_engine)
 mr_adm_core_apply_static_analysis(mr_adm_engine)
@@ -368,6 +393,19 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_hoa_encode_fixture_tests)
     add_test(NAME mr_adm_hoa_encode_fixture_tests COMMAND mr_adm_hoa_encode_fixture_tests)
 
+    # Fixture test: integrated loudness normalization — loud sine wave → -23 LUFS target.
+    add_executable(mr_adm_loudness_fixture_tests tests/unit/loudness_fixture_test.cpp)
+    target_link_libraries(mr_adm_loudness_fixture_tests
+        PRIVATE
+            MacinRender::ADMLoudness
+            MacinRender::ADMAudio
+            ebur128
+    )
+    target_include_directories(mr_adm_loudness_fixture_tests SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
+    mr_adm_core_apply_warnings(mr_adm_loudness_fixture_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_loudness_fixture_tests)
+    add_test(NAME mr_adm_loudness_fixture_tests COMMAND mr_adm_loudness_fixture_tests)
+
     if(MR_ADM_CORE_BUILD_CLI)
         add_executable(mr_adm_cli_smoke_tests tests/unit/adm_cli_smoke_test.cpp)
         target_compile_definitions(mr_adm_cli_smoke_tests PRIVATE
@@ -400,7 +438,7 @@ install(
 # libraries provide proper installed CMake configs. Install binaries and headers
 # without export; re-integrate post-M3.
 install(
-    TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_render_hoa mr_adm_peak mr_adm_engine mr_adm_audio
+    TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_render_hoa mr_adm_peak mr_adm_loudness mr_adm_engine mr_adm_audio
     FILE_SET HEADERS
 )
 
