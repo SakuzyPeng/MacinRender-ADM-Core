@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <limits>
+#include <map>
 #include <memory>
 #include <numbers>
 #include <optional>
@@ -32,11 +33,18 @@ struct LayoutSpec {
     std::vector<SpeakerDirection> speakers;
 };
 
-struct ChannelGainInfo {
-    uint16_t input_channel{0};
+struct BlockGains {
     std::vector<float> gains;
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
+    bool jump_position{false};
+    uint64_t interp_length_samples{0};
+};
+
+// One input channel with its full sorted block sequence.
+struct ChannelGainInfo {
+    uint16_t input_channel{0};
+    std::vector<BlockGains> blocks; // sorted by start_sample
 };
 
 struct SafFree {
@@ -213,7 +221,8 @@ struct SafFree {
 
 [[nodiscard]] Result<std::vector<ChannelGainInfo>>
 build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs) {
-    std::vector<ChannelGainInfo> result;
+    // Accumulate blocks per input channel so we can sort and interpolate.
+    std::map<uint16_t, ChannelGainInfo> by_channel;
     const auto num_out = layout.speakers.size();
 
     for (const auto& obj : scene.objects) {
@@ -222,6 +231,8 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
                 continue;
             }
             const uint16_t in_ch = track.channel_index.value();
+            auto& cg = by_channel[in_ch];
+            cg.input_channel = in_ch;
 
             // Objects blocks → VBAP panning.
             for (const auto& block : track.blocks) {
@@ -230,10 +241,15 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
                     return make_error(
                         gains.error().code, gains.error().message, fmt::format("track_uid={}", track.track_uid));
                 }
-                result.push_back({in_ch, std::move(*gains), block.start_sample, block.end_sample});
+                cg.blocks.push_back({std::move(*gains),
+                                     block.start_sample,
+                                     block.end_sample,
+                                     block.jump_position,
+                                     block.interp_length_samples});
             }
 
             // DirectSpeakers blocks → label match, then nearest-speaker fallback.
+            // DS channels are treated as jump_position=true (no interpolation).
             for (const auto& ds : track.ds_blocks) {
                 std::vector<float> gains(num_out, 0.0F);
 
@@ -264,11 +280,18 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
                     gains[nearest_speaker_index(layout, az, el)] = ds.gain;
                 }
 
-                result.push_back({in_ch, std::move(gains)});
+                cg.blocks.push_back({std::move(gains), 0, std::numeric_limits<uint64_t>::max(), true, 0});
             }
         }
     }
 
+    // Sort each channel's blocks by start_sample for sequential access.
+    std::vector<ChannelGainInfo> result;
+    result.reserve(by_channel.size());
+    for (auto& [ch, cg] : by_channel) {
+        std::ranges::sort(cg.blocks, {}, &BlockGains::start_sample);
+        result.push_back(std::move(cg));
+    }
     return result;
 }
 
@@ -336,6 +359,12 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
         }
         auto& writer = *writer_res;
 
+        // 5 ms default interpolation ramp when jumpPosition=false and no explicit length.
+        const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * 5 / 1000;
+
+        // Current block index per channel — advanced monotonically as frames_done increases.
+        std::vector<std::size_t> blk_idx(gain_matrix->size(), 0);
+
         constexpr uint64_t k_block_size = 1024;
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
         std::vector<float> out_block(static_cast<std::size_t>(num_out_ch) * k_block_size);
@@ -348,15 +377,47 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
             reader->read(in_block.data(), frames_now);
             std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
-            for (const auto& cg : *gain_matrix) {
-                for (std::size_t frame = 0; frame < frames_now; frame++) {
+            for (std::size_t ci = 0; ci < gain_matrix->size(); ++ci) {
+                const auto& cg = (*gain_matrix)[ci];
+                if (cg.blocks.empty()) {
+                    continue;
+                }
+
+                for (std::size_t frame = 0; frame < frames_now; ++frame) {
                     const uint64_t abs_frame = frames_done + frame;
-                    if (abs_frame < cg.start_sample || abs_frame >= cg.end_sample) {
+
+                    // Advance to the next block when its start_sample is reached.
+                    while (blk_idx[ci] + 1 < cg.blocks.size() &&
+                           abs_frame >= cg.blocks[blk_idx[ci] + 1].start_sample) {
+                        ++blk_idx[ci];
+                    }
+
+                    const auto& blk = cg.blocks[blk_idx[ci]];
+                    if (abs_frame < blk.start_sample || abs_frame >= blk.end_sample) {
                         continue;
                     }
+
                     const float in_sample = in_block[(frame * num_in_ch) + cg.input_channel];
-                    for (std::size_t out_ch = 0; out_ch < num_out_ch; out_ch++) {
-                        out_block[(frame * num_out_ch) + out_ch] += in_sample * cg.gains[out_ch];
+
+                    // Linear interpolation ramp at block entry unless jump_position=true
+                    // or this is the first block (no previous gains to ramp from).
+                    const uint64_t interp_len =
+                        (!blk.jump_position && blk_idx[ci] > 0)
+                            ? (blk.interp_length_samples > 0 ? blk.interp_length_samples : k_default_interp)
+                            : 0;
+
+                    if (interp_len > 0 && abs_frame < blk.start_sample + interp_len) {
+                        const auto& prev = cg.blocks[blk_idx[ci] - 1];
+                        const float alpha =
+                            static_cast<float>(abs_frame - blk.start_sample) / static_cast<float>(interp_len);
+                        for (std::size_t out_ch = 0; out_ch < num_out_ch; ++out_ch) {
+                            const float g = prev.gains[out_ch] * (1.0F - alpha) + blk.gains[out_ch] * alpha;
+                            out_block[(frame * num_out_ch) + out_ch] += in_sample * g;
+                        }
+                    } else {
+                        for (std::size_t out_ch = 0; out_ch < num_out_ch; ++out_ch) {
+                            out_block[(frame * num_out_ch) + out_ch] += in_sample * blk.gains[out_ch];
+                        }
                     }
                 }
             }

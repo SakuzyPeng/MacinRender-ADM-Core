@@ -82,7 +82,8 @@ uint64_t saturating_add(uint64_t lhs, uint64_t rhs) {
 
 void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat>& cf,
                                    SceneTrackRef& ref,
-                                   uint32_t sample_rate) {
+                                   uint32_t sample_rate,
+                                   uint64_t obj_start_sample) {
     const auto raw_blocks = cf->getElements<adm::AudioBlockFormatObjects>();
     for (const auto& raw : raw_blocks) {
         SceneObjectBlock block;
@@ -122,12 +123,22 @@ void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat
         }
 
         // rtime is DefaultParameter — always present, default 0.
-        block.start_sample = time_to_samples(raw.get<adm::Rtime>().get(), sample_rate);
+        // Add AudioObject start offset so time is absolute within the file.
+        const uint64_t rtime_samples = time_to_samples(raw.get<adm::Rtime>().get(), sample_rate);
+        block.start_sample = saturating_add(obj_start_sample, rtime_samples);
         if (raw.has<adm::Duration>()) {
             const uint64_t dur = time_to_samples(raw.get<adm::Duration>().get(), sample_rate);
             block.end_sample = saturating_add(block.start_sample, dur);
         }
         // else: end_sample remains UINT64_MAX (extends to end of file)
+
+        // JumpPosition is DefaultParameter (flag default = false = interpolate).
+        const auto jp = raw.get<adm::JumpPosition>();
+        block.jump_position = adm::isEnabled(const_cast<adm::JumpPosition&>(jp));
+        if (jp.has<adm::InterpolationLength>()) {
+            block.interp_length_samples =
+                time_to_samples(adm::Time{jp.get<adm::InterpolationLength>().get()}, sample_rate);
+        }
 
         ref.blocks.push_back(block);
     }
@@ -168,7 +179,10 @@ void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChann
     }
 }
 
-void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid, SceneTrackRef& ref, uint32_t sample_rate) {
+void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid,
+                           SceneTrackRef& ref,
+                           uint32_t sample_rate,
+                           uint64_t obj_start_sample) {
     const auto pf = uid->getReference<adm::AudioPackFormat>();
     if (!pf) {
         return;
@@ -177,7 +191,7 @@ void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid, Scene
     for (const auto& cf : pf->getReferences<adm::AudioChannelFormat>()) {
         const auto type = cf->get<adm::TypeDescriptor>();
         if (type == adm::TypeDefinition::OBJECTS) {
-            append_objects_blocks_from_cf(cf, ref, sample_rate);
+            append_objects_blocks_from_cf(cf, ref, sample_rate, obj_start_sample);
         } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
             append_direct_speakers_blocks_from_cf(cf, pf, ref);
         }
@@ -194,6 +208,8 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
         if (obj->has<adm::AudioObjectName>()) {
             out.name = obj->get<adm::AudioObjectName>().get();
         }
+        // AudioObject.start is DefaultParameter — always present, default 0.
+        const uint64_t obj_start = time_to_samples(obj->get<adm::Start>().get(), sample_rate);
         for (const auto& uid : obj->getReferences<adm::AudioTrackUid>()) {
             SceneTrackRef ref;
             ref.track_uid = adm::formatId(uid->get<adm::AudioTrackUidId>());
@@ -201,7 +217,7 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
             if (it != uid_map.end()) {
                 ref.channel_index = it->second;
             }
-            populate_track_blocks(uid, ref, sample_rate);
+            populate_track_blocks(uid, ref, sample_rate, obj_start);
             out.tracks.push_back(std::move(ref));
         }
         result.push_back(std::move(out));
