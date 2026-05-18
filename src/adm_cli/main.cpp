@@ -199,8 +199,10 @@ int main(int argc, char** argv) {
         ->check(CLI::Range(-60.0F, 0.0F));
     render_cmd->add_option("--output-bit-depth", output_bit_depth_str, "Output bit depth: f32, i24, i16")
         ->check(CLI::IsMember({"f32", "i24", "i16"}));
-    render_cmd->add_option("--loudness-target", loudness_target,
-                           "Normalise integrated loudness to this LUFS target (enables loudness normalisation)")
+    render_cmd
+        ->add_option("--loudness-target",
+                     loudness_target,
+                     "Normalise integrated loudness to this LUFS target (enables loudness normalisation)")
         ->check(CLI::Range(-70.0F, 0.0F));
     render_cmd->add_flag("-v,--verbose", verbose, "Enable verbose logs");
 

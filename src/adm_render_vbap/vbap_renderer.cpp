@@ -93,14 +93,13 @@ struct SafFree {
     }
     if (layout_id == "9+10+3") {
         // ITU-R BS.2159 22.2: labels follow BS.2051 layer/azimuth convention.
-        return LayoutSpec{{{-30.0F, 0.0F, "M-030"},   {30.0F, 0.0F, "M+030"},    {0.0F, 0.0F, "M+000"},
-                           {-90.0F, 0.0F, "M-090"},   {90.0F, 0.0F, "M+090"},    {-150.0F, 0.0F, "M-150"},
-                           {150.0F, 0.0F, "M+150"},   {180.0F, 0.0F, "M+180"},   {-30.0F, 30.0F, "U-030"},
-                           {30.0F, 30.0F, "U+030"},   {0.0F, 30.0F, "U+000"},    {-90.0F, 30.0F, "U-090"},
-                           {90.0F, 30.0F, "U+090"},   {-150.0F, 30.0F, "U-150"}, {150.0F, 30.0F, "U+150"},
-                           {180.0F, 30.0F, "U+180"},  {-30.0F, -30.0F, "B-030"}, {30.0F, -30.0F, "B+030"},
-                           {0.0F, -30.0F, "B+000"},   {-110.0F, -30.0F, "B-110"},{110.0F, -30.0F, "B+110"},
-                           {180.0F, -30.0F, "B+180"}}};
+        return LayoutSpec{
+            {{-30.0F, 0.0F, "M-030"},   {30.0F, 0.0F, "M+030"},    {0.0F, 0.0F, "M+000"},    {-90.0F, 0.0F, "M-090"},
+             {90.0F, 0.0F, "M+090"},    {-150.0F, 0.0F, "M-150"},  {150.0F, 0.0F, "M+150"},  {180.0F, 0.0F, "M+180"},
+             {-30.0F, 30.0F, "U-030"},  {30.0F, 30.0F, "U+030"},   {0.0F, 30.0F, "U+000"},   {-90.0F, 30.0F, "U-090"},
+             {90.0F, 30.0F, "U+090"},   {-150.0F, 30.0F, "U-150"}, {150.0F, 30.0F, "U+150"}, {180.0F, 30.0F, "U+180"},
+             {-30.0F, -30.0F, "B-030"}, {30.0F, -30.0F, "B+030"},  {0.0F, -30.0F, "B+000"},  {-110.0F, -30.0F, "B-110"},
+             {110.0F, -30.0F, "B+110"}, {180.0F, -30.0F, "B+180"}}};
     }
     return std::nullopt;
 }
@@ -121,15 +120,16 @@ struct SafFree {
 }
 
 // Find the speaker index closest to (azimuth, elevation) by squared Euclidean
-// distance in az/el space.  Good enough for speaker-routing fallback; not used
-// for panning, so full great-circle accuracy is unnecessary.
+// distance in az/el space.  Azimuth is circular: -180 and +180 are adjacent.
+// Good enough for speaker-routing fallback; not used for panning, so full
+// great-circle accuracy is unnecessary.
 [[nodiscard]] std::size_t nearest_speaker_index(const LayoutSpec& layout, float azimuth, float elevation) {
     std::size_t best = 0;
     float best_sq = std::numeric_limits<float>::max();
     for (std::size_t i = 0; i < layout.speakers.size(); ++i) {
-        const float daz = azimuth - layout.speakers[i].azimuth;
+        const float daz = std::remainder(azimuth - layout.speakers[i].azimuth, 360.0F);
         const float del = elevation - layout.speakers[i].elevation;
-        const float sq = daz * daz + del * del;
+        const float sq = (daz * daz) + (del * del);
         if (sq < best_sq) {
             best_sq = sq;
             best = i;
@@ -140,7 +140,7 @@ struct SafFree {
 
 [[nodiscard]] SpeakerDirection source_direction(const SceneBlockPosition& pos) {
     if (!pos.cartesian) {
-        return {pos.azimuth, pos.elevation};
+        return {pos.azimuth, pos.elevation, {}};
     }
 
     const auto x = static_cast<double>(pos.x);
@@ -152,7 +152,7 @@ struct SafFree {
     }
 
     constexpr auto rad_to_deg = 180.0 / std::numbers::pi;
-    return {static_cast<float>(std::atan2(-x, y) * rad_to_deg), static_cast<float>(std::atan2(z, xy) * rad_to_deg)};
+    return {static_cast<float>(std::atan2(-x, y) * rad_to_deg), static_cast<float>(std::atan2(z, xy) * rad_to_deg), {}};
 }
 
 // Map ADM Objects extent parameters to a MDAP spread angle in degrees.
@@ -209,8 +209,8 @@ struct SafFree {
     return gains;
 }
 
-[[nodiscard]] Result<std::vector<ChannelGainInfo>> build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout,
-                                                                       LogSink& logs) {
+[[nodiscard]] Result<std::vector<ChannelGainInfo>>
+build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs) {
     std::vector<ChannelGainInfo> result;
     const auto num_out = layout.speakers.size();
 
@@ -252,7 +252,7 @@ struct SafFree {
                 if (!matched) {
                     const float az = ds.has_position ? ds.azimuth : 0.0F;
                     const float el = ds.has_position ? ds.elevation : 0.0F;
-                    if (!ds.has_position && !ds.speaker_labels.empty()) {
+                    if (!ds.speaker_labels.empty()) {
                         logs.log(LogLevel::warning,
                                  "saf-vbap",
                                  fmt::format("DirectSpeakers label '{}' not in output layout — "

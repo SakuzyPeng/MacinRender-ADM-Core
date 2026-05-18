@@ -5,6 +5,8 @@
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -42,6 +44,20 @@ bool check(bool condition, const char* msg) {
 enum class ObjectPositionMode : std::uint8_t {
     polar_front,
     cartesian_front,
+};
+
+class CapturingLogSink final : public mradm::LogSink {
+  public:
+    void log(mradm::LogLevel level, std::string_view module, std::string_view message) override {
+        if (level == mradm::LogLevel::warning && module == "saf-vbap") {
+            warnings_.emplace_back(message);
+        }
+    }
+
+    [[nodiscard]] bool has_warnings() const { return !warnings_.empty(); }
+
+  private:
+    std::vector<std::string> warnings_;
 };
 
 std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(ObjectPositionMode mode) {
@@ -92,6 +108,53 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(ObjectPo
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
+std::pair<std::shared_ptr<adm::Document>, std::string> make_direct_speakers_doc(const char* label, float azimuth) {
+    auto doc = adm::Document::create();
+
+    auto cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"VbapDsCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    {
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::SphericalSpeakerPosition{adm::Azimuth{azimuth}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
+        block.add(adm::SpeakerLabel{label});
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"VbapDsPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"VbapDsSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"VbapDsTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"VbapDsObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"VbapDsContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"VbapDsProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
 std::filesystem::path write_input_fixture(const std::shared_ptr<adm::Document>& doc, const std::string& uid_str) {
     auto path = std::filesystem::temp_directory_path() / "mr_vbap_fixture_in.wav";
 
@@ -107,6 +170,25 @@ std::filesystem::path write_input_fixture(const std::shared_ptr<adm::Document>& 
     writer->write(samples.data(), k_frames);
 
     return path;
+}
+
+std::vector<double> read_channel_sums(const std::filesystem::path& path, std::size_t channels) {
+    auto reader_res = mradm::audio::FloatWavReader::open(path.string());
+    if (!reader_res) {
+        return {};
+    }
+    auto& reader = *reader_res;
+    const auto n_frames = static_cast<std::size_t>(reader.frame_count());
+    std::vector<float> samples(n_frames * channels);
+    reader.read(samples.data(), reader.frame_count());
+
+    std::vector<double> sums(channels, 0.0);
+    for (std::size_t frame = 0; frame < n_frames; ++frame) {
+        for (std::size_t ch = 0; ch < channels; ++ch) {
+            sums[ch] += std::fabs(static_cast<double>(samples[(frame * channels) + ch]));
+        }
+    }
+    return sums;
 }
 
 std::pair<std::shared_ptr<adm::Document>, std::string> make_mdap_doc(float width) {
@@ -255,6 +337,78 @@ bool verify_vbap_render_fixture(ObjectPositionMode mode, const char* label) {
     return ok;
 }
 
+bool verify_direct_speakers_label_routing() {
+    auto [doc, uid_str] = make_direct_speakers_doc("M+030", 30.0F);
+    const auto in_path = write_input_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_vbap_ds_label_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest request;
+    request.input_path = in_path;
+    request.output_path = out_path;
+    request.options.output_layout = "0+2+0";
+    request.options.renderer = mradm::RendererSelection::saf;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const mradm::RenderResult result = service.render(request, progress, logs);
+    if (!result.success()) {
+        std::cerr << "FAIL: DirectSpeakers label route render failed: " << result.error.message << "\n";
+        return false;
+    }
+
+    const auto sums = read_channel_sums(out_path, 2U);
+    bool ok = true;
+    ok &= check(sums.size() == 2U, "DirectSpeakers label output is stereo");
+    if (ok) {
+        ok &= check(sums[0] < 1.0e-6, "DirectSpeakers label M+030 does not leak to M-030 channel");
+        ok &= check(sums[1] > 0.0, "DirectSpeakers label M+030 routes to M+030 channel");
+    }
+    return ok;
+}
+
+bool verify_direct_speakers_position_fallback_wrap() {
+    auto [doc, uid_str] = make_direct_speakers_doc("NOT_A_BS2051_LABEL", -179.0F);
+    const auto in_path = write_input_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_vbap_ds_fallback_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest request;
+    request.input_path = in_path;
+    request.output_path = out_path;
+    request.options.output_layout = "9+10+3";
+    request.options.renderer = mradm::RendererSelection::saf;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    CapturingLogSink logs;
+    const mradm::RenderResult result = service.render(request, progress, logs);
+    if (!result.success()) {
+        std::cerr << "FAIL: DirectSpeakers fallback render failed: " << result.error.message << "\n";
+        return false;
+    }
+
+    constexpr std::size_t k_rear_channel = 7U; // M+180 in layout_spec("9+10+3")
+    const auto sums = read_channel_sums(out_path, 22U);
+    bool ok = true;
+    ok &= check(sums.size() == 22U, "DirectSpeakers fallback output has 22 channels");
+    if (ok) {
+        ok &= check(sums[k_rear_channel] > 0.0, "DirectSpeakers fallback wraps -179° to rear M+180");
+        for (std::size_t ch = 0; ch < sums.size(); ++ch) {
+            if (ch != k_rear_channel) {
+                ok &= check(sums[ch] < 1.0e-6, "DirectSpeakers fallback does not leak to non-nearest channels");
+            }
+        }
+    }
+    ok &= check(logs.has_warnings(), "DirectSpeakers fallback emits warning on label miss");
+    return ok;
+}
+
 // Verify MDAP spread: Objects with width=0.8 rendered to 4+5+0 (9ch, has
 // elevated speakers at ±45°) should distribute energy to elevated channels.
 // Compare against the same source with width=0 (pure VBAP) to confirm spread
@@ -293,6 +447,10 @@ int main() {
         std::cerr << "FAIL: saf-vbap must declare supports_objects\n";
         ok = false;
     }
+    if (!caps.supports_direct_speakers) {
+        std::cerr << "FAIL: saf-vbap must declare supports_direct_speakers\n";
+        ok = false;
+    }
 
     // ── Engine routing ────────────────────────────────────────────────────────
     // Nonexistent file → io_error at scene import; proves the backend is
@@ -321,6 +479,8 @@ int main() {
 
     ok &= verify_vbap_render_fixture(ObjectPositionMode::polar_front, "polar front");
     ok &= verify_vbap_render_fixture(ObjectPositionMode::cartesian_front, "cartesian front");
+    ok &= verify_direct_speakers_label_routing();
+    ok &= verify_direct_speakers_position_fallback_wrap();
     ok &= verify_mdap_spread_fixture();
 
     if (ok) {
