@@ -106,7 +106,8 @@ std::filesystem::path write_fixture(const std::shared_ptr<adm::Document>& doc, c
 std::vector<double> read_channel_rms(const std::filesystem::path& path) {
     auto reader_res = mradm::audio::FloatWavReader::open(path.string());
     if (!reader_res) {
-        return std::vector<double>(k_hoa3_channels, 0.0);
+        std::vector<double> empty(k_hoa3_channels, 0.0);
+        return empty;
     }
     auto& reader = *reader_res;
     const auto n_frames = static_cast<std::size_t>(reader.frame_count());

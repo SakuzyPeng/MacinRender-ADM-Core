@@ -58,6 +58,16 @@ mradm::RendererSelection parse_renderer(const std::string& value) {
     return mradm::RendererSelection::automatic;
 }
 
+mradm::OutputBitDepth parse_output_bit_depth(const std::string& value) {
+    if (value == "i24") {
+        return mradm::OutputBitDepth::i24;
+    }
+    if (value == "i16") {
+        return mradm::OutputBitDepth::i16;
+    }
+    return mradm::OutputBitDepth::f32;
+}
+
 void print_scene(const std::string& path, const mradm::AdmScene& scene) {
     const auto& info = scene.info;
     fmt::print("File: {}\n", path);
@@ -151,6 +161,14 @@ void print_capabilities(const mradm::CapabilityReport& caps) {
     }
 }
 
+void print_all_capabilities() {
+    print_capabilities(mradm::ear_capabilities());
+    fmt::print("\n");
+    print_capabilities(mradm::vbap_capabilities());
+    fmt::print("\n");
+    print_capabilities(mradm::hoa_capabilities());
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -211,12 +229,7 @@ int main(int argc, char** argv) {
         request.options.renderer = parse_renderer(renderer);
         request.options.peak_limit = !no_peak_limit;
         request.options.peak_limit_dbtp = peak_limit_dbtp;
-        if (output_bit_depth_str == "i24") {
-            request.options.output_bit_depth = mradm::OutputBitDepth::i24;
-        } else if (output_bit_depth_str == "i16") {
-            request.options.output_bit_depth = mradm::OutputBitDepth::i16;
-        }
-        // default f32 is already set
+        request.options.output_bit_depth = parse_output_bit_depth(output_bit_depth_str);
 
         mradm::RenderService service;
         ConsoleProgressSink progress;
@@ -250,11 +263,7 @@ int main(int argc, char** argv) {
     }
 
     if (*backends_cmd) {
-        print_capabilities(mradm::ear_capabilities());
-        fmt::print("\n");
-        print_capabilities(mradm::vbap_capabilities());
-        fmt::print("\n");
-        print_capabilities(mradm::hoa_capabilities());
+        print_all_capabilities();
     }
 
     return EXIT_SUCCESS;

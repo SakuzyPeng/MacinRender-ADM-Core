@@ -43,9 +43,12 @@ using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
 
     while (frames_left > 0) {
         const uint64_t n = std::min(static_cast<uint64_t>(k_block), frames_left);
-        reader.read(buf.data(), n);
-        ebur128_add_frames_float(st.get(), buf.data(), static_cast<std::size_t>(n));
-        frames_left -= n;
+        const uint64_t got = reader.read(buf.data(), n);
+        if (got == 0) {
+            break;
+        }
+        ebur128_add_frames_float(st.get(), buf.data(), static_cast<std::size_t>(got));
+        frames_left -= got;
     }
 
     double max_peak = 0.0;
@@ -84,13 +87,18 @@ using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
 
             while (frames_left > 0) {
                 const uint64_t n = std::min(static_cast<uint64_t>(k_block), frames_left);
-                reader.read(buf.data(), n);
-                const std::size_t samples = static_cast<std::size_t>(num_ch) * static_cast<std::size_t>(n);
+                const uint64_t got = reader.read(buf.data(), n);
+                if (got == 0) {
+                    break;
+                }
+                const std::size_t samples = static_cast<std::size_t>(num_ch) * static_cast<std::size_t>(got);
                 for (std::size_t i = 0; i < samples; ++i) {
                     buf[i] *= gain;
                 }
-                writer.write(buf.data(), n);
-                frames_left -= n;
+                if (writer.write(buf.data(), got) != got) {
+                    return make_error(ErrorCode::io_error, "short write while applying peak gain", "path=" + path);
+                }
+                frames_left -= got;
             }
         }
         std::filesystem::rename(tmp_path, path);

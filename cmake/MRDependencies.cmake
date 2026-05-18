@@ -87,8 +87,7 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         FetchContent_Declare(
             dr_libs
             GIT_REPOSITORY https://github.com/mackron/dr_libs.git
-            GIT_TAG master
-            GIT_SHALLOW TRUE
+            GIT_TAG 47a4f08e777faddf59a8955c4ea84f69f41020d5
         )
         FetchContent_GetProperties(dr_libs)
         if(NOT dr_libs_POPULATED)
@@ -102,7 +101,7 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         if(NOT TARGET dr_wav::dr_wav)
             add_library(mr_dr_wav INTERFACE)
             add_library(dr_wav::dr_wav ALIAS mr_dr_wav)
-            target_include_directories(mr_dr_wav INTERFACE "${dr_libs_SOURCE_DIR}")
+            target_include_directories(mr_dr_wav SYSTEM INTERFACE "${dr_libs_SOURCE_DIR}")
         endif()
         return()
     elseif(package_name STREQUAL "libbw64")

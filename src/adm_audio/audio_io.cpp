@@ -1,10 +1,11 @@
 // DR_WAV_IMPLEMENTATION must be defined in exactly one translation unit.
 #define DR_WAV_IMPLEMENTATION
-#include <dr_wav.h>
+#include "adm/audio_io.h"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <dr_wav.h>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -14,7 +15,6 @@
 #include <bw64/bw64.hpp>
 #include <fmt/format.h>
 
-#include "adm/audio_io.h"
 #include "adm/errors.h"
 
 namespace mradm::audio {
@@ -37,7 +37,7 @@ Result<FloatWavWriter> FloatWavWriter::open(const std::string& path, uint32_t ch
     fmt.sampleRate = sample_rate;
     fmt.bitsPerSample = 32;
 
-    if (!drwav_init_file_write(&w.impl_->wav, path.c_str(), &fmt, nullptr)) {
+    if (drwav_init_file_write(&w.impl_->wav, path.c_str(), &fmt, nullptr) == 0U) {
         return make_error(ErrorCode::io_error, "failed to open float32 WAV for writing", "path=" + path);
     }
     w.impl_->open = true;
@@ -68,7 +68,7 @@ Result<FloatWavReader> FloatWavReader::open(const std::string& path) {
     FloatWavReader r;
     r.impl_ = std::make_unique<Impl>();
 
-    if (!drwav_init_file(&r.impl_->wav, path.c_str(), nullptr)) {
+    if (drwav_init_file(&r.impl_->wav, path.c_str(), nullptr) == 0U) {
         return make_error(ErrorCode::io_error, "failed to open WAV for reading", "path=" + path);
     }
     r.impl_->open = true;
@@ -84,9 +84,15 @@ FloatWavReader::~FloatWavReader() {
 FloatWavReader::FloatWavReader(FloatWavReader&&) noexcept = default;
 FloatWavReader& FloatWavReader::operator=(FloatWavReader&&) noexcept = default;
 
-uint32_t FloatWavReader::channels() const { return impl_->wav.channels; }
-uint32_t FloatWavReader::sample_rate() const { return impl_->wav.sampleRate; }
-uint64_t FloatWavReader::frame_count() const { return impl_->wav.totalPCMFrameCount; }
+uint32_t FloatWavReader::channels() const {
+    return impl_->wav.channels;
+}
+uint32_t FloatWavReader::sample_rate() const {
+    return impl_->wav.sampleRate;
+}
+uint64_t FloatWavReader::frame_count() const {
+    return impl_->wav.totalPCMFrameCount;
+}
 
 uint64_t FloatWavReader::read(float* out, uint64_t frames) {
     return drwav_read_pcm_frames_f32(&impl_->wav, frames, out);
@@ -117,10 +123,8 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth) {
 
         const auto tmp_path = path + ".bitdepth_tmp";
         {
-            auto writer = bw64::writeFile(tmp_path,
-                                          static_cast<uint16_t>(channels),
-                                          static_cast<uint16_t>(sample_rate),
-                                          bit_depth);
+            auto writer = bw64::writeFile(
+                tmp_path, static_cast<uint16_t>(channels), static_cast<uint16_t>(sample_rate), bit_depth);
 
             constexpr uint64_t k_block = 4096;
             std::vector<float> buf(static_cast<std::size_t>(channels) * k_block);
@@ -141,9 +145,7 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth) {
         return {};
 
     } catch (const std::exception& e) {
-        return make_error(ErrorCode::io_error,
-                          std::string("bit depth conversion failed: ") + e.what(),
-                          "path=" + path);
+        return make_error(ErrorCode::io_error, std::string("bit depth conversion failed: ") + e.what(), "path=" + path);
     }
 }
 

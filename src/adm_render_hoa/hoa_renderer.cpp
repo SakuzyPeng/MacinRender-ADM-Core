@@ -183,7 +183,9 @@ Result<void> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress,
                 }
             }
 
-            writer.write(out_block.data(), frames_now);
+            if (writer.write(out_block.data(), frames_now) != frames_now) {
+                return make_error(ErrorCode::io_error, "short write while encoding HOA", "output=" + plan.output_path);
+            }
             frames_done += frames_now;
 
             const double frac = 0.3 + (0.6 * (static_cast<double>(frames_done) / static_cast<double>(num_frames)));
