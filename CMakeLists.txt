@@ -163,6 +163,30 @@ target_link_libraries(mr_adm_render_hoa
 mr_adm_core_apply_warnings(mr_adm_render_hoa)
 mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
 
+# ── adm_peak ──────────────────────────────────────────────────────────────────
+# True Peak measurement (ITU-R BS.1770-4) via libebur128 + global gain rewrite.
+
+add_library(mr_adm_peak)
+add_library(MacinRender::ADMPeak ALIAS mr_adm_peak)
+
+target_sources(
+    mr_adm_peak
+    PRIVATE
+        src/adm_peak/peak_limiter.cpp
+    PUBLIC
+        FILE_SET HEADERS
+        BASE_DIRS include
+        FILES
+            include/adm/peak.h
+)
+
+target_link_libraries(mr_adm_peak
+    PUBLIC MacinRender::ADMCore
+    PRIVATE libbw64 ebur128
+)
+mr_adm_core_apply_warnings(mr_adm_peak)
+mr_adm_core_apply_static_analysis(mr_adm_peak)
+
 # ── adm_engine ────────────────────────────────────────────────────────────────
 # Orchestration layer: implements RenderService, selects backends.
 
@@ -177,7 +201,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMPeak
 )
 mr_adm_core_apply_warnings(mr_adm_engine)
 mr_adm_core_apply_static_analysis(mr_adm_engine)
@@ -287,6 +311,20 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_ear_fixture_tests)
     add_test(NAME mr_adm_ear_fixture_tests COMMAND mr_adm_ear_fixture_tests)
 
+    # Fixture test: True Peak limiting — renders a near-full-scale Objects file and
+    # verifies the limiter brings output below the target dBTP.
+    add_executable(mr_adm_peak_fixture_tests tests/unit/peak_limiter_fixture_test.cpp)
+    target_link_libraries(mr_adm_peak_fixture_tests
+        PRIVATE
+            MacinRender::ADMEngine
+            MacinRender::ADMPeak
+            libbw64
+            adm
+    )
+    mr_adm_core_apply_warnings(mr_adm_peak_fixture_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_peak_fixture_tests)
+    add_test(NAME mr_adm_peak_fixture_tests COMMAND mr_adm_peak_fixture_tests)
+
     # Fixture test: Objects ADM → HOA3 (16ch, ACN/SN3D) encode.
     add_executable(mr_adm_hoa_encode_fixture_tests tests/unit/hoa_encode_fixture_test.cpp)
     target_link_libraries(mr_adm_hoa_encode_fixture_tests
@@ -331,7 +369,7 @@ install(
 # libraries provide proper installed CMake configs. Install binaries and headers
 # without export; re-integrate post-M3.
 install(
-    TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_render_hoa mr_adm_engine
+    TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_render_hoa mr_adm_peak mr_adm_engine
     FILE_SET HEADERS
 )
 

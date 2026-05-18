@@ -19,6 +19,7 @@ struct RenderOptions {
     std::string output_layout{"binaural"};
     bool measure_loudness{true};
     bool peak_limit{true};
+    float peak_limit_dbtp{-1.0F}; // True Peak target in dBTP (broadcast standard)
 };
 
 struct RenderRequest {

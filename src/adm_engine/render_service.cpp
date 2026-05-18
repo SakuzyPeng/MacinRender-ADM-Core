@@ -3,6 +3,7 @@
 #include <fmt/format.h>
 
 #include "adm/io.h"
+#include "adm/peak.h"
 #include "adm/render.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
@@ -73,6 +74,14 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     auto render_res = renderer->render(plan, progress, logs);
     if (!render_res) {
         return {render_res.error(), std::nullopt, {{LogLevel::error, render_res.error().message}}};
+    }
+
+    // Post-process: True Peak limiting.
+    if (request.options.peak_limit) {
+        auto limit_res = apply_peak_limit(output_path, request.options.peak_limit_dbtp, logs);
+        if (!limit_res) {
+            return {limit_res.error(), std::nullopt, {{LogLevel::error, limit_res.error().message}}};
+        }
     }
 
     return {{ErrorCode::ok, "", {}}, std::filesystem::path{output_path}, {{LogLevel::info, "render completed"}}};

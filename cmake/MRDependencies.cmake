@@ -47,6 +47,33 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             add_library(tl::expected ALIAS expected)
         endif()
         return()
+    elseif(package_name STREQUAL "libebur128")
+        set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+        set(_mr_adm_core_restore_shared_ebur TRUE)
+        if(DEFINED BUILD_SHARED_LIBS)
+            set(_mr_adm_core_had_shared_ebur TRUE)
+            set(_mr_adm_core_saved_shared_ebur "${BUILD_SHARED_LIBS}")
+        else()
+            set(_mr_adm_core_had_shared_ebur FALSE)
+        endif()
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            libebur128
+            GIT_REPOSITORY https://github.com/jiixyj/libebur128.git
+            GIT_TAG v1.2.6
+            GIT_SHALLOW TRUE
+        )
+        # libebur128 v1.2.6 declares cmake_minimum_required(VERSION 2.x), which
+        # CMake 4.0 rejects without this policy fallback.
+        set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
+        FetchContent_MakeAvailable(libebur128)
+        if(_mr_adm_core_had_shared_ebur)
+            set(BUILD_SHARED_LIBS "${_mr_adm_core_saved_shared_ebur}" CACHE BOOL "" FORCE)
+        else()
+            unset(BUILD_SHARED_LIBS CACHE)
+            unset(BUILD_SHARED_LIBS)
+        endif()
+        return()
     elseif(package_name STREQUAL "libbw64")
         set(BW64_UNIT_TESTS OFF CACHE BOOL "" FORCE)
         FetchContent_Declare(
@@ -128,6 +155,7 @@ mr_adm_core_find_or_fetch(fmt fmt::fmt)
 mr_adm_core_find_or_fetch(spdlog spdlog::spdlog)
 mr_adm_core_find_or_fetch(CLI11 CLI11::CLI11)
 mr_adm_core_find_or_fetch(tl-expected tl::expected)
+mr_adm_core_find_or_fetch(libebur128 ebur128)
 mr_adm_core_find_or_fetch(libbw64 libbw64)
 mr_adm_core_find_or_fetch(libadm adm)
 mr_adm_core_find_or_fetch(libear ear)
