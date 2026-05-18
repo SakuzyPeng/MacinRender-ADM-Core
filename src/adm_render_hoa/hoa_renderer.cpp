@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -28,10 +29,10 @@ using Hoa3Coeffs = std::array<float, k_hoa3_channels>;
 // Matches ADMHOAEncoder::encodeOrder3SN3DForDirectionX:y:z: from the ObjC
 // renderer. Callers must ensure the vector is already normalised.
 Hoa3Coeffs sh_sn3d_3(float x, float y, float z) noexcept {
-    const float sqrt3    = std::sqrt(3.0F);
-    const float sqrt15   = std::sqrt(15.0F);
-    const float sqrt5_8  = std::sqrt(5.0F / 8.0F);
-    const float sqrt3_8  = std::sqrt(3.0F / 8.0F);
+    constexpr float sqrt3 = std::numbers::sqrt3_v<float>;
+    const float sqrt15 = std::sqrt(15.0F);
+    const float sqrt5_8 = std::sqrt(5.0F / 8.0F);
+    const float sqrt3_8 = std::sqrt(3.0F / 8.0F);
 
     return {
         // n=0
@@ -91,12 +92,10 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene) {
 
             for (const auto& block : track.blocks) {
                 Hoa3Coeffs sh = block.position.cartesian
-                    ? encode_cartesian(block.position.x, block.position.y, block.position.z)
-                    : encode_polar(block.position.azimuth, block.position.elevation);
+                                    ? encode_cartesian(block.position.x, block.position.y, block.position.z)
+                                    : encode_polar(block.position.azimuth, block.position.elevation);
 
-                for (auto& c : sh) {
-                    c *= block.gain;
-                }
+                std::ranges::transform(sh, sh.begin(), [gain = block.gain](float c) { return c * gain; });
 
                 result.push_back({in_ch, sh});
             }
@@ -153,12 +152,11 @@ Result<void> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress,
     }
 
     try {
-        logs.log(LogLevel::info,
-                 "hoa-encode",
-                 fmt::format("encoding {} Objects tracks → HOA3 ({} ch), {} frames",
-                             gain_matrix.size(),
-                             k_num_out,
-                             num_frames));
+        logs.log(
+            LogLevel::info,
+            "hoa-encode",
+            fmt::format(
+                "encoding {} Objects tracks → HOA3 ({} ch), {} frames", gain_matrix.size(), k_num_out, num_frames));
         progress.on_progress({RenderStage::rendering, 0.3, "encoding HOA"});
 
         auto reader = bw64::readFile(plan.input_path);
@@ -179,8 +177,10 @@ Result<void> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress,
             for (const auto& cg : gain_matrix) {
                 for (std::size_t f = 0; f < frames_now; ++f) {
                     const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
-                    for (std::size_t ch = 0; ch < k_num_out; ++ch) {
-                        out_block[(f * k_num_out) + ch] += in_s * cg.gains[ch];
+                    std::size_t out_index = f * k_num_out;
+                    for (const float gain : cg.gains) {
+                        out_block[out_index] += in_s * gain;
+                        ++out_index;
                     }
                 }
             }

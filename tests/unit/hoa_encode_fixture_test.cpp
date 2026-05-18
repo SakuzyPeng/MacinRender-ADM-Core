@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -47,8 +48,7 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(float az
 
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"HoaCF"}, adm::TypeDefinition::OBJECTS);
     {
-        adm::AudioBlockFormatObjects block{
-            adm::SphericalPosition{adm::Azimuth{az_deg}, adm::Elevation{el_deg}}};
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{az_deg}, adm::Elevation{el_deg}}};
         block.set(adm::Gain{static_cast<double>(k_amplitude)});
         cf->add(block);
     }
@@ -111,13 +111,12 @@ std::vector<double> read_channel_rms(const std::filesystem::path& path) {
     std::vector<double> rms(k_hoa3_channels, 0.0);
     for (std::size_t f = 0; f < n_frames; ++f) {
         for (std::size_t ch = 0; ch < static_cast<std::size_t>(k_hoa3_channels); ++ch) {
-            const double s = static_cast<double>(samples[(f * static_cast<std::size_t>(k_hoa3_channels)) + ch]);
+            const auto s = static_cast<double>(samples[(f * static_cast<std::size_t>(k_hoa3_channels)) + ch]);
             rms[ch] += s * s;
         }
     }
-    for (auto& r : rms) {
-        r = std::sqrt(r / static_cast<double>(n_frames));
-    }
+    std::ranges::transform(
+        rms, rms.begin(), [n_frames](double r) { return std::sqrt(r / static_cast<double>(n_frames)); });
     return rms;
 }
 

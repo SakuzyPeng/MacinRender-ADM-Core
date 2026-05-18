@@ -218,6 +218,8 @@ if(MR_ADM_CORE_BUILD_CLI)
             MacinRender::ADMEngine
             MacinRender::ADMIo
             MacinRender::ADMRenderEar
+            MacinRender::ADMRenderVBAP
+            MacinRender::ADMRenderHOA
             CLI11::CLI11
             spdlog::spdlog
     )
@@ -328,7 +330,10 @@ install(
 # libraries (libbw64, libadm, libear, SAF) cannot be in the export set until those
 # libraries provide proper installed CMake configs. Install binaries and headers
 # without export; re-integrate post-M3.
-install(TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_engine FILE_SET HEADERS)
+install(
+    TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_render_hoa mr_adm_engine
+    FILE_SET HEADERS
+)
 
 install(
     EXPORT MacinRenderADMCoreTargets
