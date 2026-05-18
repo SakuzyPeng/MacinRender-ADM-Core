@@ -118,12 +118,14 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_time_varying_objects
         left_block.set(adm::Gain{1.0F});
         left_block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
         left_block.set(adm::Duration{adm::Time{std::chrono::milliseconds{500}}});
+        left_block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
         cf->add(left_block);
 
         adm::AudioBlockFormatObjects right_block{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}}};
         right_block.set(adm::Gain{1.0F});
         right_block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{500}}});
         right_block.set(adm::Duration{adm::Time{std::chrono::milliseconds{500}}});
+        right_block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
         cf->add(right_block);
     }
     doc->add(cf);
