@@ -35,6 +35,8 @@ struct LayoutSpec {
 struct ChannelGainInfo {
     uint16_t input_channel{0};
     std::vector<float> gains;
+    uint64_t start_sample{0};
+    uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
 };
 
 struct SafFree {
@@ -228,7 +230,7 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
                     return make_error(
                         gains.error().code, gains.error().message, fmt::format("track_uid={}", track.track_uid));
                 }
-                result.push_back({in_ch, std::move(*gains)});
+                result.push_back({in_ch, std::move(*gains), block.start_sample, block.end_sample});
             }
 
             // DirectSpeakers blocks → label match, then nearest-speaker fallback.
@@ -348,6 +350,10 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
 
             for (const auto& cg : *gain_matrix) {
                 for (std::size_t frame = 0; frame < frames_now; frame++) {
+                    const uint64_t abs_frame = frames_done + frame;
+                    if (abs_frame < cg.start_sample || abs_frame >= cg.end_sample) {
+                        continue;
+                    }
                     const float in_sample = in_block[(frame * num_in_ch) + cg.input_channel];
                     for (std::size_t out_ch = 0; out_ch < num_out_ch; out_ch++) {
                         out_block[(frame * num_out_ch) + out_ch] += in_sample * cg.gains[out_ch];

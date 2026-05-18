@@ -45,7 +45,20 @@ std::map<std::string, uint16_t> make_uid_map(const std::shared_ptr<bw64::ChnaChu
     return result;
 }
 
-void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat>& cf, SceneTrackRef& ref) {
+// Convert an adm::Time to a sample offset.  Uses nanosecond representation
+// internally; precision is ≪1 sample at all standard audio sample rates.
+// NOTE: rtime is relative to AudioObject start; we assume start==0 (the
+// common case for single-programme documents).
+uint64_t time_to_samples(const adm::Time& t, uint32_t sample_rate) {
+    const int64_t ns = t.asNanoseconds().count();
+    if (ns <= 0) {
+        return 0;
+    }
+    return (static_cast<uint64_t>(ns) * sample_rate) / 1'000'000'000ULL;
+}
+
+void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat>& cf, SceneTrackRef& ref,
+                                   uint32_t sample_rate) {
     const auto raw_blocks = cf->getElements<adm::AudioBlockFormatObjects>();
     for (const auto& raw : raw_blocks) {
         SceneObjectBlock block;
@@ -83,6 +96,14 @@ void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat
         if (raw.has<adm::Depth>()) {
             block.depth = static_cast<float>(raw.get<adm::Depth>().get());
         }
+
+        // rtime is DefaultParameter — always present, default 0.
+        block.start_sample = time_to_samples(raw.get<adm::Rtime>().get(), sample_rate);
+        if (raw.has<adm::Duration>()) {
+            const uint64_t dur = time_to_samples(raw.get<adm::Duration>().get(), sample_rate);
+            block.end_sample = block.start_sample + dur;
+        }
+        // else: end_sample remains UINT64_MAX (extends to end of file)
 
         ref.blocks.push_back(block);
     }
@@ -123,7 +144,8 @@ void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChann
     }
 }
 
-void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid, SceneTrackRef& ref) {
+void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid, SceneTrackRef& ref,
+                           uint32_t sample_rate) {
     const auto pf = uid->getReference<adm::AudioPackFormat>();
     if (!pf) {
         return;
@@ -132,7 +154,7 @@ void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid, Scene
     for (const auto& cf : pf->getReferences<adm::AudioChannelFormat>()) {
         const auto type = cf->get<adm::TypeDescriptor>();
         if (type == adm::TypeDefinition::OBJECTS) {
-            append_objects_blocks_from_cf(cf, ref);
+            append_objects_blocks_from_cf(cf, ref, sample_rate);
         } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
             append_direct_speakers_blocks_from_cf(cf, pf, ref);
         }
@@ -140,7 +162,8 @@ void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid, Scene
 }
 
 std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& doc,
-                                         const std::map<std::string, uint16_t>& uid_map) {
+                                         const std::map<std::string, uint16_t>& uid_map,
+                                         uint32_t sample_rate) {
     std::vector<SceneObject> result;
     for (const auto& obj : doc->getElements<adm::AudioObject>()) {
         SceneObject out;
@@ -155,7 +178,7 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
             if (it != uid_map.end()) {
                 ref.channel_index = it->second;
             }
-            populate_track_blocks(uid, ref);
+            populate_track_blocks(uid, ref, sample_rate);
             out.tracks.push_back(std::move(ref));
         }
         result.push_back(std::move(out));
@@ -222,7 +245,7 @@ Result<AdmScene> import_scene(const std::string& path) {
         scene.info = std::move(info);
         scene.programmes = extract_programmes(document);
         scene.contents = extract_contents(document);
-        scene.objects = extract_objects(document, uid_map);
+        scene.objects = extract_objects(document, uid_map, reader->sampleRate());
 
         return scene;
 

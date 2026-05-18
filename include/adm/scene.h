@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -33,6 +34,10 @@ struct SceneObjectBlock {
     float width{0.0f};
     float height{0.0f};
     float depth{0.0f};
+    // Sample-accurate time window within the file.  end_sample == UINT64_MAX
+    // means the block extends to the end of the file (duration not specified).
+    uint64_t start_sample{0};
+    uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
 };
 
 // Rendering metadata from one AudioBlockFormatDirectSpeakers.
