@@ -89,7 +89,7 @@ using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
                 const uint64_t n = std::min(static_cast<uint64_t>(k_block), frames_left);
                 const uint64_t got = reader.read(buf.data(), n);
                 if (got == 0) {
-                    break;
+                    return make_error(ErrorCode::io_error, "short read while applying peak gain", "path=" + path);
                 }
                 const std::size_t samples = static_cast<std::size_t>(num_ch) * static_cast<std::size_t>(got);
                 for (std::size_t i = 0; i < samples; ++i) {
