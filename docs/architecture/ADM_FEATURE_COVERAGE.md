@@ -216,13 +216,61 @@ HOA 渲染器当前功能：Objects 块 → SH3（SN3D，16ch）编码输出。
 
 ---
 
-## 9. 优先级分类
+## 9. 平台无关 DSP / 渲染扩展
+
+下列能力不完全等同于 ADM 字段覆盖，而是面向后续里程碑的渲染器能力扩展。
+它们应尽量落在 `adm_render_*` 或独立 DSP 模块内，不反向污染 `AdmScene` 领域模型。
+
+| 能力 | 当前状态 | 建议定位 |
+|---|---|---|
+| **HRTF / SOFA binauraliser** | ❌ 未实现；`output_layout=binaural` 目前只是 stereo alias | 独立 binaural 后端或渲染后处理，读取 SOFA/HRTF 数据集 |
+| **decorrelator / diffuse bus** | ❌ EAR 已计算 diffuse gains 但未渲染；VBAP 忽略 ADM `diffuse` | 优先补 EAR 的 BS.2127 去相关 FIR；VBAP 可另设扩散策略 |
+| **reverb / room simulation** | ❌ 未实现 | 可作为可选后处理，不应默认改变 ADM 合规渲染结果 |
+| **更完整 VBAP 布局表** | ⚠️ 仅硬编码少量布局 | 抽出布局注册表，覆盖更多 BS.2051 / CICP 常用布局 |
+| **VBAP 2D / 3D 配置** | ⚠️ 自动按布局高度判断；无用户可见配置 | 显式能力报告和配置开关，避免 2D 无 spread 参数时行为不透明 |
+| **VBAP 插值策略配置** | ⚠️ 支持 ADM `jumpPosition/interpolationLength`，默认 5ms；不可配置 | 暴露默认 ramp、clamp、瞬时切换等策略选项 |
+
+### HRTF / SOFA binauraliser
+
+`binaural` 目前不是 HRTF 渲染器：EAR 和 VBAP 都会把它映射到 `0+2+0`，
+输出普通双声道扬声器布局。真正的 binauraliser 需要：
+
+- SOFA 文件加载、HRTF 数据集选择和采样率匹配；
+- 方位插值、距离策略、头外化相关补偿；
+- 分块卷积和延迟管理；
+- 与 Objects / DirectSpeakers / HOA decode 输出之间的清晰串接方式。
+
+### decorrelator / diffuse
+
+EAR 路径应优先实现 libear `designDecorrelators()` 对应的 diffuse bus，
+这是当前 Objects 渲染最明确的合规缺口。VBAP 的 MDAP spread 只对应 extent 几何扩散，
+不能替代 ADM `diffuse` 的去相关语义。
+
+### reverb / room simulation
+
+房间模拟不属于 BS.2076 / BS.2127 基础渲染要求，默认启用会改变合规输出。
+若实现，应作为显式 opt-in 的后处理或单独 renderer option，并在测试中区分
+"ADM 合规渲染"与"创作型空间效果"。
+
+### VBAP 完整度
+
+当前 SAF VBAP 后端已经覆盖 Objects / DirectSpeakers、2D / 3D gain table、
+ADM 块插值和 MDAP extent spread，但仍偏工程内置：
+
+- 布局表硬编码在 `vbap_renderer.cpp`，缺少外部可扩展布局注册；
+- 2D / 3D 由布局是否存在非零 elevation 自动决定，CLI/能力报告没有显式说明；
+- 3D spread 使用 MDAP，2D SAF API 无 spread 参数，行为需要在文档和能力报告中暴露；
+- 默认插值 5ms、过长 ramp clamp 等策略尚未成为用户可配置选项。
+
+---
+
+## 10. 优先级分类
 
 ### P1 — 影响渲染正确性（当前输出有可测量偏差）
 
 | 问题 | 影响 | 涉及文件 |
 |---|---|---|
-| diffuse bus 丢弃（EAR） | diffuse=1 静音；0<d<1 能量损失 | `ear_renderer.cpp` |
+| diffuse bus 丢弃（EAR） | diffuse=1 静音；0<d<1 能量损失；需补去相关 FIR 和延迟补偿 | `ear_renderer.cpp`、DSP FIR 状态 |
 | AudioObject.gain 未读 | 对象级增益控制失效 | `scene.h`、importer |
 | AudioObject.mute 未读 | 静音对象仍正常渲染 | `scene.h`、importer、渲染器 |
 | AudioObject.duration 未读 | 对象超时仍渲染 | `scene.h`、importer |
@@ -249,6 +297,7 @@ HOA 渲染器当前功能：Objects 块 → SH3（SN3D，16ch）编码输出。
 | DS CartesianSpeakerPosition | `scene.h`、importer |
 | AudioObject.positionOffset | `scene.h`、importer、渲染器 |
 | HOA jumpPosition / 插值 | `hoa_renderer.cpp` |
+| VBAP 布局注册表 / 能力报告增强 | `vbap_renderer.cpp`、CLI |
 
 ### P3 — 功能完整性（原版也未实现）
 
@@ -260,6 +309,9 @@ HOA 渲染器当前功能：Objects 块 → SH3（SN3D，16ch）编码输出。
 | AudioProgramme loudnessMetadata | 读取内嵌响度元数据 |
 | ADM HOA 块解码（typeDefinition=HOA） | 需要 libear GainCalculatorHOA |
 | ADM Matrix / Binaural 块 | 复杂度高，覆盖率低 |
+| HRTF / SOFA binauraliser | 真正的耳机双耳渲染；当前 `binaural` 只是 stereo alias |
+| VBAP 2D / 3D / 插值策略配置 | 当前自动选择且大多硬编码 |
+| reverb / room simulation | 可选创作型空间效果，不属于默认合规渲染 |
 
 ### 暂不实现
 
