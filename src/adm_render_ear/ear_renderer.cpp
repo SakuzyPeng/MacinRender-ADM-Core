@@ -20,6 +20,7 @@ namespace {
 
 struct BlockGains {
     std::vector<double> gains;
+    std::vector<double> diffuse_gains;
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
     bool jump_position{false};
@@ -33,20 +34,34 @@ struct ChannelGainInfo {
 
 struct AccumulateContext {
     const float* input{nullptr};
-    std::vector<float>* output{nullptr};
+    std::vector<float>* output{nullptr};  // direct output buffer (float)
+    double* diffuse_in{nullptr};          // per-frame×ch diffuse input (double); may be nullptr
     uint64_t frames_done{0};
     uint16_t num_in_ch{0};
     uint16_t num_out_ch{0};
     uint64_t default_interp{0};
 };
 
-std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear::Layout& layout) {
+// FIR decorrelator state for the diffuse bus (BS.2127).
+struct DecorrState {
+    std::vector<std::vector<double>> filters;    // [num_out_ch][512]
+    int comp_delay{0};                           // decorrelatorCompensationDelay() = 255
+    std::vector<std::vector<double>> fir_hist;   // [num_out_ch][511]  FIR overlap history
+    std::vector<std::vector<float>>  dir_delay;  // [num_out_ch][comp_delay]  direct delay
+};
+
+std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene,
+                                               const ear::Layout& layout,
+                                               LogSink& logs) {
     std::map<uint16_t, ChannelGainInfo> by_channel;
     ear::GainCalculatorObjects objects_calc{layout};
     ear::GainCalculatorDirectSpeakers direct_speakers_calc{layout};
     const std::size_t num_out = layout.channels().size();
 
     for (const auto& obj : scene.objects) {
+        if (obj.mute) {
+            continue;
+        }
         for (const auto& track : obj.tracks) {
             if (!track.channel_index.has_value()) {
                 continue;
@@ -74,7 +89,25 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
                     meta.cartesian = false;
                 }
 
-                meta.gain = static_cast<double>(block.gain);
+                // P2 defensive layer: warn and degrade fields that cause libear
+                // to throw not_implemented so the file doesn't fail to render.
+                if (block.channel_lock) {
+                    logs.log(LogLevel::warning, "ear",
+                             "channelLock not supported by libear, degrading to unlocked");
+                }
+                if (block.divergence != 0.0f) {
+                    logs.log(LogLevel::warning, "ear",
+                             fmt::format("objectDivergence={:.3f} not supported by libear, degrading to 0",
+                                         block.divergence));
+                }
+                if (block.screen_ref) {
+                    logs.log(LogLevel::warning, "ear",
+                             "screenRef not supported by libear, degrading to false");
+                }
+                // meta.channelLock / objectDivergence / screenRef remain at their
+                // default (unlocked / 0 / false) — do not set from block.
+
+                meta.gain = static_cast<double>(block.gain) * static_cast<double>(obj.gain);
                 meta.diffuse = static_cast<double>(block.diffuse);
                 meta.width = static_cast<double>(block.width);
                 meta.height = static_cast<double>(block.height);
@@ -82,12 +115,12 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
 
                 BlockGains bg;
                 bg.gains.resize(num_out, 0.0);
+                bg.diffuse_gains.resize(num_out, 0.0);
                 bg.start_sample = block.start_sample;
-                bg.end_sample = block.end_sample;
+                bg.end_sample = std::min(block.end_sample, obj.end_sample);
                 bg.jump_position = block.jump_position;
                 bg.interp_length_samples = block.interp_length_samples;
-                std::vector<double> diffuse_gains(num_out, 0.0);
-                objects_calc.calculate(meta, bg.gains, diffuse_gains);
+                objects_calc.calculate(meta, bg.gains, bg.diffuse_gains);
                 cg.blocks.push_back(std::move(bg));
             }
 
@@ -107,10 +140,13 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
 
                 BlockGains bg;
                 bg.gains.resize(num_out, 0.0);
+                bg.diffuse_gains.resize(num_out, 0.0); // DS has no diffuse bus
+                bg.start_sample = ds.start_sample;
+                bg.end_sample = std::min(ds.end_sample, obj.end_sample);
                 bg.jump_position = true;
                 direct_speakers_calc.calculate(meta, bg.gains);
-                const auto block_gain = static_cast<double>(ds.gain);
-                std::ranges::transform(bg.gains, bg.gains.begin(), [block_gain](double g) { return g * block_gain; });
+                const auto ds_gain = static_cast<double>(ds.gain) * static_cast<double>(obj.gain);
+                std::ranges::transform(bg.gains, bg.gains.begin(), [ds_gain](double g) { return g * ds_gain; });
                 cg.blocks.push_back(std::move(bg));
             }
         }
@@ -147,9 +183,10 @@ interpolation_length(const ChannelGainInfo& channel, std::size_t block_index, ui
 }
 
 [[nodiscard]] double interpolated_gain(
-    const BlockGains& previous, const BlockGains& current, std::size_t out_ch, uint64_t delta, uint64_t interp_len) {
+    const std::vector<double>& prev, const std::vector<double>& cur,
+    std::size_t out_ch, uint64_t delta, uint64_t interp_len) {
     const double alpha = static_cast<double>(delta) / static_cast<double>(interp_len);
-    return (previous.gains[out_ch] * (1.0 - alpha)) + (current.gains[out_ch] * alpha);
+    return (prev[out_ch] * (1.0 - alpha)) + (cur[out_ch] * alpha);
 }
 
 void accumulate_channel_block(const ChannelGainInfo& channel,
@@ -174,9 +211,18 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
 
     for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
         const double gain = ramping
-                                ? interpolated_gain(channel.blocks[block_index - 1], block, out_ch, delta, interp_len)
-                                : block.gains[out_ch];
+            ? interpolated_gain(channel.blocks[block_index - 1].gains, block.gains, out_ch, delta, interp_len)
+            : block.gains[out_ch];
         (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += in_sample * static_cast<float>(gain);
+
+        if (ctx.diffuse_in) {
+            const double diff_gain = ramping
+                ? interpolated_gain(channel.blocks[block_index - 1].diffuse_gains,
+                                    block.diffuse_gains, out_ch, delta, interp_len)
+                : block.diffuse_gains[out_ch];
+            ctx.diffuse_in[(frame * ctx.num_out_ch) + out_ch] +=
+                static_cast<double>(in_sample) * diff_gain;
+        }
     }
 }
 
@@ -191,6 +237,78 @@ void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
         }
         for (std::size_t frame = 0; frame < frames_now; ++frame) {
             accumulate_channel_block(channel, block_indices[ci], ctx, frame);
+        }
+    }
+}
+
+// Apply 512-tap FIR decorrelator to each output channel's diffuse input signal.
+// diffuse_in:  [frames_now × num_out_ch] planar-interleaved, double
+// diffuse_out: [frames_now × num_out_ch] planar-interleaved, float  (written)
+void apply_decorrelator(DecorrState& state,
+                        const std::vector<double>& diffuse_in,
+                        std::vector<float>& diffuse_out,
+                        std::size_t frames_now,
+                        std::size_t num_out_ch) {
+    constexpr std::size_t kFirLen  = 512;
+    constexpr std::size_t kHistLen = kFirLen - 1; // 511
+
+    for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
+        const auto& fir  = state.filters[ch];
+        auto& hist = state.fir_hist[ch]; // [511]
+
+        // Build [hist | new samples] for causal convolution.
+        std::vector<double> ext(kHistLen + frames_now);
+        std::copy(hist.begin(), hist.end(), ext.begin());
+        for (std::size_t f = 0; f < frames_now; ++f) {
+            ext[kHistLen + f] = diffuse_in[f * num_out_ch + ch];
+        }
+
+        // Direct-form FIR: y[n] = Σ fir[k] × x[n−k]
+        for (std::size_t f = 0; f < frames_now; ++f) {
+            double y = 0.0;
+            for (std::size_t k = 0; k < kFirLen; ++k) {
+                y += fir[k] * ext[kHistLen + f - k];
+            }
+            diffuse_out[f * num_out_ch + ch] = static_cast<float>(y);
+        }
+
+        // Update history with last kHistLen samples of the new input.
+        // frames_now (1024) > kHistLen (511) — simple tail copy.
+        for (std::size_t i = 0; i < kHistLen; ++i) {
+            hist[i] = diffuse_in[(frames_now - kHistLen + i) * num_out_ch + ch];
+        }
+    }
+}
+
+// Delay the direct bus by comp_delay samples using a circular history buffer.
+// Operates in-place on direct_block [frames_now × num_out_ch].
+void apply_direct_delay(DecorrState& state,
+                        std::vector<float>& direct_block,
+                        std::size_t frames_now,
+                        std::size_t num_out_ch) {
+    const std::size_t D = static_cast<std::size_t>(state.comp_delay); // 255
+
+    for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
+        auto& buf = state.dir_delay[ch]; // [D]
+
+        // Snapshot the new samples before in-place modification.
+        std::vector<float> new_in(frames_now);
+        for (std::size_t f = 0; f < frames_now; ++f) {
+            new_in[f] = direct_block[f * num_out_ch + ch];
+        }
+
+        // Output: first D samples come from the delay buffer, the rest from
+        // new_in offset by D. Assumes frames_now (1024) > D (255).
+        for (std::size_t f = 0; f < D; ++f) {
+            direct_block[f * num_out_ch + ch] = buf[f];
+        }
+        for (std::size_t f = D; f < frames_now; ++f) {
+            direct_block[f * num_out_ch + ch] = new_in[f - D];
+        }
+
+        // Update delay buffer with the tail of new_in.
+        for (std::size_t i = 0; i < D; ++i) {
+            buf[i] = new_in[frames_now - D + i];
         }
     }
 }
@@ -216,11 +334,11 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         const auto& info = plan.scene.info;
 
         const ear::Layout layout = ear::getLayout(layout_id);
-        const auto gain_matrix = build_gain_matrix(plan.scene, layout);
+        const auto gain_matrix = build_gain_matrix(plan.scene, layout, logs);
 
         if (gain_matrix.empty()) {
-            return make_error(
-                ErrorCode::render_failed, "no renderable tracks found in ADM document", "input=" + plan.input_path);
+            logs.log(LogLevel::warning, "ear",
+                     "no renderable tracks found (all muted?), writing silence");
         }
 
         const auto num_out_ch = static_cast<uint16_t>(layout.channels().size());
@@ -245,6 +363,13 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
 
         progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
 
+        // Initialise decorrelator state for the diffuse bus.
+        DecorrState decorr;
+        decorr.filters   = ear::designDecorrelators<double>(layout);
+        decorr.comp_delay = ear::decorrelatorCompensationDelay(); // 255
+        decorr.fir_hist.assign(num_out_ch, std::vector<double>(511, 0.0));
+        decorr.dir_delay.assign(num_out_ch, std::vector<float>(static_cast<std::size_t>(decorr.comp_delay), 0.0f));
+
         // Open file for audio only — ADM metadata comes from plan.scene.
         auto reader = bw64::readFile(plan.input_path);
         auto writer_res = audio::FloatWavWriter::open(plan.output_path, num_out_ch, static_cast<uint32_t>(sample_rate));
@@ -257,8 +382,10 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         std::vector<std::size_t> blk_idx(gain_matrix.size(), 0);
 
         constexpr uint64_t k_block_size = 1024;
-        std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
-        std::vector<float> out_block(static_cast<std::size_t>(num_out_ch) * k_block_size);
+        std::vector<float>  in_block(static_cast<std::size_t>(num_in_ch)  * k_block_size);
+        std::vector<float>  out_block(static_cast<std::size_t>(num_out_ch) * k_block_size);
+        std::vector<double> diffuse_in(static_cast<std::size_t>(num_out_ch) * k_block_size);
+        std::vector<float>  diffuse_out(static_cast<std::size_t>(num_out_ch) * k_block_size);
         uint64_t frames_done = 0;
 
         while (frames_done < num_frames) {
@@ -266,11 +393,26 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
             const std::size_t out_samples = static_cast<std::size_t>(num_out_ch) * frames_now;
 
             reader->read(in_block.data(), frames_now);
-            std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
+            std::fill(out_block.begin(),   out_block.begin()   + static_cast<ptrdiff_t>(out_samples), 0.0F);
+            std::fill(diffuse_in.begin(),  diffuse_in.begin()  + static_cast<ptrdiff_t>(out_samples), 0.0);
+            std::fill(diffuse_out.begin(), diffuse_out.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
+            // Accumulate direct and diffuse gains into their respective buffers.
             const AccumulateContext ctx{
-                in_block.data(), &out_block, frames_done, num_in_ch, num_out_ch, k_default_interp};
+                in_block.data(), &out_block, diffuse_in.data(),
+                frames_done, num_in_ch, num_out_ch, k_default_interp};
             accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now);
+
+            // Apply 512-tap FIR decorrelator to the diffuse input per channel.
+            apply_decorrelator(decorr, diffuse_in, diffuse_out, frames_now, num_out_ch);
+
+            // Delay the direct bus by comp_delay samples to align with diffuse.
+            apply_direct_delay(decorr, out_block, frames_now, num_out_ch);
+
+            // Mix delayed direct + decorrelated diffuse.
+            for (std::size_t s = 0; s < out_samples; ++s) {
+                out_block[s] += diffuse_out[s];
+            }
 
             if (writer.write(out_block.data(), frames_now) != frames_now) {
                 return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);
