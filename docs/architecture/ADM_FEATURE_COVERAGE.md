@@ -33,10 +33,10 @@
 | width / height / depth | ✅ DefaultParam | ✅ | ✅ | ✅ | ✅ | ✅（MDAP） |
 | rtime / duration | ✅ Default/Opt | — | start/end\_sample | ✅ | ✅ | ✅ |
 | jumpPosition + interpolationLength | ✅ DefaultParam | — | ✅ | ✅ | ✅ | ✅ |
-| **channelLock** | ✅ DefaultParam | 🚫 flag=true 时抛出 | ❌ | ❌ | ❌ | ❌ |
-| **objectDivergence** | ✅ DefaultParam | 🚫 divergence≠0 时抛出 | ❌ | ❌ | ❌ | ❌ |
+| **channelLock** | ✅ DefaultParam | 🚫 flag=true 时抛出 | ✅ | ✅ | ⚠️ warn+degrade | — |
+| **objectDivergence** | ✅ DefaultParam | 🚫 divergence≠0 时抛出 | ✅ | ✅ | ⚠️ warn+degrade | — |
 | **zoneExclusion** | ❌ libadm 标注 unsupported | 🚫 zones 非空时抛出 | ❌ | ❌ | ❌ | ❌ |
-| **screenRef** | ✅ DefaultParam | 🚫 screenRef=true 时抛出 | ❌ | ❌ | ❌ | ❌ |
+| **screenRef** | ✅ DefaultParam | 🚫 screenRef=true 时抛出 | ✅ | ✅ | ⚠️ warn+degrade | — |
 | importance | ✅ DefaultParam | — 结构体无此字段 | ❌ | ❌ | — | — |
 | headLocked | ✅ DefaultParam | — | ❌ | ❌ | — | — |
 | headphoneVirtualise | ✅ DefaultParam | — | ❌ | ❌ | — | — |
@@ -55,7 +55,7 @@ if (metadata.cartesian) throw not_implemented("cartesian");
 因此，包含笛卡尔坐标 Objects 块的 ADM 文件送入 EAR 渲染器会渲染失败。
 VBAP 渲染器自行处理坐标变换，不依赖 libear，故 VBAP 侧笛卡尔坐标正常工作。
 
-### 注②：diffuse bus 被丢弃（P1 合规缺陷）
+### 注②：diffuse bus（M4 已修复）
 
 libear 的增益公式为：
 
@@ -64,27 +64,17 @@ directGains  = pv_gains × √(1 − diffuse)
 diffuseGains = pv_gains × √(diffuse)
 ```
 
-标准要求 diffuse bus 经过 `designDecorrelators()` 提供的 FIR 去相关滤波器，
-延迟补偿后与 direct bus 混合。当前实现调用 `calculate()` 但丢弃 `diffuseGains`：
+**M4 实现（✅）**：EAR 渲染器现在完整处理 diffuse bus：
+① `diffuse_gains` 由 `GainCalculatorObjects::calculate()` 同步输出；
+② 渲染循环中通过 `designDecorrelators<double>(layout)` 得到的逐声道 512-tap FIR 进行去相关；
+③ direct bus 延迟补偿 `decorrelatorCompensationDelay()` = 255 样本后与 diffuse bus 混合。
 
-```cpp
-std::vector<double> diffuse_gains(num_out, 0.0);
-objects_calc.calculate(meta, bg.gains, diffuse_gains);
-// diffuse_gains 未使用
-```
+修复后各场景：
+- `diffuse = 0`：direct gains = pv（√1），无 diffuse 贡献，行为与之前一致。
+- `0 < diffuse < 1`：direct 和 diffuse 均正确缩放并混合，能量守恒。
+- `diffuse = 1`：direct = 0，信号全部经去相关后输出，**不再静音**。
 
-实际后果：
-
-- `diffuse = 0`：direct gains 不受影响（√1 = 1），渲染正确。
-- `0 < diffuse < 1`：direct gains 按 √(1−diffuse) 衰减，能量丢失；
-  diffuse bus 的去相关贡献完全缺失。
-- `diffuse = 1`：direct gains 乘以 √0 = 0，渲染结果为**静音**。
-
-这是 EAR 渲染器目前最严重的 BS.2127 合规偏差。完整修复需要：
-① 从 libear 取 `designDecorrelators()` 和 `decorrelatorCompensationDelay()`；
-② 维护逐声道 FIR 卷积状态；③ 混合时对 direct bus 补偿延迟。
-
-VBAP 渲染器目前忽略 `diffuse` 参数；`width/height/depth` 驱动的 MDAP 扩散
+VBAP 渲染器忽略 `diffuse` 参数；`width/height/depth` 驱动的 MDAP 扩散
 基于 extent 几何分布，与 ADM diffuse 语义无关。
 
 ---
@@ -98,16 +88,15 @@ VBAP 渲染器目前忽略 `diffuse` 参数；`width/height/depth` 驱动的 MDA
 | **position ranges（azMin/Max, elMin/Max, distMin/Max）** | ✅ | ✅ | ❌ | ❌ |
 | **CartesianSpeakerPosition** | ✅ | 🚫 运行时抛出 | ❌ | ❌ |
 | gain | ✅ DefaultParam | 手动应用 | ✅ | ✅ |
-| **rtime / duration**（时域块） | ✅ Default/Opt | — | ❌ | ❌ |
+| **rtime / duration**（时域块） | ✅ Default/Opt | — | ✅ | ✅ |
 | **channelFrequency**（在 AudioChannelFormat） | ✅ | ✅ | ❌ | ❌ |
 | importance / headLocked | ✅ DefaultParam | — | ❌ | ❌ |
 
-### DS 时域块缺失
+### DS 时域块（M3.2 已修复）
 
-`AudioBlockFormatDirectSpeakers` 有 `rtime`（DefaultParam）和 `duration`（OptParam），
-语义与 Objects 块一致。当前 importer 完全忽略这两个字段，`SceneDirectSpeakersBlock`
-也没有 `start_sample` / `end_sample`。所有 DS 块被当作全程静态处理，时变床层布局无法
-正确还原。
+`AudioBlockFormatDirectSpeakers` 的 `rtime`（DefaultParam）和 `duration`（OptParam）
+现已读取：`SceneDirectSpeakersBlock` 新增 `start_sample` / `end_sample`，
+importer 从 rtime/duration 推算样本偏移后写入，EAR 和 VBAP 渲染器均已接入时域门控。
 
 ---
 
@@ -117,9 +106,9 @@ VBAP 渲染器目前忽略 `diffuse` 参数；`width/height/depth` 驱动的 MDA
 |---|---|---|---|
 | id / name | ✅ Required | ✅ | ✅ |
 | start（含父子层级 BFS 累计） | ✅ DefaultParam | ✅ | ✅ |
-| **duration**（对象有效时长上限） | ✅ Opt | ❌ | ❌ |
-| **gain**（对象级增益，乘到所有块） | ✅ DefaultParam | ❌ | ❌ |
-| **mute** | ✅ DefaultParam | ❌ | ❌ |
+| **duration**（对象有效时长上限） | ✅ Opt | ✅ | ✅ |
+| **gain**（对象级增益，乘到所有块） | ✅ DefaultParam | ✅ | ✅ |
+| **mute** | ✅ DefaultParam | ✅ | ✅ |
 | headLocked | ✅ DefaultParam | ❌ | ❌ |
 | **positionOffset**（polar / cartesian） | ✅ Opt | ❌ | ❌ |
 | interact / disableDucking | ✅ Opt | ❌ | ❌ |
@@ -224,7 +213,7 @@ HOA 渲染器当前功能：Objects 块 → SH3（SN3D，16ch）编码输出。
 | 能力 | 当前状态 | 建议定位 |
 |---|---|---|
 | **HRTF / SOFA binauraliser** | ❌ 未实现；`output_layout=binaural` 目前只是 stereo alias | 独立 binaural 后端或渲染后处理，读取 SOFA/HRTF 数据集 |
-| **decorrelator / diffuse bus** | ❌ EAR 已计算 diffuse gains 但未渲染；VBAP 忽略 ADM `diffuse` | 优先补 EAR 的 BS.2127 去相关 FIR；VBAP 可另设扩散策略 |
+| **decorrelator / diffuse bus** | ✅ EAR 已实现 BS.2127 去相关 FIR + 延迟补偿（M4）；VBAP 忽略 ADM `diffuse` | — |
 | **reverb / room simulation** | ❌ 未实现 | 可作为可选后处理，不应默认改变 ADM 合规渲染结果 |
 | **更完整 VBAP 布局表** | ⚠️ 仅硬编码少量布局 | 抽出布局注册表，覆盖更多 BS.2051 / CICP 常用布局 |
 | **VBAP 2D / 3D 配置** | ⚠️ 自动按布局高度判断；无用户可见配置 | 显式能力报告和配置开关，避免 2D 无 spread 参数时行为不透明 |
@@ -270,24 +259,20 @@ ADM 块插值和 MDAP extent spread，但仍偏工程内置：
 
 | 问题 | 影响 | 涉及文件 |
 |---|---|---|
-| diffuse bus 丢弃（EAR） | diffuse=1 静音；0<d<1 能量损失；需补去相关 FIR 和延迟补偿 | `ear_renderer.cpp`、DSP FIR 状态 |
-| AudioObject.gain 未读 | 对象级增益控制失效 | `scene.h`、importer |
-| AudioObject.mute 未读 | 静音对象仍正常渲染 | `scene.h`、importer、渲染器 |
-| AudioObject.duration 未读 | 对象超时仍渲染 | `scene.h`、importer |
-| DS 块无时间窗 | 时变床层全程叠加 | `scene.h`、importer |
 | EAR 拒绝 Cartesian Objects | 文件级渲染失败 | `ear_renderer.cpp`（需坐标转换兜底） |
 
-### P2 — libear 字段暴露但渲染实现缺失（传入会在运行时抛出）
+> 原 P1 项（diffuse bus 丢弃、AudioObject gain/mute/duration 未读、DS 块无时间窗）已在 M3/M4 中修复。
 
-| 问题 | libear 行为 | 涉及文件 |
+### P2 — libear 字段暴露（已防御）/ 仍待处理
+
+| 问题 | libear 行为 | 状态 |
 |---|---|---|
-| channelLock | flag=true 时 `not_implemented` | importer、scene.h、EAR |
-| objectDivergence | divergence≠0 时 `not_implemented` | importer、scene.h、EAR |
-| zoneExclusion | zones 非空时 `not_implemented` | importer、scene.h、EAR |
-| screenRef | screenRef=true 时 `not_implemented` | importer、scene.h、EAR、programme 解析 |
+| channelLock | flag=true 时 `not_implemented` | ⚠️ warn+degrade（M3.3） |
+| objectDivergence | divergence≠0 时 `not_implemented` | ⚠️ warn+degrade（M3.3） |
+| screenRef | screenRef=true 时 `not_implemented` | ⚠️ warn+degrade（M3.3） |
+| zoneExclusion | zones 非空时 `not_implemented` | ❌ 仍未处理，当前静默丢弃 |
 
-对于 P2 的近期策略：在传入 libear 前做检查，遇到非零值记 warning 并静默降级
-（置零 / 忽略），而非让整个渲染失败。这是防御性处理，不等于完整支持。
+warn+degrade 是防御性处理：libear 不抛出，但 P2 语义未完整渲染。
 
 ### P2b — importer 缺口（与 libear 支持无关）
 

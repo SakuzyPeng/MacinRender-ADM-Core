@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -581,11 +582,9 @@ double render_ear_diffuse_energy(float diffuse_value,
     std::vector<float> buf(n * 2U);
     reader.read(buf.data(), reader.frame_count());
 
-    double energy = 0.0;
-    for (const float s : buf) {
-        energy += std::fabs(static_cast<double>(s));
-    }
-    return energy;
+    return std::transform_reduce(buf.begin(), buf.end(), 0.0,
+                                 [](double a, double b) { return a + b; },
+                                 [](float s) { return std::fabs(static_cast<double>(s)); });
 }
 
 bool verify_diffuse_bus(mradm::RenderService& service,
@@ -662,6 +661,149 @@ bool verify_diffuse_bus(mradm::RenderService& service,
     return ok;
 }
 
+// Verifies that the EAR renderer handles a block shorter than the FIR history
+// (511 samples) and the direct delay (255 samples) without out-of-bounds access.
+bool verify_ear_short_block(const mradm::RenderService& service,
+                             mradm::NullProgressSink& progress,
+                             mradm::NullLogSink& logs) {
+    auto [doc, uid_str] = make_objects_doc();
+
+    const auto in_path = std::filesystem::temp_directory_path() / "mr_ear_short_block_in.wav";
+    {
+        std::ostringstream xml_buf;
+        adm::writeXml(xml_buf, doc);
+        auto chna = std::make_shared<bw64::ChnaChunk>(
+            std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+        // 200 frames < min(255=comp_delay, 511=FIR history): exercises both short-block paths.
+        constexpr uint32_t k_short = 200U;
+        auto writer = bw64::writeFile(in_path.string(), 1U, 48000U, 24U, chna, axml);
+        std::vector<float> samples(k_short, 0.5F);
+        writer->write(samples.data(), k_short);
+    }
+    FileGuard in_g{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_ear_short_block_out.wav";
+    FileGuard out_g{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path            = in_path;
+    req.output_path           = out_path;
+    req.options.output_layout = "0+2+0";
+    req.options.renderer      = mradm::RendererSelection::ear;
+    req.options.peak_limit    = false;
+
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: short-block EAR render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!reader_res) {
+        std::cerr << "FAIL: cannot open short-block output\n";
+        return false;
+    }
+    return check(reader_res->frame_count() == 200U, "short-block: output has 200 frames");
+}
+
+// Creates an Objects document with all three P2 fields set to non-default values
+// (channelLock=true, divergence=0.5, screenRef=true) and verifies that EAR renders
+// successfully via the warn+degrade path instead of throwing not_implemented.
+bool verify_p2_degrade_gracefully(const mradm::RenderService& service,
+                                   mradm::NullProgressSink& progress,
+                                   mradm::NullLogSink& logs) {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"P2CF"},
+                                              adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{
+            adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        adm::ChannelLock cl;
+        cl.set(adm::ChannelLockFlag{true});
+        block.set(cl);
+        adm::ObjectDivergence od;
+        od.set(adm::Divergence{0.5F});
+        block.set(od);
+        block.set(adm::ScreenRef{true});
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"P2PF"},
+                                           adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"P2SF"},
+                                             adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"P2TF"},
+                                            adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"P2Obj"});
+    obj->addReference(uid);
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"P2Content"});
+    content->addReference(obj);
+    doc->add(content);
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"P2Programme"});
+    prog->addReference(content);
+    doc->add(prog);
+    adm::reassignIds(doc);
+
+    const auto in_path = std::filesystem::temp_directory_path() / "mr_ear_p2_in.wav";
+    {
+        std::ostringstream xml_buf;
+        adm::writeXml(xml_buf, doc);
+        const std::string uid_str = adm::formatId(uid->get<adm::AudioTrackUidId>());
+        auto chna = std::make_shared<bw64::ChnaChunk>(
+            std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+        auto writer = bw64::writeFile(in_path.string(), 1U, 48000U, 24U, chna, axml);
+        std::vector<float> samples(1000U, 0.5F);
+        writer->write(samples.data(), 1000U);
+    }
+    FileGuard in_g{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_ear_p2_out.wav";
+    FileGuard out_g{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path            = in_path;
+    req.output_path           = out_path;
+    req.options.output_layout = "0+2+0";
+    req.options.renderer      = mradm::RendererSelection::ear;
+    req.options.peak_limit    = false;
+
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: P2 degrade test render failed (expected warn+degrade, got error): "
+                  << res.error.message << "\n";
+        return false;
+    }
+
+    auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!reader_res) {
+        return false;
+    }
+    auto& reader = *reader_res;
+    const auto n = static_cast<std::size_t>(reader.frame_count());
+    std::vector<float> buf(n * 2U);
+    reader.read(buf.data(), reader.frame_count());
+    const double energy = std::transform_reduce(buf.begin(), buf.end(), 0.0,
+                                                [](double a, double b) { return a + b; },
+                                                [](float s) { return std::fabs(static_cast<double>(s)); });
+    return check(energy > 0.0, "P2 degrade: output is not silent (fields degraded, not rejected)");
+}
+
 } // namespace
 
 int main() {
@@ -674,6 +816,8 @@ int main() {
     ok &= verify_direct_speakers_render_fixture(service, progress, logs);
     ok &= verify_mixed_render_fixture(service, progress, logs);
     ok &= verify_diffuse_bus(service, progress, logs);
+    ok &= verify_ear_short_block(service, progress, logs);
+    ok &= verify_p2_degrade_gracefully(service, progress, logs);
 
     if (ok) {
         std::cout << "ear_render fixture test passed\n";
