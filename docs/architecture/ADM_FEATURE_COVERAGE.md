@@ -208,7 +208,7 @@ HOA 渲染器当前功能：Objects 块 → SH3（SN3D，16ch）编码输出。
 | 块级时间门控 | ✅ 已实现（start\_sample / end\_sample） |
 | jumpPosition / 插值斜坡 | ❌ 未实现（VBAP / EAR 均已有） |
 | diffuse 参数 | ❌ 编码时忽略 |
-| 固定 SN3D 输出 | ⚠️ order/normalization 不可配置，未从 ADM 参数读取 |
+| 固定 SN3D 输出 | ⚠️ order/normalization 暂不可配置；不读取 ADM HOA 参数，因为该路径不是 ADM HOA 输入渲染 |
 
 `normalization`、`nfcRefDist`、`screenRef` 是 `AudioBlockFormatHoa`
 （ADM HOA 输入格式）的字段，不属于当前 Objects→HOA encode 路径的范围；
