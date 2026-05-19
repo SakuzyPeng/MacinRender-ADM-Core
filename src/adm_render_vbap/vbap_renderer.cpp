@@ -304,11 +304,25 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
     return result;
 }
 
-[[nodiscard]] uint64_t interpolation_length(const BlockGains& block, std::size_t block_index, uint64_t default_interp) {
+[[nodiscard]] uint64_t block_active_length(const ChannelGainInfo& channel, std::size_t block_index) {
+    const auto& block = channel.blocks[block_index];
+    uint64_t active_end = block.end_sample;
+    if (block_index + 1 < channel.blocks.size()) {
+        active_end = std::min(active_end, channel.blocks[block_index + 1].start_sample);
+    }
+    if (active_end <= block.start_sample) {
+        return 0;
+    }
+    return active_end - block.start_sample;
+}
+
+[[nodiscard]] uint64_t
+interpolation_length(const ChannelGainInfo& channel, std::size_t block_index, uint64_t default_interp) {
+    const auto& block = channel.blocks[block_index];
     if (block.jump_position || block_index == 0) {
         return 0;
     }
-    return block.interp_length_samples.value_or(default_interp);
+    return std::min(block.interp_length_samples.value_or(default_interp), block_active_length(channel, block_index));
 }
 
 [[nodiscard]] float interpolated_gain(
@@ -332,7 +346,7 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
     }
 
     const float in_sample = ctx.input[(frame * ctx.num_in_ch) + channel.input_channel];
-    const uint64_t interp_len = interpolation_length(block, block_index, ctx.default_interp);
+    const uint64_t interp_len = interpolation_length(channel, block_index, ctx.default_interp);
     const uint64_t delta = abs_frame - block.start_sample;
     const bool ramping = interp_len > 0 && delta < interp_len;
 
