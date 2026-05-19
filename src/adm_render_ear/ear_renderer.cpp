@@ -50,6 +50,109 @@ struct DecorrState {
     std::vector<std::vector<float>> dir_delay; // [num_out_ch][comp_delay]  direct delay
 };
 
+[[nodiscard]] ear::ObjectsTypeMetadata object_metadata_from_block(const SceneObjectBlock& block,
+                                                                  const SceneObject& obj) {
+    ear::ObjectsTypeMetadata meta;
+    if (block.position.cartesian) {
+        meta.position = ear::CartesianPosition{
+            static_cast<double>(block.position.x),
+            static_cast<double>(block.position.y),
+            static_cast<double>(block.position.z),
+        };
+        meta.cartesian = true;
+    } else {
+        meta.position = ear::PolarPosition{
+            static_cast<double>(block.position.azimuth),
+            static_cast<double>(block.position.elevation),
+            static_cast<double>(block.position.distance),
+        };
+        meta.cartesian = false;
+    }
+    meta.gain = static_cast<double>(block.gain) * static_cast<double>(obj.gain);
+    meta.diffuse = static_cast<double>(block.diffuse);
+    meta.width = static_cast<double>(block.width);
+    meta.height = static_cast<double>(block.height);
+    meta.depth = static_cast<double>(block.depth);
+    return meta;
+}
+
+void warn_unsupported_object_fields(const SceneObjectBlock& block, LogSink& logs) {
+    if (block.channel_lock) {
+        logs.log(LogLevel::warning, "ear", "channelLock not supported by libear, degrading to unlocked");
+    }
+    if (block.divergence != 0.0F) {
+        logs.log(LogLevel::warning,
+                 "ear",
+                 fmt::format("objectDivergence={:.3f} not supported by libear, degrading to 0", block.divergence));
+    }
+    if (block.screen_ref) {
+        logs.log(LogLevel::warning, "ear", "screenRef not supported by libear, degrading to false");
+    }
+}
+
+void append_object_blocks(const SceneTrackRef& track,
+                          const SceneObject& obj,
+                          ChannelGainInfo& cg,
+                          ear::GainCalculatorObjects& objects_calc,
+                          std::size_t num_out,
+                          LogSink& logs) {
+    for (const auto& block : track.blocks) {
+        // P2 defensive layer: warn and degrade fields that cause libear
+        // to throw not_implemented so the file doesn't fail to render.
+        warn_unsupported_object_fields(block, logs);
+
+        auto meta = object_metadata_from_block(block, obj);
+        // meta.channelLock / objectDivergence / screenRef remain at their
+        // default (unlocked / 0 / false) — do not set from block.
+
+        BlockGains bg;
+        bg.gains.resize(num_out, 0.0);
+        bg.diffuse_gains.resize(num_out, 0.0);
+        bg.start_sample = block.start_sample;
+        bg.end_sample = std::min(block.end_sample, obj.end_sample);
+        bg.jump_position = block.jump_position;
+        bg.interp_length_samples = block.interp_length_samples;
+        objects_calc.calculate(meta, bg.gains, bg.diffuse_gains);
+        cg.blocks.push_back(std::move(bg));
+    }
+}
+
+[[nodiscard]] ear::DirectSpeakersTypeMetadata direct_speakers_metadata_from_block(const SceneDirectSpeakersBlock& ds) {
+    ear::DirectSpeakersTypeMetadata meta;
+    meta.speakerLabels = ds.speaker_labels;
+    if (!ds.pack_format_id.empty()) {
+        meta.audioPackFormatID = ds.pack_format_id;
+    }
+    if (ds.has_position) {
+        meta.position = ear::PolarSpeakerPosition{
+            static_cast<double>(ds.azimuth),
+            static_cast<double>(ds.elevation),
+            static_cast<double>(ds.distance),
+        };
+    }
+    return meta;
+}
+
+void append_direct_speakers_blocks(const SceneTrackRef& track,
+                                   const SceneObject& obj,
+                                   ChannelGainInfo& cg,
+                                   ear::GainCalculatorDirectSpeakers& direct_speakers_calc,
+                                   std::size_t num_out) {
+    for (const auto& ds : track.ds_blocks) {
+        auto meta = direct_speakers_metadata_from_block(ds);
+        BlockGains bg;
+        bg.gains.resize(num_out, 0.0);
+        bg.diffuse_gains.resize(num_out, 0.0); // DS has no diffuse bus
+        bg.start_sample = ds.start_sample;
+        bg.end_sample = std::min(ds.end_sample, obj.end_sample);
+        bg.jump_position = true;
+        direct_speakers_calc.calculate(meta, bg.gains);
+        const auto ds_gain = static_cast<double>(ds.gain) * static_cast<double>(obj.gain);
+        std::ranges::transform(bg.gains, bg.gains.begin(), [ds_gain](double g) { return g * ds_gain; });
+        cg.blocks.push_back(std::move(bg));
+    }
+}
+
 std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear::Layout& layout, LogSink& logs) {
     std::map<uint16_t, ChannelGainInfo> by_channel;
     ear::GainCalculatorObjects objects_calc{layout};
@@ -67,85 +170,8 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
             const uint16_t in_ch = *track.channel_index;
             auto& cg = by_channel[in_ch];
             cg.input_channel = in_ch;
-
-            for (const auto& block : track.blocks) {
-                ear::ObjectsTypeMetadata meta;
-
-                if (block.position.cartesian) {
-                    meta.position = ear::CartesianPosition{
-                        static_cast<double>(block.position.x),
-                        static_cast<double>(block.position.y),
-                        static_cast<double>(block.position.z),
-                    };
-                    meta.cartesian = true;
-                } else {
-                    meta.position = ear::PolarPosition{
-                        static_cast<double>(block.position.azimuth),
-                        static_cast<double>(block.position.elevation),
-                        static_cast<double>(block.position.distance),
-                    };
-                    meta.cartesian = false;
-                }
-
-                // P2 defensive layer: warn and degrade fields that cause libear
-                // to throw not_implemented so the file doesn't fail to render.
-                if (block.channel_lock) {
-                    logs.log(LogLevel::warning, "ear", "channelLock not supported by libear, degrading to unlocked");
-                }
-                if (block.divergence != 0.0f) {
-                    logs.log(LogLevel::warning,
-                             "ear",
-                             fmt::format("objectDivergence={:.3f} not supported by libear, degrading to 0",
-                                         block.divergence));
-                }
-                if (block.screen_ref) {
-                    logs.log(LogLevel::warning, "ear", "screenRef not supported by libear, degrading to false");
-                }
-                // meta.channelLock / objectDivergence / screenRef remain at their
-                // default (unlocked / 0 / false) — do not set from block.
-
-                meta.gain = static_cast<double>(block.gain) * static_cast<double>(obj.gain);
-                meta.diffuse = static_cast<double>(block.diffuse);
-                meta.width = static_cast<double>(block.width);
-                meta.height = static_cast<double>(block.height);
-                meta.depth = static_cast<double>(block.depth);
-
-                BlockGains bg;
-                bg.gains.resize(num_out, 0.0);
-                bg.diffuse_gains.resize(num_out, 0.0);
-                bg.start_sample = block.start_sample;
-                bg.end_sample = std::min(block.end_sample, obj.end_sample);
-                bg.jump_position = block.jump_position;
-                bg.interp_length_samples = block.interp_length_samples;
-                objects_calc.calculate(meta, bg.gains, bg.diffuse_gains);
-                cg.blocks.push_back(std::move(bg));
-            }
-
-            for (const auto& ds : track.ds_blocks) {
-                ear::DirectSpeakersTypeMetadata meta;
-                meta.speakerLabels = ds.speaker_labels;
-                if (!ds.pack_format_id.empty()) {
-                    meta.audioPackFormatID = ds.pack_format_id;
-                }
-                if (ds.has_position) {
-                    meta.position = ear::PolarSpeakerPosition{
-                        static_cast<double>(ds.azimuth),
-                        static_cast<double>(ds.elevation),
-                        static_cast<double>(ds.distance),
-                    };
-                }
-
-                BlockGains bg;
-                bg.gains.resize(num_out, 0.0);
-                bg.diffuse_gains.resize(num_out, 0.0); // DS has no diffuse bus
-                bg.start_sample = ds.start_sample;
-                bg.end_sample = std::min(ds.end_sample, obj.end_sample);
-                bg.jump_position = true;
-                direct_speakers_calc.calculate(meta, bg.gains);
-                const auto ds_gain = static_cast<double>(ds.gain) * static_cast<double>(obj.gain);
-                std::ranges::transform(bg.gains, bg.gains.begin(), [ds_gain](double g) { return g * ds_gain; });
-                cg.blocks.push_back(std::move(bg));
-            }
+            append_object_blocks(track, obj, cg, objects_calc, num_out, logs);
+            append_direct_speakers_blocks(track, obj, cg, direct_speakers_calc, num_out);
         }
     }
 
@@ -214,7 +240,7 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
                     : block.gains[out_ch];
         (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += in_sample * static_cast<float>(gain);
 
-        if (ctx.diffuse_in) {
+        if (ctx.diffuse_in != nullptr) {
             const double diff_gain =
                 ramping
                     ? interpolated_gain(
@@ -248,32 +274,32 @@ void apply_decorrelator(DecorrState& state,
                         std::vector<float>& diffuse_out,
                         std::size_t frames_now,
                         std::size_t num_out_ch) {
-    constexpr std::size_t kFirLen = 512;
-    constexpr std::size_t kHistLen = kFirLen - 1; // 511
+    constexpr std::size_t k_fir_len = 512;
+    constexpr std::size_t k_hist_len = k_fir_len - 1; // 511
 
     for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
         const auto& fir = state.filters[ch];
         auto& hist = state.fir_hist[ch]; // [511]
 
         // Build [hist | new samples] for causal convolution.
-        std::vector<double> ext(kHistLen + frames_now);
-        std::copy(hist.begin(), hist.end(), ext.begin());
+        std::vector<double> ext(k_hist_len + frames_now);
+        std::ranges::copy(hist, ext.begin());
         for (std::size_t f = 0; f < frames_now; ++f) {
-            ext[kHistLen + f] = diffuse_in[f * num_out_ch + ch];
+            ext[k_hist_len + f] = diffuse_in[(f * num_out_ch) + ch];
         }
 
         // Direct-form FIR: y[n] = Σ fir[k] × x[n−k]
         for (std::size_t f = 0; f < frames_now; ++f) {
             double y = 0.0;
-            for (std::size_t k = 0; k < kFirLen; ++k) {
-                y += fir[k] * ext[kHistLen + f - k];
+            for (std::size_t k = 0; k < k_fir_len; ++k) {
+                y += fir[k] * ext[k_hist_len + f - k];
             }
-            diffuse_out[f * num_out_ch + ch] = static_cast<float>(y);
+            diffuse_out[(f * num_out_ch) + ch] = static_cast<float>(y);
         }
 
         // Update history: take the last kHistLen elements of ext, which is always
         // valid regardless of frames_now (avoids size_t underflow on short tail blocks).
-        for (std::size_t i = 0; i < kHistLen; ++i) {
+        for (std::size_t i = 0; i < k_hist_len; ++i) {
             hist[i] = ext[frames_now + i];
         }
     }
@@ -285,34 +311,34 @@ void apply_direct_delay(DecorrState& state,
                         std::vector<float>& direct_block,
                         std::size_t frames_now,
                         std::size_t num_out_ch) {
-    const std::size_t D = static_cast<std::size_t>(state.comp_delay); // 255
+    const auto delay = static_cast<std::size_t>(state.comp_delay); // 255
 
     for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-        auto& buf = state.dir_delay[ch]; // [D]
+        auto& buf = state.dir_delay[ch]; // [delay]
 
         // Snapshot the new samples before in-place modification.
         std::vector<float> new_in(frames_now);
         for (std::size_t f = 0; f < frames_now; ++f) {
-            new_in[f] = direct_block[f * num_out_ch + ch];
+            new_in[f] = direct_block[(f * num_out_ch) + ch];
         }
 
         // Output: up to D samples from the delay buffer, then new_in offset by D.
         // Works for any frames_now, including short tail blocks < D.
-        const std::size_t from_buf = std::min(D, frames_now);
+        const std::size_t from_buf = std::min(delay, frames_now);
         for (std::size_t f = 0; f < from_buf; ++f) {
-            direct_block[f * num_out_ch + ch] = buf[f];
+            direct_block[(f * num_out_ch) + ch] = buf[f];
         }
         for (std::size_t f = from_buf; f < frames_now; ++f) {
-            direct_block[f * num_out_ch + ch] = new_in[f - D];
+            direct_block[(f * num_out_ch) + ch] = new_in[f - delay];
         }
 
         // Update delay buffer: evict consumed samples, append new_in.
-        if (frames_now >= D) {
-            std::copy(new_in.end() - static_cast<std::ptrdiff_t>(D), new_in.end(), buf.begin());
+        if (frames_now >= delay) {
+            std::ranges::copy(new_in.end() - static_cast<std::ptrdiff_t>(delay), new_in.end(), buf.begin());
         } else {
             // Shift remaining delay left by frames_now, then append new_in at end.
-            std::copy(buf.begin() + static_cast<std::ptrdiff_t>(frames_now), buf.end(), buf.begin());
-            std::copy(new_in.begin(), new_in.end(), buf.end() - static_cast<std::ptrdiff_t>(frames_now));
+            std::ranges::copy(buf.begin() + static_cast<std::ptrdiff_t>(frames_now), buf.end(), buf.begin());
+            std::ranges::copy(new_in, buf.end() - static_cast<std::ptrdiff_t>(frames_now));
         }
     }
 }
@@ -371,7 +397,7 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         decorr.filters = ear::designDecorrelators<double>(layout);
         decorr.comp_delay = ear::decorrelatorCompensationDelay(); // 255
         decorr.fir_hist.assign(num_out_ch, std::vector<double>(511, 0.0));
-        decorr.dir_delay.assign(num_out_ch, std::vector<float>(static_cast<std::size_t>(decorr.comp_delay), 0.0f));
+        decorr.dir_delay.assign(num_out_ch, std::vector<float>(static_cast<std::size_t>(decorr.comp_delay), 0.0F));
 
         // Open file for audio only — ADM metadata comes from plan.scene.
         auto reader = bw64::readFile(plan.input_path);
