@@ -96,7 +96,7 @@ VBAP 渲染器目前忽略 `diffuse` 参数；`width/height/depth` 驱动的 MDA
 | speakerLabels | ✅ | ✅ | ✅ | ✅ |
 | SphericalSpeakerPosition（nominal） | ✅ | ✅ | ✅（polar only） | ✅ |
 | **position ranges（azMin/Max, elMin/Max, distMin/Max）** | ✅ | ✅ | ❌ | ❌ |
-| **CartesianSpeakerPosition** | ✅ | ✅ | ❌ | ❌ |
+| **CartesianSpeakerPosition** | ✅ | 🚫 运行时抛出 | ❌ | ❌ |
 | gain | ✅ DefaultParam | 手动应用 | ✅ | ✅ |
 | **rtime / duration**（时域块） | ✅ Default/Opt | — | ❌ | ❌ |
 | **channelFrequency**（在 AudioChannelFormat） | ✅ | ✅ | ❌ | ❌ |
@@ -125,6 +125,7 @@ VBAP 渲染器目前忽略 `diffuse` 参数；`width/height/depth` 驱动的 MDA
 | interact / disableDucking | ✅ Opt | ❌ | ❌ |
 | audioObjectInteraction | ✅ Opt | ❌ | ❌ |
 | dialogue / dialogueId | ✅ Opt | ❌ | ❌ |
+| importance | ✅ Opt | ❌ | ❌ |
 | audioObjectLabel | ✅ VectorParam | ❌ | ❌ |
 | audioComplementaryObjectGroupLabel | ✅ VectorParam | ❌ | ❌ |
 
@@ -157,8 +158,10 @@ VBAP 渲染器目前忽略 `diffuse` 参数；`width/height/depth` 驱动的 MDA
 | start / end | ✅ Default/Opt | ❌ | ❌ |
 | maxDuckingDepth | ✅ Opt | ❌ | ❌ |
 
-`audioProgrammeReferenceScreen` 是 `screenRef` 渲染的前提：只有从这里取到屏幕参数
-填入 `ear::ObjectsTypeMetadata::referenceScreen`，libear 才能正确计算屏幕相对坐标。
+`audioProgrammeReferenceScreen` 是 `screenRef` 完整建模的所需输入，用于填入
+`ear::ObjectsTypeMetadata::referenceScreen`。但当前 libear `GainCalculatorObjects`
+对 `screenRef=true` 直接抛出 `not_implemented`，因此近期只能按 P2 策略处理：
+warn + 降级为 `screenRef=false`，而非尝试完整渲染。
 
 ---
 
@@ -172,38 +175,44 @@ importer 仅从这两层提取路由信息（TypeDescriptor、对 AudioChannelFo
 
 ## 7. ADM typeDefinition 覆盖
 
-| typeDefinition | 作为输入 | 作为输出 |
+| typeDefinition | 作为渲染输入 | 渲染/编码输出 |
 |---|---|---|
-| Objects | ✅ EAR / VBAP / HOA-encode | ✅ 写入 HOA3 16ch WAV |
+| Objects | ✅ EAR / VBAP / HOA-encode | Objects→HOA3 16ch WAV（encode，非 ADM 输出） |
 | DirectSpeakers | ✅ EAR（polar，标签路由）/ VBAP | — |
-| HOA | ❌ ADM HOA 块未建模 | — |
-| Matrix | ❌ importer 忽略 | — |
-| Binaural | ❌ importer 忽略 | — |
+| HOA | ❌ ADM HOA 块静默丢弃 | — |
+| Matrix | ❌ 静默丢弃 | — |
+| Binaural | ❌ 静默丢弃 | — |
 
-### HOA 输入说明
+当前项目没有 ADM/BW64 写出能力；所有输出均为普通 WAV 文件。
 
-`hoa_renderer.cpp` 是将 Objects 元数据**编码**为 HOA3 球谐系数输出，
-不是对 ADM 文件中已存在的 HOA 类型块进行解码渲染。
-libear 提供 `GainCalculatorHOA`（HOA→扬声器 decode 方向），目前完全未使用。
+### HOA typeDefinition 说明
 
-ADM 中的 `typeDefinition=HOA` 块在 importer 的 `populate_track_blocks()` 里
-会被 `if (type == OBJECTS) ... else if (type == DIRECT_SPEAKERS) ...` 分支忽略，
-无警告、无报错，静默丢弃。
+`hoa_renderer.cpp` 的作用是将 **Objects 元数据编码**为 HOA3 球谐系数输出，
+不是解码渲染 ADM 文件中的 `typeDefinition=HOA` 块。两件事方向相反：
 
-Matrix 和 Binaural 同样静默忽略。
+- **当前实现（Objects→HOA encode）**：读 Objects 块位置，输出 16ch HOA3 WAV。
+- **ADM HOA 输入渲染（未实现）**：读 ADM HOA 块系数，用 `GainCalculatorHOA`
+  解码为扬声器增益（HOA→扬声器 decode），目前 libear 的这条路径完全未使用。
+
+`typeDefinition=HOA/Matrix/Binaural` 块在 importer 的 `populate_track_blocks()`
+的类型分支中静默跳过，无警告、无报错。
 
 ---
 
 ## 8. HOA 渲染器特有缺口
+
+HOA 渲染器当前功能：Objects 块 → SH3（SN3D，16ch）编码输出。
 
 | 缺口 | 当前状态 |
 |---|---|
 | 块级时间门控 | ✅ 已实现（start\_sample / end\_sample） |
 | jumpPosition / 插值斜坡 | ❌ 未实现（VBAP / EAR 均已有） |
 | diffuse 参数 | ❌ 编码时忽略 |
-| normalization（SN3D/N3D） | ⚠️ 固定 SN3D，未读 `AudioBlockFormatHoa::normalization` |
-| nfcRefDist | ❌ 未读 |
-| screenRef | ❌ 未读 |
+| 固定 SN3D 输出 | ⚠️ order/normalization 不可配置，未从 ADM 参数读取 |
+
+`normalization`、`nfcRefDist`、`screenRef` 是 `AudioBlockFormatHoa`
+（ADM HOA 输入格式）的字段，不属于当前 Objects→HOA encode 路径的范围；
+它们应归属于"ADM HOA 输入渲染（typeDefinition=HOA，未实现）"。
 
 ---
 
@@ -287,7 +296,7 @@ struct ObjectsTypeMetadata {
 ```cpp
 struct DirectSpeakersTypeMetadata {
     std::vector<std::string> speakerLabels;   // ✅
-    SpeakerPosition position;                  // polar ✅ | cartesian ❌（未导入）
+    SpeakerPosition position;                  // polar ✅ | cartesian 🚫（运行时抛出，且未导入）
     // PolarSpeakerPosition 含 azimuthMin/Max, elevationMin/Max, distanceMin/Max
     // 当前只传 nominal 值，范围字段均为 boost::none
     ChannelFrequency channelFrequency;         // ❌ 未导入
