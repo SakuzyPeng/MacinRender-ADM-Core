@@ -254,8 +254,7 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
                         gains.error().code, gains.error().message, fmt::format("track_uid={}", track.track_uid));
                 }
                 if (obj.gain != 1.0f) {
-                    std::ranges::transform(*gains, gains->begin(),
-                                          [g = obj.gain](float v) { return v * g; });
+                    std::ranges::transform(*gains, gains->begin(), [g = obj.gain](float v) { return v * g; });
                 }
                 cg.blocks.push_back({std::move(*gains),
                                      block.start_sample,
@@ -297,14 +296,10 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
                 }
 
                 if (obj.gain != 1.0f) {
-                    std::ranges::transform(gains, gains.begin(),
-                                          [g = obj.gain](float v) { return v * g; });
+                    std::ranges::transform(gains, gains.begin(), [g = obj.gain](float v) { return v * g; });
                 }
-                cg.blocks.push_back({std::move(gains),
-                                     ds.start_sample,
-                                     std::min(ds.end_sample, obj.end_sample),
-                                     true,
-                                     std::nullopt});
+                cg.blocks.push_back(
+                    {std::move(gains), ds.start_sample, std::min(ds.end_sample, obj.end_sample), true, std::nullopt});
             }
         }
     }
@@ -417,8 +412,7 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
         return make_error(gain_matrix.error().code, gain_matrix.error().message, gain_matrix.error().context);
     }
     if (gain_matrix->empty()) {
-        logs.log(LogLevel::warning, "saf-vbap",
-                 "no renderable tracks found (all muted?), writing silence");
+        logs.log(LogLevel::warning, "saf-vbap", "no renderable tracks found (all muted?), writing silence");
     }
 
     const auto num_out_ch = static_cast<uint16_t>(layout->speakers.size());
