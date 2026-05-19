@@ -62,12 +62,12 @@ struct DecorrState {
     if (pos.cartesian) {
         // BS.2076 §10.1: convert Cartesian (X right, Y front, Z up) to polar before
         // passing to libear — GainCalculatorObjects throws not_implemented("cartesian").
-        const double cx = static_cast<double>(pos.x);
-        const double cy = static_cast<double>(pos.y);
-        const double cz = static_cast<double>(pos.z);
+        const auto cx = static_cast<double>(pos.x);
+        const auto cy = static_cast<double>(pos.y);
+        const auto cz = static_cast<double>(pos.z);
         const double az = std::atan2(-cx, cy) * (180.0 / std::numbers::pi_v<double>);
-        const double el = std::atan2(cz, std::sqrt(cx * cx + cy * cy)) * (180.0 / std::numbers::pi_v<double>);
-        const double dist = std::sqrt(cx * cx + cy * cy + cz * cz);
+        const double el = std::atan2(cz, std::sqrt((cx * cx) + (cy * cy))) * (180.0 / std::numbers::pi_v<double>);
+        const double dist = std::sqrt((cx * cx) + (cy * cy) + (cz * cz));
         meta.position = ear::PolarPosition{az, el, dist};
         meta.cartesian = false;
     } else {

@@ -1016,6 +1016,61 @@ bool verify_ds_time_window_gates_block() {
 
 } // namespace
 
+// Verifies that AudioObject positionOffset is applied in the VBAP path:
+// block at az=30 (L speaker in stereo) + offset azimuth=-30 → effective az=0
+// (center) → equal energy in L and R channels.
+bool verify_vbap_position_offset() {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"OffVbapCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::Gain{1.0F});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(block);
+    }
+    doc->add(cf);
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"OffVbapPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"OffVbapSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"OffVbapTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"OffVbapObject"});
+    obj->addReference(uid);
+    obj->set(adm::SphericalPositionOffset{adm::AzimuthOffset{-30.0F}});
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"OffVbapContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"OffVbapProg"});
+    prog->addReference(content);
+    doc->add(prog);
+    adm::reassignIds(doc);
+
+    const std::string uid_str = adm::formatId(uid->get<adm::AudioTrackUidId>());
+    const auto out = std::filesystem::temp_directory_path() / "mr_vbap_offset_out.wav";
+    FileGuard out_g{out};
+    if (!render_simple(doc, uid_str, out)) {
+        return false;
+    }
+
+    const auto sums = read_channel_sums(out, 2U);
+    bool ok = true;
+    ok &= check(sums[0] > 0.0, "vbap positionOffset: L channel not silent");
+    ok &= check(sums[1] > 0.0, "vbap positionOffset: R channel not silent");
+    const double ratio = (sums[0] > 0.0) ? (sums[1] / sums[0]) : 0.0;
+    ok &= check(ratio > 0.9 && ratio < 1.1, "vbap positionOffset: L≈R for az=30+offset(-30)=center");
+    return ok;
+}
+
 int main() {
     bool ok = true;
 
@@ -1076,6 +1131,7 @@ int main() {
     ok &= verify_audio_object_mute_silences_output();
     ok &= verify_audio_object_duration_gates_output();
     ok &= verify_ds_time_window_gates_block();
+    ok &= verify_vbap_position_offset();
 
     if (ok) {
         std::cout << "vbap smoke test passed\n";

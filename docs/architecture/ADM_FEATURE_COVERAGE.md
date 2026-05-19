@@ -271,14 +271,19 @@ ADM 块插值和 MDAP extent spread，但仍偏工程内置：
 > 所有 P1 项已修复：diffuse bus 丢弃（M4）、AudioObject gain/mute/duration 未读（M3.1）、
 > DS 块无时间窗（M3.2）、EAR 拒绝 Cartesian Objects（M5）。
 
-### P2 — libear 字段暴露（已防御）/ 仍待处理
+### P2 — libear 字段暴露（已防御）
 
 | 问题 | libear 行为 | 状态 |
 |---|---|---|
 | channelLock | flag=true 时 `not_implemented` | ⚠️ warn+degrade（M3.3） |
 | objectDivergence | divergence≠0 时 `not_implemented` | ⚠️ warn+degrade（M3.3） |
 | screenRef | screenRef=true 时 `not_implemented` | ⚠️ warn+degrade（M3.3） |
-| zoneExclusion | zones 非空时 `not_implemented` | ❌ 仍未处理，当前静默丢弃 |
+
+### 上游解析限制（libadm 不支持，运行时风险不可达）
+
+| 问题 | libadm 行为 | 状态 |
+|---|---|---|
+| zoneExclusion | 不解析此字段，zones 始终为空 | — 语义未支持，但不造成渲染失败（见注③） |
 
 warn+degrade 是防御性处理：libear 不抛出，但 P2 语义未完整渲染。
 
