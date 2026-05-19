@@ -3,6 +3,7 @@
 ## 架构文档
 
 - [C++ ADM 渲染平台化重构规划](architecture/CPP_ADM_PLATFORM_REWRITE.md)
+- [ADM 特性覆盖审计](architecture/ADM_FEATURE_COVERAGE.md)
 
 ## 架构决策记录
 
