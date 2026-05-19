@@ -146,13 +146,20 @@ void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat
                 time_to_samples(adm::Time{jp.get<adm::InterpolationLength>().get()}, sample_rate);
         }
 
+        // P2 fields: read so renderers can warn and degrade before calling libear.
+        block.channel_lock = raw.get<adm::ChannelLock>().get<adm::ChannelLockFlag>().get();
+        block.divergence = static_cast<float>(raw.get<adm::ObjectDivergence>().get<adm::Divergence>().get());
+        block.screen_ref = raw.get<adm::ScreenRef>().get();
+
         ref.blocks.push_back(block);
     }
 }
 
 void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat>& cf,
                                            const std::shared_ptr<adm::AudioPackFormat>& pf,
-                                           SceneTrackRef& ref) {
+                                           SceneTrackRef& ref,
+                                           uint32_t sample_rate,
+                                           uint64_t obj_start_sample) {
     const auto raw_blocks = cf->getElements<adm::AudioBlockFormatDirectSpeakers>();
     for (const auto& raw : raw_blocks) {
         SceneDirectSpeakersBlock block;
@@ -181,6 +188,14 @@ void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChann
             block.gain = static_cast<float>(raw.get<adm::Gain>().get());
         }
 
+        // rtime is DefaultParameter — always present, default 0.
+        const uint64_t rtime = time_to_samples(raw.get<adm::Rtime>().get(), sample_rate);
+        block.start_sample = saturating_add(obj_start_sample, rtime);
+        if (raw.has<adm::Duration>()) {
+            const uint64_t dur = time_to_samples(raw.get<adm::Duration>().get(), sample_rate);
+            block.end_sample = saturating_add(block.start_sample, dur);
+        }
+
         ref.ds_blocks.push_back(std::move(block));
     }
 }
@@ -199,7 +214,7 @@ void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid,
         if (type == adm::TypeDefinition::OBJECTS) {
             append_objects_blocks_from_cf(cf, ref, sample_rate, obj_start_sample);
         } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
-            append_direct_speakers_blocks_from_cf(cf, pf, ref);
+            append_direct_speakers_blocks_from_cf(cf, pf, ref, sample_rate, obj_start_sample);
         }
     }
 }
@@ -261,8 +276,18 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
         if (obj->has<adm::AudioObjectName>()) {
             out.name = obj->get<adm::AudioObjectName>().get();
         }
+        if (obj->has<adm::Gain>()) {
+            out.gain = static_cast<float>(obj->get<adm::Gain>().get());
+        }
+        if (obj->has<adm::Mute>()) {
+            out.mute = obj->get<adm::Mute>().get();
+        }
         const auto start_it = object_start_offsets.find(out.id);
         const uint64_t obj_start = (start_it != object_start_offsets.end()) ? start_it->second : 0;
+        if (obj->has<adm::Duration>()) {
+            const uint64_t dur = time_to_samples(obj->get<adm::Duration>().get(), sample_rate);
+            out.end_sample = saturating_add(obj_start, dur);
+        }
         for (const auto& uid : obj->getReferences<adm::AudioTrackUid>()) {
             SceneTrackRef ref;
             ref.track_uid = adm::formatId(uid->get<adm::AudioTrackUidId>());

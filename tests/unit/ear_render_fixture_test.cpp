@@ -492,6 +492,176 @@ bool verify_mixed_render_fixture(const mradm::RenderService& service,
     return ok;
 }
 
+// ── M4: Diffuse bus tests ─────────────────────────────────────────────────────
+
+std::filesystem::path write_diffuse_fixture(float diffuse_value) {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DiffCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::Gain{1.0});
+        block.set(adm::Diffuse{diffuse_value});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"DiffPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"DiffSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"DiffTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"DiffObj"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"DiffContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"DiffProg"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    const std::string uid_str = adm::formatId(uid->get<adm::AudioTrackUidId>());
+
+    auto path = std::filesystem::temp_directory_path() / "mr_ear_diffuse_in.wav";
+    std::ostringstream xml_buf;
+    adm::writeXml(xml_buf, doc);
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+    std::vector<float> samples(1000U, 0.5F);
+    writer->write(samples.data(), 1000U);
+    return path;
+}
+
+// Returns total |sample| energy of the stereo EAR output, or -1 on failure.
+double render_ear_diffuse_energy(float diffuse_value,
+                                 const std::filesystem::path& out_path,
+                                 mradm::RenderService& service,
+                                 mradm::NullProgressSink& progress,
+                                 mradm::NullLogSink& logs) {
+    const auto in_path = write_diffuse_fixture(diffuse_value);
+    FileGuard in_g{in_path};
+
+    mradm::RenderRequest req;
+    req.input_path            = in_path;
+    req.output_path           = out_path;
+    req.options.output_layout = "0+2+0";
+    req.options.renderer      = mradm::RendererSelection::ear;
+    req.options.peak_limit    = false;
+
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: EAR diffuse render (d=" << diffuse_value << ") failed: " << res.error.message << "\n";
+        return -1.0;
+    }
+
+    auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!reader_res) {
+        return -1.0;
+    }
+    auto& reader = *reader_res;
+    const auto n = static_cast<std::size_t>(reader.frame_count());
+    std::vector<float> buf(n * 2U);
+    reader.read(buf.data(), reader.frame_count());
+
+    double energy = 0.0;
+    for (const float s : buf) {
+        energy += std::fabs(static_cast<double>(s));
+    }
+    return energy;
+}
+
+bool verify_diffuse_bus(mradm::RenderService& service,
+                        mradm::NullProgressSink& progress,
+                        mradm::NullLogSink& logs) {
+    bool ok = true;
+
+    {
+        const auto out = std::filesystem::temp_directory_path() / "mr_ear_diff0_out.wav";
+        FileGuard g{out};
+        const double e = render_ear_diffuse_energy(0.0F, out, service, progress, logs);
+        ok &= check(e > 0.0, "diffuse=0.0: EAR output is not silent");
+    }
+    {
+        // Before M4 fix: diffuse=1 → direct_gains *= √0 = 0 → silence.
+        // After fix: diffuse bus carries the signal through the decorrelator.
+        const auto out = std::filesystem::temp_directory_path() / "mr_ear_diff1_out.wav";
+        FileGuard g{out};
+        const double e = render_ear_diffuse_energy(1.0F, out, service, progress, logs);
+        ok &= check(e > 0.0, "diffuse=1.0: EAR output is not silent (diffuse bus active)");
+    }
+    {
+        const auto out = std::filesystem::temp_directory_path() / "mr_ear_diff05_out.wav";
+        FileGuard g{out};
+        const double e = render_ear_diffuse_energy(0.5F, out, service, progress, logs);
+        ok &= check(e > 0.0, "diffuse=0.5: EAR output is not silent");
+    }
+
+    // Verify the direct bus delay: with diffuse=0, the first comp_delay (255)
+    // output frames are silent because the delay buffer is initialised to zero.
+    {
+        const auto in_path = write_diffuse_fixture(0.0F);
+        FileGuard in_g{in_path};
+        const auto out = std::filesystem::temp_directory_path() / "mr_ear_delay_out.wav";
+        FileGuard out_g{out};
+
+        mradm::RenderRequest req;
+        req.input_path            = in_path;
+        req.output_path           = out;
+        req.options.output_layout = "0+2+0";
+        req.options.renderer      = mradm::RendererSelection::ear;
+        req.options.peak_limit    = false;
+
+        const auto res = service.render(req, progress, logs);
+        if (!res.success()) {
+            std::cerr << "FAIL: EAR delay test render failed: " << res.error.message << "\n";
+            return false;
+        }
+
+        auto reader_res = mradm::audio::FloatWavReader::open(out.string());
+        if (!reader_res) {
+            return false;
+        }
+        auto& reader = *reader_res;
+        const auto n_frames = static_cast<std::size_t>(reader.frame_count());
+        std::vector<float> buf(n_frames * 2U);
+        reader.read(buf.data(), reader.frame_count());
+
+        constexpr std::size_t kDelay = 255U;
+        double pre_energy = 0.0;
+        for (std::size_t f = 0; f < std::min(kDelay, n_frames); ++f) {
+            pre_energy += std::fabs(static_cast<double>(buf[f * 2U]));
+            pre_energy += std::fabs(static_cast<double>(buf[f * 2U + 1U]));
+        }
+        double post_energy = 0.0;
+        for (std::size_t f = kDelay; f < n_frames; ++f) {
+            post_energy += std::fabs(static_cast<double>(buf[f * 2U]));
+            post_energy += std::fabs(static_cast<double>(buf[f * 2U + 1U]));
+        }
+        ok &= check(pre_energy == 0.0, "direct delay: first 255 frames are silent");
+        ok &= check(post_energy > 0.0, "direct delay: frames after 255 carry audio");
+    }
+
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -503,6 +673,7 @@ int main() {
     ok &= verify_objects_render_fixture(service, progress, logs);
     ok &= verify_direct_speakers_render_fixture(service, progress, logs);
     ok &= verify_mixed_render_fixture(service, progress, logs);
+    ok &= verify_diffuse_bus(service, progress, logs);
 
     if (ok) {
         std::cout << "ear_render fixture test passed\n";

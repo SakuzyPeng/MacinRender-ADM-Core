@@ -43,6 +43,11 @@ struct SceneObjectBlock {
     // interp_length_samples == nullopt means use the renderer-default ramp.
     bool jump_position{false};
     std::optional<uint64_t> interp_length_samples;
+    // P2 fields: libear throws not_implemented if these are non-default.
+    // Importer reads them so renderers can warn and degrade before calling libear.
+    bool channel_lock{false};
+    float divergence{0.0f};
+    bool screen_ref{false};
 };
 
 // Rendering metadata from one AudioBlockFormatDirectSpeakers.
@@ -54,6 +59,8 @@ struct SceneDirectSpeakersBlock {
     float distance{1.0f};
     bool has_position{false};
     float gain{1.0f};
+    uint64_t start_sample{0};
+    uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
 };
 
 // Reference from a SceneObject to a specific track in the BW64 file.
@@ -70,6 +77,9 @@ struct SceneTrackRef {
 struct SceneObject {
     std::string id;
     std::string name;
+    float gain{1.0f};
+    bool mute{false};
+    uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
     std::vector<SceneTrackRef> tracks;
 };
 

@@ -767,6 +767,255 @@ bool verify_mdap_spread_fixture() {
     return ok;
 }
 
+// Returns total |sample| energy summed across all channels and frames.
+double read_total_energy(const std::filesystem::path& path, std::size_t channels) {
+    const auto sums = read_channel_sums(path, channels);
+    double total = 0.0;
+    for (const double s : sums) {
+        total += s;
+    }
+    return total;
+}
+
+// Returns total |sample| energy for [start_frame, end_frame) across all channels.
+double read_segment_energy(const std::filesystem::path& path, std::size_t channels,
+                           std::size_t start_frame, std::size_t end_frame) {
+    auto reader_res = mradm::audio::FloatWavReader::open(path.string());
+    if (!reader_res) {
+        return -1.0;
+    }
+    auto& reader = *reader_res;
+    const auto n_frames = static_cast<std::size_t>(reader.frame_count());
+    std::vector<float> samples(n_frames * channels);
+    reader.read(samples.data(), reader.frame_count());
+
+    double sum = 0.0;
+    for (std::size_t f = start_frame; f < std::min(end_frame, n_frames); ++f) {
+        for (std::size_t ch = 0; ch < channels; ++ch) {
+            sum += std::fabs(static_cast<double>(samples[f * channels + ch]));
+        }
+    }
+    return sum;
+}
+
+// Build a minimal mono polar-front Objects document and return {doc, obj_ptr, uid_str}.
+struct SimpleDoc {
+    std::shared_ptr<adm::Document> doc;
+    std::shared_ptr<adm::AudioObject> obj;
+    std::string uid_str;
+};
+
+SimpleDoc make_simple_front_doc(const char* suffix = "") {
+    auto doc = adm::Document::create();
+    const std::string s{suffix};
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"ObjCF" + s},
+                                              adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::Gain{1.0});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"ObjPF" + s}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"ObjSF" + s}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"ObjTF" + s}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"ObjObject" + s});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"ObjContent" + s});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"ObjProg" + s});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, obj, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+bool render_simple(const std::shared_ptr<adm::Document>& doc,
+                   const std::string& uid_str,
+                   const std::filesystem::path& out_path,
+                   uint16_t sample_rate = 48000U,
+                   uint32_t frames = 1000U) {
+    const auto in_path = write_input_fixture(doc, uid_str, sample_rate, frames);
+    FileGuard in_guard{in_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "0+2+0";
+    req.options.renderer = mradm::RendererSelection::saf;
+    req.options.peak_limit = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: render failed: " << res.error.message << "\n";
+        return false;
+    }
+    return true;
+}
+
+bool verify_audio_object_gain_scales_output() {
+    bool ok = true;
+    double energy_full = 0.0;
+    double energy_half = 0.0;
+
+    // Render with obj.gain = 1.0 (default)
+    {
+        auto [doc, obj, uid_str] = make_simple_front_doc("A");
+        const auto out = std::filesystem::temp_directory_path() / "mr_vbap_obj_gain_full_out.wav";
+        FileGuard out_g{out};
+        if (!render_simple(doc, uid_str, out)) {
+            return false;
+        }
+        energy_full = read_total_energy(out, 2U);
+    }
+
+    // Render with obj.gain = 0.5
+    {
+        auto [doc, obj, uid_str] = make_simple_front_doc("B");
+        obj->set(adm::Gain{0.5});
+        const auto out = std::filesystem::temp_directory_path() / "mr_vbap_obj_gain_half_out.wav";
+        FileGuard out_g{out};
+        if (!render_simple(doc, uid_str, out)) {
+            return false;
+        }
+        energy_half = read_total_energy(out, 2U);
+    }
+
+    ok &= check(energy_full > 0.0, "obj gain: reference render is not silent");
+    ok &= check(energy_half > 0.0, "obj gain: gain=0.5 render is not silent");
+    const double ratio = (energy_full > 0.0) ? (energy_half / energy_full) : 0.0;
+    ok &= check(ratio > 0.48 && ratio < 0.52, "obj gain=0.5 halves total output energy");
+    return ok;
+}
+
+bool verify_audio_object_mute_silences_output() {
+    auto [doc, obj, uid_str] = make_simple_front_doc("M");
+    obj->set(adm::Mute{true});
+
+    const auto out = std::filesystem::temp_directory_path() / "mr_vbap_obj_mute_out.wav";
+    FileGuard out_g{out};
+    if (!render_simple(doc, uid_str, out)) {
+        return false;
+    }
+
+    const double energy = read_total_energy(out, 2U);
+    return check(energy == 0.0, "muted AudioObject produces silent output");
+}
+
+bool verify_audio_object_duration_gates_output() {
+    // sample_rate=1000, frames=1000; obj.duration=250ms = 250 samples.
+    // Frames 0-249 should have audio; frames 250-999 should be silent.
+    auto [doc, obj, uid_str] = make_simple_front_doc("D");
+    obj->set(adm::Duration{adm::Time{std::chrono::milliseconds{250}}});
+
+    const auto out = std::filesystem::temp_directory_path() / "mr_vbap_obj_duration_out.wav";
+    FileGuard out_g{out};
+    if (!render_simple(doc, uid_str, out, 1000U, 1000U)) {
+        return false;
+    }
+
+    bool ok = true;
+    const double active_energy = read_segment_energy(out, 2U, 0U, 250U);
+    const double silent_energy = read_segment_energy(out, 2U, 250U, 1000U);
+    ok &= check(active_energy > 0.0, "obj duration: frames 0-249 have audio");
+    ok &= check(silent_energy == 0.0, "obj duration: frames 250-999 are silent");
+    return ok;
+}
+
+bool verify_ds_time_window_gates_block() {
+    // DS block with rtime=250ms, duration=250ms at 1000Hz / 1000 frames.
+    // Only frames 250-499 should be active on the right speaker (M+030).
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DsTimeCF"},
+                                              adm::TypeDefinition::DIRECT_SPEAKERS);
+    {
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::SphericalSpeakerPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
+        block.add(adm::SpeakerLabel{"M+030"});
+        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{250}}});
+        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{250}}});
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"DsTimePF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"DsTimeSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"DsTimeTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"DsTimeObj"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"DsTimeContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"DsTimeProg"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    const std::string uid_str = adm::formatId(uid->get<adm::AudioTrackUidId>());
+
+    const auto out = std::filesystem::temp_directory_path() / "mr_vbap_ds_timewin_out.wav";
+    FileGuard out_g{out};
+    if (!render_simple(doc, uid_str, out, 1000U, 1000U)) {
+        return false;
+    }
+
+    bool ok = true;
+    // Right channel (ch 1) carries M+030 label routing.
+    // Pre-window: frames 0-249 → silent on right.
+    // In-window: frames 250-499 → active on right.
+    // Post-window: frames 500-999 → silent on right.
+    const double before = read_segment_energy(out, 2U, 0U, 250U);
+    const double active = read_segment_energy(out, 2U, 250U, 500U);
+    const double after  = read_segment_energy(out, 2U, 500U, 1000U);
+    ok &= check(before == 0.0, "DS time window: frames 0-249 are silent");
+    ok &= check(active > 0.0,  "DS time window: frames 250-499 have audio");
+    ok &= check(after  == 0.0, "DS time window: frames 500-999 are silent");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -825,6 +1074,10 @@ int main() {
     ok &= verify_direct_speakers_label_routing();
     ok &= verify_direct_speakers_position_fallback_wrap();
     ok &= verify_mdap_spread_fixture();
+    ok &= verify_audio_object_gain_scales_output();
+    ok &= verify_audio_object_mute_silences_output();
+    ok &= verify_audio_object_duration_gates_output();
+    ok &= verify_ds_time_window_gates_block();
 
     if (ok) {
         std::cout << "vbap smoke test passed\n";
