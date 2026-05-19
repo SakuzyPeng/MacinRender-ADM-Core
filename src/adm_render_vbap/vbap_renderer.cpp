@@ -247,7 +247,11 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
             cg.input_channel = in_ch;
 
             // Objects blocks → VBAP panning.
-            for (const auto& block : track.blocks) {
+            for (const auto& raw_block : track.blocks) {
+                SceneObjectBlock block = raw_block;
+                if (obj.position_offset) {
+                    block.position = apply_position_offset(raw_block.position, *obj.position_offset);
+                }
                 auto gains = calculate_vbap_gains(block, layout);
                 if (!gains) {
                     return make_error(
@@ -257,10 +261,10 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
                     std::ranges::transform(*gains, gains->begin(), [g = obj.gain](float v) { return v * g; });
                 }
                 cg.blocks.push_back({std::move(*gains),
-                                     block.start_sample,
-                                     std::min(block.end_sample, obj.end_sample),
-                                     block.jump_position,
-                                     block.interp_length_samples});
+                                     raw_block.start_sample,
+                                     std::min(raw_block.end_sample, obj.end_sample),
+                                     raw_block.jump_position,
+                                     raw_block.interp_length_samples});
             }
 
             // DirectSpeakers blocks → label match, then nearest-speaker fallback.

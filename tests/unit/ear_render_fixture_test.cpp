@@ -513,6 +513,205 @@ bool verify_mixed_render_fixture(const mradm::RenderService& service,
     return ok;
 }
 
+// ── M5: Cartesian Objects ─────────────────────────────────────────────────────
+
+// Objects doc with CartesianPosition (X=0, Y=1, Z=0) = front center.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_cartesian_objects_doc() {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"CartCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::CartesianPosition{adm::X{0.0F}, adm::Y{1.0F}, adm::Z{0.0F}}};
+        block.set(adm::Gain{1.0F});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(block);
+    }
+    doc->add(cf);
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"CartPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"CartSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"CartTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"CartObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"CartContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"CartProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+// Verifies that Cartesian Objects (which would cause libear to throw not_implemented
+// before M5) are now successfully converted to polar and rendered.
+bool verify_ear_cartesian_objects(const mradm::RenderService& service,
+                                  mradm::NullProgressSink& progress,
+                                  mradm::NullLogSink& logs) {
+    auto [doc, uid_str] = make_cartesian_objects_doc();
+
+    const auto in_path = std::filesystem::temp_directory_path() / "mr_ear_cart_in.wav";
+    {
+        std::ostringstream xml_buf;
+        adm::writeXml(xml_buf, doc);
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+        auto writer = bw64::writeFile(in_path.string(), 1U, 48000U, 24U, chna, axml);
+        std::vector<float> samples(1000U, 0.5F);
+        writer->write(samples.data(), 1000U);
+    }
+    FileGuard in_g{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_ear_cart_out.wav";
+    FileGuard out_g{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "0+2+0";
+    req.options.renderer = mradm::RendererSelection::ear;
+    req.options.peak_limit = false;
+
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: Cartesian Objects EAR render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!reader_res) {
+        return false;
+    }
+    auto& reader = *reader_res;
+    bool ok = check(reader.frame_count() == 1000U, "cartesian: output has 1000 frames");
+
+    if (ok) {
+        const auto n = static_cast<std::size_t>(reader.frame_count());
+        std::vector<float> buf(n * 2U);
+        reader.read(buf.data(), reader.frame_count());
+        double sum_l = 0.0;
+        double sum_r = 0.0;
+        for (std::size_t f = 0; f < n; ++f) {
+            sum_l += std::fabs(static_cast<double>(buf[2U * f]));
+            sum_r += std::fabs(static_cast<double>(buf[(2U * f) + 1U]));
+        }
+        ok &= check(sum_l > 0.0, "cartesian: left channel not silent");
+        ok &= check(sum_r > 0.0, "cartesian: right channel not silent");
+        const double ratio = (sum_l > 0.0) ? (sum_r / sum_l) : 0.0;
+        ok &= check(ratio > 0.9 && ratio < 1.1, "cartesian: L≈R energy for front-center object (Y=1)");
+    }
+    return ok;
+}
+
+// ── M7: AudioObject positionOffset ────────────────────────────────────────────
+
+// Objects doc with az=30 block (left-biased) + positionOffset azimuth=-30 → center.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_offset_objects_doc() {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"OffCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::Gain{1.0F});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(block);
+    }
+    doc->add(cf);
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"OffPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"OffSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"OffTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"OffObject"});
+    obj->addReference(uid);
+    // positionOffset shifts az=30 by -30 → effective az=0 (front center)
+    obj->set(adm::SphericalPositionOffset{adm::AzimuthOffset{-30.0F}});
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"OffContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"OffProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+// Verifies that AudioObject positionOffset is applied: block at az=30 with
+// offset az=-30 should produce L≈R output (effective position = center).
+bool verify_position_offset(const mradm::RenderService& service,
+                            mradm::NullProgressSink& progress,
+                            mradm::NullLogSink& logs) {
+    auto [doc, uid_str] = make_offset_objects_doc();
+
+    const auto in_path = std::filesystem::temp_directory_path() / "mr_ear_offset_in.wav";
+    {
+        std::ostringstream xml_buf;
+        adm::writeXml(xml_buf, doc);
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+        auto writer = bw64::writeFile(in_path.string(), 1U, 48000U, 24U, chna, axml);
+        std::vector<float> samples(1000U, 0.5F);
+        writer->write(samples.data(), 1000U);
+    }
+    FileGuard in_g{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_ear_offset_out.wav";
+    FileGuard out_g{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "0+2+0";
+    req.options.renderer = mradm::RendererSelection::ear;
+    req.options.peak_limit = false;
+
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: positionOffset EAR render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!reader_res) {
+        return false;
+    }
+    auto& reader = *reader_res;
+    const auto n = static_cast<std::size_t>(reader.frame_count());
+    std::vector<float> buf(n * 2U);
+    reader.read(buf.data(), reader.frame_count());
+
+    double sum_l = 0.0;
+    double sum_r = 0.0;
+    for (std::size_t f = 0; f < n; ++f) {
+        sum_l += std::fabs(static_cast<double>(buf[2U * f]));
+        sum_r += std::fabs(static_cast<double>(buf[(2U * f) + 1U]));
+    }
+    bool ok = true;
+    ok &= check(sum_l > 0.0, "positionOffset: output not silent");
+    const double ratio = (sum_l > 0.0) ? (sum_r / sum_l) : 0.0;
+    ok &= check(ratio > 0.9 && ratio < 1.1, "positionOffset: L≈R for az=30+offset(-30)=center");
+    return ok;
+}
+
 // ── M4: Diffuse bus tests ─────────────────────────────────────────────────────
 
 std::filesystem::path write_diffuse_fixture(float diffuse_value) {
@@ -839,6 +1038,8 @@ int main() {
     ok &= verify_objects_render_fixture(service, progress, logs);
     ok &= verify_direct_speakers_render_fixture(service, progress, logs);
     ok &= verify_mixed_render_fixture(service, progress, logs);
+    ok &= verify_ear_cartesian_objects(service, progress, logs);
+    ok &= verify_position_offset(service, progress, logs);
     ok &= verify_diffuse_bus(service, progress, logs);
     ok &= verify_ear_short_block(service, progress, logs);
     ok &= verify_p2_degrade_gracefully(service, progress);

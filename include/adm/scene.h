@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -74,12 +75,40 @@ struct SceneTrackRef {
     std::vector<SceneDirectSpeakersBlock> ds_blocks;
 };
 
+// AudioObject-level positionOffset (BS.2076 §4.4.1).
+// Coordinate system must match the block position being offset.
+// Mismatched coordinate systems are ignored (spec violation by content).
+struct ScenePositionOffset {
+    bool cartesian{false}; // true = X/Y/Z offset; false = azimuth/elevation/distance
+    float azimuth{0.0f};
+    float elevation{0.0f};
+    float distance{0.0f};
+    float x{0.0f};
+    float y{0.0f};
+    float z{0.0f};
+};
+
+// Apply a ScenePositionOffset to a block position.  Returns the modified copy.
+[[nodiscard]] inline SceneBlockPosition apply_position_offset(SceneBlockPosition pos, const ScenePositionOffset& off) {
+    if (!pos.cartesian && !off.cartesian) {
+        pos.azimuth += off.azimuth;
+        pos.elevation = std::clamp(pos.elevation + off.elevation, -90.0F, 90.0F);
+        pos.distance = std::max(0.0F, pos.distance + off.distance);
+    } else if (pos.cartesian && off.cartesian) {
+        pos.x += off.x;
+        pos.y += off.y;
+        pos.z += off.z;
+    }
+    return pos;
+}
+
 struct SceneObject {
     std::string id;
     std::string name;
     float gain{1.0f};
     bool mute{false};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
+    std::optional<ScenePositionOffset> position_offset;
     std::vector<SceneTrackRef> tracks;
 };
 
