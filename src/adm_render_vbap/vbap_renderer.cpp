@@ -253,7 +253,7 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
                     return make_error(
                         gains.error().code, gains.error().message, fmt::format("track_uid={}", track.track_uid));
                 }
-                if (obj.gain != 1.0f) {
+                if (obj.gain != 1.0F) {
                     std::ranges::transform(*gains, gains->begin(), [g = obj.gain](float v) { return v * g; });
                 }
                 cg.blocks.push_back({std::move(*gains),
@@ -295,7 +295,7 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
                     gains[nearest_speaker_index(layout, az, el)] = ds.gain;
                 }
 
-                if (obj.gain != 1.0f) {
+                if (obj.gain != 1.0F) {
                     std::ranges::transform(gains, gains.begin(), [g = obj.gain](float v) { return v * g; });
                 }
                 cg.blocks.push_back(

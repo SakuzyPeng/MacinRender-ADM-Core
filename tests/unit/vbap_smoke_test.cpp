@@ -791,7 +791,7 @@ double read_segment_energy(const std::filesystem::path& path,
     double sum = 0.0;
     for (std::size_t f = start_frame; f < std::min(end_frame, n_frames); ++f) {
         for (std::size_t ch = 0; ch < channels; ++ch) {
-            sum += std::fabs(static_cast<double>(samples[f * channels + ch]));
+            sum += std::fabs(static_cast<double>(samples[(f * channels) + ch]));
         }
     }
     return sum;

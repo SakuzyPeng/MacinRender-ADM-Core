@@ -35,9 +35,8 @@ class CapturingLogSink final : public mradm::LogSink {
         }
     }
     [[nodiscard]] bool has_warning_containing(std::string_view substr) const {
-        return std::any_of(warnings_.begin(), warnings_.end(), [&](const std::string& w) {
-            return w.find(substr) != std::string::npos;
-        });
+        return std::ranges::any_of(warnings_,
+                                   [&](const std::string& w) { return w.find(substr) != std::string::npos; });
     }
 
   private:
@@ -665,16 +664,16 @@ bool verify_diffuse_bus(mradm::RenderService& service, mradm::NullProgressSink& 
         std::vector<float> buf(n_frames * 2U);
         reader.read(buf.data(), reader.frame_count());
 
-        constexpr std::size_t kDelay = 255U;
+        constexpr std::size_t k_delay = 255U;
         double pre_energy = 0.0;
-        for (std::size_t f = 0; f < std::min(kDelay, n_frames); ++f) {
+        for (std::size_t f = 0; f < std::min(k_delay, n_frames); ++f) {
             pre_energy += std::fabs(static_cast<double>(buf[f * 2U]));
-            pre_energy += std::fabs(static_cast<double>(buf[f * 2U + 1U]));
+            pre_energy += std::fabs(static_cast<double>(buf[(f * 2U) + 1U]));
         }
         double post_energy = 0.0;
-        for (std::size_t f = kDelay; f < n_frames; ++f) {
+        for (std::size_t f = k_delay; f < n_frames; ++f) {
             post_energy += std::fabs(static_cast<double>(buf[f * 2U]));
-            post_energy += std::fabs(static_cast<double>(buf[f * 2U + 1U]));
+            post_energy += std::fabs(static_cast<double>(buf[(f * 2U) + 1U]));
         }
         ok &= check(pre_energy == 0.0, "direct delay: first 255 frames are silent");
         ok &= check(post_energy > 0.0, "direct delay: frames after 255 carry audio");
