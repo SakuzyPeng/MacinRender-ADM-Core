@@ -134,11 +134,30 @@ void append_object_blocks(const SceneTrackRef& track,
         meta.audioPackFormatID = ds.pack_format_id;
     }
     if (ds.has_position) {
-        meta.position = ear::PolarSpeakerPosition{
+        ear::PolarSpeakerPosition psp{
             static_cast<double>(ds.azimuth),
             static_cast<double>(ds.elevation),
             static_cast<double>(ds.distance),
         };
+        if (ds.azimuth_min) {
+            psp.azimuthMin = static_cast<double>(*ds.azimuth_min);
+        }
+        if (ds.azimuth_max) {
+            psp.azimuthMax = static_cast<double>(*ds.azimuth_max);
+        }
+        if (ds.elevation_min) {
+            psp.elevationMin = static_cast<double>(*ds.elevation_min);
+        }
+        if (ds.elevation_max) {
+            psp.elevationMax = static_cast<double>(*ds.elevation_max);
+        }
+        if (ds.distance_min) {
+            psp.distanceMin = static_cast<double>(*ds.distance_min);
+        }
+        if (ds.distance_max) {
+            psp.distanceMax = static_cast<double>(*ds.distance_max);
+        }
+        meta.position = psp;
     }
     return meta;
 }

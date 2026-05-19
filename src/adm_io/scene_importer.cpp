@@ -1,9 +1,11 @@
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -182,6 +184,34 @@ void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChann
             if (pos.has<adm::Distance>()) {
                 block.distance = static_cast<float>(pos.get<adm::Distance>().get());
             }
+            if (pos.has<adm::AzimuthMin>()) {
+                block.azimuth_min = pos.get<adm::AzimuthMin>().get();
+            }
+            if (pos.has<adm::AzimuthMax>()) {
+                block.azimuth_max = pos.get<adm::AzimuthMax>().get();
+            }
+            if (pos.has<adm::ElevationMin>()) {
+                block.elevation_min = pos.get<adm::ElevationMin>().get();
+            }
+            if (pos.has<adm::ElevationMax>()) {
+                block.elevation_max = pos.get<adm::ElevationMax>().get();
+            }
+            if (pos.has<adm::DistanceMin>()) {
+                block.distance_min = pos.get<adm::DistanceMin>().get();
+            }
+            if (pos.has<adm::DistanceMax>()) {
+                block.distance_max = pos.get<adm::DistanceMax>().get();
+            }
+        } else if (raw.has<adm::CartesianSpeakerPosition>()) {
+            const auto& pos = raw.get<adm::CartesianSpeakerPosition>();
+            block.has_position = true;
+            const auto cx = static_cast<double>(pos.has<adm::X>() ? pos.get<adm::X>().get() : 0.0F);
+            const auto cy = static_cast<double>(pos.has<adm::Y>() ? pos.get<adm::Y>().get() : 0.0F);
+            const auto cz = static_cast<double>(pos.has<adm::Z>() ? pos.get<adm::Z>().get() : 0.0F);
+            block.azimuth = static_cast<float>(std::atan2(-cx, cy) * (180.0 / std::numbers::pi_v<double>) );
+            block.elevation = static_cast<float>(std::atan2(cz, std::sqrt((cx * cx) + (cy * cy))) *
+                                                 (180.0 / std::numbers::pi_v<double>) );
+            block.distance = static_cast<float>(std::sqrt((cx * cx) + (cy * cy) + (cz * cz)));
         }
 
         if (raw.has<adm::Gain>()) {

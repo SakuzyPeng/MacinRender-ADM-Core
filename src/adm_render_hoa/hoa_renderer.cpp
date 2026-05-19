@@ -3,8 +3,10 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <map>
 #include <memory>
 #include <numbers>
+#include <optional>
 #include <vector>
 
 #include <bw64/bw64.hpp>
@@ -76,35 +78,87 @@ Hoa3Coeffs encode_cartesian(float xc, float yc, float zc) noexcept {
     return sh_sn3d_3(yc / len, -xc / len, zc / len);
 }
 
-struct ChannelGainInfo {
-    uint16_t input_channel{0};
+struct HoaBlock {
     Hoa3Coeffs gains{};
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
+    bool jump_position{false};
+    std::optional<uint64_t> interp_length_samples;
 };
 
+struct ChannelGainInfo {
+    uint16_t input_channel{0};
+    std::vector<HoaBlock> blocks; // sorted ascending by start_sample
+};
+
+// Returns linearly interpolated HOA gains at abs_frame for the given channel.
+// Returns all-zero coefficients when abs_frame is outside every block.
+[[nodiscard]] Hoa3Coeffs gains_at(const ChannelGainInfo& cg, uint64_t abs_frame, uint64_t default_interp) {
+    // Upper-bound search: find the first block whose start_sample > abs_frame.
+    const auto it = std::ranges::upper_bound(cg.blocks, abs_frame, {}, &HoaBlock::start_sample);
+    if (it == cg.blocks.begin()) {
+        return {};
+    }
+    const auto cur_it = std::prev(it); // cur_it->start_sample <= abs_frame
+    const HoaBlock& cur = *cur_it;
+    if (abs_frame >= cur.end_sample) {
+        return {}; // frame is past this block's end
+    }
+    // Interpolation ramp: blend from previous block gains when jump_position is false.
+    if (!cur.jump_position && cur_it != cg.blocks.begin()) {
+        const HoaBlock& prev = *std::prev(cur_it);
+        const uint64_t interp_len = cur.interp_length_samples.value_or(default_interp);
+        const uint64_t delta = abs_frame - cur.start_sample;
+        if (interp_len > 0 && delta < interp_len) {
+            const double alpha = static_cast<double>(delta) / static_cast<double>(interp_len);
+            Hoa3Coeffs result;
+            for (std::size_t i = 0; i < k_hoa3_channels; ++i) {
+                result[i] = static_cast<float>(static_cast<double>(prev.gains[i]) * (1.0 - alpha) +
+                                               static_cast<double>(cur.gains[i]) * alpha);
+            }
+            return result;
+        }
+    }
+    return cur.gains;
+}
+
 std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene) {
-    std::vector<ChannelGainInfo> result;
+    std::map<uint16_t, ChannelGainInfo> by_channel;
 
     for (const auto& obj : scene.objects) {
+        if (obj.mute) {
+            continue;
+        }
         for (const auto& track : obj.tracks) {
             if (!track.channel_index.has_value()) {
                 continue;
             }
             const uint16_t in_ch = *track.channel_index;
+            auto& cg = by_channel[in_ch];
+            cg.input_channel = in_ch;
 
             for (const auto& block : track.blocks) {
-                Hoa3Coeffs sh = block.position.cartesian
-                                    ? encode_cartesian(block.position.x, block.position.y, block.position.z)
-                                    : encode_polar(block.position.azimuth, block.position.elevation);
-
-                std::ranges::transform(sh, sh.begin(), [gain = block.gain](float c) { return c * gain; });
-
-                result.push_back({in_ch, sh, block.start_sample, block.end_sample});
+                const SceneBlockPosition pos =
+                    obj.position_offset ? apply_position_offset(block.position, *obj.position_offset) : block.position;
+                Hoa3Coeffs sh =
+                    pos.cartesian ? encode_cartesian(pos.x, pos.y, pos.z) : encode_polar(pos.azimuth, pos.elevation);
+                const float combined_gain = block.gain * obj.gain;
+                std::ranges::transform(sh, sh.begin(), [combined_gain](float c) { return c * combined_gain; });
+                cg.blocks.push_back({sh,
+                                     block.start_sample,
+                                     std::min(block.end_sample, obj.end_sample),
+                                     block.jump_position,
+                                     block.interp_length_samples});
             }
         }
     }
 
+    std::vector<ChannelGainInfo> result;
+    result.reserve(by_channel.size());
+    for (auto& [ch, cg] : by_channel) {
+        std::ranges::sort(cg.blocks, {}, &HoaBlock::start_sample);
+        result.push_back(std::move(cg));
+    }
     return result;
 }
 
@@ -164,6 +218,7 @@ Result<void> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         auto& writer = *writer_res;
 
         constexpr uint64_t k_block_size = 1024;
+        const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * 5 / 1000; // 5 ms
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
         std::vector<float> out_block(static_cast<std::size_t>(k_num_out) * k_block_size);
         uint64_t frames_done = 0;
@@ -178,12 +233,10 @@ Result<void> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress,
             for (const auto& cg : gain_matrix) {
                 for (std::size_t f = 0; f < frames_now; ++f) {
                     const uint64_t abs_frame = frames_done + f;
-                    if (abs_frame < cg.start_sample || abs_frame >= cg.end_sample) {
-                        continue;
-                    }
+                    const Hoa3Coeffs gains = gains_at(cg, abs_frame, k_default_interp);
                     const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
                     std::size_t out_index = f * k_num_out;
-                    for (const float gain : cg.gains) {
+                    for (const float gain : gains) {
                         out_block[out_index] += in_s * gain;
                         ++out_index;
                     }
