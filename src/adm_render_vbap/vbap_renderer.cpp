@@ -38,13 +38,22 @@ struct BlockGains {
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
     bool jump_position{false};
-    uint64_t interp_length_samples{0};
+    std::optional<uint64_t> interp_length_samples;
 };
 
 // One input channel with its full sorted block sequence.
 struct ChannelGainInfo {
     uint16_t input_channel{0};
     std::vector<BlockGains> blocks; // sorted by start_sample
+};
+
+struct AccumulateContext {
+    const float* input{nullptr};
+    std::vector<float>* output{nullptr};
+    uint64_t frames_done{0};
+    uint16_t num_in_ch{0};
+    uint16_t num_out_ch{0};
+    uint64_t default_interp{0};
 };
 
 struct SafFree {
@@ -295,6 +304,62 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
     return result;
 }
 
+[[nodiscard]] uint64_t interpolation_length(const BlockGains& block, std::size_t block_index, uint64_t default_interp) {
+    if (block.jump_position || block_index == 0) {
+        return 0;
+    }
+    return block.interp_length_samples.value_or(default_interp);
+}
+
+[[nodiscard]] float interpolated_gain(
+    const BlockGains& previous, const BlockGains& current, std::size_t out_ch, uint64_t delta, uint64_t interp_len) {
+    const float alpha = static_cast<float>(delta) / static_cast<float>(interp_len);
+    return (previous.gains[out_ch] * (1.0F - alpha)) + (current.gains[out_ch] * alpha);
+}
+
+void accumulate_channel_block(const ChannelGainInfo& channel,
+                              std::size_t& block_index,
+                              const AccumulateContext& ctx,
+                              std::size_t frame) {
+    const uint64_t abs_frame = ctx.frames_done + frame;
+    while (block_index + 1 < channel.blocks.size() && abs_frame >= channel.blocks[block_index + 1].start_sample) {
+        ++block_index;
+    }
+
+    const auto& block = channel.blocks[block_index];
+    if (abs_frame < block.start_sample || abs_frame >= block.end_sample) {
+        return;
+    }
+
+    const float in_sample = ctx.input[(frame * ctx.num_in_ch) + channel.input_channel];
+    const uint64_t interp_len = interpolation_length(block, block_index, ctx.default_interp);
+    const uint64_t delta = abs_frame - block.start_sample;
+    const bool ramping = interp_len > 0 && delta < interp_len;
+
+    for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
+        float gain = block.gains[out_ch];
+        if (ramping) {
+            gain = interpolated_gain(channel.blocks[block_index - 1], block, out_ch, delta, interp_len);
+        }
+        (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += in_sample * gain;
+    }
+}
+
+void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
+                            std::vector<std::size_t>& block_indices,
+                            const AccumulateContext& ctx,
+                            uint64_t frames_now) {
+    for (std::size_t ci = 0; ci < gain_matrix.size(); ++ci) {
+        const auto& channel = gain_matrix[ci];
+        if (channel.blocks.empty()) {
+            continue;
+        }
+        for (std::size_t frame = 0; frame < frames_now; ++frame) {
+            accumulate_channel_block(channel, block_indices[ci], ctx, frame);
+        }
+    }
+}
+
 class VbapRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
@@ -377,50 +442,9 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
             reader->read(in_block.data(), frames_now);
             std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
-            for (std::size_t ci = 0; ci < gain_matrix->size(); ++ci) {
-                const auto& cg = (*gain_matrix)[ci];
-                if (cg.blocks.empty()) {
-                    continue;
-                }
-
-                for (std::size_t frame = 0; frame < frames_now; ++frame) {
-                    const uint64_t abs_frame = frames_done + frame;
-
-                    // Advance to the next block when its start_sample is reached.
-                    while (blk_idx[ci] + 1 < cg.blocks.size() &&
-                           abs_frame >= cg.blocks[blk_idx[ci] + 1].start_sample) {
-                        ++blk_idx[ci];
-                    }
-
-                    const auto& blk = cg.blocks[blk_idx[ci]];
-                    if (abs_frame < blk.start_sample || abs_frame >= blk.end_sample) {
-                        continue;
-                    }
-
-                    const float in_sample = in_block[(frame * num_in_ch) + cg.input_channel];
-
-                    // Linear interpolation ramp at block entry unless jump_position=true
-                    // or this is the first block (no previous gains to ramp from).
-                    const uint64_t interp_len =
-                        (!blk.jump_position && blk_idx[ci] > 0)
-                            ? (blk.interp_length_samples > 0 ? blk.interp_length_samples : k_default_interp)
-                            : 0;
-
-                    if (interp_len > 0 && abs_frame < blk.start_sample + interp_len) {
-                        const auto& prev = cg.blocks[blk_idx[ci] - 1];
-                        const float alpha =
-                            static_cast<float>(abs_frame - blk.start_sample) / static_cast<float>(interp_len);
-                        for (std::size_t out_ch = 0; out_ch < num_out_ch; ++out_ch) {
-                            const float g = prev.gains[out_ch] * (1.0F - alpha) + blk.gains[out_ch] * alpha;
-                            out_block[(frame * num_out_ch) + out_ch] += in_sample * g;
-                        }
-                    } else {
-                        for (std::size_t out_ch = 0; out_ch < num_out_ch; ++out_ch) {
-                            out_block[(frame * num_out_ch) + out_ch] += in_sample * blk.gains[out_ch];
-                        }
-                    }
-                }
-            }
+            const AccumulateContext ctx{
+                in_block.data(), &out_block, frames_done, num_in_ch, num_out_ch, k_default_interp};
+            accumulate_gain_matrix(*gain_matrix, blk_idx, ctx, frames_now);
 
             if (writer.write(out_block.data(), frames_now) != frames_now) {
                 return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);

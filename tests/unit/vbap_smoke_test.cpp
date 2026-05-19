@@ -164,6 +164,61 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_time_varying_objects
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
+std::pair<std::shared_ptr<adm::Document>, std::string> make_nested_start_objects_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"VbapNestedCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::Gain{1.0F});
+        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
+        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{500}}});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"VbapNestedPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"VbapNestedSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"VbapNestedTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto child = adm::AudioObject::create(adm::AudioObjectName{"VbapNestedChild"});
+    child->set(adm::Start{adm::Time{std::chrono::milliseconds{250}}});
+    child->addReference(uid);
+    doc->add(child);
+
+    auto parent = adm::AudioObject::create(adm::AudioObjectName{"VbapNestedParent"});
+    parent->set(adm::Start{adm::Time{std::chrono::milliseconds{250}}});
+    parent->addReference(child);
+    doc->add(parent);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"VbapNestedContent"});
+    content->addReference(parent);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"VbapNestedProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
 std::pair<std::shared_ptr<adm::Document>, std::string> make_direct_speakers_doc(const char* label, float azimuth) {
     auto doc = adm::Document::create();
 
@@ -457,6 +512,56 @@ bool verify_time_varying_objects_blocks() {
     return ok;
 }
 
+bool verify_nested_audio_object_start_offsets() {
+    auto [doc, uid_str] = make_nested_start_objects_doc();
+    const auto in_path = write_input_fixture(doc, uid_str, 1000U, 1000U);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_vbap_nested_start_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest request;
+    request.input_path = in_path;
+    request.output_path = out_path;
+    request.options.output_layout = "0+2+0";
+    request.options.renderer = mradm::RendererSelection::saf;
+    request.options.peak_limit = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const mradm::RenderResult result = service.render(request, progress, logs);
+    if (!result.success()) {
+        std::cerr << "FAIL: nested AudioObject start render failed: " << result.error.message << "\n";
+        return false;
+    }
+
+    auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!reader_res) {
+        std::cerr << "FAIL: cannot open nested start output: " << reader_res.error().message << "\n";
+        return false;
+    }
+    auto& reader = *reader_res;
+    std::vector<float> samples(static_cast<std::size_t>(reader.frame_count()) * 2U);
+    reader.read(samples.data(), reader.frame_count());
+
+    double pre_start = 0.0;
+    double active = 0.0;
+    for (std::size_t frame = 0; frame < 500U; ++frame) {
+        pre_start += std::fabs(static_cast<double>(samples[2U * frame]));
+        pre_start += std::fabs(static_cast<double>(samples[(2U * frame) + 1U]));
+    }
+    for (std::size_t frame = 500U; frame < 1000U; ++frame) {
+        active += std::fabs(static_cast<double>(samples[2U * frame]));
+        active += std::fabs(static_cast<double>(samples[(2U * frame) + 1U]));
+    }
+
+    bool ok = true;
+    ok &= check(pre_start < 1.0e-6, "nested AudioObject start offsets silence frames before cumulative start");
+    ok &= check(active > 0.0, "nested AudioObject start offsets render after cumulative start");
+    return ok;
+}
+
 bool verify_direct_speakers_label_routing() {
     auto [doc, uid_str] = make_direct_speakers_doc("M+030", 30.0F);
     const auto in_path = write_input_fixture(doc, uid_str);
@@ -600,6 +705,7 @@ int main() {
     ok &= verify_vbap_render_fixture(ObjectPositionMode::polar_front, "polar front");
     ok &= verify_vbap_render_fixture(ObjectPositionMode::cartesian_front, "cartesian front");
     ok &= verify_time_varying_objects_blocks();
+    ok &= verify_nested_audio_object_start_offsets();
     ok &= verify_direct_speakers_label_routing();
     ok &= verify_direct_speakers_position_fallback_wrap();
     ok &= verify_mdap_spread_fixture();
