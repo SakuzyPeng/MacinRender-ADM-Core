@@ -55,10 +55,18 @@ struct SceneObjectBlock {
 struct SceneDirectSpeakersBlock {
     std::vector<std::string> speaker_labels;
     std::string pack_format_id;
+    // Nominal position (always polar — Cartesian positions are converted at import time).
     float azimuth{0.0f};
     float elevation{0.0f};
     float distance{1.0f};
     bool has_position{false};
+    // Optional position range hints (BS.2076 §8.4); absent when not specified in ADM.
+    std::optional<float> azimuth_min;
+    std::optional<float> azimuth_max;
+    std::optional<float> elevation_min;
+    std::optional<float> elevation_max;
+    std::optional<float> distance_min;
+    std::optional<float> distance_max;
     float gain{1.0f};
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
