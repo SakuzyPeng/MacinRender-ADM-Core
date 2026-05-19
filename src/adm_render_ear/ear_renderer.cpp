@@ -1,8 +1,10 @@
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <limits>
 #include <map>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <vector>
 
@@ -53,18 +55,26 @@ struct DecorrState {
 [[nodiscard]] ear::ObjectsTypeMetadata object_metadata_from_block(const SceneObjectBlock& block,
                                                                   const SceneObject& obj) {
     ear::ObjectsTypeMetadata meta;
-    if (block.position.cartesian) {
-        meta.position = ear::CartesianPosition{
-            static_cast<double>(block.position.x),
-            static_cast<double>(block.position.y),
-            static_cast<double>(block.position.z),
-        };
-        meta.cartesian = true;
+
+    const SceneBlockPosition pos =
+        obj.position_offset ? apply_position_offset(block.position, *obj.position_offset) : block.position;
+
+    if (pos.cartesian) {
+        // BS.2076 §10.1: convert Cartesian (X right, Y front, Z up) to polar before
+        // passing to libear — GainCalculatorObjects throws not_implemented("cartesian").
+        const double cx = static_cast<double>(pos.x);
+        const double cy = static_cast<double>(pos.y);
+        const double cz = static_cast<double>(pos.z);
+        const double az = std::atan2(-cx, cy) * (180.0 / std::numbers::pi_v<double>);
+        const double el = std::atan2(cz, std::sqrt(cx * cx + cy * cy)) * (180.0 / std::numbers::pi_v<double>);
+        const double dist = std::sqrt(cx * cx + cy * cy + cz * cz);
+        meta.position = ear::PolarPosition{az, el, dist};
+        meta.cartesian = false;
     } else {
         meta.position = ear::PolarPosition{
-            static_cast<double>(block.position.azimuth),
-            static_cast<double>(block.position.elevation),
-            static_cast<double>(block.position.distance),
+            static_cast<double>(pos.azimuth),
+            static_cast<double>(pos.elevation),
+            static_cast<double>(pos.distance),
         };
         meta.cartesian = false;
     }

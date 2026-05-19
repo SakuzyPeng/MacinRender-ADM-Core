@@ -282,6 +282,35 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
         if (obj->has<adm::Mute>()) {
             out.mute = obj->get<adm::Mute>().get();
         }
+        if (obj->has<adm::PositionOffset>()) {
+            const auto& po = obj->get<adm::PositionOffset>();
+            ScenePositionOffset offset;
+            if (adm::isSpherical(po)) {
+                const auto& spo = boost::get<adm::SphericalPositionOffset>(po);
+                if (spo.has<adm::AzimuthOffset>()) {
+                    offset.azimuth = spo.get<adm::AzimuthOffset>().get();
+                }
+                if (spo.has<adm::ElevationOffset>()) {
+                    offset.elevation = spo.get<adm::ElevationOffset>().get();
+                }
+                if (spo.has<adm::DistanceOffset>()) {
+                    offset.distance = spo.get<adm::DistanceOffset>().get();
+                }
+            } else {
+                offset.cartesian = true;
+                const auto& cpo = boost::get<adm::CartesianPositionOffset>(po);
+                if (cpo.has<adm::XOffset>()) {
+                    offset.x = cpo.get<adm::XOffset>().get();
+                }
+                if (cpo.has<adm::YOffset>()) {
+                    offset.y = cpo.get<adm::YOffset>().get();
+                }
+                if (cpo.has<adm::ZOffset>()) {
+                    offset.z = cpo.get<adm::ZOffset>().get();
+                }
+            }
+            out.position_offset = offset;
+        }
         const auto start_it = object_start_offsets.find(out.id);
         const uint64_t obj_start = (start_it != object_start_offsets.end()) ? start_it->second : 0;
         if (obj->has<adm::Duration>()) {
