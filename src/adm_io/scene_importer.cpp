@@ -1,8 +1,14 @@
+#include <algorithm>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <map>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 #include <adm/adm.hpp>
 #include <adm/parse.hpp>
@@ -134,8 +140,8 @@ void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat
 
         // JumpPosition is DefaultParameter (flag default = false = interpolate).
         const auto jp = raw.get<adm::JumpPosition>();
-        block.jump_position = adm::isEnabled(const_cast<adm::JumpPosition&>(jp));
-        if (jp.has<adm::InterpolationLength>()) {
+        block.jump_position = jp.get<adm::JumpPositionFlag>().get();
+        if (!jp.isDefault<adm::InterpolationLength>()) {
             block.interp_length_samples =
                 time_to_samples(adm::Time{jp.get<adm::InterpolationLength>().get()}, sample_rate);
         }
@@ -198,9 +204,56 @@ void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid,
     }
 }
 
+uint64_t audio_object_start_samples(const std::shared_ptr<adm::AudioObject>& obj, uint32_t sample_rate) {
+    // AudioObject.start is DefaultParameter — always present, default 0.
+    return time_to_samples(obj->get<adm::Start>().get(), sample_rate);
+}
+
+std::map<std::string, uint64_t> make_object_start_offsets(const std::shared_ptr<adm::Document>& doc,
+                                                          uint32_t sample_rate) {
+    struct WorkItem {
+        std::shared_ptr<adm::AudioObject> object;
+        uint64_t inherited_start{0};
+    };
+
+    std::map<std::string, uint64_t> offsets;
+    std::vector<WorkItem> work;
+    for (const auto& content : doc->getElements<adm::AudioContent>()) {
+        const auto object_refs = content->getReferences<adm::AudioObject>();
+        std::ranges::transform(object_refs, std::back_inserter(work), [](const auto& obj) { return WorkItem{obj, 0}; });
+    }
+
+    while (!work.empty()) {
+        const auto item = work.back();
+        work.pop_back();
+
+        const auto id = adm::formatId(item.object->get<adm::AudioObjectId>());
+        const uint64_t start =
+            saturating_add(item.inherited_start, audio_object_start_samples(item.object, sample_rate));
+        auto [it, inserted] = offsets.emplace(id, start);
+        if (!inserted) {
+            if (start >= it->second) {
+                continue;
+            }
+            it->second = start;
+        }
+
+        const auto child_refs = item.object->getReferences<adm::AudioObject>();
+        std::ranges::transform(
+            child_refs, std::back_inserter(work), [start](const auto& child) { return WorkItem{child, start}; });
+    }
+
+    for (const auto& obj : doc->getElements<adm::AudioObject>()) {
+        const auto id = adm::formatId(obj->get<adm::AudioObjectId>());
+        offsets.try_emplace(id, audio_object_start_samples(obj, sample_rate));
+    }
+    return offsets;
+}
+
 std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& doc,
                                          const std::map<std::string, uint16_t>& uid_map,
                                          uint32_t sample_rate) {
+    const auto object_start_offsets = make_object_start_offsets(doc, sample_rate);
     std::vector<SceneObject> result;
     for (const auto& obj : doc->getElements<adm::AudioObject>()) {
         SceneObject out;
@@ -208,8 +261,8 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
         if (obj->has<adm::AudioObjectName>()) {
             out.name = obj->get<adm::AudioObjectName>().get();
         }
-        // AudioObject.start is DefaultParameter — always present, default 0.
-        const uint64_t obj_start = time_to_samples(obj->get<adm::Start>().get(), sample_rate);
+        const auto start_it = object_start_offsets.find(out.id);
+        const uint64_t obj_start = (start_it != object_start_offsets.end()) ? start_it->second : 0;
         for (const auto& uid : obj->getReferences<adm::AudioTrackUid>()) {
             SceneTrackRef ref;
             ref.track_uid = adm::formatId(uid->get<adm::AudioTrackUidId>());

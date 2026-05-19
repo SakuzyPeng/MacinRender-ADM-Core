@@ -39,10 +39,10 @@ struct SceneObjectBlock {
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
     // When jump_position is true the renderer switches gains instantly at
-    // start_sample.  Otherwise it linearly interpolates from the previous
-    // block's gains over interp_length_samples (0 → renderer-default ramp).
+    // start_sample.  Otherwise it linearly interpolates from the previous block.
+    // interp_length_samples == nullopt means use the renderer-default ramp.
     bool jump_position{false};
-    uint64_t interp_length_samples{0};
+    std::optional<uint64_t> interp_length_samples;
 };
 
 // Rendering metadata from one AudioBlockFormatDirectSpeakers.
