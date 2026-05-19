@@ -272,10 +272,10 @@ void apply_decorrelator(DecorrState& state,
             diffuse_out[f * num_out_ch + ch] = static_cast<float>(y);
         }
 
-        // Update history with last kHistLen samples of the new input.
-        // frames_now (1024) > kHistLen (511) — simple tail copy.
+        // Update history: take the last kHistLen elements of ext, which is always
+        // valid regardless of frames_now (avoids size_t underflow on short tail blocks).
         for (std::size_t i = 0; i < kHistLen; ++i) {
-            hist[i] = diffuse_in[(frames_now - kHistLen + i) * num_out_ch + ch];
+            hist[i] = ext[frames_now + i];
         }
     }
 }
@@ -297,18 +297,23 @@ void apply_direct_delay(DecorrState& state,
             new_in[f] = direct_block[f * num_out_ch + ch];
         }
 
-        // Output: first D samples come from the delay buffer, the rest from
-        // new_in offset by D. Assumes frames_now (1024) > D (255).
-        for (std::size_t f = 0; f < D; ++f) {
+        // Output: up to D samples from the delay buffer, then new_in offset by D.
+        // Works for any frames_now, including short tail blocks < D.
+        const std::size_t from_buf = std::min(D, frames_now);
+        for (std::size_t f = 0; f < from_buf; ++f) {
             direct_block[f * num_out_ch + ch] = buf[f];
         }
-        for (std::size_t f = D; f < frames_now; ++f) {
+        for (std::size_t f = from_buf; f < frames_now; ++f) {
             direct_block[f * num_out_ch + ch] = new_in[f - D];
         }
 
-        // Update delay buffer with the tail of new_in.
-        for (std::size_t i = 0; i < D; ++i) {
-            buf[i] = new_in[frames_now - D + i];
+        // Update delay buffer: evict consumed samples, append new_in.
+        if (frames_now >= D) {
+            std::copy(new_in.end() - static_cast<std::ptrdiff_t>(D), new_in.end(), buf.begin());
+        } else {
+            // Shift remaining delay left by frames_now, then append new_in at end.
+            std::copy(buf.begin() + static_cast<std::ptrdiff_t>(frames_now), buf.end(), buf.begin());
+            std::copy(new_in.begin(), new_in.end(), buf.end() - static_cast<std::ptrdiff_t>(frames_now));
         }
     }
 }

@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -770,11 +771,7 @@ bool verify_mdap_spread_fixture() {
 // Returns total |sample| energy summed across all channels and frames.
 double read_total_energy(const std::filesystem::path& path, std::size_t channels) {
     const auto sums = read_channel_sums(path, channels);
-    double total = 0.0;
-    for (const double s : sums) {
-        total += s;
-    }
-    return total;
+    return std::accumulate(sums.begin(), sums.end(), 0.0);
 }
 
 // Returns total |sample| energy for [start_frame, end_frame) across all channels.
