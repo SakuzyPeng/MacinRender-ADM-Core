@@ -249,9 +249,8 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
             // Objects blocks → VBAP panning.
             for (const auto& raw_block : track.blocks) {
                 SceneObjectBlock block = raw_block;
-                if (obj.position_offset) {
-                    block.position = apply_position_offset(raw_block.position, *obj.position_offset);
-                }
+                block.position = obj.position_offset ? apply_position_offset(raw_block.position, *obj.position_offset)
+                                                     : raw_block.position;
                 auto gains = calculate_vbap_gains(block, layout);
                 if (!gains) {
                     return make_error(
