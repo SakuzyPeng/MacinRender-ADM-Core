@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <cstddef>
 #include <limits>
+#include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <bw64/bw64.hpp>
@@ -16,17 +18,21 @@ namespace mradm {
 
 namespace {
 
-struct ChannelGainInfo {
-    uint16_t input_channel{0};
-    std::vector<double> direct_gains;
+struct BlockGains {
+    std::vector<double> gains;
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
+    bool jump_position{false};
+    std::optional<uint64_t> interp_length_samples;
 };
 
-// Build a static gain matrix from pre-parsed scene metadata.
-// Uses imported block metadata from each track; M6 scope: Objects + DirectSpeakers.
+struct ChannelGainInfo {
+    uint16_t input_channel{0};
+    std::vector<BlockGains> blocks; // sorted by start_sample
+};
+
 std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear::Layout& layout) {
-    std::vector<ChannelGainInfo> result;
+    std::map<uint16_t, ChannelGainInfo> by_channel;
     ear::GainCalculatorObjects objects_calc{layout};
     ear::GainCalculatorDirectSpeakers direct_speakers_calc{layout};
     const std::size_t num_out = layout.channels().size();
@@ -37,6 +43,8 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
                 continue;
             }
             const uint16_t in_ch = *track.channel_index;
+            auto& cg = by_channel[in_ch];
+            cg.input_channel = in_ch;
 
             for (const auto& block : track.blocks) {
                 ear::ObjectsTypeMetadata meta;
@@ -63,47 +71,67 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
                 meta.height = static_cast<double>(block.height);
                 meta.depth = static_cast<double>(block.depth);
 
-                ChannelGainInfo info;
-                info.input_channel = in_ch;
-                info.direct_gains.resize(num_out, 0.0);
-                info.start_sample = block.start_sample;
-                info.end_sample = block.end_sample;
+                BlockGains bg;
+                bg.gains.resize(num_out, 0.0);
+                bg.start_sample = block.start_sample;
+                bg.end_sample = block.end_sample;
+                bg.jump_position = block.jump_position;
+                bg.interp_length_samples = block.interp_length_samples;
                 std::vector<double> diffuse_gains(num_out, 0.0);
-                objects_calc.calculate(meta, info.direct_gains, diffuse_gains);
-
-                result.push_back(std::move(info));
+                objects_calc.calculate(meta, bg.gains, diffuse_gains);
+                cg.blocks.push_back(std::move(bg));
             }
 
-            for (const auto& block : track.ds_blocks) {
+            for (const auto& ds : track.ds_blocks) {
                 ear::DirectSpeakersTypeMetadata meta;
-                meta.speakerLabels = block.speaker_labels;
-                if (!block.pack_format_id.empty()) {
-                    meta.audioPackFormatID = block.pack_format_id;
+                meta.speakerLabels = ds.speaker_labels;
+                if (!ds.pack_format_id.empty()) {
+                    meta.audioPackFormatID = ds.pack_format_id;
                 }
-                if (block.has_position) {
+                if (ds.has_position) {
                     meta.position = ear::PolarSpeakerPosition{
-                        static_cast<double>(block.azimuth),
-                        static_cast<double>(block.elevation),
-                        static_cast<double>(block.distance),
+                        static_cast<double>(ds.azimuth),
+                        static_cast<double>(ds.elevation),
+                        static_cast<double>(ds.distance),
                     };
                 }
 
-                ChannelGainInfo info;
-                info.input_channel = in_ch;
-                info.direct_gains.resize(num_out, 0.0);
-                direct_speakers_calc.calculate(meta, info.direct_gains);
-
-                const auto block_gain = static_cast<double>(block.gain);
-                std::ranges::transform(info.direct_gains, info.direct_gains.begin(), [block_gain](double gain) {
-                    return gain * block_gain;
-                });
-
-                result.push_back(std::move(info));
+                BlockGains bg;
+                bg.gains.resize(num_out, 0.0);
+                bg.jump_position = true;
+                direct_speakers_calc.calculate(meta, bg.gains);
+                const auto block_gain = static_cast<double>(ds.gain);
+                std::ranges::transform(bg.gains, bg.gains.begin(), [block_gain](double g) { return g * block_gain; });
+                cg.blocks.push_back(std::move(bg));
             }
         }
     }
 
+    std::vector<ChannelGainInfo> result;
+    result.reserve(by_channel.size());
+    for (auto& [ch, cg] : by_channel) {
+        std::ranges::sort(cg.blocks, {}, &BlockGains::start_sample);
+        result.push_back(std::move(cg));
+    }
     return result;
+}
+
+[[nodiscard]] uint64_t interpolation_length(const BlockGains& block,
+                                            std::size_t block_index,
+                                            uint64_t default_interp) {
+    if (block.jump_position || block_index == 0) {
+        return 0;
+    }
+    return block.interp_length_samples.value_or(default_interp);
+}
+
+[[nodiscard]] double interpolated_gain(const BlockGains& previous,
+                                       const BlockGains& current,
+                                       std::size_t out_ch,
+                                       uint64_t delta,
+                                       uint64_t interp_len) {
+    const double alpha = static_cast<double>(delta) / static_cast<double>(interp_len);
+    return previous.gains[out_ch] * (1.0 - alpha) + current.gains[out_ch] * alpha;
 }
 
 class EarRenderer final : public IRenderer {
@@ -139,8 +167,8 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         const auto num_frames = info.num_frames;
         const auto sample_rate = info.sample_rate;
 
-        const auto invalid_channel =
-            std::ranges::find_if(gain_matrix, [num_in_ch](const auto& cg) { return cg.input_channel >= num_in_ch; });
+        const auto invalid_channel = std::ranges::find_if(
+            gain_matrix, [num_in_ch](const auto& cg) { return cg.input_channel >= num_in_ch; });
         if (invalid_channel != gain_matrix.end()) {
             return make_error(ErrorCode::render_failed,
                               fmt::format("track channel index {} is outside input channel count {}",
@@ -164,6 +192,9 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         }
         auto& writer = *writer_res;
 
+        const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * 5 / 1000;
+        std::vector<std::size_t> blk_idx(gain_matrix.size(), 0);
+
         constexpr uint64_t k_block_size = 1024;
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
         std::vector<float> out_block(static_cast<std::size_t>(num_out_ch) * k_block_size);
@@ -176,15 +207,34 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
             reader->read(in_block.data(), frames_now);
             std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
-            for (const auto& cg : gain_matrix) {
-                for (std::size_t f = 0; f < frames_now; f++) {
+            for (std::size_t ci = 0; ci < gain_matrix.size(); ++ci) {
+                const auto& channel = gain_matrix[ci];
+                if (channel.blocks.empty()) {
+                    continue;
+                }
+                for (std::size_t f = 0; f < frames_now; ++f) {
                     const uint64_t abs_frame = frames_done + f;
-                    if (abs_frame < cg.start_sample || abs_frame >= cg.end_sample) {
+
+                    while (blk_idx[ci] + 1 < channel.blocks.size() &&
+                           abs_frame >= channel.blocks[blk_idx[ci] + 1].start_sample) {
+                        ++blk_idx[ci];
+                    }
+
+                    const auto& blk = channel.blocks[blk_idx[ci]];
+                    if (abs_frame < blk.start_sample || abs_frame >= blk.end_sample) {
                         continue;
                     }
-                    const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
-                    for (std::size_t out_ch = 0; out_ch < num_out_ch; out_ch++) {
-                        out_block[(f * num_out_ch) + out_ch] += in_s * static_cast<float>(cg.direct_gains[out_ch]);
+
+                    const float in_s = in_block[(f * num_in_ch) + channel.input_channel];
+                    const uint64_t interp_len = interpolation_length(blk, blk_idx[ci], k_default_interp);
+                    const uint64_t delta = abs_frame - blk.start_sample;
+                    const bool ramping = interp_len > 0 && delta < interp_len;
+
+                    for (std::size_t out_ch = 0; out_ch < num_out_ch; ++out_ch) {
+                        const double gain =
+                            ramping ? interpolated_gain(channel.blocks[blk_idx[ci] - 1], blk, out_ch, delta, interp_len)
+                                    : blk.gains[out_ch];
+                        out_block[(f * num_out_ch) + out_ch] += in_s * static_cast<float>(gain);
                     }
                 }
             }
