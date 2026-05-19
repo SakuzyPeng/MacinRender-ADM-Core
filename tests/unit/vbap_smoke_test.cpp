@@ -775,8 +775,10 @@ double read_total_energy(const std::filesystem::path& path, std::size_t channels
 }
 
 // Returns total |sample| energy for [start_frame, end_frame) across all channels.
-double read_segment_energy(const std::filesystem::path& path, std::size_t channels,
-                           std::size_t start_frame, std::size_t end_frame) {
+double read_segment_energy(const std::filesystem::path& path,
+                           std::size_t channels,
+                           std::size_t start_frame,
+                           std::size_t end_frame) {
     auto reader_res = mradm::audio::FloatWavReader::open(path.string());
     if (!reader_res) {
         return -1.0;
@@ -805,8 +807,7 @@ struct SimpleDoc {
 SimpleDoc make_simple_front_doc(const char* suffix = "") {
     auto doc = adm::Document::create();
     const std::string s{suffix};
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"ObjCF" + s},
-                                              adm::TypeDefinition::OBJECTS);
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"ObjCF" + s}, adm::TypeDefinition::OBJECTS);
     {
         adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
         block.set(adm::Gain{1.0});
@@ -948,8 +949,8 @@ bool verify_ds_time_window_gates_block() {
     // DS block with rtime=250ms, duration=250ms at 1000Hz / 1000 frames.
     // Only frames 250-499 should be active on the right speaker (M+030).
     auto doc = adm::Document::create();
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DsTimeCF"},
-                                              adm::TypeDefinition::DIRECT_SPEAKERS);
+    auto cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DsTimeCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
     {
         adm::AudioBlockFormatDirectSpeakers block{
             adm::SphericalSpeakerPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
@@ -1006,10 +1007,10 @@ bool verify_ds_time_window_gates_block() {
     // Post-window: frames 500-999 → silent on right.
     const double before = read_segment_energy(out, 2U, 0U, 250U);
     const double active = read_segment_energy(out, 2U, 250U, 500U);
-    const double after  = read_segment_energy(out, 2U, 500U, 1000U);
+    const double after = read_segment_energy(out, 2U, 500U, 1000U);
     ok &= check(before == 0.0, "DS time window: frames 0-249 are silent");
-    ok &= check(active > 0.0,  "DS time window: frames 250-499 have audio");
-    ok &= check(after  == 0.0, "DS time window: frames 500-999 are silent");
+    ok &= check(active > 0.0, "DS time window: frames 250-499 have audio");
+    ok &= check(after == 0.0, "DS time window: frames 500-999 are silent");
     return ok;
 }
 

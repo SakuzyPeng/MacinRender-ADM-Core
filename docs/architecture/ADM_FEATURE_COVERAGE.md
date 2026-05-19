@@ -118,8 +118,7 @@ importer 从 rtime/duration 推算样本偏移后写入，EAR 和 VBAP 渲染器
 | audioObjectLabel | ✅ VectorParam | ❌ | ❌ |
 | audioComplementaryObjectGroupLabel | ✅ VectorParam | ❌ | ❌ |
 
-`gain` 和 `mute` 是 P1 级别缺口：BS.2076-2 第 11.1 节要求 AudioObject 的 `gain`
-乘到该对象所有块的最终增益上；`mute=true` 的对象应产生全零输出，当前两者均被忽略。
+`gain`、`mute`、`duration` 已在 M3.1 中实现：`gain` 乘入所有块最终增益，`mute=true` 跳过对象渲染，`duration` 推算 `end_sample` 进行时域门控。
 
 ---
 
@@ -231,9 +230,7 @@ HOA 渲染器当前功能：Objects 块 → SH3（SN3D，16ch）编码输出。
 
 ### decorrelator / diffuse
 
-EAR 路径应优先实现 libear `designDecorrelators()` 对应的 diffuse bus，
-这是当前 Objects 渲染最明确的合规缺口。VBAP 的 MDAP spread 只对应 extent 几何扩散，
-不能替代 ADM `diffuse` 的去相关语义。
+EAR diffuse bus 已在 M4 中实现（见注②）：`designDecorrelators()` FIR 去相关 + `decorrelatorCompensationDelay()` direct 延迟补偿。VBAP 的 MDAP spread 对应 extent 几何扩散，与 ADM `diffuse` 语义无关，暂不计划实现 VBAP 侧去相关。
 
 ### reverb / room simulation
 

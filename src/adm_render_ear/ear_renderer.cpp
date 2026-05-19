@@ -34,8 +34,8 @@ struct ChannelGainInfo {
 
 struct AccumulateContext {
     const float* input{nullptr};
-    std::vector<float>* output{nullptr};  // direct output buffer (float)
-    double* diffuse_in{nullptr};          // per-frame×ch diffuse input (double); may be nullptr
+    std::vector<float>* output{nullptr}; // direct output buffer (float)
+    double* diffuse_in{nullptr};         // per-frame×ch diffuse input (double); may be nullptr
     uint64_t frames_done{0};
     uint16_t num_in_ch{0};
     uint16_t num_out_ch{0};
@@ -44,15 +44,13 @@ struct AccumulateContext {
 
 // FIR decorrelator state for the diffuse bus (BS.2127).
 struct DecorrState {
-    std::vector<std::vector<double>> filters;    // [num_out_ch][512]
-    int comp_delay{0};                           // decorrelatorCompensationDelay() = 255
-    std::vector<std::vector<double>> fir_hist;   // [num_out_ch][511]  FIR overlap history
-    std::vector<std::vector<float>>  dir_delay;  // [num_out_ch][comp_delay]  direct delay
+    std::vector<std::vector<double>> filters;  // [num_out_ch][512]
+    int comp_delay{0};                         // decorrelatorCompensationDelay() = 255
+    std::vector<std::vector<double>> fir_hist; // [num_out_ch][511]  FIR overlap history
+    std::vector<std::vector<float>> dir_delay; // [num_out_ch][comp_delay]  direct delay
 };
 
-std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene,
-                                               const ear::Layout& layout,
-                                               LogSink& logs) {
+std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear::Layout& layout, LogSink& logs) {
     std::map<uint16_t, ChannelGainInfo> by_channel;
     ear::GainCalculatorObjects objects_calc{layout};
     ear::GainCalculatorDirectSpeakers direct_speakers_calc{layout};
@@ -92,17 +90,16 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene,
                 // P2 defensive layer: warn and degrade fields that cause libear
                 // to throw not_implemented so the file doesn't fail to render.
                 if (block.channel_lock) {
-                    logs.log(LogLevel::warning, "ear",
-                             "channelLock not supported by libear, degrading to unlocked");
+                    logs.log(LogLevel::warning, "ear", "channelLock not supported by libear, degrading to unlocked");
                 }
                 if (block.divergence != 0.0f) {
-                    logs.log(LogLevel::warning, "ear",
+                    logs.log(LogLevel::warning,
+                             "ear",
                              fmt::format("objectDivergence={:.3f} not supported by libear, degrading to 0",
                                          block.divergence));
                 }
                 if (block.screen_ref) {
-                    logs.log(LogLevel::warning, "ear",
-                             "screenRef not supported by libear, degrading to false");
+                    logs.log(LogLevel::warning, "ear", "screenRef not supported by libear, degrading to false");
                 }
                 // meta.channelLock / objectDivergence / screenRef remain at their
                 // default (unlocked / 0 / false) — do not set from block.
@@ -182,9 +179,11 @@ interpolation_length(const ChannelGainInfo& channel, std::size_t block_index, ui
     return std::min(block.interp_length_samples.value_or(default_interp), block_active_length(channel, block_index));
 }
 
-[[nodiscard]] double interpolated_gain(
-    const std::vector<double>& prev, const std::vector<double>& cur,
-    std::size_t out_ch, uint64_t delta, uint64_t interp_len) {
+[[nodiscard]] double interpolated_gain(const std::vector<double>& prev,
+                                       const std::vector<double>& cur,
+                                       std::size_t out_ch,
+                                       uint64_t delta,
+                                       uint64_t interp_len) {
     const double alpha = static_cast<double>(delta) / static_cast<double>(interp_len);
     return (prev[out_ch] * (1.0 - alpha)) + (cur[out_ch] * alpha);
 }
@@ -210,18 +209,18 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
     const bool ramping = interp_len > 0 && delta < interp_len;
 
     for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
-        const double gain = ramping
-            ? interpolated_gain(channel.blocks[block_index - 1].gains, block.gains, out_ch, delta, interp_len)
-            : block.gains[out_ch];
+        const double gain =
+            ramping ? interpolated_gain(channel.blocks[block_index - 1].gains, block.gains, out_ch, delta, interp_len)
+                    : block.gains[out_ch];
         (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += in_sample * static_cast<float>(gain);
 
         if (ctx.diffuse_in) {
-            const double diff_gain = ramping
-                ? interpolated_gain(channel.blocks[block_index - 1].diffuse_gains,
-                                    block.diffuse_gains, out_ch, delta, interp_len)
-                : block.diffuse_gains[out_ch];
-            ctx.diffuse_in[(frame * ctx.num_out_ch) + out_ch] +=
-                static_cast<double>(in_sample) * diff_gain;
+            const double diff_gain =
+                ramping
+                    ? interpolated_gain(
+                          channel.blocks[block_index - 1].diffuse_gains, block.diffuse_gains, out_ch, delta, interp_len)
+                    : block.diffuse_gains[out_ch];
+            ctx.diffuse_in[(frame * ctx.num_out_ch) + out_ch] += static_cast<double>(in_sample) * diff_gain;
         }
     }
 }
@@ -249,11 +248,11 @@ void apply_decorrelator(DecorrState& state,
                         std::vector<float>& diffuse_out,
                         std::size_t frames_now,
                         std::size_t num_out_ch) {
-    constexpr std::size_t kFirLen  = 512;
+    constexpr std::size_t kFirLen = 512;
     constexpr std::size_t kHistLen = kFirLen - 1; // 511
 
     for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-        const auto& fir  = state.filters[ch];
+        const auto& fir = state.filters[ch];
         auto& hist = state.fir_hist[ch]; // [511]
 
         // Build [hist | new samples] for causal convolution.
@@ -342,8 +341,7 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         const auto gain_matrix = build_gain_matrix(plan.scene, layout, logs);
 
         if (gain_matrix.empty()) {
-            logs.log(LogLevel::warning, "ear",
-                     "no renderable tracks found (all muted?), writing silence");
+            logs.log(LogLevel::warning, "ear", "no renderable tracks found (all muted?), writing silence");
         }
 
         const auto num_out_ch = static_cast<uint16_t>(layout.channels().size());
@@ -370,7 +368,7 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
 
         // Initialise decorrelator state for the diffuse bus.
         DecorrState decorr;
-        decorr.filters   = ear::designDecorrelators<double>(layout);
+        decorr.filters = ear::designDecorrelators<double>(layout);
         decorr.comp_delay = ear::decorrelatorCompensationDelay(); // 255
         decorr.fir_hist.assign(num_out_ch, std::vector<double>(511, 0.0));
         decorr.dir_delay.assign(num_out_ch, std::vector<float>(static_cast<std::size_t>(decorr.comp_delay), 0.0f));
@@ -387,10 +385,10 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         std::vector<std::size_t> blk_idx(gain_matrix.size(), 0);
 
         constexpr uint64_t k_block_size = 1024;
-        std::vector<float>  in_block(static_cast<std::size_t>(num_in_ch)  * k_block_size);
-        std::vector<float>  out_block(static_cast<std::size_t>(num_out_ch) * k_block_size);
+        std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
+        std::vector<float> out_block(static_cast<std::size_t>(num_out_ch) * k_block_size);
         std::vector<double> diffuse_in(static_cast<std::size_t>(num_out_ch) * k_block_size);
-        std::vector<float>  diffuse_out(static_cast<std::size_t>(num_out_ch) * k_block_size);
+        std::vector<float> diffuse_out(static_cast<std::size_t>(num_out_ch) * k_block_size);
         uint64_t frames_done = 0;
 
         while (frames_done < num_frames) {
@@ -398,14 +396,13 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
             const std::size_t out_samples = static_cast<std::size_t>(num_out_ch) * frames_now;
 
             reader->read(in_block.data(), frames_now);
-            std::fill(out_block.begin(),   out_block.begin()   + static_cast<ptrdiff_t>(out_samples), 0.0F);
-            std::fill(diffuse_in.begin(),  diffuse_in.begin()  + static_cast<ptrdiff_t>(out_samples), 0.0);
+            std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
+            std::fill(diffuse_in.begin(), diffuse_in.begin() + static_cast<ptrdiff_t>(out_samples), 0.0);
             std::fill(diffuse_out.begin(), diffuse_out.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
             // Accumulate direct and diffuse gains into their respective buffers.
             const AccumulateContext ctx{
-                in_block.data(), &out_block, diffuse_in.data(),
-                frames_done, num_in_ch, num_out_ch, k_default_interp};
+                in_block.data(), &out_block, diffuse_in.data(), frames_done, num_in_ch, num_out_ch, k_default_interp};
             accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now);
 
             // Apply 512-tap FIR decorrelator to the diffuse input per channel.

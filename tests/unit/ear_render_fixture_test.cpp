@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdlib>
@@ -6,6 +7,8 @@
 #include <memory>
 #include <numeric>
 #include <sstream>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -22,6 +25,24 @@
 #include "adm/render.h"
 
 namespace {
+
+// Records warnings logged by module "ear" for assertion in tests.
+class CapturingLogSink final : public mradm::LogSink {
+  public:
+    void log(mradm::LogLevel level, std::string_view /*module*/, std::string_view message) override {
+        if (level == mradm::LogLevel::warning) {
+            warnings_.emplace_back(message);
+        }
+    }
+    [[nodiscard]] bool has_warning_containing(std::string_view substr) const {
+        return std::any_of(warnings_.begin(), warnings_.end(), [&](const std::string& w) {
+            return w.find(substr) != std::string::npos;
+        });
+    }
+
+  private:
+    std::vector<std::string> warnings_;
+};
 
 class FileGuard {
   public:
@@ -561,11 +582,11 @@ double render_ear_diffuse_energy(float diffuse_value,
     FileGuard in_g{in_path};
 
     mradm::RenderRequest req;
-    req.input_path            = in_path;
-    req.output_path           = out_path;
+    req.input_path = in_path;
+    req.output_path = out_path;
     req.options.output_layout = "0+2+0";
-    req.options.renderer      = mradm::RendererSelection::ear;
-    req.options.peak_limit    = false;
+    req.options.renderer = mradm::RendererSelection::ear;
+    req.options.peak_limit = false;
 
     const auto res = service.render(req, progress, logs);
     if (!res.success()) {
@@ -582,14 +603,15 @@ double render_ear_diffuse_energy(float diffuse_value,
     std::vector<float> buf(n * 2U);
     reader.read(buf.data(), reader.frame_count());
 
-    return std::transform_reduce(buf.begin(), buf.end(), 0.0,
-                                 [](double a, double b) { return a + b; },
-                                 [](float s) { return std::fabs(static_cast<double>(s)); });
+    return std::transform_reduce(
+        buf.begin(),
+        buf.end(),
+        0.0,
+        [](double a, double b) { return a + b; },
+        [](float s) { return std::fabs(static_cast<double>(s)); });
 }
 
-bool verify_diffuse_bus(mradm::RenderService& service,
-                        mradm::NullProgressSink& progress,
-                        mradm::NullLogSink& logs) {
+bool verify_diffuse_bus(mradm::RenderService& service, mradm::NullProgressSink& progress, mradm::NullLogSink& logs) {
     bool ok = true;
 
     {
@@ -622,11 +644,11 @@ bool verify_diffuse_bus(mradm::RenderService& service,
         FileGuard out_g{out};
 
         mradm::RenderRequest req;
-        req.input_path            = in_path;
-        req.output_path           = out;
+        req.input_path = in_path;
+        req.output_path = out;
         req.options.output_layout = "0+2+0";
-        req.options.renderer      = mradm::RendererSelection::ear;
-        req.options.peak_limit    = false;
+        req.options.renderer = mradm::RendererSelection::ear;
+        req.options.peak_limit = false;
 
         const auto res = service.render(req, progress, logs);
         if (!res.success()) {
@@ -664,16 +686,15 @@ bool verify_diffuse_bus(mradm::RenderService& service,
 // Verifies that the EAR renderer handles a block shorter than the FIR history
 // (511 samples) and the direct delay (255 samples) without out-of-bounds access.
 bool verify_ear_short_block(const mradm::RenderService& service,
-                             mradm::NullProgressSink& progress,
-                             mradm::NullLogSink& logs) {
+                            mradm::NullProgressSink& progress,
+                            mradm::NullLogSink& logs) {
     auto [doc, uid_str] = make_objects_doc();
 
     const auto in_path = std::filesystem::temp_directory_path() / "mr_ear_short_block_in.wav";
     {
         std::ostringstream xml_buf;
         adm::writeXml(xml_buf, doc);
-        auto chna = std::make_shared<bw64::ChnaChunk>(
-            std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
         auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
         // 200 frames < min(255=comp_delay, 511=FIR history): exercises both short-block paths.
         constexpr uint32_t k_short = 200U;
@@ -687,11 +708,11 @@ bool verify_ear_short_block(const mradm::RenderService& service,
     FileGuard out_g{out_path};
 
     mradm::RenderRequest req;
-    req.input_path            = in_path;
-    req.output_path           = out_path;
+    req.input_path = in_path;
+    req.output_path = out_path;
     req.options.output_layout = "0+2+0";
-    req.options.renderer      = mradm::RendererSelection::ear;
-    req.options.peak_limit    = false;
+    req.options.renderer = mradm::RendererSelection::ear;
+    req.options.peak_limit = false;
 
     const auto res = service.render(req, progress, logs);
     if (!res.success()) {
@@ -708,17 +729,14 @@ bool verify_ear_short_block(const mradm::RenderService& service,
 }
 
 // Creates an Objects document with all three P2 fields set to non-default values
-// (channelLock=true, divergence=0.5, screenRef=true) and verifies that EAR renders
-// successfully via the warn+degrade path instead of throwing not_implemented.
-bool verify_p2_degrade_gracefully(const mradm::RenderService& service,
-                                   mradm::NullProgressSink& progress,
-                                   mradm::NullLogSink& logs) {
+// (channelLock=true, divergence=0.5, screenRef=true) and verifies that EAR:
+//   (a) renders successfully (no not_implemented exception), and
+//   (b) emits a warning for each degraded field.
+bool verify_p2_degrade_gracefully(const mradm::RenderService& service, mradm::NullProgressSink& progress) {
     auto doc = adm::Document::create();
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"P2CF"},
-                                              adm::TypeDefinition::OBJECTS);
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"P2CF"}, adm::TypeDefinition::OBJECTS);
     {
-        adm::AudioBlockFormatObjects block{
-            adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
         block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
         adm::ChannelLock cl;
         cl.set(adm::ChannelLockFlag{true});
@@ -731,16 +749,13 @@ bool verify_p2_degrade_gracefully(const mradm::RenderService& service,
     }
     doc->add(cf);
 
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"P2PF"},
-                                           adm::TypeDefinition::OBJECTS);
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"P2PF"}, adm::TypeDefinition::OBJECTS);
     pf->addReference(cf);
     doc->add(pf);
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"P2SF"},
-                                             adm::FormatDefinition::PCM);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"P2SF"}, adm::FormatDefinition::PCM);
     sf->setReference(cf);
     doc->add(sf);
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"P2TF"},
-                                            adm::FormatDefinition::PCM);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"P2TF"}, adm::FormatDefinition::PCM);
     tf->setReference(sf);
     sf->addReference(tf);
     doc->add(tf);
@@ -764,8 +779,7 @@ bool verify_p2_degrade_gracefully(const mradm::RenderService& service,
         std::ostringstream xml_buf;
         adm::writeXml(xml_buf, doc);
         const std::string uid_str = adm::formatId(uid->get<adm::AudioTrackUidId>());
-        auto chna = std::make_shared<bw64::ChnaChunk>(
-            std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
         auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
         auto writer = bw64::writeFile(in_path.string(), 1U, 48000U, 24U, chna, axml);
         std::vector<float> samples(1000U, 0.5F);
@@ -777,18 +791,25 @@ bool verify_p2_degrade_gracefully(const mradm::RenderService& service,
     FileGuard out_g{out_path};
 
     mradm::RenderRequest req;
-    req.input_path            = in_path;
-    req.output_path           = out_path;
+    req.input_path = in_path;
+    req.output_path = out_path;
     req.options.output_layout = "0+2+0";
-    req.options.renderer      = mradm::RendererSelection::ear;
-    req.options.peak_limit    = false;
+    req.options.renderer = mradm::RendererSelection::ear;
+    req.options.peak_limit = false;
 
-    const auto res = service.render(req, progress, logs);
+    CapturingLogSink capturing_logs;
+    const auto res = service.render(req, progress, capturing_logs);
     if (!res.success()) {
-        std::cerr << "FAIL: P2 degrade test render failed (expected warn+degrade, got error): "
-                  << res.error.message << "\n";
+        std::cerr << "FAIL: P2 degrade test render failed (expected warn+degrade, got error): " << res.error.message
+                  << "\n";
         return false;
     }
+
+    bool ok = true;
+    ok &= check(capturing_logs.has_warning_containing("channelLock"), "P2 degrade: warning emitted for channelLock");
+    ok &= check(capturing_logs.has_warning_containing("objectDivergence"),
+                "P2 degrade: warning emitted for objectDivergence");
+    ok &= check(capturing_logs.has_warning_containing("screenRef"), "P2 degrade: warning emitted for screenRef");
 
     auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
     if (!reader_res) {
@@ -798,10 +819,14 @@ bool verify_p2_degrade_gracefully(const mradm::RenderService& service,
     const auto n = static_cast<std::size_t>(reader.frame_count());
     std::vector<float> buf(n * 2U);
     reader.read(buf.data(), reader.frame_count());
-    const double energy = std::transform_reduce(buf.begin(), buf.end(), 0.0,
-                                                [](double a, double b) { return a + b; },
-                                                [](float s) { return std::fabs(static_cast<double>(s)); });
-    return check(energy > 0.0, "P2 degrade: output is not silent (fields degraded, not rejected)");
+    const double energy = std::transform_reduce(
+        buf.begin(),
+        buf.end(),
+        0.0,
+        [](double a, double b) { return a + b; },
+        [](float s) { return std::fabs(static_cast<double>(s)); });
+    ok &= check(energy > 0.0, "P2 degrade: output is not silent (fields degraded, not rejected)");
+    return ok;
 }
 
 } // namespace
@@ -817,7 +842,7 @@ int main() {
     ok &= verify_mixed_render_fixture(service, progress, logs);
     ok &= verify_diffuse_bus(service, progress, logs);
     ok &= verify_ear_short_block(service, progress, logs);
-    ok &= verify_p2_degrade_gracefully(service, progress, logs);
+    ok &= verify_p2_degrade_gracefully(service, progress);
 
     if (ok) {
         std::cout << "ear_render fixture test passed\n";
