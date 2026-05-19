@@ -164,6 +164,69 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_time_varying_objects
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
+std::pair<std::shared_ptr<adm::Document>, std::string> make_overlong_interpolation_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"VbapClampCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects left_block{adm::SphericalPosition{adm::Azimuth{-30.0F}, adm::Elevation{0.0F}}};
+        left_block.set(adm::Gain{1.0F});
+        left_block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
+        left_block.set(adm::Duration{adm::Time{std::chrono::milliseconds{500}}});
+        left_block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(left_block);
+
+        adm::AudioBlockFormatObjects right_block{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}}};
+        right_block.set(adm::Gain{1.0F});
+        right_block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{500}}});
+        right_block.set(adm::Duration{adm::Time{std::chrono::milliseconds{100}}});
+        right_block.set(
+            adm::JumpPosition{adm::JumpPositionFlag{false}, adm::InterpolationLength{std::chrono::seconds{1}}});
+        cf->add(right_block);
+
+        adm::AudioBlockFormatObjects final_block{adm::SphericalPosition{adm::Azimuth{-30.0F}, adm::Elevation{0.0F}}};
+        final_block.set(adm::Gain{1.0F});
+        final_block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{600}}});
+        final_block.set(adm::Duration{adm::Time{std::chrono::milliseconds{400}}});
+        final_block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(final_block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"VbapClampPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"VbapClampSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"VbapClampTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"VbapClampObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"VbapClampContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"VbapClampProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
 std::pair<std::shared_ptr<adm::Document>, std::string> make_nested_start_objects_doc() {
     auto doc = adm::Document::create();
 
@@ -512,6 +575,58 @@ bool verify_time_varying_objects_blocks() {
     return ok;
 }
 
+bool verify_overlong_interpolation_is_clamped() {
+    auto [doc, uid_str] = make_overlong_interpolation_doc();
+    const auto in_path = write_input_fixture(doc, uid_str, 1000U, 1000U);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_vbap_interp_clamp_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest request;
+    request.input_path = in_path;
+    request.output_path = out_path;
+    request.options.output_layout = "0+2+0";
+    request.options.renderer = mradm::RendererSelection::saf;
+    request.options.peak_limit = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const mradm::RenderResult result = service.render(request, progress, logs);
+    if (!result.success()) {
+        std::cerr << "FAIL: overlong interpolation render failed: " << result.error.message << "\n";
+        return false;
+    }
+
+    auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!reader_res) {
+        std::cerr << "FAIL: cannot open interpolation clamp output: " << reader_res.error().message << "\n";
+        return false;
+    }
+    auto& reader = *reader_res;
+    bool ok = true;
+    ok &= check(reader.channels() == 2U, "interpolation clamp output is stereo");
+    ok &= check(reader.sample_rate() == 1000U, "interpolation clamp output sample rate == 1000");
+    ok &= check(reader.frame_count() == 1000U, "interpolation clamp output frame count == 1000");
+    if (!ok) {
+        return false;
+    }
+
+    std::vector<float> samples(static_cast<std::size_t>(reader.frame_count()) * 2U);
+    reader.read(samples.data(), reader.frame_count());
+
+    double middle_left = 0.0;
+    double middle_right = 0.0;
+    for (std::size_t frame = 500U; frame < 600U; ++frame) {
+        middle_left += std::fabs(static_cast<double>(samples[2U * frame]));
+        middle_right += std::fabs(static_cast<double>(samples[(2U * frame) + 1U]));
+    }
+
+    ok &= check(middle_right > middle_left * 0.8, "overlong interpolation clamps to current block duration");
+    return ok;
+}
+
 bool verify_nested_audio_object_start_offsets() {
     auto [doc, uid_str] = make_nested_start_objects_doc();
     const auto in_path = write_input_fixture(doc, uid_str, 1000U, 1000U);
@@ -705,6 +820,7 @@ int main() {
     ok &= verify_vbap_render_fixture(ObjectPositionMode::polar_front, "polar front");
     ok &= verify_vbap_render_fixture(ObjectPositionMode::cartesian_front, "cartesian front");
     ok &= verify_time_varying_objects_blocks();
+    ok &= verify_overlong_interpolation_is_clamped();
     ok &= verify_nested_audio_object_start_offsets();
     ok &= verify_direct_speakers_label_routing();
     ok &= verify_direct_speakers_position_fallback_wrap();
