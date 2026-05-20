@@ -1089,7 +1089,7 @@ bool verify_audio_object_duration_gates_output() {
 
 bool verify_ds_time_window_gates_block() {
     // DS block with rtime=250ms, duration=250ms at 1000Hz / 1000 frames.
-    // Only frames 250-499 should be active on the right speaker (M+030).
+    // Only frames 250-499 should be active for M+030 (ch0 in 0+2+0).
     auto doc = adm::Document::create();
     auto cf =
         adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DsTimeCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
