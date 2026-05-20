@@ -28,7 +28,7 @@ ctest --test-dir build --output-on-failure
 
 ```bash
 ./build/adm --version
-./build/adm render -i input.wav -o output.wav --renderer auto --output-layout binaural
+./build/adm render -i input.wav -o output.wav --renderer auto --output-layout 0+2+0
 ```
 
 第一次配置时，CMake 会优先查找系统安装的 CLI11、fmt、spdlog；找不到时默认通过 `FetchContent` 拉取固定版本。可通过以下选项关闭自动拉取：
