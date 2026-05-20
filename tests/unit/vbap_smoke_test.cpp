@@ -580,10 +580,11 @@ bool verify_time_varying_objects_blocks() {
     }
 
     constexpr double k_leak_tolerance = 1.0e-3;
-    ok &= check(first_left > 0.0, "first timed block renders to left speaker");
-    ok &= check(first_right < k_leak_tolerance, "first timed block does not leak into right speaker");
-    ok &= check(second_right > 0.0, "second timed block renders to right speaker");
-    ok &= check(second_left < k_leak_tolerance, "second timed block does not leak into left speaker");
+    // first block az=-30 → M-030 → ch1 (right); second block az=+30 → M+030 → ch0 (left)
+    ok &= check(first_right > 0.0, "first timed block (az=-30) renders to right speaker (M-030, ch1)");
+    ok &= check(first_left < k_leak_tolerance, "first timed block does not leak into left speaker");
+    ok &= check(second_left > 0.0, "second timed block (az=+30) renders to left speaker (M+030, ch0)");
+    ok &= check(second_right < k_leak_tolerance, "second timed block does not leak into right speaker");
     return ok;
 }
 
@@ -635,7 +636,8 @@ bool verify_overlong_interpolation_is_clamped() {
         middle_right += std::fabs(static_cast<double>(samples[(2U * frame) + 1U]));
     }
 
-    ok &= check(middle_right > middle_left * 0.8, "overlong interpolation clamps to current block duration");
+    // second block az=+30 → M+030 → ch0 (left); clamping means M+030 dominates in frames 500-600
+    ok &= check(middle_left > middle_right * 0.8, "overlong interpolation clamps to current block duration");
     return ok;
 }
 
@@ -716,8 +718,8 @@ bool verify_direct_speakers_label_routing() {
     bool ok = true;
     ok &= check(sums.size() == 2U, "DirectSpeakers label output is stereo");
     if (ok) {
-        ok &= check(sums[0] < 1.0e-6, "DirectSpeakers label M+030 does not leak to M-030 channel");
-        ok &= check(sums[1] > 0.0, "DirectSpeakers label M+030 routes to M+030 channel");
+        ok &= check(sums[0] > 0.0, "DirectSpeakers label M+030 routes to ch0 (M+030)");
+        ok &= check(sums[1] < 1.0e-6, "DirectSpeakers label M+030 does not leak to ch1 (M-030)");
     }
     return ok;
 }
@@ -1141,10 +1143,8 @@ bool verify_ds_time_window_gates_block() {
     }
 
     bool ok = true;
-    // Right channel (ch 1) carries M+030 label routing.
-    // Pre-window: frames 0-249 → silent on right.
-    // In-window: frames 250-499 → active on right.
-    // Post-window: frames 500-999 → silent on right.
+    // Left channel (ch 0) carries M+030 label routing (0+2+0: ch0=M+030, ch1=M-030).
+    // read_segment_energy sums both channels, so this test is channel-order-independent.
     const double before = read_segment_energy(out, 2U, 0U, 250U);
     const double active = read_segment_energy(out, 2U, 250U, 500U);
     const double after = read_segment_energy(out, 2U, 500U, 1000U);
