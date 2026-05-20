@@ -27,6 +27,7 @@ struct SpeakerDirection {
     float azimuth{0.0F};
     float elevation{0.0F};
     std::string label; // BS.2051 label, e.g. "M+030"; empty = unlabelled
+    bool is_lfe{false};
 };
 
 struct LayoutSpec {
@@ -65,96 +66,93 @@ struct SafFree {
 };
 
 [[nodiscard]] std::optional<LayoutSpec> layout_spec(std::string_view layout_id) {
-    // Azimuth convention: positive = left (ADM / ITU-R BS.2051).
-    // Labels follow BS.2051 naming: layer prefix (M/U/B) + sign + three-digit angle.
+    // Channel order and positions match BS.2051 / libear exactly.
+    // LFE speakers (is_lfe=true) are included in the output at the correct channel index
+    // but receive zero gain from VBAP panning. DirectSpeakers LFE tracks are routed to
+    // the matching LFE label; non-LFE tracks never land on an LFE channel.
     if (layout_id == "0+2+0") {
+        // 2ch — no LFE
         return LayoutSpec{{{-30.0F, 0.0F, "M-030"}, {30.0F, 0.0F, "M+030"}}};
     }
     if (layout_id == "0+5+0") {
-        return LayoutSpec{{{-30.0F, 0.0F, "M-030"},
-                           {30.0F, 0.0F, "M+030"},
+        // BS.2051 5.1 — 6ch
+        return LayoutSpec{{{30.0F, 0.0F, "M+030"},
+                           {-30.0F, 0.0F, "M-030"},
                            {0.0F, 0.0F, "M+000"},
-                           {-110.0F, 0.0F, "M-110"},
-                           {110.0F, 0.0F, "M+110"}}};
+                           {45.0F, -30.0F, "LFE1", true},
+                           {110.0F, 0.0F, "M+110"},
+                           {-110.0F, 0.0F, "M-110"}}};
     }
     if (layout_id == "0+7+0") {
-        return LayoutSpec{{{-30.0F, 0.0F, "M-030"},
-                           {30.0F, 0.0F, "M+030"},
+        // BS.2051 7.1 — 8ch
+        return LayoutSpec{{{30.0F, 0.0F, "M+030"},
+                           {-30.0F, 0.0F, "M-030"},
                            {0.0F, 0.0F, "M+000"},
-                           {-90.0F, 0.0F, "M-090"},
+                           {45.0F, -30.0F, "LFE1", true},
                            {90.0F, 0.0F, "M+090"},
-                           {-150.0F, 0.0F, "M-150"},
-                           {150.0F, 0.0F, "M+150"}}};
+                           {-90.0F, 0.0F, "M-090"},
+                           {135.0F, 0.0F, "M+135"},
+                           {-135.0F, 0.0F, "M-135"}}};
     }
     if (layout_id == "4+5+0") {
-        return LayoutSpec{{{-30.0F, 0.0F, "M-030"},
-                           {30.0F, 0.0F, "M+030"},
+        // BS.2051 5.1.4 — 10ch; U layer at 30° elevation
+        return LayoutSpec{{{30.0F, 0.0F, "M+030"},
+                           {-30.0F, 0.0F, "M-030"},
                            {0.0F, 0.0F, "M+000"},
-                           {-110.0F, 0.0F, "M-110"},
+                           {45.0F, -30.0F, "LFE1", true},
                            {110.0F, 0.0F, "M+110"},
-                           {-45.0F, 45.0F, "U-045"},
-                           {45.0F, 45.0F, "U+045"},
-                           {-135.0F, 45.0F, "U-135"},
-                           {135.0F, 45.0F, "U+135"}}};
+                           {-110.0F, 0.0F, "M-110"},
+                           {30.0F, 30.0F, "U+030"},
+                           {-30.0F, 30.0F, "U-030"},
+                           {110.0F, 30.0F, "U+110"},
+                           {-110.0F, 30.0F, "U-110"}}};
     }
     if (layout_id == "4+7+0") {
-        return LayoutSpec{{{-30.0F, 0.0F, "M-030"},
-                           {30.0F, 0.0F, "M+030"},
+        // BS.2051 7.1.4 — 12ch; U layer at 30° elevation
+        return LayoutSpec{{{30.0F, 0.0F, "M+030"},
+                           {-30.0F, 0.0F, "M-030"},
                            {0.0F, 0.0F, "M+000"},
-                           {-90.0F, 0.0F, "M-090"},
+                           {45.0F, -30.0F, "LFE1", true},
                            {90.0F, 0.0F, "M+090"},
-                           {-150.0F, 0.0F, "M-150"},
-                           {150.0F, 0.0F, "M+150"},
-                           {-45.0F, 45.0F, "U-045"},
-                           {45.0F, 45.0F, "U+045"},
-                           {-135.0F, 45.0F, "U-135"},
-                           {135.0F, 45.0F, "U+135"}}};
-    }
-    if (layout_id == "9+10+3") {
-        // ITU-R BS.2051 22.2 (NHK): 10M + 8U + T+000 + 3B = 22 non-LFE speakers.
-        // Speaker positions match libear's bs2051_layouts.cpp exactly; LFE1/LFE2 excluded.
-        // TODO: 9.1.6 (Dolby Atmos 16-ch) is a separate layout — not yet implemented.
-        return LayoutSpec{// M layer (10)
-                          {{60.0F, 0.0F, "M+060"},
-                           {-60.0F, 0.0F, "M-060"},
-                           {0.0F, 0.0F, "M+000"},
+                           {-90.0F, 0.0F, "M-090"},
                            {135.0F, 0.0F, "M+135"},
                            {-135.0F, 0.0F, "M-135"},
-                           {30.0F, 0.0F, "M+030"},
-                           {-30.0F, 0.0F, "M-030"},
-                           {180.0F, 0.0F, "M+180"},
-                           {90.0F, 0.0F, "M+090"},
-                           {-90.0F, 0.0F, "M-090"},
-                           // U layer (8)
                            {45.0F, 30.0F, "U+045"},
                            {-45.0F, 30.0F, "U-045"},
-                           {0.0F, 30.0F, "U+000"},
                            {135.0F, 30.0F, "U+135"},
-                           {-135.0F, 30.0F, "U-135"},
-                           {90.0F, 30.0F, "U+090"},
-                           {-90.0F, 30.0F, "U-090"},
-                           {180.0F, 30.0F, "U+180"},
-                           // T layer (1)
-                           {0.0F, 90.0F, "T+000"},
-                           // B layer (3)
-                           {0.0F, -30.0F, "B+000"},
-                           {45.0F, -30.0F, "B+045"},
-                           {-45.0F, -30.0F, "B-045"}}};
+                           {-135.0F, 30.0F, "U-135"}}};
+    }
+    if (layout_id == "9+10+3") {
+        // BS.2051 22.2 (NHK) — 24ch (22 non-LFE + LFE1 + LFE2).
+        // Channel order matches libear bs2051_layouts.cpp exactly.
+        // TODO: 9.1.6 (Dolby Atmos 16-ch) is a separate layout — not yet implemented.
+        return LayoutSpec{{{60.0F, 0.0F, "M+060"},         {-60.0F, 0.0F, "M-060"},  {0.0F, 0.0F, "M+000"},
+                           {45.0F, -30.0F, "LFE1", true},  {135.0F, 0.0F, "M+135"},  {-135.0F, 0.0F, "M-135"},
+                           {30.0F, 0.0F, "M+030"},         {-30.0F, 0.0F, "M-030"},  {180.0F, 0.0F, "M+180"},
+                           {-45.0F, -30.0F, "LFE2", true}, {90.0F, 0.0F, "M+090"},   {-90.0F, 0.0F, "M-090"},
+                           {45.0F, 30.0F, "U+045"},        {-45.0F, 30.0F, "U-045"}, {0.0F, 30.0F, "U+000"},
+                           {0.0F, 90.0F, "T+000"},         {135.0F, 30.0F, "U+135"}, {-135.0F, 30.0F, "U-135"},
+                           {90.0F, 30.0F, "U+090"},        {-90.0F, 30.0F, "U-090"}, {180.0F, 30.0F, "U+180"},
+                           {0.0F, -30.0F, "B+000"},        {45.0F, -30.0F, "B+045"}, {-45.0F, -30.0F, "B-045"}}};
     }
     return std::nullopt;
 }
 
 [[nodiscard]] bool is_2d_layout(const LayoutSpec& layout) {
-    return std::ranges::all_of(layout.speakers,
-                               [](const auto& speaker) { return std::fabs(speaker.elevation) < 1.0e-6F; });
+    // LFE speakers sit at el=-30° but are not panned; exclude them from the check.
+    return std::ranges::all_of(
+        layout.speakers, [](const auto& speaker) { return speaker.is_lfe || std::fabs(speaker.elevation) < 1.0e-6F; });
 }
 
 [[nodiscard]] std::vector<float> flatten_layout(const LayoutSpec& layout) {
+    // Only non-LFE speakers participate in VBAP panning.
     std::vector<float> result;
     result.reserve(layout.speakers.size() * 2U);
     for (const auto& speaker : layout.speakers) {
-        result.push_back(speaker.azimuth);
-        result.push_back(speaker.elevation);
+        if (!speaker.is_lfe) {
+            result.push_back(speaker.azimuth);
+            result.push_back(speaker.elevation);
+        }
     }
     return result;
 }
@@ -167,6 +165,9 @@ struct SafFree {
     std::size_t best = 0;
     float best_sq = std::numeric_limits<float>::max();
     for (std::size_t i = 0; i < layout.speakers.size(); ++i) {
+        if (layout.speakers[i].is_lfe) {
+            continue; // Non-LFE sources must never land on an LFE channel
+        }
         const float daz = std::remainder(azimuth - layout.speakers[i].azimuth, 360.0F);
         const float del = elevation - layout.speakers[i].elevation;
         const float sq = (daz * daz) + (del * del);
@@ -209,11 +210,11 @@ struct SafFree {
 }
 
 [[nodiscard]] Result<std::vector<float>> calculate_vbap_gains(const SceneObjectBlock& block, const LayoutSpec& layout) {
-    auto speakers = flatten_layout(layout);
+    auto speakers = flatten_layout(layout); // non-LFE only
     const auto src = source_direction(block.position);
     std::vector<float> source{src.azimuth, src.elevation};
 
-    const auto speaker_count = static_cast<int>(layout.speakers.size());
+    const auto num_non_lfe = static_cast<int>(speakers.size() / 2U);
     const bool use_3d = !is_2d_layout(layout);
     const float spread_deg = use_3d ? mdap_spread_degrees(block) : 0.0F;
     int table_size = 0;
@@ -222,14 +223,14 @@ struct SafFree {
 
     if (!use_3d) {
         generateVBAPgainTable2D_srcs(
-            source.data(), 1, speakers.data(), speaker_count, &raw_table, &table_size, &simplex_count);
+            source.data(), 1, speakers.data(), num_non_lfe, &raw_table, &table_size, &simplex_count);
     } else {
         constexpr int k_omit_large_triangles = 1;
         constexpr int k_enable_dummies = 1;
         generateVBAPgainTable3D_srcs(source.data(),
                                      1,
                                      speakers.data(),
-                                     speaker_count,
+                                     num_non_lfe,
                                      k_omit_large_triangles,
                                      k_enable_dummies,
                                      spread_deg,
@@ -243,9 +244,15 @@ struct SafFree {
         return make_error(ErrorCode::render_failed, "SAF VBAP gain calculation failed", {});
     }
 
-    std::vector<float> gains(static_cast<std::size_t>(speaker_count), 0.0F);
-    std::copy_n(table.get(), gains.size(), gains.begin());
-    std::ranges::transform(gains, gains.begin(), [block_gain = block.gain](float gain) { return gain * block_gain; });
+    // Expand VBAP gains (non-LFE only) to full output channel count.
+    // LFE channels stay zero — Objects never route to LFE.
+    std::vector<float> gains(layout.speakers.size(), 0.0F);
+    std::size_t vbap_idx = 0;
+    for (std::size_t i = 0; i < layout.speakers.size(); ++i) {
+        if (!layout.speakers[i].is_lfe) {
+            gains[i] = table.get()[vbap_idx++] * block.gain;
+        }
+    }
     return gains;
 }
 
@@ -518,11 +525,11 @@ CapabilityReport vbap_capabilities() {
     r.supports_hoa = false;
     r.supported_layouts = {
         {"0+2+0", "Stereo"},
-        {"0+5+0", "5.0"},
-        {"0+7+0", "7.0"},
+        {"0+5+0", "5.1"},
+        {"0+7+0", "7.1"},
         {"4+5+0", "5.1.4"},
         {"4+7+0", "7.1.4"},
-        {"9+10+3", "22.2 (22ch, no LFE)"},
+        {"9+10+3", "22.2"},
     };
     return r;
 }
