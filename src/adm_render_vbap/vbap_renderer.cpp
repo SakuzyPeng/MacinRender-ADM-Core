@@ -71,8 +71,8 @@ struct SafFree {
     // but receive zero gain from VBAP panning. DirectSpeakers LFE tracks are routed to
     // the matching LFE label; non-LFE tracks never land on an LFE channel.
     if (layout_id == "0+2+0") {
-        // 2ch — no LFE
-        return LayoutSpec{{{-30.0F, 0.0F, "M-030"}, {30.0F, 0.0F, "M+030"}}};
+        // 2ch — no LFE; ch0=M+030 (L), ch1=M-030 (R), matches libear 0+2+0 order.
+        return LayoutSpec{{{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}}};
     }
     if (layout_id == "0+5+0") {
         // BS.2051 5.1 — 6ch
