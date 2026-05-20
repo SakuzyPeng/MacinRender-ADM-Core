@@ -145,8 +145,8 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene) {
             cg.input_channel = in_ch;
 
             for (const auto& block : track.blocks) {
-                const SceneBlockPosition pos =
-                    obj.position_offset ? apply_position_offset(block.position, *obj.position_offset) : block.position;
+                const auto& off = obj.position_offset;
+                const SceneBlockPosition pos = off ? apply_position_offset(block.position, *off) : block.position;
                 Hoa3Coeffs sh =
                     pos.cartesian ? encode_cartesian(pos.x, pos.y, pos.z) : encode_polar(pos.azimuth, pos.elevation);
                 const float combined_gain = block.gain * obj.gain;
