@@ -1,3 +1,4 @@
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -9,6 +10,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -335,7 +337,10 @@ std::filesystem::path write_input_fixture(const std::shared_ptr<adm::Document>& 
                                           const std::string& uid_str,
                                           uint16_t sample_rate = 48000U,
                                           uint32_t frames = 1000U) {
-    auto path = std::filesystem::temp_directory_path() / "mr_vbap_fixture_in.wav";
+    static std::atomic<int> s_seq{0};
+    const auto name = "mr_vbap_in_" + std::to_string(static_cast<int>(::getpid())) + "_" +
+                      std::to_string(s_seq.fetch_add(1)) + ".wav";
+    auto path = std::filesystem::temp_directory_path() / name;
 
     std::ostringstream xml_buf;
     adm::writeXml(xml_buf, doc);
