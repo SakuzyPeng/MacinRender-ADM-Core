@@ -349,20 +349,25 @@ std::filesystem::path write_input_fixture(const std::shared_ptr<adm::Document>& 
     return path;
 }
 
-std::vector<double> read_channel_sums(const std::filesystem::path& path, std::size_t channels) {
+std::vector<double> read_channel_sums(const std::filesystem::path& path, std::size_t expected_channels) {
     auto reader_res = mradm::audio::FloatWavReader::open(path.string());
     if (!reader_res) {
         return {};
     }
     auto& reader = *reader_res;
+    const auto actual_channels = static_cast<std::size_t>(reader.channels());
+    if (actual_channels != expected_channels) {
+        std::cerr << "FAIL: expected " << expected_channels << " output channels, got " << actual_channels << "\n";
+        return {};
+    }
     const auto n_frames = static_cast<std::size_t>(reader.frame_count());
-    std::vector<float> samples(n_frames * channels);
+    std::vector<float> samples(n_frames * actual_channels);
     reader.read(samples.data(), reader.frame_count());
 
-    std::vector<double> sums(channels, 0.0);
+    std::vector<double> sums(actual_channels, 0.0);
     for (std::size_t frame = 0; frame < n_frames; ++frame) {
-        for (std::size_t ch = 0; ch < channels; ++ch) {
-            sums[ch] += std::fabs(static_cast<double>(samples[(frame * channels) + ch]));
+        for (std::size_t ch = 0; ch < actual_channels; ++ch) {
+            sums[ch] += std::fabs(static_cast<double>(samples[(frame * actual_channels) + ch]));
         }
     }
     return sums;
@@ -735,9 +740,9 @@ bool verify_direct_speakers_position_fallback_wrap() {
     }
 
     // 9+10+3 is now 24ch (22 non-LFE + LFE1[3] + LFE2[9]); M+180 is at index 8.
-    constexpr std::size_t k_rear_channel = 8U;  // M+180 in 24ch BS.2051 9+10+3 order
-    constexpr std::size_t k_lfe1_channel = 3U;  // LFE1 — always zero for non-LFE sources
-    constexpr std::size_t k_lfe2_channel = 9U;  // LFE2 — always zero for non-LFE sources
+    constexpr std::size_t k_rear_channel = 8U; // M+180 in 24ch BS.2051 9+10+3 order
+    constexpr std::size_t k_lfe1_channel = 3U; // LFE1 — always zero for non-LFE sources
+    constexpr std::size_t k_lfe2_channel = 9U; // LFE2 — always zero for non-LFE sources
     const auto sums = read_channel_sums(out_path, 24U);
     bool ok = true;
     ok &= check(sums.size() == 24U, "DirectSpeakers fallback output has 24 channels");

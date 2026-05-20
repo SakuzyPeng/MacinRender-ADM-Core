@@ -122,10 +122,32 @@ struct SafFree {
                            {135.0F, 30.0F, "U+135"},
                            {-135.0F, 30.0F, "U-135"}}};
     }
+    if (layout_id == "9.1.6") {
+        // Dolby Atmos 9.1.6 — 16ch.
+        // Channel order matches kAudioChannelLayoutTag_Atmos_9_1_6 and Cavern ref916:
+        //   L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr
+        // Bed positions: Ls/Rs=±110° (side surround), Rls/Rrs=±150° (rear surround),
+        //   Lw/Rw=±70° (wide front). Height at 45° elevation.
+        return LayoutSpec{{{30.0F, 0.0F, "M+030"},
+                           {-30.0F, 0.0F, "M-030"},
+                           {0.0F, 0.0F, "M+000"},
+                           {45.0F, -30.0F, "LFE1", true},
+                           {110.0F, 0.0F, "M+110"},     // Ls
+                           {-110.0F, 0.0F, "M-110"},    // Rs
+                           {150.0F, 0.0F, "M+150"},     // Rls
+                           {-150.0F, 0.0F, "M-150"},    // Rrs
+                           {70.0F, 0.0F, "M+070"},      // Lw
+                           {-70.0F, 0.0F, "M-070"},     // Rw
+                           {70.0F, 45.0F, "U+070"},     // Vhl (top front left)
+                           {-70.0F, 45.0F, "U-070"},    // Vhr
+                           {110.0F, 45.0F, "U+110"},    // Ltm (top side left)
+                           {-110.0F, 45.0F, "U-110"},   // Rtm
+                           {150.0F, 45.0F, "U+150"},    // Ltr (top rear left)
+                           {-150.0F, 45.0F, "U-150"}}}; // Rtr
+    }
     if (layout_id == "9+10+3") {
         // BS.2051 22.2 (NHK) — 24ch (22 non-LFE + LFE1 + LFE2).
         // Channel order matches libear bs2051_layouts.cpp exactly.
-        // TODO: 9.1.6 (Dolby Atmos 16-ch) is a separate layout — not yet implemented.
         return LayoutSpec{{{60.0F, 0.0F, "M+060"},         {-60.0F, 0.0F, "M-060"},  {0.0F, 0.0F, "M+000"},
                            {45.0F, -30.0F, "LFE1", true},  {135.0F, 0.0F, "M+135"},  {-135.0F, 0.0F, "M-135"},
                            {30.0F, 0.0F, "M+030"},         {-30.0F, 0.0F, "M-030"},  {180.0F, 0.0F, "M+180"},
@@ -530,6 +552,7 @@ CapabilityReport vbap_capabilities() {
         {"4+5+0", "5.1.4"},
         {"4+7+0", "7.1.4"},
         {"9+10+3", "22.2"},
+        {"9.1.6", "9.1.6 (Dolby Atmos)"},
     };
     return r;
 }
