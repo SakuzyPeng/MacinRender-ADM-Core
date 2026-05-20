@@ -734,16 +734,20 @@ bool verify_direct_speakers_position_fallback_wrap() {
         return false;
     }
 
-    constexpr std::size_t k_rear_channel = 7U; // M+180 in layout_spec("9+10+3")
-    const auto sums = read_channel_sums(out_path, 22U);
+    // 9+10+3 is now 24ch (22 non-LFE + LFE1[3] + LFE2[9]); M+180 is at index 8.
+    constexpr std::size_t k_rear_channel = 8U;  // M+180 in 24ch BS.2051 9+10+3 order
+    constexpr std::size_t k_lfe1_channel = 3U;  // LFE1 — always zero for non-LFE sources
+    constexpr std::size_t k_lfe2_channel = 9U;  // LFE2 — always zero for non-LFE sources
+    const auto sums = read_channel_sums(out_path, 24U);
     bool ok = true;
-    ok &= check(sums.size() == 22U, "DirectSpeakers fallback output has 22 channels");
+    ok &= check(sums.size() == 24U, "DirectSpeakers fallback output has 24 channels");
     if (ok) {
         ok &= check(sums[k_rear_channel] > 0.0, "DirectSpeakers fallback wraps -179° to rear M+180");
         for (std::size_t ch = 0; ch < sums.size(); ++ch) {
-            if (ch != k_rear_channel) {
-                ok &= check(sums[ch] < 1.0e-6, "DirectSpeakers fallback does not leak to non-nearest channels");
+            if (ch == k_rear_channel || ch == k_lfe1_channel || ch == k_lfe2_channel) {
+                continue;
             }
+            ok &= check(sums[ch] < 1.0e-6, "DirectSpeakers fallback does not leak to non-nearest channels");
         }
     }
     ok &= check(logs.has_warnings(), "DirectSpeakers fallback emits warning on label miss");
