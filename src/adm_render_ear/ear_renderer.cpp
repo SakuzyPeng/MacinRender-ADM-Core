@@ -130,7 +130,10 @@ void append_object_blocks(const SceneTrackRef& track,
 [[nodiscard]] ear::DirectSpeakersTypeMetadata direct_speakers_metadata_from_block(const SceneDirectSpeakersBlock& ds) {
     ear::DirectSpeakersTypeMetadata meta;
     meta.speakerLabels = ds.speaker_labels;
-    if (!ds.pack_format_id.empty()) {
+    // libear throws if audioPackFormatID is set without speaker labels (including
+    // non-common-definition IDs). Only pass the ID when labels are also present so
+    // that label-less custom DS blocks fall through to position-based routing.
+    if (!ds.pack_format_id.empty() && !ds.speaker_labels.empty()) {
         meta.audioPackFormatID = ds.pack_format_id;
     }
     if (ds.has_position) {

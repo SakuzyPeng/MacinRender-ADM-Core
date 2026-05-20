@@ -1028,8 +1028,9 @@ bool verify_p2_degrade_gracefully(const mradm::RenderService& service, mradm::Nu
 }
 
 // DS CartesianSpeakerPosition → M8b converts to polar at import time, no libear throw.
-// M+030 (az=+30°, el=0°) expressed as CartesianSpeakerPosition{X=-0.5, Y=0.866, Z=0}.
-// Importer converts: az = atan2(-(-0.5), 0.866) ≈ +30°, routes to left output channel.
+// CartesianSpeakerPosition{X=-0.5, Y=0.866, Z=0} converts via az=atan2(-X,Y)≈+30°.
+// No SpeakerLabel → libear routes by position; source at az≈+30° must land left-biased
+// in a 0+2+0 layout (M+030=ch0 at +30°, M-030=ch1 at -30°).
 bool verify_ds_cartesian_speaker_position(const mradm::RenderService& service,
                                           mradm::ProgressSink& progress,
                                           mradm::NullLogSink& logs) {
@@ -1038,10 +1039,10 @@ bool verify_ds_cartesian_speaker_position(const mradm::RenderService& service,
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DsCartesianCF"},
                                               adm::TypeDefinition::DIRECT_SPEAKERS);
     {
-        // M+030: az=+30° → in ADM Cartesian: X=-sin(30°)=-0.5, Y=cos(30°)≈0.866
+        // az=+30° → Cartesian: X=-sin(30°)=-0.5, Y=cos(30°)≈0.866
+        // No SpeakerLabel: importer produces polar az≈+30°; libear routes by position only.
         adm::AudioBlockFormatDirectSpeakers block{
             adm::CartesianSpeakerPosition{adm::X{-0.5F}, adm::Y{0.866F}, adm::Z{0.0F}}};
-        block.add(adm::SpeakerLabel{"M+030"});
         cf->add(block);
     }
     doc->add(cf);
@@ -1094,13 +1095,25 @@ bool verify_ds_cartesian_speaker_position(const mradm::RenderService& service,
         return false;
     }
     auto& reader = *reader_res;
-    const std::size_t n_frames = static_cast<std::size_t>(reader.frame_count());
+    const auto n_frames = static_cast<std::size_t>(reader.frame_count());
     std::vector<float> samples(n_frames * 2U);
     reader.read(samples.data(), reader.frame_count());
-    const double total_energy = std::transform_reduce(samples.begin(), samples.end(), 0.0, std::plus<>{}, [](float s) {
-        return static_cast<double>(s) * static_cast<double>(s);
-    });
-    return check(total_energy > 0.0, "DS CartesianSpeakerPosition: output is not silent");
+
+    // Verify that the converted az≈+30° position drives the LEFT channel (ch0=M+030)
+    // harder than the right channel (ch1=M-030). This confirms the Cartesian→polar
+    // formula is correct: wrong sign on X would give az≈-30° and flip the result.
+    double ch0_sq = 0.0;
+    double ch1_sq = 0.0;
+    for (std::size_t f = 0; f < n_frames; ++f) {
+        const auto s0 = static_cast<double>(samples[(f * 2U) + 0U]);
+        const auto s1 = static_cast<double>(samples[(f * 2U) + 1U]);
+        ch0_sq += s0 * s0;
+        ch1_sq += s1 * s1;
+    }
+    bool ok = true;
+    ok &= check(ch0_sq > 100.0, "DS Cartesian: left channel (M+030) has energy");
+    ok &= check(ch0_sq > ch1_sq * 5.0, "DS Cartesian: left channel louder than right (az≈+30° → left-biased)");
+    return ok;
 }
 
 } // namespace

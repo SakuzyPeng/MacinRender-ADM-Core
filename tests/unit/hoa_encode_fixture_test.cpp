@@ -127,6 +127,19 @@ std::vector<double> read_channel_rms(const std::filesystem::path& path) {
     return rms;
 }
 
+// Read all samples from a 16ch HOA output as a flat frame-interleaved buffer.
+std::vector<float> read_hoa_raw_samples(const std::filesystem::path& path) {
+    auto reader_res = mradm::audio::FloatWavReader::open(path.string());
+    if (!reader_res) {
+        return {};
+    }
+    auto& reader = *reader_res;
+    const auto n_frames = static_cast<std::size_t>(reader.frame_count());
+    std::vector<float> buf(n_frames * static_cast<std::size_t>(k_hoa3_channels), 0.0F);
+    reader.read(buf.data(), reader.frame_count());
+    return buf;
+}
+
 // Front source (az=0, el=0): in SN3D, W=gain and X=gain; Y=Z=0.
 bool verify_front_source() {
     auto [doc, uid_str] = make_objects_doc(0.0F, 0.0F);
@@ -319,6 +332,128 @@ bool verify_hoa_jump_position() {
     return ok;
 }
 
+// jumpPosition=false: linear ramp from block0 (front) to block1 (left).
+// At ramp start (frame 480, delta=0): gains = prev block (front) → ch3(X)≈0.5, ch1(Y)≈0.
+// After ramp  (frame 720, delta=interp_len): gains = cur block (left) → ch3(X)≈0, ch1(Y)≈0.5.
+bool verify_hoa_ramp_interpolation() {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"HoaCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block0{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block0.set(adm::Gain{static_cast<double>(k_amplitude)});
+        block0.set(adm::Duration{adm::Time{std::chrono::milliseconds{10}}});
+        cf->add(block0);
+
+        adm::AudioBlockFormatObjects block1{adm::SphericalPosition{adm::Azimuth{90.0F}, adm::Elevation{0.0F}}};
+        block1.set(adm::Gain{static_cast<double>(k_amplitude)});
+        block1.set(adm::Rtime{adm::Time{std::chrono::milliseconds{10}}});
+        // JumpPosition defaults to false → linear interpolation ramp
+        cf->add(block1);
+    }
+    doc->add(cf);
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"HoaPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"HoaSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"HoaTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"HoaObj"});
+    obj->addReference(uid);
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"HoaContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"HoaProg"});
+    prog->addReference(content);
+    doc->add(prog);
+    adm::reassignIds(doc);
+    const auto uid_str = adm::formatId(uid->get<adm::AudioTrackUidId>());
+
+    const auto in_path = write_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_hoa_enc_ramp.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "hoa3";
+    req.options.renderer = mradm::RendererSelection::hoa;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: HOA ramp render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    const auto raw = read_hoa_raw_samples(out_path);
+    if (raw.empty()) {
+        std::cerr << "FAIL: cannot read HOA ramp output\n";
+        return false;
+    }
+    // Block0 ends at sample 480; block1 starts there with 5ms ramp (240 samples at 48kHz).
+    // Frame 480 (delta=0, alpha=0): output = block0 gains → X active, Y silent.
+    // Frame 720 (delta=240=interp_len): output = block1 gains → Y active, X silent.
+    constexpr auto k_ch = static_cast<std::size_t>(k_hoa3_channels);
+    const float x_ramp_start = raw.at((480U * k_ch) + 3U);
+    const float y_ramp_start = raw.at((480U * k_ch) + 1U);
+    const float x_after_ramp = raw.at((720U * k_ch) + 3U);
+    const float y_after_ramp = raw.at((720U * k_ch) + 1U);
+    bool ok = true;
+    ok &= check(x_ramp_start > 0.1F, "HOA ramp: X (front) active at ramp start (prev-block contribution)");
+    ok &= check(y_ramp_start < 0.01F, "HOA ramp: Y (left) silent at ramp start");
+    ok &= check(x_after_ramp < 0.01F, "HOA ramp: X (front) silent after ramp completes");
+    ok &= check(y_after_ramp > 0.3F, "HOA ramp: Y (left) active after ramp completes");
+    return ok;
+}
+
+// positionOffset azimuth=+90° rotates a front source (az=0) to left (az=90).
+// HOA output must match verify_left_source(): Y (ch1) active, X (ch3) ≈ 0.
+bool verify_hoa_position_offset() {
+    auto [doc, uid_str] = make_objects_doc(0.0F, 0.0F);
+    for (const auto& ao : doc->getElements<adm::AudioObject>()) {
+        adm::SphericalPositionOffset spo;
+        spo.set(adm::AzimuthOffset{90.0F});
+        ao->set(adm::PositionOffset{spo});
+    }
+    const auto in_path = write_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_hoa_enc_posoffset.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "hoa3";
+    req.options.renderer = mradm::RendererSelection::hoa;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: HOA positionOffset render failed: " << res.error.message << "\n";
+        return false;
+    }
+    const auto rms = read_channel_rms(out_path);
+    // az = 0 + 90 = 90 (left): Y (ch1) ≈ gain, X (ch3) ≈ 0.
+    bool ok = true;
+    ok &= check(rms[1] > 0.3, "HOA positionOffset: Y (ACN 1) active (source rotated to left)");
+    ok &= check(rms[3] < 0.05, "HOA positionOffset: X (ACN 3) ≈ 0 (rotated away from front)");
+    return ok;
+}
+
 // Left source (az=90, el=0): W=gain, Y=gain, X=Z=0.
 bool verify_left_source() {
     auto [doc, uid_str] = make_objects_doc(90.0F, 0.0F);
@@ -375,6 +510,8 @@ int main() {
     ok &= verify_hoa_mute_writes_silence();
     ok &= verify_hoa_obj_gain();
     ok &= verify_hoa_jump_position();
+    ok &= verify_hoa_ramp_interpolation();
+    ok &= verify_hoa_position_offset();
 
     if (ok) {
         std::cout << "hoa encode fixture test passed\n";
