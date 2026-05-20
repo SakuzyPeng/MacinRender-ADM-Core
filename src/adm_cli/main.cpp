@@ -180,7 +180,7 @@ int main(int argc, char** argv) {
     // ── render ────────────────────────────────────────────────────────────────
     std::string input;
     std::string output;
-    std::string layout{"binaural"};
+    std::string layout{"0+2+0"};
     std::string renderer{"auto"};
     bool no_peak_limit{false};
     float peak_limit_dbtp{-1.0F};

@@ -111,14 +111,35 @@ struct SafFree {
                            {135.0F, 45.0F, "U+135"}}};
     }
     if (layout_id == "9+10+3") {
-        // ITU-R BS.2159 22.2: labels follow BS.2051 layer/azimuth convention.
-        return LayoutSpec{
-            {{-30.0F, 0.0F, "M-030"},   {30.0F, 0.0F, "M+030"},    {0.0F, 0.0F, "M+000"},    {-90.0F, 0.0F, "M-090"},
-             {90.0F, 0.0F, "M+090"},    {-150.0F, 0.0F, "M-150"},  {150.0F, 0.0F, "M+150"},  {180.0F, 0.0F, "M+180"},
-             {-30.0F, 30.0F, "U-030"},  {30.0F, 30.0F, "U+030"},   {0.0F, 30.0F, "U+000"},   {-90.0F, 30.0F, "U-090"},
-             {90.0F, 30.0F, "U+090"},   {-150.0F, 30.0F, "U-150"}, {150.0F, 30.0F, "U+150"}, {180.0F, 30.0F, "U+180"},
-             {-30.0F, -30.0F, "B-030"}, {30.0F, -30.0F, "B+030"},  {0.0F, -30.0F, "B+000"},  {-110.0F, -30.0F, "B-110"},
-             {110.0F, -30.0F, "B+110"}, {180.0F, -30.0F, "B+180"}}};
+        // ITU-R BS.2051 22.2 (NHK): 10M + 8U + T+000 + 3B = 22 non-LFE speakers.
+        // Speaker positions match libear's bs2051_layouts.cpp exactly; LFE1/LFE2 excluded.
+        // TODO: 9.1.6 (Dolby Atmos 16-ch) is a separate layout — not yet implemented.
+        return LayoutSpec{// M layer (10)
+                          {{60.0F, 0.0F, "M+060"},
+                           {-60.0F, 0.0F, "M-060"},
+                           {0.0F, 0.0F, "M+000"},
+                           {135.0F, 0.0F, "M+135"},
+                           {-135.0F, 0.0F, "M-135"},
+                           {30.0F, 0.0F, "M+030"},
+                           {-30.0F, 0.0F, "M-030"},
+                           {180.0F, 0.0F, "M+180"},
+                           {90.0F, 0.0F, "M+090"},
+                           {-90.0F, 0.0F, "M-090"},
+                           // U layer (8)
+                           {45.0F, 30.0F, "U+045"},
+                           {-45.0F, 30.0F, "U-045"},
+                           {0.0F, 30.0F, "U+000"},
+                           {135.0F, 30.0F, "U+135"},
+                           {-135.0F, 30.0F, "U-135"},
+                           {90.0F, 30.0F, "U+090"},
+                           {-90.0F, 30.0F, "U-090"},
+                           {180.0F, 30.0F, "U+180"},
+                           // T layer (1)
+                           {0.0F, 90.0F, "T+000"},
+                           // B layer (3)
+                           {0.0F, -30.0F, "B+000"},
+                           {45.0F, -30.0F, "B+045"},
+                           {-45.0F, -30.0F, "B-045"}}};
     }
     return std::nullopt;
 }
@@ -398,11 +419,7 @@ CapabilityReport VbapRenderer::capabilities() const {
 }
 
 Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
-    std::string layout_id = plan.output_layout;
-    if (layout_id == "binaural") {
-        layout_id = "0+2+0";
-    }
-
+    const std::string layout_id = plan.output_layout;
     const auto layout = layout_spec(layout_id);
     if (!layout.has_value()) {
         return make_error(ErrorCode::unsupported, fmt::format("unsupported VBAP output layout '{}'", layout_id), {});
@@ -505,7 +522,7 @@ CapabilityReport vbap_capabilities() {
         {"0+7+0", "7.0"},
         {"4+5+0", "5.1.4"},
         {"4+7+0", "7.1.4"},
-        {"9+10+3", "9.1.6"},
+        {"9+10+3", "22.2"},
     };
     return r;
 }

@@ -386,16 +386,10 @@ CapabilityReport EarRenderer::capabilities() const {
 }
 
 Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
-    // Map the "binaural" layout alias before any validation.
-    std::string layout_id = plan.output_layout;
-    if (layout_id == "binaural") {
-        layout_id = "0+2+0";
-    }
-
     try {
         const auto& info = plan.scene.info;
 
-        const ear::Layout layout = ear::getLayout(layout_id);
+        const ear::Layout layout = ear::getLayout(plan.output_layout);
         const auto gain_matrix = build_gain_matrix(plan.scene, layout, logs);
 
         if (gain_matrix.empty()) {
@@ -491,8 +485,8 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
     } catch (const std::invalid_argument& e) {
         // libear throws std::invalid_argument for unknown layout names
         return make_error(ErrorCode::unsupported,
-                          fmt::format("unsupported output layout '{}': {}", layout_id, e.what()),
-                          "layout=" + layout_id);
+                          fmt::format("unsupported output layout '{}': {}", plan.output_layout, e.what()),
+                          "layout=" + plan.output_layout);
     } catch (const std::exception& e) {
         return make_error(ErrorCode::io_error, std::string("render failed: ") + e.what(), "input=" + plan.input_path);
     }
