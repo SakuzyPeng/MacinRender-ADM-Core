@@ -107,14 +107,21 @@ struct ChannelGainInfo {
     // Interpolation ramp: blend from previous block gains when jump_position is false.
     if (!cur.jump_position && cur_it != cg.blocks.begin()) {
         const HoaBlock& prev = *std::prev(cur_it);
-        const uint64_t interp_len = cur.interp_length_samples.value_or(default_interp);
+        // Clamp interp_len to active block duration (mirrors EAR/VBAP interpolation_length()).
+        uint64_t active_end = cur.end_sample;
+        const auto next_it = std::next(cur_it);
+        if (next_it != cg.blocks.end()) {
+            active_end = std::min(active_end, next_it->start_sample);
+        }
+        const uint64_t active_len = (active_end > cur.start_sample) ? (active_end - cur.start_sample) : 0;
+        const uint64_t interp_len = std::min(cur.interp_length_samples.value_or(default_interp), active_len);
         const uint64_t delta = abs_frame - cur.start_sample;
         if (interp_len > 0 && delta < interp_len) {
             const double alpha = static_cast<double>(delta) / static_cast<double>(interp_len);
             Hoa3Coeffs result;
             for (std::size_t i = 0; i < k_hoa3_channels; ++i) {
-                result[i] = static_cast<float>(static_cast<double>(prev.gains[i]) * (1.0 - alpha) +
-                                               static_cast<double>(cur.gains[i]) * alpha);
+                result.at(i) = static_cast<float>((static_cast<double>(prev.gains.at(i)) * (1.0 - alpha)) +
+                                                  (static_cast<double>(cur.gains.at(i)) * alpha));
             }
             return result;
         }
@@ -133,7 +140,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene) {
             if (!track.channel_index.has_value()) {
                 continue;
             }
-            const uint16_t in_ch = *track.channel_index;
+            const uint16_t in_ch = track.channel_index.value();
             auto& cg = by_channel[in_ch];
             cg.input_channel = in_ch;
 
@@ -183,8 +190,7 @@ Result<void> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress,
 
     auto gain_matrix = build_gain_matrix(plan.scene);
     if (gain_matrix.empty()) {
-        return make_error(
-            ErrorCode::render_failed, "no renderable Objects tracks found in ADM document", "input=" + plan.input_path);
+        logs.log(LogLevel::warning, "hoa-encode", "no renderable tracks found (all muted?), writing silence");
     }
 
     const auto num_in_ch = info.num_channels;

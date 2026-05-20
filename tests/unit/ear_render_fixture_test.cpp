@@ -1027,6 +1027,82 @@ bool verify_p2_degrade_gracefully(const mradm::RenderService& service, mradm::Nu
     return ok;
 }
 
+// DS CartesianSpeakerPosition → M8b converts to polar at import time, no libear throw.
+// M+030 (az=+30°, el=0°) expressed as CartesianSpeakerPosition{X=-0.5, Y=0.866, Z=0}.
+// Importer converts: az = atan2(-(-0.5), 0.866) ≈ +30°, routes to left output channel.
+bool verify_ds_cartesian_speaker_position(const mradm::RenderService& service,
+                                          mradm::ProgressSink& progress,
+                                          mradm::NullLogSink& logs) {
+    auto doc = adm::Document::create();
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"DsCartesianObj"});
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DsCartesianCF"},
+                                              adm::TypeDefinition::DIRECT_SPEAKERS);
+    {
+        // M+030: az=+30° → in ADM Cartesian: X=-sin(30°)=-0.5, Y=cos(30°)≈0.866
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::CartesianSpeakerPosition{adm::X{-0.5F}, adm::Y{0.866F}, adm::Z{0.0F}}};
+        block.add(adm::SpeakerLabel{"M+030"});
+        cf->add(block);
+    }
+    doc->add(cf);
+    auto pf =
+        adm::AudioPackFormat::create(adm::AudioPackFormatName{"DsCartesianPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"DsCartesianSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"DsCartesianTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    obj->addReference(uid);
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"DsCartesianContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"DsCartesianProg"});
+    prog->addReference(content);
+    doc->add(prog);
+    adm::reassignIds(doc);
+    const auto uid_str = adm::formatId(uid->get<adm::AudioTrackUidId>());
+
+    const auto in_path = write_input_fixture(uid_str, doc);
+    FileGuard in_guard{in_path};
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_ear_ds_cartesian_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "0+2+0";
+    req.options.renderer = mradm::RendererSelection::ear;
+
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: DS CartesianSpeakerPosition render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!reader_res) {
+        std::cerr << "FAIL: cannot open DS cartesian output\n";
+        return false;
+    }
+    auto& reader = *reader_res;
+    const std::size_t n_frames = static_cast<std::size_t>(reader.frame_count());
+    std::vector<float> samples(n_frames * 2U);
+    reader.read(samples.data(), reader.frame_count());
+    const double total_energy = std::transform_reduce(samples.begin(), samples.end(), 0.0, std::plus<>{}, [](float s) {
+        return static_cast<double>(s) * static_cast<double>(s);
+    });
+    return check(total_energy > 0.0, "DS CartesianSpeakerPosition: output is not silent");
+}
+
 } // namespace
 
 int main() {
@@ -1043,6 +1119,7 @@ int main() {
     ok &= verify_diffuse_bus(service, progress, logs);
     ok &= verify_ear_short_block(service, progress, logs);
     ok &= verify_p2_degrade_gracefully(service, progress);
+    ok &= verify_ds_cartesian_speaker_position(service, progress, logs);
 
     if (ok) {
         std::cout << "ear_render fixture test passed\n";
