@@ -124,10 +124,10 @@ struct SafFree {
     }
     if (layout_id == "9.1.6") {
         // Dolby Atmos 9.1.6 — 16ch.
-        // Channel order matches kAudioChannelLayoutTag_Atmos_9_1_6 and Cavern ref916:
+        // Output order follows CoreAudio kAudioChannelLayoutTag_Atmos_9_1_6:
         //   L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr
-        // Bed positions: Ls/Rs=±110° (side surround), Rls/Rrs=±150° (rear surround),
-        //   Lw/Rw=±70° (wide front). Height at 45° elevation.
+        // Bed: Ls/Rs=±110° (side), Rls/Rrs=±150° (rear), Lw/Rw=±70° (wide).
+        // Height: top-side style (not BS.2051 top-front), all at 45° elevation.
         return LayoutSpec{{{30.0F, 0.0F, "M+030"},
                            {-30.0F, 0.0F, "M-030"},
                            {0.0F, 0.0F, "M+000"},

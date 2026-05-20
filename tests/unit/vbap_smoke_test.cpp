@@ -283,14 +283,15 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_nested_start_objects
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
-std::pair<std::shared_ptr<adm::Document>, std::string> make_direct_speakers_doc(const char* label, float azimuth) {
+std::pair<std::shared_ptr<adm::Document>, std::string>
+make_direct_speakers_doc(const char* label, float azimuth, float elevation = 0.0F) {
     auto doc = adm::Document::create();
 
     auto cf =
         adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"VbapDsCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
     {
         adm::AudioBlockFormatDirectSpeakers block{
-            adm::SphericalSpeakerPosition{adm::Azimuth{azimuth}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
+            adm::SphericalSpeakerPosition{adm::Azimuth{azimuth}, adm::Elevation{elevation}, adm::Distance{1.0F}}};
         block.add(adm::SpeakerLabel{label});
         cf->add(block);
     }
@@ -759,6 +760,131 @@ bool verify_direct_speakers_position_fallback_wrap() {
     return ok;
 }
 
+// Verify 9.1.6 layout produces a 16-channel output and that the LFE channel
+// (index 3) carries no energy when a non-LFE DirectSpeakers source is rendered.
+bool verify_916_output_is_16ch() {
+    // Center speaker (M+000, ch2) as a simple non-LFE source.
+    auto [doc, uid_str] = make_direct_speakers_doc("M+000", 0.0F);
+    const auto in_path = write_input_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_vbap_916_16ch_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest request;
+    request.input_path = in_path;
+    request.output_path = out_path;
+    request.options.output_layout = "9.1.6";
+    request.options.renderer = mradm::RendererSelection::saf;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const mradm::RenderResult result = service.render(request, progress, logs);
+    if (!result.success()) {
+        std::cerr << "FAIL: 9.1.6 render failed: " << result.error.message << "\n";
+        return false;
+    }
+
+    // 9.1.6: L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr
+    constexpr std::size_t k_center_ch = 2U; // M+000 (C)
+    constexpr std::size_t k_lfe_ch = 3U;    // LFE1 — always zero for non-LFE source
+    const auto sums = read_channel_sums(out_path, 16U);
+    bool ok = true;
+    ok &= check(sums.size() == 16U, "9.1.6 output has 16 channels");
+    if (ok) {
+        ok &= check(sums[k_center_ch] > 0.0, "9.1.6 center (ch2) carries energy from M+000 source");
+        ok &= check(sums[k_lfe_ch] < 1.0e-9, "9.1.6 LFE (ch3) is silent for non-LFE source");
+    }
+    return ok;
+}
+
+// Verify 9.1.6 top-side channel routing: a DS source with label "U+110" (Ltm)
+// must land on channel 12, and a position-fallback at az=110/el=45 must also
+// resolve to the same channel (nearest non-LFE speaker).
+bool verify_916_top_side_routing() {
+    // 9.1.6 channel index map (non-LFE only here):
+    //  0  L    1  R    2  C    3  LFE  4  Ls   5  Rs
+    //  6  Rls  7  Rrs  8  Lw   9  Rw   10 Vhl  11 Vhr
+    // 12  Ltm  13 Rtm  14 Ltr  15 Rtr
+    constexpr std::size_t k_ltm_ch = 12U; // U+110 (top side left)
+    constexpr std::size_t k_lfe_ch = 3U;
+
+    bool ok = true;
+
+    // ── Sub-test A: label routing via "U+110" ────────────────────────────────
+    {
+        auto [doc, uid_str] = make_direct_speakers_doc("U+110", 110.0F, 45.0F);
+        const auto in_path = write_input_fixture(doc, uid_str);
+        FileGuard in_guard{in_path};
+        const auto out_path = std::filesystem::temp_directory_path() / "mr_vbap_916_ltm_label_out.wav";
+        FileGuard out_guard{out_path};
+
+        mradm::RenderRequest request;
+        request.input_path = in_path;
+        request.output_path = out_path;
+        request.options.output_layout = "9.1.6";
+        request.options.renderer = mradm::RendererSelection::saf;
+
+        mradm::RenderService service;
+        mradm::NullProgressSink progress;
+        mradm::NullLogSink logs;
+        const mradm::RenderResult res = service.render(request, progress, logs);
+        if (!res.success()) {
+            std::cerr << "FAIL: 9.1.6 top-side label render failed: " << res.error.message << "\n";
+            return false;
+        }
+
+        const auto sums = read_channel_sums(out_path, 16U);
+        ok &= check(sums.size() == 16U, "9.1.6 top-side label: 16 channels");
+        if (ok) {
+            ok &= check(sums[k_ltm_ch] > 0.0, "9.1.6 U+110 label routes to ch12 (Ltm)");
+            ok &= check(sums[k_lfe_ch] < 1.0e-9, "9.1.6 top-side: LFE ch3 silent");
+            for (std::size_t ch = 0; ch < sums.size(); ++ch) {
+                if (ch == k_ltm_ch || ch == k_lfe_ch) {
+                    continue;
+                }
+                if (!check(sums[ch] < 1.0e-6, "9.1.6 top-side label: energy leaked to non-target channel")) {
+                    ok = false;
+                }
+            }
+        }
+    }
+
+    // ── Sub-test B: position fallback az=110/el=45 → nearest = U+110 (ch12) ─
+    {
+        auto [doc, uid_str] = make_direct_speakers_doc("NOT_A_BS2051_LABEL", 110.0F, 45.0F);
+        const auto in_path = write_input_fixture(doc, uid_str);
+        FileGuard in_guard{in_path};
+        const auto out_path = std::filesystem::temp_directory_path() / "mr_vbap_916_ltm_fallback_out.wav";
+        FileGuard out_guard{out_path};
+
+        mradm::RenderRequest request;
+        request.input_path = in_path;
+        request.output_path = out_path;
+        request.options.output_layout = "9.1.6";
+        request.options.renderer = mradm::RendererSelection::saf;
+
+        mradm::RenderService service;
+        mradm::NullProgressSink progress;
+        CapturingLogSink logs;
+        const mradm::RenderResult res = service.render(request, progress, logs);
+        if (!res.success()) {
+            std::cerr << "FAIL: 9.1.6 top-side fallback render failed: " << res.error.message << "\n";
+            return false;
+        }
+
+        const auto sums = read_channel_sums(out_path, 16U);
+        ok &= check(sums.size() == 16U, "9.1.6 top-side fallback: 16 channels");
+        if (ok) {
+            ok &= check(sums[k_ltm_ch] > 0.0, "9.1.6 position fallback az=110/el=45 routes to ch12 (Ltm)");
+            ok &= check(logs.has_warnings(), "9.1.6 position fallback emits warning on label miss");
+        }
+    }
+
+    return ok;
+}
+
 // Verify MDAP spread: Objects with width=0.8 rendered to 4+5+0 (9ch, has
 // elevated speakers at ±45°) should distribute energy to elevated channels.
 // Compare against the same source with width=0 (pure VBAP) to confirm spread
@@ -1135,6 +1261,8 @@ int main() {
     ok &= verify_nested_audio_object_start_offsets();
     ok &= verify_direct_speakers_label_routing();
     ok &= verify_direct_speakers_position_fallback_wrap();
+    ok &= verify_916_output_is_16ch();
+    ok &= verify_916_top_side_routing();
     ok &= verify_mdap_spread_fixture();
     ok &= verify_audio_object_gain_scales_output();
     ok &= verify_audio_object_mute_silences_output();
