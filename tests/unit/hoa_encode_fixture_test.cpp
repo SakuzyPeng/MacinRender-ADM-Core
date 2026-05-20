@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -177,6 +178,147 @@ bool verify_front_source() {
     return ok;
 }
 
+// Two-block doc: block0 at az=0 (front) for 10 ms, block1 at az=90 (left) with jump_position.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_two_block_objects_doc() {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"HoaCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block0{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block0.set(adm::Gain{static_cast<double>(k_amplitude)});
+        block0.set(adm::Duration{adm::Time{std::chrono::milliseconds{10}}});
+        cf->add(block0);
+
+        adm::AudioBlockFormatObjects block1{adm::SphericalPosition{adm::Azimuth{90.0F}, adm::Elevation{0.0F}}};
+        block1.set(adm::Gain{static_cast<double>(k_amplitude)});
+        block1.set(adm::Rtime{adm::Time{std::chrono::milliseconds{10}}});
+        block1.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(block1);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"HoaPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"HoaSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"HoaTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"HoaObj"});
+    obj->addReference(uid);
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"HoaContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"HoaProg"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+// All-muted AudioObject must produce silent output (not render_failed).
+bool verify_hoa_mute_writes_silence() {
+    auto [doc, uid_str] = make_objects_doc(0.0F, 0.0F);
+    for (const auto& obj : doc->getElements<adm::AudioObject>()) {
+        obj->set(adm::Mute{true});
+    }
+    const auto in_path = write_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_hoa_enc_mute.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "hoa3";
+    req.options.renderer = mradm::RendererSelection::hoa;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: all-muted HOA must write silence, not fail: " << res.error.message << "\n";
+        return false;
+    }
+    const auto rms = read_channel_rms(out_path);
+    bool ok = true;
+    for (std::size_t ch = 0; ch < static_cast<std::size_t>(k_hoa3_channels); ++ch) {
+        ok &= check(rms[ch] < 1e-6, "HOA muted: all channels silent");
+    }
+    return ok;
+}
+
+// AudioObject.gain applied correctly (obj.gain=0.5 halves block energy).
+bool verify_hoa_obj_gain() {
+    auto [doc, uid_str] = make_objects_doc(0.0F, 0.0F);
+    for (const auto& obj : doc->getElements<adm::AudioObject>()) {
+        obj->set(adm::Gain{0.5});
+    }
+    const auto in_path = write_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_hoa_enc_objgain.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "hoa3";
+    req.options.renderer = mradm::RendererSelection::hoa;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: HOA obj_gain render failed: " << res.error.message << "\n";
+        return false;
+    }
+    const auto rms = read_channel_rms(out_path);
+    // block.gain = k_amplitude = 0.5, obj.gain = 0.5 → combined gain = 0.25
+    // W (ch0) at front: SH[0,0] = 1.0, so W ≈ 0.25; accept 0.15–0.35
+    return check(rms[0] > 0.15 && rms[0] < 0.35, "HOA obj_gain=0.5: W ≈ 0.25");
+}
+
+// jump_position=true switches SH coefficients instantaneously.
+bool verify_hoa_jump_position() {
+    auto [doc, uid_str] = make_two_block_objects_doc();
+    const auto in_path = write_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_hoa_enc_jump.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "hoa3";
+    req.options.renderer = mradm::RendererSelection::hoa;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: HOA jump_position render failed: " << res.error.message << "\n";
+        return false;
+    }
+    const auto rms = read_channel_rms(out_path);
+    bool ok = true;
+    // Block0 (front, 10ms): contributes W and X. Block1 (left, ~11ms): contributes W and Y.
+    ok &= check(rms[0] > 0.3, "HOA jump: W non-silent (both blocks contribute)");
+    ok &= check(rms[1] > 0.1, "HOA jump: Y non-silent (left block contributes)");
+    ok &= check(rms[3] > 0.1, "HOA jump: X non-silent (front block contributes)");
+    return ok;
+}
+
 // Left source (az=90, el=0): W=gain, Y=gain, X=Z=0.
 bool verify_left_source() {
     auto [doc, uid_str] = make_objects_doc(90.0F, 0.0F);
@@ -230,6 +372,9 @@ int main() {
     // ── Fixtures ──────────────────────────────────────────────────────────────
     ok &= verify_front_source();
     ok &= verify_left_source();
+    ok &= verify_hoa_mute_writes_silence();
+    ok &= verify_hoa_obj_gain();
+    ok &= verify_hoa_jump_position();
 
     if (ok) {
         std::cout << "hoa encode fixture test passed\n";
