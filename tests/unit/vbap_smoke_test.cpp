@@ -61,6 +61,11 @@ class CapturingLogSink final : public mradm::LogSink {
 
     [[nodiscard]] bool has_warnings() const { return !warnings_.empty(); }
 
+    [[nodiscard]] bool has_warning_containing(std::string_view needle) const {
+        return std::ranges::any_of(warnings_,
+                                   [needle](const std::string& w) { return w.find(needle) != std::string::npos; });
+    }
+
   private:
     std::vector<std::string> warnings_;
 };
@@ -1386,6 +1391,116 @@ bool verify_register_vbap_layout() {
     return ok;
 }
 
+// Creates a minimal Objects document with a source at the given elevation.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_elevated_objects_doc(float elevation_deg) {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"ElevCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{elevation_deg}}};
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"ElevPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"ElevSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"ElevTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"ElevObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"ElevContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"ElevProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+// Verify the 2D-layout-with-elevated-sources warning:
+//   - 2D layout (0+2+0) + elevated source (el=30°)  → warning containing "2D"
+//   - 3D layout (4+5+0) + elevated source (el=30°)  → no warning
+//   - 2D layout (0+2+0) + floor source   (el=0°)    → no warning
+bool verify_2d_layout_elevated_source_warning() {
+    bool ok = true;
+
+    struct RenderCapture {
+        bool success{false};
+        CapturingLogSink logs;
+    };
+
+    auto render_and_capture = [](std::string_view layout_id, float el_deg) -> RenderCapture {
+        auto [doc, uid_str] = make_elevated_objects_doc(el_deg);
+        const auto path_in = write_input_fixture(doc, uid_str);
+        FileGuard in_guard{path_in};
+
+        auto path_out = std::filesystem::temp_directory_path() / "mr_vbap_2d_warn_out.wav";
+        FileGuard out_guard{path_out};
+
+        mradm::RenderRequest req;
+        req.input_path = path_in;
+        req.output_path = path_out;
+        req.options.output_layout = std::string{layout_id};
+        req.options.renderer = mradm::RendererSelection::saf;
+        req.options.peak_limit = false;
+
+        mradm::RenderService service;
+        mradm::NullProgressSink progress;
+        CapturingLogSink logs;
+        const auto result = service.render(req, progress, logs);
+        return {result.success(), logs};
+    };
+
+    // 2D layout + elevated source → must warn with "2D" in the message.
+    {
+        const auto capture = render_and_capture("0+2+0", 30.0F);
+        ok &= check(capture.success, "2D layout + elevated source: render succeeds");
+        ok &= check(capture.logs.has_warning_containing("2D"), "2D layout + elevated source: warning mentions '2D'");
+        ok &=
+            check(capture.logs.has_warning_containing("elevation") || capture.logs.has_warning_containing("horizontal"),
+                  "2D layout + elevated source: warning mentions height loss");
+    }
+
+    // 3D layout + elevated source → no warning expected.
+    {
+        const auto capture = render_and_capture("4+5+0", 30.0F);
+        ok &= check(capture.success, "3D layout + elevated source: render succeeds");
+        ok &= check(!capture.logs.has_warning_containing("2D"), "3D layout + elevated source: no 2D warning");
+    }
+
+    // 2D layout + floor-level source → no warning.
+    {
+        const auto capture = render_and_capture("0+2+0", 0.0F);
+        ok &= check(capture.success, "2D layout + floor source: render succeeds");
+        ok &= check(!capture.logs.has_warning_containing("2D"), "2D layout + floor source: no warning");
+    }
+
+    if (ok) {
+        std::cout << "PASS: verify_2d_layout_elevated_source_warning\n";
+    }
+    return ok;
+}
+
 int main() {
     bool ok = true;
 
@@ -1451,6 +1566,7 @@ int main() {
     ok &= verify_vbap_position_offset();
     ok &= verify_default_interp_ms_controls_ramp();
     ok &= verify_register_vbap_layout();
+    ok &= verify_2d_layout_elevated_source_warning();
 
     if (ok) {
         std::cout << "vbap smoke test passed\n";
