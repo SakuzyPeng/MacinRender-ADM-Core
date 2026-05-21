@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <iterator>
@@ -31,12 +32,14 @@ std::string axml_to_string(const bw64::AxmlChunk& chunk) {
     return buf.str();
 }
 
-// AudioId::uid() returns a 12-byte fixed-width string padded with spaces
-// (and possibly NUL bytes). Trim both to recover the actual UID.
-std::string trim_uid(std::string raw) {
+// AudioId::uid() returns a 12-byte fixed-width string padded with spaces (and
+// possibly NUL bytes).  libadm may format hex digits A-F as lower-case while
+// CHNA/AXML commonly use upper-case, so normalize before matching.
+std::string normalize_uid(std::string raw) {
     while (!raw.empty() && (raw.back() == ' ' || raw.back() == '\0')) {
         raw.pop_back();
     }
+    std::ranges::transform(raw, raw.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
     return raw;
 }
 
@@ -47,7 +50,7 @@ std::map<std::string, uint16_t> make_uid_map(const std::shared_ptr<bw64::ChnaChu
         return result;
     }
     for (const auto& entry : chna->audioIds()) {
-        std::string uid = trim_uid(entry.uid());
+        std::string uid = normalize_uid(entry.uid());
         if (!uid.empty()) {
             // trackIndex is 1-based in BW64; convert to 0-based
             result[std::move(uid)] = static_cast<uint16_t>(entry.trackIndex() - 1);
@@ -238,6 +241,8 @@ void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChann
     }
 }
 
+std::shared_ptr<adm::AudioChannelFormat> channel_format_from_uid(const std::shared_ptr<adm::AudioTrackUid>& uid);
+
 void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid,
                            SceneTrackRef& ref,
                            uint32_t sample_rate,
@@ -248,7 +253,7 @@ void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid,
         return;
     }
 
-    for (const auto& cf : pf->getReferences<adm::AudioChannelFormat>()) {
+    const auto append_cf = [&](const std::shared_ptr<adm::AudioChannelFormat>& cf) {
         const auto type = cf->get<adm::TypeDescriptor>();
         if (type == adm::TypeDefinition::OBJECTS) {
             append_objects_blocks_from_cf(cf, ref, sample_rate, obj_start_sample);
@@ -258,6 +263,15 @@ void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid,
             // HOA is handled separately by extract_hoa_packs(); anything else is unsupported.
             skipped_type_defs.insert(adm::formatTypeDefinition(type));
         }
+    };
+
+    if (const auto cf = channel_format_from_uid(uid); cf != nullptr) {
+        append_cf(cf);
+        return;
+    }
+
+    for (const auto& cf : pf->getReferences<adm::AudioChannelFormat>()) {
+        append_cf(cf);
     }
 }
 
@@ -376,7 +390,7 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
         for (const auto& uid : obj->getReferences<adm::AudioTrackUid>()) {
             SceneTrackRef ref;
             ref.track_uid = adm::formatId(uid->get<adm::AudioTrackUidId>());
-            auto it = uid_map.find(ref.track_uid);
+            auto it = uid_map.find(normalize_uid(ref.track_uid));
             if (it != uid_map.end()) {
                 ref.channel_index = it->second;
             }
@@ -705,7 +719,7 @@ std::vector<SceneHOATracks> extract_hoa_packs(const std::shared_ptr<adm::Documen
             for (const auto& uid : uids) {
                 SceneHOAChannel ch;
                 ch.track_uid = adm::formatId(uid->get<adm::AudioTrackUidId>());
-                const auto uid_it = uid_map.find(ch.track_uid);
+                const auto uid_it = uid_map.find(normalize_uid(ch.track_uid));
                 if (uid_it != uid_map.end()) {
                     ch.channel_index = uid_it->second;
                 }

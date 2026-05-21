@@ -1,7 +1,10 @@
 #include <algorithm>
+#include <array>
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
@@ -165,6 +168,91 @@ struct SafFree {
     return best;
 }
 
+struct DsLabelAlias {
+    const char* canonical;
+    const char* bs2051;
+};
+
+// Non-standard RoomCentric and DAW shorthand labels found in ADM BWF exports.
+// The renderer's built-in layouts use BS.2051-style labels; label routing must
+// happen before position fallback so LFE channels and bed channels land in the
+// intended output slots.
+// clang-format off
+constexpr std::array<DsLabelAlias, 34> k_ds_aliases = {{
+    {"RCL",   "M+030"}, {"RCR",   "M-030"}, {"RCC",   "M+000"},
+    {"RCLFE", "LFE1"},  {"RCLSS", "M+090"}, {"RCRSS", "M-090"},
+    {"RCLRS", "M+135"}, {"RCRRS", "M-135"},
+    {"RCLTS", "U+090"}, {"RCRTS", "U-090"},
+    {"L",     "M+030"}, {"R",     "M-030"}, {"C",     "M+000"},
+    {"LFE",   "LFE1"},  {"LFEL",  "LFE1"},  {"LFER",  "LFE2"},
+    {"LS",    "M+090"}, {"RS",    "M-090"},
+    {"LSS",   "M+090"}, {"RSS",   "M-090"},
+    {"LRS",   "M+135"}, {"RRS",   "M-135"},
+    {"LB",    "M+135"}, {"RB",    "M-135"},
+    {"LW",    "M+060"}, {"RW",    "M-060"},
+    {"CS",    "M+180"},
+    {"VHL",   "U+045"}, {"VHR",   "U-045"}, {"VHC",   "U+000"},
+    {"TSL",   "U+090"}, {"TSR",   "U-090"},
+    {"LTM",   "U+090"}, {"RTM",   "U-090"},
+}};
+// clang-format on
+
+[[nodiscard]] std::string canonicalize_ds_label(std::string_view label) {
+    std::string out;
+    out.reserve(label.size());
+    for (const char c : label) {
+        if (std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '+' || c == '-') {
+            out.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+        }
+    }
+    return out;
+}
+
+[[nodiscard]] std::optional<std::string_view> resolve_ds_alias(std::string_view label) {
+    const auto key = canonicalize_ds_label(label);
+    const auto* const it =
+        std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
+    if (it != k_ds_aliases.end()) {
+        return it->bs2051;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<std::size_t> speaker_index_for_label(const LayoutSpec& layout, std::string_view label) {
+    const auto it = std::ranges::find_if(layout.speakers, [label](const VbapSpeakerSpec& speaker) {
+        return !speaker.label.empty() && speaker.label == label;
+    });
+    if (it == layout.speakers.end()) {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(std::distance(layout.speakers.begin(), it));
+}
+
+bool route_one_direct_speaker_label(const LayoutSpec& layout,
+                                    std::string_view label,
+                                    float gain,
+                                    std::vector<float>& gains) {
+    if (const auto index = speaker_index_for_label(layout, label)) {
+        gains[*index] = gain;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool route_direct_speaker_label(const LayoutSpec& layout,
+                                              const std::vector<std::string>& labels,
+                                              float gain,
+                                              std::vector<float>& gains) {
+    if (std::ranges::any_of(
+            labels, [&](const auto& label) { return route_one_direct_speaker_label(layout, label, gain, gains); })) {
+        return true;
+    }
+    return std::ranges::any_of(labels, [&](const auto& label) {
+        const auto resolved = resolve_ds_alias(label);
+        return resolved && route_one_direct_speaker_label(layout, *resolved, gain, gains);
+    });
+}
+
 [[nodiscard]] SpeakerDirection source_direction(const SceneBlockPosition& pos) {
     if (!pos.cartesian) {
         return {pos.azimuth, pos.elevation, {}};
@@ -294,8 +382,11 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, std::string_v
             // Objects blocks → VBAP panning.
             for (const auto& raw_block : track.blocks) {
                 SceneObjectBlock block = raw_block;
-                block.position = obj.position_offset ? apply_position_offset(raw_block.position, *obj.position_offset)
-                                                     : raw_block.position;
+                if (obj.position_offset) {
+                    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+                    const auto& off = *obj.position_offset;
+                    block.position = apply_position_offset(raw_block.position, off);
+                }
                 auto gains = calculate_vbap_gains(block, layout);
                 if (!gains) {
                     return make_error(
@@ -318,19 +409,7 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, std::string_v
             for (const auto& ds : track.ds_blocks) {
                 std::vector<float> gains(num_out, 0.0F);
 
-                bool matched = false;
-                for (const auto& lbl : ds.speaker_labels) {
-                    for (std::size_t i = 0; i < num_out; ++i) {
-                        if (!layout.speakers[i].label.empty() && layout.speakers[i].label == lbl) {
-                            gains[i] = ds.gain;
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (matched) {
-                        break;
-                    }
-                }
+                const bool matched = route_direct_speaker_label(layout, ds.speaker_labels, ds.gain, gains);
 
                 if (!matched) {
                     if (ds.low_pass_hz) {
