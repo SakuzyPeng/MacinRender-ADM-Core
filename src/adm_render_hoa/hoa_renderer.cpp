@@ -224,7 +224,7 @@ Result<void> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         auto& writer = *writer_res;
 
         constexpr uint64_t k_block_size = 1024;
-        const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * 5 / 1000; // 5 ms
+        const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
         std::vector<float> out_block(static_cast<std::size_t>(k_num_out) * k_block_size);
         uint64_t frames_done = 0;
@@ -279,7 +279,7 @@ CapabilityReport hoa_capabilities() {
     r.supports_direct_speakers = false;
     r.supports_hoa = false;
     r.supported_layouts = {
-        {"hoa3", "HOA 3rd Order (16ch, ACN/SN3D)"},
+        {"hoa3", "HOA 3rd Order (16ch, ACN/SN3D)", 16, true, 0, false},
     };
     return r;
 }

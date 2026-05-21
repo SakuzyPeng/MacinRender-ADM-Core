@@ -33,6 +33,8 @@ struct RenderPlan {
     std::string output_path;
     std::string output_layout;
     AdmScene scene; // populated by RenderService; backends must not re-parse ADM
+    // Default gain-interpolation ramp in milliseconds (from RenderOptions).
+    uint32_t default_interp_ms{5};
 };
 
 // Abstract renderer backend interface.

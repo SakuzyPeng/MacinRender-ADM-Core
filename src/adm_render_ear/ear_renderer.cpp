@@ -162,6 +162,9 @@ void append_object_blocks(const SceneTrackRef& track,
         }
         meta.position = psp;
     }
+    if (ds.low_pass_hz) {
+        meta.channelFrequency.lowPass = static_cast<double>(*ds.low_pass_hz);
+    }
     return meta;
 }
 
@@ -185,10 +188,64 @@ void append_direct_speakers_blocks(const SceneTrackRef& track,
     }
 }
 
+void append_hoa_blocks(const SceneHOATracks& pack,
+                       std::map<uint16_t, ChannelGainInfo>& by_channel,
+                       ear::GainCalculatorHOA& hoa_calc,
+                       std::size_t num_out) {
+    const std::size_t n_hoa = pack.channels.size();
+    if (n_hoa == 0) {
+        return;
+    }
+
+    ear::HOATypeMetadata meta;
+    meta.normalization = pack.normalization;
+    meta.nfcRefDist = pack.nfc_ref_dist;
+    meta.screenRef = pack.screen_ref;
+    meta.orders.resize(n_hoa);
+    meta.degrees.resize(n_hoa);
+    for (std::size_t i = 0; i < n_hoa; ++i) {
+        meta.orders[i] = pack.channels[i].order;
+        meta.degrees[i] = pack.channels[i].degree;
+    }
+
+    // decode_matrix[i][out_ch] = gain for HOA channel i → output channel out_ch.
+    std::vector<std::vector<double>> decode_matrix(n_hoa, std::vector<double>(num_out, 0.0));
+    hoa_calc.calculate(meta, decode_matrix);
+
+    const auto obj_gain = static_cast<double>(pack.gain);
+
+    for (std::size_t i = 0; i < n_hoa; ++i) {
+        const auto& ch = pack.channels[i];
+        if (!ch.channel_index.has_value()) {
+            continue;
+        }
+        const uint16_t in_ch = *ch.channel_index;
+        auto& cg = by_channel[in_ch];
+        cg.input_channel = in_ch;
+
+        // One BlockGains per AudioBlockFormatHoa block; the decode matrix row is
+        // fixed (order/degree unchanged across blocks), only the gain scalar varies.
+        for (const auto& hblk : ch.blocks) {
+            const double ch_gain = static_cast<double>(hblk.gain) * obj_gain;
+            BlockGains bg;
+            bg.gains.resize(num_out, 0.0);
+            bg.diffuse_gains.resize(num_out, 0.0);
+            bg.start_sample = hblk.start_sample;
+            bg.end_sample = hblk.end_sample;
+            bg.jump_position = true; // decode matrix is static — no interpolation ramp
+            for (std::size_t out_ch = 0; out_ch < num_out; ++out_ch) {
+                bg.gains[out_ch] = decode_matrix[i][out_ch] * ch_gain;
+            }
+            cg.blocks.push_back(std::move(bg));
+        }
+    }
+}
+
 std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear::Layout& layout, LogSink& logs) {
     std::map<uint16_t, ChannelGainInfo> by_channel;
     ear::GainCalculatorObjects objects_calc{layout};
     ear::GainCalculatorDirectSpeakers direct_speakers_calc{layout};
+    ear::GainCalculatorHOA hoa_calc{layout};
     const std::size_t num_out = layout.channels().size();
 
     for (const auto& obj : scene.objects) {
@@ -204,6 +261,12 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
             cg.input_channel = in_ch;
             append_object_blocks(track, obj, cg, objects_calc, num_out, logs);
             append_direct_speakers_blocks(track, obj, cg, direct_speakers_calc, num_out);
+        }
+    }
+
+    for (const auto& pack : scene.hoa_tracks) {
+        if (!pack.mute) {
+            append_hoa_blocks(pack, by_channel, hoa_calc, num_out);
         }
     }
 
@@ -433,7 +496,7 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         }
         auto& writer = *writer_res;
 
-        const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * 5 / 1000;
+        const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
         std::vector<std::size_t> blk_idx(gain_matrix.size(), 0);
 
         constexpr uint64_t k_block_size = 1024;
@@ -500,17 +563,19 @@ CapabilityReport ear_capabilities() {
     r.backend_version = "0.9.0";
     r.supports_objects = true;
     r.supports_direct_speakers = true;
-    r.supports_hoa = false;
+    r.supports_hoa = true; // HOA block decode via GainCalculatorHOA
+    // clang-format off
     r.supported_layouts = {
-        {"0+2+0", "Stereo"},
-        {"0+5+0", "5.1"},
-        {"2+5+0", "5.1.2"},
-        {"4+5+0", "5.1.4"},
-        {"4+5+4", "9.1.4"},
-        {"0+7+0", "7.1"},
-        {"4+7+0", "7.1.4"},
-        {"9+10+3", "22.2"},
+        {"0+2+0",  "Stereo",        2,  false, 0, true},
+        {"0+5+0",  "5.1",           6,  false, 1, true},
+        {"2+5+0",  "5.1.2",         8,  true,  1, true},
+        {"4+5+0",  "5.1.4",         10, true,  1, true},
+        {"4+5+4",  "9.1.4",         14, true,  1, true},
+        {"0+7+0",  "7.1",           8,  false, 1, true},
+        {"4+7+0",  "7.1.4",         12, true,  1, true},
+        {"9+10+3", "22.2",          24, true,  2, true},
     };
+    // clang-format on
     return r;
 }
 

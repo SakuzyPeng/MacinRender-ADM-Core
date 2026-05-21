@@ -393,6 +393,19 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_hoa_encode_fixture_tests)
     add_test(NAME mr_adm_hoa_encode_fixture_tests COMMAND mr_adm_hoa_encode_fixture_tests)
 
+    # Fixture test: HOA ADM (typeDefinition=HOA) → loudspeaker decode via EAR.
+    add_executable(mr_adm_hoa_decode_fixture_tests tests/unit/hoa_decode_fixture_test.cpp)
+    target_link_libraries(mr_adm_hoa_decode_fixture_tests
+        PRIVATE
+            MacinRender::ADMEngine
+            MacinRender::ADMAudio
+            libbw64
+            adm
+    )
+    mr_adm_core_apply_warnings(mr_adm_hoa_decode_fixture_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_hoa_decode_fixture_tests)
+    add_test(NAME mr_adm_hoa_decode_fixture_tests COMMAND mr_adm_hoa_decode_fixture_tests)
+
     # Fixture test: integrated loudness normalization — loud sine wave → -23 LUFS target.
     add_executable(mr_adm_loudness_fixture_tests tests/unit/loudness_fixture_test.cpp)
     target_link_libraries(mr_adm_loudness_fixture_tests

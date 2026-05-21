@@ -28,6 +28,9 @@ struct RenderOptions {
     bool peak_limit{true};
     float peak_limit_dbtp{-1.0F}; // True Peak target in dBTP (broadcast standard)
     OutputBitDepth output_bit_depth{OutputBitDepth::f32};
+    // Default gain-interpolation ramp used when jumpPosition=false and the ADM block
+    // carries no explicit interpolationLength.  Set to 0 for instant switching.
+    uint32_t default_interp_ms{5};
 };
 
 struct RenderRequest {
