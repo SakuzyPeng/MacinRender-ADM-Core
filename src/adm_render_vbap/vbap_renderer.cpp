@@ -242,8 +242,39 @@ struct SafFree {
     return gains;
 }
 
+// Returns true if any non-muted Objects block has non-negligible elevation.
+[[nodiscard]] bool scene_has_elevated_sources(const AdmScene& scene) {
+    constexpr float k_el_threshold = 1.0e-3F; // 0.001°, well below any real source
+    const auto block_has_elevation = [](const SceneObject& obj, const SceneObjectBlock& block) {
+        const auto position =
+            obj.position_offset ? apply_position_offset(block.position, *obj.position_offset) : block.position;
+        const float el = position.cartesian
+                             ? static_cast<float>(std::atan2(static_cast<double>(position.z),
+                                                             std::hypot(static_cast<double>(position.x),
+                                                                        static_cast<double>(position.y))) *
+                                                  (180.0 / std::numbers::pi_v<double>) )
+                             : position.elevation;
+        return std::fabs(el) > k_el_threshold;
+    };
+    return std::ranges::any_of(scene.objects, [&](const SceneObject& obj) {
+        return !obj.mute && std::ranges::any_of(obj.tracks, [&](const SceneTrackRef& track) {
+            return std::ranges::any_of(track.blocks,
+                                       [&](const SceneObjectBlock& block) { return block_has_elevation(obj, block); });
+        });
+    });
+}
+
 [[nodiscard]] Result<std::vector<ChannelGainInfo>>
 build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, std::string_view layout_id, LogSink& logs) {
+    // Warn once if 2D output will silently discard height information.
+    if (is_2d_layout(layout) && scene_has_elevated_sources(scene)) {
+        logs.log(LogLevel::warning,
+                 "saf-vbap",
+                 fmt::format("output layout '{}' is 2D but scene contains Objects with non-zero elevation — "
+                             "height information will be projected to the horizontal plane",
+                             std::string{layout_id}));
+    }
+
     // Accumulate blocks per input channel so we can sort and interpolate.
     std::map<uint16_t, ChannelGainInfo> by_channel;
     const auto num_out = layout.speakers.size();
@@ -458,10 +489,11 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
     try {
         logs.log(LogLevel::info,
                  "saf-vbap",
-                 fmt::format("rendering {} tracks (Objects + DirectSpeakers) → {} channels, {} frames",
+                 fmt::format("rendering {} tracks (Objects + DirectSpeakers) → {} channels, {} frames [{}]",
                              gain_matrix->size(),
                              num_out_ch,
-                             num_frames));
+                             num_frames,
+                             is_2d_layout(*layout) ? "2D VBAP" : "3D VBAP"));
         progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
 
         auto reader = bw64::readFile(plan.input_path);
