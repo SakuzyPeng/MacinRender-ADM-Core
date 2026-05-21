@@ -730,6 +730,45 @@ bool verify_direct_speakers_label_routing() {
     return ok;
 }
 
+bool verify_direct_speakers_alias_routing() {
+    auto [doc, uid_str] = make_direct_speakers_doc("RC_LFE", 0.0F);
+    const auto in_path = write_input_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_vbap_ds_alias_lfe_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest request;
+    request.input_path = in_path;
+    request.output_path = out_path;
+    request.options.output_layout = "0+5+0";
+    request.options.renderer = mradm::RendererSelection::saf;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const mradm::RenderResult result = service.render(request, progress, logs);
+    if (!result.success()) {
+        std::cerr << "FAIL: DirectSpeakers alias route render failed: " << result.error.message << "\n";
+        return false;
+    }
+
+    constexpr std::size_t k_lfe_ch = 3U;
+    const auto sums = read_channel_sums(out_path, 6U);
+    bool ok = true;
+    ok &= check(sums.size() == 6U, "DirectSpeakers alias output is 5.1");
+    if (ok) {
+        ok &= check(sums[k_lfe_ch] > 0.0, "DirectSpeakers alias RC_LFE routes to LFE1");
+        for (std::size_t ch = 0; ch < sums.size(); ++ch) {
+            if (ch == k_lfe_ch) {
+                continue;
+            }
+            ok &= check(sums[ch] < 1.0e-6, "DirectSpeakers alias RC_LFE does not leak to non-LFE channels");
+        }
+    }
+    return ok;
+}
+
 bool verify_direct_speakers_position_fallback_wrap() {
     auto [doc, uid_str] = make_direct_speakers_doc("NOT_A_BS2051_LABEL", -179.0F);
     const auto in_path = write_input_fixture(doc, uid_str);
@@ -1555,6 +1594,7 @@ int main() {
     ok &= verify_overlong_interpolation_is_clamped();
     ok &= verify_nested_audio_object_start_offsets();
     ok &= verify_direct_speakers_label_routing();
+    ok &= verify_direct_speakers_alias_routing();
     ok &= verify_direct_speakers_position_fallback_wrap();
     ok &= verify_916_output_is_16ch();
     ok &= verify_916_top_side_routing();

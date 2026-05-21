@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -455,6 +456,133 @@ bool verify_mixed_blocks_fixture() {
             const auto has_label = std::ranges::find(blk.speaker_labels, "M+030") != blk.speaker_labels.end();
             ok &= check(has_label, "mixed DS block: label M+030");
         }
+    }
+
+    return ok;
+}
+
+// One DirectSpeakers pack may contain several channel formats.  Each
+// AudioTrackUid must import only the channel format selected by its
+// TrackFormat/StreamFormat chain; otherwise every bed input channel is routed to
+// every speaker in the pack.
+// NOLINTNEXTLINE(readability-function-size)
+bool verify_direct_speakers_pack_channels_are_track_scoped() {
+    bool ok = true;
+    auto doc = adm::Document::create();
+
+    auto left_cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"BedLeftCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    {
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::SphericalSpeakerPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
+        block.add(adm::SpeakerLabel{"M+030"});
+        left_cf->add(block);
+    }
+    doc->add(left_cf);
+
+    auto right_cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"BedRightCF"},
+                                                    adm::TypeDefinition::DIRECT_SPEAKERS);
+    {
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::SphericalSpeakerPosition{adm::Azimuth{-30.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
+        block.add(adm::SpeakerLabel{"M-030"});
+        right_cf->add(block);
+    }
+    doc->add(right_cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"BedPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    pf->addReference(left_cf);
+    pf->addReference(right_cf);
+    doc->add(pf);
+
+    auto make_uid = [&](const std::shared_ptr<adm::AudioChannelFormat>& cf, std::string_view name) {
+        auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{std::string{name} + "SF"},
+                                                 adm::FormatDefinition::PCM);
+        sf->setReference(cf);
+        doc->add(sf);
+
+        auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{std::string{name} + "TF"},
+                                                adm::FormatDefinition::PCM);
+        tf->setReference(sf);
+        sf->addReference(tf);
+        doc->add(tf);
+
+        auto uid = adm::AudioTrackUid::create();
+        uid->setReference(tf);
+        uid->setReference(pf);
+        doc->add(uid);
+        return uid;
+    };
+
+    auto left_uid = make_uid(left_cf, "Left");
+    auto right_uid = make_uid(right_cf, "Right");
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"BedObject"});
+    object->addReference(left_uid);
+    object->addReference(right_uid);
+    doc->add(object);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"BedContent"});
+    content->addReference(object);
+    doc->add(content);
+
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"BedProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    left_uid->set(adm::AudioTrackUidId{adm::AudioTrackUidIdValue{0x0AU}});
+    right_uid->set(adm::AudioTrackUidId{adm::AudioTrackUidIdValue{0x0BU}});
+    const auto left_uid_str = adm::formatId(left_uid->get<adm::AudioTrackUidId>());
+    const auto right_uid_str = adm::formatId(right_uid->get<adm::AudioTrackUidId>());
+    auto upper_uid = [](std::string uid) {
+        std::ranges::transform(uid, uid.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+        return uid;
+    };
+
+    auto path = std::filesystem::temp_directory_path() / "mr_adm_io_ds_track_scoped.wav";
+    FileGuard guard{path};
+    {
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{
+            bw64::AudioId(1, upper_uid(left_uid_str), "", ""),
+            bw64::AudioId(2, upper_uid(right_uid_str), "", ""),
+        });
+        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
+        auto writer = bw64::writeFile(path.string(), 2U, 48000U, 24U, chna, axml);
+        std::vector<float> silence(2, 0.0F);
+        writer->write(silence.data(), 1U);
+    }
+
+    auto result = mradm::io::import_scene(path.string());
+    if (!result.has_value()) {
+        std::cerr << "FAIL: DS track-scoped import failed: " << result.error().message << "\n";
+        return false;
+    }
+
+    const auto& scene = result.value();
+    ok &= check(scene.objects.size() == 1, "DS track-scoped: 1 object");
+    if (scene.objects.empty()) {
+        return false;
+    }
+    const auto& tracks = scene.objects[0].tracks;
+    ok &= check(tracks.size() == 2, "DS track-scoped: 2 tracks");
+    if (tracks.size() != 2U) {
+        return false;
+    }
+
+    ok &= check(tracks[0].ds_blocks.size() == 1, "DS track-scoped: left track has one DS block");
+    ok &= check(tracks[1].ds_blocks.size() == 1, "DS track-scoped: right track has one DS block");
+    if (!tracks[0].ds_blocks.empty() && !tracks[1].ds_blocks.empty()) {
+        const auto& left = tracks[0].ds_blocks[0];
+        const auto& right = tracks[1].ds_blocks[0];
+        ok &= check(std::ranges::find(left.speaker_labels, "M+030") != left.speaker_labels.end(),
+                    "DS track-scoped: left track label M+030");
+        ok &= check(std::ranges::find(left.speaker_labels, "M-030") == left.speaker_labels.end(),
+                    "DS track-scoped: left track does not inherit right label");
+        ok &= check(std::ranges::find(right.speaker_labels, "M-030") != right.speaker_labels.end(),
+                    "DS track-scoped: right track label M-030");
+        ok &= check(std::ranges::find(right.speaker_labels, "M+030") == right.speaker_labels.end(),
+                    "DS track-scoped: right track does not inherit left label");
     }
 
     return ok;
@@ -1107,6 +1235,7 @@ int main() {
     ok &= verify_objects_blocks_fixture();
     ok &= verify_direct_speakers_blocks_fixture();
     ok &= verify_mixed_blocks_fixture();
+    ok &= verify_direct_speakers_pack_channels_are_track_scoped();
     ok &= verify_binaural_skipped_produces_import_warning();
     ok &= verify_ds_lfe_channel_frequency_imported();
     ok &= verify_programme_loudness_metadata_imported();
