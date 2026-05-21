@@ -11,6 +11,8 @@
 #include <bw64/bw64.hpp>
 #include <ear/ear.hpp>
 #include <fmt/format.h>
+#include <saf_utility_complex.h>
+#include <saf_utility_fft.h>
 
 #include "adm/audio_io.h"
 #include "adm/render.h"
@@ -34,22 +36,38 @@ struct ChannelGainInfo {
     std::vector<BlockGains> blocks; // sorted by start_sample
 };
 
+// Accumulation uses non-interleaved (channel-major) temporary buffers so the
+// innermost loop over frames is a plain saxpy — SIMD-vectorisable by the compiler.
+// Layout: col_buf[out_ch * frames_cap + frame], contiguous per output channel.
 struct AccumulateContext {
     const float* input{nullptr};
-    std::vector<float>* output{nullptr}; // direct output buffer (float)
-    double* diffuse_in{nullptr};         // per-frame×ch diffuse input (double); may be nullptr
+    float* col_direct{nullptr};  // [num_out_ch × frames_cap] column-major, float
+    float* col_diffuse{nullptr}; // [num_out_ch × frames_cap] column-major, float
     uint64_t frames_done{0};
     uint16_t num_in_ch{0};
     uint16_t num_out_ch{0};
     uint64_t default_interp{0};
+    uint64_t frames_cap{0};      // stride between columns (= k_block_size)
 };
 
 // FIR decorrelator state for the diffuse bus (BS.2127).
+// Uses overlap-add FFT convolution via saf_rfft (KissFFT backend, platform-agnostic).
+// FFT size L=2048 (next power-of-2 >= block_size(1024) + filter_len(512) - 1).
 struct DecorrState {
-    std::vector<std::vector<double>> filters;  // [num_out_ch][512]
-    int comp_delay{0};                         // decorrelatorCompensationDelay() = 255
-    std::vector<std::vector<double>> fir_hist; // [num_out_ch][511]  FIR overlap history
-    std::vector<std::vector<float>> dir_delay; // [num_out_ch][comp_delay]  direct delay
+    void* hFFT{nullptr};                                    // saf_rfft handle, L=2048
+    std::vector<std::vector<float_complex>> filter_fd;      // [num_out_ch][L/2+1=1025]
+    std::vector<std::vector<float>> overlap;                // [num_out_ch][K-1=511]
+    int comp_delay{0};                                      // decorrelatorCompensationDelay()=255
+    std::vector<std::vector<float>> dir_delay;              // [num_out_ch][comp_delay]
+
+    ~DecorrState() {
+        if (hFFT != nullptr) {
+            saf_rfft_destroy(&hFFT);
+        }
+    }
+    DecorrState() = default;
+    DecorrState(const DecorrState&) = delete;
+    DecorrState& operator=(const DecorrState&) = delete;
 };
 
 [[nodiscard]] ear::ObjectsTypeMetadata object_metadata_from_block(const SceneObjectBlock& block,
@@ -309,39 +327,81 @@ interpolation_length(const ChannelGainInfo& channel, std::size_t block_index, ui
     return (prev[out_ch] * (1.0 - alpha)) + (cur[out_ch] * alpha);
 }
 
+// Accumulate one input channel into the column-major direct/diffuse buffers.
+// Fast path (static gains): inner loop is a plain saxpy → auto-vectorised.
+// Slow path (ramping or block transition): per-frame scalar fallback.
 void accumulate_channel_block(const ChannelGainInfo& channel,
                               std::size_t& block_index,
                               const AccumulateContext& ctx,
-                              std::size_t frame) {
-    const uint64_t abs_frame = ctx.frames_done + frame;
+                              const float* ch_in,   // deinterleaved, [frames_now]
+                              uint64_t frames_now) {
+    const uint64_t abs_start = ctx.frames_done;
 
-    while (block_index + 1 < channel.blocks.size() && abs_frame >= channel.blocks[block_index + 1].start_sample) {
+    // Advance block index past any block that ended before this render window.
+    while (block_index + 1 < channel.blocks.size() &&
+           abs_start >= channel.blocks[block_index + 1].start_sample) {
         ++block_index;
     }
 
     const auto& block = channel.blocks[block_index];
-    if (abs_frame < block.start_sample || abs_frame >= block.end_sample) {
+
+    // Clamp active range to this render window.
+    const uint64_t win_end = abs_start + frames_now;
+    if (abs_start >= block.end_sample || win_end <= block.start_sample) {
         return;
     }
+    const auto f0 = static_cast<std::size_t>(
+        block.start_sample > abs_start ? block.start_sample - abs_start : 0);
+    const auto f1 = static_cast<std::size_t>(
+        std::min(block.end_sample - abs_start, frames_now));
 
-    const float in_sample = ctx.input[(frame * ctx.num_in_ch) + channel.input_channel];
     const uint64_t interp_len = interpolation_length(channel, block_index, ctx.default_interp);
-    const uint64_t delta = abs_frame - block.start_sample;
-    const bool ramping = interp_len > 0 && delta < interp_len;
+    const uint64_t delta0 = (abs_start + f0) - block.start_sample;
+    const bool any_ramp = interp_len > 0 && delta0 < interp_len;
 
-    for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
-        const double gain =
-            ramping ? interpolated_gain(channel.blocks[block_index - 1].gains, block.gains, out_ch, delta, interp_len)
-                    : block.gains[out_ch];
-        (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += in_sample * static_cast<float>(gain);
+    const std::size_t num_out = ctx.num_out_ch;
 
-        if (ctx.diffuse_in != nullptr) {
-            const double diff_gain =
-                ramping
-                    ? interpolated_gain(
-                          channel.blocks[block_index - 1].diffuse_gains, block.diffuse_gains, out_ch, delta, interp_len)
-                    : block.diffuse_gains[out_ch];
-            ctx.diffuse_in[(frame * ctx.num_out_ch) + out_ch] += static_cast<double>(in_sample) * diff_gain;
+    const uint64_t stride = ctx.frames_cap;
+
+    if (!any_ramp) {
+        // Fast path: gains constant over this window → saxpy per output channel.
+        for (std::size_t out_ch = 0; out_ch < num_out; ++out_ch) {
+            const float gd = static_cast<float>(block.gains[out_ch]);
+            const float gf = static_cast<float>(block.diffuse_gains[out_ch]);
+            if (gd == 0.0F && gf == 0.0F) {
+                continue; // skip sparse zeros (common for VBAP panning)
+            }
+            float* __restrict__ col_d = ctx.col_direct  + out_ch * stride;
+            float* __restrict__ col_f = ctx.col_diffuse + out_ch * stride;
+            if (gd != 0.0F) {
+                for (std::size_t f = f0; f < f1; ++f) {
+                    col_d[f] += ch_in[f] * gd;
+                }
+            }
+            if (gf != 0.0F) {
+                for (std::size_t f = f0; f < f1; ++f) {
+                    col_f[f] += ch_in[f] * gf;
+                }
+            }
+        }
+    } else {
+        // Slow path: interpolating — per-frame scalar fallback.
+        for (std::size_t f = f0; f < f1; ++f) {
+            const uint64_t delta = (abs_start + f) - block.start_sample;
+            const bool ramping = delta < interp_len;
+            const float in = ch_in[f];
+            for (std::size_t out_ch = 0; out_ch < num_out; ++out_ch) {
+                const float gd = static_cast<float>(
+                    ramping ? interpolated_gain(channel.blocks[block_index - 1].gains,
+                                               block.gains, out_ch, delta, interp_len)
+                            : block.gains[out_ch]);
+                const float gf = static_cast<float>(
+                    ramping ? interpolated_gain(channel.blocks[block_index - 1].diffuse_gains,
+                                               block.diffuse_gains, out_ch, delta, interp_len)
+                            : block.diffuse_gains[out_ch]);
+                ctx.col_direct [out_ch * stride + f] += in * gd;
+                ctx.col_diffuse[out_ch * stride + f] += in * gf;
+            }
         }
     }
 }
@@ -349,53 +409,66 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
 void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
                             std::vector<std::size_t>& block_indices,
                             const AccumulateContext& ctx,
-                            uint64_t frames_now) {
+                            uint64_t frames_now,
+                            std::vector<float>& ch_in_buf) {
     for (std::size_t ci = 0; ci < gain_matrix.size(); ++ci) {
         const auto& channel = gain_matrix[ci];
         if (channel.blocks.empty()) {
             continue;
         }
-        for (std::size_t frame = 0; frame < frames_now; ++frame) {
-            accumulate_channel_block(channel, block_indices[ci], ctx, frame);
+        // Deinterleave this input channel into a contiguous buffer.
+        const uint16_t ic = channel.input_channel;
+        const uint16_t num_in = ctx.num_in_ch;
+        for (std::size_t f = 0; f < frames_now; ++f) {
+            ch_in_buf[f] = ctx.input[f * num_in + ic];
         }
+        accumulate_channel_block(channel, block_indices[ci], ctx, ch_in_buf.data(), frames_now);
     }
 }
 
-// Apply 512-tap FIR decorrelator to each output channel's diffuse input signal.
-// diffuse_in:  [frames_now × num_out_ch] planar-interleaved, double
-// diffuse_out: [frames_now × num_out_ch] planar-interleaved, float  (written)
+// Apply 512-tap FIR decorrelator via overlap-add FFT convolution (saf_rfft / KissFFT).
+// diffuse_in:  [frames_now × num_out_ch] interleaved, float
+// diffuse_out: [frames_now × num_out_ch] interleaved, float  (written)
 void apply_decorrelator(DecorrState& state,
-                        const std::vector<double>& diffuse_in,
+                        const std::vector<float>& diffuse_in,
                         std::vector<float>& diffuse_out,
                         std::size_t frames_now,
                         std::size_t num_out_ch) {
-    constexpr std::size_t k_fir_len = 512;
-    constexpr std::size_t k_hist_len = k_fir_len - 1; // 511
+    constexpr std::size_t k_fft_len = 2048;
+    constexpr std::size_t k_bins = k_fft_len / 2 + 1; // 1025
+    constexpr std::size_t k_overlap_len = 511;          // K - 1
+
+    // Per-call scratch — small fixed size, stack-friendly via vector.
+    std::vector<float> buf(k_fft_len);
+    std::vector<float_complex> X(k_bins);
+    std::vector<float_complex> Y(k_bins);
+    std::vector<float> y(k_fft_len);
 
     for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-        const auto& fir = state.filters[ch];
-        auto& hist = state.fir_hist[ch]; // [511]
-
-        // Build [hist | new samples] for causal convolution.
-        std::vector<double> ext(k_hist_len + frames_now);
-        std::ranges::copy(hist, ext.begin());
+        // Deinterleave, zero-pad remainder.
+        std::fill(buf.begin(), buf.end(), 0.0F);
         for (std::size_t f = 0; f < frames_now; ++f) {
-            ext[k_hist_len + f] = diffuse_in[(f * num_out_ch) + ch];
+            buf[f] = diffuse_in[f * num_out_ch + ch];
         }
 
-        // Direct-form FIR: y[n] = Σ fir[k] × x[n−k]
-        for (std::size_t f = 0; f < frames_now; ++f) {
-            double y = 0.0;
-            for (std::size_t k = 0; k < k_fir_len; ++k) {
-                y += fir[k] * ext[k_hist_len + f - k];
-            }
-            diffuse_out[(f * num_out_ch) + ch] = static_cast<float>(y);
+        saf_rfft_forward(state.hFFT, buf.data(), X.data());
+
+        for (std::size_t b = 0; b < k_bins; ++b) {
+            Y[b] = X[b] * state.filter_fd[ch][b];
         }
 
-        // Update history: take the last kHistLen elements of ext, which is always
-        // valid regardless of frames_now (avoids size_t underflow on short tail blocks).
-        for (std::size_t i = 0; i < k_hist_len; ++i) {
-            hist[i] = ext[frames_now + i];
+        // saf_rfft_backward scales by 1/N internally — no extra scaling needed.
+        saf_rfft_backward(state.hFFT, Y.data(), y.data());
+
+        // Overlap-add: accumulate saved tail into this block's output.
+        auto& ovl = state.overlap[ch];
+        for (std::size_t f = 0; f < frames_now; ++f) {
+            diffuse_out[f * num_out_ch + ch] = y[f] + (f < k_overlap_len ? ovl[f] : 0.0F);
+        }
+
+        // Save new tail (y[frames_now .. frames_now + k_overlap_len - 1]).
+        for (std::size_t i = 0; i < k_overlap_len; ++i) {
+            ovl[i] = y[frames_now + i];
         }
     }
 }
@@ -482,11 +555,28 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
 
         // Initialise decorrelator state for the diffuse bus.
+        // Filters designed as float; precomputed in frequency domain for FFT convolution.
+        constexpr int k_fft_len = 2048; // L: next pow2 >= 1024 + 512 - 1
+        constexpr int k_bins = k_fft_len / 2 + 1; // 1025
+        constexpr std::size_t k_fir_len = 512;
+
         DecorrState decorr;
-        decorr.filters = ear::designDecorrelators<double>(layout);
+        saf_rfft_create(&decorr.hFFT, k_fft_len);
         decorr.comp_delay = ear::decorrelatorCompensationDelay(); // 255
-        decorr.fir_hist.assign(num_out_ch, std::vector<double>(511, 0.0));
+        decorr.overlap.assign(num_out_ch, std::vector<float>(k_fir_len - 1, 0.0F));
         decorr.dir_delay.assign(num_out_ch, std::vector<float>(static_cast<std::size_t>(decorr.comp_delay), 0.0F));
+
+        {
+            const auto raw_filters = ear::designDecorrelators<float>(layout);
+            decorr.filter_fd.resize(num_out_ch, std::vector<float_complex>(k_bins));
+            std::vector<float> fir_buf(k_fft_len, 0.0F);
+            for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
+                std::fill(fir_buf.begin(), fir_buf.end(), 0.0F);
+                const auto& fir = raw_filters[ch];
+                std::copy(fir.begin(), fir.end(), fir_buf.begin());
+                saf_rfft_forward(decorr.hFFT, fir_buf.data(), decorr.filter_fd[ch].data());
+            }
+        }
 
         // Open file for audio only — ADM metadata comes from plan.scene.
         auto reader = bw64::readFile(plan.input_path);
@@ -501,25 +591,55 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         std::vector<std::size_t> blk_idx(gain_matrix.size(), 0);
 
         constexpr uint64_t k_block_size = 1024;
+        const std::size_t col_stride = k_block_size; // frames_cap
+
+        // Column-major accumulation buffers [num_out_ch × k_block_size].
+        // col_direct[out_ch * col_stride + frame], col_diffuse likewise.
+        std::vector<float> col_direct(num_out_ch * col_stride, 0.0F);
+        std::vector<float> col_diffuse(num_out_ch * col_stride, 0.0F);
+
+        // Interleaved buffers used for I/O and the decorrelator.
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
-        std::vector<float> out_block(static_cast<std::size_t>(num_out_ch) * k_block_size);
-        std::vector<double> diffuse_in(static_cast<std::size_t>(num_out_ch) * k_block_size);
-        std::vector<float> diffuse_out(static_cast<std::size_t>(num_out_ch) * k_block_size);
+        std::vector<float> out_block(num_out_ch * k_block_size);     // interleaved direct
+        std::vector<float> diffuse_in(num_out_ch * k_block_size);    // interleaved diffuse
+        std::vector<float> diffuse_out(num_out_ch * k_block_size);
+        std::vector<float> ch_in_buf(k_block_size);                  // deinterleaved input scratch
         uint64_t frames_done = 0;
 
         while (frames_done < num_frames) {
             const uint64_t frames_now = std::min(k_block_size, num_frames - frames_done);
-            const std::size_t out_samples = static_cast<std::size_t>(num_out_ch) * frames_now;
+            const std::size_t out_samples = num_out_ch * static_cast<std::size_t>(frames_now);
 
             reader->read(in_block.data(), frames_now);
-            std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
-            std::fill(diffuse_in.begin(), diffuse_in.begin() + static_cast<ptrdiff_t>(out_samples), 0.0);
-            std::fill(diffuse_out.begin(), diffuse_out.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
-            // Accumulate direct and diffuse gains into their respective buffers.
-            const AccumulateContext ctx{
-                in_block.data(), &out_block, diffuse_in.data(), frames_done, num_in_ch, num_out_ch, k_default_interp};
-            accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now);
+            // Zero column-major accumulation buffers (only the live region per channel).
+            for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
+                std::fill_n(col_direct.data()  + ch * col_stride, frames_now, 0.0F);
+                std::fill_n(col_diffuse.data() + ch * col_stride, frames_now, 0.0F);
+            }
+
+            // Accumulate gains into column-major buffers (SIMD-friendly inner loop).
+            AccumulateContext ctx;
+            ctx.input        = in_block.data();
+            ctx.col_direct   = col_direct.data();
+            ctx.col_diffuse  = col_diffuse.data();
+            ctx.frames_done  = frames_done;
+            ctx.num_in_ch    = num_in_ch;
+            ctx.num_out_ch   = num_out_ch;
+            ctx.default_interp = k_default_interp;
+            ctx.frames_cap   = col_stride;
+
+                accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now, ch_in_buf);
+
+            // Transpose column-major → interleaved for decorrelator and delay.
+            for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
+                const float* src_d = col_direct.data()  + ch * col_stride;
+                const float* src_f = col_diffuse.data() + ch * col_stride;
+                for (std::size_t f = 0; f < frames_now; ++f) {
+                    out_block [f * num_out_ch + ch] = src_d[f];
+                    diffuse_in[f * num_out_ch + ch] = src_f[f];
+                }
+            }
 
             // Apply 512-tap FIR decorrelator to the diffuse input per channel.
             apply_decorrelator(decorr, diffuse_in, diffuse_out, frames_now, num_out_ch);
