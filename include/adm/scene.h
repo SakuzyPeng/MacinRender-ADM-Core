@@ -121,6 +121,11 @@ struct SceneObject {
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
     std::optional<ScenePositionOffset> position_offset;
     std::vector<SceneTrackRef> tracks;
+    std::vector<std::string> labels; // audioObjectLabel values
+    std::optional<int> importance;   // 0–10; absent when not specified
+    // dialogue / dialogueId: 0=non-dialogue, 1=dialogue, 2=mixed; absent when unset.
+    // Note: BS.2076-2 defines a default of 2, but libadm treats it as optional.
+    std::optional<unsigned int> dialogue_id;
 };
 
 // Time-window and gain from one AudioBlockFormatHoa entry.
@@ -188,6 +193,12 @@ struct SceneProgramme {
     std::string id;
     std::string name;
     std::vector<std::string> content_ids;
+    std::optional<std::string> language; // audioProgrammeLanguage
+    std::vector<std::string> labels;     // audioProgrammeLabel values
+    // Programme time bounds within the file.  start_sample is 0 when unset (default).
+    // end_sample is absent when no <end> element is present (programme runs to file end).
+    uint64_t start_sample{0};
+    std::optional<uint64_t> end_sample;
     // First LoudnessMetadata entry from the programme, if any.
     std::optional<SceneLoudnessMetadata> loudness;
     // True when the ADM document includes an audioProgrammeReferenceScreen element.

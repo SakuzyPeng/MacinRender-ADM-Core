@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <limits>
 #include <string>
+#include <string_view>
 
 #include <CLI/CLI.hpp>
 #include <fmt/format.h>
@@ -72,26 +73,39 @@ mradm::OutputBitDepth parse_output_bit_depth(const std::string& value) {
 }
 
 void print_loudness(const mradm::SceneLoudnessMetadata& lm) {
-    if (lm.loudness_method) {
-        fmt::print("    loudness method: {}\n", *lm.loudness_method);
+    if (const auto loudness_method = lm.loudness_method; loudness_method.has_value()) {
+        fmt::print("    loudness method: {}\n", loudness_method.value());
     }
-    if (lm.integrated_loudness) {
-        fmt::print("    integrated loudness: {:.1f} LUFS\n", *lm.integrated_loudness);
+    if (const auto integrated_loudness = lm.integrated_loudness; integrated_loudness.has_value()) {
+        fmt::print("    integrated loudness: {:.1f} LUFS\n", integrated_loudness.value());
     }
-    if (lm.max_true_peak) {
-        fmt::print("    max true peak:       {:.1f} dBTP\n", *lm.max_true_peak);
+    if (const auto max_true_peak = lm.max_true_peak; max_true_peak.has_value()) {
+        fmt::print("    max true peak:       {:.1f} dBTP\n", max_true_peak.value());
     }
-    if (lm.loudness_range) {
-        fmt::print("    loudness range:      {:.1f} LU\n", *lm.loudness_range);
+    if (const auto loudness_range = lm.loudness_range; loudness_range.has_value()) {
+        fmt::print("    loudness range:      {:.1f} LU\n", loudness_range.value());
     }
-    if (lm.max_momentary) {
-        fmt::print("    max momentary:       {:.1f} LUFS\n", *lm.max_momentary);
+    if (const auto max_momentary = lm.max_momentary; max_momentary.has_value()) {
+        fmt::print("    max momentary:       {:.1f} LUFS\n", max_momentary.value());
     }
-    if (lm.max_short_term) {
-        fmt::print("    max short-term:      {:.1f} LUFS\n", *lm.max_short_term);
+    if (const auto max_short_term = lm.max_short_term; max_short_term.has_value()) {
+        fmt::print("    max short-term:      {:.1f} LUFS\n", max_short_term.value());
     }
-    if (lm.dialogue_loudness) {
-        fmt::print("    dialogue loudness:   {:.1f} LUFS\n", *lm.dialogue_loudness);
+    if (const auto dialogue_loudness = lm.dialogue_loudness; dialogue_loudness.has_value()) {
+        fmt::print("    dialogue loudness:   {:.1f} LUFS\n", dialogue_loudness.value());
+    }
+}
+
+std::string_view dialogue_id_name(unsigned int dialogue_id) {
+    switch (dialogue_id) {
+    case 0:
+        return "non-dialogue";
+    case 1:
+        return "dialogue";
+    case 2:
+        return "mixed";
+    default:
+        return {};
     }
 }
 
@@ -99,11 +113,27 @@ void print_programmes(const std::vector<mradm::SceneProgramme>& programmes) {
     fmt::print("\nProgrammes ({}):\n", programmes.size());
     for (const auto& p : programmes) {
         fmt::print("  {}  \"{}\"\n", p.id, p.name);
+        if (const auto language = p.language; language.has_value()) {
+            fmt::print("    language: {}\n", language.value());
+        }
+        if (!p.labels.empty()) {
+            fmt::print("    label:");
+            for (const auto& l : p.labels) {
+                fmt::print(" \"{}\"", l);
+            }
+            fmt::print("\n");
+        }
+        if (p.start_sample > 0) {
+            fmt::print("    start: {} samples\n", p.start_sample);
+        }
+        if (const auto end_sample = p.end_sample; end_sample.has_value()) {
+            fmt::print("    end:   {} samples\n", end_sample.value());
+        }
         if (p.has_reference_screen) {
             fmt::print("    reference screen: present (geometry not parsed by libadm)\n");
         }
-        if (p.loudness) {
-            print_loudness(*p.loudness);
+        if (const auto loudness = p.loudness; loudness.has_value()) {
+            print_loudness(loudness.value());
         }
         for (const auto& cid : p.content_ids) {
             fmt::print("    → {}\n", cid);
@@ -112,8 +142,8 @@ void print_programmes(const std::vector<mradm::SceneProgramme>& programmes) {
 }
 
 void print_content_metadata(const mradm::SceneContent& c) {
-    if (c.language) {
-        fmt::print("    language: {}\n", *c.language);
+    if (const auto language = c.language; language.has_value()) {
+        fmt::print("    language: {}\n", language.value());
     }
     if (!c.labels.empty()) {
         fmt::print("    label:");
@@ -122,15 +152,15 @@ void print_content_metadata(const mradm::SceneContent& c) {
         }
         fmt::print("\n");
     }
-    if (c.dialogue_kind) {
-        if (c.content_kind) {
-            fmt::print("    dialogue: {} ({})\n", *c.dialogue_kind, *c.content_kind);
+    if (const auto dialogue_kind = c.dialogue_kind; dialogue_kind.has_value()) {
+        if (const auto content_kind = c.content_kind; content_kind.has_value()) {
+            fmt::print("    dialogue: {} ({})\n", dialogue_kind.value(), content_kind.value());
         } else {
-            fmt::print("    dialogue: {}\n", *c.dialogue_kind);
+            fmt::print("    dialogue: {}\n", dialogue_kind.value());
         }
     }
-    if (c.loudness) {
-        print_loudness(*c.loudness);
+    if (const auto loudness = c.loudness; loudness.has_value()) {
+        print_loudness(loudness.value());
     }
 }
 
@@ -160,6 +190,24 @@ void print_scene(const std::string& path, const mradm::AdmScene& scene) {
     fmt::print("\nObjects ({}):\n", scene.objects.size());
     for (const auto& obj : scene.objects) {
         fmt::print("  {}  \"{}\"\n", obj.id, obj.name);
+        if (!obj.labels.empty()) {
+            fmt::print("    label:");
+            for (const auto& l : obj.labels) {
+                fmt::print(" \"{}\"", l);
+            }
+            fmt::print("\n");
+        }
+        if (const auto importance = obj.importance; importance.has_value()) {
+            fmt::print("    importance: {}\n", importance.value());
+        }
+        if (const auto dialogue_id = obj.dialogue_id; dialogue_id.has_value()) {
+            const auto dialogue_name = dialogue_id_name(dialogue_id.value());
+            if (!dialogue_name.empty()) {
+                fmt::print("    dialogue: {}\n", dialogue_name);
+            } else {
+                fmt::print("    dialogue: {}\n", dialogue_id.value());
+            }
+        }
         for (const auto& track : obj.tracks) {
             if (track.channel_index.has_value()) {
                 fmt::print("    {}  ch={}\n", track.track_uid, *track.channel_index);

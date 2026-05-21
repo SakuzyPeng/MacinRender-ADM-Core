@@ -918,6 +918,187 @@ bool verify_reference_screen_flag_imported() {
     return ok;
 }
 
+std::pair<std::shared_ptr<adm::Document>, std::string> make_programme_extended_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"PExtCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"PExtPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"PExtSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"PExtTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"PExtObject"});
+    object->addReference(uid);
+    doc->add(object);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"PExtContent"});
+    content->addReference(object);
+    doc->add(content);
+
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"PExtProgramme"});
+    programme->addReference(content);
+    programme->set(adm::AudioProgrammeLanguage{"fr"});
+    {
+        adm::Label label;
+        label.set(adm::LabelValue{"French Main Mix"});
+        label.set(adm::LabelLanguage{"fr"});
+        programme->add(label);
+    }
+    // start at 1 second, end at 5 seconds (at 48000 Hz)
+    programme->set(adm::Start{adm::Time{std::chrono::nanoseconds{1'000'000'000LL}}});
+    programme->set(adm::End{adm::Time{std::chrono::nanoseconds{5'000'000'000LL}}});
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+bool verify_programme_language_labels_time_imported() {
+    bool ok = true;
+    auto [doc, uid_str] = make_programme_extended_doc();
+    auto path = std::filesystem::temp_directory_path() / "mr_adm_io_prog_ext.wav";
+    FileGuard guard{path};
+
+    {
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
+        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        std::vector<float> silence(48000, 0.0F);
+        writer->write(silence.data(), 48000U);
+    }
+
+    auto result = mradm::io::import_scene(path.string());
+    if (!result) {
+        std::cerr << "FAIL: programme_extended import_scene error: " << result.error().message << "\n";
+        return false;
+    }
+    const auto& scene = result.value();
+
+    ok &= check(!scene.programmes.empty(), "programme extended: 1 programme");
+    if (scene.programmes.empty()) {
+        return false;
+    }
+    const auto& prog = scene.programmes[0];
+
+    ok &= check(prog.language.has_value() && *prog.language == "fr", "programme: language == 'fr'");
+    ok &= check(!prog.labels.empty() && prog.labels[0] == "French Main Mix", "programme: label value");
+    ok &= check(prog.start_sample == 48000U, "programme: start_sample == 48000");
+    ok &= check(prog.end_sample.has_value() && *prog.end_sample == 240000U, "programme: end_sample == 240000");
+
+    if (ok) {
+        std::cout << "PASS: verify_programme_language_labels_time_imported\n";
+    }
+    return ok;
+}
+
+std::pair<std::shared_ptr<adm::Document>, std::string> make_object_extended_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"OExtCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"OExtPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"OExtSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"OExtTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"OExtObject"});
+    object->addReference(uid);
+    {
+        adm::Label label;
+        label.set(adm::LabelValue{"Main Dialogue"});
+        label.set(adm::LabelLanguage{"en"});
+        object->add(label);
+    }
+    object->set(adm::Importance{7});
+    object->set(adm::DialogueId{1}); // dialogue
+    doc->add(object);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"OExtContent"});
+    content->addReference(object);
+    doc->add(content);
+
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"OExtProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+bool verify_object_labels_importance_dialogue_imported() {
+    bool ok = true;
+    auto [doc, uid_str] = make_object_extended_doc();
+    auto path = std::filesystem::temp_directory_path() / "mr_adm_io_obj_ext.wav";
+    FileGuard guard{path};
+
+    {
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
+        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        std::vector<float> silence(1, 0.0F);
+        writer->write(silence.data(), 1U);
+    }
+
+    auto result = mradm::io::import_scene(path.string());
+    if (!result) {
+        std::cerr << "FAIL: object_extended import_scene error: " << result.error().message << "\n";
+        return false;
+    }
+    const auto& scene = result.value();
+
+    ok &= check(!scene.objects.empty(), "object extended: 1 object");
+    if (scene.objects.empty()) {
+        return false;
+    }
+    const auto& obj = scene.objects[0];
+
+    ok &= check(!obj.labels.empty() && obj.labels[0] == "Main Dialogue", "object: label value");
+    ok &= check(obj.importance.has_value() && *obj.importance == 7, "object: importance == 7");
+    ok &= check(obj.dialogue_id.has_value() && *obj.dialogue_id == 1U, "object: dialogue_id == 1");
+
+    if (ok) {
+        std::cout << "PASS: verify_object_labels_importance_dialogue_imported\n";
+    }
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -931,6 +1112,8 @@ int main() {
     ok &= verify_programme_loudness_metadata_imported();
     ok &= verify_content_metadata_imported();
     ok &= verify_reference_screen_flag_imported();
+    ok &= verify_programme_language_labels_time_imported();
+    ok &= verify_object_labels_importance_dialogue_imported();
 
     if (ok) {
         std::cout << "adm_io fixture test passed\n";

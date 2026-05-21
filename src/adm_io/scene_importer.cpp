@@ -360,6 +360,19 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
             const uint64_t dur = time_to_samples(obj->get<adm::Duration>().get(), sample_rate);
             out.end_sample = saturating_add(obj_start, dur);
         }
+        if (obj->has<adm::Labels>()) {
+            for (const auto& label : obj->get<adm::Labels>()) {
+                if (label.has<adm::LabelValue>()) {
+                    out.labels.push_back(label.get<adm::LabelValue>().get());
+                }
+            }
+        }
+        if (obj->has<adm::Importance>()) {
+            out.importance = obj->get<adm::Importance>().get();
+        }
+        if (obj->has<adm::DialogueId>()) {
+            out.dialogue_id = obj->get<adm::DialogueId>().get();
+        }
         for (const auto& uid : obj->getReferences<adm::AudioTrackUid>()) {
             SceneTrackRef ref;
             ref.track_uid = adm::formatId(uid->get<adm::AudioTrackUidId>());
@@ -503,7 +516,7 @@ std::vector<SceneContent> extract_contents(const std::shared_ptr<adm::Document>&
     return result;
 }
 
-std::vector<SceneProgramme> extract_programmes(const std::shared_ptr<adm::Document>& doc) {
+std::vector<SceneProgramme> extract_programmes(const std::shared_ptr<adm::Document>& doc, uint32_t sample_rate) {
     std::vector<SceneProgramme> result;
     for (const auto& p : doc->getElements<adm::AudioProgramme>()) {
         SceneProgramme out;
@@ -513,6 +526,22 @@ std::vector<SceneProgramme> extract_programmes(const std::shared_ptr<adm::Docume
         }
         for (const auto& c : p->getReferences<adm::AudioContent>()) {
             out.content_ids.push_back(adm::formatId(c->get<adm::AudioContentId>()));
+        }
+        if (p->has<adm::AudioProgrammeLanguage>()) {
+            out.language = p->get<adm::AudioProgrammeLanguage>().get();
+        }
+        if (p->has<adm::Labels>()) {
+            for (const auto& label : p->get<adm::Labels>()) {
+                if (label.has<adm::LabelValue>()) {
+                    out.labels.push_back(label.get<adm::LabelValue>().get());
+                }
+            }
+        }
+        if (!p->isDefault<adm::Start>()) {
+            out.start_sample = time_to_samples(p->get<adm::Start>().get(), sample_rate);
+        }
+        if (p->has<adm::End>()) {
+            out.end_sample = time_to_samples(p->get<adm::End>().get(), sample_rate);
         }
         if (p->has<adm::LoudnessMetadatas>()) {
             const auto& vec = p->get<adm::LoudnessMetadatas>();
@@ -732,7 +761,7 @@ Result<AdmScene> import_scene(const std::string& path) {
 
         AdmScene scene;
         scene.info = std::move(info);
-        scene.programmes = extract_programmes(document);
+        scene.programmes = extract_programmes(document, reader->sampleRate());
         scene.contents = extract_contents(document);
         std::set<std::string> skipped_type_defs;
         scene.objects = extract_objects(document, uid_map, reader->sampleRate(), skipped_type_defs);
