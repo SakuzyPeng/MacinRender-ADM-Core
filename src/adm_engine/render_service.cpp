@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
 
 #include <fmt/format.h>
@@ -13,6 +15,17 @@
 #include "adm/render_vbap.h"
 
 namespace mradm {
+
+namespace {
+
+[[nodiscard]] bool is_caf_path(const std::string& path) {
+    auto ext = std::filesystem::path(path).extension().string();
+    std::ranges::transform(
+        ext, ext.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+    return ext == ".caf";
+}
+
+} // namespace
 
 RenderService::RenderService() = default;
 
@@ -69,11 +82,27 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     const auto caps = renderer->capabilities();
     logs.log(LogLevel::info, "engine", fmt::format("backend: {} {}", caps.backend_name, caps.backend_version));
 
+    const auto output_layout = request.options.output_layout.empty() ? "0+2+0" : request.options.output_layout;
+    if (is_caf_path(output_path)) {
+        if (sel == RendererSelection::hoa) {
+            return {{ErrorCode::unsupported, "CAF output is only supported for speaker-layout renderers", output_path},
+                    std::nullopt,
+                    {{LogLevel::error, "CAF output is only supported for speaker-layout renderers"}}};
+        }
+        if (request.options.measure_loudness || request.options.peak_limit ||
+            request.options.output_bit_depth != OutputBitDepth::f32) {
+            const auto msg =
+                std::string{"CAF output currently supports render-only float32 output; disable loudness normalization, "
+                            "peak limiting, and integer bit-depth conversion"};
+            return {{ErrorCode::unsupported, msg, output_path}, std::nullopt, {{LogLevel::error, msg}}};
+        }
+    }
+
     // Build plan.
     RenderPlan plan;
     plan.input_path = request.input_path.string();
     plan.output_path = output_path;
-    plan.output_layout = request.options.output_layout.empty() ? "0+2+0" : request.options.output_layout;
+    plan.output_layout = output_layout;
     plan.default_interp_ms = request.options.default_interp_ms;
     plan.scene = std::move(*scene_result);
 

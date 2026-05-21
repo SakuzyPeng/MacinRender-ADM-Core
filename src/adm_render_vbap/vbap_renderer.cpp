@@ -497,7 +497,8 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
         progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
 
         auto reader = bw64::readFile(plan.input_path);
-        auto writer_res = audio::FloatWavWriter::open(plan.output_path, num_out_ch, static_cast<uint32_t>(sample_rate));
+        auto writer_res = audio::WriterHandle::open(
+            plan.output_path, num_out_ch, static_cast<uint32_t>(sample_rate), plan.output_layout);
         if (!writer_res) {
             return tl::unexpected{writer_res.error()};
         }

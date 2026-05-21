@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <variant>
 
 #include "adm/errors.h"
 
@@ -47,6 +48,51 @@ class FloatWavReader {
     FloatWavReader() = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
+};
+
+// Streaming writer for CAF (Core Audio Format) files with IEEE float32 samples
+// and an Apple AudioChannelLayoutTag encoded in the 'chan' chunk.
+// layout_id must be one of the supported BS.2051 identifiers:
+//   "0+2+0", "0+5+0", "0+7+0", "4+5+0", "4+7+0", "9.1.6", "9+10+3"
+// PCM samples are stored as little-endian float32 with the matching layout tag so
+// that afinfo, QuickTime, and CoreAudio consumers can read the channel assignment.
+class FloatCafWriter {
+  public:
+    static Result<FloatCafWriter>
+    open(const std::string& path, uint32_t channels, uint32_t sample_rate, const std::string& layout_id);
+    ~FloatCafWriter();
+    FloatCafWriter(FloatCafWriter&&) noexcept;
+    FloatCafWriter& operator=(FloatCafWriter&&) noexcept;
+    FloatCafWriter(const FloatCafWriter&) = delete;
+    FloatCafWriter& operator=(const FloatCafWriter&) = delete;
+
+    uint64_t write(const float* samples, uint64_t frame_count);
+
+  private:
+    FloatCafWriter() = default;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+// Type-erased audio file writer.  Selects WAV or CAF automatically from the
+// output path extension (.wav → FloatWavWriter, .caf → FloatCafWriter).
+// For CAF, layout_id must be a known BS.2051 layout identifier.
+class WriterHandle {
+  public:
+    static Result<WriterHandle>
+    open(const std::string& path, uint32_t channels, uint32_t sample_rate, const std::string& layout_id = {});
+
+    WriterHandle(WriterHandle&&) noexcept = default;
+    WriterHandle& operator=(WriterHandle&&) noexcept = default;
+    WriterHandle(const WriterHandle&) = delete;
+    WriterHandle& operator=(const WriterHandle&) = delete;
+
+    uint64_t write(const float* samples, uint64_t frame_count);
+
+  private:
+    explicit WriterHandle(FloatWavWriter w) : impl_(std::move(w)) {}
+    explicit WriterHandle(FloatCafWriter w) : impl_(std::move(w)) {}
+    std::variant<FloatWavWriter, FloatCafWriter> impl_;
 };
 
 // Convert an existing float32 WAV to integer PCM in-place (temp + rename).
