@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <sstream>
@@ -1211,6 +1212,180 @@ bool verify_vbap_position_offset() {
     return ok;
 }
 
+// Two-block document without jumpPosition: block1 az=-30 (right), block2 az=+30 (left),
+// each 500ms.  The renderer will apply the default interpolation ramp at the transition.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_two_block_no_jump_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"TBnjCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects b1{adm::SphericalPosition{adm::Azimuth{-30.0F}, adm::Elevation{0.0F}}};
+        b1.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
+        b1.set(adm::Duration{adm::Time{std::chrono::milliseconds{500}}});
+        cf->add(b1);
+
+        adm::AudioBlockFormatObjects b2{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}}};
+        b2.set(adm::Rtime{adm::Time{std::chrono::milliseconds{500}}});
+        b2.set(adm::Duration{adm::Time{std::chrono::milliseconds{500}}});
+        cf->add(b2);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"TBnjPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"TBnjSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"TBnjTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"TBnjObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"TBnjContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"TBnjProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+// Render the two-block document with the given interp_ms and return stereo samples.
+std::vector<float> render_two_block_no_jump(uint32_t interp_ms) {
+    auto [doc, uid_str] = make_two_block_no_jump_doc();
+    // 1000Hz × 1000 frames = 1 second; block boundary at frame 500.
+    const auto in_path = write_input_fixture(doc, uid_str, 1000U, 1000U);
+    FileGuard in_guard{in_path};
+
+    const auto out_path =
+        std::filesystem::temp_directory_path() / ("mr_vbap_interp_ms_" + std::to_string(interp_ms) + "_out.wav");
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest request;
+    request.input_path = in_path;
+    request.output_path = out_path;
+    request.options.output_layout = "0+2+0";
+    request.options.renderer = mradm::RendererSelection::saf;
+    request.options.peak_limit = false;
+    request.options.default_interp_ms = interp_ms;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const mradm::RenderResult result = service.render(request, progress, logs);
+    if (!result.success()) {
+        return {};
+    }
+
+    auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!reader_res) {
+        return {};
+    }
+    auto& reader = *reader_res;
+    std::vector<float> samples(static_cast<std::size_t>(reader.frame_count()) * 2U);
+    reader.read(samples.data(), reader.frame_count());
+    return samples;
+}
+
+bool verify_default_interp_ms_controls_ramp() {
+    bool ok = true;
+
+    // With interp_ms=0: block transition at frame 500 is instant.
+    // Frames 510-540 (well into block 2, az=+30 → left) must have no right-channel
+    // energy from the previous block.
+    const auto samples0 = render_two_block_no_jump(0);
+    if (samples0.empty()) {
+        std::cerr << "FAIL: interp_ms=0 render failed\n";
+        return false;
+    }
+    double right_after_0 = 0.0;
+    for (std::size_t frame = 510; frame < 540; ++frame) {
+        right_after_0 += std::fabs(static_cast<double>(samples0[(2U * frame) + 1U]));
+    }
+    ok &= check(right_after_0 < 1.0e-6, "interp_ms=0: no right energy at frames 510-539 (instant switch, block2=left)");
+
+    // With interp_ms=200 (200 samples at 1000Hz): ramp spans frames 500-699.
+    // Frames 510-540 are inside the ramp → must still have measurable right-channel
+    // energy from the previous block.
+    const auto samples200 = render_two_block_no_jump(200);
+    if (samples200.empty()) {
+        std::cerr << "FAIL: interp_ms=200 render failed\n";
+        return false;
+    }
+    double right_after_200 = 0.0;
+    for (std::size_t frame = 510; frame < 540; ++frame) {
+        right_after_200 += std::fabs(static_cast<double>(samples200[(2U * frame) + 1U]));
+    }
+    ok &= check(right_after_200 > 1.0e-3, "interp_ms=200: right energy present at frames 510-539 (ramp not complete)");
+
+    if (ok) {
+        std::cout << "PASS: verify_default_interp_ms_controls_ramp\n";
+    }
+    return ok;
+}
+
+bool verify_register_vbap_layout() {
+    bool ok = true;
+
+    // ── Valid registration ─────────────────────────────────────────────────────
+    const bool registered = mradm::register_vbap_layout(
+        "test+custom",
+        "Test Custom 4ch",
+        {{30.0F, 0.0F, "L"}, {-30.0F, 0.0F, "R"}, {110.0F, 0.0F, "Ls"}, {-110.0F, 0.0F, "Rs"}});
+    ok &= check(registered, "register_vbap_layout: valid layout should succeed");
+
+    // ── Duplicate rejection (same id, different speakers) ──────────────────────
+    const bool dup = mradm::register_vbap_layout("test+custom", "Dup", {{30.0F, 0.0F, "L"}, {-30.0F, 0.0F, "R"}});
+    ok &= check(!dup, "register_vbap_layout: duplicate id must return false");
+
+    // ── Built-in id is immutable ───────────────────────────────────────────────
+    const bool builtin_dup =
+        mradm::register_vbap_layout("0+2+0", "Override", {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}});
+    ok &= check(!builtin_dup, "register_vbap_layout: built-in id must not be overridden");
+
+    // ── Registered layout visible in capabilities with correct metadata ─────────
+    const auto caps = mradm::vbap_capabilities();
+    const auto it = std::ranges::find_if(caps.supported_layouts, [](const auto& l) { return l.id == "test+custom"; });
+    ok &= check(it != caps.supported_layouts.end(), "register_vbap_layout: registered layout appears in capabilities");
+    if (it != caps.supported_layouts.end()) {
+        ok &= check(it->channel_count == 4, "register_vbap_layout: channel_count == 4");
+        ok &= check(!it->is_3d, "register_vbap_layout: 2D custom layout: is_3d == false");
+        ok &= check(it->lfe_count == 0, "register_vbap_layout: lfe_count == 0");
+    }
+
+    // ── Invalid input rejection ────────────────────────────────────────────────
+    ok &= check(!mradm::register_vbap_layout("", "Empty id", {{30.0F, 0.0F, "L"}}),
+                "register_vbap_layout: empty id rejected");
+    ok &= check(!mradm::register_vbap_layout("test+empty-speakers", "Empty speakers", {}),
+                "register_vbap_layout: empty speakers rejected");
+    ok &= check(!mradm::register_vbap_layout(
+                    "test+all-lfe", "All LFE", {{30.0F, -30.0F, "LFE1", true}, {-30.0F, -30.0F, "LFE2", true}}),
+                "register_vbap_layout: all-LFE layout rejected");
+    ok &= check(!mradm::register_vbap_layout(
+                    "test+nan-az", "NaN azimuth", {{std::numeric_limits<float>::quiet_NaN(), 0.0F, "L"}}),
+                "register_vbap_layout: NaN azimuth rejected");
+    ok &= check(!mradm::register_vbap_layout(
+                    "test+inf-el", "Inf elevation", {{30.0F, std::numeric_limits<float>::infinity(), "L"}}),
+                "register_vbap_layout: infinite elevation rejected");
+
+    return ok;
+}
+
 int main() {
     bool ok = true;
 
@@ -1274,6 +1449,8 @@ int main() {
     ok &= verify_audio_object_duration_gates_output();
     ok &= verify_ds_time_window_gates_block();
     ok &= verify_vbap_position_offset();
+    ok &= verify_default_interp_ms_controls_ramp();
+    ok &= verify_register_vbap_layout();
 
     if (ok) {
         std::cout << "vbap smoke test passed\n";

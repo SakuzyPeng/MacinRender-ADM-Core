@@ -7,6 +7,7 @@
 #include <memory>
 #include <numbers>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -162,9 +163,16 @@ void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChann
                                            SceneTrackRef& ref,
                                            uint32_t sample_rate,
                                            uint64_t obj_start_sample) {
+    // channelFrequency is a CF-level attribute shared by all blocks within this CF.
+    std::optional<float> low_pass_hz;
+    if (cf->has<adm::Frequency>() && adm::isLowPass(cf->get<adm::Frequency>())) {
+        low_pass_hz = static_cast<float>(cf->get<adm::Frequency>().get<adm::LowPass>().get());
+    }
+
     const auto raw_blocks = cf->getElements<adm::AudioBlockFormatDirectSpeakers>();
     for (const auto& raw : raw_blocks) {
         SceneDirectSpeakersBlock block;
+        block.low_pass_hz = low_pass_hz;
 
         if (pf) {
             block.pack_format_id = adm::formatId(pf->get<adm::AudioPackFormatId>());
@@ -233,7 +241,8 @@ void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChann
 void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid,
                            SceneTrackRef& ref,
                            uint32_t sample_rate,
-                           uint64_t obj_start_sample) {
+                           uint64_t obj_start_sample,
+                           std::set<std::string>& skipped_type_defs) {
     const auto pf = uid->getReference<adm::AudioPackFormat>();
     if (!pf) {
         return;
@@ -245,6 +254,9 @@ void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid,
             append_objects_blocks_from_cf(cf, ref, sample_rate, obj_start_sample);
         } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
             append_direct_speakers_blocks_from_cf(cf, pf, ref, sample_rate, obj_start_sample);
+        } else if (type != adm::TypeDefinition::HOA) {
+            // HOA is handled separately by extract_hoa_packs(); anything else is unsupported.
+            skipped_type_defs.insert(adm::formatTypeDefinition(type));
         }
     }
 }
@@ -297,7 +309,8 @@ std::map<std::string, uint64_t> make_object_start_offsets(const std::shared_ptr<
 
 std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& doc,
                                          const std::map<std::string, uint16_t>& uid_map,
-                                         uint32_t sample_rate) {
+                                         uint32_t sample_rate,
+                                         std::set<std::string>& skipped_type_defs) {
     const auto object_start_offsets = make_object_start_offsets(doc, sample_rate);
     std::vector<SceneObject> result;
     for (const auto& obj : doc->getElements<adm::AudioObject>()) {
@@ -354,12 +367,82 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
             if (it != uid_map.end()) {
                 ref.channel_index = it->second;
             }
-            populate_track_blocks(uid, ref, sample_rate, obj_start);
+            populate_track_blocks(uid, ref, sample_rate, obj_start, skipped_type_defs);
             out.tracks.push_back(std::move(ref));
         }
         result.push_back(std::move(out));
     }
     return result;
+}
+
+// Convert DialogueId + optional sub-kind to human-readable strings.
+std::pair<std::optional<std::string>, std::optional<std::string>>
+dialogue_strings(const std::shared_ptr<adm::AudioContent>& c) {
+    if (!c->has<adm::DialogueId>()) {
+        return {};
+    }
+    const unsigned int id = c->get<adm::DialogueId>().get();
+    std::optional<std::string> dk;
+    std::optional<std::string> ck;
+    if (id == 0) {
+        dk = "non-dialogue";
+        if (c->has<adm::NonDialogueContentKind>()) {
+            switch (c->get<adm::NonDialogueContentKind>().get()) {
+            case 1:
+                ck = "music";
+                break;
+            case 2:
+                ck = "effect";
+                break;
+            default:
+                break;
+            }
+        }
+    } else if (id == 1) {
+        dk = "dialogue";
+        if (c->has<adm::DialogueContentKind>()) {
+            switch (c->get<adm::DialogueContentKind>().get()) {
+            case 1:
+                ck = "dialogue";
+                break;
+            case 2:
+                ck = "voiceover";
+                break;
+            case 3:
+                ck = "spoken-subtitle";
+                break;
+            case 4:
+                ck = "audio-description";
+                break;
+            case 5:
+                ck = "commentary";
+                break;
+            case 6:
+                ck = "emergency";
+                break;
+            default:
+                break;
+            }
+        }
+    } else if (id == 2) {
+        dk = "mixed";
+        if (c->has<adm::MixedContentKind>()) {
+            switch (c->get<adm::MixedContentKind>().get()) {
+            case 1:
+                ck = "complete-main";
+                break;
+            case 2:
+                ck = "mixed";
+                break;
+            case 3:
+                ck = "hearing-impaired";
+                break;
+            default:
+                break;
+            }
+        }
+    }
+    return {dk, ck};
 }
 
 std::vector<SceneContent> extract_contents(const std::shared_ptr<adm::Document>& doc) {
@@ -373,6 +456,48 @@ std::vector<SceneContent> extract_contents(const std::shared_ptr<adm::Document>&
         for (const auto& obj : c->getReferences<adm::AudioObject>()) {
             out.object_ids.push_back(adm::formatId(obj->get<adm::AudioObjectId>()));
         }
+        if (c->has<adm::AudioContentLanguage>()) {
+            out.language = c->get<adm::AudioContentLanguage>().get();
+        }
+        if (c->has<adm::Labels>()) {
+            for (const auto& label : c->get<adm::Labels>()) {
+                if (label.has<adm::LabelValue>()) {
+                    out.labels.push_back(label.get<adm::LabelValue>().get());
+                }
+            }
+        }
+        if (c->has<adm::LoudnessMetadatas>()) {
+            const auto& vec = c->get<adm::LoudnessMetadatas>();
+            if (!vec.empty()) {
+                const auto& src = vec[0];
+                SceneLoudnessMetadata lm;
+                if (src.has<adm::IntegratedLoudness>()) {
+                    lm.integrated_loudness = static_cast<float>(src.get<adm::IntegratedLoudness>().get());
+                }
+                if (src.has<adm::MaxTruePeak>()) {
+                    lm.max_true_peak = static_cast<float>(src.get<adm::MaxTruePeak>().get());
+                }
+                if (src.has<adm::LoudnessRange>()) {
+                    lm.loudness_range = static_cast<float>(src.get<adm::LoudnessRange>().get());
+                }
+                if (src.has<adm::MaxMomentary>()) {
+                    lm.max_momentary = static_cast<float>(src.get<adm::MaxMomentary>().get());
+                }
+                if (src.has<adm::MaxShortTerm>()) {
+                    lm.max_short_term = static_cast<float>(src.get<adm::MaxShortTerm>().get());
+                }
+                if (src.has<adm::DialogueLoudness>()) {
+                    lm.dialogue_loudness = static_cast<float>(src.get<adm::DialogueLoudness>().get());
+                }
+                if (src.has<adm::LoudnessMethod>()) {
+                    lm.loudness_method = src.get<adm::LoudnessMethod>().get();
+                }
+                out.loudness = std::move(lm);
+            }
+        }
+        auto [dk, ck] = dialogue_strings(c);
+        out.dialogue_kind = std::move(dk);
+        out.content_kind = std::move(ck);
         result.push_back(std::move(out));
     }
     return result;
@@ -389,7 +514,195 @@ std::vector<SceneProgramme> extract_programmes(const std::shared_ptr<adm::Docume
         for (const auto& c : p->getReferences<adm::AudioContent>()) {
             out.content_ids.push_back(adm::formatId(c->get<adm::AudioContentId>()));
         }
+        if (p->has<adm::LoudnessMetadatas>()) {
+            const auto& vec = p->get<adm::LoudnessMetadatas>();
+            if (!vec.empty()) {
+                const auto& src = vec[0];
+                SceneLoudnessMetadata lm;
+                if (src.has<adm::IntegratedLoudness>()) {
+                    lm.integrated_loudness = static_cast<float>(src.get<adm::IntegratedLoudness>().get());
+                }
+                if (src.has<adm::MaxTruePeak>()) {
+                    lm.max_true_peak = static_cast<float>(src.get<adm::MaxTruePeak>().get());
+                }
+                if (src.has<adm::LoudnessRange>()) {
+                    lm.loudness_range = static_cast<float>(src.get<adm::LoudnessRange>().get());
+                }
+                if (src.has<adm::MaxMomentary>()) {
+                    lm.max_momentary = static_cast<float>(src.get<adm::MaxMomentary>().get());
+                }
+                if (src.has<adm::MaxShortTerm>()) {
+                    lm.max_short_term = static_cast<float>(src.get<adm::MaxShortTerm>().get());
+                }
+                if (src.has<adm::DialogueLoudness>()) {
+                    lm.dialogue_loudness = static_cast<float>(src.get<adm::DialogueLoudness>().get());
+                }
+                if (src.has<adm::LoudnessMethod>()) {
+                    lm.loudness_method = src.get<adm::LoudnessMethod>().get();
+                }
+                out.loudness = std::move(lm);
+            }
+        }
+        out.has_reference_screen = p->has<adm::AudioProgrammeReferenceScreen>();
         result.push_back(std::move(out));
+    }
+    return result;
+}
+
+// Traverse UID → TrackFormat → StreamFormat → ChannelFormat; returns nullptr when
+// any link in the chain is absent.
+std::shared_ptr<adm::AudioChannelFormat> channel_format_from_uid(const std::shared_ptr<adm::AudioTrackUid>& uid) {
+    const auto tf = uid->getReference<adm::AudioTrackFormat>();
+    if (!tf) {
+        return nullptr;
+    }
+    const auto sf = tf->getReference<adm::AudioStreamFormat>();
+    if (!sf) {
+        return nullptr;
+    }
+    return sf->getReference<adm::AudioChannelFormat>();
+}
+
+// Read order/degree from the first AudioBlockFormatHoa (fixed per channel), then
+// append one SceneHOAChannelBlock per block (rtime/duration/gain).  Returns true
+// when at least one block was found; false means the caller should skip this channel.
+bool populate_hoa_channel_from_cf(const std::shared_ptr<adm::AudioChannelFormat>& cf,
+                                  SceneHOAChannel& ch,
+                                  uint64_t pack_start,
+                                  uint64_t pack_end,
+                                  uint32_t sample_rate) {
+    const auto hoa_blocks = cf->getElements<adm::AudioBlockFormatHoa>();
+    if (hoa_blocks.empty()) {
+        return false;
+    }
+    // order/degree are fixed per channel — read once from the first block.
+    const auto& first = hoa_blocks.front();
+    if (first.has<adm::Order>()) {
+        ch.order = first.get<adm::Order>().get();
+    }
+    if (first.has<adm::Degree>()) {
+        ch.degree = first.get<adm::Degree>().get();
+    }
+    ch.blocks.reserve(hoa_blocks.size());
+    for (const auto& blk : hoa_blocks) {
+        SceneHOAChannelBlock b;
+        b.gain = static_cast<float>(blk.get<adm::Gain>().get());
+        const uint64_t rtime = time_to_samples(blk.get<adm::Rtime>().get(), sample_rate);
+        b.start_sample = saturating_add(pack_start, rtime);
+        if (blk.has<adm::Duration>()) {
+            const uint64_t dur = time_to_samples(blk.get<adm::Duration>().get(), sample_rate);
+            b.end_sample = std::min(saturating_add(b.start_sample, dur), pack_end);
+        } else {
+            b.end_sample = pack_end;
+        }
+        ch.blocks.push_back(b);
+    }
+    return true;
+}
+
+// Override pack normalization/nfcRefDist/screenRef with block values if non-default
+// (BS.2127 §5.2.7.3: block-level takes precedence over pack-level).
+void apply_hoa_block_pack_metadata(const std::shared_ptr<adm::AudioChannelFormat>& cf, SceneHOATracks& pack) {
+    const auto hoa_blocks = cf->getElements<adm::AudioBlockFormatHoa>();
+    if (hoa_blocks.empty()) {
+        return;
+    }
+    const auto& blk = hoa_blocks.front();
+    if (!blk.isDefault<adm::Normalization>()) {
+        pack.normalization = blk.get<adm::Normalization>().get();
+    }
+    if (!blk.isDefault<adm::NfcRefDist>()) {
+        pack.nfc_ref_dist = static_cast<double>(blk.get<adm::NfcRefDist>().get());
+    }
+    if (!blk.isDefault<adm::ScreenRef>()) {
+        pack.screen_ref = blk.get<adm::ScreenRef>().get();
+    }
+}
+
+std::vector<SceneHOATracks> extract_hoa_packs(const std::shared_ptr<adm::Document>& doc,
+                                              const std::map<std::string, uint16_t>& uid_map,
+                                              uint32_t sample_rate) {
+    const auto object_start_offsets = make_object_start_offsets(doc, sample_rate);
+    std::vector<SceneHOATracks> result;
+
+    for (const auto& obj : doc->getElements<adm::AudioObject>()) {
+        // Group UIDs by HOA pack format ID; also retain the pack format pointer.
+        std::map<std::string, std::shared_ptr<adm::AudioPackFormat>> pack_formats;
+        std::map<std::string, std::vector<std::shared_ptr<adm::AudioTrackUid>>> pack_to_uids;
+        for (const auto& uid : obj->getReferences<adm::AudioTrackUid>()) {
+            const auto pf = uid->getReference<adm::AudioPackFormat>();
+            if (!pf || pf->get<adm::TypeDescriptor>() != adm::TypeDefinition::HOA) {
+                continue;
+            }
+            const auto pf_id = adm::formatId(pf->get<adm::AudioPackFormatId>());
+            pack_to_uids[pf_id].push_back(uid);
+            pack_formats.emplace(pf_id, pf);
+        }
+        if (pack_to_uids.empty()) {
+            continue;
+        }
+
+        const auto obj_id = adm::formatId(obj->get<adm::AudioObjectId>());
+        const auto start_it = object_start_offsets.find(obj_id);
+        const uint64_t obj_start = (start_it != object_start_offsets.end()) ? start_it->second : 0;
+
+        for (auto& [pf_id, uids] : pack_to_uids) {
+            SceneHOATracks pack;
+            pack.object_id = obj_id;
+            pack.pack_format_id = pf_id;
+
+            if (obj->has<adm::Gain>()) {
+                pack.gain = static_cast<float>(obj->get<adm::Gain>().get());
+            }
+            if (obj->has<adm::Mute>()) {
+                pack.mute = obj->get<adm::Mute>().get();
+            }
+            pack.start_sample = obj_start;
+            if (obj->has<adm::Duration>()) {
+                const uint64_t dur = time_to_samples(obj->get<adm::Duration>().get(), sample_rate);
+                pack.end_sample = saturating_add(obj_start, dur);
+            }
+
+            // Seed normalization/nfcRefDist/screenRef from AudioPackFormatHoa
+            // (BS.2127 §5.2.7.3: pack-level is the fallback; block-level overrides).
+            const auto* hoa_pf = dynamic_cast<const adm::AudioPackFormatHoa*>(pack_formats.at(pf_id).get());
+            if (hoa_pf != nullptr) {
+                pack.normalization = hoa_pf->get<adm::Normalization>().get();
+                pack.nfc_ref_dist = static_cast<double>(hoa_pf->get<adm::NfcRefDist>().get());
+                pack.screen_ref = hoa_pf->get<adm::ScreenRef>().get();
+            }
+
+            bool got_block_metadata = false;
+            for (const auto& uid : uids) {
+                SceneHOAChannel ch;
+                ch.track_uid = adm::formatId(uid->get<adm::AudioTrackUidId>());
+                const auto uid_it = uid_map.find(ch.track_uid);
+                if (uid_it != uid_map.end()) {
+                    ch.channel_index = uid_it->second;
+                }
+
+                const auto cf = channel_format_from_uid(uid);
+                if (cf != nullptr) {
+                    const bool found =
+                        populate_hoa_channel_from_cf(cf, ch, pack.start_sample, pack.end_sample, sample_rate);
+                    if (found && !got_block_metadata) {
+                        apply_hoa_block_pack_metadata(cf, pack);
+                        got_block_metadata = true;
+                    }
+                }
+                // Only include channels with at least one decoded block.
+                // UIDs with no HOA block data (broken chain, wrong type) are
+                // silently skipped to avoid polluting the pack with phantom
+                // (order=0, degree=0) channels that would corrupt the decode matrix.
+                if (!ch.blocks.empty()) {
+                    pack.channels.push_back(std::move(ch));
+                }
+            }
+
+            if (!pack.channels.empty()) {
+                result.push_back(std::move(pack));
+            }
+        }
     }
     return result;
 }
@@ -421,7 +734,13 @@ Result<AdmScene> import_scene(const std::string& path) {
         scene.info = std::move(info);
         scene.programmes = extract_programmes(document);
         scene.contents = extract_contents(document);
-        scene.objects = extract_objects(document, uid_map, reader->sampleRate());
+        std::set<std::string> skipped_type_defs;
+        scene.objects = extract_objects(document, uid_map, reader->sampleRate(), skipped_type_defs);
+        scene.hoa_tracks = extract_hoa_packs(document, uid_map, reader->sampleRate());
+        for (const auto& type_name : skipped_type_defs) {
+            scene.import_warnings.push_back("typeDefinition=" + type_name +
+                                            " is not supported — tracks of this type are silently skipped");
+        }
 
         return scene;
 

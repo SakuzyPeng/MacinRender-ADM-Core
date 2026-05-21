@@ -23,16 +23,66 @@ namespace mradm {
 
 namespace {
 
-struct SpeakerDirection {
-    float azimuth{0.0F};
-    float elevation{0.0F};
-    std::string label; // BS.2051 label, e.g. "M+030"; empty = unlabelled
-    bool is_lfe{false};
-};
+// Internal layout alias so the rest of the renderer can use VbapSpeakerSpec directly.
+using SpeakerDirection = VbapSpeakerSpec;
 
 struct LayoutSpec {
-    std::vector<SpeakerDirection> speakers;
+    std::vector<VbapSpeakerSpec> speakers;
 };
+
+struct RegistryEntry {
+    std::string id;
+    std::string display_name;
+    std::vector<VbapSpeakerSpec> speakers;
+};
+
+// Flat ordered registry of all VBAP layouts (built-ins first, then custom).
+// Initialised once from built_default_registry(); mutable for register_vbap_layout().
+std::vector<RegistryEntry>& layout_registry() {
+    // clang-format off
+    static auto reg = [] {
+        std::vector<RegistryEntry> r;
+        r.push_back({"0+2+0", "Stereo",
+                     {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}}});
+        r.push_back({"0+5+0", "5.1",
+                     {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}, {0.0F, 0.0F, "M+000"},
+                      {45.0F, -30.0F, "LFE1", true}, {110.0F, 0.0F, "M+110"}, {-110.0F, 0.0F, "M-110"}}});
+        r.push_back({"0+7+0", "7.1",
+                     {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}, {0.0F, 0.0F, "M+000"},
+                      {45.0F, -30.0F, "LFE1", true}, {90.0F, 0.0F, "M+090"}, {-90.0F, 0.0F, "M-090"},
+                      {135.0F, 0.0F, "M+135"}, {-135.0F, 0.0F, "M-135"}}});
+        r.push_back({"4+5+0", "5.1.4",
+                     {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}, {0.0F, 0.0F, "M+000"},
+                      {45.0F, -30.0F, "LFE1", true}, {110.0F, 0.0F, "M+110"}, {-110.0F, 0.0F, "M-110"},
+                      {30.0F, 30.0F, "U+030"}, {-30.0F, 30.0F, "U-030"}, {110.0F, 30.0F, "U+110"}, {-110.0F, 30.0F, "U-110"}}});
+        r.push_back({"4+7+0", "7.1.4",
+                     {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}, {0.0F, 0.0F, "M+000"},
+                      {45.0F, -30.0F, "LFE1", true}, {90.0F, 0.0F, "M+090"}, {-90.0F, 0.0F, "M-090"},
+                      {135.0F, 0.0F, "M+135"}, {-135.0F, 0.0F, "M-135"},
+                      {45.0F, 30.0F, "U+045"}, {-45.0F, 30.0F, "U-045"}, {135.0F, 30.0F, "U+135"}, {-135.0F, 30.0F, "U-135"}}});
+        r.push_back({"9.1.6", "9.1.6 (Dolby Atmos)",
+                     {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}, {0.0F, 0.0F, "M+000"},
+                      {45.0F, -30.0F, "LFE1", true},
+                      {110.0F, 0.0F, "M+110"}, {-110.0F, 0.0F, "M-110"},
+                      {150.0F, 0.0F, "M+150"}, {-150.0F, 0.0F, "M-150"},
+                      {70.0F, 0.0F, "M+070"}, {-70.0F, 0.0F, "M-070"},
+                      {70.0F, 45.0F, "U+070"}, {-70.0F, 45.0F, "U-070"},
+                      {110.0F, 45.0F, "U+110"}, {-110.0F, 45.0F, "U-110"},
+                      {150.0F, 45.0F, "U+150"}, {-150.0F, 45.0F, "U-150"}}});
+        r.push_back({"9+10+3", "22.2",
+                     {{60.0F, 0.0F, "M+060"}, {-60.0F, 0.0F, "M-060"}, {0.0F, 0.0F, "M+000"},
+                      {45.0F, -30.0F, "LFE1", true}, {135.0F, 0.0F, "M+135"}, {-135.0F, 0.0F, "M-135"},
+                      {30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}, {180.0F, 0.0F, "M+180"},
+                      {-45.0F, -30.0F, "LFE2", true}, {90.0F, 0.0F, "M+090"}, {-90.0F, 0.0F, "M-090"},
+                      {45.0F, 30.0F, "U+045"}, {-45.0F, 30.0F, "U-045"}, {0.0F, 30.0F, "U+000"},
+                      {0.0F, 90.0F, "T+000"}, {135.0F, 30.0F, "U+135"}, {-135.0F, 30.0F, "U-135"},
+                      {90.0F, 30.0F, "U+090"}, {-90.0F, 30.0F, "U-090"}, {180.0F, 30.0F, "U+180"},
+                      {0.0F, -30.0F, "B+000"}, {45.0F, -30.0F, "B+045"}, {-45.0F, -30.0F, "B-045"}}});
+        return r;
+    }();
+    // clang-format on
+    return reg;
+}
 
 struct BlockGains {
     std::vector<float> gains;
@@ -66,98 +116,12 @@ struct SafFree {
 };
 
 [[nodiscard]] std::optional<LayoutSpec> layout_spec(std::string_view layout_id) {
-    // Channel order and positions match BS.2051 / libear exactly.
-    // LFE speakers (is_lfe=true) are included in the output at the correct channel index
-    // but receive zero gain from VBAP panning. DirectSpeakers LFE tracks are routed to
-    // the matching LFE label; non-LFE tracks never land on an LFE channel.
-    if (layout_id == "0+2+0") {
-        // 2ch — no LFE; ch0=M+030 (L), ch1=M-030 (R), matches libear 0+2+0 order.
-        return LayoutSpec{{{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}}};
+    const auto& reg = layout_registry();
+    const auto it = std::ranges::find_if(reg, [layout_id](const RegistryEntry& e) { return e.id == layout_id; });
+    if (it == reg.end()) {
+        return std::nullopt;
     }
-    if (layout_id == "0+5+0") {
-        // BS.2051 5.1 — 6ch
-        return LayoutSpec{{{30.0F, 0.0F, "M+030"},
-                           {-30.0F, 0.0F, "M-030"},
-                           {0.0F, 0.0F, "M+000"},
-                           {45.0F, -30.0F, "LFE1", true},
-                           {110.0F, 0.0F, "M+110"},
-                           {-110.0F, 0.0F, "M-110"}}};
-    }
-    if (layout_id == "0+7+0") {
-        // BS.2051 7.1 — 8ch
-        return LayoutSpec{{{30.0F, 0.0F, "M+030"},
-                           {-30.0F, 0.0F, "M-030"},
-                           {0.0F, 0.0F, "M+000"},
-                           {45.0F, -30.0F, "LFE1", true},
-                           {90.0F, 0.0F, "M+090"},
-                           {-90.0F, 0.0F, "M-090"},
-                           {135.0F, 0.0F, "M+135"},
-                           {-135.0F, 0.0F, "M-135"}}};
-    }
-    if (layout_id == "4+5+0") {
-        // BS.2051 5.1.4 — 10ch; U layer at 30° elevation
-        return LayoutSpec{{{30.0F, 0.0F, "M+030"},
-                           {-30.0F, 0.0F, "M-030"},
-                           {0.0F, 0.0F, "M+000"},
-                           {45.0F, -30.0F, "LFE1", true},
-                           {110.0F, 0.0F, "M+110"},
-                           {-110.0F, 0.0F, "M-110"},
-                           {30.0F, 30.0F, "U+030"},
-                           {-30.0F, 30.0F, "U-030"},
-                           {110.0F, 30.0F, "U+110"},
-                           {-110.0F, 30.0F, "U-110"}}};
-    }
-    if (layout_id == "4+7+0") {
-        // BS.2051 7.1.4 — 12ch; U layer at 30° elevation
-        return LayoutSpec{{{30.0F, 0.0F, "M+030"},
-                           {-30.0F, 0.0F, "M-030"},
-                           {0.0F, 0.0F, "M+000"},
-                           {45.0F, -30.0F, "LFE1", true},
-                           {90.0F, 0.0F, "M+090"},
-                           {-90.0F, 0.0F, "M-090"},
-                           {135.0F, 0.0F, "M+135"},
-                           {-135.0F, 0.0F, "M-135"},
-                           {45.0F, 30.0F, "U+045"},
-                           {-45.0F, 30.0F, "U-045"},
-                           {135.0F, 30.0F, "U+135"},
-                           {-135.0F, 30.0F, "U-135"}}};
-    }
-    if (layout_id == "9.1.6") {
-        // Dolby Atmos 9.1.6 — 16ch.
-        // Output order follows CoreAudio kAudioChannelLayoutTag_Atmos_9_1_6:
-        //   L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr
-        // Bed: Ls/Rs=±110° (side), Rls/Rrs=±150° (rear), Lw/Rw=±70° (wide).
-        // Height: top-side style (not BS.2051 top-front), all at 45° elevation.
-        return LayoutSpec{{{30.0F, 0.0F, "M+030"},
-                           {-30.0F, 0.0F, "M-030"},
-                           {0.0F, 0.0F, "M+000"},
-                           {45.0F, -30.0F, "LFE1", true},
-                           {110.0F, 0.0F, "M+110"},     // Ls
-                           {-110.0F, 0.0F, "M-110"},    // Rs
-                           {150.0F, 0.0F, "M+150"},     // Rls
-                           {-150.0F, 0.0F, "M-150"},    // Rrs
-                           {70.0F, 0.0F, "M+070"},      // Lw
-                           {-70.0F, 0.0F, "M-070"},     // Rw
-                           {70.0F, 45.0F, "U+070"},     // Vhl (top front left)
-                           {-70.0F, 45.0F, "U-070"},    // Vhr
-                           {110.0F, 45.0F, "U+110"},    // Ltm (top side left)
-                           {-110.0F, 45.0F, "U-110"},   // Rtm
-                           {150.0F, 45.0F, "U+150"},    // Ltr (top rear left)
-                           {-150.0F, 45.0F, "U-150"}}}; // Rtr
-    }
-    if (layout_id == "9+10+3") {
-        // BS.2051 22.2 (NHK) — 24ch (22 non-LFE + LFE1 + LFE2).
-        // Channel order matches libear bs2051_layouts.cpp exactly.
-        return LayoutSpec{{{60.0F, 0.0F, "M+060"},         {-60.0F, 0.0F, "M-060"},  {0.0F, 0.0F, "M+000"},
-                           {45.0F, -30.0F, "LFE1", true},  {135.0F, 0.0F, "M+135"},  {-135.0F, 0.0F, "M-135"},
-                           {30.0F, 0.0F, "M+030"},         {-30.0F, 0.0F, "M-030"},  {180.0F, 0.0F, "M+180"},
-                           {-45.0F, -30.0F, "LFE2", true}, {90.0F, 0.0F, "M+090"},   {-90.0F, 0.0F, "M-090"},
-                           {45.0F, 30.0F, "U+045"},        {-45.0F, 30.0F, "U-045"}, {0.0F, 30.0F, "U+000"},
-                           {0.0F, 90.0F, "T+000"},         {135.0F, 30.0F, "U+135"}, {-135.0F, 30.0F, "U-135"},
-                           {90.0F, 30.0F, "U+090"},        {-90.0F, 30.0F, "U-090"}, {180.0F, 30.0F, "U+180"},
-                           {0.0F, -30.0F, "B+000"},        {45.0F, -30.0F, "B+045"}, {-45.0F, -30.0F, "B-045"}}};
-    }
-    return std::nullopt;
+    return LayoutSpec{it->speakers};
 }
 
 [[nodiscard]] bool is_2d_layout(const LayoutSpec& layout) {
@@ -279,7 +243,7 @@ struct SafFree {
 }
 
 [[nodiscard]] Result<std::vector<ChannelGainInfo>>
-build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs) {
+build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, std::string_view layout_id, LogSink& logs) {
     // Accumulate blocks per input channel so we can sort and interpolate.
     std::map<uint16_t, ChannelGainInfo> by_channel;
     const auto num_out = layout.speakers.size();
@@ -317,6 +281,8 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
             }
 
             // DirectSpeakers blocks → label match, then nearest-speaker fallback.
+            // LFE-identified channels (channelFrequency.lowPass) skip the fallback:
+            // routing bass content to a full-range speaker would be incorrect.
             // DS channels are treated as jump_position=true (no interpolation).
             for (const auto& ds : track.ds_blocks) {
                 std::vector<float> gains(num_out, 0.0F);
@@ -336,16 +302,26 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, LogSink& logs
                 }
 
                 if (!matched) {
-                    const float az = ds.has_position ? ds.azimuth : 0.0F;
-                    const float el = ds.has_position ? ds.elevation : 0.0F;
-                    if (!ds.speaker_labels.empty()) {
+                    if (ds.low_pass_hz) {
+                        // LFE channel with no matching LFE output: drop rather than misroute.
                         logs.log(LogLevel::warning,
                                  "saf-vbap",
-                                 fmt::format("DirectSpeakers label '{}' not in output layout — "
-                                             "routing to nearest speaker",
-                                             ds.speaker_labels.front()));
+                                 fmt::format("LFE channel (lowPass={:.0f}Hz) has no matching LFE output "
+                                             "in layout '{}' — channel dropped",
+                                             *ds.low_pass_hz,
+                                             std::string{layout_id}));
+                    } else {
+                        const float az = ds.has_position ? ds.azimuth : 0.0F;
+                        const float el = ds.has_position ? ds.elevation : 0.0F;
+                        if (!ds.speaker_labels.empty()) {
+                            logs.log(LogLevel::warning,
+                                     "saf-vbap",
+                                     fmt::format("DirectSpeakers label '{}' not in output layout — "
+                                                 "routing to nearest speaker",
+                                                 ds.speaker_labels.front()));
+                        }
+                        gains[nearest_speaker_index(layout, az, el)] = ds.gain;
                     }
-                    gains[nearest_speaker_index(layout, az, el)] = ds.gain;
                 }
 
                 if (obj.gain != 1.0F) {
@@ -456,7 +432,7 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
 
     const auto& info = plan.scene.info;
 
-    auto gain_matrix = build_gain_matrix(plan.scene, *layout, logs);
+    auto gain_matrix = build_gain_matrix(plan.scene, *layout, layout_id, logs);
     if (!gain_matrix) {
         return make_error(gain_matrix.error().code, gain_matrix.error().message, gain_matrix.error().context);
     }
@@ -495,8 +471,7 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
         }
         auto& writer = *writer_res;
 
-        // 5 ms default interpolation ramp when jumpPosition=false and no explicit length.
-        const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * 5 / 1000;
+        const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
 
         // Current block index per channel — advanced monotonically as frames_done increases.
         std::vector<std::size_t> blk_idx(gain_matrix->size(), 0);
@@ -538,6 +513,25 @@ Result<void> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress
 
 } // namespace
 
+bool register_vbap_layout(std::string id, std::string display_name, std::vector<VbapSpeakerSpec> speakers) {
+    if (id.empty() || speakers.empty()) {
+        return false;
+    }
+    if (std::ranges::all_of(speakers, [](const auto& s) { return s.is_lfe; })) {
+        return false; // nothing to pan
+    }
+    if (std::ranges::any_of(speakers,
+                            [](const auto& s) { return !std::isfinite(s.azimuth) || !std::isfinite(s.elevation); })) {
+        return false;
+    }
+    auto& reg = layout_registry();
+    if (std::ranges::any_of(reg, [&id](const RegistryEntry& e) { return e.id == id; })) {
+        return false;
+    }
+    reg.push_back({std::move(id), std::move(display_name), std::move(speakers)});
+    return true;
+}
+
 CapabilityReport vbap_capabilities() {
     CapabilityReport r;
     r.backend_name = "saf-vbap";
@@ -545,15 +539,19 @@ CapabilityReport vbap_capabilities() {
     r.supports_objects = true;
     r.supports_direct_speakers = true;
     r.supports_hoa = false;
-    r.supported_layouts = {
-        {"0+2+0", "Stereo"},
-        {"0+5+0", "5.1"},
-        {"0+7+0", "7.1"},
-        {"4+5+0", "5.1.4"},
-        {"4+7+0", "7.1.4"},
-        {"9+10+3", "22.2"},
-        {"9.1.6", "9.1.6 (Dolby Atmos)"},
-    };
+
+    for (const auto& entry : layout_registry()) {
+        CapabilityReport::Layout layout;
+        layout.id = entry.id;
+        layout.display_name = entry.display_name;
+        layout.channel_count = static_cast<uint16_t>(entry.speakers.size());
+        layout.lfe_count =
+            static_cast<uint16_t>(std::ranges::count_if(entry.speakers, [](const auto& s) { return s.is_lfe; }));
+        layout.is_3d = std::ranges::any_of(entry.speakers,
+                                           [](const auto& s) { return !s.is_lfe && std::fabs(s.elevation) > 1.0e-6F; });
+        layout.supports_spread = layout.is_3d; // 2D VBAP passes spread=0; MDAP/SAF only helps for 3D
+        r.supported_layouts.push_back(std::move(layout));
+    }
     return r;
 }
 

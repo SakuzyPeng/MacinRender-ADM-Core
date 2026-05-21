@@ -5,6 +5,8 @@
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <string>
+#include <string_view>
 #include <utility>
 
 // Our library (mradm namespace)
@@ -163,6 +165,17 @@ std::string serialize_doc(const std::shared_ptr<adm::Document>& doc) {
     std::ostringstream buf;
     adm::writeXml(buf, doc);
     return buf.str();
+}
+
+std::string with_programme_reference_screen(std::string xml) {
+    // libadm parses audioProgrammeReferenceScreen but does not write the empty
+    // element back out, so inject it into fixture XML to exercise import_scene().
+    constexpr std::string_view marker = "</audioProgramme>";
+    const auto pos = xml.find(marker);
+    if (pos != std::string::npos) {
+        xml.insert(pos, "    <audioProgrammeReferenceScreen />\n");
+    }
+    return xml;
 }
 
 // Create a temp BW64 file with 1 channel and the given ADM metadata.
@@ -447,6 +460,464 @@ bool verify_mixed_blocks_fixture() {
     return ok;
 }
 
+// Build a one-channel Binaural ADM document so we can verify the import warning.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_binaural_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"BinauralCF"}, adm::TypeDefinition::BINAURAL);
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"BinauralPF"}, adm::TypeDefinition::BINAURAL);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"BinauralSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"BinauralTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"BinauralObject"});
+    object->addReference(uid);
+    doc->add(object);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"BinauralContent"});
+    content->addReference(object);
+    doc->add(content);
+
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"BinauralProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+// Build a one-channel DirectSpeakers ADM document with channelFrequency.lowPass
+// set on the CF to identify it as an LFE channel.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_ds_lfe_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"LfeCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    cf->set(adm::Frequency{adm::LowPass{120.0F}});
+    {
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::SphericalSpeakerPosition{adm::Azimuth{45.0F}, adm::Elevation{-30.0F}, adm::Distance{1.0F}}};
+        block.add(adm::SpeakerLabel{"LFE1"});
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"LfePF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"LfeSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"LfeTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"LfeObject"});
+    object->addReference(uid);
+    doc->add(object);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"LfeContent"});
+    content->addReference(object);
+    doc->add(content);
+
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"LfeProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+// Build a minimal Objects ADM document with LoudnessMetadata on its programme.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_loudness_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"LoudnessCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"LoudnessPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"LoudnessSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"LoudnessTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"LoudnessObject"});
+    object->addReference(uid);
+    doc->add(object);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"LoudnessContent"});
+    content->addReference(object);
+    doc->add(content);
+
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"LoudnessProgramme"});
+    programme->addReference(content);
+    {
+        adm::LoudnessMetadata lm;
+        lm.set(adm::IntegratedLoudness{-23.0F});
+        lm.set(adm::MaxTruePeak{-1.0F});
+        lm.set(adm::LoudnessRange{6.5F});
+        lm.set(adm::MaxMomentary{-18.5F});
+        lm.set(adm::MaxShortTerm{-20.0F});
+        lm.set(adm::DialogueLoudness{-24.0F});
+        lm.set(adm::LoudnessMethod{"ITU-R BS.1770-4"});
+        programme->set(adm::LoudnessMetadatas{lm});
+    }
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+bool verify_programme_loudness_metadata_imported() {
+    bool ok = true;
+    auto [doc, uid_str] = make_loudness_doc();
+    auto path = std::filesystem::temp_directory_path() / "mr_adm_io_loudness.wav";
+    FileGuard guard{path};
+
+    {
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
+        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        std::vector<float> silence(1, 0.0F);
+        writer->write(silence.data(), 1U);
+    }
+
+    auto result = mradm::io::import_scene(path.string());
+    if (!result) {
+        std::cerr << "FAIL: import_scene returned error: " << result.error().message << "\n";
+        return false;
+    }
+    const auto& scene = result.value();
+
+    if (scene.programmes.empty()) {
+        std::cerr << "FAIL: no programmes imported\n";
+        return false;
+    }
+    const auto& prog = scene.programmes[0];
+
+    if (!prog.loudness) {
+        std::cerr << "FAIL: programme has no loudness metadata\n";
+        return false;
+    }
+    const auto& lm = *prog.loudness;
+
+    auto check_float = [&](const std::optional<float>& val, const char* name, float expected) {
+        if (!val) {
+            std::cerr << "FAIL: " << name << " not imported\n";
+            ok = false;
+            return;
+        }
+        if (std::fabs(*val - expected) > 0.01F) {
+            std::cerr << "FAIL: " << name << " = " << *val << ", expected " << expected << "\n";
+            ok = false;
+        }
+    };
+
+    check_float(lm.integrated_loudness, "integrated_loudness", -23.0F);
+    check_float(lm.max_true_peak, "max_true_peak", -1.0F);
+    check_float(lm.loudness_range, "loudness_range", 6.5F);
+    check_float(lm.max_momentary, "max_momentary", -18.5F);
+    check_float(lm.max_short_term, "max_short_term", -20.0F);
+    check_float(lm.dialogue_loudness, "dialogue_loudness", -24.0F);
+
+    if (!lm.loudness_method || *lm.loudness_method != "ITU-R BS.1770-4") {
+        std::cerr << "FAIL: loudness_method = " << (lm.loudness_method ? *lm.loudness_method : "<absent>") << "\n";
+        ok = false;
+    }
+
+    if (ok) {
+        std::cout << "PASS: verify_programme_loudness_metadata_imported\n";
+    }
+    return ok;
+}
+
+bool verify_binaural_skipped_produces_import_warning() {
+    bool ok = true;
+    auto [doc, uid_str] = make_binaural_doc();
+    auto path = std::filesystem::temp_directory_path() / "mr_adm_io_binaural_warn.wav";
+    FileGuard guard{path};
+
+    {
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
+        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        (void) writer;
+    }
+
+    auto result = mradm::io::import_scene(path.string());
+    if (!result.has_value()) {
+        std::cerr << "FAIL: Binaural import failed: " << result.error().message << "\n";
+        return false;
+    }
+
+    const auto& scene = result.value();
+    ok &= check(!scene.import_warnings.empty(), "Binaural typeDefinition: import_warnings non-empty");
+    const bool has_binaural_warn = std::ranges::any_of(
+        scene.import_warnings, [](const auto& w) { return w.find("Binaural") != std::string::npos; });
+    ok &= check(has_binaural_warn, "Binaural typeDefinition: warning mentions 'Binaural'");
+
+    return ok;
+}
+
+bool verify_ds_lfe_channel_frequency_imported() {
+    bool ok = true;
+    auto [doc, uid_str] = make_ds_lfe_doc();
+    auto path = std::filesystem::temp_directory_path() / "mr_adm_io_ds_lfe_freq.wav";
+    FileGuard guard{path};
+
+    {
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
+        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        (void) writer;
+    }
+
+    auto result = mradm::io::import_scene(path.string());
+    if (!result.has_value()) {
+        std::cerr << "FAIL: LFE DS import failed: " << result.error().message << "\n";
+        return false;
+    }
+
+    const auto& scene = result.value();
+    ok &= check(scene.import_warnings.empty(), "LFE DS: no import warnings (known typeDefinition)");
+    ok &= check(scene.objects.size() == 1, "LFE DS: 1 object");
+    if (!scene.objects.empty() && !scene.objects[0].tracks.empty() && !scene.objects[0].tracks[0].ds_blocks.empty()) {
+        const auto& blk = scene.objects[0].tracks[0].ds_blocks[0];
+        ok &= check(blk.low_pass_hz.has_value(), "LFE DS: low_pass_hz populated");
+        if (blk.low_pass_hz) {
+            ok &= check(std::fabs(*blk.low_pass_hz - 120.0F) < 0.5F, "LFE DS: low_pass_hz ≈ 120 Hz");
+        }
+    } else {
+        std::cerr << "FAIL: LFE DS: expected 1 DS block\n";
+        ok = false;
+    }
+
+    return ok;
+}
+
+// Build a one-channel Objects ADM document with AudioContent metadata:
+// language, label, loudness, and dialogue=dialogue / voiceover kind.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_content_metadata_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"CMdCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"CMdPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"CMdSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"CMdTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"CMdObject"});
+    object->addReference(uid);
+    doc->add(object);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"CMdContent"});
+    content->addReference(object);
+    content->set(adm::AudioContentLanguage{"en"});
+    {
+        adm::Label label;
+        label.set(adm::LabelValue{"English Commentary"});
+        label.set(adm::LabelLanguage{"en"});
+        content->add(label);
+    }
+    {
+        adm::LoudnessMetadata lm;
+        lm.set(adm::IntegratedLoudness{-24.0F});
+        lm.set(adm::MaxTruePeak{-2.0F});
+        content->set(adm::LoudnessMetadatas{lm});
+    }
+    content->set(adm::DialogueContent::VOICEOVER);
+    doc->add(content);
+
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"CMdProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+bool verify_content_metadata_imported() {
+    bool ok = true;
+    auto [doc, uid_str] = make_content_metadata_doc();
+    auto path = std::filesystem::temp_directory_path() / "mr_adm_io_content_metadata.wav";
+    FileGuard guard{path};
+
+    {
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
+        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        std::vector<float> silence(1, 0.0F);
+        writer->write(silence.data(), 1U);
+    }
+
+    auto result = mradm::io::import_scene(path.string());
+    if (!result) {
+        std::cerr << "FAIL: import_scene returned error: " << result.error().message << "\n";
+        return false;
+    }
+    const auto& scene = result.value();
+
+    ok &= check(scene.contents.size() == 1, "content metadata: 1 content");
+    if (scene.contents.empty()) {
+        return false;
+    }
+    const auto& ct = scene.contents[0];
+
+    ok &= check(ct.language.has_value() && *ct.language == "en", "content: language == 'en'");
+    ok &= check(!ct.labels.empty() && ct.labels[0] == "English Commentary", "content: label value");
+    ok &=
+        check(ct.dialogue_kind.has_value() && *ct.dialogue_kind == "dialogue", "content: dialogue_kind == 'dialogue'");
+    ok &= check(ct.content_kind.has_value() && *ct.content_kind == "voiceover", "content: content_kind == 'voiceover'");
+
+    if (!ct.loudness) {
+        std::cerr << "FAIL: content loudness absent\n";
+        return false;
+    }
+    ok &= check(ct.loudness->integrated_loudness.has_value() &&
+                    std::fabs(*ct.loudness->integrated_loudness - (-24.0F)) < 0.01F,
+                "content: integrated_loudness == -24 LUFS");
+    ok &= check(ct.loudness->max_true_peak.has_value() && std::fabs(*ct.loudness->max_true_peak - (-2.0F)) < 0.01F,
+                "content: max_true_peak == -2 dBTP");
+
+    if (ok) {
+        std::cout << "PASS: verify_content_metadata_imported\n";
+    }
+    return ok;
+}
+
+// Reuse make_minimal_doc() — no reference screen.
+// Build a second doc with audioProgrammeReferenceScreen set.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_reference_screen_doc() {
+    auto doc = adm::Document::create();
+
+    auto uid = adm::AudioTrackUid::create();
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"RSObject"});
+    object->addReference(uid);
+    doc->add(object);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"RSContent"});
+    content->addReference(object);
+    doc->add(content);
+
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"RSProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+bool verify_reference_screen_flag_imported() {
+    bool ok = true;
+
+    // Without reference screen: flag must be false.
+    {
+        auto [doc, uid_str] = make_minimal_doc();
+        auto path = std::filesystem::temp_directory_path() / "mr_adm_io_no_refscreen.wav";
+        FileGuard guard{path};
+        {
+            auto chna =
+                std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
+            auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
+            auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+            (void) writer;
+        }
+        auto result = mradm::io::import_scene(path.string());
+        if (!result) {
+            std::cerr << "FAIL: no-refscreen import_scene error\n";
+            return false;
+        }
+        ok &= check(!result->programmes.empty() && !result->programmes[0].has_reference_screen,
+                    "no refscreen: has_reference_screen == false");
+    }
+
+    // With reference screen: flag must be true.
+    {
+        auto [doc, uid_str] = make_reference_screen_doc();
+        auto path = std::filesystem::temp_directory_path() / "mr_adm_io_refscreen.wav";
+        FileGuard guard{path};
+        {
+            auto chna =
+                std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
+            auto axml = std::make_shared<bw64::AxmlChunk>(with_programme_reference_screen(serialize_doc(doc)));
+            auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+            (void) writer;
+        }
+        auto result = mradm::io::import_scene(path.string());
+        if (!result) {
+            std::cerr << "FAIL: refscreen import_scene error\n";
+            return false;
+        }
+        ok &= check(!result->programmes.empty() && result->programmes[0].has_reference_screen,
+                    "with refscreen: has_reference_screen == true");
+    }
+
+    if (ok) {
+        std::cout << "PASS: verify_reference_screen_flag_imported\n";
+    }
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -455,6 +926,11 @@ int main() {
     ok &= verify_objects_blocks_fixture();
     ok &= verify_direct_speakers_blocks_fixture();
     ok &= verify_mixed_blocks_fixture();
+    ok &= verify_binaural_skipped_produces_import_warning();
+    ok &= verify_ds_lfe_channel_frequency_imported();
+    ok &= verify_programme_loudness_metadata_imported();
+    ok &= verify_content_metadata_imported();
+    ok &= verify_reference_screen_flag_imported();
 
     if (ok) {
         std::cout << "adm_io fixture test passed\n";

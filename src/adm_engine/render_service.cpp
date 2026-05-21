@@ -38,6 +38,9 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
                          scene_result->objects.size(),
                          scene_result->info.num_channels,
                          scene_result->info.sample_rate));
+    for (const auto& w : scene_result->import_warnings) {
+        logs.log(LogLevel::warning, "importer", w);
+    }
 
     // Resolve output path.
     std::string output_path;
@@ -71,6 +74,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     plan.input_path = request.input_path.string();
     plan.output_path = output_path;
     plan.output_layout = request.options.output_layout.empty() ? "0+2+0" : request.options.output_layout;
+    plan.default_interp_ms = request.options.default_interp_ms;
     plan.scene = std::move(*scene_result);
 
     // Render.

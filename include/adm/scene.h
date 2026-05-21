@@ -68,6 +68,9 @@ struct SceneDirectSpeakersBlock {
     std::optional<float> distance_min;
     std::optional<float> distance_max;
     float gain{1.0f};
+    // Set when the parent AudioChannelFormat carries a lowPass channelFrequency element.
+    // Identifies this channel as LFE — nearest-speaker fallback is suppressed.
+    std::optional<float> low_pass_hz;
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
 };
@@ -120,16 +123,77 @@ struct SceneObject {
     std::vector<SceneTrackRef> tracks;
 };
 
+// Time-window and gain from one AudioBlockFormatHoa entry.
+struct SceneHOAChannelBlock {
+    float gain{1.0f}; // AudioBlockFormatHoa.gain (DefaultParameter, default 1)
+    uint64_t start_sample{0};
+    uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
+};
+
+// One HOA input channel within a HOA pack (one UID/BW64 track).
+// blocks is empty when no AudioBlockFormatHoa is found; such channels are
+// skipped by the importer and must not appear in SceneHOATracks.channels.
+struct SceneHOAChannel {
+    std::optional<uint16_t> channel_index; // 0-based BW64 channel; nullopt if missing from CHNA
+    std::string track_uid;
+    int order{0};  // from first AudioBlockFormatHoa (fixed per channel)
+    int degree{0}; // from first AudioBlockFormatHoa (fixed per channel)
+    std::vector<SceneHOAChannelBlock> blocks;
+};
+
+// All channels belonging to one (AudioObject, AudioPackFormat) HOA pack.
+// channels[i] must be in the same order as orders/degrees will be passed to
+// GainCalculatorHOA::calculate(), i.e. the decode matrix row i maps to
+// channels[i].channel_index.
+struct SceneHOATracks {
+    std::string object_id;
+    std::string pack_format_id;
+    std::string normalization{"SN3D"};
+    double nfc_ref_dist{0.0};
+    bool screen_ref{false};
+    float gain{1.0f};
+    bool mute{false};
+    uint64_t start_sample{0};
+    uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
+    std::vector<SceneHOAChannel> channels;
+};
+
+// Loudness metadata from AudioProgramme (BS.2076 §4.1.7 / BS.2127 §5.2.2).
+// All fields are optional — only present when the ADM document sets them.
+struct SceneLoudnessMetadata {
+    std::optional<float> integrated_loudness; // LUFS  (IntegratedLoudness)
+    std::optional<float> max_true_peak;       // dBTP  (MaxTruePeak)
+    std::optional<float> loudness_range;      // LU    (LoudnessRange)
+    std::optional<float> max_momentary;       // LUFS  (MaxMomentary)
+    std::optional<float> max_short_term;      // LUFS  (MaxShortTerm)
+    std::optional<float> dialogue_loudness;   // LUFS  (DialogueLoudness)
+    std::optional<std::string> loudness_method;
+};
+
 struct SceneContent {
     std::string id;
     std::string name;
     std::vector<std::string> object_ids;
+    std::optional<std::string> language;           // audioContentLanguage
+    std::vector<std::string> labels;               // audioContentLabel values
+    std::optional<SceneLoudnessMetadata> loudness; // first loudnessMetadata entry
+    // dialogue / contentKind (BS.2076 §4.3): human-readable strings or absent.
+    // dialogue_kind: "non-dialogue" | "dialogue" | "mixed"
+    // content_kind:  sub-kind string (e.g. "music", "voiceover", "complete-main")
+    std::optional<std::string> dialogue_kind;
+    std::optional<std::string> content_kind;
 };
 
 struct SceneProgramme {
     std::string id;
     std::string name;
     std::vector<std::string> content_ids;
+    // First LoudnessMetadata entry from the programme, if any.
+    std::optional<SceneLoudnessMetadata> loudness;
+    // True when the ADM document includes an audioProgrammeReferenceScreen element.
+    // libadm parses only the element's presence, not its inner geometry (screenCentrePosition,
+    // screenWidth, aspectRatio), so no further detail is available here.
+    bool has_reference_screen{false};
 };
 
 struct AdmScene {
@@ -137,6 +201,10 @@ struct AdmScene {
     std::vector<SceneProgramme> programmes;
     std::vector<SceneContent> contents;
     std::vector<SceneObject> objects;
+    std::vector<SceneHOATracks> hoa_tracks;
+    // Warnings produced during import (e.g. skipped typeDefinitions).
+    // Renderers emit these via LogSink before rendering starts.
+    std::vector<std::string> import_warnings;
 };
 
 } // namespace mradm

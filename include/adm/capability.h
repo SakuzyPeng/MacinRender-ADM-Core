@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -9,6 +10,10 @@ struct CapabilityReport {
     struct Layout {
         std::string id;
         std::string display_name;
+        uint16_t channel_count{0};   // total output channels (including LFE)
+        bool is_3d{false};           // true when any non-LFE speaker has non-zero elevation
+        uint16_t lfe_count{0};       // number of LFE channels
+        bool supports_spread{false}; // spatial extent spreading available for this layout
     };
 
     std::string backend_name;
