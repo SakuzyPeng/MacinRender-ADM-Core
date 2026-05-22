@@ -268,6 +268,41 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_SHALLOW TRUE
             SOURCE_SUBDIR framework
         )
+    elseif(package_name STREQUAL "Opus")
+        # Try CMake config first
+        find_package(Opus CONFIG QUIET)
+        if(TARGET Opus::opus)
+            message(STATUS "Using system libopus via find_package")
+            return()
+        endif()
+        # Manual Homebrew/system path
+        find_library(MR_OPUS_LIB NAMES opus
+            HINTS /opt/homebrew/lib /usr/local/lib /usr/lib NO_CACHE)
+        find_path(MR_OPUS_INCLUDE NAMES opus/opus_multistream.h
+            HINTS /opt/homebrew/include /usr/local/include /usr/include NO_CACHE)
+        if(MR_OPUS_LIB AND MR_OPUS_INCLUDE)
+            add_library(Opus::opus UNKNOWN IMPORTED GLOBAL)
+            set_target_properties(Opus::opus PROPERTIES
+                IMPORTED_LOCATION "${MR_OPUS_LIB}"
+                INTERFACE_INCLUDE_DIRECTORIES "${MR_OPUS_INCLUDE}")
+            message(STATUS "Using system libopus: ${MR_OPUS_LIB}")
+            return()
+        endif()
+        if(NOT MR_ADM_CORE_FETCH_DEPS)
+            message(FATAL_ERROR "libopus was not found and MR_ADM_CORE_FETCH_DEPS is OFF")
+        endif()
+        # Vendored fallback
+        set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+        set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+        set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(Opus
+            GIT_REPOSITORY https://github.com/xiph/opus.git
+            GIT_TAG v1.5.2 GIT_SHALLOW TRUE)
+        FetchContent_MakeAvailable(Opus)
+        if(TARGET opus AND NOT TARGET Opus::opus)
+            add_library(Opus::opus ALIAS opus)
+        endif()
+        return()
     else()
         message(FATAL_ERROR "Unknown dependency: ${package_name}")
     endif()
@@ -297,3 +332,4 @@ mr_adm_core_find_or_fetch(libbw64 libbw64)
 mr_adm_core_find_or_fetch(libadm adm)
 mr_adm_core_find_or_fetch(libear ear)
 mr_adm_core_find_or_fetch(Spatial_Audio_Framework saf)
+mr_adm_core_find_or_fetch(Opus Opus::opus)

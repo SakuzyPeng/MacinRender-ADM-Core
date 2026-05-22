@@ -140,6 +140,30 @@ class FloatFlacReader {
     std::unique_ptr<Impl> impl_;
 };
 
+// Streaming writer for Matroska Audio (.mka) files with Opus-encoded audio.
+// Accepts float32 input at 48000 Hz (the only rate Opus supports from external
+// input without resampling). Uses VBR at 128 kbps for stereo or 64 kbps × ch
+// for multichannel (transparent for Opus VBR). Channel mapping: family 0 for
+// mono/stereo, family 1 for 3-8 ch surround, family 255 for 9-255 ch.
+// Call convert_to_opus_mka() rather than this class directly in the pipeline.
+class FloatOpusMkaWriter {
+  public:
+    static Result<FloatOpusMkaWriter>
+    open(const std::string& path, uint32_t channels, uint32_t sample_rate);
+    ~FloatOpusMkaWriter();
+    FloatOpusMkaWriter(FloatOpusMkaWriter&&) noexcept;
+    FloatOpusMkaWriter& operator=(FloatOpusMkaWriter&&) noexcept;
+    FloatOpusMkaWriter(const FloatOpusMkaWriter&) = delete;
+    FloatOpusMkaWriter& operator=(const FloatOpusMkaWriter&) = delete;
+
+    uint64_t write(const float* samples, uint64_t frame_count);
+
+  private:
+    FloatOpusMkaWriter() = default;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
 // Type-erased audio file writer.  Selects WAV, CAF, or FLAC automatically from
 // the output path extension (.wav → FloatWavWriter, .caf → FloatCafWriter,
 // .flac → FloatFlacWriter). For CAF, layout_id must be a known BS.2051 layout
@@ -200,6 +224,14 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth);
 // and downconvert_to_int() — so the float32 domain is preserved through all
 // adjustments before quantisation.  FLAC channel count must be 1-8.
 Result<void> convert_to_flac(const std::string& src_path, const std::string& flac_path);
+
+// Encode a fully post-processed float32 WAV (src_path) to Opus MKA (mka_path).
+// src_path must be 48000 Hz (Opus requirement). layout_id is stored in the Tags
+// element for informational purposes. Use this as the final pipeline step after
+// all apply_gain_to_file() adjustments — re-encoding degrades lossy quality.
+Result<void> convert_to_opus_mka(const std::string& src_path,
+                                  const std::string& mka_path,
+                                  const std::string& layout_id = {});
 
 // Format-agnostic render output metadata.  Assembled by the engine layer and
 // passed to write_file_metadata(); format-specific encoding is handled there.
