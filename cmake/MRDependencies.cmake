@@ -103,6 +103,44 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             add_library(dr_wav::dr_wav ALIAS mr_dr_wav)
             target_include_directories(mr_dr_wav SYSTEM INTERFACE "${dr_libs_SOURCE_DIR}")
         endif()
+        if(NOT TARGET dr_flac::dr_flac)
+            add_library(mr_dr_flac INTERFACE)
+            add_library(dr_flac::dr_flac ALIAS mr_dr_flac)
+            target_include_directories(mr_dr_flac SYSTEM INTERFACE "${dr_libs_SOURCE_DIR}")
+        endif()
+        return()
+    elseif(package_name STREQUAL "FLAC")
+        # libFLAC does not ship CMake config files in typical brew/system installs.
+        # Search common prefix paths before falling back to FetchContent.
+        find_library(MR_FLAC_LIB NAMES FLAC
+            HINTS /opt/homebrew/lib /usr/local/lib /usr/lib
+            NO_CACHE)
+        find_path(MR_FLAC_INCLUDE NAMES FLAC/stream_encoder.h
+            HINTS /opt/homebrew/include /usr/local/include /usr/include
+            NO_CACHE)
+        if(MR_FLAC_LIB AND MR_FLAC_INCLUDE)
+            add_library(FLAC::FLAC UNKNOWN IMPORTED GLOBAL)
+            set_target_properties(FLAC::FLAC PROPERTIES
+                IMPORTED_LOCATION "${MR_FLAC_LIB}"
+                INTERFACE_INCLUDE_DIRECTORIES "${MR_FLAC_INCLUDE}"
+            )
+            return()
+        endif()
+        set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+        set(BUILD_DOCS OFF CACHE BOOL "" FORCE)
+        set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(WITH_OGG OFF CACHE BOOL "" FORCE)
+        set(INSTALL_MANPAGES OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            FLAC
+            GIT_REPOSITORY https://github.com/xiph/flac.git
+            GIT_TAG 1.5.0
+            GIT_SHALLOW TRUE
+        )
+        FetchContent_MakeAvailable(FLAC)
+        if(TARGET FLAC AND NOT TARGET FLAC::FLAC)
+            add_library(FLAC::FLAC ALIAS FLAC)
+        endif()
         return()
     elseif(package_name STREQUAL "libbw64")
         set(BW64_UNIT_TESTS OFF CACHE BOOL "" FORCE)
@@ -187,6 +225,7 @@ mr_adm_core_find_or_fetch(CLI11 CLI11::CLI11)
 mr_adm_core_find_or_fetch(tl-expected tl::expected)
 mr_adm_core_find_or_fetch(libebur128 ebur128)
 mr_adm_core_find_or_fetch(dr_libs dr_wav::dr_wav)
+mr_adm_core_find_or_fetch(FLAC FLAC::FLAC)
 mr_adm_core_find_or_fetch(libbw64 libbw64)
 mr_adm_core_find_or_fetch(libadm adm)
 mr_adm_core_find_or_fetch(libear ear)

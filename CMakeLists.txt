@@ -174,7 +174,8 @@ mr_adm_core_apply_warnings(mr_adm_render_hoa)
 mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
 
 # ── adm_audio ─────────────────────────────────────────────────────────────────
-# Float32 WAV I/O via dr_wav. DR_WAV_IMPLEMENTATION defined here only.
+# Float32 WAV/CAF/FLAC I/O. DR_WAV_IMPLEMENTATION and DR_FLAC_IMPLEMENTATION
+# are defined in audio_io.cpp only. FLAC encoding uses libFLAC; decoding uses dr_flac.
 
 add_library(mr_adm_audio)
 add_library(MacinRender::ADMAudio ALIAS mr_adm_audio)
@@ -192,7 +193,7 @@ target_sources(
 
 target_link_libraries(mr_adm_audio
     PUBLIC MacinRender::ADMCore
-    PRIVATE dr_wav::dr_wav libbw64
+    PRIVATE dr_wav::dr_wav dr_flac::dr_flac FLAC::FLAC libbw64
 )
 mr_adm_core_apply_warnings(mr_adm_audio)
 mr_adm_core_apply_static_analysis(mr_adm_audio)
@@ -428,6 +429,21 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_loudness_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_loudness_fixture_tests)
     add_test(NAME mr_adm_loudness_fixture_tests COMMAND mr_adm_loudness_fixture_tests)
+
+    # Smoke test: FloatFlacWriter/Reader round-trip, apply_gain_to_file(.flac),
+    # Vorbis Comment tags, single VC block, WAVEFORMATEXTENSIBLE_CHANNEL_MASK value.
+    add_executable(mr_adm_flac_io_smoke_tests tests/unit/flac_io_smoke_test.cpp)
+    target_link_libraries(mr_adm_flac_io_smoke_tests
+        PRIVATE
+            MacinRender::ADMEngine
+            MacinRender::ADMAudio
+            libbw64
+            adm
+            FLAC::FLAC
+    )
+    mr_adm_core_apply_warnings(mr_adm_flac_io_smoke_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_flac_io_smoke_tests)
+    add_test(NAME mr_adm_flac_io_smoke_tests COMMAND mr_adm_flac_io_smoke_tests)
 
     if(MR_ADM_CORE_BUILD_CLI)
         add_executable(mr_adm_cli_smoke_tests tests/unit/adm_cli_smoke_test.cpp)

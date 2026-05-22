@@ -98,9 +98,52 @@ class FloatCafReader {
     std::unique_ptr<Impl> impl_;
 };
 
-// Type-erased audio file writer.  Selects WAV or CAF automatically from the
-// output path extension (.wav → FloatWavWriter, .caf → FloatCafWriter).
-// For CAF, layout_id must be a known BS.2051 layout identifier.
+// Streaming writer for FLAC files. Accepts float32 input and encodes at 24-bit
+// integer depth (FLAC lossless compression). Channel count must be 1-8 (FLAC
+// format limit). WAVEFORMATEXTENSIBLE_CHANNEL_MASK is written later by
+// write_file_metadata() into the Vorbis Comment block.
+class FloatFlacWriter {
+  public:
+    static Result<FloatFlacWriter> open(const std::string& path, uint32_t channels, uint32_t sample_rate);
+    ~FloatFlacWriter();
+    FloatFlacWriter(FloatFlacWriter&&) noexcept;
+    FloatFlacWriter& operator=(FloatFlacWriter&&) noexcept;
+    FloatFlacWriter(const FloatFlacWriter&) = delete;
+    FloatFlacWriter& operator=(const FloatFlacWriter&) = delete;
+
+    uint64_t write(const float* samples, uint64_t frame_count);
+
+  private:
+    FloatFlacWriter() = default;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+// Streaming reader for FLAC files. Decodes any integer FLAC to float32.
+class FloatFlacReader {
+  public:
+    static Result<FloatFlacReader> open(const std::string& path);
+    ~FloatFlacReader();
+    FloatFlacReader(FloatFlacReader&&) noexcept;
+    FloatFlacReader& operator=(FloatFlacReader&&) noexcept;
+    FloatFlacReader(const FloatFlacReader&) = delete;
+    FloatFlacReader& operator=(const FloatFlacReader&) = delete;
+
+    uint32_t channels() const;
+    uint32_t sample_rate() const;
+    uint64_t frame_count() const;
+    uint64_t read(float* out, uint64_t frames);
+
+  private:
+    FloatFlacReader() = default;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+// Type-erased audio file writer.  Selects WAV, CAF, or FLAC automatically from
+// the output path extension (.wav → FloatWavWriter, .caf → FloatCafWriter,
+// .flac → FloatFlacWriter). For CAF, layout_id must be a known BS.2051 layout
+// identifier; it is ignored for WAV and FLAC.
 class WriterHandle {
   public:
     static Result<WriterHandle>
@@ -116,10 +159,11 @@ class WriterHandle {
   private:
     explicit WriterHandle(FloatWavWriter w) : impl_(std::move(w)) {}
     explicit WriterHandle(FloatCafWriter w) : impl_(std::move(w)) {}
-    std::variant<FloatWavWriter, FloatCafWriter> impl_;
+    explicit WriterHandle(FloatFlacWriter w) : impl_(std::move(w)) {}
+    std::variant<FloatWavWriter, FloatCafWriter, FloatFlacWriter> impl_;
 };
 
-// Type-erased audio file reader. Selects WAV or CAF from the path extension.
+// Type-erased audio file reader. Selects WAV, CAF, or FLAC from the path extension.
 class ReaderHandle {
   public:
     static Result<ReaderHandle> open(const std::string& path);
@@ -137,18 +181,25 @@ class ReaderHandle {
   private:
     explicit ReaderHandle(FloatWavReader r) : impl_(std::move(r)) {}
     explicit ReaderHandle(FloatCafReader r) : impl_(std::move(r)) {}
-    std::variant<FloatWavReader, FloatCafReader> impl_;
+    explicit ReaderHandle(FloatFlacReader r) : impl_(std::move(r)) {}
+    std::variant<FloatWavReader, FloatCafReader, FloatFlacReader> impl_;
 };
 
 // Apply a linear gain to all samples in path, rewriting the file in-place via a
-// temp file + rename. Supports WAV and CAF formats. layout_id is required when
-// the path is a CAF file; ignored for WAV. No-op when |gain - 1| < 1e-6.
+// temp file + rename. Supports WAV, CAF, and FLAC formats. layout_id is required
+// when the path is a CAF file; ignored for WAV and FLAC. No-op when |gain - 1| < 1e-6.
 Result<void> apply_gain_to_file(const std::string& path, float gain, const std::string& layout_id = {});
 
 // Convert an existing float32 WAV to integer PCM in-place (temp + rename).
 // bit_depth must be 16 or 24. Limited to sample rates <= 65535 Hz by the
 // underlying bw64 integer writer (libbw64 0.10.0 API constraint).
 Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth);
+
+// Encode a fully post-processed float32 WAV (src_path) to 24-bit FLAC (flac_path).
+// Use this as the final pipeline step for FLAC output — after apply_gain_to_file()
+// and downconvert_to_int() — so the float32 domain is preserved through all
+// adjustments before quantisation.  FLAC channel count must be 1-8.
+Result<void> convert_to_flac(const std::string& src_path, const std::string& flac_path);
 
 // Format-agnostic render output metadata.  Assembled by the engine layer and
 // passed to write_file_metadata(); format-specific encoding is handled there.
@@ -167,6 +218,8 @@ struct MetadataFields {
 //           MaxTruePeakLevel (0x7FFF = not-indicated when value is absent).
 //   CAF  — appends an info chunk with encodingapplication / date / comments
 //           keys.  Comments encodes renderer, layout, loudness, peak.
+//   FLAC — inserts a Vorbis Comment block (ENCODER, DATE, COMMENT tags) and, for
+//           recognised layouts, a WAVEFORMATEXTENSIBLE_CHANNEL_MASK tag.
 //   Other extensions — silently ignored (not an error).
 // Failure is non-fatal; callers should log a warning and continue.
 Result<void> write_file_metadata(const std::string& path, const MetadataFields& meta);
