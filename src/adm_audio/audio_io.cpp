@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -161,36 +162,42 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth) {
 
 namespace {
 
-[[nodiscard]] uint16_t caf_read_u16(std::FILE* f) {
+[[nodiscard]] bool caf_read_u16(std::FILE* f, uint16_t& out) {
     std::array<uint8_t, 2> b{};
-    std::fread(b.data(), 1, 2, f);
-    return (static_cast<uint16_t>(b[0]) << 8U) | b[1];
+    if (std::fread(b.data(), 1, b.size(), f) != b.size()) {
+        return false;
+    }
+    out = static_cast<uint16_t>((static_cast<uint16_t>(b[0]) << 8U) | b[1]);
+    return true;
 }
-[[nodiscard]] uint32_t caf_read_u32(std::FILE* f) {
+[[nodiscard]] bool caf_read_u32(std::FILE* f, uint32_t& out) {
     std::array<uint8_t, 4> b{};
-    std::fread(b.data(), 1, 4, f);
-    return (static_cast<uint32_t>(b[0]) << 24U) | (static_cast<uint32_t>(b[1]) << 16U) |
-           (static_cast<uint32_t>(b[2]) << 8U) | b[3];
-}
-[[nodiscard]] int64_t caf_read_i64(std::FILE* f) {
-    std::array<uint8_t, 8> b{};
-    std::fread(b.data(), 1, 8, f);
-    uint64_t u = 0;
-    for (const auto byte : b) {
-        u = (u << 8U) | byte;
+    if (std::fread(b.data(), 1, b.size(), f) != b.size()) {
+        return false;
     }
-    return static_cast<int64_t>(u);
+    out = (static_cast<uint32_t>(b[0]) << 24U) | (static_cast<uint32_t>(b[1]) << 16U) |
+          (static_cast<uint32_t>(b[2]) << 8U) | b[3];
+    return true;
 }
-[[nodiscard]] double caf_read_f64(std::FILE* f) {
+[[nodiscard]] bool caf_read_i64(std::FILE* f, int64_t& out) {
     std::array<uint8_t, 8> b{};
-    std::fread(b.data(), 1, 8, f);
-    uint64_t u = 0;
-    for (const auto byte : b) {
-        u = (u << 8U) | byte;
+    if (std::fread(b.data(), 1, b.size(), f) != b.size()) {
+        return false;
     }
-    double d{};
-    std::memcpy(&d, &u, 8);
-    return d;
+    const uint64_t u =
+        std::accumulate(b.begin(), b.end(), uint64_t{0}, [](uint64_t acc, uint8_t byte) { return (acc << 8U) | byte; });
+    out = static_cast<int64_t>(u);
+    return true;
+}
+[[nodiscard]] bool caf_read_f64(std::FILE* f, double& out) {
+    std::array<uint8_t, 8> b{};
+    if (std::fread(b.data(), 1, b.size(), f) != b.size()) {
+        return false;
+    }
+    const uint64_t u =
+        std::accumulate(b.begin(), b.end(), uint64_t{0}, [](uint64_t acc, uint8_t byte) { return (acc << 8U) | byte; });
+    std::memcpy(&out, &u, 8);
+    return true;
 }
 
 } // anonymous namespace
@@ -200,7 +207,7 @@ struct FloatCafReader::Impl {
     uint32_t channels{0};
     uint32_t sample_rate{0};
     uint64_t frame_count{0};
-    long data_start{0};  // file offset of first sample (after edit_count)
+    long data_start{0}; // file offset of first sample (after edit_count)
     uint64_t frames_read{0};
 };
 
@@ -212,17 +219,23 @@ Result<FloatCafReader> FloatCafReader::open(const std::string& path) {
 
     // File header: "caff" (4) + version u16 (2) + flags u16 (2).
     std::array<char, 4> magic{};
-    std::fread(magic.data(), 1, 4, f);
+    if (std::fread(magic.data(), 1, magic.size(), f) != magic.size()) {
+        std::fclose(f);
+        return make_error(ErrorCode::io_error, "truncated CAF file header", "path=" + path);
+    }
     if (std::string_view(magic.data(), 4) != "caff") {
         std::fclose(f);
         return make_error(ErrorCode::io_error, "not a CAF file (bad magic)", "path=" + path);
     }
-    caf_read_u16(f); // version
-    caf_read_u16(f); // flags
+    uint16_t header_word = 0;
+    if (!caf_read_u16(f, header_word) || !caf_read_u16(f, header_word)) {
+        std::fclose(f);
+        return make_error(ErrorCode::io_error, "truncated CAF file header", "path=" + path);
+    }
 
     // Scan chunks to find desc and data.
-    uint32_t channels = 0;
-    uint32_t sample_rate = 0;
+    uint32_t caf_channels = 0;
+    uint32_t caf_sample_rate = 0;
     long data_start = -1;
     uint64_t data_bytes = 0;
     bool desc_ok = false;
@@ -232,36 +245,43 @@ Result<FloatCafReader> FloatCafReader::open(const std::string& path) {
         if (std::fread(ctype.data(), 1, 4, f) != 4) {
             break; // EOF
         }
-        const int64_t csize = caf_read_i64(f);
+        int64_t csize = 0;
+        if (!caf_read_i64(f, csize)) {
+            std::fclose(f);
+            return make_error(ErrorCode::io_error, "truncated CAF chunk header", "path=" + path);
+        }
         const std::string_view ct(ctype.data(), 4);
         const long payload_start = std::ftell(f);
 
         if (ct == "desc") {
             // 32-byte payload: f64 sample_rate, FourCC format_id, u32 flags,
             // u32 bytes_per_packet, u32 frames_per_packet, u32 channels, u32 bits.
-            const double sr = caf_read_f64(f);
+            double sr = 0.0;
             std::array<char, 4> fmt_id{};
-            std::fread(fmt_id.data(), 1, 4, f);
-            const uint32_t flags      = caf_read_u32(f);
-            /* bytes_per_packet */       caf_read_u32(f);
-            const uint32_t fpp        = caf_read_u32(f);
-            const uint32_t ch         = caf_read_u32(f);
-            const uint32_t bpc        = caf_read_u32(f);
+            uint32_t flags = 0;
+            uint32_t bytes_per_packet = 0;
+            uint32_t fpp = 0;
+            uint32_t ch = 0;
+            uint32_t bpc = 0;
+            if (!caf_read_f64(f, sr) || std::fread(fmt_id.data(), 1, fmt_id.size(), f) != fmt_id.size() ||
+                !caf_read_u32(f, flags) || !caf_read_u32(f, bytes_per_packet) || !caf_read_u32(f, fpp) ||
+                !caf_read_u32(f, ch) || !caf_read_u32(f, bpc)) {
+                std::fclose(f);
+                return make_error(ErrorCode::io_error, "truncated CAF desc chunk", "path=" + path);
+            }
 
-            constexpr uint32_t k_is_float    = 1U;
-            constexpr uint32_t k_is_le       = 2U;
+            constexpr uint32_t k_is_float = 1U;
+            constexpr uint32_t k_is_le = 2U;
             const bool valid = std::string_view(fmt_id.data(), 4) == "lpcm" &&
-                               (flags & (k_is_float | k_is_le)) == (k_is_float | k_is_le) &&
-                               fpp == 1U && bpc == 32U;
+                               (flags & (k_is_float | k_is_le)) == (k_is_float | k_is_le) && fpp == 1U && bpc == 32U;
             if (!valid) {
                 std::fclose(f);
-                return make_error(ErrorCode::unsupported,
-                                  "CAF file is not float32 LE lpcm — cannot read back",
-                                  "path=" + path);
+                return make_error(
+                    ErrorCode::unsupported, "CAF file is not float32 LE lpcm — cannot read back", "path=" + path);
             }
-            channels    = ch;
-            sample_rate = static_cast<uint32_t>(sr);
-            desc_ok     = true;
+            caf_channels = ch;
+            caf_sample_rate = static_cast<uint32_t>(sr);
+            desc_ok = true;
             // Seek past any remaining desc payload (in case future versions extend it).
             std::fseek(f, payload_start + static_cast<long>(csize), SEEK_SET);
 
@@ -289,23 +309,21 @@ Result<FloatCafReader> FloatCafReader::open(const std::string& path) {
         }
     }
 
-    if (!desc_ok || data_start < 0 || channels == 0) {
+    if (!desc_ok || data_start < 0 || caf_channels == 0) {
         std::fclose(f);
-        return make_error(ErrorCode::io_error,
-                          "CAF file missing valid desc or data chunk",
-                          "path=" + path);
+        return make_error(ErrorCode::io_error, "CAF file missing valid desc or data chunk", "path=" + path);
     }
 
-    const uint64_t frame_count = data_bytes / (static_cast<uint64_t>(channels) * sizeof(float));
+    const uint64_t caf_frame_count = data_bytes / (static_cast<uint64_t>(caf_channels) * sizeof(float));
     std::fseek(f, data_start, SEEK_SET);
 
     FloatCafReader r;
-    r.impl_              = std::make_unique<Impl>();
-    r.impl_->file        = f;
-    r.impl_->channels    = channels;
-    r.impl_->sample_rate = sample_rate;
-    r.impl_->frame_count = frame_count;
-    r.impl_->data_start  = data_start;
+    r.impl_ = std::make_unique<Impl>();
+    r.impl_->file = f;
+    r.impl_->channels = caf_channels;
+    r.impl_->sample_rate = caf_sample_rate;
+    r.impl_->frame_count = caf_frame_count;
+    r.impl_->data_start = data_start;
     return r;
 }
 
@@ -318,13 +336,19 @@ FloatCafReader::~FloatCafReader() {
 FloatCafReader::FloatCafReader(FloatCafReader&&) noexcept = default;
 FloatCafReader& FloatCafReader::operator=(FloatCafReader&&) noexcept = default;
 
-uint32_t FloatCafReader::channels()    const { return impl_->channels; }
-uint32_t FloatCafReader::sample_rate() const { return impl_->sample_rate; }
-uint64_t FloatCafReader::frame_count() const { return impl_->frame_count; }
+uint32_t FloatCafReader::channels() const {
+    return impl_->channels;
+}
+uint32_t FloatCafReader::sample_rate() const {
+    return impl_->sample_rate;
+}
+uint64_t FloatCafReader::frame_count() const {
+    return impl_->frame_count;
+}
 
 uint64_t FloatCafReader::read(float* out, uint64_t frames) {
     const uint64_t remaining = impl_->frame_count - impl_->frames_read;
-    const uint64_t to_read   = std::min(frames, remaining);
+    const uint64_t to_read = std::min(frames, remaining);
     if (to_read == 0) {
         return 0;
     }
@@ -357,9 +381,15 @@ Result<ReaderHandle> ReaderHandle::open(const std::string& path) {
     return ReaderHandle{std::move(*res)};
 }
 
-uint32_t ReaderHandle::channels()    const { return std::visit([](const auto& r) { return r.channels(); }, impl_); }
-uint32_t ReaderHandle::sample_rate() const { return std::visit([](const auto& r) { return r.sample_rate(); }, impl_); }
-uint64_t ReaderHandle::frame_count() const { return std::visit([](const auto& r) { return r.frame_count(); }, impl_); }
+uint32_t ReaderHandle::channels() const {
+    return std::visit([](const auto& r) { return r.channels(); }, impl_);
+}
+uint32_t ReaderHandle::sample_rate() const {
+    return std::visit([](const auto& r) { return r.sample_rate(); }, impl_);
+}
+uint64_t ReaderHandle::frame_count() const {
+    return std::visit([](const auto& r) { return r.frame_count(); }, impl_);
+}
 uint64_t ReaderHandle::read(float* out, uint64_t frames) {
     return std::visit([&](auto& r) { return r.read(out, frames); }, impl_);
 }
@@ -371,19 +401,22 @@ Result<void> apply_gain_to_file(const std::string& path, float gain, const std::
         return {};
     }
 
-    auto reader_res = ReaderHandle::open(path);
-    if (!reader_res) {
-        return tl::unexpected{reader_res.error()};
-    }
-    auto& reader = *reader_res;
+    const std::filesystem::path original_path{path};
+    const auto tmp_path = original_path.parent_path() /
+                          (original_path.stem().string() + ".gain_tmp" + original_path.extension().string());
 
-    const uint32_t num_ch      = reader.channels();
-    const uint32_t sr          = reader.sample_rate();
-    const uint64_t total_frames = reader.frame_count();
-
-    const auto tmp_path = path + ".gain_tmp";
     {
-        auto writer_res = WriterHandle::open(tmp_path, num_ch, sr, layout_id);
+        auto reader_res = ReaderHandle::open(path);
+        if (!reader_res) {
+            return tl::unexpected{reader_res.error()};
+        }
+        auto& reader = *reader_res;
+
+        const uint32_t num_ch = reader.channels();
+        const uint32_t sr = reader.sample_rate();
+        const uint64_t total_frames = reader.frame_count();
+
+        auto writer_res = WriterHandle::open(tmp_path.string(), num_ch, sr, layout_id);
         if (!writer_res) {
             return tl::unexpected{writer_res.error()};
         }
@@ -394,7 +427,7 @@ Result<void> apply_gain_to_file(const std::string& path, float gain, const std::
         uint64_t left = total_frames;
 
         while (left > 0) {
-            const uint64_t n   = std::min(k_block, left);
+            const uint64_t n = std::min(k_block, left);
             const uint64_t got = reader.read(buf.data(), n);
             if (got == 0) {
                 break;
@@ -404,12 +437,29 @@ Result<void> apply_gain_to_file(const std::string& path, float gain, const std::
                 buf[i] *= gain;
             }
             if (writer.write(buf.data(), got) != got) {
-                return make_error(ErrorCode::io_error, "short write in apply_gain_to_file", "path=" + tmp_path);
+                return make_error(
+                    ErrorCode::io_error, "short write in apply_gain_to_file", "path=" + tmp_path.string());
             }
             left -= got;
         }
+        if (left != 0) {
+            return make_error(ErrorCode::io_error, "short read in apply_gain_to_file", "path=" + path);
+        }
     }
-    std::filesystem::rename(tmp_path, path);
+
+    std::error_code ec;
+    std::filesystem::rename(tmp_path, original_path, ec);
+    if (ec) {
+        std::error_code remove_ec;
+        std::filesystem::remove(original_path, remove_ec);
+        ec.clear();
+        std::filesystem::rename(tmp_path, original_path, ec);
+        if (ec) {
+            return make_error(ErrorCode::io_error,
+                              "failed to replace output after apply_gain_to_file: " + ec.message(),
+                              "path=" + path);
+        }
+    }
     return {};
 }
 

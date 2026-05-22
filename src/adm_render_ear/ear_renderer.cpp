@@ -624,11 +624,12 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
         std::vector<std::size_t> blk_idx(gain_matrix.size(), 0);
 
         // Inline loudness + true-peak measurement (BS.1770-4 / EBU R128).
-        struct EburFree { void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); } };
+        struct EburFree {
+            void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); }
+        };
         using EburPtr = std::unique_ptr<ebur128_state, EburFree>;
-        EburPtr lufs_st{ebur128_init(num_out_ch,
-                                     static_cast<unsigned long>(sample_rate),
-                                     EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
+        EburPtr lufs_st{
+            ebur128_init(num_out_ch, static_cast<unsigned long>(sample_rate), EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
 
         constexpr uint64_t k_block_size = 1024;
         const std::size_t col_stride = k_block_size; // frames_cap
@@ -711,8 +712,7 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
         RenderMetrics metrics;
         if (lufs_st) {
             double loudness = 0.0;
-            if (ebur128_loudness_global(lufs_st.get(), &loudness) == EBUR128_SUCCESS &&
-                std::isfinite(loudness)) {
+            if (ebur128_loudness_global(lufs_st.get(), &loudness) == EBUR128_SUCCESS && std::isfinite(loudness)) {
                 metrics.measured_lufs = loudness;
             }
             double max_peak = 0.0;

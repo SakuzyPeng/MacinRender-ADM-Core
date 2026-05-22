@@ -92,8 +92,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         logs.log(LogLevel::info, "engine", fmt::format("measured loudness: {:.1f} LUFS", *metrics.measured_lufs));
     }
     if (metrics.measured_peak_dbtp) {
-        logs.log(
-            LogLevel::info, "engine", fmt::format("measured true peak: {:.2f} dBTP", *metrics.measured_peak_dbtp));
+        logs.log(LogLevel::info, "engine", fmt::format("measured true peak: {:.2f} dBTP", *metrics.measured_peak_dbtp));
     }
 
     // Compute combined gain: loudness target first, then peak ceiling.
@@ -102,12 +101,11 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
 
     if (request.options.measure_loudness && metrics.measured_lufs.has_value()) {
         const double target = static_cast<double>(request.options.loudness_target_lufs);
-        const double delta  = target - *metrics.measured_lufs;
+        const double delta = target - *metrics.measured_lufs;
         if (std::abs(delta) >= 0.1) {
             gain_db += delta;
-            logs.log(LogLevel::info,
-                     "engine",
-                     fmt::format("loudness target {:.1f} LUFS → gain {:.2f} dB", target, delta));
+            logs.log(
+                LogLevel::info, "engine", fmt::format("loudness target {:.1f} LUFS → gain {:.2f} dB", target, delta));
         } else {
             logs.log(LogLevel::info, "engine", "integrated loudness within 0.1 LU of target — no adjustment");
         }
@@ -116,7 +114,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     if (request.options.peak_limit && metrics.measured_peak_dbtp.has_value()) {
         const double peak_after = *metrics.measured_peak_dbtp + gain_db;
         const double target_peak = static_cast<double>(request.options.peak_limit_dbtp);
-        const double peak_clamp  = std::min(0.0, target_peak - peak_after);
+        const double peak_clamp = std::min(0.0, target_peak - peak_after);
         if (peak_clamp < -0.1) {
             gain_db += peak_clamp;
             logs.log(LogLevel::info,
@@ -132,9 +130,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
 
     if (std::abs(gain_db) >= 0.01) {
         const float gain_linear = static_cast<float>(std::pow(10.0, gain_db / 20.0));
-        logs.log(LogLevel::info,
-                 "engine",
-                 fmt::format("applying total gain {:.4f} ({:.2f} dB)", gain_linear, gain_db));
+        logs.log(LogLevel::info, "engine", fmt::format("applying total gain {:.4f} ({:.2f} dB)", gain_linear, gain_db));
         auto gain_res = audio::apply_gain_to_file(output_path, gain_linear, output_layout);
         if (!gain_res) {
             return {gain_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, gain_res.error().message}}};
@@ -151,10 +147,8 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         }
     }
 
-    return {{ErrorCode::ok, "", {}},
-            std::filesystem::path{output_path},
-            metrics,
-            {{LogLevel::info, "render completed"}}};
+    return {
+        {ErrorCode::ok, "", {}}, std::filesystem::path{output_path}, metrics, {{LogLevel::info, "render completed"}}};
 }
 
 } // namespace mradm

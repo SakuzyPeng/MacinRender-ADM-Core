@@ -589,11 +589,12 @@ Result<RenderMetrics> VbapRenderer::render(const RenderPlan& plan, ProgressSink&
         // Current block index per channel — advanced monotonically as frames_done increases.
         std::vector<std::size_t> blk_idx(gain_matrix->size(), 0);
 
-        struct EburFree { void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); } };
+        struct EburFree {
+            void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); }
+        };
         using EburPtr = std::unique_ptr<ebur128_state, EburFree>;
-        EburPtr lufs_st{ebur128_init(num_out_ch,
-                                     static_cast<unsigned long>(sample_rate),
-                                     EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
+        EburPtr lufs_st{
+            ebur128_init(num_out_ch, static_cast<unsigned long>(sample_rate), EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
 
         constexpr uint64_t k_block_size = 1024;
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
@@ -630,8 +631,7 @@ Result<RenderMetrics> VbapRenderer::render(const RenderPlan& plan, ProgressSink&
         RenderMetrics metrics;
         if (lufs_st) {
             double loudness = 0.0;
-            if (ebur128_loudness_global(lufs_st.get(), &loudness) == EBUR128_SUCCESS &&
-                std::isfinite(loudness)) {
+            if (ebur128_loudness_global(lufs_st.get(), &loudness) == EBUR128_SUCCESS && std::isfinite(loudness)) {
                 metrics.measured_lufs = loudness;
             }
             double max_peak = 0.0;
