@@ -148,8 +148,7 @@ class FloatFlacReader {
 // Call convert_to_opus_mka() rather than this class directly in the pipeline.
 class FloatOpusMkaWriter {
   public:
-    static Result<FloatOpusMkaWriter>
-    open(const std::string& path, uint32_t channels, uint32_t sample_rate);
+    static Result<FloatOpusMkaWriter> open(const std::string& path, uint32_t channels, uint32_t sample_rate);
     ~FloatOpusMkaWriter();
     FloatOpusMkaWriter(FloatOpusMkaWriter&&) noexcept;
     FloatOpusMkaWriter& operator=(FloatOpusMkaWriter&&) noexcept;
@@ -157,6 +156,7 @@ class FloatOpusMkaWriter {
     FloatOpusMkaWriter& operator=(const FloatOpusMkaWriter&) = delete;
 
     uint64_t write(const float* samples, uint64_t frame_count);
+    Result<void> close();
 
   private:
     FloatOpusMkaWriter() = default;
@@ -226,12 +226,12 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth);
 Result<void> convert_to_flac(const std::string& src_path, const std::string& flac_path);
 
 // Encode a fully post-processed float32 WAV (src_path) to Opus MKA (mka_path).
-// src_path must be 48000 Hz (Opus requirement). layout_id is stored in the Tags
-// element for informational purposes. Use this as the final pipeline step after
-// all apply_gain_to_file() adjustments — re-encoding degrades lossy quality.
-Result<void> convert_to_opus_mka(const std::string& src_path,
-                                  const std::string& mka_path,
-                                  const std::string& layout_id = {});
+// src_path must be 48000 Hz (Opus requirement). layout_id is reserved for
+// container metadata written by the engine layer. Use this as the final pipeline
+// step after all apply_gain_to_file() adjustments — re-encoding degrades lossy
+// quality.
+Result<void>
+convert_to_opus_mka(const std::string& src_path, const std::string& mka_path, const std::string& layout_id = {});
 
 // Format-agnostic render output metadata.  Assembled by the engine layer and
 // passed to write_file_metadata(); format-specific encoding is handled there.

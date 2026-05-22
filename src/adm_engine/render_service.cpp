@@ -142,15 +142,11 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     });
     const bool is_flac_final = (final_ext == ".flac");
     const bool is_opus_final = (final_ext == ".mka");
-    const auto render_temp_path = (is_flac_final || is_opus_final)
-        ? unique_render_temp_path(final_path)
-        : std::filesystem::path{};
-    auto render_temp_guard = (is_flac_final || is_opus_final)
-        ? std::make_unique<TempFileGuard>(render_temp_path)
-        : nullptr;
-    const std::string render_path = (is_flac_final || is_opus_final)
-        ? render_temp_path.string()
-        : output_path;
+    const auto render_temp_path =
+        (is_flac_final || is_opus_final) ? unique_render_temp_path(final_path) : std::filesystem::path{};
+    auto render_temp_guard =
+        (is_flac_final || is_opus_final) ? std::make_unique<TempFileGuard>(render_temp_path) : nullptr;
+    const std::string render_path = (is_flac_final || is_opus_final) ? render_temp_path.string() : output_path;
 
     // Build plan.
     RenderPlan plan;

@@ -151,6 +151,7 @@ fi
 echo "[INFO] cppcheck: ${#source_files[@]} changed file(s)"
 cppcheck \
     --enable=warning,style,performance,portability \
+    --language=c++ \
     --std=c++20 \
     --inline-suppr \
     --error-exitcode=2 \
