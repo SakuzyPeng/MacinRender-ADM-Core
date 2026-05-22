@@ -28,6 +28,9 @@ struct RenderOptions {
     bool peak_limit{true};
     float peak_limit_dbtp{-1.0F}; // True Peak target in dBTP (broadcast standard)
     OutputBitDepth output_bit_depth{OutputBitDepth::f32};
+    // Opus MKA output: target bitrate per channel in kbps (VBR hint).
+    // 0 = auto (64 kbps/ch; minimum 128 kbps for stereo).
+    uint32_t opus_bitrate_per_ch_kbps{0};
     // Default gain-interpolation ramp used when jumpPosition=false and the ADM block
     // carries no explicit interpolationLength.  Set to 0 for instant switching.
     uint32_t default_interp_ms{5};
