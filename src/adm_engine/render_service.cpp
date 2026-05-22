@@ -1,8 +1,13 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <ctime>
+#include <filesystem>
+#include <memory>
+#include <random>
+#include <system_error>
 
 #include <fmt/format.h>
 
@@ -27,6 +32,45 @@ namespace {
 #endif
     return tm_utc;
 }
+
+[[nodiscard]] std::filesystem::path unique_render_temp_path(const std::filesystem::path& final_path) {
+    static thread_local std::mt19937_64 rng{std::random_device{}()};
+    std::uniform_int_distribution<std::uint64_t> dist;
+
+    const auto parent = final_path.parent_path();
+    const auto stem = final_path.stem().string();
+    for (int attempt = 0; attempt < 16; ++attempt) {
+        auto candidate = parent / fmt::format("{}.render_tmp.{:016x}.wav", stem, dist(rng));
+        std::error_code ec;
+        if (!std::filesystem::exists(candidate, ec)) {
+            return candidate;
+        }
+    }
+    return parent / fmt::format("{}.render_tmp.{:016x}.wav", stem, dist(rng));
+}
+
+class TempFileGuard {
+  public:
+    explicit TempFileGuard(std::filesystem::path path) : path_(std::move(path)) {}
+    TempFileGuard(const TempFileGuard&) = delete;
+    TempFileGuard& operator=(const TempFileGuard&) = delete;
+    TempFileGuard(TempFileGuard&&) = delete;
+    TempFileGuard& operator=(TempFileGuard&&) = delete;
+    ~TempFileGuard() { remove_now(); }
+
+    void remove_now() noexcept {
+        if (!active_) {
+            return;
+        }
+        std::error_code ec;
+        std::filesystem::remove(path_, ec);
+        active_ = false;
+    }
+
+  private:
+    std::filesystem::path path_;
+    bool active_{true};
+};
 
 } // anonymous namespace
 
@@ -87,10 +131,24 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
 
     const auto output_layout = request.options.output_layout.empty() ? "0+2+0" : request.options.output_layout;
 
+    // Detect FLAC final output: FLAC does not carry float32 samples, so rendering
+    // directly to FLAC would clip any > 0 dBFS content before loudness/peak
+    // post-processing can compensate.  Use a float32 temp WAV as the render target
+    // and encode to FLAC as the very last step, after all adjustments are applied.
+    const auto final_path = std::filesystem::path(output_path);
+    auto final_ext = final_path.extension().string();
+    std::ranges::transform(final_ext, final_ext.begin(), [](char c) {
+        return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    });
+    const bool is_flac_final = (final_ext == ".flac");
+    const auto render_temp_path = is_flac_final ? unique_render_temp_path(final_path) : std::filesystem::path{};
+    auto render_temp_guard = is_flac_final ? std::make_unique<TempFileGuard>(render_temp_path) : nullptr;
+    const std::string render_path = is_flac_final ? render_temp_path.string() : output_path;
+
     // Build plan.
     RenderPlan plan;
     plan.input_path = request.input_path.string();
-    plan.output_path = output_path;
+    plan.output_path = render_path;
     plan.output_layout = output_layout;
     plan.default_interp_ms = request.options.default_interp_ms;
     plan.scene = std::move(*scene_result);
@@ -145,19 +203,39 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     if (std::abs(gain_db) >= 0.01) {
         const float gain_linear = static_cast<float>(std::pow(10.0, gain_db / 20.0));
         logs.log(LogLevel::info, "engine", fmt::format("applying total gain {:.4f} ({:.2f} dB)", gain_linear, gain_db));
-        auto gain_res = audio::apply_gain_to_file(output_path, gain_linear, output_layout);
+        auto gain_res = audio::apply_gain_to_file(render_path, gain_linear, output_layout);
         if (!gain_res) {
             return {gain_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, gain_res.error().message}}};
         }
     }
 
-    // Final bit depth conversion (after all post-processing). CAF is always float32.
-    if (request.options.output_bit_depth != OutputBitDepth::f32) {
-        const uint16_t depth = (request.options.output_bit_depth == OutputBitDepth::i16) ? 16U : 24U;
-        logs.log(LogLevel::info, "engine", fmt::format("converting to {}-bit integer PCM", depth));
-        auto conv_res = audio::downconvert_to_int(output_path, depth);
-        if (!conv_res) {
-            return {conv_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, conv_res.error().message}}};
+    // Bit depth conversion: WAV output only.
+    // CAF is always float32. For FLAC, the temp WAV stays float32 here so that
+    // quantisation happens exactly once during the final FLAC encode step below.
+    if (!is_flac_final && request.options.output_bit_depth != OutputBitDepth::f32) {
+        auto render_ext = std::filesystem::path(render_path).extension().string();
+        std::ranges::transform(render_ext, render_ext.begin(), [](char c) {
+            return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        });
+        if (render_ext != ".caf") {
+            const uint16_t depth = (request.options.output_bit_depth == OutputBitDepth::i16) ? 16U : 24U;
+            logs.log(LogLevel::info, "engine", fmt::format("converting to {}-bit integer PCM", depth));
+            auto conv_res = audio::downconvert_to_int(render_path, depth);
+            if (!conv_res) {
+                return {conv_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, conv_res.error().message}}};
+            }
+        }
+    }
+
+    // FLAC final encode: the temp WAV is now fully post-processed (float32, gain
+    // applied).  Encode to FLAC (24-bit) and remove the temp WAV regardless of
+    // outcome to avoid leaving stale files on disk.
+    if (is_flac_final) {
+        logs.log(LogLevel::info, "engine", "encoding float32 render to FLAC (24-bit)");
+        auto flac_res = audio::convert_to_flac(render_path, output_path);
+        render_temp_guard->remove_now();
+        if (!flac_res) {
+            return {flac_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, flac_res.error().message}}};
         }
     }
 
