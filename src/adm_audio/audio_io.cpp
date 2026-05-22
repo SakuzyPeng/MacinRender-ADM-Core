@@ -155,6 +155,264 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth) {
     }
 }
 
+// ── FloatCafReader ────────────────────────────────────────────────────────────
+// Reads CAF files produced by FloatCafWriter: float32 LE lpcm, known chunk layout.
+// Scans all chunks to locate desc + data, tolerates any ordering (e.g. trailing info).
+
+namespace {
+
+[[nodiscard]] uint16_t caf_read_u16(std::FILE* f) {
+    std::array<uint8_t, 2> b{};
+    std::fread(b.data(), 1, 2, f);
+    return (static_cast<uint16_t>(b[0]) << 8U) | b[1];
+}
+[[nodiscard]] uint32_t caf_read_u32(std::FILE* f) {
+    std::array<uint8_t, 4> b{};
+    std::fread(b.data(), 1, 4, f);
+    return (static_cast<uint32_t>(b[0]) << 24U) | (static_cast<uint32_t>(b[1]) << 16U) |
+           (static_cast<uint32_t>(b[2]) << 8U) | b[3];
+}
+[[nodiscard]] int64_t caf_read_i64(std::FILE* f) {
+    std::array<uint8_t, 8> b{};
+    std::fread(b.data(), 1, 8, f);
+    uint64_t u = 0;
+    for (const auto byte : b) {
+        u = (u << 8U) | byte;
+    }
+    return static_cast<int64_t>(u);
+}
+[[nodiscard]] double caf_read_f64(std::FILE* f) {
+    std::array<uint8_t, 8> b{};
+    std::fread(b.data(), 1, 8, f);
+    uint64_t u = 0;
+    for (const auto byte : b) {
+        u = (u << 8U) | byte;
+    }
+    double d{};
+    std::memcpy(&d, &u, 8);
+    return d;
+}
+
+} // anonymous namespace
+
+struct FloatCafReader::Impl {
+    std::FILE* file{nullptr};
+    uint32_t channels{0};
+    uint32_t sample_rate{0};
+    uint64_t frame_count{0};
+    long data_start{0};  // file offset of first sample (after edit_count)
+    uint64_t frames_read{0};
+};
+
+Result<FloatCafReader> FloatCafReader::open(const std::string& path) {
+    std::FILE* f = std::fopen(path.c_str(), "rb");
+    if (f == nullptr) {
+        return make_error(ErrorCode::io_error, "cannot open CAF file for reading", "path=" + path);
+    }
+
+    // File header: "caff" (4) + version u16 (2) + flags u16 (2).
+    std::array<char, 4> magic{};
+    std::fread(magic.data(), 1, 4, f);
+    if (std::string_view(magic.data(), 4) != "caff") {
+        std::fclose(f);
+        return make_error(ErrorCode::io_error, "not a CAF file (bad magic)", "path=" + path);
+    }
+    caf_read_u16(f); // version
+    caf_read_u16(f); // flags
+
+    // Scan chunks to find desc and data.
+    uint32_t channels = 0;
+    uint32_t sample_rate = 0;
+    long data_start = -1;
+    uint64_t data_bytes = 0;
+    bool desc_ok = false;
+
+    while (true) {
+        std::array<char, 4> ctype{};
+        if (std::fread(ctype.data(), 1, 4, f) != 4) {
+            break; // EOF
+        }
+        const int64_t csize = caf_read_i64(f);
+        const std::string_view ct(ctype.data(), 4);
+        const long payload_start = std::ftell(f);
+
+        if (ct == "desc") {
+            // 32-byte payload: f64 sample_rate, FourCC format_id, u32 flags,
+            // u32 bytes_per_packet, u32 frames_per_packet, u32 channels, u32 bits.
+            const double sr = caf_read_f64(f);
+            std::array<char, 4> fmt_id{};
+            std::fread(fmt_id.data(), 1, 4, f);
+            const uint32_t flags      = caf_read_u32(f);
+            /* bytes_per_packet */       caf_read_u32(f);
+            const uint32_t fpp        = caf_read_u32(f);
+            const uint32_t ch         = caf_read_u32(f);
+            const uint32_t bpc        = caf_read_u32(f);
+
+            constexpr uint32_t k_is_float    = 1U;
+            constexpr uint32_t k_is_le       = 2U;
+            const bool valid = std::string_view(fmt_id.data(), 4) == "lpcm" &&
+                               (flags & (k_is_float | k_is_le)) == (k_is_float | k_is_le) &&
+                               fpp == 1U && bpc == 32U;
+            if (!valid) {
+                std::fclose(f);
+                return make_error(ErrorCode::unsupported,
+                                  "CAF file is not float32 LE lpcm — cannot read back",
+                                  "path=" + path);
+            }
+            channels    = ch;
+            sample_rate = static_cast<uint32_t>(sr);
+            desc_ok     = true;
+            // Seek past any remaining desc payload (in case future versions extend it).
+            std::fseek(f, payload_start + static_cast<long>(csize), SEEK_SET);
+
+        } else if (ct == "data") {
+            // First 4 bytes of payload are edit_count; samples follow.
+            std::fseek(f, 4, SEEK_CUR); // skip edit_count
+            data_start = std::ftell(f);
+
+            if (csize == -1) {
+                // Unknown size: data extends to EOF.
+                std::fseek(f, 0, SEEK_END);
+                data_bytes = static_cast<uint64_t>(std::ftell(f) - data_start);
+            } else {
+                data_bytes = static_cast<uint64_t>(csize) - 4U;
+                std::fseek(f, payload_start + static_cast<long>(csize), SEEK_SET);
+            }
+
+        } else {
+            // Unknown or unneeded chunk (chan, info, …): skip.
+            if (csize >= 0) {
+                std::fseek(f, payload_start + static_cast<long>(csize), SEEK_SET);
+            } else {
+                break; // malformed unknown chunk with unknown size — stop
+            }
+        }
+    }
+
+    if (!desc_ok || data_start < 0 || channels == 0) {
+        std::fclose(f);
+        return make_error(ErrorCode::io_error,
+                          "CAF file missing valid desc or data chunk",
+                          "path=" + path);
+    }
+
+    const uint64_t frame_count = data_bytes / (static_cast<uint64_t>(channels) * sizeof(float));
+    std::fseek(f, data_start, SEEK_SET);
+
+    FloatCafReader r;
+    r.impl_              = std::make_unique<Impl>();
+    r.impl_->file        = f;
+    r.impl_->channels    = channels;
+    r.impl_->sample_rate = sample_rate;
+    r.impl_->frame_count = frame_count;
+    r.impl_->data_start  = data_start;
+    return r;
+}
+
+FloatCafReader::~FloatCafReader() {
+    if (impl_ && impl_->file != nullptr) {
+        std::fclose(impl_->file);
+    }
+}
+
+FloatCafReader::FloatCafReader(FloatCafReader&&) noexcept = default;
+FloatCafReader& FloatCafReader::operator=(FloatCafReader&&) noexcept = default;
+
+uint32_t FloatCafReader::channels()    const { return impl_->channels; }
+uint32_t FloatCafReader::sample_rate() const { return impl_->sample_rate; }
+uint64_t FloatCafReader::frame_count() const { return impl_->frame_count; }
+
+uint64_t FloatCafReader::read(float* out, uint64_t frames) {
+    const uint64_t remaining = impl_->frame_count - impl_->frames_read;
+    const uint64_t to_read   = std::min(frames, remaining);
+    if (to_read == 0) {
+        return 0;
+    }
+    const std::size_t samples = static_cast<std::size_t>(to_read) * impl_->channels;
+    // Samples are float32 LE — on any LE host (macOS) fread gives correct values directly.
+    const std::size_t got = std::fread(out, sizeof(float), samples, impl_->file);
+    const uint64_t frames_got = static_cast<uint64_t>(got) / impl_->channels;
+    impl_->frames_read += frames_got;
+    return frames_got;
+}
+
+// ── ReaderHandle ──────────────────────────────────────────────────────────────
+
+Result<ReaderHandle> ReaderHandle::open(const std::string& path) {
+    auto ext = std::filesystem::path(path).extension().string();
+    std::ranges::transform(
+        ext, ext.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+
+    if (ext == ".caf") {
+        auto res = FloatCafReader::open(path);
+        if (!res) {
+            return tl::unexpected{res.error()};
+        }
+        return ReaderHandle{std::move(*res)};
+    }
+    auto res = FloatWavReader::open(path);
+    if (!res) {
+        return tl::unexpected{res.error()};
+    }
+    return ReaderHandle{std::move(*res)};
+}
+
+uint32_t ReaderHandle::channels()    const { return std::visit([](const auto& r) { return r.channels(); }, impl_); }
+uint32_t ReaderHandle::sample_rate() const { return std::visit([](const auto& r) { return r.sample_rate(); }, impl_); }
+uint64_t ReaderHandle::frame_count() const { return std::visit([](const auto& r) { return r.frame_count(); }, impl_); }
+uint64_t ReaderHandle::read(float* out, uint64_t frames) {
+    return std::visit([&](auto& r) { return r.read(out, frames); }, impl_);
+}
+
+// ── apply_gain_to_file ────────────────────────────────────────────────────────
+
+Result<void> apply_gain_to_file(const std::string& path, float gain, const std::string& layout_id) {
+    if (std::abs(gain - 1.0F) < 1e-6F) {
+        return {};
+    }
+
+    auto reader_res = ReaderHandle::open(path);
+    if (!reader_res) {
+        return tl::unexpected{reader_res.error()};
+    }
+    auto& reader = *reader_res;
+
+    const uint32_t num_ch      = reader.channels();
+    const uint32_t sr          = reader.sample_rate();
+    const uint64_t total_frames = reader.frame_count();
+
+    const auto tmp_path = path + ".gain_tmp";
+    {
+        auto writer_res = WriterHandle::open(tmp_path, num_ch, sr, layout_id);
+        if (!writer_res) {
+            return tl::unexpected{writer_res.error()};
+        }
+        auto& writer = *writer_res;
+
+        constexpr uint64_t k_block = 4096;
+        std::vector<float> buf(static_cast<std::size_t>(num_ch) * k_block);
+        uint64_t left = total_frames;
+
+        while (left > 0) {
+            const uint64_t n   = std::min(k_block, left);
+            const uint64_t got = reader.read(buf.data(), n);
+            if (got == 0) {
+                break;
+            }
+            const std::size_t samples = static_cast<std::size_t>(num_ch) * static_cast<std::size_t>(got);
+            for (std::size_t i = 0; i < samples; ++i) {
+                buf[i] *= gain;
+            }
+            if (writer.write(buf.data(), got) != got) {
+                return make_error(ErrorCode::io_error, "short write in apply_gain_to_file", "path=" + tmp_path);
+            }
+            left -= got;
+        }
+    }
+    std::filesystem::rename(tmp_path, path);
+    return {};
+}
+
 // ── FloatCafWriter ────────────────────────────────────────────────────────────
 // CAF format reference: Apple "Core Audio Format Specification 1.0"
 // All chunk headers and metadata are big-endian; PCM samples are little-endian

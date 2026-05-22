@@ -1,14 +1,13 @@
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 
 #include <fmt/format.h>
 
 #include "adm/audio_io.h"
 #include "adm/io.h"
-#include "adm/loudness.h"
 #include "adm/options.h"
-#include "adm/peak.h"
 #include "adm/render.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
@@ -16,16 +15,6 @@
 
 namespace mradm {
 
-namespace {
-
-[[nodiscard]] bool is_caf_path(const std::string& path) {
-    auto ext = std::filesystem::path(path).extension().string();
-    std::ranges::transform(
-        ext, ext.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
-    return ext == ".caf";
-}
-
-} // namespace
 
 RenderService::RenderService() = default;
 
@@ -33,7 +22,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     progress.on_progress({RenderStage::validating, 0.0, "validating request"});
 
     if (request.input_path.empty()) {
-        return {{ErrorCode::invalid_argument, "input path is required", {}}, std::nullopt, {}};
+        return {{ErrorCode::invalid_argument, "input path is required", {}}, std::nullopt, std::nullopt, {}};
     }
 
     logs.log(LogLevel::info, "engine", fmt::format("render request: {}", request.input_path.string()));
@@ -42,7 +31,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     progress.on_progress({RenderStage::probing, 0.05, "probing input"});
     auto scene_result = io::import_scene(request.input_path.string());
     if (!scene_result) {
-        return {scene_result.error(), std::nullopt, {{LogLevel::error, scene_result.error().message}}};
+        return {scene_result.error(), std::nullopt, std::nullopt, {{LogLevel::error, scene_result.error().message}}};
     }
     logs.log(LogLevel::info,
              "engine",
@@ -76,27 +65,13 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         renderer = create_hoa_renderer();
     } else {
         const auto msg = fmt::format("renderer '{}' is not available in this build", static_cast<int>(sel));
-        return {{ErrorCode::unsupported, msg, {}}, std::nullopt, {{LogLevel::error, msg}}};
+        return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
     }
 
     const auto caps = renderer->capabilities();
     logs.log(LogLevel::info, "engine", fmt::format("backend: {} {}", caps.backend_name, caps.backend_version));
 
     const auto output_layout = request.options.output_layout.empty() ? "0+2+0" : request.options.output_layout;
-    if (is_caf_path(output_path)) {
-        if (sel == RendererSelection::hoa) {
-            return {{ErrorCode::unsupported, "CAF output is only supported for speaker-layout renderers", output_path},
-                    std::nullopt,
-                    {{LogLevel::error, "CAF output is only supported for speaker-layout renderers"}}};
-        }
-        if (request.options.measure_loudness || request.options.peak_limit ||
-            request.options.output_bit_depth != OutputBitDepth::f32) {
-            const auto msg =
-                std::string{"CAF output currently supports render-only float32 output; disable loudness normalization, "
-                            "peak limiting, and integer bit-depth conversion"};
-            return {{ErrorCode::unsupported, msg, output_path}, std::nullopt, {{LogLevel::error, msg}}};
-        }
-    }
 
     // Build plan.
     RenderPlan plan;
@@ -106,39 +81,80 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     plan.default_interp_ms = request.options.default_interp_ms;
     plan.scene = std::move(*scene_result);
 
-    // Render.
+    // Render (inline measurement of loudness + True Peak).
     auto render_res = renderer->render(plan, progress, logs);
     if (!render_res) {
-        return {render_res.error(), std::nullopt, {{LogLevel::error, render_res.error().message}}};
+        return {render_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, render_res.error().message}}};
+    }
+    const RenderMetrics& metrics = *render_res;
+
+    if (metrics.measured_lufs) {
+        logs.log(LogLevel::info, "engine", fmt::format("measured loudness: {:.1f} LUFS", *metrics.measured_lufs));
+    }
+    if (metrics.measured_peak_dbtp) {
+        logs.log(
+            LogLevel::info, "engine", fmt::format("measured true peak: {:.2f} dBTP", *metrics.measured_peak_dbtp));
     }
 
-    // Post-process: loudness normalisation first (may raise gain), then clamp True Peak.
-    if (request.options.measure_loudness) {
-        auto lufs_res = apply_loudness_norm(output_path, request.options.loudness_target_lufs, logs);
-        if (!lufs_res) {
-            return {lufs_res.error(), std::nullopt, {{LogLevel::error, lufs_res.error().message}}};
+    // Compute combined gain: loudness target first, then peak ceiling.
+    // Merging both into one apply_gain_to_file avoids a second read-write pass.
+    double gain_db = 0.0;
+
+    if (request.options.measure_loudness && metrics.measured_lufs.has_value()) {
+        const double target = static_cast<double>(request.options.loudness_target_lufs);
+        const double delta  = target - *metrics.measured_lufs;
+        if (std::abs(delta) >= 0.1) {
+            gain_db += delta;
+            logs.log(LogLevel::info,
+                     "engine",
+                     fmt::format("loudness target {:.1f} LUFS → gain {:.2f} dB", target, delta));
+        } else {
+            logs.log(LogLevel::info, "engine", "integrated loudness within 0.1 LU of target — no adjustment");
         }
     }
 
-    // Post-process: True Peak limiting.
-    if (request.options.peak_limit) {
-        auto limit_res = apply_peak_limit(output_path, request.options.peak_limit_dbtp, logs);
-        if (!limit_res) {
-            return {limit_res.error(), std::nullopt, {{LogLevel::error, limit_res.error().message}}};
+    if (request.options.peak_limit && metrics.measured_peak_dbtp.has_value()) {
+        const double peak_after = *metrics.measured_peak_dbtp + gain_db;
+        const double target_peak = static_cast<double>(request.options.peak_limit_dbtp);
+        const double peak_clamp  = std::min(0.0, target_peak - peak_after);
+        if (peak_clamp < -0.1) {
+            gain_db += peak_clamp;
+            logs.log(LogLevel::info,
+                     "engine",
+                     fmt::format("true peak after loudness {:.2f} dBTP, ceiling {:.1f} dBTP → clamp {:.2f} dB",
+                                 peak_after,
+                                 target_peak,
+                                 peak_clamp));
+        } else {
+            logs.log(LogLevel::info, "engine", "true peak within target — no clamp");
         }
     }
 
-    // Final bit depth conversion (after all post-processing).
+    if (std::abs(gain_db) >= 0.01) {
+        const float gain_linear = static_cast<float>(std::pow(10.0, gain_db / 20.0));
+        logs.log(LogLevel::info,
+                 "engine",
+                 fmt::format("applying total gain {:.4f} ({:.2f} dB)", gain_linear, gain_db));
+        auto gain_res = audio::apply_gain_to_file(output_path, gain_linear, output_layout);
+        if (!gain_res) {
+            return {gain_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, gain_res.error().message}}};
+        }
+    }
+
+    // Final bit depth conversion (after all post-processing). CAF is always float32.
     if (request.options.output_bit_depth != OutputBitDepth::f32) {
         const uint16_t depth = (request.options.output_bit_depth == OutputBitDepth::i16) ? 16U : 24U;
         logs.log(LogLevel::info, "engine", fmt::format("converting to {}-bit integer PCM", depth));
         auto conv_res = audio::downconvert_to_int(output_path, depth);
         if (!conv_res) {
-            return {conv_res.error(), std::nullopt, {{LogLevel::error, conv_res.error().message}}};
+            return {conv_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, conv_res.error().message}}};
         }
     }
 
-    return {{ErrorCode::ok, "", {}}, std::filesystem::path{output_path}, {{LogLevel::info, "render completed"}}};
+    return {{ErrorCode::ok, "", {}},
+            std::filesystem::path{output_path},
+            metrics,
+            {{LogLevel::info, "render completed"}}};
 }
 
 } // namespace mradm

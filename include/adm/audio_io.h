@@ -74,6 +74,29 @@ class FloatCafWriter {
     std::unique_ptr<Impl> impl_;
 };
 
+// Streaming reader for CAF files written by FloatCafWriter.
+// Validates format (float32 LE lpcm) and scans chunk headers to locate the
+// data payload; robust to any CAF chunk ordering including a trailing info chunk.
+class FloatCafReader {
+  public:
+    static Result<FloatCafReader> open(const std::string& path);
+    ~FloatCafReader();
+    FloatCafReader(FloatCafReader&&) noexcept;
+    FloatCafReader& operator=(FloatCafReader&&) noexcept;
+    FloatCafReader(const FloatCafReader&) = delete;
+    FloatCafReader& operator=(const FloatCafReader&) = delete;
+
+    uint32_t channels() const;
+    uint32_t sample_rate() const;
+    uint64_t frame_count() const;
+    uint64_t read(float* out, uint64_t frames);
+
+  private:
+    FloatCafReader() = default;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
 // Type-erased audio file writer.  Selects WAV or CAF automatically from the
 // output path extension (.wav → FloatWavWriter, .caf → FloatCafWriter).
 // For CAF, layout_id must be a known BS.2051 layout identifier.
@@ -94,6 +117,32 @@ class WriterHandle {
     explicit WriterHandle(FloatCafWriter w) : impl_(std::move(w)) {}
     std::variant<FloatWavWriter, FloatCafWriter> impl_;
 };
+
+// Type-erased audio file reader. Selects WAV or CAF from the path extension.
+class ReaderHandle {
+  public:
+    static Result<ReaderHandle> open(const std::string& path);
+
+    ReaderHandle(ReaderHandle&&) noexcept = default;
+    ReaderHandle& operator=(ReaderHandle&&) noexcept = default;
+    ReaderHandle(const ReaderHandle&) = delete;
+    ReaderHandle& operator=(const ReaderHandle&) = delete;
+
+    uint32_t channels() const;
+    uint32_t sample_rate() const;
+    uint64_t frame_count() const;
+    uint64_t read(float* out, uint64_t frames);
+
+  private:
+    explicit ReaderHandle(FloatWavReader r) : impl_(std::move(r)) {}
+    explicit ReaderHandle(FloatCafReader r) : impl_(std::move(r)) {}
+    std::variant<FloatWavReader, FloatCafReader> impl_;
+};
+
+// Apply a linear gain to all samples in path, rewriting the file in-place via a
+// temp file + rename. Supports WAV and CAF formats. layout_id is required when
+// the path is a CAF file; ignored for WAV. No-op when |gain - 1| < 1e-6.
+Result<void> apply_gain_to_file(const std::string& path, float gain, const std::string& layout_id = {});
 
 // Convert an existing float32 WAV to integer PCM in-place (temp + rename).
 // bit_depth must be 16 or 24. Limited to sample rates <= 65535 Hz by the

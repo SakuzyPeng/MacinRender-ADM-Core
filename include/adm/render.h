@@ -19,9 +19,17 @@ struct Diagnostic {
     std::string message;
 };
 
+// Inline measurement results from the renderer's render loop.
+// Both fields are nullopt when the signal is silence or too short for gating.
+struct RenderMetrics {
+    std::optional<double> measured_lufs;      // BS.1770-4 integrated loudness (LUFS)
+    std::optional<double> measured_peak_dbtp; // ITU-R BS.1770-4 True Peak (dBTP)
+};
+
 struct RenderResult {
     Error error;
     std::optional<std::filesystem::path> output_path;
+    std::optional<RenderMetrics> metrics;
     std::vector<Diagnostic> diagnostics;
 
     [[nodiscard]] bool success() const noexcept { return error.ok(); }
@@ -42,7 +50,7 @@ class IRenderer {
   public:
     virtual ~IRenderer() = default;
     [[nodiscard]] virtual CapabilityReport capabilities() const = 0;
-    [[nodiscard]] virtual Result<void> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) = 0;
+    [[nodiscard]] virtual Result<RenderMetrics> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) = 0;
 };
 
 class RenderService {

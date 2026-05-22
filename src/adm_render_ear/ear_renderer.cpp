@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <ebur128.h>
 #include <limits>
 #include <map>
 #include <memory>
@@ -546,14 +547,14 @@ void apply_direct_delay(DecorrState& state,
 class EarRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
-    [[nodiscard]] Result<void> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override;
+    [[nodiscard]] Result<RenderMetrics> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override;
 };
 
 CapabilityReport EarRenderer::capabilities() const {
     return ear_capabilities();
 }
 
-Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
     try {
         const auto& info = plan.scene.info;
 
@@ -622,6 +623,13 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
         std::vector<std::size_t> blk_idx(gain_matrix.size(), 0);
 
+        // Inline loudness + true-peak measurement (BS.1770-4 / EBU R128).
+        struct EburFree { void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); } };
+        using EburPtr = std::unique_ptr<ebur128_state, EburFree>;
+        EburPtr lufs_st{ebur128_init(num_out_ch,
+                                     static_cast<unsigned long>(sample_rate),
+                                     EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
+
         constexpr uint64_t k_block_size = 1024;
         const std::size_t col_stride = k_block_size; // frames_cap
 
@@ -684,6 +692,10 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
                 out_block[s] += diffuse_out[s];
             }
 
+            if (lufs_st) {
+                ebur128_add_frames_float(lufs_st.get(), out_block.data(), static_cast<std::size_t>(frames_now));
+            }
+
             if (writer.write(out_block.data(), frames_now) != frames_now) {
                 return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);
             }
@@ -696,7 +708,25 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         progress.on_progress({RenderStage::finished, 1.0, "done"});
         logs.log(LogLevel::info, "ear", fmt::format("wrote {} frames to {}", num_frames, plan.output_path));
 
-        return {};
+        RenderMetrics metrics;
+        if (lufs_st) {
+            double loudness = 0.0;
+            if (ebur128_loudness_global(lufs_st.get(), &loudness) == EBUR128_SUCCESS &&
+                std::isfinite(loudness)) {
+                metrics.measured_lufs = loudness;
+            }
+            double max_peak = 0.0;
+            for (unsigned int ch = 0; ch < num_out_ch; ++ch) {
+                double ch_peak = 0.0;
+                if (ebur128_true_peak(lufs_st.get(), ch, &ch_peak) == EBUR128_SUCCESS) {
+                    max_peak = std::max(max_peak, ch_peak);
+                }
+            }
+            if (max_peak > 0.0) {
+                metrics.measured_peak_dbtp = 20.0 * std::log10(max_peak);
+            }
+        }
+        return metrics;
 
     } catch (const std::invalid_argument& e) {
         // libear throws std::invalid_argument for unknown layout names
