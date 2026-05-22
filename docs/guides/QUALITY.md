@@ -32,6 +32,12 @@ scripts/quality/clang-tidy.sh build/debug
 scripts/quality/cppcheck.sh build/debug
 ```
 
+本地日常开发建议优先跑增量检查，只扫描相对 `origin/main`、暂存区和工作区发生变化的 C/C++ 文件：
+
+```bash
+scripts/quality/check-changed.sh --build-dir build/debug
+```
+
 一键检查：
 
 ```bash
