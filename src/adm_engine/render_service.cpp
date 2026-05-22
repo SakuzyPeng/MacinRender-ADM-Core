@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <ctime>
 
 #include <fmt/format.h>
 
@@ -15,6 +16,19 @@
 
 namespace mradm {
 
+namespace {
+
+[[nodiscard]] std::tm utc_time(std::time_t t) {
+    std::tm tm_utc{};
+#if defined(_WIN32)
+    gmtime_s(&tm_utc, &t);
+#else
+    gmtime_r(&t, &tm_utc);
+#endif
+    return tm_utc;
+}
+
+} // anonymous namespace
 
 RenderService::RenderService() = default;
 
@@ -144,6 +158,34 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         auto conv_res = audio::downconvert_to_int(output_path, depth);
         if (!conv_res) {
             return {conv_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, conv_res.error().message}}};
+        }
+    }
+
+    // Write format-specific metadata (non-fatal on failure).
+    {
+        const std::time_t now = std::time(nullptr);
+        const std::tm tm_utc = utc_time(now);
+
+        audio::MetadataFields meta_fields;
+        meta_fields.encoder = "MacinRender ADM Core Alpha";
+        meta_fields.date_utc = fmt::format("{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z",
+                                           tm_utc.tm_year + 1900,
+                                           tm_utc.tm_mon + 1,
+                                           tm_utc.tm_mday,
+                                           tm_utc.tm_hour,
+                                           tm_utc.tm_min,
+                                           tm_utc.tm_sec);
+        meta_fields.renderer = caps.backend_name;
+        meta_fields.output_layout = output_layout;
+        // bext / info fields must reflect the actual file after gain adjustment.
+        meta_fields.lufs =
+            metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
+        meta_fields.peak_dbtp =
+            metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
+
+        auto meta_res = audio::write_file_metadata(output_path, meta_fields);
+        if (!meta_res) {
+            logs.log(LogLevel::warning, "engine", "metadata write failed: " + meta_res.error().message);
         }
     }
 

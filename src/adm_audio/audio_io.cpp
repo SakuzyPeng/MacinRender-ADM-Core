@@ -5,12 +5,14 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <dr_wav.h>
 #include <filesystem>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <numeric>
@@ -218,6 +220,12 @@ namespace {
         std::accumulate(b.begin(), b.end(), uint64_t{0}, [](uint64_t acc, uint8_t byte) { return (acc << 8U) | byte; });
     std::memcpy(&out, &u, 8);
     return true;
+}
+
+[[nodiscard]] uint32_t read_le32(const char* p) {
+    const auto* b = reinterpret_cast<const uint8_t*>(p);
+    return static_cast<uint32_t>(b[0]) | (static_cast<uint32_t>(b[1]) << 8U) | (static_cast<uint32_t>(b[2]) << 16U) |
+           (static_cast<uint32_t>(b[3]) << 24U);
 }
 
 } // anonymous namespace
@@ -674,6 +682,214 @@ WriterHandle::open(const std::string& path, uint32_t channels, uint32_t sample_r
 
 uint64_t WriterHandle::write(const float* samples, uint64_t frame_count) {
     return std::visit([&](auto& w) { return w.write(samples, frame_count); }, impl_);
+}
+
+// ── write_file_metadata ───────────────────────────────────────────────────────
+
+namespace {
+
+// Append a BWF v2 bext chunk to an existing RIFF/WAVE file and update the RIFF
+// size.  EBU Tech 3285 supplement 5 field layout (602-byte fixed payload).
+Result<void> write_wav_metadata(const std::string& path, const MetadataFields& meta) {
+    std::FILE* f = std::fopen(path.c_str(), "r+b");
+    if (!f) {
+        return make_error(ErrorCode::io_error, "cannot open WAV for metadata write", "path=" + path);
+    }
+
+    // Verify RIFF/WAVE magic.
+    std::array<char, 12> hdr{};
+    if (std::fread(hdr.data(), 1, hdr.size(), f) != hdr.size() || std::string_view(hdr.data(), 4) != "RIFF" ||
+        std::string_view(hdr.data() + 8, 4) != "WAVE") {
+        std::fclose(f);
+        return make_error(ErrorCode::io_error, "not a RIFF/WAVE file", "path=" + path);
+    }
+    const uint32_t riff_size = read_le32(hdr.data() + 4);
+
+    // Fixed bext payload size (no coding history).
+    constexpr uint32_t k_payload = 602;
+    constexpr uint32_t k_chunk_total = 8 + k_payload; // FourCC(4) + size(4) + payload
+
+    // Write bext chunk at EOF.
+    std::fseek(f, 0, SEEK_END);
+
+    // Null-padded fixed-width string helper.
+    const auto write_str_field = [&](const std::string& s, std::size_t width) {
+        std::vector<char> buf(width, '\0');
+        std::memcpy(buf.data(), s.c_str(), std::min(s.size(), width - 1));
+        std::fwrite(buf.data(), 1, width, f);
+    };
+    const auto write_le16 = [&](int16_t v) {
+        const auto u = static_cast<uint16_t>(v);
+        const std::array<uint8_t, 2> bytes{static_cast<uint8_t>(u), static_cast<uint8_t>(u >> 8U)};
+        std::fwrite(bytes.data(), 1, bytes.size(), f);
+    };
+    const auto write_le32 = [&](uint32_t v) {
+        const std::array<uint8_t, 4> bytes{static_cast<uint8_t>(v),
+                                           static_cast<uint8_t>(v >> 8U),
+                                           static_cast<uint8_t>(v >> 16U),
+                                           static_cast<uint8_t>(v >> 24U)};
+        std::fwrite(bytes.data(), 1, bytes.size(), f);
+    };
+
+    // Chunk header (LE chunk size).
+    std::fwrite("bext", 1, 4, f);
+    write_le32(k_payload);
+
+    // Description[256] — renderer + layout summary.
+    const std::string desc = meta.renderer.empty() ? "" : "renderer=" + meta.renderer + " layout=" + meta.output_layout;
+    write_str_field(desc, 256);
+
+    // Originator[32].
+    write_str_field(meta.encoder, 32);
+
+    // OriginatorReference[32] — layout id.
+    write_str_field(meta.output_layout, 32);
+
+    // OriginationDate[10] "yyyy-mm-dd" and OriginationTime[8] "hh-mm-ss".
+    std::array<char, 10> odate{};
+    std::array<char, 8> otime{};
+    if (meta.date_utc.size() >= 10) {
+        std::memcpy(odate.data(), meta.date_utc.c_str(), 10);
+    }
+    if (meta.date_utc.size() >= 19) {
+        // ISO 8601 "Thh:mm:ss" — EBU spec wants "hh-mm-ss".
+        otime[0] = meta.date_utc[11];
+        otime[1] = meta.date_utc[12];
+        otime[2] = '-';
+        otime[3] = meta.date_utc[14];
+        otime[4] = meta.date_utc[15];
+        otime[5] = '-';
+        otime[6] = meta.date_utc[17];
+        otime[7] = meta.date_utc[18];
+    }
+    std::fwrite(odate.data(), 1, odate.size(), f);
+    std::fwrite(otime.data(), 1, otime.size(), f);
+
+    // TimeReferenceLow + TimeReferenceHigh (8 bytes, zero).
+    write_le32(0);
+    write_le32(0);
+
+    // Version = 2 (BWF v2 for loudness fields).
+    write_le16(2);
+
+    // UMID[64] — zero.
+    std::array<uint8_t, 64> umid{};
+    std::fwrite(umid.data(), 1, umid.size(), f);
+
+    // Loudness fields (int16_t LE, unit = 0.01; 0x7FFF = not-indicated).
+    constexpr int16_t k_ni = 0x7FFF;
+    const int16_t loudness_val = meta.lufs ? static_cast<int16_t>(std::lround(*meta.lufs * 100.0)) : k_ni;
+    const int16_t peak_val = meta.peak_dbtp ? static_cast<int16_t>(std::lround(*meta.peak_dbtp * 100.0)) : k_ni;
+    write_le16(loudness_val); // LoudnessValue
+    write_le16(k_ni);         // LoudnessRange — not measured
+    write_le16(peak_val);     // MaxTruePeakLevel
+    write_le16(k_ni);         // MaxMomentaryLoudness — not measured
+    write_le16(k_ni);         // MaxShortTermLoudness — not measured
+
+    // Reserved[180] — zero.
+    std::array<uint8_t, 180> reserved{};
+    std::fwrite(reserved.data(), 1, reserved.size(), f);
+    // Byte count: 256+32+32+10+8+4+4+2+64+2+2+2+2+2+180 = 602 ✓
+
+    // Update RIFF size (bytes 4-7, LE).
+    const uint32_t new_riff_size = riff_size + k_chunk_total;
+    std::fseek(f, 4, SEEK_SET);
+    write_le32(new_riff_size);
+
+    std::fclose(f);
+    return {};
+}
+
+// Append a CAF info chunk to an existing CAF file.
+// Chunk payload: num_entries (u32 BE) + [key\0value\0]* pairs.
+Result<void> write_caf_metadata(const std::string& path, const MetadataFields& meta) {
+    std::FILE* f = std::fopen(path.c_str(), "r+b");
+    if (!f) {
+        return make_error(ErrorCode::io_error, "cannot open CAF for metadata write", "path=" + path);
+    }
+
+    std::array<char, 4> magic{};
+    if (std::fread(magic.data(), 1, magic.size(), f) != magic.size() || std::string_view(magic.data(), 4) != "caff") {
+        std::fclose(f);
+        return make_error(ErrorCode::io_error, "not a CAF file", "path=" + path);
+    }
+
+    // Build key-value pairs.
+    struct KV {
+        std::string key;
+        std::string value;
+    };
+    std::vector<KV> pairs;
+
+    if (!meta.encoder.empty()) {
+        pairs.push_back({"encodingapplication", meta.encoder});
+    }
+    if (!meta.date_utc.empty()) {
+        pairs.push_back({"date", meta.date_utc});
+    }
+
+    // Compact comments: renderer, layout, loudness, peak.
+    std::string comments;
+    const auto append = [&](std::string_view kv) {
+        if (!comments.empty()) {
+            comments += ' ';
+        }
+        comments.append(kv);
+    };
+    if (!meta.renderer.empty()) {
+        append("renderer=" + meta.renderer);
+    }
+    if (!meta.output_layout.empty()) {
+        append("layout=" + meta.output_layout);
+    }
+    if (meta.lufs) {
+        append(fmt::format("loudness={:.1f}LUFS", *meta.lufs));
+    }
+    if (meta.peak_dbtp) {
+        append(fmt::format("peak={:.2f}dBTP", *meta.peak_dbtp));
+    }
+    if (!comments.empty()) {
+        pairs.push_back({"comments", comments});
+    }
+
+    // Serialise payload: num_entries (u32 BE) + [key\0value\0]*.
+    std::vector<uint8_t> payload;
+    const uint32_t n = static_cast<uint32_t>(pairs.size());
+    payload.push_back((n >> 24) & 0xFF);
+    payload.push_back((n >> 16) & 0xFF);
+    payload.push_back((n >> 8) & 0xFF);
+    payload.push_back(n & 0xFF);
+    for (const auto& kv : pairs) {
+        std::ranges::transform(kv.key, std::back_inserter(payload), [](char c) { return static_cast<uint8_t>(c); });
+        payload.push_back(0);
+        std::ranges::transform(kv.value, std::back_inserter(payload), [](char c) { return static_cast<uint8_t>(c); });
+        payload.push_back(0);
+    }
+
+    // Append info chunk (FourCC + int64 BE size + payload).
+    std::fseek(f, 0, SEEK_END);
+    std::fwrite("info", 1, 4, f);
+    const uint64_t csize = static_cast<uint64_t>(payload.size());
+    caf_write_i64(f, static_cast<int64_t>(csize));
+    std::fwrite(payload.data(), 1, payload.size(), f);
+
+    std::fclose(f);
+    return {};
+}
+
+} // anonymous namespace
+
+Result<void> write_file_metadata(const std::string& path, const MetadataFields& meta) {
+    auto ext = std::filesystem::path(path).extension().string();
+    std::ranges::transform(
+        ext, ext.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+    if (ext == ".caf") {
+        return write_caf_metadata(path, meta);
+    }
+    if (ext == ".wav") {
+        return write_wav_metadata(path, meta);
+    }
+    return {}; // unsupported extension — silently skip
 }
 
 } // namespace mradm::audio
