@@ -2,6 +2,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <ebur128.h>
 #include <limits>
 #include <map>
 #include <memory>
@@ -172,14 +173,14 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene) {
 class HoaRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
-    [[nodiscard]] Result<void> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override;
+    [[nodiscard]] Result<RenderMetrics> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override;
 };
 
 CapabilityReport HoaRenderer::capabilities() const {
     return hoa_capabilities();
 }
 
-Result<void> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
     if (plan.output_layout != "hoa3") {
         return make_error(ErrorCode::unsupported,
                           fmt::format("unsupported HOA output layout '{}'; supported: hoa3", plan.output_layout),
@@ -227,6 +228,13 @@ Result<void> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
         std::vector<float> out_block(static_cast<std::size_t>(k_num_out) * k_block_size);
+
+        struct EburFree { void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); } };
+        using EburPtr = std::unique_ptr<ebur128_state, EburFree>;
+        EburPtr lufs_st{ebur128_init(k_num_out,
+                                     static_cast<unsigned long>(sample_rate),
+                                     EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
+
         uint64_t frames_done = 0;
 
         while (frames_done < num_frames) {
@@ -249,6 +257,10 @@ Result<void> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress,
                 }
             }
 
+            if (lufs_st) {
+                ebur128_add_frames_float(lufs_st.get(), out_block.data(), static_cast<std::size_t>(frames_now));
+            }
+
             if (writer.write(out_block.data(), frames_now) != frames_now) {
                 return make_error(ErrorCode::io_error, "short write while encoding HOA", "output=" + plan.output_path);
             }
@@ -261,7 +273,25 @@ Result<void> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress,
         progress.on_progress({RenderStage::finished, 1.0, "done"});
         logs.log(LogLevel::info, "hoa-encode", fmt::format("wrote {} frames to {}", num_frames, plan.output_path));
 
-        return {};
+        RenderMetrics metrics;
+        if (lufs_st) {
+            double loudness = 0.0;
+            if (ebur128_loudness_global(lufs_st.get(), &loudness) == EBUR128_SUCCESS &&
+                std::isfinite(loudness)) {
+                metrics.measured_lufs = loudness;
+            }
+            double max_peak = 0.0;
+            for (unsigned int ch = 0; ch < k_num_out; ++ch) {
+                double ch_peak = 0.0;
+                if (ebur128_true_peak(lufs_st.get(), ch, &ch_peak) == EBUR128_SUCCESS) {
+                    max_peak = std::max(max_peak, ch_peak);
+                }
+            }
+            if (max_peak > 0.0) {
+                metrics.measured_peak_dbtp = 20.0 * std::log10(max_peak);
+            }
+        }
+        return metrics;
 
     } catch (const std::exception& e) {
         return make_error(

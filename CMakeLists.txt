@@ -104,11 +104,12 @@ target_sources(
 
 target_link_libraries(mr_adm_render_ear
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 adm ear saf MacinRender::ADMAudio
+    PRIVATE libbw64 adm ear saf ebur128 MacinRender::ADMAudio
 )
 target_include_directories(mr_adm_render_ear
     SYSTEM PRIVATE
         "${saf_SOURCE_DIR}/modules/saf_utilities"
+        "${EBUR128_INCLUDE_DIR}"
 )
 mr_adm_core_apply_warnings(mr_adm_render_ear)
 mr_adm_core_apply_static_analysis(mr_adm_render_ear)
@@ -133,11 +134,12 @@ target_sources(
 
 target_link_libraries(mr_adm_render_vbap
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 saf MacinRender::ADMAudio
+    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio
 )
 target_include_directories(mr_adm_render_vbap
     SYSTEM PRIVATE
         "${saf_SOURCE_DIR}/modules/saf_vbap"
+        "${EBUR128_INCLUDE_DIR}"
 )
 mr_adm_core_apply_warnings(mr_adm_render_vbap)
 mr_adm_core_apply_static_analysis(mr_adm_render_vbap)
@@ -162,7 +164,11 @@ target_sources(
 
 target_link_libraries(mr_adm_render_hoa
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 MacinRender::ADMAudio
+    PRIVATE libbw64 ebur128 MacinRender::ADMAudio
+)
+target_include_directories(mr_adm_render_hoa
+    SYSTEM PRIVATE
+        "${EBUR128_INCLUDE_DIR}"
 )
 mr_adm_core_apply_warnings(mr_adm_render_hoa)
 mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
