@@ -514,7 +514,7 @@ struct CafLayoutEntry {
 constexpr std::array<CafLayoutEntry, 7> k_caf_tags = {{
     {"0+2+0",  (101U << 16) | 2U,  2U},  // kAudioChannelLayoutTag_MPEG_2_0  / CICP_2  (L R)
     {"0+5+0",  (121U << 16) | 6U,  6U},  // kAudioChannelLayoutTag_MPEG_5_1_A / CICP_6 (L R C LFE Ls Rs)
-    {"0+7+0",  (128U << 16) | 8U,  8U},  // kAudioChannelLayoutTag_MPEG_7_1_C / CICP_12
+    {"wav71",  (189U << 16) | 8U,  8U},  // kAudioChannelLayoutTag_WAVE_7_1 (L R C LFE Rls Rrs Ls Rs)
     {"4+5+0",  (195U << 16) | 10U, 10U}, // kAudioChannelLayoutTag_Atmos_5_1_4
     {"4+7+0",  (192U << 16) | 12U, 12U}, // kAudioChannelLayoutTag_Atmos_7_1_4
     {"9.1.6",  (193U << 16) | 16U, 16U}, // kAudioChannelLayoutTag_Atmos_9_1_6

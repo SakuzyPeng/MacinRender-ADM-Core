@@ -141,6 +141,45 @@ namespace {
     return true;
 }
 
+[[nodiscard]] bool verify_caf_wav71_layout_tag() {
+    const auto path = std::filesystem::temp_directory_path() / "mr_core_caf_wav71_test.caf";
+    std::filesystem::remove(path);
+
+    {
+        auto writer_res = mradm::audio::WriterHandle::open(path.string(), 8U, 48000U, "wav71");
+        if (!writer_res) {
+            std::cerr << "CAF wav71 writer open failed: " << writer_res.error().message << "\n";
+            return false;
+        }
+        const std::vector<float> samples(8U, 0.0F);
+        if (writer_res->write(samples.data(), 1U) != 1U) {
+            std::cerr << "CAF wav71 writer short write\n";
+            std::filesystem::remove(path);
+            return false;
+        }
+    }
+
+    std::ifstream in(path, std::ios::binary);
+    std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
+    const auto chan = find_caf_chunk(bytes, "chan");
+    constexpr uint32_t k_wave_71_tag = (189U << 16U) | 8U;
+    if (chan == std::string::npos || read_be32(bytes, chan + 12U) != k_wave_71_tag) {
+        std::cerr << "CAF wav71 channel layout tag mismatch\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+
+    auto old_res = mradm::audio::WriterHandle::open(path.string(), 8U, 48000U, "0+7+0");
+    if (old_res || old_res.error().code != mradm::ErrorCode::unsupported) {
+        std::cerr << "CAF old 0+7+0 layout id should be unsupported\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+
+    std::filesystem::remove(path);
+    return true;
+}
+
 [[nodiscard]] bool verify_caf_metadata_write(const std::filesystem::path& path) {
     const auto meta_res = mradm::audio::write_file_metadata(path.string(), test_metadata());
     if (!meta_res) {
@@ -337,6 +376,9 @@ int main() {
         return EXIT_FAILURE;
     }
     if (!verify_wav_metadata_write()) {
+        return EXIT_FAILURE;
+    }
+    if (!verify_caf_wav71_layout_tag()) {
         return EXIT_FAILURE;
     }
 

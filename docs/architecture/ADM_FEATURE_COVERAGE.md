@@ -275,12 +275,13 @@ ADM 块插值和 MDAP extent spread。
 |---|---|---|---|
 | `0+2+0` | Stereo | 2 | — |
 | `0+5+0` | 5.1 | 6 | LFE1@ch3 |
-| `0+7+0` | 7.1 | 8 | LFE1@ch3 |
+| `wav71` | WAV 7.1 | 8 | LFE1@ch3 |
 | `4+5+0` | 5.1.4 | 10 | LFE1@ch3 |
 | `4+7+0` | 7.1.4 | 12 | LFE1@ch3 |
 | `9+10+3` | 22.2 | 24 | LFE1@ch3，LFE2@ch9 |
 | `9.1.6` | 9.1.6 (Dolby Atmos) | 16 | LFE1@ch3 |
 
+除 `wav71` 使用 CoreAudio `kAudioChannelLayoutTag_WAVE_7_1` / Microsoft WAVE 7.1 槽位外，
 通道顺序与 libear `bs2051_layouts.cpp` 一致（`0+2+0` 在 2026-05-20 修正了原始的 L/R 反转 bug）。
 `9.1.6` 通道顺序遵循 CoreAudio `kAudioChannelLayoutTag_Atmos_9_1_6`。
 LFE 声道参与输出但不参与 VBAP panning；DS LFE 轨按标签（"LFE1"/"LFE2"）直接路由。
