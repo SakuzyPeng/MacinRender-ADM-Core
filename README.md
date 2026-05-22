@@ -37,6 +37,12 @@ ctest --test-dir build --output-on-failure
 cmake -S . -B build -DMR_ADM_CORE_FETCH_DEPS=OFF
 ```
 
+FLAC 输出依赖 libFLAC，默认使用三档策略：
+
+- `MR_ADM_FLAC_PROVIDER=AUTO`：默认值；首次配置为 Release / RelWithDebInfo / MinSizeRel 或多配置生成器时走 vendored static libFLAC，Debug / 未指定构建类型优先用系统 libFLAC，找不到再 FetchContent。
+- `MR_ADM_FLAC_PROVIDER=VENDORED`：强制 FetchContent 拉取并静态链接 libFLAC，适合正式分发。
+- `MR_ADM_FLAC_PROVIDER=SYSTEM` 或 `MR_ADM_USE_SYSTEM_FLAC=ON`：强制使用系统 libFLAC，适合 Homebrew、vcpkg、Linux 发行版打包。
+
 可选启用 Cppcheck：
 
 ```bash
