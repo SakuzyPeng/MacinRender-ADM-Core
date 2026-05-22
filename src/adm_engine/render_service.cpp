@@ -244,8 +244,8 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
 
     if (is_opus_final) {
         logs.log(LogLevel::info, "engine", "encoding float32 render to Opus MKA (VBR)");
-        auto opus_res = audio::convert_to_opus_mka(render_path, output_path, output_layout,
-                                                    request.options.opus_bitrate_per_ch_kbps);
+        auto opus_res = audio::convert_to_opus_mka(
+            render_path, output_path, output_layout, request.options.opus_bitrate_per_ch_kbps);
         render_temp_guard->remove_now();
         if (!opus_res) {
             return {opus_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, opus_res.error().message}}};

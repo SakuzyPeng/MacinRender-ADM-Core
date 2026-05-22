@@ -333,7 +333,8 @@ CLI::App* add_render_command(CLI::App& app, RenderCliOptions& opts) {
     render_cmd
         ->add_option("--opus-bitrate-per-ch",
                      opts.opus_bitrate_per_ch,
-                     "Opus MKA VBR target bitrate per channel in kbps (default: 64, stereo min 128)")
+                     "Opus MKA VBR target bitrate per channel in kbps (6-320); "
+                     "omit for auto: 64 kbps/ch, 128 kbps floor for mono/stereo")
         ->check(CLI::Range(6U, 320U));
     return render_cmd;
 }
