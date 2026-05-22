@@ -304,6 +304,7 @@ struct RenderCliOptions {
     std::string output_bit_depth_str{"f32"};
     float loudness_target{std::numeric_limits<float>::quiet_NaN()};
     uint32_t interp_ms{5};
+    uint32_t opus_bitrate_per_ch{0};
 };
 
 CLI::App* add_render_command(CLI::App& app, RenderCliOptions& opts) {
@@ -329,6 +330,11 @@ CLI::App* add_render_command(CLI::App& app, RenderCliOptions& opts) {
                      "Default gain-interpolation ramp in ms when ADM block has no jumpPosition/interpolationLength "
                      "(default: 5, set to 0 for instant switching)")
         ->check(CLI::Range(0U, 500U));
+    render_cmd
+        ->add_option("--opus-bitrate-per-ch",
+                     opts.opus_bitrate_per_ch,
+                     "Opus MKA VBR target bitrate per channel in kbps (default: 64, stereo min 128)")
+        ->check(CLI::Range(6U, 320U));
     return render_cmd;
 }
 
@@ -344,6 +350,7 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     request.options.peak_limit_dbtp = opts.peak_limit_dbtp;
     request.options.output_bit_depth = parse_output_bit_depth(opts.output_bit_depth_str);
     request.options.default_interp_ms = opts.interp_ms;
+    request.options.opus_bitrate_per_ch_kbps = opts.opus_bitrate_per_ch;
     if (!std::isnan(opts.loudness_target)) {
         request.options.measure_loudness = true;
         request.options.loudness_target_lufs = opts.loudness_target;

@@ -148,7 +148,11 @@ class FloatFlacReader {
 // Call convert_to_opus_mka() rather than this class directly in the pipeline.
 class FloatOpusMkaWriter {
   public:
-    static Result<FloatOpusMkaWriter> open(const std::string& path, uint32_t channels, uint32_t sample_rate);
+    // bitrate_per_ch_kbps: VBR target per channel in kbps; 0 = auto
+    // (64 kbps/ch, minimum 128 kbps for stereo).
+    static Result<FloatOpusMkaWriter>
+    open(const std::string& path, uint32_t channels, uint32_t sample_rate,
+         uint32_t bitrate_per_ch_kbps = 0);
     ~FloatOpusMkaWriter();
     FloatOpusMkaWriter(FloatOpusMkaWriter&&) noexcept;
     FloatOpusMkaWriter& operator=(FloatOpusMkaWriter&&) noexcept;
@@ -230,8 +234,10 @@ Result<void> convert_to_flac(const std::string& src_path, const std::string& fla
 // container metadata written by the engine layer. Use this as the final pipeline
 // step after all apply_gain_to_file() adjustments — re-encoding degrades lossy
 // quality.
+// bitrate_per_ch_kbps: VBR target per channel in kbps; 0 = auto.
 Result<void>
-convert_to_opus_mka(const std::string& src_path, const std::string& mka_path, const std::string& layout_id = {});
+convert_to_opus_mka(const std::string& src_path, const std::string& mka_path,
+                    const std::string& layout_id = {}, uint32_t bitrate_per_ch_kbps = 0);
 
 // Format-agnostic render output metadata.  Assembled by the engine layer and
 // passed to write_file_metadata(); format-specific encoding is handled there.
