@@ -544,6 +544,19 @@ void apply_direct_delay(DecorrState& state,
     }
 }
 
+void remap_wav71_to_wave_order(std::vector<float>& block, std::size_t frames_now, std::size_t num_out_ch) {
+    if (num_out_ch != 8U) {
+        return;
+    }
+    // libear BS.2051 0+7+0 is L R C LFE Ls Rs Lrs Rrs; WAVE_7_1 is
+    // L R C LFE Lrs Rrs Ls Rs.
+    for (std::size_t f = 0; f < frames_now; ++f) {
+        const auto base = f * num_out_ch;
+        std::swap(block[base + 4U], block[base + 6U]);
+        std::swap(block[base + 5U], block[base + 7U]);
+    }
+}
+
 class EarRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
@@ -558,7 +571,9 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
     try {
         const auto& info = plan.scene.info;
 
-        const ear::Layout layout = ear::getLayout(plan.output_layout);
+        // libear uses BS.2051 IDs; "wav71" is our public alias for "0+7+0".
+        const std::string ear_layout_id = (plan.output_layout == "wav71") ? "0+7+0" : plan.output_layout;
+        const ear::Layout layout = ear::getLayout(ear_layout_id);
         const auto gain_matrix = build_gain_matrix(plan.scene, layout, logs);
 
         if (gain_matrix.empty()) {
@@ -692,6 +707,9 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
             for (std::size_t s = 0; s < out_samples; ++s) {
                 out_block[s] += diffuse_out[s];
             }
+            if (plan.output_layout == "wav71") {
+                remap_wav71_to_wave_order(out_block, frames_now, num_out_ch);
+            }
 
             if (lufs_st) {
                 ebur128_add_frames_float(lufs_st.get(), out_block.data(), static_cast<std::size_t>(frames_now));
@@ -754,7 +772,7 @@ CapabilityReport ear_capabilities() {
         {"2+5+0",  "5.1.2",         8,  true,  1, true},
         {"4+5+0",  "5.1.4",         10, true,  1, true},
         {"4+5+4",  "9.1.4",         14, true,  1, true},
-        {"0+7+0",  "7.1",           8,  false, 1, true},
+        {"wav71",  "7.1",           8,  false, 1, true},
         {"4+7+0",  "7.1.4",         12, true,  1, true},
         {"9+10+3", "22.2",          24, true,  2, true},
     };

@@ -146,6 +146,8 @@ int main() {
         ok &= check(r.code == 0, "backends: exit 0");
         ok &= check(r.out.find("libear") != std::string::npos, "backends: 'libear' in output");
         ok &= check(r.out.find("0+2+0") != std::string::npos, "backends: stereo layout listed");
+        ok &= check(r.out.find("wav71") != std::string::npos, "backends: wav71 layout listed");
+        ok &= check(r.out.find("0+7+0") == std::string::npos, "backends: old 0+7+0 layout not listed");
     }
 
     // ── adm inspect <fixture> ─────────────────────────────────────────────────

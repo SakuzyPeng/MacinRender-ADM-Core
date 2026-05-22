@@ -53,8 +53,8 @@ class FloatWavReader {
 
 // Streaming writer for CAF (Core Audio Format) files with IEEE float32 samples
 // and an Apple AudioChannelLayoutTag encoded in the 'chan' chunk.
-// layout_id must be one of the supported BS.2051 identifiers:
-//   "0+2+0", "0+5+0", "0+7+0", "4+5+0", "4+7+0", "9.1.6", "9+10+3"
+// layout_id must be one of the supported output layout identifiers:
+//   "0+2+0", "0+5+0", "wav71", "4+5+0", "4+7+0", "9.1.6", "9+10+3"
 // PCM samples are stored as little-endian float32 with the matching layout tag so
 // that afinfo, QuickTime, and CoreAudio consumers can read the channel assignment.
 class FloatCafWriter {

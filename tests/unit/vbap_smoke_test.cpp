@@ -730,6 +730,50 @@ bool verify_direct_speakers_label_routing() {
     return ok;
 }
 
+bool verify_wav71_rear_side_order() {
+    auto render_ds = [](const char* label, float azimuth, const char* suffix) {
+        auto [doc, uid_str] = make_direct_speakers_doc(label, azimuth);
+        const auto in_path = write_input_fixture(doc, uid_str);
+        FileGuard in_guard{in_path};
+
+        const auto out_path =
+            std::filesystem::temp_directory_path() / (std::string{"mr_vbap_wav71_"} + suffix + ".wav");
+        FileGuard out_guard{out_path};
+
+        mradm::RenderRequest request;
+        request.input_path = in_path;
+        request.output_path = out_path;
+        request.options.output_layout = "wav71";
+        request.options.renderer = mradm::RendererSelection::saf;
+
+        mradm::RenderService service;
+        mradm::NullProgressSink progress;
+        mradm::NullLogSink logs;
+        const mradm::RenderResult result = service.render(request, progress, logs);
+        if (!result.success()) {
+            std::cerr << "FAIL: wav71 DirectSpeakers render failed: " << result.error.message << "\n";
+            return std::vector<double>{};
+        }
+        return read_channel_sums(out_path, 8U);
+    };
+
+    // WAVE_7_1 order is L R C LFE Lrs Rrs Ls Rs.  The old BS.2051 0+7+0 order
+    // had side before rear; this locks the public wav71 slot order.
+    const auto rear = render_ds("M+135", 135.0F, "rear");
+    const auto side = render_ds("M+090", 90.0F, "side");
+
+    bool ok = true;
+    ok &= check(rear.size() == 8U, "wav71 rear output has 8 channels");
+    ok &= check(side.size() == 8U, "wav71 side output has 8 channels");
+    if (ok) {
+        ok &= check(rear[4] > 0.0, "wav71 M+135 routes to rear-left slot ch4");
+        ok &= check(rear[6] < 1.0e-6, "wav71 M+135 does not route to side-left slot ch6");
+        ok &= check(side[6] > 0.0, "wav71 M+090 routes to side-left slot ch6");
+        ok &= check(side[4] < 1.0e-6, "wav71 M+090 does not route to rear-left slot ch4");
+    }
+    return ok;
+}
+
 bool verify_direct_speakers_alias_routing() {
     auto [doc, uid_str] = make_direct_speakers_doc("RC_LFE", 0.0F);
     const auto in_path = write_input_fixture(doc, uid_str);
@@ -1554,6 +1598,19 @@ int main() {
         std::cerr << "FAIL: supported_layouts must not be empty\n";
         ok = false;
     }
+    const auto wav71 = std::ranges::find_if(caps.supported_layouts, [](const auto& layout) {
+        return layout.id == "wav71" && layout.channel_count == 8U && layout.lfe_count == 1U;
+    });
+    if (wav71 == caps.supported_layouts.end()) {
+        std::cerr << "FAIL: saf-vbap must expose wav71 as the public 7.1 layout\n";
+        ok = false;
+    }
+    const auto old_070 =
+        std::ranges::find_if(caps.supported_layouts, [](const auto& layout) { return layout.id == "0+7+0"; });
+    if (old_070 != caps.supported_layouts.end()) {
+        std::cerr << "FAIL: saf-vbap must not expose old 0+7+0 layout id\n";
+        ok = false;
+    }
     if (!caps.supports_objects) {
         std::cerr << "FAIL: saf-vbap must declare supports_objects\n";
         ok = false;
@@ -1594,6 +1651,7 @@ int main() {
     ok &= verify_overlong_interpolation_is_clamped();
     ok &= verify_nested_audio_object_start_offsets();
     ok &= verify_direct_speakers_label_routing();
+    ok &= verify_wav71_rear_side_order();
     ok &= verify_direct_speakers_alias_routing();
     ok &= verify_direct_speakers_position_fallback_wrap();
     ok &= verify_916_output_is_16ch();
