@@ -104,7 +104,11 @@ target_sources(
 
 target_link_libraries(mr_adm_render_ear
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 adm ear MacinRender::ADMAudio
+    PRIVATE libbw64 adm ear saf MacinRender::ADMAudio
+)
+target_include_directories(mr_adm_render_ear
+    SYSTEM PRIVATE
+        "${saf_SOURCE_DIR}/modules/saf_utilities"
 )
 mr_adm_core_apply_warnings(mr_adm_render_ear)
 mr_adm_core_apply_static_analysis(mr_adm_render_ear)
