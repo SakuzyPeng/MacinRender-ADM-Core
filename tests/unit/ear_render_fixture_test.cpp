@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -120,6 +121,60 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc() {
     return {doc, uid_str};
 }
 
+std::pair<std::shared_ptr<adm::Document>, std::string> make_two_block_jump_objects_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"EarTwoBlockCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects right_block{adm::SphericalPosition{adm::Azimuth{-30.0F}, adm::Elevation{0.0F}}};
+        right_block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
+        right_block.set(adm::Duration{adm::Time{std::chrono::milliseconds{500}}});
+        right_block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(right_block);
+
+        adm::AudioBlockFormatObjects left_block{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}}};
+        left_block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{500}}});
+        left_block.set(adm::Duration{adm::Time{std::chrono::milliseconds{500}}});
+        left_block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(left_block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"EarTwoBlockPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"EarTwoBlockSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"EarTwoBlockTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"EarTwoBlockObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"EarTwoBlockContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"EarTwoBlockProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
 struct DirectSpeakersDoc {
     std::shared_ptr<adm::Document> doc;
     std::array<std::string, 2> uids;
@@ -205,6 +260,26 @@ std::filesystem::path write_input_fixture(const std::string& uid_str, const std:
     constexpr uint32_t k_frames = 1000U;
     std::vector<float> samples(k_frames, 0.5F);
     writer->write(samples.data(), k_frames);
+
+    return path;
+}
+
+std::filesystem::path write_input_fixture(const std::string& uid_str,
+                                          const std::shared_ptr<adm::Document>& doc,
+                                          std::string_view stem,
+                                          uint16_t sample_rate,
+                                          uint32_t frames) {
+    auto path = std::filesystem::temp_directory_path() / std::string{stem};
+
+    std::ostringstream xml_buf;
+    adm::writeXml(xml_buf, doc);
+    const std::string xml_str = xml_buf.str();
+
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml_str);
+    auto writer = bw64::writeFile(path.string(), 1U, sample_rate, 24U, chna, axml);
+    std::vector<float> samples(frames, 0.5F);
+    writer->write(samples.data(), frames);
 
     return path;
 }
@@ -1116,6 +1191,63 @@ bool verify_ds_cartesian_speaker_position(const mradm::RenderService& service,
     return ok;
 }
 
+bool verify_ear_multiblock_inside_render_window(const mradm::RenderService& service,
+                                                mradm::ProgressSink& progress,
+                                                mradm::NullLogSink& logs) {
+    auto [doc, uid_str] = make_two_block_jump_objects_doc();
+    const auto in_path = write_input_fixture(uid_str, doc, "mr_ear_multiblock_window_in.wav", 1000U, 1000U);
+    FileGuard in_guard{in_path};
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_ear_multiblock_window_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "0+2+0";
+    req.options.renderer = mradm::RendererSelection::ear;
+    req.options.peak_limit = false;
+
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: EAR multiblock window render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!reader_res) {
+        std::cerr << "FAIL: cannot open EAR multiblock output\n";
+        return false;
+    }
+    auto& reader = *reader_res;
+    bool ok = check(reader.frame_count() == 1000U, "EAR multiblock: output has 1000 frames");
+    if (!ok) {
+        return false;
+    }
+
+    std::vector<float> samples(static_cast<std::size_t>(reader.frame_count()) * 2U);
+    reader.read(samples.data(), reader.frame_count());
+
+    double early_l = 0.0;
+    double early_r = 0.0;
+    for (std::size_t f = 320U; f < 470U; ++f) {
+        early_l += std::fabs(static_cast<double>(samples[(f * 2U) + 0U]));
+        early_r += std::fabs(static_cast<double>(samples[(f * 2U) + 1U]));
+    }
+
+    double late_l = 0.0;
+    double late_r = 0.0;
+    for (std::size_t f = 820U; f < 970U; ++f) {
+        late_l += std::fabs(static_cast<double>(samples[(f * 2U) + 0U]));
+        late_r += std::fabs(static_cast<double>(samples[(f * 2U) + 1U]));
+    }
+
+    ok &= check(early_r > 1.0, "EAR multiblock: first block contributes before boundary");
+    ok &= check(early_r > early_l * 5.0, "EAR multiblock: first block routes right");
+    ok &= check(late_l > 1.0, "EAR multiblock: second block contributes inside same render window");
+    ok &= check(late_l > late_r * 5.0, "EAR multiblock: second block routes left");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1133,6 +1265,7 @@ int main() {
     ok &= verify_ear_short_block(service, progress, logs);
     ok &= verify_p2_degrade_gracefully(service, progress);
     ok &= verify_ds_cartesian_speaker_position(service, progress, logs);
+    ok &= verify_ear_multiblock_inside_render_window(service, progress, logs);
 
     if (ok) {
         std::cout << "ear_render fixture test passed\n";

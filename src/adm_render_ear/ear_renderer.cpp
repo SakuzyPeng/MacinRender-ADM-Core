@@ -6,13 +6,13 @@
 #include <memory>
 #include <numbers>
 #include <optional>
+#include <saf_utility_complex.h>
+#include <saf_utility_fft.h>
 #include <vector>
 
 #include <bw64/bw64.hpp>
 #include <ear/ear.hpp>
 #include <fmt/format.h>
-#include <saf_utility_complex.h>
-#include <saf_utility_fft.h>
 
 #include "adm/audio_io.h"
 #include "adm/render.h"
@@ -47,18 +47,18 @@ struct AccumulateContext {
     uint16_t num_in_ch{0};
     uint16_t num_out_ch{0};
     uint64_t default_interp{0};
-    uint64_t frames_cap{0};      // stride between columns (= k_block_size)
+    uint64_t frames_cap{0}; // stride between columns (= k_block_size)
 };
 
 // FIR decorrelator state for the diffuse bus (BS.2127).
 // Uses overlap-add FFT convolution via saf_rfft (KissFFT backend, platform-agnostic).
 // FFT size L=2048 (next power-of-2 >= block_size(1024) + filter_len(512) - 1).
 struct DecorrState {
-    void* hFFT{nullptr};                                    // saf_rfft handle, L=2048
-    std::vector<std::vector<float_complex>> filter_fd;      // [num_out_ch][L/2+1=1025]
-    std::vector<std::vector<float>> overlap;                // [num_out_ch][K-1=511]
-    int comp_delay{0};                                      // decorrelatorCompensationDelay()=255
-    std::vector<std::vector<float>> dir_delay;              // [num_out_ch][comp_delay]
+    void* hFFT{nullptr};                               // saf_rfft handle, L=2048
+    std::vector<std::vector<float_complex>> filter_fd; // [num_out_ch][L/2+1=1025]
+    std::vector<std::vector<float>> overlap;           // [num_out_ch][K-1=511]
+    int comp_delay{0};                                 // decorrelatorCompensationDelay()=255
+    std::vector<std::vector<float>> dir_delay;         // [num_out_ch][comp_delay]
 
     ~DecorrState() {
         if (hFFT != nullptr) {
@@ -327,33 +327,14 @@ interpolation_length(const ChannelGainInfo& channel, std::size_t block_index, ui
     return (prev[out_ch] * (1.0 - alpha)) + (cur[out_ch] * alpha);
 }
 
-// Accumulate one input channel into the column-major direct/diffuse buffers.
-// Fast path (static gains): inner loop is a plain saxpy → auto-vectorised.
-// Slow path (ramping or block transition): per-frame scalar fallback.
-void accumulate_channel_block(const ChannelGainInfo& channel,
-                              std::size_t& block_index,
-                              const AccumulateContext& ctx,
-                              const float* ch_in,   // deinterleaved, [frames_now]
-                              uint64_t frames_now) {
-    const uint64_t abs_start = ctx.frames_done;
-
-    // Advance block index past any block that ended before this render window.
-    while (block_index + 1 < channel.blocks.size() &&
-           abs_start >= channel.blocks[block_index + 1].start_sample) {
-        ++block_index;
-    }
-
+void accumulate_channel_segment(const ChannelGainInfo& channel,
+                                std::size_t block_index,
+                                const AccumulateContext& ctx,
+                                const float* ch_in,
+                                std::size_t f0,
+                                std::size_t f1) {
     const auto& block = channel.blocks[block_index];
-
-    // Clamp active range to this render window.
-    const uint64_t win_end = abs_start + frames_now;
-    if (abs_start >= block.end_sample || win_end <= block.start_sample) {
-        return;
-    }
-    const auto f0 = static_cast<std::size_t>(
-        block.start_sample > abs_start ? block.start_sample - abs_start : 0);
-    const auto f1 = static_cast<std::size_t>(
-        std::min(block.end_sample - abs_start, frames_now));
+    const uint64_t abs_start = ctx.frames_done;
 
     const uint64_t interp_len = interpolation_length(channel, block_index, ctx.default_interp);
     const uint64_t delta0 = (abs_start + f0) - block.start_sample;
@@ -371,7 +352,7 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
             if (gd == 0.0F && gf == 0.0F) {
                 continue; // skip sparse zeros (common for VBAP panning)
             }
-            float* __restrict__ col_d = ctx.col_direct  + out_ch * stride;
+            float* __restrict__ col_d = ctx.col_direct + out_ch * stride;
             float* __restrict__ col_f = ctx.col_diffuse + out_ch * stride;
             if (gd != 0.0F) {
                 for (std::size_t f = f0; f < f1; ++f) {
@@ -392,17 +373,68 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
             const float in = ch_in[f];
             for (std::size_t out_ch = 0; out_ch < num_out; ++out_ch) {
                 const float gd = static_cast<float>(
-                    ramping ? interpolated_gain(channel.blocks[block_index - 1].gains,
-                                               block.gains, out_ch, delta, interp_len)
+                    ramping ? interpolated_gain(
+                                  channel.blocks[block_index - 1].gains, block.gains, out_ch, delta, interp_len)
                             : block.gains[out_ch]);
-                const float gf = static_cast<float>(
-                    ramping ? interpolated_gain(channel.blocks[block_index - 1].diffuse_gains,
-                                               block.diffuse_gains, out_ch, delta, interp_len)
-                            : block.diffuse_gains[out_ch]);
-                ctx.col_direct [out_ch * stride + f] += in * gd;
+                const float gf =
+                    static_cast<float>(ramping ? interpolated_gain(channel.blocks[block_index - 1].diffuse_gains,
+                                                                   block.diffuse_gains,
+                                                                   out_ch,
+                                                                   delta,
+                                                                   interp_len)
+                                               : block.diffuse_gains[out_ch]);
+                ctx.col_direct[out_ch * stride + f] += in * gd;
                 ctx.col_diffuse[out_ch * stride + f] += in * gf;
             }
         }
+    }
+}
+
+// Accumulate one input channel into the column-major direct/diffuse buffers.
+// Fast path (static gains): inner loop is a plain saxpy -> auto-vectorised.
+// Slow path (ramping): per-frame scalar fallback.
+void accumulate_channel_block(const ChannelGainInfo& channel,
+                              std::size_t& block_index,
+                              const AccumulateContext& ctx,
+                              const float* ch_in, // deinterleaved, [frames_now]
+                              uint64_t frames_now) {
+    const uint64_t abs_start = ctx.frames_done;
+    const uint64_t win_end = abs_start + frames_now;
+    std::size_t f0 = 0;
+
+    while (f0 < frames_now) {
+        const uint64_t abs_frame = abs_start + f0;
+        while (block_index + 1 < channel.blocks.size() && abs_frame >= channel.blocks[block_index + 1].start_sample) {
+            ++block_index;
+        }
+
+        const auto& block = channel.blocks[block_index];
+        if (abs_frame < block.start_sample) {
+            f0 = static_cast<std::size_t>(std::min(block.start_sample - abs_start, win_end - abs_start));
+            continue;
+        }
+        if (abs_frame >= block.end_sample) {
+            if (block_index + 1 >= channel.blocks.size()) {
+                return;
+            }
+            const uint64_t next_start = channel.blocks[block_index + 1].start_sample;
+            f0 = static_cast<std::size_t>(std::min(std::max(abs_frame, next_start) - abs_start, frames_now));
+            ++block_index;
+            continue;
+        }
+
+        uint64_t segment_end = std::min(block.end_sample, win_end);
+        if (block_index + 1 < channel.blocks.size()) {
+            segment_end = std::min(segment_end, channel.blocks[block_index + 1].start_sample);
+        }
+        if (segment_end <= abs_frame) {
+            ++block_index;
+            continue;
+        }
+
+        const auto f1 = static_cast<std::size_t>(segment_end - abs_start);
+        accumulate_channel_segment(channel, block_index, ctx, ch_in, f0, f1);
+        f0 = f1;
     }
 }
 
@@ -436,7 +468,7 @@ void apply_decorrelator(DecorrState& state,
                         std::size_t num_out_ch) {
     constexpr std::size_t k_fft_len = 2048;
     constexpr std::size_t k_bins = k_fft_len / 2 + 1; // 1025
-    constexpr std::size_t k_overlap_len = 511;          // K - 1
+    constexpr std::size_t k_overlap_len = 511;        // K - 1
 
     // Per-call scratch — small fixed size, stack-friendly via vector.
     std::vector<float> buf(k_fft_len);
@@ -556,7 +588,7 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
 
         // Initialise decorrelator state for the diffuse bus.
         // Filters designed as float; precomputed in frequency domain for FFT convolution.
-        constexpr int k_fft_len = 2048; // L: next pow2 >= 1024 + 512 - 1
+        constexpr int k_fft_len = 2048;           // L: next pow2 >= 1024 + 512 - 1
         constexpr int k_bins = k_fft_len / 2 + 1; // 1025
         constexpr std::size_t k_fir_len = 512;
 
@@ -600,10 +632,10 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
 
         // Interleaved buffers used for I/O and the decorrelator.
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
-        std::vector<float> out_block(num_out_ch * k_block_size);     // interleaved direct
-        std::vector<float> diffuse_in(num_out_ch * k_block_size);    // interleaved diffuse
+        std::vector<float> out_block(num_out_ch * k_block_size);  // interleaved direct
+        std::vector<float> diffuse_in(num_out_ch * k_block_size); // interleaved diffuse
         std::vector<float> diffuse_out(num_out_ch * k_block_size);
-        std::vector<float> ch_in_buf(k_block_size);                  // deinterleaved input scratch
+        std::vector<float> ch_in_buf(k_block_size); // deinterleaved input scratch
         uint64_t frames_done = 0;
 
         while (frames_done < num_frames) {
@@ -614,29 +646,29 @@ Result<void> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress,
 
             // Zero column-major accumulation buffers (only the live region per channel).
             for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-                std::fill_n(col_direct.data()  + ch * col_stride, frames_now, 0.0F);
+                std::fill_n(col_direct.data() + ch * col_stride, frames_now, 0.0F);
                 std::fill_n(col_diffuse.data() + ch * col_stride, frames_now, 0.0F);
             }
 
             // Accumulate gains into column-major buffers (SIMD-friendly inner loop).
             AccumulateContext ctx;
-            ctx.input        = in_block.data();
-            ctx.col_direct   = col_direct.data();
-            ctx.col_diffuse  = col_diffuse.data();
-            ctx.frames_done  = frames_done;
-            ctx.num_in_ch    = num_in_ch;
-            ctx.num_out_ch   = num_out_ch;
+            ctx.input = in_block.data();
+            ctx.col_direct = col_direct.data();
+            ctx.col_diffuse = col_diffuse.data();
+            ctx.frames_done = frames_done;
+            ctx.num_in_ch = num_in_ch;
+            ctx.num_out_ch = num_out_ch;
             ctx.default_interp = k_default_interp;
-            ctx.frames_cap   = col_stride;
+            ctx.frames_cap = col_stride;
 
-                accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now, ch_in_buf);
+            accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now, ch_in_buf);
 
             // Transpose column-major → interleaved for decorrelator and delay.
             for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-                const float* src_d = col_direct.data()  + ch * col_stride;
+                const float* src_d = col_direct.data() + ch * col_stride;
                 const float* src_f = col_diffuse.data() + ch * col_stride;
                 for (std::size_t f = 0; f < frames_now; ++f) {
-                    out_block [f * num_out_ch + ch] = src_d[f];
+                    out_block[f * num_out_ch + ch] = src_d[f];
                     diffuse_in[f * num_out_ch + ch] = src_f[f];
                 }
             }
