@@ -229,11 +229,12 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
         std::vector<float> out_block(static_cast<std::size_t>(k_num_out) * k_block_size);
 
-        struct EburFree { void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); } };
+        struct EburFree {
+            void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); }
+        };
         using EburPtr = std::unique_ptr<ebur128_state, EburFree>;
-        EburPtr lufs_st{ebur128_init(k_num_out,
-                                     static_cast<unsigned long>(sample_rate),
-                                     EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
+        EburPtr lufs_st{
+            ebur128_init(k_num_out, static_cast<unsigned long>(sample_rate), EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
 
         uint64_t frames_done = 0;
 
@@ -276,8 +277,7 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         RenderMetrics metrics;
         if (lufs_st) {
             double loudness = 0.0;
-            if (ebur128_loudness_global(lufs_st.get(), &loudness) == EBUR128_SUCCESS &&
-                std::isfinite(loudness)) {
+            if (ebur128_loudness_global(lufs_st.get(), &loudness) == EBUR128_SUCCESS && std::isfinite(loudness)) {
                 metrics.measured_lufs = loudness;
             }
             double max_peak = 0.0;
