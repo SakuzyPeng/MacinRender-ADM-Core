@@ -187,13 +187,13 @@ importer 仅从这两层提取路由信息（TypeDescriptor、对 AudioChannelFo
 
 | typeDefinition | 作为渲染输入 | 渲染/编码输出 |
 |---|---|---|
-| Objects | ✅ EAR / VBAP / HOA-encode | Objects→HOA3 16ch WAV（encode，非 ADM 输出） |
+| Objects | ✅ EAR / VBAP / HOA-encode | Objects→HOA3 16ch PCM 文件（encode，非 ADM 输出） |
 | DirectSpeakers | ✅ EAR（polar，标签路由）/ VBAP | — |
 | HOA | ✅ EAR（GainCalculatorHOA，多 block，mute/gain 门控） | — |
 | Matrix | ⚠️ 丢弃，emit `import_warnings` 警告 | — |
 | Binaural | ⚠️ 丢弃，emit `import_warnings` 警告 | — |
 
-当前项目没有 ADM/BW64 写出能力；所有输出均为普通 WAV 文件。
+当前项目没有 ADM/BW64 写出能力；输出为普通 PCM 文件（WAV/CAF float、FLAC 24-bit integer）。
 
 ### HOA typeDefinition 说明
 

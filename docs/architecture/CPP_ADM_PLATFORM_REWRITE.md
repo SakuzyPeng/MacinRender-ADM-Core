@@ -240,6 +240,12 @@ public:
 - 最终增益。
 - FLAC/WAV/CAF 等后处理策略。
 
+FLAC 输出策略：
+
+- 当前固定写出 24-bit integer FLAC，作为渲染结果的无损压缩交付格式。
+- 16-bit FLAC 主要服务消费级体积/兼容性诉求，列为后续 CLI 选项（如 `--flac-bit-depth 16|24`），不阻塞首发。
+- 如需保留 0 dBFS 以上 headroom 或 float 工作流，应使用 WAV/CAF float 输出，而不是 FLAC。
+
 原则：
 
 - DSP 算法尽量使用跨平台实现。

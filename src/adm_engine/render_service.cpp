@@ -141,9 +141,16 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     });
     const bool is_flac_final = (final_ext == ".flac");
-    const auto render_temp_path = is_flac_final ? unique_render_temp_path(final_path) : std::filesystem::path{};
-    auto render_temp_guard = is_flac_final ? std::make_unique<TempFileGuard>(render_temp_path) : nullptr;
-    const std::string render_path = is_flac_final ? render_temp_path.string() : output_path;
+    const bool is_opus_final = (final_ext == ".mka");
+    const auto render_temp_path = (is_flac_final || is_opus_final)
+        ? unique_render_temp_path(final_path)
+        : std::filesystem::path{};
+    auto render_temp_guard = (is_flac_final || is_opus_final)
+        ? std::make_unique<TempFileGuard>(render_temp_path)
+        : nullptr;
+    const std::string render_path = (is_flac_final || is_opus_final)
+        ? render_temp_path.string()
+        : output_path;
 
     // Build plan.
     RenderPlan plan;
@@ -212,7 +219,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     // Bit depth conversion: WAV output only.
     // CAF is always float32. For FLAC, the temp WAV stays float32 here so that
     // quantisation happens exactly once during the final FLAC encode step below.
-    if (!is_flac_final && request.options.output_bit_depth != OutputBitDepth::f32) {
+    if (!is_flac_final && !is_opus_final && request.options.output_bit_depth != OutputBitDepth::f32) {
         auto render_ext = std::filesystem::path(render_path).extension().string();
         std::ranges::transform(render_ext, render_ext.begin(), [](char c) {
             return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -236,6 +243,15 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         render_temp_guard->remove_now();
         if (!flac_res) {
             return {flac_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, flac_res.error().message}}};
+        }
+    }
+
+    if (is_opus_final) {
+        logs.log(LogLevel::info, "engine", "encoding float32 render to Opus MKA (VBR)");
+        auto opus_res = audio::convert_to_opus_mka(render_path, output_path, output_layout);
+        render_temp_guard->remove_now();
+        if (!opus_res) {
+            return {opus_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, opus_res.error().message}}};
         }
     }
 

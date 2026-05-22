@@ -43,6 +43,8 @@ FLAC 输出依赖 libFLAC，默认使用三档策略：
 - `MR_ADM_FLAC_PROVIDER=VENDORED`：强制 FetchContent 拉取并静态链接 libFLAC，适合正式分发。
 - `MR_ADM_FLAC_PROVIDER=SYSTEM` 或 `MR_ADM_USE_SYSTEM_FLAC=ON`：强制使用系统 libFLAC，适合 Homebrew、vcpkg、Linux 发行版打包。
 
+当前 FLAC 写出固定为 24-bit integer FLAC。16-bit FLAC 属于后续可选 CLI 能力，不阻塞首发；需要保留 float/headroom 时应优先使用 WAV/CAF float 输出。
+
 可选启用 Cppcheck：
 
 ```bash
