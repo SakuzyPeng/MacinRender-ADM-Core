@@ -1150,9 +1150,10 @@ bool FloatOpusMkaWriter::Impl::encode_and_write(uint64_t frame_ts_ms) {
     return true;
 }
 
-Result<FloatOpusMkaWriter>
-FloatOpusMkaWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate,
-                         uint32_t bitrate_per_ch_kbps) {
+Result<FloatOpusMkaWriter> FloatOpusMkaWriter::open(const std::string& path,
+                                                    uint32_t channels,
+                                                    uint32_t sample_rate,
+                                                    uint32_t bitrate_per_ch_kbps) {
     if (sample_rate != 48000U) {
         return make_error(ErrorCode::unsupported,
                           fmt::format("Opus MKA requires 48000 Hz input, got {} Hz", sample_rate),
@@ -1184,9 +1185,17 @@ FloatOpusMkaWriter::open(const std::string& path, uint32_t channels, uint32_t sa
                           "path=" + path);
     }
 
-    const int32_t bitrate = (bitrate_per_ch_kbps > 0U)
-        ? static_cast<int32_t>(bitrate_per_ch_kbps) * static_cast<int32_t>(channels) * 1000
-        : (channels <= 2U) ? 128000 : static_cast<int32_t>(channels) * 64000;
+    if (bitrate_per_ch_kbps > 0U && (bitrate_per_ch_kbps < 6U || bitrate_per_ch_kbps > 320U)) {
+        return make_error(
+            ErrorCode::invalid_argument,
+            fmt::format("opus_bitrate_per_ch_kbps must be 0 (auto) or 6-320, got {}", bitrate_per_ch_kbps),
+            "path=" + path);
+    }
+    const uint64_t total_bps = (bitrate_per_ch_kbps > 0U)
+                                   ? static_cast<uint64_t>(bitrate_per_ch_kbps) * channels * 1000U
+                               : (channels <= 2U) ? 128000U
+                                                  : static_cast<uint64_t>(channels) * 64000U;
+    const int32_t bitrate = static_cast<int32_t>(total_bps);
     const auto opus_ctl_error = [&](int ret, std::string_view op) -> Result<void> {
         if (ret == OPUS_OK) {
             return {};
@@ -1385,9 +1394,10 @@ Result<void> FloatOpusMkaWriter::close() {
     return impl_->close();
 }
 
-Result<void>
-convert_to_opus_mka(const std::string& src_path, const std::string& mka_path,
-                    const std::string& layout_id, uint32_t bitrate_per_ch_kbps) {
+Result<void> convert_to_opus_mka(const std::string& src_path,
+                                 const std::string& mka_path,
+                                 const std::string& layout_id,
+                                 uint32_t bitrate_per_ch_kbps) {
     auto reader_res = FloatWavReader::open(src_path);
     if (!reader_res) {
         return tl::unexpected{reader_res.error()};
@@ -1400,8 +1410,7 @@ convert_to_opus_mka(const std::string& src_path, const std::string& mka_path,
                           "src=" + src_path);
     }
 
-    auto writer_res = FloatOpusMkaWriter::open(mka_path, reader.channels(), reader.sample_rate(),
-                                               bitrate_per_ch_kbps);
+    auto writer_res = FloatOpusMkaWriter::open(mka_path, reader.channels(), reader.sample_rate(), bitrate_per_ch_kbps);
     if (!writer_res) {
         return tl::unexpected{writer_res.error()};
     }
