@@ -531,6 +531,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 - 决策：`FetchContent` + `find_package(CONFIG)` 兜底为主路径；SAF 因许可证模块化复杂走 vendored submodule。
 - `libbw64`/`libadm`/`libear` 通过 `cmake/MRDependencies.cmake` 接入，与 `fmt`/`spdlog`/`CLI11` 共用 find-or-fetch 模式。
 - `MR_ADM_CORE_FETCH_DEPS=OFF` 必须保持可用，支持 Linux 发行版打包与离线构建。
+- `libFLAC` 采用三档策略：开发构建可优先系统库，正式分发默认 vendored static，包管理器可通过 `MR_ADM_FLAC_PROVIDER=SYSTEM` 或 `MR_ADM_USE_SYSTEM_FLAC=ON` 强制系统库。
 - 详细记录：`docs/adr/0004-third-party-dependency-management.md`。
 
 ### 13.5 错误处理模型

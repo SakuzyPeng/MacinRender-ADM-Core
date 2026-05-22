@@ -1,12 +1,18 @@
 include(FetchContent)
 
 function(mr_adm_core_find_or_fetch package_name target_name)
-    find_package(${package_name} CONFIG QUIET)
     if(TARGET ${target_name})
         return()
     endif()
 
-    if(NOT MR_ADM_CORE_FETCH_DEPS)
+    if(NOT package_name STREQUAL "FLAC")
+        find_package(${package_name} CONFIG QUIET)
+    endif()
+    if(TARGET ${target_name})
+        return()
+    endif()
+
+    if(NOT package_name STREQUAL "FLAC" AND NOT MR_ADM_CORE_FETCH_DEPS)
         message(FATAL_ERROR "${package_name} was not found and MR_ADM_CORE_FETCH_DEPS is OFF")
     endif()
 
@@ -110,25 +116,76 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         endif()
         return()
     elseif(package_name STREQUAL "FLAC")
-        # libFLAC does not ship CMake config files in typical brew/system installs.
-        # Search common prefix paths before falling back to FetchContent.
-        find_library(MR_FLAC_LIB NAMES FLAC
-            HINTS /opt/homebrew/lib /usr/local/lib /usr/lib
-            NO_CACHE)
-        find_path(MR_FLAC_INCLUDE NAMES FLAC/stream_encoder.h
-            HINTS /opt/homebrew/include /usr/local/include /usr/include
-            NO_CACHE)
-        if(MR_FLAC_LIB AND MR_FLAC_INCLUDE)
-            add_library(FLAC::FLAC UNKNOWN IMPORTED GLOBAL)
-            set_target_properties(FLAC::FLAC PROPERTIES
-                IMPORTED_LOCATION "${MR_FLAC_LIB}"
-                INTERFACE_INCLUDE_DIRECTORIES "${MR_FLAC_INCLUDE}"
-            )
-            return()
+        string(TOUPPER "${MR_ADM_FLAC_PROVIDER}" _mr_flac_requested_provider)
+        if(MR_ADM_USE_SYSTEM_FLAC)
+            set(_mr_flac_requested_provider SYSTEM)
         endif()
+        if(NOT _mr_flac_requested_provider MATCHES "^(AUTO|SYSTEM|VENDORED)$")
+            message(FATAL_ERROR "MR_ADM_FLAC_PROVIDER must be AUTO, SYSTEM, or VENDORED")
+        endif()
+
+        set(_mr_flac_provider "${_mr_flac_requested_provider}")
+        if(_mr_flac_provider STREQUAL "AUTO")
+            if(CMAKE_CONFIGURATION_TYPES OR MR_ADM_FLAC_AUTO_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+                set(_mr_flac_provider VENDORED)
+            else()
+                set(_mr_flac_provider SYSTEM)
+            endif()
+            message(STATUS "libFLAC provider AUTO resolved to ${_mr_flac_provider}")
+        endif()
+
+        if(_mr_flac_provider STREQUAL "SYSTEM")
+            find_package(FLAC CONFIG QUIET)
+            if(TARGET FLAC::FLAC)
+                message(STATUS "Using system libFLAC via find_package")
+                return()
+            endif()
+
+            # libFLAC does not ship CMake config files in typical brew/system installs.
+            # Search common prefix paths before falling back in AUTO developer builds.
+            find_library(MR_FLAC_LIB NAMES FLAC
+                HINTS /opt/homebrew/lib /usr/local/lib /usr/lib
+                NO_CACHE)
+            find_path(MR_FLAC_INCLUDE NAMES FLAC/stream_encoder.h
+                HINTS /opt/homebrew/include /usr/local/include /usr/include
+                NO_CACHE)
+            if(MR_FLAC_LIB AND MR_FLAC_INCLUDE)
+                add_library(FLAC::FLAC UNKNOWN IMPORTED GLOBAL)
+                set_target_properties(FLAC::FLAC PROPERTIES
+                    IMPORTED_LOCATION "${MR_FLAC_LIB}"
+                    INTERFACE_INCLUDE_DIRECTORIES "${MR_FLAC_INCLUDE}"
+                )
+                message(STATUS "Using system libFLAC: ${MR_FLAC_LIB}")
+                return()
+            endif()
+
+            if(NOT _mr_flac_requested_provider STREQUAL "AUTO")
+                message(FATAL_ERROR "System libFLAC was requested but not found")
+            endif()
+            if(NOT MR_ADM_CORE_FETCH_DEPS)
+                message(FATAL_ERROR "libFLAC was not found and MR_ADM_CORE_FETCH_DEPS is OFF")
+            endif()
+            set(_mr_flac_provider VENDORED)
+            message(STATUS "System libFLAC not found; falling back to vendored static libFLAC")
+        endif()
+
+        if(NOT MR_ADM_CORE_FETCH_DEPS)
+            message(FATAL_ERROR "Vendored libFLAC requires MR_ADM_CORE_FETCH_DEPS=ON")
+        endif()
+
+        if(DEFINED BUILD_SHARED_LIBS)
+            set(_mr_adm_core_had_shared_flac TRUE)
+            set(_mr_adm_core_saved_shared_flac "${BUILD_SHARED_LIBS}")
+        else()
+            set(_mr_adm_core_had_shared_flac FALSE)
+        endif()
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+        set(BUILD_CXXLIBS OFF CACHE BOOL "" FORCE)
+        set(BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
         set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
         set(BUILD_DOCS OFF CACHE BOOL "" FORCE)
         set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
         set(WITH_OGG OFF CACHE BOOL "" FORCE)
         set(INSTALL_MANPAGES OFF CACHE BOOL "" FORCE)
         FetchContent_Declare(
@@ -138,9 +195,19 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_SHALLOW TRUE
         )
         FetchContent_MakeAvailable(FLAC)
+        if(_mr_adm_core_had_shared_flac)
+            set(BUILD_SHARED_LIBS "${_mr_adm_core_saved_shared_flac}" CACHE BOOL "" FORCE)
+        else()
+            unset(BUILD_SHARED_LIBS CACHE)
+            unset(BUILD_SHARED_LIBS)
+        endif()
         if(TARGET FLAC AND NOT TARGET FLAC::FLAC)
             add_library(FLAC::FLAC ALIAS FLAC)
         endif()
+        if(NOT TARGET FLAC::FLAC)
+            message(FATAL_ERROR "Vendored libFLAC did not provide FLAC::FLAC")
+        endif()
+        message(STATUS "Using vendored static libFLAC")
         return()
     elseif(package_name STREQUAL "libbw64")
         set(BW64_UNIT_TESTS OFF CACHE BOOL "" FORCE)
