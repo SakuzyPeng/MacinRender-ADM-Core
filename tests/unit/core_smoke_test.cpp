@@ -100,6 +100,24 @@ namespace {
         std::filesystem::remove(path);
         return false;
     }
+    const auto stale_tmp = path.parent_path() / (path.stem().string() + ".gain_tmp" + path.extension().string());
+    {
+        std::ofstream stale(stale_tmp, std::ios::binary);
+        stale << "stale";
+    }
+    gain_res = mradm::audio::apply_gain_to_file(path.string(), 0.5F, "0+2+0");
+    if (!gain_res) {
+        std::cerr << "CAF apply_gain with stale tmp failed: " << gain_res.error().message << "\n";
+        std::filesystem::remove(stale_tmp);
+        std::filesystem::remove(path);
+        return false;
+    }
+    if (!std::filesystem::exists(stale_tmp)) {
+        std::cerr << "CAF apply_gain reused legacy fixed tmp name\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+    std::filesystem::remove(stale_tmp);
     {
         std::ifstream gained(path, std::ios::binary);
         std::vector<unsigned char> gained_bytes((std::istreambuf_iterator<char>(gained)), {});
@@ -119,7 +137,7 @@ namespace {
         }
         std::vector<float> readback(8U);
         auto& reader = *reader_res;
-        if (reader.read(readback.data(), 4U) != 4U || readback[2] != 0.5F || readback[7] != -1.5F) {
+        if (reader.read(readback.data(), 4U) != 4U || readback[2] != 0.25F || readback[7] != -0.75F) {
             std::cerr << "CAF gain sample mismatch\n";
             std::filesystem::remove(path);
             return false;

@@ -14,6 +14,7 @@
 #include <limits>
 #include <memory>
 #include <numeric>
+#include <random>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -161,6 +162,25 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth) {
 // Scans all chunks to locate desc + data, tolerates any ordering (e.g. trailing info).
 
 namespace {
+
+[[nodiscard]] std::filesystem::path unique_sidecar_path(const std::filesystem::path& original_path,
+                                                        std::string_view purpose) {
+    static thread_local std::mt19937_64 rng{std::random_device{}()};
+    std::uniform_int_distribution<uint64_t> dist;
+
+    const auto parent = original_path.parent_path();
+    const auto stem = original_path.stem().string();
+    const auto ext = original_path.extension().string();
+
+    for (int attempt = 0; attempt < 16; ++attempt) {
+        const auto token = dist(rng);
+        auto candidate = parent / fmt::format("{}.{}.{:016x}{}", stem, purpose, token, ext);
+        if (!std::filesystem::exists(candidate)) {
+            return candidate;
+        }
+    }
+    return parent / fmt::format("{}.{}.{:016x}{}", stem, purpose, dist(rng), ext);
+}
 
 [[nodiscard]] bool caf_read_u16(std::FILE* f, uint16_t& out) {
     std::array<uint8_t, 2> b{};
@@ -402,8 +422,7 @@ Result<void> apply_gain_to_file(const std::string& path, float gain, const std::
     }
 
     const std::filesystem::path original_path{path};
-    const auto tmp_path = original_path.parent_path() /
-                          (original_path.stem().string() + ".gain_tmp" + original_path.extension().string());
+    const auto tmp_path = unique_sidecar_path(original_path, "gain_tmp");
 
     {
         auto reader_res = ReaderHandle::open(path);
