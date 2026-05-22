@@ -5,14 +5,14 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         return()
     endif()
 
-    if(NOT package_name STREQUAL "FLAC")
+    if(NOT package_name STREQUAL "FLAC" AND NOT package_name STREQUAL "Opus")
         find_package(${package_name} CONFIG QUIET)
     endif()
     if(TARGET ${target_name})
         return()
     endif()
 
-    if(NOT package_name STREQUAL "FLAC" AND NOT MR_ADM_CORE_FETCH_DEPS)
+    if(NOT package_name STREQUAL "FLAC" AND NOT package_name STREQUAL "Opus" AND NOT MR_ADM_CORE_FETCH_DEPS)
         message(FATAL_ERROR "${package_name} was not found and MR_ADM_CORE_FETCH_DEPS is OFF")
     endif()
 
@@ -269,39 +269,91 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             SOURCE_SUBDIR framework
         )
     elseif(package_name STREQUAL "Opus")
-        # Try CMake config first
-        find_package(Opus CONFIG QUIET)
-        if(TARGET Opus::opus)
-            message(STATUS "Using system libopus via find_package")
-            return()
+        string(TOUPPER "${MR_ADM_OPUS_PROVIDER}" _mr_opus_requested_provider)
+        if(MR_ADM_USE_SYSTEM_OPUS)
+            set(_mr_opus_requested_provider SYSTEM)
         endif()
-        # Manual Homebrew/system path
-        find_library(MR_OPUS_LIB NAMES opus
-            HINTS /opt/homebrew/lib /usr/local/lib /usr/lib NO_CACHE)
-        find_path(MR_OPUS_INCLUDE NAMES opus/opus_multistream.h
-            HINTS /opt/homebrew/include /usr/local/include /usr/include NO_CACHE)
-        if(MR_OPUS_LIB AND MR_OPUS_INCLUDE)
-            add_library(Opus::opus UNKNOWN IMPORTED GLOBAL)
-            set_target_properties(Opus::opus PROPERTIES
-                IMPORTED_LOCATION "${MR_OPUS_LIB}"
-                INTERFACE_INCLUDE_DIRECTORIES "${MR_OPUS_INCLUDE}")
-            message(STATUS "Using system libopus: ${MR_OPUS_LIB}")
-            return()
+        if(NOT _mr_opus_requested_provider MATCHES "^(AUTO|SYSTEM|VENDORED)$")
+            message(FATAL_ERROR "MR_ADM_OPUS_PROVIDER must be AUTO, SYSTEM, or VENDORED")
         endif()
+
+        set(_mr_opus_provider "${_mr_opus_requested_provider}")
+        if(_mr_opus_provider STREQUAL "AUTO")
+            if(CMAKE_CONFIGURATION_TYPES OR MR_ADM_OPUS_AUTO_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+                set(_mr_opus_provider VENDORED)
+            else()
+                set(_mr_opus_provider SYSTEM)
+            endif()
+            message(STATUS "libopus provider AUTO resolved to ${_mr_opus_provider}")
+        endif()
+
+        if(_mr_opus_provider STREQUAL "SYSTEM")
+            find_package(Opus CONFIG QUIET)
+            if(TARGET Opus::opus)
+                message(STATUS "Using system libopus via find_package")
+                return()
+            endif()
+
+            find_library(MR_OPUS_LIB NAMES opus
+                HINTS /opt/homebrew/lib /usr/local/lib /usr/lib
+                NO_CACHE)
+            find_path(MR_OPUS_INCLUDE NAMES opus_multistream.h
+                HINTS /opt/homebrew/include /usr/local/include /usr/include
+                PATH_SUFFIXES opus
+                NO_CACHE)
+            if(MR_OPUS_LIB AND MR_OPUS_INCLUDE)
+                add_library(Opus::opus UNKNOWN IMPORTED GLOBAL)
+                set_target_properties(Opus::opus PROPERTIES
+                    IMPORTED_LOCATION "${MR_OPUS_LIB}"
+                    INTERFACE_INCLUDE_DIRECTORIES "${MR_OPUS_INCLUDE}"
+                )
+                message(STATUS "Using system libopus: ${MR_OPUS_LIB}")
+                return()
+            endif()
+
+            if(NOT _mr_opus_requested_provider STREQUAL "AUTO")
+                message(FATAL_ERROR "System libopus was requested but not found")
+            endif()
+            if(NOT MR_ADM_CORE_FETCH_DEPS)
+                message(FATAL_ERROR "libopus was not found and MR_ADM_CORE_FETCH_DEPS is OFF")
+            endif()
+            set(_mr_opus_provider VENDORED)
+            message(STATUS "System libopus not found; falling back to vendored static libopus")
+        endif()
+
         if(NOT MR_ADM_CORE_FETCH_DEPS)
-            message(FATAL_ERROR "libopus was not found and MR_ADM_CORE_FETCH_DEPS is OFF")
+            message(FATAL_ERROR "Vendored libopus requires MR_ADM_CORE_FETCH_DEPS=ON")
         endif()
-        # Vendored fallback
+
+        if(DEFINED BUILD_SHARED_LIBS)
+            set(_mr_adm_core_had_shared_opus TRUE)
+            set(_mr_adm_core_saved_shared_opus "${BUILD_SHARED_LIBS}")
+        else()
+            set(_mr_adm_core_had_shared_opus FALSE)
+        endif()
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
         set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+        set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+        set(OPUS_BUILD_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
         set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
         set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
         FetchContent_Declare(Opus
             GIT_REPOSITORY https://github.com/xiph/opus.git
             GIT_TAG v1.5.2 GIT_SHALLOW TRUE)
         FetchContent_MakeAvailable(Opus)
+        if(_mr_adm_core_had_shared_opus)
+            set(BUILD_SHARED_LIBS "${_mr_adm_core_saved_shared_opus}" CACHE BOOL "" FORCE)
+        else()
+            unset(BUILD_SHARED_LIBS CACHE)
+            unset(BUILD_SHARED_LIBS)
+        endif()
         if(TARGET opus AND NOT TARGET Opus::opus)
             add_library(Opus::opus ALIAS opus)
         endif()
+        if(NOT TARGET Opus::opus)
+            message(FATAL_ERROR "Vendored libopus did not provide Opus::opus")
+        endif()
+        message(STATUS "Using vendored static libopus")
         return()
     else()
         message(FATAL_ERROR "Unknown dependency: ${package_name}")

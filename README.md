@@ -45,6 +45,14 @@ FLAC 输出依赖 libFLAC，默认使用三档策略：
 
 当前 FLAC 写出固定为 24-bit integer FLAC。16-bit FLAC 属于后续可选 CLI 能力，不阻塞首发；需要保留 float/headroom 时应优先使用 WAV/CAF float 输出。
 
+Opus MKA 输出依赖 libopus，采用与 libFLAC 相同的三档策略：
+
+- `MR_ADM_OPUS_PROVIDER=AUTO`：默认值；首次配置为 Release / RelWithDebInfo / MinSizeRel 或多配置生成器时走 vendored static libopus，Debug / 未指定构建类型优先用系统 libopus，找不到再 FetchContent。
+- `MR_ADM_OPUS_PROVIDER=VENDORED`：强制 FetchContent 拉取并静态链接 libopus，适合正式分发。
+- `MR_ADM_OPUS_PROVIDER=SYSTEM` 或 `MR_ADM_USE_SYSTEM_OPUS=ON`：强制使用系统 libopus，适合 Homebrew、vcpkg、Linux 发行版打包。
+
+Opus MKA 当前只接受 48 kHz 输入。9 声道及以上使用 Opus mapping family 255，即透明多流编码；标准扬声器布局语义通过容器 metadata 记录，不应假设播放器能自动识别 22.2、9.1.6 等布局。
+
 可选启用 Cppcheck：
 
 ```bash

@@ -61,6 +61,7 @@ ADR 0003 已规定 `libear` 类型只能出现在 `adm_render_ear` 内部，本 
 - 上游配置变更应封装为本仓库 `cmake/` 下的 `MRDeps<Name>.cmake`（仅在配置项超过 3 个时拆文件），保持 `MRDependencies.cmake` 可读。
 - `MR_ADM_CORE_FETCH_DEPS=OFF` 模式必须仍可构建（前提是系统已 `find_package` 全部依赖），用于 Linux 发行版打包、CI 离线场景与 Homebrew formula。
 - libFLAC 使用三档 provider：`MR_ADM_FLAC_PROVIDER=AUTO`（默认，按首次配置的构建类型选择：开发构建优先系统库，Release/多配置默认 vendored static）、`VENDORED`（正式分发，FetchContent + 静态链接）、`SYSTEM`/`MR_ADM_USE_SYSTEM_FLAC=ON`（包管理器或发行版打包）。
+- libopus 使用同样的三档 provider：`MR_ADM_OPUS_PROVIDER=AUTO`（默认，按首次配置的构建类型选择：开发构建优先系统库，Release/多配置默认 vendored static）、`VENDORED`（正式分发，FetchContent + 静态链接）、`SYSTEM`/`MR_ADM_USE_SYSTEM_OPUS=ON`（包管理器或发行版打包）。
 - 任何依赖的版本升级（修改 tag）需附带 CMake configure + build + ctest 验证，并在 commit message 注明升级原因（安全补丁/特性需求/上游 deprecation）。
 
 ## 三平台策略

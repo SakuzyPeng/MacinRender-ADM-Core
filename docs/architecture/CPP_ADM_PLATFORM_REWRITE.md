@@ -238,13 +238,20 @@ public:
 - 峰值限制。
 - 响度标准化。
 - 最终增益。
-- FLAC/WAV/CAF 等后处理策略。
+- FLAC/Opus MKA/WAV/CAF 等后处理策略。
 
 FLAC 输出策略：
 
 - 当前固定写出 24-bit integer FLAC，作为渲染结果的无损压缩交付格式。
 - 16-bit FLAC 主要服务消费级体积/兼容性诉求，列为后续 CLI 选项（如 `--flac-bit-depth 16|24`），不阻塞首发。
 - 如需保留 0 dBFS 以上 headroom 或 float 工作流，应使用 WAV/CAF float 输出，而不是 FLAC。
+
+Opus MKA 输出策略：
+
+- 当前写出 Matroska Audio（`.mka`）容器 + Opus 编码，输入采样率固定要求 48 kHz。
+- 1-2 声道使用 Opus mapping family 0，3-8 声道使用 family 1，9-255 声道使用 family 255。
+- family 255 是透明多流编码，不携带标准扬声器布局语义；22.2、9.1.6 等布局只作为容器 metadata 记录，播放器不保证自动识别。
+- Opus 为有损交付格式，响度/峰值/增益等后处理必须在 float 中间文件上完成，最后一步再编码。
 
 原则：
 
@@ -538,6 +545,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 - `libbw64`/`libadm`/`libear` 通过 `cmake/MRDependencies.cmake` 接入，与 `fmt`/`spdlog`/`CLI11` 共用 find-or-fetch 模式。
 - `MR_ADM_CORE_FETCH_DEPS=OFF` 必须保持可用，支持 Linux 发行版打包与离线构建。
 - `libFLAC` 采用三档策略：开发构建可优先系统库，正式分发默认 vendored static，包管理器可通过 `MR_ADM_FLAC_PROVIDER=SYSTEM` 或 `MR_ADM_USE_SYSTEM_FLAC=ON` 强制系统库。
+- `libopus` 采用同样的三档策略：开发构建可优先系统库，正式分发默认 vendored static，包管理器可通过 `MR_ADM_OPUS_PROVIDER=SYSTEM` 或 `MR_ADM_USE_SYSTEM_OPUS=ON` 强制系统库。
 - 详细记录：`docs/adr/0004-third-party-dependency-management.md`。
 
 ### 13.5 错误处理模型

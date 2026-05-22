@@ -7,3 +7,6 @@ missingIncludeSystem
 functionStatic:*/src/adm_core/render_service.cpp
 functionStatic:*/src/adm_engine/render_service.cpp
 *:*/_deps/*
+# Public API structs are consumed across translation units; cppcheck sees the
+# header alone and reports false positives for metadata fields.
+unusedStructMember:*/include/adm/audio_io.h

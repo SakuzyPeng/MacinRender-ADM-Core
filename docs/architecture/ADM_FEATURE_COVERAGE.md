@@ -193,7 +193,7 @@ importer 仅从这两层提取路由信息（TypeDescriptor、对 AudioChannelFo
 | Matrix | ⚠️ 丢弃，emit `import_warnings` 警告 | — |
 | Binaural | ⚠️ 丢弃，emit `import_warnings` 警告 | — |
 
-当前项目没有 ADM/BW64 写出能力；输出为普通 PCM 文件（WAV/CAF float、FLAC 24-bit integer）。
+当前项目没有 ADM/BW64 写出能力；输出为普通 PCM 文件（WAV/CAF float、FLAC 24-bit integer）或 Opus MKA 有损交付文件。Opus MKA 的 9 声道及以上输出使用 mapping family 255，属于透明多流编码；布局语义仅通过 metadata 表达，不能假设播放器会自动识别标准扬声器布局。
 
 ### HOA typeDefinition 说明
 

@@ -16,6 +16,9 @@ option(MR_ADM_CORE_ENABLE_CPPCHECK "Run cppcheck as part of compilation when ava
 set(MR_ADM_FLAC_PROVIDER "AUTO" CACHE STRING "libFLAC provider: AUTO, SYSTEM, or VENDORED")
 set_property(CACHE MR_ADM_FLAC_PROVIDER PROPERTY STRINGS AUTO SYSTEM VENDORED)
 option(MR_ADM_USE_SYSTEM_FLAC "Shortcut for MR_ADM_FLAC_PROVIDER=SYSTEM" OFF)
+set(MR_ADM_OPUS_PROVIDER "AUTO" CACHE STRING "libopus provider: AUTO, SYSTEM, or VENDORED")
+set_property(CACHE MR_ADM_OPUS_PROVIDER PROPERTY STRINGS AUTO SYSTEM VENDORED)
+option(MR_ADM_USE_SYSTEM_OPUS "Shortcut for MR_ADM_OPUS_PROVIDER=SYSTEM" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +26,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(NOT DEFINED MR_ADM_FLAC_AUTO_BUILD_TYPE)
     set(MR_ADM_FLAC_AUTO_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE INTERNAL "Initial build type for FLAC AUTO provider")
+endif()
+if(NOT DEFINED MR_ADM_OPUS_AUTO_BUILD_TYPE)
+    set(MR_ADM_OPUS_AUTO_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE INTERNAL "Initial build type for Opus AUTO provider")
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -180,8 +186,9 @@ mr_adm_core_apply_warnings(mr_adm_render_hoa)
 mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
 
 # ── adm_audio ─────────────────────────────────────────────────────────────────
-# Float32 WAV/CAF/FLAC I/O. DR_WAV_IMPLEMENTATION and DR_FLAC_IMPLEMENTATION
-# are defined in audio_io.cpp only. FLAC encoding uses libFLAC; decoding uses dr_flac.
+# Float32 WAV/CAF/FLAC and Opus MKA I/O. DR_WAV_IMPLEMENTATION and
+# DR_FLAC_IMPLEMENTATION are defined in audio_io.cpp only. FLAC encoding uses
+# libFLAC; decoding uses dr_flac.
 
 add_library(mr_adm_audio)
 add_library(MacinRender::ADMAudio ALIAS mr_adm_audio)
