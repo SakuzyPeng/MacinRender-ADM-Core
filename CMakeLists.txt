@@ -98,6 +98,23 @@ target_link_libraries(mr_adm_io
 mr_adm_core_apply_warnings(mr_adm_io)
 mr_adm_core_apply_static_analysis(mr_adm_io)
 
+# ── adm_render_common ─────────────────────────────────────────────────────────
+# Backend-agnostic object preprocessing and block timeline helpers used by
+# speaker renderers. No libear/SAF/Apple types may appear in this target.
+
+add_library(mr_adm_render_common)
+add_library(MacinRender::ADMRenderCommon ALIAS mr_adm_render_common)
+
+target_sources(
+    mr_adm_render_common
+    PRIVATE
+        src/adm_render_common/render_common.cpp
+)
+target_include_directories(mr_adm_render_common PUBLIC src/adm_render_common)
+target_link_libraries(mr_adm_render_common PUBLIC MacinRender::ADMCore)
+mr_adm_core_apply_warnings(mr_adm_render_common)
+mr_adm_core_apply_static_analysis(mr_adm_render_common)
+
 # ── adm_render_ear ────────────────────────────────────────────────────────────
 # libear-based Objects renderer. libear types confined to this target.
 
@@ -117,7 +134,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_ear
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 adm ear saf ebur128 MacinRender::ADMAudio
+    PRIVATE libbw64 adm ear saf ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
 )
 target_include_directories(mr_adm_render_ear
     SYSTEM PRIVATE
@@ -147,7 +164,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_vbap
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio
+    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
 )
 target_include_directories(mr_adm_render_vbap
     SYSTEM PRIVATE

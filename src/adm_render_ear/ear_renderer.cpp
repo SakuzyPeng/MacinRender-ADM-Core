@@ -18,6 +18,8 @@
 #include "adm/render.h"
 #include "adm/render_ear.h"
 
+#include "render_common.h"
+
 namespace mradm {
 
 namespace {
@@ -103,17 +105,6 @@ struct DecorrState {
     return meta;
 }
 
-void warn_screen_ref(const SceneObjectBlock& block, LogSink& logs, bool& warned) {
-    if (block.screen_ref) {
-        if (!warned) {
-            logs.log(LogLevel::warning,
-                     "ear",
-                     "screenRef requires referenceScreen geometry; rendering block as screenRef=false");
-            warned = true;
-        }
-    }
-}
-
 void append_object_blocks(const SceneTrackRef& track,
                           const SceneObject& obj,
                           ChannelGainInfo& cg,
@@ -123,22 +114,17 @@ void append_object_blocks(const SceneTrackRef& track,
                           LogSink& logs,
                           bool& screen_ref_warned) {
     for (const auto& raw_block : track.blocks) {
-        SceneObjectBlock block = raw_block;
-        if (obj.position_offset) {
-            block.position = apply_position_offset(block.position, *obj.position_offset);
-        }
-        warn_screen_ref(block, logs, screen_ref_warned);
-        block = apply_channel_lock(block, speakers);
-
+        const auto prepared =
+            render_common::prepare_object_block(raw_block, obj, speakers, logs, "ear", screen_ref_warned);
         BlockGains bg;
         bg.gains.resize(num_out, 0.0);
         bg.diffuse_gains.resize(num_out, 0.0);
-        bg.start_sample = raw_block.start_sample;
-        bg.end_sample = std::min(raw_block.end_sample, obj.end_sample);
-        bg.jump_position = raw_block.jump_position;
-        bg.interp_length_samples = raw_block.interp_length_samples;
+        bg.start_sample = prepared.start_sample;
+        bg.end_sample = prepared.end_sample;
+        bg.jump_position = prepared.jump_position;
+        bg.interp_length_samples = prepared.interp_length_samples;
 
-        for (const auto& source : expand_object_divergence(block)) {
+        for (const auto& source : prepared.sources) {
             auto meta = object_metadata_from_block(source, obj);
             std::vector<double> direct(num_out, 0.0);
             std::vector<double> diffuse(num_out, 0.0);
@@ -309,36 +295,6 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
     return result;
 }
 
-[[nodiscard]] uint64_t block_active_length(const ChannelGainInfo& channel, std::size_t block_index) {
-    const auto& block = channel.blocks[block_index];
-    uint64_t active_end = block.end_sample;
-    if (block_index + 1 < channel.blocks.size()) {
-        active_end = std::min(active_end, channel.blocks[block_index + 1].start_sample);
-    }
-    if (active_end <= block.start_sample) {
-        return 0;
-    }
-    return active_end - block.start_sample;
-}
-
-[[nodiscard]] uint64_t
-interpolation_length(const ChannelGainInfo& channel, std::size_t block_index, uint64_t default_interp) {
-    const auto& block = channel.blocks[block_index];
-    if (block.jump_position || block_index == 0) {
-        return 0;
-    }
-    return std::min(block.interp_length_samples.value_or(default_interp), block_active_length(channel, block_index));
-}
-
-[[nodiscard]] double interpolated_gain(const std::vector<double>& prev,
-                                       const std::vector<double>& cur,
-                                       std::size_t out_ch,
-                                       uint64_t delta,
-                                       uint64_t interp_len) {
-    const double alpha = static_cast<double>(delta) / static_cast<double>(interp_len);
-    return (prev[out_ch] * (1.0 - alpha)) + (cur[out_ch] * alpha);
-}
-
 void accumulate_channel_segment(const ChannelGainInfo& channel,
                                 std::size_t block_index,
                                 const AccumulateContext& ctx,
@@ -348,7 +304,7 @@ void accumulate_channel_segment(const ChannelGainInfo& channel,
     const auto& block = channel.blocks[block_index];
     const uint64_t abs_start = ctx.frames_done;
 
-    const uint64_t interp_len = interpolation_length(channel, block_index, ctx.default_interp);
+    const uint64_t interp_len = render_common::interpolation_length(channel, block_index, ctx.default_interp);
     const uint64_t delta0 = (abs_start + f0) - block.start_sample;
     const bool any_ramp = interp_len > 0 && delta0 < interp_len;
 
@@ -385,16 +341,15 @@ void accumulate_channel_segment(const ChannelGainInfo& channel,
             const float in = ch_in[f];
             for (std::size_t out_ch = 0; out_ch < num_out; ++out_ch) {
                 const auto gd = static_cast<float>(
-                    ramping ? interpolated_gain(
-                                  channel.blocks[block_index - 1].gains, block.gains, out_ch, delta, interp_len)
+                    ramping ? render_common::interpolated_scalar(
+                                  channel.blocks[block_index - 1].gains[out_ch], block.gains[out_ch], delta, interp_len)
                             : block.gains[out_ch]);
-                const auto gf =
-                    static_cast<float>(ramping ? interpolated_gain(channel.blocks[block_index - 1].diffuse_gains,
-                                                                   block.diffuse_gains,
-                                                                   out_ch,
-                                                                   delta,
-                                                                   interp_len)
-                                               : block.diffuse_gains[out_ch]);
+                const auto gf = static_cast<float>(
+                    ramping ? render_common::interpolated_scalar(channel.blocks[block_index - 1].diffuse_gains[out_ch],
+                                                                 block.diffuse_gains[out_ch],
+                                                                 delta,
+                                                                 interp_len)
+                            : block.diffuse_gains[out_ch]);
                 ctx.col_direct[(out_ch * stride) + f] += in * gd;
                 ctx.col_diffuse[(out_ch * stride) + f] += in * gf;
             }
