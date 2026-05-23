@@ -166,7 +166,8 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     if (sel == RendererSelection::automatic && (requests_speaker_stereo || requested_layout == "binaural")) {
         sel = RendererSelection::binaural;
     }
-    if ((sel == RendererSelection::ear || sel == RendererSelection::saf) && requests_speaker_stereo) {
+    if ((sel == RendererSelection::ear || sel == RendererSelection::saf) && requests_speaker_stereo &&
+        !request.options.internal_allow_speaker_stereo) {
         const auto msg =
             std::string{"speaker stereo rendering is disabled; use --renderer binaural for 2ch ADM output"};
         return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};

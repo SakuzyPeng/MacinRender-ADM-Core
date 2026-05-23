@@ -152,9 +152,18 @@ void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat
                 time_to_samples(adm::Time{jp.get<adm::InterpolationLength>().get()}, sample_rate);
         }
 
-        // P2 fields: read so renderers can warn and degrade before calling libear.
-        block.channel_lock = raw.get<adm::ChannelLock>().get<adm::ChannelLockFlag>().get();
-        block.divergence = static_cast<float>(raw.get<adm::ObjectDivergence>().get<adm::Divergence>().get());
+        // Objects panning modifiers. libear exposes these but throws for non-default
+        // values, so renderers consume them in project-owned preprocessing.
+        const auto channel_lock = raw.get<adm::ChannelLock>();
+        block.channel_lock = channel_lock.get<adm::ChannelLockFlag>().get();
+        if (channel_lock.has<adm::MaxDistance>()) {
+            block.channel_lock_max_distance = static_cast<float>(channel_lock.get<adm::MaxDistance>().get());
+        }
+
+        const auto divergence = raw.get<adm::ObjectDivergence>();
+        block.divergence = static_cast<float>(divergence.get<adm::Divergence>().get());
+        block.divergence_azimuth_range = static_cast<float>(divergence.get<adm::AzimuthRange>().get());
+        block.divergence_position_range = static_cast<float>(divergence.get<adm::PositionRange>().get());
         block.screen_ref = raw.get<adm::ScreenRef>().get();
 
         ref.blocks.push_back(block);

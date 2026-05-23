@@ -23,6 +23,10 @@ struct CapabilityReport {
     bool supports_objects{false};
     bool supports_direct_speakers{false};
     bool supports_hoa{false};
+    bool supports_channel_lock{false};
+    bool supports_object_divergence{false};
+    bool supports_screen_ref{false};
+    bool supports_diffuse{false};
 };
 
 } // namespace mradm

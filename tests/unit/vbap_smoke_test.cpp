@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -490,6 +491,7 @@ bool verify_vbap_render_fixture(ObjectPositionMode mode, const char* label) {
     request.input_path = in_path;
     request.output_path = out_path;
     request.options.output_layout = "0+2+0";
+    request.options.internal_allow_speaker_stereo = true;
     request.options.renderer = mradm::RendererSelection::saf;
 
     mradm::RenderService service;
@@ -543,6 +545,7 @@ bool verify_time_varying_objects_blocks() {
     request.input_path = in_path;
     request.output_path = out_path;
     request.options.output_layout = "0+2+0";
+    request.options.internal_allow_speaker_stereo = true;
     request.options.renderer = mradm::RendererSelection::saf;
     request.options.peak_limit = false;
 
@@ -606,6 +609,7 @@ bool verify_overlong_interpolation_is_clamped() {
     request.input_path = in_path;
     request.output_path = out_path;
     request.options.output_layout = "0+2+0";
+    request.options.internal_allow_speaker_stereo = true;
     request.options.renderer = mradm::RendererSelection::saf;
     request.options.peak_limit = false;
 
@@ -659,6 +663,7 @@ bool verify_nested_audio_object_start_offsets() {
     request.input_path = in_path;
     request.output_path = out_path;
     request.options.output_layout = "0+2+0";
+    request.options.internal_allow_speaker_stereo = true;
     request.options.renderer = mradm::RendererSelection::saf;
     request.options.peak_limit = false;
 
@@ -709,6 +714,7 @@ bool verify_direct_speakers_label_routing() {
     request.input_path = in_path;
     request.output_path = out_path;
     request.options.output_layout = "0+2+0";
+    request.options.internal_allow_speaker_stereo = true;
     request.options.renderer = mradm::RendererSelection::saf;
 
     mradm::RenderService service;
@@ -1093,6 +1099,7 @@ bool render_simple(const std::shared_ptr<adm::Document>& doc,
     req.input_path = in_path;
     req.output_path = out_path;
     req.options.output_layout = "0+2+0";
+    req.options.internal_allow_speaker_stereo = true;
     req.options.renderer = mradm::RendererSelection::saf;
     req.options.peak_limit = false;
 
@@ -1102,6 +1109,90 @@ bool render_simple(const std::shared_ptr<adm::Document>& doc,
     const auto res = service.render(req, progress, logs);
     if (!res.success()) {
         std::cerr << "FAIL: render failed: " << res.error.message << "\n";
+        return false;
+    }
+    return true;
+}
+
+std::pair<std::shared_ptr<adm::Document>, std::string> make_object_semantics_doc(
+    float azimuth, bool channel_lock, std::optional<float> max_distance, float divergence, float azimuth_range) {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"SemCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{azimuth}, adm::Elevation{0.0F}}};
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        if (channel_lock) {
+            adm::ChannelLock lock;
+            lock.set(adm::ChannelLockFlag{true});
+            if (max_distance.has_value()) {
+                lock.set(adm::MaxDistance{*max_distance});
+            }
+            block.set(lock);
+        }
+        if (divergence > 0.0F) {
+            adm::ObjectDivergence od;
+            od.set(adm::Divergence{divergence});
+            od.set(adm::AzimuthRange{azimuth_range});
+            block.set(od);
+        }
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"SemPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"SemSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"SemTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"SemObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"SemContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"SemProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+bool render_to_layout(const std::shared_ptr<adm::Document>& doc,
+                      const std::string& uid_str,
+                      const std::filesystem::path& out_path,
+                      std::string_view layout_id) {
+    const auto in_path = write_input_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = std::string{layout_id};
+    req.options.renderer = mradm::RendererSelection::saf;
+    req.options.peak_limit = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: render_to_layout failed: " << res.error.message << "\n";
         return false;
     }
     return true;
@@ -1139,6 +1230,71 @@ bool verify_audio_object_gain_scales_output() {
     ok &= check(energy_half > 0.0, "obj gain: gain=0.5 render is not silent");
     const double ratio = (energy_full > 0.0) ? (energy_half / energy_full) : 0.0;
     ok &= check(ratio > 0.48 && ratio < 0.52, "obj gain=0.5 halves total output energy");
+    return ok;
+}
+
+bool verify_vbap_channel_lock_routes_to_nearest_speaker() {
+    auto [doc, uid_str] = make_object_semantics_doc(20.0F, true, std::nullopt, 0.0F, 45.0F);
+    const auto out = std::filesystem::temp_directory_path() / "mr_vbap_channel_lock_out.wav";
+    FileGuard out_g{out};
+    if (!render_to_layout(doc, uid_str, out, "0+5+0")) {
+        return false;
+    }
+
+    const auto sums = read_channel_sums(out, 6U);
+    bool ok = true;
+    ok &= check(sums.size() == 6U, "channelLock: output is 5.1");
+    if (sums.size() == 6U) {
+        ok &= check(sums[0] > 100.0, "channelLock: nearest left speaker carries energy");
+        ok &= check(sums[1] < 1.0e-6, "channelLock: right speaker is silent");
+        ok &= check(sums[2] < 1.0e-6, "channelLock: center speaker is silent after lock");
+        ok &= check(sums[3] < 1.0e-9, "channelLock: LFE is ignored");
+    }
+    return ok;
+}
+
+bool verify_vbap_channel_lock_max_distance_rejects_lock() {
+    auto [locked_doc, locked_uid] = make_object_semantics_doc(20.0F, true, std::nullopt, 0.0F, 45.0F);
+    auto [free_doc, free_uid] = make_object_semantics_doc(20.0F, true, 0.01F, 0.0F, 45.0F);
+
+    const auto locked_out = std::filesystem::temp_directory_path() / "mr_vbap_channel_lock_ref_out.wav";
+    const auto free_out = std::filesystem::temp_directory_path() / "mr_vbap_channel_lock_reject_out.wav";
+    FileGuard locked_g{locked_out};
+    FileGuard free_g{free_out};
+    if (!render_to_layout(locked_doc, locked_uid, locked_out, "0+5+0") ||
+        !render_to_layout(free_doc, free_uid, free_out, "0+5+0")) {
+        return false;
+    }
+
+    const auto locked = read_channel_sums(locked_out, 6U);
+    const auto free = read_channel_sums(free_out, 6U);
+    bool ok = true;
+    ok &= check(locked.size() == 6U && free.size() == 6U, "channelLock maxDistance: outputs are 5.1");
+    if (locked.size() == 6U && free.size() == 6U) {
+        ok &= check(locked[2] < 1.0e-6, "channelLock maxDistance: reference lock has no center energy");
+        ok &= check(free[2] > 1.0, "channelLock maxDistance: rejected lock falls back to VBAP center contribution");
+    }
+    return ok;
+}
+
+bool verify_vbap_object_divergence_spreads_center_source() {
+    auto [doc, uid_str] = make_object_semantics_doc(0.0F, false, std::nullopt, 1.0F, 30.0F);
+    const auto out = std::filesystem::temp_directory_path() / "mr_vbap_divergence_out.wav";
+    FileGuard out_g{out};
+    if (!render_to_layout(doc, uid_str, out, "0+5+0")) {
+        return false;
+    }
+
+    const auto sums = read_channel_sums(out, 6U);
+    bool ok = true;
+    ok &= check(sums.size() == 6U, "objectDivergence: output is 5.1");
+    if (sums.size() == 6U) {
+        ok &= check(sums[0] > 1.0, "objectDivergence: left virtual source contributes");
+        ok &= check(sums[1] > 1.0, "objectDivergence: right virtual source contributes");
+        ok &= check(sums[2] < 1.0e-6, "objectDivergence: divergence=1 removes center contribution");
+        const double ratio = sums[0] > 0.0 ? sums[1] / sums[0] : 0.0;
+        ok &= check(ratio > 0.95 && ratio < 1.05, "objectDivergence: left/right energy is balanced");
+    }
     return ok;
 }
 
@@ -1368,6 +1524,7 @@ std::vector<float> render_two_block_no_jump(uint32_t interp_ms) {
     request.input_path = in_path;
     request.output_path = out_path;
     request.options.output_layout = "0+2+0";
+    request.options.internal_allow_speaker_stereo = true;
     request.options.renderer = mradm::RendererSelection::saf;
     request.options.peak_limit = false;
     request.options.default_interp_ms = interp_ms;
@@ -1544,6 +1701,9 @@ bool verify_2d_layout_elevated_source_warning() {
         req.input_path = path_in;
         req.output_path = path_out;
         req.options.output_layout = std::string{layout_id};
+        if (std::string_view{layout_id} == "0+2+0") {
+            req.options.internal_allow_speaker_stereo = true;
+        }
         req.options.renderer = mradm::RendererSelection::saf;
         req.options.peak_limit = false;
 
@@ -1662,6 +1822,9 @@ int main() {
     ok &= verify_audio_object_duration_gates_output();
     ok &= verify_ds_time_window_gates_block();
     ok &= verify_vbap_position_offset();
+    ok &= verify_vbap_channel_lock_routes_to_nearest_speaker();
+    ok &= verify_vbap_channel_lock_max_distance_rejects_lock();
+    ok &= verify_vbap_object_divergence_spreads_center_source();
     ok &= verify_default_interp_ms_controls_ramp();
     ok &= verify_register_vbap_layout();
     ok &= verify_2d_layout_elevated_source_warning();

@@ -147,6 +147,15 @@ struct SafFree {
     return result;
 }
 
+[[nodiscard]] std::vector<SceneOutputSpeaker> output_speakers(const LayoutSpec& layout) {
+    std::vector<SceneOutputSpeaker> result;
+    result.reserve(layout.speakers.size());
+    std::ranges::transform(layout.speakers, std::back_inserter(result), [](const VbapSpeakerSpec& speaker) {
+        return SceneOutputSpeaker{speaker.azimuth, speaker.elevation, speaker.is_lfe};
+    });
+    return result;
+}
+
 // Find the speaker index closest to (azimuth, elevation) by squared Euclidean
 // distance in az/el space.  Azimuth is circular: -180 and +180 are adjacent.
 // Good enough for speaker-routing fallback; not used for panning, so full
@@ -255,20 +264,8 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
 }
 
 [[nodiscard]] SpeakerDirection source_direction(const SceneBlockPosition& pos) {
-    if (!pos.cartesian) {
-        return {pos.azimuth, pos.elevation, {}};
-    }
-
-    const auto x = static_cast<double>(pos.x);
-    const auto y = static_cast<double>(pos.y);
-    const auto z = static_cast<double>(pos.z);
-    const auto xy = std::hypot(x, y);
-    if (xy == 0.0 && z == 0.0) {
-        return {};
-    }
-
-    constexpr auto rad_to_deg = 180.0 / std::numbers::pi;
-    return {static_cast<float>(std::atan2(-x, y) * rad_to_deg), static_cast<float>(std::atan2(z, xy) * rad_to_deg), {}};
+    const auto polar = scene_position_to_polar(pos);
+    return {polar.azimuth, polar.elevation, {}};
 }
 
 // Map ADM Objects extent parameters to a MDAP spread angle in degrees.
@@ -279,12 +276,15 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
                                                     : block.position.distance;
     const float spread_scale = std::clamp(1.0F / std::max(0.4F, distance), 0.5F, 2.5F);
     const float w = std::max(0.0F, block.width) * 60.0F * spread_scale;
+    const float w_with_divergence =
+        block.divergence > 1.0e-4F ? std::max(w, std::max(0.0F, block.divergence_azimuth_range) * 0.5F) : w;
     const float h = std::max(0.0F, block.height) * 45.0F * spread_scale;
     const float d = std::max(0.0F, block.depth) * 20.0F * spread_scale;
-    return std::min(180.0F, std::hypot(w, h, d));
+    return std::min(180.0F, std::hypot(w_with_divergence, h, d));
 }
 
-[[nodiscard]] Result<std::vector<float>> calculate_vbap_gains(const SceneObjectBlock& block, const LayoutSpec& layout) {
+[[nodiscard]] Result<std::vector<float>> calculate_one_vbap_gains(const SceneObjectBlock& block,
+                                                                  const LayoutSpec& layout) {
     auto speakers = flatten_layout(layout); // non-LFE only
     const auto src = source_direction(block.position);
     std::vector<float> source{src.azimuth, src.elevation};
@@ -331,6 +331,20 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
     return gains;
 }
 
+[[nodiscard]] Result<std::vector<float>> calculate_vbap_gains(const SceneObjectBlock& block, const LayoutSpec& layout) {
+    std::vector<float> result(layout.speakers.size(), 0.0F);
+    for (const auto& source : expand_object_divergence(block)) {
+        auto gains = calculate_one_vbap_gains(source, layout);
+        if (!gains) {
+            return tl::unexpected{gains.error()};
+        }
+        for (std::size_t i = 0; i < result.size(); ++i) {
+            result[i] += (*gains)[i];
+        }
+    }
+    return result;
+}
+
 // Returns true if any non-muted Objects block has non-negligible elevation.
 [[nodiscard]] bool scene_has_elevated_sources(const AdmScene& scene) {
     constexpr float k_el_threshold = 1.0e-3F; // 0.001°, well below any real source
@@ -367,6 +381,8 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, std::string_v
     // Accumulate blocks per input channel so we can sort and interpolate.
     std::map<uint16_t, ChannelGainInfo> by_channel;
     const auto num_out = layout.speakers.size();
+    const auto object_speakers = output_speakers(layout);
+    bool screen_ref_warned{false};
 
     for (const auto& obj : scene.objects) {
         if (obj.mute) {
@@ -388,6 +404,13 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, std::string_v
                     const auto& off = *obj.position_offset;
                     block.position = apply_position_offset(raw_block.position, off);
                 }
+                if (block.screen_ref && !screen_ref_warned) {
+                    logs.log(LogLevel::warning,
+                             "saf-vbap",
+                             "screenRef requires referenceScreen geometry; rendering block as screenRef=false");
+                    screen_ref_warned = true;
+                }
+                block = apply_channel_lock(block, object_speakers);
                 auto gains = calculate_vbap_gains(block, layout);
                 if (!gains) {
                     return make_error(
@@ -534,6 +557,7 @@ CapabilityReport VbapRenderer::capabilities() const {
     return vbap_capabilities();
 }
 
+// NOLINTNEXTLINE(readability-function-size)
 Result<RenderMetrics> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
     const std::string layout_id = plan.output_layout;
     const auto layout = layout_spec(layout_id);
@@ -680,6 +704,10 @@ CapabilityReport vbap_capabilities() {
     r.supports_objects = true;
     r.supports_direct_speakers = true;
     r.supports_hoa = false;
+    r.supports_channel_lock = true;
+    r.supports_object_divergence = true;
+    r.supports_screen_ref = false;
+    r.supports_diffuse = false;
 
     for (const auto& entry : layout_registry()) {
         CapabilityReport::Layout layout;

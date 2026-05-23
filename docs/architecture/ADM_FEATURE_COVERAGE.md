@@ -33,10 +33,10 @@
 | width / height / depth | ✅ DefaultParam | ✅ | ✅ | ✅ | ✅ | ✅（MDAP） |
 | rtime / duration | ✅ Default/Opt | — | start/end\_sample | ✅ | ✅ | ✅ |
 | jumpPosition + interpolationLength | ✅ DefaultParam | — | ✅ | ✅ | ✅ | ✅ |
-| **channelLock** | ✅ DefaultParam | 🚫 flag=true 时抛出 | ✅ | ✅ | ⚠️ warn+degrade | — |
-| **objectDivergence** | ✅ DefaultParam | 🚫 divergence≠0 时抛出 | ✅ | ✅ | ⚠️ warn+degrade | — |
+| **channelLock** | ✅ DefaultParam | 🚫 flag=true 时抛出 | ✅ | ✅ | ✅ 项目内预处理 | ✅ 项目内预处理 |
+| **objectDivergence** | ✅ DefaultParam | 🚫 divergence≠0 时抛出 | ✅ | ✅ | ✅ 项目内预处理 | ✅ 项目内预处理 |
 | **zoneExclusion** | ❌ libadm 不解析此字段 | 🚫 zones 非空时抛出 | ❌ | ❌ | — 见注③ | ❌ |
-| **screenRef** | ✅ DefaultParam | 🚫 screenRef=true 时抛出 | ✅ | ✅ | ⚠️ warn+degrade | — |
+| **screenRef** | ✅ DefaultParam | 🚫 screenRef=true 时抛出 | ✅ | ✅ | ⚠️ warn+degrade | ⚠️ warn+degrade |
 | importance | ✅ DefaultParam | — 结构体无此字段 | ❌ | ❌ | — | — |
 | headLocked | ✅ DefaultParam | — | ❌ | ❌ | — | — |
 | headphoneVirtualise | ✅ DefaultParam | — | ❌ | ❌ | — | — |
@@ -168,10 +168,8 @@ importer 从 rtime/duration 推算样本偏移后写入，EAR 和 VBAP 渲染器
 | **start / end** | ✅ Default/Opt | ✅ `start_sample` / `end_sample` | ✅ |
 | maxDuckingDepth | ✅ Opt | ❌ | ❌ |
 
-`audioProgrammeReferenceScreen` 是 `screenRef` 完整建模的所需输入，用于填入
-`ear::ObjectsTypeMetadata::referenceScreen`。但当前 libear `GainCalculatorObjects`
-对 `screenRef=true` 直接抛出 `not_implemented`，因此近期只能按 P2 策略处理：
-warn + 降级为 `screenRef=false`，而非尝试完整渲染。
+`audioProgrammeReferenceScreen` 是 `screenRef` 完整建模的所需输入。当前 libadm 只记录元素存在，
+不解析 reference screen 几何；因此 EAR / VBAP 均只输出 warning，并按普通对象位置渲染。
 
 ---
 
@@ -339,13 +337,13 @@ LFE 声道参与输出但不参与 VBAP panning；DS LFE 轨按标签（"LFE1"/"
 > 所有 P1 项已修复：diffuse bus 丢弃（M4）、AudioObject gain/mute/duration 未读（M3.1）、
 > DS 块无时间窗（M3.2）、EAR 拒绝 Cartesian Objects（M5）。
 
-### P2 — libear 字段暴露（已防御）
+### P2 — libear 字段暴露（已防御 / 已预处理）
 
 | 问题 | libear 行为 | 状态 |
 |---|---|---|
-| channelLock | flag=true 时 `not_implemented` | ⚠️ warn+degrade（M3.3） |
-| objectDivergence | divergence≠0 时 `not_implemented` | ⚠️ warn+degrade（M3.3） |
-| screenRef | screenRef=true 时 `not_implemented` | ⚠️ warn+degrade（M3.3） |
+| ~~channelLock~~ | ~~flag=true 时 `not_implemented`~~ | ✅ 项目内按输出布局锁定最近非 LFE 扬声器，EAR/VBAP 均不再传给 libear |
+| ~~objectDivergence~~ | ~~divergence≠0 时 `not_implemented`~~ | ✅ 项目内展开为 left/center/right 虚拟源，EAR/VBAP 均不再传给 libear |
+| screenRef | screenRef=true 时 `not_implemented` | ⚠️ 需要 referenceScreen geometry；当前 warn+degrade |
 
 ### 上游解析限制（libadm 不支持，运行时风险不可达）
 
@@ -404,8 +402,8 @@ struct ObjectsTypeMetadata {
     bool cartesian{false};       // 🚫 true 时 not_implemented
     double gain{1.0};            // ✅
     double diffuse{0.0};         // ✅（direct *= √(1-d)，diffuse *= √d）
-    ChannelLock channelLock;     // 🚫 flag=true 时 not_implemented
-    ObjectDivergence objectDivergence; // 🚫 divergence≠0 时 not_implemented
+    ChannelLock channelLock;     // 🚫 flag=true 时 not_implemented；项目内预处理后保持默认
+    ObjectDivergence objectDivergence; // 🚫 divergence≠0 时 not_implemented；项目内预处理后保持默认
     ZoneExclusion zoneExclusion; // 🚫 zones 非空时 not_implemented
     bool screenRef{false};       // 🚫 true 时 not_implemented
     Screen referenceScreen;      // screenRef 生效时使用
