@@ -95,6 +95,7 @@ struct BlockGains {
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
     bool jump_position{false};
+    bool smoothable_object{false};
     std::optional<uint64_t> interp_length_samples;
 };
 
@@ -111,6 +112,7 @@ struct AccumulateContext {
     uint16_t num_in_ch{0};
     uint16_t num_out_ch{0};
     uint64_t default_interp{0};
+    uint64_t object_smoothing_frames{0};
 };
 
 struct SafFree {
@@ -222,7 +224,7 @@ constexpr std::array<DsLabelAlias, 34> k_ds_aliases = {{
 
 [[nodiscard]] std::optional<std::string_view> resolve_ds_alias(std::string_view label) {
     const auto key = canonicalize_ds_label(label);
-    const auto it =
+    const auto* const it =
         std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
     if (it != k_ds_aliases.end()) {
         return it->bs2051;
@@ -407,6 +409,7 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, std::string_v
                                      prepared.start_sample,
                                      prepared.end_sample,
                                      prepared.jump_position,
+                                     true,
                                      prepared.interp_length_samples});
             }
 
@@ -445,8 +448,12 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, std::string_v
                 if (obj.gain != 1.0F) {
                     std::ranges::transform(gains, gains.begin(), [g = obj.gain](float v) { return v * g; });
                 }
-                cg.blocks.push_back(
-                    {std::move(gains), ds.start_sample, std::min(ds.end_sample, obj.end_sample), true, std::nullopt});
+                cg.blocks.push_back({std::move(gains),
+                                     ds.start_sample,
+                                     std::min(ds.end_sample, obj.end_sample),
+                                     true,
+                                     false,
+                                     std::nullopt});
             }
         }
     }
@@ -490,17 +497,66 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
     }
 }
 
+[[nodiscard]] bool gains_at_frame(const ChannelGainInfo& channel,
+                                  std::size_t& block_index,
+                                  const AccumulateContext& ctx,
+                                  uint64_t abs_frame,
+                                  std::vector<float>& gains) {
+    std::ranges::fill(gains, 0.0F);
+    while (block_index + 1 < channel.blocks.size() && abs_frame >= channel.blocks[block_index + 1].start_sample) {
+        ++block_index;
+    }
+
+    const auto& block = channel.blocks[block_index];
+    if (abs_frame < block.start_sample || abs_frame >= block.end_sample) {
+        return false;
+    }
+
+    const uint64_t interp_len = render_common::interpolation_length(channel, block_index, ctx.default_interp);
+    const uint64_t delta = abs_frame - block.start_sample;
+    const bool ramping = interp_len > 0 && delta < interp_len;
+    for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
+        gains[out_ch] = block.gains[out_ch];
+        if (ramping) {
+            gains[out_ch] = render_common::interpolated_scalar(
+                channel.blocks[block_index - 1].gains[out_ch], block.gains[out_ch], delta, interp_len);
+        }
+    }
+    return block.smoothable_object;
+}
+
 void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
                             std::vector<std::size_t>& block_indices,
                             const AccumulateContext& ctx,
                             uint64_t frames_now) {
+    std::vector<float> start_gains(ctx.num_out_ch);
+    std::vector<float> end_gains(ctx.num_out_ch);
     for (std::size_t ci = 0; ci < gain_matrix.size(); ++ci) {
         const auto& channel = gain_matrix[ci];
         if (channel.blocks.empty()) {
             continue;
         }
+        auto start_index = block_indices[ci];
+        auto end_index = start_index;
+        const bool smooth_start =
+            ctx.object_smoothing_frames > 0 && gains_at_frame(channel, start_index, ctx, ctx.frames_done, start_gains);
+        const bool smooth_end = ctx.object_smoothing_frames > 0 &&
+                                gains_at_frame(channel, end_index, ctx, ctx.frames_done + frames_now - 1, end_gains);
+        if (!smooth_start || !smooth_end) {
+            for (std::size_t frame = 0; frame < frames_now; ++frame) {
+                accumulate_channel_block(channel, block_indices[ci], ctx, frame);
+            }
+            continue;
+        }
+        block_indices[ci] = start_index;
+
         for (std::size_t frame = 0; frame < frames_now; ++frame) {
-            accumulate_channel_block(channel, block_indices[ci], ctx, frame);
+            const float alpha = frames_now > 1 ? static_cast<float>(frame) / static_cast<float>(frames_now - 1) : 0.0F;
+            const float in_sample = ctx.input[(frame * ctx.num_in_ch) + channel.input_channel];
+            for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
+                const float gain = (start_gains[out_ch] * (1.0F - alpha)) + (end_gains[out_ch] * alpha);
+                (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += in_sample * gain;
+            }
         }
     }
 }
@@ -578,7 +634,8 @@ Result<RenderMetrics> VbapRenderer::render(const RenderPlan& plan, ProgressSink&
         EburPtr lufs_st{
             ebur128_init(num_out_ch, static_cast<unsigned long>(sample_rate), EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
 
-        constexpr uint64_t k_block_size = 1024;
+        constexpr uint64_t k_min_block_size = 1024;
+        const uint64_t k_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
         std::vector<float> out_block(static_cast<std::size_t>(num_out_ch) * k_block_size);
         uint64_t frames_done = 0;
@@ -590,8 +647,13 @@ Result<RenderMetrics> VbapRenderer::render(const RenderPlan& plan, ProgressSink&
             reader->read(in_block.data(), frames_now);
             std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
-            const AccumulateContext ctx{
-                in_block.data(), &out_block, frames_done, num_in_ch, num_out_ch, k_default_interp};
+            const AccumulateContext ctx{in_block.data(),
+                                        &out_block,
+                                        frames_done,
+                                        num_in_ch,
+                                        num_out_ch,
+                                        k_default_interp,
+                                        plan.object_smoothing_frames};
             accumulate_gain_matrix(*gain_matrix, blk_idx, ctx, frames_now);
 
             if (lufs_st) {

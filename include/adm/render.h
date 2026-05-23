@@ -45,6 +45,9 @@ struct RenderPlan {
     std::optional<std::filesystem::path> sofa_path; // binaural renderer only; empty = built-in KEMAR
     // Default gain-interpolation ramp in milliseconds (from RenderOptions).
     uint32_t default_interp_ms{5};
+    // Renderer-side control-rate smoothing for dense Objects metadata updates.
+    // 0 disables smoothing.
+    uint32_t object_smoothing_frames{8875};
 };
 
 // Abstract renderer backend interface.

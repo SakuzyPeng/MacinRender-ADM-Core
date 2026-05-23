@@ -16,6 +16,7 @@ struct RenderCliOptions {
     std::string output_bit_depth_str{"f32"};
     float loudness_target{std::numeric_limits<float>::quiet_NaN()};
     uint32_t interp_ms{5};
+    uint32_t object_smoothing_frames{8875};
     uint32_t opus_bitrate_per_ch{0};
     uint32_t apac_bitrate{0};
     bool apac_drc_music{true};

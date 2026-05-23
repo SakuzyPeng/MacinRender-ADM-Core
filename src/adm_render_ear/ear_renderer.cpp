@@ -24,7 +24,7 @@ namespace mradm {
 
 namespace {
 
-#if defined(_MSC_VER)
+#ifdef _MSC_VER
 #define MRADM_RESTRICT __restrict
 #elif defined(__GNUC__) || defined(__clang__)
 #define MRADM_RESTRICT __restrict__
@@ -38,6 +38,7 @@ struct BlockGains {
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
     bool jump_position{false};
+    bool smoothable_object{false};
     std::optional<uint64_t> interp_length_samples;
 };
 
@@ -57,6 +58,7 @@ struct AccumulateContext {
     uint16_t num_in_ch{0};
     uint16_t num_out_ch{0};
     uint64_t default_interp{0};
+    uint64_t object_smoothing_frames{0};
     uint64_t frames_cap{0}; // stride between columns (= k_block_size)
 };
 
@@ -68,8 +70,11 @@ struct DecorrState {
     void* hFFT{nullptr};                               // saf_rfft handle, L=2048
     std::vector<std::vector<float_complex>> filter_fd; // [num_out_ch][L/2+1=1025]
     std::vector<std::vector<float>> overlap;           // [num_out_ch][K-1=511]
-    int comp_delay{0};                                 // decorrelatorCompensationDelay()=255
-    std::vector<std::vector<float>> dir_delay;         // [num_out_ch][comp_delay]
+    std::size_t fft_len{0};
+    std::size_t bins{0};
+    std::size_t overlap_len{0};
+    int comp_delay{0};                         // decorrelatorCompensationDelay()=255
+    std::vector<std::vector<float>> dir_delay; // [num_out_ch][comp_delay]
 
     ~DecorrState() {
         if (hFFT != nullptr) {
@@ -92,6 +97,14 @@ struct DecorrState {
         result.push_back({static_cast<float>(pos.azimuth), static_cast<float>(pos.elevation), channel.isLfe()});
     }
     return result;
+}
+
+[[nodiscard]] std::size_t next_power_of_two(std::size_t value) {
+    std::size_t out = 1;
+    while (out < value) {
+        out <<= 1U;
+    }
+    return out;
 }
 
 [[nodiscard]] ear::ObjectsTypeMetadata object_metadata_from_block(const SceneObjectBlock& block,
@@ -130,6 +143,7 @@ void append_object_blocks(const SceneTrackRef& track,
         bg.start_sample = prepared.start_sample;
         bg.end_sample = prepared.end_sample;
         bg.jump_position = prepared.jump_position;
+        bg.smoothable_object = true;
         bg.interp_length_samples = prepared.interp_length_samples;
 
         for (const auto& source : prepared.sources) {
@@ -413,11 +427,51 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
     }
 }
 
+[[nodiscard]] bool gains_at_frame(const ChannelGainInfo& channel,
+                                  std::size_t& block_index,
+                                  const AccumulateContext& ctx,
+                                  uint64_t abs_frame,
+                                  std::vector<float>& direct,
+                                  std::vector<float>& diffuse) {
+    std::ranges::fill(direct, 0.0F);
+    std::ranges::fill(diffuse, 0.0F);
+    while (block_index + 1 < channel.blocks.size() && abs_frame >= channel.blocks[block_index + 1].start_sample) {
+        ++block_index;
+    }
+
+    const auto& block = channel.blocks[block_index];
+    if (abs_frame < block.start_sample || abs_frame >= block.end_sample) {
+        return false;
+    }
+
+    const uint64_t interp_len = render_common::interpolation_length(channel, block_index, ctx.default_interp);
+    const uint64_t delta = abs_frame - block.start_sample;
+    const bool ramping = interp_len > 0 && delta < interp_len;
+    for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
+        direct[out_ch] = static_cast<float>(block.gains[out_ch]);
+        diffuse[out_ch] = static_cast<float>(block.diffuse_gains[out_ch]);
+        if (ramping) {
+            direct[out_ch] = render_common::interpolated_scalar(
+                static_cast<float>(channel.blocks[block_index - 1].gains[out_ch]), direct[out_ch], delta, interp_len);
+            diffuse[out_ch] = render_common::interpolated_scalar(
+                static_cast<float>(channel.blocks[block_index - 1].diffuse_gains[out_ch]),
+                diffuse[out_ch],
+                delta,
+                interp_len);
+        }
+    }
+    return block.smoothable_object;
+}
+
 void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
                             std::vector<std::size_t>& block_indices,
                             const AccumulateContext& ctx,
                             uint64_t frames_now,
                             std::vector<float>& ch_in_buf) {
+    std::vector<float> start_direct(ctx.num_out_ch);
+    std::vector<float> end_direct(ctx.num_out_ch);
+    std::vector<float> start_diffuse(ctx.num_out_ch);
+    std::vector<float> end_diffuse(ctx.num_out_ch);
     for (std::size_t ci = 0; ci < gain_matrix.size(); ++ci) {
         const auto& channel = gain_matrix[ci];
         if (channel.blocks.empty()) {
@@ -429,7 +483,31 @@ void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
         for (std::size_t f = 0; f < frames_now; ++f) {
             ch_in_buf[f] = ctx.input[(f * num_in) + ic];
         }
-        accumulate_channel_block(channel, block_indices[ci], ctx, ch_in_buf.data(), frames_now);
+        auto start_index = block_indices[ci];
+        auto end_index = start_index;
+        const bool smooth_start =
+            ctx.object_smoothing_frames > 0 &&
+            gains_at_frame(channel, start_index, ctx, ctx.frames_done, start_direct, start_diffuse);
+        const bool smooth_end =
+            ctx.object_smoothing_frames > 0 &&
+            gains_at_frame(channel, end_index, ctx, ctx.frames_done + frames_now - 1, end_direct, end_diffuse);
+        if (!smooth_start || !smooth_end) {
+            accumulate_channel_block(channel, block_indices[ci], ctx, ch_in_buf.data(), frames_now);
+            continue;
+        }
+        block_indices[ci] = start_index;
+        const uint64_t stride = ctx.frames_cap;
+        for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
+            float* MRADM_RESTRICT col_d = ctx.col_direct + (out_ch * stride);
+            float* MRADM_RESTRICT col_f = ctx.col_diffuse + (out_ch * stride);
+            for (std::size_t f = 0; f < frames_now; ++f) {
+                const float alpha = frames_now > 1 ? static_cast<float>(f) / static_cast<float>(frames_now - 1) : 0.0F;
+                const float gd = (start_direct[out_ch] * (1.0F - alpha)) + (end_direct[out_ch] * alpha);
+                const float gf = (start_diffuse[out_ch] * (1.0F - alpha)) + (end_diffuse[out_ch] * alpha);
+                col_d[f] += ch_in_buf[f] * gd;
+                col_f[f] += ch_in_buf[f] * gf;
+            }
+        }
     }
 }
 
@@ -441,15 +519,11 @@ void apply_decorrelator(DecorrState& state,
                         std::vector<float>& diffuse_out,
                         std::size_t frames_now,
                         std::size_t num_out_ch) {
-    constexpr std::size_t k_fft_len = 2048;
-    constexpr std::size_t k_bins = (k_fft_len / 2) + 1; // 1025
-    constexpr std::size_t k_overlap_len = 511;          // K - 1
-
     // Per-call scratch — small fixed size, stack-friendly via vector.
-    std::vector<float> buf(k_fft_len);
-    std::vector<float_complex> x_fd(k_bins);
-    std::vector<float_complex> y_fd(k_bins);
-    std::vector<float> y(k_fft_len);
+    std::vector<float> buf(state.fft_len);
+    std::vector<float_complex> x_fd(state.bins);
+    std::vector<float_complex> y_fd(state.bins);
+    std::vector<float> y(state.fft_len);
 
     for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
         // Deinterleave, zero-pad remainder.
@@ -460,7 +534,7 @@ void apply_decorrelator(DecorrState& state,
 
         saf_rfft_forward(state.hFFT, buf.data(), x_fd.data());
 
-        for (std::size_t b = 0; b < k_bins; ++b) {
+        for (std::size_t b = 0; b < state.bins; ++b) {
             y_fd[b] = x_fd[b] * state.filter_fd[ch][b];
         }
 
@@ -470,11 +544,11 @@ void apply_decorrelator(DecorrState& state,
         // Overlap-add: accumulate saved tail into this block's output.
         auto& ovl = state.overlap[ch];
         for (std::size_t f = 0; f < frames_now; ++f) {
-            diffuse_out[(f * num_out_ch) + ch] = y[f] + (f < k_overlap_len ? ovl[f] : 0.0F);
+            diffuse_out[(f * num_out_ch) + ch] = y[f] + (f < state.overlap_len ? ovl[f] : 0.0F);
         }
 
         // Save new tail (y[frames_now .. frames_now + k_overlap_len - 1]).
-        for (std::size_t i = 0; i < k_overlap_len; ++i) {
+        for (std::size_t i = 0; i < state.overlap_len; ++i) {
             ovl[i] = y[frames_now + i];
         }
     }
@@ -577,16 +651,22 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
 
         progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
 
+        constexpr uint64_t k_min_block_size = 1024;
+        const uint64_t k_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
+
         // Initialise decorrelator state for the diffuse bus.
         // Filters designed as float; precomputed in frequency domain for FFT convolution.
-        constexpr int k_fft_len = 2048;             // L: next pow2 >= 1024 + 512 - 1
-        constexpr int k_bins = (k_fft_len / 2) + 1; // 1025
         constexpr std::size_t k_fir_len = 512;
+        const std::size_t k_fft_len = next_power_of_two(static_cast<std::size_t>(k_block_size) + k_fir_len - 1U);
+        const std::size_t k_bins = (k_fft_len / 2U) + 1U;
 
         DecorrState decorr;
-        saf_rfft_create(&decorr.hFFT, k_fft_len);
+        saf_rfft_create(&decorr.hFFT, static_cast<int>(k_fft_len));
+        decorr.fft_len = k_fft_len;
+        decorr.bins = k_bins;
+        decorr.overlap_len = k_fir_len - 1U;
         decorr.comp_delay = ear::decorrelatorCompensationDelay(); // 255
-        decorr.overlap.assign(num_out_ch, std::vector<float>(k_fir_len - 1, 0.0F));
+        decorr.overlap.assign(num_out_ch, std::vector<float>(decorr.overlap_len, 0.0F));
         decorr.dir_delay.assign(num_out_ch, std::vector<float>(static_cast<std::size_t>(decorr.comp_delay), 0.0F));
 
         {
@@ -621,7 +701,6 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
         EburPtr lufs_st{
             ebur128_init(num_out_ch, static_cast<unsigned long>(sample_rate), EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
 
-        constexpr uint64_t k_block_size = 1024;
         const std::size_t col_stride = k_block_size; // frames_cap
 
         // Column-major accumulation buffers [num_out_ch × k_block_size].
@@ -658,6 +737,7 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
             ctx.num_in_ch = num_in_ch;
             ctx.num_out_ch = num_out_ch;
             ctx.default_interp = k_default_interp;
+            ctx.object_smoothing_frames = plan.object_smoothing_frames;
             ctx.frames_cap = col_stride;
 
             accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now, ch_in_buf);
