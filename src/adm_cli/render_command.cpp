@@ -74,7 +74,7 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
     render_cmd->add_option("-o,--output", opts.output, "Output audio path");
     render_cmd->add_option("--output-layout",
                            opts.layout,
-                           "Output layout for non-binaural renderers; use 'adm layouts --format <fmt>' for final "
+                           "Output layout for non-binaural renderers; use 'mradm layouts --format <fmt>' for final "
                            "container channel order");
     render_cmd->add_option("--renderer", opts.renderer, "Renderer backend: auto, ear, saf, hoa, binaural, apple")
         ->check(CLI::IsMember({"auto", "ear", "saf", "hoa", "binaural", "apple"}));
@@ -104,7 +104,7 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
         ->add_option("--apac-bitrate",
                      opts.apac_bitrate,
                      "APAC total VBR target/hint bitrate in kbps (64-6000); "
-                     "actual measured bitrate may differ substantially; omit for encoder default")
+                     "actual measured bitrate may differ substantially; omit for layout default")
         ->check(CLI::Range(64U, 6000U));
     render_cmd->add_flag("--apac-drc-none{false},--apac-drc-music{true}",
                          opts.apac_drc_music,

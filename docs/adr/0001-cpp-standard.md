@@ -2,7 +2,7 @@
 
 > 状态：已接受  
 > 日期：2026-05-16  
-> 适用范围：未来 `src/adm_*`、`include/adm/*`、`tools/adm/*` 等新 C++ 平台化代码。旧 Objective-C/Objective-C++ 路径不受本 ADR 强制约束。
+> 适用范围：未来 `src/adm_*`、`include/adm/*`、`tools/mradm/*` 等新 C++ 平台化代码。旧 Objective-C/Objective-C++ 路径不受本 ADR 强制约束。
 
 ## 背景
 

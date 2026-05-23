@@ -7,7 +7,7 @@ project(
     LANGUAGES C CXX
 )
 
-option(MR_ADM_CORE_BUILD_CLI "Build the adm command-line interface" ON)
+option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
 option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 option(MR_ADM_CORE_FETCH_DEPS "Fetch CLI/fmt/spdlog dependencies when not found" ON)
@@ -375,9 +375,9 @@ mr_adm_core_apply_static_analysis(mr_adm_c_api)
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 if(MR_ADM_CORE_BUILD_CLI)
-    add_executable(adm_exe)
-    set_target_properties(adm_exe PROPERTIES OUTPUT_NAME adm)
-    target_sources(adm_exe
+    add_executable(mradm_exe)
+    set_target_properties(mradm_exe PROPERTIES OUTPUT_NAME mradm)
+    target_sources(mradm_exe
         PRIVATE
             src/adm_cli/backends_command.cpp
             src/adm_cli/inspect_command.cpp
@@ -386,7 +386,7 @@ if(MR_ADM_CORE_BUILD_CLI)
             src/adm_cli/render_command.cpp
     )
     target_link_libraries(
-        adm_exe
+        mradm_exe
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMIo
@@ -397,8 +397,8 @@ if(MR_ADM_CORE_BUILD_CLI)
             CLI11::CLI11
             spdlog::spdlog
     )
-    mr_adm_core_apply_warnings(adm_exe)
-    mr_adm_core_apply_static_analysis(adm_exe)
+    mr_adm_core_apply_warnings(mradm_exe)
+    mr_adm_core_apply_static_analysis(mradm_exe)
 endif()
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -560,7 +560,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(MR_ADM_CORE_BUILD_CLI)
         add_executable(mr_adm_cli_smoke_tests tests/unit/adm_cli_smoke_test.cpp)
         target_compile_definitions(mr_adm_cli_smoke_tests PRIVATE
-            "ADM_EXE_PATH=\"$<TARGET_FILE:adm_exe>\""
+            "MRADM_EXE_PATH=\"$<TARGET_FILE:mradm_exe>\""
         )
         target_link_libraries(mr_adm_cli_smoke_tests
             PRIVATE
