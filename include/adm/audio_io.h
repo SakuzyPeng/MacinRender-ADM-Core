@@ -54,7 +54,7 @@ class FloatWavReader {
 // Streaming writer for CAF (Core Audio Format) files with IEEE float32 samples
 // and an Apple AudioChannelLayoutTag encoded in the 'chan' chunk.
 // layout_id must be one of the supported output layout identifiers:
-//   "0+2+0", "0+5+0", "wav71", "4+5+0", "4+7+0", "9.1.6", "9+10+3"
+//   "0+2+0", "binaural", "0+5+0", "wav71", "4+5+0", "4+7+0", "9.1.6", "9+10+3"
 // PCM samples are stored as little-endian float32 with the matching layout tag so
 // that afinfo, QuickTime, and CoreAudio consumers can read the channel assignment.
 class FloatCafWriter {
@@ -169,7 +169,7 @@ class FloatOpusMkaWriter {
 
 // Type-erased audio file writer.  Selects WAV, CAF, or FLAC automatically from
 // the output path extension (.wav → FloatWavWriter, .caf → FloatCafWriter,
-// .flac → FloatFlacWriter). For CAF, layout_id must be a known BS.2051 layout
+// .flac → FloatFlacWriter). For CAF, layout_id must be a known output layout
 // identifier; it is ignored for WAV and FLAC.
 class WriterHandle {
   public:
@@ -243,10 +243,11 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
 // container (.m4a / mp4f).  Requires macOS (AudioToolbox); returns
 // ErrorCode::unsupported on other platforms.
 // layout_id controls channel mapping:
+//   "binaural" → Binaural      (no swap)
+//   "0+2+0"  → MPEG_2_0 stereo (no swap)
 //   "wav71"  → AudioUnit_7_1  (ch4↔ch6, ch5↔ch7 swap applied before encoding)
 //   "4+5+0"  → Atmos_7_1_4   (no swap)
 //   "4+7+0"  → Atmos_9_1_6   (no swap)
-//   "0+2+0"  → Binaural      (no swap)
 // bitrate_kbps: total VBR target/hint in kbps; 0 = encoder default. The APAC
 // encoder may produce a measured average bitrate that differs substantially.
 // drc_music: true = Music DRC (cdrc=1), false = None (cdrc=0).

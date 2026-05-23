@@ -523,10 +523,10 @@ Result<void> apply_gain_to_file(const std::string& path, float gain, const std::
 
 namespace {
 
-// Apple AudioChannelLayoutTag values for our supported BS.2051 output layouts.
+// Apple AudioChannelLayoutTag values for our supported output layouts.
 // Tag encoding: (tag_constant << 16) | channel_count — public integers, no
-// AudioToolbox dependency.  Channel ordering follows BS.2051 / libear conventions
-// which align exactly with the Apple tag slot ordering for all seven layouts.
+// AudioToolbox dependency.  Speaker channel ordering follows BS.2051 / libear
+// conventions which align exactly with the Apple tag slot ordering.
 //
 // NB: BS.2051 uses "LFE1/LFE2" labels while CICP_13 names the same slots
 // "LFE2/LFE3".  This is a naming-context difference only; the spatial positions
@@ -537,8 +537,9 @@ struct CafLayoutEntry {
     uint32_t channel_count;
 };
 // clang-format off
-constexpr std::array<CafLayoutEntry, 7> k_caf_tags = {{
-    {"0+2+0",  (101U << 16) | 2U,  2U},  // kAudioChannelLayoutTag_MPEG_2_0  / CICP_2  (L R)
+constexpr std::array<CafLayoutEntry, 8> k_caf_tags = {{
+    {"0+2+0",   (101U << 16) | 2U,  2U}, // kAudioChannelLayoutTag_MPEG_2_0  / CICP_2  (L R)
+    {"binaural", (106U << 16) | 2U,  2U}, // kAudioChannelLayoutTag_Binaural (BinauralLeft BinauralRight)
     {"0+5+0",  (121U << 16) | 6U,  6U},  // kAudioChannelLayoutTag_MPEG_5_1_A / CICP_6 (L R C LFE Ls Rs)
     {"wav71",  (189U << 16) | 8U,  8U},  // kAudioChannelLayoutTag_WAVE_7_1 (L R C LFE Rls Rrs Ls Rs)
     {"4+5+0",  (195U << 16) | 10U, 10U}, // kAudioChannelLayoutTag_Atmos_5_1_4
@@ -1952,8 +1953,10 @@ Result<void> convert_to_apac(const std::string& src_path,
         uint32_t expected_channels; // 0 = any channel count accepted
     };
     std::optional<ApacLayout> al;
-    if (layout_id == "0+2+0") {
+    if (layout_id == "binaural") {
         al = ApacLayout{kAudioChannelLayoutTag_Binaural, false, 2U};
+    } else if (layout_id == "0+2+0") {
+        al = ApacLayout{kAudioChannelLayoutTag_MPEG_2_0, false, 2U};
     } else if (layout_id == "wav71") {
         al = ApacLayout{kAudioChannelLayoutTag_AudioUnit_7_1, true, 8U};
     } else if (layout_id == "4+5+0" || layout_id == "atmos714") {
