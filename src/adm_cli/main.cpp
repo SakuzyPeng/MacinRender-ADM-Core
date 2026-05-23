@@ -12,7 +12,7 @@
 int main(int argc, char** argv) {
     CLI::App app{"MacinRender ADM Core command-line interface"};
     // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks): CLI11 owns the version callback.
-    app.set_version_flag("--version", fmt::format("adm {}", mradm::version()));
+    app.set_version_flag("--version", fmt::format("mradm {}", mradm::version()));
 
     RenderCliOptions render_opts;
     bool verbose{false};

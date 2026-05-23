@@ -14,8 +14,8 @@
 #include <bw64/bw64.hpp>
 #include <sys/wait.h>
 
-#ifndef ADM_EXE_PATH
-#define ADM_EXE_PATH ""
+#ifndef MRADM_EXE_PATH
+#define MRADM_EXE_PATH ""
 #endif
 
 namespace {
@@ -133,7 +133,7 @@ std::filesystem::path write_fixture() {
 
 // NOLINTNEXTLINE(readability-function-size): this is a linear CLI smoke script.
 int main() {
-    const std::string adm_exe = "\"" ADM_EXE_PATH "\"";
+    const std::string mradm_exe = "\"" MRADM_EXE_PATH "\"";
 
     const auto fixture = write_fixture();
     const FileGuard fixture_guard{fixture};
@@ -141,9 +141,9 @@ int main() {
 
     bool ok = true;
 
-    // ── adm backends ──────────────────────────────────────────────────────────
+    // ── mradm backends ────────────────────────────────────────────────────────
     {
-        auto r = run_cmd(adm_exe + " backends");
+        auto r = run_cmd(mradm_exe + " backends");
         ok &= check(r.code == 0, "backends: exit 0");
         ok &= check(r.out.find("libear") != std::string::npos, "backends: 'libear' in output");
         ok &= check(r.out.find("stereo") == std::string::npos, "backends: speaker stereo layout not listed");
@@ -157,95 +157,95 @@ int main() {
         ok &= check(r.out.find("4+7+0") == std::string::npos, "backends: old 4+7+0 layout not listed");
     }
 
-    // ── adm layouts requires format and reports final container order ────────
+    // ── mradm layouts requires format and reports final container order ──────
     {
-        auto r = run_cmd(adm_exe + " layouts");
+        auto r = run_cmd(mradm_exe + " layouts");
         ok &= check(r.code != 0, "layouts without --format: non-zero exit");
     }
     {
-        auto r = run_cmd(adm_exe + " layouts --format apac --layout 7.1");
+        auto r = run_cmd(mradm_exe + " layouts --format apac --layout 7.1");
         ok &= check(r.code == 0, "layouts --format apac --layout 7.1: exit 0");
         ok &= check(r.out.find("AudioUnit_7_1") != std::string::npos, "layouts apac 7.1: AudioUnit tag");
         ok &= check(r.out.find("L R C LFE Ls Rs Rls Rrs") != std::string::npos, "layouts apac 7.1: final APAC order");
     }
     {
-        auto r = run_cmd(adm_exe + " layouts --format wav --layout wav71");
+        auto r = run_cmd(mradm_exe + " layouts --format wav --layout wav71");
         ok &= check(r.code == 0, "layouts --format wav --layout wav71: exit 0");
         ok &= check(r.out.find("L R C LFE Rls Rrs Ls Rs") != std::string::npos, "layouts wav 7.1: final WAV order");
     }
     {
-        auto r = run_cmd(adm_exe + " layouts --format flac --renderer saf");
+        auto r = run_cmd(mradm_exe + " layouts --format flac --renderer saf");
         ok &= check(r.code == 0, "layouts --format flac --renderer saf: exit 0");
         ok &= check(r.out.find("Renderer: saf-vbap") != std::string::npos, "layouts renderer filter: saf heading");
         ok &= check(r.out.find("7.1.4") == std::string::npos, "layouts flac+saf: 7.1.4 hidden");
     }
     {
-        auto r = run_cmd(adm_exe + " layouts --format wav --renderer ear");
+        auto r = run_cmd(mradm_exe + " layouts --format wav --renderer ear");
         ok &= check(r.code == 0, "layouts --format wav --renderer ear: exit 0");
         ok &= check(r.out.find("Renderer: libear") != std::string::npos, "layouts renderer filter: ear heading");
         ok &= check(r.out.find("9.1.6") == std::string::npos, "layouts wav+ear: unsupported 9.1.6 hidden");
     }
     {
-        auto r = run_cmd(adm_exe + " layouts --format apac --renderer saf --layout 5.1.2");
+        auto r = run_cmd(mradm_exe + " layouts --format apac --renderer saf --layout 5.1.2");
         ok &= check(r.code != 0, "layouts apac+saf unsupported layout: non-zero exit");
         ok &= check(r.out.find("not supported") != std::string::npos, "layouts apac+saf unsupported layout: message");
     }
 
-    // ── adm inspect <fixture> ─────────────────────────────────────────────────
+    // ── mradm inspect <fixture> ───────────────────────────────────────────────
     {
-        auto r = run_cmd(adm_exe + " inspect " + fix);
+        auto r = run_cmd(mradm_exe + " inspect " + fix);
         ok &= check(r.code == 0, "inspect: exit 0");
         ok &= check(r.out.find("48000") != std::string::npos, "inspect: sample rate 48000");
         ok &= check(r.out.find("Objects") != std::string::npos, "inspect: Objects section");
         ok &= check(r.out.find("CliTestObj") != std::string::npos, "inspect: object name");
     }
 
-    // ── adm inspect --xml <fixture> ───────────────────────────────────────────
+    // ── mradm inspect --xml <fixture> ─────────────────────────────────────────
     {
-        auto r = run_cmd(adm_exe + " inspect --xml " + fix);
+        auto r = run_cmd(mradm_exe + " inspect --xml " + fix);
         ok &= check(r.code == 0, "inspect --xml: exit 0");
         ok &= check(r.out.find("<?xml") != std::string::npos, "inspect --xml: XML declaration");
         ok &= check(r.out.find("audioObject") != std::string::npos, "inspect --xml: audioObject element");
         ok &= check(r.out.find("CliTestObj") != std::string::npos, "inspect --xml: object name in XML");
     }
 
-    // ── adm inspect nonexistent → non-zero exit ───────────────────────────────
+    // ── mradm inspect nonexistent → non-zero exit ─────────────────────────────
     {
-        auto r = run_cmd(adm_exe + " inspect /nonexistent_mr_cli_test_xyz.wav");
+        auto r = run_cmd(mradm_exe + " inspect /nonexistent_mr_cli_test_xyz.wav");
         ok &= check(r.code != 0, "inspect nonexistent: non-zero exit");
     }
 
-    // ── adm render --sofa nonexistent → non-zero exit ────────────────────────
+    // ── mradm render --sofa nonexistent → non-zero exit ──────────────────────
     {
         const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_binaural_sofa_missing.wav";
         const FileGuard out_guard{out};
-        auto r = run_cmd(adm_exe + " render --renderer binaural --sofa /nonexistent_mr_cli_test_xyz.sofa -o " +
+        auto r = run_cmd(mradm_exe + " render --renderer binaural --sofa /nonexistent_mr_cli_test_xyz.sofa -o " +
                          shell_quote(out.string()) + " " + fix);
         ok &= check(r.code != 0, "render --sofa nonexistent: non-zero exit");
     }
 
-    // ── adm render default 2ch → binaural succeeds ───────────────────────────
+    // ── mradm render default 2ch → binaural succeeds ─────────────────────────
     {
         const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_default_binaural.wav";
         const FileGuard out_guard{out};
-        auto r = run_cmd(adm_exe + " render -o " + shell_quote(out.string()) + " -i " + fix);
+        auto r = run_cmd(mradm_exe + " render -o " + shell_quote(out.string()) + " -i " + fix);
         ok &= check(r.code == 0, "render default 2ch uses binaural: exit 0");
     }
 
-    // ── adm render speaker stereo is disabled ────────────────────────────────
+    // ── mradm render speaker stereo is disabled ──────────────────────────────
     {
         const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_speaker_stereo.wav";
         const FileGuard out_guard{out};
-        auto r = run_cmd(adm_exe + " render --renderer saf --output-layout stereo -o " + shell_quote(out.string()) +
+        auto r = run_cmd(mradm_exe + " render --renderer saf --output-layout stereo -o " + shell_quote(out.string()) +
                          " -i " + fix);
         ok &= check(r.code != 0, "render --renderer saf --output-layout stereo: non-zero exit");
     }
 
-    // ── adm render accepts common layout names → exit 0 ──────────────────────
+    // ── mradm render accepts common layout names → exit 0 ────────────────────
     {
         const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_layout_alias.wav";
         const FileGuard out_guard{out};
-        auto r = run_cmd(adm_exe + " render --renderer saf --output-layout 7.1.4 -o " + shell_quote(out.string()) +
+        auto r = run_cmd(mradm_exe + " render --renderer saf --output-layout 7.1.4 -o " + shell_quote(out.string()) +
                          " -i " + fix);
         ok &= check(r.code == 0, "render --output-layout 7.1.4: exit 0");
     }
@@ -254,7 +254,7 @@ int main() {
     {
         const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_hoa_loudness_skip.wav";
         const FileGuard out_guard{out};
-        auto r = run_cmd(adm_exe + " render --renderer hoa --output-layout hoa3 --loudness-target -23 -o " +
+        auto r = run_cmd(mradm_exe + " render --renderer hoa --output-layout hoa3 --loudness-target -23 -o " +
                          shell_quote(out.string()) + " -i " + fix);
         ok &= check(r.code == 0, "render HOA with loudness target: exit 0");
         ok &= check(r.out.find("loudness normalization skipped for HOA output") != std::string::npos,

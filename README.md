@@ -22,33 +22,33 @@ cmake --build build/release
 渲染一个 ADM BWF 文件：
 
 ```bash
-./build/release/adm render -i input.wav -o output.wav
+./build/release/mradm render -i input.wav -o output.wav
 ```
 
 双耳渲染：
 
 ```bash
-./build/release/adm render -i input.wav -o binaural.wav --renderer binaural
+./build/release/mradm render -i input.wav -o binaural.wav --renderer binaural
 ```
 
 渲染到 7.1 FLAC：
 
 ```bash
-./build/release/adm render -i input.wav -o output.flac --renderer ear --output-layout 7.1
+./build/release/mradm render -i input.wav -o output.flac --renderer ear --output-layout 7.1
 ```
 
 查看 ADM 场景：
 
 ```bash
-./build/release/adm inspect input.wav
+./build/release/mradm inspect input.wav
 ```
 
 查看可用后端和布局：
 
 ```bash
-./build/release/adm backends
-./build/release/adm layouts --format wav
-./build/release/adm layouts --format flac --renderer saf
+./build/release/mradm backends
+./build/release/mradm layouts --format wav
+./build/release/mradm layouts --format flac --renderer saf
 ```
 
 ## 渲染后端
@@ -95,10 +95,10 @@ APAC 空间布局和 HOA 默认使用稳定的总目标码率提示：以 `7.1.4
 声道顺序取决于最终输出格式。完整表可用 CLI 查询：
 
 ```bash
-./build/release/adm layouts --format wav
-./build/release/adm layouts --format caf
-./build/release/adm layouts --format apac
-./build/release/adm layouts --format flac --renderer ear
+./build/release/mradm layouts --format wav
+./build/release/mradm layouts --format caf
+./build/release/mradm layouts --format apac
+./build/release/mradm layouts --format flac --renderer ear
 ```
 
 常见差异示例：
@@ -130,7 +130,7 @@ APAC 空间布局和 HOA 默认使用稳定的总目标码率提示：以 `7.1.4
 更多选项可查看：
 
 ```bash
-./build/release/adm render --help
+./build/release/mradm render --help
 ```
 
 ## 构建选项

@@ -582,7 +582,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 下列问题已不再悬而未决：
 
-- **新旧 CLI 二进制名称**：新仓库 CLI 已叫 `adm`，与旧仓库分属不同 repo 无共存冲突；不需 ADR 单独记录。
+- **新旧 CLI 二进制名称**：正式 CLI 二进制名为 `mradm`，避免占用通用标准名 `adm`；不保留 `adm` 兼容入口。
 
 ## 15. 下一步建议
 
