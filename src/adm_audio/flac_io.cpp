@@ -1,11 +1,13 @@
 // DR_FLAC_IMPLEMENTATION must be defined in exactly one TU.
 #define DR_FLAC_IMPLEMENTATION
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <dr_flac.h>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <FLAC/metadata.h>
