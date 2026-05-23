@@ -200,7 +200,11 @@ docs/architecture/  特性覆盖审计和设计规划
 
 ## 许可证
 
-许可证待定。引入第三方音频库前，需先记录依赖许可证和链接边界。
+本项目源码采用 **MIT License**，以仓库根目录 [LICENSE](LICENSE) 为准。
+
+当前默认构建依赖与 MIT 源码许可证兼容；二进制发行包需要附带第三方依赖的 notice/license 文本。默认发行构建不得启用 SAF 的 GPLv2 可选模块（如 tracker / HADES）或 FFTW 等需要单独审计的依赖。
+
+第三方许可证和生产发行边界见 [docs/THIRD_PARTY_LICENSES.md](docs/THIRD_PARTY_LICENSES.md)。
 
 ---
 
