@@ -59,9 +59,12 @@ MacinRender ADM Core 的项目源码采用 **MIT License**，以仓库根目录 
 发布二进制时至少包含：
 
 1. `LICENSE`：本项目 MIT 许可证。
-2. `THIRD_PARTY_NOTICES` 或 `licenses/` 目录：包含上表所有实际链接/打包依赖的许可证文本。
+2. `THIRD_PARTY_NOTICES.md` 或 `licenses/` 目录：包含上表所有实际链接/打包依赖的许可证文本。
 3. 构建配置摘要：记录 `MR_ADM_FLAC_PROVIDER`、`MR_ADM_OPUS_PROVIDER`、`MR_ADM_ENABLE_SOFA`、SAF 可选模块开关，以及是否启用 APAC。
 4. 若包含示例 SOFA/HRTF/ADM 音频素材，素材许可证必须与代码许可证分开声明。
+
+当前首版 release package 会把本文复制为 `THIRD_PARTY_NOTICES.md`。它是工程审计用 notice 摘要；
+正式公开发行前仍建议拆分为完整逐项许可证文本 bundle。
 
 ## 推荐后续防线
 

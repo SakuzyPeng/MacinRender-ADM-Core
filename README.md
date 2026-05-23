@@ -51,6 +51,25 @@ cmake --build build/release
 ./build/release/mradm layouts --format flac --renderer saf
 ```
 
+## 发行包
+
+GitHub Actions 的 release workflow 会在 tag `v*` 或手动触发时生成首版可审计发行包：
+
+| 平台 | artifact | 支持基线 | 自包含边界 |
+|---|---|---|---|
+| macOS arm64 | `mradm-<version>-macos-arm64.tar.gz` | macOS 15 runner 构建 | 不依赖 Homebrew / `/usr/local` 动态库；允许 Apple 系统库与 framework |
+| Linux x86_64 | `mradm-<version>-linux-x86_64.tar.gz` | Ubuntu 24.04 x86_64 | 附带 `ldd` 清单；不承诺任意 Linux 发行版 portable |
+
+发行包内容：
+
+- `bin/mradm`
+- `LICENSE`
+- `THIRD_PARTY_NOTICES.md`
+- `BUILD_INFO.txt`
+- `DEPENDENCIES.txt`
+
+每个 `.tar.gz` 旁边会生成对应 `.sha256`。本轮暂不提供 Windows 产物、macOS universal2、codesign 或 notarization。
+
 ## 渲染后端
 
 | 后端 | CLI 选项 | 输入类型 | 输出 |
