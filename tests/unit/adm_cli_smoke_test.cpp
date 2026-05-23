@@ -131,6 +131,7 @@ std::filesystem::path write_fixture() {
 
 } // namespace
 
+// NOLINTNEXTLINE(readability-function-size): this is a linear CLI smoke script.
 int main() {
     const std::string adm_exe = "\"" ADM_EXE_PATH "\"";
 
@@ -171,6 +172,23 @@ int main() {
         auto r = run_cmd(adm_exe + " layouts --format wav --layout wav71");
         ok &= check(r.code == 0, "layouts --format wav --layout wav71: exit 0");
         ok &= check(r.out.find("L R C LFE Rls Rrs Ls Rs") != std::string::npos, "layouts wav 7.1: final WAV order");
+    }
+    {
+        auto r = run_cmd(adm_exe + " layouts --format flac --renderer saf");
+        ok &= check(r.code == 0, "layouts --format flac --renderer saf: exit 0");
+        ok &= check(r.out.find("Renderer: saf-vbap") != std::string::npos, "layouts renderer filter: saf heading");
+        ok &= check(r.out.find("7.1.4") == std::string::npos, "layouts flac+saf: 7.1.4 hidden");
+    }
+    {
+        auto r = run_cmd(adm_exe + " layouts --format wav --renderer ear");
+        ok &= check(r.code == 0, "layouts --format wav --renderer ear: exit 0");
+        ok &= check(r.out.find("Renderer: libear") != std::string::npos, "layouts renderer filter: ear heading");
+        ok &= check(r.out.find("9.1.6") == std::string::npos, "layouts wav+ear: unsupported 9.1.6 hidden");
+    }
+    {
+        auto r = run_cmd(adm_exe + " layouts --format apac --renderer saf --layout 5.1.2");
+        ok &= check(r.code != 0, "layouts apac+saf unsupported layout: non-zero exit");
+        ok &= check(r.out.find("not supported") != std::string::npos, "layouts apac+saf unsupported layout: message");
     }
 
     // ── adm inspect <fixture> ─────────────────────────────────────────────────
