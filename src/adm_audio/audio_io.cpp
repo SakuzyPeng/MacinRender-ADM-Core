@@ -1954,6 +1954,10 @@ Result<void> convert_to_apac(const std::string& src_path,
     };
     std::optional<ApacLayout> al;
     if (layout_id == "binaural") {
+        // CoreAudio accepts the Binaural input layout here, but as of macOS 15
+        // afinfo reports the encoded APAC track as Stereo (L R).  Keep the
+        // layout id for validation/metadata semantics; do not rely on APAC as a
+        // durable binaural channel-layout carrier.
         al = ApacLayout{kAudioChannelLayoutTag_Binaural, false, 2U};
     } else if (layout_id == "0+2+0") {
         al = ApacLayout{kAudioChannelLayoutTag_MPEG_2_0, false, 2U};
