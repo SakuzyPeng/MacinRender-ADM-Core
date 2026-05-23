@@ -53,8 +53,10 @@ PR changed / main full 的分层策略。
 release workflow 使用 `scripts/release/package.sh` 生成首版可审计发行包。包内包含 `bin/mradm`、
 `LICENSE`、`THIRD_PARTY_NOTICES.md`、`BUILD_INFO.txt` 和 `DEPENDENCIES.txt`。macOS 包会拒绝
 `/opt/homebrew` 与 `/usr/local` 动态库，并只允许 Apple 系统库/framework；Linux 包记录 `ldd` 清单，
-支持基线为 Ubuntu 24.04 x86_64。签名、notarization、GitHub Release 自动创建和完整 license bundle
-留到后续阶段。
+并拒绝缺失库、构建目录依赖和 `/usr/local` 依赖。两个平台都会在上传前通过
+`scripts/release/smoke-package.sh` 解包、校验 checksum，并运行 `mradm --version` / `mradm backends`。
+Linux 支持基线为 Ubuntu 24.04 x86_64。签名、notarization、GitHub Release 自动创建和完整 license
+bundle 留到后续阶段。
 
 ## 缓存策略
 

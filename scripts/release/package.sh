@@ -9,6 +9,29 @@ Creates dist/mradm-<version>-<platform>-<arch>.tar.gz and a matching .sha256 fil
 EOF
 }
 
+validate_linux_dependencies() {
+    local deps_file="$1"
+    local repo_root="$2"
+
+    if grep -F 'not found' "$deps_file" >/dev/null; then
+        echo "Linux release binary has unresolved shared libraries:" >&2
+        grep -F 'not found' "$deps_file" >&2
+        exit 1
+    fi
+
+    if grep -F "$repo_root/" "$deps_file" >/dev/null; then
+        echo "Linux release binary links a build-tree dependency:" >&2
+        grep -F "$repo_root/" "$deps_file" >&2
+        exit 1
+    fi
+
+    if grep -E '=>[[:space:]]+/usr/local/' "$deps_file" >/dev/null; then
+        echo "Linux release binary links /usr/local, which is outside the Ubuntu 24.04 baseline:" >&2
+        grep -E '=>[[:space:]]+/usr/local/' "$deps_file" >&2
+        exit 1
+    fi
+}
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 binary=""
 platform=""
@@ -117,6 +140,7 @@ case "$platform" in
         ;;
     linux)
         ldd "$package_root/bin/mradm" > "$deps_file"
+        validate_linux_dependencies "$deps_file" "$repo_root"
         ;;
 esac
 
@@ -129,7 +153,7 @@ platform: $platform
 arch: $arch
 built_at_utc: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 cmake_options: ${cmake_options:-not recorded}
-dependency_policy: macOS packages may only link Apple system libraries/frameworks; Linux packages target Ubuntu 24.04 x86_64.
+dependency_policy: macOS packages may only link Apple system libraries/frameworks; Linux packages target Ubuntu 24.04 x86_64 and must not contain unresolved, /usr/local, or build-tree shared-library dependencies.
 EOF
 
 (
