@@ -133,6 +133,58 @@ make_objects_doc(float azimuth, std::chrono::milliseconds rtime, std::chrono::mi
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
+std::pair<std::shared_ptr<adm::Document>, std::string>
+make_lfe_direct_speakers_doc(std::chrono::milliseconds rtime, std::chrono::milliseconds duration) {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"BinauralLfeCF"},
+                                              adm::TypeDefinition::DIRECT_SPEAKERS);
+    {
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::SphericalSpeakerPosition{adm::Azimuth{45.0F}, adm::Elevation{-35.0F}, adm::Distance{1.0F}}};
+        block.add(adm::SpeakerLabel{"RC_LFE"});
+        block.set(adm::Gain{1.0F});
+        block.set(adm::Rtime{adm::Time{rtime}});
+        block.set(adm::Duration{adm::Time{duration}});
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf =
+        adm::AudioPackFormat::create(adm::AudioPackFormatName{"BinauralLfePF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"BinauralLfeSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"BinauralLfeTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"BinauralLfeObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"BinauralLfeContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"BinauralLfeProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
 std::filesystem::path
 write_fixture(float azimuth, std::chrono::milliseconds rtime, std::chrono::milliseconds duration, uint32_t frames) {
     constexpr uint32_t k_ch = 1U;
@@ -151,6 +203,30 @@ write_fixture(float azimuth, std::chrono::milliseconds rtime, std::chrono::milli
     std::vector<float> samples(frames);
     for (uint32_t i = 0; i < frames; ++i) {
         samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
+                                      static_cast<float>(k_sr));
+    }
+    writer->write(samples.data(), frames);
+    return path;
+}
+
+std::filesystem::path
+write_lfe_fixture(std::chrono::milliseconds rtime, std::chrono::milliseconds duration, uint32_t frames) {
+    constexpr uint32_t k_ch = 1U;
+    constexpr uint32_t k_sr = 48000U;
+
+    const auto [doc, uid_str] = make_lfe_direct_speakers_doc(rtime, duration);
+    auto path = temp_path("mr_binaural_lfe_input", ".wav");
+
+    std::ostringstream xml_buf;
+    adm::writeXml(xml_buf, doc);
+
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+
+    auto writer = bw64::writeFile(path.string(), k_ch, k_sr, 24U, chna, axml);
+    std::vector<float> samples(frames);
+    for (uint32_t i = 0; i < frames; ++i) {
+        samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 80.0F * static_cast<float>(i) /
                                       static_cast<float>(k_sr));
     }
     writer->write(samples.data(), frames);
@@ -266,6 +342,33 @@ bool verify_binaural_time_gate_respects_block_start() {
     return ok;
 }
 
+bool verify_binaural_lfe_bypasses_hrtf() {
+    const auto in = write_lfe_fixture(std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U);
+    const auto out = temp_path("mr_binaural_lfe_bypass", ".wav");
+    FileGuard in_guard(in);
+    FileGuard out_guard(out);
+
+    auto options = make_request(in, out).options;
+    if (!render_to_path(in, out, options)) {
+        return false;
+    }
+
+    auto reader = mradm::audio::FloatWavReader::open(out.string());
+    if (!check(reader.has_value(), "LFE bypass binaural WAV output opens")) {
+        return false;
+    }
+    std::vector<float> samples(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
+    reader->read(samples.data(), reader->frame_count());
+
+    bool ok = true;
+    ok &= check(reader->channels() == 2U, "LFE bypass output is stereo");
+    const double l_energy = channel_energy(samples, reader->channels(), 0U, 0U, reader->frame_count());
+    const double r_energy = channel_energy(samples, reader->channels(), 1U, 0U, reader->frame_count());
+    ok &= check(l_energy > 1e-5, "LFE bypass left output is not silent");
+    ok &= check(std::abs(l_energy - r_energy) < (l_energy * 1.0e-6), "LFE bypass feeds both ears equally");
+    return ok;
+}
+
 bool verify_binaural_caf_ignores_requested_layout() {
     const auto in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U);
     const auto out = temp_path("mr_binaural_layout", ".caf");
@@ -346,6 +449,7 @@ int main() {
     bool ok = true;
     ok &= verify_binaural_render_is_stereo_and_directional();
     ok &= verify_binaural_time_gate_respects_block_start();
+    ok &= verify_binaural_lfe_bypasses_hrtf();
     ok &= verify_binaural_caf_ignores_requested_layout();
     ok &= verify_binaural_missing_sofa_fails_cleanly();
     ok &= verify_external_sofa_when_available();
