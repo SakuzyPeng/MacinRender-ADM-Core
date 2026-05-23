@@ -29,6 +29,23 @@
 
 README 优先使用 5.1.4 / 7.1.4 这类常见布局名称。旧的 BS.2051 风格布局 ID 仍兼容，但不建议新命令继续使用。普通扬声器 stereo 渲染已禁用；2ch ADM 输出只走 `binaural`，避免把不可听的 speaker-stereo 投影误认为双耳或正式下混。
 
+### 最终声道顺序
+
+声道语义必须和最终输出格式一起看；同一个 `--output-layout` 在不同容器里可能有不同的实际顺序。完整表可用 `adm layouts --format <wav|caf|flac|apac>` 查询。
+
+| 格式 | Layout | 最终容器 / 映射 | 最终声道顺序 |
+|---|---|---|---|
+| WAV / FLAC | `7.1` | WAVE_7_1 / `wav71` | L R C LFE Rls Rrs Ls Rs |
+| APAC / M4A | `7.1` | CoreAudio `AudioUnit_7_1` | L R C LFE Ls Rs Rls Rrs |
+| CAF | `7.1` | CoreAudio `WAVE_7_1` | L R C LFE Rls Rrs Ls Rs |
+| APAC / CAF | `5.1.4` | CoreAudio `Atmos_5_1_4` | L R C LFE Ls Rs Vhl Vhr Ltr Rtr |
+| APAC / CAF | `7.1.4` | CoreAudio `Atmos_7_1_4` | L R C LFE Ls Rs Rls Rrs Vhl Vhr Ltr Rtr |
+| APAC / CAF | `9.1.6` | CoreAudio `Atmos_9_1_6` | L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr |
+| APAC / CAF | `22.2` | CoreAudio `CICP_13` | Lw Rw C LFE2 Rls Rrs L R Cs LFE3 Lss Rss Vhl Vhr Vhc Ts Ltr Rtr Ltm Rtm Ctr Cb Lb Rb |
+| APAC / M4A | `binaural` | 请求 CoreAudio `Binaural`，metadata 写 `layout=binaural` | L R（`afinfo` 目前仍可能显示 Stereo） |
+
+APAC 7.1 在编码前会把内部 `wav71` 顺序重排为 CoreAudio `AudioUnit_7_1` 顺序。`22.2` 的两个 LFE 槽位在 BS.2051/libear 语境中常写作 LFE1/LFE2，而 CoreAudio `CICP_13` 读出为 LFE2/LFE3；这是命名语境差异，不代表声道位置不同。
+
 ### 输出格式
 
 | 格式 | 扩展名 | 位深 | 平台 |
@@ -128,6 +145,10 @@ cmake -S . -B build -DMR_ADM_ENABLE_SOFA=ON
 
 # 列出所有可用后端和布局
 ./build/release/adm backends
+
+# 按最终输出格式查看实际声道顺序
+./build/release/adm layouts --format apac --layout 7.1
+./build/release/adm layouts --format wav
 ```
 
 ### 常用渲染选项

@@ -152,6 +152,23 @@ int main() {
         ok &= check(r.out.find("4+7+0") == std::string::npos, "backends: old 4+7+0 layout not listed");
     }
 
+    // ── adm layouts requires format and reports final container order ────────
+    {
+        auto r = run_cmd(adm_exe + " layouts");
+        ok &= check(r.code != 0, "layouts without --format: non-zero exit");
+    }
+    {
+        auto r = run_cmd(adm_exe + " layouts --format apac --layout 7.1");
+        ok &= check(r.code == 0, "layouts --format apac --layout 7.1: exit 0");
+        ok &= check(r.out.find("AudioUnit_7_1") != std::string::npos, "layouts apac 7.1: AudioUnit tag");
+        ok &= check(r.out.find("L R C LFE Ls Rs Rls Rrs") != std::string::npos, "layouts apac 7.1: final APAC order");
+    }
+    {
+        auto r = run_cmd(adm_exe + " layouts --format wav --layout wav71");
+        ok &= check(r.code == 0, "layouts --format wav --layout wav71: exit 0");
+        ok &= check(r.out.find("L R C LFE Rls Rrs Ls Rs") != std::string::npos, "layouts wav 7.1: final WAV order");
+    }
+
     // ── adm inspect <fixture> ─────────────────────────────────────────────────
     {
         auto r = run_cmd(adm_exe + " inspect " + fix);

@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <array>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -337,6 +340,190 @@ void print_all_capabilities() {
     print_capabilities(mradm::binaural_capabilities());
 }
 
+struct LayoutInfo {
+    std::string_view format;
+    std::string_view layout;
+    uint32_t channels;
+    std::string_view container;
+    std::string_view order;
+    std::string_view note;
+};
+
+std::string lower_copy(std::string value) {
+    std::ranges::transform(
+        value, value.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+    return value;
+}
+
+std::string normalize_layout_query(const std::string& layout) {
+    auto key = lower_copy(layout);
+    if (key.empty()) {
+        return {};
+    }
+    if (key == "binaural") {
+        return "binaural";
+    }
+    if (key == "5.1" || key == "0+5+0") {
+        return "5.1";
+    }
+    if (key == "5.1.2" || key == "2+5+0") {
+        return "5.1.2";
+    }
+    if (key == "7.1" || key == "wav71" || key == "0+7+0") {
+        return "7.1";
+    }
+    if (key == "5.1.4" || key == "4+5+0" || key == "atmos514") {
+        return "5.1.4";
+    }
+    if (key == "7.1.4" || key == "4+7+0" || key == "atmos714") {
+        return "7.1.4";
+    }
+    if (key == "9.1.6" || key == "atmos916") {
+        return "9.1.6";
+    }
+    if (key == "22.2" || key == "9+10+3" || key == "cicp13") {
+        return "22.2";
+    }
+    if (key == "hoa3") {
+        return "hoa3";
+    }
+    return key;
+}
+
+std::string normalize_layout_format(const std::string& format) {
+    auto key = lower_copy(format);
+    if (key == "wave") {
+        return "wav";
+    }
+    if (key == "m4a" || key == "mp4") {
+        return "apac";
+    }
+    return key;
+}
+
+constexpr std::array<LayoutInfo, 26> k_layout_infos{{
+    {"wav",
+     "binaural",
+     2,
+     "plain WAV; metadata layout=binaural",
+     "Binaural L, Binaural R",
+     "No speaker-stereo ADM render path is exposed."},
+    {"wav", "5.1", 6, "plain WAV sample order", "L R C LFE Ls Rs", ""},
+    {"wav", "5.1.2", 8, "plain WAV sample order", "L R C LFE Ls Rs U+030 U-030", "Top channels use ADM labels."},
+    {"wav", "7.1", 8, "plain WAV sample order", "L R C LFE Rls Rrs Ls Rs", "WAVE_7_1 / wav71 order."},
+    {"wav",
+     "5.1.4",
+     10,
+     "plain WAV sample order",
+     "L R C LFE Ls Rs U+030 U-030 U+110 U-110",
+     "Top channels use ADM labels."},
+    {"wav",
+     "7.1.4",
+     12,
+     "plain WAV sample order",
+     "L R C LFE Ls Rs Rls Rrs U+045 U-045 U+135 U-135",
+     "Top channels use ADM labels."},
+    {"wav", "9.1.6", 16, "plain WAV sample order", "L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr", ""},
+    {"wav",
+     "22.2",
+     24,
+     "plain WAV sample order",
+     "M+060 M-060 M+000 LFE1 M+135 M-135 M+030 M-030 M+180 LFE2 M+090 M-090 U+045 U-045 "
+     "U+000 T+000 U+135 U-135 U+090 U-090 U+180 B+000 B+045 B-045",
+     "BS.2051/libear order; LFE names differ from CoreAudio CICP_13 names."},
+    {"wav", "hoa3", 16, "plain WAV sample order", "ACN 0..15, SN3D", "HOA encode output, not a speaker layout."},
+
+    {"caf", "binaural", 2, "CoreAudio Binaural", "BinauralLeft BinauralRight", ""},
+    {"caf", "5.1", 6, "CoreAudio MPEG_5_1_A / CICP_6", "L R C LFE Ls Rs", ""},
+    {"caf", "7.1", 8, "CoreAudio WAVE_7_1", "L R C LFE Rls Rrs Ls Rs", "Same order as internal wav71."},
+    {"caf", "5.1.4", 10, "CoreAudio Atmos_5_1_4", "L R C LFE Ls Rs Vhl Vhr Ltr Rtr", ""},
+    {"caf", "7.1.4", 12, "CoreAudio Atmos_7_1_4", "L R C LFE Ls Rs Rls Rrs Vhl Vhr Ltr Rtr", ""},
+    {"caf", "9.1.6", 16, "CoreAudio Atmos_9_1_6", "L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr", ""},
+    {"caf",
+     "22.2",
+     24,
+     "CoreAudio CICP_13",
+     "Lw Rw C LFE2 Rls Rrs L R Cs LFE3 Lss Rss Vhl Vhr Vhc Ts Ltr Rtr Ltm Rtm Ctr Cb Lb Rb",
+     "CoreAudio names the two LFE slots LFE2/LFE3."},
+
+    {"flac",
+     "binaural",
+     2,
+     "FLAC Vorbis Comment layout=binaural",
+     "Binaural L, Binaural R",
+     "Readers may display this as ordinary stereo."},
+    {"flac", "5.1", 6, "FLAC + WAVEFORMATEXTENSIBLE mask 0x0000003F", "L R C LFE Ls Rs", ""},
+    {"flac",
+     "5.1.2",
+     8,
+     "FLAC 8ch; no WAVE mask currently written",
+     "L R C LFE Ls Rs U+030 U-030",
+     "Top channels use ADM labels."},
+    {"flac",
+     "7.1",
+     8,
+     "FLAC + WAVEFORMATEXTENSIBLE mask 0x0000063F",
+     "L R C LFE Rls Rrs Ls Rs",
+     "WAVE_7_1 / wav71 order."},
+
+    {"apac",
+     "binaural",
+     2,
+     "APAC requests CoreAudio Binaural",
+     "L R",
+     "afinfo currently reports Stereo; metadata preserves layout=binaural."},
+    {"apac",
+     "7.1",
+     8,
+     "CoreAudio AudioUnit_7_1",
+     "L R C LFE Ls Rs Rls Rrs",
+     "Input wav71 is reordered before APAC encoding."},
+    {"apac", "5.1.4", 10, "CoreAudio Atmos_5_1_4", "L R C LFE Ls Rs Vhl Vhr Ltr Rtr", ""},
+    {"apac", "7.1.4", 12, "CoreAudio Atmos_7_1_4", "L R C LFE Ls Rs Rls Rrs Vhl Vhr Ltr Rtr", ""},
+    {"apac", "9.1.6", 16, "CoreAudio Atmos_9_1_6", "L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr", ""},
+    {"apac",
+     "22.2",
+     24,
+     "CoreAudio CICP_13",
+     "Lw Rw C LFE2 Rls Rrs L R Cs LFE3 Lss Rss Vhl Vhr Vhc Ts Ltr Rtr Ltm Rtm Ctr Cb Lb Rb",
+     "CoreAudio names the two LFE slots LFE2/LFE3."},
+}};
+
+int print_layouts(std::string format, const std::string& layout_filter) {
+    format = normalize_layout_format(format);
+    const auto layout = normalize_layout_query(layout_filter);
+    const auto heading = format == "apac" ? std::string_view{"apac/m4a"} : std::string_view{format};
+
+    fmt::print("Format: {}\n", heading);
+    fmt::print("{:<10} {:<8} {:<46} {}\n", "Layout", "Channels", "Container mapping", "Final channel order");
+    fmt::print("{:-<10} {:-<8} {:-<46} {:-<19}\n", "", "", "", "");
+
+    bool any{false};
+    for (const auto& row : k_layout_infos) {
+        if (row.format != format) {
+            continue;
+        }
+        if (!layout.empty() && row.layout != layout) {
+            continue;
+        }
+        any = true;
+        fmt::print("{:<10} {:<8} {:<46} {}\n", row.layout, row.channels, row.container, row.order);
+        if (!row.note.empty()) {
+            fmt::print("{:<10} {:<8} {:<46} note: {}\n", "", "", "", row.note);
+        }
+    }
+
+    if (!any) {
+        if (layout.empty()) {
+            fmt::print(stderr, "No channel-order table is available for format '{}'.\n", format);
+        } else {
+            fmt::print(stderr, "Layout '{}' is not supported for format '{}'.\n", layout, format);
+        }
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+}
+
 struct RenderCliOptions {
     std::string input;
     std::string output;
@@ -357,7 +544,10 @@ CLI::App* add_render_command(CLI::App& app, RenderCliOptions& opts) {
     auto* render_cmd = app.add_subcommand("render", "Render an ADM BWF file");
     render_cmd->add_option("-i,--input", opts.input, "Input ADM BWF/WAV path")->required();
     render_cmd->add_option("-o,--output", opts.output, "Output audio path");
-    render_cmd->add_option("--output-layout", opts.layout, "Output layout identifier");
+    render_cmd->add_option("--output-layout",
+                           opts.layout,
+                           "Output layout for non-binaural renderers; use 'adm layouts --format <fmt>' for final "
+                           "container channel order");
     render_cmd->add_option("--renderer", opts.renderer, "Renderer backend: auto, ear, saf, hoa, binaural, apple")
         ->check(CLI::IsMember({"auto", "ear", "saf", "hoa", "binaural", "apple"}));
     render_cmd->add_flag("--no-peak-limit", opts.no_peak_limit, "Disable True Peak limiting");
@@ -457,6 +647,15 @@ int main(int argc, char** argv) {
     // ── backends ──────────────────────────────────────────────────────────────
     auto* backends_cmd = app.add_subcommand("backends", "List available renderer backends and supported layouts");
 
+    // ── layouts ───────────────────────────────────────────────────────────────
+    std::string layouts_format;
+    std::string layouts_layout;
+    auto* layouts_cmd = app.add_subcommand("layouts", "Show final channel order for a specific output format");
+    layouts_cmd->add_option("--format", layouts_format, "Output format: wav, caf, flac, apac/m4a/mp4")
+        ->required()
+        ->check(CLI::IsMember({"wav", "wave", "caf", "flac", "apac", "m4a", "mp4"}));
+    layouts_cmd->add_option("--layout", layouts_layout, "Optional layout filter, e.g. 7.1, 9.1.6, 22.2, binaural");
+
     app.require_subcommand(1);
 
     try {
@@ -492,6 +691,10 @@ int main(int argc, char** argv) {
 
     if (*backends_cmd) {
         print_all_capabilities();
+    }
+
+    if (*layouts_cmd) {
+        return print_layouts(layouts_format, layouts_layout);
     }
 
     return EXIT_SUCCESS;
