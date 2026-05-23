@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 #include <dr_wav.h>
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
