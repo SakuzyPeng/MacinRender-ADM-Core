@@ -239,6 +239,22 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
                                  const std::string& layout_id = {},
                                  uint32_t bitrate_per_ch_kbps = 0);
 
+// Encode a fully post-processed float32 WAV (src_path) to APAC in an MPEG-4
+// container (.m4a / mp4f).  Requires macOS (AudioToolbox); returns
+// ErrorCode::unsupported on other platforms.
+// layout_id controls channel mapping:
+//   "wav71"  → AudioUnit_7_1  (ch4↔ch6, ch5↔ch7 swap applied before encoding)
+//   "4+5+0"  → Atmos_7_1_4   (no swap)
+//   "4+7+0"  → Atmos_9_1_6   (no swap)
+//   "0+2+0"  → Binaural      (no swap)
+// bitrate_kbps: VBR target per channel in kbps; 0 = encoder default.
+// drc_music: true = Music DRC (cdrc=1), false = None (cdrc=0).
+Result<void> convert_to_apac(const std::string& src_path,
+                             const std::string& apac_path,
+                             const std::string& layout_id = {},
+                             uint32_t bitrate_kbps = 0,
+                             bool drc_music = true);
+
 // Format-agnostic render output metadata.  Assembled by the engine layer and
 // passed to write_file_metadata(); format-specific encoding is handled there.
 struct MetadataFields {

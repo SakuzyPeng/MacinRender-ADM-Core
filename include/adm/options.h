@@ -31,6 +31,10 @@ struct RenderOptions {
     // Opus MKA output: target bitrate per channel in kbps (VBR hint).
     // 0 = auto (64 kbps/ch; minimum 128 kbps for stereo).
     uint32_t opus_bitrate_per_ch_kbps{0};
+    // APAC output (macOS only). 0 = encoder default (~1 Mbps for 7.1 @ 48 kHz).
+    uint32_t apac_bitrate_kbps{0};
+    // APAC DRC profile: true = Music (cdrc=1), false = None (cdrc=0).
+    bool apac_drc_music{true};
     // Default gain-interpolation ramp used when jumpPosition=false and the ADM block
     // carries no explicit interpolationLength.  Set to 0 for instant switching.
     uint32_t default_interp_ms{5};

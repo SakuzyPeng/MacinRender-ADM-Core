@@ -1,0 +1,301 @@
+#include <cmath>
+#include <cstdlib>
+#include <filesystem>
+#include <iostream>
+#include <numbers>
+#include <string>
+#include <vector>
+
+#include "adm/audio_io.h"
+#include "adm/errors.h"
+
+#ifdef __APPLE__
+#include <AudioToolbox/AudioToolbox.h>
+#include <CoreFoundation/CoreFoundation.h>
+#endif
+
+namespace {
+
+class FileGuard {
+  public:
+    explicit FileGuard(std::filesystem::path p) : path_(std::move(p)) {}
+    FileGuard(const FileGuard&) = delete;
+    FileGuard& operator=(const FileGuard&) = delete;
+    FileGuard(FileGuard&&) = delete;
+    FileGuard& operator=(FileGuard&&) = delete;
+    ~FileGuard() { std::filesystem::remove(path_); }
+
+  private:
+    std::filesystem::path path_;
+};
+
+bool check(bool cond, const char* msg) {
+    if (!cond) {
+        std::cerr << "FAIL: " << msg << "\n";
+    }
+    return cond;
+}
+
+// Write a 1-second 48 kHz WAV with per-channel sine amplitudes taken from |amps|.
+// |amps| must have exactly |channels| entries.
+bool write_test_wav_with_amps(const std::string& path,
+                              uint32_t channels,
+                              const std::vector<float>& amps,
+                              uint32_t frames = 48000U) {
+    auto wr = mradm::audio::FloatWavWriter::open(path, channels, 48000U);
+    if (!check(wr.has_value(), "FloatWavWriter::open failed")) {
+        return false;
+    }
+    std::vector<float> buf(static_cast<std::size_t>(channels) * frames, 0.0F);
+    constexpr float k_freq = 440.0F;
+    constexpr float k_sr = 48000.0F;
+    for (uint32_t f = 0; f < frames; ++f) {
+        const float s = std::sin(2.0F * std::numbers::pi_v<float> * k_freq * static_cast<float>(f) / k_sr);
+        for (uint32_t c = 0; c < channels; ++c) {
+            buf[(static_cast<std::size_t>(f) * channels) + c] = amps[c] * s;
+        }
+    }
+    return check(wr->write(buf.data(), frames) == frames, "WAV short write");
+}
+
+bool write_test_wav(const std::string& path, uint32_t channels, uint32_t sample_rate, uint32_t frames) {
+    auto wr = mradm::audio::FloatWavWriter::open(path, channels, sample_rate);
+    if (!check(wr.has_value(), "FloatWavWriter::open failed")) {
+        return false;
+    }
+    std::vector<float> buf(static_cast<std::size_t>(channels) * frames);
+    for (std::size_t i = 0; i < buf.size(); ++i) {
+        buf[i] = 0.25F * std::sin(static_cast<float>(i) * 0.1F);
+    }
+    return check(wr->write(buf.data(), frames) == frames, "WAV short write");
+}
+
+#ifdef __APPLE__
+
+// Decode an APAC .m4a to interleaved float32 PCM via AudioToolbox.
+// Returns false on any error; out is resized to the decoded sample count.
+// NOLINTNEXTLINE(readability-function-size)
+bool decode_apac_to_pcm(const std::string& path, uint32_t channels, std::vector<float>& out) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    CFURLRef url = CFURLCreateFromFileSystemRepresentation(nullptr,
+                                                           reinterpret_cast<const UInt8*>(path.c_str()),
+                                                           static_cast<CFIndex>(path.size()),
+                                                           static_cast<Boolean>(false));
+    if (url == nullptr) {
+        return false;
+    }
+
+    ExtAudioFileRef ext_file = nullptr;
+    OSStatus err = ExtAudioFileOpenURL(url, &ext_file);
+    CFRelease(url);
+    if (err != noErr || ext_file == nullptr) {
+        return false;
+    }
+
+    AudioStreamBasicDescription client_fmt{};
+    client_fmt.mSampleRate = 48000.0;
+    client_fmt.mFormatID = kAudioFormatLinearPCM;
+    client_fmt.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
+    client_fmt.mChannelsPerFrame = channels;
+    client_fmt.mBitsPerChannel = 32;
+    client_fmt.mFramesPerPacket = 1;
+    client_fmt.mBytesPerFrame = static_cast<UInt32>(sizeof(float) * channels);
+    client_fmt.mBytesPerPacket = client_fmt.mBytesPerFrame;
+
+    err = ExtAudioFileSetProperty(ext_file, kExtAudioFileProperty_ClientDataFormat, sizeof(client_fmt), &client_fmt);
+    if (err != noErr) {
+        ExtAudioFileDispose(ext_file);
+        return false;
+    }
+
+    SInt64 file_frames = 0;
+    UInt32 sz = sizeof(file_frames);
+    ExtAudioFileGetProperty(ext_file, kExtAudioFileProperty_FileLengthFrames, &sz, &file_frames);
+    if (file_frames <= 0) {
+        ExtAudioFileDispose(ext_file);
+        return false;
+    }
+
+    out.resize(static_cast<std::size_t>(file_frames) * channels);
+    constexpr UInt32 k_block = 4096;
+    float* ptr = out.data();
+    auto frames_remaining = static_cast<UInt32>(file_frames);
+    uint64_t total_read = 0;
+
+    while (frames_remaining > 0) {
+        UInt32 n = std::min(k_block, frames_remaining);
+        AudioBufferList abl{};
+        abl.mNumberBuffers = 1;
+        abl.mBuffers[0].mNumberChannels = channels;
+        abl.mBuffers[0].mDataByteSize = static_cast<UInt32>(static_cast<std::size_t>(n) * channels * sizeof(float));
+        abl.mBuffers[0].mData = ptr;
+        err = ExtAudioFileRead(ext_file, &n, &abl);
+        if (err != noErr || n == 0) {
+            break;
+        }
+        ptr += static_cast<std::ptrdiff_t>(n) * channels;
+        frames_remaining -= n;
+        total_read += n;
+    }
+
+    ExtAudioFileDispose(ext_file);
+    out.resize(static_cast<std::size_t>(total_read) * channels);
+    return !out.empty();
+}
+
+// Per-channel RMS over the decoded interleaved buffer.
+float channel_rms(const std::vector<float>& samples, uint32_t ch, uint32_t channels) {
+    double sum = 0.0;
+    std::size_t count = 0;
+    for (std::size_t i = ch; i < samples.size(); i += channels) {
+        const auto v = static_cast<double>(samples[i]);
+        sum += v * v;
+        ++count;
+    }
+    return count > 0U ? static_cast<float>(std::sqrt(sum / static_cast<double>(count))) : 0.0F;
+}
+
+#endif // __APPLE__
+
+// Verifies that the wav71 swap (ch4↔ch6, ch5↔ch7) is actually applied.
+//
+// Strategy: encode a WAVE_7_1 WAV with ch4=0.8, ch5=0.7, ch6=0.2, ch7=0.3
+// amplitude (all other channels 0.5).  After the swap the APAC encoder sees
+// ch4=0.2, ch5=0.3, ch6=0.8, ch7=0.7 in AU_7_1 order.  Decoding back to PCM
+// must therefore give rms(ch4) < rms(ch6) and rms(ch5) < rms(ch7).
+// If the swap were omitted the inequalities would be reversed.
+bool verify_apac_wav71_swap() {
+    constexpr uint32_t k_ch = 8U;
+    const std::string wav = "/tmp/mr_apac_wav71_src.wav";
+    const std::string m4a = "/tmp/mr_apac_wav71.m4a";
+    FileGuard gw(wav);
+    FileGuard gm(m4a);
+
+    // WAVE_7_1 physical order: L R C LFE Rls(0.8) Rrs(0.7) Ls(0.2) Rs(0.3)
+    const std::vector<float> amps = {0.5F, 0.5F, 0.5F, 0.5F, 0.8F, 0.7F, 0.2F, 0.3F};
+    if (!write_test_wav_with_amps(wav, k_ch, amps)) {
+        return false;
+    }
+
+    auto res = mradm::audio::convert_to_apac(wav, m4a, "wav71");
+    if (!check(res.has_value(), "convert_to_apac(wav71) failed")) {
+        return false;
+    }
+    if (!check(std::filesystem::exists(m4a), "wav71 .m4a not created")) {
+        return false;
+    }
+    if (!check(std::filesystem::file_size(m4a) > 10000U, "wav71 .m4a suspiciously small")) {
+        return false;
+    }
+
+#ifdef __APPLE__
+    // Round-trip decode: verify swap was applied.
+    std::vector<float> decoded;
+    if (!check(decode_apac_to_pcm(m4a, k_ch, decoded), "APAC decode failed")) {
+        return false;
+    }
+    const float rms4 = channel_rms(decoded, 4, k_ch);
+    const float rms5 = channel_rms(decoded, 5, k_ch);
+    const float rms6 = channel_rms(decoded, 6, k_ch);
+    const float rms7 = channel_rms(decoded, 7, k_ch);
+    // After swap: AU_7_1 ch4(Ls)=0.2 < ch6(Rls)=0.8 and ch5(Rs)=0.3 < ch7(Rrs)=0.7
+    if (!check(rms4 < rms6, "wav71 swap not applied: decoded ch4 should be weaker than ch6")) {
+        return false;
+    }
+    if (!check(rms5 < rms7, "wav71 swap not applied: decoded ch5 should be weaker than ch7")) {
+        return false;
+    }
+#endif
+
+    return true;
+}
+
+bool verify_apac_atmos714() {
+    const std::string wav = "/tmp/mr_apac_atmos714_src.wav";
+    const std::string m4a = "/tmp/mr_apac_atmos714.m4a";
+    FileGuard gw(wav);
+    FileGuard gm(m4a);
+    if (!write_test_wav(wav, 12, 48000, 48000)) {
+        return false;
+    }
+    auto res = mradm::audio::convert_to_apac(wav, m4a, "4+5+0");
+    if (!check(res.has_value(), "convert_to_apac(4+5+0) failed")) {
+        return false;
+    }
+    if (!check(std::filesystem::exists(m4a), "atmos714 .m4a not created")) {
+        return false;
+    }
+    return check(std::filesystem::file_size(m4a) > 10000U, "atmos714 .m4a suspiciously small");
+}
+
+bool verify_apac_atmos916() {
+    const std::string wav = "/tmp/mr_apac_atmos916_src.wav";
+    const std::string m4a = "/tmp/mr_apac_atmos916.m4a";
+    FileGuard gw(wav);
+    FileGuard gm(m4a);
+    if (!write_test_wav(wav, 16, 48000, 48000)) {
+        return false;
+    }
+    auto res = mradm::audio::convert_to_apac(wav, m4a, "4+7+0");
+    if (!check(res.has_value(), "convert_to_apac(4+7+0) failed")) {
+        return false;
+    }
+    if (!check(std::filesystem::exists(m4a), "atmos916 .m4a not created")) {
+        return false;
+    }
+    return check(std::filesystem::file_size(m4a) > 10000U, "atmos916 .m4a suspiciously small");
+}
+
+bool verify_apac_wrong_layout_rejected() {
+    auto res = mradm::audio::convert_to_apac("/tmp/nope.wav", "/tmp/nope.m4a", "hoa3");
+    return check(!res.has_value() && res.error().code == mradm::ErrorCode::unsupported,
+                 "unsupported layout 'hoa3' should be rejected");
+}
+
+bool verify_apac_wrong_samplerate_rejected() {
+    const std::string wav = "/tmp/mr_apac_44k_src.wav";
+    const std::string m4a = "/tmp/mr_apac_44k.m4a";
+    FileGuard gw(wav);
+    FileGuard gm(m4a);
+    if (!write_test_wav(wav, 2, 44100, 44100)) {
+        return false;
+    }
+    auto res = mradm::audio::convert_to_apac(wav, m4a, "0+2+0");
+    return check(!res.has_value() && res.error().code == mradm::ErrorCode::invalid_argument,
+                 "44100 Hz input should be rejected for APAC");
+}
+
+bool verify_apac_wrong_channelcount_rejected() {
+    const std::string wav = "/tmp/mr_apac_2ch_wav71.wav";
+    const std::string m4a = "/tmp/mr_apac_2ch_wav71.m4a";
+    FileGuard gw(wav);
+    FileGuard gm(m4a);
+    if (!write_test_wav(wav, 2, 48000, 480)) {
+        return false;
+    }
+    auto res = mradm::audio::convert_to_apac(wav, m4a, "wav71");
+    return check(!res.has_value() && res.error().code == mradm::ErrorCode::invalid_argument,
+                 "2ch WAV with wav71 layout (requires 8ch) should be rejected");
+}
+
+} // namespace
+
+int main() {
+#ifndef __APPLE__
+    std::cout << "APAC smoke tests skipped (not macOS)\n";
+    return EXIT_SUCCESS;
+#else
+    bool ok = true;
+    ok &= verify_apac_wav71_swap();
+    ok &= verify_apac_atmos714();
+    ok &= verify_apac_atmos916();
+    ok &= verify_apac_wrong_layout_rejected();
+    ok &= verify_apac_wrong_samplerate_rejected();
+    ok &= verify_apac_wrong_channelcount_rejected();
+    if (!ok) {
+        return EXIT_FAILURE;
+    }
+    std::cout << "APAC smoke tests passed (6/6)\n";
+    return EXIT_SUCCESS;
+#endif
+}
