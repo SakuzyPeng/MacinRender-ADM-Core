@@ -14,6 +14,7 @@ struct CapabilityReport {
         bool is_3d{false};           // true when any non-LFE speaker has non-zero elevation
         uint16_t lfe_count{0};       // number of LFE channels
         bool supports_spread{false}; // spatial extent spreading available for this layout
+        bool is_binaural{false};     // true only when HRTF convolution is applied (none currently)
     };
 
     std::string backend_name;

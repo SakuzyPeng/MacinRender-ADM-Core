@@ -282,6 +282,9 @@ void print_capabilities(const mradm::CapabilityReport& caps) {
         if (layout.supports_spread) {
             flags += " spread";
         }
+        if (layout.is_binaural) {
+            flags += " binaural";
+        }
         fmt::print("    {:<12}  {:<30}  {}\n", layout.id, layout.display_name, flags);
     }
 }
