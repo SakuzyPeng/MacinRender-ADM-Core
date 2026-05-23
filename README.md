@@ -48,6 +48,7 @@ cmake --build build/release
 ```bash
 ./build/release/adm backends
 ./build/release/adm layouts --format wav
+./build/release/adm layouts --format flac --renderer saf
 ```
 
 ## 渲染后端
@@ -95,6 +96,7 @@ FLAC 当前最多支持 8 声道，因此不能用于 `5.1.4`、`7.1.4`、`9.1.6
 ./build/release/adm layouts --format wav
 ./build/release/adm layouts --format caf
 ./build/release/adm layouts --format apac
+./build/release/adm layouts --format flac --renderer ear
 ```
 
 常见差异示例：

@@ -405,6 +405,59 @@ std::string normalize_layout_format(const std::string& format) {
     return key;
 }
 
+const mradm::CapabilityReport* capabilities_for_renderer(std::string_view renderer) {
+    static const auto ear = mradm::ear_capabilities();
+    static const auto saf = mradm::vbap_capabilities();
+    static const auto hoa = mradm::hoa_capabilities();
+    static const auto binaural = mradm::binaural_capabilities();
+
+    if (renderer == "ear") {
+        return &ear;
+    }
+    if (renderer == "saf") {
+        return &saf;
+    }
+    if (renderer == "hoa") {
+        return &hoa;
+    }
+    if (renderer == "binaural") {
+        return &binaural;
+    }
+    return nullptr;
+}
+
+std::string capability_layout_id(std::string_view layout) {
+    if (layout == "5.1") {
+        return "0+5+0";
+    }
+    if (layout == "5.1.2") {
+        return "2+5+0";
+    }
+    if (layout == "7.1") {
+        return "wav71";
+    }
+    if (layout == "5.1.4") {
+        return "4+5+0";
+    }
+    if (layout == "9.1.4") {
+        return "4+5+4";
+    }
+    if (layout == "7.1.4") {
+        return "4+7+0";
+    }
+    if (layout == "22.2") {
+        return "9+10+3";
+    }
+    return std::string{layout};
+}
+
+bool renderer_supports_layout(const mradm::CapabilityReport& caps, std::string_view layout) {
+    const auto id = capability_layout_id(layout);
+    return std::ranges::any_of(caps.supported_layouts, [&](const auto& supported) {
+        return supported.id == id || (layout == "binaural" && supported.is_binaural);
+    });
+}
+
 constexpr std::array<LayoutInfo, 26> k_layout_infos{{
     {"wav",
      "binaural",
@@ -493,12 +546,17 @@ constexpr std::array<LayoutInfo, 26> k_layout_infos{{
      "CoreAudio names the two LFE slots LFE2/LFE3."},
 }};
 
-int print_layouts(std::string format, const std::string& layout_filter) {
+int print_layouts(std::string format, const std::string& layout_filter, std::string renderer_filter) {
     format = normalize_layout_format(format);
     const auto layout = normalize_layout_query(layout_filter);
+    renderer_filter = lower_copy(renderer_filter);
+    const auto* renderer_caps = capabilities_for_renderer(renderer_filter);
     const auto heading = format == "apac" ? std::string_view{"apac/m4a"} : std::string_view{format};
 
     fmt::print("Format: {}\n", heading);
+    if (renderer_caps != nullptr) {
+        fmt::print("Renderer: {}\n", renderer_caps->backend_name);
+    }
     fmt::print("{:<10} {:<8} {:<46} {}\n", "Layout", "Channels", "Container mapping", "Final channel order");
     fmt::print("{:-<10} {:-<8} {:-<46} {:-<19}\n", "", "", "", "");
 
@@ -510,6 +568,9 @@ int print_layouts(std::string format, const std::string& layout_filter) {
         if (!layout.empty() && row.layout != layout) {
             continue;
         }
+        if (renderer_caps != nullptr && !renderer_supports_layout(*renderer_caps, row.layout)) {
+            continue;
+        }
         any = true;
         fmt::print("{:<10} {:<8} {:<46} {}\n", row.layout, row.channels, row.container, row.order);
         if (!row.note.empty()) {
@@ -519,7 +580,18 @@ int print_layouts(std::string format, const std::string& layout_filter) {
 
     if (!any) {
         if (layout.empty()) {
-            fmt::print(stderr, "No channel-order table is available for format '{}'.\n", format);
+            if (renderer_caps != nullptr) {
+                fmt::print(
+                    stderr, "No layout is supported for format '{}' with renderer '{}'.\n", format, renderer_filter);
+            } else {
+                fmt::print(stderr, "No channel-order table is available for format '{}'.\n", format);
+            }
+        } else if (renderer_caps != nullptr) {
+            fmt::print(stderr,
+                       "Layout '{}' is not supported for format '{}' with renderer '{}'.\n",
+                       layout,
+                       format,
+                       renderer_filter);
         } else {
             fmt::print(stderr, "Layout '{}' is not supported for format '{}'.\n", layout, format);
         }
@@ -654,11 +726,15 @@ int main(int argc, char** argv) {
     // ── layouts ───────────────────────────────────────────────────────────────
     std::string layouts_format;
     std::string layouts_layout;
-    auto* layouts_cmd = app.add_subcommand("layouts", "Show final channel order for a specific output format");
+    std::string layouts_renderer;
+    auto* layouts_cmd =
+        app.add_subcommand("layouts", "Show final channel order for an output format, optionally filtered by renderer");
     layouts_cmd->add_option("--format", layouts_format, "Output format: wav, caf, flac, apac/m4a/mp4")
         ->required()
         ->check(CLI::IsMember({"wav", "wave", "caf", "flac", "apac", "m4a", "mp4"}));
     layouts_cmd->add_option("--layout", layouts_layout, "Optional layout filter, e.g. 7.1, 9.1.6, 22.2, binaural");
+    layouts_cmd->add_option("--renderer", layouts_renderer, "Optional renderer filter: ear, saf, hoa, binaural")
+        ->check(CLI::IsMember({"ear", "saf", "hoa", "binaural"}));
 
     app.require_subcommand(1);
 
@@ -698,7 +774,7 @@ int main(int argc, char** argv) {
     }
 
     if (*layouts_cmd) {
-        return print_layouts(layouts_format, layouts_layout);
+        return print_layouts(layouts_format, layouts_layout, layouts_renderer);
     }
 
     return EXIT_SUCCESS;
