@@ -258,11 +258,25 @@ APAC `.m4a/mp4f` 以及 APAC-in-CAF 即使请求 `Binaural`，最终仍报告为
 `layout=binaural`，供自家工具和诊断流程恢复语义；播放器仍可能只按普通 stereo
 显示或播放。
 
+ALAC 与 APAC 一样通常交付为 `.m4a/mp4` 容器。ALAC 编码算法本身已有开源实现，
+但跨平台支持的真正成本在 MP4 muxer、iTunes metadata、channel layout 和依赖分发，
+而不是 lossless 压缩核心。因此 ALAC 不进入首个全平台核心格式集合；若后续实现，
+优先作为 Apple 生态便利格式处理：
+
+- macOS 快路径：AudioToolbox ALAC encoder，工程量最低，但属于 Apple-only 后端；
+- 全平台可选路径：FFmpeg/libavformat provider，能力完整但依赖体积和许可证审计成本高；
+- 自维护路径：vendored Apple ALAC encoder + 项目内 MP4 muxer，最可控但工作量最大。
+
+Binaural ALAC 的语义策略与 APAC 一致：音频本体为 2ch lossless ALAC，容器里写
+`©cmt` comment metadata（`layout=binaural`），不把它伪装成普通 speaker stereo。
+播放器仍可能只显示 Stereo；项目工具应以后备 metadata 恢复 binaural 语义。
+
 仍待实现：
 
 - SOFA 文件加载、HRTF 数据集选择和采样率匹配；
 - 距离策略、头外化相关补偿；
 - HOA 输入到 binaural 的串接方式。
+- ALAC 输出（先 macOS-only AudioToolbox 快路径，跨平台 provider 另立里程碑评估）。
 
 ### decorrelator / diffuse
 
