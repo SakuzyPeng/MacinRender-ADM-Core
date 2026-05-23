@@ -208,6 +208,14 @@ target_link_libraries(mr_adm_audio
     PUBLIC MacinRender::ADMCore
     PRIVATE dr_wav::dr_wav dr_flac::dr_flac FLAC::FLAC Opus::opus libbw64
 )
+if(APPLE)
+    find_library(MR_ADM_AUDIOTOOLBOX_FW AudioToolbox REQUIRED)
+    find_library(MR_ADM_COREFOUNDATION_FW CoreFoundation REQUIRED)
+    target_link_libraries(mr_adm_audio PRIVATE
+        ${MR_ADM_AUDIOTOOLBOX_FW}
+        ${MR_ADM_COREFOUNDATION_FW}
+    )
+endif()
 mr_adm_core_apply_warnings(mr_adm_audio)
 mr_adm_core_apply_static_analysis(mr_adm_audio)
 
@@ -463,6 +471,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_opus_mka_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_opus_mka_smoke_tests)
     add_test(NAME mr_adm_opus_mka_smoke_tests COMMAND mr_adm_opus_mka_smoke_tests)
+
+    add_executable(mr_adm_apac_smoke_tests tests/unit/apac_smoke_test.cpp)
+    target_link_libraries(mr_adm_apac_smoke_tests PRIVATE MacinRender::ADMAudio)
+    mr_adm_core_apply_warnings(mr_adm_apac_smoke_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_apac_smoke_tests)
+    add_test(NAME mr_adm_apac_smoke_tests COMMAND mr_adm_apac_smoke_tests)
 
     if(MR_ADM_CORE_BUILD_CLI)
         add_executable(mr_adm_cli_smoke_tests tests/unit/adm_cli_smoke_test.cpp)

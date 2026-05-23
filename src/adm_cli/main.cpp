@@ -305,6 +305,8 @@ struct RenderCliOptions {
     float loudness_target{std::numeric_limits<float>::quiet_NaN()};
     uint32_t interp_ms{5};
     uint32_t opus_bitrate_per_ch{0};
+    uint32_t apac_bitrate{0};
+    bool apac_drc_music{true};
 };
 
 CLI::App* add_render_command(CLI::App& app, RenderCliOptions& opts) {
@@ -336,6 +338,15 @@ CLI::App* add_render_command(CLI::App& app, RenderCliOptions& opts) {
                      "Opus MKA VBR target bitrate per channel in kbps (6-320); "
                      "omit for auto: 64 kbps/ch, 128 kbps floor for mono/stereo")
         ->check(CLI::Range(6U, 320U));
+    render_cmd
+        ->add_option("--apac-bitrate",
+                     opts.apac_bitrate,
+                     "APAC VBR target bitrate per channel in kbps (64-2000); "
+                     "omit for encoder default (~1 Mbps for 7.1 @ 48 kHz)")
+        ->check(CLI::Range(64U, 2000U));
+    render_cmd->add_flag("--apac-drc-none{false},--apac-drc-music{true}",
+                         opts.apac_drc_music,
+                         "APAC DRC profile: --apac-drc-music (default) or --apac-drc-none");
     return render_cmd;
 }
 
@@ -352,6 +363,8 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     request.options.output_bit_depth = parse_output_bit_depth(opts.output_bit_depth_str);
     request.options.default_interp_ms = opts.interp_ms;
     request.options.opus_bitrate_per_ch_kbps = opts.opus_bitrate_per_ch;
+    request.options.apac_bitrate_kbps = opts.apac_bitrate;
+    request.options.apac_drc_music = opts.apac_drc_music;
     if (!std::isnan(opts.loudness_target)) {
         request.options.measure_loudness = true;
         request.options.loudness_target_lufs = opts.loudness_target;

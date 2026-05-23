@@ -146,11 +146,14 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     });
     const bool is_flac_final = (final_ext == ".flac");
     const bool is_opus_final = (final_ext == ".mka");
-    const auto render_temp_path =
-        (is_flac_final || is_opus_final) ? unique_render_temp_path(final_path) : std::filesystem::path{};
+    const bool is_apac_final = (final_ext == ".m4a");
+    const auto render_temp_path = (is_flac_final || is_opus_final || is_apac_final)
+                                      ? unique_render_temp_path(final_path)
+                                      : std::filesystem::path{};
     auto render_temp_guard =
-        (is_flac_final || is_opus_final) ? std::make_unique<TempFileGuard>(render_temp_path) : nullptr;
-    const std::string render_path = (is_flac_final || is_opus_final) ? render_temp_path.string() : output_path;
+        (is_flac_final || is_opus_final || is_apac_final) ? std::make_unique<TempFileGuard>(render_temp_path) : nullptr;
+    const std::string render_path =
+        (is_flac_final || is_opus_final || is_apac_final) ? render_temp_path.string() : output_path;
 
     // Build plan.
     RenderPlan plan;
@@ -219,7 +222,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     // Bit depth conversion: WAV output only.
     // CAF is always float32. For FLAC, the temp WAV stays float32 here so that
     // quantisation happens exactly once during the final FLAC encode step below.
-    if (!is_flac_final && !is_opus_final && request.options.output_bit_depth != OutputBitDepth::f32) {
+    if (!is_flac_final && !is_opus_final && !is_apac_final && request.options.output_bit_depth != OutputBitDepth::f32) {
         auto render_ext = std::filesystem::path(render_path).extension().string();
         std::ranges::transform(render_ext, render_ext.begin(), [](char c) {
             return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -253,6 +256,16 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         render_temp_guard->remove_now();
         if (!opus_res) {
             return {opus_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, opus_res.error().message}}};
+        }
+    }
+
+    if (is_apac_final) {
+        logs.log(LogLevel::info, "engine", "encoding float32 render to APAC (.m4a)");
+        auto apac_res = audio::convert_to_apac(
+            render_path, output_path, output_layout, request.options.apac_bitrate_kbps, request.options.apac_drc_music);
+        render_temp_guard->remove_now();
+        if (!apac_res) {
+            return {apac_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, apac_res.error().message}}};
         }
     }
 
