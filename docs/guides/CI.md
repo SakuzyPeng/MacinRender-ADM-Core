@@ -129,5 +129,7 @@ sudo apt-get install -y clang-format clang-tidy cppcheck
 4. Windows 暂用 `.github/workflows/windows-bringup.yml` 手动验证 MSVC + Ninja 的 CLI 构建边界。libadm
    需要的 Boost 组件通过 vcpkg 安装，并使用本地文件型 vcpkg binary cache；OpenBLAS/LAPACKE 使用
    OpenBLAS 官方 Windows x64 预编译包并缓存解压目录，避免每次从源码编译 OpenBLAS。该 workflow 先关闭测试，
-   只构建 `mradm_exe` 并运行 `mradm --version` / `mradm backends`；绿灯后再逐步打开 smoke tests、
-   运行实际渲染 fixture，并评估是否加入默认 CI 矩阵。
+   以 `MinSizeRel` 构建 `mradm_exe` 并运行 `mradm --version` / `mradm backends`；绿灯后再逐步打开 smoke tests、
+   运行实际渲染 fixture，并评估是否加入默认 CI 矩阵。当前使用 `MinSizeRel` 是为了绕开 MSVC 14.44 在 SAF
+   `saf_utility_filters.c` 上的 `/O2` 内部编译器错误；正式发行前需要重新评估是否改为单文件降优化或 pin
+   工具链版本。
