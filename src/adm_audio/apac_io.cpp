@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <fmt/format.h>
@@ -15,6 +16,19 @@
 #include "adm/errors.h"
 
 namespace mradm::audio {
+
+namespace {
+
+[[nodiscard]] uint32_t default_apac_bitrate_kbps(std::string_view layout_id, uint32_t channels) {
+    if (layout_id == "hoa3") {
+        // Match the 16ch APAC probe convention used for Atmos-style layouts:
+        // 12ch baseline 2048 kbps, scaled by channel count.
+        return ((2048U * channels) + 6U) / 12U;
+    }
+    return 0;
+}
+
+} // namespace
 
 // Encode a fully post-processed float32 WAV to APAC in an MPEG-4 (.m4a / mp4f)
 // container using the AudioToolbox ExtAudioFile C API.  On non-Apple platforms the
@@ -147,8 +161,10 @@ Result<void> convert_to_apac(const std::string& src_path,
                           fmt::format("APAC: AudioConverter lookup failed ({})", static_cast<int>(err)),
                           "path=" + apac_path);
     }
-    if (bitrate_kbps > 0U) {
-        UInt32 br = bitrate_kbps * 1000U;
+    const uint32_t effective_bitrate_kbps =
+        bitrate_kbps > 0U ? bitrate_kbps : default_apac_bitrate_kbps(layout_id, channels);
+    if (effective_bitrate_kbps > 0U) {
+        UInt32 br = effective_bitrate_kbps * 1000U;
         err = AudioConverterSetProperty(conv, kAudioConverterEncodeBitRate, sizeof(br), &br);
         if (err != noErr) {
             ExtAudioFileDispose(ext_file);
