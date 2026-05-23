@@ -437,16 +437,16 @@ double sum_elevated_channels(const std::filesystem::path& path) {
         return 0.0;
     }
     auto& reader = *reader_res;
-    constexpr std::size_t k_num_ch = 9U;
+    const auto num_ch = static_cast<std::size_t>(reader.channels());
     const auto n_frames = static_cast<std::size_t>(reader.frame_count());
-    std::vector<float> samples(n_frames * k_num_ch);
+    std::vector<float> samples(n_frames * num_ch);
     reader.read(samples.data(), reader.frame_count());
 
-    // Channels 5-8 are the elevated speakers (elevation +/-45 degrees).
+    // 5.1.4 output is 10ch including LFE; channels 6-9 are the elevated speakers.
     double elevated_sum = 0.0;
     for (std::size_t frame = 0; frame < n_frames; frame++) {
-        for (std::size_t ch = 5U; ch < k_num_ch; ch++) {
-            elevated_sum += std::fabs(static_cast<double>(samples[(frame * k_num_ch) + ch]));
+        for (std::size_t ch = 6U; ch < num_ch; ch++) {
+            elevated_sum += std::fabs(static_cast<double>(samples[(frame * num_ch) + ch]));
         }
     }
     return elevated_sum;
@@ -463,7 +463,7 @@ bool render_mdap_and_sum_elevated(float width, double& out_elevated_sum) {
     mradm::RenderRequest req;
     req.input_path = path_in;
     req.output_path = path_out;
-    req.options.output_layout = "4+5+0"; // 9ch: ch0-4 horizontal, ch5-8 elevated
+    req.options.output_layout = "4+5+0"; // 10ch 5.1.4: ch6-9 are elevated
     req.options.renderer = mradm::RendererSelection::saf;
 
     mradm::RenderService service;
