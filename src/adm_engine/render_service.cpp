@@ -6,7 +6,9 @@
 #include <ctime>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <random>
+#include <string_view>
 #include <system_error>
 
 #include <fmt/format.h>
@@ -86,6 +88,25 @@ namespace {
         return key;
     }
     return layout;
+}
+
+[[nodiscard]] std::optional<uint16_t> channel_count_for_layout(const CapabilityReport& caps,
+                                                               std::string_view layout_id) {
+    const auto it = std::ranges::find_if(
+        caps.supported_layouts, [layout_id](const CapabilityReport::Layout& layout) { return layout.id == layout_id; });
+    if (it != caps.supported_layouts.end()) {
+        return it->channel_count;
+    }
+
+    if (layout_id == "binaural") {
+        const auto binaural_it = std::ranges::find_if(
+            caps.supported_layouts, [](const CapabilityReport::Layout& layout) { return layout.is_binaural; });
+        if (binaural_it != caps.supported_layouts.end()) {
+            return binaural_it->channel_count;
+        }
+    }
+
+    return std::nullopt;
 }
 
 class TempFileGuard {
@@ -213,6 +234,14 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     const bool is_flac_final = (final_ext == ".flac");
     const bool is_opus_final = (final_ext == ".mka");
     const bool is_apac_final = (final_ext == ".m4a");
+    if (is_flac_final) {
+        const auto channels = channel_count_for_layout(caps, output_layout);
+        if (channels.has_value() && *channels > 8U) {
+            const auto msg =
+                fmt::format("FLAC supports 1-8 channels; layout '{}' renders {} channels", output_layout, *channels);
+            return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+        }
+    }
     const auto render_temp_path = (is_flac_final || is_opus_final || is_apac_final)
                                       ? unique_render_temp_path(final_path)
                                       : std::filesystem::path{};

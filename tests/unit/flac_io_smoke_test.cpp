@@ -152,11 +152,13 @@ bool flac_has_tag(const std::string& path, std::string_view prefix) {
     FLAC__metadata_iterator_init(it, chain);
 
     bool found = false;
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while): libFLAC iterator is advanced after inspecting current block.
     do {
         if (FLAC__metadata_iterator_get_block_type(it) != FLAC__METADATA_TYPE_VORBIS_COMMENT) {
             continue;
         }
         const FLAC__StreamMetadata* block = FLAC__metadata_iterator_get_block(it);
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-union-access): libFLAC exposes metadata payloads as a C union.
         const auto& vc = block->data.vorbis_comment;
         for (uint32_t i = 0; i < vc.num_comments; ++i) {
             const std::string_view entry(reinterpret_cast<const char*>(vc.comments[i].entry),
@@ -326,12 +328,14 @@ bool verify_flac_vorbis_comment() {
     bool has_comment = false;
     bool has_channel_mask = false;
 
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while): libFLAC iterator is advanced after inspecting current block.
     do {
         if (FLAC__metadata_iterator_get_block_type(it) != FLAC__METADATA_TYPE_VORBIS_COMMENT) {
             continue;
         }
         ++vc_count;
         const FLAC__StreamMetadata* block = FLAC__metadata_iterator_get_block(it);
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-union-access): libFLAC exposes metadata payloads as a C union.
         const auto& vc = block->data.vorbis_comment;
         for (uint32_t i = 0; i < vc.num_comments; ++i) {
             const std::string_view entry(reinterpret_cast<const char*>(vc.comments[i].entry),
@@ -406,11 +410,13 @@ bool verify_flac_channel_mask_value() {
     FLAC__metadata_iterator_init(it, chain);
 
     std::string mask_value;
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while): libFLAC iterator is advanced after inspecting current block.
     do {
         if (FLAC__metadata_iterator_get_block_type(it) != FLAC__METADATA_TYPE_VORBIS_COMMENT) {
             continue;
         }
         const FLAC__StreamMetadata* block = FLAC__metadata_iterator_get_block(it);
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-union-access): libFLAC exposes metadata payloads as a C union.
         const auto& vc = block->data.vorbis_comment;
         constexpr std::string_view k_prefix = "WAVEFORMATEXTENSIBLE_CHANNEL_MASK=";
         for (uint32_t i = 0; i < vc.num_comments; ++i) {
@@ -457,6 +463,7 @@ bool verify_render_service_flac_final_pipeline() {
     req.options.output_layout = "0+2+0";
     req.options.peak_limit = false;
     req.options.measure_loudness = false;
+    req.options.internal_allow_speaker_stereo = true;
 
     mradm::RenderService service;
     mradm::NullProgressSink progress;
@@ -497,6 +504,44 @@ bool verify_render_service_flac_final_pipeline() {
     return true;
 }
 
+bool verify_render_service_flac_rejects_more_than_8_channels() {
+    const auto in_path = write_render_fixture();
+    const FileGuard in_guard(in_path);
+
+    const auto out_path = temp_path("mr_flac_engine_too_many_channels", ".flac");
+    const FileGuard out_guard(out_path);
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.renderer = mradm::RendererSelection::saf;
+    req.options.output_layout = "7.1.4";
+    req.options.peak_limit = false;
+    req.options.measure_loudness = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!check(!res.success(), "RenderService accepted >8ch FLAC layout")) {
+        return false;
+    }
+    if (!check(res.error.code == mradm::ErrorCode::unsupported, "RenderService >8ch FLAC error code")) {
+        return false;
+    }
+    if (!check(res.error.message.find("FLAC supports 1-8 channels") != std::string::npos,
+               "RenderService >8ch FLAC error message")) {
+        return false;
+    }
+    if (!check(!std::filesystem::exists(out_path), "RenderService created unsupported FLAC output")) {
+        return false;
+    }
+    if (!check(!has_render_temp_sidecar(out_path), "RenderService created render temp for unsupported FLAC layout")) {
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 int main() {
@@ -506,6 +551,7 @@ int main() {
     ok &= verify_flac_vorbis_comment();
     ok &= verify_flac_channel_mask_value();
     ok &= verify_render_service_flac_final_pipeline();
+    ok &= verify_render_service_flac_rejects_more_than_8_channels();
     if (!ok) {
         return EXIT_FAILURE;
     }
