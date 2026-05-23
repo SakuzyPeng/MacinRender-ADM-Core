@@ -34,7 +34,7 @@ struct RenderOptions {
     uint32_t opus_bitrate_per_ch_kbps{0};
     // APAC output (macOS only): total target/hint bitrate in kbps.
     // The encoder may produce a measured average bitrate that differs substantially.
-    // 0 = encoder default (~1 Mbps for 7.1 @ 48 kHz).
+    // 0 = layout default for spatial/HOA layouts, otherwise encoder default.
     uint32_t apac_bitrate_kbps{0};
     // APAC DRC profile: true = Music (cdrc=1), false = None (cdrc=0).
     bool apac_drc_music{true};

@@ -17,6 +17,7 @@
 
 ## 使用指南
 
+- [CI 设计草案](guides/CI.md)
 - [质量工具配置](guides/QUALITY.md)
 - [第三方许可证与发行边界](THIRD_PARTY_LICENSES.md)
 

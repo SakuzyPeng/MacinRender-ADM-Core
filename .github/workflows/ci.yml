@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  debug:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS debug
+            runner: macos-15
+            install: brew install cmake ninja boost ccache
+          - name: Linux debug
+            runner: ubuntu-24.04
+            install: |
+              sudo apt-get update
+              sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache libboost-all-dev libopenblas-dev liblapacke-dev
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPRESS: "true"
+      FC_CACHE_DIR: ${{ github.workspace }}/.fc-cache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: ${{ matrix.install }}
+
+      - name: Restore FetchContent cache
+        uses: actions/cache@v4
+        with:
+          path: .fc-cache
+          key: fc-${{ runner.os }}-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            fc-${{ runner.os }}-
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ runner.os }}-debug-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-debug-
+            ccache-${{ runner.os }}-
+
+      - name: Configure
+        run: >
+          cmake --preset debug
+          -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
+          -DMR_ADM_FLAC_PROVIDER=VENDORED
+          -DMR_ADM_OPUS_PROVIDER=VENDORED
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build --preset debug
+
+      - name: Test
+        run: ctest --preset debug
+
+      - name: ccache stats
+        if: always()
+        run: ccache --show-stats || true

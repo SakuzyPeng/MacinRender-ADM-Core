@@ -251,8 +251,9 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
 //   "7.1.4"    → Atmos_7_1_4   (no swap)
 //   "9.1.6"    → Atmos_9_1_6   (no swap)
 //   "22.2"     → CICP_13       (no swap)
-// bitrate_kbps: total VBR target/hint in kbps; 0 = encoder default. The APAC
-// encoder may produce a measured average bitrate that differs substantially.
+// bitrate_kbps: total VBR target/hint in kbps; 0 = layout default for spatial/HOA
+// layouts, otherwise encoder default. The APAC encoder may produce a measured
+// average bitrate that differs substantially.
 // drc_music: true = Music DRC (cdrc=1), false = None (cdrc=0).
 Result<void> convert_to_apac(const std::string& src_path,
                              const std::string& apac_path,
