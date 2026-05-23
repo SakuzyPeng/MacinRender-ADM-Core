@@ -19,9 +19,6 @@ concurrency:
   group: quality-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   quality:
     name: macOS quality
@@ -35,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -46,7 +43,7 @@ jobs:
         run: echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
 
       - name: Restore FetchContent cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .fc-cache
           key: fc-quality-${{ runner.os }}-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
@@ -55,7 +52,7 @@ jobs:
             fc-${{ runner.os }}-
 
       - name: Restore ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .ccache
           key: ccache-${{ runner.os }}-quality-${{ github.sha }}
