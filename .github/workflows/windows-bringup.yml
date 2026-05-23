@@ -19,7 +19,7 @@ jobs:
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-bincache
-      VCPKG_BINARY_SOURCES: clear;x-gha,readwrite;files,${{ github.workspace }}\.vcpkg-bincache,readwrite
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\.vcpkg-bincache,readwrite
       VCPKG_FEATURE_FLAGS: binarycaching
       OPENBLAS_VERSION: 0.3.33
       OPENBLAS_ROOT: ${{ github.workspace }}\.openblas
@@ -56,7 +56,16 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
           Write-Host "VCPKG_BINARY_SOURCES=$env:VCPKG_BINARY_SOURCES"
-          vcpkg install boost-headers --triplet x64-windows
+          vcpkg install `
+            boost-format `
+            boost-functional `
+            boost-integer `
+            boost-iterator `
+            boost-optional `
+            boost-range `
+            boost-rational `
+            boost-variant `
+            --triplet x64-windows
 
       - name: Install prebuilt OpenBLAS
         shell: pwsh

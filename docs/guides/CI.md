@@ -126,8 +126,8 @@ sudo apt-get install -y clang-format clang-tidy cppcheck
 1. 观察第一轮 GitHub runner 上 FetchContent、SAF、vendored FLAC/Opus 是否稳定。
 2. 如果 quality 太慢，保留 PR changed，必要时把 main full 改成夜间 schedule。
 3. release job 后续补 macOS 签名/notarization、GitHub Release 自动创建和完整第三方 license bundle。
-4. Windows 暂用 `.github/workflows/windows-bringup.yml` 手动验证 MSVC + Ninja + vcpkg OpenBLAS 的 CLI
-   构建边界。Boost headers 通过 vcpkg 安装并启用 vcpkg `x-gha` 二进制缓存；OpenBLAS/LAPACKE 使用
-   OpenBLAS 官方 Windows x64 预编译包并缓存解压目录，避免每次从源码编译 OpenBLAS。该 workflow 先关闭
-   测试，只构建 `mradm_exe` 并运行 `mradm --version` / `mradm backends`；绿灯后再逐步打开 smoke tests、
+4. Windows 暂用 `.github/workflows/windows-bringup.yml` 手动验证 MSVC + Ninja 的 CLI 构建边界。libadm
+   需要的 Boost 组件通过 vcpkg 安装，并使用本地文件型 vcpkg binary cache；OpenBLAS/LAPACKE 使用
+   OpenBLAS 官方 Windows x64 预编译包并缓存解压目录，避免每次从源码编译 OpenBLAS。该 workflow 先关闭测试，
+   只构建 `mradm_exe` 并运行 `mradm --version` / `mradm backends`；绿灯后再逐步打开 smoke tests、
    运行实际渲染 fixture，并评估是否加入默认 CI 矩阵。
