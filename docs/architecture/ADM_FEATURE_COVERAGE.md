@@ -3,7 +3,7 @@
 本文档记录 MacinRender ADM Core 对 BS.2076 / BS.2127 特性的当前覆盖状态，
 以及与 libadm / libear 能力边界之间的差距。
 
-最后更新：2026-05-20
+最后更新：2026-05-23
 
 ---
 
@@ -191,14 +191,14 @@ importer 仅从这两层提取路由信息（TypeDescriptor、对 AudioChannelFo
 | Matrix | ⚠️ 丢弃，emit `import_warnings` 警告 | — |
 | Binaural | ⚠️ 丢弃，emit `import_warnings` 警告 | — |
 
-当前项目没有 ADM/BW64 写出能力；输出为普通 PCM 文件（WAV/CAF float、FLAC 24-bit integer）或 Opus MKA 有损交付文件。Opus MKA 的 9 声道及以上输出使用 mapping family 255，属于透明多流编码；布局语义仅通过 metadata 表达，不能假设播放器会自动识别标准扬声器布局。
+当前项目没有 ADM/BW64 写出能力；输出为普通 PCM 文件（WAV/CAF float）、FLAC 24-bit integer、Opus MKA 有损交付文件，或 macOS-only APAC `.m4a/.mp4`。Opus MKA 的 9 声道及以上输出使用 mapping family 255，属于透明多流编码；布局语义仅通过 metadata 表达，不能假设播放器会自动识别标准扬声器布局。
 
 ### HOA typeDefinition 说明
 
 `hoa_renderer.cpp` 的作用是将 **Objects 元数据编码**为 HOA3 球谐系数输出（Objects→HOA encode），
 与 ADM HOA 输入渲染方向相反。
 
-- **Objects→HOA encode**：读 Objects 块位置，输出 16ch HOA3 WAV。
+- **Objects→HOA encode**：读 Objects 块位置，输出 16ch HOA3 ACN/SN3D。WAV 通过 AmbiX `ambi` chunk 标记，CAF / APAC 使用 CoreAudio `HOA_ACN_SN3D` layout tag。
 - **ADM HOA 输入渲染（已实现）**：`scene_importer.cpp` 的 `extract_hoa_packs()` 读取
   `typeDefinition=HOA` 的 AudioChannelFormat，解析每个 AudioBlockFormatHoa 的
   order/degree/gain/rtime/duration，以及 AudioPackFormatHoa 层的 normalization/nfcRefDist/screenRef；
@@ -225,6 +225,10 @@ HOA 渲染器当前功能：Objects 块 → SH3（SN3D，16ch）编码输出。
 `normalization`、`nfcRefDist`、`screenRef` 是 ADM HOA 输入渲染的字段（已在 `SceneHOATracks` / `extract_hoa_packs()` 实现），
 不属于当前 Objects→HOA encode 路径的范围。
 
+HOA3 输出的响度 / True Peak 测量仅作为系数域诊断。`RenderService` 会跳过 HOA 的 `--loudness-target`
+播放响度归一化，也不会把 HOA 系数域 LUFS / True Peak 写入文件 metadata。若需要发行响度，
+应先把 HOA 解码到明确的播放布局（例如 binaural、9.1.6 或 22.2）后再测量。
+
 ---
 
 ## 9. 平台无关 DSP / 渲染扩展
@@ -238,8 +242,8 @@ HOA 渲染器当前功能：Objects 块 → SH3（SN3D，16ch）编码输出。
 | **decorrelator / diffuse bus** | ✅ EAR 已实现 BS.2127 去相关 FIR + 延迟补偿（M4）；VBAP 忽略 ADM `diffuse` | — |
 | **reverb / room simulation** | ❌ 未实现 | 可作为可选后处理，不应默认改变 ADM 合规渲染结果 |
 | **VBAP 布局正确性** | ✅ 全部布局通道顺序和 LFE 位置已校对；新增 9.1.6（见下） | — |
-| **更完整 VBAP 布局表** | ⚠️ 7 个内置布局（见下）；缺少外部可扩展注册 | 抽出布局注册表，覆盖更多 BS.2051 / CICP 常用布局 |
-| **VBAP 2D / 3D 配置** | ⚠️ 自动按布局高度判断；无用户可见配置 | 显式能力报告和配置开关，避免 2D 无 spread 参数时行为不透明 |
+| **更完整 VBAP 布局表** | ✅ 7 个内置布局（见下），并提供 `register_vbap_layout()` 运行时注册入口 | 后续可增加配置文件或插件式布局源 |
+| **VBAP 2D / 3D 配置** | ✅ 自动按布局高度判断；能力报告和 render 日志显示 2D/3D，2D 布局遇到高度源会 warning | 后续可增加显式 override 开关 |
 | **VBAP 插值策略配置** | ✅ `RenderOptions.default_interp_ms`（默认 5ms，0=瞬时切换，CLI `--interp-ms`）；EAR / HOA 渲染器同步生效 | — |
 
 ### HRTF / SOFA binauraliser
@@ -323,10 +327,10 @@ LFE 声道参与输出但不参与 VBAP panning；DS LFE 轨按标签（"LFE1"/"
 
 **仍待改善：**
 
-- 布局表硬编码在 `vbap_renderer.cpp`，缺少外部可扩展布局注册；
-- 2D / 3D 由布局是否存在非零 elevation 自动决定，CLI/能力报告没有显式说明；
-- 3D spread 使用 MDAP，2D SAF API 无 spread 参数，行为需要在文档和能力报告中暴露；
-- 默认插值 5ms、过长 ramp clamp 等策略尚未成为用户可配置选项。
+- 内置布局仍在代码中注册，缺少配置文件或外部布局包加载机制；
+- 2D / 3D 由布局是否存在非零 elevation 自动决定，尚无用户显式 override；
+- 3D spread 使用 MDAP，2D SAF API 无 spread 参数；当前通过能力报告、日志和 warning 暴露行为差异；
+- 过长 interpolationLength 的 clamp / 诊断策略仍可继续加固。
 
 ---
 

@@ -9,7 +9,7 @@ MacinRender ADM Core 是一个跨平台 ADM（Audio Definition Model，ITU-R BS.
 - ADM scene import：基于 libbw64 / libadm 读取 BW64 ADM 元数据，并转换为项目自有领域模型。
 - 多后端渲染：libear、SAF VBAP、HOA encoder、HRTF binaural。
 - Objects / DirectSpeakers：支持对象和直达扬声器内容，含时间块、增益、插值、扩散、channelLock 和 objectDivergence 等语义。
-- 输出后处理：响度归一化、True Peak 限制、位深转换、CAF/FLAC/Opus/APAC metadata。
+- 输出后处理：响度归一化、True Peak 限制、位深转换、CAF/FLAC/Opus/APAC metadata。HOA 输出的响度测量仅作为系数域诊断，不作为播放端响度归一化依据。
 - 平台边界：核心功能面向 macOS / Linux / Windows；APAC 编码为 macOS-only。
 
 ## 快速开始
@@ -76,6 +76,8 @@ cmake --build build/release
 
 FLAC 当前最多支持 8 声道，因此不能用于 `5.1.4`、`7.1.4`、`9.1.6`、`22.2` 等超过 8 声道的布局；这些布局请使用 WAV、CAF、APAC 或 Opus MKA。
 
+APAC 空间布局和 HOA 默认使用稳定的总目标码率提示：以 `7.1.4` 的 2048 kbps 为 12 声道基准按声道数缩放，例如 `5.1.4` 约 1707 kbps，`9.1.6` / `hoa3` 约 2731 kbps，`22.2` 约 4096 kbps。APAC 是 VBR 编码，实际统计码率可能明显偏离目标值。
+
 ## 输出布局
 
 | 常用名称 / CLI 值 | 声道数 | EAR | SAF VBAP |
@@ -107,6 +109,8 @@ FLAC 当前最多支持 8 声道，因此不能用于 `5.1.4`、`7.1.4`、`9.1.6
 | APAC / M4A | `7.1` | CoreAudio `AudioUnit_7_1` | L R C LFE Ls Rs Rls Rrs |
 | APAC / CAF | `9.1.6` | CoreAudio `Atmos_9_1_6` | L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr |
 | APAC / CAF | `22.2` | CoreAudio `CICP_13` | Lw Rw C LFE2 Rls Rrs L R Cs LFE3 Lss Rss Vhl Vhr Vhc Ts Ltr Rtr Ltm Rtm Ctr Cb Lb Rb |
+| WAV | `hoa3` | AmbiX `ambi` chunk | ACN/SN3D 16ch |
+| CAF / APAC | `hoa3` | CoreAudio `HOA_ACN_SN3D` | ACN/SN3D 16ch |
 
 ## 常用 CLI 选项
 
@@ -115,12 +119,12 @@ FLAC 当前最多支持 8 声道，因此不能用于 `5.1.4`、`7.1.4`、`9.1.6
 | `--renderer auto\|ear\|saf\|hoa\|binaural` | 选择渲染后端 | `auto` |
 | `--output-layout <layout>` | 输出布局，如 `7.1.4` / `9.1.6` / `22.2` | 后端默认 |
 | `--output-bit-depth f32\|i24\|i16` | WAV 输出位深（CAF 固定 float32；FLAC 固定 24-bit / 最多 8 声道） | `f32` |
-| `--loudness-target <LUFS>` | 响度归一化目标 | 关闭 |
+| `--loudness-target <LUFS>` | 响度归一化目标；HOA 输出会跳过，需先解码到播放布局后测量 | 关闭 |
 | `--peak-limit-dbtp <dBTP>` | True Peak 限制目标 | `-1.0` |
 | `--no-peak-limit` | 关闭 True Peak 限制 | - |
 | `--interp-ms <ms>` | ADM 块无 jumpPosition 时的增益插值斜坡 | `5` |
 | `--opus-bitrate-per-ch <kbps>` | Opus VBR 目标比特率 / 声道 | 自动 |
-| `--apac-bitrate <kbps>` | APAC 总目标比特率提示 | 编码器默认 |
+| `--apac-bitrate <kbps>` | APAC 总目标比特率提示；未设置时空间布局 / HOA 按 7.1.4=2048 kbps 基准缩放 | 见输出格式说明 |
 | `--sofa <path>` | binaural 用户 SOFA HRIR 文件 | 内置 KEMAR |
 
 更多选项可查看：
