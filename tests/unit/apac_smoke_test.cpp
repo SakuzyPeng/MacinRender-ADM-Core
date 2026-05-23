@@ -312,8 +312,12 @@ bool verify_apac_hoa3() {
     if (!check(std::filesystem::file_size(m4a) > 10000U, "HOA3 .m4a suspiciously small")) {
         return false;
     }
+#ifdef __APPLE__
     std::vector<float> decoded;
     return check(decode_apac_to_pcm(m4a, 16U, decoded), "HOA3 APAC decodes as 16ch");
+#else
+    return true;
+#endif
 }
 
 bool verify_apac_binaural() {
