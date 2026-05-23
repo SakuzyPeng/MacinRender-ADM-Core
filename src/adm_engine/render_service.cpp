@@ -136,7 +136,18 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     const auto caps = renderer->capabilities();
     logs.log(LogLevel::info, "engine", fmt::format("backend: {} {}", caps.backend_name, caps.backend_version));
 
-    const auto output_layout = request.options.output_layout.empty() ? "0+2+0" : request.options.output_layout;
+    const auto requested_layout =
+        request.options.output_layout.empty() ? std::string{"0+2+0"} : request.options.output_layout;
+    auto output_layout = requested_layout;
+    if (sel == RendererSelection::binaural) {
+        if (requested_layout != "0+2+0" && requested_layout != "binaural") {
+            logs.log(LogLevel::warning,
+                     "engine",
+                     fmt::format("binaural renderer always writes 2ch HRTF output; ignoring requested layout '{}'",
+                                 requested_layout));
+        }
+        output_layout = "binaural";
+    }
 
     // Detect FLAC final output: FLAC does not carry float32 samples, so rendering
     // directly to FLAC would clip any > 0 dBFS content before loudness/peak

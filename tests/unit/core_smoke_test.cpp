@@ -62,7 +62,9 @@ namespace {
 }
 
 [[nodiscard]] bool contains_blob(const std::vector<unsigned char>& bytes, std::string_view needle) {
-    return std::search(bytes.begin(), bytes.end(), needle.begin(), needle.end()) != bytes.end();
+    const auto found = std::ranges::search(
+        bytes, needle, {}, [](unsigned char b) { return static_cast<char>(b); }, [](char c) { return c; });
+    return !found.empty();
 }
 
 [[nodiscard]] std::string caf_info_pair(std::string_view key, std::string_view value) {
@@ -180,6 +182,38 @@ namespace {
     return true;
 }
 
+[[nodiscard]] bool verify_caf_binaural_layout_tag() {
+    const auto path = std::filesystem::temp_directory_path() / "mr_core_caf_binaural_test.caf";
+    std::filesystem::remove(path);
+
+    {
+        auto writer_res = mradm::audio::WriterHandle::open(path.string(), 2U, 48000U, "binaural");
+        if (!writer_res) {
+            std::cerr << "CAF binaural writer open failed: " << writer_res.error().message << "\n";
+            return false;
+        }
+        const std::vector<float> samples(2U, 0.0F);
+        if (writer_res->write(samples.data(), 1U) != 1U) {
+            std::cerr << "CAF binaural writer short write\n";
+            std::filesystem::remove(path);
+            return false;
+        }
+    }
+
+    std::ifstream in(path, std::ios::binary);
+    std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
+    const auto chan = find_caf_chunk(bytes, "chan");
+    constexpr uint32_t k_binaural_tag = (106U << 16U) | 2U;
+    if (chan == std::string::npos || read_be32(bytes, chan + 12U) != k_binaural_tag) {
+        std::cerr << "CAF binaural channel layout tag mismatch\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+
+    std::filesystem::remove(path);
+    return true;
+}
+
 [[nodiscard]] bool verify_caf_metadata_write(const std::filesystem::path& path) {
     const auto meta_res = mradm::audio::write_file_metadata(path.string(), test_metadata());
     if (!meta_res) {
@@ -216,7 +250,7 @@ namespace {
     return true;
 }
 
-[[nodiscard]] bool verify_caf_writer() {
+[[nodiscard]] bool verify_caf_writer() { // NOLINT(readability-function-size)
     const auto path = std::filesystem::temp_directory_path() / "mr_core_caf_writer_test.caf";
     std::filesystem::remove(path);
 
@@ -379,6 +413,9 @@ int main() {
         return EXIT_FAILURE;
     }
     if (!verify_caf_wav71_layout_tag()) {
+        return EXIT_FAILURE;
+    }
+    if (!verify_caf_binaural_layout_tag()) {
         return EXIT_FAILURE;
     }
 

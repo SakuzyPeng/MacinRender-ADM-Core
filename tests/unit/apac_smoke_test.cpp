@@ -246,6 +246,24 @@ bool verify_apac_atmos916() {
     return check(std::filesystem::file_size(m4a) > 10000U, "atmos916 .m4a suspiciously small");
 }
 
+bool verify_apac_binaural() {
+    const std::string wav = "/tmp/mr_apac_binaural_src.wav";
+    const std::string m4a = "/tmp/mr_apac_binaural.m4a";
+    FileGuard gw(wav);
+    FileGuard gm(m4a);
+    if (!write_test_wav(wav, 2, 48000, 48000)) {
+        return false;
+    }
+    auto res = mradm::audio::convert_to_apac(wav, m4a, "binaural");
+    if (!check(res.has_value(), "convert_to_apac(binaural) failed")) {
+        return false;
+    }
+    if (!check(std::filesystem::exists(m4a), "binaural .m4a not created")) {
+        return false;
+    }
+    return check(std::filesystem::file_size(m4a) > 10000U, "binaural .m4a suspiciously small");
+}
+
 bool verify_apac_wrong_layout_rejected() {
     auto res = mradm::audio::convert_to_apac("/tmp/nope.wav", "/tmp/nope.m4a", "hoa3");
     return check(!res.has_value() && res.error().code == mradm::ErrorCode::unsupported,
@@ -289,13 +307,14 @@ int main() {
     ok &= verify_apac_wav71_swap();
     ok &= verify_apac_atmos714();
     ok &= verify_apac_atmos916();
+    ok &= verify_apac_binaural();
     ok &= verify_apac_wrong_layout_rejected();
     ok &= verify_apac_wrong_samplerate_rejected();
     ok &= verify_apac_wrong_channelcount_rejected();
     if (!ok) {
         return EXIT_FAILURE;
     }
-    std::cout << "APAC smoke tests passed (6/6)\n";
+    std::cout << "APAC smoke tests passed (7/7)\n";
     return EXIT_SUCCESS;
 #endif
 }

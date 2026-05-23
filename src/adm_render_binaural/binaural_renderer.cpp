@@ -32,10 +32,10 @@ namespace {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 constexpr uint64_t k_block_size = 1024U;
-constexpr int k_hrir_len = 256;               // __default_hrir_len
-constexpr int k_fft_size = 2048;              // next pow2 >= k_block_size + k_hrir_len - 1
-constexpr int k_n_bands = k_fft_size / 2 + 1; // 1025
-constexpr int k_n_hrtf_dirs = 836;            // __default_N_hrir_dirs
+constexpr int k_hrir_len = 256;                 // __default_hrir_len
+constexpr int k_fft_size = 2048;                // next pow2 >= k_block_size + k_hrir_len - 1
+constexpr int k_n_bands = (k_fft_size / 2) + 1; // 1025
+constexpr int k_n_hrtf_dirs = 836;              // __default_N_hrir_dirs
 constexpr int k_n_ears = 2;
 constexpr int k_overlap_len = k_hrir_len - 1; // 255 OLA tail samples
 constexpr int k_n_azi = 361;                  // (int)(360/1 + 0.5) + 1
@@ -65,9 +65,10 @@ std::pair<float, float> label_to_polar(const std::string& label) {
 std::pair<float, float> cart_to_polar(float x, float y, float z) {
     const double az =
         std::atan2(static_cast<double>(-x), static_cast<double>(y)) * (180.0 / std::numbers::pi_v<double>);
+    const auto cx = static_cast<double>(x);
+    const auto cy = static_cast<double>(y);
     const double el =
-        std::atan2(static_cast<double>(z), std::sqrt(static_cast<double>(x) * x + static_cast<double>(y) * y)) *
-        (180.0 / std::numbers::pi_v<double>);
+        std::atan2(static_cast<double>(z), std::sqrt((cx * cx) + (cy * cy))) * (180.0 / std::numbers::pi_v<double>);
     return {static_cast<float>(az), static_cast<float>(el)};
 }
 
@@ -77,13 +78,14 @@ int vbap_grid_idx(float az_deg, float el_deg) {
     if (az_norm < 0.0F) {
         az_norm += 360.0F;
     }
-    const int az_idx = std::min(static_cast<int>(az_norm + 0.5F), k_n_azi - 1);
-    const int el_idx = std::clamp(static_cast<int>(el_deg + 90.0F + 0.5F), 0, k_n_elev - 1);
-    return el_idx * k_n_azi + az_idx;
+    const int az_idx = std::min(static_cast<int>(std::lround(az_norm)), k_n_azi - 1);
+    const int el_idx = std::clamp(static_cast<int>(std::lround(el_deg + 90.0F)), 0, k_n_elev - 1);
+    return (el_idx * k_n_azi) + az_idx;
 }
 
 // ── Pre-computed state ────────────────────────────────────────────────────────
 
+// NOLINTBEGIN(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
 struct BinauralState {
     // HRTFs in frequency domain; FLAT: [k_n_bands × k_n_ears × k_n_hrtf_dirs]
     std::vector<float_complex> hrtf_fd;
@@ -96,6 +98,7 @@ struct BinauralState {
     BinauralState(const BinauralState&) = delete;
     BinauralState& operator=(const BinauralState&) = delete;
 };
+// NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
 
 // Build BinauralState once.  Returns nullptr on VBAP triangulation failure.
 std::unique_ptr<BinauralState> build_binaural_state() {
@@ -103,14 +106,14 @@ std::unique_ptr<BinauralState> build_binaural_state() {
 
     // Convert built-in HRIRs to frequency-domain HRTFs.
     bs->hrtf_fd.resize(static_cast<std::size_t>(k_n_bands) * k_n_ears * k_n_hrtf_dirs);
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
     HRIRs2HRTFs(
         const_cast<float*>(&__default_hrirs[0][0][0]), k_n_hrtf_dirs, k_hrir_len, k_fft_size, bs->hrtf_fd.data());
 
     // Build VBAP gain table for the 836 HRTF measurement directions as
     // "loudspeakers".  1° grid; gains are energy-normalised after this call.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
     auto* hrtf_dirs = const_cast<float*>(&__default_hrir_dirs_deg[0][0]);
+    // NOLINTEND(cppcoreguidelines-pro-type-const-cast)
     float* gtable_full = nullptr;
     int n_gtable = 0;
     int n_triangles = 0;
@@ -142,19 +145,20 @@ std::unique_ptr<BinauralState> build_binaural_state() {
 // Returns flat [k_n_bands × k_n_ears] complex array (L = ear 0, R = ear 1).
 std::vector<float_complex> hrtf_for_dir(const BinauralState& bs, float az_deg, float el_deg) {
     const auto g = static_cast<std::size_t>(vbap_grid_idx(az_deg, el_deg));
-    const float w0 = bs.vbap_gains[g * 3 + 0];
-    const float w1 = bs.vbap_gains[g * 3 + 1];
-    const float w2 = bs.vbap_gains[g * 3 + 2];
-    const int d0 = bs.vbap_dirs[g * 3 + 0];
-    const int d1 = bs.vbap_dirs[g * 3 + 1];
-    const int d2 = bs.vbap_dirs[g * 3 + 2];
+    const auto gbase = g * 3U;
+    const float w0 = bs.vbap_gains[gbase + 0U];
+    const float w1 = bs.vbap_gains[gbase + 1U];
+    const float w2 = bs.vbap_gains[gbase + 2U];
+    const int d0 = bs.vbap_dirs[gbase + 0U];
+    const int d1 = bs.vbap_dirs[gbase + 1U];
+    const int d2 = bs.vbap_dirs[gbase + 2U];
 
     std::vector<float_complex> out(static_cast<std::size_t>(k_n_bands) * k_n_ears);
     for (int band = 0; band < k_n_bands; ++band) {
         for (int ear = 0; ear < k_n_ears; ++ear) {
-            const auto base = static_cast<std::ptrdiff_t>(band) * k_n_ears * k_n_hrtf_dirs +
-                              static_cast<std::ptrdiff_t>(ear) * k_n_hrtf_dirs;
-            out[static_cast<std::size_t>(band) * k_n_ears + static_cast<std::size_t>(ear)] =
+            const auto base = (static_cast<std::ptrdiff_t>(band) * k_n_ears * k_n_hrtf_dirs) +
+                              (static_cast<std::ptrdiff_t>(ear) * k_n_hrtf_dirs);
+            out[(static_cast<std::size_t>(band) * k_n_ears) + static_cast<std::size_t>(ear)] =
                 crmulf(bs.hrtf_fd[static_cast<std::size_t>(base + d0)], w0) +
                 crmulf(bs.hrtf_fd[static_cast<std::size_t>(base + d1)], w1) +
                 crmulf(bs.hrtf_fd[static_cast<std::size_t>(base + d2)], w2);
@@ -166,8 +170,8 @@ std::vector<float_complex> hrtf_for_dir(const BinauralState& bs, float az_deg, f
 // ── Per-channel OLA convolution state ─────────────────────────────────────────
 
 struct OLAState {
-    std::vector<float> overlap_l{k_overlap_len, 0.0F};
-    std::vector<float> overlap_r{k_overlap_len, 0.0F};
+    std::vector<float> overlap_l = std::vector<float>(k_overlap_len, 0.0F);
+    std::vector<float> overlap_r = std::vector<float>(k_overlap_len, 0.0F);
 };
 
 // OLA convolution: convolve src[frames_now] with hrtf[k_n_bands × k_n_ears],
@@ -197,7 +201,7 @@ void convolve_and_accumulate(void* hfft,
         for (int band = 0; band < k_n_bands; ++band) {
             out_fd[static_cast<std::size_t>(band)] =
                 gain * src_fd[static_cast<std::size_t>(band)] *
-                hrtf[static_cast<std::size_t>(band) * k_n_ears + static_cast<std::size_t>(ear)];
+                hrtf[(static_cast<std::size_t>(band) * k_n_ears) + static_cast<std::size_t>(ear)];
         }
         saf_rfft_backward(hfft, out_fd.data(), y.data());
 
@@ -213,6 +217,32 @@ void convolve_and_accumulate(void* hfft,
             overlap[i] = y[fn + static_cast<std::size_t>(i)];
         }
     }
+}
+
+// Advance a source's FIR overlap through a silent interval.  This emits the tail
+// from a previous active segment at the correct absolute time instead of carrying
+// it forward to the next non-silent ADM block.
+void advance_silence(OLAState& state, uint64_t frames_now, float* l_out, float* r_out) {
+    const auto fn = static_cast<std::size_t>(frames_now);
+    const auto emit = std::min(fn, static_cast<std::size_t>(k_overlap_len));
+    for (std::size_t f = 0; f < emit; ++f) {
+        l_out[f] += state.overlap_l[f];
+        r_out[f] += state.overlap_r[f];
+    }
+
+    if (fn >= static_cast<std::size_t>(k_overlap_len)) {
+        std::ranges::fill(state.overlap_l, 0.0F);
+        std::ranges::fill(state.overlap_r, 0.0F);
+        return;
+    }
+
+    const auto remain = static_cast<std::size_t>(k_overlap_len) - fn;
+    std::move(
+        state.overlap_l.begin() + static_cast<std::ptrdiff_t>(fn), state.overlap_l.end(), state.overlap_l.begin());
+    std::move(
+        state.overlap_r.begin() + static_cast<std::ptrdiff_t>(fn), state.overlap_r.end(), state.overlap_r.begin());
+    std::fill(state.overlap_l.begin() + static_cast<std::ptrdiff_t>(remain), state.overlap_l.end(), 0.0F);
+    std::fill(state.overlap_r.begin() + static_cast<std::ptrdiff_t>(remain), state.overlap_r.end(), 0.0F);
 }
 
 // ── Source descriptor ─────────────────────────────────────────────────────────
@@ -253,11 +283,12 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs) 
             if (!track.channel_index.has_value()) {
                 continue;
             }
+            const auto channel_index = *track.channel_index;
 
             // Objects-type blocks.
             if (!track.blocks.empty()) {
                 BinauralSource src;
-                src.channel_index = *track.channel_index;
+                src.channel_index = channel_index;
                 src.gain = obj.gain;
                 for (const auto& blk : track.blocks) {
                     auto [az, el] = block_position(obj, blk);
@@ -265,6 +296,7 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs) 
                         {az, el, blk.gain, blk.start_sample, std::min(blk.end_sample, obj.end_sample)});
                 }
                 if (!src.blocks.empty()) {
+                    std::ranges::sort(src.blocks, {}, &BinauralSource::Block::start_sample);
                     srcs.push_back(std::move(src));
                 }
             }
@@ -293,14 +325,14 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs) 
                     }
                 }
                 if (!found) {
-                    logs.log(LogLevel::warning,
-                             "binaural",
-                             fmt::format("DirectSpeakers channel {} has no resolvable position, skipping",
-                                         *track.channel_index));
+                    logs.log(
+                        LogLevel::warning,
+                        "binaural",
+                        fmt::format("DirectSpeakers channel {} has no resolvable position, skipping", channel_index));
                     continue;
                 }
                 BinauralSource src;
-                src.channel_index = *track.channel_index;
+                src.channel_index = channel_index;
                 src.gain = obj.gain;
                 src.blocks.push_back({az, el, ds.gain, ds.start_sample, std::min(ds.end_sample, obj.end_sample)});
                 srcs.push_back(std::move(src));
@@ -315,10 +347,10 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs) 
     return srcs;
 }
 
-// Active block index for a source at absolute frame position.
-std::size_t active_block(const BinauralSource& src, uint64_t frame) {
+// First block that has not ended before an absolute frame position.
+std::size_t first_relevant_block(const BinauralSource& src, uint64_t frame) {
     std::size_t idx = 0;
-    while (idx + 1 < src.blocks.size() && frame >= src.blocks[idx + 1].start_sample) {
+    while (idx < src.blocks.size() && src.blocks[idx].end_sample <= frame) {
         ++idx;
     }
     return idx;
@@ -361,7 +393,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
 
     // Open I/O.
     auto reader = bw64::readFile(plan.input_path);
-    auto writer_res = audio::WriterHandle::open(plan.output_path, 2U, info.sample_rate);
+    auto writer_res = audio::WriterHandle::open(plan.output_path, 2U, info.sample_rate, "binaural");
     if (!writer_res) {
         return tl::unexpected{writer_res.error()};
     }
@@ -378,9 +410,17 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     // One FFT handle (KissFFT, thread-safe to use per render call).
     void* hfft = nullptr;
     saf_rfft_create(&hfft, k_fft_size);
-    struct FftGuard {
-        void** h;
-        ~FftGuard() { saf_rfft_destroy(h); }
+    class FftGuard {
+      public:
+        explicit FftGuard(void** handle) : handle_(handle) {}
+        FftGuard(const FftGuard&) = delete;
+        FftGuard& operator=(const FftGuard&) = delete;
+        FftGuard(FftGuard&&) = delete;
+        FftGuard& operator=(FftGuard&&) = delete;
+        ~FftGuard() { saf_rfft_destroy(handle_); }
+
+      private:
+        void** handle_;
     } fft_guard{&hfft};
 
     // Per-source OLA state.
@@ -400,7 +440,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
         const auto fn = static_cast<std::size_t>(frames_now);
 
         reader->read(in_block.data(), frames_now);
-        std::fill(out_block.begin(), out_block.end(), 0.0F);
+        std::ranges::fill(out_block, 0.0F);
 
         // Scratch L/R accumulation buffers (non-interleaved for SIMD friendliness).
         std::vector<float> l_buf(fn, 0.0F);
@@ -414,28 +454,62 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                 continue;
             }
 
-            const std::size_t bi = active_block(src, frames_done);
-            const auto& blk = src.blocks[bi];
-            if (frames_done >= blk.end_sample || frames_done + frames_now <= blk.start_sample) {
-                continue; // outside this block's active window
+            const uint64_t chunk_start = frames_done;
+            const uint64_t chunk_end = frames_done + frames_now;
+            uint64_t cursor = chunk_start;
+            std::size_t bi = first_relevant_block(src, chunk_start);
+
+            while (cursor < chunk_end) {
+                while (bi < src.blocks.size() && src.blocks[bi].end_sample <= cursor) {
+                    ++bi;
+                }
+
+                if (bi >= src.blocks.size() || src.blocks[bi].start_sample >= chunk_end) {
+                    const auto off = static_cast<std::size_t>(cursor - chunk_start);
+                    advance_silence(ola[si], chunk_end - cursor, l_buf.data() + off, r_buf.data() + off);
+                    break;
+                }
+
+                const auto& blk = src.blocks[bi];
+                if (cursor < blk.start_sample) {
+                    const uint64_t silent_end = std::min<uint64_t>(blk.start_sample, chunk_end);
+                    const auto off = static_cast<std::size_t>(cursor - chunk_start);
+                    advance_silence(ola[si], silent_end - cursor, l_buf.data() + off, r_buf.data() + off);
+                    cursor = silent_end;
+                    continue;
+                }
+
+                const uint64_t seg_end = std::min<uint64_t>(blk.end_sample, chunk_end);
+                if (seg_end <= cursor) {
+                    ++bi;
+                    continue;
+                }
+
+                const auto off = static_cast<std::size_t>(cursor - chunk_start);
+                const uint64_t seg_frames = seg_end - cursor;
+                const auto seg_fn = static_cast<std::size_t>(seg_frames);
+
+                const uint16_t ic = src.channel_index;
+                for (std::size_t f = 0; f < seg_fn; ++f) {
+                    ch_in[f] = (ic < num_in_ch) ? in_block[((off + f) * num_in_ch) + ic] : 0.0F;
+                }
+
+                const auto hrtf = hrtf_for_dir(*bs, blk.az, blk.el);
+                const float gain = src.gain * blk.block_gain;
+                convolve_and_accumulate(
+                    hfft, ch_in.data(), seg_frames, gain, hrtf, ola[si], l_buf.data() + off, r_buf.data() + off);
+
+                cursor = seg_end;
+                if (cursor >= blk.end_sample) {
+                    ++bi;
+                }
             }
-
-            const auto hrtf = hrtf_for_dir(*bs, blk.az, blk.el);
-            const float gain = src.gain * blk.block_gain;
-
-            // De-interleave source channel.
-            const uint16_t ic = src.channel_index;
-            for (std::size_t f = 0; f < fn; ++f) {
-                ch_in[f] = (ic < num_in_ch) ? in_block[f * num_in_ch + ic] : 0.0F;
-            }
-
-            convolve_and_accumulate(hfft, ch_in.data(), frames_now, gain, hrtf, ola[si], l_buf.data(), r_buf.data());
         }
 
         // Interleave L/R into output block.
         for (std::size_t f = 0; f < fn; ++f) {
-            out_block[f * 2 + 0] = l_buf[f];
-            out_block[f * 2 + 1] = r_buf[f];
+            out_block[(f * 2U) + 0U] = l_buf[f];
+            out_block[(f * 2U) + 1U] = r_buf[f];
         }
 
         if (lufs_st) {
@@ -446,7 +520,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
         }
 
         frames_done += frames_now;
-        const double frac = 0.2 + 0.7 * (static_cast<double>(frames_done) / static_cast<double>(num_frames));
+        const double frac = 0.2 + (0.7 * (static_cast<double>(frames_done) / static_cast<double>(num_frames)));
         progress.on_progress({RenderStage::rendering, frac, "rendering"});
     }
 
