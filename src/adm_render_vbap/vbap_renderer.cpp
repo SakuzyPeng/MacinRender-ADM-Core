@@ -303,7 +303,12 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
             source.data(), 1, speakers.data(), num_non_lfe, &raw_table, &table_size, &simplex_count);
     } else {
         constexpr int k_omit_large_triangles = 1;
-        constexpr int k_enable_dummies = 1;
+        // SAF's dummy-speaker removal path reallocates the returned table and has
+        // triggered glibc heap corruption under repeated per-block calls. The
+        // supported layouts are defined with real speakers covering our target
+        // render directions, so keep dummies disabled until SAF is patched or
+        // VBAP table generation is cached at layout scope.
+        constexpr int k_enable_dummies = 0;
         generateVBAPgainTable3D_srcs(source.data(),
                                      1,
                                      speakers.data(),
