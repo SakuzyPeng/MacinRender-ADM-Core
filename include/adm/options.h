@@ -43,6 +43,9 @@ struct RenderOptions {
     // Default gain-interpolation ramp used when jumpPosition=false and the ADM block
     // carries no explicit interpolationLength.  Set to 0 for instant switching.
     uint32_t default_interp_ms{5};
+    // De-zipper window for rapidly changing Objects metadata, in sample frames.
+    // 0 disables renderer-side control-rate smoothing and follows ADM blocks sample-accurately.
+    uint32_t object_smoothing_frames{8875};
     // Internal diagnostics/tests only. The CLI never exposes this; normal users
     // cannot request speaker-stereo ADM rendering.
     bool internal_allow_speaker_stereo{false};

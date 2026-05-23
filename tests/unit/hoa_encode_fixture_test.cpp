@@ -387,6 +387,7 @@ bool verify_hoa_ramp_interpolation() {
     req.output_path = out_path;
     req.options.output_layout = "hoa3";
     req.options.renderer = mradm::RendererSelection::hoa;
+    req.options.object_smoothing_frames = 0;
 
     mradm::RenderService service;
     mradm::NullProgressSink progress;

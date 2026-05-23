@@ -1347,6 +1347,7 @@ bool verify_ear_multiblock_inside_render_window(const mradm::RenderService& serv
     req.options.internal_allow_speaker_stereo = true;
     req.options.renderer = mradm::RendererSelection::ear;
     req.options.peak_limit = false;
+    req.options.object_smoothing_frames = 0;
 
     const auto res = service.render(req, progress, logs);
     if (!res.success()) {

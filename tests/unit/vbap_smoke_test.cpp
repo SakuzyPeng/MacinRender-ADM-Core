@@ -548,6 +548,7 @@ bool verify_time_varying_objects_blocks() {
     request.options.internal_allow_speaker_stereo = true;
     request.options.renderer = mradm::RendererSelection::saf;
     request.options.peak_limit = false;
+    request.options.object_smoothing_frames = 0;
 
     mradm::RenderService service;
     mradm::NullProgressSink progress;
@@ -612,6 +613,7 @@ bool verify_overlong_interpolation_is_clamped() {
     request.options.internal_allow_speaker_stereo = true;
     request.options.renderer = mradm::RendererSelection::saf;
     request.options.peak_limit = false;
+    request.options.object_smoothing_frames = 0;
 
     mradm::RenderService service;
     mradm::NullProgressSink progress;
@@ -1528,6 +1530,7 @@ std::vector<float> render_two_block_no_jump(uint32_t interp_ms) {
     request.options.renderer = mradm::RendererSelection::saf;
     request.options.peak_limit = false;
     request.options.default_interp_ms = interp_ms;
+    request.options.object_smoothing_frames = 0;
 
     mradm::RenderService service;
     mradm::NullProgressSink progress;

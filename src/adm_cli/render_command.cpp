@@ -2,7 +2,6 @@
 #include <string>
 #include <string_view>
 
-#include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
 #include "adm/render.h"
@@ -14,7 +13,7 @@ namespace {
 class SpdlogSink final : public mradm::LogSink {
   public:
     void log(mradm::LogLevel level, std::string_view module, std::string_view message) override {
-        const auto text = fmt::format("[{}] {}", module, message);
+        const auto text = std::string{"["} + std::string{module} + "] " + std::string{message};
         switch (level) {
         case mradm::LogLevel::debug:
             spdlog::debug(text);
@@ -35,7 +34,8 @@ class SpdlogSink final : public mradm::LogSink {
 class ConsoleProgressSink final : public mradm::ProgressSink {
   public:
     void on_progress(const mradm::ProgressEvent& event) override {
-        spdlog::debug("progress {:.0f}%: {}", event.fraction * 100.0, event.message);
+        spdlog::debug(std::string{"progress "} + std::to_string(static_cast<int>(std::lround(event.fraction * 100.0))) +
+                      "%: " + std::string{event.message});
     }
 };
 
@@ -95,6 +95,12 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                      "(default: 5, set to 0 for instant switching)")
         ->check(CLI::Range(0U, 500U));
     render_cmd
+        ->add_option("--object-smoothing-frames",
+                     opts.object_smoothing_frames,
+                     "De-zipper window for dense Objects metadata updates in sample frames "
+                     "(default: 8875, set to 0 for sample-accurate block switching)")
+        ->check(CLI::Range(0U, 48000U));
+    render_cmd
         ->add_option("--opus-bitrate-per-ch",
                      opts.opus_bitrate_per_ch,
                      "Opus MKA VBR target bitrate per channel in kbps (6-320); "
@@ -125,6 +131,7 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     request.options.peak_limit_dbtp = opts.peak_limit_dbtp;
     request.options.output_bit_depth = parse_output_bit_depth(opts.output_bit_depth_str);
     request.options.default_interp_ms = opts.interp_ms;
+    request.options.object_smoothing_frames = opts.object_smoothing_frames;
     request.options.opus_bitrate_per_ch_kbps = opts.opus_bitrate_per_ch;
     request.options.apac_bitrate_kbps = opts.apac_bitrate;
     request.options.apac_drc_music = opts.apac_drc_music;
@@ -148,7 +155,7 @@ int run_render_impl(const RenderCliOptions& opts) {
         return EXIT_FAILURE;
     }
     if (result.output_path.has_value()) {
-        spdlog::info("wrote {}", result.output_path->string());
+        spdlog::info(std::string{"wrote "} + result.output_path->string());
     }
     return EXIT_SUCCESS;
 }

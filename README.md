@@ -143,6 +143,7 @@ APAC 空间布局和 HOA 默认使用稳定的总目标码率提示：以 `7.1.4
 | `--peak-limit-dbtp <dBTP>` | True Peak 限制目标 | `-1.0` |
 | `--no-peak-limit` | 关闭 True Peak 限制 | - |
 | `--interp-ms <ms>` | ADM 块无 jumpPosition 时的增益插值斜坡 | `5` |
+| `--object-smoothing-frames <frames>` | Objects 动态元数据去拉链平滑窗口；`0` 为逐样本跟随 ADM 块 | `8875` |
 | `--opus-bitrate-per-ch <kbps>` | Opus VBR 目标比特率 / 声道 | 自动 |
 | `--apac-bitrate <kbps>` | APAC 总目标比特率提示；未设置时空间布局 / HOA 按 7.1.4=2048 kbps 基准缩放 | 见输出格式说明 |
 | `--sofa <path>` | binaural 用户 SOFA HRIR 文件 | 内置 KEMAR |

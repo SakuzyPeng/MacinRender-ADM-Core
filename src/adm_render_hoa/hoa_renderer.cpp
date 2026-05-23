@@ -180,6 +180,7 @@ CapabilityReport HoaRenderer::capabilities() const {
     return hoa_capabilities();
 }
 
+// NOLINTNEXTLINE(readability-function-size)
 Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
     if (plan.output_layout != "hoa3") {
         return make_error(ErrorCode::unsupported,
@@ -225,7 +226,8 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         }
         auto& writer = *writer_res;
 
-        constexpr uint64_t k_block_size = 1024;
+        constexpr uint64_t k_min_block_size = 1024;
+        const uint64_t k_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
         const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
         std::vector<float> out_block(static_cast<std::size_t>(k_num_out) * k_block_size);
@@ -247,6 +249,23 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
             std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
             for (const auto& cg : gain_matrix) {
+                if (plan.object_smoothing_frames > 0) {
+                    const Hoa3Coeffs start_gains = gains_at(cg, frames_done, k_default_interp);
+                    const Hoa3Coeffs end_gains = gains_at(cg, frames_done + frames_now - 1, k_default_interp);
+                    for (std::size_t f = 0; f < frames_now; ++f) {
+                        const float alpha =
+                            frames_now > 1 ? static_cast<float>(f) / static_cast<float>(frames_now - 1) : 0.0F;
+                        const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
+                        std::size_t out_index = f * k_num_out;
+                        for (std::size_t out_ch = 0; out_ch < k_num_out; ++out_ch) {
+                            const float gain =
+                                (start_gains.at(out_ch) * (1.0F - alpha)) + (end_gains.at(out_ch) * alpha);
+                            out_block[out_index] += in_s * gain;
+                            ++out_index;
+                        }
+                    }
+                    continue;
+                }
                 for (std::size_t f = 0; f < frames_now; ++f) {
                     const uint64_t abs_frame = frames_done + f;
                     const Hoa3Coeffs gains = gains_at(cg, abs_frame, k_default_interp);

@@ -6,10 +6,12 @@
 #include <cstring>
 #include <ebur128.h>
 #include <filesystem>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <numbers>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -38,7 +40,7 @@ namespace {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-constexpr uint64_t k_block_size = 1024U;
+constexpr uint64_t k_min_block_size = 1024U;
 constexpr int k_n_ears = 2;
 constexpr int k_n_azi = 361;  // (int)(360/1 + 0.5) + 1
 constexpr int k_n_elev = 181; // (int)(180/1 + 0.5) + 1
@@ -279,11 +281,11 @@ struct BinauralState {
 // NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
 
 // Build BinauralState once.  Returns nullptr on VBAP triangulation failure.
-std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset) {
+std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_t block_size) {
     auto bs = std::make_unique<BinauralState>();
     bs->num_dirs = dataset.num_dirs;
     bs->hrir_len = dataset.hrir_len;
-    bs->fft_size = next_pow2_int(static_cast<int>(k_block_size) + dataset.hrir_len - 1);
+    bs->fft_size = next_pow2_int(static_cast<int>(block_size) + dataset.hrir_len - 1);
     bs->n_bands = (bs->fft_size / 2) + 1;
     bs->overlap_len = dataset.hrir_len - 1;
     bs->dataset_name = std::move(dataset.name);
@@ -450,6 +452,7 @@ struct BinauralSource {
     uint16_t channel_index{0};
     float gain{1.0F}; // object-level gain
     bool bypass_lfe{false};
+    bool smoothable_object{false};
     struct Block {
         float az{0.0F};
         float el{0.0F};
@@ -489,6 +492,7 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs) 
                 BinauralSource src;
                 src.channel_index = channel_index;
                 src.gain = obj.gain;
+                src.smoothable_object = true;
                 for (const auto& blk : track.blocks) {
                     auto [az, el] = block_position(obj, blk);
                     src.blocks.push_back(
@@ -565,6 +569,72 @@ std::size_t first_relevant_block(const BinauralSource& src, uint64_t frame) {
     return idx;
 }
 
+const BinauralSource::Block* first_overlapping_block(const BinauralSource& src, uint64_t start, uint64_t end) {
+    const auto it = std::ranges::find_if(
+        src.blocks, [start, end](const auto& block) { return block.end_sample > start && block.start_sample < end; });
+    return it == src.blocks.end() ? nullptr : &*it;
+}
+
+const BinauralSource::Block* last_overlapping_block(const BinauralSource& src, uint64_t start, uint64_t end) {
+    auto blocks_reversed = std::views::reverse(src.blocks);
+    const auto it = std::ranges::find_if(blocks_reversed, [start, end](const auto& block) {
+        return block.end_sample > start && block.start_sample < end;
+    });
+    return it == blocks_reversed.end() ? nullptr : std::addressof(*it);
+}
+
+void copy_windowed_object_input(const BinauralSource& src,
+                                const float* input,
+                                uint16_t num_in_ch,
+                                uint64_t chunk_start,
+                                uint64_t frames_now,
+                                float* out) {
+    std::ranges::fill_n(out, static_cast<std::ptrdiff_t>(frames_now), 0.0F);
+    std::size_t bi = first_relevant_block(src, chunk_start);
+    for (std::size_t f = 0; f < frames_now; ++f) {
+        const uint64_t abs_frame = chunk_start + f;
+        while (bi < src.blocks.size() && src.blocks[bi].end_sample <= abs_frame) {
+            ++bi;
+        }
+        if (bi < src.blocks.size() && src.blocks[bi].start_sample <= abs_frame) {
+            const uint16_t ic = src.channel_index;
+            out[f] = (ic < num_in_ch) ? input[(f * num_in_ch) + ic] : 0.0F;
+        }
+    }
+}
+
+// NOLINTNEXTLINE(readability-function-size)
+void convolve_crossfaded_object_block(void* hfft,
+                                      const BinauralState& bs,
+                                      const float* src,
+                                      uint64_t frames_now,
+                                      float start_gain,
+                                      float end_gain,
+                                      const std::vector<float_complex>& start_hrtf,
+                                      const std::vector<float_complex>& end_hrtf,
+                                      OLAState& state,
+                                      float* l_out,
+                                      float* r_out) {
+    OLAState start_state = state;
+    OLAState end_state = state;
+    const auto fn = static_cast<std::size_t>(frames_now);
+    std::vector<float> l_start(fn, 0.0F);
+    std::vector<float> r_start(fn, 0.0F);
+    std::vector<float> l_end(fn, 0.0F);
+    std::vector<float> r_end(fn, 0.0F);
+
+    convolve_and_accumulate(
+        hfft, bs, src, frames_now, start_gain, start_hrtf, start_state, l_start.data(), r_start.data());
+    convolve_and_accumulate(hfft, bs, src, frames_now, end_gain, end_hrtf, end_state, l_end.data(), r_end.data());
+
+    for (std::size_t f = 0; f < fn; ++f) {
+        const float alpha = fn > 1U ? static_cast<float>(f) / static_cast<float>(fn - 1U) : 0.0F;
+        l_out[f] += (l_start[f] * (1.0F - alpha)) + (l_end[f] * alpha);
+        r_out[f] += (r_start[f] * (1.0F - alpha)) + (r_end[f] * alpha);
+    }
+    state = std::move(end_state);
+}
+
 // ── Renderer ──────────────────────────────────────────────────────────────────
 
 class BinauralRenderer final : public IRenderer {
@@ -587,13 +657,15 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                           "input=" + plan.input_path);
     }
 
+    const uint64_t render_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
+
     // One-time setup: load HRIR dataset, then build HRTF table + VBAP grid.
     progress.on_progress({RenderStage::planning, 0.1, "building HRTF table"});
     auto dataset_res = load_hrtf_dataset(plan);
     if (!dataset_res) {
         return tl::unexpected{dataset_res.error()};
     }
-    auto bs = build_binaural_state(std::move(*dataset_res));
+    auto bs = build_binaural_state(std::move(*dataset_res), render_block_size);
     if (!bs) {
         return make_error(ErrorCode::internal_error, "binaural: VBAP triangulation of HRTF directions failed", {});
     }
@@ -653,14 +725,14 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     const uint64_t num_frames = info.num_frames;
     const uint16_t num_in_ch = info.num_channels;
 
-    std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
-    std::vector<float> out_block(2U * k_block_size); // interleaved L/R
+    std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * render_block_size);
+    std::vector<float> out_block(2U * render_block_size); // interleaved L/R
     uint64_t frames_done = 0;
 
     progress.on_progress({RenderStage::rendering, 0.2, "rendering"});
 
     while (frames_done < num_frames) {
-        const uint64_t frames_now = std::min(k_block_size, num_frames - frames_done);
+        const uint64_t frames_now = std::min(render_block_size, num_frames - frames_done);
         const auto fn = static_cast<std::size_t>(frames_now);
 
         reader->read(in_block.data(), frames_now);
@@ -680,6 +752,29 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
 
             const uint64_t chunk_start = frames_done;
             const uint64_t chunk_end = frames_done + frames_now;
+
+            if (plan.object_smoothing_frames > 0 && src.smoothable_object && !src.bypass_lfe) {
+                const auto* start_block = first_overlapping_block(src, chunk_start, chunk_end);
+                const auto* end_block = last_overlapping_block(src, chunk_start, chunk_end);
+                if (start_block != nullptr && end_block != nullptr) {
+                    copy_windowed_object_input(src, in_block.data(), num_in_ch, chunk_start, frames_now, ch_in.data());
+                    const auto start_hrtf = hrtf_for_dir(*bs, start_block->az, start_block->el);
+                    const auto end_hrtf = hrtf_for_dir(*bs, end_block->az, end_block->el);
+                    convolve_crossfaded_object_block(hfft,
+                                                     *bs,
+                                                     ch_in.data(),
+                                                     frames_now,
+                                                     src.gain * start_block->block_gain,
+                                                     src.gain * end_block->block_gain,
+                                                     start_hrtf,
+                                                     end_hrtf,
+                                                     ola[si],
+                                                     l_buf.data(),
+                                                     r_buf.data());
+                    continue;
+                }
+            }
+
             uint64_t cursor = chunk_start;
             std::size_t bi = first_relevant_block(src, chunk_start);
 
