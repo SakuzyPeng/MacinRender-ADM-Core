@@ -20,9 +20,11 @@ namespace mradm::audio {
 namespace {
 
 [[nodiscard]] uint32_t default_apac_bitrate_kbps(std::string_view layout_id, uint32_t channels) {
-    if (layout_id == "hoa3") {
-        // Match the 16ch APAC probe convention used for Atmos-style layouts:
-        // 12ch baseline 2048 kbps, scaled by channel count.
+    if (layout_id == "4+5+0" || layout_id == "5.1.4" || layout_id == "atmos514" || layout_id == "4+7+0" ||
+        layout_id == "7.1.4" || layout_id == "atmos714" || layout_id == "9.1.6" || layout_id == "atmos916" ||
+        layout_id == "9+10+3" || layout_id == "22.2" || layout_id == "cicp13" || layout_id == "hoa3") {
+        // Use a stable APAC default for spatial/HOA layouts:
+        // 12ch 7.1.4 baseline 2048 kbps, scaled by channel count.
         return ((2048U * channels) + 6U) / 12U;
     }
     return 0;
