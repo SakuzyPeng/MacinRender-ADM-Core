@@ -250,7 +250,10 @@ HOA 渲染器当前功能：Objects 块 → SH3（SN3D，16ch）编码输出。
 Objects / DirectSpeakers → 位置解析 → HRTF 数据集（默认 SAF 内置 KEMAR，或 CLI `--sofa` 用户 SOFA）→
 OLA 分块卷积 → 固定 2ch binaural 输出。
 渲染器会忽略用户请求的扬声器布局；PCM CAF 写入时使用 CoreAudio `Binaural` layout tag，
-普通 `0+2+0` 仍保留为 speaker stereo，避免两种 2ch 语义混淆。
+普通 speaker stereo ADM 渲染不再作为用户入口暴露：默认 2ch 输出会自动路由到
+`binaural`，显式请求 `--renderer ear|saf --output-layout stereo/0+2+0` 会返回
+`unsupported`。底层音频 I/O 仍保留 `0+2+0`，仅用于普通两声道文件格式写入、测试和
+非 ADM 渲染语义，避免把不可听的 speaker-stereo 投影误认为双耳或正式下混。
 
 SOFA 支持通过 `MR_ADM_ENABLE_SOFA=ON` 默认启用，使用 SAF 的 SOFA reader 与其内置
 libmysofa/zlib 路径，`SAF_ENABLE_NETCDF` 保持关闭。首版边界为 free-field FIR HRIR：
@@ -303,11 +306,11 @@ EAR diffuse bus 已在 M4 中实现（见注②）：`designDecorrelators()` FIR
 当前 SAF VBAP 后端已经覆盖 Objects / DirectSpeakers、2D / 3D gain table、
 ADM 块插值和 MDAP extent spread。
 
-**已内置布局（`vbap_renderer.cpp`，共 7 个）：**
+**已内置扬声器布局（`vbap_renderer.cpp`）：**
 
 | 布局 ID | 名称 | 声道数 | LFE |
 |---|---|---|---|
-| `0+2+0` | Stereo | 2 | — |
+| `0+2+0` | Stereo（内部保留，用户渲染入口禁用） | 2 | — |
 | `0+5+0` | 5.1 | 6 | LFE1@ch3 |
 | `wav71` | WAV 7.1 | 8 | LFE1@ch3 |
 | `4+5+0` | 5.1.4 | 10 | LFE1@ch3 |
@@ -316,7 +319,7 @@ ADM 块插值和 MDAP extent spread。
 | `9.1.6` | 9.1.6 (Dolby Atmos) | 16 | LFE1@ch3 |
 
 除 `wav71` 使用 CoreAudio `kAudioChannelLayoutTag_WAVE_7_1` / Microsoft WAVE 7.1 槽位外，
-通道顺序与 libear `bs2051_layouts.cpp` 一致（`0+2+0` 在 2026-05-20 修正了原始的 L/R 反转 bug）。
+通道顺序与 libear `bs2051_layouts.cpp` 一致（内部 `0+2+0` 在 2026-05-20 修正了原始的 L/R 反转 bug）。
 `9.1.6` 通道顺序遵循 CoreAudio `kAudioChannelLayoutTag_Atmos_9_1_6`。
 LFE 声道参与输出但不参与 VBAP panning；DS LFE 轨按标签（"LFE1"/"LFE2"）直接路由。
 

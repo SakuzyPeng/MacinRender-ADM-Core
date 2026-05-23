@@ -16,8 +16,7 @@
 ### 输出布局
 
 | 常用名称 / CLI 值 | 声道数 | 支持 EAR | 支持 VBAP |
-|---|---|---|---|---|
-| `stereo` | 2 | ✅ | ✅ |
+|---|---|---|---|
 | `5.1` | 6 | ✅ | ✅ |
 | `5.1.2` | 8 | ✅ | — |
 | `7.1` | 8 | ✅ | ✅ |
@@ -28,7 +27,7 @@
 | `22.2` | 24 | ✅ | ✅ |
 | `hoa3` | 16 | — | — |
 
-README 优先使用 5.1.4 / 7.1.4 这类常见布局名称。旧的 BS.2051 风格布局 ID 仍兼容，但不建议新命令继续使用。binaural 后端固定输出 2ch，忽略 `--output-layout`。
+README 优先使用 5.1.4 / 7.1.4 这类常见布局名称。旧的 BS.2051 风格布局 ID 仍兼容，但不建议新命令继续使用。普通扬声器 stereo 渲染已禁用；2ch ADM 输出只走 `binaural`，避免把不可听的 speaker-stereo 投影误认为双耳或正式下混。
 
 ### 输出格式
 
@@ -100,7 +99,7 @@ cmake -S . -B build -DMR_ADM_ENABLE_SOFA=ON
 ## 使用
 
 ```bash
-# 自动选择后端，Stereo 输出
+# 自动选择后端，2ch 输出默认走 Binaural
 ./build/release/adm render -i input.wav -o output.wav
 
 # EAR 后端，7.1.4 扬声器布局，FLAC 输出
@@ -120,9 +119,9 @@ cmake -S . -B build -DMR_ADM_ENABLE_SOFA=ON
 ./build/release/adm render -i input.wav -o output.mka \
     --renderer ear --output-layout 7.1.4 --opus-bitrate-per-ch 64
 
-# APAC（macOS only），支持 Stereo / 7.1 / 5.1.4 / 7.1.4 / 9.1.6 / 22.2
+# APAC（macOS only），支持 Binaural / 7.1 / 5.1.4 / 7.1.4 / 9.1.6 / 22.2
 ./build/release/adm render -i input.wav -o output.m4a \
-    --renderer ear --output-layout stereo
+    --renderer binaural
 
 # 查看 ADM 场景元数据
 ./build/release/adm inspect input.wav
