@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -78,6 +79,68 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc() {
     doc->add(content);
 
     auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"TestProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+std::pair<std::shared_ptr<adm::Document>, std::string> make_fractional_timing_objects_doc() {
+    using namespace std::chrono_literals;
+
+    auto doc = adm::Document::create();
+
+    auto cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"FractionalCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block0{adm::SphericalPosition{adm::Azimuth{-30.0F}, adm::Elevation{0.0F}}};
+        block0.set(adm::Rtime{adm::Time{0ns}});
+        block0.set(adm::Duration{adm::Time{5'408'630'000ns}});
+        block0.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(block0);
+
+        adm::AudioBlockFormatObjects block1{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}}};
+        block1.set(adm::Rtime{adm::Time{5'408'630'000ns}});
+        block1.set(adm::Duration{adm::Time{1'040'000ns}});
+        block1.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(block1);
+
+        adm::AudioBlockFormatObjects block2{adm::SphericalPosition{adm::Azimuth{-30.0F}, adm::Elevation{0.0F}}};
+        block2.set(adm::Rtime{adm::Time{5'409'670'000ns}});
+        block2.set(adm::Duration{adm::Time{1'040'000ns}});
+        block2.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(block2);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"FractionalPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"FractionalSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"FractionalTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"FractionalObject"});
+    object->addReference(uid);
+    doc->add(object);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"FractionalContent"});
+    content->addReference(object);
+    doc->add(content);
+
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"FractionalProgramme"});
     programme->addReference(content);
     doc->add(programme);
 
@@ -348,6 +411,34 @@ bool verify_objects_blocks_fixture() {
                         "objectDivergence azimuthRange defaults to 45");
             ok &=
                 check(std::fabs(blk.divergence_position_range) < 0.01F, "objectDivergence positionRange defaults to 0");
+        }
+    }
+
+    return ok;
+}
+
+bool verify_fractional_block_boundaries_are_contiguous() {
+    bool ok = true;
+    auto [doc, uid_str] = make_fractional_timing_objects_doc();
+    auto path = write_fixture(uid_str, serialize_doc(doc));
+    FileGuard guard{path};
+
+    auto result = mradm::io::import_scene(path.string());
+    if (!result.has_value()) {
+        std::cerr << "FAIL: fractional timing import failed: " << result.error().message << "\n";
+        return false;
+    }
+
+    const auto& scene = result.value();
+    ok &= check(scene.objects.size() == 1, "fractional timing: 1 object");
+    if (scene.objects.size() == 1 && scene.objects[0].tracks.size() == 1) {
+        const auto& blocks = scene.objects[0].tracks[0].blocks;
+        ok &= check(blocks.size() == 3, "fractional timing: 3 blocks");
+        if (blocks.size() == 3) {
+            ok &= check(blocks[0].end_sample == blocks[1].start_sample, "block0 end == block1 start");
+            ok &= check(blocks[1].end_sample == blocks[2].start_sample, "block1 end == block2 start");
+            ok &= check(blocks[1].start_sample == 259614, "block1 start rounded to nearest sample");
+            ok &= check(blocks[1].end_sample == 259664, "block1 end rounded to nearest sample");
         }
     }
 
@@ -1377,6 +1468,7 @@ int main() {
     bool ok = true;
     ok &= verify_minimal_fixture();
     ok &= verify_objects_blocks_fixture();
+    ok &= verify_fractional_block_boundaries_are_contiguous();
     ok &= verify_direct_speakers_blocks_fixture();
     ok &= verify_mixed_blocks_fixture();
     ok &= verify_direct_speakers_pack_channels_are_track_scoped();
