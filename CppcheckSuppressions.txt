@@ -10,3 +10,4 @@ functionStatic:*/src/adm_engine/render_service.cpp
 # Public API structs are consumed across translation units; cppcheck sees the
 # header alone and reports false positives for metadata fields.
 unusedStructMember:*/include/adm/audio_io.h
+unusedStructMember:*/include/adm/options.h
