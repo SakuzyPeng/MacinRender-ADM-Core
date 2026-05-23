@@ -31,10 +31,10 @@ cmake --build build/release
 ./build/release/adm render -i input.wav -o binaural.wav --renderer binaural
 ```
 
-渲染到 7.1.4 FLAC：
+渲染到 7.1 FLAC：
 
 ```bash
-./build/release/adm render -i input.wav -o output.flac --renderer ear --output-layout 7.1.4
+./build/release/adm render -i input.wav -o output.flac --renderer ear --output-layout 7.1
 ```
 
 查看 ADM 场景：
@@ -67,11 +67,13 @@ cmake --build build/release
 |---|---|---|---|
 | WAV | `.wav` | float32 / 24-bit / 16-bit PCM | 全平台 |
 | CAF | `.caf` | float32 PCM | 全平台 |
-| FLAC | `.flac` | 24-bit integer FLAC | 全平台 |
+| FLAC | `.flac` | 24-bit integer FLAC，1-8 声道 | 全平台 |
 | Opus MKA | `.mka` | Opus VBR | 全平台 |
 | APAC | `.m4a` | APAC VBR | macOS only |
 
 “编码支持”只表示本项目可在对应平台写出该格式，不代表目标系统或播放器一定能原生识别布局或直接回放。
+
+FLAC 当前最多支持 8 声道，因此不能用于 `5.1.4`、`7.1.4`、`9.1.6`、`22.2` 等超过 8 声道的布局；这些布局请使用 WAV、CAF、APAC 或 Opus MKA。
 
 ## 输出布局
 
@@ -110,7 +112,7 @@ cmake --build build/release
 |---|---|---|
 | `--renderer auto\|ear\|saf\|hoa\|binaural` | 选择渲染后端 | `auto` |
 | `--output-layout <layout>` | 输出布局，如 `7.1.4` / `9.1.6` / `22.2` | 后端默认 |
-| `--output-bit-depth f32\|i24\|i16` | WAV 输出位深（CAF 固定 float32；FLAC 固定 24-bit） | `f32` |
+| `--output-bit-depth f32\|i24\|i16` | WAV 输出位深（CAF 固定 float32；FLAC 固定 24-bit / 最多 8 声道） | `f32` |
 | `--loudness-target <LUFS>` | 响度归一化目标 | 关闭 |
 | `--peak-limit-dbtp <dBTP>` | True Peak 限制目标 | `-1.0` |
 | `--no-peak-limit` | 关闭 True Peak 限制 | - |
@@ -176,4 +178,4 @@ cmake -S . -B build -DMR_ADM_ENABLE_SOFA=ON
 
 本项目源码采用 **MIT License**，以仓库根目录 [LICENSE](LICENSE) 为准。
 
-当前默认构建依赖与 MIT 源码许可证兼容；二进制发行包需要附带第三方依赖的 notice/license 文本。默认发行构建不得启用 SAF 的 GPLv2 可选模块（如 tracker / HADES）或 FFTW 等需要单独审计的依赖。
+当前默认构建依赖与 MIT 源码许可证兼容；二进制发行包需要附带第三方依赖的 notice/license 文本。默认构建只启用本项目渲染路径所需的 SAF 组件，额外 SAF 模块和替代 DSP 依赖需在发行前单独确认许可证。

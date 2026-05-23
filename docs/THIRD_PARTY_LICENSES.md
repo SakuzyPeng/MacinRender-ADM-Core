@@ -21,25 +21,25 @@ MacinRender ADM Core 的项目源码采用 **MIT License**，以仓库根目录 
 
 | 依赖 | 用途 | 许可证 | 默认发行可用性 | 备注 |
 |---|---|---|---|---|
-| `fmt` | 格式化与日志辅助 | MIT | ✅ | 若动态链接系统库，仍需记录版本与许可证 |
-| `spdlog` | 日志库 | MIT | ✅ | 使用 external fmt |
-| `CLI11` | CLI 参数解析 | BSD-3-Clause | ✅ | |
-| `tl::expected` | `Result<T>` 基础类型 | CC0-1.0 | ✅ | header-only |
-| `libbw64` | BW64/ADM BWF 读写 | Apache-2.0 | ✅ | |
-| `libadm` | ADM XML 建模/解析 | Apache-2.0 | ✅ | 内含 RapidXML，Boost Software License 或 MIT |
-| `libear` | BS.2127/EAR 增益计算 | Apache-2.0 | ✅ | 内部 vendored Eigen/xsimd/kissfft 需随 notice 记录 |
-| Eigen（libear 内部） | 线性代数 | MPL-2.0 为主，含 BSD/LGPL 文件 | ⚠️ 需防线 | 建议编译 libear 时定义 `EIGEN_MPL2_ONLY`，避免误用 LGPL-only 模块 |
-| xsimd（libear 内部） | SIMD 抽象 | BSD-3-Clause | ✅ | |
-| kissfft（libear/SAF 内部） | FFT | BSD-3-Clause | ✅ | |
-| `libebur128` | LUFS/True Peak 测量 | MIT | ✅ | |
-| `dr_libs` (`dr_wav`, `dr_flac`) | WAV/FLAC 轻量读写 | Unlicense 或 MIT-0 可选 | ✅ | 本项目按 MIT-0/Unlicense 宽松使用 |
-| `libFLAC` | FLAC 编码与 metadata | Xiph BSD-like | ✅ | 当前关闭 C++ libs/programs/docs/examples；源码包内 GPL/LGPL 文本不代表默认链接这些组件 |
-| `libopus` | Opus MKA 编码 | BSD-like + IETF patent IPR notices | ✅ | 发行文档需保留专利 IPR 链接说明 |
-| Spatial Audio Framework (SAF) core | VBAP/MDAP/HRTF/FFT 等 DSP | ISC + permissive third-party code | ✅ | 仅在禁用 GPL 模块的配置下 |
-| SAF `saf_sofa_reader` | 用户 SOFA HRIR 读取 | ISC | ✅ | 默认可启用 |
-| libmysofa（SAF SOFA reader 内部） | SOFA 解析 | BSD-3-Clause | ✅ | |
-| zlib（SAF SOFA reader 内部） | 压缩支持 | zlib License | ✅ | |
-| Apple AudioToolbox/CoreFoundation/Accelerate | APAC、CAF layout、macOS 加速 | Apple 平台 SDK | ✅ macOS only | 不进入跨平台发行物依赖集合 |
+| `fmt` | 格式化与日志辅助 | MIT | 可用 | 若动态链接系统库，仍需记录版本与许可证 |
+| `spdlog` | 日志库 | MIT | 可用 | 使用 external fmt |
+| `CLI11` | CLI 参数解析 | BSD-3-Clause | 可用 | |
+| `tl::expected` | `Result<T>` 基础类型 | CC0-1.0 | 可用 | header-only |
+| `libbw64` | BW64/ADM BWF 读写 | Apache-2.0 | 可用 | |
+| `libadm` | ADM XML 建模/解析 | Apache-2.0 | 可用 | 内含 RapidXML，Boost Software License 或 MIT |
+| `libear` | BS.2127/EAR 增益计算 | Apache-2.0 | 可用 | 内部 vendored Eigen/xsimd/kissfft 需随 notice 记录 |
+| Eigen（libear 内部） | 线性代数 | MPL-2.0 为主，含 BSD/LGPL 文件 | 需防线 | 建议编译 libear 时定义 `EIGEN_MPL2_ONLY`，避免误用 LGPL-only 模块 |
+| xsimd（libear 内部） | SIMD 抽象 | BSD-3-Clause | 可用 | |
+| kissfft（libear/SAF 内部） | FFT | BSD-3-Clause | 可用 | |
+| `libebur128` | LUFS/True Peak 测量 | MIT | 可用 | |
+| `dr_libs` (`dr_wav`, `dr_flac`) | WAV/FLAC 轻量读写 | Unlicense 或 MIT-0 可选 | 可用 | 本项目按 MIT-0/Unlicense 宽松使用 |
+| `libFLAC` | FLAC 编码与 metadata | Xiph BSD-like | 可用 | 当前关闭 C++ libs/programs/docs/examples；源码包内 GPL/LGPL 文本不代表默认链接这些组件 |
+| `libopus` | Opus MKA 编码 | BSD-like + IETF patent IPR notices | 可用 | 发行文档需保留专利 IPR 链接说明 |
+| Spatial Audio Framework (SAF) core | VBAP/MDAP/HRTF/FFT 等 DSP | ISC + permissive third-party code | 可用 | 仅在禁用 GPL 模块的配置下 |
+| SAF `saf_sofa_reader` | 用户 SOFA HRIR 读取 | ISC | 可用 | 默认可启用 |
+| libmysofa（SAF SOFA reader 内部） | SOFA 解析 | BSD-3-Clause | 可用 | |
+| zlib（SAF SOFA reader 内部） | 压缩支持 | zlib License | 可用 | |
+| Apple AudioToolbox/CoreFoundation/Accelerate | APAC、CAF layout、macOS 加速 | Apple 平台 SDK | macOS only | 不进入跨平台发行物依赖集合 |
 
 ## 禁止或需单独审批的选项
 
