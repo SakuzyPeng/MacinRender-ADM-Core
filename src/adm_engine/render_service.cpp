@@ -221,6 +221,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         }
         output_layout = "binaural";
     }
+    const bool is_hoa_output = (sel == RendererSelection::hoa || output_layout == "hoa3");
 
     // Detect FLAC final output: FLAC does not carry float32 samples, so rendering
     // directly to FLAC would clip any > 0 dBFS content before loudness/peak
@@ -266,10 +267,19 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     }
     const RenderMetrics& metrics = *render_res;
 
-    if (metrics.measured_lufs) {
+    if (metrics.measured_lufs && is_hoa_output) {
+        logs.log(LogLevel::info,
+                 "engine",
+                 fmt::format("measured HOA coefficient loudness: {:.1f} LUFS (not playback loudness)",
+                             *metrics.measured_lufs));
+    } else if (metrics.measured_lufs) {
         logs.log(LogLevel::info, "engine", fmt::format("measured loudness: {:.1f} LUFS", *metrics.measured_lufs));
     }
-    if (metrics.measured_peak_dbtp) {
+    if (metrics.measured_peak_dbtp && is_hoa_output) {
+        logs.log(LogLevel::info,
+                 "engine",
+                 fmt::format("measured HOA coefficient true peak: {:.2f} dBTP", *metrics.measured_peak_dbtp));
+    } else if (metrics.measured_peak_dbtp) {
         logs.log(LogLevel::info, "engine", fmt::format("measured true peak: {:.2f} dBTP", *metrics.measured_peak_dbtp));
     }
 
@@ -277,7 +287,11 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     // Merging both into one apply_gain_to_file avoids a second read-write pass.
     double gain_db = 0.0;
 
-    if (request.options.measure_loudness && metrics.measured_lufs.has_value()) {
+    if (request.options.measure_loudness && is_hoa_output) {
+        logs.log(LogLevel::warning,
+                 "engine",
+                 "loudness normalization skipped for HOA output; measure loudness after decoding to a playback layout");
+    } else if (request.options.measure_loudness && metrics.measured_lufs.has_value()) {
         const auto target = static_cast<double>(request.options.loudness_target_lufs);
         const double delta = target - *metrics.measured_lufs;
         if (std::abs(delta) >= 0.1) {
@@ -295,14 +309,23 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         const double peak_clamp = std::min(0.0, target_peak - peak_after);
         if (peak_clamp < -0.1) {
             gain_db += peak_clamp;
+            const auto msg = is_hoa_output
+                                 ? fmt::format("HOA coefficient true peak {:.2f} dBTP, ceiling {:.1f} dBTP → clamp "
+                                               "{:.2f} dB",
+                                               peak_after,
+                                               target_peak,
+                                               peak_clamp)
+                                 : fmt::format("true peak after loudness {:.2f} dBTP, ceiling {:.1f} dBTP → clamp "
+                                               "{:.2f} dB",
+                                               peak_after,
+                                               target_peak,
+                                               peak_clamp);
+            logs.log(LogLevel::info, "engine", msg);
+        } else {
             logs.log(LogLevel::info,
                      "engine",
-                     fmt::format("true peak after loudness {:.2f} dBTP, ceiling {:.1f} dBTP → clamp {:.2f} dB",
-                                 peak_after,
-                                 target_peak,
-                                 peak_clamp));
-        } else {
-            logs.log(LogLevel::info, "engine", "true peak within target — no clamp");
+                     is_hoa_output ? "HOA coefficient true peak within target — no clamp"
+                                   : "true peak within target — no clamp");
         }
     }
 
@@ -382,10 +405,14 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         meta_fields.renderer = caps.backend_name;
         meta_fields.output_layout = output_layout;
         // bext / info fields must reflect the actual file after gain adjustment.
-        meta_fields.lufs =
-            metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
-        meta_fields.peak_dbtp =
-            metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
+        // HOA metrics are coefficient-domain diagnostics, not playback loudness/peak.
+        if (!is_hoa_output) {
+            meta_fields.lufs =
+                metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
+            meta_fields.peak_dbtp = metrics.measured_peak_dbtp
+                                        ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db)
+                                        : std::nullopt;
+        }
 
         auto meta_res = audio::write_file_metadata(output_path, meta_fields);
         if (!meta_res) {
