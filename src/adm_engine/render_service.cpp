@@ -233,7 +233,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     });
     const bool is_flac_final = (final_ext == ".flac");
     const bool is_opus_final = (final_ext == ".mka");
-    const bool is_apac_final = (final_ext == ".m4a");
+    const bool is_apac_final = (final_ext == ".m4a" || final_ext == ".mp4");
     if (is_flac_final) {
         const auto channels = channel_count_for_layout(caps, output_layout);
         if (channels.has_value() && *channels > 8U) {

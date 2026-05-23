@@ -214,6 +214,38 @@ namespace {
     return true;
 }
 
+[[nodiscard]] bool verify_caf_hoa3_layout_tag() {
+    const auto path = std::filesystem::temp_directory_path() / "mr_core_caf_hoa3_test.caf";
+    std::filesystem::remove(path);
+
+    {
+        auto writer_res = mradm::audio::WriterHandle::open(path.string(), 16U, 48000U, "hoa3");
+        if (!writer_res) {
+            std::cerr << "CAF HOA3 writer open failed: " << writer_res.error().message << "\n";
+            return false;
+        }
+        const std::vector<float> samples(16U, 0.0F);
+        if (writer_res->write(samples.data(), 1U) != 1U) {
+            std::cerr << "CAF HOA3 writer short write\n";
+            std::filesystem::remove(path);
+            return false;
+        }
+    }
+
+    std::ifstream in(path, std::ios::binary);
+    std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
+    const auto chan = find_caf_chunk(bytes, "chan");
+    constexpr uint32_t k_hoa3_tag = (190U << 16U) | 16U;
+    if (chan == std::string::npos || read_be32(bytes, chan + 12U) != k_hoa3_tag) {
+        std::cerr << "CAF HOA3 channel layout tag mismatch\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+
+    std::filesystem::remove(path);
+    return true;
+}
+
 [[nodiscard]] bool verify_caf_metadata_write(const std::filesystem::path& path) {
     const auto meta_res = mradm::audio::write_file_metadata(path.string(), test_metadata());
     if (!meta_res) {
@@ -416,6 +448,9 @@ int main() {
         return EXIT_FAILURE;
     }
     if (!verify_caf_binaural_layout_tag()) {
+        return EXIT_FAILURE;
+    }
+    if (!verify_caf_hoa3_layout_tag()) {
         return EXIT_FAILURE;
     }
 

@@ -49,6 +49,8 @@ Result<void> convert_to_apac(const std::string& src_path,
         al = ApacLayout{kAudioChannelLayoutTag_MPEG_2_0, false, 2U};
     } else if (layout_id == "wav71") {
         al = ApacLayout{kAudioChannelLayoutTag_AudioUnit_7_1, true, 8U};
+    } else if (layout_id == "hoa3") {
+        al = ApacLayout{static_cast<AudioChannelLayoutTag>((190U << 16U) | 16U), false, 16U};
     } else if (layout_id == "4+5+0" || layout_id == "5.1.4" || layout_id == "atmos514") {
         al = ApacLayout{static_cast<AudioChannelLayoutTag>((195U << 16U) | 10U), false, 10U};
     } else if (layout_id == "4+7+0" || layout_id == "7.1.4" || layout_id == "atmos714") {

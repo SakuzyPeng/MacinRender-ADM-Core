@@ -131,7 +131,7 @@ bool renderer_supports_layout(const mradm::CapabilityReport& caps, std::string_v
     });
 }
 
-constexpr std::array<LayoutInfo, 26> k_layout_infos{{
+constexpr std::array<LayoutInfo, 28> k_layout_infos{{
     {"wav",
      "binaural",
      2,
@@ -166,6 +166,7 @@ constexpr std::array<LayoutInfo, 26> k_layout_infos{{
     {"caf", "binaural", 2, "CoreAudio Binaural", "BinauralLeft BinauralRight", ""},
     {"caf", "5.1", 6, "CoreAudio MPEG_5_1_A / CICP_6", "L R C LFE Ls Rs", ""},
     {"caf", "7.1", 8, "CoreAudio WAVE_7_1", "L R C LFE Rls Rrs Ls Rs", "Same order as internal wav71."},
+    {"caf", "hoa3", 16, "CoreAudio HOA_ACN_SN3D", "ACN 0..15, SN3D", "HOA encode output, not a speaker layout."},
     {"caf", "5.1.4", 10, "CoreAudio Atmos_5_1_4", "L R C LFE Ls Rs Vhl Vhr Ltr Rtr", ""},
     {"caf", "7.1.4", 12, "CoreAudio Atmos_7_1_4", "L R C LFE Ls Rs Rls Rrs Vhl Vhr Ltr Rtr", ""},
     {"caf", "9.1.6", 16, "CoreAudio Atmos_9_1_6", "L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr", ""},
@@ -208,6 +209,7 @@ constexpr std::array<LayoutInfo, 26> k_layout_infos{{
      "CoreAudio AudioUnit_7_1",
      "L R C LFE Ls Rs Rls Rrs",
      "Input wav71 is reordered before APAC encoding."},
+    {"apac", "hoa3", 16, "CoreAudio HOA_ACN_SN3D", "ACN 0..15, SN3D", "HOA encode output, not a speaker layout."},
     {"apac", "5.1.4", 10, "CoreAudio Atmos_5_1_4", "L R C LFE Ls Rs Vhl Vhr Ltr Rtr", ""},
     {"apac", "7.1.4", 12, "CoreAudio Atmos_7_1_4", "L R C LFE Ls Rs Rls Rrs Vhl Vhr Ltr Rtr", ""},
     {"apac", "9.1.6", 16, "CoreAudio Atmos_9_1_6", "L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr", ""},
