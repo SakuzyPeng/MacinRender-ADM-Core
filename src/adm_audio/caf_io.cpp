@@ -4,7 +4,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <iterator>
 #include <limits>
+#include <memory>
 #include <numeric>
 #include <string>
 #include <string_view>
@@ -267,12 +269,12 @@ constexpr std::array<CafLayoutEntry, 9> k_caf_tags = {{
 // clang-format on
 
 [[nodiscard]] const CafLayoutEntry* caf_layout_entry(std::string_view layout_id) {
-    const auto* const it =
+    const auto it =
         std::ranges::find_if(k_caf_tags, [layout_id](const CafLayoutEntry& e) { return layout_id == e.layout_id; });
     if (it == k_caf_tags.end()) {
         return nullptr;
     }
-    return it;
+    return std::addressof(*it);
 }
 
 template <std::size_t N> void caf_write_bytes(std::FILE* f, const std::array<uint8_t, N>& bytes) {
