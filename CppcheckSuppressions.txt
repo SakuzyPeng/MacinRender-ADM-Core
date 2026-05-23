@@ -14,3 +14,5 @@ unusedStructMember:*/include/adm/options.h
 unusedStructMember:*/include/adm/capability.h
 unusedStructMember:*/include/adm/render.h
 unusedStructMember:*/include/adm/scene.h
+# Shared renderer internals return aggregate structs across translation units.
+unusedStructMember:*/src/adm_render_common/render_common.h

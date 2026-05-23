@@ -23,6 +23,8 @@
 #include "adm/render.h"
 #include "adm/render_vbap.h"
 
+#include "render_common.h"
+
 namespace mradm {
 
 namespace {
@@ -331,20 +333,6 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
     return gains;
 }
 
-[[nodiscard]] Result<std::vector<float>> calculate_vbap_gains(const SceneObjectBlock& block, const LayoutSpec& layout) {
-    std::vector<float> result(layout.speakers.size(), 0.0F);
-    for (const auto& source : expand_object_divergence(block)) {
-        auto gains = calculate_one_vbap_gains(source, layout);
-        if (!gains) {
-            return tl::unexpected{gains.error()};
-        }
-        for (std::size_t i = 0; i < result.size(); ++i) {
-            result[i] += (*gains)[i];
-        }
-    }
-    return result;
-}
-
 // Returns true if any non-muted Objects block has non-negligible elevation.
 [[nodiscard]] bool scene_has_elevated_sources(const AdmScene& scene) {
     constexpr float k_el_threshold = 1.0e-3F; // 0.001°, well below any real source
@@ -398,32 +386,28 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, std::string_v
 
             // Objects blocks → VBAP panning.
             for (const auto& raw_block : track.blocks) {
-                SceneObjectBlock block = raw_block;
-                if (obj.position_offset) {
-                    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-                    const auto& off = *obj.position_offset;
-                    block.position = apply_position_offset(raw_block.position, off);
-                }
-                if (block.screen_ref && !screen_ref_warned) {
-                    logs.log(LogLevel::warning,
-                             "saf-vbap",
-                             "screenRef requires referenceScreen geometry; rendering block as screenRef=false");
-                    screen_ref_warned = true;
-                }
-                block = apply_channel_lock(block, object_speakers);
-                auto gains = calculate_vbap_gains(block, layout);
-                if (!gains) {
-                    return make_error(
-                        gains.error().code, gains.error().message, fmt::format("track_uid={}", track.track_uid));
+                const auto prepared = render_common::prepare_object_block(
+                    raw_block, obj, object_speakers, logs, "saf-vbap", screen_ref_warned);
+                std::vector<float> gains(num_out, 0.0F);
+                for (const auto& source : prepared.sources) {
+                    auto source_gains = calculate_one_vbap_gains(source, layout);
+                    if (!source_gains) {
+                        return make_error(source_gains.error().code,
+                                          source_gains.error().message,
+                                          fmt::format("track_uid={}", track.track_uid));
+                    }
+                    for (std::size_t i = 0; i < gains.size(); ++i) {
+                        gains[i] += (*source_gains)[i];
+                    }
                 }
                 if (obj.gain != 1.0F) {
-                    std::ranges::transform(*gains, gains->begin(), [g = obj.gain](float v) { return v * g; });
+                    std::ranges::transform(gains, gains.begin(), [g = obj.gain](float v) { return v * g; });
                 }
-                cg.blocks.push_back({std::move(*gains),
-                                     raw_block.start_sample,
-                                     std::min(raw_block.end_sample, obj.end_sample),
-                                     raw_block.jump_position,
-                                     raw_block.interp_length_samples});
+                cg.blocks.push_back({std::move(gains),
+                                     prepared.start_sample,
+                                     prepared.end_sample,
+                                     prepared.jump_position,
+                                     prepared.interp_length_samples});
             }
 
             // DirectSpeakers blocks → label match, then nearest-speaker fallback.
@@ -477,33 +461,6 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, std::string_v
     return result;
 }
 
-[[nodiscard]] uint64_t block_active_length(const ChannelGainInfo& channel, std::size_t block_index) {
-    const auto& block = channel.blocks[block_index];
-    uint64_t active_end = block.end_sample;
-    if (block_index + 1 < channel.blocks.size()) {
-        active_end = std::min(active_end, channel.blocks[block_index + 1].start_sample);
-    }
-    if (active_end <= block.start_sample) {
-        return 0;
-    }
-    return active_end - block.start_sample;
-}
-
-[[nodiscard]] uint64_t
-interpolation_length(const ChannelGainInfo& channel, std::size_t block_index, uint64_t default_interp) {
-    const auto& block = channel.blocks[block_index];
-    if (block.jump_position || block_index == 0) {
-        return 0;
-    }
-    return std::min(block.interp_length_samples.value_or(default_interp), block_active_length(channel, block_index));
-}
-
-[[nodiscard]] float interpolated_gain(
-    const BlockGains& previous, const BlockGains& current, std::size_t out_ch, uint64_t delta, uint64_t interp_len) {
-    const float alpha = static_cast<float>(delta) / static_cast<float>(interp_len);
-    return (previous.gains[out_ch] * (1.0F - alpha)) + (current.gains[out_ch] * alpha);
-}
-
 void accumulate_channel_block(const ChannelGainInfo& channel,
                               std::size_t& block_index,
                               const AccumulateContext& ctx,
@@ -519,14 +476,15 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
     }
 
     const float in_sample = ctx.input[(frame * ctx.num_in_ch) + channel.input_channel];
-    const uint64_t interp_len = interpolation_length(channel, block_index, ctx.default_interp);
+    const uint64_t interp_len = render_common::interpolation_length(channel, block_index, ctx.default_interp);
     const uint64_t delta = abs_frame - block.start_sample;
     const bool ramping = interp_len > 0 && delta < interp_len;
 
     for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
         float gain = block.gains[out_ch];
         if (ramping) {
-            gain = interpolated_gain(channel.blocks[block_index - 1], block, out_ch, delta, interp_len);
+            gain = render_common::interpolated_scalar(
+                channel.blocks[block_index - 1].gains[out_ch], block.gains[out_ch], delta, interp_len);
         }
         (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += in_sample * gain;
     }
