@@ -253,7 +253,10 @@ Objects / DirectSpeakers → 位置解析 → SAF 内置 KEMAR HRTF（836 方向
 
 手动验证（2026-05-23，`afinfo`）显示：PCM CAF 可读为 `Channel layout: Binaural`；
 APAC `.m4a/mp4f` 以及 APAC-in-CAF 即使请求 `Binaural`，最终仍报告为 `Stereo (L R)`。
-因此 APAC 目前只能保留 2ch 音频本体，不能作为可靠的 binaural layout carrier。
+因此 APAC 目前不能作为可靠的 binaural layout carrier。项目会保留 2ch 音频本体，
+并在 `.m4a/.mp4` 的 iTunes-style comment metadata（`©cmt`）中写入
+`layout=binaural`，供自家工具和诊断流程恢复语义；播放器仍可能只按普通 stereo
+显示或播放。
 
 仍待实现：
 

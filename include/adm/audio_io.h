@@ -276,6 +276,9 @@ struct MetadataFields {
 //           keys.  Comments encodes renderer, layout, loudness, peak.
 //   FLAC — inserts a Vorbis Comment block (ENCODER, DATE, COMMENT tags) and, for
 //           recognised layouts, a WAVEFORMATEXTENSIBLE_CHANNEL_MASK tag.
+//   M4A/MP4 — inserts iTunes-style metadata atoms (©too, ©day, ©cmt). Layout
+//             semantics such as "binaural" are stored in comments because APAC
+//             does not reliably preserve non-stereo CoreAudio layout tags.
 //   Other extensions — silently ignored (not an error).
 // Failure is non-fatal; callers should log a warning and continue.
 Result<void> write_file_metadata(const std::string& path, const MetadataFields& meta);
