@@ -42,6 +42,21 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
           vcpkg install boost-headers openblas --triplet x64-windows
 
+      - name: Locate MSVC environment
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ([string]::IsNullOrWhiteSpace($installPath)) {
+            throw "Visual Studio with VC tools was not found"
+          }
+          $vcvars = Join-Path $installPath "VC\Auxiliary\Build\vcvars64.bat"
+          if (!(Test-Path $vcvars)) {
+            throw "vcvars64.bat not found at $vcvars"
+          }
+          "VCVARS64=$vcvars" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Using MSVC environment: $vcvars"
+
       - name: Locate OpenBLAS for SAF
         shell: pwsh
         run: |
@@ -60,23 +75,29 @@ jobs:
           Write-Host "Using OpenBLAS include: $include"
 
       - name: Configure
-        shell: pwsh
+        shell: cmd
         run: |
-          cmake -S . -B build/windows -G Ninja `
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
-            -DFETCHCONTENT_BASE_DIR="$env:FC_CACHE_DIR" `
-            -DMR_ADM_CORE_BUILD_TESTS=OFF `
-            -DMR_ADM_FLAC_PROVIDER=VENDORED `
-            -DMR_ADM_OPUS_PROVIDER=VENDORED `
-            -DSAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE `
-            -DOPENBLAS_LIBRARY="$env:OPENBLAS_LIBRARY" `
-            -DLAPACKE_LIBRARY="$env:LAPACKE_LIBRARY" `
-            -DOPENBLAS_HEADER_PATH="$env:OPENBLAS_HEADER_PATH" `
-            -DLAPACKE_HEADER_PATH="$env:LAPACKE_HEADER_PATH"
+          call "%VCVARS64%"
+          cmake -S . -B build/windows -G Ninja ^
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
+            -DCMAKE_C_COMPILER=cl ^
+            -DCMAKE_CXX_COMPILER=cl ^
+            -DCMAKE_TOOLCHAIN_FILE="%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
+            -DFETCHCONTENT_BASE_DIR="%FC_CACHE_DIR%" ^
+            -DMR_ADM_CORE_BUILD_TESTS=OFF ^
+            -DMR_ADM_FLAC_PROVIDER=VENDORED ^
+            -DMR_ADM_OPUS_PROVIDER=VENDORED ^
+            -DSAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE ^
+            -DOPENBLAS_LIBRARY="%OPENBLAS_LIBRARY%" ^
+            -DLAPACKE_LIBRARY="%LAPACKE_LIBRARY%" ^
+            -DOPENBLAS_HEADER_PATH="%OPENBLAS_HEADER_PATH%" ^
+            -DLAPACKE_HEADER_PATH="%LAPACKE_HEADER_PATH%"
 
       - name: Build CLI
-        run: cmake --build build/windows --target mradm_exe --config RelWithDebInfo
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          cmake --build build/windows --target mradm_exe --config RelWithDebInfo
 
       - name: Smoke
         shell: pwsh
