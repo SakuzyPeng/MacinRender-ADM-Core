@@ -2202,11 +2202,14 @@ Result<void> convert_to_apac(const std::string& src_path,
         al = ApacLayout{kAudioChannelLayoutTag_MPEG_2_0, false, 2U};
     } else if (layout_id == "wav71") {
         al = ApacLayout{kAudioChannelLayoutTag_AudioUnit_7_1, true, 8U};
-    } else if (layout_id == "4+5+0" || layout_id == "atmos714") {
-        al = ApacLayout{kAudioChannelLayoutTag_Atmos_7_1_4, false, 12U};
-    } else if (layout_id == "4+7+0" || layout_id == "atmos916") {
-        // kAudioChannelLayoutTag_Atmos_9_1_6 = (193<<16)|16; may not be in SDK headers yet.
+    } else if (layout_id == "4+5+0" || layout_id == "5.1.4" || layout_id == "atmos514") {
+        al = ApacLayout{static_cast<AudioChannelLayoutTag>((195U << 16U) | 10U), false, 10U};
+    } else if (layout_id == "4+7+0" || layout_id == "7.1.4" || layout_id == "atmos714") {
+        al = ApacLayout{static_cast<AudioChannelLayoutTag>((192U << 16U) | 12U), false, 12U};
+    } else if (layout_id == "9.1.6" || layout_id == "atmos916") {
         al = ApacLayout{static_cast<AudioChannelLayoutTag>((193U << 16U) | 16U), false, 16U};
+    } else if (layout_id == "9+10+3" || layout_id == "22.2" || layout_id == "cicp13") {
+        al = ApacLayout{static_cast<AudioChannelLayoutTag>((204U << 16U) | 24U), false, 24U};
     } else {
         return make_error(ErrorCode::unsupported, fmt::format("APAC: unsupported layout '{}'", layout_id), {});
     }

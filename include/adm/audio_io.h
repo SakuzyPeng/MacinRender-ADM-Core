@@ -54,7 +54,7 @@ class FloatWavReader {
 // Streaming writer for CAF (Core Audio Format) files with IEEE float32 samples
 // and an Apple AudioChannelLayoutTag encoded in the 'chan' chunk.
 // layout_id must be one of the supported output layout identifiers:
-//   "0+2+0", "binaural", "0+5+0", "wav71", "4+5+0", "4+7+0", "9.1.6", "9+10+3"
+//   "0+2+0", "binaural", "0+5+0", "wav71", "5.1.4", "7.1.4", "9.1.6", "22.2"
 // PCM samples are stored as little-endian float32 with the matching layout tag so
 // that afinfo, QuickTime, and CoreAudio consumers can read the channel assignment.
 class FloatCafWriter {
@@ -246,8 +246,10 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
 //   "binaural" → request Binaural 2ch input layout (no swap; afinfo reports APAC output as Stereo)
 //   "0+2+0"    → MPEG_2_0 stereo (no swap)
 //   "wav71"    → AudioUnit_7_1  (ch4↔ch6, ch5↔ch7 swap applied before encoding)
-//   "4+5+0"    → Atmos_7_1_4   (no swap)
-//   "4+7+0"    → Atmos_9_1_6   (no swap)
+//   "5.1.4"    → Atmos_5_1_4   (no swap)
+//   "7.1.4"    → Atmos_7_1_4   (no swap)
+//   "9.1.6"    → Atmos_9_1_6   (no swap)
+//   "22.2"     → CICP_13       (no swap)
 // bitrate_kbps: total VBR target/hint in kbps; 0 = encoder default. The APAC
 // encoder may produce a measured average bitrate that differs substantially.
 // drc_music: true = Music DRC (cdrc=1), false = None (cdrc=0).

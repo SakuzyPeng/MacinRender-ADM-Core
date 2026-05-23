@@ -221,6 +221,24 @@ bool verify_apac_wav71_swap() {
     return true;
 }
 
+bool verify_apac_atmos514() {
+    const std::string wav = "/tmp/mr_apac_atmos514_src.wav";
+    const std::string m4a = "/tmp/mr_apac_atmos514.m4a";
+    FileGuard gw(wav);
+    FileGuard gm(m4a);
+    if (!write_test_wav(wav, 10, 48000, 48000)) {
+        return false;
+    }
+    auto res = mradm::audio::convert_to_apac(wav, m4a, "5.1.4");
+    if (!check(res.has_value(), "convert_to_apac(5.1.4) failed")) {
+        return false;
+    }
+    if (!check(std::filesystem::exists(m4a), "atmos514 .m4a not created")) {
+        return false;
+    }
+    return check(std::filesystem::file_size(m4a) > 10000U, "atmos514 .m4a suspiciously small");
+}
+
 bool verify_apac_atmos714() {
     const std::string wav = "/tmp/mr_apac_atmos714_src.wav";
     const std::string m4a = "/tmp/mr_apac_atmos714.m4a";
@@ -229,8 +247,8 @@ bool verify_apac_atmos714() {
     if (!write_test_wav(wav, 12, 48000, 48000)) {
         return false;
     }
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "4+5+0");
-    if (!check(res.has_value(), "convert_to_apac(4+5+0) failed")) {
+    auto res = mradm::audio::convert_to_apac(wav, m4a, "7.1.4");
+    if (!check(res.has_value(), "convert_to_apac(7.1.4) failed")) {
         return false;
     }
     if (!check(std::filesystem::exists(m4a), "atmos714 .m4a not created")) {
@@ -247,14 +265,32 @@ bool verify_apac_atmos916() {
     if (!write_test_wav(wav, 16, 48000, 48000)) {
         return false;
     }
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "4+7+0");
-    if (!check(res.has_value(), "convert_to_apac(4+7+0) failed")) {
+    auto res = mradm::audio::convert_to_apac(wav, m4a, "9.1.6");
+    if (!check(res.has_value(), "convert_to_apac(9.1.6) failed")) {
         return false;
     }
     if (!check(std::filesystem::exists(m4a), "atmos916 .m4a not created")) {
         return false;
     }
     return check(std::filesystem::file_size(m4a) > 10000U, "atmos916 .m4a suspiciously small");
+}
+
+bool verify_apac_222() {
+    const std::string wav = "/tmp/mr_apac_222_src.wav";
+    const std::string m4a = "/tmp/mr_apac_222.m4a";
+    FileGuard gw(wav);
+    FileGuard gm(m4a);
+    if (!write_test_wav(wav, 24, 48000, 48000)) {
+        return false;
+    }
+    auto res = mradm::audio::convert_to_apac(wav, m4a, "22.2");
+    if (!check(res.has_value(), "convert_to_apac(22.2) failed")) {
+        return false;
+    }
+    if (!check(std::filesystem::exists(m4a), "22.2 .m4a not created")) {
+        return false;
+    }
+    return check(std::filesystem::file_size(m4a) > 10000U, "22.2 .m4a suspiciously small");
 }
 
 bool verify_apac_binaural() {
@@ -344,8 +380,10 @@ int main() {
 #else
     bool ok = true;
     ok &= verify_apac_wav71_swap();
+    ok &= verify_apac_atmos514();
     ok &= verify_apac_atmos714();
     ok &= verify_apac_atmos916();
+    ok &= verify_apac_222();
     ok &= verify_apac_binaural();
     ok &= verify_apac_wrong_layout_rejected();
     ok &= verify_apac_wrong_samplerate_rejected();
@@ -353,7 +391,7 @@ int main() {
     if (!ok) {
         return EXIT_FAILURE;
     }
-    std::cout << "APAC smoke tests passed (7/7)\n";
+    std::cout << "APAC smoke tests passed (9/9)\n";
     return EXIT_SUCCESS;
 #endif
 }

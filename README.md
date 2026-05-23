@@ -1,103 +1,187 @@
 # MacinRender ADM Core
 
-MacinRender ADM Core 是 MacinRender 的跨平台 ADM（Audio Definition Model，音频定义模型）渲染核心。它从一开始就按 C++20、CMake、C ABI（Application Binary Interface，应用二进制接口）和可替换渲染后端来组织，目标是逐步接入 `libbw64`、`libadm`、`libear` 和 Spatial Audio Framework（空间音频框架，简称 SAF）。
+跨平台 ADM（Audio Definition Model，ITU-R BS.2076）空间音频渲染引擎，C++20 实现，提供 CLI 工具和 C ABI 库。
 
-这个仓库不是旧 macOS CLI 的逐行翻译，而是新的平台地基。旧 `MacinRender-ADM-Tool` 仓库仍可作为 macOS 工具、GUI（图形用户界面）、历史实现和 golden fixtures（黄金样本）参考。
+## 功能
 
-## 当前状态
+### 渲染后端
 
-当前仓库处于 M1 skeleton（骨架）阶段：
+| 后端 | 选项 | 输入类型 | 输出 |
+|---|---|---|---|
+| libear | `--renderer auto` / `ear` | Objects · DirectSpeakers · HOA | 多声道扬声器 |
+| SAF VBAP | `--renderer saf` | Objects · DirectSpeakers | 多声道扬声器 |
+| HOA 编码 | `--renderer hoa` | Objects | HOA3 16ch（ACN/SN3D） |
+| HRTF 双耳 | `--renderer binaural` | Objects · DirectSpeakers | 2ch 双耳 |
 
-- C++20 core library：`mr_adm_core`
-- 稳定 C ABI 占位层：`mr_adm_c_api`
-- CLI11 + fmt + spdlog 驱动的最小 CLI：`adm`
-- 最小单元测试：`mr_adm_core_unit_tests`
-- 架构规划和 ADR（Architecture Decision Record，架构决策记录）
+### 输出布局
 
-渲染尚未实现。下一步目标是 ADM BWF probe（探测）和 scene dump（场景摘要导出）。
+| 常用名称 / CLI 值 | 声道数 | 支持 EAR | 支持 VBAP |
+|---|---|---|---|---|
+| `stereo` | 2 | ✅ | ✅ |
+| `5.1` | 6 | ✅ | ✅ |
+| `5.1.2` | 8 | ✅ | — |
+| `7.1` | 8 | ✅ | ✅ |
+| `5.1.4` | 10 | ✅ | ✅ |
+| `9.1.4` | 14 | ✅ | — |
+| `7.1.4` | 12 | ✅ | ✅ |
+| `9.1.6` (Dolby Atmos) | 16 | — | ✅ |
+| `22.2` | 24 | ✅ | ✅ |
+| `hoa3` | 16 | — | — |
+
+README 优先使用 5.1.4 / 7.1.4 这类常见布局名称。旧的 BS.2051 风格布局 ID 仍兼容，但不建议新命令继续使用。binaural 后端固定输出 2ch，忽略 `--output-layout`。
+
+### 输出格式
+
+| 格式 | 扩展名 | 位深 | 平台 |
+|---|---|---|---|
+| WAV | `.wav` | float32 / 24-bit / 16-bit | 全平台 |
+| CAF | `.caf` | float32 | 全平台 |
+| FLAC | `.flac` | 24-bit integer | 全平台 |
+| Opus MKA | `.mka` | VBR 有损 | 全平台 |
+| APAC | `.m4a` | VBR 有损 | macOS only |
 
 ## 构建
 
 ```bash
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
+cmake --build build/release
 ```
 
-运行 CLI：
-
-```bash
-./build/adm --version
-./build/adm render -i input.wav -o output.wav --renderer auto --output-layout 0+2+0
-```
-
-第一次配置时，CMake 会优先查找系统安装的 CLI11、fmt、spdlog；找不到时默认通过 `FetchContent` 拉取固定版本。可通过以下选项关闭自动拉取：
+首次配置时 CMake 自动通过 `FetchContent` 拉取所有依赖，无需手动安装。可关闭：
 
 ```bash
 cmake -S . -B build -DMR_ADM_CORE_FETCH_DEPS=OFF
 ```
 
-FLAC 输出依赖 libFLAC，默认使用三档策略：
-
-- `MR_ADM_FLAC_PROVIDER=AUTO`：默认值；首次配置为 Release / RelWithDebInfo / MinSizeRel 或多配置生成器时走 vendored static libFLAC，Debug / 未指定构建类型优先用系统 libFLAC，找不到再 FetchContent。
-- `MR_ADM_FLAC_PROVIDER=VENDORED`：强制 FetchContent 拉取并静态链接 libFLAC，适合正式分发。
-- `MR_ADM_FLAC_PROVIDER=SYSTEM` 或 `MR_ADM_USE_SYSTEM_FLAC=ON`：强制使用系统 libFLAC，适合 Homebrew、vcpkg、Linux 发行版打包。
-
-当前 FLAC 写出固定为 24-bit integer FLAC。16-bit FLAC 属于后续可选 CLI 能力，不阻塞首发；需要保留 float/headroom 时应优先使用 WAV/CAF float 输出。
-
-Opus MKA 输出依赖 libopus，采用与 libFLAC 相同的三档策略：
-
-- `MR_ADM_OPUS_PROVIDER=AUTO`：默认值；首次配置为 Release / RelWithDebInfo / MinSizeRel 或多配置生成器时走 vendored static libopus，Debug / 未指定构建类型优先用系统 libopus，找不到再 FetchContent。
-- `MR_ADM_OPUS_PROVIDER=VENDORED`：强制 FetchContent 拉取并静态链接 libopus，适合正式分发。
-- `MR_ADM_OPUS_PROVIDER=SYSTEM` 或 `MR_ADM_USE_SYSTEM_OPUS=ON`：强制使用系统 libopus，适合 Homebrew、vcpkg、Linux 发行版打包。
-
-Opus MKA 当前只接受 48 kHz 输入。9 声道及以上使用 Opus mapping family 255，即透明多流编码；标准扬声器布局语义通过容器 metadata 记录，不应假设播放器能自动识别 22.2、9.1.6 等布局。
-
-可选启用 Cppcheck：
+**预设（推荐）：**
 
 ```bash
-cmake --preset quality
-cmake --build --preset quality
+cmake --preset debug    # 含 debug symbols
+cmake --build --preset debug
 ```
 
-独立运行质量工具：
+需要在构建期启用 clang-tidy / Cppcheck 时使用 `quality` preset。
+
+**测试：**
 
 ```bash
-scripts/quality/format.sh --check
-scripts/quality/clang-tidy.sh build/debug
-scripts/quality/cppcheck.sh build/debug
+ctest --test-dir build/debug --output-on-failure
 ```
 
-## 目录
+**质量检查：**
 
-```text
-include/adm/      公共 C++ API 和 C ABI 头文件
-src/adm_core/     跨平台核心实现
-src/adm_c_api/    C ABI 包装层
-src/adm_cli/      CLI11/fmt/spdlog 命令行入口
-tests/unit/       最小单元测试
-cmake/            CMake 辅助模块
-docs/architecture 架构规划
-docs/adr/         架构决策记录
+```bash
+./scripts/quality/check-changed.sh          # 仅检查 git 变更文件
+./scripts/quality/format.sh --check         # clang-format
+./scripts/quality/clang-tidy.sh build/debug
+./scripts/quality/cppcheck.sh build/debug
 ```
 
-## 设计原则
+### FLAC 提供方
 
-- core 不依赖 Apple 平台框架。
-- CLI 不直接调用 `libadm`、`libbw64`、`libear` 或 SAF。
-- 第三方库类型不进入公共 API。
-- C ABI 保持窄接口，为未来 GUI、Rust CLI 和脚本绑定预留。
-- C++20 采用保守写法，优先清晰、直接、可调试。
-- Rust 作为后续可渐进引入方向，而不是第一阶段主语言。
+| CMake 选项 | 说明 |
+|---|---|
+| `MR_ADM_FLAC_PROVIDER=AUTO`（默认）| Release 用 vendored 静态链接；Debug 优先系统 libFLAC |
+| `MR_ADM_FLAC_PROVIDER=VENDORED` | 强制 FetchContent 静态链接，适合分发 |
+| `MR_ADM_FLAC_PROVIDER=SYSTEM` | 强制使用系统 libFLAC（Homebrew / vcpkg / Linux 发行版） |
 
-## 文档
+### Opus 提供方
 
-- [C++ ADM 渲染平台化重构规划](docs/architecture/CPP_ADM_PLATFORM_REWRITE.md)
-- [ADR 0001：新 C++ 核心采用 C++20](docs/adr/0001-cpp-standard.md)
-- [ADR 0002：先建立 C++ 地基，后续渐进引入 Rust](docs/adr/0002-cpp-first-rust-later.md)
-- [ADR 0003：自有 ADM 领域模型与后端边界](docs/adr/0003-owned-domain-model-and-backend-boundaries.md)
-- [质量工具配置](docs/guides/QUALITY.md)
+与 FLAC 相同的三档策略，对应选项为 `MR_ADM_OPUS_PROVIDER`。
+
+### SOFA 支持
+
+```bash
+cmake -S . -B build -DMR_ADM_ENABLE_SOFA=ON
+```
+
+启用后可通过 `--sofa` 加载用户 FIR SOFA HRIR 文件替换内置 KEMAR HRTF。当前限制：SimpleFreeFieldHRIR / GeneralFIR 格式，2 receivers，48 kHz，不支持重采样。
+
+## 使用
+
+```bash
+# 自动选择后端，Stereo 输出
+./build/release/adm render -i input.wav -o output.wav
+
+# EAR 后端，7.1.4 扬声器布局，FLAC 输出
+./build/release/adm render -i input.wav -o output.flac --renderer ear --output-layout 7.1.4
+
+# SAF VBAP，9.1.6，响度归一化到 -23 LUFS
+./build/release/adm render -i input.wav -o output.wav \
+    --renderer saf --output-layout 9.1.6 --loudness-target -23
+
+# HRTF 双耳渲染，内置 KEMAR HRTF
+./build/release/adm render -i input.wav -o output.wav --renderer binaural
+
+# HRTF 双耳渲染，用户 SOFA 文件
+./build/release/adm render -i input.wav -o output.wav --renderer binaural --sofa my.sofa
+
+# Opus MKA，7.1.4，64 kbps/ch
+./build/release/adm render -i input.wav -o output.mka \
+    --renderer ear --output-layout 7.1.4 --opus-bitrate-per-ch 64
+
+# APAC（macOS only），支持 Stereo / 7.1 / 5.1.4 / 7.1.4 / 9.1.6 / 22.2
+./build/release/adm render -i input.wav -o output.m4a \
+    --renderer ear --output-layout stereo
+
+# 查看 ADM 场景元数据
+./build/release/adm inspect input.wav
+
+# 列出所有可用后端和布局
+./build/release/adm backends
+```
+
+### 常用渲染选项
+
+| 选项 | 说明 | 默认值 |
+|---|---|---|
+| `--output-bit-depth f32\|i24\|i16` | WAV 输出位深（CAF 固定 float32；FLAC 固定 24-bit） | `f32` |
+| `--loudness-target <LUFS>` | 响度归一化目标（启用测量） | 关闭 |
+| `--peak-limit-dbtp <dBTP>` | True Peak 限制目标 | `-1.0` |
+| `--no-peak-limit` | 关闭 True Peak 限制 | — |
+| `--interp-ms <ms>` | ADM 块无 jumpPosition 时的增益插值斜坡 | `5` |
+| `--opus-bitrate-per-ch <kbps>` | Opus VBR 目标比特率 / 声道 | 自动（64 kbps/ch） |
+| `--apac-bitrate <kbps>` | APAC 总目标比特率提示 | 编码器默认 |
+| `--apac-drc-music\|--apac-drc-none` | APAC DRC 配置 | `music` |
+| `--sofa <path>` | binaural 用户 SOFA HRIR 文件 | 内置 KEMAR |
+
+## 架构
+
+```
+include/adm/        公共 C++ API 和 C ABI 头文件
+src/adm_core/       核心领域模型、scene 结构和公共基础
+src/adm_io/         ADM/BW64 scene importer
+src/adm_audio/      音频 I/O（WAV/CAF/FLAC/Opus/APAC）
+src/adm_engine/     渲染编排（RenderService）
+src/adm_render_ear/         libear 后端
+src/adm_render_vbap/        SAF VBAP 后端
+src/adm_render_hoa/         HOA 编码后端
+src/adm_render_binaural/    HRTF 双耳后端
+src/adm_c_api/      C ABI 包装层
+src/adm_cli/        CLI 入口（CLI11 + fmt）
+tests/unit/         单元与 smoke 测试
+cmake/              CMake 辅助模块
+docs/adr/           架构决策记录
+docs/architecture/  特性覆盖审计和设计规划
+```
+
+**核心设计原则：**
+
+- `adm_core` 不依赖任何平台框架（可在 Linux / Windows / macOS 编译）
+- 第三方库类型不进入公共 API
+- C ABI 保持窄接口，为 GUI、Rust CLI 和脚本绑定预留
+- 渲染后端可替换，通过 `IRenderer` 接口注册
+
+## binaural 后端
+
+使用 SAF 内置 Genelec KEMAR HRTF（836 方向，256 tap，48 kHz）。渲染流程：Objects 块逐帧解析方位角/仰角 → VBAP 权重插值 HRTF → OLA FFT 卷积 → 2ch 累加输出。DirectSpeakers 通过 BS.2051 扬声器标签查表定位。
+
+输出文件使用 CoreAudio `Binaural` layout tag（PCM CAF），与普通扬声器立体声（`MPEG_2_0`）区分。APAC `.m4a` 编码器不可靠地保留该 tag，binaural 语义通过 `©cmt` metadata 保留。
 
 ## 许可证
 
-许可证待定。引入第三方音频库前，需要先记录依赖许可证和链接边界。
+许可证待定。引入第三方音频库前，需先记录依赖许可证和链接边界。
+
+---
+
+*更多信息：[特性覆盖审计](docs/architecture/ADM_FEATURE_COVERAGE.md) · [架构决策记录](docs/adr/) · [质量工具配置](docs/guides/QUALITY.md)*
