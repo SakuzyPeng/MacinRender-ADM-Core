@@ -546,6 +546,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 - `MR_ADM_CORE_FETCH_DEPS=OFF` 必须保持可用，支持 Linux 发行版打包与离线构建。
 - `libFLAC` 采用三档策略：开发构建可优先系统库，正式分发默认 vendored static，包管理器可通过 `MR_ADM_FLAC_PROVIDER=SYSTEM` 或 `MR_ADM_USE_SYSTEM_FLAC=ON` 强制系统库。
 - `libopus` 采用同样的三档策略：开发构建可优先系统库，正式分发默认 vendored static，包管理器可通过 `MR_ADM_OPUS_PROVIDER=SYSTEM` 或 `MR_ADM_USE_SYSTEM_OPUS=ON` 强制系统库。
+- ALAC 暂不进入首个全平台核心格式集合。若实现，短期可用 AudioToolbox 作为 macOS-only 快路径；全平台路线需另行评估 FFmpeg/libavformat provider 或 vendored Apple ALAC encoder + MP4 muxer，避免把 MP4 容器复杂度过早拉进核心。
 - 详细记录：`docs/adr/0004-third-party-dependency-management.md`。
 
 ### 13.5 错误处理模型
