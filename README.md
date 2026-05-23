@@ -27,8 +27,6 @@
 | `22.2` | 24 | ✅ | ✅ |
 | `hoa3` | 16 | — | — |
 
-README 优先使用 5.1.4 / 7.1.4 这类常见布局名称。旧的 BS.2051 风格布局 ID 仍兼容，但不建议新命令继续使用。普通扬声器 stereo 渲染已禁用；2ch ADM 输出只走 `binaural`，避免把不可听的 speaker-stereo 投影误认为双耳或正式下混。
-
 ### 最终声道顺序
 
 声道语义必须和最终输出格式一起看；同一个 `--output-layout` 在不同容器里可能有不同的实际顺序。完整表可用 `adm layouts --format <wav|caf|flac|apac>` 查询。
@@ -48,13 +46,15 @@ APAC 7.1 在编码前会把内部 `wav71` 顺序重排为 CoreAudio `AudioUnit_7
 
 ### 输出格式
 
-| 格式 | 扩展名 | 位深 | 平台 |
+| 格式 | 扩展名 | 位深 | 编码支持 |
 |---|---|---|---|
 | WAV | `.wav` | float32 / 24-bit / 16-bit | 全平台 |
 | CAF | `.caf` | float32 | 全平台 |
 | FLAC | `.flac` | 24-bit integer | 全平台 |
 | Opus MKA | `.mka` | VBR 有损 | 全平台 |
 | APAC | `.m4a` | VBR 有损 | macOS only |
+
+“编码支持”只表示本项目可在对应平台写出该格式，不代表目标系统或播放器一定能原生识别布局或直接回放。
 
 ## 构建
 
@@ -184,13 +184,6 @@ cmake/              CMake 辅助模块
 docs/adr/           架构决策记录
 docs/architecture/  特性覆盖审计和设计规划
 ```
-
-**核心设计原则：**
-
-- `adm_core` 不依赖任何平台框架（可在 Linux / Windows / macOS 编译）
-- 第三方库类型不进入公共 API
-- C ABI 保持窄接口，为 GUI、Rust CLI 和脚本绑定预留
-- 渲染后端可替换，通过 `IRenderer` 接口注册
 
 ## binaural 后端
 
