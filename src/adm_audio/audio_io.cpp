@@ -2042,56 +2042,60 @@ Result<void> convert_to_apac(const std::string& src_path,
     AudioConverterRef conv = nullptr;
     UInt32 conv_sz = sizeof(AudioConverterRef);
     // NOLINTNEXTLINE(bugprone-multi-level-implicit-pointer-conversion)
-    ExtAudioFileGetProperty(ext_file, kExtAudioFileProperty_AudioConverter, &conv_sz, &conv);
-    if (conv != nullptr) {
-        if (bitrate_kbps > 0U) {
-            UInt32 br = bitrate_kbps * 1000U * channels;
-            err = AudioConverterSetProperty(conv, kAudioConverterEncodeBitRate, sizeof(br), &br);
-            if (err != noErr) {
-                ExtAudioFileDispose(ext_file);
-                return make_error(ErrorCode::io_error,
-                                  fmt::format("APAC: EncodeBitRate failed ({})", static_cast<int>(err)),
-                                  "path=" + apac_path);
-            }
-        }
-        constexpr uint32_t k_csrc_val = 7U;
-        constexpr uint32_t k_aspf_val = 75U;
-        const uint32_t cdrc_val = drc_music ? 1U : 0U;
-        err = AudioConverterSetProperty(conv, k_apac_csrc, sizeof(k_csrc_val), &k_csrc_val);
+    err = ExtAudioFileGetProperty(ext_file, kExtAudioFileProperty_AudioConverter, &conv_sz, &conv);
+    if (err != noErr || conv == nullptr) {
+        ExtAudioFileDispose(ext_file);
+        return make_error(ErrorCode::io_error,
+                          fmt::format("APAC: AudioConverter lookup failed ({})", static_cast<int>(err)),
+                          "path=" + apac_path);
+    }
+    if (bitrate_kbps > 0U) {
+        UInt32 br = bitrate_kbps * 1000U;
+        err = AudioConverterSetProperty(conv, kAudioConverterEncodeBitRate, sizeof(br), &br);
         if (err != noErr) {
             ExtAudioFileDispose(ext_file);
             return make_error(ErrorCode::io_error,
-                              fmt::format("APAC: csrc property failed ({})", static_cast<int>(err)),
+                              fmt::format("APAC: EncodeBitRate failed ({})", static_cast<int>(err)),
                               "path=" + apac_path);
         }
-        err = AudioConverterSetProperty(conv, k_apac_cdrc, sizeof(cdrc_val), &cdrc_val);
-        if (err != noErr) {
-            ExtAudioFileDispose(ext_file);
-            return make_error(ErrorCode::io_error,
-                              fmt::format("APAC: cdrc property failed ({})", static_cast<int>(err)),
-                              "path=" + apac_path);
-        }
-        err = AudioConverterSetProperty(conv, k_apac_aspf, sizeof(k_aspf_val), &k_aspf_val);
-        if (err != noErr) {
-            ExtAudioFileDispose(ext_file);
-            return make_error(ErrorCode::io_error,
-                              fmt::format("APAC: aspf property failed ({})", static_cast<int>(err)),
-                              "path=" + apac_path);
-        }
-        CFArrayRef empty = CFArrayCreate(nullptr, nullptr, 0, nullptr);
-        if (empty == nullptr) {
-            ExtAudioFileDispose(ext_file);
-            return make_error(ErrorCode::io_error, "APAC: CFArrayCreate failed (OOM?)", "path=" + apac_path);
-        }
-        // NOLINTNEXTLINE(bugprone-sizeof-expression,bugprone-multi-level-implicit-pointer-conversion)
-        err = ExtAudioFileSetProperty(ext_file, kExtAudioFileProperty_ConverterConfig, sizeof(CFArrayRef), &empty);
-        CFRelease(empty);
-        if (err != noErr) {
-            ExtAudioFileDispose(ext_file);
-            return make_error(ErrorCode::io_error,
-                              fmt::format("APAC: ConverterConfig commit failed ({})", static_cast<int>(err)),
-                              "path=" + apac_path);
-        }
+    }
+    constexpr uint32_t k_csrc_val = 7U;
+    constexpr uint32_t k_aspf_val = 75U;
+    const uint32_t cdrc_val = drc_music ? 1U : 0U;
+    err = AudioConverterSetProperty(conv, k_apac_csrc, sizeof(k_csrc_val), &k_csrc_val);
+    if (err != noErr) {
+        ExtAudioFileDispose(ext_file);
+        return make_error(ErrorCode::io_error,
+                          fmt::format("APAC: csrc property failed ({})", static_cast<int>(err)),
+                          "path=" + apac_path);
+    }
+    err = AudioConverterSetProperty(conv, k_apac_cdrc, sizeof(cdrc_val), &cdrc_val);
+    if (err != noErr) {
+        ExtAudioFileDispose(ext_file);
+        return make_error(ErrorCode::io_error,
+                          fmt::format("APAC: cdrc property failed ({})", static_cast<int>(err)),
+                          "path=" + apac_path);
+    }
+    err = AudioConverterSetProperty(conv, k_apac_aspf, sizeof(k_aspf_val), &k_aspf_val);
+    if (err != noErr) {
+        ExtAudioFileDispose(ext_file);
+        return make_error(ErrorCode::io_error,
+                          fmt::format("APAC: aspf property failed ({})", static_cast<int>(err)),
+                          "path=" + apac_path);
+    }
+    CFArrayRef empty = CFArrayCreate(nullptr, nullptr, 0, nullptr);
+    if (empty == nullptr) {
+        ExtAudioFileDispose(ext_file);
+        return make_error(ErrorCode::io_error, "APAC: CFArrayCreate failed (OOM?)", "path=" + apac_path);
+    }
+    // NOLINTNEXTLINE(bugprone-sizeof-expression,bugprone-multi-level-implicit-pointer-conversion)
+    err = ExtAudioFileSetProperty(ext_file, kExtAudioFileProperty_ConverterConfig, sizeof(CFArrayRef), &empty);
+    CFRelease(empty);
+    if (err != noErr) {
+        ExtAudioFileDispose(ext_file);
+        return make_error(ErrorCode::io_error,
+                          fmt::format("APAC: ConverterConfig commit failed ({})", static_cast<int>(err)),
+                          "path=" + apac_path);
     }
 
     constexpr uint64_t k_block = 4096;

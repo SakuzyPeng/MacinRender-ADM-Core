@@ -341,8 +341,8 @@ CLI::App* add_render_command(CLI::App& app, RenderCliOptions& opts) {
     render_cmd
         ->add_option("--apac-bitrate",
                      opts.apac_bitrate,
-                     "APAC VBR target bitrate per channel in kbps (64-2000); "
-                     "omit for encoder default (~1 Mbps for 7.1 @ 48 kHz)")
+                     "APAC total VBR target/hint bitrate in kbps (64-2000); "
+                     "actual measured bitrate may differ substantially; omit for encoder default")
         ->check(CLI::Range(64U, 2000U));
     render_cmd->add_flag("--apac-drc-none{false},--apac-drc-music{true}",
                          opts.apac_drc_music,
