@@ -210,13 +210,34 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         message(STATUS "Using vendored static libFLAC")
         return()
     elseif(package_name STREQUAL "libbw64")
-        set(BW64_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+        set(EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(UNIT_TESTS OFF CACHE BOOL "" FORCE)
         FetchContent_Declare(
             libbw64
             GIT_REPOSITORY https://github.com/ebu/libbw64.git
             GIT_TAG 0.10.0
             GIT_SHALLOW TRUE
         )
+        FetchContent_GetProperties(libbw64)
+        if(NOT libbw64_POPULATED)
+            cmake_policy(PUSH)
+            if(POLICY CMP0169)
+                cmake_policy(SET CMP0169 OLD)
+            endif()
+            FetchContent_Populate(libbw64)
+            cmake_policy(POP)
+            set(_mr_libbw64_cmake "${libbw64_SOURCE_DIR}/src/CMakeLists.txt")
+            file(READ "${_mr_libbw64_cmake}" _mr_libbw64_src_cmake)
+            string(REPLACE "\${CMAKE_SOURCE_DIR}/config/libbw64Config.cmake.in"
+                           "\${PROJECT_SOURCE_DIR}/config/libbw64Config.cmake.in"
+                           _mr_libbw64_src_cmake "${_mr_libbw64_src_cmake}")
+            string(REPLACE "\${CMAKE_BINARY_DIR}/libbw64Config"
+                           "\${PROJECT_BINARY_DIR}/libbw64Config"
+                           _mr_libbw64_src_cmake "${_mr_libbw64_src_cmake}")
+            file(WRITE "${_mr_libbw64_cmake}" "${_mr_libbw64_src_cmake}")
+            add_subdirectory("${libbw64_SOURCE_DIR}" "${libbw64_BINARY_DIR}" EXCLUDE_FROM_ALL)
+        endif()
+        return()
     elseif(package_name STREQUAL "libadm")
         set(ADM_UNIT_TESTS OFF CACHE BOOL "" FORCE)
         set(ADM_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -338,6 +359,7 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         set(OPUS_BUILD_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
         set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
         set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+        set(OPUS_DISABLE_INTRINSICS ON CACHE BOOL "" FORCE)
         FetchContent_Declare(Opus
             GIT_REPOSITORY https://github.com/xiph/opus.git
             GIT_TAG v1.5.2 GIT_SHALLOW TRUE)
