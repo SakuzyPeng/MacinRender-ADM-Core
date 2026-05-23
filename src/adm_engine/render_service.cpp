@@ -155,8 +155,23 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         output_path = (dir / (stem + "_rendered.wav")).string();
     }
 
-    // Select backend.
-    const auto sel = request.options.renderer;
+    const auto requested_layout = normalize_output_layout(
+        request.options.output_layout.empty() ? std::string{"0+2+0"} : request.options.output_layout);
+    const bool requests_speaker_stereo = (requested_layout == "0+2+0");
+
+    // Select backend. Speaker stereo rendering is intentionally not exposed:
+    // the current 2ch speaker projection is not a downmix and can be badly
+    // misleading for ADM content. Automatic 2ch output therefore means binaural.
+    auto sel = request.options.renderer;
+    if (sel == RendererSelection::automatic && (requests_speaker_stereo || requested_layout == "binaural")) {
+        sel = RendererSelection::binaural;
+    }
+    if ((sel == RendererSelection::ear || sel == RendererSelection::saf) && requests_speaker_stereo) {
+        const auto msg =
+            std::string{"speaker stereo rendering is disabled; use --renderer binaural for 2ch ADM output"};
+        return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+    }
+
     std::unique_ptr<IRenderer> renderer;
     if (sel == RendererSelection::ear || sel == RendererSelection::automatic) {
         renderer = create_ear_renderer();
@@ -174,8 +189,6 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     const auto caps = renderer->capabilities();
     logs.log(LogLevel::info, "engine", fmt::format("backend: {} {}", caps.backend_name, caps.backend_version));
 
-    const auto requested_layout = normalize_output_layout(
-        request.options.output_layout.empty() ? std::string{"0+2+0"} : request.options.output_layout);
     auto output_layout = requested_layout;
     if (sel == RendererSelection::binaural) {
         if (requested_layout != "0+2+0" && requested_layout != "binaural") {

@@ -299,8 +299,13 @@ void print_capabilities(const mradm::CapabilityReport& caps) {
     fmt::print("  Objects:        {}\n", caps.supports_objects ? "yes" : "no");
     fmt::print("  DirectSpeakers: {}\n", caps.supports_direct_speakers ? "yes" : "no");
     fmt::print("  HOA:            {}\n", caps.supports_hoa ? "yes" : "no");
-    fmt::print("  Layouts ({}):\n", caps.supported_layouts.size());
+    const auto visible_layouts = std::ranges::count_if(
+        caps.supported_layouts, [](const auto& layout) { return layout.is_binaural || layout.channel_count != 2U; });
+    fmt::print("  Layouts ({}):\n", visible_layouts);
     for (const auto& layout : caps.supported_layouts) {
+        if (!layout.is_binaural && layout.channel_count == 2U) {
+            continue;
+        }
         std::string flags;
         if (layout.channel_count > 0) {
             flags += fmt::format("{}ch", layout.channel_count);
