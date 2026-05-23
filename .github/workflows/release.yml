@@ -94,6 +94,11 @@ jobs:
           --arch "${{ matrix.arch }}"
           --cmake-options "release; fmt/spdlog/CLI11 FetchContent; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED"
 
+      - name: Package smoke
+        run: |
+          archive="$(ls dist/mradm-*-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz)"
+          scripts/release/smoke-package.sh "$archive"
+
       - name: Upload release package
         uses: actions/upload-artifact@v7
         with:
