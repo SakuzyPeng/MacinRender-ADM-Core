@@ -59,11 +59,14 @@ jobs:
           vcpkg install `
             boost-format `
             boost-functional `
+            boost-algorithm `
             boost-integer `
             boost-iterator `
+            boost-math `
             boost-optional `
             boost-range `
             boost-rational `
+            boost-smart-ptr `
             boost-variant `
             --triplet x64-windows
 
