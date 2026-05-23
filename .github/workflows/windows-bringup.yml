@@ -21,6 +21,8 @@ jobs:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-bincache
       VCPKG_BINARY_SOURCES: clear;x-gha,readwrite;files,${{ github.workspace }}\.vcpkg-bincache,readwrite
       VCPKG_FEATURE_FLAGS: binarycaching
+      OPENBLAS_VERSION: 0.3.33
+      OPENBLAS_ROOT: ${{ github.workspace }}\.openblas
 
     steps:
       - name: Checkout
@@ -38,17 +40,41 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .vcpkg-bincache
-          key: vcpkg-windows-openblas-${{ runner.os }}-${{ hashFiles('.github/workflows/windows-bringup.yml') }}
+          key: vcpkg-windows-boost-${{ runner.os }}-${{ hashFiles('.github/workflows/windows-bringup.yml') }}
           restore-keys: |
-            vcpkg-windows-openblas-${{ runner.os }}-
-            vcpkg-windows-openblas-
+            vcpkg-windows-boost-${{ runner.os }}-
+            vcpkg-windows-boost-
+
+      - name: Restore OpenBLAS cache
+        uses: actions/cache@v5
+        with:
+          path: .openblas
+          key: openblas-windows-x64-${{ env.OPENBLAS_VERSION }}
 
       - name: Install native dependencies
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
           Write-Host "VCPKG_BINARY_SOURCES=$env:VCPKG_BINARY_SOURCES"
-          vcpkg install boost-headers openblas --triplet x64-windows
+          vcpkg install boost-headers --triplet x64-windows
+
+      - name: Install prebuilt OpenBLAS
+        shell: pwsh
+        run: |
+          $lib = Join-Path $env:OPENBLAS_ROOT "lib\libopenblas.lib"
+          if (!(Test-Path $lib)) {
+            New-Item -ItemType Directory -Force -Path "$env:OPENBLAS_ROOT" | Out-Null
+            $zip = Join-Path $env:RUNNER_TEMP "OpenBLAS-$env:OPENBLAS_VERSION-x64.zip"
+            $url = "https://github.com/OpenMathLib/OpenBLAS/releases/download/v$env:OPENBLAS_VERSION/OpenBLAS-$env:OPENBLAS_VERSION-x64.zip"
+            Invoke-WebRequest -Uri $url -OutFile $zip
+            Expand-Archive -Path $zip -DestinationPath "$env:OPENBLAS_ROOT" -Force
+          }
+          "OPENBLAS_LIBRARY=$lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "LAPACKE_LIBRARY=$lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "OPENBLAS_HEADER_PATH=$(Join-Path $env:OPENBLAS_ROOT 'include')" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "LAPACKE_HEADER_PATH=$(Join-Path $env:OPENBLAS_ROOT 'include')" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "$(Join-Path $env:OPENBLAS_ROOT 'bin')" | Out-File -FilePath $env:GITHUB_PATH -Append
+          Write-Host "Using prebuilt OpenBLAS: $lib"
 
       - name: Locate MSVC environment
         shell: pwsh
@@ -68,19 +94,13 @@ jobs:
       - name: Locate OpenBLAS for SAF
         shell: pwsh
         run: |
-          $prefix = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows"
-          $include = Join-Path $prefix "include"
-          $libDir = Join-Path $prefix "lib"
-          $openblas = Get-ChildItem $libDir -Filter "*openblas*.lib" | Select-Object -First 1
-          if ($null -eq $openblas) {
-            throw "openblas .lib not found in $libDir"
+          foreach ($path in @($env:OPENBLAS_LIBRARY, $env:OPENBLAS_HEADER_PATH)) {
+            if (!(Test-Path $path)) {
+              throw "OpenBLAS path not found: $path"
+            }
           }
-          "OPENBLAS_LIBRARY=$($openblas.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "LAPACKE_LIBRARY=$($openblas.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "OPENBLAS_HEADER_PATH=$include" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "LAPACKE_HEADER_PATH=$include" | Out-File -FilePath $env:GITHUB_ENV -Append
-          Write-Host "Using OpenBLAS library: $($openblas.FullName)"
-          Write-Host "Using OpenBLAS include: $include"
+          Write-Host "Using OpenBLAS library: $env:OPENBLAS_LIBRARY"
+          Write-Host "Using OpenBLAS include: $env:OPENBLAS_HEADER_PATH"
 
       - name: Configure
         shell: cmd
