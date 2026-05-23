@@ -20,12 +20,16 @@ jobs:
         include:
           - name: macOS release
             runner: macos-15
-            artifact: mradm-macos
+            artifact: mradm-macos-arm64
+            platform: macos
+            arch: arm64
             binary: build/release/mradm
             install: brew install cmake ninja boost ccache
           - name: Linux release
             runner: ubuntu-24.04
-            artifact: mradm-linux
+            artifact: mradm-linux-x86_64
+            platform: linux
+            arch: x86_64
             binary: build/release/mradm
             install: |
               sudo apt-get update
@@ -66,6 +70,9 @@ jobs:
         run: >
           cmake --preset release
           -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
+          -DCMAKE_DISABLE_FIND_PACKAGE_fmt=TRUE
+          -DCMAKE_DISABLE_FIND_PACKAGE_spdlog=TRUE
+          -DCMAKE_DISABLE_FIND_PACKAGE_CLI11=TRUE
           -DMR_ADM_FLAC_PROVIDER=VENDORED
           -DMR_ADM_OPUS_PROVIDER=VENDORED
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
@@ -79,11 +86,21 @@ jobs:
           "${{ matrix.binary }}" --version
           "${{ matrix.binary }}" backends
 
-      - name: Upload binary artifact
+      - name: Package
+        run: >
+          scripts/release/package.sh
+          --binary "${{ matrix.binary }}"
+          --platform "${{ matrix.platform }}"
+          --arch "${{ matrix.arch }}"
+          --cmake-options "release; fmt/spdlog/CLI11 FetchContent; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED"
+
+      - name: Upload release package
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.binary }}
+          path: |
+            dist/mradm-*-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
+            dist/mradm-*-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz.sha256
           if-no-files-found: error
 
       - name: ccache stats

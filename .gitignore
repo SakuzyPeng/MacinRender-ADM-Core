@@ -4,6 +4,7 @@ cmake-build-*/
 out/
 bin/
 lib/
+dist/
 
 # CMake
 CMakeCache.txt

@@ -47,11 +47,14 @@ PR changed / main full 的分层策略。
 
 | Job | 触发 | 内容 |
 |---|---|---|
-| `release-macos` | tag `v*`、手动触发 | `cmake --preset release`、`cmake --build --preset release --target mradm_exe`、上传 `mradm-macos` |
-| `release-linux` | tag `v*`、手动触发 | 同上，上传 `mradm-linux` |
+| `release-macos` | tag `v*`、手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-macos-arm64.tar.gz` 与 `.sha256` |
+| `release-linux` | tag `v*`、手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-linux-x86_64.tar.gz` 与 `.sha256` |
 
-release workflow 只上传裸 `mradm` 二进制 artifact；签名、压缩包、license bundle 和 GitHub Release
-创建留到发行策略明确后再加。
+release workflow 使用 `scripts/release/package.sh` 生成首版可审计发行包。包内包含 `bin/mradm`、
+`LICENSE`、`THIRD_PARTY_NOTICES.md`、`BUILD_INFO.txt` 和 `DEPENDENCIES.txt`。macOS 包会拒绝
+`/opt/homebrew` 与 `/usr/local` 动态库，并只允许 Apple 系统库/framework；Linux 包记录 `ldd` 清单，
+支持基线为 Ubuntu 24.04 x86_64。签名、notarization、GitHub Release 自动创建和完整 license bundle
+留到后续阶段。
 
 ## 缓存策略
 
@@ -113,12 +116,12 @@ sudo apt-get install -y clang-format clang-tidy cppcheck
 
 .github/workflows/release.yml
   tag v* / workflow_dispatch
-  macOS release + Linux release artifacts
+  macOS release + Linux release tarballs/checksums
 ```
 
 ## 后续实施顺序
 
 1. 观察第一轮 GitHub runner 上 FetchContent、SAF、vendored FLAC/Opus 是否稳定。
 2. 如果 quality 太慢，保留 PR changed，必要时把 main full 改成夜间 schedule。
-3. release job 后续补签名、压缩包、checksum 和第三方 license bundle。
+3. release job 后续补 macOS 签名/notarization、GitHub Release 自动创建和完整第三方 license bundle。
 4. Windows 暂列为后续工作；需要先确认 SAF、Boost、libadm/libear 和 APAC skip 路径在 MSVC 上的构建边界。
