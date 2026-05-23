@@ -1,7 +1,9 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <numbers>
 #include <string>
 #include <vector>
@@ -157,6 +159,15 @@ float channel_rms(const std::vector<float>& samples, uint32_t ch, uint32_t chann
 
 #endif // __APPLE__
 
+bool file_contains_bytes(const std::string& path, std::string_view needle) {
+    std::ifstream in(path, std::ios::binary);
+    if (!check(in.good(), "open file for byte scan")) {
+        return false;
+    }
+    const std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    return bytes.find(needle) != std::string::npos;
+}
+
 // Verifies that the wav71 swap (ch4↔ch6, ch5↔ch7) is actually applied.
 //
 // Strategy: encode a WAVE_7_1 WAV with ch4=0.8, ch5=0.7, ch6=0.2, ch7=0.3
@@ -254,14 +265,42 @@ bool verify_apac_binaural() {
     if (!write_test_wav(wav, 2, 48000, 48000)) {
         return false;
     }
+    mradm::audio::MetadataFields meta;
+    meta.encoder = "MacinRender Test";
+    meta.date_utc = "2026-05-23T03:42:00Z";
+    meta.renderer = "binaural-hrtf";
+    meta.output_layout = "binaural";
     auto res = mradm::audio::convert_to_apac(wav, m4a, "binaural");
     if (!check(res.has_value(), "convert_to_apac(binaural) failed")) {
+        std::cerr << res.error().message << "\n";
         return false;
     }
     if (!check(std::filesystem::exists(m4a), "binaural .m4a not created")) {
         return false;
     }
-    return check(std::filesystem::file_size(m4a) > 10000U, "binaural .m4a suspiciously small");
+    if (!check(std::filesystem::file_size(m4a) > 10000U, "binaural .m4a suspiciously small")) {
+        return false;
+    }
+    auto meta_res = mradm::audio::write_file_metadata(m4a, meta);
+    if (!check(meta_res.has_value(), "write_file_metadata(.m4a) failed")) {
+        std::cerr << meta_res.error().message << "\n";
+        return false;
+    }
+    if (!check(file_contains_bytes(m4a,
+                                   "\xA9"
+                                   "cmt"),
+               "APAC metadata contains iTunes comment atom")) {
+        return false;
+    }
+    if (!check(file_contains_bytes(m4a, "layout=binaural"), "APAC metadata comment preserves layout=binaural")) {
+        return false;
+    }
+#ifdef __APPLE__
+    std::vector<float> decoded;
+    return check(decode_apac_to_pcm(m4a, 2U, decoded), "APAC still decodes after metadata insertion");
+#else
+    return true;
+#endif
 }
 
 bool verify_apac_wrong_layout_rejected() {
