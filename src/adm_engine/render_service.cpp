@@ -356,7 +356,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     }
 
     if (is_apac_final) {
-        logs.log(LogLevel::info, "engine", "encoding float32 render to APAC (.m4a)");
+        logs.log(LogLevel::info, "engine", fmt::format("encoding float32 render to APAC ({})", final_ext));
         auto apac_res = audio::convert_to_apac(
             render_path, output_path, output_layout, request.options.apac_bitrate_kbps, request.options.apac_drc_music);
         render_temp_guard->remove_now();

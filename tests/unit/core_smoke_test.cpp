@@ -143,6 +143,52 @@ namespace {
     return true;
 }
 
+[[nodiscard]] bool verify_wav_hoa3_ambi_metadata() {
+    const auto path = std::filesystem::temp_directory_path() / "mr_core_hoa3_ambi_test.wav";
+    std::filesystem::remove(path);
+
+    {
+        auto writer_res = mradm::audio::WriterHandle::open(path.string(), 16U, 48000U, "hoa3");
+        if (!writer_res) {
+            std::cerr << "HOA3 WAV writer open failed: " << writer_res.error().message << "\n";
+            return false;
+        }
+        const std::vector<float> samples(16U, 0.0F);
+        if (writer_res->write(samples.data(), 1U) != 1U) {
+            std::cerr << "HOA3 WAV writer short write\n";
+            std::filesystem::remove(path);
+            return false;
+        }
+    }
+
+    auto meta = test_metadata();
+    meta.output_layout = "hoa3";
+    const auto meta_res = mradm::audio::write_file_metadata(path.string(), meta);
+    if (!meta_res) {
+        std::cerr << "HOA3 WAV metadata write failed: " << meta_res.error().message << "\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+
+    std::ifstream in(path, std::ios::binary);
+    std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
+    const auto ambi = find_riff_chunk(bytes, "ambi");
+    if (ambi == std::string::npos || read_le32(bytes, ambi + 4U) != 16U) {
+        std::cerr << "HOA3 WAV ambi chunk missing or wrong size\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+    if (read_le32(bytes, ambi + 8U) != 1U || read_le32(bytes, ambi + 12U) != 2U || read_le32(bytes, ambi + 16U) != 2U ||
+        read_le32(bytes, ambi + 20U) != 16U || read_le32(bytes, 4U) != bytes.size() - 8U) {
+        std::cerr << "HOA3 WAV ambi payload mismatch\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+
+    std::filesystem::remove(path);
+    return true;
+}
+
 [[nodiscard]] bool verify_caf_wav71_layout_tag() {
     const auto path = std::filesystem::temp_directory_path() / "mr_core_caf_wav71_test.caf";
     std::filesystem::remove(path);
@@ -442,6 +488,9 @@ int main() {
         return EXIT_FAILURE;
     }
     if (!verify_wav_metadata_write()) {
+        return EXIT_FAILURE;
+    }
+    if (!verify_wav_hoa3_ambi_metadata()) {
         return EXIT_FAILURE;
     }
     if (!verify_caf_wav71_layout_tag()) {

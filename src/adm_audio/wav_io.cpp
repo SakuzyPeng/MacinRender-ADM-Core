@@ -158,6 +158,67 @@ namespace {
            (static_cast<uint32_t>(b[3]) << 24U);
 }
 
+[[nodiscard]] long find_riff_chunk(std::FILE* f, std::string_view id) {
+    std::fseek(f, 0, SEEK_END);
+    const long file_size = std::ftell(f);
+    long offset = 12;
+    while (offset + 8 <= file_size) {
+        std::array<char, 8> hdr{};
+        std::fseek(f, offset, SEEK_SET);
+        if (std::fread(hdr.data(), 1, hdr.size(), f) != hdr.size()) {
+            return -1;
+        }
+        const uint32_t size = read_le32(hdr.data() + 4);
+        if (std::string_view(hdr.data(), 4) == id) {
+            return offset;
+        }
+        offset += 8 + static_cast<long>(size) + static_cast<long>(size & 1U);
+    }
+    return -1;
+}
+
+void write_le16_file(std::FILE* f, int16_t v) {
+    const auto u = static_cast<uint16_t>(v);
+    const std::array<uint8_t, 2> bytes{static_cast<uint8_t>(u), static_cast<uint8_t>(u >> 8U)};
+    std::fwrite(bytes.data(), 1, bytes.size(), f);
+}
+
+void write_le32_file(std::FILE* f, uint32_t v) {
+    const std::array<uint8_t, 4> bytes{static_cast<uint8_t>(v),
+                                       static_cast<uint8_t>(v >> 8U),
+                                       static_cast<uint8_t>(v >> 16U),
+                                       static_cast<uint8_t>(v >> 24U)};
+    std::fwrite(bytes.data(), 1, bytes.size(), f);
+}
+
+Result<void> write_hoa3_ambi_chunk(std::FILE* f, const std::string& path) {
+    // Source-compatible AmbiX marker for HOA WAV:
+    // ambisonic_type=B-format(1), ordering=ACN(2), normalisation=SN3D(2),
+    // n_channels=16. CoreAudio does not expose a native HOA tag for WAV,
+    // so this chunk carries the semantic marker for tools that understand it.
+    constexpr uint32_t k_ambi_payload = 16;
+    constexpr std::array<uint32_t, 4> k_hoa3_ambi{1U, 2U, 2U, 16U};
+
+    const long existing_ambi = find_riff_chunk(f, "ambi");
+    if (existing_ambi >= 0) {
+        std::array<char, 8> ambi_hdr{};
+        std::fseek(f, existing_ambi, SEEK_SET);
+        if (std::fread(ambi_hdr.data(), 1, ambi_hdr.size(), f) != ambi_hdr.size() ||
+            read_le32(ambi_hdr.data() + 4) != k_ambi_payload) {
+            return make_error(ErrorCode::io_error, "invalid existing WAV ambi chunk", "path=" + path);
+        }
+        std::fseek(f, existing_ambi + 8, SEEK_SET);
+    } else {
+        std::fseek(f, 0, SEEK_END);
+        std::fwrite("ambi", 1, 4, f);
+        write_le32_file(f, k_ambi_payload);
+    }
+    for (const uint32_t v : k_hoa3_ambi) {
+        write_le32_file(f, v);
+    }
+    return {};
+}
+
 } // namespace
 
 // Append a BWF v2 bext chunk to an existing RIFF/WAVE file and update the RIFF
@@ -181,31 +242,19 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
     constexpr uint32_t k_payload = 602;
     constexpr uint32_t k_chunk_total = 8 + k_payload; // FourCC(4) + size(4) + payload
 
-    // Write bext chunk at EOF.
-    std::fseek(f, 0, SEEK_END);
-
     // Null-padded fixed-width string helper.
     const auto write_str_field = [&](const std::string& s, std::size_t width) {
         std::vector<char> buf(width, '\0');
         std::memcpy(buf.data(), s.c_str(), std::min(s.size(), width - 1));
         std::fwrite(buf.data(), 1, width, f);
     };
-    const auto write_le16 = [&](int16_t v) {
-        const auto u = static_cast<uint16_t>(v);
-        const std::array<uint8_t, 2> bytes{static_cast<uint8_t>(u), static_cast<uint8_t>(u >> 8U)};
-        std::fwrite(bytes.data(), 1, bytes.size(), f);
-    };
-    const auto write_le32 = [&](uint32_t v) {
-        const std::array<uint8_t, 4> bytes{static_cast<uint8_t>(v),
-                                           static_cast<uint8_t>(v >> 8U),
-                                           static_cast<uint8_t>(v >> 16U),
-                                           static_cast<uint8_t>(v >> 24U)};
-        std::fwrite(bytes.data(), 1, bytes.size(), f);
-    };
+
+    // Write bext chunk at EOF.
+    std::fseek(f, 0, SEEK_END);
 
     // Chunk header (LE chunk size).
     std::fwrite("bext", 1, 4, f);
-    write_le32(k_payload);
+    write_le32_file(f, k_payload);
 
     // Description[256] — renderer + layout summary.
     const std::string desc = meta.renderer.empty() ? "" : "renderer=" + meta.renderer + " layout=" + meta.output_layout;
@@ -238,11 +287,11 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
     std::fwrite(otime.data(), 1, otime.size(), f);
 
     // TimeReferenceLow + TimeReferenceHigh (8 bytes, zero).
-    write_le32(0);
-    write_le32(0);
+    write_le32_file(f, 0);
+    write_le32_file(f, 0);
 
     // Version = 2 (BWF v2 for loudness fields).
-    write_le16(2);
+    write_le16_file(f, 2);
 
     // UMID[64] — zero.
     std::array<uint8_t, 64> umid{};
@@ -252,21 +301,31 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
     constexpr int16_t k_ni = 0x7FFF;
     const int16_t loudness_val = meta.lufs ? static_cast<int16_t>(std::lround(*meta.lufs * 100.0)) : k_ni;
     const int16_t peak_val = meta.peak_dbtp ? static_cast<int16_t>(std::lround(*meta.peak_dbtp * 100.0)) : k_ni;
-    write_le16(loudness_val); // LoudnessValue
-    write_le16(k_ni);         // LoudnessRange — not measured
-    write_le16(peak_val);     // MaxTruePeakLevel
-    write_le16(k_ni);         // MaxMomentaryLoudness — not measured
-    write_le16(k_ni);         // MaxShortTermLoudness — not measured
+    write_le16_file(f, loudness_val); // LoudnessValue
+    write_le16_file(f, k_ni);         // LoudnessRange — not measured
+    write_le16_file(f, peak_val);     // MaxTruePeakLevel
+    write_le16_file(f, k_ni);         // MaxMomentaryLoudness — not measured
+    write_le16_file(f, k_ni);         // MaxShortTermLoudness — not measured
 
     // Reserved[180] — zero.
     std::array<uint8_t, 180> reserved{};
     std::fwrite(reserved.data(), 1, reserved.size(), f);
     // Byte count: 256+32+32+10+8+4+4+2+64+2+2+2+2+2+180 = 602 ✓
 
+    if (meta.output_layout == "hoa3") {
+        auto ambi_res = write_hoa3_ambi_chunk(f, path);
+        if (!ambi_res) {
+            std::fclose(f);
+            return tl::unexpected{ambi_res.error()};
+        }
+    }
+
     // Update RIFF size (bytes 4-7, LE).
-    const uint32_t new_riff_size = riff_size + k_chunk_total;
+    std::fseek(f, 0, SEEK_END);
+    const long file_size = std::ftell(f);
+    const uint32_t new_riff_size = file_size >= 8 ? static_cast<uint32_t>(file_size - 8) : riff_size + k_chunk_total;
     std::fseek(f, 4, SEEK_SET);
-    write_le32(new_riff_size);
+    write_le32_file(f, new_riff_size);
 
     std::fclose(f);
     return {};
