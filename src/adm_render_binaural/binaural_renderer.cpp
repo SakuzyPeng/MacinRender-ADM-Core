@@ -394,9 +394,14 @@ void convolve_and_accumulate(void* hfft,
         for (std::size_t f = 0; f < fn; ++f) {
             dst[f] += y[f] + (f < overlap_len ? overlap[f] : 0.0F);
         }
-        // Save new overlap tail: y[fn .. fn + overlap_len - 1].
+        // Save new overlap: y[fn..fn+overlap_len-1] plus any unemitted residual from the
+        // old overlap.  When fn < overlap_len, overlap[fn..overlap_len-1] was never written
+        // to dst; those samples belong at output positions [fn..overlap_len-1] relative to
+        // this segment and must be carried forward.  Processing i in ascending order is safe:
+        // the read index (fn+i) exceeds the write index (i) for all i < fn, so no aliasing.
         for (std::size_t i = 0; i < overlap_len; ++i) {
-            overlap[i] = y[fn + i];
+            const float residual = (fn + i < overlap_len) ? overlap[fn + i] : 0.0F;
+            overlap[i] = y[fn + i] + residual;
         }
     }
 }
