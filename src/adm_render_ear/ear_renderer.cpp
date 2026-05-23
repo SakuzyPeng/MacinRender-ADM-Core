@@ -24,6 +24,14 @@ namespace mradm {
 
 namespace {
 
+#if defined(_MSC_VER)
+#define MRADM_RESTRICT __restrict
+#elif defined(__GNUC__) || defined(__clang__)
+#define MRADM_RESTRICT __restrict__
+#else
+#define MRADM_RESTRICT
+#endif
+
 struct BlockGains {
     std::vector<double> gains;
     std::vector<double> diffuse_gains;
@@ -320,8 +328,8 @@ void accumulate_channel_segment(const ChannelGainInfo& channel,
             if (gd == 0.0F && gf == 0.0F) {
                 continue; // skip sparse zeros (common for VBAP panning)
             }
-            float* __restrict__ col_d = ctx.col_direct + (out_ch * stride);
-            float* __restrict__ col_f = ctx.col_diffuse + (out_ch * stride);
+            float* MRADM_RESTRICT col_d = ctx.col_direct + (out_ch * stride);
+            float* MRADM_RESTRICT col_f = ctx.col_diffuse + (out_ch * stride);
             if (gd != 0.0F) {
                 for (std::size_t f = f0; f < f1; ++f) {
                     col_d[f] += ch_in[f] * gd;
@@ -724,6 +732,8 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
 }
 
 } // namespace
+
+#undef MRADM_RESTRICT
 
 CapabilityReport ear_capabilities() {
     CapabilityReport r;

@@ -222,7 +222,7 @@ constexpr std::array<DsLabelAlias, 34> k_ds_aliases = {{
 
 [[nodiscard]] std::optional<std::string_view> resolve_ds_alias(std::string_view label) {
     const auto key = canonicalize_ds_label(label);
-    const auto* const it =
+    const auto it =
         std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
     if (it != k_ds_aliases.end()) {
         return it->bs2051;
