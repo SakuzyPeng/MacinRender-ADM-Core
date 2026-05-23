@@ -3,6 +3,10 @@ name: Windows Bring-up
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: write
+
 concurrency:
   group: windows-bringup-${{ github.ref }}
   cancel-in-progress: true
@@ -15,6 +19,8 @@ jobs:
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-bincache
+      VCPKG_BINARY_SOURCES: clear;x-gha,readwrite;files,${{ github.workspace }}\.vcpkg-bincache,readwrite
+      VCPKG_FEATURE_FLAGS: binarycaching
 
     steps:
       - name: Checkout
@@ -32,14 +38,16 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .vcpkg-bincache
-          key: vcpkg-windows-openblas-${{ hashFiles('.github/workflows/windows-bringup.yml') }}
+          key: vcpkg-windows-openblas-${{ runner.os }}-${{ hashFiles('.github/workflows/windows-bringup.yml') }}
           restore-keys: |
+            vcpkg-windows-openblas-${{ runner.os }}-
             vcpkg-windows-openblas-
 
       - name: Install native dependencies
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
+          Write-Host "VCPKG_BINARY_SOURCES=$env:VCPKG_BINARY_SOURCES"
           vcpkg install boost-headers openblas --triplet x64-windows
 
       - name: Locate MSVC environment
