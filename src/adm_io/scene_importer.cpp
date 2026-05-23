@@ -59,8 +59,9 @@ std::map<std::string, uint16_t> make_uid_map(const std::shared_ptr<bw64::ChnaChu
     return result;
 }
 
-// Convert an adm::Time to a sample offset.  Uses nanosecond representation
-// internally; precision is ≪1 sample at all standard audio sample rates.
+// Convert an adm::Time to the nearest sample offset.  ADM authored by DAWs often
+// stores sample-aligned times as decimal seconds, so flooring each timestamp can
+// create one-sample holes at dense block boundaries.
 // NOTE: rtime is relative to AudioObject start; we assume start==0 (the
 // common case for single-programme documents).
 uint64_t time_to_samples(const adm::Time& t, uint32_t sample_rate) {
@@ -77,7 +78,7 @@ uint64_t time_to_samples(const adm::Time& t, uint32_t sample_rate) {
         return max;
     }
     const uint64_t whole_samples = seconds * sample_rate;
-    const uint64_t fractional_samples = (remainder * sample_rate) / k_ns_per_second;
+    const uint64_t fractional_samples = ((remainder * sample_rate) + (k_ns_per_second / 2U)) / k_ns_per_second;
     if (max - whole_samples < fractional_samples) {
         return max;
     }
