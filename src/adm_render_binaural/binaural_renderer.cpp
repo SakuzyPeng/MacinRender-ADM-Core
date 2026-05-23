@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
@@ -60,6 +61,15 @@ std::pair<float, float> label_to_polar(const std::string& label) {
     };
     auto it = k_tab.find(label);
     return it != k_tab.end() ? it->second : std::pair<float, float>{std::numeric_limits<float>::quiet_NaN(), 0.0F};
+}
+
+bool is_lfe_label(const std::string& label) {
+    std::string upper(label.size(), '\0');
+    std::ranges::transform(label, upper.begin(), [](const char ch) {
+        return static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    });
+    return upper == "LF" || upper.find("LFE") != std::string::npos || upper.find("SUB") != std::string::npos ||
+           upper.find("LOWFREQUENCY") != std::string::npos || upper.find("LOW_FREQUENCY") != std::string::npos;
 }
 
 // ADM Cartesian (right=+X, front=+Y, up=+Z) → polar az/el in degrees.
@@ -439,6 +449,7 @@ void advance_silence(OLAState& state, uint64_t frames_now, float* l_out, float* 
 struct BinauralSource {
     uint16_t channel_index{0};
     float gain{1.0F}; // object-level gain
+    bool bypass_lfe{false};
     struct Block {
         float az{0.0F};
         float el{0.0F};
@@ -491,8 +502,18 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs) 
 
             // DirectSpeakers-type blocks.
             for (const auto& ds : track.ds_blocks) {
-                if (ds.low_pass_hz.has_value()) {
-                    continue; // skip LFE
+                const bool is_lfe =
+                    ds.low_pass_hz.has_value() ||
+                    std::ranges::any_of(ds.speaker_labels, [](const auto& label) { return is_lfe_label(label); });
+                if (is_lfe) {
+                    BinauralSource src;
+                    src.channel_index = channel_index;
+                    src.gain = obj.gain;
+                    src.bypass_lfe = true;
+                    src.blocks.push_back(
+                        {0.0F, 0.0F, ds.gain, ds.start_sample, std::min(ds.end_sample, obj.end_sample)});
+                    srcs.push_back(std::move(src));
+                    continue;
                 }
                 float az = 0.0F;
                 float el = 0.0F;
@@ -697,10 +718,25 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                     ch_in[f] = (ic < num_in_ch) ? in_block[((off + f) * num_in_ch) + ic] : 0.0F;
                 }
 
-                const auto hrtf = hrtf_for_dir(*bs, blk.az, blk.el);
                 const float gain = src.gain * blk.block_gain;
-                convolve_and_accumulate(
-                    hfft, *bs, ch_in.data(), seg_frames, gain, hrtf, ola[si], l_buf.data() + off, r_buf.data() + off);
+                if (src.bypass_lfe) {
+                    for (std::size_t f = 0; f < seg_fn; ++f) {
+                        const float sample = ch_in[f] * gain;
+                        l_buf[off + f] += sample;
+                        r_buf[off + f] += sample;
+                    }
+                } else {
+                    const auto hrtf = hrtf_for_dir(*bs, blk.az, blk.el);
+                    convolve_and_accumulate(hfft,
+                                            *bs,
+                                            ch_in.data(),
+                                            seg_frames,
+                                            gain,
+                                            hrtf,
+                                            ola[si],
+                                            l_buf.data() + off,
+                                            r_buf.data() + off);
+                }
 
                 cursor = seg_end;
                 if (cursor >= blk.end_sample) {
