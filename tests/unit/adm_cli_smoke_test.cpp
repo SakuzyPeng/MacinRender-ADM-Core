@@ -148,6 +148,10 @@ int main() {
         ok &= check(r.out.find("stereo") == std::string::npos, "backends: speaker stereo layout not listed");
         ok &= check(r.out.find("binaural") != std::string::npos, "backends: binaural layout listed");
         ok &= check(r.out.find("7.1") != std::string::npos, "backends: 7.1 layout listed");
+        ok &= check(r.out.find("ChannelLock:    yes") != std::string::npos, "backends: channelLock flag listed");
+        ok &= check(r.out.find("Divergence:     yes") != std::string::npos, "backends: divergence flag listed");
+        ok &= check(r.out.find("ScreenRef:      no") != std::string::npos, "backends: screenRef unsupported listed");
+        ok &= check(r.out.find("Diffuse:        yes") != std::string::npos, "backends: diffuse flag listed");
         ok &= check(r.out.find("0+7+0") == std::string::npos, "backends: old 0+7+0 layout not listed");
         ok &= check(r.out.find("4+7+0") == std::string::npos, "backends: old 4+7+0 layout not listed");
     }

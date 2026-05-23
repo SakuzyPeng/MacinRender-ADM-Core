@@ -7,6 +7,7 @@
 #include <iostream>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -322,6 +323,7 @@ bool verify_objects_render_fixture(const mradm::RenderService& service,
     request.input_path = in_path;
     request.output_path = out_path;
     request.options.output_layout = "0+2+0";
+    request.options.internal_allow_speaker_stereo = true;
     request.options.renderer = mradm::RendererSelection::ear;
 
     const mradm::RenderResult result = service.render(request, progress, logs);
@@ -378,6 +380,7 @@ bool verify_direct_speakers_render_fixture(const mradm::RenderService& service,
     ds_request.input_path = ds_in_path;
     ds_request.output_path = ds_out_path;
     ds_request.options.output_layout = "0+2+0";
+    ds_request.options.internal_allow_speaker_stereo = true;
     ds_request.options.renderer = mradm::RendererSelection::ear;
 
     const mradm::RenderResult ds_result = service.render(ds_request, progress, logs);
@@ -548,6 +551,7 @@ bool verify_mixed_render_fixture(const mradm::RenderService& service,
     request.input_path = in_path;
     request.output_path = out_path;
     request.options.output_layout = "0+2+0";
+    request.options.internal_allow_speaker_stereo = true;
     request.options.renderer = mradm::RendererSelection::ear;
 
     const mradm::RenderResult result = service.render(request, progress, logs);
@@ -654,6 +658,7 @@ bool verify_ear_cartesian_objects(const mradm::RenderService& service,
     req.input_path = in_path;
     req.output_path = out_path;
     req.options.output_layout = "0+2+0";
+    req.options.internal_allow_speaker_stereo = true;
     req.options.renderer = mradm::RendererSelection::ear;
     req.options.peak_limit = false;
 
@@ -756,6 +761,7 @@ bool verify_position_offset(const mradm::RenderService& service,
     req.input_path = in_path;
     req.output_path = out_path;
     req.options.output_layout = "0+2+0";
+    req.options.internal_allow_speaker_stereo = true;
     req.options.renderer = mradm::RendererSelection::ear;
     req.options.peak_limit = false;
 
@@ -858,6 +864,7 @@ double render_ear_diffuse_energy(float diffuse_value,
     req.input_path = in_path;
     req.output_path = out_path;
     req.options.output_layout = "0+2+0";
+    req.options.internal_allow_speaker_stereo = true;
     req.options.renderer = mradm::RendererSelection::ear;
     req.options.peak_limit = false;
 
@@ -920,6 +927,7 @@ bool verify_diffuse_bus(mradm::RenderService& service, mradm::NullProgressSink& 
         req.input_path = in_path;
         req.output_path = out;
         req.options.output_layout = "0+2+0";
+        req.options.internal_allow_speaker_stereo = true;
         req.options.renderer = mradm::RendererSelection::ear;
         req.options.peak_limit = false;
 
@@ -984,6 +992,7 @@ bool verify_ear_short_block(const mradm::RenderService& service,
     req.input_path = in_path;
     req.output_path = out_path;
     req.options.output_layout = "0+2+0";
+    req.options.internal_allow_speaker_stereo = true;
     req.options.renderer = mradm::RendererSelection::ear;
     req.options.peak_limit = false;
 
@@ -1001,10 +1010,9 @@ bool verify_ear_short_block(const mradm::RenderService& service,
     return check(reader_res->frame_count() == 200U, "short-block: output has 200 frames");
 }
 
-// Creates an Objects document with all three P2 fields set to non-default values
-// (channelLock=true, divergence=0.5, screenRef=true) and verifies that EAR:
-//   (a) renders successfully (no not_implemented exception), and
-//   (b) emits a warning for each degraded field.
+// Creates an Objects document with channelLock/objectDivergence/screenRef set.
+// EAR now preprocesses channelLock and objectDivergence before calling libear;
+// screenRef still warns because referenceScreen geometry is not available.
 bool verify_p2_degrade_gracefully(const mradm::RenderService& service, mradm::NullProgressSink& progress) {
     auto doc = adm::Document::create();
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"P2CF"}, adm::TypeDefinition::OBJECTS);
@@ -1067,6 +1075,7 @@ bool verify_p2_degrade_gracefully(const mradm::RenderService& service, mradm::Nu
     req.input_path = in_path;
     req.output_path = out_path;
     req.options.output_layout = "0+2+0";
+    req.options.internal_allow_speaker_stereo = true;
     req.options.renderer = mradm::RendererSelection::ear;
     req.options.peak_limit = false;
 
@@ -1079,10 +1088,11 @@ bool verify_p2_degrade_gracefully(const mradm::RenderService& service, mradm::Nu
     }
 
     bool ok = true;
-    ok &= check(capturing_logs.has_warning_containing("channelLock"), "P2 degrade: warning emitted for channelLock");
-    ok &= check(capturing_logs.has_warning_containing("objectDivergence"),
-                "P2 degrade: warning emitted for objectDivergence");
-    ok &= check(capturing_logs.has_warning_containing("screenRef"), "P2 degrade: warning emitted for screenRef");
+    ok &= check(!capturing_logs.has_warning_containing("channelLock"),
+                "P2 support: no unsupported warning emitted for channelLock");
+    ok &= check(!capturing_logs.has_warning_containing("objectDivergence"),
+                "P2 support: no unsupported warning emitted for objectDivergence");
+    ok &= check(capturing_logs.has_warning_containing("screenRef"), "P2 support: warning emitted for screenRef");
 
     auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
     if (!reader_res) {
@@ -1098,7 +1108,136 @@ bool verify_p2_degrade_gracefully(const mradm::RenderService& service, mradm::Nu
         0.0,
         [](double a, double b) { return a + b; },
         [](float s) { return std::fabs(static_cast<double>(s)); });
-    ok &= check(energy > 0.0, "P2 degrade: output is not silent (fields degraded, not rejected)");
+    ok &= check(energy > 0.0, "P2 support: output is not silent");
+    return ok;
+}
+
+std::pair<std::shared_ptr<adm::Document>, std::string> make_ear_object_semantics_doc(
+    float azimuth, bool channel_lock, std::optional<float> max_distance, float divergence, float azimuth_range) {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"EarSemCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{azimuth}, adm::Elevation{0.0F}}};
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        if (channel_lock) {
+            adm::ChannelLock lock;
+            lock.set(adm::ChannelLockFlag{true});
+            if (max_distance.has_value()) {
+                lock.set(adm::MaxDistance{*max_distance});
+            }
+            block.set(lock);
+        }
+        if (divergence > 0.0F) {
+            adm::ObjectDivergence od;
+            od.set(adm::Divergence{divergence});
+            od.set(adm::AzimuthRange{azimuth_range});
+            block.set(od);
+        }
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"EarSemPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"EarSemSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"EarSemTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"EarSemObj"});
+    obj->addReference(uid);
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"EarSemContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"EarSemProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+std::vector<double> render_ear_semantics_sums(const mradm::RenderService& service,
+                                              mradm::ProgressSink& progress,
+                                              mradm::LogSink& logs,
+                                              const std::shared_ptr<adm::Document>& doc,
+                                              const std::string& uid_str,
+                                              std::string_view stem) {
+    const auto in_path = write_input_fixture(uid_str, doc, stem, 48000U, 1000U);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / (std::string{stem} + "_out.wav");
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "0+5+0";
+    req.options.renderer = mradm::RendererSelection::ear;
+    req.options.peak_limit = false;
+
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: EAR semantics render failed: " << res.error.message << "\n";
+        return {};
+    }
+
+    auto reader_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!reader_res || reader_res->channels() != 6U) {
+        std::cerr << "FAIL: EAR semantics output is not 5.1\n";
+        return {};
+    }
+    auto& reader = *reader_res;
+    const auto n_frames = static_cast<std::size_t>(reader.frame_count());
+    std::vector<float> samples(n_frames * 6U);
+    reader.read(samples.data(), reader.frame_count());
+
+    std::vector<double> sums(6U, 0.0);
+    for (std::size_t frame = 0; frame < n_frames; ++frame) {
+        for (std::size_t ch = 0; ch < 6U; ++ch) {
+            sums[ch] += std::fabs(static_cast<double>(samples[(frame * 6U) + ch]));
+        }
+    }
+    return sums;
+}
+
+bool verify_ear_channel_lock(const mradm::RenderService& service,
+                             mradm::ProgressSink& progress,
+                             mradm::NullLogSink& logs) {
+    auto [doc, uid_str] = make_ear_object_semantics_doc(20.0F, true, std::nullopt, 0.0F, 45.0F);
+    const auto sums = render_ear_semantics_sums(service, progress, logs, doc, uid_str, "mr_ear_channel_lock_in.wav");
+
+    bool ok = true;
+    ok &= check(sums.size() == 6U, "EAR channelLock: output is 5.1");
+    if (sums.size() == 6U) {
+        ok &= check(sums[0] > 100.0, "EAR channelLock: nearest left speaker carries energy");
+        ok &= check(sums[0] > sums[2] * 10.0, "EAR channelLock: left speaker dominates center");
+        ok &= check(sums[3] < 1.0e-9, "EAR channelLock: LFE is ignored");
+    }
+    return ok;
+}
+
+bool verify_ear_object_divergence(const mradm::RenderService& service,
+                                  mradm::ProgressSink& progress,
+                                  mradm::NullLogSink& logs) {
+    auto [doc, uid_str] = make_ear_object_semantics_doc(0.0F, false, std::nullopt, 1.0F, 30.0F);
+    const auto sums = render_ear_semantics_sums(service, progress, logs, doc, uid_str, "mr_ear_divergence_in.wav");
+
+    bool ok = true;
+    ok &= check(sums.size() == 6U, "EAR objectDivergence: output is 5.1");
+    if (sums.size() == 6U) {
+        ok &= check(sums[0] > 1.0, "EAR objectDivergence: left virtual source contributes");
+        ok &= check(sums[1] > 1.0, "EAR objectDivergence: right virtual source contributes");
+        ok &= check(sums[0] > sums[2], "EAR objectDivergence: left energy exceeds center");
+        ok &= check(sums[1] > sums[2], "EAR objectDivergence: right energy exceeds center");
+    }
     return ok;
 }
 
@@ -1156,6 +1295,7 @@ bool verify_ds_cartesian_speaker_position(const mradm::RenderService& service,
     req.input_path = in_path;
     req.output_path = out_path;
     req.options.output_layout = "0+2+0";
+    req.options.internal_allow_speaker_stereo = true;
     req.options.renderer = mradm::RendererSelection::ear;
 
     const auto res = service.render(req, progress, logs);
@@ -1204,6 +1344,7 @@ bool verify_ear_multiblock_inside_render_window(const mradm::RenderService& serv
     req.input_path = in_path;
     req.output_path = out_path;
     req.options.output_layout = "0+2+0";
+    req.options.internal_allow_speaker_stereo = true;
     req.options.renderer = mradm::RendererSelection::ear;
     req.options.peak_limit = false;
 
@@ -1264,6 +1405,8 @@ int main() {
     ok &= verify_diffuse_bus(service, progress, logs);
     ok &= verify_ear_short_block(service, progress, logs);
     ok &= verify_p2_degrade_gracefully(service, progress);
+    ok &= verify_ear_channel_lock(service, progress, logs);
+    ok &= verify_ear_object_divergence(service, progress, logs);
     ok &= verify_ds_cartesian_speaker_position(service, progress, logs);
     ok &= verify_ear_multiblock_inside_render_window(service, progress, logs);
 

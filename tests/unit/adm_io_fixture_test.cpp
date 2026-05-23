@@ -85,6 +85,64 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc() {
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
+std::pair<std::shared_ptr<adm::Document>, std::string> make_object_lock_divergence_doc(bool explicit_ranges = true) {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"LockDivCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{20.0F}, adm::Elevation{0.0F}}};
+        adm::ChannelLock lock;
+        lock.set(adm::ChannelLockFlag{true});
+        if (explicit_ranges) {
+            lock.set(adm::MaxDistance{1.0F});
+        }
+        block.set(lock);
+
+        adm::ObjectDivergence divergence;
+        divergence.set(adm::Divergence{0.5F});
+        if (explicit_ranges) {
+            divergence.set(adm::AzimuthRange{60.0F});
+            divergence.set(adm::PositionRange{0.25F});
+        }
+        block.set(divergence);
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"LockDivPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"LockDivSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"LockDivTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"LockDivObject"});
+    object->addReference(uid);
+    doc->add(object);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"LockDivContent"});
+    content->addReference(object);
+    doc->add(content);
+
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"LockDivProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
 // Build a DirectSpeakers-chain document: uid → packformat → channelformat → block.
 // label=M+030 az=30 el=0 gain=0.7 — enough metadata to route without libadm in renderers.
 std::pair<std::shared_ptr<adm::Document>, std::string> make_direct_speakers_doc() {
@@ -283,7 +341,93 @@ bool verify_objects_blocks_fixture() {
             ok &= check(std::fabs(blk.position.elevation - 10.0F) < 0.01F, "elevation ≈ 10");
             ok &= check(std::fabs(blk.position.distance - 1.0F) < 0.01F, "distance ≈ 1 (default)");
             ok &= check(std::fabs(blk.gain - 0.8F) < 0.01F, "gain ≈ 0.8");
+            ok &= check(!blk.channel_lock, "channelLock defaults to false");
+            ok &= check(!blk.channel_lock_max_distance.has_value(), "channelLock maxDistance defaults to unset");
+            ok &= check(std::fabs(blk.divergence) < 0.01F, "objectDivergence divergence defaults to 0");
+            ok &= check(std::fabs(blk.divergence_azimuth_range - 45.0F) < 0.01F,
+                        "objectDivergence azimuthRange defaults to 45");
+            ok &=
+                check(std::fabs(blk.divergence_position_range) < 0.01F, "objectDivergence positionRange defaults to 0");
         }
+    }
+
+    return ok;
+}
+
+bool verify_object_lock_divergence_imported() {
+    bool ok = true;
+    auto [doc, uid_str] = make_object_lock_divergence_doc(true);
+    auto path = std::filesystem::temp_directory_path() / "mr_adm_io_lock_divergence.wav";
+    FileGuard guard{path};
+
+    {
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
+        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        std::vector<float> silence(1U, 0.0F);
+        writer->write(silence.data(), 1U);
+    }
+
+    auto result = mradm::io::import_scene(path.string());
+    if (!result) {
+        std::cerr << "FAIL: lock/divergence import_scene error: " << result.error().message << "\n";
+        return false;
+    }
+
+    const auto& scene = result.value();
+    ok &= check(scene.objects.size() == 1U, "lock/divergence: 1 object");
+    if (scene.objects.size() == 1U && scene.objects[0].tracks.size() == 1U &&
+        scene.objects[0].tracks[0].blocks.size() == 1U) {
+        const auto& block = scene.objects[0].tracks[0].blocks[0];
+        ok &= check(block.channel_lock, "channelLock flag imported");
+        ok &= check(block.channel_lock_max_distance.has_value(), "channelLock maxDistance imported");
+        if (block.channel_lock_max_distance.has_value()) {
+            ok &= check(std::fabs(*block.channel_lock_max_distance - 1.0F) < 0.01F, "channelLock maxDistance ≈ 1");
+        }
+        ok &= check(std::fabs(block.divergence - 0.5F) < 0.01F, "objectDivergence divergence ≈ 0.5");
+        ok &= check(std::fabs(block.divergence_azimuth_range - 60.0F) < 0.01F, "objectDivergence azimuthRange ≈ 60");
+        ok &=
+            check(std::fabs(block.divergence_position_range - 0.25F) < 0.01F, "objectDivergence positionRange ≈ 0.25");
+    } else {
+        ok &= check(false, "lock/divergence: expected one track block");
+    }
+
+    return ok;
+}
+
+bool verify_object_divergence_defaults_imported() {
+    bool ok = true;
+    auto [doc, uid_str] = make_object_lock_divergence_doc(false);
+    auto path = std::filesystem::temp_directory_path() / "mr_adm_io_divergence_defaults.wav";
+    FileGuard guard{path};
+
+    {
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
+        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        std::vector<float> silence(1U, 0.0F);
+        writer->write(silence.data(), 1U);
+    }
+
+    auto result = mradm::io::import_scene(path.string());
+    if (!result) {
+        std::cerr << "FAIL: divergence defaults import_scene error: " << result.error().message << "\n";
+        return false;
+    }
+
+    const auto& scene = result.value();
+    ok &= check(scene.objects.size() == 1U, "divergence defaults: 1 object");
+    if (scene.objects.size() == 1U && scene.objects[0].tracks.size() == 1U &&
+        scene.objects[0].tracks[0].blocks.size() == 1U) {
+        const auto& block = scene.objects[0].tracks[0].blocks[0];
+        ok &= check(block.channel_lock, "channelLock flag imported with unset maxDistance");
+        ok &= check(!block.channel_lock_max_distance.has_value(), "channelLock maxDistance remains unset");
+        ok &= check(std::fabs(block.divergence - 0.5F) < 0.01F, "objectDivergence divergence imported");
+        ok &= check(std::fabs(block.divergence_azimuth_range - 45.0F) < 0.01F,
+                    "objectDivergence default azimuthRange == 45");
+        ok &= check(std::fabs(block.divergence_position_range) < 0.01F, "objectDivergence default positionRange == 0");
+    } else {
+        ok &= check(false, "divergence defaults: expected one track block");
     }
 
     return ok;
@@ -1243,6 +1387,8 @@ int main() {
     ok &= verify_reference_screen_flag_imported();
     ok &= verify_programme_language_labels_time_imported();
     ok &= verify_object_labels_importance_dialogue_imported();
+    ok &= verify_object_lock_divergence_imported();
+    ok &= verify_object_divergence_defaults_imported();
 
     if (ok) {
         std::cout << "adm_io fixture test passed\n";

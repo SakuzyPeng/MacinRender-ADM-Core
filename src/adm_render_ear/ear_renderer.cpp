@@ -5,7 +5,6 @@
 #include <limits>
 #include <map>
 #include <memory>
-#include <numbers>
 #include <optional>
 #include <saf_utility_complex.h>
 #include <saf_utility_fft.h>
@@ -54,6 +53,7 @@ struct AccumulateContext {
 // FIR decorrelator state for the diffuse bus (BS.2127).
 // Uses overlap-add FFT convolution via saf_rfft (KissFFT backend, platform-agnostic).
 // FFT size L=2048 (next power-of-2 >= block_size(1024) + filter_len(512) - 1).
+// NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct DecorrState {
     void* hFFT{nullptr};                               // saf_rfft handle, L=2048
     std::vector<std::vector<float_complex>> filter_fd; // [num_out_ch][L/2+1=1025]
@@ -69,34 +69,32 @@ struct DecorrState {
     DecorrState() = default;
     DecorrState(const DecorrState&) = delete;
     DecorrState& operator=(const DecorrState&) = delete;
+    DecorrState(DecorrState&&) = delete;
+    DecorrState& operator=(DecorrState&&) = delete;
 };
+// NOLINTEND(misc-non-private-member-variables-in-classes)
+
+[[nodiscard]] std::vector<SceneOutputSpeaker> output_speakers(const ear::Layout& layout) {
+    std::vector<SceneOutputSpeaker> result;
+    result.reserve(layout.channels().size());
+    for (const auto& channel : layout.channels()) {
+        const auto pos = channel.polarPosition();
+        result.push_back({static_cast<float>(pos.azimuth), static_cast<float>(pos.elevation), channel.isLfe()});
+    }
+    return result;
+}
 
 [[nodiscard]] ear::ObjectsTypeMetadata object_metadata_from_block(const SceneObjectBlock& block,
                                                                   const SceneObject& obj) {
     ear::ObjectsTypeMetadata meta;
 
-    const SceneBlockPosition pos =
-        obj.position_offset ? apply_position_offset(block.position, *obj.position_offset) : block.position;
-
-    if (pos.cartesian) {
-        // BS.2076 §10.1: convert Cartesian (X right, Y front, Z up) to polar before
-        // passing to libear — GainCalculatorObjects throws not_implemented("cartesian").
-        const auto cx = static_cast<double>(pos.x);
-        const auto cy = static_cast<double>(pos.y);
-        const auto cz = static_cast<double>(pos.z);
-        const double az = std::atan2(-cx, cy) * (180.0 / std::numbers::pi_v<double>);
-        const double el = std::atan2(cz, std::sqrt((cx * cx) + (cy * cy))) * (180.0 / std::numbers::pi_v<double>);
-        const double dist = std::sqrt((cx * cx) + (cy * cy) + (cz * cz));
-        meta.position = ear::PolarPosition{az, el, dist};
-        meta.cartesian = false;
-    } else {
-        meta.position = ear::PolarPosition{
-            static_cast<double>(pos.azimuth),
-            static_cast<double>(pos.elevation),
-            static_cast<double>(pos.distance),
-        };
-        meta.cartesian = false;
-    }
+    const auto pos = scene_position_to_polar(block.position);
+    meta.position = ear::PolarPosition{
+        static_cast<double>(pos.azimuth),
+        static_cast<double>(pos.elevation),
+        static_cast<double>(pos.distance),
+    };
+    meta.cartesian = false;
     meta.gain = static_cast<double>(block.gain) * static_cast<double>(obj.gain);
     meta.diffuse = static_cast<double>(block.diffuse);
     meta.width = static_cast<double>(block.width);
@@ -105,17 +103,14 @@ struct DecorrState {
     return meta;
 }
 
-void warn_unsupported_object_fields(const SceneObjectBlock& block, LogSink& logs) {
-    if (block.channel_lock) {
-        logs.log(LogLevel::warning, "ear", "channelLock not supported by libear, degrading to unlocked");
-    }
-    if (block.divergence != 0.0F) {
-        logs.log(LogLevel::warning,
-                 "ear",
-                 fmt::format("objectDivergence={:.3f} not supported by libear, degrading to 0", block.divergence));
-    }
+void warn_screen_ref(const SceneObjectBlock& block, LogSink& logs, bool& warned) {
     if (block.screen_ref) {
-        logs.log(LogLevel::warning, "ear", "screenRef not supported by libear, degrading to false");
+        if (!warned) {
+            logs.log(LogLevel::warning,
+                     "ear",
+                     "screenRef requires referenceScreen geometry; rendering block as screenRef=false");
+            warned = true;
+        }
     }
 }
 
@@ -123,25 +118,39 @@ void append_object_blocks(const SceneTrackRef& track,
                           const SceneObject& obj,
                           ChannelGainInfo& cg,
                           ear::GainCalculatorObjects& objects_calc,
+                          const std::vector<SceneOutputSpeaker>& speakers,
                           std::size_t num_out,
-                          LogSink& logs) {
-    for (const auto& block : track.blocks) {
-        // P2 defensive layer: warn and degrade fields that cause libear
-        // to throw not_implemented so the file doesn't fail to render.
-        warn_unsupported_object_fields(block, logs);
-
-        auto meta = object_metadata_from_block(block, obj);
-        // meta.channelLock / objectDivergence / screenRef remain at their
-        // default (unlocked / 0 / false) — do not set from block.
+                          LogSink& logs,
+                          bool& screen_ref_warned) {
+    for (const auto& raw_block : track.blocks) {
+        SceneObjectBlock block = raw_block;
+        if (obj.position_offset) {
+            block.position = apply_position_offset(block.position, *obj.position_offset);
+        }
+        warn_screen_ref(block, logs, screen_ref_warned);
+        block = apply_channel_lock(block, speakers);
 
         BlockGains bg;
         bg.gains.resize(num_out, 0.0);
         bg.diffuse_gains.resize(num_out, 0.0);
-        bg.start_sample = block.start_sample;
-        bg.end_sample = std::min(block.end_sample, obj.end_sample);
-        bg.jump_position = block.jump_position;
-        bg.interp_length_samples = block.interp_length_samples;
-        objects_calc.calculate(meta, bg.gains, bg.diffuse_gains);
+        bg.start_sample = raw_block.start_sample;
+        bg.end_sample = std::min(raw_block.end_sample, obj.end_sample);
+        bg.jump_position = raw_block.jump_position;
+        bg.interp_length_samples = raw_block.interp_length_samples;
+
+        for (const auto& source : expand_object_divergence(block)) {
+            auto meta = object_metadata_from_block(source, obj);
+            std::vector<double> direct(num_out, 0.0);
+            std::vector<double> diffuse(num_out, 0.0);
+            // meta.channelLock / objectDivergence / screenRef remain default;
+            // project-owned preprocessing above keeps libear away from its
+            // not_implemented paths for these fields.
+            objects_calc.calculate(meta, direct, diffuse);
+            for (std::size_t out_ch = 0; out_ch < num_out; ++out_ch) {
+                bg.gains[out_ch] += direct[out_ch];
+                bg.diffuse_gains[out_ch] += diffuse[out_ch];
+            }
+        }
         cg.blocks.push_back(std::move(bg));
     }
 }
@@ -266,6 +275,8 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
     ear::GainCalculatorDirectSpeakers direct_speakers_calc{layout};
     ear::GainCalculatorHOA hoa_calc{layout};
     const std::size_t num_out = layout.channels().size();
+    const auto speakers = output_speakers(layout);
+    bool screen_ref_warned{false};
 
     for (const auto& obj : scene.objects) {
         if (obj.mute) {
@@ -278,7 +289,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
             const uint16_t in_ch = *track.channel_index;
             auto& cg = by_channel[in_ch];
             cg.input_channel = in_ch;
-            append_object_blocks(track, obj, cg, objects_calc, num_out, logs);
+            append_object_blocks(track, obj, cg, objects_calc, speakers, num_out, logs, screen_ref_warned);
             append_direct_speakers_blocks(track, obj, cg, direct_speakers_calc, num_out);
         }
     }
@@ -348,13 +359,13 @@ void accumulate_channel_segment(const ChannelGainInfo& channel,
     if (!any_ramp) {
         // Fast path: gains constant over this window → saxpy per output channel.
         for (std::size_t out_ch = 0; out_ch < num_out; ++out_ch) {
-            const float gd = static_cast<float>(block.gains[out_ch]);
-            const float gf = static_cast<float>(block.diffuse_gains[out_ch]);
+            const auto gd = static_cast<float>(block.gains[out_ch]);
+            const auto gf = static_cast<float>(block.diffuse_gains[out_ch]);
             if (gd == 0.0F && gf == 0.0F) {
                 continue; // skip sparse zeros (common for VBAP panning)
             }
-            float* __restrict__ col_d = ctx.col_direct + out_ch * stride;
-            float* __restrict__ col_f = ctx.col_diffuse + out_ch * stride;
+            float* __restrict__ col_d = ctx.col_direct + (out_ch * stride);
+            float* __restrict__ col_f = ctx.col_diffuse + (out_ch * stride);
             if (gd != 0.0F) {
                 for (std::size_t f = f0; f < f1; ++f) {
                     col_d[f] += ch_in[f] * gd;
@@ -373,19 +384,19 @@ void accumulate_channel_segment(const ChannelGainInfo& channel,
             const bool ramping = delta < interp_len;
             const float in = ch_in[f];
             for (std::size_t out_ch = 0; out_ch < num_out; ++out_ch) {
-                const float gd = static_cast<float>(
+                const auto gd = static_cast<float>(
                     ramping ? interpolated_gain(
                                   channel.blocks[block_index - 1].gains, block.gains, out_ch, delta, interp_len)
                             : block.gains[out_ch]);
-                const float gf =
+                const auto gf =
                     static_cast<float>(ramping ? interpolated_gain(channel.blocks[block_index - 1].diffuse_gains,
                                                                    block.diffuse_gains,
                                                                    out_ch,
                                                                    delta,
                                                                    interp_len)
                                                : block.diffuse_gains[out_ch]);
-                ctx.col_direct[out_ch * stride + f] += in * gd;
-                ctx.col_diffuse[out_ch * stride + f] += in * gf;
+                ctx.col_direct[(out_ch * stride) + f] += in * gd;
+                ctx.col_diffuse[(out_ch * stride) + f] += in * gf;
             }
         }
     }
@@ -453,7 +464,7 @@ void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
         const uint16_t ic = channel.input_channel;
         const uint16_t num_in = ctx.num_in_ch;
         for (std::size_t f = 0; f < frames_now; ++f) {
-            ch_in_buf[f] = ctx.input[f * num_in + ic];
+            ch_in_buf[f] = ctx.input[(f * num_in) + ic];
         }
         accumulate_channel_block(channel, block_indices[ci], ctx, ch_in_buf.data(), frames_now);
     }
@@ -468,35 +479,35 @@ void apply_decorrelator(DecorrState& state,
                         std::size_t frames_now,
                         std::size_t num_out_ch) {
     constexpr std::size_t k_fft_len = 2048;
-    constexpr std::size_t k_bins = k_fft_len / 2 + 1; // 1025
-    constexpr std::size_t k_overlap_len = 511;        // K - 1
+    constexpr std::size_t k_bins = (k_fft_len / 2) + 1; // 1025
+    constexpr std::size_t k_overlap_len = 511;          // K - 1
 
     // Per-call scratch — small fixed size, stack-friendly via vector.
     std::vector<float> buf(k_fft_len);
-    std::vector<float_complex> X(k_bins);
-    std::vector<float_complex> Y(k_bins);
+    std::vector<float_complex> x_fd(k_bins);
+    std::vector<float_complex> y_fd(k_bins);
     std::vector<float> y(k_fft_len);
 
     for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
         // Deinterleave, zero-pad remainder.
-        std::fill(buf.begin(), buf.end(), 0.0F);
+        std::ranges::fill(buf, 0.0F);
         for (std::size_t f = 0; f < frames_now; ++f) {
-            buf[f] = diffuse_in[f * num_out_ch + ch];
+            buf[f] = diffuse_in[(f * num_out_ch) + ch];
         }
 
-        saf_rfft_forward(state.hFFT, buf.data(), X.data());
+        saf_rfft_forward(state.hFFT, buf.data(), x_fd.data());
 
         for (std::size_t b = 0; b < k_bins; ++b) {
-            Y[b] = X[b] * state.filter_fd[ch][b];
+            y_fd[b] = x_fd[b] * state.filter_fd[ch][b];
         }
 
         // saf_rfft_backward scales by 1/N internally — no extra scaling needed.
-        saf_rfft_backward(state.hFFT, Y.data(), y.data());
+        saf_rfft_backward(state.hFFT, y_fd.data(), y.data());
 
         // Overlap-add: accumulate saved tail into this block's output.
         auto& ovl = state.overlap[ch];
         for (std::size_t f = 0; f < frames_now; ++f) {
-            diffuse_out[f * num_out_ch + ch] = y[f] + (f < k_overlap_len ? ovl[f] : 0.0F);
+            diffuse_out[(f * num_out_ch) + ch] = y[f] + (f < k_overlap_len ? ovl[f] : 0.0F);
         }
 
         // Save new tail (y[frames_now .. frames_now + k_overlap_len - 1]).
@@ -567,6 +578,7 @@ CapabilityReport EarRenderer::capabilities() const {
     return ear_capabilities();
 }
 
+// NOLINTNEXTLINE(readability-function-size)
 Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
     try {
         const auto& info = plan.scene.info;
@@ -604,8 +616,8 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
 
         // Initialise decorrelator state for the diffuse bus.
         // Filters designed as float; precomputed in frequency domain for FFT convolution.
-        constexpr int k_fft_len = 2048;           // L: next pow2 >= 1024 + 512 - 1
-        constexpr int k_bins = k_fft_len / 2 + 1; // 1025
+        constexpr int k_fft_len = 2048;             // L: next pow2 >= 1024 + 512 - 1
+        constexpr int k_bins = (k_fft_len / 2) + 1; // 1025
         constexpr std::size_t k_fir_len = 512;
 
         DecorrState decorr;
@@ -619,9 +631,9 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
             decorr.filter_fd.resize(num_out_ch, std::vector<float_complex>(k_bins));
             std::vector<float> fir_buf(k_fft_len, 0.0F);
             for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-                std::fill(fir_buf.begin(), fir_buf.end(), 0.0F);
+                std::ranges::fill(fir_buf, 0.0F);
                 const auto& fir = raw_filters[ch];
-                std::copy(fir.begin(), fir.end(), fir_buf.begin());
+                std::ranges::copy(fir, fir_buf.begin());
                 saf_rfft_forward(decorr.hFFT, fir_buf.data(), decorr.filter_fd[ch].data());
             }
         }
@@ -670,8 +682,8 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
 
             // Zero column-major accumulation buffers (only the live region per channel).
             for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-                std::fill_n(col_direct.data() + ch * col_stride, frames_now, 0.0F);
-                std::fill_n(col_diffuse.data() + ch * col_stride, frames_now, 0.0F);
+                std::fill_n(col_direct.data() + (ch * col_stride), frames_now, 0.0F);
+                std::fill_n(col_diffuse.data() + (ch * col_stride), frames_now, 0.0F);
             }
 
             // Accumulate gains into column-major buffers (SIMD-friendly inner loop).
@@ -689,11 +701,11 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
 
             // Transpose column-major → interleaved for decorrelator and delay.
             for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-                const float* src_d = col_direct.data() + ch * col_stride;
-                const float* src_f = col_diffuse.data() + ch * col_stride;
+                const float* src_d = col_direct.data() + (ch * col_stride);
+                const float* src_f = col_diffuse.data() + (ch * col_stride);
                 for (std::size_t f = 0; f < frames_now; ++f) {
-                    out_block[f * num_out_ch + ch] = src_d[f];
-                    diffuse_in[f * num_out_ch + ch] = src_f[f];
+                    out_block[(f * num_out_ch) + ch] = src_d[f];
+                    diffuse_in[(f * num_out_ch) + ch] = src_f[f];
                 }
             }
 
@@ -765,6 +777,10 @@ CapabilityReport ear_capabilities() {
     r.supports_objects = true;
     r.supports_direct_speakers = true;
     r.supports_hoa = true; // HOA block decode via GainCalculatorHOA
+    r.supports_channel_lock = true;
+    r.supports_object_divergence = true;
+    r.supports_screen_ref = false;
+    r.supports_diffuse = true;
     // clang-format off
     r.supported_layouts = {
         {"0+2+0",  "Stereo",        2,  false, 0, true},

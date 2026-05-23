@@ -302,6 +302,10 @@ void print_capabilities(const mradm::CapabilityReport& caps) {
     fmt::print("  Objects:        {}\n", caps.supports_objects ? "yes" : "no");
     fmt::print("  DirectSpeakers: {}\n", caps.supports_direct_speakers ? "yes" : "no");
     fmt::print("  HOA:            {}\n", caps.supports_hoa ? "yes" : "no");
+    fmt::print("  ChannelLock:    {}\n", caps.supports_channel_lock ? "yes" : "no");
+    fmt::print("  Divergence:     {}\n", caps.supports_object_divergence ? "yes" : "no");
+    fmt::print("  ScreenRef:      {}\n", caps.supports_screen_ref ? "yes" : "no");
+    fmt::print("  Diffuse:        {}\n", caps.supports_diffuse ? "yes" : "no");
     const auto visible_layouts = std::ranges::count_if(
         caps.supported_layouts, [](const auto& layout) { return layout.is_binaural || layout.channel_count != 2U; });
     fmt::print("  Layouts ({}):\n", visible_layouts);
