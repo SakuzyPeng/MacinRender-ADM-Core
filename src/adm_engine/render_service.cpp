@@ -25,7 +25,7 @@ namespace {
 
 [[nodiscard]] std::tm utc_time(std::time_t t) {
     std::tm tm_utc{};
-#if defined(_WIN32)
+#ifdef _WIN32
     gmtime_s(&tm_utc, &t);
 #else
     gmtime_r(&t, &tm_utc);
@@ -76,6 +76,10 @@ class TempFileGuard {
 
 RenderService::RenderService() = default;
 
+// RenderService intentionally owns the full orchestration pipeline; splitting it
+// mechanically would hide the ordering constraints between render, post-process,
+// encode, and metadata.
+// NOLINTNEXTLINE(readability-function-size)
 RenderResult RenderService::render(const RenderRequest& request, ProgressSink& progress, LogSink& logs) const {
     progress.on_progress({RenderStage::validating, 0.0, "validating request"});
 
@@ -175,7 +179,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     double gain_db = 0.0;
 
     if (request.options.measure_loudness && metrics.measured_lufs.has_value()) {
-        const double target = static_cast<double>(request.options.loudness_target_lufs);
+        const auto target = static_cast<double>(request.options.loudness_target_lufs);
         const double delta = target - *metrics.measured_lufs;
         if (std::abs(delta) >= 0.1) {
             gain_db += delta;
@@ -188,7 +192,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
 
     if (request.options.peak_limit && metrics.measured_peak_dbtp.has_value()) {
         const double peak_after = *metrics.measured_peak_dbtp + gain_db;
-        const double target_peak = static_cast<double>(request.options.peak_limit_dbtp);
+        const auto target_peak = static_cast<double>(request.options.peak_limit_dbtp);
         const double peak_clamp = std::min(0.0, target_peak - peak_after);
         if (peak_clamp < -0.1) {
             gain_db += peak_clamp;
@@ -204,7 +208,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     }
 
     if (std::abs(gain_db) >= 0.01) {
-        const float gain_linear = static_cast<float>(std::pow(10.0, gain_db / 20.0));
+        const auto gain_linear = static_cast<float>(std::pow(10.0, gain_db / 20.0));
         logs.log(LogLevel::info, "engine", fmt::format("applying total gain {:.4f} ({:.2f} dB)", gain_linear, gain_db));
         auto gain_res = audio::apply_gain_to_file(render_path, gain_linear, output_layout);
         if (!gain_res) {

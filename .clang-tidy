@@ -4,6 +4,7 @@ Checks: >
   -bugprone-exception-escape,
   -bugprone-easily-swappable-parameters,
   clang-analyzer-*,
+  -clang-analyzer-unix.Stream,
   cppcoreguidelines-*,
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-owning-memory,

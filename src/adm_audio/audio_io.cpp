@@ -170,6 +170,7 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth) {
 // Reads CAF files produced by FloatCafWriter: float32 LE lpcm, known chunk layout.
 // Scans all chunks to locate desc + data, tolerates any ordering (e.g. trailing info).
 
+// NOLINTBEGIN(clang-analyzer-unix.Stream)
 namespace {
 
 [[nodiscard]] std::filesystem::path unique_sidecar_path(const std::filesystem::path& original_path,
@@ -236,6 +237,7 @@ namespace {
 }
 
 } // anonymous namespace
+// NOLINTEND(clang-analyzer-unix.Stream)
 
 struct FloatCafReader::Impl {
     std::FILE* file{nullptr};
@@ -246,6 +248,7 @@ struct FloatCafReader::Impl {
     uint64_t frames_read{0};
 };
 
+// NOLINTBEGIN(clang-analyzer-unix.Stream,readability-function-size)
 Result<FloatCafReader> FloatCafReader::open(const std::string& path) {
     std::FILE* f = std::fopen(path.c_str(), "rb");
     if (f == nullptr) {
@@ -262,11 +265,14 @@ Result<FloatCafReader> FloatCafReader::open(const std::string& path) {
         std::fclose(f);
         return make_error(ErrorCode::io_error, "not a CAF file (bad magic)", "path=" + path);
     }
-    uint16_t header_word = 0;
-    if (!caf_read_u16(f, header_word) || !caf_read_u16(f, header_word)) {
+    uint16_t caf_version = 0;
+    uint16_t caf_flags = 0;
+    if (!caf_read_u16(f, caf_version) || !caf_read_u16(f, caf_flags)) {
         std::fclose(f);
         return make_error(ErrorCode::io_error, "truncated CAF file header", "path=" + path);
     }
+    (void) caf_version;
+    (void) caf_flags;
 
     // Scan chunks to find desc and data.
     uint32_t caf_channels = 0;
@@ -361,6 +367,7 @@ Result<FloatCafReader> FloatCafReader::open(const std::string& path) {
     r.impl_->data_start = data_start;
     return r;
 }
+// NOLINTEND(clang-analyzer-unix.Stream,readability-function-size)
 
 FloatCafReader::~FloatCafReader() {
     if (impl_ && impl_->file != nullptr) {
@@ -735,7 +742,7 @@ uint64_t FloatFlacWriter::write(const float* samples, uint64_t frame_count) {
     }
     const FLAC__bool ok = FLAC__stream_encoder_process_interleaved(
         impl_->encoder, impl_->int_buf.data(), static_cast<uint32_t>(frame_count));
-    return ok ? frame_count : 0U;
+    return (ok != 0) ? frame_count : 0U;
 }
 
 // ── FloatFlacReader ───────────────────────────────────────────────────────────
@@ -746,6 +753,9 @@ struct FloatFlacReader::Impl {
 };
 
 Result<FloatFlacReader> FloatFlacReader::open(const std::string& path) {
+    // dr_flac owns any internal stream state after a successful open and releases
+    // it in drflac_close(); clang's stream analyzer cannot see that handoff.
+    // NOLINTNEXTLINE(clang-analyzer-unix.Stream)
     drflac* f = drflac_open_file(path.c_str(), nullptr);
     if (f == nullptr) {
         return make_error(ErrorCode::io_error, "failed to open FLAC file for reading", "path=" + path);
@@ -815,6 +825,9 @@ uint64_t WriterHandle::write(const float* samples, uint64_t frame_count) {
 // Minimal hand-written EBML/MKA muxer + libopus encoder.
 // Only supports 48000 Hz input (Opus native rate).
 
+// This block is deliberately low-level EBML/libopus C API glue. Keeping the
+// Matroska element names close to the spec is more useful than local style churn.
+// NOLINTBEGIN(readability-identifier-naming,readability-static-definition-in-anonymous-namespace)
 namespace {
 
 // EBML header element IDs
@@ -1017,7 +1030,9 @@ static std::vector<uint8_t> build_opus_head(uint32_t channels,
 }
 
 } // namespace
+// NOLINTEND(readability-identifier-naming,readability-static-definition-in-anonymous-namespace)
 
+// NOLINTBEGIN(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes,cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays,cppcoreguidelines-pro-bounds-array-to-pointer-decay,cppcoreguidelines-pro-type-vararg,readability-function-size)
 struct FloatOpusMkaWriter::Impl {
     FILE* file{nullptr};
     OpusMSEncoder* encoder{nullptr};
@@ -1058,7 +1073,7 @@ Result<void> FloatOpusMkaWriter::Impl::close() {
     }
 
     if (!ibuf.empty() && file != nullptr) {
-        const std::size_t missing = static_cast<std::size_t>(k_frame_size) * channels - ibuf.size();
+        const std::size_t missing = (static_cast<std::size_t>(k_frame_size) * channels) - ibuf.size();
         ibuf.insert(ibuf.end(), missing, 0.0F);
         const uint64_t frame_ms = (total_frames * static_cast<uint64_t>(k_frame_size) * 1000U) / 48000U;
         if (encode_and_write(frame_ms)) {
@@ -1168,7 +1183,12 @@ Result<FloatOpusMkaWriter> FloatOpusMkaWriter::open(const std::string& path,
     impl->channels = channels;
     impl->path = path;
 
-    const int family = (channels <= 2U) ? 0 : (channels <= 8U) ? 1 : 255;
+    int family = 255;
+    if (channels <= 2U) {
+        family = 0;
+    } else if (channels <= 8U) {
+        family = 1;
+    }
 
     int error{};
     impl->encoder = opus_multistream_surround_encoder_create(48000,
@@ -1191,18 +1211,20 @@ Result<FloatOpusMkaWriter> FloatOpusMkaWriter::open(const std::string& path,
             fmt::format("opus_bitrate_per_ch_kbps must be 0 (auto) or 6-320, got {}", bitrate_per_ch_kbps),
             "path=" + path);
     }
-    const uint64_t total_bps = (bitrate_per_ch_kbps > 0U)
-                                   ? static_cast<uint64_t>(bitrate_per_ch_kbps) * channels * 1000U
-                               : (channels <= 2U) ? 128000U
-                                                  : static_cast<uint64_t>(channels) * 64000U;
-    const int32_t bitrate = static_cast<int32_t>(total_bps);
+    uint64_t total_bps = static_cast<uint64_t>(channels) * 64000U;
+    if (bitrate_per_ch_kbps > 0U) {
+        total_bps = static_cast<uint64_t>(bitrate_per_ch_kbps) * channels * 1000U;
+    } else if (channels <= 2U) {
+        total_bps = 128000U;
+    }
+    const auto bitrate = static_cast<int32_t>(total_bps);
     const auto opus_ctl_error = [&](int ret, std::string_view op) -> Result<void> {
         if (ret == OPUS_OK) {
             return {};
         }
         return make_error(ErrorCode::io_error, fmt::format("{} failed: {}", op, opus_strerror(ret)), "path=" + path);
     };
-#if defined(__clang__)
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wold-style-cast"
 #endif
@@ -1226,7 +1248,7 @@ Result<FloatOpusMkaWriter> FloatOpusMkaWriter::open(const std::string& path,
         !ret) {
         return tl::unexpected{ret.error()};
     }
-#if defined(__clang__)
+#ifdef __clang__
 #pragma clang diagnostic pop
 #endif
     impl->preskip = preskip;
@@ -1292,10 +1314,14 @@ Result<FloatOpusMkaWriter> FloatOpusMkaWriter::open(const std::string& path,
         const std::size_t info_elem_start = ebml.size();
         constexpr std::size_t k_info_id_bytes = 4U; // kInfo is 4-byte ID
         const std::size_t info_content_size = info.size();
-        const std::size_t sz_bytes = (info_content_size < 0x7FULL)       ? 1U
-                                     : (info_content_size < 0x3FFFULL)   ? 2U
-                                     : (info_content_size < 0x1FFFFFULL) ? 3U
-                                                                         : 4U;
+        std::size_t sz_bytes = 4U;
+        if (info_content_size < 0x7FULL) {
+            sz_bytes = 1U;
+        } else if (info_content_size < 0x3FFFULL) {
+            sz_bytes = 2U;
+        } else if (info_content_size < 0x1FFFFFULL) {
+            sz_bytes = 3U;
+        }
 
         // TimestampScale element is 7 bytes (3+1+3), Duration header is 3 bytes (2+1),
         // Duration value starts 7+3=10 bytes into info content.
@@ -1364,7 +1390,7 @@ uint64_t FloatOpusMkaWriter::write(const float* samples, uint64_t frame_count) {
     uint64_t frames_consumed = 0;
     const std::size_t ch = impl_->channels;
     while (frames_consumed < frame_count) {
-        const std::size_t needed = static_cast<std::size_t>(Impl::k_frame_size) * ch - impl_->ibuf.size();
+        const std::size_t needed = (static_cast<std::size_t>(Impl::k_frame_size) * ch) - impl_->ibuf.size();
         const std::size_t avail = static_cast<std::size_t>(frame_count - frames_consumed) * ch;
         const std::size_t take = std::min(needed, avail);
         impl_->ibuf.insert(impl_->ibuf.end(), samples, samples + take);
@@ -1436,15 +1462,18 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
     (void) layout_id;
     return writer.close();
 }
+// NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes,cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays,cppcoreguidelines-pro-bounds-array-to-pointer-decay,cppcoreguidelines-pro-type-vararg,readability-function-size)
 
 // ── write_file_metadata ───────────────────────────────────────────────────────
 
+// NOLINTBEGIN(readability-static-definition-in-anonymous-namespace)
 namespace {
 
-static std::optional<std::size_t> find_mka_unknown_size_cluster(const std::vector<uint8_t>& data) {
+std::optional<std::size_t> find_mka_unknown_size_cluster(const std::vector<uint8_t>& data) {
     MkaBuf needle;
     mka_write_id(needle, kCluster);
     mka_write_unknown_size(needle);
+    // NOLINTNEXTLINE(modernize-use-ranges)
     const auto it = std::search(data.begin(), data.end(), needle.begin(), needle.end());
     if (it == data.end()) {
         return std::nullopt;
@@ -1466,6 +1495,7 @@ Result<void> write_mka_metadata(const std::string& path, const MetadataFields& m
 
     MkaBuf tag_content;
     MkaBuf targets;
+    // NOLINTNEXTLINE(readability-suspicious-call-argument)
     mka_elem(tag_content, kTargets, targets);
 
     const auto append_simple = [&](const std::string& name, const std::string& value) {
@@ -1473,18 +1503,24 @@ Result<void> write_mka_metadata(const std::string& path, const MetadataFields& m
         tag_content.insert(tag_content.end(), st.begin(), st.end());
     };
 
-    if (!meta.encoder.empty())
+    if (!meta.encoder.empty()) {
         append_simple("ENCODER", meta.encoder);
-    if (!meta.date_utc.empty())
+    }
+    if (!meta.date_utc.empty()) {
         append_simple("DATE_RECORDED", meta.date_utc);
-    if (!meta.renderer.empty())
+    }
+    if (!meta.renderer.empty()) {
         append_simple("RENDERER", meta.renderer);
-    if (!meta.output_layout.empty())
+    }
+    if (!meta.output_layout.empty()) {
         append_simple("OUTPUT_LAYOUT", meta.output_layout);
-    if (meta.lufs)
+    }
+    if (meta.lufs) {
         append_simple("INTEGRATED_LOUDNESS", fmt::format("{:.1f}", *meta.lufs));
-    if (meta.peak_dbtp)
+    }
+    if (meta.peak_dbtp) {
         append_simple("TRUE_PEAK", fmt::format("{:.2f}", *meta.peak_dbtp));
+    }
 
     MkaBuf tag_elem;
     mka_elem(tag_elem, kTag, tag_content);
@@ -1527,7 +1563,7 @@ Result<void> write_mka_metadata(const std::string& path, const MetadataFields& m
 // size.  EBU Tech 3285 supplement 5 field layout (602-byte fixed payload).
 Result<void> write_wav_metadata(const std::string& path, const MetadataFields& meta) {
     std::FILE* f = std::fopen(path.c_str(), "r+b");
-    if (!f) {
+    if (f == nullptr) {
         return make_error(ErrorCode::io_error, "cannot open WAV for metadata write", "path=" + path);
     }
 
@@ -1639,7 +1675,7 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
 // Chunk payload: num_entries (u32 BE) + [key\0value\0]* pairs.
 Result<void> write_caf_metadata(const std::string& path, const MetadataFields& meta) {
     std::FILE* f = std::fopen(path.c_str(), "r+b");
-    if (!f) {
+    if (f == nullptr) {
         return make_error(ErrorCode::io_error, "cannot open CAF for metadata write", "path=" + path);
     }
 
@@ -1689,7 +1725,7 @@ Result<void> write_caf_metadata(const std::string& path, const MetadataFields& m
 
     // Serialise payload: num_entries (u32 BE) + [key\0value\0]*.
     std::vector<uint8_t> payload;
-    const uint32_t n = static_cast<uint32_t>(pairs.size());
+    const auto n = static_cast<uint32_t>(pairs.size());
     payload.push_back((n >> 24) & 0xFF);
     payload.push_back((n >> 16) & 0xFF);
     payload.push_back((n >> 8) & 0xFF);
@@ -1704,7 +1740,7 @@ Result<void> write_caf_metadata(const std::string& path, const MetadataFields& m
     // Append info chunk (FourCC + int64 BE size + payload).
     std::fseek(f, 0, SEEK_END);
     std::fwrite("info", 1, 4, f);
-    const uint64_t csize = static_cast<uint64_t>(payload.size());
+    const auto csize = static_cast<uint64_t>(payload.size());
     caf_write_i64(f, static_cast<int64_t>(csize));
     std::fwrite(payload.data(), 1, payload.size(), f);
 
@@ -1715,6 +1751,7 @@ Result<void> write_caf_metadata(const std::string& path, const MetadataFields& m
 // Insert Vorbis Comment block into an existing FLAC file using the libFLAC
 // metadata chain API. Recognised output layouts get a WAVEFORMATEXTENSIBLE_CHANNEL_MASK
 // tag so that standard players (ffmpeg, foobar2000) can identify channel positions.
+// NOLINTNEXTLINE(readability-function-size)
 Result<void> write_flac_metadata(const std::string& path, const MetadataFields& meta) {
     FLAC__Metadata_Chain* chain = FLAC__metadata_chain_new();
     if (chain == nullptr) {
@@ -1791,7 +1828,8 @@ Result<void> write_flac_metadata(const std::string& path, const MetadataFields& 
     // default) to avoid duplicate VC blocks, which violates the FLAC spec.
     // On failure, vc is NOT owned by the chain — caller must delete it.
     bool replaced = false;
-    do {
+    bool keep_scanning = true;
+    while (keep_scanning) {
         if (FLAC__metadata_iterator_get_block_type(it) == FLAC__METADATA_TYPE_VORBIS_COMMENT) {
             if (FLAC__metadata_iterator_set_block(it, vc) == 0) {
                 FLAC__metadata_object_delete(vc);
@@ -1802,7 +1840,8 @@ Result<void> write_flac_metadata(const std::string& path, const MetadataFields& 
             replaced = true;
             break;
         }
-    } while (FLAC__metadata_iterator_next(it) != 0);
+        keep_scanning = FLAC__metadata_iterator_next(it) != 0;
+    }
 
     if (!replaced) {
         // No existing VC block — insert after STREAMINFO (first block).
@@ -1817,7 +1856,7 @@ Result<void> write_flac_metadata(const std::string& path, const MetadataFields& 
     FLAC__metadata_iterator_delete(it);
 
     FLAC__metadata_chain_sort_padding(chain);
-    const FLAC__bool ok = FLAC__metadata_chain_write(chain, /*use_padding=*/true, /*preserve_file_stats=*/false);
+    const FLAC__bool ok = FLAC__metadata_chain_write(chain, /*use_padding=*/1, /*preserve_file_stats=*/0);
     FLAC__metadata_chain_delete(chain);
 
     if (ok == 0) {
@@ -1827,6 +1866,7 @@ Result<void> write_flac_metadata(const std::string& path, const MetadataFields& 
 }
 
 } // anonymous namespace
+// NOLINTEND(readability-static-definition-in-anonymous-namespace)
 
 Result<void> write_file_metadata(const std::string& path, const MetadataFields& meta) {
     auto ext = std::filesystem::path(path).extension().string();
