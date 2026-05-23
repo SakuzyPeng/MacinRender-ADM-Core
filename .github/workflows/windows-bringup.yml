@@ -1,0 +1,84 @@
+name: Windows Bring-up
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: windows-bringup-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  msvc:
+    name: Windows MSVC CLI
+    runs-on: windows-2025
+
+    env:
+      FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-bincache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Restore FetchContent cache
+        uses: actions/cache@v5
+        with:
+          path: .fc-cache
+          key: fc-windows-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            fc-windows-
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v5
+        with:
+          path: .vcpkg-bincache
+          key: vcpkg-windows-openblas-${{ hashFiles('.github/workflows/windows-bringup.yml') }}
+          restore-keys: |
+            vcpkg-windows-openblas-
+
+      - name: Install native dependencies
+        shell: pwsh
+        run: |
+          vcpkg install boost-headers openblas --triplet x64-windows
+
+      - name: Locate OpenBLAS for SAF
+        shell: pwsh
+        run: |
+          $prefix = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows"
+          $include = Join-Path $prefix "include"
+          $libDir = Join-Path $prefix "lib"
+          $openblas = Get-ChildItem $libDir -Filter "*openblas*.lib" | Select-Object -First 1
+          if ($null -eq $openblas) {
+            throw "openblas .lib not found in $libDir"
+          }
+          "OPENBLAS_LIBRARY=$($openblas.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "LAPACKE_LIBRARY=$($openblas.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "OPENBLAS_HEADER_PATH=$include" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "LAPACKE_HEADER_PATH=$include" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Using OpenBLAS library: $($openblas.FullName)"
+          Write-Host "Using OpenBLAS include: $include"
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build/windows -G Ninja `
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DFETCHCONTENT_BASE_DIR="$env:FC_CACHE_DIR" `
+            -DMR_ADM_CORE_BUILD_TESTS=OFF `
+            -DMR_ADM_FLAC_PROVIDER=VENDORED `
+            -DMR_ADM_OPUS_PROVIDER=VENDORED `
+            -DSAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE `
+            -DOPENBLAS_LIBRARY="$env:OPENBLAS_LIBRARY" `
+            -DLAPACKE_LIBRARY="$env:LAPACKE_LIBRARY" `
+            -DOPENBLAS_HEADER_PATH="$env:OPENBLAS_HEADER_PATH" `
+            -DLAPACKE_HEADER_PATH="$env:LAPACKE_HEADER_PATH"
+
+      - name: Build CLI
+        run: cmake --build build/windows --target mradm_exe --config RelWithDebInfo
+
+      - name: Smoke
+        shell: pwsh
+        run: |
+          .\build\windows\mradm.exe --version
+          .\build\windows\mradm.exe backends

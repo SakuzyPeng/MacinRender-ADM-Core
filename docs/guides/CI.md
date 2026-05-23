@@ -126,4 +126,6 @@ sudo apt-get install -y clang-format clang-tidy cppcheck
 1. 观察第一轮 GitHub runner 上 FetchContent、SAF、vendored FLAC/Opus 是否稳定。
 2. 如果 quality 太慢，保留 PR changed，必要时把 main full 改成夜间 schedule。
 3. release job 后续补 macOS 签名/notarization、GitHub Release 自动创建和完整第三方 license bundle。
-4. Windows 暂列为后续工作；需要先确认 SAF、Boost、libadm/libear 和 APAC skip 路径在 MSVC 上的构建边界。
+4. Windows 暂用 `.github/workflows/windows-bringup.yml` 手动验证 MSVC + Ninja + vcpkg OpenBLAS 的 CLI
+   构建边界。该 workflow 先关闭测试，只构建 `mradm_exe` 并运行 `mradm --version` / `mradm backends`；
+   绿灯后再逐步打开 smoke tests、运行实际渲染 fixture，并评估是否加入默认 CI 矩阵。
