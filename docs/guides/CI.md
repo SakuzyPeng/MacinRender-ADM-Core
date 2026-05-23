@@ -1,0 +1,124 @@
+# CI 设计
+
+本文档记录 MacinRender ADM Core 的 GitHub Actions CI 设计与当前落地状态。目标是先建立稳定的
+跨平台构建与测试基线，再逐步完善发布打包、许可证 bundle 和更重的静态分析。
+
+## 目标
+
+- 每个 pull request 都能验证 CMake 配置、编译、单元 / fixture 测试和 CLI smoke。
+- macOS 路径必须覆盖 APAC、CAF layout、AudioToolbox 和 Accelerate 相关代码。
+- Linux 路径用于验证跨平台构建和非 Apple 输出格式，避免 Apple framework 偶然泄漏到公共路径。
+- 质量检查与本地脚本一致，优先复用 `scripts/quality/*`。
+- CI 不依赖私有音频素材；只使用测试代码运行时生成的小 fixture。
+
+## 阶段划分
+
+### 第一阶段：必需 CI
+
+当前已落地在 `.github/workflows/ci.yml`。PR、push 到 `main` 和手动触发都会运行。
+
+| Job | Runner | 内容 | 说明 |
+|---|---|---|---|
+| `macos-debug` | `macos-15` 或当前最新 macOS arm64 | `cmake --preset debug`、`cmake --build --preset debug`、`ctest --preset debug` | 主验证路径；覆盖 APAC smoke 和 CoreAudio layout |
+| `linux-debug` | `ubuntu-24.04` | `cmake --preset debug`、`cmake --build --preset debug`、`ctest --preset debug` | APAC 测试会自动 skip；验证跨平台核心 |
+
+这两个 job 均显式使用 `MR_ADM_FLAC_PROVIDER=VENDORED` 和 `MR_ADM_OPUS_PROVIDER=VENDORED`
+作为 CI 默认值，减少系统包差异。系统仍需安装 CMake、Ninja、Boost headers、ccache 和平台编译工具；
+`libbw64/libadm/libear/SAF/FLAC/Opus` 由 FetchContent 或 vendored provider 处理。
+
+### 第二阶段：质量 CI
+
+当前已落地在 `.github/workflows/quality.yml`。质量 job 初期只跑在 macOS，因为
+clang-tidy 脚本已经包含 macOS SDK 参数处理，且项目当前主要开发环境是 macOS。
+
+| Job | Runner | 触发 | 内容 |
+|---|---|---|---|
+| `quality` | `macos-15` | pull request | `cmake --preset debug`、`scripts/quality/check-changed.sh --base origin/main --build-dir build/debug` |
+| `quality` | `macos-15` | push 到 `main` / 手动 full | `cmake --preset debug`、`scripts/quality/check-all.sh build/debug` |
+| `quality` | `macos-15` | 手动 changed | `check-changed.sh` |
+
+`check-all.sh` 会全量扫描 `include/`、`src/`、`tests/`。如果后续耗时过长，可以继续保留
+PR changed / main full 的分层策略。
+
+### 第三阶段：发布构建
+
+当前已落地在 `.github/workflows/release.yml`。发布构建用于验证 vendored static provider 和优化配置，
+不在 PR 或普通 push 中运行。
+
+| Job | 触发 | 内容 |
+|---|---|---|
+| `release-macos` | tag `v*`、手动触发 | `cmake --preset release`、`cmake --build --preset release --target mradm_exe`、上传 `mradm-macos` |
+| `release-linux` | tag `v*`、手动触发 | 同上，上传 `mradm-linux` |
+
+release workflow 只上传裸 `mradm` 二进制 artifact；签名、压缩包、license bundle 和 GitHub Release
+创建留到发行策略明确后再加。
+
+## 缓存策略
+
+CI 使用两层缓存，不缓存 CMake build tree。
+
+| 缓存 | 路径 | 用途 | key 依据 |
+|---|---|---|---|
+| FetchContent | `.fc-cache` | 缓存第三方源码 checkout，降低网络波动 | OS + `cmake/MRDependencies.cmake` + `CMakeLists.txt` + `CMakePresets.json` |
+| ccache | `.ccache` | 缓存编译产物 | OS + job 类型 + commit SHA，带 OS/job restore key |
+
+所有 job 都 fresh configure。这样即使 CMake cache 或 FetchContent 状态变化，也不会复用旧 build tree。
+
+## 依赖安装建议
+
+### macOS
+
+```bash
+brew install cmake ninja boost llvm cppcheck ccache
+```
+
+CI 中应显式把 Homebrew LLVM 放入 `PATH`：
+
+```bash
+echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+```
+
+### Linux
+
+```bash
+sudo apt-get update
+sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache libboost-all-dev libopenblas-dev liblapacke-dev
+```
+
+如果 Linux job 后续启用质量检查，再安装：
+
+```bash
+sudo apt-get install -y clang-format clang-tidy cppcheck
+```
+
+## 需要注意的边界
+
+- APAC 编码只在 macOS 可用；Linux / Windows 上 `mr_adm_apac_smoke_tests` 会跳过。
+- SAF 使用 Apple Accelerate 的路径只在 macOS 存在；Linux 走 SAF 的通用路径。
+- SOFA reader 默认开启，但 NetCDF 关闭；CI 不需要下载外部 SOFA 数据集。
+- Release preset 默认会让 FLAC / Opus 的 `AUTO` provider 走 vendored static；Debug 在本机可能优先系统库。CI 建议显式指定 provider，减少 runner 差异。
+- `mradm` 是唯一正式 CLI 二进制名；CI 不应检查或生成 `adm` 兼容入口。
+
+## 当前 workflow 摘要
+
+```yaml
+.github/workflows/ci.yml
+  pull_request / push main / workflow_dispatch
+  macOS debug + Linux debug
+
+.github/workflows/quality.yml
+  pull_request / push main / workflow_dispatch
+  PR: changed quality
+  main/manual full: full quality
+
+.github/workflows/release.yml
+  tag v* / workflow_dispatch
+  macOS release + Linux release artifacts
+```
+
+## 后续实施顺序
+
+1. 观察第一轮 GitHub runner 上 FetchContent、SAF、vendored FLAC/Opus 是否稳定。
+2. 如果 quality 太慢，保留 PR changed，必要时把 main full 改成夜间 schedule。
+3. release job 后续补签名、压缩包、checksum 和第三方 license bundle。
+4. Windows 暂列为后续工作；需要先确认 SAF、Boost、libadm/libear 和 APAC skip 路径在 MSVC 上的构建边界。

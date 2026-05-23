@@ -1,0 +1,82 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Quality scope"
+        type: choice
+        options:
+          - full
+          - changed
+        default: full
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: macOS quality
+    runs-on: macos-15
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPRESS: "true"
+      FC_CACHE_DIR: ${{ github.workspace }}/.fc-cache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: brew install cmake ninja boost llvm cppcheck ccache
+
+      - name: Add LLVM tools to PATH
+        run: echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+
+      - name: Restore FetchContent cache
+        uses: actions/cache@v4
+        with:
+          path: .fc-cache
+          key: fc-quality-${{ runner.os }}-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            fc-quality-${{ runner.os }}-
+            fc-${{ runner.os }}-
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ runner.os }}-quality-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-quality-
+            ccache-${{ runner.os }}-
+
+      - name: Configure
+        run: >
+          cmake --preset debug
+          -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
+          -DMR_ADM_FLAC_PROVIDER=VENDORED
+          -DMR_ADM_OPUS_PROVIDER=VENDORED
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Changed quality checks
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'changed')
+        run: scripts/quality/check-changed.sh --base origin/main --build-dir build/debug
+
+      - name: Full quality checks
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full')
+        run: scripts/quality/check-all.sh build/debug
+
+      - name: ccache stats
+        if: always()
+        run: ccache --show-stats || true

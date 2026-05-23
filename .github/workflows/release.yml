@@ -1,0 +1,91 @@
+name: Release Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS release
+            runner: macos-15
+            artifact: mradm-macos
+            binary: build/release/mradm
+            install: brew install cmake ninja boost ccache
+          - name: Linux release
+            runner: ubuntu-24.04
+            artifact: mradm-linux
+            binary: build/release/mradm
+            install: |
+              sudo apt-get update
+              sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache libboost-all-dev libopenblas-dev liblapacke-dev
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPRESS: "true"
+      FC_CACHE_DIR: ${{ github.workspace }}/.fc-cache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: ${{ matrix.install }}
+
+      - name: Restore FetchContent cache
+        uses: actions/cache@v4
+        with:
+          path: .fc-cache
+          key: fc-release-${{ runner.os }}-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            fc-release-${{ runner.os }}-
+            fc-${{ runner.os }}-
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ runner.os }}-release-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-release-
+            ccache-${{ runner.os }}-
+
+      - name: Configure
+        run: >
+          cmake --preset release
+          -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
+          -DMR_ADM_FLAC_PROVIDER=VENDORED
+          -DMR_ADM_OPUS_PROVIDER=VENDORED
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build --preset release --target mradm_exe
+
+      - name: Smoke
+        run: |
+          "${{ matrix.binary }}" --version
+          "${{ matrix.binary }}" backends
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.binary }}
+          if-no-files-found: error
+
+      - name: ccache stats
+        if: always()
+        run: ccache --show-stats || true
