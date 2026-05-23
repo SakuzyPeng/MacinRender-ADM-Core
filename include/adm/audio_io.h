@@ -246,6 +246,7 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
 //   "binaural" → request Binaural 2ch input layout (no swap; afinfo reports APAC output as Stereo)
 //   "0+2+0"    → MPEG_2_0 stereo (no swap)
 //   "wav71"    → AudioUnit_7_1  (ch4↔ch6, ch5↔ch7 swap applied before encoding)
+//   "hoa3"     → HOA_ACN_SN3D 16ch (ACN 0..15, no swap)
 //   "5.1.4"    → Atmos_5_1_4   (no swap)
 //   "7.1.4"    → Atmos_7_1_4   (no swap)
 //   "9.1.6"    → Atmos_9_1_6   (no swap)

@@ -70,7 +70,7 @@ cmake --build build/release
 | CAF | `.caf` | float32 PCM | 全平台 |
 | FLAC | `.flac` | 24-bit integer FLAC，1-8 声道 | 全平台 |
 | Opus MKA | `.mka` | Opus VBR | 全平台 |
-| APAC | `.m4a` | APAC VBR | macOS only |
+| APAC | `.m4a` / `.mp4` | APAC VBR | macOS only |
 
 “编码支持”只表示本项目可在对应平台写出该格式，不代表目标系统或播放器一定能原生识别布局或直接回放。
 

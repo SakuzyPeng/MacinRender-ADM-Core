@@ -293,6 +293,29 @@ bool verify_apac_222() {
     return check(std::filesystem::file_size(m4a) > 10000U, "22.2 .m4a suspiciously small");
 }
 
+bool verify_apac_hoa3() {
+    const std::string wav = "/tmp/mr_apac_hoa3_src.wav";
+    const std::string m4a = "/tmp/mr_apac_hoa3.m4a";
+    FileGuard gw(wav);
+    FileGuard gm(m4a);
+
+    if (!write_test_wav(wav, 16U, 48000U, 48000U)) {
+        return false;
+    }
+    auto res = mradm::audio::convert_to_apac(wav, m4a, "hoa3");
+    if (!check(res.has_value(), "convert_to_apac(hoa3) failed")) {
+        return false;
+    }
+    if (!check(std::filesystem::exists(m4a), "HOA3 .m4a not created")) {
+        return false;
+    }
+    if (!check(std::filesystem::file_size(m4a) > 10000U, "HOA3 .m4a suspiciously small")) {
+        return false;
+    }
+    std::vector<float> decoded;
+    return check(decode_apac_to_pcm(m4a, 16U, decoded), "HOA3 APAC decodes as 16ch");
+}
+
 bool verify_apac_binaural() {
     const std::string wav = "/tmp/mr_apac_binaural_src.wav";
     const std::string m4a = "/tmp/mr_apac_binaural.m4a";
@@ -340,9 +363,9 @@ bool verify_apac_binaural() {
 }
 
 bool verify_apac_wrong_layout_rejected() {
-    auto res = mradm::audio::convert_to_apac("/tmp/nope.wav", "/tmp/nope.m4a", "hoa3");
+    auto res = mradm::audio::convert_to_apac("/tmp/nope.wav", "/tmp/nope.m4a", "bogus-layout");
     return check(!res.has_value() && res.error().code == mradm::ErrorCode::unsupported,
-                 "unsupported layout 'hoa3' should be rejected");
+                 "unsupported layout should be rejected");
 }
 
 bool verify_apac_wrong_samplerate_rejected() {
@@ -384,6 +407,7 @@ int main() {
     ok &= verify_apac_atmos714();
     ok &= verify_apac_atmos916();
     ok &= verify_apac_222();
+    ok &= verify_apac_hoa3();
     ok &= verify_apac_binaural();
     ok &= verify_apac_wrong_layout_rejected();
     ok &= verify_apac_wrong_samplerate_rejected();
