@@ -220,9 +220,9 @@ mr_adm_core_apply_warnings(mr_adm_render_binaural)
 mr_adm_core_apply_static_analysis(mr_adm_render_binaural)
 
 # ── adm_audio ─────────────────────────────────────────────────────────────────
-# Float32 WAV/CAF/FLAC and Opus MKA I/O. DR_WAV_IMPLEMENTATION and
-# DR_FLAC_IMPLEMENTATION are defined in audio_io.cpp only. FLAC encoding uses
-# libFLAC; decoding uses dr_flac.
+# Float32 WAV/CAF/FLAC, Opus MKA, APAC, and metadata I/O.
+# DR_WAV_IMPLEMENTATION is defined in wav_io.cpp only; DR_FLAC_IMPLEMENTATION is
+# defined in flac_io.cpp only. FLAC encoding uses libFLAC; decoding uses dr_flac.
 
 add_library(mr_adm_audio)
 add_library(MacinRender::ADMAudio ALIAS mr_adm_audio)
@@ -230,7 +230,13 @@ add_library(MacinRender::ADMAudio ALIAS mr_adm_audio)
 target_sources(
     mr_adm_audio
     PRIVATE
-        src/adm_audio/audio_io.cpp
+        src/adm_audio/apac_io.cpp
+        src/adm_audio/audio_handles.cpp
+        src/adm_audio/caf_io.cpp
+        src/adm_audio/flac_io.cpp
+        src/adm_audio/metadata_io.cpp
+        src/adm_audio/opus_mka_io.cpp
+        src/adm_audio/wav_io.cpp
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS include
@@ -352,8 +358,16 @@ mr_adm_core_apply_static_analysis(mr_adm_c_api)
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 if(MR_ADM_CORE_BUILD_CLI)
-    add_executable(adm_exe src/adm_cli/main.cpp)
+    add_executable(adm_exe)
     set_target_properties(adm_exe PROPERTIES OUTPUT_NAME adm)
+    target_sources(adm_exe
+        PRIVATE
+            src/adm_cli/backends_command.cpp
+            src/adm_cli/inspect_command.cpp
+            src/adm_cli/layouts_command.cpp
+            src/adm_cli/main.cpp
+            src/adm_cli/render_command.cpp
+    )
     target_link_libraries(
         adm_exe
         PRIVATE
