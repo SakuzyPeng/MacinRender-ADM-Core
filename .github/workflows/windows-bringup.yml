@@ -39,6 +39,7 @@ jobs:
       - name: Install native dependencies
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
           vcpkg install boost-headers openblas --triplet x64-windows
 
       - name: Locate OpenBLAS for SAF
