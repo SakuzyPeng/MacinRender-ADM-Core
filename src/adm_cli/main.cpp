@@ -267,6 +267,34 @@ void print_scene(const std::string& path, const mradm::AdmScene& scene) {
 }
 
 void print_capabilities(const mradm::CapabilityReport& caps) {
+    auto layout_label = [](const std::string& id) {
+        if (id == "0+2+0") {
+            return std::string{"stereo"};
+        }
+        if (id == "0+5+0") {
+            return std::string{"5.1"};
+        }
+        if (id == "2+5+0") {
+            return std::string{"5.1.2"};
+        }
+        if (id == "wav71") {
+            return std::string{"7.1"};
+        }
+        if (id == "4+5+0") {
+            return std::string{"5.1.4"};
+        }
+        if (id == "4+5+4") {
+            return std::string{"9.1.4"};
+        }
+        if (id == "4+7+0") {
+            return std::string{"7.1.4"};
+        }
+        if (id == "9+10+3") {
+            return std::string{"22.2"};
+        }
+        return id;
+    };
+
     fmt::print("Backend: {} {}\n", caps.backend_name, caps.backend_version);
     fmt::print("  Objects:        {}\n", caps.supports_objects ? "yes" : "no");
     fmt::print("  DirectSpeakers: {}\n", caps.supports_direct_speakers ? "yes" : "no");
@@ -289,7 +317,8 @@ void print_capabilities(const mradm::CapabilityReport& caps) {
         if (layout.is_binaural) {
             flags += " binaural";
         }
-        fmt::print("    {:<12}  {:<30}  {}\n", layout.id, layout.display_name, flags);
+        const std::string label = layout.is_binaural ? std::string{"binaural"} : layout_label(layout.id);
+        fmt::print("    {:<12}  {:<30}  {}\n", label, layout.display_name, flags);
     }
 }
 

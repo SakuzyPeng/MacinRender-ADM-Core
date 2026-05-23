@@ -145,9 +145,10 @@ int main() {
         auto r = run_cmd(adm_exe + " backends");
         ok &= check(r.code == 0, "backends: exit 0");
         ok &= check(r.out.find("libear") != std::string::npos, "backends: 'libear' in output");
-        ok &= check(r.out.find("0+2+0") != std::string::npos, "backends: stereo layout listed");
-        ok &= check(r.out.find("wav71") != std::string::npos, "backends: wav71 layout listed");
+        ok &= check(r.out.find("stereo") != std::string::npos, "backends: stereo layout listed");
+        ok &= check(r.out.find("7.1") != std::string::npos, "backends: 7.1 layout listed");
         ok &= check(r.out.find("0+7+0") == std::string::npos, "backends: old 0+7+0 layout not listed");
+        ok &= check(r.out.find("4+7+0") == std::string::npos, "backends: old 4+7+0 layout not listed");
     }
 
     // ── adm inspect <fixture> ─────────────────────────────────────────────────
@@ -181,6 +182,15 @@ int main() {
         auto r = run_cmd(adm_exe + " render --renderer binaural --sofa /nonexistent_mr_cli_test_xyz.sofa -o " +
                          shell_quote(out.string()) + " " + fix);
         ok &= check(r.code != 0, "render --sofa nonexistent: non-zero exit");
+    }
+
+    // ── adm render accepts common layout names → exit 0 ──────────────────────
+    {
+        const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_layout_alias.wav";
+        const FileGuard out_guard{out};
+        auto r = run_cmd(adm_exe + " render --renderer saf --output-layout 7.1.4 -o " + shell_quote(out.string()) +
+                         " -i " + fix);
+        ok &= check(r.code == 0, "render --output-layout 7.1.4: exit 0");
     }
 
     if (ok) {
