@@ -11,6 +11,7 @@
 
 #include "adm/io.h"
 #include "adm/render.h"
+#include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
 #include "adm/render_vbap.h"
@@ -58,6 +59,9 @@ mradm::RendererSelection parse_renderer(const std::string& value) {
     }
     if (value == "apple") {
         return mradm::RendererSelection::apple;
+    }
+    if (value == "binaural") {
+        return mradm::RendererSelection::binaural;
     }
     return mradm::RendererSelection::automatic;
 }
@@ -295,6 +299,8 @@ void print_all_capabilities() {
     print_capabilities(mradm::vbap_capabilities());
     fmt::print("\n");
     print_capabilities(mradm::hoa_capabilities());
+    fmt::print("\n");
+    print_capabilities(mradm::binaural_capabilities());
 }
 
 struct RenderCliOptions {
@@ -317,8 +323,8 @@ CLI::App* add_render_command(CLI::App& app, RenderCliOptions& opts) {
     render_cmd->add_option("-i,--input", opts.input, "Input ADM BWF/WAV path")->required();
     render_cmd->add_option("-o,--output", opts.output, "Output audio path");
     render_cmd->add_option("--output-layout", opts.layout, "Output layout identifier");
-    render_cmd->add_option("--renderer", opts.renderer, "Renderer backend: auto, ear, saf, hoa, apple")
-        ->check(CLI::IsMember({"auto", "ear", "saf", "hoa", "apple"}));
+    render_cmd->add_option("--renderer", opts.renderer, "Renderer backend: auto, ear, saf, hoa, binaural, apple")
+        ->check(CLI::IsMember({"auto", "ear", "saf", "hoa", "binaural", "apple"}));
     render_cmd->add_flag("--no-peak-limit", opts.no_peak_limit, "Disable True Peak limiting");
     render_cmd->add_option("--peak-limit-dbtp", opts.peak_limit_dbtp, "True Peak target in dBTP")
         ->check(CLI::Range(-60.0F, 0.0F));

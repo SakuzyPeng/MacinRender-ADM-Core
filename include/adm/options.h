@@ -18,6 +18,7 @@ enum class RendererSelection {
     saf,
     hoa,
     apple,
+    binaural,
 };
 
 struct RenderOptions {

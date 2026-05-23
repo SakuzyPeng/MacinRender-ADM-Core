@@ -185,6 +185,38 @@ target_include_directories(mr_adm_render_hoa
 mr_adm_core_apply_warnings(mr_adm_render_hoa)
 mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
 
+# ── adm_render_binaural ───────────────────────────────────────────────────────
+# SAF HRTF binaural renderer: Objects/DirectSpeakers → 2ch via VBAP-interpolated
+# KEMAR HRTF convolution (836 dirs, 256-tap FIR, 48 kHz).  HOA not supported.
+
+add_library(mr_adm_render_binaural)
+add_library(MacinRender::ADMRenderBinaural ALIAS mr_adm_render_binaural)
+
+target_sources(
+    mr_adm_render_binaural
+    PRIVATE
+        src/adm_render_binaural/binaural_renderer.cpp
+    PUBLIC
+        FILE_SET HEADERS
+        BASE_DIRS include
+        FILES
+            include/adm/render_binaural.h
+)
+
+target_link_libraries(mr_adm_render_binaural
+    PUBLIC MacinRender::ADMCore
+    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio
+)
+target_include_directories(mr_adm_render_binaural
+    SYSTEM PRIVATE
+        "${saf_SOURCE_DIR}/modules/saf_hrir"
+        "${saf_SOURCE_DIR}/modules/saf_vbap"
+        "${saf_SOURCE_DIR}/modules/saf_utilities"
+        "${EBUR128_INCLUDE_DIR}"
+)
+mr_adm_core_apply_warnings(mr_adm_render_binaural)
+mr_adm_core_apply_static_analysis(mr_adm_render_binaural)
+
 # ── adm_audio ─────────────────────────────────────────────────────────────────
 # Float32 WAV/CAF/FLAC and Opus MKA I/O. DR_WAV_IMPLEMENTATION and
 # DR_FLAC_IMPLEMENTATION are defined in audio_io.cpp only. FLAC encoding uses
@@ -285,7 +317,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio
 )
 mr_adm_core_apply_warnings(mr_adm_engine)
 mr_adm_core_apply_static_analysis(mr_adm_engine)
@@ -328,6 +360,7 @@ if(MR_ADM_CORE_BUILD_CLI)
             MacinRender::ADMRenderEar
             MacinRender::ADMRenderVBAP
             MacinRender::ADMRenderHOA
+            MacinRender::ADMRenderBinaural
             CLI11::CLI11
             spdlog::spdlog
     )
@@ -510,7 +543,7 @@ install(
 # libraries provide proper installed CMake configs. Install binaries and headers
 # without export; re-integrate post-M3.
 install(
-    TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_render_hoa mr_adm_peak mr_adm_loudness mr_adm_engine mr_adm_audio
+    TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_render_hoa mr_adm_render_binaural mr_adm_peak mr_adm_loudness mr_adm_engine mr_adm_audio
     FILE_SET HEADERS
 )
 
