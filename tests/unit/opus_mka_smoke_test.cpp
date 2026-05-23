@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -38,9 +39,9 @@ bool has_ebml_magic(const std::string& path) {
     if (!f) {
         return false;
     }
+    std::array<uint8_t, 4> hdr{};
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-    uint8_t hdr[4]{};
-    f.read(reinterpret_cast<char*>(hdr), 4);
+    f.read(reinterpret_cast<char*>(hdr.data()), static_cast<std::streamsize>(hdr.size()));
     return hdr[0] == 0x1AU && hdr[1] == 0x45U && hdr[2] == 0xDFU && hdr[3] == 0xA3U;
 }
 
@@ -50,6 +51,7 @@ std::vector<uint8_t> read_binary(const std::string& path) {
 }
 
 std::ptrdiff_t find_bytes(const std::vector<uint8_t>& data, const std::vector<uint8_t>& needle) {
+    // NOLINTNEXTLINE(modernize-use-ranges)
     const auto it = std::search(data.begin(), data.end(), needle.begin(), needle.end());
     if (it == data.end()) {
         return -1;
