@@ -174,6 +174,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     plan.input_path = request.input_path.string();
     plan.output_path = render_path;
     plan.output_layout = output_layout;
+    plan.sofa_path = request.options.sofa_path;
     plan.default_interp_ms = request.options.default_interp_ms;
     plan.scene = std::move(*scene_result);
 

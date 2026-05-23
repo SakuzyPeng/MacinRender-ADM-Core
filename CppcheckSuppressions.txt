@@ -12,3 +12,4 @@ functionStatic:*/src/adm_engine/render_service.cpp
 unusedStructMember:*/include/adm/audio_io.h
 unusedStructMember:*/include/adm/options.h
 unusedStructMember:*/include/adm/capability.h
+unusedStructMember:*/include/adm/render.h

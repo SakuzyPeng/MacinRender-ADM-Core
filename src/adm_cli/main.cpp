@@ -316,6 +316,7 @@ struct RenderCliOptions {
     uint32_t opus_bitrate_per_ch{0};
     uint32_t apac_bitrate{0};
     bool apac_drc_music{true};
+    std::string sofa_path;
 };
 
 CLI::App* add_render_command(CLI::App& app, RenderCliOptions& opts) {
@@ -356,6 +357,7 @@ CLI::App* add_render_command(CLI::App& app, RenderCliOptions& opts) {
     render_cmd->add_flag("--apac-drc-none{false},--apac-drc-music{true}",
                          opts.apac_drc_music,
                          "APAC DRC profile: --apac-drc-music (default) or --apac-drc-none");
+    render_cmd->add_option("--sofa", opts.sofa_path, "User SOFA HRIR file for binaural rendering");
     return render_cmd;
 }
 
@@ -374,6 +376,9 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     request.options.opus_bitrate_per_ch_kbps = opts.opus_bitrate_per_ch;
     request.options.apac_bitrate_kbps = opts.apac_bitrate;
     request.options.apac_drc_music = opts.apac_drc_music;
+    if (!opts.sofa_path.empty()) {
+        request.options.sofa_path = opts.sofa_path;
+    }
     if (!std::isnan(opts.loudness_target)) {
         request.options.measure_loudness = true;
         request.options.loudness_target_lufs = opts.loudness_target;

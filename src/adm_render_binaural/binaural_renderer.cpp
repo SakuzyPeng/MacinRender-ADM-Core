@@ -1,11 +1,16 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
+#include <cstring>
 #include <ebur128.h>
+#include <filesystem>
 #include <limits>
 #include <memory>
 #include <numbers>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 // clang-format off
@@ -15,6 +20,7 @@
 #include <saf_utility_complex.h>
 #include <saf_utility_fft.h>
 #include <saf_hrir.h>
+#include <saf_sofa_reader.h>
 #include <saf_vbap.h>
 // clang-format on
 
@@ -32,14 +38,9 @@ namespace {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 constexpr uint64_t k_block_size = 1024U;
-constexpr int k_hrir_len = 256;                 // __default_hrir_len
-constexpr int k_fft_size = 2048;                // next pow2 >= k_block_size + k_hrir_len - 1
-constexpr int k_n_bands = (k_fft_size / 2) + 1; // 1025
-constexpr int k_n_hrtf_dirs = 836;              // __default_N_hrir_dirs
 constexpr int k_n_ears = 2;
-constexpr int k_overlap_len = k_hrir_len - 1; // 255 OLA tail samples
-constexpr int k_n_azi = 361;                  // (int)(360/1 + 0.5) + 1
-constexpr int k_n_elev = 181;                 // (int)(180/1 + 0.5) + 1
+constexpr int k_n_azi = 361;  // (int)(360/1 + 0.5) + 1
+constexpr int k_n_elev = 181; // (int)(180/1 + 0.5) + 1
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -72,6 +73,14 @@ std::pair<float, float> cart_to_polar(float x, float y, float z) {
     return {static_cast<float>(az), static_cast<float>(el)};
 }
 
+int next_pow2_int(int value) {
+    int out = 1;
+    while (out < value) {
+        out <<= 1U;
+    }
+    return out;
+}
+
 // Grid index into the pre-computed VBAP table (az_res=1°, el_res=1°).
 int vbap_grid_idx(float az_deg, float el_deg) {
     float az_norm = fmodf(az_deg + 180.0F, 360.0F);
@@ -83,14 +92,173 @@ int vbap_grid_idx(float az_deg, float el_deg) {
     return (el_idx * k_n_azi) + az_idx;
 }
 
-// ── Pre-computed state ────────────────────────────────────────────────────────
+#ifdef SAF_ENABLE_SOFA_READER_MODULE
+// SOFA Cartesian (front=+X, left=+Y, up=+Z) → polar az/el in degrees.
+std::pair<float, float> sofa_cart_to_polar(float x, float y, float z) {
+    const double az = std::atan2(static_cast<double>(y), static_cast<double>(x)) * (180.0 / std::numbers::pi_v<double>);
+    const auto cx = static_cast<double>(x);
+    const auto cy = static_cast<double>(y);
+    const double el =
+        std::atan2(static_cast<double>(z), std::sqrt((cx * cx) + (cy * cy))) * (180.0 / std::numbers::pi_v<double>);
+    return {static_cast<float>(az), static_cast<float>(el)};
+}
+
+[[nodiscard]] bool string_is(const char* value, std::string_view expected) {
+    return value != nullptr && expected == std::string_view{value};
+}
+
+[[nodiscard]] bool contains_token(const char* value, std::string_view token) {
+    return value != nullptr && std::string_view{value}.find(token) != std::string_view::npos;
+}
+
+[[nodiscard]] std::string sofa_error_name(int code) {
+    switch (code) {
+    case SAF_SOFA_OK:
+        return "OK";
+    case SAF_SOFA_ERROR_INVALID_FILE_OR_FILE_PATH:
+        return "invalid file or path";
+    case SAF_SOFA_ERROR_DIMENSIONS_UNEXPECTED:
+        return "unexpected dimensions";
+    case SAF_SOFA_ERROR_FORMAT_UNEXPECTED:
+        return "unexpected format";
+    case SAF_SOFA_ERROR_NETCDF_IN_USE:
+        return "NetCDF reader already in use";
+    default:
+        return fmt::format("unknown ({})", code);
+    }
+}
+#endif
+
+// ── HRTF dataset and pre-computed state ───────────────────────────────────────
+
+struct HrtfDataset {
+    std::string name;
+    int sample_rate{0};
+    int hrir_len{0};
+    int num_dirs{0};
+    std::vector<float> dirs_deg; // FLAT: [num_dirs × 2] az/el in degrees
+    std::vector<float> hrirs;    // FLAT: [num_dirs × 2 × hrir_len]
+};
+
+HrtfDataset built_in_kemar_dataset() {
+    HrtfDataset ds;
+    ds.name = "built-in KEMAR";
+    ds.sample_rate = __default_hrir_fs;
+    ds.hrir_len = __default_hrir_len;
+    ds.num_dirs = __default_N_hrir_dirs;
+    ds.dirs_deg.assign(&__default_hrir_dirs_deg[0][0],
+                       &__default_hrir_dirs_deg[0][0] + (static_cast<std::ptrdiff_t>(ds.num_dirs) * 2));
+    ds.hrirs.assign(&__default_hrirs[0][0][0],
+                    &__default_hrirs[0][0][0] + (static_cast<std::ptrdiff_t>(ds.num_dirs) * k_n_ears * ds.hrir_len));
+    return ds;
+}
+
+#ifdef SAF_ENABLE_SOFA_READER_MODULE
+Result<HrtfDataset> load_sofa_dataset(const std::filesystem::path& path, uint32_t input_sample_rate) {
+    std::string sofa_path = path.string();
+    saf_sofa_container sofa{};
+    const auto sofa_err = saf_sofa_open(&sofa, sofa_path.data(), SAF_SOFA_READER_OPTION_LIBMYSOFA);
+    if (sofa_err != SAF_SOFA_OK) {
+        return make_error(
+            ErrorCode::io_error, fmt::format("SOFA load failed: {}", sofa_error_name(sofa_err)), "path=" + sofa_path);
+    }
+
+    class SofaGuard {
+      public:
+        explicit SofaGuard(saf_sofa_container* sofa) : sofa_(sofa) {}
+        SofaGuard(const SofaGuard&) = delete;
+        SofaGuard& operator=(const SofaGuard&) = delete;
+        SofaGuard(SofaGuard&&) = delete;
+        SofaGuard& operator=(SofaGuard&&) = delete;
+        ~SofaGuard() { saf_sofa_close(sofa_); }
+
+      private:
+        saf_sofa_container* sofa_;
+    } sofa_guard{&sofa};
+
+    if (!string_is(sofa.SOFAConventions, "SimpleFreeFieldHRIR") && !string_is(sofa.SOFAConventions, "GeneralFIR")) {
+        return make_error(ErrorCode::unsupported,
+                          "SOFA: only SimpleFreeFieldHRIR and GeneralFIR conventions are supported",
+                          "path=" + sofa_path);
+    }
+    if (!string_is(sofa.DataType, "FIR")) {
+        return make_error(ErrorCode::unsupported, "SOFA: only FIR data is supported", "path=" + sofa_path);
+    }
+    if (sofa.nReceivers != k_n_ears) {
+        return make_error(ErrorCode::unsupported,
+                          fmt::format("SOFA: expected 2 receivers, got {}", sofa.nReceivers),
+                          "path=" + sofa_path);
+    }
+    if (std::lround(sofa.DataSamplingRate) != static_cast<long>(input_sample_rate)) {
+        return make_error(
+            ErrorCode::unsupported,
+            fmt::format("SOFA: sample rate {} Hz does not match input {} Hz", sofa.DataSamplingRate, input_sample_rate),
+            "path=" + sofa_path);
+    }
+    if (sofa.DataLengthIR <= 0 || sofa.nSources < 4 || sofa.DataIR == nullptr || sofa.SourcePosition == nullptr) {
+        return make_error(ErrorCode::unsupported, "SOFA: missing usable FIR directions", "path=" + sofa_path);
+    }
+
+    const bool spherical = string_is(sofa.SourcePositionType, "spherical");
+    const bool cartesian = string_is(sofa.SourcePositionType, "cartesian");
+    if (!spherical && !cartesian) {
+        return make_error(ErrorCode::unsupported, "SOFA: unsupported SourcePosition Type", "path=" + sofa_path);
+    }
+    if (spherical &&
+        (!contains_token(sofa.SourcePositionUnits, "degree") || !contains_token(sofa.SourcePositionUnits, "met"))) {
+        return make_error(
+            ErrorCode::unsupported, "SOFA: spherical SourcePosition units must be degrees/metres", "path=" + sofa_path);
+    }
+    if (cartesian && !contains_token(sofa.SourcePositionUnits, "met")) {
+        return make_error(
+            ErrorCode::unsupported, "SOFA: cartesian SourcePosition units must be metres", "path=" + sofa_path);
+    }
+
+    HrtfDataset ds;
+    ds.name = sofa.ListenerShortName != nullptr ? fmt::format("SOFA {}", sofa.ListenerShortName)
+                                                : fmt::format("SOFA {}", path.filename().string());
+    ds.sample_rate = static_cast<int>(std::lround(sofa.DataSamplingRate));
+    ds.hrir_len = sofa.DataLengthIR;
+    ds.num_dirs = sofa.nSources;
+    ds.hrirs.assign(sofa.DataIR, sofa.DataIR + (static_cast<std::ptrdiff_t>(ds.num_dirs) * k_n_ears * ds.hrir_len));
+    ds.dirs_deg.resize(static_cast<std::size_t>(ds.num_dirs) * 2U);
+    for (int i = 0; i < ds.num_dirs; ++i) {
+        const float a = sofa.SourcePosition[(static_cast<std::size_t>(i) * 3U) + 0U];
+        const float b = sofa.SourcePosition[(static_cast<std::size_t>(i) * 3U) + 1U];
+        const float c = sofa.SourcePosition[(static_cast<std::size_t>(i) * 3U) + 2U];
+        auto [az, el] = spherical ? std::pair<float, float>{a, b} : sofa_cart_to_polar(a, b, c);
+        ds.dirs_deg[(static_cast<std::size_t>(i) * 2U) + 0U] = az;
+        ds.dirs_deg[(static_cast<std::size_t>(i) * 2U) + 1U] = el;
+    }
+    return ds;
+}
+#else
+Result<HrtfDataset> load_sofa_dataset(const std::filesystem::path& path, uint32_t input_sample_rate) {
+    (void) input_sample_rate;
+    return make_error(ErrorCode::unsupported,
+                      "SOFA loading is disabled in this build (MR_ADM_ENABLE_SOFA=OFF)",
+                      "path=" + path.string());
+}
+#endif
+
+Result<HrtfDataset> load_hrtf_dataset(const RenderPlan& plan) {
+    if (plan.sofa_path.has_value()) {
+        return load_sofa_dataset(*plan.sofa_path, plan.scene.info.sample_rate);
+    }
+    return built_in_kemar_dataset();
+}
 
 // NOLINTBEGIN(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
 struct BinauralState {
-    // HRTFs in frequency domain; FLAT: [k_n_bands × k_n_ears × k_n_hrtf_dirs]
+    int num_dirs{0};
+    int hrir_len{0};
+    int fft_size{0};
+    int n_bands{0};
+    int overlap_len{0};
+    std::string dataset_name;
+    // HRTFs in frequency domain; FLAT: [n_bands × k_n_ears × num_dirs]
     std::vector<float_complex> hrtf_fd;
     // Compressed VBAP table: amplitude-normalised gains + direction indices per grid point.
-    // Each grid point has 3 gains and 3 indices (triangular interpolation).
     std::vector<float> vbap_gains; // FLAT: [N_gtable × 3]
     std::vector<int> vbap_dirs;    // FLAT: [N_gtable × 3]
 
@@ -101,24 +269,25 @@ struct BinauralState {
 // NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
 
 // Build BinauralState once.  Returns nullptr on VBAP triangulation failure.
-std::unique_ptr<BinauralState> build_binaural_state() {
+std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset) {
     auto bs = std::make_unique<BinauralState>();
+    bs->num_dirs = dataset.num_dirs;
+    bs->hrir_len = dataset.hrir_len;
+    bs->fft_size = next_pow2_int(static_cast<int>(k_block_size) + dataset.hrir_len - 1);
+    bs->n_bands = (bs->fft_size / 2) + 1;
+    bs->overlap_len = dataset.hrir_len - 1;
+    bs->dataset_name = std::move(dataset.name);
 
-    // Convert built-in HRIRs to frequency-domain HRTFs.
-    bs->hrtf_fd.resize(static_cast<std::size_t>(k_n_bands) * k_n_ears * k_n_hrtf_dirs);
-    // NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
-    HRIRs2HRTFs(
-        const_cast<float*>(&__default_hrirs[0][0][0]), k_n_hrtf_dirs, k_hrir_len, k_fft_size, bs->hrtf_fd.data());
+    // Convert HRIRs to frequency-domain HRTFs.
+    bs->hrtf_fd.resize(static_cast<std::size_t>(bs->n_bands) * k_n_ears * static_cast<std::size_t>(bs->num_dirs));
+    HRIRs2HRTFs(dataset.hrirs.data(), bs->num_dirs, bs->hrir_len, bs->fft_size, bs->hrtf_fd.data());
 
-    // Build VBAP gain table for the 836 HRTF measurement directions as
-    // "loudspeakers".  1° grid; gains are energy-normalised after this call.
-    auto* hrtf_dirs = const_cast<float*>(&__default_hrir_dirs_deg[0][0]);
-    // NOLINTEND(cppcoreguidelines-pro-type-const-cast)
+    // Build VBAP gain table for the HRTF measurement directions as "loudspeakers".
     float* gtable_full = nullptr;
     int n_gtable = 0;
     int n_triangles = 0;
-    generateVBAPgainTable3D(hrtf_dirs,
-                            k_n_hrtf_dirs,
+    generateVBAPgainTable3D(dataset.dirs_deg.data(),
+                            bs->num_dirs,
                             /*az_res=*/1,
                             /*el_res=*/1,
                             /*omitLargeTriangles=*/1,
@@ -134,15 +303,15 @@ std::unique_ptr<BinauralState> build_binaural_state() {
     // Compress to 3-per-point amplitude-normalised table (sum of gains = 1).
     bs->vbap_gains.resize(static_cast<std::size_t>(n_gtable) * 3);
     bs->vbap_dirs.resize(static_cast<std::size_t>(n_gtable) * 3);
-    compressVBAPgainTable3D(gtable_full, n_gtable, k_n_hrtf_dirs, bs->vbap_gains.data(), bs->vbap_dirs.data());
+    compressVBAPgainTable3D(gtable_full, n_gtable, bs->num_dirs, bs->vbap_gains.data(), bs->vbap_dirs.data());
     // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
-    free(gtable_full);
+    std::free(gtable_full);
 
     return bs;
 }
 
 // Interpolate HRTF at (az_deg, el_deg) using the compressed VBAP table.
-// Returns flat [k_n_bands × k_n_ears] complex array (L = ear 0, R = ear 1).
+// Returns flat [n_bands × k_n_ears] complex array (L = ear 0, R = ear 1).
 std::vector<float_complex> hrtf_for_dir(const BinauralState& bs, float az_deg, float el_deg) {
     const auto g = static_cast<std::size_t>(vbap_grid_idx(az_deg, el_deg));
     const auto gbase = g * 3U;
@@ -153,11 +322,11 @@ std::vector<float_complex> hrtf_for_dir(const BinauralState& bs, float az_deg, f
     const int d1 = bs.vbap_dirs[gbase + 1U];
     const int d2 = bs.vbap_dirs[gbase + 2U];
 
-    std::vector<float_complex> out(static_cast<std::size_t>(k_n_bands) * k_n_ears);
-    for (int band = 0; band < k_n_bands; ++band) {
+    std::vector<float_complex> out(static_cast<std::size_t>(bs.n_bands) * k_n_ears);
+    for (int band = 0; band < bs.n_bands; ++band) {
         for (int ear = 0; ear < k_n_ears; ++ear) {
-            const auto base = (static_cast<std::ptrdiff_t>(band) * k_n_ears * k_n_hrtf_dirs) +
-                              (static_cast<std::ptrdiff_t>(ear) * k_n_hrtf_dirs);
+            const auto base = (static_cast<std::ptrdiff_t>(band) * k_n_ears * bs.num_dirs) +
+                              (static_cast<std::ptrdiff_t>(ear) * bs.num_dirs);
             out[(static_cast<std::size_t>(band) * k_n_ears) + static_cast<std::size_t>(ear)] =
                 crmulf(bs.hrtf_fd[static_cast<std::size_t>(base + d0)], w0) +
                 crmulf(bs.hrtf_fd[static_cast<std::size_t>(base + d1)], w1) +
@@ -169,15 +338,26 @@ std::vector<float_complex> hrtf_for_dir(const BinauralState& bs, float az_deg, f
 
 // ── Per-channel OLA convolution state ─────────────────────────────────────────
 
-struct OLAState {
-    std::vector<float> overlap_l = std::vector<float>(k_overlap_len, 0.0F);
-    std::vector<float> overlap_r = std::vector<float>(k_overlap_len, 0.0F);
+class OLAState {
+  public:
+    explicit OLAState(int overlap_len)
+        : overlap_l(static_cast<std::size_t>(overlap_len), 0.0F),
+          overlap_r(static_cast<std::size_t>(overlap_len), 0.0F) {}
+
+    [[nodiscard]] std::vector<float>& left() noexcept { return overlap_l; }
+    [[nodiscard]] std::vector<float>& right() noexcept { return overlap_r; }
+
+  private:
+    std::vector<float> overlap_l;
+    std::vector<float> overlap_r;
 };
 
-// OLA convolution: convolve src[frames_now] with hrtf[k_n_bands × k_n_ears],
+// OLA convolution: convolve src[frames_now] with hrtf[n_bands × k_n_ears],
 // accumulate into l_out/r_out (both [frames_now]), update state.overlap.
 // Uses saf_rfft (KissFFT backend).
+// NOLINTNEXTLINE(readability-function-size)
 void convolve_and_accumulate(void* hfft,
+                             const BinauralState& bs,
                              const float* src,
                              uint64_t frames_now,
                              float gain,
@@ -187,10 +367,10 @@ void convolve_and_accumulate(void* hfft,
                              float* r_out) {
     const auto fn = static_cast<std::size_t>(frames_now);
 
-    std::vector<float> buf(k_fft_size, 0.0F);
-    std::vector<float_complex> src_fd(k_n_bands);
-    std::vector<float_complex> out_fd(k_n_bands);
-    std::vector<float> y(k_fft_size);
+    std::vector<float> buf(static_cast<std::size_t>(bs.fft_size), 0.0F);
+    std::vector<float_complex> src_fd(static_cast<std::size_t>(bs.n_bands));
+    std::vector<float_complex> out_fd(static_cast<std::size_t>(bs.n_bands));
+    std::vector<float> y(static_cast<std::size_t>(bs.fft_size));
 
     // Zero-pad source block into FFT buffer and transform.
     std::copy_n(src, fn, buf.begin());
@@ -198,23 +378,25 @@ void convolve_and_accumulate(void* hfft,
 
     for (int ear = 0; ear < k_n_ears; ++ear) {
         // Frequency-domain multiply: src_fd × hrtf[:][ear].
-        for (int band = 0; band < k_n_bands; ++band) {
+        for (int band = 0; band < bs.n_bands; ++band) {
             out_fd[static_cast<std::size_t>(band)] =
                 gain * src_fd[static_cast<std::size_t>(band)] *
                 hrtf[(static_cast<std::size_t>(band) * k_n_ears) + static_cast<std::size_t>(ear)];
         }
         saf_rfft_backward(hfft, out_fd.data(), y.data());
 
-        float* overlap = (ear == 0) ? state.overlap_l.data() : state.overlap_r.data();
+        auto& overlap_vec = (ear == 0) ? state.left() : state.right();
+        float* overlap = overlap_vec.data();
         float* dst = (ear == 0) ? l_out : r_out;
+        const auto overlap_len = static_cast<std::size_t>(bs.overlap_len);
 
         // Overlap-add: accumulated output = y[0..fn-1] + saved overlap.
         for (std::size_t f = 0; f < fn; ++f) {
-            dst[f] += y[f] + (f < static_cast<std::size_t>(k_overlap_len) ? overlap[f] : 0.0F);
+            dst[f] += y[f] + (f < overlap_len ? overlap[f] : 0.0F);
         }
-        // Save new overlap tail: y[fn .. fn + k_overlap_len - 1].
-        for (int i = 0; i < k_overlap_len; ++i) {
-            overlap[i] = y[fn + static_cast<std::size_t>(i)];
+        // Save new overlap tail: y[fn .. fn + overlap_len - 1].
+        for (std::size_t i = 0; i < overlap_len; ++i) {
+            overlap[i] = y[fn + i];
         }
     }
 }
@@ -224,25 +406,26 @@ void convolve_and_accumulate(void* hfft,
 // it forward to the next non-silent ADM block.
 void advance_silence(OLAState& state, uint64_t frames_now, float* l_out, float* r_out) {
     const auto fn = static_cast<std::size_t>(frames_now);
-    const auto emit = std::min(fn, static_cast<std::size_t>(k_overlap_len));
+    auto& overlap_l = state.left();
+    auto& overlap_r = state.right();
+    const auto overlap_len = overlap_l.size();
+    const auto emit = std::min(fn, overlap_len);
     for (std::size_t f = 0; f < emit; ++f) {
-        l_out[f] += state.overlap_l[f];
-        r_out[f] += state.overlap_r[f];
+        l_out[f] += overlap_l[f];
+        r_out[f] += overlap_r[f];
     }
 
-    if (fn >= static_cast<std::size_t>(k_overlap_len)) {
-        std::ranges::fill(state.overlap_l, 0.0F);
-        std::ranges::fill(state.overlap_r, 0.0F);
+    if (fn >= overlap_len) {
+        std::ranges::fill(overlap_l, 0.0F);
+        std::ranges::fill(overlap_r, 0.0F);
         return;
     }
 
-    const auto remain = static_cast<std::size_t>(k_overlap_len) - fn;
-    std::move(
-        state.overlap_l.begin() + static_cast<std::ptrdiff_t>(fn), state.overlap_l.end(), state.overlap_l.begin());
-    std::move(
-        state.overlap_r.begin() + static_cast<std::ptrdiff_t>(fn), state.overlap_r.end(), state.overlap_r.begin());
-    std::fill(state.overlap_l.begin() + static_cast<std::ptrdiff_t>(remain), state.overlap_l.end(), 0.0F);
-    std::fill(state.overlap_r.begin() + static_cast<std::ptrdiff_t>(remain), state.overlap_r.end(), 0.0F);
+    const auto remain = overlap_len - fn;
+    std::move(overlap_l.begin() + static_cast<std::ptrdiff_t>(fn), overlap_l.end(), overlap_l.begin());
+    std::move(overlap_r.begin() + static_cast<std::ptrdiff_t>(fn), overlap_r.end(), overlap_r.begin());
+    std::fill(overlap_l.begin() + static_cast<std::ptrdiff_t>(remain), overlap_l.end(), 0.0F);
+    std::fill(overlap_r.begin() + static_cast<std::ptrdiff_t>(remain), overlap_r.end(), 0.0F);
 }
 
 // ── Source descriptor ─────────────────────────────────────────────────────────
@@ -378,12 +561,23 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                           "input=" + plan.input_path);
     }
 
-    // One-time setup: build HRTF table + VBAP grid.
+    // One-time setup: load HRIR dataset, then build HRTF table + VBAP grid.
     progress.on_progress({RenderStage::planning, 0.1, "building HRTF table"});
-    auto bs = build_binaural_state();
+    auto dataset_res = load_hrtf_dataset(plan);
+    if (!dataset_res) {
+        return tl::unexpected{dataset_res.error()};
+    }
+    auto bs = build_binaural_state(std::move(*dataset_res));
     if (!bs) {
         return make_error(ErrorCode::internal_error, "binaural: VBAP triangulation of HRTF directions failed", {});
     }
+    logs.log(LogLevel::info,
+             "binaural",
+             fmt::format("HRTF source: {} ({} dirs, {} taps @ {} Hz)",
+                         bs->dataset_name,
+                         bs->num_dirs,
+                         bs->hrir_len,
+                         info.sample_rate));
 
     const auto sources = build_sources(plan.scene, logs);
     if (sources.empty()) {
@@ -409,7 +603,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
 
     // One FFT handle (KissFFT, thread-safe to use per render call).
     void* hfft = nullptr;
-    saf_rfft_create(&hfft, k_fft_size);
+    saf_rfft_create(&hfft, bs->fft_size);
     class FftGuard {
       public:
         explicit FftGuard(void** handle) : handle_(handle) {}
@@ -424,7 +618,11 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     } fft_guard{&hfft};
 
     // Per-source OLA state.
-    std::vector<OLAState> ola(sources.size());
+    std::vector<OLAState> ola;
+    ola.reserve(sources.size());
+    for (std::size_t i = 0; i < sources.size(); ++i) {
+        ola.emplace_back(bs->overlap_len);
+    }
 
     const uint64_t num_frames = info.num_frames;
     const uint16_t num_in_ch = info.num_channels;
@@ -497,7 +695,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                 const auto hrtf = hrtf_for_dir(*bs, blk.az, blk.el);
                 const float gain = src.gain * blk.block_gain;
                 convolve_and_accumulate(
-                    hfft, ch_in.data(), seg_frames, gain, hrtf, ola[si], l_buf.data() + off, r_buf.data() + off);
+                    hfft, *bs, ch_in.data(), seg_frames, gain, hrtf, ola[si], l_buf.data() + off, r_buf.data() + off);
 
                 cursor = seg_end;
                 if (cursor >= blk.end_sample) {
@@ -555,7 +753,7 @@ CapabilityReport binaural_capabilities() {
     r.supports_hoa = false;
     r.supported_layouts = {
         // clang-format off
-        {"0+2+0", "Binaural (KEMAR HRTF, 836 dirs)", 2, false, 0, false, true},
+        {"0+2+0", "Binaural (KEMAR or user SOFA HRIR)", 2, false, 0, false, true},
         // clang-format on
     };
     return r;

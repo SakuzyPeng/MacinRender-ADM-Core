@@ -240,7 +240,8 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_SHALLOW FALSE
         )
     elseif(package_name STREQUAL "Spatial_Audio_Framework")
-        # SAF exposes target 'saf'. Keep optional/GPL modules off; M7 only needs saf_vbap.
+        # SAF exposes target 'saf'. Keep GPL modules off; SOFA uses libmysofa/zlib
+        # when MR_ADM_ENABLE_SOFA is ON, and NetCDF stays disabled.
         set(_mr_adm_core_restore_build_shared_libs TRUE)
         if(DEFINED BUILD_SHARED_LIBS)
             set(_mr_adm_core_had_build_shared_libs TRUE)
@@ -249,7 +250,7 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             set(_mr_adm_core_had_build_shared_libs FALSE)
         endif()
         set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-        set(SAF_ENABLE_SOFA_READER_MODULE OFF CACHE BOOL "" FORCE)
+        set(SAF_ENABLE_SOFA_READER_MODULE ${MR_ADM_ENABLE_SOFA} CACHE BOOL "" FORCE)
         set(SAF_ENABLE_TRACKER_MODULE OFF CACHE BOOL "" FORCE)
         set(SAF_ENABLE_HADES_MODULE OFF CACHE BOOL "" FORCE)
         set(SAF_USE_INTEL_IPP OFF CACHE BOOL "" FORCE)
