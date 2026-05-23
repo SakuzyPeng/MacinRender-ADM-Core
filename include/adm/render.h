@@ -40,7 +40,8 @@ struct RenderPlan {
     std::string input_path;
     std::string output_path;
     std::string output_layout;
-    AdmScene scene; // populated by RenderService; backends must not re-parse ADM
+    AdmScene scene;                                 // populated by RenderService; backends must not re-parse ADM
+    std::optional<std::filesystem::path> sofa_path; // binaural renderer only; empty = built-in KEMAR
     // Default gain-interpolation ramp in milliseconds (from RenderOptions).
     uint32_t default_interp_ms{5};
 };

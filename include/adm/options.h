@@ -38,6 +38,8 @@ struct RenderOptions {
     uint32_t apac_bitrate_kbps{0};
     // APAC DRC profile: true = Music (cdrc=1), false = None (cdrc=0).
     bool apac_drc_music{true};
+    // User SOFA HRIR file for the binaural renderer. Empty = built-in KEMAR.
+    std::optional<std::filesystem::path> sofa_path;
     // Default gain-interpolation ramp used when jumpPosition=false and the ADM block
     // carries no explicit interpolationLength.  Set to 0 for instant switching.
     uint32_t default_interp_ms{5};

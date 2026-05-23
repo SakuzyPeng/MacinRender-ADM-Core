@@ -13,6 +13,7 @@ option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 option(MR_ADM_CORE_FETCH_DEPS "Fetch CLI/fmt/spdlog dependencies when not found" ON)
 option(MR_ADM_CORE_ENABLE_CLANG_TIDY "Run clang-tidy as part of compilation when available" OFF)
 option(MR_ADM_CORE_ENABLE_CPPCHECK "Run cppcheck as part of compilation when available" OFF)
+option(MR_ADM_ENABLE_SOFA "Enable user SOFA HRIR loading for the binaural renderer" ON)
 set(MR_ADM_FLAC_PROVIDER "AUTO" CACHE STRING "libFLAC provider: AUTO, SYSTEM, or VENDORED")
 set_property(CACHE MR_ADM_FLAC_PROVIDER PROPERTY STRINGS AUTO SYSTEM VENDORED)
 option(MR_ADM_USE_SYSTEM_FLAC "Shortcut for MR_ADM_FLAC_PROVIDER=SYSTEM" OFF)
@@ -187,7 +188,7 @@ mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
 
 # ── adm_render_binaural ───────────────────────────────────────────────────────
 # SAF HRTF binaural renderer: Objects/DirectSpeakers → 2ch via VBAP-interpolated
-# KEMAR HRTF convolution (836 dirs, 256-tap FIR, 48 kHz).  HOA not supported.
+# KEMAR or user SOFA HRTF convolution.  HOA not supported.
 
 add_library(mr_adm_render_binaural)
 add_library(MacinRender::ADMRenderBinaural ALIAS mr_adm_render_binaural)
@@ -210,6 +211,7 @@ target_link_libraries(mr_adm_render_binaural
 target_include_directories(mr_adm_render_binaural
     SYSTEM PRIVATE
         "${saf_SOURCE_DIR}/modules/saf_hrir"
+        "${saf_SOURCE_DIR}/modules/saf_sofa_reader"
         "${saf_SOURCE_DIR}/modules/saf_vbap"
         "${saf_SOURCE_DIR}/modules/saf_utilities"
         "${EBUR128_INCLUDE_DIR}"

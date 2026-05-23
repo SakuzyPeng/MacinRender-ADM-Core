@@ -197,6 +197,20 @@ bool render_to_path(const std::filesystem::path& input,
     return true;
 }
 
+mradm::RenderResult render_result_for(const std::filesystem::path& input,
+                                      const std::filesystem::path& output,
+                                      mradm::RenderOptions options) {
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+
+    mradm::RenderRequest req;
+    req.input_path = input;
+    req.output_path = output;
+    req.options = std::move(options);
+    return service.render(req, progress, logs);
+}
+
 bool verify_binaural_render_is_stereo_and_directional() {
     const auto in = write_fixture(90.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U);
     const auto out = temp_path("mr_binaural_directional", ".wav");
@@ -275,6 +289,57 @@ bool verify_binaural_caf_ignores_requested_layout() {
     return ok;
 }
 
+bool verify_binaural_missing_sofa_fails_cleanly() {
+    const auto in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U);
+    const auto out = temp_path("mr_binaural_missing_sofa", ".wav");
+    const auto missing_sofa = temp_path("mr_binaural_missing", ".sofa");
+    FileGuard in_guard(in);
+    FileGuard out_guard(out);
+
+    auto options = make_request(in, out).options;
+    options.sofa_path = missing_sofa;
+    const auto res = render_result_for(in, out, options);
+
+    bool ok = true;
+    ok &= check(!res.success(), "missing SOFA path fails");
+    ok &= check(res.error.code == mradm::ErrorCode::io_error || res.error.code == mradm::ErrorCode::unsupported,
+                "missing SOFA error is explicit");
+    return ok;
+}
+
+bool verify_external_sofa_when_available() {
+    const char* sofa_env = std::getenv("MR_ADM_TEST_SOFA_PATH");
+    if (sofa_env == nullptr || std::string_view{sofa_env}.empty()) {
+        return true;
+    }
+
+    const auto in = write_fixture(90.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U);
+    const auto out = temp_path("mr_binaural_external_sofa", ".wav");
+    FileGuard in_guard(in);
+    FileGuard out_guard(out);
+
+    auto options = make_request(in, out).options;
+    options.sofa_path = std::filesystem::path{sofa_env};
+    if (!render_to_path(in, out, options)) {
+        return false;
+    }
+
+    auto reader = mradm::audio::FloatWavReader::open(out.string());
+    if (!check(reader.has_value(), "external SOFA binaural WAV output opens")) {
+        return false;
+    }
+    std::vector<float> samples(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
+    reader->read(samples.data(), reader->frame_count());
+    const double l_energy = channel_energy(samples, reader->channels(), 0U, 0U, reader->frame_count());
+    const double r_energy = channel_energy(samples, reader->channels(), 1U, 0U, reader->frame_count());
+
+    bool ok = true;
+    ok &= check(reader->channels() == 2U, "external SOFA output is stereo");
+    ok &= check((l_energy + r_energy) > 1e-5, "external SOFA output is not silent");
+    ok &= check(l_energy > r_energy, "left source favours left ear with external SOFA");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -282,5 +347,7 @@ int main() {
     ok &= verify_binaural_render_is_stereo_and_directional();
     ok &= verify_binaural_time_gate_respects_block_start();
     ok &= verify_binaural_caf_ignores_requested_layout();
+    ok &= verify_binaural_missing_sofa_fails_cleanly();
+    ok &= verify_external_sofa_when_available();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

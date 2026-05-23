@@ -342,7 +342,7 @@ CLI args / config
 | `libbw64` | BW64/RF64/WAV 容器和 ADM BWF chunk 读写 | 仅在 `adm_io` 适配层直接使用 |
 | `libadm` | BS.2076 ADM XML 解析和序列化 | 仅在 `adm_io` 适配层直接使用 |
 | `libear` | BS.2127 标准渲染路径 | 仅在 `adm_render_ear` 后端直接使用 |
-| `Spatial_Audio_Framework` | VBAP、HOA、HRTF、扩散、去相关等空间音频 DSP | 仅在 `adm_render_saf` 后端直接使用 |
+| `Spatial_Audio_Framework` | VBAP、HOA、HRTF、扩散、去相关等空间音频 DSP；SOFA reader 默认开启用于用户 HRIR，NetCDF 关闭 | 仅在 `adm_render_saf` / `adm_render_binaural` 后端直接使用 |
 | `libebur128` | EBU R128 响度与 True Peak 相关测量 | 可在 `adm_process` 适配层使用 |
 | `libsndfile` | 普通音频 IO 候选 | 可选，不替代 ADM BWF 主路径 |
 | `OpenBLAS` / `Accelerate` | BLAS/LAPACK 后端 | 作为平台加速实现，不进入核心接口 |

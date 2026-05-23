@@ -174,6 +174,15 @@ int main() {
         ok &= check(r.code != 0, "inspect nonexistent: non-zero exit");
     }
 
+    // ── adm render --sofa nonexistent → non-zero exit ────────────────────────
+    {
+        const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_binaural_sofa_missing.wav";
+        const FileGuard out_guard{out};
+        auto r = run_cmd(adm_exe + " render --renderer binaural --sofa /nonexistent_mr_cli_test_xyz.sofa -o " +
+                         shell_quote(out.string()) + " " + fix);
+        ok &= check(r.code != 0, "render --sofa nonexistent: non-zero exit");
+    }
+
     if (ok) {
         std::cout << "adm_cli smoke test passed\n";
         return EXIT_SUCCESS;
