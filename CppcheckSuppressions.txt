@@ -11,3 +11,4 @@ functionStatic:*/src/adm_engine/render_service.cpp
 # header alone and reports false positives for metadata fields.
 unusedStructMember:*/include/adm/audio_io.h
 unusedStructMember:*/include/adm/options.h
+unusedStructMember:*/include/adm/capability.h
