@@ -18,6 +18,7 @@
 ## 使用指南
 
 - [质量工具配置](guides/QUALITY.md)
+- [第三方许可证与发行边界](THIRD_PARTY_LICENSES.md)
 
 ## 维护说明
 
