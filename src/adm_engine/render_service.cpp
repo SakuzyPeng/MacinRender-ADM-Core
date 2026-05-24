@@ -377,12 +377,10 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
 
     if (is_iamf_final) {
         logs.log(LogLevel::info, "engine", "encoding float32 render to IAMF (Opus, raw OBU stream)");
-        const auto lufs = metrics.measured_lufs
-                              ? std::optional<double>(*metrics.measured_lufs + gain_db)
-                              : std::nullopt;
-        const auto peak = metrics.measured_peak_dbtp
-                              ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db)
-                              : std::nullopt;
+        const auto lufs =
+            metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
+        const auto peak =
+            metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
         auto iamf_res = audio::convert_to_iamf(
             render_path, output_path, output_layout, request.options.opus_bitrate_per_ch_kbps, lufs, peak);
         render_temp_guard->remove_now();
@@ -410,9 +408,8 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         // bext / info fields must reflect the actual file after gain adjustment.
         meta_fields.lufs =
             metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
-        meta_fields.peak_dbtp = metrics.measured_peak_dbtp
-                                    ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db)
-                                    : std::nullopt;
+        meta_fields.peak_dbtp =
+            metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
 
         auto meta_res = audio::write_file_metadata(output_path, meta_fields);
         if (!meta_res) {

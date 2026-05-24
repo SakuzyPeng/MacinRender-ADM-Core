@@ -28,4 +28,4 @@ Recent history uses Conventional Commit style, for example `fix: ...`, `ci: ...`
 
 ## Agent-Specific Instructions
 
-Do not edit generated build directories under `build/`. Preserve existing uncommitted user changes. For public C ABI work, review `docs/adr/0007-c-abi-stability-policy.md`; for error handling, follow `docs/adr/0005-error-handling-model.md`.
+Use Chinese for user-facing discussion by default, unless the user explicitly asks for another language. Do not edit generated build directories under `build/`. Preserve existing uncommitted user changes. For public C ABI work, review `docs/adr/0007-c-abi-stability-policy.md`; for error handling, follow `docs/adr/0005-error-handling-model.md`.
