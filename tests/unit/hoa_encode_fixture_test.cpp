@@ -492,7 +492,7 @@ bool verify_left_source() {
 // ── DirectSpeakers helpers ────────────────────────────────────────────────────
 
 struct DsDocOptions {
-    std::optional<float> azimuth;   // absent → no SphericalSpeakerPosition set (has_position=false)
+    std::optional<float> azimuth; // absent → no SphericalSpeakerPosition set (has_position=false)
     std::optional<float> elevation;
     std::string label;
 };
@@ -500,8 +500,8 @@ struct DsDocOptions {
 std::pair<std::shared_ptr<adm::Document>, std::string> make_ds_doc(const DsDocOptions& opts) {
     auto doc = adm::Document::create();
 
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DsCF"},
-                                              adm::TypeDefinition::DIRECT_SPEAKERS);
+    auto cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DsCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
     adm::AudioBlockFormatDirectSpeakers block{};
     if (opts.azimuth.has_value()) {
         adm::SphericalSpeakerPosition spos;
@@ -515,8 +515,7 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_ds_doc(const DsDocOp
     cf->add(block);
     doc->add(cf);
 
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"DsPF"},
-                                           adm::TypeDefinition::DIRECT_SPEAKERS);
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"DsPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
     pf->addReference(cf);
     doc->add(pf);
 
@@ -611,8 +610,7 @@ bool verify_ds_lfe_label_no_lowpass() {
     ok &= check(rms[0] > 0.9, "DS RC_LFE: W (ACN 0) ≈ 1 (omnidirectional)");
     // All higher-order channels must be silent — no directional encoding.
     for (int ch = 1; ch < k_hoa3_channels; ++ch) {
-        ok &= check(rms[static_cast<std::size_t>(ch)] < 1e-3,
-                    "DS RC_LFE: higher-order ACN channel ≈ 0");
+        ok &= check(rms[static_cast<std::size_t>(ch)] < 1e-3, "DS RC_LFE: higher-order ACN channel ≈ 0");
     }
     return ok;
 }

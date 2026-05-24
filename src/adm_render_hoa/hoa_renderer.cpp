@@ -110,11 +110,20 @@ std::optional<std::pair<float, float>> parse_speaker_label(const std::string& la
     }
     float el = 0.0F;
     switch (label[0]) {
-        case 'M': el = 0.0F; break;
-        case 'U': el = 30.0F; break;
-        case 'T': el = 90.0F; break;
-        case 'B': el = -30.0F; break;
-        default: return std::nullopt;
+    case 'M':
+        el = 0.0F;
+        break;
+    case 'U':
+        el = 30.0F;
+        break;
+    case 'T':
+        el = 90.0F;
+        break;
+    case 'B':
+        el = -30.0F;
+        break;
+    default:
+        return std::nullopt;
     }
     if (label[1] != '+' && label[1] != '-') {
         return std::nullopt;
@@ -222,15 +231,12 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
                 } else if (ds.has_position) {
                     sh = encode_polar(ds.azimuth, ds.elevation);
                 } else {
-                    bool resolved = false;
-                    for (const auto& lbl : ds.speaker_labels) {
-                        if (const auto pos = parse_speaker_label(lbl)) {
-                            sh = encode_polar(pos->first, pos->second);
-                            resolved = true;
-                            break;
-                        }
-                    }
-                    if (!resolved) {
+                    std::optional<std::pair<float, float>> parsed_pos;
+                    const auto parsed_label = std::ranges::find_if(ds.speaker_labels, [&parsed_pos](const auto& lbl) {
+                        parsed_pos = parse_speaker_label(lbl);
+                        return parsed_pos.has_value();
+                    });
+                    if (parsed_label == ds.speaker_labels.end()) {
                         logs.log(LogLevel::warning,
                                  "hoa-encode",
                                  fmt::format("DirectSpeakers channel {} has no position and no parseable label; "
@@ -238,6 +244,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
                                              in_ch));
                         continue;
                     }
+                    sh = encode_polar(parsed_pos->first, parsed_pos->second);
                 }
                 const float combined_gain = ds.gain * obj.gain;
                 std::ranges::transform(sh, sh.begin(), [combined_gain](float c) { return c * combined_gain; });
