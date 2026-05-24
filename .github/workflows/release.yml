@@ -19,7 +19,7 @@ jobs:
       matrix:
         include:
           - name: macOS release
-            runner: macos-15
+            runner: macos-26
             artifact: mradm-macos-arm64
             platform: macos
             arch: arm64
@@ -111,3 +111,152 @@ jobs:
       - name: ccache stats
         if: always()
         run: ccache --show-stats || true
+
+  release-windows:
+    name: Windows release
+    runs-on: windows-2025
+
+    env:
+      FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-bincache
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\.vcpkg-bincache,readwrite
+      VCPKG_FEATURE_FLAGS: binarycaching
+      OPENBLAS_VERSION: 0.3.33
+      OPENBLAS_ROOT: ${{ github.workspace }}\.openblas
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Restore FetchContent cache
+        uses: actions/cache@v5
+        with:
+          path: .fc-cache
+          key: fc-release-windows-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            fc-release-windows-
+            fc-windows-
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v5
+        with:
+          path: .vcpkg-bincache
+          key: vcpkg-release-windows-boost-${{ hashFiles('.github/workflows/release.yml') }}
+          restore-keys: |
+            vcpkg-release-windows-boost-
+            vcpkg-windows-boost-
+
+      - name: Restore OpenBLAS cache
+        uses: actions/cache@v5
+        with:
+          path: .openblas
+          key: openblas-windows-x64-${{ env.OPENBLAS_VERSION }}
+
+      - name: Install native dependencies
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
+          Write-Host "VCPKG_BINARY_SOURCES=$env:VCPKG_BINARY_SOURCES"
+          vcpkg install `
+            boost-format `
+            boost-functional `
+            boost-algorithm `
+            boost-integer `
+            boost-iterator `
+            boost-math `
+            boost-optional `
+            boost-range `
+            boost-rational `
+            boost-smart-ptr `
+            boost-variant `
+            --triplet x64-windows
+
+      - name: Install prebuilt OpenBLAS
+        shell: pwsh
+        run: |
+          $lib = Join-Path $env:OPENBLAS_ROOT "lib\libopenblas.lib"
+          if (!(Test-Path $lib)) {
+            New-Item -ItemType Directory -Force -Path "$env:OPENBLAS_ROOT" | Out-Null
+            $zip = Join-Path $env:RUNNER_TEMP "OpenBLAS-$env:OPENBLAS_VERSION-x64.zip"
+            $url = "https://github.com/OpenMathLib/OpenBLAS/releases/download/v$env:OPENBLAS_VERSION/OpenBLAS-$env:OPENBLAS_VERSION-x64.zip"
+            Invoke-WebRequest -Uri $url -OutFile $zip
+            Expand-Archive -Path $zip -DestinationPath "$env:OPENBLAS_ROOT" -Force
+          }
+          "OPENBLAS_LIBRARY=$lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "LAPACKE_LIBRARY=$lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "OPENBLAS_HEADER_PATH=$(Join-Path $env:OPENBLAS_ROOT 'include')" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "LAPACKE_HEADER_PATH=$(Join-Path $env:OPENBLAS_ROOT 'include')" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "$(Join-Path $env:OPENBLAS_ROOT 'bin')" | Out-File -FilePath $env:GITHUB_PATH -Append
+          Write-Host "Using prebuilt OpenBLAS: $lib"
+
+      - name: Locate MSVC environment
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ([string]::IsNullOrWhiteSpace($installPath)) {
+            throw "Visual Studio with VC tools was not found"
+          }
+          $vcvars = Join-Path $installPath "VC\Auxiliary\Build\vcvars64.bat"
+          if (!(Test-Path $vcvars)) {
+            throw "vcvars64.bat not found at $vcvars"
+          }
+          "VCVARS64=$vcvars" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Using MSVC environment: $vcvars"
+
+      - name: Configure
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          cmake -S . -B build/windows -G Ninja ^
+            -DCMAKE_BUILD_TYPE=MinSizeRel ^
+            -DCMAKE_C_COMPILER=cl ^
+            -DCMAKE_CXX_COMPILER=cl ^
+            -DCMAKE_TOOLCHAIN_FILE="%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
+            -DFETCHCONTENT_BASE_DIR="%FC_CACHE_DIR%" ^
+            -DMR_ADM_CORE_BUILD_TESTS=OFF ^
+            -DMR_ADM_FLAC_PROVIDER=VENDORED ^
+            -DMR_ADM_OPUS_PROVIDER=VENDORED ^
+            -DSAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE ^
+            -DOPENBLAS_LIBRARY="%OPENBLAS_LIBRARY%" ^
+            -DLAPACKE_LIBRARY="%LAPACKE_LIBRARY%" ^
+            -DOPENBLAS_HEADER_PATH="%OPENBLAS_HEADER_PATH%" ^
+            -DLAPACKE_HEADER_PATH="%LAPACKE_HEADER_PATH%"
+
+      - name: Build
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          cmake --build build/windows --target mradm_exe --config RelWithDebInfo
+
+      - name: Smoke
+        shell: pwsh
+        run: |
+          .\build\windows\mradm.exe --version
+          .\build\windows\mradm.exe backends
+
+      - name: Package
+        shell: pwsh
+        run: >
+          .\scripts\release\package-windows.ps1
+          -Binary ".\build\windows\mradm.exe"
+          -Arch "x64"
+          -OpenBlasRoot "$env:OPENBLAS_ROOT"
+          -VcpkgRoot "$env:VCPKG_INSTALLATION_ROOT"
+          -CmakeOptions "MinSizeRel; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; SAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE"
+
+      - name: Package smoke
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -Path dist -Filter "mradm-*-windows-x64.zip" | Select-Object -First 1
+          if ($null -eq $archive) { throw "Windows release package was not produced" }
+          .\scripts\release\smoke-package-windows.ps1 -Archive $archive.FullName
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v7
+        with:
+          name: mradm-windows-x64
+          path: |
+            dist/mradm-*-windows-x64.zip
+            dist/mradm-*-windows-x64.zip.sha256
+          if-no-files-found: error
