@@ -225,7 +225,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         }
         output_layout = "binaural";
     }
-    const bool is_hoa_output = (sel == RendererSelection::hoa || output_layout == "hoa3");
+
 
     // Detect FLAC final output: FLAC does not carry float32 samples, so rendering
     // directly to FLAC would clip any > 0 dBFS content before loudness/peak
@@ -305,23 +305,14 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         const double peak_clamp = std::min(0.0, target_peak - peak_after);
         if (peak_clamp < -0.1) {
             gain_db += peak_clamp;
-            const auto msg = is_hoa_output
-                                 ? fmt::format("HOA coefficient true peak {:.2f} dBTP, ceiling {:.1f} dBTP → clamp "
-                                               "{:.2f} dB",
-                                               peak_after,
-                                               target_peak,
-                                               peak_clamp)
-                                 : fmt::format("true peak after loudness {:.2f} dBTP, ceiling {:.1f} dBTP → clamp "
-                                               "{:.2f} dB",
-                                               peak_after,
-                                               target_peak,
-                                               peak_clamp);
-            logs.log(LogLevel::info, "engine", msg);
-        } else {
             logs.log(LogLevel::info,
                      "engine",
-                     is_hoa_output ? "HOA coefficient true peak within target — no clamp"
-                                   : "true peak within target — no clamp");
+                     fmt::format("true peak after loudness {:.2f} dBTP, ceiling {:.1f} dBTP → clamp {:.2f} dB",
+                                 peak_after,
+                                 target_peak,
+                                 peak_clamp));
+        } else {
+            logs.log(LogLevel::info, "engine", "true peak within target — no clamp");
         }
     }
 
@@ -386,10 +377,10 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
 
     if (is_iamf_final) {
         logs.log(LogLevel::info, "engine", "encoding float32 render to IAMF (Opus, raw OBU stream)");
-        const auto lufs = (!is_hoa_output && metrics.measured_lufs)
+        const auto lufs = metrics.measured_lufs
                               ? std::optional<double>(*metrics.measured_lufs + gain_db)
                               : std::nullopt;
-        const auto peak = (!is_hoa_output && metrics.measured_peak_dbtp)
+        const auto peak = metrics.measured_peak_dbtp
                               ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db)
                               : std::nullopt;
         auto iamf_res = audio::convert_to_iamf(
@@ -417,14 +408,11 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         meta_fields.renderer = caps.backend_name;
         meta_fields.output_layout = output_layout;
         // bext / info fields must reflect the actual file after gain adjustment.
-        // HOA metrics are coefficient-domain diagnostics, not playback loudness/peak.
-        if (!is_hoa_output) {
-            meta_fields.lufs =
-                metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
-            meta_fields.peak_dbtp = metrics.measured_peak_dbtp
-                                        ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db)
-                                        : std::nullopt;
-        }
+        meta_fields.lufs =
+            metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
+        meta_fields.peak_dbtp = metrics.measured_peak_dbtp
+                                    ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db)
+                                    : std::nullopt;
 
         auto meta_res = audio::write_file_metadata(output_path, meta_fields);
         if (!meta_res) {
