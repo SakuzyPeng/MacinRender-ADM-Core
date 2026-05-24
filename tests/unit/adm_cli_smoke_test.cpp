@@ -180,6 +180,11 @@ int main() {
         ok &= check(r.out.find("7.1.4") == std::string::npos, "layouts flac+saf: 7.1.4 hidden");
     }
     {
+        auto r = run_cmd(mradm_exe + " layouts --format flac --renderer ear");
+        ok &= check(r.code == 0, "layouts --format flac --renderer ear: exit 0");
+        ok &= check(r.out.find("5.1.2") == std::string::npos, "layouts flac+ear: 5.1.2 hidden");
+    }
+    {
         auto r = run_cmd(mradm_exe + " layouts --format wav --renderer ear");
         ok &= check(r.code == 0, "layouts --format wav --renderer ear: exit 0");
         ok &= check(r.out.find("Renderer: libear") != std::string::npos, "layouts renderer filter: ear heading");

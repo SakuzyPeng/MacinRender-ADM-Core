@@ -243,6 +243,7 @@ public:
 FLAC 输出策略：
 
 - 当前固定写出 24-bit integer FLAC，作为渲染结果的无损压缩交付格式。
+- RenderService 只开放 `binaural`、`5.1`、`7.1` 等无高度布局的 FLAC 输出；`5.1.2` 虽然不超过 8 声道，但缺少可靠通用的高度声道语义，因此拒绝写出。
 - 16-bit FLAC 主要服务消费级体积/兼容性诉求，列为后续 CLI 选项（如 `--flac-bit-depth 16|24`），不阻塞首发。
 - 如需保留 0 dBFS 以上 headroom 或 float 工作流，应使用 WAV/CAF float 输出，而不是 FLAC。
 

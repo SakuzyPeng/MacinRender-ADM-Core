@@ -529,7 +529,7 @@ bool verify_render_service_flac_rejects_more_than_8_channels() {
     if (!check(res.error.code == mradm::ErrorCode::unsupported, "RenderService >8ch FLAC error code")) {
         return false;
     }
-    if (!check(res.error.message.find("FLAC supports 1-8 channels") != std::string::npos,
+    if (!check(res.error.message.find("non-height layouts") != std::string::npos,
                "RenderService >8ch FLAC error message")) {
         return false;
     }
@@ -537,6 +537,44 @@ bool verify_render_service_flac_rejects_more_than_8_channels() {
         return false;
     }
     if (!check(!has_render_temp_sidecar(out_path), "RenderService created render temp for unsupported FLAC layout")) {
+        return false;
+    }
+    return true;
+}
+
+bool verify_render_service_flac_rejects_height_layouts() {
+    const auto in_path = write_render_fixture();
+    const FileGuard in_guard(in_path);
+
+    const auto out_path = temp_path("mr_flac_engine_height_layout", ".flac");
+    const FileGuard out_guard(out_path);
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.renderer = mradm::RendererSelection::ear;
+    req.options.output_layout = "5.1.2";
+    req.options.peak_limit = false;
+    req.options.measure_loudness = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!check(!res.success(), "RenderService accepted height FLAC layout")) {
+        return false;
+    }
+    if (!check(res.error.code == mradm::ErrorCode::unsupported, "RenderService height FLAC error code")) {
+        return false;
+    }
+    if (!check(res.error.message.find("non-height layouts") != std::string::npos,
+               "RenderService height FLAC error message")) {
+        return false;
+    }
+    if (!check(!std::filesystem::exists(out_path), "RenderService created unsupported height FLAC output")) {
+        return false;
+    }
+    if (!check(!has_render_temp_sidecar(out_path), "RenderService created temp for unsupported height FLAC layout")) {
         return false;
     }
     return true;
@@ -552,9 +590,10 @@ int main() {
     ok &= verify_flac_channel_mask_value();
     ok &= verify_render_service_flac_final_pipeline();
     ok &= verify_render_service_flac_rejects_more_than_8_channels();
+    ok &= verify_render_service_flac_rejects_height_layouts();
     if (!ok) {
         return EXIT_FAILURE;
     }
-    std::cout << "FLAC I/O smoke tests passed (5/5)\n";
+    std::cout << "FLAC I/O smoke tests passed (6/6)\n";
     return EXIT_SUCCESS;
 }
