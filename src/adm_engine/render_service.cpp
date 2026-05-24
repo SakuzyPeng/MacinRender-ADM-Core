@@ -109,6 +109,10 @@ namespace {
     return std::nullopt;
 }
 
+[[nodiscard]] bool flac_supports_layout(std::string_view layout_id) {
+    return layout_id == "binaural" || layout_id == "0+2+0" || layout_id == "0+5+0" || layout_id == "wav71";
+}
+
 class TempFileGuard {
   public:
     explicit TempFileGuard(std::filesystem::path path) : path_(std::move(path)) {}
@@ -236,6 +240,12 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     const bool is_opus_final = (final_ext == ".mka");
     const bool is_apac_final = (final_ext == ".m4a" || final_ext == ".mp4");
     if (is_flac_final) {
+        if (!flac_supports_layout(output_layout)) {
+            const auto msg = fmt::format(
+                "FLAC output supports only non-height layouts (binaural, 5.1, 7.1); layout '{}' is not supported",
+                output_layout);
+            return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+        }
         const auto channels = channel_count_for_layout(caps, output_layout);
         if (channels.has_value() && *channels > 8U) {
             const auto msg =

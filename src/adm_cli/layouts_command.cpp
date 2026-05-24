@@ -131,7 +131,7 @@ bool renderer_supports_layout(const mradm::CapabilityReport& caps, std::string_v
     });
 }
 
-constexpr std::array<LayoutInfo, 28> k_layout_infos{{
+constexpr std::array<LayoutInfo, 27> k_layout_infos{{
     {"wav",
      "binaural",
      2,
@@ -184,12 +184,6 @@ constexpr std::array<LayoutInfo, 28> k_layout_infos{{
      "Binaural L, Binaural R",
      "Readers may display this as ordinary stereo."},
     {"flac", "5.1", 6, "FLAC + WAVEFORMATEXTENSIBLE mask 0x0000003F", "L R C LFE Ls Rs", ""},
-    {"flac",
-     "5.1.2",
-     8,
-     "FLAC 8ch; no WAVE mask currently written",
-     "L R C LFE Ls Rs U+030 U-030",
-     "Top channels use ADM labels."},
     {"flac",
      "7.1",
      8,
