@@ -8,6 +8,7 @@
 #include <memory>
 #include <numbers>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include <bw64/bw64.hpp>
@@ -79,6 +80,32 @@ Hoa3Coeffs encode_cartesian(float xc, float yc, float zc) noexcept {
     return sh_sn3d_3(yc / len, -xc / len, zc / len);
 }
 
+// Parse a BS.2051 speaker label (e.g. "M+030", "U-045", "T+000") into (az, el) degrees.
+// Returns nullopt when the label is not a recognised positional format.
+std::optional<std::pair<float, float>> parse_speaker_label(const std::string& label) {
+    if (label.size() < 5) {
+        return std::nullopt;
+    }
+    float el = 0.0F;
+    switch (label[0]) {
+        case 'M': el = 0.0F; break;
+        case 'U': el = 30.0F; break;
+        case 'T': el = 90.0F; break;
+        case 'B': el = -30.0F; break;
+        default: return std::nullopt;
+    }
+    if (label[1] != '+' && label[1] != '-') {
+        return std::nullopt;
+    }
+    const float sign = (label[1] == '+') ? 1.0F : -1.0F;
+    try {
+        const float az = std::stof(label.substr(2)) * sign;
+        return std::make_pair(az, el);
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
 struct HoaBlock {
     Hoa3Coeffs gains{};
     uint64_t start_sample{0};
@@ -130,7 +157,7 @@ struct ChannelGainInfo {
     return cur.gains;
 }
 
-std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene) {
+std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& logs) {
     std::map<uint16_t, ChannelGainInfo> by_channel;
 
     for (const auto& obj : scene.objects) {
@@ -157,6 +184,37 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene) {
                                      std::min(block.end_sample, obj.end_sample),
                                      block.jump_position,
                                      block.interp_length_samples});
+            }
+
+            for (const auto& ds : track.ds_blocks) {
+                Hoa3Coeffs sh{};
+                if (ds.low_pass_hz.has_value()) {
+                    // LFE: no directionality → encode as omnidirectional (W channel only, ACN 0).
+                    sh[0] = 1.0F;
+                } else if (ds.has_position) {
+                    sh = encode_polar(ds.azimuth, ds.elevation);
+                } else {
+                    bool resolved = false;
+                    for (const auto& lbl : ds.speaker_labels) {
+                        if (const auto pos = parse_speaker_label(lbl)) {
+                            sh = encode_polar(pos->first, pos->second);
+                            resolved = true;
+                            break;
+                        }
+                    }
+                    if (!resolved) {
+                        logs.log(LogLevel::warning,
+                                 "hoa-encode",
+                                 fmt::format("DirectSpeakers channel {} has no position and no parseable label; "
+                                             "skipping",
+                                             in_ch));
+                        continue;
+                    }
+                }
+                const float combined_gain = ds.gain * obj.gain;
+                std::ranges::transform(sh, sh.begin(), [combined_gain](float c) { return c * combined_gain; });
+                // DirectSpeakers positions are static — no interpolation needed between blocks.
+                cg.blocks.push_back({sh, ds.start_sample, std::min(ds.end_sample, obj.end_sample), true, std::nullopt});
             }
         }
     }
@@ -190,7 +248,7 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
 
     const auto& info = plan.scene.info;
 
-    auto gain_matrix = build_gain_matrix(plan.scene);
+    auto gain_matrix = build_gain_matrix(plan.scene, logs);
     if (gain_matrix.empty()) {
         logs.log(LogLevel::warning, "hoa-encode", "no renderable tracks found (all muted?), writing silence");
     }
@@ -211,11 +269,12 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
     }
 
     try {
-        logs.log(
-            LogLevel::info,
-            "hoa-encode",
-            fmt::format(
-                "encoding {} Objects tracks → HOA3 ({} ch), {} frames", gain_matrix.size(), k_num_out, num_frames));
+        logs.log(LogLevel::info,
+                 "hoa-encode",
+                 fmt::format("encoding {} input channels (Objects + DirectSpeakers) → HOA3 ({} ch), {} frames",
+                             gain_matrix.size(),
+                             k_num_out,
+                             num_frames));
         progress.on_progress({RenderStage::rendering, 0.3, "encoding HOA"});
 
         auto reader = bw64::readFile(plan.input_path);
@@ -326,7 +385,7 @@ CapabilityReport hoa_capabilities() {
     r.backend_name = "hoa-encode";
     r.backend_version = "1.0";
     r.supports_objects = true;
-    r.supports_direct_speakers = false;
+    r.supports_direct_speakers = true;
     r.supports_hoa = false;
     r.supported_layouts = {
         {"hoa3", "HOA 3rd Order (16ch, ACN/SN3D)", 16, true, 0, false},
