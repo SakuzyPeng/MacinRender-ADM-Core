@@ -35,6 +35,52 @@ ctest --test-dir build/debug -R mr_adm_ear_fixture_tests --output-on-failure
 
 CLI 二进制名固定为 `mradm`（`mradm_exe` 是 CMake target；二进制输出名是 `mradm`）。**不要**为兼容旧名再生成 `adm` 入口。
 
+## 常用 CLI 渲染示例
+
+始终使用 **release** 构建（`build/release/mradm`）跑实际渲染，debug 构建仅用于开发调试。
+
+容器选择原则：
+- **双耳 / ≤8ch 无高度布局**（如 stereo、5.1）→ FLAC
+- **高度布局**（5.1.4 / 7.1.4 / 9.1.6 / 22.2）或 **HOA** → macOS 用 APAC（`.m4a`），Windows/跨平台测试用 Opus MKA（`.mka`）
+- WAV 不作为首选输出格式
+
+```bash
+# 双耳 → FLAC（2ch）
+./build/release/mradm render \
+  -i input.wav -o output.binaural.flac \
+  --renderer binaural
+
+# ≤8ch 无高度扬声器布局（如 5.1）→ FLAC
+./build/release/mradm render \
+  -i input.wav -o output.5_1.flac \
+  --output-layout 5.1
+
+# 高度布局（7.1.4 等）→ macOS APAC
+./build/release/mradm render \
+  -i input.wav -o output.7_1_4.m4a \
+  --output-layout 7.1.4
+
+# 高度布局 → Windows/跨平台测试用 Opus MKA
+./build/release/mradm render \
+  -i input.wav -o output.7_1_4.mka \
+  --output-layout 7.1.4
+
+# HOA 3 阶 → macOS APAC
+./build/release/mradm render \
+  -i input.wav -o output.hoa3.m4a \
+  --renderer hoa --output-layout hoa3
+
+# HOA 3 阶 → Opus MKA（跨平台测试）
+./build/release/mradm render \
+  -i input.wav -o output.hoa3.mka \
+  --renderer hoa --output-layout hoa3
+
+# 查看场景元数据
+./build/release/mradm inspect -i input.wav
+```
+
+`-v` 打印详细进度日志。
+
 ## 质量检查
 
 ```bash
