@@ -35,6 +35,33 @@ ctest --test-dir build/debug -R mr_adm_ear_fixture_tests --output-on-failure
 
 CLI 二进制名固定为 `mradm`（`mradm_exe` 是 CMake target；二进制输出名是 `mradm`）。**不要**为兼容旧名再生成 `adm` 入口。
 
+## 常用 CLI 渲染示例
+
+始终使用 **release** 构建（`build/release/mradm`）跑实际渲染，debug 构建仅用于开发调试。
+
+```bash
+# 双耳（binaural）→ FLAC，输出到源文件同目录
+./build/release/mradm render \
+  -i "/path/to/input.wav" \
+  -o "/path/to/output.binaural.flac" \
+  --renderer binaural
+
+# 多声道扬声器布局 → FLAC（layout 示例：7.1.4）
+./build/release/mradm render \
+  -i input.wav -o output.flac \
+  --output-layout 7.1.4
+
+# HOA 3 阶 → FLAC
+./build/release/mradm render \
+  -i input.wav -o output.hoa3.flac \
+  --renderer hoa --output-layout hoa3
+
+# 查看场景元数据
+./build/release/mradm inspect -i input.wav
+```
+
+输出文件自动由扩展名决定容器（`.flac` / `.wav` / `.mka` / `.m4a`）。`-v` 打印详细进度日志。
+
 ## 质量检查
 
 ```bash
