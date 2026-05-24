@@ -5,15 +5,15 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <iomanip>
 #include <iterator>
 #include <limits>
 #include <opus_multistream.h>
 #include <random>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <fmt/format.h>
 
 #include "adm/audio_io.h"
 #include "adm/errors.h"
@@ -230,6 +230,61 @@ static std::vector<uint8_t> build_opus_head(uint32_t channels,
     return h;
 }
 
+[[nodiscard]] bool is_square_channel_count(uint32_t channels) {
+    const auto root = static_cast<uint32_t>(std::sqrt(static_cast<double>(channels)));
+    return root * root == channels;
+}
+
+[[nodiscard]] bool is_hoa_layout(std::string_view layout_id, uint32_t channels) {
+    return layout_id.starts_with("hoa") && is_square_channel_count(channels);
+}
+
+[[nodiscard]] bool is_standard_opus_surround_layout(std::string_view layout_id, uint32_t channels) {
+    if ((layout_id == "0+5+0" || layout_id == "5.1") && channels == 6U) {
+        return true;
+    }
+    if ((layout_id == "wav71" || layout_id == "7.1") && channels == 8U) {
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] int opus_mapping_family(uint32_t channels, std::string_view layout_id) {
+    if (is_hoa_layout(layout_id, channels)) {
+        return 2;
+    }
+    if (channels <= 2U) {
+        return 0;
+    }
+    if (is_standard_opus_surround_layout(layout_id, channels)) {
+        return 1;
+    }
+    if (layout_id.empty() && channels <= 8U) {
+        return 1;
+    }
+    return 255;
+}
+
+[[nodiscard]] std::vector<uint32_t> opus_vorbis_source_order(std::string_view layout_id, uint32_t channels) {
+    if ((layout_id == "0+5+0" || layout_id == "5.1") && channels == 6U) {
+        // Internal/WAVE order: L R C LFE Ls Rs
+        // Opus family 1/Vorbis order: L C R Ls Rs LFE
+        return {0U, 2U, 1U, 4U, 5U, 3U};
+    }
+    if ((layout_id == "wav71" || layout_id == "7.1") && channels == 8U) {
+        // Internal WAVE_7_1 order: L R C LFE Rls Rrs Ls Rs
+        // Opus family 1/Vorbis order: L C R Ls Rs Rls Rrs LFE
+        return {0U, 2U, 1U, 6U, 7U, 4U, 5U, 3U};
+    }
+    return {};
+}
+
+[[nodiscard]] std::string fixed_decimal(double value, int decimals) {
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(decimals) << value;
+    return out.str();
+}
+
 } // namespace
 // NOLINTEND(readability-identifier-naming,readability-static-definition-in-anonymous-namespace)
 
@@ -341,7 +396,7 @@ bool FloatOpusMkaWriter::Impl::encode_and_write(uint64_t frame_ts_ms) {
         encoder, ibuf.data(), k_frame_size, pbuf.data(), static_cast<opus_int32>(pbuf.size()));
     if (ret <= 0) {
         failed = true;
-        failure_message = fmt::format("opus_multistream_encode_float failed: {}", opus_strerror(ret));
+        failure_message = std::string{"opus_multistream_encode_float failed: "} + opus_strerror(ret);
         return false;
     }
 
@@ -369,27 +424,23 @@ bool FloatOpusMkaWriter::Impl::encode_and_write(uint64_t frame_ts_ms) {
 Result<FloatOpusMkaWriter> FloatOpusMkaWriter::open(const std::string& path,
                                                     uint32_t channels,
                                                     uint32_t sample_rate,
-                                                    uint32_t bitrate_per_ch_kbps) {
+                                                    uint32_t bitrate_per_ch_kbps,
+                                                    const std::string& layout_id) {
     if (sample_rate != 48000U) {
         return make_error(ErrorCode::unsupported,
-                          fmt::format("Opus MKA requires 48000 Hz input, got {} Hz", sample_rate),
+                          "Opus MKA requires 48000 Hz input, got " + std::to_string(sample_rate) + " Hz",
                           "path=" + path);
     }
     if (channels < 1U || channels > 255U) {
         return make_error(
-            ErrorCode::unsupported, fmt::format("Opus supports 1-255 channels, got {}", channels), "path=" + path);
+            ErrorCode::unsupported, "Opus supports 1-255 channels, got " + std::to_string(channels), "path=" + path);
     }
 
     auto impl = std::make_unique<Impl>();
     impl->channels = channels;
     impl->path = path;
 
-    int family = 255;
-    if (channels <= 2U) {
-        family = 0;
-    } else if (channels <= 8U) {
-        family = 1;
-    }
+    const int family = opus_mapping_family(channels, layout_id);
 
     int error{};
     impl->encoder = opus_multistream_surround_encoder_create(48000,
@@ -402,15 +453,15 @@ Result<FloatOpusMkaWriter> FloatOpusMkaWriter::open(const std::string& path,
                                                              &error);
     if (impl->encoder == nullptr || error != OPUS_OK) {
         return make_error(ErrorCode::io_error,
-                          fmt::format("opus_multistream_surround_encoder_create failed: {}", opus_strerror(error)),
+                          std::string{"opus_multistream_surround_encoder_create failed: "} + opus_strerror(error),
                           "path=" + path);
     }
 
     if (bitrate_per_ch_kbps > 0U && (bitrate_per_ch_kbps < 6U || bitrate_per_ch_kbps > 320U)) {
-        return make_error(
-            ErrorCode::invalid_argument,
-            fmt::format("opus_bitrate_per_ch_kbps must be 0 (auto) or 6-320, got {}", bitrate_per_ch_kbps),
-            "path=" + path);
+        return make_error(ErrorCode::invalid_argument,
+                          "opus_bitrate_per_ch_kbps must be 0 (auto) or 6-320, got " +
+                              std::to_string(bitrate_per_ch_kbps),
+                          "path=" + path);
     }
     uint64_t total_bps = static_cast<uint64_t>(channels) * 64000U;
     if (bitrate_per_ch_kbps > 0U) {
@@ -423,7 +474,8 @@ Result<FloatOpusMkaWriter> FloatOpusMkaWriter::open(const std::string& path,
         if (ret == OPUS_OK) {
             return {};
         }
-        return make_error(ErrorCode::io_error, fmt::format("{} failed: {}", op, opus_strerror(ret)), "path=" + path);
+        return make_error(
+            ErrorCode::io_error, std::string{op.data(), op.size()} + " failed: " + opus_strerror(ret), "path=" + path);
     };
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -633,11 +685,12 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
 
     if (reader.sample_rate() != 48000U) {
         return make_error(ErrorCode::unsupported,
-                          fmt::format("Opus MKA requires 48000 Hz source, got {} Hz", reader.sample_rate()),
+                          "Opus MKA requires 48000 Hz source, got " + std::to_string(reader.sample_rate()) + " Hz",
                           "src=" + src_path);
     }
 
-    auto writer_res = FloatOpusMkaWriter::open(mka_path, reader.channels(), reader.sample_rate(), bitrate_per_ch_kbps);
+    auto writer_res =
+        FloatOpusMkaWriter::open(mka_path, reader.channels(), reader.sample_rate(), bitrate_per_ch_kbps, layout_id);
     if (!writer_res) {
         return tl::unexpected{writer_res.error()};
     }
@@ -645,6 +698,8 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
 
     constexpr uint64_t k_block = 4096;
     std::vector<float> buf(static_cast<std::size_t>(reader.channels()) * k_block);
+    const auto source_order = opus_vorbis_source_order(layout_id, reader.channels());
+    std::vector<float> reordered_buf(source_order.empty() ? 0U : buf.size());
     uint64_t left = reader.frame_count();
     while (left > 0) {
         const uint64_t n = std::min(k_block, left);
@@ -652,7 +707,18 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
         if (got == 0) {
             break;
         }
-        if (writer.write(buf.data(), got) != got) {
+        const float* write_ptr = buf.data();
+        if (!source_order.empty()) {
+            const auto channels = static_cast<std::size_t>(reader.channels());
+            for (uint64_t frame = 0; frame < got; ++frame) {
+                const auto base = static_cast<std::size_t>(frame) * channels;
+                for (std::size_t dst_ch = 0; dst_ch < channels; ++dst_ch) {
+                    reordered_buf[base + dst_ch] = buf[base + source_order[dst_ch]];
+                }
+            }
+            write_ptr = reordered_buf.data();
+        }
+        if (writer.write(write_ptr, got) != got) {
             return make_error(ErrorCode::io_error, "short write in convert_to_opus_mka", "path=" + mka_path);
         }
         left -= got;
@@ -660,7 +726,6 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
     if (left != 0) {
         return make_error(ErrorCode::io_error, "short read in convert_to_opus_mka", "src=" + src_path);
     }
-    (void) layout_id;
     return writer.close();
 }
 // NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes,cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays,cppcoreguidelines-pro-bounds-array-to-pointer-decay,cppcoreguidelines-pro-type-vararg,readability-function-size)
@@ -716,10 +781,10 @@ Result<void> write_mka_metadata(const std::string& path, const MetadataFields& m
         append_simple("OUTPUT_LAYOUT", meta.output_layout);
     }
     if (meta.lufs) {
-        append_simple("INTEGRATED_LOUDNESS", fmt::format("{:.1f}", *meta.lufs));
+        append_simple("INTEGRATED_LOUDNESS", fixed_decimal(*meta.lufs, 1));
     }
     if (meta.peak_dbtp) {
-        append_simple("TRUE_PEAK", fmt::format("{:.2f}", *meta.peak_dbtp));
+        append_simple("TRUE_PEAK", fixed_decimal(*meta.peak_dbtp, 2));
     }
 
     MkaBuf tag_elem;

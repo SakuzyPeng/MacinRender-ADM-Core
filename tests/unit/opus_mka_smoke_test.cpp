@@ -1,11 +1,13 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -61,6 +63,22 @@ std::ptrdiff_t find_bytes(const std::vector<uint8_t>& data, const std::vector<ui
 
 bool contains_ascii(const std::vector<uint8_t>& data, const std::string& text) {
     return find_bytes(data, {text.begin(), text.end()}) >= 0;
+}
+
+std::optional<std::size_t> find_opus_head(const std::vector<uint8_t>& data) {
+    const auto pos = find_bytes(data, {'O', 'p', 'u', 's', 'H', 'e', 'a', 'd'});
+    if (pos < 0) {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(pos);
+}
+
+std::optional<uint8_t> opus_head_family(const std::vector<uint8_t>& data) {
+    const auto pos = find_opus_head(data);
+    if (!pos || *pos + 18U >= data.size()) {
+        return std::nullopt;
+    }
+    return data[*pos + 18U];
 }
 
 bool verify_mka_stereo() {
@@ -129,6 +147,98 @@ bool verify_mka_multichannel_24() {
     }
     if (!check(has_ebml_magic(path), "24ch MKA missing EBML magic")) {
         return false;
+    }
+    return true;
+}
+
+bool verify_mka_wav71_uses_vorbis_mapping() {
+    constexpr uint32_t k_ch = 8U;
+    constexpr uint32_t k_sr = 48000U;
+    constexpr uint32_t k_frames = 4800U;
+
+    const std::string path = "/tmp/mr_opus_wav71_mapping_test.mka";
+    FileGuard guard(path);
+
+    std::vector<float> samples(static_cast<std::size_t>(k_ch) * k_frames, 0.1F);
+
+    {
+        auto wr = mradm::audio::FloatOpusMkaWriter::open(path, k_ch, k_sr, 0U, "wav71");
+        if (!check(wr.has_value(), "FloatOpusMkaWriter::open (wav71) failed")) {
+            return false;
+        }
+        if (!check(wr->write(samples.data(), k_frames) == k_frames, "wav71 MKA short write")) {
+            return false;
+        }
+        if (!check(wr->close().has_value(), "wav71 MKA close failed")) {
+            return false;
+        }
+    }
+
+    const auto data = read_binary(path);
+    const auto pos = find_opus_head(data);
+    if (!pos.has_value()) {
+        check(false, "wav71 OpusHead missing");
+        return false;
+    }
+    const auto head = pos.value();
+    if (!check(opus_head_family(data) == 1U, "wav71 must use Opus mapping family 1")) {
+        return false;
+    }
+    constexpr std::array<uint8_t, 8> k_expected_mapping{{0U, 6U, 1U, 2U, 3U, 4U, 5U, 7U}};
+    if (!check(data[head + 19U] == 5U, "wav71 OpusHead stream count")) {
+        return false;
+    }
+    if (!check(data[head + 20U] == 3U, "wav71 OpusHead coupled stream count")) {
+        return false;
+    }
+    const auto mapping_begin = data.begin() + static_cast<std::ptrdiff_t>(head + 21U);
+    return check(std::equal(k_expected_mapping.begin(), k_expected_mapping.end(), mapping_begin),
+                 "wav71 OpusHead mapping table");
+}
+
+bool verify_mka_hoa3_uses_ambisonics_mapping() {
+    constexpr uint32_t k_ch = 16U;
+    constexpr uint32_t k_sr = 48000U;
+    constexpr uint32_t k_frames = 4800U;
+
+    const std::string path = "/tmp/mr_opus_hoa3_mapping_test.mka";
+    FileGuard guard(path);
+
+    std::vector<float> samples(static_cast<std::size_t>(k_ch) * k_frames, 0.1F);
+
+    {
+        auto wr = mradm::audio::FloatOpusMkaWriter::open(path, k_ch, k_sr, 0U, "hoa3");
+        if (!check(wr.has_value(), "FloatOpusMkaWriter::open (hoa3) failed")) {
+            return false;
+        }
+        if (!check(wr->write(samples.data(), k_frames) == k_frames, "hoa3 MKA short write")) {
+            return false;
+        }
+        if (!check(wr->close().has_value(), "hoa3 MKA close failed")) {
+            return false;
+        }
+    }
+
+    const auto data = read_binary(path);
+    const auto pos = find_opus_head(data);
+    if (!pos.has_value()) {
+        check(false, "hoa3 OpusHead missing");
+        return false;
+    }
+    const auto head = pos.value();
+    if (!check(opus_head_family(data) == 2U, "hoa3 must use Opus ambisonics mapping family 2")) {
+        return false;
+    }
+    if (!check(data[head + 19U] == 16U, "hoa3 OpusHead stream count")) {
+        return false;
+    }
+    if (!check(data[head + 20U] == 0U, "hoa3 OpusHead coupled stream count")) {
+        return false;
+    }
+    for (uint8_t i = 0; i < k_ch; ++i) {
+        if (!check(data[head + 21U + i] == i, "hoa3 OpusHead ACN mapping table")) {
+            return false;
+        }
     }
     return true;
 }
@@ -210,11 +320,13 @@ int main() {
     bool ok = true;
     ok &= verify_mka_stereo();
     ok &= verify_mka_multichannel_24();
+    ok &= verify_mka_wav71_uses_vorbis_mapping();
+    ok &= verify_mka_hoa3_uses_ambisonics_mapping();
     ok &= verify_mka_metadata_appended();
     ok &= verify_mka_wrong_sample_rate_rejected();
     if (!ok) {
         return EXIT_FAILURE;
     }
-    std::cout << "Opus MKA smoke tests passed (4/4)\n";
+    std::cout << "Opus MKA smoke tests passed (6/6)\n";
     return EXIT_SUCCESS;
 }

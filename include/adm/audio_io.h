@@ -144,14 +144,18 @@ class FloatFlacReader {
 // Accepts float32 input at 48000 Hz (the only rate Opus supports from external
 // input without resampling). Uses VBR at 128 kbps for stereo or 64 kbps × ch
 // for multichannel (transparent for Opus VBR). Channel mapping: family 0 for
-// mono/stereo, family 1 for 3-8 ch surround, family 255 for 9-255 ch.
+// mono/stereo; family 1 for standard 5.1 / 7.1 after Vorbis-order permutation;
+// family 2 for HOA/ambisonics; family 255 for layouts without Opus semantics.
 // Call convert_to_opus_mka() rather than this class directly in the pipeline.
 class FloatOpusMkaWriter {
   public:
     // bitrate_per_ch_kbps: VBR target per channel in kbps; 0 = auto
     // (64 kbps/ch, minimum 128 kbps for stereo).
-    static Result<FloatOpusMkaWriter>
-    open(const std::string& path, uint32_t channels, uint32_t sample_rate, uint32_t bitrate_per_ch_kbps = 0);
+    static Result<FloatOpusMkaWriter> open(const std::string& path,
+                                           uint32_t channels,
+                                           uint32_t sample_rate,
+                                           uint32_t bitrate_per_ch_kbps = 0,
+                                           const std::string& layout_id = {});
     ~FloatOpusMkaWriter();
     FloatOpusMkaWriter(FloatOpusMkaWriter&&) noexcept;
     FloatOpusMkaWriter& operator=(FloatOpusMkaWriter&&) noexcept;
@@ -229,10 +233,11 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth);
 Result<void> convert_to_flac(const std::string& src_path, const std::string& flac_path);
 
 // Encode a fully post-processed float32 WAV (src_path) to Opus MKA (mka_path).
-// src_path must be 48000 Hz (Opus requirement). layout_id is reserved for
-// container metadata written by the engine layer. Use this as the final pipeline
-// step after all apply_gain_to_file() adjustments — re-encoding degrades lossy
-// quality.
+// src_path must be 48000 Hz (Opus requirement). layout_id controls Opus channel
+// mapping where the format has standard semantics (5.1/7.1 Vorbis order,
+// hoa3 ambisonics); it is also mirrored into container metadata by the engine
+// layer. Use this as the final pipeline step after all apply_gain_to_file()
+// adjustments — re-encoding degrades lossy quality.
 // bitrate_per_ch_kbps: VBR target per channel in kbps; 0 = auto.
 Result<void> convert_to_opus_mka(const std::string& src_path,
                                  const std::string& mka_path,
