@@ -254,6 +254,7 @@ target_sources(
         src/adm_audio/audio_handles.cpp
         src/adm_audio/caf_io.cpp
         src/adm_audio/flac_io.cpp
+        src/adm_audio/iamf_io.cpp
         src/adm_audio/metadata_io.cpp
         src/adm_audio/opus_mka_io.cpp
         src/adm_audio/wav_io.cpp

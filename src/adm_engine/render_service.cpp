@@ -239,6 +239,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     const bool is_flac_final = (final_ext == ".flac");
     const bool is_opus_final = (final_ext == ".mka");
     const bool is_apac_final = (final_ext == ".m4a" || final_ext == ".mp4");
+    const bool is_iamf_final = (final_ext == ".iamf");
     if (is_flac_final) {
         if (!flac_supports_layout(output_layout)) {
             const auto msg = fmt::format(
@@ -253,13 +254,10 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
             return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
         }
     }
-    const auto render_temp_path = (is_flac_final || is_opus_final || is_apac_final)
-                                      ? unique_render_temp_path(final_path)
-                                      : std::filesystem::path{};
-    auto render_temp_guard =
-        (is_flac_final || is_opus_final || is_apac_final) ? std::make_unique<TempFileGuard>(render_temp_path) : nullptr;
-    const std::string render_path =
-        (is_flac_final || is_opus_final || is_apac_final) ? render_temp_path.string() : output_path;
+    const bool is_lossy_final = (is_flac_final || is_opus_final || is_apac_final || is_iamf_final);
+    const auto render_temp_path = is_lossy_final ? unique_render_temp_path(final_path) : std::filesystem::path{};
+    auto render_temp_guard = is_lossy_final ? std::make_unique<TempFileGuard>(render_temp_path) : nullptr;
+    const std::string render_path = is_lossy_final ? render_temp_path.string() : output_path;
 
     // Build plan.
     RenderPlan plan;
@@ -352,7 +350,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     // Bit depth conversion: WAV output only.
     // CAF is always float32. For FLAC, the temp WAV stays float32 here so that
     // quantisation happens exactly once during the final FLAC encode step below.
-    if (!is_flac_final && !is_opus_final && !is_apac_final && request.options.output_bit_depth != OutputBitDepth::f32) {
+    if (!is_lossy_final && request.options.output_bit_depth != OutputBitDepth::f32) {
         auto render_ext = std::filesystem::path(render_path).extension().string();
         std::ranges::transform(render_ext, render_ext.begin(), [](char c) {
             return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -396,6 +394,22 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         render_temp_guard->remove_now();
         if (!apac_res) {
             return {apac_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, apac_res.error().message}}};
+        }
+    }
+
+    if (is_iamf_final) {
+        logs.log(LogLevel::info, "engine", "encoding float32 render to IAMF (Opus, raw OBU stream)");
+        const auto lufs = (!is_hoa_output && metrics.measured_lufs)
+                              ? std::optional<double>(*metrics.measured_lufs + gain_db)
+                              : std::nullopt;
+        const auto peak = (!is_hoa_output && metrics.measured_peak_dbtp)
+                              ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db)
+                              : std::nullopt;
+        auto iamf_res = audio::convert_to_iamf(
+            render_path, output_path, output_layout, request.options.opus_bitrate_per_ch_kbps, lufs, peak);
+        render_temp_guard->remove_now();
+        if (!iamf_res) {
+            return {iamf_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, iamf_res.error().message}}};
         }
     }
 
