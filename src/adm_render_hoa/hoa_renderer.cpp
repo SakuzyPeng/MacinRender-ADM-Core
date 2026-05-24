@@ -158,6 +158,7 @@ struct HoaBlock {
 
 struct ChannelGainInfo {
     uint16_t input_channel{0};
+    bool has_lfe_block{false};    // true when any ds_block is LFE; used for separate TP tracking
     std::vector<HoaBlock> blocks; // sorted ascending by start_sample
 };
 
@@ -235,6 +236,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
                     // Label check runs before position so channels like RC_LFE (no lowPass element
                     // but carrying a nominal position) are still treated as non-directional.
                     sh[0] = 1.0F;
+                    cg.has_lfe_block = true;
                 } else if (ds.has_position) {
                     sh = encode_polar(ds.azimuth, ds.elevation);
                 } else {
@@ -317,10 +319,10 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
     //
     // SAF getLoudspeakerDecoderMtx uses N3D internally; our HOA output is SN3D.
     // Each column of the decode matrix is scaled by sqrt(2n+1) to compensate.
-    constexpr int k_714_nls = 11;            // non-LFE spatial speakers for AllRAD
-    constexpr int k_714_ch  = 12;            // ebur128 channel count (11 spatial + LFE slot)
-    constexpr std::size_t k_714_nls_sz = static_cast<std::size_t>(k_714_nls);
-    constexpr std::size_t k_714_ch_sz  = static_cast<std::size_t>(k_714_ch);
+    constexpr int k_714_nls = 11; // non-LFE spatial speakers for AllRAD
+    constexpr int k_714_ch = 12;  // ebur128 channel count (11 spatial + LFE slot)
+    constexpr auto k_714_nls_sz = static_cast<std::size_t>(k_714_nls);
+    constexpr auto k_714_ch_sz = static_cast<std::size_t>(k_714_ch);
     // clang-format off
     // 11 non-LFE speakers; LFE (az=45, el=-30) deliberately omitted.
     constexpr std::array<float, k_714_nls_sz * 2> k_714_dirs = {
@@ -336,11 +338,13 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         135.F,  30.F,   // row 9 → ch10 Ltr
        -135.F,  30.F,   // row10 → ch11 Rtr
     };
+    constexpr float k_sqrt5 = 2.2360679774997896F;
+    constexpr float k_sqrt7 = 2.6457513110645905F;
     constexpr std::array<float, k_hoa3_channels> k_sn3d_to_n3d = {
-        1.F,                                                                                 // n=0 (√1)
-        1.7320508F, 1.7320508F, 1.7320508F,                                                  // n=1 (√3)
-        2.2360679F, 2.2360679F, 2.2360679F, 2.2360679F, 2.2360679F,                         // n=2 (√5)
-        2.6457513F, 2.6457513F, 2.6457513F, 2.6457513F, 2.6457513F, 2.6457513F, 2.6457513F, // n=3 (√7)
+        1.F,                                                                                     // n=0 (√1)
+        std::numbers::sqrt3_v<float>, std::numbers::sqrt3_v<float>, std::numbers::sqrt3_v<float>, // n=1 (√3)
+        k_sqrt5, k_sqrt5, k_sqrt5, k_sqrt5, k_sqrt5,                                            // n=2 (√5)
+        k_sqrt7, k_sqrt7, k_sqrt7, k_sqrt7, k_sqrt7, k_sqrt7, k_sqrt7,                          // n=3 (√7)
     };
     // clang-format on
     std::array<float, k_714_nls_sz * k_hoa3_channels> dec_mtx{};
@@ -350,7 +354,7 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         getLoudspeakerDecoderMtx(dirs_buf.data(), k_714_nls, LOUDSPEAKER_DECODER_ALLRAD, 3, 1, dec_mtx.data());
         for (int ls = 0; ls < k_714_nls; ++ls) {
             for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
-                dec_mtx[static_cast<std::size_t>(ls) * k_hoa3_channels + sh] *= k_sn3d_to_n3d[sh];
+                dec_mtx.at((static_cast<std::size_t>(ls) * k_hoa3_channels) + sh) *= k_sn3d_to_n3d.at(sh);
             }
         }
     }
@@ -389,18 +393,30 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         if (lufs_st) {
             // Explicit 7.1.4 channel map so BS.1770 weighting is applied correctly.
             // Channels 6+ default to UNUSED in libebur128; set all 12 explicitly.
-            ebur128_set_channel(lufs_st.get(),  0U, EBUR128_Mp030); // L
-            ebur128_set_channel(lufs_st.get(),  1U, EBUR128_Mm030); // R
-            ebur128_set_channel(lufs_st.get(),  2U, EBUR128_Mp000); // C
-            ebur128_set_channel(lufs_st.get(),  3U, EBUR128_UNUSED); // LFE (zeroed, excluded)
-            ebur128_set_channel(lufs_st.get(),  4U, EBUR128_Mp090); // Ls
-            ebur128_set_channel(lufs_st.get(),  5U, EBUR128_Mm090); // Rs
-            ebur128_set_channel(lufs_st.get(),  6U, EBUR128_Mp135); // Lss
-            ebur128_set_channel(lufs_st.get(),  7U, EBUR128_Mm135); // Rss
-            ebur128_set_channel(lufs_st.get(),  8U, EBUR128_Up045); // Ltf
-            ebur128_set_channel(lufs_st.get(),  9U, EBUR128_Um045); // Rtf
+            ebur128_set_channel(lufs_st.get(), 0U, EBUR128_Mp030);  // L
+            ebur128_set_channel(lufs_st.get(), 1U, EBUR128_Mm030);  // R
+            ebur128_set_channel(lufs_st.get(), 2U, EBUR128_Mp000);  // C
+            ebur128_set_channel(lufs_st.get(), 3U, EBUR128_UNUSED); // LFE (zeroed, excluded)
+            ebur128_set_channel(lufs_st.get(), 4U, EBUR128_Mp090);  // Ls
+            ebur128_set_channel(lufs_st.get(), 5U, EBUR128_Mm090);  // Rs
+            ebur128_set_channel(lufs_st.get(), 6U, EBUR128_Mp135);  // Lss
+            ebur128_set_channel(lufs_st.get(), 7U, EBUR128_Mm135);  // Rss
+            ebur128_set_channel(lufs_st.get(), 8U, EBUR128_Up045);  // Ltf
+            ebur128_set_channel(lufs_st.get(), 9U, EBUR128_Um045);  // Rtf
             ebur128_set_channel(lufs_st.get(), 10U, EBUR128_Up135); // Ltr
             ebur128_set_channel(lufs_st.get(), 11U, EBUR128_Um135); // Rtr
+        }
+
+        // Separate TP tracker for LFE channels: LFE is encoded W-only and zeroed in the
+        // decoded 7.1.4 buffer, so its peak would be invisible to the spatial TP measurement.
+        // We mix all LFE inputs (with their per-block gains) into a mono TP-only state and
+        // merge the resulting peak with the spatial decode peak at the end.
+        EburPtr lfe_tp_st;
+        std::vector<float> lfe_mix_block;
+        const bool has_lfe = std::ranges::any_of(gain_matrix, [](const auto& cg) { return cg.has_lfe_block; });
+        if (has_lfe) {
+            lfe_tp_st.reset(ebur128_init(1U, static_cast<unsigned long>(sample_rate), EBUR128_MODE_TRUE_PEAK));
+            lfe_mix_block.resize(k_block_size, 0.F);
         }
 
         uint64_t frames_done = 0;
@@ -446,23 +462,46 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
                 // Decode 16ch HOA → 12ch 7.1.4 for BS.1770 playback-domain measurement.
                 // rows 0-2  → ch 0-2 (L R C); ch3 (LFE) = 0; rows 3-10 → ch 4-11.
                 for (std::size_t f = 0; f < frames_now; ++f) {
-                    const float* hoa = out_block.data() + f * k_hoa3_channels;
-                    float* dec = decoded_block.data() + f * k_714_ch_sz;
+                    const float* hoa = out_block.data() + (f * k_hoa3_channels);
+                    float* dec = decoded_block.data() + (f * k_714_ch_sz);
                     for (int ls = 0; ls < 3; ++ls) {
                         float s = 0.F;
-                        const float* row = dec_mtx.data() + static_cast<std::size_t>(ls) * k_hoa3_channels;
-                        for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) { s += row[sh] * hoa[sh]; }
+                        const float* row = dec_mtx.data() + (static_cast<std::size_t>(ls) * k_hoa3_channels);
+                        for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
+                            s += row[sh] * hoa[sh];
+                        }
                         dec[ls] = s;
                     }
                     dec[3] = 0.F; // LFE not decoded
                     for (int ls = 3; ls < k_714_nls; ++ls) {
                         float s = 0.F;
-                        const float* row = dec_mtx.data() + static_cast<std::size_t>(ls) * k_hoa3_channels;
-                        for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) { s += row[sh] * hoa[sh]; }
+                        const float* row = dec_mtx.data() + (static_cast<std::size_t>(ls) * k_hoa3_channels);
+                        for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
+                            s += row[sh] * hoa[sh];
+                        }
                         dec[ls + 1] = s; // +1 to skip LFE slot at ch3
                     }
                 }
                 ebur128_add_frames_float(lufs_st.get(), decoded_block.data(), static_cast<std::size_t>(frames_now));
+            }
+
+            if (lfe_tp_st) {
+                // Mix all LFE input channels (with their per-block gains) into a mono buffer
+                // and feed to the LFE TP tracker.  gains_at()[0] is the W-channel gain =
+                // combined_gain for LFE blocks; DirectSpeakers have jump_position=true so no
+                // interpolation occurs.
+                std::fill(lfe_mix_block.begin(), lfe_mix_block.begin() + static_cast<std::ptrdiff_t>(frames_now), 0.F);
+                for (const auto& cg : gain_matrix) {
+                    if (!cg.has_lfe_block) {
+                        continue;
+                    }
+                    for (std::size_t f = 0; f < frames_now; ++f) {
+                        const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
+                        const float g = gains_at(cg, frames_done + f, k_default_interp)[0];
+                        lfe_mix_block[f] += in_s * g;
+                    }
+                }
+                ebur128_add_frames_float(lfe_tp_st.get(), lfe_mix_block.data(), static_cast<std::size_t>(frames_now));
             }
 
             if (writer.write(out_block.data(), frames_now) != frames_now) {
@@ -488,6 +527,12 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
                 double ch_peak = 0.0;
                 if (ebur128_true_peak(lufs_st.get(), ch, &ch_peak) == EBUR128_SUCCESS) {
                     max_peak = std::max(max_peak, ch_peak);
+                }
+            }
+            if (lfe_tp_st) {
+                double lfe_peak = 0.0;
+                if (ebur128_true_peak(lfe_tp_st.get(), 0U, &lfe_peak) == EBUR128_SUCCESS) {
+                    max_peak = std::max(max_peak, lfe_peak);
                 }
             }
             if (max_peak > 0.0) {

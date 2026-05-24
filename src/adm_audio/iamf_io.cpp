@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -42,12 +43,12 @@ constexpr uint8_t k_exp_10_2_9_3 = 13;
 
 // SoundSystem enum (IAMF spec Table 4.28 / Annex A)
 constexpr uint8_t k_ss_stereo = 0; // A: 0.2.0
-constexpr uint8_t k_ss_5_1 = 1;   // B: 0.5.0
-constexpr uint8_t k_ss_5_1_2 = 2; // C: 2.5.0
-constexpr uint8_t k_ss_5_1_4 = 3; // D: 4.5.0
-constexpr uint8_t k_ss_22_2 = 7;  // H: 9.10.3
-constexpr uint8_t k_ss_7_1 = 8;   // I: 0.7.0
-constexpr uint8_t k_ss_7_1_4 = 9; // J: 4.7.0
+constexpr uint8_t k_ss_5_1 = 1;    // B: 0.5.0
+constexpr uint8_t k_ss_5_1_2 = 2;  // C: 2.5.0
+constexpr uint8_t k_ss_5_1_4 = 3;  // D: 4.5.0
+constexpr uint8_t k_ss_22_2 = 7;   // H: 9.10.3
+constexpr uint8_t k_ss_7_1 = 8;    // I: 0.7.0
+constexpr uint8_t k_ss_7_1_4 = 9;  // J: 4.7.0
 constexpr uint8_t k_ss_9_1_6 = 13; // Extension 13: 6.9.0
 
 constexpr int k_frame_size = 960;
@@ -120,12 +121,9 @@ constexpr std::array<IamfLayoutInfo, 8> k_layouts{{
 // clang-format on
 
 const IamfLayoutInfo* find_layout(std::string_view layout_id, uint32_t channels) {
-    for (const auto& li : k_layouts) {
-        if (li.layout_id == layout_id && li.channels == channels) {
-            return &li;
-        }
-    }
-    return nullptr;
+    const auto it = std::ranges::find_if(
+        k_layouts, [&](const auto& li) { return li.layout_id == layout_id && li.channels == channels; });
+    return it != k_layouts.end() ? &*it : nullptr;
 }
 
 // ---- Low-level OBU serialization ------------------------------------------
@@ -207,15 +205,15 @@ bool write_codec_config(FILE* f) {
     push_uleb128(payload, k_frame_size);         // num_samples_per_frame = 960
     push_i16_be(payload, k_audio_roll_distance); // audio_roll_distance = -4
     // decoder_config_opus: all f(N) fields are big-endian per IAMF spec
-    push_u8(payload, 1);                 // version
-    push_u8(payload, 2);                 // output_channel_count (reference; coupling overrides)
-    push_i16_be(payload, static_cast<int16_t>(k_preskip));   // pre_skip f(16)
+    push_u8(payload, 1);                                   // version
+    push_u8(payload, 2);                                   // output_channel_count (reference; coupling overrides)
+    push_i16_be(payload, static_cast<int16_t>(k_preskip)); // pre_skip f(16)
     push_u8(payload, static_cast<uint8_t>((k_sample_rate >> 24u) & 0xffu)); // input_sample_rate f(32)
     push_u8(payload, static_cast<uint8_t>((k_sample_rate >> 16u) & 0xffu));
     push_u8(payload, static_cast<uint8_t>((k_sample_rate >> 8u) & 0xffu));
     push_u8(payload, static_cast<uint8_t>(k_sample_rate & 0xffu));
-    push_i16_be(payload, 0);             // output_gain f(16)
-    push_u8(payload, 0);                 // channel_mapping_family
+    push_i16_be(payload, 0); // output_gain f(16)
+    push_u8(payload, 0);     // channel_mapping_family
     // }
     return write_obu(f, k_obu_codec_config, payload);
 }
@@ -248,9 +246,9 @@ bool write_audio_element(FILE* f, const IamfLayoutInfo& li) {
 }
 
 bool write_mix_presentation(FILE* f,
-                                   const IamfLayoutInfo& li,
-                                   std::optional<double> loudness_lufs,
-                                   std::optional<double> peak_dbtp) {
+                            const IamfLayoutInfo& li,
+                            std::optional<double> loudness_lufs,
+                            std::optional<double> peak_dbtp) {
     Buf payload;
     push_uleb128(payload, 0);     // mix_presentation_id = 0
     push_uleb128(payload, 1);     // count_label = 1
@@ -330,6 +328,12 @@ struct FloatIamfWriter::Impl {
     uint32_t channels{0};
     bool failed{false};
     std::string path;
+
+    Impl() = default;
+    Impl(const Impl&) = delete;
+    Impl& operator=(const Impl&) = delete;
+    Impl(Impl&&) = delete;
+    Impl& operator=(Impl&&) = delete;
 
     ~Impl() {
         for (auto* enc : encoders) {
