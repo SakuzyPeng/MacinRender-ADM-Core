@@ -671,16 +671,7 @@ bool verify_lfe_metrics_separation() {
         ok &= check(*m.measured_peak_dbtp > -6.0,
                     "LFE-only HOA: TP > -6 dBTP (LFE tracker at 0.8F; AllRAD-only would give ~-12 dBTP)");
     }
-    // The 0.8F DC input is largely attenuated by the ebur128 K-weighting high-pass
-    // (38 Hz cutoff): LUFS is driven only by the initial step-change transient, giving
-    // a very low integrated loudness (≈ -28 LUFS observed).  The TP, measured on the
-    // raw LFE mix before K-weighting, is ≈ -1 dBTP — at least 20 dB above the LUFS.
-    // This gap confirms that LFE amplitude is captured by TP but does not proportionally
-    // inflate LUFS, which reflects the K-weighted AllRAD spatial decode only.
-    if (m.measured_lufs.has_value() && m.measured_peak_dbtp.has_value()) {
-        ok &= check(*m.measured_peak_dbtp > *m.measured_lufs + 20.0,
-                    "LFE-only HOA: TP at least 20 dB above LUFS (LFE in TP, not proportionally in LUFS)");
-    }
+    ok &= check(!m.measured_lufs.has_value(), "LFE-only HOA: measured_lufs absent (LFE excluded from LUFS path)");
     return ok;
 }
 

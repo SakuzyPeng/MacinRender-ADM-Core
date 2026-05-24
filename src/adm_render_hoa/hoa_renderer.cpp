@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <ebur128.h>
 #include <limits>
 #include <map>
@@ -152,9 +153,16 @@ struct HoaBlock {
     Hoa3Coeffs gains{};
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
+    bool is_lfe{false};
     bool jump_position{false};
     std::optional<uint64_t> interp_length_samples;
 };
+
+enum class BlockFilter : uint8_t { all, lfe_only };
+
+[[nodiscard]] bool block_matches_filter(const HoaBlock& block, BlockFilter filter) noexcept {
+    return filter == BlockFilter::all || block.is_lfe;
+}
 
 struct ChannelGainInfo {
     uint16_t input_channel{0};
@@ -164,7 +172,10 @@ struct ChannelGainInfo {
 
 // Returns linearly interpolated HOA gains at abs_frame for the given channel.
 // Returns all-zero coefficients when abs_frame is outside every block.
-[[nodiscard]] Hoa3Coeffs gains_at(const ChannelGainInfo& cg, uint64_t abs_frame, uint64_t default_interp) {
+[[nodiscard]] Hoa3Coeffs gains_at(const ChannelGainInfo& cg,
+                                  uint64_t abs_frame,
+                                  uint64_t default_interp,
+                                  BlockFilter filter = BlockFilter::all) {
     // Upper-bound search: find the first block whose start_sample > abs_frame.
     const auto it = std::ranges::upper_bound(cg.blocks, abs_frame, {}, &HoaBlock::start_sample);
     if (it == cg.blocks.begin()) {
@@ -175,9 +186,15 @@ struct ChannelGainInfo {
     if (abs_frame >= cur.end_sample) {
         return {}; // frame is past this block's end
     }
+    if (!block_matches_filter(cur, filter)) {
+        return {};
+    }
     // Interpolation ramp: blend from previous block gains when jump_position is false.
     if (!cur.jump_position && cur_it != cg.blocks.begin()) {
         const HoaBlock& prev = *std::prev(cur_it);
+        if (!block_matches_filter(prev, filter)) {
+            return cur.gains;
+        }
         // Clamp interp_len to active block duration (mirrors EAR/VBAP interpolation_length()).
         uint64_t active_end = cur.end_sample;
         const auto next_it = std::next(cur_it);
@@ -225,27 +242,37 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
                 cg.blocks.push_back({sh,
                                      block.start_sample,
                                      std::min(block.end_sample, obj.end_sample),
+                                     false,
                                      block.jump_position,
                                      block.interp_length_samples});
             }
 
             for (const auto& ds : track.ds_blocks) {
                 Hoa3Coeffs sh{};
+                bool is_lfe = false;
                 if (ds.low_pass_hz.has_value() || any_label_is_lfe(ds.speaker_labels)) {
                     // LFE: no directionality → encode as omnidirectional (W channel only, ACN 0).
                     // Label check runs before position so channels like RC_LFE (no lowPass element
                     // but carrying a nominal position) are still treated as non-directional.
                     sh[0] = 1.0F;
+                    is_lfe = true;
                     cg.has_lfe_block = true;
                 } else if (ds.has_position) {
                     sh = encode_polar(ds.azimuth, ds.elevation);
                 } else {
-                    std::optional<std::pair<float, float>> parsed_pos;
-                    const auto parsed_label = std::ranges::find_if(ds.speaker_labels, [&parsed_pos](const auto& lbl) {
-                        parsed_pos = parse_speaker_label(lbl);
-                        return parsed_pos.has_value();
-                    });
-                    if (parsed_label == ds.speaker_labels.end()) {
+                    bool found_label_pos = false;
+                    float parsed_azimuth = 0.F;
+                    float parsed_elevation = 0.F;
+                    for (const auto& label : ds.speaker_labels) {
+                        const auto parsed_pos = parse_speaker_label(label);
+                        if (parsed_pos.has_value()) {
+                            parsed_azimuth = parsed_pos->first;
+                            parsed_elevation = parsed_pos->second;
+                            found_label_pos = true;
+                            break;
+                        }
+                    }
+                    if (!found_label_pos) {
                         logs.log(LogLevel::warning,
                                  "hoa-encode",
                                  fmt::format("DirectSpeakers channel {} has no position and no parseable label; "
@@ -253,12 +280,13 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
                                              in_ch));
                         continue;
                     }
-                    sh = encode_polar(parsed_pos->first, parsed_pos->second);
+                    sh = encode_polar(parsed_azimuth, parsed_elevation);
                 }
                 const float combined_gain = ds.gain * obj.gain;
                 std::ranges::transform(sh, sh.begin(), [combined_gain](float c) { return c * combined_gain; });
                 // DirectSpeakers positions are static — no interpolation needed between blocks.
-                cg.blocks.push_back({sh, ds.start_sample, std::min(ds.end_sample, obj.end_sample), true, std::nullopt});
+                cg.blocks.push_back(
+                    {sh, ds.start_sample, std::min(ds.end_sample, obj.end_sample), is_lfe, true, std::nullopt});
             }
         }
     }
@@ -381,6 +409,7 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
         std::vector<float> out_block(static_cast<std::size_t>(k_num_out) * k_block_size);
+        std::vector<float> measure_hoa_block(static_cast<std::size_t>(k_num_out) * k_block_size);
         std::vector<float> decoded_block(k_714_ch_sz * k_block_size);
 
         struct EburFree {
@@ -407,10 +436,10 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
             ebur128_set_channel(lufs_st.get(), 11U, EBUR128_Um135); // Rtr
         }
 
-        // Separate TP tracker for LFE channels: LFE is encoded W-only and zeroed in the
-        // decoded 7.1.4 buffer, so its peak would be invisible to the spatial TP measurement.
-        // We mix all LFE inputs (with their per-block gains) into a mono TP-only state and
-        // merge the resulting peak with the spatial decode peak at the end.
+        // Separate TP tracker for LFE channels. LFE is still encoded W-only in the HOA
+        // output, but it is subtracted from the HOA measurement buffer before the 7.1.4
+        // decode so it cannot contribute to LUFS/spatial TP. Its peak is measured on this
+        // mono TP-only state and merged with the spatial decode peak at the end.
         EburPtr lfe_tp_st;
         std::vector<float> lfe_mix_block;
         const bool has_lfe = std::ranges::any_of(gain_matrix, [](const auto& cg) { return cg.has_lfe_block; });
@@ -459,10 +488,40 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
             }
 
             if (lufs_st) {
+                std::copy_n(out_block.begin(), static_cast<std::ptrdiff_t>(out_samples), measure_hoa_block.begin());
+            }
+
+            if (lfe_tp_st) {
+                // Mix all LFE input channels into a mono buffer and remove the same W-only
+                // contribution from the HOA measurement buffer. gains_at(..., lfe_only)[0]
+                // is the combined_gain for LFE blocks; DirectSpeakers have jump_position=true
+                // so no interpolation occurs.
+                std::fill(lfe_mix_block.begin(), lfe_mix_block.begin() + static_cast<std::ptrdiff_t>(frames_now), 0.F);
+                for (const auto& cg : gain_matrix) {
+                    if (!cg.has_lfe_block) {
+                        continue;
+                    }
+                    for (std::size_t f = 0; f < frames_now; ++f) {
+                        const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
+                        const Hoa3Coeffs lfe_gains =
+                            gains_at(cg, frames_done + f, k_default_interp, BlockFilter::lfe_only);
+                        lfe_mix_block[f] += in_s * lfe_gains[0];
+                        if (lufs_st) {
+                            float* measure_hoa = measure_hoa_block.data() + (f * k_hoa3_channels);
+                            for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
+                                measure_hoa[sh] -= in_s * lfe_gains.at(sh);
+                            }
+                        }
+                    }
+                }
+                ebur128_add_frames_float(lfe_tp_st.get(), lfe_mix_block.data(), static_cast<std::size_t>(frames_now));
+            }
+
+            if (lufs_st) {
                 // Decode 16ch HOA → 12ch 7.1.4 for BS.1770 playback-domain measurement.
                 // rows 0-2  → ch 0-2 (L R C); ch3 (LFE) = 0; rows 3-10 → ch 4-11.
                 for (std::size_t f = 0; f < frames_now; ++f) {
-                    const float* hoa = out_block.data() + (f * k_hoa3_channels);
+                    const float* hoa = measure_hoa_block.data() + (f * k_hoa3_channels);
                     float* dec = decoded_block.data() + (f * k_714_ch_sz);
                     for (int ls = 0; ls < 3; ++ls) {
                         float s = 0.F;
@@ -483,25 +542,6 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
                     }
                 }
                 ebur128_add_frames_float(lufs_st.get(), decoded_block.data(), static_cast<std::size_t>(frames_now));
-            }
-
-            if (lfe_tp_st) {
-                // Mix all LFE input channels (with their per-block gains) into a mono buffer
-                // and feed to the LFE TP tracker.  gains_at()[0] is the W-channel gain =
-                // combined_gain for LFE blocks; DirectSpeakers have jump_position=true so no
-                // interpolation occurs.
-                std::fill(lfe_mix_block.begin(), lfe_mix_block.begin() + static_cast<std::ptrdiff_t>(frames_now), 0.F);
-                for (const auto& cg : gain_matrix) {
-                    if (!cg.has_lfe_block) {
-                        continue;
-                    }
-                    for (std::size_t f = 0; f < frames_now; ++f) {
-                        const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
-                        const float g = gains_at(cg, frames_done + f, k_default_interp)[0];
-                        lfe_mix_block[f] += in_s * g;
-                    }
-                }
-                ebur128_add_frames_float(lfe_tp_st.get(), lfe_mix_block.data(), static_cast<std::size_t>(frames_now));
             }
 
             if (writer.write(out_block.data(), frames_now) != frames_now) {

@@ -161,7 +161,7 @@ mradm_exe (CLI)     PRIVATE: ADMEngine + 所有 renderer + CLI11 + spdlog
 - Opus MKA：输入采样率固定 48 kHz；1–2ch 用 mapping family 0，3–8ch family 1，9–255ch family 255
 - APAC：**macOS-only**；通过 AudioToolbox；CI 在 Linux 上 `mr_adm_apac_smoke_tests` 自动 skip
 - 空间布局 / HOA 的 APAC 默认码率以 `7.1.4=2048 kbps` 为 12 声道基准缩放（README 输出格式表）
-- HOA 输出的响度归一化会被跳过（系数域响度不是播放响度）；测量值仅作为诊断
+- HOA 输出的响度归一化可用；测量先解码到 7.1.4 AllRAD 参考播放域，LFE 不计入 LUFS 但单独计入 True Peak
 - binaural 默认使用 SAF 内置 KEMAR HRTF；`--sofa <path>` 支持 SimpleFreeFieldHRIR / GeneralFIR、2 receivers、48 kHz、**不重采样**
 - WAV `wav_io.cpp` 中定义 `DR_WAV_IMPLEMENTATION`；FLAC 解码 `dr_flac.cpp` 中定义 `DR_FLAC_IMPLEMENTATION`；编码用 `libFLAC`
 
