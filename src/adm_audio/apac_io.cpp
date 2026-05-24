@@ -4,8 +4,6 @@
 #include <string_view>
 #include <vector>
 
-#include <fmt/format.h>
-
 #include "adm/audio_io.h"
 
 #ifdef __APPLE__
@@ -28,6 +26,10 @@ namespace {
         return ((2048U * channels) + 6U) / 12U;
     }
     return 0;
+}
+
+[[nodiscard]] std::string status_message(std::string_view op, int err) {
+    return std::string{op.data(), op.size()} + " failed (" + std::to_string(err) + ")";
 }
 
 } // namespace
@@ -56,10 +58,10 @@ Result<void> convert_to_apac(const std::string& src_path,
     };
     std::optional<ApacLayout> al;
     if (layout_id == "binaural") {
-        // CoreAudio accepts the Binaural input layout here, but as of macOS 15
-        // afinfo reports the encoded APAC track as Stereo (L R).  Keep the
-        // layout id for validation/metadata semantics; do not rely on APAC as a
-        // durable binaural channel-layout carrier.
+        // CoreAudio accepts the Binaural input layout here, but afinfo may
+        // report the encoded APAC track as Stereo (L R). Keep the layout id for
+        // validation/metadata semantics; do not rely on APAC as a durable
+        // binaural channel-layout carrier.
         al = ApacLayout{kAudioChannelLayoutTag_Binaural, false, 2U};
     } else if (layout_id == "0+2+0") {
         al = ApacLayout{kAudioChannelLayoutTag_MPEG_2_0, false, 2U};
@@ -76,7 +78,7 @@ Result<void> convert_to_apac(const std::string& src_path,
     } else if (layout_id == "9+10+3" || layout_id == "22.2" || layout_id == "cicp13") {
         al = ApacLayout{static_cast<AudioChannelLayoutTag>((204U << 16U) | 24U), false, 24U};
     } else {
-        return make_error(ErrorCode::unsupported, fmt::format("APAC: unsupported layout '{}'", layout_id), {});
+        return make_error(ErrorCode::unsupported, "APAC: unsupported layout '" + layout_id + "'", {});
     }
 
     auto reader_res = FloatWavReader::open(src_path);
@@ -87,15 +89,15 @@ Result<void> convert_to_apac(const std::string& src_path,
     const uint32_t channels = reader.channels();
 
     if (al->expected_channels > 0U && channels != al->expected_channels) {
-        return make_error(
-            ErrorCode::invalid_argument,
-            fmt::format("APAC layout '{}' requires {} channels, got {}", layout_id, al->expected_channels, channels),
-            "src=" + src_path);
+        return make_error(ErrorCode::invalid_argument,
+                          "APAC layout '" + layout_id + "' requires " + std::to_string(al->expected_channels) +
+                              " channels, got " + std::to_string(channels),
+                          "src=" + src_path);
     }
 
     if (reader.sample_rate() != 48000U) {
         return make_error(ErrorCode::invalid_argument,
-                          fmt::format("APAC requires 48000 Hz input, got {} Hz", reader.sample_rate()),
+                          "APAC requires 48000 Hz input, got " + std::to_string(reader.sample_rate()) + " Hz",
                           "src=" + src_path);
     }
 
@@ -124,7 +126,7 @@ Result<void> convert_to_apac(const std::string& src_path,
     CFRelease(url);
     if (err != noErr) {
         return make_error(ErrorCode::io_error,
-                          fmt::format("APAC: ExtAudioFileCreateWithURL failed ({})", static_cast<int>(err)),
+                          status_message("APAC: ExtAudioFileCreateWithURL", static_cast<int>(err)),
                           "path=" + apac_path);
     }
 
@@ -140,9 +142,8 @@ Result<void> convert_to_apac(const std::string& src_path,
     err = ExtAudioFileSetProperty(ext_file, kExtAudioFileProperty_ClientDataFormat, sizeof(src_asbd), &src_asbd);
     if (err != noErr) {
         ExtAudioFileDispose(ext_file);
-        return make_error(ErrorCode::io_error,
-                          fmt::format("APAC: ClientDataFormat failed ({})", static_cast<int>(err)),
-                          "path=" + apac_path);
+        return make_error(
+            ErrorCode::io_error, status_message("APAC: ClientDataFormat", static_cast<int>(err)), "path=" + apac_path);
     }
 
     // APAC-specific property IDs (not yet named in SDK headers; hex avoids -Wmultichar).
@@ -160,7 +161,7 @@ Result<void> convert_to_apac(const std::string& src_path,
     if (err != noErr || conv == nullptr) {
         ExtAudioFileDispose(ext_file);
         return make_error(ErrorCode::io_error,
-                          fmt::format("APAC: AudioConverter lookup failed ({})", static_cast<int>(err)),
+                          status_message("APAC: AudioConverter lookup", static_cast<int>(err)),
                           "path=" + apac_path);
     }
     const uint32_t effective_bitrate_kbps =
@@ -170,9 +171,8 @@ Result<void> convert_to_apac(const std::string& src_path,
         err = AudioConverterSetProperty(conv, kAudioConverterEncodeBitRate, sizeof(br), &br);
         if (err != noErr) {
             ExtAudioFileDispose(ext_file);
-            return make_error(ErrorCode::io_error,
-                              fmt::format("APAC: EncodeBitRate failed ({})", static_cast<int>(err)),
-                              "path=" + apac_path);
+            return make_error(
+                ErrorCode::io_error, status_message("APAC: EncodeBitRate", static_cast<int>(err)), "path=" + apac_path);
         }
     }
     constexpr uint32_t k_csrc_val = 7U;
@@ -181,23 +181,20 @@ Result<void> convert_to_apac(const std::string& src_path,
     err = AudioConverterSetProperty(conv, k_apac_csrc, sizeof(k_csrc_val), &k_csrc_val);
     if (err != noErr) {
         ExtAudioFileDispose(ext_file);
-        return make_error(ErrorCode::io_error,
-                          fmt::format("APAC: csrc property failed ({})", static_cast<int>(err)),
-                          "path=" + apac_path);
+        return make_error(
+            ErrorCode::io_error, status_message("APAC: csrc property", static_cast<int>(err)), "path=" + apac_path);
     }
     err = AudioConverterSetProperty(conv, k_apac_cdrc, sizeof(cdrc_val), &cdrc_val);
     if (err != noErr) {
         ExtAudioFileDispose(ext_file);
-        return make_error(ErrorCode::io_error,
-                          fmt::format("APAC: cdrc property failed ({})", static_cast<int>(err)),
-                          "path=" + apac_path);
+        return make_error(
+            ErrorCode::io_error, status_message("APAC: cdrc property", static_cast<int>(err)), "path=" + apac_path);
     }
     err = AudioConverterSetProperty(conv, k_apac_aspf, sizeof(k_aspf_val), &k_aspf_val);
     if (err != noErr) {
         ExtAudioFileDispose(ext_file);
-        return make_error(ErrorCode::io_error,
-                          fmt::format("APAC: aspf property failed ({})", static_cast<int>(err)),
-                          "path=" + apac_path);
+        return make_error(
+            ErrorCode::io_error, status_message("APAC: aspf property", static_cast<int>(err)), "path=" + apac_path);
     }
     CFArrayRef empty = CFArrayCreate(nullptr, nullptr, 0, nullptr);
     if (empty == nullptr) {
@@ -210,7 +207,7 @@ Result<void> convert_to_apac(const std::string& src_path,
     if (err != noErr) {
         ExtAudioFileDispose(ext_file);
         return make_error(ErrorCode::io_error,
-                          fmt::format("APAC: ConverterConfig commit failed ({})", static_cast<int>(err)),
+                          status_message("APAC: ConverterConfig commit", static_cast<int>(err)),
                           "path=" + apac_path);
     }
 
@@ -239,7 +236,7 @@ Result<void> convert_to_apac(const std::string& src_path,
         if (err != noErr) {
             ExtAudioFileDispose(ext_file);
             return make_error(ErrorCode::io_error,
-                              fmt::format("APAC: ExtAudioFileWrite failed ({})", static_cast<int>(err)),
+                              status_message("APAC: ExtAudioFileWrite", static_cast<int>(err)),
                               "path=" + apac_path);
         }
         left -= got;
@@ -252,7 +249,7 @@ Result<void> convert_to_apac(const std::string& src_path,
     err = ExtAudioFileDispose(ext_file);
     if (err != noErr) {
         return make_error(ErrorCode::io_error,
-                          fmt::format("APAC: ExtAudioFileDispose failed ({})", static_cast<int>(err)),
+                          status_message("APAC: ExtAudioFileDispose", static_cast<int>(err)),
                           "path=" + apac_path);
     }
     return {};

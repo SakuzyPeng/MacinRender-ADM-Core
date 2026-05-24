@@ -20,7 +20,7 @@ jobs:
       matrix:
         include:
           - name: macOS debug
-            runner: macos-15
+            runner: macos-26
             install: brew install cmake ninja boost ccache
           - name: Linux debug
             runner: ubuntu-24.04
