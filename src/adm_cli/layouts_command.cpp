@@ -75,6 +75,9 @@ std::string normalize_layout_format(const std::string& format) {
     if (key == "m4a" || key == "mp4") {
         return "apac";
     }
+    if (key == "iamf") {
+        return "iamf";
+    }
     return key;
 }
 
@@ -131,7 +134,7 @@ bool renderer_supports_layout(const mradm::CapabilityReport& caps, std::string_v
     });
 }
 
-constexpr std::array<LayoutInfo, 27> k_layout_infos{{
+constexpr std::array<LayoutInfo, 34> k_layout_infos{{
     {"wav",
      "binaural",
      2,
@@ -213,6 +216,24 @@ constexpr std::array<LayoutInfo, 27> k_layout_infos{{
      "CoreAudio CICP_13",
      "Lw Rw C LFE2 Rls Rrs L R Cs LFE3 Lss Rss Vhl Vhr Vhc Ts Ltr Rtr Ltm Rtm Ctr Cb Lb Rb",
      "CoreAudio names the two LFE slots LFE2/LFE3."},
+
+    {"iamf", "5.1", 6, "IAMF kLayout5_1_ch (Opus VBR)", "FL FR SiL SiR C LFE (encoding order)", ""},
+    {"iamf", "5.1.2", 8, "IAMF kLayout5_1_2_ch (Opus VBR)", "FL FR SiL SiR TpFL TpFR C LFE (encoding order)", ""},
+    {"iamf", "5.1.4", 10, "IAMF kLayout5_1_4_ch (Opus VBR)", "FL FR SiL SiR TpFL TpFR TpBL TpBR C LFE (enc order)", ""},
+    {"iamf", "7.1", 8, "IAMF kLayout7_1_ch (Opus VBR)", "FL FR Ls Rs Rls Rrs C LFE (wav71 reordered)", ""},
+    {"iamf", "7.1.4", 12, "IAMF kLayout7_1_4_ch (Opus VBR)", "FL FR Ls Rs Rls Rrs TpFL TpFR TpBL TpBR C LFE", ""},
+    {"iamf",
+     "9.1.6",
+     16,
+     "IAMF Expanded 9.1.6 (Opus VBR)",
+     "FL FR Rls Rrs Lw Rw Ls Rs Vhl Vhr Ltr Rtr Ltm Rtm C LFE",
+     ""},
+    {"iamf",
+     "22.2",
+     24,
+     "IAMF Expanded 10.2.9.3 (Opus VBR)",
+     "8 coupled pairs + 8 mono; IAMF spec Annex A Sound System H",
+     ""},
 }};
 
 int print_layouts(std::string format, const std::string& layout_filter, std::string renderer_filter) {
@@ -274,9 +295,9 @@ int print_layouts(std::string format, const std::string& layout_filter, std::str
 CLI::App* add_layouts_command(CLI::App& app, LayoutCliOptions& opts) {
     auto* layouts_cmd =
         app.add_subcommand("layouts", "Show final channel order for an output format, optionally filtered by renderer");
-    layouts_cmd->add_option("--format", opts.format, "Output format: wav, caf, flac, apac/m4a/mp4")
+    layouts_cmd->add_option("--format", opts.format, "Output format: wav, caf, flac, apac/m4a/mp4, iamf")
         ->required()
-        ->check(CLI::IsMember({"wav", "wave", "caf", "flac", "apac", "m4a", "mp4"}));
+        ->check(CLI::IsMember({"wav", "wave", "caf", "flac", "apac", "m4a", "mp4", "iamf"}));
     layouts_cmd->add_option("--layout", opts.layout, "Optional layout filter, e.g. 7.1, 9.1.6, 22.2, binaural");
     layouts_cmd->add_option("--renderer", opts.renderer, "Optional renderer filter: ear, saf, hoa, binaural")
         ->check(CLI::IsMember({"ear", "saf", "hoa", "binaural"}));
