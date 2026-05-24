@@ -193,7 +193,7 @@ importer 仅从这两层提取路由信息（TypeDescriptor、对 AudioChannelFo
 
 当前项目没有 ADM/BW64 写出能力；输出为普通 PCM 文件（WAV/CAF float）、FLAC 24-bit integer、Opus MKA 有损交付文件，或 macOS-only APAC `.m4a/.mp4`。Opus MKA 对标准 5.1/7.1 会重排到 Opus/Vorbis 声道顺序；HOA3 写入 Opus ambisonics mapping family 2；其它 9 声道及以上离散布局使用 mapping family 255，属于透明多流编码。布局语义不能只依赖播放器自动识别。
 
-HOA 直接回放目前只确认 macOS 上的 CAF 与 APAC 可行。WAV HOA3 依赖 AmbiX `ambi` chunk 支持；Opus HOA3 虽可写入 ambisonics mapping，但常见播放器兼容性不足，不作为直接监听格式。
+HOA 直接回放目前只确认 macOS 上的 CAF 与 APAC 可行。WAV HOA3 依赖 AmbiX `ambi` chunk 支持；Opus HOA3 虽可写入 ambisonics mapping，但常见播放器兼容性不足，不作为通用直接监听格式。实测 VLC 4.0 可回放 Opus HOA3；播放时需要在音频选项中将 mix node 从 `original: ambisonics` 改为 `binaural`，避免依赖声卡或系统直接承载 HOA 多声道输出。
 
 ### HOA typeDefinition 说明
 

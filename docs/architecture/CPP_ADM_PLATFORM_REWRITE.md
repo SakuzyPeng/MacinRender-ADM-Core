@@ -251,7 +251,7 @@ Opus MKA 输出策略：
 - 当前写出 Matroska Audio（`.mka`）容器 + Opus 编码，输入采样率固定要求 48 kHz。
 - 1-2 声道使用 Opus mapping family 0；标准 5.1 / 7.1 会重排到 Opus/Vorbis 声道顺序并使用 family 1；HOA3 使用 Opus ambisonics mapping family 2。
 - family 255 是透明多流编码，不携带标准扬声器布局语义；22.2、9.1.6 等布局只作为容器 metadata 记录，播放器不保证自动识别。
-- HOA 直接回放目前只确认 macOS 上的 CAF 与 APAC 可行；Opus HOA3 虽可写入 ambisonics mapping，但常见播放器兼容性不足，不作为直接监听格式。
+- HOA 直接回放目前只确认 macOS 上的 CAF 与 APAC 可行；Opus HOA3 虽可写入 ambisonics mapping，但常见播放器兼容性不足，不作为通用直接监听格式。VLC 4.0 可回放 Opus HOA3，但需要在音频选项中将 mix node 从 `original: ambisonics` 改为 `binaural`。
 - Opus 为有损交付格式，响度/峰值/增益等后处理必须在 float 中间文件上完成，最后一步再编码。
 
 原则：
