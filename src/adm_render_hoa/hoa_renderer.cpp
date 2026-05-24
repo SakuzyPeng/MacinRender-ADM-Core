@@ -11,6 +11,13 @@
 #include <optional>
 #include <string>
 #include <vector>
+// clang-format off
+// saf_utility_complex.h must precede saf_hoa.h: saf_hoa.h opens extern "C" and
+// re-includes saf_utility_complex.h inside that block, causing std::complex<float>
+// template instantiation in C linkage if the include guard hasn't fired yet.
+#include <saf_utility_complex.h>
+#include <saf_hoa.h>
+// clang-format on
 
 #include <bw64/bw64.hpp>
 #include <fmt/format.h>
@@ -303,6 +310,46 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
                           "input=" + plan.input_path);
     }
 
+    // Build 7.1.4 AllRAD decode matrix for BS.1770 playback-domain measurement.
+    // Directions [az, el] in degrees; same convention as ADM (az=0→front, +az→left CCW).
+    // SAF getLoudspeakerDecoderMtx uses N3D internally; our HOA output is SN3D.
+    // Each column of the decode matrix is scaled by sqrt(2n+1) to compensate.
+    constexpr int k_714_nls = 12;
+    constexpr std::size_t k_714_nls_sz = static_cast<std::size_t>(k_714_nls);
+    // clang-format off
+    constexpr std::array<float, k_714_nls_sz * 2> k_714_dirs = {
+         30.F,   0.F,   // L
+        -30.F,   0.F,   // R
+          0.F,   0.F,   // C
+         45.F, -30.F,   // LFE  (index 3; ebur128 will weight at -10 dB)
+         90.F,   0.F,   // Ls
+        -90.F,   0.F,   // Rs
+        135.F,   0.F,   // Lss
+       -135.F,   0.F,   // Rss
+         45.F,  30.F,   // Ltf
+        -45.F,  30.F,   // Rtf
+        135.F,  30.F,   // Ltr
+       -135.F,  30.F,   // Rtr
+    };
+    constexpr std::array<float, k_hoa3_channels> k_sn3d_to_n3d = {
+        1.F,                                                                                 // n=0 (√1)
+        1.7320508F, 1.7320508F, 1.7320508F,                                                  // n=1 (√3)
+        2.2360679F, 2.2360679F, 2.2360679F, 2.2360679F, 2.2360679F,                         // n=2 (√5)
+        2.6457513F, 2.6457513F, 2.6457513F, 2.6457513F, 2.6457513F, 2.6457513F, 2.6457513F, // n=3 (√7)
+    };
+    // clang-format on
+    std::array<float, k_714_nls_sz * k_hoa3_channels> dec_mtx{};
+    {
+        // getLoudspeakerDecoderMtx takes a non-const pointer; copy to a local mutable array.
+        std::array<float, k_714_nls_sz * 2> dirs_buf = k_714_dirs;
+        getLoudspeakerDecoderMtx(dirs_buf.data(), k_714_nls, LOUDSPEAKER_DECODER_ALLRAD, 3, 1, dec_mtx.data());
+        for (int ls = 0; ls < k_714_nls; ++ls) {
+            for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
+                dec_mtx[static_cast<std::size_t>(ls) * k_hoa3_channels + sh] *= k_sn3d_to_n3d[sh];
+            }
+        }
+    }
+
     try {
         logs.log(LogLevel::info,
                  "hoa-encode",
@@ -325,13 +372,18 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
         std::vector<float> out_block(static_cast<std::size_t>(k_num_out) * k_block_size);
+        std::vector<float> decoded_block(static_cast<std::size_t>(k_714_nls) * k_block_size);
 
         struct EburFree {
             void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); }
         };
         using EburPtr = std::unique_ptr<ebur128_state, EburFree>;
-        EburPtr lufs_st{
-            ebur128_init(k_num_out, static_cast<unsigned long>(sample_rate), EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
+        EburPtr lufs_st{ebur128_init(static_cast<unsigned int>(k_714_nls),
+                                     static_cast<unsigned long>(sample_rate),
+                                     EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
+        if (lufs_st) {
+            ebur128_set_channel(lufs_st.get(), 3U, EBUR128_UNUSED); // LFE excluded from loudness
+        }
 
         uint64_t frames_done = 0;
 
@@ -373,7 +425,20 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
             }
 
             if (lufs_st) {
-                ebur128_add_frames_float(lufs_st.get(), out_block.data(), static_cast<std::size_t>(frames_now));
+                // Decode 16ch HOA → 12ch 7.1.4 and measure in the playback domain.
+                for (std::size_t f = 0; f < frames_now; ++f) {
+                    const float* hoa = out_block.data() + f * k_hoa3_channels;
+                    float* dec = decoded_block.data() + f * static_cast<std::size_t>(k_714_nls);
+                    for (int ls = 0; ls < k_714_nls; ++ls) {
+                        float s = 0.F;
+                        const float* row = dec_mtx.data() + static_cast<std::size_t>(ls) * k_hoa3_channels;
+                        for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
+                            s += row[sh] * hoa[sh];
+                        }
+                        dec[ls] = s;
+                    }
+                }
+                ebur128_add_frames_float(lufs_st.get(), decoded_block.data(), static_cast<std::size_t>(frames_now));
             }
 
             if (writer.write(out_block.data(), frames_now) != frames_now) {
@@ -395,7 +460,7 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
                 metrics.measured_lufs = loudness;
             }
             double max_peak = 0.0;
-            for (unsigned int ch = 0; ch < k_num_out; ++ch) {
+            for (unsigned int ch = 0; ch < static_cast<unsigned int>(k_714_nls); ++ch) {
                 double ch_peak = 0.0;
                 if (ebur128_true_peak(lufs_st.get(), ch, &ch_peak) == EBUR128_SUCCESS) {
                     max_peak = std::max(max_peak, ch_peak);

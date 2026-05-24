@@ -255,15 +255,15 @@ int main() {
         ok &= check(r.code == 0, "render --output-layout 7.1.4: exit 0");
     }
 
-    // ── HOA loudness target is skipped because HOA channels are coefficients ─
+    // ── HOA loudness: measured via 7.1.4 AllRAD decode; normalisation no longer skipped ──
     {
-        const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_hoa_loudness_skip.wav";
+        const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_hoa_loudness.wav";
         const FileGuard out_guard{out};
         auto r = run_cmd(mradm_exe + " render --renderer hoa --output-layout hoa3 --loudness-target -23 -o " +
                          shell_quote(out.string()) + " -i " + fix);
         ok &= check(r.code == 0, "render HOA with loudness target: exit 0");
-        ok &= check(r.out.find("loudness normalization skipped for HOA output") != std::string::npos,
-                    "render HOA with loudness target: skip warning");
+        ok &= check(r.out.find("loudness normalization skipped") == std::string::npos,
+                    "render HOA with loudness target: no skip warning");
     }
 
     if (ok) {

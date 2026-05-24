@@ -276,19 +276,10 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     }
     const RenderMetrics& metrics = *render_res;
 
-    if (metrics.measured_lufs && is_hoa_output) {
-        logs.log(LogLevel::info,
-                 "engine",
-                 fmt::format("measured HOA coefficient loudness: {:.1f} LUFS (not playback loudness)",
-                             *metrics.measured_lufs));
-    } else if (metrics.measured_lufs) {
+    if (metrics.measured_lufs) {
         logs.log(LogLevel::info, "engine", fmt::format("measured loudness: {:.1f} LUFS", *metrics.measured_lufs));
     }
-    if (metrics.measured_peak_dbtp && is_hoa_output) {
-        logs.log(LogLevel::info,
-                 "engine",
-                 fmt::format("measured HOA coefficient true peak: {:.2f} dBTP", *metrics.measured_peak_dbtp));
-    } else if (metrics.measured_peak_dbtp) {
+    if (metrics.measured_peak_dbtp) {
         logs.log(LogLevel::info, "engine", fmt::format("measured true peak: {:.2f} dBTP", *metrics.measured_peak_dbtp));
     }
 
@@ -296,11 +287,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     // Merging both into one apply_gain_to_file avoids a second read-write pass.
     double gain_db = 0.0;
 
-    if (request.options.measure_loudness && is_hoa_output) {
-        logs.log(LogLevel::warning,
-                 "engine",
-                 "loudness normalization skipped for HOA output; measure loudness after decoding to a playback layout");
-    } else if (request.options.measure_loudness && metrics.measured_lufs.has_value()) {
+    if (request.options.measure_loudness && metrics.measured_lufs.has_value()) {
         const auto target = static_cast<double>(request.options.loudness_target_lufs);
         const double delta = target - *metrics.measured_lufs;
         if (std::abs(delta) >= 0.1) {

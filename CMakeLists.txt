@@ -197,10 +197,12 @@ target_sources(
 
 target_link_libraries(mr_adm_render_hoa
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 ebur128 MacinRender::ADMAudio
+    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio
 )
 target_include_directories(mr_adm_render_hoa
     SYSTEM PRIVATE
+        "${saf_SOURCE_DIR}/modules/saf_hoa"
+        "${saf_SOURCE_DIR}/modules/saf_utilities"
         "${EBUR128_INCLUDE_DIR}"
 )
 mr_adm_core_apply_warnings(mr_adm_render_hoa)
