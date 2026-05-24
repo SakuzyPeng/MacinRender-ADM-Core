@@ -144,3 +144,50 @@ jobs:
         run: |
           .\build\windows\mradm.exe --version
           .\build\windows\mradm.exe backends
+
+      - name: Prepare artifact
+        shell: pwsh
+        run: |
+          $root = "artifact\mradm-windows-x64"
+          $bin = Join-Path $root "bin"
+          New-Item -ItemType Directory -Force -Path $bin | Out-Null
+          Copy-Item ".\build\windows\mradm.exe" -Destination $bin -Force
+
+          foreach ($dir in @(
+            (Join-Path $env:OPENBLAS_ROOT "bin"),
+            (Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows\bin"),
+            ".\build\windows"
+          )) {
+            if (Test-Path $dir) {
+              Get-ChildItem -Path $dir -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue |
+                ForEach-Object { Copy-Item $_.FullName -Destination $bin -Force }
+            }
+          }
+
+          $exe = (Resolve-Path ".\build\windows\mradm.exe").Path
+          $depsCmd = Join-Path $env:RUNNER_TEMP "mradm-deps.cmd"
+          $depsScript = @"
+          @echo off
+          call "$env:VCVARS64"
+          dumpbin /dependents "$exe"
+          "@
+          $depsScript | Set-Content -Path $depsCmd -Encoding ASCII
+          cmd /c $depsCmd | Out-File -FilePath (Join-Path $root "DEPENDENCIES.txt") -Encoding utf8
+
+          @(
+            "name=mradm-windows-x64",
+            "commit=${{ github.sha }}",
+            "runner=${{ runner.os }}",
+            "build_type=MinSizeRel",
+            "compiler=MSVC",
+            "flac_provider=VENDORED",
+            "opus_provider=VENDORED",
+            "saf_performance_lib=SAF_USE_OPEN_BLAS_AND_LAPACKE"
+          ) | Set-Content -Path (Join-Path $root "BUILD_INFO.txt") -Encoding utf8
+
+      - name: Upload Windows CLI artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: mradm-windows-x64
+          path: artifact/mradm-windows-x64
+          if-no-files-found: error
