@@ -21,7 +21,8 @@ struct Diagnostic {
 
 // Inline measurement results from the renderer's render loop.
 // Both fields are nullopt when the signal is silence or too short for gating.
-// For HOA outputs these are coefficient-domain diagnostics, not playback loudness.
+// For HOA outputs, LUFS is measured via an AllRAD 7.1.4 decode (spatial domain).
+// LFE is excluded from LUFS (EBUR128_UNUSED) but tracked separately for True Peak.
 struct RenderMetrics {
     std::optional<double> measured_lufs;      // BS.1770-4 integrated loudness (LUFS)
     std::optional<double> measured_peak_dbtp; // ITU-R BS.1770-4 True Peak (dBTP)

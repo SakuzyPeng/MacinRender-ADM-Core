@@ -615,6 +615,75 @@ bool verify_ds_lfe_label_no_lowpass() {
     return ok;
 }
 
+// LFE-only DirectSpeakers: LUFS must be absent; True Peak must be present.
+// Validates the separation between the AllRAD 7.1.4 LUFS path (LFE excluded via
+// EBUR128_UNUSED) and the dedicated per-frame LFE True Peak tracker.
+bool verify_lfe_metrics_separation() {
+    constexpr float k_lfe_amp = 0.8F;
+    constexpr uint32_t k_lfe_frames = 48000U; // 1 s at 48 kHz
+
+    // RC_LFE label triggers W-only HOA encoding; position is irrelevant.
+    auto [doc, uid_str] = make_ds_doc({.azimuth = 0.0F, .elevation = 0.0F, .label = "RC_LFE"});
+
+    const auto in_path = std::filesystem::temp_directory_path() / "mr_hoa_enc_lfe_sep_in.wav";
+    FileGuard in_guard{in_path};
+    {
+        std::ostringstream xml_buf;
+        adm::writeXml(xml_buf, doc);
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+        auto writer = bw64::writeFile(in_path.string(), 1U, 48000U, 24U, chna, axml);
+        std::vector<float> samples(k_lfe_frames, k_lfe_amp);
+        writer->write(samples.data(), k_lfe_frames);
+    }
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_hoa_enc_lfe_sep_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "hoa3";
+    req.options.renderer = mradm::RendererSelection::hoa;
+    req.options.peak_limit = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: LFE metrics separation render failed: " << res.error.message << "\n";
+        return false;
+    }
+    if (!res.metrics.has_value()) {
+        std::cerr << "FAIL: LFE metrics separation: no metrics in RenderResult\n";
+        return false;
+    }
+    const auto& m = *res.metrics;
+
+    bool ok = true;
+    // TP must reflect the LFE signal amplitude (≈ -1 dBTP for 0.8F), NOT the AllRAD
+    // W-spread value per spatial speaker (0.8 × AllRAD_W_coeff ≈ 0.24F → ≈ -12 dBTP).
+    // A threshold of -6 dBTP lies between these two values and will catch regression if
+    // the LFE TP tracker is removed.
+    ok &= check(m.measured_peak_dbtp.has_value(), "LFE-only HOA: measured_peak_dbtp present (LFE TP tracker active)");
+    if (m.measured_peak_dbtp.has_value()) {
+        ok &= check(*m.measured_peak_dbtp > -6.0,
+                    "LFE-only HOA: TP > -6 dBTP (LFE tracker at 0.8F; AllRAD-only would give ~-12 dBTP)");
+    }
+    // The 0.8F DC input is largely attenuated by the ebur128 K-weighting high-pass
+    // (38 Hz cutoff): LUFS is driven only by the initial step-change transient, giving
+    // a very low integrated loudness (≈ -28 LUFS observed).  The TP, measured on the
+    // raw LFE mix before K-weighting, is ≈ -1 dBTP — at least 20 dB above the LUFS.
+    // This gap confirms that LFE amplitude is captured by TP but does not proportionally
+    // inflate LUFS, which reflects the K-weighted AllRAD spatial decode only.
+    if (m.measured_lufs.has_value() && m.measured_peak_dbtp.has_value()) {
+        ok &= check(*m.measured_peak_dbtp > *m.measured_lufs + 20.0,
+                    "LFE-only HOA: TP at least 20 dB above LUFS (LFE in TP, not proportionally in LUFS)");
+    }
+    return ok;
+}
+
 // DirectSpeakers at az=+30°, el=0° (left-front): verify non-trivial SH coefficients.
 // W≈1, X≈cos(30°)≈0.87, Y≈sin(30°)≈0.5, Z≈0.
 // Note: libadm always initialises AudioBlockFormatDirectSpeakers with a default
@@ -672,6 +741,7 @@ int main() {
     ok &= verify_ds_with_position();
     ok &= verify_ds_lfe_label_no_lowpass();
     ok &= verify_ds_off_axis_position();
+    ok &= verify_lfe_metrics_separation();
 
     if (ok) {
         std::cout << "hoa encode fixture test passed\n";
