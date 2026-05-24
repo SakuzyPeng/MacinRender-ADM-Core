@@ -136,22 +136,6 @@ void push_u8(Buf& b, uint8_t v) {
     b.push_back(v);
 }
 
-void push_u16_le(Buf& b, uint16_t v) {
-    b.push_back(static_cast<uint8_t>(v & 0xffu));
-    b.push_back(static_cast<uint8_t>(v >> 8u));
-}
-
-void push_i16_le(Buf& b, int16_t v) {
-    push_u16_le(b, static_cast<uint16_t>(v));
-}
-
-void push_u32_le(Buf& b, uint32_t v) {
-    b.push_back(static_cast<uint8_t>(v & 0xffu));
-    b.push_back(static_cast<uint8_t>((v >> 8u) & 0xffu));
-    b.push_back(static_cast<uint8_t>((v >> 16u) & 0xffu));
-    b.push_back(static_cast<uint8_t>(v >> 24u));
-}
-
 void push_i16_be(Buf& b, int16_t v) {
     auto u = static_cast<uint16_t>(v);
     b.push_back(static_cast<uint8_t>(u >> 8u));
@@ -204,8 +188,8 @@ bool write_ia_sequence_header(FILE* f) {
     payload.push_back('a');
     payload.push_back('m');
     payload.push_back('f');
-    push_u8(payload, 0); // primary_profile = Base Profile
-    push_u8(payload, 0); // additional_profile = Base Profile
+    push_u8(payload, 0); // primary_profile = Simple Profile (0)
+    push_u8(payload, 0); // additional_profile = Simple Profile (0)
     return write_obu(f, k_obu_ia_sequence_header, payload);
 }
 
