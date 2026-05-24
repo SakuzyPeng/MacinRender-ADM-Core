@@ -489,6 +489,164 @@ bool verify_left_source() {
     return ok;
 }
 
+// ── DirectSpeakers helpers ────────────────────────────────────────────────────
+
+struct DsDocOptions {
+    std::optional<float> azimuth;   // absent → no SphericalSpeakerPosition set (has_position=false)
+    std::optional<float> elevation;
+    std::string label;
+};
+
+std::pair<std::shared_ptr<adm::Document>, std::string> make_ds_doc(const DsDocOptions& opts) {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DsCF"},
+                                              adm::TypeDefinition::DIRECT_SPEAKERS);
+    adm::AudioBlockFormatDirectSpeakers block{};
+    if (opts.azimuth.has_value()) {
+        adm::SphericalSpeakerPosition spos;
+        spos.set(adm::Azimuth{*opts.azimuth});
+        spos.set(adm::Elevation{opts.elevation.value_or(0.0F)});
+        block.set(spos);
+    }
+    if (!opts.label.empty()) {
+        block.add(adm::SpeakerLabel{opts.label});
+    }
+    cf->add(block);
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"DsPF"},
+                                           adm::TypeDefinition::DIRECT_SPEAKERS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"DsSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"DsTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"DsObj"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"DsContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"DsProg"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    const auto uid_str = adm::formatId(uid->get<adm::AudioTrackUidId>());
+    return {doc, uid_str};
+}
+
+mradm::RenderResult render_ds(const std::filesystem::path& in_path, const std::filesystem::path& out_path) {
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "hoa3";
+    req.options.renderer = mradm::RendererSelection::hoa;
+    req.options.peak_limit = false;
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    return service.render(req, progress, logs);
+}
+
+// DirectSpeakers with explicit position (az=0, el=0) encodes as front source:
+// W (ACN 0) ≈ 1, X (ACN 3) ≈ 1, Y (ACN 1) ≈ 0.
+bool verify_ds_with_position() {
+    auto [doc, uid_str] = make_ds_doc({.azimuth = 0.0F, .elevation = 0.0F, .label = "M+000"});
+    const auto in_path = write_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_hoa_enc_ds_pos.wav";
+    FileGuard out_guard{out_path};
+
+    const auto res = render_ds(in_path, out_path);
+    if (!res.success()) {
+        std::cerr << "FAIL: ds_with_position render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    const auto rms = read_channel_rms(out_path);
+    bool ok = true;
+    ok &= check(rms[0] > 0.9, "DS front: W (ACN 0) ≈ 1");
+    ok &= check(rms[1] < 1e-3, "DS front: Y (ACN 1) ≈ 0");
+    ok &= check(rms[2] < 1e-3, "DS front: Z (ACN 2) ≈ 0");
+    ok &= check(rms[3] > 0.9, "DS front: X (ACN 3) ≈ 1");
+    return ok;
+}
+
+// DirectSpeakers labelled RC_LFE without a lowPass ChannelFrequency element must
+// still be encoded omnidirectionally (W only). Before the label-check fix this
+// channel was encoded as a directional source at its nominal az=45, el=-30 position.
+bool verify_ds_lfe_label_no_lowpass() {
+    auto [doc, uid_str] = make_ds_doc({.azimuth = 45.0F, .elevation = -30.0F, .label = "RC_LFE"});
+    const auto in_path = write_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_hoa_enc_ds_lfe.wav";
+    FileGuard out_guard{out_path};
+
+    const auto res = render_ds(in_path, out_path);
+    if (!res.success()) {
+        std::cerr << "FAIL: ds_lfe_label render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    const auto rms = read_channel_rms(out_path);
+    bool ok = true;
+    ok &= check(rms[0] > 0.9, "DS RC_LFE: W (ACN 0) ≈ 1 (omnidirectional)");
+    // All higher-order channels must be silent — no directional encoding.
+    for (int ch = 1; ch < k_hoa3_channels; ++ch) {
+        ok &= check(rms[static_cast<std::size_t>(ch)] < 1e-3,
+                    "DS RC_LFE: higher-order ACN channel ≈ 0");
+    }
+    return ok;
+}
+
+// DirectSpeakers at az=+30°, el=0° (left-front): verify non-trivial SH coefficients.
+// W≈1, X≈cos(30°)≈0.87, Y≈sin(30°)≈0.5, Z≈0.
+// Note: libadm always initialises AudioBlockFormatDirectSpeakers with a default
+// SphericalSpeakerPosition (boost::variant first alternative), so a block with no
+// explicit position always resolves to az=0,el=0 through the normal import path.
+// The label-only fallback in build_gain_matrix therefore cannot be exercised via the
+// full render pipeline; parse_speaker_label is verified by code inspection.
+bool verify_ds_off_axis_position() {
+    auto [doc, uid_str] = make_ds_doc({.azimuth = 30.0F, .elevation = 0.0F, .label = "M+030"});
+    const auto in_path = write_fixture(doc, uid_str);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_hoa_enc_ds_offaxis.wav";
+    FileGuard out_guard{out_path};
+
+    const auto res = render_ds(in_path, out_path);
+    if (!res.success()) {
+        std::cerr << "FAIL: ds_off_axis render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    const auto rms = read_channel_rms(out_path);
+    bool ok = true;
+    ok &= check(rms[0] > 0.9, "DS az=30: W (ACN 0) ≈ 1");
+    ok &= check(rms[1] > 0.3 && rms[1] < 0.7, "DS az=30: Y (ACN 1) ≈ sin(30°) ≈ 0.5");
+    ok &= check(rms[2] < 1e-3, "DS az=30: Z (ACN 2) ≈ 0");
+    ok &= check(rms[3] > 0.7 && rms[3] < 0.95, "DS az=30: X (ACN 3) ≈ cos(30°) ≈ 0.87");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -513,6 +671,9 @@ int main() {
     ok &= verify_hoa_jump_position();
     ok &= verify_hoa_ramp_interpolation();
     ok &= verify_hoa_position_offset();
+    ok &= verify_ds_with_position();
+    ok &= verify_ds_lfe_label_no_lowpass();
+    ok &= verify_ds_off_axis_position();
 
     if (ok) {
         std::cout << "hoa encode fixture test passed\n";
