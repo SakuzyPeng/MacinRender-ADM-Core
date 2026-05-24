@@ -222,13 +222,16 @@ bool write_codec_config(FILE* f) {
     payload.push_back('s');                      // codec_id = 'Opus'
     push_uleb128(payload, k_frame_size);         // num_samples_per_frame = 960
     push_i16_be(payload, k_audio_roll_distance); // audio_roll_distance = -4
-    // decoder_config_opus (OpusHead structure, little-endian fields):
+    // decoder_config_opus: all f(N) fields are big-endian per IAMF spec
     push_u8(payload, 1);                 // version
     push_u8(payload, 2);                 // output_channel_count (reference; coupling overrides)
-    push_u16_le(payload, k_preskip);     // pre_skip = 312
-    push_u32_le(payload, k_sample_rate); // input_sample_rate = 48000
-    push_i16_le(payload, 0);             // output_gain = 0
-    push_u8(payload, 0);                 // channel_mapping_family = 0
+    push_i16_be(payload, static_cast<int16_t>(k_preskip));   // pre_skip f(16)
+    push_u8(payload, static_cast<uint8_t>((k_sample_rate >> 24u) & 0xffu)); // input_sample_rate f(32)
+    push_u8(payload, static_cast<uint8_t>((k_sample_rate >> 16u) & 0xffu));
+    push_u8(payload, static_cast<uint8_t>((k_sample_rate >> 8u) & 0xffu));
+    push_u8(payload, static_cast<uint8_t>(k_sample_rate & 0xffu));
+    push_i16_be(payload, 0);             // output_gain f(16)
+    push_u8(payload, 0);                 // channel_mapping_family
     // }
     return write_obu(f, k_obu_codec_config, payload);
 }
@@ -294,21 +297,36 @@ bool write_mix_presentation(FILE* f,
     push_u8(payload, 0x80u);
     push_i16_be(payload, 0); // default_mix_gain = 0 dB (Q7.8)
 
-    push_uleb128(payload, 1); // num_layouts = 1
-    // layout[0]: layout_type f(2)=2 (loudspeaker) | sound_system f(4) | reserved f(2)=0  → 1 byte total
-    push_u8(payload, static_cast<uint8_t>((2u << 6u) | (static_cast<uint32_t>(li.sound_system) << 2u)));
+    // IAMF §3.7: every sub-mix MUST contain a stereo (Sound System A) layout.
+    const bool is_stereo_target = (li.sound_system == k_ss_stereo);
+    push_uleb128(payload, is_stereo_target ? 1u : 2u); // num_layouts
 
-    // loudness_info:
     const bool has_peak = peak_dbtp.has_value();
-    push_u8(payload, has_peak ? 0x01u : 0x00u); // info_type: bit0=true_peak
+    const uint8_t info_type = has_peak ? 0x01u : 0x00u; // bit0 = true_peak
     const int16_t int_lufs =
         loudness_lufs.has_value() ? static_cast<int16_t>(*loudness_lufs * 256.0) : static_cast<int16_t>(0x7FFF);
-    push_i16_be(payload, int_lufs); // integrated_loudness Q7.8
     const int16_t dpeak =
         peak_dbtp.has_value() ? static_cast<int16_t>(*peak_dbtp * 256.0) : static_cast<int16_t>(0x7FFF);
-    push_i16_be(payload, dpeak); // digital_peak Q7.8
+
+    // layout[0]: target layout
+    // layout_type f(2)=2 (loudspeaker) | sound_system f(4) | reserved f(2)=0 → 1 byte
+    push_u8(payload, static_cast<uint8_t>((2u << 6u) | (static_cast<uint32_t>(li.sound_system) << 2u)));
+    push_u8(payload, info_type);
+    push_i16_be(payload, int_lufs);
+    push_i16_be(payload, dpeak);
     if (has_peak) {
-        push_i16_be(payload, dpeak); // true_peak Q7.8 (same as digital_peak)
+        push_i16_be(payload, dpeak); // true_peak = digital_peak
+    }
+
+    if (!is_stereo_target) {
+        // layout[1]: mandatory stereo (Sound System A, sound_system=0)
+        push_u8(payload, static_cast<uint8_t>(2u << 6u)); // layout_type=2 | sound_system=0 | reserved=0
+        push_u8(payload, info_type);
+        push_i16_be(payload, int_lufs);
+        push_i16_be(payload, dpeak);
+        if (has_peak) {
+            push_i16_be(payload, dpeak);
+        }
     }
 
     return write_obu(f, k_obu_mix_presentation, payload);
