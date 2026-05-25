@@ -45,13 +45,17 @@ bool check(bool condition, const char* msg) {
     return condition;
 }
 
-std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(float az_deg, float el_deg) {
+std::pair<std::shared_ptr<adm::Document>, std::string>
+make_objects_doc(float az_deg, float el_deg, float diffuse = 0.0F) {
     auto doc = adm::Document::create();
 
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"HoaCF"}, adm::TypeDefinition::OBJECTS);
     {
         adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{az_deg}, adm::Elevation{el_deg}}};
         block.set(adm::Gain{static_cast<double>(k_amplitude)});
+        if (diffuse > 0.0F) {
+            block.set(adm::Diffuse{diffuse});
+        }
         cf->add(block);
     }
     doc->add(cf);
@@ -101,6 +105,31 @@ std::filesystem::path write_fixture(const std::shared_ptr<adm::Document>& doc, c
     std::vector<float> samples(k_frames, 1.0F);
     writer->write(samples.data(), k_frames);
     return path;
+}
+
+std::filesystem::path write_fixture_samples(const std::shared_ptr<adm::Document>& doc,
+                                            const std::string& uid_str,
+                                            const std::string& suffix,
+                                            const std::vector<float>& samples) {
+    auto path = std::filesystem::temp_directory_path() / ("mr_hoa_enc_" + suffix + ".wav");
+    std::ostringstream xml_buf;
+    adm::writeXml(xml_buf, doc);
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+    writer->write(samples.data(), static_cast<uint32_t>(samples.size()));
+    return path;
+}
+
+std::vector<float> make_noise_samples(std::size_t frames) {
+    std::vector<float> samples(frames, 0.0F);
+    uint32_t state = 0x5a17c0deU;
+    for (float& sample : samples) {
+        state = (state * 1664525U) + 1013904223U;
+        const float unit = static_cast<float>((state >> 8U) & 0xffffU) / 32768.0F;
+        sample = (unit - 1.0F) * 0.5F;
+    }
+    return samples;
 }
 
 // Read per-channel RMS energy from a 16ch HOA3 output file.
@@ -235,6 +264,64 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_two_block_objects_do
 
     adm::reassignIds(doc);
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+std::pair<std::shared_ptr<adm::Document>, std::string> make_two_block_diffuse_doc() {
+    auto doc = adm::Document::create();
+    auto cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"HoaDiffuseCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block0{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block0.set(adm::Gain{static_cast<double>(k_amplitude)});
+        block0.set(adm::Diffuse{0.0F});
+        block0.set(adm::Duration{adm::Time{std::chrono::milliseconds{10}}});
+        cf->add(block0);
+
+        adm::AudioBlockFormatObjects block1{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block1.set(adm::Gain{static_cast<double>(k_amplitude)});
+        block1.set(adm::Diffuse{1.0F});
+        block1.set(adm::Rtime{adm::Time{std::chrono::milliseconds{10}}});
+        cf->add(block1);
+    }
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"HoaDiffusePF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"HoaDiffuseSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"HoaDiffuseTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"HoaDiffuseObj"});
+    obj->addReference(uid);
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"HoaDiffuseContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"HoaDiffuseProg"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+double
+channel_rms_range(const std::vector<float>& raw, std::size_t channel, std::size_t begin_frame, std::size_t frames) {
+    constexpr auto k_ch = static_cast<std::size_t>(k_hoa3_channels);
+    double energy = 0.0;
+    for (std::size_t f = begin_frame; f < begin_frame + frames; ++f) {
+        const auto s = static_cast<double>(raw.at((f * k_ch) + channel));
+        energy += s * s;
+    }
+    return std::sqrt(energy / static_cast<double>(frames));
 }
 
 // All-muted AudioObject must produce silent output (not render_failed).
@@ -489,6 +576,106 @@ bool verify_left_source() {
     return ok;
 }
 
+bool verify_hoa_diffuse_cloud() {
+    constexpr std::size_t k_diffuse_frames = 4096U;
+    const auto samples = make_noise_samples(k_diffuse_frames);
+
+    auto [direct_doc, direct_uid] = make_objects_doc(0.0F, 0.0F, 0.0F);
+    const auto direct_in = write_fixture_samples(direct_doc, direct_uid, "diffuse_direct_in", samples);
+    FileGuard direct_in_guard{direct_in};
+    const auto direct_out = std::filesystem::temp_directory_path() / "mr_hoa_enc_diffuse_direct_out.wav";
+    FileGuard direct_out_guard{direct_out};
+
+    auto [diffuse_doc, diffuse_uid] = make_objects_doc(0.0F, 0.0F, 1.0F);
+    const auto diffuse_in = write_fixture_samples(diffuse_doc, diffuse_uid, "diffuse_cloud_in", samples);
+    FileGuard diffuse_in_guard{diffuse_in};
+    const auto diffuse_out = std::filesystem::temp_directory_path() / "mr_hoa_enc_diffuse_cloud_out.wav";
+    FileGuard diffuse_out_guard{diffuse_out};
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+
+    mradm::RenderRequest direct_req;
+    direct_req.input_path = direct_in;
+    direct_req.output_path = direct_out;
+    direct_req.options.output_layout = "hoa3";
+    direct_req.options.renderer = mradm::RendererSelection::hoa;
+    direct_req.options.object_smoothing_frames = 0;
+    direct_req.options.peak_limit = false;
+
+    auto res = service.render(direct_req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: HOA diffuse direct baseline failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    mradm::RenderRequest diffuse_req = direct_req;
+    diffuse_req.input_path = diffuse_in;
+    diffuse_req.output_path = diffuse_out;
+    res = service.render(diffuse_req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: HOA diffuse cloud render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    const auto direct_rms = read_channel_rms(direct_out);
+    const auto diffuse_rms = read_channel_rms(diffuse_out);
+    bool ok = true;
+    ok &= check(direct_rms[1] < 1e-5, "HOA diffuse baseline: front source has no Y component");
+    ok &= check(direct_rms[2] < 1e-5, "HOA diffuse baseline: front source has no Z component");
+    ok &= check(diffuse_rms[0] > 0.01, "HOA diffuse=1: W component is not silent");
+    ok &= check(diffuse_rms[1] > 0.01, "HOA diffuse=1: diffuse cloud activates Y component");
+    ok &= check(diffuse_rms[2] > 0.01, "HOA diffuse=1: diffuse cloud activates Z component");
+    ok &= check(diffuse_rms[3] < direct_rms[3] * 0.9, "HOA diffuse=1: direct front X component is attenuated");
+    return ok;
+}
+
+bool verify_hoa_diffuse_smoothing_path() {
+    constexpr std::size_t k_diffuse_frames = 4096U;
+    const auto samples = make_noise_samples(k_diffuse_frames);
+    auto [doc, uid] = make_two_block_diffuse_doc();
+    const auto in_path = write_fixture_samples(doc, uid, "diffuse_smoothing_in", samples);
+    FileGuard in_guard{in_path};
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_hoa_enc_diffuse_smoothing_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "hoa3";
+    req.options.renderer = mradm::RendererSelection::hoa;
+    req.options.peak_limit = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: HOA diffuse smoothing render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    const auto raw = read_hoa_raw_samples(out_path);
+    if (raw.empty()) {
+        std::cerr << "FAIL: cannot read HOA diffuse smoothing output\n";
+        return false;
+    }
+
+    constexpr std::size_t k_window = 256U;
+    const double x_start = channel_rms_range(raw, 3U, 0U, k_window);
+    const double x_end = channel_rms_range(raw, 3U, k_diffuse_frames - k_window, k_window);
+    const double y_end = channel_rms_range(raw, 1U, k_diffuse_frames - k_window, k_window);
+    const double z_end = channel_rms_range(raw, 2U, k_diffuse_frames - k_window, k_window);
+
+    bool ok = true;
+    ok &= check(x_start > 0.05, "HOA diffuse smoothing: direct X starts active");
+    ok &= check(x_end < x_start * 0.8, "HOA diffuse smoothing: direct X is attenuated by end of block");
+    ok &= check(y_end > 0.005, "HOA diffuse smoothing: cloud Y appears by end of block");
+    ok &= check(z_end > 0.005, "HOA diffuse smoothing: cloud Z appears by end of block");
+    return ok;
+}
+
 // ── DirectSpeakers helpers ────────────────────────────────────────────────────
 
 struct DsDocOptions {
@@ -720,6 +907,7 @@ int main() {
         std::cerr << "FAIL: supported_layouts must not be empty\n";
         ok = false;
     }
+    ok &= check(caps.supports_diffuse, "HOA capabilities: diffuse supported");
 
     // ── Fixtures ──────────────────────────────────────────────────────────────
     ok &= verify_front_source();
@@ -729,6 +917,8 @@ int main() {
     ok &= verify_hoa_jump_position();
     ok &= verify_hoa_ramp_interpolation();
     ok &= verify_hoa_position_offset();
+    ok &= verify_hoa_diffuse_cloud();
+    ok &= verify_hoa_diffuse_smoothing_path();
     ok &= verify_ds_with_position();
     ok &= verify_ds_lfe_label_no_lowpass();
     ok &= verify_ds_off_axis_position();
