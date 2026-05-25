@@ -49,6 +49,8 @@ constexpr int k_n_azi = 361;  // (int)(360/1 + 0.5) + 1
 constexpr int k_n_elev = 181; // (int)(180/1 + 0.5) + 1
 constexpr std::size_t k_binaural_divergence_slots = 3U;
 constexpr std::size_t k_binaural_center_slot = 1U;
+constexpr std::size_t k_binaural_extent_slots = 17U;
+constexpr std::size_t k_binaural_extent_center_slot = 0U;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,6 +89,36 @@ int next_pow2_int(int value) {
     return out;
 }
 
+struct Vec3 {
+    float x{0.0F};
+    float y{0.0F};
+    float z{0.0F};
+};
+
+[[nodiscard]] Vec3 add(Vec3 lhs, Vec3 rhs) noexcept {
+    return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z};
+}
+
+[[nodiscard]] Vec3 scale(Vec3 v, float s) noexcept {
+    return {v.x * s, v.y * s, v.z * s};
+}
+
+[[nodiscard]] Vec3 cross(Vec3 lhs, Vec3 rhs) noexcept {
+    return {
+        (lhs.y * rhs.z) - (lhs.z * rhs.y),
+        (lhs.z * rhs.x) - (lhs.x * rhs.z),
+        (lhs.x * rhs.y) - (lhs.y * rhs.x),
+    };
+}
+
+[[nodiscard]] Vec3 normalize(Vec3 v) noexcept {
+    const float n = std::hypot(v.x, v.y, v.z);
+    if (n <= 1.0e-8F) {
+        return {0.0F, 1.0F, 0.0F};
+    }
+    return {v.x / n, v.y / n, v.z / n};
+}
+
 // Grid index into the pre-computed VBAP table (az_res=1°, el_res=1°).
 int vbap_grid_idx(float az_deg, float el_deg) {
     float az_norm = fmodf(az_deg + 180.0F, 360.0F);
@@ -96,6 +128,32 @@ int vbap_grid_idx(float az_deg, float el_deg) {
     const int az_idx = std::min(static_cast<int>(std::lround(az_norm)), k_n_azi - 1);
     const int el_idx = std::clamp(static_cast<int>(std::lround(el_deg + 90.0F)), 0, k_n_elev - 1);
     return (el_idx * k_n_azi) + az_idx;
+}
+
+[[nodiscard]] Vec3 direction_from_position(const SceneBlockPosition& pos) noexcept {
+    const auto polar = scene_position_to_polar(pos);
+    const double az = static_cast<double>(polar.azimuth) * (std::numbers::pi_v<double> / 180.0);
+    const double el = static_cast<double>(polar.elevation) * (std::numbers::pi_v<double> / 180.0);
+    const double cos_el = std::cos(el);
+    return normalize({
+        static_cast<float>(-std::sin(az) * cos_el),
+        static_cast<float>(std::cos(az) * cos_el),
+        static_cast<float>(std::sin(el)),
+    });
+}
+
+[[nodiscard]] float distance_from_position(const SceneBlockPosition& pos) noexcept {
+    return pos.cartesian ? std::hypot(pos.x, pos.y, pos.z) : pos.distance;
+}
+
+[[nodiscard]] std::pair<float, float> polar_from_direction(Vec3 dir) noexcept {
+    const Vec3 n = normalize(dir);
+    const double az =
+        std::atan2(static_cast<double>(-n.x), static_cast<double>(n.y)) * (180.0 / std::numbers::pi_v<double>);
+    const double el =
+        std::atan2(static_cast<double>(n.z), std::hypot(static_cast<double>(n.x), static_cast<double>(n.y))) *
+        (180.0 / std::numbers::pi_v<double>);
+    return {static_cast<float>(az), static_cast<float>(el)};
 }
 
 #ifdef SAF_ENABLE_SOFA_READER_MODULE
@@ -474,6 +532,78 @@ std::pair<float, float> block_position(const SceneObjectBlock& blk) {
     return {pos.azimuth, pos.elevation};
 }
 
+struct ExtentSource {
+    float az{0.0F};
+    float el{0.0F};
+    float gain{0.0F};
+    std::size_t slot{k_binaural_extent_center_slot};
+};
+
+[[nodiscard]] std::vector<ExtentSource> expand_binaural_extent(const SceneObjectBlock& block) {
+    const float distance = distance_from_position(block.position);
+    const float spread_scale = std::clamp(1.0F / std::max(0.4F, distance), 0.5F, 2.5F);
+    const float depth_radius = std::max(0.0F, block.depth) * 20.0F * spread_scale;
+    const float width_radius = (std::max(0.0F, block.width) * 60.0F * spread_scale) + depth_radius;
+    const float height_radius = (std::max(0.0F, block.height) * 45.0F * spread_scale) + depth_radius;
+    if (width_radius <= 1.0e-4F && height_radius <= 1.0e-4F) {
+        auto [az, el] = block_position(block);
+        return {{az, el, block.gain, k_binaural_extent_center_slot}};
+    }
+
+    struct DiskSample {
+        float x{0.0F};
+        float y{0.0F};
+        float weight{0.0F};
+    };
+    constexpr float k_deg2rad = static_cast<float>(std::numbers::pi) / 180.0F;
+    constexpr float k_outer_weight = 1.0F / 12.0F; // outer ring total = 2/3
+    constexpr float k_inner_weight = 1.0F / 24.0F; // inner ring total = 1/3
+    constexpr std::array<DiskSample, k_binaural_extent_slots> k_samples = {{
+        {0.0F, 0.0F, 0.0F},
+        {1.0F, 0.0F, k_outer_weight},
+        {-1.0F, 0.0F, k_outer_weight},
+        {0.0F, 1.0F, k_outer_weight},
+        {0.0F, -1.0F, k_outer_weight},
+        {0.70710678F, 0.70710678F, k_outer_weight},
+        {-0.70710678F, 0.70710678F, k_outer_weight},
+        {0.70710678F, -0.70710678F, k_outer_weight},
+        {-0.70710678F, -0.70710678F, k_outer_weight},
+        {0.5F, 0.0F, k_inner_weight},
+        {-0.5F, 0.0F, k_inner_weight},
+        {0.0F, 0.5F, k_inner_weight},
+        {0.0F, -0.5F, k_inner_weight},
+        {0.35355339F, 0.35355339F, k_inner_weight},
+        {-0.35355339F, 0.35355339F, k_inner_weight},
+        {0.35355339F, -0.35355339F, k_inner_weight},
+        {-0.35355339F, -0.35355339F, k_inner_weight},
+    }};
+
+    const Vec3 center = direction_from_position(block.position);
+    Vec3 horizontal = cross({0.0F, 0.0F, 1.0F}, center);
+    if (std::hypot(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
+        horizontal = {1.0F, 0.0F, 0.0F};
+    } else {
+        horizontal = normalize(horizontal);
+    }
+    const Vec3 vertical = normalize(cross(center, horizontal));
+
+    std::vector<ExtentSource> sources;
+    sources.reserve(k_binaural_extent_slots - 1U);
+    std::size_t slot = 0;
+    for (const auto& sample : k_samples) {
+        if (sample.weight <= 0.0F) {
+            ++slot;
+            continue;
+        }
+        const float h = std::tan(sample.x * width_radius * k_deg2rad);
+        const float v = std::tan(sample.y * height_radius * k_deg2rad);
+        auto [az, el] = polar_from_direction(normalize(add(add(center, scale(horizontal, h)), scale(vertical, v))));
+        sources.push_back({az, el, block.gain * sample.weight, slot});
+        ++slot;
+    }
+    return sources;
+}
+
 void append_object_track_sources(const SceneObject& obj,
                                  const SceneTrackRef& track,
                                  uint16_t channel_index,
@@ -481,7 +611,7 @@ void append_object_track_sources(const SceneObject& obj,
                                  bool& screen_ref_warned,
                                  LogSink& logs,
                                  std::vector<BinauralSource>& srcs) {
-    std::array<BinauralSource, k_binaural_divergence_slots> track_sources;
+    std::array<BinauralSource, k_binaural_divergence_slots * k_binaural_extent_slots> track_sources;
     for (auto& src : track_sources) {
         src.channel_index = channel_index;
         src.gain = obj.gain;
@@ -493,16 +623,18 @@ void append_object_track_sources(const SceneObject& obj,
             render_common::prepare_object_block(blk, obj, lock_speakers, logs, "binaural", screen_ref_warned);
         for (std::size_t source_index = 0; source_index < prepared.sources.size(); ++source_index) {
             const auto& source_block = prepared.sources[source_index];
-            auto [az, el] = block_position(source_block);
-            const std::size_t slot =
+            const std::size_t divergence_slot =
                 prepared.sources.size() == k_binaural_divergence_slots ? source_index : k_binaural_center_slot;
-            track_sources.at(slot).blocks.push_back({az,
-                                                     el,
-                                                     source_block.gain,
-                                                     prepared.start_sample,
-                                                     prepared.end_sample,
-                                                     prepared.jump_position,
-                                                     prepared.interp_length_samples});
+            for (const auto& extent_source : expand_binaural_extent(source_block)) {
+                const std::size_t slot = (divergence_slot * k_binaural_extent_slots) + extent_source.slot;
+                track_sources.at(slot).blocks.push_back({extent_source.az,
+                                                         extent_source.el,
+                                                         extent_source.gain,
+                                                         prepared.start_sample,
+                                                         prepared.end_sample,
+                                                         prepared.jump_position,
+                                                         prepared.interp_length_samples});
+            }
         }
     }
     for (auto& src : track_sources) {
@@ -933,7 +1065,7 @@ CapabilityReport binaural_capabilities() {
     r.supports_diffuse = false;
     r.supported_layouts = {
         // clang-format off
-        {"0+2+0", "Binaural (KEMAR or user SOFA HRIR)", 2, false, 0, false, true},
+        {"0+2+0", "Binaural (KEMAR or user SOFA HRIR)", 2, false, 0, true, true},
         // clang-format on
     };
     return r;
