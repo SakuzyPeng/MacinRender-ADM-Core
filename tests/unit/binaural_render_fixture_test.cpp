@@ -85,30 +85,46 @@ std::filesystem::path temp_path(std::string_view stem, std::string_view ext) {
     return std::filesystem::temp_directory_path() / name;
 }
 
-std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(float azimuth,
-                                                                        std::chrono::milliseconds rtime,
-                                                                        std::chrono::milliseconds duration,
-                                                                        bool channel_lock = false,
-                                                                        float divergence = 0.0F,
-                                                                        float divergence_range = 45.0F) {
+struct ObjectFixtureOptions {
+    float azimuth{0.0F};
+    std::chrono::milliseconds rtime{0};
+    std::chrono::milliseconds duration{80};
+    bool channel_lock{false};
+    float divergence{0.0F};
+    float divergence_range{45.0F};
+    float width{0.0F};
+    float height{0.0F};
+    float depth{0.0F};
+};
+
+std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(const ObjectFixtureOptions& opts) {
     auto doc = adm::Document::create();
 
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"BinauralCF"}, adm::TypeDefinition::OBJECTS);
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{azimuth}, adm::Elevation{0.0F}}};
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{opts.azimuth}, adm::Elevation{0.0F}}};
         block.set(adm::Gain{1.0F});
-        block.set(adm::Rtime{adm::Time{rtime}});
-        block.set(adm::Duration{adm::Time{duration}});
+        block.set(adm::Rtime{adm::Time{opts.rtime}});
+        block.set(adm::Duration{adm::Time{opts.duration}});
         block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
-        if (channel_lock) {
+        if (opts.width > 0.0F) {
+            block.set(adm::Width{opts.width});
+        }
+        if (opts.height > 0.0F) {
+            block.set(adm::Height{opts.height});
+        }
+        if (opts.depth > 0.0F) {
+            block.set(adm::Depth{opts.depth});
+        }
+        if (opts.channel_lock) {
             adm::ChannelLock lock;
             lock.set(adm::ChannelLockFlag{true});
             block.set(lock);
         }
-        if (divergence > 0.0F) {
+        if (opts.divergence > 0.0F) {
             adm::ObjectDivergence od;
-            od.set(adm::Divergence{divergence});
-            od.set(adm::AzimuthRange{divergence_range});
+            od.set(adm::Divergence{opts.divergence});
+            od.set(adm::AzimuthRange{opts.divergence_range});
             block.set(od);
         }
         cf->add(block);
@@ -265,17 +281,11 @@ make_lfe_direct_speakers_doc(std::chrono::milliseconds rtime, std::chrono::milli
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
-std::filesystem::path write_fixture(float azimuth,
-                                    std::chrono::milliseconds rtime,
-                                    std::chrono::milliseconds duration,
-                                    uint32_t frames,
-                                    bool channel_lock = false,
-                                    float divergence = 0.0F,
-                                    float divergence_range = 45.0F) {
+std::filesystem::path write_fixture(const ObjectFixtureOptions& opts, uint32_t frames) {
     constexpr uint32_t k_ch = 1U;
     constexpr uint32_t k_sr = 48000U;
 
-    const auto [doc, uid_str] = make_objects_doc(azimuth, rtime, duration, channel_lock, divergence, divergence_range);
+    const auto [doc, uid_str] = make_objects_doc(opts);
     auto path = temp_path("mr_binaural_input", ".wav");
 
     std::ostringstream xml_buf;
@@ -292,6 +302,11 @@ std::filesystem::path write_fixture(float azimuth,
     }
     writer->write(samples.data(), frames);
     return path;
+}
+
+std::filesystem::path
+write_fixture(float azimuth, std::chrono::milliseconds rtime, std::chrono::milliseconds duration, uint32_t frames) {
+    return write_fixture(ObjectFixtureOptions{.azimuth = azimuth, .rtime = rtime, .duration = duration}, frames);
 }
 
 std::filesystem::path write_mixed_divergence_fixture(uint32_t frames) {
@@ -559,8 +574,7 @@ bool verify_binaural_missing_sofa_fails_cleanly() {
 
 bool verify_binaural_channel_lock_changes_direction() {
     const auto free_in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U);
-    const auto locked_in =
-        write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U, true);
+    const auto locked_in = write_fixture(ObjectFixtureOptions{.channel_lock = true}, 4096U);
     FileGuard free_guard(free_in);
     FileGuard locked_guard(locked_in);
 
@@ -584,8 +598,7 @@ bool verify_binaural_channel_lock_changes_direction() {
 
 bool verify_binaural_object_divergence_changes_output() {
     const auto point_in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U);
-    const auto div_in =
-        write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U, false, 1.0F, 60.0F);
+    const auto div_in = write_fixture(ObjectFixtureOptions{.divergence = 1.0F, .divergence_range = 60.0F}, 4096U);
     FileGuard point_guard(point_in);
     FileGuard div_guard(div_in);
 
@@ -607,12 +620,42 @@ bool verify_binaural_object_divergence_changes_output() {
     return ok;
 }
 
+bool verify_binaural_extent_changes_output() {
+    const auto point_in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U);
+    const auto width_in = write_fixture(ObjectFixtureOptions{.width = 1.0F}, 4096U);
+    const auto height_in = write_fixture(ObjectFixtureOptions{.height = 1.0F}, 4096U);
+    const auto depth_in = write_fixture(ObjectFixtureOptions{.depth = 1.0F}, 4096U);
+    FileGuard point_guard(point_in);
+    FileGuard width_guard(width_in);
+    FileGuard height_guard(height_in);
+    FileGuard depth_guard(depth_in);
+
+    const auto point = render_stereo_samples(point_in, "mr_binaural_extent_point");
+    const auto width = render_stereo_samples(width_in, "mr_binaural_extent_width");
+    const auto height = render_stereo_samples(height_in, "mr_binaural_extent_height");
+    const auto depth = render_stereo_samples(depth_in, "mr_binaural_extent_depth");
+    if (!point || !width || !height || !depth) {
+        return false;
+    }
+
+    const double point_energy =
+        channel_energy(*point, 2U, 0U, 0U, point->size() / 2U) + channel_energy(*point, 2U, 1U, 0U, point->size() / 2U);
+
+    bool ok = true;
+    ok &= check(sample_difference_energy(*point, *width) > point_energy * 1.0e-3,
+                "binaural width: extent output differs from point source");
+    ok &= check(sample_difference_energy(*point, *height) > point_energy * 1.0e-4,
+                "binaural height: extent output differs from point source");
+    ok &= check(sample_difference_energy(*point, *depth) > point_energy * 1.0e-4,
+                "binaural depth: extent output differs from point source");
+    return ok;
+}
+
 bool verify_binaural_mixed_divergence_keeps_center_slot() {
     constexpr std::size_t k_divergent_begin = 1920U;
     constexpr std::size_t k_divergent_end = 3840U;
 
-    const auto reference_in =
-        write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U, false, 1.0F, 60.0F);
+    const auto reference_in = write_fixture(ObjectFixtureOptions{.divergence = 1.0F, .divergence_range = 60.0F}, 4096U);
     const auto mixed_in = write_mixed_divergence_fixture(4096U);
     FileGuard reference_guard(reference_in);
     FileGuard mixed_guard(mixed_in);
@@ -683,6 +726,7 @@ int main() {
     ok &= verify_binaural_missing_sofa_fails_cleanly();
     ok &= verify_binaural_channel_lock_changes_direction();
     ok &= verify_binaural_object_divergence_changes_output();
+    ok &= verify_binaural_extent_changes_output();
     ok &= verify_binaural_mixed_divergence_keeps_center_slot();
     ok &= verify_external_sofa_when_available();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
