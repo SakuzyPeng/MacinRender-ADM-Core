@@ -47,6 +47,7 @@ struct Vec3 {
 struct DiskSample {
     float x{0.0F};
     float y{0.0F};
+    float weight{0.0F};
 };
 
 [[nodiscard]] Vec3 normalize(Vec3 v) noexcept {
@@ -151,24 +152,26 @@ Hoa3Coeffs encode_polar(float az_deg, float el_deg) noexcept {
     }
 
     constexpr float k_deg2rad = static_cast<float>(std::numbers::pi) / 180.0F;
+    constexpr float k_outer_weight = 1.0F / 12.0F; // outer ring total = 2/3
+    constexpr float k_inner_weight = 1.0F / 24.0F; // inner ring total = 1/3
     constexpr std::array<DiskSample, 17> k_samples = {{
-        {0.0F, 0.0F},
-        {1.0F, 0.0F},
-        {-1.0F, 0.0F},
-        {0.0F, 1.0F},
-        {0.0F, -1.0F},
-        {0.70710678F, 0.70710678F},
-        {-0.70710678F, 0.70710678F},
-        {0.70710678F, -0.70710678F},
-        {-0.70710678F, -0.70710678F},
-        {0.5F, 0.0F},
-        {-0.5F, 0.0F},
-        {0.0F, 0.5F},
-        {0.0F, -0.5F},
-        {0.35355339F, 0.35355339F},
-        {-0.35355339F, 0.35355339F},
-        {0.35355339F, -0.35355339F},
-        {-0.35355339F, -0.35355339F},
+        {0.0F, 0.0F, 0.0F},
+        {1.0F, 0.0F, k_outer_weight},
+        {-1.0F, 0.0F, k_outer_weight},
+        {0.0F, 1.0F, k_outer_weight},
+        {0.0F, -1.0F, k_outer_weight},
+        {0.70710678F, 0.70710678F, k_outer_weight},
+        {-0.70710678F, 0.70710678F, k_outer_weight},
+        {0.70710678F, -0.70710678F, k_outer_weight},
+        {-0.70710678F, -0.70710678F, k_outer_weight},
+        {0.5F, 0.0F, k_inner_weight},
+        {-0.5F, 0.0F, k_inner_weight},
+        {0.0F, 0.5F, k_inner_weight},
+        {0.0F, -0.5F, k_inner_weight},
+        {0.35355339F, 0.35355339F, k_inner_weight},
+        {-0.35355339F, 0.35355339F, k_inner_weight},
+        {0.35355339F, -0.35355339F, k_inner_weight},
+        {-0.35355339F, -0.35355339F, k_inner_weight},
     }};
 
     const Vec3 center = direction_from_position(pos);
@@ -187,7 +190,7 @@ Hoa3Coeffs encode_polar(float az_deg, float el_deg) noexcept {
         const Vec3 dir = normalize(add(add(center, scale(horizontal, h)), scale(vertical, v)));
         const Hoa3Coeffs coeffs = encode_direction(dir);
         for (std::size_t i = 0; i < k_hoa3_channels; ++i) {
-            result.at(i) += coeffs.at(i) / static_cast<float>(k_samples.size());
+            result.at(i) += coeffs.at(i) * sample.weight;
         }
     }
     return result;
