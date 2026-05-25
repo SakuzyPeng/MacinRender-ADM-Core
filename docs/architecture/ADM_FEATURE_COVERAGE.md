@@ -246,7 +246,7 @@ LUFS / 空间 True Peak 测量缓冲中剥离，并由独立 mono True Peak trac
 
 | 能力 | 当前状态 | 建议定位 |
 |---|---|---|
-| **HRTF / SOFA binauraliser** | ✅ 已有独立 `binaural` 后端：默认 SAF 内置 KEMAR HRTF，支持 `--sofa` 加载用户 FIR SOFA HRIR；Objects 已接入 channelLock / objectDivergence / extent 预处理，输出 2ch binaural | 后续可扩展 diffuse、HOA 输入、更多 HRTF 数据集选择、距离策略和房间响应 |
+| **HRTF / SOFA binauraliser** | ✅ 已有独立 `binaural` 后端：默认 SAF 内置 KEMAR HRTF，支持 `--sofa` 加载用户 FIR SOFA HRIR；Objects 已接入 channelLock / objectDivergence / extent / diffuse，输出 2ch binaural | 后续可扩展 HOA 输入、更多 HRTF 数据集选择、距离策略和房间响应 |
 | **decorrelator / diffuse bus** | ✅ EAR 已实现 BS.2127 去相关 FIR + 延迟补偿（M4）；HOA encode 使用 divergence-aware 逐系数 32-tap diffuse decorrelator；VBAP 忽略 ADM `diffuse` | — |
 | **reverb / room simulation** | ❌ 未实现 | 可作为可选后处理，不应默认改变 ADM 合规渲染结果 |
 | **扬声器布局统一** | ✅ EAR / SAF VBAP 共用项目布局 registry；对外均显示 8 个 speaker layouts（内部另保留 `0+2+0`） | 后续可增加配置文件或插件式布局源 |
@@ -284,7 +284,7 @@ Objects 参数覆盖状态：
 | channelLock | ✅ 预处理为双耳参考 stereo pair（±30°）上的最近非 LFE 方向 |
 | objectDivergence | ✅ 预处理为左右/中心虚拟源；每个虚拟源独立 HRTF OLA 状态 |
 | width / height / depth | ✅ 展开为 17 点 angular extent cloud；按内/外环面积权重拆成多方向 HRTF 源 |
-| diffuse | ❌ 未实现；需要独立 diffuse binaural bus 和去相关 / HRTF 卷积策略 |
+| diffuse | ✅ direct / diffuse 能量拆分；diffuse source 独立短延迟去相关后进入对应方向 HRTF OLA |
 | ADM HOA 输入 | ❌ 未实现；需先解码 HOA 到虚拟扬声器/方向阵列，再进入 HRTF 卷积 |
 
 手动验证（2026-05-23，`afinfo`）显示：PCM CAF 可读为 `Channel layout: Binaural`；
@@ -310,7 +310,6 @@ Binaural ALAC 的语义策略与 APAC 一致：音频本体为 2ch lossless ALAC
 仍待实现：
 
 - BRIR / room-response SOFA、TF SOFA、HRIR 重采样和多 receiver 数据集；
-- diffuse bus 的去相关与 HRTF 卷积策略；
 - 距离策略、头外化相关补偿；
 - HOA 输入到 binaural 的串接方式；
 - ALAC 输出（先 macOS-only AudioToolbox 快路径，跨平台 provider 另立里程碑评估）。

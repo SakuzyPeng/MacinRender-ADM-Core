@@ -13,6 +13,7 @@
 #include <numbers>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -51,6 +52,7 @@ constexpr std::size_t k_binaural_divergence_slots = 3U;
 constexpr std::size_t k_binaural_center_slot = 1U;
 constexpr std::size_t k_binaural_extent_slots = 17U;
 constexpr std::size_t k_binaural_extent_center_slot = 0U;
+constexpr std::size_t k_diffuse_delay_len = 32U;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -416,6 +418,29 @@ class OLAState {
     std::vector<float> overlap_r;
 };
 
+struct DiffuseDelayState {
+    std::array<float, k_diffuse_delay_len> delay_line{};
+    std::size_t write_pos{0};
+};
+
+void decorrelate_diffuse_mono(DiffuseDelayState& state, const float* in, uint64_t frames_now, float* out) {
+    constexpr std::array<std::size_t, 8U> k_offsets{3U, 7U, 11U, 17U, 19U, 23U, 29U, 31U};
+    constexpr std::array<float, 8U> k_polarity{1.0F, -1.0F, 1.0F, 1.0F, -1.0F, 1.0F, -1.0F, -1.0F};
+    constexpr float k_norm = 0.35355339F; // 1/sqrt(8)
+
+    for (std::size_t f = 0; f < static_cast<std::size_t>(frames_now); ++f) {
+        state.delay_line.at(state.write_pos) = in[f];
+        float sum = 0.0F;
+        for (std::size_t i = 0; i < k_offsets.size(); ++i) {
+            const std::size_t read_pos =
+                (state.write_pos + k_diffuse_delay_len - k_offsets.at(i)) % k_diffuse_delay_len;
+            sum += state.delay_line.at(read_pos) * k_polarity.at(i);
+        }
+        out[f] = sum * k_norm;
+        state.write_pos = (state.write_pos + 1U) % k_diffuse_delay_len;
+    }
+}
+
 // OLA convolution: convolve src[frames_now] with hrtf[n_bands × k_n_ears],
 // accumulate into l_out/r_out (both [frames_now]), update state.overlap.
 // Uses saf_rfft (KissFFT backend).
@@ -505,6 +530,7 @@ struct BinauralSource {
     float gain{1.0F}; // object-level gain
     bool bypass_lfe{false};
     bool smoothable_object{false};
+    bool diffuse_bus{false};
     struct Block {
         float az{0.0F};
         float el{0.0F};
@@ -539,7 +565,7 @@ struct ExtentSource {
     std::size_t slot{k_binaural_extent_center_slot};
 };
 
-[[nodiscard]] std::vector<ExtentSource> expand_binaural_extent(const SceneObjectBlock& block) {
+[[nodiscard]] std::vector<ExtentSource> expand_binaural_extent(const SceneObjectBlock& block, float source_gain) {
     const float distance = distance_from_position(block.position);
     const float spread_scale = std::clamp(1.0F / std::max(0.4F, distance), 0.5F, 2.5F);
     const float depth_radius = std::max(0.0F, block.depth) * 20.0F * spread_scale;
@@ -547,7 +573,7 @@ struct ExtentSource {
     const float height_radius = (std::max(0.0F, block.height) * 45.0F * spread_scale) + depth_radius;
     if (width_radius <= 1.0e-4F && height_radius <= 1.0e-4F) {
         auto [az, el] = block_position(block);
-        return {{az, el, block.gain, k_binaural_extent_center_slot}};
+        return {{az, el, source_gain, k_binaural_extent_center_slot}};
     }
 
     struct DiskSample {
@@ -598,10 +624,39 @@ struct ExtentSource {
         const float h = std::tan(sample.x * width_radius * k_deg2rad);
         const float v = std::tan(sample.y * height_radius * k_deg2rad);
         auto [az, el] = polar_from_direction(normalize(add(add(center, scale(horizontal, h)), scale(vertical, v))));
-        sources.push_back({az, el, block.gain * sample.weight, slot});
+        sources.push_back({az, el, source_gain * sample.weight, slot});
         ++slot;
     }
     return sources;
+}
+
+struct BinauralSourceBank {
+    std::array<BinauralSource, k_binaural_divergence_slots * k_binaural_extent_slots> direct;
+    std::array<BinauralSource, k_binaural_divergence_slots * k_binaural_extent_slots> diffuse;
+};
+
+void init_source_bank(BinauralSourceBank& bank, uint16_t channel_index, float object_gain) {
+    for (auto& src : bank.direct) {
+        src.channel_index = channel_index;
+        src.gain = object_gain;
+        src.smoothable_object = true;
+        src.diffuse_bus = false;
+    }
+    for (auto& src : bank.diffuse) {
+        src.channel_index = channel_index;
+        src.gain = object_gain;
+        src.smoothable_object = true;
+        src.diffuse_bus = true;
+    }
+}
+
+void append_source_bank(std::span<BinauralSource> bank, std::vector<BinauralSource>& srcs) {
+    for (auto& src : bank) {
+        if (!src.blocks.empty()) {
+            std::ranges::sort(src.blocks, {}, &BinauralSource::Block::start_sample);
+            srcs.push_back(std::move(src));
+        }
+    }
 }
 
 void append_object_track_sources(const SceneObject& obj,
@@ -611,12 +666,8 @@ void append_object_track_sources(const SceneObject& obj,
                                  bool& screen_ref_warned,
                                  LogSink& logs,
                                  std::vector<BinauralSource>& srcs) {
-    std::array<BinauralSource, k_binaural_divergence_slots * k_binaural_extent_slots> track_sources;
-    for (auto& src : track_sources) {
-        src.channel_index = channel_index;
-        src.gain = obj.gain;
-        src.smoothable_object = true;
-    }
+    BinauralSourceBank track_sources;
+    init_source_bank(track_sources, channel_index, obj.gain);
 
     for (const auto& blk : track.blocks) {
         const auto prepared =
@@ -625,24 +676,39 @@ void append_object_track_sources(const SceneObject& obj,
             const auto& source_block = prepared.sources[source_index];
             const std::size_t divergence_slot =
                 prepared.sources.size() == k_binaural_divergence_slots ? source_index : k_binaural_center_slot;
-            for (const auto& extent_source : expand_binaural_extent(source_block)) {
+            const float diffuse = std::clamp(source_block.diffuse, 0.0F, 1.0F);
+            const float direct_scale = std::sqrt(1.0F - diffuse);
+            const float diffuse_scale = std::sqrt(diffuse);
+            if (direct_scale > 1.0e-4F) {
+                for (const auto& extent_source :
+                     expand_binaural_extent(source_block, source_block.gain * direct_scale)) {
+                    const std::size_t slot = (divergence_slot * k_binaural_extent_slots) + extent_source.slot;
+                    track_sources.direct.at(slot).blocks.push_back({extent_source.az,
+                                                                    extent_source.el,
+                                                                    extent_source.gain,
+                                                                    prepared.start_sample,
+                                                                    prepared.end_sample,
+                                                                    prepared.jump_position,
+                                                                    prepared.interp_length_samples});
+                }
+            }
+            if (diffuse_scale <= 1.0e-4F) {
+                continue;
+            }
+            for (const auto& extent_source : expand_binaural_extent(source_block, source_block.gain * diffuse_scale)) {
                 const std::size_t slot = (divergence_slot * k_binaural_extent_slots) + extent_source.slot;
-                track_sources.at(slot).blocks.push_back({extent_source.az,
-                                                         extent_source.el,
-                                                         extent_source.gain,
-                                                         prepared.start_sample,
-                                                         prepared.end_sample,
-                                                         prepared.jump_position,
-                                                         prepared.interp_length_samples});
+                track_sources.diffuse.at(slot).blocks.push_back({extent_source.az,
+                                                                 extent_source.el,
+                                                                 extent_source.gain,
+                                                                 prepared.start_sample,
+                                                                 prepared.end_sample,
+                                                                 prepared.jump_position,
+                                                                 prepared.interp_length_samples});
             }
         }
     }
-    for (auto& src : track_sources) {
-        if (!src.blocks.empty()) {
-            std::ranges::sort(src.blocks, {}, &BinauralSource::Block::start_sample);
-            srcs.push_back(std::move(src));
-        }
-    }
+    append_source_bank(track_sources.direct, srcs);
+    append_source_bank(track_sources.diffuse, srcs);
 }
 
 // Build source list from scene.
@@ -889,6 +955,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     for (std::size_t i = 0; i < sources.size(); ++i) {
         ola.emplace_back(bs->overlap_len);
     }
+    std::vector<DiffuseDelayState> diffuse_delay(sources.size());
 
     const uint64_t num_frames = info.num_frames;
     const uint16_t num_in_ch = info.num_channels;
@@ -911,6 +978,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
         std::vector<float> r_buf(fn, 0.0F);
         // De-interleaved input scratch for one channel.
         std::vector<float> ch_in(fn);
+        std::vector<float> diffuse_in(fn);
 
         for (std::size_t si = 0; si < sources.size(); ++si) {
             const auto& src = sources[si];
@@ -930,11 +998,16 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                     if (interp_len > 0U) {
                         copy_windowed_object_input(
                             src, in_block.data(), num_in_ch, chunk_start, frames_now, ch_in.data());
+                        const float* conv_in = ch_in.data();
+                        if (src.diffuse_bus) {
+                            decorrelate_diffuse_mono(diffuse_delay[si], ch_in.data(), frames_now, diffuse_in.data());
+                            conv_in = diffuse_in.data();
+                        }
                         const auto start_hrtf = hrtf_for_dir(*bs, start_block->az, start_block->el);
                         const auto end_hrtf = hrtf_for_dir(*bs, end_block->az, end_block->el);
                         convolve_crossfaded_object_block(hfft,
                                                          *bs,
-                                                         ch_in.data(),
+                                                         conv_in,
                                                          frames_now,
                                                          src.gain * start_block->block_gain,
                                                          src.gain * end_block->block_gain,
@@ -994,16 +1067,14 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                         r_buf[off + f] += sample;
                     }
                 } else {
+                    const float* conv_in = ch_in.data();
+                    if (src.diffuse_bus) {
+                        decorrelate_diffuse_mono(diffuse_delay[si], ch_in.data(), seg_frames, diffuse_in.data());
+                        conv_in = diffuse_in.data();
+                    }
                     const auto hrtf = hrtf_for_dir(*bs, blk.az, blk.el);
-                    convolve_and_accumulate(hfft,
-                                            *bs,
-                                            ch_in.data(),
-                                            seg_frames,
-                                            gain,
-                                            hrtf,
-                                            ola[si],
-                                            l_buf.data() + off,
-                                            r_buf.data() + off);
+                    convolve_and_accumulate(
+                        hfft, *bs, conv_in, seg_frames, gain, hrtf, ola[si], l_buf.data() + off, r_buf.data() + off);
                 }
 
                 cursor = seg_end;
@@ -1062,7 +1133,7 @@ CapabilityReport binaural_capabilities() {
     r.supports_hoa = false;
     r.supports_channel_lock = true;
     r.supports_object_divergence = true;
-    r.supports_diffuse = false;
+    r.supports_diffuse = true;
     r.supported_layouts = {
         // clang-format off
         {"0+2+0", "Binaural (KEMAR or user SOFA HRIR)", 2, false, 0, true, true},
