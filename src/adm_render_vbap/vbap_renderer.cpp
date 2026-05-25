@@ -24,6 +24,7 @@
 #include "adm/render_vbap.h"
 
 #include "render_common.h"
+#include "speaker_layouts.h"
 
 namespace mradm {
 
@@ -42,52 +43,20 @@ struct RegistryEntry {
     std::vector<VbapSpeakerSpec> speakers;
 };
 
-// Flat ordered registry of all VBAP layouts (built-ins first, then custom).
-// Initialised once from built_default_registry(); mutable for register_vbap_layout().
-std::vector<RegistryEntry>& layout_registry() {
-    // clang-format off
-    static auto reg = [] {
-        std::vector<RegistryEntry> r;
-        r.push_back({"0+2+0", "Stereo",
-                     {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}}});
-        r.push_back({"0+5+0", "5.1",
-                     {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}, {0.0F, 0.0F, "M+000"},
-                      {45.0F, -30.0F, "LFE1", true}, {110.0F, 0.0F, "M+110"}, {-110.0F, 0.0F, "M-110"}}});
-        r.push_back({"wav71", "7.1",
-                     {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}, {0.0F, 0.0F, "M+000"},
-                      {45.0F, -30.0F, "LFE1", true}, {135.0F, 0.0F, "M+135"}, {-135.0F, 0.0F, "M-135"},
-                      {90.0F, 0.0F, "M+090"}, {-90.0F, 0.0F, "M-090"}}});
-        r.push_back({"4+5+0", "5.1.4",
-                     {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}, {0.0F, 0.0F, "M+000"},
-                      {45.0F, -30.0F, "LFE1", true}, {110.0F, 0.0F, "M+110"}, {-110.0F, 0.0F, "M-110"},
-                      {30.0F, 30.0F, "U+030"}, {-30.0F, 30.0F, "U-030"}, {110.0F, 30.0F, "U+110"}, {-110.0F, 30.0F, "U-110"}}});
-        r.push_back({"4+7+0", "7.1.4",
-                     {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}, {0.0F, 0.0F, "M+000"},
-                      {45.0F, -30.0F, "LFE1", true}, {90.0F, 0.0F, "M+090"}, {-90.0F, 0.0F, "M-090"},
-                      {135.0F, 0.0F, "M+135"}, {-135.0F, 0.0F, "M-135"},
-                      {45.0F, 30.0F, "U+045"}, {-45.0F, 30.0F, "U-045"}, {135.0F, 30.0F, "U+135"}, {-135.0F, 30.0F, "U-135"}}});
-        r.push_back({"9.1.6", "9.1.6 (Dolby Atmos)",
-                     {{30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}, {0.0F, 0.0F, "M+000"},
-                      {45.0F, -30.0F, "LFE1", true},
-                      {110.0F, 0.0F, "M+110"}, {-110.0F, 0.0F, "M-110"},
-                      {150.0F, 0.0F, "M+150"}, {-150.0F, 0.0F, "M-150"},
-                      {70.0F, 0.0F, "M+070"}, {-70.0F, 0.0F, "M-070"},
-                      {70.0F, 45.0F, "U+070"}, {-70.0F, 45.0F, "U-070"},
-                      {110.0F, 45.0F, "U+110"}, {-110.0F, 45.0F, "U-110"},
-                      {150.0F, 45.0F, "U+150"}, {-150.0F, 45.0F, "U-150"}}});
-        r.push_back({"9+10+3", "22.2",
-                     {{60.0F, 0.0F, "M+060"}, {-60.0F, 0.0F, "M-060"}, {0.0F, 0.0F, "M+000"},
-                      {45.0F, -30.0F, "LFE1", true}, {135.0F, 0.0F, "M+135"}, {-135.0F, 0.0F, "M-135"},
-                      {30.0F, 0.0F, "M+030"}, {-30.0F, 0.0F, "M-030"}, {180.0F, 0.0F, "M+180"},
-                      {-45.0F, -30.0F, "LFE2", true}, {90.0F, 0.0F, "M+090"}, {-90.0F, 0.0F, "M-090"},
-                      {45.0F, 30.0F, "U+045"}, {-45.0F, 30.0F, "U-045"}, {0.0F, 30.0F, "U+000"},
-                      {0.0F, 90.0F, "T+000"}, {135.0F, 30.0F, "U+135"}, {-135.0F, 30.0F, "U-135"},
-                      {90.0F, 30.0F, "U+090"}, {-90.0F, 30.0F, "U-090"}, {180.0F, 30.0F, "U+180"},
-                      {0.0F, -30.0F, "B+000"}, {45.0F, -30.0F, "B+045"}, {-45.0F, -30.0F, "B-045"}}});
-        return r;
-    }();
-    // clang-format on
+std::vector<RegistryEntry>& custom_layout_registry() {
+    static std::vector<RegistryEntry> reg;
     return reg;
+}
+
+[[nodiscard]] VbapSpeakerSpec to_vbap_speaker(const render_layouts::SpeakerSpec& speaker) {
+    return {speaker.azimuth, speaker.elevation, std::string{speaker.label}, speaker.is_lfe};
+}
+
+[[nodiscard]] LayoutSpec layout_spec_from_shared(const render_layouts::SpeakerLayout& layout) {
+    LayoutSpec spec;
+    spec.speakers.reserve(layout.speakers.size());
+    std::ranges::transform(layout.speakers, std::back_inserter(spec.speakers), to_vbap_speaker);
+    return spec;
 }
 
 struct BlockGains {
@@ -124,12 +93,15 @@ struct SafFree {
 };
 
 [[nodiscard]] std::optional<LayoutSpec> layout_spec(std::string_view layout_id) {
-    const auto& reg = layout_registry();
-    const auto it = std::ranges::find_if(reg, [layout_id](const RegistryEntry& e) { return e.id == layout_id; });
-    if (it == reg.end()) {
-        return std::nullopt;
+    if (const auto* shared = render_layouts::find_speaker_layout(layout_id); shared != nullptr) {
+        return layout_spec_from_shared(*shared);
     }
-    return LayoutSpec{it->speakers};
+    const auto& reg = custom_layout_registry();
+    const auto it = std::ranges::find_if(reg, [layout_id](const RegistryEntry& e) { return e.id == layout_id; });
+    if (it != reg.end()) {
+        return LayoutSpec{it->speakers};
+    }
+    return std::nullopt;
 }
 
 [[nodiscard]] bool is_2d_layout(const LayoutSpec& layout) {
@@ -709,7 +681,10 @@ bool register_vbap_layout(std::string id, std::string display_name, std::vector<
                             [](const auto& s) { return !std::isfinite(s.azimuth) || !std::isfinite(s.elevation); })) {
         return false;
     }
-    auto& reg = layout_registry();
+    if (render_layouts::find_speaker_layout(id) != nullptr) {
+        return false;
+    }
+    auto& reg = custom_layout_registry();
     if (std::ranges::any_of(reg, [&id](const RegistryEntry& e) { return e.id == id; })) {
         return false;
     }
@@ -729,17 +704,24 @@ CapabilityReport vbap_capabilities() {
     r.supports_screen_ref = false;
     r.supports_diffuse = false;
 
-    for (const auto& entry : layout_registry()) {
+    auto append_layout = [&](std::string_view id, std::string_view display_name, const auto& speakers) {
         CapabilityReport::Layout layout;
-        layout.id = entry.id;
-        layout.display_name = entry.display_name;
-        layout.channel_count = static_cast<uint16_t>(entry.speakers.size());
+        layout.id = std::string{id};
+        layout.display_name = std::string{display_name};
+        layout.channel_count = static_cast<uint16_t>(speakers.size());
         layout.lfe_count =
-            static_cast<uint16_t>(std::ranges::count_if(entry.speakers, [](const auto& s) { return s.is_lfe; }));
-        layout.is_3d = std::ranges::any_of(entry.speakers,
-                                           [](const auto& s) { return !s.is_lfe && std::fabs(s.elevation) > 1.0e-6F; });
+            static_cast<uint16_t>(std::ranges::count_if(speakers, [](const auto& s) { return s.is_lfe; }));
+        layout.is_3d =
+            std::ranges::any_of(speakers, [](const auto& s) { return !s.is_lfe && std::fabs(s.elevation) > 1.0e-6F; });
         layout.supports_spread = layout.is_3d; // 2D VBAP passes spread=0; MDAP/SAF only helps for 3D
         r.supported_layouts.push_back(std::move(layout));
+    };
+
+    for (const auto& entry : render_layouts::speaker_layouts()) {
+        append_layout(entry.id, entry.display_name, entry.speakers);
+    }
+    for (const auto& entry : custom_layout_registry()) {
+        append_layout(entry.id, entry.display_name, entry.speakers);
     }
     return r;
 }

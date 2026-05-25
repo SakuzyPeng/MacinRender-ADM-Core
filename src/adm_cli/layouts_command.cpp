@@ -134,7 +134,7 @@ bool renderer_supports_layout(const mradm::CapabilityReport& caps, std::string_v
     });
 }
 
-constexpr std::array<LayoutInfo, 34> k_layout_infos{{
+constexpr std::array<LayoutInfo, 35> k_layout_infos{{
     {"wav",
      "binaural",
      2,
@@ -156,6 +156,7 @@ constexpr std::array<LayoutInfo, 34> k_layout_infos{{
      "plain WAV sample order",
      "L R C LFE Ls Rs Rls Rrs U+045 U-045 U+135 U-135",
      "Top channels use ADM labels."},
+    {"wav", "9.1.4", 14, "plain WAV sample order", "L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltr Rtr", ""},
     {"wav", "9.1.6", 16, "plain WAV sample order", "L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr", ""},
     {"wav",
      "22.2",

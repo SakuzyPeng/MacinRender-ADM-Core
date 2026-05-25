@@ -188,7 +188,8 @@ int main() {
         auto r = run_cmd(mradm_exe + " layouts --format wav --renderer ear");
         ok &= check(r.code == 0, "layouts --format wav --renderer ear: exit 0");
         ok &= check(r.out.find("Renderer: libear") != std::string::npos, "layouts renderer filter: ear heading");
-        ok &= check(r.out.find("9.1.6") == std::string::npos, "layouts wav+ear: unsupported 9.1.6 hidden");
+        ok &= check(r.out.find("9.1.4") != std::string::npos, "layouts wav+ear: 9.1.4 listed");
+        ok &= check(r.out.find("9.1.6") != std::string::npos, "layouts wav+ear: 9.1.6 listed");
     }
     {
         auto r = run_cmd(mradm_exe + " layouts --format apac --renderer saf --layout 5.1.2");

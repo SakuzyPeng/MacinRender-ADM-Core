@@ -181,6 +181,11 @@ struct DirectSpeakersDoc {
     std::array<std::string, 2> uids;
 };
 
+struct SingleDirectSpeakerDoc {
+    std::shared_ptr<adm::Document> doc;
+    std::string uid;
+};
+
 struct SpeakerSetup {
     const char* label;
     float azimuth;
@@ -246,6 +251,54 @@ DirectSpeakersDoc make_direct_speakers_doc() {
              adm::formatId(uids.at(1)->get<adm::AudioTrackUidId>())}};
 }
 
+SingleDirectSpeakerDoc make_single_direct_speaker_doc(const char* label, float azimuth, float elevation) {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"SingleDsCF"},
+                                              adm::TypeDefinition::DIRECT_SPEAKERS);
+    {
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::SphericalSpeakerPosition{adm::Azimuth{azimuth}, adm::Elevation{elevation}, adm::Distance{1.0F}}};
+        block.add(adm::SpeakerLabel{label});
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf =
+        adm::AudioPackFormat::create(adm::AudioPackFormatName{"SingleDsPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"SingleDsSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"SingleDsTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"SingleDirectSpeakersObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"SingleDirectSpeakersContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"SingleDirectSpeakersProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
 std::filesystem::path write_input_fixture(const std::string& uid_str, const std::shared_ptr<adm::Document>& doc) {
     auto path = std::filesystem::temp_directory_path() / "mr_ear_fixture_in.wav";
 
@@ -307,6 +360,25 @@ std::filesystem::path write_direct_speakers_input_fixture(const DirectSpeakersDo
     writer->write(samples.data(), k_frames);
 
     return path;
+}
+
+std::vector<double> read_channel_sums(const std::filesystem::path& path, uint32_t channels) {
+    auto reader_res = mradm::audio::FloatWavReader::open(path.string());
+    if (!reader_res || reader_res->channels() != channels) {
+        return {};
+    }
+    auto& reader = *reader_res;
+    const auto frames = static_cast<std::size_t>(reader.frame_count());
+    std::vector<float> samples(frames * channels);
+    reader.read(samples.data(), reader.frame_count());
+
+    std::vector<double> sums(channels, 0.0);
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        for (std::size_t ch = 0; ch < channels; ++ch) {
+            sums[ch] += std::fabs(static_cast<double>(samples[(frame * channels) + ch]));
+        }
+    }
+    return sums;
 }
 
 bool verify_objects_render_fixture(const mradm::RenderService& service,
@@ -417,6 +489,73 @@ bool verify_direct_speakers_render_fixture(const mradm::RenderService& service,
         ok &= check(sum_r > 0.0, "DS right channel is not silent");
     }
 
+    return ok;
+}
+
+bool verify_ear_custom_916_objects(const mradm::RenderService& service,
+                                   mradm::ProgressSink& progress,
+                                   mradm::LogSink& logs) {
+    auto [doc, uid_str] = make_objects_doc();
+    const auto in_path = write_input_fixture(uid_str, doc, "mr_ear_916_obj_in.wav", 48000U, 1000U);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_ear_916_obj_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "9.1.6";
+    req.options.renderer = mradm::RendererSelection::ear;
+    req.options.peak_limit = false;
+
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: EAR 9.1.6 object render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    const auto sums = read_channel_sums(out_path, 16U);
+    bool ok = true;
+    ok &= check(sums.size() == 16U, "EAR 9.1.6 object: output is 16-channel");
+    if (sums.size() == 16U) {
+        ok &= check(sums[2U] > 0.0, "EAR 9.1.6 object: center channel has energy");
+        ok &= check(sums[3U] < 1.0e-9, "EAR 9.1.6 object: LFE is silent");
+    }
+    return ok;
+}
+
+bool verify_ear_custom_916_direct_speakers(const mradm::RenderService& service,
+                                           mradm::ProgressSink& progress,
+                                           mradm::LogSink& logs) {
+    auto fixture = make_single_direct_speaker_doc("U+110", 110.0F, 45.0F);
+    const auto in_path = write_input_fixture(fixture.uid, fixture.doc, "mr_ear_916_ds_in.wav", 48000U, 1000U);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_ear_916_ds_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "9.1.6";
+    req.options.renderer = mradm::RendererSelection::ear;
+    req.options.peak_limit = false;
+
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: EAR 9.1.6 DirectSpeakers render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    constexpr std::size_t k_ltm_ch = 12U;
+    const auto sums = read_channel_sums(out_path, 16U);
+    bool ok = true;
+    ok &= check(sums.size() == 16U, "EAR 9.1.6 DirectSpeakers: output is 16-channel");
+    if (sums.size() == 16U) {
+        ok &= check(sums[k_ltm_ch] > 0.0, "EAR 9.1.6 DirectSpeakers: U+110 routes to Ltm");
+        ok &= check(sums[3U] < 1.0e-9, "EAR 9.1.6 DirectSpeakers: LFE is silent");
+    }
     return ok;
 }
 
@@ -1400,6 +1539,8 @@ int main() {
     bool ok = true;
     ok &= verify_objects_render_fixture(service, progress, logs);
     ok &= verify_direct_speakers_render_fixture(service, progress, logs);
+    ok &= verify_ear_custom_916_objects(service, progress, logs);
+    ok &= verify_ear_custom_916_direct_speakers(service, progress, logs);
     ok &= verify_mixed_render_fixture(service, progress, logs);
     ok &= verify_ear_cartesian_objects(service, progress, logs);
     ok &= verify_position_offset(service, progress, logs);
