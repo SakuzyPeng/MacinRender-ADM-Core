@@ -29,6 +29,7 @@ coverage/
 # Local environment
 .env
 .env.*
+.cache/
 
 # Local experiments
 experiments/
