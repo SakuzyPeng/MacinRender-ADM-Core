@@ -32,6 +32,8 @@ namespace mradm {
 namespace {
 
 constexpr std::size_t k_hoa3_channels = 16; // (3+1)^2 = 4^2
+constexpr std::size_t k_diffuse_dirs = 32;
+constexpr std::size_t k_diffuse_delay_len = 1024;
 
 constexpr uint16_t k_hoa3_channels_u16 = static_cast<uint16_t>(k_hoa3_channels);
 using Hoa3Coeffs = std::array<float, k_hoa3_channels>;
@@ -87,6 +89,18 @@ Hoa3Coeffs encode_polar(float az_deg, float el_deg) noexcept {
 Hoa3Coeffs encode_cartesian(float xc, float yc, float zc) noexcept {
     const float len = std::max(1.0e-6F, std::hypot(xc, yc, zc));
     return sh_sn3d_3(yc / len, -xc / len, zc / len);
+}
+
+std::array<Hoa3Coeffs, k_diffuse_dirs> make_diffuse_cloud() {
+    std::array<Hoa3Coeffs, k_diffuse_dirs> cloud{};
+    const float k_golden_angle = std::numbers::pi_v<float> * (3.0F - std::sqrt(5.0F));
+    for (std::size_t i = 0; i < k_diffuse_dirs; ++i) {
+        const float z = 1.0F - ((2.0F * (static_cast<float>(i) + 0.5F)) / static_cast<float>(k_diffuse_dirs));
+        const float r = std::sqrt(std::max(0.0F, 1.0F - (z * z)));
+        const float theta = static_cast<float>(i) * k_golden_angle;
+        cloud.at(i) = sh_sn3d_3(r * std::cos(theta), r * std::sin(theta), z);
+    }
+    return cloud;
 }
 
 // Return true when any label in the list identifies an LFE channel.
@@ -151,11 +165,22 @@ std::optional<std::pair<float, float>> parse_speaker_label(const std::string& la
 
 struct HoaBlock {
     Hoa3Coeffs gains{};
+    float diffuse_gain{0.0F};
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
     bool is_lfe{false};
     bool jump_position{false};
     std::optional<uint64_t> interp_length_samples;
+};
+
+struct HoaFrameGains {
+    Hoa3Coeffs direct{};
+    float diffuse_gain{0.0F};
+};
+
+struct DiffuseState {
+    std::array<float, k_diffuse_delay_len> delay_line{};
+    std::size_t write_pos{0};
 };
 
 enum class BlockFilter : uint8_t { all, lfe_only };
@@ -166,16 +191,17 @@ enum class BlockFilter : uint8_t { all, lfe_only };
 
 struct ChannelGainInfo {
     uint16_t input_channel{0};
-    bool has_lfe_block{false};    // true when any ds_block is LFE; used for separate TP tracking
+    bool has_lfe_block{false}; // true when any ds_block is LFE; used for separate TP tracking
+    bool has_diffuse_block{false};
     std::vector<HoaBlock> blocks; // sorted ascending by start_sample
 };
 
 // Returns linearly interpolated HOA gains at abs_frame for the given channel.
 // Returns all-zero coefficients when abs_frame is outside every block.
-[[nodiscard]] Hoa3Coeffs gains_at(const ChannelGainInfo& cg,
-                                  uint64_t abs_frame,
-                                  uint64_t default_interp,
-                                  BlockFilter filter = BlockFilter::all) {
+[[nodiscard]] HoaFrameGains gains_at(const ChannelGainInfo& cg,
+                                     uint64_t abs_frame,
+                                     uint64_t default_interp,
+                                     BlockFilter filter = BlockFilter::all) {
     // Upper-bound search: find the first block whose start_sample > abs_frame.
     const auto it = std::ranges::upper_bound(cg.blocks, abs_frame, {}, &HoaBlock::start_sample);
     if (it == cg.blocks.begin()) {
@@ -189,11 +215,12 @@ struct ChannelGainInfo {
     if (!block_matches_filter(cur, filter)) {
         return {};
     }
+    HoaFrameGains frame{cur.gains, cur.diffuse_gain};
     // Interpolation ramp: blend from previous block gains when jump_position is false.
     if (!cur.jump_position && cur_it != cg.blocks.begin()) {
         const HoaBlock& prev = *std::prev(cur_it);
         if (!block_matches_filter(prev, filter)) {
-            return cur.gains;
+            return frame;
         }
         // Clamp interp_len to active block duration (mirrors EAR/VBAP interpolation_length()).
         uint64_t active_end = cur.end_sample;
@@ -206,15 +233,52 @@ struct ChannelGainInfo {
         const uint64_t delta = abs_frame - cur.start_sample;
         if (interp_len > 0 && delta < interp_len) {
             const double alpha = static_cast<double>(delta) / static_cast<double>(interp_len);
-            Hoa3Coeffs result;
+            HoaFrameGains result;
             for (std::size_t i = 0; i < k_hoa3_channels; ++i) {
-                result.at(i) = static_cast<float>((static_cast<double>(prev.gains.at(i)) * (1.0 - alpha)) +
-                                                  (static_cast<double>(cur.gains.at(i)) * alpha));
+                result.direct.at(i) = static_cast<float>((static_cast<double>(prev.gains.at(i)) * (1.0 - alpha)) +
+                                                         (static_cast<double>(cur.gains.at(i)) * alpha));
             }
+            result.diffuse_gain = static_cast<float>((static_cast<double>(prev.diffuse_gain) * (1.0 - alpha)) +
+                                                     (static_cast<double>(cur.diffuse_gain) * alpha));
             return result;
         }
     }
-    return cur.gains;
+    return frame;
+}
+
+void add_direct_hoa(float in_s, const Hoa3Coeffs& gains, float* out_frame) {
+    for (std::size_t out_ch = 0; out_ch < k_hoa3_channels; ++out_ch) {
+        out_frame[out_ch] += in_s * gains.at(out_ch);
+    }
+}
+
+void add_diffuse_hoa(float diffuse_in,
+                     DiffuseState& state,
+                     const std::array<Hoa3Coeffs, k_diffuse_dirs>& cloud,
+                     float* out_frame) {
+    // Prime delays decorrelate each virtual cloud source while keeping the encoded
+    // diffuse field independent of any speaker layout.
+    constexpr std::array<std::size_t, k_diffuse_dirs> k_delays = {
+        37U,  53U,  67U,  83U,  97U,  109U, 127U, 149U, 163U, 181U, 199U, 211U, 233U, 251U, 271U, 293U,
+        313U, 337U, 359U, 383U, 409U, 431U, 457U, 487U, 521U, 557U, 593U, 631U, 673U, 719U, 761U, 809U,
+    };
+    constexpr std::array<float, k_diffuse_dirs> k_polarity = {
+        1.F,  -1.F, 1.F, 1.F,  -1.F, -1.F, 1.F,  -1.F, -1.F, 1.F,  1.F, -1.F, 1.F,  -1.F, -1.F, 1.F,
+        -1.F, 1.F,  1.F, -1.F, 1.F,  -1.F, -1.F, 1.F,  1.F,  -1.F, 1.F, -1.F, -1.F, 1.F,  -1.F, 1.F,
+    };
+    const float k_cloud_weight = 1.0F / std::sqrt(static_cast<float>(k_diffuse_dirs));
+
+    for (std::size_t dir = 0; dir < k_diffuse_dirs; ++dir) {
+        const std::size_t read_pos = (state.write_pos + k_diffuse_delay_len - k_delays.at(dir)) % k_diffuse_delay_len;
+        const float sample = state.delay_line.at(read_pos) * k_polarity.at(dir) * k_cloud_weight;
+        const auto& coeffs = cloud.at(dir);
+        for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
+            out_frame[sh] += sample * coeffs.at(sh);
+        }
+    }
+
+    state.delay_line.at(state.write_pos) = diffuse_in;
+    state.write_pos = (state.write_pos + 1U) % k_diffuse_delay_len;
 }
 
 std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& logs) {
@@ -238,8 +302,13 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
                 Hoa3Coeffs sh =
                     pos.cartesian ? encode_cartesian(pos.x, pos.y, pos.z) : encode_polar(pos.azimuth, pos.elevation);
                 const float combined_gain = block.gain * obj.gain;
-                std::ranges::transform(sh, sh.begin(), [combined_gain](float c) { return c * combined_gain; });
+                const float diffuse = std::clamp(block.diffuse, 0.0F, 1.0F);
+                const float direct_gain = combined_gain * std::sqrt(1.0F - diffuse);
+                const float diffuse_gain = combined_gain * std::sqrt(diffuse);
+                cg.has_diffuse_block = cg.has_diffuse_block || diffuse_gain > 0.0F;
+                std::ranges::transform(sh, sh.begin(), [direct_gain](float c) { return c * direct_gain; });
                 cg.blocks.push_back({sh,
+                                     diffuse_gain,
                                      block.start_sample,
                                      std::min(block.end_sample, obj.end_sample),
                                      false,
@@ -286,7 +355,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
                 std::ranges::transform(sh, sh.begin(), [combined_gain](float c) { return c * combined_gain; });
                 // DirectSpeakers positions are static — no interpolation needed between blocks.
                 cg.blocks.push_back(
-                    {sh, ds.start_sample, std::min(ds.end_sample, obj.end_sample), is_lfe, true, std::nullopt});
+                    {sh, 0.0F, ds.start_sample, std::min(ds.end_sample, obj.end_sample), is_lfe, true, std::nullopt});
             }
         }
     }
@@ -411,6 +480,8 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         std::vector<float> out_block(static_cast<std::size_t>(k_num_out) * k_block_size);
         std::vector<float> measure_hoa_block(static_cast<std::size_t>(k_num_out) * k_block_size);
         std::vector<float> decoded_block(k_714_ch_sz * k_block_size);
+        static const auto diffuse_cloud = make_diffuse_cloud();
+        std::vector<DiffuseState> diffuse_states(gain_matrix.size());
 
         struct EburFree {
             void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); }
@@ -457,32 +528,40 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
             reader->read(in_block.data(), frames_now);
             std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
-            for (const auto& cg : gain_matrix) {
+            for (std::size_t ci = 0; ci < gain_matrix.size(); ++ci) {
+                const auto& cg = gain_matrix.at(ci);
+                auto& diffuse_state = diffuse_states.at(ci);
+                const bool has_diffuse = cg.has_diffuse_block;
                 if (plan.object_smoothing_frames > 0) {
-                    const Hoa3Coeffs start_gains = gains_at(cg, frames_done, k_default_interp);
-                    const Hoa3Coeffs end_gains = gains_at(cg, frames_done + frames_now - 1, k_default_interp);
+                    const HoaFrameGains start_gains = gains_at(cg, frames_done, k_default_interp);
+                    const HoaFrameGains end_gains = gains_at(cg, frames_done + frames_now - 1, k_default_interp);
                     for (std::size_t f = 0; f < frames_now; ++f) {
                         const float alpha =
                             frames_now > 1 ? static_cast<float>(f) / static_cast<float>(frames_now - 1) : 0.0F;
                         const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
-                        std::size_t out_index = f * k_num_out;
+                        float* out_frame = out_block.data() + (f * k_num_out);
+                        Hoa3Coeffs direct_gains{};
                         for (std::size_t out_ch = 0; out_ch < k_num_out; ++out_ch) {
-                            const float gain =
-                                (start_gains.at(out_ch) * (1.0F - alpha)) + (end_gains.at(out_ch) * alpha);
-                            out_block[out_index] += in_s * gain;
-                            ++out_index;
+                            direct_gains.at(out_ch) = (start_gains.direct.at(out_ch) * (1.0F - alpha)) +
+                                                      (end_gains.direct.at(out_ch) * alpha);
+                        }
+                        add_direct_hoa(in_s, direct_gains, out_frame);
+                        const float diffuse_gain =
+                            (start_gains.diffuse_gain * (1.0F - alpha)) + (end_gains.diffuse_gain * alpha);
+                        if (has_diffuse) {
+                            add_diffuse_hoa(in_s * diffuse_gain, diffuse_state, diffuse_cloud, out_frame);
                         }
                     }
                     continue;
                 }
                 for (std::size_t f = 0; f < frames_now; ++f) {
                     const uint64_t abs_frame = frames_done + f;
-                    const Hoa3Coeffs gains = gains_at(cg, abs_frame, k_default_interp);
+                    const HoaFrameGains gains = gains_at(cg, abs_frame, k_default_interp);
                     const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
-                    std::size_t out_index = f * k_num_out;
-                    for (const float gain : gains) {
-                        out_block[out_index] += in_s * gain;
-                        ++out_index;
+                    float* out_frame = out_block.data() + (f * k_num_out);
+                    add_direct_hoa(in_s, gains.direct, out_frame);
+                    if (has_diffuse) {
+                        add_diffuse_hoa(in_s * gains.diffuse_gain, diffuse_state, diffuse_cloud, out_frame);
                     }
                 }
             }
@@ -503,13 +582,13 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
                     }
                     for (std::size_t f = 0; f < frames_now; ++f) {
                         const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
-                        const Hoa3Coeffs lfe_gains =
+                        const HoaFrameGains lfe_gains =
                             gains_at(cg, frames_done + f, k_default_interp, BlockFilter::lfe_only);
-                        lfe_mix_block[f] += in_s * lfe_gains[0];
+                        lfe_mix_block[f] += in_s * lfe_gains.direct[0];
                         if (lufs_st) {
                             float* measure_hoa = measure_hoa_block.data() + (f * k_hoa3_channels);
                             for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
-                                measure_hoa[sh] -= in_s * lfe_gains.at(sh);
+                                measure_hoa[sh] -= in_s * lfe_gains.direct.at(sh);
                             }
                         }
                     }
@@ -596,6 +675,7 @@ CapabilityReport hoa_capabilities() {
     r.supports_objects = true;
     r.supports_direct_speakers = true;
     r.supports_hoa = false;
+    r.supports_diffuse = true;
     r.supported_layouts = {
         {"hoa3", "HOA 3rd Order (16ch, ACN/SN3D)", 16, true, 0, false},
     };
