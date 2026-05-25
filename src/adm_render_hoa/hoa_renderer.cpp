@@ -34,9 +34,11 @@ namespace {
 constexpr std::size_t k_hoa3_channels = 16; // (3+1)^2 = 4^2
 constexpr std::size_t k_diffuse_dirs = 32;
 constexpr std::size_t k_diffuse_delay_len = 1024;
+constexpr std::size_t k_diffuse_slots = 3; // left / center / right divergence components
 
 constexpr uint16_t k_hoa3_channels_u16 = static_cast<uint16_t>(k_hoa3_channels);
 using Hoa3Coeffs = std::array<float, k_hoa3_channels>;
+using DiffuseSlots = std::array<Hoa3Coeffs, k_diffuse_slots>;
 
 struct Vec3 {
     float x{0.0F};
@@ -196,18 +198,6 @@ Hoa3Coeffs encode_polar(float az_deg, float el_deg) noexcept {
     return result;
 }
 
-std::array<Hoa3Coeffs, k_diffuse_dirs> make_diffuse_cloud() {
-    std::array<Hoa3Coeffs, k_diffuse_dirs> cloud{};
-    const float k_golden_angle = std::numbers::pi_v<float> * (3.0F - std::sqrt(5.0F));
-    for (std::size_t i = 0; i < k_diffuse_dirs; ++i) {
-        const float z = 1.0F - ((2.0F * (static_cast<float>(i) + 0.5F)) / static_cast<float>(k_diffuse_dirs));
-        const float r = std::sqrt(std::max(0.0F, 1.0F - (z * z)));
-        const float theta = static_cast<float>(i) * k_golden_angle;
-        cloud.at(i) = sh_sn3d_3(r * std::cos(theta), r * std::sin(theta), z);
-    }
-    return cloud;
-}
-
 // Return true when any label in the list identifies an LFE channel.
 // Canonicalises by stripping non-alphanumeric characters and uppercasing so
 // that "RC_LFE", "RCLFE", "LFE", "LFE1", "LFE2", "LFEL", "LFER" all match.
@@ -270,7 +260,7 @@ std::optional<std::pair<float, float>> parse_speaker_label(const std::string& la
 
 struct HoaBlock {
     Hoa3Coeffs gains{};
-    float diffuse_gain{0.0F};
+    DiffuseSlots diffuse_gains{};
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
     bool is_lfe{false};
@@ -280,11 +270,11 @@ struct HoaBlock {
 
 struct HoaFrameGains {
     Hoa3Coeffs direct{};
-    float diffuse_gain{0.0F};
+    DiffuseSlots diffuse{};
 };
 
 struct DiffuseState {
-    std::array<float, k_diffuse_delay_len> delay_line{};
+    std::array<std::array<float, k_diffuse_delay_len>, k_hoa3_channels> delay_lines{};
     std::size_t write_pos{0};
 };
 
@@ -320,7 +310,7 @@ struct ChannelGainInfo {
     if (!block_matches_filter(cur, filter)) {
         return {};
     }
-    HoaFrameGains frame{cur.gains, cur.diffuse_gain};
+    HoaFrameGains frame{cur.gains, cur.diffuse_gains};
     // Interpolation ramp: blend from previous block gains when jump_position is false.
     if (!cur.jump_position && cur_it != cg.blocks.begin()) {
         const HoaBlock& prev = *std::prev(cur_it);
@@ -343,8 +333,13 @@ struct ChannelGainInfo {
                 result.direct.at(i) = static_cast<float>((static_cast<double>(prev.gains.at(i)) * (1.0 - alpha)) +
                                                          (static_cast<double>(cur.gains.at(i)) * alpha));
             }
-            result.diffuse_gain = static_cast<float>((static_cast<double>(prev.diffuse_gain) * (1.0 - alpha)) +
-                                                     (static_cast<double>(cur.diffuse_gain) * alpha));
+            for (std::size_t slot = 0; slot < k_diffuse_slots; ++slot) {
+                for (std::size_t i = 0; i < k_hoa3_channels; ++i) {
+                    result.diffuse.at(slot).at(i) =
+                        static_cast<float>((static_cast<double>(prev.diffuse_gains.at(slot).at(i)) * (1.0 - alpha)) +
+                                           (static_cast<double>(cur.diffuse_gains.at(slot).at(i)) * alpha));
+                }
+            }
             return result;
         }
     }
@@ -357,12 +352,9 @@ void add_direct_hoa(float in_s, const Hoa3Coeffs& gains, float* out_frame) {
     }
 }
 
-void add_diffuse_hoa(float diffuse_in,
-                     DiffuseState& state,
-                     const std::array<Hoa3Coeffs, k_diffuse_dirs>& cloud,
-                     float* out_frame) {
-    // Prime delays decorrelate each virtual cloud source while keeping the encoded
-    // diffuse field independent of any speaker layout.
+void add_diffuse_hoa(const Hoa3Coeffs& diffuse_in, DiffuseState& state, float* out_frame) {
+    // Per-HOA-coefficient multi-tap decorrelation keeps objectDivergence direction
+    // information separate instead of collapsing all diffuse energy into one mono bus.
     constexpr std::array<std::size_t, k_diffuse_dirs> k_delays = {
         37U,  53U,  67U,  83U,  97U,  109U, 127U, 149U, 163U, 181U, 199U, 211U, 233U, 251U, 271U, 293U,
         313U, 337U, 359U, 383U, 409U, 431U, 457U, 487U, 521U, 557U, 593U, 631U, 673U, 719U, 761U, 809U,
@@ -373,16 +365,18 @@ void add_diffuse_hoa(float diffuse_in,
     };
     const float k_cloud_weight = 1.0F / std::sqrt(static_cast<float>(k_diffuse_dirs));
 
-    for (std::size_t dir = 0; dir < k_diffuse_dirs; ++dir) {
-        const std::size_t read_pos = (state.write_pos + k_diffuse_delay_len - k_delays.at(dir)) % k_diffuse_delay_len;
-        const float sample = state.delay_line.at(read_pos) * k_polarity.at(dir) * k_cloud_weight;
-        const auto& coeffs = cloud.at(dir);
-        for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
-            out_frame[sh] += sample * coeffs.at(sh);
+    for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
+        auto& line = state.delay_lines.at(sh);
+        float sample = 0.0F;
+        for (std::size_t tap = 0; tap < k_diffuse_dirs; ++tap) {
+            const std::size_t read_pos =
+                (state.write_pos + k_diffuse_delay_len - k_delays.at(tap)) % k_diffuse_delay_len;
+            sample += line.at(read_pos) * k_polarity.at(tap) * k_cloud_weight;
         }
+        out_frame[sh] += sample;
+        line.at(state.write_pos) = diffuse_in.at(sh);
     }
 
-    state.delay_line.at(state.write_pos) = diffuse_in;
     state.write_pos = (state.write_pos + 1U) % k_diffuse_delay_len;
 }
 
@@ -410,21 +404,31 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
                 }
 
                 Hoa3Coeffs sh{};
-                float diffuse_gain = 0.0F;
-                for (const auto& source : expand_object_divergence(base)) {
+                DiffuseSlots diffuse_gains{};
+                const auto sources = expand_object_divergence(base);
+                for (std::size_t source_index = 0; source_index < sources.size(); ++source_index) {
+                    const auto& source = sources.at(source_index);
                     const Hoa3Coeffs source_sh = encode_extent(source.position, source);
                     const float combined_gain = source.gain * obj.gain;
                     const float diffuse = std::clamp(source.diffuse, 0.0F, 1.0F);
                     const float direct_gain = combined_gain * std::sqrt(1.0F - diffuse);
                     const float source_diffuse_gain = combined_gain * std::sqrt(diffuse);
-                    diffuse_gain += source_diffuse_gain;
+                    const std::size_t diffuse_slot = sources.size() == k_diffuse_slots ? source_index : 1U;
+                    SceneObjectBlock diffuse_source = source;
+                    diffuse_source.width = std::max(diffuse_source.width, 1.0F);
+                    diffuse_source.height = std::max(diffuse_source.height, 1.0F);
+                    const Hoa3Coeffs diffuse_sh = encode_extent(diffuse_source.position, diffuse_source);
                     for (std::size_t i = 0; i < k_hoa3_channels; ++i) {
                         sh.at(i) += source_sh.at(i) * direct_gain;
+                        diffuse_gains.at(diffuse_slot).at(i) += diffuse_sh.at(i) * source_diffuse_gain;
                     }
                 }
-                cg.has_diffuse_block = cg.has_diffuse_block || diffuse_gain > 0.0F;
+                cg.has_diffuse_block =
+                    cg.has_diffuse_block || std::ranges::any_of(diffuse_gains, [](const auto& coeffs) {
+                        return std::fabs(coeffs.at(0)) > 0.0F;
+                    });
                 cg.blocks.push_back({sh,
-                                     diffuse_gain,
+                                     diffuse_gains,
                                      raw_block.start_sample,
                                      std::min(raw_block.end_sample, obj.end_sample),
                                      false,
@@ -471,7 +475,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
                 std::ranges::transform(sh, sh.begin(), [combined_gain](float c) { return c * combined_gain; });
                 // DirectSpeakers positions are static — no interpolation needed between blocks.
                 cg.blocks.push_back(
-                    {sh, 0.0F, ds.start_sample, std::min(ds.end_sample, obj.end_sample), is_lfe, true, std::nullopt});
+                    {sh, {}, ds.start_sample, std::min(ds.end_sample, obj.end_sample), is_lfe, true, std::nullopt});
             }
         }
     }
@@ -596,8 +600,7 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         std::vector<float> out_block(static_cast<std::size_t>(k_num_out) * k_block_size);
         std::vector<float> measure_hoa_block(static_cast<std::size_t>(k_num_out) * k_block_size);
         std::vector<float> decoded_block(k_714_ch_sz * k_block_size);
-        static const auto diffuse_cloud = make_diffuse_cloud();
-        std::vector<DiffuseState> diffuse_states(gain_matrix.size());
+        std::vector<std::array<DiffuseState, k_diffuse_slots>> diffuse_states(gain_matrix.size());
 
         struct EburFree {
             void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); }
@@ -662,10 +665,17 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
                                                       (end_gains.direct.at(out_ch) * alpha);
                         }
                         add_direct_hoa(in_s, direct_gains, out_frame);
-                        const float diffuse_gain =
-                            (start_gains.diffuse_gain * (1.0F - alpha)) + (end_gains.diffuse_gain * alpha);
                         if (has_diffuse) {
-                            add_diffuse_hoa(in_s * diffuse_gain, diffuse_state, diffuse_cloud, out_frame);
+                            for (std::size_t slot = 0; slot < k_diffuse_slots; ++slot) {
+                                Hoa3Coeffs diffuse_gains{};
+                                for (std::size_t out_ch = 0; out_ch < k_num_out; ++out_ch) {
+                                    diffuse_gains.at(out_ch) =
+                                        (start_gains.diffuse.at(slot).at(out_ch) * (1.0F - alpha)) +
+                                        (end_gains.diffuse.at(slot).at(out_ch) * alpha);
+                                    diffuse_gains.at(out_ch) *= in_s;
+                                }
+                                add_diffuse_hoa(diffuse_gains, diffuse_state.at(slot), out_frame);
+                            }
                         }
                     }
                     continue;
@@ -677,7 +687,12 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
                     float* out_frame = out_block.data() + (f * k_num_out);
                     add_direct_hoa(in_s, gains.direct, out_frame);
                     if (has_diffuse) {
-                        add_diffuse_hoa(in_s * gains.diffuse_gain, diffuse_state, diffuse_cloud, out_frame);
+                        for (std::size_t slot = 0; slot < k_diffuse_slots; ++slot) {
+                            Hoa3Coeffs diffuse_gains = gains.diffuse.at(slot);
+                            std::ranges::transform(
+                                diffuse_gains, diffuse_gains.begin(), [in_s](float coeff) { return coeff * in_s; });
+                            add_diffuse_hoa(diffuse_gains, diffuse_state.at(slot), out_frame);
+                        }
                     }
                 }
             }
