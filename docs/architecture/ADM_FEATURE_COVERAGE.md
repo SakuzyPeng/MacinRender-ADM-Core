@@ -3,7 +3,7 @@
 本文档记录 MacinRender ADM Core 对 BS.2076 / BS.2127 特性的当前覆盖状态，
 以及与 libadm / libear 能力边界之间的差距。
 
-最后更新：2026-05-23
+最后更新：2026-05-25
 
 ---
 
@@ -246,7 +246,7 @@ LUFS / 空间 True Peak 测量缓冲中剥离，并由独立 mono True Peak trac
 
 | 能力 | 当前状态 | 建议定位 |
 |---|---|---|
-| **HRTF / SOFA binauraliser** | ✅ 已有独立 `binaural` 后端：默认 SAF 内置 KEMAR HRTF，支持 `--sofa` 加载用户 FIR SOFA HRIR（首版 2 receiver / 48 kHz / 不重采样），输出 2ch binaural | 后续可扩展更多 HRTF 数据集选择、距离策略和房间响应 |
+| **HRTF / SOFA binauraliser** | ✅ 已有独立 `binaural` 后端：默认 SAF 内置 KEMAR HRTF，支持 `--sofa` 加载用户 FIR SOFA HRIR；Objects 已接入 channelLock / objectDivergence 预处理，输出 2ch binaural | 后续可扩展 extent、diffuse、HOA 输入、更多 HRTF 数据集选择、距离策略和房间响应 |
 | **decorrelator / diffuse bus** | ✅ EAR 已实现 BS.2127 去相关 FIR + 延迟补偿（M4）；HOA encode 使用 divergence-aware 逐系数 32-tap diffuse decorrelator；VBAP 忽略 ADM `diffuse` | — |
 | **reverb / room simulation** | ❌ 未实现 | 可作为可选后处理，不应默认改变 ADM 合规渲染结果 |
 | **扬声器布局统一** | ✅ EAR / SAF VBAP 共用项目布局 registry；对外均显示 8 个 speaker layouts（内部另保留 `0+2+0`） | 后续可增加配置文件或插件式布局源 |
@@ -275,6 +275,18 @@ degree/degree/metre，azimuth 按 ADM 的 `+az = left` 直接消费；cartesian 
 按 SOFA 的 `+X front, +Y left, +Z up` 转为极坐标。其他单位、TF SOFA、BRIR、重采样和
 receiver 数不为 2 的文件都会返回 `unsupported` 或清晰的加载错误。
 
+Objects 参数覆盖状态：
+
+| 参数 | binaural 状态 |
+|---|---|
+| position / gain / rtime / duration | ✅ 已实现，逐块 HRTF 卷积并做时间门控 |
+| jumpPosition / interpolationLength | ⚠️ 块内记录并用于禁用 jumpPosition 的跨块平滑；当前插值长度仍受分块渲染路径限制 |
+| channelLock | ✅ 预处理为双耳参考 stereo pair（±30°）上的最近非 LFE 方向 |
+| objectDivergence | ✅ 预处理为左右/中心虚拟源；每个虚拟源独立 HRTF OLA 状态 |
+| width / height / depth | ❌ 未实现；需要将 extent 展开为多方向 HRTF 源或引入 binaural spread 模型 |
+| diffuse | ❌ 未实现；需要独立 diffuse binaural bus 和去相关 / HRTF 卷积策略 |
+| ADM HOA 输入 | ❌ 未实现；需先解码 HOA 到虚拟扬声器/方向阵列，再进入 HRTF 卷积 |
+
 手动验证（2026-05-23，`afinfo`）显示：PCM CAF 可读为 `Channel layout: Binaural`；
 APAC `.m4a/mp4f` 以及 APAC-in-CAF 即使请求 `Binaural`，最终仍报告为 `Stereo (L R)`。
 因此 APAC 目前不能作为可靠的 binaural layout carrier。项目会保留 2ch 音频本体，
@@ -298,6 +310,8 @@ Binaural ALAC 的语义策略与 APAC 一致：音频本体为 2ch lossless ALAC
 仍待实现：
 
 - BRIR / room-response SOFA、TF SOFA、HRIR 重采样和多 receiver 数据集；
+- width / height / depth 的 per-source binaural spread；
+- diffuse bus 的去相关与 HRTF 卷积策略；
 - 距离策略、头外化相关补偿；
 - HOA 输入到 binaural 的串接方式；
 - ALAC 输出（先 macOS-only AudioToolbox 快路径，跨平台 provider 另立里程碑评估）。

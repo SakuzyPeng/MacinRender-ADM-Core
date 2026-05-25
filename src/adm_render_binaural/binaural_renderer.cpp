@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
@@ -34,6 +35,8 @@
 #include "adm/render.h"
 #include "adm/render_binaural.h"
 
+#include "render_common.h"
+
 namespace mradm {
 
 namespace {
@@ -44,6 +47,8 @@ constexpr uint64_t k_min_block_size = 1024U;
 constexpr int k_n_ears = 2;
 constexpr int k_n_azi = 361;  // (int)(360/1 + 0.5) + 1
 constexpr int k_n_elev = 181; // (int)(180/1 + 0.5) + 1
+constexpr std::size_t k_binaural_divergence_slots = 3U;
+constexpr std::size_t k_binaural_center_slot = 1U;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -72,17 +77,6 @@ bool is_lfe_label(const std::string& label) {
     });
     return upper == "LF" || upper.find("LFE") != std::string::npos || upper.find("SUB") != std::string::npos ||
            upper.find("LOWFREQUENCY") != std::string::npos || upper.find("LOW_FREQUENCY") != std::string::npos;
-}
-
-// ADM Cartesian (right=+X, front=+Y, up=+Z) → polar az/el in degrees.
-std::pair<float, float> cart_to_polar(float x, float y, float z) {
-    const double az =
-        std::atan2(static_cast<double>(-x), static_cast<double>(y)) * (180.0 / std::numbers::pi_v<double>);
-    const auto cx = static_cast<double>(x);
-    const auto cy = static_cast<double>(y);
-    const double el =
-        std::atan2(static_cast<double>(z), std::sqrt((cx * cx) + (cy * cy))) * (180.0 / std::numbers::pi_v<double>);
-    return {static_cast<float>(az), static_cast<float>(el)};
 }
 
 int next_pow2_int(int value) {
@@ -459,23 +453,71 @@ struct BinauralSource {
         float block_gain{1.0F};
         uint64_t start_sample{0};
         uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
+        bool jump_position{false};
+        std::optional<uint64_t> interp_length_samples;
     };
     std::vector<Block> blocks;
 };
 
-// Resolve az/el from a SceneObjectBlock (handles Cartesian → polar).
-std::pair<float, float> block_position(const SceneObject& obj, const SceneObjectBlock& blk) {
-    const SceneBlockPosition pos =
-        obj.position_offset ? apply_position_offset(blk.position, *obj.position_offset) : blk.position;
-    if (pos.cartesian) {
-        return cart_to_polar(pos.x, pos.y, pos.z);
-    }
+// Binaural has no physical speaker layout, but channelLock still needs a
+// deterministic reproduction reference. Use the conventional ±30° stereo pair.
+[[nodiscard]] std::vector<SceneOutputSpeaker> binaural_lock_speakers() {
+    return {
+        {30.0F, 0.0F, false},
+        {-30.0F, 0.0F, false},
+    };
+}
+
+// Resolve az/el from a preprocessed SceneObjectBlock.
+std::pair<float, float> block_position(const SceneObjectBlock& blk) {
+    const SceneBlockPosition pos = scene_position_to_polar(blk.position);
     return {pos.azimuth, pos.elevation};
+}
+
+void append_object_track_sources(const SceneObject& obj,
+                                 const SceneTrackRef& track,
+                                 uint16_t channel_index,
+                                 const std::vector<SceneOutputSpeaker>& lock_speakers,
+                                 bool& screen_ref_warned,
+                                 LogSink& logs,
+                                 std::vector<BinauralSource>& srcs) {
+    std::array<BinauralSource, k_binaural_divergence_slots> track_sources;
+    for (auto& src : track_sources) {
+        src.channel_index = channel_index;
+        src.gain = obj.gain;
+        src.smoothable_object = true;
+    }
+
+    for (const auto& blk : track.blocks) {
+        const auto prepared =
+            render_common::prepare_object_block(blk, obj, lock_speakers, logs, "binaural", screen_ref_warned);
+        for (std::size_t source_index = 0; source_index < prepared.sources.size(); ++source_index) {
+            const auto& source_block = prepared.sources[source_index];
+            auto [az, el] = block_position(source_block);
+            const std::size_t slot =
+                prepared.sources.size() == k_binaural_divergence_slots ? source_index : k_binaural_center_slot;
+            track_sources.at(slot).blocks.push_back({az,
+                                                     el,
+                                                     source_block.gain,
+                                                     prepared.start_sample,
+                                                     prepared.end_sample,
+                                                     prepared.jump_position,
+                                                     prepared.interp_length_samples});
+        }
+    }
+    for (auto& src : track_sources) {
+        if (!src.blocks.empty()) {
+            std::ranges::sort(src.blocks, {}, &BinauralSource::Block::start_sample);
+            srcs.push_back(std::move(src));
+        }
+    }
 }
 
 // Build source list from scene.
 std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs) {
     std::vector<BinauralSource> srcs;
+    const auto lock_speakers = binaural_lock_speakers();
+    bool screen_ref_warned{false};
 
     for (const auto& obj : scene.objects) {
         if (obj.mute) {
@@ -489,19 +531,7 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs) 
 
             // Objects-type blocks.
             if (!track.blocks.empty()) {
-                BinauralSource src;
-                src.channel_index = channel_index;
-                src.gain = obj.gain;
-                src.smoothable_object = true;
-                for (const auto& blk : track.blocks) {
-                    auto [az, el] = block_position(obj, blk);
-                    src.blocks.push_back(
-                        {az, el, blk.gain, blk.start_sample, std::min(blk.end_sample, obj.end_sample)});
-                }
-                if (!src.blocks.empty()) {
-                    std::ranges::sort(src.blocks, {}, &BinauralSource::Block::start_sample);
-                    srcs.push_back(std::move(src));
-                }
+                append_object_track_sources(obj, track, channel_index, lock_speakers, screen_ref_warned, logs, srcs);
             }
 
             // DirectSpeakers-type blocks.
@@ -514,8 +544,13 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs) 
                     src.channel_index = channel_index;
                     src.gain = obj.gain;
                     src.bypass_lfe = true;
-                    src.blocks.push_back(
-                        {0.0F, 0.0F, ds.gain, ds.start_sample, std::min(ds.end_sample, obj.end_sample)});
+                    src.blocks.push_back({0.0F,
+                                          0.0F,
+                                          ds.gain,
+                                          ds.start_sample,
+                                          std::min(ds.end_sample, obj.end_sample),
+                                          true,
+                                          std::nullopt});
                     srcs.push_back(std::move(src));
                     continue;
                 }
@@ -547,7 +582,8 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs) 
                 BinauralSource src;
                 src.channel_index = channel_index;
                 src.gain = obj.gain;
-                src.blocks.push_back({az, el, ds.gain, ds.start_sample, std::min(ds.end_sample, obj.end_sample)});
+                src.blocks.push_back(
+                    {az, el, ds.gain, ds.start_sample, std::min(ds.end_sample, obj.end_sample), true, std::nullopt});
                 srcs.push_back(std::move(src));
             }
         }
@@ -756,22 +792,27 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
             if (plan.object_smoothing_frames > 0 && src.smoothable_object && !src.bypass_lfe) {
                 const auto* start_block = first_overlapping_block(src, chunk_start, chunk_end);
                 const auto* end_block = last_overlapping_block(src, chunk_start, chunk_end);
-                if (start_block != nullptr && end_block != nullptr) {
-                    copy_windowed_object_input(src, in_block.data(), num_in_ch, chunk_start, frames_now, ch_in.data());
-                    const auto start_hrtf = hrtf_for_dir(*bs, start_block->az, start_block->el);
-                    const auto end_hrtf = hrtf_for_dir(*bs, end_block->az, end_block->el);
-                    convolve_crossfaded_object_block(hfft,
-                                                     *bs,
-                                                     ch_in.data(),
-                                                     frames_now,
-                                                     src.gain * start_block->block_gain,
-                                                     src.gain * end_block->block_gain,
-                                                     start_hrtf,
-                                                     end_hrtf,
-                                                     ola[si],
-                                                     l_buf.data(),
-                                                     r_buf.data());
-                    continue;
+                if (start_block != nullptr && end_block != nullptr && start_block != end_block &&
+                    !end_block->jump_position) {
+                    const uint64_t interp_len = end_block->interp_length_samples.value_or(plan.object_smoothing_frames);
+                    if (interp_len > 0U) {
+                        copy_windowed_object_input(
+                            src, in_block.data(), num_in_ch, chunk_start, frames_now, ch_in.data());
+                        const auto start_hrtf = hrtf_for_dir(*bs, start_block->az, start_block->el);
+                        const auto end_hrtf = hrtf_for_dir(*bs, end_block->az, end_block->el);
+                        convolve_crossfaded_object_block(hfft,
+                                                         *bs,
+                                                         ch_in.data(),
+                                                         frames_now,
+                                                         src.gain * start_block->block_gain,
+                                                         src.gain * end_block->block_gain,
+                                                         start_hrtf,
+                                                         end_hrtf,
+                                                         ola[si],
+                                                         l_buf.data(),
+                                                         r_buf.data());
+                        continue;
+                    }
                 }
             }
 
@@ -887,6 +928,9 @@ CapabilityReport binaural_capabilities() {
     r.supports_objects = true;
     r.supports_direct_speakers = true;
     r.supports_hoa = false;
+    r.supports_channel_lock = true;
+    r.supports_object_divergence = true;
+    r.supports_diffuse = false;
     r.supported_layouts = {
         // clang-format off
         {"0+2+0", "Binaural (KEMAR or user SOFA HRIR)", 2, false, 0, false, true},
