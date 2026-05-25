@@ -1,0 +1,61 @@
+name: Cache Maintenance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 3 * * 1"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  prune:
+    name: Prune stale cache generations
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Delete stale cache generations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          caches="$(mktemp)"
+          stale="$(mktemp)"
+
+          gh cache list --repo "$REPO" --limit 1000 --json id,key,lastAccessedAt,sizeInBytes > "$caches"
+
+          jq -r '
+            def family($key):
+              if ($key | test("-[0-9a-f]{40}$")) then
+                ($key | sub("-[0-9a-f]{40}$"; ""))
+              elif ($key | test("-[0-9a-f]{64}$")) then
+                ($key | sub("-[0-9a-f]{64}$"; ""))
+              else
+                $key
+              end;
+
+            [.[] | . + {family: family(.key)}]
+            | group_by(.family)[]
+            | sort_by(.lastAccessedAt)
+            | reverse
+            | .[1:][]
+            | [.id, .sizeInBytes, .key]
+            | @tsv
+          ' "$caches" > "$stale"
+
+          if [ ! -s "$stale" ]; then
+            echo "No stale cache generations found."
+            exit 0
+          fi
+
+          reclaimed="$(awk '{sum += $2} END {print sum + 0}' "$stale")"
+          count="$(wc -l < "$stale" | tr -d ' ')"
+          echo "Deleting $count stale cache generations; candidate bytes: $reclaimed"
+
+          while IFS=$'\t' read -r id _ key; do
+            echo "Deleting cache $id ($key)"
+            gh cache delete "$id" --repo "$REPO"
+          done < "$stale"

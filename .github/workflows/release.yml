@@ -52,9 +52,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .fc-cache
-          key: fc-release-${{ runner.os }}-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
+          key: fc-${{ runner.os }}-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
           restore-keys: |
-            fc-release-${{ runner.os }}-
             fc-${{ runner.os }}-
 
       - name: Restore ccache
@@ -132,9 +131,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .fc-cache
-          key: fc-release-windows-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
+          key: fc-windows-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
           restore-keys: |
-            fc-release-windows-
             fc-windows-
 
       - name: Restore vcpkg binary cache
