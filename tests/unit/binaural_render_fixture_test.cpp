@@ -8,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <numbers>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -84,8 +85,12 @@ std::filesystem::path temp_path(std::string_view stem, std::string_view ext) {
     return std::filesystem::temp_directory_path() / name;
 }
 
-std::pair<std::shared_ptr<adm::Document>, std::string>
-make_objects_doc(float azimuth, std::chrono::milliseconds rtime, std::chrono::milliseconds duration) {
+std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(float azimuth,
+                                                                        std::chrono::milliseconds rtime,
+                                                                        std::chrono::milliseconds duration,
+                                                                        bool channel_lock = false,
+                                                                        float divergence = 0.0F,
+                                                                        float divergence_range = 45.0F) {
     auto doc = adm::Document::create();
 
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"BinauralCF"}, adm::TypeDefinition::OBJECTS);
@@ -95,6 +100,17 @@ make_objects_doc(float azimuth, std::chrono::milliseconds rtime, std::chrono::mi
         block.set(adm::Rtime{adm::Time{rtime}});
         block.set(adm::Duration{adm::Time{duration}});
         block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        if (channel_lock) {
+            adm::ChannelLock lock;
+            lock.set(adm::ChannelLockFlag{true});
+            block.set(lock);
+        }
+        if (divergence > 0.0F) {
+            adm::ObjectDivergence od;
+            od.set(adm::Divergence{divergence});
+            od.set(adm::AzimuthRange{divergence_range});
+            block.set(od);
+        }
         cf->add(block);
     }
     doc->add(cf);
@@ -126,6 +142,70 @@ make_objects_doc(float azimuth, std::chrono::milliseconds rtime, std::chrono::mi
     doc->add(content);
 
     auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"BinauralProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+std::pair<std::shared_ptr<adm::Document>, std::string> make_mixed_divergence_doc() {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"BinauralMixedDivCF"},
+                                              adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::Gain{1.0F});
+        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
+        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{40}}});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        cf->add(block);
+    }
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::Gain{1.0F});
+        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{40}}});
+        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{40}}});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{false}});
+        adm::ObjectDivergence od;
+        od.set(adm::Divergence{1.0F});
+        od.set(adm::AzimuthRange{60.0F});
+        block.set(od);
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    auto pf =
+        adm::AudioPackFormat::create(adm::AudioPackFormatName{"BinauralMixedDivPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf =
+        adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"BinauralMixedDivSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+
+    auto tf =
+        adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"BinauralMixedDivTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"BinauralMixedDivObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+
+    auto content = adm::AudioContent::create(adm::AudioContentName{"BinauralMixedDivContent"});
+    content->addReference(obj);
+    doc->add(content);
+
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"BinauralMixedDivProgramme"});
     prog->addReference(content);
     doc->add(prog);
 
@@ -185,13 +265,41 @@ make_lfe_direct_speakers_doc(std::chrono::milliseconds rtime, std::chrono::milli
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
-std::filesystem::path
-write_fixture(float azimuth, std::chrono::milliseconds rtime, std::chrono::milliseconds duration, uint32_t frames) {
+std::filesystem::path write_fixture(float azimuth,
+                                    std::chrono::milliseconds rtime,
+                                    std::chrono::milliseconds duration,
+                                    uint32_t frames,
+                                    bool channel_lock = false,
+                                    float divergence = 0.0F,
+                                    float divergence_range = 45.0F) {
     constexpr uint32_t k_ch = 1U;
     constexpr uint32_t k_sr = 48000U;
 
-    const auto [doc, uid_str] = make_objects_doc(azimuth, rtime, duration);
+    const auto [doc, uid_str] = make_objects_doc(azimuth, rtime, duration, channel_lock, divergence, divergence_range);
     auto path = temp_path("mr_binaural_input", ".wav");
+
+    std::ostringstream xml_buf;
+    adm::writeXml(xml_buf, doc);
+
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+
+    auto writer = bw64::writeFile(path.string(), k_ch, k_sr, 24U, chna, axml);
+    std::vector<float> samples(frames);
+    for (uint32_t i = 0; i < frames; ++i) {
+        samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
+                                      static_cast<float>(k_sr));
+    }
+    writer->write(samples.data(), frames);
+    return path;
+}
+
+std::filesystem::path write_mixed_divergence_fixture(uint32_t frames) {
+    constexpr uint32_t k_ch = 1U;
+    constexpr uint32_t k_sr = 48000U;
+
+    const auto [doc, uid_str] = make_mixed_divergence_doc();
+    auto path = temp_path("mr_binaural_mixed_divergence_input", ".wav");
 
     std::ostringstream xml_buf;
     adm::writeXml(xml_buf, doc);
@@ -239,6 +347,45 @@ channel_energy(const std::vector<float>& samples, uint32_t channels, uint32_t ch
     for (std::size_t f = begin; f < end; ++f) {
         const double v = samples[(f * channels) + ch];
         e += v * v;
+    }
+    return e;
+}
+
+bool render_to_path(const std::filesystem::path& input,
+                    const std::filesystem::path& output,
+                    mradm::RenderOptions options);
+
+std::optional<std::vector<float>> render_stereo_samples(const std::filesystem::path& input,
+                                                        std::string_view output_stem) {
+    const auto out = temp_path(output_stem, ".wav");
+    FileGuard out_guard(out);
+
+    mradm::RenderOptions options;
+    options.renderer = mradm::RendererSelection::binaural;
+    options.peak_limit = false;
+    options.measure_loudness = false;
+    if (!render_to_path(input, out, options)) {
+        return std::nullopt;
+    }
+
+    auto reader = mradm::audio::FloatWavReader::open(out.string());
+    if (!check(reader.has_value(), "binaural semantic WAV output opens")) {
+        return std::nullopt;
+    }
+    if (!check(reader->channels() == 2U, "binaural semantic output is stereo")) {
+        return std::nullopt;
+    }
+    std::vector<float> samples(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
+    reader->read(samples.data(), reader->frame_count());
+    return samples;
+}
+
+double sample_difference_energy(const std::vector<float>& lhs, const std::vector<float>& rhs) {
+    const auto n = std::min(lhs.size(), rhs.size());
+    double e = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const double diff = static_cast<double>(lhs[i]) - static_cast<double>(rhs[i]);
+        e += diff * diff;
     }
     return e;
 }
@@ -410,6 +557,88 @@ bool verify_binaural_missing_sofa_fails_cleanly() {
     return ok;
 }
 
+bool verify_binaural_channel_lock_changes_direction() {
+    const auto free_in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U);
+    const auto locked_in =
+        write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U, true);
+    FileGuard free_guard(free_in);
+    FileGuard locked_guard(locked_in);
+
+    const auto free = render_stereo_samples(free_in, "mr_binaural_channel_lock_free");
+    const auto locked = render_stereo_samples(locked_in, "mr_binaural_channel_lock_locked");
+    if (!free || !locked) {
+        return false;
+    }
+
+    const double free_l = channel_energy(*free, 2U, 0U, 0U, free->size() / 2U);
+    const double free_r = channel_energy(*free, 2U, 1U, 0U, free->size() / 2U);
+    const double locked_l = channel_energy(*locked, 2U, 0U, 0U, locked->size() / 2U);
+    const double locked_r = channel_energy(*locked, 2U, 1U, 0U, locked->size() / 2U);
+
+    bool ok = true;
+    ok &= check((locked_l + locked_r) > 1e-5, "channelLock: locked binaural output is not silent");
+    ok &= check(std::abs(locked_l - locked_r) > std::abs(free_l - free_r) * 2.0,
+                "channelLock: front source locks to off-centre binaural reference");
+    return ok;
+}
+
+bool verify_binaural_object_divergence_changes_output() {
+    const auto point_in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U);
+    const auto div_in =
+        write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U, false, 1.0F, 60.0F);
+    FileGuard point_guard(point_in);
+    FileGuard div_guard(div_in);
+
+    const auto point = render_stereo_samples(point_in, "mr_binaural_divergence_point");
+    const auto div = render_stereo_samples(div_in, "mr_binaural_divergence_spread");
+    if (!point || !div) {
+        return false;
+    }
+
+    const double point_energy =
+        channel_energy(*point, 2U, 0U, 0U, point->size() / 2U) + channel_energy(*point, 2U, 1U, 0U, point->size() / 2U);
+    const double div_energy =
+        channel_energy(*div, 2U, 0U, 0U, div->size() / 2U) + channel_energy(*div, 2U, 1U, 0U, div->size() / 2U);
+
+    bool ok = true;
+    ok &= check(div_energy > 1e-5, "objectDivergence: divergent binaural output is not silent");
+    ok &= check(sample_difference_energy(*point, *div) > point_energy * 1.0e-3,
+                "objectDivergence: divergent output differs from point source");
+    return ok;
+}
+
+bool verify_binaural_mixed_divergence_keeps_center_slot() {
+    constexpr std::size_t k_divergent_begin = 1920U;
+    constexpr std::size_t k_divergent_end = 3840U;
+
+    const auto reference_in =
+        write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U, false, 1.0F, 60.0F);
+    const auto mixed_in = write_mixed_divergence_fixture(4096U);
+    FileGuard reference_guard(reference_in);
+    FileGuard mixed_guard(mixed_in);
+
+    const auto reference = render_stereo_samples(reference_in, "mr_binaural_mixed_divergence_reference");
+    const auto mixed = render_stereo_samples(mixed_in, "mr_binaural_mixed_divergence_mixed");
+    if (!reference || !mixed) {
+        return false;
+    }
+
+    const double reference_l = channel_energy(*reference, 2U, 0U, k_divergent_begin, k_divergent_end);
+    const double reference_r = channel_energy(*reference, 2U, 1U, k_divergent_begin, k_divergent_end);
+    const double mixed_l = channel_energy(*mixed, 2U, 0U, k_divergent_begin, k_divergent_end);
+    const double mixed_r = channel_energy(*mixed, 2U, 1U, k_divergent_begin, k_divergent_end);
+
+    const double reference_delta = std::abs(reference_l - reference_r);
+    const double mixed_delta = std::abs(mixed_l - mixed_r);
+    const double mixed_energy = mixed_l + mixed_r;
+
+    bool ok = true;
+    ok &= check(mixed_energy > 1e-5, "mixed objectDivergence: divergent segment is not silent");
+    ok &= check(mixed_delta < (reference_delta + (mixed_energy * 0.05)),
+                "mixed objectDivergence: divergent segment keeps balanced ±60° slots");
+    return ok;
+}
+
 bool verify_external_sofa_when_available() {
     const char* sofa_env = std::getenv("MR_ADM_TEST_SOFA_PATH");
     if (sofa_env == nullptr || std::string_view{sofa_env}.empty()) {
@@ -452,6 +681,9 @@ int main() {
     ok &= verify_binaural_lfe_bypasses_hrtf();
     ok &= verify_binaural_caf_ignores_requested_layout();
     ok &= verify_binaural_missing_sofa_fails_cleanly();
+    ok &= verify_binaural_channel_lock_changes_direction();
+    ok &= verify_binaural_object_divergence_changes_output();
+    ok &= verify_binaural_mixed_divergence_keeps_center_slot();
     ok &= verify_external_sofa_when_available();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
