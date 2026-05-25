@@ -45,8 +45,14 @@ bool check(bool condition, const char* msg) {
     return condition;
 }
 
-std::pair<std::shared_ptr<adm::Document>, std::string>
-make_objects_doc(float az_deg, float el_deg, float diffuse = 0.0F) {
+std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(float az_deg,
+                                                                        float el_deg,
+                                                                        float diffuse = 0.0F,
+                                                                        float width = 0.0F,
+                                                                        float height = 0.0F,
+                                                                        float depth = 0.0F,
+                                                                        float divergence = 0.0F,
+                                                                        float divergence_range = 45.0F) {
     auto doc = adm::Document::create();
 
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"HoaCF"}, adm::TypeDefinition::OBJECTS);
@@ -55,6 +61,21 @@ make_objects_doc(float az_deg, float el_deg, float diffuse = 0.0F) {
         block.set(adm::Gain{static_cast<double>(k_amplitude)});
         if (diffuse > 0.0F) {
             block.set(adm::Diffuse{diffuse});
+        }
+        if (width > 0.0F) {
+            block.set(adm::Width{width});
+        }
+        if (height > 0.0F) {
+            block.set(adm::Height{height});
+        }
+        if (depth > 0.0F) {
+            block.set(adm::Depth{depth});
+        }
+        if (divergence > 0.0F) {
+            adm::ObjectDivergence od;
+            od.set(adm::Divergence{divergence});
+            od.set(adm::AzimuthRange{divergence_range});
+            block.set(od);
         }
         cf->add(block);
     }
@@ -676,6 +697,71 @@ bool verify_hoa_diffuse_smoothing_path() {
     return ok;
 }
 
+std::vector<double> render_object_rms(
+    float width, float height, float depth, float divergence, float divergence_range, const std::string& suffix) {
+    auto [doc, uid] = make_objects_doc(0.0F, 0.0F, 0.0F, width, height, depth, divergence, divergence_range);
+    const auto in_path = write_fixture(doc, uid);
+    FileGuard in_guard{in_path};
+    const auto out_path = std::filesystem::temp_directory_path() / ("mr_hoa_enc_extent_" + suffix + ".wav");
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "hoa3";
+    req.options.renderer = mradm::RendererSelection::hoa;
+    req.options.peak_limit = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: HOA extent render failed: " << res.error.message << "\n";
+        return {};
+    }
+    return read_channel_rms(out_path);
+}
+
+std::vector<double> render_object_rms(float width, float height, float depth, const std::string& suffix) {
+    return render_object_rms(width, height, depth, 0.0F, 45.0F, suffix);
+}
+
+bool verify_hoa_extent_spread() {
+    const auto point = render_object_rms(0.0F, 0.0F, 0.0F, "point");
+    const auto width = render_object_rms(1.0F, 0.0F, 0.0F, "width");
+    const auto height = render_object_rms(0.0F, 1.0F, 0.0F, "height");
+    const auto depth = render_object_rms(0.0F, 0.0F, 1.0F, "depth");
+    if (point.empty() || width.empty() || height.empty() || depth.empty()) {
+        return false;
+    }
+
+    bool ok = true;
+    ok &= check(point[0] > 0.4 && point[0] < 0.6, "HOA extent baseline: W remains point-source gain");
+    ok &= check(width[0] > 0.4 && width[0] < 0.6, "HOA width: W remains close to point-source gain");
+    ok &= check(width[3] < point[3] * 0.9, "HOA width: front X directionality is reduced");
+    ok &= check(width[1] < 1e-4, "HOA width: symmetric horizontal spread keeps first-order Y centered");
+    ok &= check(height[0] > 0.4 && height[0] < 0.6, "HOA height: W remains close to point-source gain");
+    ok &= check(height[3] < point[3] * 0.95, "HOA height: front X directionality is reduced");
+    ok &= check(height[2] < 1e-4, "HOA height: symmetric vertical spread keeps first-order Z centered");
+    ok &= check(depth[3] < point[3] * 0.98, "HOA depth: isotropic angular broadening reduces front X");
+    return ok;
+}
+
+bool verify_hoa_object_divergence() {
+    const auto point = render_object_rms(0.0F, 0.0F, 0.0F, "divergence_point");
+    const auto divergence = render_object_rms(0.0F, 0.0F, 0.0F, 1.0F, 60.0F, "divergence");
+    if (point.empty() || divergence.empty()) {
+        return false;
+    }
+
+    bool ok = true;
+    ok &= check(divergence[0] > 0.4 && divergence[0] < 0.6, "HOA objectDivergence: W keeps summed gain");
+    ok &= check(divergence[1] < 1e-4, "HOA objectDivergence: symmetric side sources keep Y centered");
+    ok &= check(divergence[3] < point[3] * 0.7, "HOA objectDivergence: front X directionality is reduced");
+    return ok;
+}
+
 // ── DirectSpeakers helpers ────────────────────────────────────────────────────
 
 struct DsDocOptions {
@@ -907,6 +993,7 @@ int main() {
         std::cerr << "FAIL: supported_layouts must not be empty\n";
         ok = false;
     }
+    ok &= check(caps.supports_object_divergence, "HOA capabilities: objectDivergence supported");
     ok &= check(caps.supports_diffuse, "HOA capabilities: diffuse supported");
 
     // ── Fixtures ──────────────────────────────────────────────────────────────
@@ -919,6 +1006,8 @@ int main() {
     ok &= verify_hoa_position_offset();
     ok &= verify_hoa_diffuse_cloud();
     ok &= verify_hoa_diffuse_smoothing_path();
+    ok &= verify_hoa_extent_spread();
+    ok &= verify_hoa_object_divergence();
     ok &= verify_ds_with_position();
     ok &= verify_ds_lfe_label_no_lowpass();
     ok &= verify_ds_off_axis_position();

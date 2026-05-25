@@ -38,6 +38,38 @@ constexpr std::size_t k_diffuse_delay_len = 1024;
 constexpr uint16_t k_hoa3_channels_u16 = static_cast<uint16_t>(k_hoa3_channels);
 using Hoa3Coeffs = std::array<float, k_hoa3_channels>;
 
+struct Vec3 {
+    float x{0.0F};
+    float y{0.0F};
+    float z{0.0F};
+};
+
+struct DiskSample {
+    float x{0.0F};
+    float y{0.0F};
+};
+
+[[nodiscard]] Vec3 normalize(Vec3 v) noexcept {
+    const float len = std::max(1.0e-6F, std::hypot(v.x, v.y, v.z));
+    return {v.x / len, v.y / len, v.z / len};
+}
+
+[[nodiscard]] Vec3 cross(Vec3 a, Vec3 b) noexcept {
+    return {
+        (a.y * b.z) - (a.z * b.y),
+        (a.z * b.x) - (a.x * b.z),
+        (a.x * b.y) - (a.y * b.x),
+    };
+}
+
+[[nodiscard]] Vec3 add(Vec3 a, Vec3 b) noexcept {
+    return {a.x + b.x, a.y + b.y, a.z + b.z};
+}
+
+[[nodiscard]] Vec3 scale(Vec3 v, float s) noexcept {
+    return {v.x * s, v.y * s, v.z * s};
+}
+
 // Compute real SN3D spherical harmonic coefficients for order 3 (ACN channel
 // ordering), given a Cartesian unit direction in HOA convention (X=front,
 // Y=left, Z=up).
@@ -75,20 +107,90 @@ Hoa3Coeffs sh_sn3d_3(float x, float y, float z) noexcept {
 }
 
 // ADM polar (standard convention: az=0→front, +az→left CCW) to HOA Cartesian
-// (X=front, Y=left, Z=up), then encode.
-Hoa3Coeffs encode_polar(float az_deg, float el_deg) noexcept {
+// (X=front, Y=left, Z=up).
+Vec3 direction_from_polar(float az_deg, float el_deg) noexcept {
     constexpr float k_deg2rad = static_cast<float>(std::numbers::pi) / 180.0F;
     const float az = az_deg * k_deg2rad;
     const float el = el_deg * k_deg2rad;
     const float cos_el = std::cos(el);
     // Standard ADM: +az = left (CCW) → sin(az) gives positive Y for left sources.
-    return sh_sn3d_3(cos_el * std::cos(az), cos_el * std::sin(az), std::sin(el));
+    return {cos_el * std::cos(az), cos_el * std::sin(az), std::sin(el)};
 }
 
 // ADM Cartesian (X=right, Y=front, Z=up) → HOA (X=front, Y=left, Z=up).
-Hoa3Coeffs encode_cartesian(float xc, float yc, float zc) noexcept {
-    const float len = std::max(1.0e-6F, std::hypot(xc, yc, zc));
-    return sh_sn3d_3(yc / len, -xc / len, zc / len);
+Vec3 direction_from_cartesian(float xc, float yc, float zc) noexcept {
+    return normalize({yc, -xc, zc});
+}
+
+Hoa3Coeffs encode_direction(Vec3 dir) noexcept {
+    const Vec3 n = normalize(dir);
+    return sh_sn3d_3(n.x, n.y, n.z);
+}
+
+Hoa3Coeffs encode_polar(float az_deg, float el_deg) noexcept {
+    return encode_direction(direction_from_polar(az_deg, el_deg));
+}
+
+[[nodiscard]] Vec3 direction_from_position(const SceneBlockPosition& pos) noexcept {
+    return pos.cartesian ? direction_from_cartesian(pos.x, pos.y, pos.z)
+                         : direction_from_polar(pos.azimuth, pos.elevation);
+}
+
+[[nodiscard]] float distance_from_position(const SceneBlockPosition& pos) noexcept {
+    return pos.cartesian ? std::hypot(pos.x, pos.y, pos.z) : pos.distance;
+}
+
+[[nodiscard]] Hoa3Coeffs encode_extent(const SceneBlockPosition& pos, const SceneObjectBlock& block) {
+    const float distance = distance_from_position(pos);
+    const float spread_scale = std::clamp(1.0F / std::max(0.4F, distance), 0.5F, 2.5F);
+    const float depth_radius = std::max(0.0F, block.depth) * 20.0F * spread_scale;
+    const float width_radius = (std::max(0.0F, block.width) * 60.0F * spread_scale) + depth_radius;
+    const float height_radius = (std::max(0.0F, block.height) * 45.0F * spread_scale) + depth_radius;
+    if (width_radius <= 1.0e-4F && height_radius <= 1.0e-4F) {
+        return encode_direction(direction_from_position(pos));
+    }
+
+    constexpr float k_deg2rad = static_cast<float>(std::numbers::pi) / 180.0F;
+    constexpr std::array<DiskSample, 17> k_samples = {{
+        {0.0F, 0.0F},
+        {1.0F, 0.0F},
+        {-1.0F, 0.0F},
+        {0.0F, 1.0F},
+        {0.0F, -1.0F},
+        {0.70710678F, 0.70710678F},
+        {-0.70710678F, 0.70710678F},
+        {0.70710678F, -0.70710678F},
+        {-0.70710678F, -0.70710678F},
+        {0.5F, 0.0F},
+        {-0.5F, 0.0F},
+        {0.0F, 0.5F},
+        {0.0F, -0.5F},
+        {0.35355339F, 0.35355339F},
+        {-0.35355339F, 0.35355339F},
+        {0.35355339F, -0.35355339F},
+        {-0.35355339F, -0.35355339F},
+    }};
+
+    const Vec3 center = direction_from_position(pos);
+    Vec3 horizontal = cross({0.0F, 0.0F, 1.0F}, center);
+    if (std::hypot(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
+        horizontal = {1.0F, 0.0F, 0.0F};
+    } else {
+        horizontal = normalize(horizontal);
+    }
+    const Vec3 vertical = normalize(cross(center, horizontal));
+
+    Hoa3Coeffs result{};
+    for (const auto& sample : k_samples) {
+        const float h = std::tan(sample.x * width_radius * k_deg2rad);
+        const float v = std::tan(sample.y * height_radius * k_deg2rad);
+        const Vec3 dir = normalize(add(add(center, scale(horizontal, h)), scale(vertical, v)));
+        const Hoa3Coeffs coeffs = encode_direction(dir);
+        for (std::size_t i = 0; i < k_hoa3_channels; ++i) {
+            result.at(i) += coeffs.at(i) / static_cast<float>(k_samples.size());
+        }
+    }
+    return result;
 }
 
 std::array<Hoa3Coeffs, k_diffuse_dirs> make_diffuse_cloud() {
@@ -281,6 +383,7 @@ void add_diffuse_hoa(float diffuse_in,
     state.write_pos = (state.write_pos + 1U) % k_diffuse_delay_len;
 }
 
+// NOLINTNEXTLINE(readability-function-size)
 std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& logs) {
     std::map<uint16_t, ChannelGainInfo> by_channel;
 
@@ -296,24 +399,34 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
             auto& cg = by_channel[in_ch];
             cg.input_channel = in_ch;
 
-            for (const auto& block : track.blocks) {
+            for (const auto& raw_block : track.blocks) {
                 const auto& off = obj.position_offset;
-                const SceneBlockPosition pos = off ? apply_position_offset(block.position, *off) : block.position;
-                Hoa3Coeffs sh =
-                    pos.cartesian ? encode_cartesian(pos.x, pos.y, pos.z) : encode_polar(pos.azimuth, pos.elevation);
-                const float combined_gain = block.gain * obj.gain;
-                const float diffuse = std::clamp(block.diffuse, 0.0F, 1.0F);
-                const float direct_gain = combined_gain * std::sqrt(1.0F - diffuse);
-                const float diffuse_gain = combined_gain * std::sqrt(diffuse);
+                SceneObjectBlock base = raw_block;
+                if (off) {
+                    base.position = apply_position_offset(base.position, *off);
+                }
+
+                Hoa3Coeffs sh{};
+                float diffuse_gain = 0.0F;
+                for (const auto& source : expand_object_divergence(base)) {
+                    const Hoa3Coeffs source_sh = encode_extent(source.position, source);
+                    const float combined_gain = source.gain * obj.gain;
+                    const float diffuse = std::clamp(source.diffuse, 0.0F, 1.0F);
+                    const float direct_gain = combined_gain * std::sqrt(1.0F - diffuse);
+                    const float source_diffuse_gain = combined_gain * std::sqrt(diffuse);
+                    diffuse_gain += source_diffuse_gain;
+                    for (std::size_t i = 0; i < k_hoa3_channels; ++i) {
+                        sh.at(i) += source_sh.at(i) * direct_gain;
+                    }
+                }
                 cg.has_diffuse_block = cg.has_diffuse_block || diffuse_gain > 0.0F;
-                std::ranges::transform(sh, sh.begin(), [direct_gain](float c) { return c * direct_gain; });
                 cg.blocks.push_back({sh,
                                      diffuse_gain,
-                                     block.start_sample,
-                                     std::min(block.end_sample, obj.end_sample),
+                                     raw_block.start_sample,
+                                     std::min(raw_block.end_sample, obj.end_sample),
                                      false,
-                                     block.jump_position,
-                                     block.interp_length_samples});
+                                     raw_block.jump_position,
+                                     raw_block.interp_length_samples});
             }
 
             for (const auto& ds : track.ds_blocks) {
@@ -675,6 +788,7 @@ CapabilityReport hoa_capabilities() {
     r.supports_objects = true;
     r.supports_direct_speakers = true;
     r.supports_hoa = false;
+    r.supports_object_divergence = true;
     r.supports_diffuse = true;
     r.supported_layouts = {
         {"hoa3", "HOA 3rd Order (16ch, ACN/SN3D)", 16, true, 0, false},
