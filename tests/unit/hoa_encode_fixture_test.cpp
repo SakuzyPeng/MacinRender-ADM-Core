@@ -646,8 +646,8 @@ bool verify_hoa_diffuse_cloud() {
     ok &= check(direct_rms[1] < 1e-5, "HOA diffuse baseline: front source has no Y component");
     ok &= check(direct_rms[2] < 1e-5, "HOA diffuse baseline: front source has no Z component");
     ok &= check(diffuse_rms[0] > 0.01, "HOA diffuse=1: W component is not silent");
-    ok &= check(diffuse_rms[1] > 0.01, "HOA diffuse=1: diffuse cloud activates Y component");
-    ok &= check(diffuse_rms[2] > 0.01, "HOA diffuse=1: diffuse cloud activates Z component");
+    ok &= check(diffuse_rms[1] < 1e-4, "HOA diffuse=1: symmetric diffuse keeps Y centered");
+    ok &= check(diffuse_rms[2] < 1e-4, "HOA diffuse=1: symmetric diffuse keeps Z centered");
     ok &= check(diffuse_rms[3] < direct_rms[3] * 0.9, "HOA diffuse=1: direct front X component is attenuated");
     return ok;
 }
@@ -692,14 +692,19 @@ bool verify_hoa_diffuse_smoothing_path() {
     bool ok = true;
     ok &= check(x_start > 0.05, "HOA diffuse smoothing: direct X starts active");
     ok &= check(x_end < x_start * 0.8, "HOA diffuse smoothing: direct X is attenuated by end of block");
-    ok &= check(y_end > 0.005, "HOA diffuse smoothing: cloud Y appears by end of block");
-    ok &= check(z_end > 0.005, "HOA diffuse smoothing: cloud Z appears by end of block");
+    ok &= check(y_end < 1e-4, "HOA diffuse smoothing: symmetric diffuse keeps Y centered");
+    ok &= check(z_end < 1e-4, "HOA diffuse smoothing: symmetric diffuse keeps Z centered");
     return ok;
 }
 
-std::vector<double> render_object_rms(
-    float width, float height, float depth, float divergence, float divergence_range, const std::string& suffix) {
-    auto [doc, uid] = make_objects_doc(0.0F, 0.0F, 0.0F, width, height, depth, divergence, divergence_range);
+std::vector<double> render_object_rms(float diffuse,
+                                      float width,
+                                      float height,
+                                      float depth,
+                                      float divergence,
+                                      float divergence_range,
+                                      const std::string& suffix) {
+    auto [doc, uid] = make_objects_doc(0.0F, 0.0F, diffuse, width, height, depth, divergence, divergence_range);
     const auto in_path = write_fixture(doc, uid);
     FileGuard in_guard{in_path};
     const auto out_path = std::filesystem::temp_directory_path() / ("mr_hoa_enc_extent_" + suffix + ".wav");
@@ -724,7 +729,7 @@ std::vector<double> render_object_rms(
 }
 
 std::vector<double> render_object_rms(float width, float height, float depth, const std::string& suffix) {
-    return render_object_rms(width, height, depth, 0.0F, 45.0F, suffix);
+    return render_object_rms(0.0F, width, height, depth, 0.0F, 45.0F, suffix);
 }
 
 bool verify_hoa_extent_spread() {
@@ -750,7 +755,7 @@ bool verify_hoa_extent_spread() {
 
 bool verify_hoa_object_divergence() {
     const auto point = render_object_rms(0.0F, 0.0F, 0.0F, "divergence_point");
-    const auto divergence = render_object_rms(0.0F, 0.0F, 0.0F, 1.0F, 60.0F, "divergence");
+    const auto divergence = render_object_rms(0.0F, 0.0F, 0.0F, 0.0F, 1.0F, 60.0F, "divergence");
     if (point.empty() || divergence.empty()) {
         return false;
     }
@@ -759,6 +764,20 @@ bool verify_hoa_object_divergence() {
     ok &= check(divergence[0] > 0.4 && divergence[0] < 0.6, "HOA objectDivergence: W keeps summed gain");
     ok &= check(divergence[1] < 1e-4, "HOA objectDivergence: symmetric side sources keep Y centered");
     ok &= check(divergence[3] < point[3] * 0.7, "HOA objectDivergence: front X directionality is reduced");
+    return ok;
+}
+
+bool verify_hoa_diffuse_preserves_divergence() {
+    const auto diffuse = render_object_rms(1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 45.0F, "diffuse_no_divergence");
+    const auto divergent = render_object_rms(1.0F, 0.0F, 0.0F, 0.0F, 1.0F, 60.0F, "diffuse_divergence");
+    if (diffuse.empty() || divergent.empty()) {
+        return false;
+    }
+
+    bool ok = true;
+    ok &= check(divergent[0] > 0.01, "HOA diffuse+divergence: W remains non-silent");
+    ok &= check(divergent[1] < 1e-4, "HOA diffuse+divergence: symmetric side diffuse keeps Y centered");
+    ok &= check(divergent[3] < diffuse[3] * 0.8, "HOA diffuse+divergence: front X is lower than non-divergent diffuse");
     return ok;
 }
 
@@ -1008,6 +1027,7 @@ int main() {
     ok &= verify_hoa_diffuse_smoothing_path();
     ok &= verify_hoa_extent_spread();
     ok &= verify_hoa_object_divergence();
+    ok &= verify_hoa_diffuse_preserves_divergence();
     ok &= verify_ds_with_position();
     ok &= verify_ds_lfe_label_no_lowpass();
     ok &= verify_ds_off_axis_position();
