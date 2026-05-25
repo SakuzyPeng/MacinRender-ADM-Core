@@ -4,11 +4,10 @@
 #include <cstdio>
 #include <memory>
 #include <optional>
+#include <opus.h>
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <opus/opus.h>
 
 #include "adm/audio_io.h"
 #include "adm/errors.h"
