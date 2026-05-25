@@ -355,6 +355,46 @@ bool verify_hoa1_w_decodes_to_all_speakers() {
     return ok;
 }
 
+bool verify_hoa1_w_decodes_to_916() {
+    auto [doc, uid_strs] = make_hoa1_doc();
+    const auto in_path = write_hoa1_fixture(doc, uid_strs, 0U, "w_916_in");
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_hoa_dec_w_916_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.renderer = mradm::RendererSelection::ear;
+    req.options.output_layout = "9.1.6";
+    req.options.peak_limit = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: HOA1 W decode to 9.1.6 failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    auto hdr_res = mradm::audio::FloatWavReader::open(out_path.string());
+    if (!hdr_res) {
+        std::cerr << "FAIL: cannot open HOA1 9.1.6 output\n";
+        return false;
+    }
+    bool ok = true;
+    ok &= check(hdr_res->channels() == 16U, "HOA1 W decode 9.1.6: output is 16-channel");
+    const auto rms = read_rms(out_path, 16U);
+    if (rms.size() == 16U) {
+        ok &= check(rms[0] > 0.01, "HOA1 W decode 9.1.6: left has energy");
+        ok &= check(rms[1] > 0.01, "HOA1 W decode 9.1.6: right has energy");
+        ok &= check(rms[3] < 1e-5, "HOA1 W decode 9.1.6: LFE is silent");
+    }
+    return ok;
+}
+
 // Muted AudioObject: HOA decode must produce silence, not fail.
 bool verify_hoa1_mute_produces_silence() {
     auto [doc, uid_strs] = make_hoa1_doc();
@@ -546,6 +586,7 @@ bool verify_hoa1_no_phantom_w_from_broken_uid() {
 int main() {
     bool ok = true;
     ok &= verify_hoa1_w_decodes_to_all_speakers();
+    ok &= verify_hoa1_w_decodes_to_916();
     ok &= verify_hoa1_mute_produces_silence();
     ok &= verify_hoa1_obj_gain_scales_output();
     ok &= verify_hoa1_multiblock_time_gating();

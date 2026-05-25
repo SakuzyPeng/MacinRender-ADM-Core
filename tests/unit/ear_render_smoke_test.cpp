@@ -20,6 +20,16 @@ int main() {
         std::cerr << "libear capabilities must not expose old 0+7+0 layout id\n";
         return EXIT_FAILURE;
     }
+    const auto expected_layouts =
+        std::array{"0+2+0", "0+5+0", "2+5+0", "4+5+0", "wav71", "4+7+0", "4+5+4", "9.1.6", "9+10+3"};
+    for (const auto* expected : expected_layouts) {
+        const auto it = std::ranges::find_if(caps.supported_layouts,
+                                             [expected](const auto& layout) { return layout.id == expected; });
+        if (it == caps.supported_layouts.end()) {
+            std::cerr << "libear capabilities missing layout " << expected << "\n";
+            return EXIT_FAILURE;
+        }
+    }
 
     mradm::RenderRequest request;
     request.input_path = "/tmp/nonexistent_mr_ear_test_xyz.wav";

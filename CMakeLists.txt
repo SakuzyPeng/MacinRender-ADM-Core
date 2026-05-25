@@ -112,6 +112,7 @@ target_sources(
     mr_adm_render_common
     PRIVATE
         src/adm_render_common/render_common.cpp
+        src/adm_render_common/speaker_layouts.cpp
 )
 target_include_directories(mr_adm_render_common PUBLIC src/adm_render_common)
 target_link_libraries(mr_adm_render_common PUBLIC MacinRender::ADMCore)

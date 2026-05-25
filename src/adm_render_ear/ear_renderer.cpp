@@ -2,12 +2,15 @@
 #include <cmath>
 #include <cstddef>
 #include <ebur128.h>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
 #include <optional>
 #include <saf_utility_complex.h>
 #include <saf_utility_fft.h>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include <bw64/bw64.hpp>
@@ -19,6 +22,7 @@
 #include "adm/render_ear.h"
 
 #include "render_common.h"
+#include "speaker_layouts.h"
 
 namespace mradm {
 
@@ -97,6 +101,47 @@ struct DecorrState {
         result.push_back({static_cast<float>(pos.azimuth), static_cast<float>(pos.elevation), channel.isLfe()});
     }
     return result;
+}
+
+[[nodiscard]] boost::optional<std::pair<double, double>>
+to_ear_range(const std::optional<std::pair<float, float>>& range) {
+    if (!range.has_value()) {
+        return boost::none;
+    }
+    return std::make_pair(static_cast<double>(range->first), static_cast<double>(range->second));
+}
+
+[[nodiscard]] ear::Channel make_ear_channel(const render_layouts::SpeakerSpec& speaker) {
+    const ear::PolarPosition pos{static_cast<double>(speaker.azimuth), static_cast<double>(speaker.elevation)};
+    return {std::string{speaker.label},
+            pos,
+            pos,
+            to_ear_range(speaker.azimuth_range),
+            to_ear_range(speaker.elevation_range),
+            speaker.is_lfe};
+}
+
+[[nodiscard]] ear::Layout make_custom_ear_layout(const render_layouts::SpeakerLayout& spec) {
+    std::vector<ear::Channel> channels;
+    channels.reserve(spec.speakers.size());
+    std::ranges::transform(spec.speakers, std::back_inserter(channels), make_ear_channel);
+    return {std::string{spec.id}, std::move(channels)};
+}
+
+[[nodiscard]] bool needs_project_ear_layout(std::string_view layout_id) {
+    return layout_id == "4+5+4" || layout_id == "9.1.6";
+}
+
+[[nodiscard]] ear::Layout make_ear_layout(std::string_view layout_id) {
+    if (layout_id == "wav71") {
+        return ear::getLayout("0+7+0");
+    }
+    if (needs_project_ear_layout(layout_id)) {
+        if (const auto* layout = render_layouts::find_speaker_layout(layout_id); layout != nullptr) {
+            return make_custom_ear_layout(*layout);
+        }
+    }
+    return ear::getLayout(std::string{layout_id});
 }
 
 [[nodiscard]] std::size_t next_power_of_two(std::size_t value) {
@@ -620,9 +665,7 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
     try {
         const auto& info = plan.scene.info;
 
-        // libear uses BS.2051 IDs; "wav71" is our public alias for "0+7+0".
-        const std::string ear_layout_id = (plan.output_layout == "wav71") ? "0+7+0" : plan.output_layout;
-        const ear::Layout layout = ear::getLayout(ear_layout_id);
+        const ear::Layout layout = make_ear_layout(plan.output_layout);
         const auto gain_matrix = build_gain_matrix(plan.scene, layout, logs);
 
         if (gain_matrix.empty()) {
@@ -826,18 +869,18 @@ CapabilityReport ear_capabilities() {
     r.supports_object_divergence = true;
     r.supports_screen_ref = false;
     r.supports_diffuse = true;
-    // clang-format off
-    r.supported_layouts = {
-        {"0+2+0",  "Stereo",        2,  false, 0, true},
-        {"0+5+0",  "5.1",           6,  false, 1, true},
-        {"2+5+0",  "5.1.2",         8,  true,  1, true},
-        {"4+5+0",  "5.1.4",         10, true,  1, true},
-        {"4+5+4",  "9.1.4",         14, true,  1, true},
-        {"wav71",  "7.1",           8,  false, 1, true},
-        {"4+7+0",  "7.1.4",         12, true,  1, true},
-        {"9+10+3", "22.2",          24, true,  2, true},
-    };
-    // clang-format on
+    for (const auto& spec : render_layouts::speaker_layouts()) {
+        CapabilityReport::Layout layout;
+        layout.id = std::string{spec.id};
+        layout.display_name = std::string{spec.display_name};
+        layout.channel_count = static_cast<uint16_t>(spec.speakers.size());
+        layout.lfe_count =
+            static_cast<uint16_t>(std::ranges::count_if(spec.speakers, [](const auto& s) { return s.is_lfe; }));
+        layout.is_3d = std::ranges::any_of(spec.speakers,
+                                           [](const auto& s) { return !s.is_lfe && std::fabs(s.elevation) > 1.0e-6F; });
+        layout.supports_spread = true;
+        r.supported_layouts.push_back(std::move(layout));
+    }
     return r;
 }
 

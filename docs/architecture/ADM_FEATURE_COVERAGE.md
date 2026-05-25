@@ -245,8 +245,8 @@ LUFS / 空间 True Peak 测量缓冲中剥离，并由独立 mono True Peak trac
 | **HRTF / SOFA binauraliser** | ✅ 已有独立 `binaural` 后端：默认 SAF 内置 KEMAR HRTF，支持 `--sofa` 加载用户 FIR SOFA HRIR（首版 2 receiver / 48 kHz / 不重采样），输出 2ch binaural | 后续可扩展更多 HRTF 数据集选择、距离策略和房间响应 |
 | **decorrelator / diffuse bus** | ✅ EAR 已实现 BS.2127 去相关 FIR + 延迟补偿（M4）；VBAP 忽略 ADM `diffuse` | — |
 | **reverb / room simulation** | ❌ 未实现 | 可作为可选后处理，不应默认改变 ADM 合规渲染结果 |
-| **VBAP 布局正确性** | ✅ 全部布局通道顺序和 LFE 位置已校对；新增 9.1.6（见下） | — |
-| **更完整 VBAP 布局表** | ✅ 7 个内置布局（见下），并提供 `register_vbap_layout()` 运行时注册入口 | 后续可增加配置文件或插件式布局源 |
+| **扬声器布局统一** | ✅ EAR / SAF VBAP 共用项目布局 registry；对外均显示 8 个 speaker layouts（内部另保留 `0+2+0`） | 后续可增加配置文件或插件式布局源 |
+| **VBAP 布局扩展** | ✅ 通道顺序和 LFE 位置已校对；SAF 补齐 `5.1.2` / `9.1.4` / `9.1.6`，并保留 `register_vbap_layout()` 运行时注册入口 | — |
 | **VBAP 2D / 3D 配置** | ✅ 自动按布局高度判断；能力报告和 render 日志显示 2D/3D，2D 布局遇到高度源会 warning | 后续可增加显式 override 开关 |
 | **VBAP 插值策略配置** | ✅ `RenderOptions.default_interp_ms`（默认 5ms，0=瞬时切换，CLI `--interp-ms`）；EAR / HOA 渲染器同步生效 | — |
 | **Objects 动态元数据去拉链** | ✅ `RenderOptions.object_smoothing_frames`（默认 8875，CLI `--object-smoothing-frames`）；VBAP / EAR / HOA encode / binaural 均接入，DirectSpeakers 不平滑 | 用于高密度 jumpPosition 压力素材的工程平滑；设为 0 可逐样本跟随 ADM 块 |
@@ -311,28 +311,28 @@ EAR diffuse bus 已在 M4 中实现（见注②）：`designDecorrelators()` FIR
 ### VBAP 完整度
 
 当前 SAF VBAP 后端已经覆盖 Objects / DirectSpeakers、2D / 3D gain table、
-ADM 块插值和 MDAP extent spread。
+ADM 块插值和 MDAP extent spread。EAR 与 SAF VBAP 的扬声器布局能力由
+`adm_render_common` 中的共享 registry 驱动。
 
-**已内置扬声器布局（`vbap_renderer.cpp`）：**
+**已内置扬声器布局（`speaker_layouts.cpp`）：**
 
 | 布局 ID | 名称 | 声道数 | LFE |
 |---|---|---|---|
-| `0+2+0` | Stereo（内部保留，用户渲染入口禁用） | 2 | — |
+| `0+2+0` | Stereo（内部保留，speaker 渲染入口禁用） | 2 | — |
 | `0+5+0` | 5.1 | 6 | LFE1@ch3 |
+| `2+5+0` | 5.1.2 | 8 | LFE1@ch3 |
 | `wav71` | WAV 7.1 | 8 | LFE1@ch3 |
 | `4+5+0` | 5.1.4 | 10 | LFE1@ch3 |
 | `4+7+0` | 7.1.4 | 12 | LFE1@ch3 |
-| `9+10+3` | 22.2 | 24 | LFE1@ch3，LFE2@ch9 |
+| `4+5+4` | 9.1.4 | 14 | LFE1@ch3 |
 | `9.1.6` | 9.1.6 (Dolby Atmos) | 16 | LFE1@ch3 |
+| `9+10+3` | 22.2 | 24 | LFE1@ch3，LFE2@ch9 |
 
-除 `wav71` 使用 CoreAudio `kAudioChannelLayoutTag_WAVE_7_1` / Microsoft WAVE 7.1 槽位外，
-通道顺序与 libear `bs2051_layouts.cpp` 一致（内部 `0+2+0` 在 2026-05-20 修正了原始的 L/R 反转 bug）。
-`9.1.6` 通道顺序遵循 CoreAudio `kAudioChannelLayoutTag_Atmos_9_1_6`。
-LFE 声道参与输出但不参与 VBAP panning；DS LFE 轨按标签（"LFE1"/"LFE2"）直接路由。
+`0+2+0` 用于内部测试和普通两声道文件写入，不在 CLI `backends` 的 speaker layouts 中对外显示；用户 2ch 渲染入口仍走 `binaural`。`wav71` 使用 CoreAudio `kAudioChannelLayoutTag_WAVE_7_1` / Microsoft WAVE 7.1 槽位；`9.1.4` 与 `9.1.6` 使用项目侧 Atmos-style 声道顺序，其中 libear 后端通过自定义 `ear::Layout` 构造。LFE 声道参与输出但不参与 VBAP panning；DS LFE 轨按标签（"LFE1"/"LFE2"）直接路由。
 
 **仍待改善：**
 
-- 内置布局仍在代码中注册，缺少配置文件或外部布局包加载机制；
+- 内置布局仍是代码内静态 registry，缺少配置文件或外部布局包加载机制；
 - 2D / 3D 由布局是否存在非零 elevation 自动决定，尚无用户显式 override；
 - 3D spread 使用 MDAP，2D SAF API 无 spread 参数；当前通过能力报告、日志和 warning 暴露行为差异；
 - 过长 interpolationLength 的 clamp / 诊断策略仍可继续加固。

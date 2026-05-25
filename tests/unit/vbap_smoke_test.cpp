@@ -864,6 +864,55 @@ bool verify_direct_speakers_position_fallback_wrap() {
     return ok;
 }
 
+bool verify_vbap_unified_extra_layouts() {
+    struct Case {
+        const char* layout_id;
+        const char* label;
+        float azimuth;
+        float elevation;
+        std::size_t channels;
+        std::size_t target_channel;
+    };
+    constexpr std::array<Case, 2> cases{{
+        {"2+5+0", "U+030", 30.0F, 30.0F, 8U, 6U},
+        {"4+5+4", "U+150", 150.0F, 45.0F, 14U, 12U},
+    }};
+
+    bool ok = true;
+    for (const auto& c : cases) {
+        auto [doc, uid_str] = make_direct_speakers_doc(c.label, c.azimuth, c.elevation);
+        const auto in_path = write_input_fixture(doc, uid_str);
+        FileGuard in_guard{in_path};
+        const auto out_path =
+            std::filesystem::temp_directory_path() / (std::string{"mr_vbap_unified_"} + c.layout_id + "_out.wav");
+        FileGuard out_guard{out_path};
+
+        mradm::RenderRequest request;
+        request.input_path = in_path;
+        request.output_path = out_path;
+        request.options.output_layout = c.layout_id;
+        request.options.renderer = mradm::RendererSelection::saf;
+
+        mradm::RenderService service;
+        mradm::NullProgressSink progress;
+        mradm::NullLogSink logs;
+        const auto res = service.render(request, progress, logs);
+        if (!res.success()) {
+            std::cerr << "FAIL: SAF unified layout render failed for " << c.layout_id << ": " << res.error.message
+                      << "\n";
+            return false;
+        }
+
+        const auto sums = read_channel_sums(out_path, c.channels);
+        ok &= check(sums.size() == c.channels, "SAF unified layout: output channel count");
+        if (sums.size() == c.channels) {
+            ok &= check(sums[c.target_channel] > 0.0, "SAF unified layout: target top channel has energy");
+            ok &= check(sums[3U] < 1.0e-9, "SAF unified layout: LFE silent for non-LFE source");
+        }
+    }
+    return ok;
+}
+
 // Verify 9.1.6 layout produces a 16-channel output and that the LFE channel
 // (index 3) carries no energy when a non-LFE DirectSpeakers source is rendered.
 bool verify_916_output_is_16ch() {
@@ -1747,6 +1796,7 @@ bool verify_2d_layout_elevated_source_warning() {
     return ok;
 }
 
+// NOLINTNEXTLINE(readability-function-size): linear smoke-test checklist.
 int main() {
     bool ok = true;
 
@@ -1773,6 +1823,16 @@ int main() {
     if (old_070 != caps.supported_layouts.end()) {
         std::cerr << "FAIL: saf-vbap must not expose old 0+7+0 layout id\n";
         ok = false;
+    }
+    constexpr std::array<const char*, 9> k_expected_layouts{
+        "0+2+0", "0+5+0", "2+5+0", "4+5+0", "wav71", "4+7+0", "4+5+4", "9.1.6", "9+10+3"};
+    for (const auto* expected : k_expected_layouts) {
+        const auto it = std::ranges::find_if(caps.supported_layouts,
+                                             [expected](const auto& layout) { return layout.id == expected; });
+        if (it == caps.supported_layouts.end()) {
+            std::cerr << "FAIL: saf-vbap capabilities missing layout " << expected << "\n";
+            ok = false;
+        }
     }
     if (!caps.supports_objects) {
         std::cerr << "FAIL: saf-vbap must declare supports_objects\n";
@@ -1817,6 +1877,7 @@ int main() {
     ok &= verify_wav71_rear_side_order();
     ok &= verify_direct_speakers_alias_routing();
     ok &= verify_direct_speakers_position_fallback_wrap();
+    ok &= verify_vbap_unified_extra_layouts();
     ok &= verify_916_output_is_16ch();
     ok &= verify_916_top_side_routing();
     ok &= verify_mdap_spread_fixture();
