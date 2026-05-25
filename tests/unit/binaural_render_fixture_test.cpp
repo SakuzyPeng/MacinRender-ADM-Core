@@ -92,6 +92,7 @@ struct ObjectFixtureOptions {
     bool channel_lock{false};
     float divergence{0.0F};
     float divergence_range{45.0F};
+    float diffuse{0.0F};
     float width{0.0F};
     float height{0.0F};
     float depth{0.0F};
@@ -107,6 +108,9 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(const Ob
         block.set(adm::Rtime{adm::Time{opts.rtime}});
         block.set(adm::Duration{adm::Time{opts.duration}});
         block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        if (opts.diffuse > 0.0F) {
+            block.set(adm::Diffuse{opts.diffuse});
+        }
         if (opts.width > 0.0F) {
             block.set(adm::Width{opts.width});
         }
@@ -651,6 +655,36 @@ bool verify_binaural_extent_changes_output() {
     return ok;
 }
 
+bool verify_binaural_diffuse_bus() {
+    const auto direct_in = write_fixture(ObjectFixtureOptions{}, 4096U);
+    const auto diffuse_in = write_fixture(ObjectFixtureOptions{.diffuse = 1.0F}, 4096U);
+    const auto mixed_in = write_fixture(ObjectFixtureOptions{.diffuse = 0.5F}, 4096U);
+    FileGuard direct_guard(direct_in);
+    FileGuard diffuse_guard(diffuse_in);
+    FileGuard mixed_guard(mixed_in);
+
+    const auto direct = render_stereo_samples(direct_in, "mr_binaural_diffuse_direct");
+    const auto diffuse = render_stereo_samples(diffuse_in, "mr_binaural_diffuse_full");
+    const auto mixed = render_stereo_samples(mixed_in, "mr_binaural_diffuse_half");
+    if (!direct || !diffuse || !mixed) {
+        return false;
+    }
+
+    const double direct_energy = channel_energy(*direct, 2U, 0U, 0U, direct->size() / 2U) +
+                                 channel_energy(*direct, 2U, 1U, 0U, direct->size() / 2U);
+    const double diffuse_energy = channel_energy(*diffuse, 2U, 0U, 0U, diffuse->size() / 2U) +
+                                  channel_energy(*diffuse, 2U, 1U, 0U, diffuse->size() / 2U);
+    const double mixed_energy =
+        channel_energy(*mixed, 2U, 0U, 0U, mixed->size() / 2U) + channel_energy(*mixed, 2U, 1U, 0U, mixed->size() / 2U);
+
+    bool ok = true;
+    ok &= check(diffuse_energy > direct_energy * 0.01, "binaural diffuse=1: diffuse bus is not silent");
+    ok &= check(mixed_energy > direct_energy * 0.01, "binaural diffuse=0.5: mixed bus is not silent");
+    ok &= check(sample_difference_energy(*direct, *diffuse) > direct_energy * 1.0e-3,
+                "binaural diffuse=1: output differs from direct bus");
+    return ok;
+}
+
 bool verify_binaural_mixed_divergence_keeps_center_slot() {
     constexpr std::size_t k_divergent_begin = 1920U;
     constexpr std::size_t k_divergent_end = 3840U;
@@ -727,6 +761,7 @@ int main() {
     ok &= verify_binaural_channel_lock_changes_direction();
     ok &= verify_binaural_object_divergence_changes_output();
     ok &= verify_binaural_extent_changes_output();
+    ok &= verify_binaural_diffuse_bus();
     ok &= verify_binaural_mixed_divergence_keeps_center_slot();
     ok &= verify_external_sofa_when_available();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
