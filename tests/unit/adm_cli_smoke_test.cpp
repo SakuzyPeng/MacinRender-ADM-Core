@@ -157,6 +157,14 @@ int main() {
         ok &= check(r.out.find("4+7+0") == std::string::npos, "backends: old 4+7+0 layout not listed");
     }
 
+    // ── mradm render help exposes peak makeup ────────────────────────────────
+    {
+        auto r = run_cmd(mradm_exe + " render --help");
+        ok &= check(r.code == 0, "render --help: exit 0");
+        ok &= check(r.out.find("--peak-normalize-to-limit") != std::string::npos,
+                    "render --help: peak normalize option listed");
+    }
+
     // ── mradm layouts requires format and reports final container order ──────
     {
         auto r = run_cmd(mradm_exe + " layouts");

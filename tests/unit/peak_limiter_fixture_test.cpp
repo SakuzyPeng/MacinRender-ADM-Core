@@ -7,14 +7,19 @@
 #include <iostream>
 #include <numbers>
 #include <numeric>
+#include <sstream>
 #include <string>
 #include <vector>
 
+#include <adm/adm.hpp>
+#include <adm/utilities/id_assignment.hpp>
+#include <adm/write.hpp>
 #include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
 #include "adm/logging.h"
 #include "adm/peak.h"
+#include "adm/render.h"
 
 namespace {
 
@@ -47,6 +52,58 @@ void write_sine_wav(float amplitude, const std::filesystem::path& path) {
 
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{});
     auto axml = std::make_shared<bw64::AxmlChunk>("");
+    auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);
+
+    std::vector<float> samples(k_frames);
+    for (uint32_t n = 0; n < k_frames; ++n) {
+        samples[n] = amplitude * std::sin(2.0F * std::numbers::pi_v<float> * k_freq * static_cast<float>(n) /
+                                          static_cast<float>(k_sr));
+    }
+    writer->write(samples.data(), static_cast<uint64_t>(k_frames));
+}
+
+void write_objects_sine_wav(float amplitude, const std::filesystem::path& path) {
+    constexpr uint32_t k_sr = 48000U;
+    constexpr uint32_t k_frames = k_sr; // 1 second
+    constexpr float k_freq = 440.0F;
+
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"PeakCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        cf->add(block);
+    }
+    doc->add(cf);
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"PeakPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"PeakSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"PeakTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"PeakObj"});
+    obj->addReference(uid);
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"PeakContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"PeakProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+    adm::reassignIds(doc);
+
+    std::ostringstream xml_buf;
+    adm::writeXml(xml_buf, doc);
+    const std::string uid_str = adm::formatId(uid->get<adm::AudioTrackUidId>());
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
     auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);
 
     std::vector<float> samples(k_frames);
@@ -123,12 +180,74 @@ bool verify_limiter_noop() {
     return check(max_sample > 0.08 && max_sample < 0.12, "[noop] amplitude unchanged");
 }
 
+bool verify_render_service_peak_normalize_to_limit() {
+    const auto in_path = std::filesystem::temp_directory_path() / "mr_peak_norm_input.wav";
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_peak_norm_output.wav";
+    FileGuard in_guard{in_path};
+    FileGuard out_guard{out_path};
+    write_objects_sine_wav(0.01F, in_path);
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.renderer = mradm::RendererSelection::saf;
+    req.options.output_layout = "0+5+0";
+    req.options.peak_limit = true;
+    req.options.peak_limit_dbtp = -6.0F;
+    req.options.peak_normalize_to_limit = true;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL [normalize]: " << res.error.message << "\n";
+        return false;
+    }
+
+    const double max_sample = max_abs_sample(out_path);
+    const double target_linear = std::pow(10.0, -6.0 / 20.0); // about 0.5012
+
+    bool ok = true;
+    ok &= check(max_sample <= target_linear * 1.02, "[normalize] peak stays below red line");
+    ok &= check(max_sample > target_linear * 0.85, "[normalize] peak is raised near target");
+    return ok;
+}
+
+bool verify_peak_normalize_requires_peak_limit() {
+    const auto in_path = std::filesystem::temp_directory_path() / "mr_peak_norm_requires_limit_input.wav";
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_peak_norm_requires_limit_output.wav";
+    FileGuard in_guard{in_path};
+    FileGuard out_guard{out_path};
+    write_objects_sine_wav(0.01F, in_path);
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.renderer = mradm::RendererSelection::saf;
+    req.options.output_layout = "0+5+0";
+    req.options.peak_limit = false;
+    req.options.peak_normalize_to_limit = true;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+
+    bool ok = true;
+    ok &= check(!res.success(), "[requires-limit] render rejected");
+    ok &= check(res.error.code == mradm::ErrorCode::invalid_argument, "[requires-limit] invalid_argument error");
+    return ok;
+}
+
 } // namespace
 
 int main() {
     bool ok = true;
     ok &= verify_limiter_active();
     ok &= verify_limiter_noop();
+    ok &= verify_render_service_peak_normalize_to_limit();
+    ok &= verify_peak_normalize_requires_peak_limit();
 
     if (ok) {
         std::cout << "peak limiter fixture test passed\n";

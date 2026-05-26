@@ -153,6 +153,11 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
 
     logs.log(LogLevel::info, "engine", fmt::format("render request: {}", request.input_path.string()));
 
+    if (request.options.peak_normalize_to_limit && !request.options.peak_limit) {
+        const auto msg = std::string{"peak normalization to limit requires peak limiting to be enabled"};
+        return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+    }
+
     // Probe input for early error detection and logging.
     progress.on_progress({RenderStage::probing, 0.05, "probing input"});
     auto scene_result = io::import_scene(request.input_path.string());
@@ -283,7 +288,8 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         logs.log(LogLevel::info, "engine", fmt::format("measured true peak: {:.2f} dBTP", *metrics.measured_peak_dbtp));
     }
 
-    // Compute combined gain: loudness target first, then peak ceiling.
+    // Compute combined gain: loudness target first, optional peak makeup second,
+    // then peak ceiling as the final red line.
     // Merging both into one apply_gain_to_file avoids a second read-write pass.
     double gain_db = 0.0;
 
@@ -296,6 +302,23 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
                 LogLevel::info, "engine", fmt::format("loudness target {:.1f} LUFS → gain {:.2f} dB", target, delta));
         } else {
             logs.log(LogLevel::info, "engine", "integrated loudness within 0.1 LU of target — no adjustment");
+        }
+    }
+
+    if (request.options.peak_normalize_to_limit && metrics.measured_peak_dbtp.has_value()) {
+        const double peak_after = *metrics.measured_peak_dbtp + gain_db;
+        const auto target_peak = static_cast<double>(request.options.peak_limit_dbtp);
+        const double peak_makeup = target_peak - peak_after;
+        if (peak_makeup > 0.1) {
+            gain_db += peak_makeup;
+            logs.log(LogLevel::info,
+                     "engine",
+                     fmt::format("true peak after loudness {:.2f} dBTP, target {:.1f} dBTP -> makeup {:.2f} dB",
+                                 peak_after,
+                                 target_peak,
+                                 peak_makeup));
+        } else {
+            logs.log(LogLevel::info, "engine", "true peak already at/above normalization target; no makeup");
         }
     }
 

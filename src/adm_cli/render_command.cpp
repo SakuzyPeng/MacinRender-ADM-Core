@@ -81,6 +81,9 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
     render_cmd->add_flag("--no-peak-limit", opts.no_peak_limit, "Disable True Peak limiting");
     render_cmd->add_option("--peak-limit-dbtp", opts.peak_limit_dbtp, "True Peak target in dBTP")
         ->check(CLI::Range(-60.0F, 0.0F));
+    render_cmd->add_flag("--peak-normalize-to-limit",
+                         opts.peak_normalize_to_limit,
+                         "Raise global gain up to --peak-limit-dbtp when measured True Peak is below the ceiling");
     render_cmd->add_option("--output-bit-depth", opts.output_bit_depth_str, "Output bit depth: f32, i24, i16")
         ->check(CLI::IsMember({"f32", "i24", "i16"}));
     render_cmd
@@ -129,6 +132,7 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     request.options.renderer = parse_renderer(opts.renderer);
     request.options.peak_limit = !opts.no_peak_limit;
     request.options.peak_limit_dbtp = opts.peak_limit_dbtp;
+    request.options.peak_normalize_to_limit = opts.peak_normalize_to_limit;
     request.options.output_bit_depth = parse_output_bit_depth(opts.output_bit_depth_str);
     request.options.default_interp_ms = opts.interp_ms;
     request.options.object_smoothing_frames = opts.object_smoothing_frames;
