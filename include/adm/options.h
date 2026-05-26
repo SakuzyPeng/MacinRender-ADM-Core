@@ -28,6 +28,9 @@ struct RenderOptions {
     float loudness_target_lufs{-23.0F}; // EBU R128 broadcast standard
     bool peak_limit{true};
     float peak_limit_dbtp{-1.0F}; // True Peak target in dBTP (broadcast standard)
+    // Opt-in peak makeup: after loudness adjustment, raise global gain up to
+    // peak_limit_dbtp when measured True Peak is below the ceiling.
+    bool peak_normalize_to_limit{false};
     OutputBitDepth output_bit_depth{OutputBitDepth::f32};
     // Opus MKA output: target bitrate per channel in kbps (VBR hint).
     // 0 = auto (64 kbps/ch; minimum 128 kbps for stereo).

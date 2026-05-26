@@ -13,6 +13,7 @@ struct RenderCliOptions {
     std::string renderer{"auto"};
     bool no_peak_limit{false};
     float peak_limit_dbtp{-1.0F};
+    bool peak_normalize_to_limit{false};
     std::string output_bit_depth_str{"f32"};
     float loudness_target{std::numeric_limits<float>::quiet_NaN()};
     uint32_t interp_ms{5};

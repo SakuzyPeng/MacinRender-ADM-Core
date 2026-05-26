@@ -146,12 +146,15 @@ EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4
 | `--output-bit-depth f32\|i24\|i16` | WAV 输出位深（CAF 固定 float32；FLAC 固定 24-bit / 最多 8 声道） | `f32` |
 | `--loudness-target <LUFS>` | 响度归一化目标；HOA 通过 7.1.4 AllRAD 参考解码测量，LFE 排除于 LUFS | 关闭 |
 | `--peak-limit-dbtp <dBTP>` | True Peak 限制目标 | `-1.0` |
+| `--peak-normalize-to-limit` | 在响度增益后，如 True Peak 低于 `--peak-limit-dbtp`，自动补全局增益到上限；需要开启 True Peak 限制 | 关闭 |
 | `--no-peak-limit` | 关闭 True Peak 限制 | - |
 | `--interp-ms <ms>` | ADM 块无 jumpPosition 时的增益插值斜坡 | `5` |
 | `--object-smoothing-frames <frames>` | Objects 动态元数据去拉链平滑窗口；`0` 为逐样本跟随 ADM 块 | `8875` |
 | `--opus-bitrate-per-ch <kbps>` | Opus VBR 目标比特率 / 声道 | 自动 |
 | `--apac-bitrate <kbps>` | APAC 总目标比特率提示；未设置时空间布局 / HOA 按 7.1.4=2048 kbps 基准缩放 | 见输出格式说明 |
 | `--sofa <path>` | binaural 用户 SOFA HRIR 文件 | 内置 KEMAR |
+
+响度相关后处理顺序为：`--loudness-target` 先决定目标响度增益，`--peak-normalize-to-limit` 可选补峰到 True Peak 上限，最后 `--peak-limit-dbtp` 作为硬上限裁剪全局增益。
 
 更多选项可查看：
 
