@@ -552,6 +552,41 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     return out;
 }
 
+[[nodiscard]] Json neutral_diffuse_policy() {
+    return Json{{"enabled", true}, {"scale", 1.0F}, {"max", 1.0F}};
+}
+
+[[nodiscard]] Json neutral_extent_policy() {
+    return Json{{"enabled", true},
+                {"scale", 1.0F},
+                {"width_scale", 1.0F},
+                {"height_scale", 1.0F},
+                {"depth_scale", 1.0F},
+                {"max", 1.0F}};
+}
+
+[[nodiscard]] Json neutral_divergence_policy() {
+    return Json{{"enabled", true}, {"scale", 1.0F}, {"range_scale", 1.0F}, {"max_range", 120.0F}};
+}
+
+[[nodiscard]] Json neutral_channel_lock_policy() {
+    return Json{{"enabled", true}};
+}
+
+[[nodiscard]] Json neutral_interpolation_policy() {
+    return Json{{"honor_jump_position", true}, {"max_ms", 0U}};
+}
+
+[[nodiscard]] Json neutral_override_template() {
+    Json out = Json::object();
+    out["diffuse"] = neutral_diffuse_policy();
+    out["extent"] = neutral_extent_policy();
+    out["divergence"] = neutral_divergence_policy();
+    out["channel_lock"] = neutral_channel_lock_policy();
+    out["interpolation"] = neutral_interpolation_policy();
+    return out;
+}
+
 [[nodiscard]] std::string rule_label(const SemanticObjectRule& rule) {
     if (!rule.id.empty()) {
         return "id=" + rule.id;
@@ -734,6 +769,33 @@ Result<void> write_semantic_report_file(const std::filesystem::path& path,
     out << doc.dump(2) << '\n';
     if (!out) {
         return tl::unexpected{io_policy(path, "failed to write report")};
+    }
+    return {};
+}
+
+Result<void> write_semantic_policy_template_file(const std::filesystem::path& path, const AdmScene& scene) {
+    Json doc = Json::object();
+    doc["schema"] = SemanticPolicy::schema_id;
+    doc["global"] = neutral_override_template();
+    doc["objects"] = Json::array();
+
+    for (const auto& object : scene.objects) {
+        Json rule = neutral_override_template();
+        rule["id"] = object.id;
+        rule["name"] = object.name;
+        if (!object.tracks.empty()) {
+            rule["track_uid"] = object.tracks.front().track_uid;
+        }
+        doc["objects"].push_back(std::move(rule));
+    }
+
+    std::ofstream out(path);
+    if (!out) {
+        return tl::unexpected{io_policy(path, "cannot open policy template for writing")};
+    }
+    out << doc.dump(2) << '\n';
+    if (!out) {
+        return tl::unexpected{io_policy(path, "failed to write policy template")};
     }
     return {};
 }

@@ -29,6 +29,7 @@ struct RenderCliOptions {
 struct InspectCliOptions {
     std::string input;
     bool xml{false};
+    std::string semantic_policy_template_path;
 };
 
 struct LayoutCliOptions {

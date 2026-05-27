@@ -181,6 +181,23 @@ bool verify_semantic_report() {
     return ok;
 }
 
+bool verify_semantic_template_round_trips() {
+    const auto path = std::filesystem::temp_directory_path() / "mr_semantic_template_test.json";
+    const FileGuard guard{path};
+    const auto scene = make_scene();
+    const auto write_result = mradm::write_semantic_policy_template_file(path, scene);
+    bool ok = true;
+    ok &= check(write_result.has_value(), "semantic policy template writes");
+
+    const auto policy = mradm::load_semantic_policy_file(path);
+    ok &= check(policy.has_value(), "semantic policy template parses as policy");
+    if (policy) {
+        ok &= check(policy->objects.size() == scene.objects.size(), "semantic policy template includes all objects");
+        ok &= check(policy->global.has_value(), "semantic policy template includes global defaults");
+    }
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -188,6 +205,7 @@ int main() {
     ok &= verify_policy_parse_and_apply();
     ok &= verify_invalid_policy_rejected();
     ok &= verify_semantic_report();
+    ok &= verify_semantic_template_round_trips();
     if (ok) {
         std::cout << "semantic policy test passed\n";
         return 0;
