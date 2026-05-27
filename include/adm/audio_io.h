@@ -143,7 +143,7 @@ class FloatFlacReader {
 // Streaming writer for IAMF raw OBU streams (.iamf, no ISO BMFF container).
 // Accepts float32 input at 48000 Hz with an Opus encoder per substream.
 // layout_id must be one of: "0+2+0", "0+5+0", "2+5+0", "4+5+0", "wav71",
-//   "4+7+0", "9.1.6", "9+10+3". hoa3 and binaural are not supported.
+//   "4+7+0", "9.1.6". 22.2 / 10.2.9.3, hoa3, and binaural are not supported.
 // loudness_lufs / peak_dbtp are written into the Mix Presentation OBU; pass
 // std::nullopt to record not-indicated (0x7FFF in Q7.8).
 class FloatIamfWriter {
