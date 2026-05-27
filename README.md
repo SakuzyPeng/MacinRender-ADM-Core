@@ -160,6 +160,11 @@ EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4
 
 Semantic policy 不修改原始 AXML，仅影响本次渲染。最小示例：
 
+```bash
+./build/release/mradm inspect in.wav --write-semantic-policy-template policy.json
+./build/release/mradm render -i in.wav -o out.flac --renderer binaural --semantic-policy policy.json
+```
+
 ```json
 {
   "schema": "mradm.semantic-policy.v1",

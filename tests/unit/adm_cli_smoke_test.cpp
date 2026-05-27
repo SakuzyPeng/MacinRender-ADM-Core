@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -167,6 +168,22 @@ int main() {
             check(r.out.find("--semantic-policy") != std::string::npos, "render --help: semantic policy option listed");
         ok &= check(r.out.find("--write-semantic-report") != std::string::npos,
                     "render --help: semantic report option listed");
+    }
+
+    // ── mradm inspect can write an editable semantic policy template ─────────
+    {
+        const auto template_path = std::filesystem::temp_directory_path() / "mr_adm_cli_semantic_policy_template.json";
+        const FileGuard template_guard{template_path};
+        auto r = run_cmd(mradm_exe + " inspect " + fix + " --write-semantic-policy-template " +
+                         shell_quote(template_path.string()));
+        ok &= check(r.code == 0, "inspect --write-semantic-policy-template: exit 0");
+        std::ifstream in(template_path);
+        const std::string json((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        ok &= check(json.find(R"("schema": "mradm.semantic-policy.v1")") != std::string::npos,
+                    "semantic template: schema present");
+        ok &= check(json.find("\"global\"") != std::string::npos, "semantic template: global section present");
+        ok &= check(json.find("\"CliTestObj\"") != std::string::npos, "semantic template: object name present");
+        ok &= check(json.find("\"diffuse\"") != std::string::npos, "semantic template: diffuse section present");
     }
 
     // ── mradm layouts requires format and reports final container order ──────

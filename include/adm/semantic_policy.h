@@ -84,4 +84,7 @@ struct SemanticPolicyReportOptions {
                                                       const SemanticPolicyReportOptions& options,
                                                       const std::vector<std::string>& warnings = {});
 
+[[nodiscard]] Result<void> write_semantic_policy_template_file(const std::filesystem::path& path,
+                                                               const AdmScene& scene);
+
 } // namespace mradm
