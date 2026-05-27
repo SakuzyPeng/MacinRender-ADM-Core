@@ -134,7 +134,7 @@ bool renderer_supports_layout(const mradm::CapabilityReport& caps, std::string_v
     });
 }
 
-constexpr std::array<LayoutInfo, 35> k_layout_infos{{
+constexpr std::array<LayoutInfo, 34> k_layout_infos{{
     {"wav",
      "binaural",
      2,
@@ -228,12 +228,6 @@ constexpr std::array<LayoutInfo, 35> k_layout_infos{{
      16,
      "IAMF Expanded 9.1.6 (Opus VBR)",
      "FL FR Rls Rrs Lw Rw Ls Rs Vhl Vhr Ltr Rtr Ltm Rtm C LFE",
-     ""},
-    {"iamf",
-     "22.2",
-     24,
-     "IAMF Expanded 10.2.9.3 (Opus VBR)",
-     "8 coupled pairs + 8 mono; IAMF spec Annex A Sound System H",
      ""},
 }};
 

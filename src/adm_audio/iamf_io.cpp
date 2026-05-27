@@ -38,14 +38,12 @@ constexpr uint8_t k_ll_expanded = 15;
 
 // ExpandedLoudspeakerLayout enum (IAMF spec Table 4.6)
 constexpr uint8_t k_exp_9_1_6 = 8;
-constexpr uint8_t k_exp_10_2_9_3 = 13;
 
 // SoundSystem enum (IAMF spec Table 4.28 / Annex A)
 constexpr uint8_t k_ss_stereo = 0; // A: 0.2.0
 constexpr uint8_t k_ss_5_1 = 1;    // B: 0.5.0
 constexpr uint8_t k_ss_5_1_2 = 2;  // C: 2.5.0
 constexpr uint8_t k_ss_5_1_4 = 3;  // D: 4.5.0
-constexpr uint8_t k_ss_22_2 = 7;   // H: 9.10.3
 constexpr uint8_t k_ss_7_1 = 8;    // I: 0.7.0
 constexpr uint8_t k_ss_7_1_4 = 9;  // J: 4.7.0
 constexpr uint8_t k_ss_9_1_6 = 13; // Extension 13: 6.9.0
@@ -83,7 +81,7 @@ struct IamfLayoutInfo {
 };
 
 // clang-format off
-constexpr std::array<IamfLayoutInfo, 8> k_layouts{{
+constexpr std::array<IamfLayoutInfo, 7> k_layouts{{
     // Stereo: 1 coupled pair
     {"0+2+0", 2, k_ll_stereo, false, 0, k_ss_stereo, 1, 1,
      {0,1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}},
@@ -108,14 +106,6 @@ constexpr std::array<IamfLayoutInfo, 8> k_layouts{{
     //         [10]Vhl [11]Vhr [12]Ltm [13]Rtm [14]Ltr [15]Rtr
     {"9.1.6", 16, k_ll_expanded, true, k_exp_9_1_6, k_ss_9_1_6, 9, 7,
      {0,1, 6,7, 8,9, 4,5, 10,11, 14,15, 12,13, 2,3, 0,0,0,0,0,0,0,0}},
-    // 22.2 (9+10+3) expanded: 8 coupled pairs + 8 mono
-    //   proj: [0]FLc [1]FRc [2]FC [3]LFE [4]BL [5]BR [6]FL [7]FR [8]BC [9]LFE2
-    //         [10]SiL [11]SiR [12]TpFL [13]TpFR [14]TpFC [15]TpC
-    //         [16]TpBL [17]TpBR [18]TpSiL [19]TpSiR [20]TpBC [21]BtFC [22]BtFL [23]BtFR
-    //   pairs: (FL,FR) (BL,BR) (FLc,FRc) (SiL,SiR) (TpFL,TpFR) (TpBL,TpBR) (TpSiL,TpSiR) (BtFL,BtFR)
-    //   mono:  FC LFE BC LFE2 TpFC TpC TpBC BtFC
-    {"9+10+3", 24, k_ll_expanded, true, k_exp_10_2_9_3, k_ss_22_2, 16, 8,
-     {6,7, 4,5, 0,1, 10,11, 12,13, 16,17, 18,19, 22,23, 2,3, 8,9, 14,15, 20,21}},
 }};
 // clang-format on
 
@@ -185,8 +175,8 @@ bool write_ia_sequence_header(FILE* f) {
     payload.push_back('a');
     payload.push_back('m');
     payload.push_back('f');
-    push_u8(payload, 0); // primary_profile = Simple Profile (0)
-    push_u8(payload, 0); // additional_profile = Simple Profile (0)
+    push_u8(payload, 0); // primary_profile = Simple Profile
+    push_u8(payload, 0); // additional_profile = Simple Profile
     return write_obu(f, k_obu_ia_sequence_header, payload);
 }
 
@@ -360,6 +350,12 @@ Result<FloatIamfWriter> FloatIamfWriter::open(const std::string& path,
     if (sample_rate != k_sample_rate) {
         return make_error(ErrorCode::invalid_argument,
                           "IAMF output requires 48000 Hz; got " + std::to_string(sample_rate));
+    }
+
+    if (layout_id == "9+10+3" || layout_id == "22.2") {
+        return make_error(ErrorCode::unsupported,
+                          "IAMF 22.2 / 10.2.9.3 is not supported: public IAMF v1.1 does not define a usable profile "
+                          "for this layout");
     }
 
     const IamfLayoutInfo* li = find_layout(layout_id, channels);
