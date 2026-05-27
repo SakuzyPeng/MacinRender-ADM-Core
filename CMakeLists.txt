@@ -52,6 +52,7 @@ add_library(MacinRender::ADMCore ALIAS mr_adm_core)
 target_sources(
     mr_adm_core
     PRIVATE
+        src/adm_core/semantic_policy.cpp
         src/adm_core/version.cpp
     PUBLIC
         FILE_SET HEADERS
@@ -63,6 +64,7 @@ target_sources(
             include/adm/options.h
             include/adm/progress.h
             include/adm/render.h
+            include/adm/semantic_policy.h
             include/adm/version.h
 )
 
@@ -73,7 +75,7 @@ target_include_directories(
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_link_libraries(mr_adm_core PUBLIC tl::expected fmt::fmt)
+target_link_libraries(mr_adm_core PUBLIC tl::expected fmt::fmt PRIVATE nlohmann_json::nlohmann_json)
 mr_adm_core_apply_warnings(mr_adm_core)
 mr_adm_core_apply_static_analysis(mr_adm_core)
 
@@ -425,6 +427,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_io_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_io_smoke_tests)
     add_test(NAME mr_adm_io_smoke_tests COMMAND mr_adm_io_smoke_tests)
+
+    add_executable(mr_adm_semantic_policy_tests tests/unit/semantic_policy_test.cpp)
+    target_link_libraries(mr_adm_semantic_policy_tests PRIVATE MacinRender::ADMCore)
+    mr_adm_core_apply_warnings(mr_adm_semantic_policy_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_semantic_policy_tests)
+    add_test(NAME mr_adm_semantic_policy_tests COMMAND mr_adm_semantic_policy_tests)
 
     add_executable(mr_adm_io_fixture_tests tests/unit/adm_io_fixture_test.cpp)
     target_link_libraries(mr_adm_io_fixture_tests

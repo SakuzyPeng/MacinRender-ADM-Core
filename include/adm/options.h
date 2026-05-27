@@ -43,6 +43,11 @@ struct RenderOptions {
     bool apac_drc_music{true};
     // User SOFA HRIR file for the binaural renderer. Empty = built-in KEMAR.
     std::optional<std::filesystem::path> sofa_path;
+    // Optional ADM semantic render policy JSON. Applied to the imported scene
+    // before handing metadata to the selected renderer.
+    std::optional<std::filesystem::path> semantic_policy_path;
+    // Optional effective semantic report JSON for debugging policy matches.
+    std::optional<std::filesystem::path> semantic_report_path;
     // Default gain-interpolation ramp used when jumpPosition=false and the ADM block
     // carries no explicit interpolationLength.  Set to 0 for instant switching.
     uint32_t default_interp_ms{5};

@@ -153,8 +153,21 @@ EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4
 | `--opus-bitrate-per-ch <kbps>` | Opus VBR 目标比特率 / 声道 | 自动 |
 | `--apac-bitrate <kbps>` | APAC 总目标比特率提示；未设置时空间布局 / HOA 按 7.1.4=2048 kbps 基准缩放 | 见输出格式说明 |
 | `--sofa <path>` | binaural 用户 SOFA HRIR 文件 | 内置 KEMAR |
+| `--semantic-policy <path>` | 渲染时应用 ADM Objects 语义控制 JSON，如 diffuse / extent / divergence 开关或缩放 | 关闭 |
+| `--write-semantic-report <path>` | 写出 policy 应用后的 effective semantic JSON，便于确认对象规则命中情况 | 关闭 |
 
 响度相关后处理顺序为：`--loudness-target` 先决定目标响度增益，`--peak-normalize-to-limit` 可选补峰到 True Peak 上限，最后 `--peak-limit-dbtp` 作为硬上限裁剪全局增益。
+
+Semantic policy 不修改原始 AXML，仅影响本次渲染。最小示例：
+
+```json
+{
+  "schema": "mradm.semantic-policy.v1",
+  "objects": [
+    { "name_glob": "*kick*", "diffuse": { "enabled": false }, "extent": { "enabled": false } }
+  ]
+}
+```
 
 更多选项可查看：
 

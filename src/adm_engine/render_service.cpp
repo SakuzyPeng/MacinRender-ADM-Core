@@ -21,6 +21,7 @@
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
 #include "adm/render_vbap.h"
+#include "adm/semantic_policy.h"
 
 namespace mradm {
 
@@ -111,6 +112,24 @@ namespace {
 
 [[nodiscard]] bool flac_supports_layout(std::string_view layout_id) {
     return layout_id == "binaural" || layout_id == "0+2+0" || layout_id == "0+5+0" || layout_id == "wav71";
+}
+
+[[nodiscard]] std::string renderer_name(RendererSelection sel) {
+    switch (sel) {
+    case RendererSelection::automatic:
+        return "auto";
+    case RendererSelection::ear:
+        return "ear";
+    case RendererSelection::saf:
+        return "saf";
+    case RendererSelection::hoa:
+        return "hoa";
+    case RendererSelection::apple:
+        return "apple";
+    case RendererSelection::binaural:
+        return "binaural";
+    }
+    return "unknown";
 }
 
 class TempFileGuard {
@@ -220,6 +239,11 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     const auto caps = renderer->capabilities();
     logs.log(LogLevel::info, "engine", fmt::format("backend: {} {}", caps.backend_name, caps.backend_version));
 
+    std::optional<SemanticPolicy> semantic_policy;
+    std::vector<std::string> semantic_warnings;
+    const bool needs_semantic_report = request.options.semantic_report_path.has_value();
+    const AdmScene original_scene = needs_semantic_report ? *scene_result : AdmScene{};
+
     auto output_layout = requested_layout;
     if (sel == RendererSelection::binaural) {
         if (requested_layout != "0+2+0" && requested_layout != "binaural") {
@@ -231,6 +255,39 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         output_layout = "binaural";
     }
 
+    if (request.options.semantic_policy_path.has_value()) {
+        auto policy_res = load_semantic_policy_file(*request.options.semantic_policy_path);
+        if (!policy_res) {
+            return {policy_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, policy_res.error().message}}};
+        }
+        semantic_policy = std::move(*policy_res);
+        auto apply_res =
+            apply_semantic_policy(*scene_result, *semantic_policy, scene_result->info.sample_rate, &semantic_warnings);
+        if (!apply_res) {
+            return {apply_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, apply_res.error().message}}};
+        }
+        for (const auto& warning : semantic_warnings) {
+            logs.log(LogLevel::warning, "semantic-policy", warning);
+        }
+    }
+
+    if (needs_semantic_report) {
+        const SemanticPolicyReportOptions report_options{
+            .renderer = renderer_name(sel),
+            .policy_path =
+                request.options.semantic_policy_path ? request.options.semantic_policy_path->string() : std::string{},
+            .capabilities = caps,
+        };
+        auto report_res = write_semantic_report_file(*request.options.semantic_report_path,
+                                                     original_scene,
+                                                     *scene_result,
+                                                     semantic_policy ? &*semantic_policy : nullptr,
+                                                     report_options,
+                                                     semantic_warnings);
+        if (!report_res) {
+            return {report_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, report_res.error().message}}};
+        }
+    }
 
     // Detect FLAC final output: FLAC does not carry float32 samples, so rendering
     // directly to FLAC would clip any > 0 dBFS content before loudness/peak

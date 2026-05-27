@@ -22,6 +22,8 @@ struct RenderCliOptions {
     uint32_t apac_bitrate{0};
     bool apac_drc_music{true};
     std::string sofa_path;
+    std::string semantic_policy_path;
+    std::string semantic_report_path;
 };
 
 struct InspectCliOptions {
