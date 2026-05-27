@@ -119,6 +119,10 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                          opts.apac_drc_music,
                          "APAC DRC profile: --apac-drc-music (default) or --apac-drc-none");
     render_cmd->add_option("--sofa", opts.sofa_path, "User SOFA HRIR file for binaural rendering");
+    render_cmd->add_option("--semantic-policy", opts.semantic_policy_path, "ADM semantic render policy JSON");
+    render_cmd->add_option("--write-semantic-report",
+                           opts.semantic_report_path,
+                           "Write effective ADM semantic report JSON after applying policy");
     return render_cmd;
 }
 
@@ -141,6 +145,12 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     request.options.apac_drc_music = opts.apac_drc_music;
     if (!opts.sofa_path.empty()) {
         request.options.sofa_path = opts.sofa_path;
+    }
+    if (!opts.semantic_policy_path.empty()) {
+        request.options.semantic_policy_path = opts.semantic_policy_path;
+    }
+    if (!opts.semantic_report_path.empty()) {
+        request.options.semantic_report_path = opts.semantic_report_path;
     }
     if (!std::isnan(opts.loudness_target)) {
         request.options.measure_loudness = true;

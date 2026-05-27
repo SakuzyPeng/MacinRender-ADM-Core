@@ -23,6 +23,14 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_TAG v2.5.0
             GIT_SHALLOW TRUE
         )
+    elseif(package_name STREQUAL "nlohmann_json")
+        set(JSON_BuildTests OFF CACHE INTERNAL "")
+        FetchContent_Declare(
+            nlohmann_json
+            GIT_REPOSITORY https://github.com/nlohmann/json.git
+            GIT_TAG v3.12.0
+            GIT_SHALLOW TRUE
+        )
     elseif(package_name STREQUAL "fmt")
         FetchContent_Declare(
             fmt
@@ -403,6 +411,7 @@ endfunction()
 mr_adm_core_find_or_fetch(fmt fmt::fmt)
 mr_adm_core_find_or_fetch(spdlog spdlog::spdlog)
 mr_adm_core_find_or_fetch(CLI11 CLI11::CLI11)
+mr_adm_core_find_or_fetch(nlohmann_json nlohmann_json::nlohmann_json)
 mr_adm_core_find_or_fetch(tl-expected tl::expected)
 mr_adm_core_find_or_fetch(libebur128 ebur128)
 mr_adm_core_find_or_fetch(dr_libs dr_wav::dr_wav)
