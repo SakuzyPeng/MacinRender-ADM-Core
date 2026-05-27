@@ -75,7 +75,10 @@ target_include_directories(
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_link_libraries(mr_adm_core PUBLIC tl::expected fmt::fmt PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(mr_adm_core PUBLIC tl::expected fmt::fmt)
+target_include_directories(mr_adm_core SYSTEM PRIVATE
+    "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
+)
 mr_adm_core_apply_warnings(mr_adm_core)
 mr_adm_core_apply_static_analysis(mr_adm_core)
 
