@@ -2,21 +2,25 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <ebur128.h>
+#include <exception>
 #include <filesystem>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <numbers>
 #include <optional>
 #include <ranges>
 #include <span>
 #include <string>
-#include <future>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 // clang-format off
@@ -56,6 +60,108 @@ constexpr std::size_t k_binaural_center_slot = 1U;
 constexpr std::size_t k_binaural_extent_slots = 17U;
 constexpr std::size_t k_binaural_extent_center_slot = 0U;
 constexpr std::size_t k_diffuse_delay_len = 32U;
+
+class TrackWorkerPool {
+  public:
+    explicit TrackWorkerPool(std::size_t worker_count) {
+        workers_.reserve(worker_count);
+        for (std::size_t i = 0; i < worker_count; ++i) {
+            workers_.emplace_back([this] { worker_loop(); });
+        }
+    }
+
+    TrackWorkerPool(const TrackWorkerPool&) = delete;
+    TrackWorkerPool& operator=(const TrackWorkerPool&) = delete;
+    TrackWorkerPool(TrackWorkerPool&&) = delete;
+    TrackWorkerPool& operator=(TrackWorkerPool&&) = delete;
+
+    ~TrackWorkerPool() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stopping_ = true;
+        }
+        work_cv_.notify_all();
+        for (auto& worker : workers_) {
+            if (worker.joinable()) {
+                worker.join();
+            }
+        }
+    }
+
+    template <typename Fn> void parallel_for(std::size_t count, Fn&& fn) {
+        if (count == 0U) {
+            return;
+        }
+        if (workers_.empty() || count == 1U) {
+            for (std::size_t i = 0; i < count; ++i) {
+                fn(i);
+            }
+            return;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            task_ = std::forward<Fn>(fn);
+            next_index_ = 0U;
+            end_index_ = count;
+            active_workers_ = 0U;
+            error_ = nullptr;
+        }
+        work_cv_.notify_all();
+
+        std::unique_lock<std::mutex> lock(mutex_);
+        done_cv_.wait(lock, [&] { return next_index_ >= end_index_ && active_workers_ == 0U; });
+        task_ = nullptr;
+        // cppcheck-suppress knownConditionTrueFalse; worker threads may set error_ while this thread waits.
+        if (error_ != nullptr) {
+            std::rethrow_exception(error_);
+        }
+    }
+
+  private:
+    void worker_loop() {
+        while (true) {
+            std::size_t index = 0U;
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                work_cv_.wait(lock, [&] { return stopping_ || next_index_ < end_index_; });
+                if (stopping_) {
+                    return;
+                }
+                index = next_index_++;
+                ++active_workers_;
+            }
+
+            try {
+                task_(index);
+            } catch (...) {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (error_ == nullptr) {
+                    error_ = std::current_exception();
+                }
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                --active_workers_;
+                if (next_index_ >= end_index_ && active_workers_ == 0U) {
+                    done_cv_.notify_one();
+                }
+            }
+        }
+    }
+
+    std::vector<std::thread> workers_;
+    std::mutex mutex_;
+    std::condition_variable work_cv_;
+    std::condition_variable done_cv_;
+    std::function<void(std::size_t)> task_;
+    std::exception_ptr error_;
+    std::size_t next_index_{0U};
+    std::size_t end_index_{0U};
+    std::size_t active_workers_{0U};
+    bool stopping_{false};
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1028,14 +1134,14 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
         spreader_tracks = build_spreader_tracks(plan.scene, logs);
         spreader_adapters.reserve(spreader_tracks.size());
-        for (const auto& st : spreader_tracks) {
-            spreader_adapters.emplace_back(bs->hrtf_td.data(),
+        std::ranges::transform(spreader_tracks, std::back_inserter(spreader_adapters), [&](const SpreaderTrack& st) {
+            return BinauralSpreaderAdapter{bs->hrtf_td.data(),
                                            bs->grid_dirs_deg.data(),
                                            bs->num_dirs,
                                            bs->hrir_len,
                                            bs->sample_rate,
-                                           st.n_sources);
-        }
+                                           st.n_sources};
+        });
         logs.log(LogLevel::info,
                  "binaural",
                  fmt::format("{} spreader track(s) (saf_spreader, compensated latency {} samples)",
@@ -1107,6 +1213,10 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     const bool spreader_mode = !spreader_adapters.empty();
     const std::size_t spr_delay =
         spreader_mode ? static_cast<std::size_t>(BinauralSpreaderAdapter::total_latency()) : 0U;
+    const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
+    const std::size_t spreader_worker_count =
+        (spreader_tracks.size() > 1U && hw_threads > 1U) ? std::min(spreader_tracks.size(), hw_threads) : 0U;
+    TrackWorkerPool spreader_pool(spreader_worker_count);
     std::vector<float> ola_dl_l;
     std::vector<float> ola_dl_r;
     std::size_t ola_dl_pos = 0;
@@ -1346,27 +1456,17 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                     } else {
                         std::vector<const float*> silent_ptrs(static_cast<std::size_t>(st.n_sources),
                                                               zeros_full.data());
-                        adapter.process_chunk(
-                            silent_ptrs.data(), st.n_sources, seg_fn, spr_l[ti].data() + seg_off, spr_r[ti].data() + seg_off);
+                        adapter.process_chunk(silent_ptrs.data(),
+                                              st.n_sources,
+                                              seg_fn,
+                                              spr_l[ti].data() + seg_off,
+                                              spr_r[ti].data() + seg_off);
                     }
                     sp_cursor = next_boundary;
                 }
             };
 
-            if (n_tracks == 1U) {
-                // Single track: no scheduling overhead.
-                process_one_track(0U);
-            } else {
-                std::vector<std::future<void>> futs;
-                futs.reserve(n_tracks - 1U);
-                for (std::size_t ti = 1U; ti < n_tracks; ++ti) {
-                    futs.push_back(std::async(std::launch::async, process_one_track, ti));
-                }
-                process_one_track(0U); // run track 0 on this thread
-                for (auto& f : futs) {
-                    f.get();
-                }
-            }
+            spreader_pool.parallel_for(n_tracks, process_one_track);
 
             // Reduce per-track scratch into l_buf / r_buf.
             for (std::size_t ti = 0U; ti < n_tracks; ++ti) {

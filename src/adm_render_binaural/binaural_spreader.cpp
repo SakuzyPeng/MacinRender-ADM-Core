@@ -92,22 +92,20 @@ void BinauralSpreaderAdapter::set_source(int idx, float az_deg, float el_deg, fl
     spreader_setSourceAzi_deg(handle_, idx, az_deg);
     spreader_setSourceElev_deg(handle_, idx, el_deg);
     spreader_setSourceSpread_deg(handle_, idx, spread_deg);
-    gains_[static_cast<std::size_t>(idx)] = gain;
+    gains_.at(static_cast<std::size_t>(idx)) = gain;
 }
 
 // Apply gain, call spreader_process, push 512 output samples into the ring.
 void BinauralSpreaderAdapter::push_batch() {
     // Apply per-source gain.
     for (int si = 0; si < n_sources_; ++si) {
-        const float g = gains_[static_cast<std::size_t>(si)];
+        const float g = gains_.at(static_cast<std::size_t>(si));
         auto& buf = in_scratch_[static_cast<std::size_t>(si)];
-        for (auto& s : buf) {
-            s *= g;
-        }
+        std::ranges::transform(buf, buf.begin(), [g](float s) { return s * g; });
     }
 
-    std::fill(out_scratch_l_.begin(), out_scratch_l_.end(), 0.0F);
-    std::fill(out_scratch_r_.begin(), out_scratch_r_.end(), 0.0F);
+    std::ranges::fill(out_scratch_l_, 0.0F);
+    std::ranges::fill(out_scratch_r_, 0.0F);
 
     spreader_process(handle_, in_ptrs_.data(), out_ptrs_.data(), n_sources_, k_n_ears, k_frame_size);
 
@@ -197,7 +195,7 @@ void BinauralSpreaderAdapter::prime() {
     // NB: priming with more frames would only push real output further back — the STFT's
     // own processing_delay() is already absorbed because spreader_process is causal.
     for (auto& buf : in_scratch_) {
-        std::fill(buf.begin(), buf.end(), 0.0F);
+        std::ranges::fill(buf, 0.0F);
     }
     push_batch();
 }
