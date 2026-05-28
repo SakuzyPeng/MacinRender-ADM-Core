@@ -329,6 +329,8 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     plan.sofa_path = request.options.sofa_path;
     plan.default_interp_ms = request.options.default_interp_ms;
     plan.object_smoothing_frames = request.options.object_smoothing_frames;
+    plan.speaker_spread_mode = request.options.speaker_spread_mode;
+    plan.binaural_spread_mode = request.options.binaural_spread_mode;
     plan.scene = std::move(*scene_result);
 
     // Render (inline measurement of loudness + True Peak).

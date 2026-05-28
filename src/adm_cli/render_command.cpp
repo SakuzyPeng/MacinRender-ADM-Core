@@ -58,6 +58,29 @@ mradm::RendererSelection parse_renderer(const std::string& value) {
     return mradm::RendererSelection::automatic;
 }
 
+mradm::SpeakerSpreadMode parse_speaker_spread_mode(const std::string& value) {
+    if (value == "none") {
+        return mradm::SpeakerSpreadMode::none;
+    }
+    if (value == "mdap") {
+        return mradm::SpeakerSpreadMode::mdap;
+    }
+    return mradm::SpeakerSpreadMode::automatic;
+}
+
+mradm::BinauralSpreadMode parse_binaural_spread_mode(const std::string& value) {
+    if (value == "none") {
+        return mradm::BinauralSpreadMode::none;
+    }
+    if (value == "cloud") {
+        return mradm::BinauralSpreadMode::cloud;
+    }
+    if (value == "saf-spreader") {
+        return mradm::BinauralSpreadMode::saf_spreader;
+    }
+    return mradm::BinauralSpreadMode::automatic;
+}
+
 mradm::OutputBitDepth parse_output_bit_depth(const std::string& value) {
     if (value == "i24") {
         return mradm::OutputBitDepth::i24;
@@ -123,6 +146,17 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
     render_cmd->add_option("--write-semantic-report",
                            opts.semantic_report_path,
                            "Write effective ADM semantic report JSON after applying policy");
+    render_cmd
+        ->add_option("--speaker-spread-mode",
+                     opts.speaker_spread_mode_str,
+                     "Speaker Objects extent spread algorithm: auto (mdap for 3D, none for 2D), none, mdap")
+        ->check(CLI::IsMember({"auto", "none", "mdap"}));
+    render_cmd
+        ->add_option("--binaural-spread-mode",
+                     opts.binaural_spread_mode_str,
+                     "Binaural Objects extent spread algorithm: auto (cloud), none, cloud, "
+                     "saf-spreader [experimental: SAF covariance-matching STFT-domain spreader]")
+        ->check(CLI::IsMember({"auto", "none", "cloud", "saf-spreader"}));
     return render_cmd;
 }
 
@@ -156,6 +190,8 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
         request.options.measure_loudness = true;
         request.options.loudness_target_lufs = opts.loudness_target;
     }
+    request.options.speaker_spread_mode = parse_speaker_spread_mode(opts.speaker_spread_mode_str);
+    request.options.binaural_spread_mode = parse_binaural_spread_mode(opts.binaural_spread_mode_str);
     return request;
 }
 

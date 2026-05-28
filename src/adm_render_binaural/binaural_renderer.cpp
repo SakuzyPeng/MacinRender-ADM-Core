@@ -36,6 +36,7 @@
 #include "adm/render.h"
 #include "adm/render_binaural.h"
 
+#include "binaural_spreader.h"
 #include "render_common.h"
 
 namespace mradm {
@@ -45,6 +46,7 @@ namespace {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 constexpr uint64_t k_min_block_size = 1024U;
+constexpr float k_spreader_extent_threshold_deg = 1.0F; // min extent to route via saf_spreader
 constexpr int k_n_ears = 2;
 constexpr int k_n_azi = 361;  // (int)(360/1 + 0.5) + 1
 constexpr int k_n_elev = 181; // (int)(180/1 + 0.5) + 1
@@ -327,6 +329,10 @@ struct BinauralState {
     // Compressed VBAP table: amplitude-normalised gains + direction indices per grid point.
     std::vector<float> vbap_gains; // FLAT: [N_gtable × 3]
     std::vector<int> vbap_dirs;    // FLAT: [N_gtable × 3]
+    // Time-domain HRTFs and grid for saf_spreader mode.
+    std::vector<float> hrtf_td;       // [num_dirs × k_n_ears × hrir_len]
+    std::vector<float> grid_dirs_deg; // [num_dirs × 2]
+    int sample_rate{0};
 
     BinauralState() = default;
     BinauralState(const BinauralState&) = delete;
@@ -343,16 +349,19 @@ std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_
     bs->n_bands = (bs->fft_size / 2) + 1;
     bs->overlap_len = dataset.hrir_len - 1;
     bs->dataset_name = std::move(dataset.name);
+    bs->hrtf_td = std::move(dataset.hrirs);
+    bs->grid_dirs_deg = std::move(dataset.dirs_deg);
+    bs->sample_rate = dataset.sample_rate;
 
     // Convert HRIRs to frequency-domain HRTFs.
     bs->hrtf_fd.resize(static_cast<std::size_t>(bs->n_bands) * k_n_ears * static_cast<std::size_t>(bs->num_dirs));
-    HRIRs2HRTFs(dataset.hrirs.data(), bs->num_dirs, bs->hrir_len, bs->fft_size, bs->hrtf_fd.data());
+    HRIRs2HRTFs(bs->hrtf_td.data(), bs->num_dirs, bs->hrir_len, bs->fft_size, bs->hrtf_fd.data());
 
     // Build VBAP gain table for the HRTF measurement directions as "loudspeakers".
     float* gtable_full = nullptr;
     int n_gtable = 0;
     int n_triangles = 0;
-    generateVBAPgainTable3D(dataset.dirs_deg.data(),
+    generateVBAPgainTable3D(bs->grid_dirs_deg.data(),
                             bs->num_dirs,
                             /*az_res=*/1,
                             /*el_res=*/1,
@@ -565,7 +574,94 @@ struct ExtentSource {
     std::size_t slot{k_binaural_extent_center_slot};
 };
 
-[[nodiscard]] std::vector<ExtentSource> expand_binaural_extent(const SceneObjectBlock& block, float source_gain) {
+// Maps ADM block extent (width/height/depth, each 0..1) to a saf_spreader cone
+// half-angle in degrees. This is an *intentionally separate* mapping from VBAP's
+// mdap_spread_degrees() and the binaural cloud spread_scale: it feeds the SAF
+// spreader's OM spreading-cone parameter, which has different perceptual scaling
+// than MDAP point clouds. Width is weighted more than height (the horizontal plane
+// dominates spatial impression); depth adds an isotropic term. Note: this does NOT
+// apply distance scaling — extent is taken directly from the block. Used both to
+// gate point-source bypass (k_spreader_extent_threshold_deg) and to drive the cone.
+float extent_spread_deg(const SceneObjectBlock& block) noexcept {
+    const float depth_r = std::max(0.0F, block.depth) * 20.0F;
+    const float width_r = (std::max(0.0F, block.width) * 60.0F) + depth_r;
+    const float height_r = (std::max(0.0F, block.height) * 45.0F) + depth_r;
+    return std::max(width_r, height_r) * 2.0F;
+}
+
+// NOLINTBEGIN(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
+struct SpreaderSubSource {
+    float az{0.0F};
+    float el{0.0F};
+    float spread_deg{0.0F};
+    float gain{1.0F};
+};
+
+struct SpreaderBlock {
+    std::vector<SpreaderSubSource> sources;
+    uint64_t start_sample{0};
+    uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
+};
+
+struct SpreaderTrack {
+    uint16_t channel_index{0};
+    float object_gain{1.0F};
+    std::vector<SpreaderBlock> blocks;
+    int n_sources{1};
+};
+// NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
+
+std::vector<SpreaderTrack> build_spreader_tracks(const AdmScene& scene, LogSink& logs) {
+    std::vector<SpreaderTrack> tracks;
+    const auto lock_speakers = binaural_lock_speakers();
+    bool screen_ref_warned{false};
+    for (const auto& obj : scene.objects) {
+        if (obj.mute) {
+            continue;
+        }
+        for (const auto& track : obj.tracks) {
+            if (!track.channel_index.has_value() || track.blocks.empty()) {
+                continue;
+            }
+            const auto channel_index = *track.channel_index;
+            SpreaderTrack st;
+            st.channel_index = channel_index;
+            st.object_gain = obj.gain;
+            for (const auto& blk : track.blocks) {
+                const auto prepared =
+                    render_common::prepare_object_block(blk, obj, lock_speakers, logs, "binaural", screen_ref_warned);
+                SpreaderBlock sb;
+                sb.start_sample = prepared.start_sample;
+                sb.end_sample = prepared.end_sample;
+                for (const auto& src : prepared.sources) {
+                    const float diffuse = std::clamp(src.diffuse, 0.0F, 1.0F);
+                    const float direct_scale = std::sqrt(1.0F - diffuse);
+                    const float spread = extent_spread_deg(src);
+                    if (direct_scale > 1.0e-4F && spread >= k_spreader_extent_threshold_deg) {
+                        auto [az, el] = block_position(src);
+                        sb.sources.push_back({az, el, spread, src.gain * direct_scale});
+                    }
+                }
+                if (!sb.sources.empty()) {
+                    st.n_sources = std::max(st.n_sources, static_cast<int>(sb.sources.size()));
+                    st.blocks.push_back(std::move(sb));
+                }
+            }
+            if (!st.blocks.empty()) {
+                std::ranges::sort(st.blocks, {}, &SpreaderBlock::start_sample);
+                tracks.push_back(std::move(st));
+            }
+        }
+    }
+    return tracks;
+}
+
+[[nodiscard]] std::vector<ExtentSource>
+expand_binaural_extent(const SceneObjectBlock& block, float source_gain, BinauralSpreadMode spread_mode) {
+    if (spread_mode == BinauralSpreadMode::none || spread_mode == BinauralSpreadMode::saf_spreader) {
+        auto [az, el] = block_position(block);
+        return {{az, el, source_gain, k_binaural_extent_center_slot}};
+    }
     const float distance = distance_from_position(block.position);
     const float spread_scale = std::clamp(1.0F / std::max(0.4F, distance), 0.5F, 2.5F);
     const float depth_radius = std::max(0.0F, block.depth) * 20.0F * spread_scale;
@@ -665,7 +761,8 @@ void append_object_track_sources(const SceneObject& obj,
                                  const std::vector<SceneOutputSpeaker>& lock_speakers,
                                  bool& screen_ref_warned,
                                  LogSink& logs,
-                                 std::vector<BinauralSource>& srcs) {
+                                 std::vector<BinauralSource>& srcs,
+                                 BinauralSpreadMode spread_mode) {
     BinauralSourceBank track_sources;
     init_source_bank(track_sources, channel_index, obj.gain);
 
@@ -679,9 +776,12 @@ void append_object_track_sources(const SceneObject& obj,
             const float diffuse = std::clamp(source_block.diffuse, 0.0F, 1.0F);
             const float direct_scale = std::sqrt(1.0F - diffuse);
             const float diffuse_scale = std::sqrt(diffuse);
-            if (direct_scale > 1.0e-4F) {
+            const bool has_extent = extent_spread_deg(source_block) >= k_spreader_extent_threshold_deg;
+            if (direct_scale > 1.0e-4F && (spread_mode != BinauralSpreadMode::saf_spreader || !has_extent)) {
+                const BinauralSpreadMode direct_mode =
+                    (spread_mode == BinauralSpreadMode::saf_spreader) ? BinauralSpreadMode::none : spread_mode;
                 for (const auto& extent_source :
-                     expand_binaural_extent(source_block, source_block.gain * direct_scale)) {
+                     expand_binaural_extent(source_block, source_block.gain * direct_scale, direct_mode)) {
                     const std::size_t slot = (divergence_slot * k_binaural_extent_slots) + extent_source.slot;
                     track_sources.direct.at(slot).blocks.push_back({extent_source.az,
                                                                     extent_source.el,
@@ -695,7 +795,10 @@ void append_object_track_sources(const SceneObject& obj,
             if (diffuse_scale <= 1.0e-4F) {
                 continue;
             }
-            for (const auto& extent_source : expand_binaural_extent(source_block, source_block.gain * diffuse_scale)) {
+            const BinauralSpreadMode diff_mode =
+                (spread_mode == BinauralSpreadMode::saf_spreader) ? BinauralSpreadMode::none : spread_mode;
+            for (const auto& extent_source :
+                 expand_binaural_extent(source_block, source_block.gain * diffuse_scale, diff_mode)) {
                 const std::size_t slot = (divergence_slot * k_binaural_extent_slots) + extent_source.slot;
                 track_sources.diffuse.at(slot).blocks.push_back({extent_source.az,
                                                                  extent_source.el,
@@ -712,7 +815,7 @@ void append_object_track_sources(const SceneObject& obj,
 }
 
 // Build source list from scene.
-std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs) {
+std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs, BinauralSpreadMode spread_mode) {
     std::vector<BinauralSource> srcs;
     const auto lock_speakers = binaural_lock_speakers();
     bool screen_ref_warned{false};
@@ -729,7 +832,8 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs) 
 
             // Objects-type blocks.
             if (!track.blocks.empty()) {
-                append_object_track_sources(obj, track, channel_index, lock_speakers, screen_ref_warned, logs, srcs);
+                append_object_track_sources(
+                    obj, track, channel_index, lock_speakers, screen_ref_warned, logs, srcs, spread_mode);
             }
 
             // DirectSpeakers-type blocks.
@@ -911,11 +1015,37 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                          bs->hrir_len,
                          info.sample_rate));
 
-    const auto sources = build_sources(plan.scene, logs);
+    const auto sources = build_sources(plan.scene, logs, plan.binaural_spread_mode);
     if (sources.empty()) {
         logs.log(LogLevel::warning, "binaural", "no renderable tracks found, writing silence");
     }
     logs.log(LogLevel::info, "binaural", fmt::format("{} source(s) to render", sources.size()));
+
+    // Build spreader tracks and adapters for saf_spreader mode.
+    std::vector<SpreaderTrack> spreader_tracks;
+    std::vector<BinauralSpreaderAdapter> spreader_adapters;
+    if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
+        spreader_tracks = build_spreader_tracks(plan.scene, logs);
+        spreader_adapters.reserve(spreader_tracks.size());
+        for (const auto& st : spreader_tracks) {
+            spreader_adapters.emplace_back(bs->hrtf_td.data(),
+                                           bs->grid_dirs_deg.data(),
+                                           bs->num_dirs,
+                                           bs->hrir_len,
+                                           bs->sample_rate,
+                                           st.n_sources);
+        }
+        logs.log(LogLevel::info,
+                 "binaural",
+                 fmt::format("{} spreader track(s) (saf_spreader, compensated latency {} samples)",
+                             spreader_tracks.size(),
+                             BinauralSpreaderAdapter::total_latency()));
+        // Prime each adapter: pre-fill the output ring with one frame so process_chunk
+        // drains exactly n_frames (constant total_latency(), no gaps).
+        for (auto& adapter : spreader_adapters) {
+            adapter.prime();
+        }
+    }
 
     // Open I/O.
     auto reader = bw64::readFile(plan.input_path);
@@ -964,6 +1094,57 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     std::vector<float> out_block(2U * render_block_size); // interleaved L/R
     uint64_t frames_done = 0;
 
+    // saf_spreader latency compensation: after prime() the spreader has a constant
+    // total_latency() sample delay (= STFT processing_delay() + a one-frame ring
+    // cushion; prime() guarantees every process_chunk() drains exactly n_frames).
+    // To keep its output sample-aligned with the OLA (point/diffuse) path and with
+    // the input ADM timeline, we delay the OLA contribution by spr_delay (ola_dl ring),
+    // skip the first spr_delay output samples (out_skip), and run a spr_delay-sample
+    // silent tail after the input is exhausted. The cushion makes spr_delay >= STFT
+    // delay + max partial-batch carry, so the tail also fully flushes non-512-aligned
+    // input lengths. Net result: file length == num_frames, fully aligned.
+    const bool spreader_mode = !spreader_adapters.empty();
+    const std::size_t spr_delay =
+        spreader_mode ? static_cast<std::size_t>(BinauralSpreaderAdapter::total_latency()) : 0U;
+    std::vector<float> ola_dl_l;
+    std::vector<float> ola_dl_r;
+    std::size_t ola_dl_pos = 0;
+    if (spreader_mode) {
+        ola_dl_l.assign(spr_delay, 0.0F);
+        ola_dl_r.assign(spr_delay, 0.0F);
+    }
+    std::size_t out_skip = spr_delay;
+    uint64_t out_written = 0;
+
+    // Skip out_skip leading samples, write at most (num_frames - out_written),
+    // interleaving L/R and measuring loudness. Used by both the main loop and the
+    // tail drain so the file ends at exactly num_frames. Returns false on short write.
+    auto emit = [&](const float* lb, const float* rb, std::size_t count) -> bool {
+        std::size_t local = 0;
+        if (out_skip > 0) {
+            const std::size_t s = std::min(out_skip, count);
+            out_skip -= s;
+            local = s;
+        }
+        const std::size_t avail = count - local;
+        const auto want = static_cast<uint64_t>(std::min<uint64_t>(avail, num_frames - out_written));
+        if (want == 0) {
+            return true;
+        }
+        for (std::size_t f = 0; f < want; ++f) {
+            out_block[(f * 2U) + 0U] = lb[local + f];
+            out_block[(f * 2U) + 1U] = rb[local + f];
+        }
+        if (lufs_st) {
+            ebur128_add_frames_float(lufs_st.get(), out_block.data(), static_cast<size_t>(want));
+        }
+        if (writer.write(out_block.data(), want) != want) {
+            return false;
+        }
+        out_written += want;
+        return true;
+    };
+
     progress.on_progress({RenderStage::rendering, 0.2, "rendering"});
 
     while (frames_done < num_frames) {
@@ -979,6 +1160,20 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
         // De-interleaved input scratch for one channel.
         std::vector<float> ch_in(fn);
         std::vector<float> diffuse_in(fn);
+
+        // In saf_spreader mode the OLA (point/diffuse) path accumulates into a
+        // separate buffer so it can be delayed by spr_delay before being mixed
+        // with the spreader output. Otherwise it writes directly to l_buf/r_buf.
+        std::vector<float> ola_l;
+        std::vector<float> ola_r;
+        float* ola_l_dst = l_buf.data();
+        float* ola_r_dst = r_buf.data();
+        if (spreader_mode) {
+            ola_l.assign(fn, 0.0F);
+            ola_r.assign(fn, 0.0F);
+            ola_l_dst = ola_l.data();
+            ola_r_dst = ola_r.data();
+        }
 
         for (std::size_t si = 0; si < sources.size(); ++si) {
             const auto& src = sources[si];
@@ -1014,8 +1209,8 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                                                          start_hrtf,
                                                          end_hrtf,
                                                          ola[si],
-                                                         l_buf.data(),
-                                                         r_buf.data());
+                                                         ola_l_dst,
+                                                         ola_r_dst);
                         continue;
                     }
                 }
@@ -1031,7 +1226,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
 
                 if (bi >= src.blocks.size() || src.blocks[bi].start_sample >= chunk_end) {
                     const auto off = static_cast<std::size_t>(cursor - chunk_start);
-                    advance_silence(ola[si], chunk_end - cursor, l_buf.data() + off, r_buf.data() + off);
+                    advance_silence(ola[si], chunk_end - cursor, ola_l_dst + off, ola_r_dst + off);
                     break;
                 }
 
@@ -1039,7 +1234,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                 if (cursor < blk.start_sample) {
                     const uint64_t silent_end = std::min<uint64_t>(blk.start_sample, chunk_end);
                     const auto off = static_cast<std::size_t>(cursor - chunk_start);
-                    advance_silence(ola[si], silent_end - cursor, l_buf.data() + off, r_buf.data() + off);
+                    advance_silence(ola[si], silent_end - cursor, ola_l_dst + off, ola_r_dst + off);
                     cursor = silent_end;
                     continue;
                 }
@@ -1063,8 +1258,8 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                 if (src.bypass_lfe) {
                     for (std::size_t f = 0; f < seg_fn; ++f) {
                         const float sample = ch_in[f] * gain;
-                        l_buf[off + f] += sample;
-                        r_buf[off + f] += sample;
+                        ola_l_dst[off + f] += sample;
+                        ola_r_dst[off + f] += sample;
                     }
                 } else {
                     const float* conv_in = ch_in.data();
@@ -1074,7 +1269,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                     }
                     const auto hrtf = hrtf_for_dir(*bs, blk.az, blk.el);
                     convolve_and_accumulate(
-                        hfft, *bs, conv_in, seg_frames, gain, hrtf, ola[si], l_buf.data() + off, r_buf.data() + off);
+                        hfft, *bs, conv_in, seg_frames, gain, hrtf, ola[si], ola_l_dst + off, ola_r_dst + off);
                 }
 
                 cursor = seg_end;
@@ -1084,22 +1279,116 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
             }
         }
 
-        // Interleave L/R into output block.
-        for (std::size_t f = 0; f < fn; ++f) {
-            out_block[(f * 2U) + 0U] = l_buf[f];
-            out_block[(f * 2U) + 1U] = r_buf[f];
+        // Delay the OLA (point/diffuse) contribution by spr_delay so it co-aligns
+        // with the spreader's inherent STFT latency, then mix into l_buf/r_buf.
+        if (spreader_mode) {
+            for (std::size_t f = 0; f < fn; ++f) {
+                l_buf[f] += ola_dl_l[ola_dl_pos];
+                r_buf[f] += ola_dl_r[ola_dl_pos];
+                ola_dl_l[ola_dl_pos] = ola_l[f];
+                ola_dl_r[ola_dl_pos] = ola_r[f];
+                ola_dl_pos = (ola_dl_pos + 1U) % spr_delay;
+            }
         }
 
-        if (lufs_st) {
-            ebur128_add_frames_float(lufs_st.get(), out_block.data(), fn);
+        // saf_spreader direct-source path: process in block-boundary-aligned segments so that
+        // direction changes mid-chunk are handled correctly.
+        if (!spreader_adapters.empty()) {
+            const uint64_t chunk_start_sp = frames_done;
+            const uint64_t chunk_end_sp = frames_done + frames_now;
+            const std::vector<float> zeros_full(fn, 0.0F);
+            for (std::size_t ti = 0; ti < spreader_tracks.size(); ++ti) {
+                const auto& st = spreader_tracks[ti];
+                auto& adapter = spreader_adapters[ti];
+                uint64_t sp_cursor = chunk_start_sp;
+                while (sp_cursor < chunk_end_sp) {
+                    // Find the block active at sp_cursor (blocks are sorted by start_sample).
+                    const SpreaderBlock* active = nullptr;
+                    uint64_t next_boundary = chunk_end_sp;
+                    for (const auto& sb : st.blocks) {
+                        if (sb.end_sample <= sp_cursor) {
+                            continue;
+                        }
+                        if (sb.start_sample <= sp_cursor) {
+                            active = &sb;
+                            next_boundary = std::min(sb.end_sample, chunk_end_sp);
+                        } else {
+                            next_boundary = std::min(sb.start_sample, chunk_end_sp);
+                        }
+                        break;
+                    }
+                    const auto seg_off = static_cast<std::size_t>(sp_cursor - chunk_start_sp);
+                    const auto seg_fn = static_cast<std::size_t>(next_boundary - sp_cursor);
+                    if (active != nullptr) {
+                        for (std::size_t si = 0; si < active->sources.size(); ++si) {
+                            const auto& ss = active->sources[si];
+                            adapter.set_source(
+                                static_cast<int>(si), ss.az, ss.el, ss.spread_deg, st.object_gain * ss.gain);
+                        }
+                        const uint16_t ic = st.channel_index;
+                        for (std::size_t f = 0; f < seg_fn; ++f) {
+                            ch_in[f] = (ic < num_in_ch) ? in_block[((seg_off + f) * num_in_ch) + ic] : 0.0F;
+                        }
+                        std::vector<const float*> mono_ptrs(active->sources.size(), ch_in.data());
+                        adapter.process_chunk(mono_ptrs.data(),
+                                              static_cast<int>(active->sources.size()),
+                                              seg_fn,
+                                              l_buf.data() + seg_off,
+                                              r_buf.data() + seg_off);
+                    } else {
+                        // Silent gap: feed zeros and accumulate STFT tail into output.
+                        std::vector<const float*> silent_ptrs(static_cast<std::size_t>(st.n_sources),
+                                                              zeros_full.data());
+                        adapter.process_chunk(
+                            silent_ptrs.data(), st.n_sources, seg_fn, l_buf.data() + seg_off, r_buf.data() + seg_off);
+                    }
+                    sp_cursor = next_boundary;
+                }
+            }
         }
-        if (writer.write(out_block.data(), frames_now) != frames_now) {
+
+        // Head-skip (out_skip) + truncate to num_frames handled inside emit().
+        if (!emit(l_buf.data(), r_buf.data(), fn)) {
             return make_error(ErrorCode::io_error, "short write during binaural render", "output=" + plan.output_path);
         }
 
         frames_done += frames_now;
         const double frac = 0.2 + (0.7 * (static_cast<double>(frames_done) / static_cast<double>(num_frames)));
         progress.on_progress({RenderStage::rendering, frac, "rendering"});
+    }
+
+    // saf_spreader tail: the input is exhausted but spr_delay samples of real
+    // output are still in flight (STFT latency + delayed OLA path). Feed spr_delay
+    // silent samples through both paths and write them until the file reaches
+    // exactly num_frames. The leading warm-up was already dropped via out_skip.
+    if (spreader_mode) {
+        uint64_t tail_remaining = spr_delay;
+        while (tail_remaining > 0 && out_written < num_frames) {
+            const auto tn = static_cast<std::size_t>(std::min<uint64_t>(render_block_size, tail_remaining));
+            std::vector<float> l_buf(tn, 0.0F);
+            std::vector<float> r_buf(tn, 0.0F);
+            // Drain the OLA delay ring (push silence, pop the held real tail).
+            for (std::size_t f = 0; f < tn; ++f) {
+                l_buf[f] += ola_dl_l[ola_dl_pos];
+                r_buf[f] += ola_dl_r[ola_dl_pos];
+                ola_dl_l[ola_dl_pos] = 0.0F;
+                ola_dl_r[ola_dl_pos] = 0.0F;
+                ola_dl_pos = (ola_dl_pos + 1U) % spr_delay;
+            }
+            // Drain the spreader STFT tail (feed silence; exact-D latency means
+            // exactly tn aligned output samples come out).
+            const std::vector<float> zeros_tn(tn, 0.0F);
+            for (std::size_t ti = 0; ti < spreader_adapters.size(); ++ti) {
+                const int ns = spreader_tracks[ti].n_sources;
+                std::vector<const float*> zptrs(static_cast<std::size_t>(ns), zeros_tn.data());
+                spreader_adapters[ti].process_chunk(zptrs.data(), ns, tn, l_buf.data(), r_buf.data());
+            }
+            if (!emit(l_buf.data(), r_buf.data(), tn)) {
+                return make_error(
+                    ErrorCode::io_error, "short write during binaural spreader tail", "output=" + plan.output_path);
+            }
+            tail_remaining -= tn;
+        }
     }
 
     progress.on_progress({RenderStage::finished, 1.0, "done"});

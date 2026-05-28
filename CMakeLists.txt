@@ -225,6 +225,8 @@ target_sources(
     mr_adm_render_binaural
     PRIVATE
         src/adm_render_binaural/binaural_renderer.cpp
+        src/adm_render_binaural/binaural_spreader.cpp
+        src/adm_render_binaural/spreader_mr.c
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS include
@@ -243,6 +245,7 @@ target_include_directories(mr_adm_render_binaural
         "${saf_SOURCE_DIR}/modules/saf_vbap"
         "${saf_SOURCE_DIR}/modules/saf_utilities"
         "${EBUR128_INCLUDE_DIR}"
+        "${saf_SOURCE_DIR}/../examples/include"
 )
 mr_adm_core_apply_warnings(mr_adm_render_binaural)
 mr_adm_core_apply_static_analysis(mr_adm_render_binaural)

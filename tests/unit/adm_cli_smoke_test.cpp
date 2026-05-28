@@ -168,6 +168,58 @@ int main() {
             check(r.out.find("--semantic-policy") != std::string::npos, "render --help: semantic policy option listed");
         ok &= check(r.out.find("--write-semantic-report") != std::string::npos,
                     "render --help: semantic report option listed");
+        ok &= check(r.out.find("--speaker-spread-mode") != std::string::npos,
+                    "render --help: speaker-spread-mode option listed");
+        ok &= check(r.out.find("--binaural-spread-mode") != std::string::npos,
+                    "render --help: binaural-spread-mode option listed");
+    }
+
+    // ── spread mode parse: valid values accepted, invalid rejected ────────────
+    {
+        // --speaker-spread-mode: valid values
+        for (const auto* val : {"auto", "none", "mdap"}) {
+            auto r = run_cmd(mradm_exe + " render --help --speaker-spread-mode " + val);
+            const std::string msg_spk = std::string("render --speaker-spread-mode ") + val + ": exit 0";
+            ok &= check(r.code == 0, msg_spk.c_str());
+        }
+        // --speaker-spread-mode: invalid value
+        {
+            auto r = run_cmd(mradm_exe + " render --speaker-spread-mode invalid_xyz");
+            ok &= check(r.code != 0, "render --speaker-spread-mode invalid: non-zero exit");
+        }
+        // --binaural-spread-mode: valid values
+        for (const auto* val : {"auto", "none", "cloud", "saf-spreader"}) {
+            auto r = run_cmd(mradm_exe + " render --help --binaural-spread-mode " + val);
+            const std::string msg_bin = std::string("render --binaural-spread-mode ") + val + ": exit 0";
+            ok &= check(r.code == 0, msg_bin.c_str());
+        }
+        // --binaural-spread-mode: invalid value
+        {
+            auto r = run_cmd(mradm_exe + " render --binaural-spread-mode invalid_xyz");
+            ok &= check(r.code != 0, "render --binaural-spread-mode invalid: non-zero exit");
+        }
+    }
+
+    // ── --speaker-spread-mode none renders a 5.1 mix without crashing ────────
+    {
+        const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_speaker_spread_none.flac";
+        const FileGuard out_guard{out};
+        auto r = run_cmd(mradm_exe +
+                         " render --renderer saf --output-layout 5.1 "
+                         "--speaker-spread-mode none -o " +
+                         shell_quote(out.string()) + " -i " + fix);
+        ok &= check(r.code == 0, "render --speaker-spread-mode none (5.1): exit 0");
+    }
+
+    // ── --binaural-spread-mode none renders binaural without crashing ─────────
+    {
+        const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_binaural_spread_none.flac";
+        const FileGuard out_guard{out};
+        auto r = run_cmd(mradm_exe +
+                         " render --renderer binaural --binaural-spread-mode none "
+                         "-o " +
+                         shell_quote(out.string()) + " -i " + fix);
+        ok &= check(r.code == 0, "render --binaural-spread-mode none: exit 0");
     }
 
     // ── mradm inspect can write an editable semantic policy template ─────────

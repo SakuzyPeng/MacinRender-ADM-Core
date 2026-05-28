@@ -49,6 +49,8 @@ struct RenderPlan {
     // Renderer-side control-rate smoothing for dense Objects metadata updates.
     // 0 disables smoothing.
     uint32_t object_smoothing_frames{8875};
+    SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
+    BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
 };
 
 // Abstract renderer backend interface.
