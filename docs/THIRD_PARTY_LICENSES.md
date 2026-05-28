@@ -38,6 +38,7 @@ MacinRender ADM Core 的项目源码采用 **MIT License**，以仓库根目录 
 | `libopus` | Opus MKA 编码 | BSD-like + IETF patent IPR notices | 可用 | 发行文档需保留专利 IPR 链接说明 |
 | Spatial Audio Framework (SAF) core | VBAP/MDAP/HRTF/FFT 等 DSP | ISC + permissive third-party code | 可用 | 仅在禁用 GPL 模块的配置下 |
 | SAF `saf_sofa_reader` | 用户 SOFA HRIR 读取 | ISC | 可用 | 默认可启用 |
+| SAF examples `spreader` (fork) | saf_spreader 双耳扩散渲染（实验性） | ISC，版权 2021 Leo McCormack | 可用 | fork 位于 `src/adm_render_binaural/spreader_mr.*`；最小改动：增加 `spreader_init_from_hrtf_grid()` 接口、修复 SOFA Q 未赋值 bug；不引入额外依赖 |
 | libmysofa（SAF SOFA reader 内部） | SOFA 解析 | BSD-3-Clause | 可用 | |
 | zlib（SAF SOFA reader 内部） | 压缩支持 | zlib License | 可用 | |
 | Apple AudioToolbox/CoreFoundation/Accelerate | APAC、CAF layout、macOS 加速 | Apple 平台 SDK | macOS only | 不进入跨平台发行物依赖集合 |

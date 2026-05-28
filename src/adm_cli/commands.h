@@ -24,6 +24,8 @@ struct RenderCliOptions {
     std::string sofa_path;
     std::string semantic_policy_path;
     std::string semantic_report_path;
+    std::string speaker_spread_mode_str{"auto"};
+    std::string binaural_spread_mode_str{"auto"};
 };
 
 struct InspectCliOptions {

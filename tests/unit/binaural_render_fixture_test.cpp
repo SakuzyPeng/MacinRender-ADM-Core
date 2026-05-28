@@ -655,6 +655,91 @@ bool verify_binaural_extent_changes_output() {
     return ok;
 }
 
+bool verify_binaural_saf_spreader_output() {
+    constexpr uint32_t frames = 4096U;
+    const auto width_in = write_fixture(ObjectFixtureOptions{.width = 1.0F}, frames);
+    const auto point_in = write_fixture(ObjectFixtureOptions{}, frames);
+    FileGuard width_guard(width_in);
+    FileGuard point_guard(point_in);
+
+    bool ok = true;
+
+    // Width=1.0 rendered with the experimental saf_spreader mode.
+    const auto spr_out = temp_path("mr_binaural_saf_spreader_width", ".wav");
+    FileGuard spr_guard(spr_out);
+    mradm::RenderOptions spr_opts;
+    spr_opts.renderer = mradm::RendererSelection::binaural;
+    spr_opts.peak_limit = false;
+    spr_opts.measure_loudness = false;
+    spr_opts.binaural_spread_mode = mradm::BinauralSpreadMode::saf_spreader;
+    if (!render_to_path(width_in, spr_out, spr_opts)) {
+        return false;
+    }
+    auto spr_reader = mradm::audio::FloatWavReader::open(spr_out.string());
+    if (!check(spr_reader.has_value(), "saf_spreader output opens")) {
+        return false;
+    }
+    // STFT delay compensation: the rendered file must be exactly as long as the
+    // input ADM timeline (head warm-up skipped, tail drained, no extra frames).
+    ok &= check(spr_reader->frame_count() == frames,
+                "saf_spreader output length equals input length (delay compensated)");
+    ok &= check(spr_reader->channels() == 2U, "saf_spreader output is stereo");
+    std::vector<float> spr_samples(static_cast<std::size_t>(spr_reader->channels()) * spr_reader->frame_count());
+    spr_reader->read(spr_samples.data(), spr_reader->frame_count());
+    const double spr_energy = channel_energy(spr_samples, 2U, 0U, 0U, spr_reader->frame_count()) +
+                              channel_energy(spr_samples, 2U, 1U, 0U, spr_reader->frame_count());
+    ok &= check(spr_energy > 1e-5, "saf_spreader width output is not silent");
+
+    // saf_spreader should produce a different rendering than the default 17-point cloud.
+    const auto cloud = render_stereo_samples(width_in, "mr_binaural_saf_spreader_cloud_ref");
+    if (!cloud) {
+        return false;
+    }
+    ok &= check(sample_difference_energy(spr_samples, *cloud) > spr_energy * 1.0e-3,
+                "saf_spreader output differs from cloud extent output");
+
+    // A point source (no extent) carries no spreader track, so saf_spreader mode
+    // falls back to the OLA path: output stays length-exact and non-silent.
+    const auto pt_out = temp_path("mr_binaural_saf_spreader_point", ".wav");
+    FileGuard pt_guard(pt_out);
+    if (!render_to_path(point_in, pt_out, spr_opts)) {
+        return false;
+    }
+    auto pt_reader = mradm::audio::FloatWavReader::open(pt_out.string());
+    if (!check(pt_reader.has_value(), "saf_spreader point output opens")) {
+        return false;
+    }
+    ok &= check(pt_reader->frame_count() == frames, "saf_spreader point-source output length equals input length");
+    std::vector<float> pt_samples(static_cast<std::size_t>(pt_reader->channels()) * pt_reader->frame_count());
+    pt_reader->read(pt_samples.data(), pt_reader->frame_count());
+    const double pt_energy = channel_energy(pt_samples, 2U, 0U, 0U, pt_reader->frame_count()) +
+                             channel_energy(pt_samples, 2U, 1U, 0U, pt_reader->frame_count());
+    ok &= check(pt_energy > 1e-5, "saf_spreader point-source output is not silent");
+
+    // Non-512-aligned length: the partial last STFT batch must still be flushed by
+    // the tail, so the output stays exactly as long as the input (no truncation).
+    constexpr uint32_t odd_frames = 4096U + 123U;
+    const auto odd_in = write_fixture(ObjectFixtureOptions{.width = 1.0F}, odd_frames);
+    FileGuard odd_guard(odd_in);
+    const auto odd_out = temp_path("mr_binaural_saf_spreader_odd", ".wav");
+    FileGuard odd_out_guard(odd_out);
+    if (!render_to_path(odd_in, odd_out, spr_opts)) {
+        return false;
+    }
+    auto odd_reader = mradm::audio::FloatWavReader::open(odd_out.string());
+    if (!check(odd_reader.has_value(), "saf_spreader odd-length output opens")) {
+        return false;
+    }
+    ok &= check(odd_reader->frame_count() == odd_frames,
+                "saf_spreader non-512-aligned output length equals input length");
+    std::vector<float> odd_samples(static_cast<std::size_t>(odd_reader->channels()) * odd_reader->frame_count());
+    odd_reader->read(odd_samples.data(), odd_reader->frame_count());
+    const double odd_energy = channel_energy(odd_samples, 2U, 0U, 0U, odd_reader->frame_count()) +
+                              channel_energy(odd_samples, 2U, 1U, 0U, odd_reader->frame_count());
+    ok &= check(odd_energy > 1e-5, "saf_spreader non-512-aligned output is not silent");
+    return ok;
+}
+
 bool verify_binaural_diffuse_bus() {
     const auto direct_in = write_fixture(ObjectFixtureOptions{}, 4096U);
     const auto diffuse_in = write_fixture(ObjectFixtureOptions{.diffuse = 1.0F}, 4096U);
@@ -761,6 +846,7 @@ int main() {
     ok &= verify_binaural_channel_lock_changes_direction();
     ok &= verify_binaural_object_divergence_changes_output();
     ok &= verify_binaural_extent_changes_output();
+    ok &= verify_binaural_saf_spreader_output();
     ok &= verify_binaural_diffuse_bus();
     ok &= verify_binaural_mixed_divergence_keeps_center_slot();
     ok &= verify_external_sofa_when_available();

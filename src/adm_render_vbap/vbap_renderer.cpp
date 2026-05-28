@@ -196,7 +196,7 @@ constexpr std::array<DsLabelAlias, 34> k_ds_aliases = {{
 
 [[nodiscard]] std::optional<std::string_view> resolve_ds_alias(std::string_view label) {
     const auto key = canonicalize_ds_label(label);
-    const auto it =
+    const auto* const it =
         std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
     if (it != k_ds_aliases.end()) {
         return it->bs2051;
@@ -260,14 +260,26 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
 }
 
 [[nodiscard]] Result<std::vector<float>> calculate_one_vbap_gains(const SceneObjectBlock& block,
-                                                                  const LayoutSpec& layout) {
+                                                                  const LayoutSpec& layout,
+                                                                  mradm::SpeakerSpreadMode spread_mode) {
     auto speakers = flatten_layout(layout); // non-LFE only
     const auto src = source_direction(block.position);
     std::vector<float> source{src.azimuth, src.elevation};
 
     const auto num_non_lfe = static_cast<int>(speakers.size() / 2U);
     const bool use_3d = !is_2d_layout(layout);
-    const float spread_deg = use_3d ? mdap_spread_degrees(block) : 0.0F;
+    float spread_deg = 0.0F;
+    if (use_3d) {
+        switch (spread_mode) {
+        case mradm::SpeakerSpreadMode::none:
+            spread_deg = 0.0F;
+            break;
+        case mradm::SpeakerSpreadMode::automatic:
+        case mradm::SpeakerSpreadMode::mdap:
+            spread_deg = mdap_spread_degrees(block);
+            break;
+        }
+    }
     int table_size = 0;
     int simplex_count = 0;
     float* raw_table = nullptr;
@@ -329,8 +341,11 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
     });
 }
 
-[[nodiscard]] Result<std::vector<ChannelGainInfo>>
-build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, std::string_view layout_id, LogSink& logs) {
+[[nodiscard]] Result<std::vector<ChannelGainInfo>> build_gain_matrix(const AdmScene& scene,
+                                                                     const LayoutSpec& layout,
+                                                                     std::string_view layout_id,
+                                                                     LogSink& logs,
+                                                                     mradm::SpeakerSpreadMode spread_mode) {
     // Warn once if 2D output will silently discard height information.
     if (is_2d_layout(layout) && scene_has_elevated_sources(scene)) {
         logs.log(LogLevel::warning,
@@ -364,7 +379,7 @@ build_gain_matrix(const AdmScene& scene, const LayoutSpec& layout, std::string_v
                     raw_block, obj, object_speakers, logs, "saf-vbap", screen_ref_warned);
                 std::vector<float> gains(num_out, 0.0F);
                 for (const auto& source : prepared.sources) {
-                    auto source_gains = calculate_one_vbap_gains(source, layout);
+                    auto source_gains = calculate_one_vbap_gains(source, layout, spread_mode);
                     if (!source_gains) {
                         return make_error(source_gains.error().code,
                                           source_gains.error().message,
@@ -553,7 +568,7 @@ Result<RenderMetrics> VbapRenderer::render(const RenderPlan& plan, ProgressSink&
 
     const auto& info = plan.scene.info;
 
-    auto gain_matrix = build_gain_matrix(plan.scene, *layout, layout_id, logs);
+    auto gain_matrix = build_gain_matrix(plan.scene, *layout, layout_id, logs, plan.speaker_spread_mode);
     if (!gain_matrix) {
         return make_error(gain_matrix.error().code, gain_matrix.error().message, gain_matrix.error().context);
     }

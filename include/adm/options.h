@@ -21,6 +21,19 @@ enum class RendererSelection {
     binaural,
 };
 
+enum class SpeakerSpreadMode {
+    automatic, // mdap for 3D layouts, none for 2D
+    none,      // disable MDAP; Objects always use point VBAP regardless of extent
+    mdap,      // always use MDAP (multi-directional amplitude panning) for 3D layouts
+};
+
+enum class BinauralSpreadMode {
+    automatic,    // cloud
+    none,         // point source; extent parameters ignored
+    cloud,        // 17-point angular extent cloud (default)
+    saf_spreader, // experimental: SAF spreader OM mode (covariance-matching STFT domain)
+};
+
 struct RenderOptions {
     RendererSelection renderer{RendererSelection::automatic};
     std::string output_layout{"0+2+0"};
@@ -54,6 +67,8 @@ struct RenderOptions {
     // De-zipper window for rapidly changing Objects metadata, in sample frames.
     // 0 disables renderer-side control-rate smoothing and follows ADM blocks sample-accurately.
     uint32_t object_smoothing_frames{8875};
+    SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
+    BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
     // Internal diagnostics/tests only. The CLI never exposes this; normal users
     // cannot request speaker-stereo ADM rendering.
     bool internal_allow_speaker_stereo{false};
