@@ -158,6 +158,45 @@ bool verify_invalid_policy_rejected() {
     return ok;
 }
 
+bool verify_policy_id_matching_is_case_insensitive() {
+    const auto path = write_temp_json("mr_semantic_policy_id_case_test.json",
+                                      R"json({
+  "schema": "mradm.semantic-policy.v1",
+  "objects": [
+    {
+      "id": "ao_1001",
+      "diffuse": { "enabled": false }
+    },
+    {
+      "track_uid": "atu_00000002",
+      "extent": { "enabled": false }
+    }
+  ]
+})json");
+    const FileGuard guard{path};
+
+    auto policy = mradm::load_semantic_policy_file(path);
+    if (!check(policy.has_value(), "case-insensitive id policy parses")) {
+        return false;
+    }
+
+    auto scene = make_scene();
+    std::vector<std::string> warnings;
+    auto result = mradm::apply_semantic_policy(scene, *policy, scene.info.sample_rate, &warnings);
+    if (!check(result.has_value(), "case-insensitive id policy applies")) {
+        return false;
+    }
+
+    bool ok = true;
+    ok &= check(warnings.empty(), "case-insensitive id/track_uid rules matched");
+    const auto& kick = scene.objects.at(0).tracks.at(0).blocks.at(0);
+    ok &= check(near(kick.diffuse, 0.0F), "object id match ignores case");
+    const auto& cymbal = scene.objects.at(1).tracks.at(0).blocks.at(0);
+    ok &= check(near(cymbal.width, 0.0F) && near(cymbal.height, 0.0F) && near(cymbal.depth, 0.0F),
+                "track_uid match ignores case");
+    return ok;
+}
+
 bool verify_semantic_report() {
     const auto path = std::filesystem::temp_directory_path() / "mr_semantic_report_test.json";
     const FileGuard guard{path};
@@ -204,6 +243,7 @@ int main() {
     bool ok = true;
     ok &= verify_policy_parse_and_apply();
     ok &= verify_invalid_policy_rejected();
+    ok &= verify_policy_id_matching_is_case_insensitive();
     ok &= verify_semantic_report();
     ok &= verify_semantic_template_round_trips();
     if (ok) {

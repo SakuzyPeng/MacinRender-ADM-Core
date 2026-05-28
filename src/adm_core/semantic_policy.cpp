@@ -426,19 +426,24 @@ void merge_override(SemanticPolicyOverride& dst, const SemanticPolicyOverride& s
     return p == pat.size();
 }
 
+[[nodiscard]] bool ascii_equal_ignore_case(std::string_view lhs, std::string_view rhs) {
+    return lower_ascii(lhs) == lower_ascii(rhs);
+}
+
 [[nodiscard]] bool rule_matches(const SceneObject& object, const SemanticObjectRule& rule) {
-    if (!rule.id.empty() && object.id == rule.id) {
+    if (!rule.id.empty() && ascii_equal_ignore_case(object.id, rule.id)) {
         return true;
     }
-    if (!rule.name.empty() && lower_ascii(object.name) == lower_ascii(rule.name)) {
+    if (!rule.name.empty() && ascii_equal_ignore_case(object.name, rule.name)) {
         return true;
     }
     if (!rule.name_glob.empty() && glob_match_lower(rule.name_glob, object.name)) {
         return true;
     }
     if (!rule.track_uid.empty()) {
-        return std::ranges::any_of(object.tracks,
-                                   [&](const SceneTrackRef& track) { return track.track_uid == rule.track_uid; });
+        return std::ranges::any_of(object.tracks, [&](const SceneTrackRef& track) {
+            return ascii_equal_ignore_case(track.track_uid, rule.track_uid);
+        });
     }
     return false;
 }
