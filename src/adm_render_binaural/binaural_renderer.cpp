@@ -597,6 +597,19 @@ struct ConvolutionScratch {
     }
 };
 
+// Per-source resources for parallel OLA processing (each source owns its own FFT handle,
+// scratch buffers, and output accumulators so workers never alias each other).
+// NOLINTBEGIN(misc-non-private-member-variables-in-classes)
+struct PerSourceConvState {
+    void* hfft{nullptr};
+    ConvolutionScratch scratch;
+    std::vector<float> l_out;
+    std::vector<float> r_out;
+    std::vector<float> ch_in;
+    std::vector<float> diffuse_in;
+};
+// NOLINTEND(misc-non-private-member-variables-in-classes)
+
 // OLA convolution: convolve src[frames_now] with hrtf[n_bands × k_n_ears],
 // accumulate into l_out/r_out (both [frames_now]), update state.overlap.
 // Uses saf_rfft (KissFFT backend).
@@ -1217,22 +1230,6 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     EburPtr lufs_st{
         ebur128_init(2U, static_cast<unsigned long>(info.sample_rate), EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
 
-    // One FFT handle (KissFFT, thread-safe to use per render call).
-    void* hfft = nullptr;
-    saf_rfft_create(&hfft, bs->fft_size);
-    class FftGuard {
-      public:
-        explicit FftGuard(void** handle) : handle_(handle) {}
-        FftGuard(const FftGuard&) = delete;
-        FftGuard& operator=(const FftGuard&) = delete;
-        FftGuard(FftGuard&&) = delete;
-        FftGuard& operator=(FftGuard&&) = delete;
-        ~FftGuard() { saf_rfft_destroy(handle_); }
-
-      private:
-        void** handle_;
-    } fft_guard{&hfft};
-
     // Per-source OLA state.
     std::vector<OLAState> ola;
     ola.reserve(sources.size());
@@ -1241,8 +1238,32 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     }
     std::vector<DiffuseDelayState> diffuse_delay(sources.size());
     std::vector<HrtfCache> hrtf_cache(sources.size());
-    ConvolutionScratch conv_scratch;
-    conv_scratch.resize(*bs, static_cast<std::size_t>(render_block_size));
+
+    // Per-source FFT handles, scratch, and output buffers for parallel OLA processing.
+    std::vector<PerSourceConvState> src_cs(sources.size());
+    for (auto& cs : src_cs) {
+        saf_rfft_create(&cs.hfft, bs->fft_size);
+        cs.scratch.resize(*bs, static_cast<std::size_t>(render_block_size));
+        cs.l_out.resize(static_cast<std::size_t>(render_block_size));
+        cs.r_out.resize(static_cast<std::size_t>(render_block_size));
+        cs.ch_in.resize(static_cast<std::size_t>(render_block_size));
+        cs.diffuse_in.resize(static_cast<std::size_t>(render_block_size));
+    }
+    struct SrcCsGuard {
+        std::vector<PerSourceConvState>& data;
+        explicit SrcCsGuard(std::vector<PerSourceConvState>& d) : data(d) {}
+        SrcCsGuard(const SrcCsGuard&) = delete;
+        SrcCsGuard& operator=(const SrcCsGuard&) = delete;
+        SrcCsGuard(SrcCsGuard&&) = delete;
+        SrcCsGuard& operator=(SrcCsGuard&&) = delete;
+        ~SrcCsGuard() {
+            for (auto& cs : data) {
+                if (cs.hfft != nullptr) {
+                    saf_rfft_destroy(&cs.hfft);
+                }
+            }
+        }
+    } src_cs_guard{src_cs};
 
     const uint64_t num_frames = info.num_frames;
     const uint16_t num_in_ch = info.num_channels;
@@ -1267,6 +1288,9 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     const std::size_t spreader_worker_count =
         (spreader_tracks.size() > 1U && hw_threads > 1U) ? std::min(spreader_tracks.size(), hw_threads) : 0U;
     TrackWorkerPool spreader_pool(spreader_worker_count);
+    const std::size_t ola_worker_count =
+        (sources.size() > 1U && hw_threads > 1U) ? std::min(sources.size(), hw_threads) : 0U;
+    TrackWorkerPool ola_pool(ola_worker_count);
     std::vector<float> ola_dl_l;
     std::vector<float> ola_dl_r;
     std::size_t ola_dl_pos = 0;
@@ -1318,9 +1342,6 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
         // Scratch L/R accumulation buffers (non-interleaved for SIMD friendliness).
         std::vector<float> l_buf(fn, 0.0F);
         std::vector<float> r_buf(fn, 0.0F);
-        // De-interleaved input scratch for one channel.
-        std::vector<float> ch_in(fn);
-        std::vector<float> diffuse_in(fn);
 
         // In saf_spreader mode the OLA (point/diffuse) path accumulates into a
         // separate buffer so it can be delayed by spr_delay before being mixed
@@ -1336,11 +1357,18 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
             ola_r_dst = ola_r.data();
         }
 
-        for (std::size_t si = 0; si < sources.size(); ++si) {
+        // Process each OLA source independently; parallelise across sources.
+        ola_pool.parallel_for(sources.size(), [&](std::size_t si) {
             const auto& src = sources[si];
             if (src.blocks.empty()) {
-                continue;
+                return;
             }
+
+            auto& cs = src_cs[si];
+            float* src_l = cs.l_out.data();
+            float* src_r = cs.r_out.data();
+            std::fill_n(src_l, fn, 0.0F);
+            std::fill_n(src_r, fn, 0.0F);
 
             const uint64_t chunk_start = frames_done;
             const uint64_t chunk_end = frames_done + frames_now;
@@ -1353,15 +1381,15 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                     const uint64_t interp_len = end_block->interp_length_samples.value_or(plan.object_smoothing_frames);
                     if (interp_len > 0U) {
                         copy_windowed_object_input(
-                            src, in_block.data(), num_in_ch, chunk_start, frames_now, ch_in.data());
-                        const float* conv_in = ch_in.data();
+                            src, in_block.data(), num_in_ch, chunk_start, frames_now, cs.ch_in.data());
+                        const float* conv_in = cs.ch_in.data();
                         if (src.diffuse_bus) {
-                            decorrelate_diffuse_mono(diffuse_delay[si], ch_in.data(), frames_now, diffuse_in.data());
-                            conv_in = diffuse_in.data();
+                            decorrelate_diffuse_mono(diffuse_delay[si], cs.ch_in.data(), frames_now, cs.diffuse_in.data());
+                            conv_in = cs.diffuse_in.data();
                         }
                         const auto& start_hrtf = get_cached_hrtf(*bs, start_block->az, start_block->el, hrtf_cache[si]);
                         const auto end_hrtf = hrtf_for_dir(*bs, end_block->az, end_block->el);
-                        convolve_crossfaded_object_block(hfft,
+                        convolve_crossfaded_object_block(cs.hfft,
                                                          *bs,
                                                          conv_in,
                                                          frames_now,
@@ -1370,10 +1398,10 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                                                          start_hrtf,
                                                          end_hrtf,
                                                          ola[si],
-                                                         ola_l_dst,
-                                                         ola_r_dst,
-                                                         conv_scratch);
-                        continue;
+                                                         src_l,
+                                                         src_r,
+                                                         cs.scratch);
+                        return;
                     }
                 }
             }
@@ -1388,7 +1416,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
 
                 if (bi >= src.blocks.size() || src.blocks[bi].start_sample >= chunk_end) {
                     const auto off = static_cast<std::size_t>(cursor - chunk_start);
-                    advance_silence(ola[si], chunk_end - cursor, ola_l_dst + off, ola_r_dst + off);
+                    advance_silence(ola[si], chunk_end - cursor, src_l + off, src_r + off);
                     break;
                 }
 
@@ -1396,7 +1424,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                 if (cursor < blk.start_sample) {
                     const uint64_t silent_end = std::min<uint64_t>(blk.start_sample, chunk_end);
                     const auto off = static_cast<std::size_t>(cursor - chunk_start);
-                    advance_silence(ola[si], silent_end - cursor, ola_l_dst + off, ola_r_dst + off);
+                    advance_silence(ola[si], silent_end - cursor, src_l + off, src_r + off);
                     cursor = silent_end;
                     continue;
                 }
@@ -1413,39 +1441,49 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
 
                 const uint16_t ic = src.channel_index;
                 for (std::size_t f = 0; f < seg_fn; ++f) {
-                    ch_in[f] = (ic < num_in_ch) ? in_block[((off + f) * num_in_ch) + ic] : 0.0F;
+                    cs.ch_in[f] = (ic < num_in_ch) ? in_block[((off + f) * num_in_ch) + ic] : 0.0F;
                 }
 
                 const float gain = src.gain * blk.block_gain;
                 if (src.bypass_lfe) {
                     for (std::size_t f = 0; f < seg_fn; ++f) {
-                        const float sample = ch_in[f] * gain;
-                        ola_l_dst[off + f] += sample;
-                        ola_r_dst[off + f] += sample;
+                        const float sample = cs.ch_in[f] * gain;
+                        src_l[off + f] += sample;
+                        src_r[off + f] += sample;
                     }
                 } else {
-                    const float* conv_in = ch_in.data();
+                    const float* conv_in = cs.ch_in.data();
                     if (src.diffuse_bus) {
-                        decorrelate_diffuse_mono(diffuse_delay[si], ch_in.data(), seg_frames, diffuse_in.data());
-                        conv_in = diffuse_in.data();
+                        decorrelate_diffuse_mono(diffuse_delay[si], cs.ch_in.data(), seg_frames, cs.diffuse_in.data());
+                        conv_in = cs.diffuse_in.data();
                     }
                     const auto& hrtf = get_cached_hrtf(*bs, blk.az, blk.el, hrtf_cache[si]);
-                    convolve_and_accumulate(hfft,
+                    convolve_and_accumulate(cs.hfft,
                                             *bs,
                                             conv_in,
                                             seg_frames,
                                             gain,
                                             hrtf,
                                             ola[si],
-                                            ola_l_dst + off,
-                                            ola_r_dst + off,
-                                            conv_scratch);
+                                            src_l + off,
+                                            src_r + off,
+                                            cs.scratch);
                 }
 
                 cursor = seg_end;
                 if (cursor >= blk.end_sample) {
                     ++bi;
                 }
+            }
+        });
+
+        // Reduce per-source outputs into the shared OLA destination.
+        for (std::size_t si = 0; si < sources.size(); ++si) {
+            const float* src_l = src_cs[si].l_out.data();
+            const float* src_r = src_cs[si].r_out.data();
+            for (std::size_t f = 0; f < fn; ++f) {
+                ola_l_dst[f] += src_l[f];
+                ola_r_dst[f] += src_r[f];
             }
         }
 
