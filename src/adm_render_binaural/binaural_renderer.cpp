@@ -492,9 +492,8 @@ std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_
     return bs;
 }
 
-// Interpolate HRTF at (az_deg, el_deg) using the compressed VBAP table.
-// Returns flat [n_bands × k_n_ears] complex array (L = ear 0, R = ear 1).
-std::vector<float_complex> hrtf_for_dir(const BinauralState& bs, float az_deg, float el_deg) {
+// Interpolate HRTF at (az_deg, el_deg) into an existing buffer (no allocation after first call).
+void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<float_complex>& out) {
     const auto g = static_cast<std::size_t>(vbap_grid_idx(az_deg, el_deg));
     const auto gbase = g * 3U;
     const float w0 = bs.vbap_gains[gbase + 0U];
@@ -503,8 +502,7 @@ std::vector<float_complex> hrtf_for_dir(const BinauralState& bs, float az_deg, f
     const int d0 = bs.vbap_dirs[gbase + 0U];
     const int d1 = bs.vbap_dirs[gbase + 1U];
     const int d2 = bs.vbap_dirs[gbase + 2U];
-
-    std::vector<float_complex> out(static_cast<std::size_t>(bs.n_bands) * k_n_ears);
+    out.resize(static_cast<std::size_t>(bs.n_bands) * k_n_ears);
     for (int band = 0; band < bs.n_bands; ++band) {
         for (int ear = 0; ear < k_n_ears; ++ear) {
             const auto base = (static_cast<std::ptrdiff_t>(band) * k_n_ears * bs.num_dirs) +
@@ -515,7 +513,28 @@ std::vector<float_complex> hrtf_for_dir(const BinauralState& bs, float az_deg, f
                 crmulf(bs.hrtf_fd[static_cast<std::size_t>(base + d2)], w2);
         }
     }
+}
+
+std::vector<float_complex> hrtf_for_dir(const BinauralState& bs, float az_deg, float el_deg) {
+    std::vector<float_complex> out;
+    compute_hrtf_into(bs, az_deg, el_deg, out);
     return out;
+}
+
+struct HrtfCache {
+    float cached_az{std::numeric_limits<float>::quiet_NaN()};
+    float cached_el{std::numeric_limits<float>::quiet_NaN()};
+    std::vector<float_complex> hrtf;
+};
+
+const std::vector<float_complex>&
+get_cached_hrtf(const BinauralState& bs, float az, float el, HrtfCache& cache) {
+    if (cache.hrtf.empty() || az != cache.cached_az || el != cache.cached_el) {
+        compute_hrtf_into(bs, az, el, cache.hrtf);
+        cache.cached_az = az;
+        cache.cached_el = el;
+    }
+    return cache.hrtf;
 }
 
 // ── Per-channel OLA convolution state ─────────────────────────────────────────
@@ -557,6 +576,28 @@ void decorrelate_diffuse_mono(DiffuseDelayState& state, const float* in, uint64_
     }
 }
 
+struct ConvolutionScratch {
+    std::vector<float>         buf;
+    std::vector<float_complex> src_fd;
+    std::vector<float_complex> out_fd;
+    std::vector<float>         y;
+    std::vector<float>         l_cf0; // crossfade start arm
+    std::vector<float>         r_cf0;
+    std::vector<float>         l_cf1; // crossfade end arm
+    std::vector<float>         r_cf1;
+
+    void resize(const BinauralState& bs, std::size_t max_block) {
+        buf.resize(static_cast<std::size_t>(bs.fft_size));
+        src_fd.resize(static_cast<std::size_t>(bs.n_bands));
+        out_fd.resize(static_cast<std::size_t>(bs.n_bands));
+        y.resize(static_cast<std::size_t>(bs.fft_size));
+        l_cf0.resize(max_block);
+        r_cf0.resize(max_block);
+        l_cf1.resize(max_block);
+        r_cf1.resize(max_block);
+    }
+};
+
 // OLA convolution: convolve src[frames_now] with hrtf[n_bands × k_n_ears],
 // accumulate into l_out/r_out (both [frames_now]), update state.overlap.
 // Uses saf_rfft (KissFFT backend).
@@ -569,26 +610,23 @@ void convolve_and_accumulate(void* hfft,
                              const std::vector<float_complex>& hrtf,
                              OLAState& state,
                              float* l_out,
-                             float* r_out) {
+                             float* r_out,
+                             ConvolutionScratch& scratch) {
     const auto fn = static_cast<std::size_t>(frames_now);
 
-    std::vector<float> buf(static_cast<std::size_t>(bs.fft_size), 0.0F);
-    std::vector<float_complex> src_fd(static_cast<std::size_t>(bs.n_bands));
-    std::vector<float_complex> out_fd(static_cast<std::size_t>(bs.n_bands));
-    std::vector<float> y(static_cast<std::size_t>(bs.fft_size));
-
     // Zero-pad source block into FFT buffer and transform.
-    std::copy_n(src, fn, buf.begin());
-    saf_rfft_forward(hfft, buf.data(), src_fd.data());
+    std::ranges::fill(scratch.buf, 0.0F);
+    std::copy_n(src, fn, scratch.buf.begin());
+    saf_rfft_forward(hfft, scratch.buf.data(), scratch.src_fd.data());
 
     for (int ear = 0; ear < k_n_ears; ++ear) {
         // Frequency-domain multiply: src_fd × hrtf[:][ear].
         for (int band = 0; band < bs.n_bands; ++band) {
-            out_fd[static_cast<std::size_t>(band)] =
-                gain * src_fd[static_cast<std::size_t>(band)] *
+            scratch.out_fd[static_cast<std::size_t>(band)] =
+                gain * scratch.src_fd[static_cast<std::size_t>(band)] *
                 hrtf[(static_cast<std::size_t>(band) * k_n_ears) + static_cast<std::size_t>(ear)];
         }
-        saf_rfft_backward(hfft, out_fd.data(), y.data());
+        saf_rfft_backward(hfft, scratch.out_fd.data(), scratch.y.data());
 
         auto& overlap_vec = (ear == 0) ? state.left() : state.right();
         float* overlap = overlap_vec.data();
@@ -597,7 +635,7 @@ void convolve_and_accumulate(void* hfft,
 
         // Overlap-add: accumulated output = y[0..fn-1] + saved overlap.
         for (std::size_t f = 0; f < fn; ++f) {
-            dst[f] += y[f] + (f < overlap_len ? overlap[f] : 0.0F);
+            dst[f] += scratch.y[f] + (f < overlap_len ? overlap[f] : 0.0F);
         }
         // Save new overlap: y[fn..fn+overlap_len-1] plus any unemitted residual from the
         // old overlap.  When fn < overlap_len, overlap[fn..overlap_len-1] was never written
@@ -606,7 +644,7 @@ void convolve_and_accumulate(void* hfft,
         // the read index (fn+i) exceeds the write index (i) for all i < fn, so no aliasing.
         for (std::size_t i = 0; i < overlap_len; ++i) {
             const float residual = (fn + i < overlap_len) ? overlap[fn + i] : 0.0F;
-            overlap[i] = y[fn + i] + residual;
+            overlap[i] = scratch.y[fn + i] + residual;
         }
     }
 }
@@ -1059,23 +1097,25 @@ void convolve_crossfaded_object_block(void* hfft,
                                       const std::vector<float_complex>& end_hrtf,
                                       OLAState& state,
                                       float* l_out,
-                                      float* r_out) {
+                                      float* r_out,
+                                      ConvolutionScratch& scratch) {
     OLAState start_state = state;
     OLAState end_state = state;
     const auto fn = static_cast<std::size_t>(frames_now);
-    std::vector<float> l_start(fn, 0.0F);
-    std::vector<float> r_start(fn, 0.0F);
-    std::vector<float> l_end(fn, 0.0F);
-    std::vector<float> r_end(fn, 0.0F);
+    std::fill_n(scratch.l_cf0.begin(), fn, 0.0F);
+    std::fill_n(scratch.r_cf0.begin(), fn, 0.0F);
+    std::fill_n(scratch.l_cf1.begin(), fn, 0.0F);
+    std::fill_n(scratch.r_cf1.begin(), fn, 0.0F);
 
     convolve_and_accumulate(
-        hfft, bs, src, frames_now, start_gain, start_hrtf, start_state, l_start.data(), r_start.data());
-    convolve_and_accumulate(hfft, bs, src, frames_now, end_gain, end_hrtf, end_state, l_end.data(), r_end.data());
+        hfft, bs, src, frames_now, start_gain, start_hrtf, start_state, scratch.l_cf0.data(), scratch.r_cf0.data(), scratch);
+    convolve_and_accumulate(
+        hfft, bs, src, frames_now, end_gain, end_hrtf, end_state, scratch.l_cf1.data(), scratch.r_cf1.data(), scratch);
 
     for (std::size_t f = 0; f < fn; ++f) {
         const float alpha = fn > 1U ? static_cast<float>(f) / static_cast<float>(fn - 1U) : 0.0F;
-        l_out[f] += (l_start[f] * (1.0F - alpha)) + (l_end[f] * alpha);
-        r_out[f] += (r_start[f] * (1.0F - alpha)) + (r_end[f] * alpha);
+        l_out[f] += (scratch.l_cf0[f] * (1.0F - alpha)) + (scratch.l_cf1[f] * alpha);
+        r_out[f] += (scratch.r_cf0[f] * (1.0F - alpha)) + (scratch.r_cf1[f] * alpha);
     }
     state = std::move(end_state);
 }
@@ -1193,6 +1233,9 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
         ola.emplace_back(bs->overlap_len);
     }
     std::vector<DiffuseDelayState> diffuse_delay(sources.size());
+    std::vector<HrtfCache> hrtf_cache(sources.size());
+    ConvolutionScratch conv_scratch;
+    conv_scratch.resize(*bs, static_cast<std::size_t>(render_block_size));
 
     const uint64_t num_frames = info.num_frames;
     const uint16_t num_in_ch = info.num_channels;
@@ -1309,7 +1352,8 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                             decorrelate_diffuse_mono(diffuse_delay[si], ch_in.data(), frames_now, diffuse_in.data());
                             conv_in = diffuse_in.data();
                         }
-                        const auto start_hrtf = hrtf_for_dir(*bs, start_block->az, start_block->el);
+                        const auto& start_hrtf =
+                            get_cached_hrtf(*bs, start_block->az, start_block->el, hrtf_cache[si]);
                         const auto end_hrtf = hrtf_for_dir(*bs, end_block->az, end_block->el);
                         convolve_crossfaded_object_block(hfft,
                                                          *bs,
@@ -1321,7 +1365,8 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                                                          end_hrtf,
                                                          ola[si],
                                                          ola_l_dst,
-                                                         ola_r_dst);
+                                                         ola_r_dst,
+                                                         conv_scratch);
                         continue;
                     }
                 }
@@ -1378,9 +1423,9 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                         decorrelate_diffuse_mono(diffuse_delay[si], ch_in.data(), seg_frames, diffuse_in.data());
                         conv_in = diffuse_in.data();
                     }
-                    const auto hrtf = hrtf_for_dir(*bs, blk.az, blk.el);
+                    const auto& hrtf = get_cached_hrtf(*bs, blk.az, blk.el, hrtf_cache[si]);
                     convolve_and_accumulate(
-                        hfft, *bs, conv_in, seg_frames, gain, hrtf, ola[si], ola_l_dst + off, ola_r_dst + off);
+                        hfft, *bs, conv_in, seg_frames, gain, hrtf, ola[si], ola_l_dst + off, ola_r_dst + off, conv_scratch);
                 }
 
                 cursor = seg_end;
