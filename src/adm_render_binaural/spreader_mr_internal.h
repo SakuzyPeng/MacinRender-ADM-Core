@@ -120,6 +120,18 @@ typedef struct _spreader {
      * by spreader_init_from_hrtf_grid(); skip HRTF loading in initCodec */
     int useExternalHRIRsFLAG;
 
+    /* cone index cache: avoids iterating all nGrid directions every frame when
+     * source az/el/spread is unchanged.  cone_ng_flat[src * nGrid + k] holds the
+     * k-th in-cone grid index for source src.  Allocated in
+     * spreader_init_from_hrtf_grid(), freed in spreader_destroy(). */
+    int* cone_ng_flat;
+    int  n_cone[SPREADER_MAX_NUM_SOURCES];
+    int  centre_ind_cache[SPREADER_MAX_NUM_SOURCES];
+    float cone_cached_az[SPREADER_MAX_NUM_SOURCES];
+    float cone_cached_el[SPREADER_MAX_NUM_SOURCES];
+    float cone_cached_spread[SPREADER_MAX_NUM_SOURCES];
+    int  cone_valid[SPREADER_MAX_NUM_SOURCES];
+
 } spreader_data;
 
 /* ── internal function ───────────────────────────────────────────────── */
