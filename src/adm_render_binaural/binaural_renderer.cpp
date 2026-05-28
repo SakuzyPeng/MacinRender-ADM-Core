@@ -15,6 +15,7 @@
 #include <ranges>
 #include <span>
 #include <string>
+#include <future>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -1291,18 +1292,25 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
             }
         }
 
-        // saf_spreader direct-source path: process in block-boundary-aligned segments so that
-        // direction changes mid-chunk are handled correctly.
+        // saf_spreader direct-source path: each track is independent (separate STFT state),
+        // so process them in parallel. Each track accumulates into its own l/r scratch buffer;
+        // results are reduced into l_buf/r_buf after all tracks finish.
         if (!spreader_adapters.empty()) {
             const uint64_t chunk_start_sp = frames_done;
             const uint64_t chunk_end_sp = frames_done + frames_now;
-            const std::vector<float> zeros_full(fn, 0.0F);
-            for (std::size_t ti = 0; ti < spreader_tracks.size(); ++ti) {
+            const std::size_t n_tracks = spreader_tracks.size();
+
+            // Per-track output scratch (independent of l_buf/r_buf during parallel phase).
+            std::vector<std::vector<float>> spr_l(n_tracks, std::vector<float>(fn, 0.0F));
+            std::vector<std::vector<float>> spr_r(n_tracks, std::vector<float>(fn, 0.0F));
+
+            auto process_one_track = [&](std::size_t ti) {
                 const auto& st = spreader_tracks[ti];
                 auto& adapter = spreader_adapters[ti];
+                const std::vector<float> zeros_full(fn, 0.0F);
+                std::vector<float> track_ch(fn);
                 uint64_t sp_cursor = chunk_start_sp;
                 while (sp_cursor < chunk_end_sp) {
-                    // Find the block active at sp_cursor (blocks are sorted by start_sample).
                     const SpreaderBlock* active = nullptr;
                     uint64_t next_boundary = chunk_end_sp;
                     for (const auto& sb : st.blocks) {
@@ -1327,22 +1335,44 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                         }
                         const uint16_t ic = st.channel_index;
                         for (std::size_t f = 0; f < seg_fn; ++f) {
-                            ch_in[f] = (ic < num_in_ch) ? in_block[((seg_off + f) * num_in_ch) + ic] : 0.0F;
+                            track_ch[f] = (ic < num_in_ch) ? in_block[((seg_off + f) * num_in_ch) + ic] : 0.0F;
                         }
-                        std::vector<const float*> mono_ptrs(active->sources.size(), ch_in.data());
+                        std::vector<const float*> mono_ptrs(active->sources.size(), track_ch.data());
                         adapter.process_chunk(mono_ptrs.data(),
                                               static_cast<int>(active->sources.size()),
                                               seg_fn,
-                                              l_buf.data() + seg_off,
-                                              r_buf.data() + seg_off);
+                                              spr_l[ti].data() + seg_off,
+                                              spr_r[ti].data() + seg_off);
                     } else {
-                        // Silent gap: feed zeros and accumulate STFT tail into output.
                         std::vector<const float*> silent_ptrs(static_cast<std::size_t>(st.n_sources),
                                                               zeros_full.data());
                         adapter.process_chunk(
-                            silent_ptrs.data(), st.n_sources, seg_fn, l_buf.data() + seg_off, r_buf.data() + seg_off);
+                            silent_ptrs.data(), st.n_sources, seg_fn, spr_l[ti].data() + seg_off, spr_r[ti].data() + seg_off);
                     }
                     sp_cursor = next_boundary;
+                }
+            };
+
+            if (n_tracks == 1U) {
+                // Single track: no scheduling overhead.
+                process_one_track(0U);
+            } else {
+                std::vector<std::future<void>> futs;
+                futs.reserve(n_tracks - 1U);
+                for (std::size_t ti = 1U; ti < n_tracks; ++ti) {
+                    futs.push_back(std::async(std::launch::async, process_one_track, ti));
+                }
+                process_one_track(0U); // run track 0 on this thread
+                for (auto& f : futs) {
+                    f.get();
+                }
+            }
+
+            // Reduce per-track scratch into l_buf / r_buf.
+            for (std::size_t ti = 0U; ti < n_tracks; ++ti) {
+                for (std::size_t f = 0U; f < fn; ++f) {
+                    l_buf[f] += spr_l[ti][f];
+                    r_buf[f] += spr_r[ti][f];
                 }
             }
         }
