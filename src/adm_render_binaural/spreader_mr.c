@@ -393,19 +393,26 @@ void spreader_process(
                 float az_s = src_dirs_deg[src][0];
                 float el_s = src_dirs_deg[src][1];
                 float sp_s = src_spread[src];
-                int needs_rebuild = !pData->cone_valid[src] ||
-                    az_s != pData->cone_cached_az[src] ||
-                    el_s != pData->cone_cached_el[src] ||
-                    sp_s != pData->cone_cached_spread[src];
+                int needs_rebuild = !pData->cone_valid[src] || az_s != pData->cone_cached_az[src] ||
+                                    el_s != pData->cone_cached_el[src] || sp_s != pData->cone_cached_spread[src];
                 if (needs_rebuild) {
-                    int* cng = pData->cone_ng_flat + (size_t)src * (size_t)pData->nGrid;
+                    int* cng = pData->cone_ng_flat + (size_t) src * (size_t) pData->nGrid;
                     int nc_build = 0;
                     unitSph2cart(src_dirs_deg[src], 1, 1, src_dir_xyz);
-                    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                                pData->nGrid, 1, 3, 1.0f,
-                                pData->grid_dirs_xyz, 3,
-                                src_dir_xyz, 1, 0.0f,
-                                pData->angles, 1);
+                    cblas_sgemm(CblasRowMajor,
+                                CblasNoTrans,
+                                CblasNoTrans,
+                                pData->nGrid,
+                                1,
+                                3,
+                                1.0f,
+                                pData->grid_dirs_xyz,
+                                3,
+                                src_dir_xyz,
+                                1,
+                                0.0f,
+                                pData->angles,
+                                1);
                     for (i = 0; i < pData->nGrid; i++)
                         pData->angles[i] = acosf(SAF_MIN(pData->angles[i], 0.9999999f)) * 180.0f / SAF_PI;
                     utility_siminv(pData->angles, pData->nGrid, &centre_ind);
@@ -429,16 +436,15 @@ void spreader_process(
             case SPREADER_MODE_NAIVE: /* fall through */
             case SPREADER_MODE_OM:
                 for (band = 0; band < HYBRID_BANDS; band++) {
-                    const int* cng = pData->cone_ng_flat + (size_t)src * (size_t)pData->nGrid;
+                    const int* cng = pData->cone_ng_flat + (size_t) src * (size_t) pData->nGrid;
                     nc = (pData->freqVector[band] < MAX_SPREAD_FREQ) ? pData->n_cone[src] : 0;
                     memset(pData->_H_tmp, 0, Q * sizeof(float_complex));
                     nSpread = nc;
                     for (k = 0; k < nc; k++) {
                         ng = cng[k];
                         for (q = 0; q < Q; q++)
-                            pData->_H_tmp[q] =
-                                ccaddf(pData->_H_tmp[q],
-                                       pData->H_grid[band * Q * pData->nGrid + q * pData->nGrid + ng]);
+                            pData->_H_tmp[q] = ccaddf(pData->_H_tmp[q],
+                                                      pData->H_grid[band * Q * pData->nGrid + q * pData->nGrid + ng]);
                     }
                     if (nSpread == 0) {
                         for (q = 0; q < Q; q++)
@@ -506,7 +512,7 @@ void spreader_process(
                 }
 
                 for (band = 0; band < HYBRID_BANDS; band++) {
-                    const int* cng = pData->cone_ng_flat + (size_t)src * (size_t)pData->nGrid;
+                    const int* cng = pData->cone_ng_flat + (size_t) src * (size_t) pData->nGrid;
                     nc = (pData->freqVector[band] < MAX_SPREAD_FREQ) ? pData->n_cone[src] : 0;
                     memset(pData->_Cy, 0, Q * Q * sizeof(float_complex));
                     memset(pData->_H_tmp, 0, Q * sizeof(float_complex));
@@ -515,9 +521,8 @@ void spreader_process(
                         ng = cng[k];
                         cblas_caxpy(Q * Q, &calpha, pData->HHH[band][ng], 1, pData->_Cy, 1);
                         for (q = 0; q < Q; q++)
-                            pData->_H_tmp[q] =
-                                ccaddf(pData->_H_tmp[q],
-                                       pData->H_grid[band * Q * pData->nGrid + q * pData->nGrid + ng]);
+                            pData->_H_tmp[q] = ccaddf(pData->_H_tmp[q],
+                                                      pData->H_grid[band * Q * pData->nGrid + q * pData->nGrid + ng]);
                     }
                     if (nSpread == 0) {
                         cblas_caxpy(Q * Q, &calpha, pData->HHH[band][centre_ind], 1, pData->_Cy, 1);
@@ -894,6 +899,6 @@ void spreader_init_from_hrtf_grid(void* const hSpr,
     pData->codecStatus = CODEC_STATUS_NOT_INITIALISED;
 
     /* (re)allocate cone index cache for the new grid size */
-    pData->cone_ng_flat = realloc1d(pData->cone_ng_flat, (size_t)nGrid * SPREADER_MAX_NUM_SOURCES * sizeof(int));
+    pData->cone_ng_flat = realloc1d(pData->cone_ng_flat, (size_t) nGrid * SPREADER_MAX_NUM_SOURCES * sizeof(int));
     memset(pData->cone_valid, 0, sizeof(pData->cone_valid));
 }

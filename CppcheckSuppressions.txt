@@ -18,3 +18,8 @@ unusedStructMember:*/include/adm/semantic_policy.h
 # Shared renderer internals return aggregate structs across translation units.
 unusedStructMember:*/src/adm_render_common/render_common.h
 unusedStructMember:*/src/adm_cli/commands.h
+unusedStructMember:*/src/adm_render_binaural/binaural_spreader.h
+# SAF spreader is a local C fork of the upstream SAF example; keep cppcheck from
+# treating third-party C idioms as project C++ style issues.
+*:*/src/adm_render_binaural/spreader_mr.c
+unusedStructMember:*/src/adm_render_binaural/spreader_mr_internal.h
