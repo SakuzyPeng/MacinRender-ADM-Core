@@ -527,8 +527,7 @@ struct HrtfCache {
     std::vector<float_complex> hrtf;
 };
 
-const std::vector<float_complex>&
-get_cached_hrtf(const BinauralState& bs, float az, float el, HrtfCache& cache) {
+const std::vector<float_complex>& get_cached_hrtf(const BinauralState& bs, float az, float el, HrtfCache& cache) {
     if (cache.hrtf.empty() || az != cache.cached_az || el != cache.cached_el) {
         compute_hrtf_into(bs, az, el, cache.hrtf);
         cache.cached_az = az;
@@ -577,14 +576,14 @@ void decorrelate_diffuse_mono(DiffuseDelayState& state, const float* in, uint64_
 }
 
 struct ConvolutionScratch {
-    std::vector<float>         buf;
+    std::vector<float> buf;
     std::vector<float_complex> src_fd;
     std::vector<float_complex> out_fd;
-    std::vector<float>         y;
-    std::vector<float>         l_cf0; // crossfade start arm
-    std::vector<float>         r_cf0;
-    std::vector<float>         l_cf1; // crossfade end arm
-    std::vector<float>         r_cf1;
+    std::vector<float> y;
+    std::vector<float> l_cf0; // crossfade start arm
+    std::vector<float> r_cf0;
+    std::vector<float> l_cf1; // crossfade end arm
+    std::vector<float> r_cf1;
 
     void resize(const BinauralState& bs, std::size_t max_block) {
         buf.resize(static_cast<std::size_t>(bs.fft_size));
@@ -1107,8 +1106,16 @@ void convolve_crossfaded_object_block(void* hfft,
     std::fill_n(scratch.l_cf1.begin(), fn, 0.0F);
     std::fill_n(scratch.r_cf1.begin(), fn, 0.0F);
 
-    convolve_and_accumulate(
-        hfft, bs, src, frames_now, start_gain, start_hrtf, start_state, scratch.l_cf0.data(), scratch.r_cf0.data(), scratch);
+    convolve_and_accumulate(hfft,
+                            bs,
+                            src,
+                            frames_now,
+                            start_gain,
+                            start_hrtf,
+                            start_state,
+                            scratch.l_cf0.data(),
+                            scratch.r_cf0.data(),
+                            scratch);
     convolve_and_accumulate(
         hfft, bs, src, frames_now, end_gain, end_hrtf, end_state, scratch.l_cf1.data(), scratch.r_cf1.data(), scratch);
 
@@ -1352,8 +1359,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                             decorrelate_diffuse_mono(diffuse_delay[si], ch_in.data(), frames_now, diffuse_in.data());
                             conv_in = diffuse_in.data();
                         }
-                        const auto& start_hrtf =
-                            get_cached_hrtf(*bs, start_block->az, start_block->el, hrtf_cache[si]);
+                        const auto& start_hrtf = get_cached_hrtf(*bs, start_block->az, start_block->el, hrtf_cache[si]);
                         const auto end_hrtf = hrtf_for_dir(*bs, end_block->az, end_block->el);
                         convolve_crossfaded_object_block(hfft,
                                                          *bs,
@@ -1424,8 +1430,16 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                         conv_in = diffuse_in.data();
                     }
                     const auto& hrtf = get_cached_hrtf(*bs, blk.az, blk.el, hrtf_cache[si]);
-                    convolve_and_accumulate(
-                        hfft, *bs, conv_in, seg_frames, gain, hrtf, ola[si], ola_l_dst + off, ola_r_dst + off, conv_scratch);
+                    convolve_and_accumulate(hfft,
+                                            *bs,
+                                            conv_in,
+                                            seg_frames,
+                                            gain,
+                                            hrtf,
+                                            ola[si],
+                                            ola_l_dst + off,
+                                            ola_r_dst + off,
+                                            conv_scratch);
                 }
 
                 cursor = seg_end;
