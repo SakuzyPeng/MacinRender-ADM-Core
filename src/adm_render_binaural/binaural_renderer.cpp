@@ -575,6 +575,7 @@ void decorrelate_diffuse_mono(DiffuseDelayState& state, const float* in, uint64_
     }
 }
 
+// NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct ConvolutionScratch {
     std::vector<float> buf;
     std::vector<float_complex> src_fd;
@@ -596,6 +597,7 @@ struct ConvolutionScratch {
         r_cf1.resize(max_block);
     }
 };
+// NOLINTEND(misc-non-private-member-variables-in-classes)
 
 // Per-source resources for parallel OLA processing (each source owns its own FFT handle,
 // scratch buffers, and output accumulators so workers never alias each other).
@@ -1250,7 +1252,6 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
         cs.diffuse_in.resize(static_cast<std::size_t>(render_block_size));
     }
     struct SrcCsGuard {
-        std::vector<PerSourceConvState>& data;
         explicit SrcCsGuard(std::vector<PerSourceConvState>& d) : data(d) {}
         SrcCsGuard(const SrcCsGuard&) = delete;
         SrcCsGuard& operator=(const SrcCsGuard&) = delete;
@@ -1263,6 +1264,9 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                 }
             }
         }
+
+      private:
+        std::vector<PerSourceConvState>& data;
     } src_cs_guard{src_cs};
 
     const uint64_t num_frames = info.num_frames;
@@ -1384,7 +1388,8 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                             src, in_block.data(), num_in_ch, chunk_start, frames_now, cs.ch_in.data());
                         const float* conv_in = cs.ch_in.data();
                         if (src.diffuse_bus) {
-                            decorrelate_diffuse_mono(diffuse_delay[si], cs.ch_in.data(), frames_now, cs.diffuse_in.data());
+                            decorrelate_diffuse_mono(
+                                diffuse_delay[si], cs.ch_in.data(), frames_now, cs.diffuse_in.data());
                             conv_in = cs.diffuse_in.data();
                         }
                         const auto& start_hrtf = get_cached_hrtf(*bs, start_block->az, start_block->el, hrtf_cache[si]);
@@ -1458,16 +1463,8 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                         conv_in = cs.diffuse_in.data();
                     }
                     const auto& hrtf = get_cached_hrtf(*bs, blk.az, blk.el, hrtf_cache[si]);
-                    convolve_and_accumulate(cs.hfft,
-                                            *bs,
-                                            conv_in,
-                                            seg_frames,
-                                            gain,
-                                            hrtf,
-                                            ola[si],
-                                            src_l + off,
-                                            src_r + off,
-                                            cs.scratch);
+                    convolve_and_accumulate(
+                        cs.hfft, *bs, conv_in, seg_frames, gain, hrtf, ola[si], src_l + off, src_r + off, cs.scratch);
                 }
 
                 cursor = seg_end;
