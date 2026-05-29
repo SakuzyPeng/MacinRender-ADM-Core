@@ -1,0 +1,107 @@
+name: IAMF Bridge Prebuild
+
+on:
+  workflow_dispatch:
+    inputs:
+      iamf_tools_ref:
+        description: "AOMediaCodec/iamf-tools ref to build"
+        required: true
+        default: "main"
+  pull_request:
+    paths:
+      - ".github/workflows/iamf-bridge-prebuild.yml"
+      - "tools/iamf_aom_bridge/**"
+
+concurrency:
+  group: iamf-bridge-prebuild-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prebuild:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS IAMF bridge
+            runner: macos-26
+            platform: macos
+            arch: arm64
+            install: |
+              brew install bazelisk
+              mkdir -p "$HOME/.local/bin"
+              ln -sf "$(brew --prefix)/bin/bazelisk" "$HOME/.local/bin/bazel"
+              echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          - name: Linux IAMF bridge
+            runner: ubuntu-24.04
+            platform: linux
+            arch: x86_64
+            install: |
+              sudo apt-get update
+              sudo apt-get install -y curl ca-certificates
+              curl -fsSL \
+                https://github.com/bazelbuild/bazelisk/releases/download/v1.26.0/bazelisk-linux-amd64 \
+                -o /tmp/bazelisk
+              sudo install -m 0755 /tmp/bazelisk /usr/local/bin/bazel
+
+    env:
+      BAZEL_CACHE_DIR: ${{ github.workspace }}/.bazel-cache
+      IAMF_TOOLS_REF: ${{ github.event.inputs.iamf_tools_ref || 'main' }}
+
+    steps:
+      - name: Checkout MacinRender
+        uses: actions/checkout@v6
+        with:
+          path: mradm
+
+      - name: Checkout iamf-tools
+        uses: actions/checkout@v6
+        with:
+          repository: AOMediaCodec/iamf-tools
+          ref: ${{ env.IAMF_TOOLS_REF }}
+          path: iamf-tools
+
+      - name: Install dependencies
+        run: ${{ matrix.install }}
+
+      - name: Restore Bazel cache
+        uses: actions/cache@v5
+        with:
+          path: .bazel-cache
+          key: bazel-iamf-bridge-${{ runner.os }}-${{ env.IAMF_TOOLS_REF }}-${{ hashFiles('mradm/tools/iamf_aom_bridge/**') }}
+          restore-keys: |
+            bazel-iamf-bridge-${{ runner.os }}-${{ env.IAMF_TOOLS_REF }}-
+            bazel-iamf-bridge-${{ runner.os }}-
+
+      - name: Inject bridge source
+        run: |
+          rm -rf iamf-tools/iamf/cli/mr_bridge
+          cp -R mradm/tools/iamf_aom_bridge iamf-tools/iamf/cli/mr_bridge
+
+      - name: Build bridge
+        working-directory: iamf-tools
+        run: >
+          bazel
+          --output_user_root="$BAZEL_CACHE_DIR"
+          build
+          //iamf/cli/mr_bridge:mr_iamf_aom_bridge
+
+      - name: Package SDK
+        run: |
+          version="${GITHUB_SHA::12}"
+          root="dist/mr-iamf-aom-sdk-${version}-${{ matrix.platform }}-${{ matrix.arch }}"
+          mkdir -p "$root/lib" "$root/include"
+          cp iamf-tools/bazel-bin/iamf/cli/mr_bridge/libmr_iamf_aom_bridge.* "$root/lib/"
+          cp mradm/tools/iamf_aom_bridge/mr_iamf_aom_bridge.h "$root/include/"
+          cp mradm/tools/iamf_aom_bridge/README.md "$root/README.md"
+          tar -C dist -czf "$root.tar.gz" "$(basename "$root")"
+          echo "archive=$root.tar.gz" >> "$GITHUB_OUTPUT"
+        id: package
+
+      - name: Upload SDK
+        uses: actions/upload-artifact@v7
+        with:
+          name: mr-iamf-aom-sdk-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error

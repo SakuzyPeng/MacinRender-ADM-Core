@@ -74,6 +74,7 @@ jobs:
           -DCMAKE_DISABLE_FIND_PACKAGE_CLI11=TRUE
           -DMR_ADM_FLAC_PROVIDER=VENDORED
           -DMR_ADM_OPUS_PROVIDER=VENDORED
+          -DMR_ADM_ENABLE_IAMF=OFF
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -91,7 +92,7 @@ jobs:
           --binary "${{ matrix.binary }}"
           --platform "${{ matrix.platform }}"
           --arch "${{ matrix.arch }}"
-          --cmake-options "release; fmt/spdlog/CLI11 FetchContent; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED"
+          --cmake-options "release; fmt/spdlog/CLI11 FetchContent; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF"
 
       - name: Package smoke
         run: |
@@ -215,6 +216,7 @@ jobs:
             -DMR_ADM_CORE_BUILD_TESTS=OFF ^
             -DMR_ADM_FLAC_PROVIDER=VENDORED ^
             -DMR_ADM_OPUS_PROVIDER=VENDORED ^
+            -DMR_ADM_ENABLE_IAMF=OFF ^
             -DSAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE ^
             -DOPENBLAS_LIBRARY="%OPENBLAS_LIBRARY%" ^
             -DLAPACKE_LIBRARY="%LAPACKE_LIBRARY%" ^
@@ -241,7 +243,7 @@ jobs:
           -Arch "x64"
           -OpenBlasRoot "$env:OPENBLAS_ROOT"
           -VcpkgRoot "$env:VCPKG_INSTALLATION_ROOT"
-          -CmakeOptions "MinSizeRel; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; SAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE"
+          -CmakeOptions "MinSizeRel; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF; SAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE"
 
       - name: Package smoke
         shell: pwsh
