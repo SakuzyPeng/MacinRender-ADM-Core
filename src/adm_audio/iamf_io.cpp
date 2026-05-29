@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -34,6 +35,24 @@ struct RunResult {
     int code{-1};
     std::string output;
 };
+
+constexpr std::size_t k_max_process_output = 4096U;
+constexpr const char* k_process_output_truncated = "...(truncated)";
+
+void append_process_output(std::string& output, const char* data, std::size_t size) {
+    if (output.size() >= k_max_process_output) {
+        if (output.find(k_process_output_truncated) == std::string::npos) {
+            output += k_process_output_truncated;
+        }
+        return;
+    }
+
+    const std::size_t remaining = k_max_process_output - output.size();
+    output.append(data, std::min(size, remaining));
+    if (size > remaining) {
+        output += k_process_output_truncated;
+    }
+}
 
 #if defined(_WIN32)
 
@@ -121,8 +140,7 @@ RunResult run_process(const std::string& prog, const std::vector<std::string>& a
     std::array<char, 512> buf{};
     DWORD n = 0;
     while (ReadFile(pipe_r, buf.data(), static_cast<DWORD>(buf.size()), &n, nullptr) != 0 && n > 0) {
-        output.append(buf.data(), n);
-        if (output.size() > 4096U) { output += "...(truncated)"; break; }
+        append_process_output(output, buf.data(), n);
     }
     CloseHandle(pipe_r);
 
@@ -190,8 +208,7 @@ RunResult run_process(const std::string& prog, const std::vector<std::string>& a
     std::array<char, 512> buf{};
     ssize_t n = 0;
     while ((n = ::read(fds[0], buf.data(), buf.size())) > 0) {
-        output.append(buf.data(), static_cast<std::size_t>(n));
-        if (output.size() > 4096U) { output += "...(truncated)"; break; }
+        append_process_output(output, buf.data(), static_cast<std::size_t>(n));
     }
     ::close(fds[0]);
 
