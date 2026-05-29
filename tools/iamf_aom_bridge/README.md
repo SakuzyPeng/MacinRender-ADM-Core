@@ -23,6 +23,15 @@ mkdir -p /path/to/iamf-sdk/lib
 cp bazel-bin/iamf/cli/mr_bridge/libmr_iamf_aom_bridge.* /path/to/iamf-sdk/lib/
 ```
 
+On Windows, place the import library under `lib/` and the runtime DLL under
+`bin/`:
+
+```text
+iamf-sdk/
+  bin/mr_iamf_aom_bridge.dll
+  lib/mr_iamf_aom_bridge.lib
+```
+
 Then configure MacinRender with:
 
 ```sh

@@ -44,6 +44,16 @@ jobs:
                 https://github.com/bazelbuild/bazelisk/releases/download/v1.26.0/bazelisk-linux-amd64 \
                 -o /tmp/bazelisk
               sudo install -m 0755 /tmp/bazelisk /usr/local/bin/bazel
+          - name: Windows IAMF bridge
+            runner: windows-2025
+            platform: windows
+            arch: x64
+            install: |
+              mkdir -p "$HOME/.local/bin"
+              curl -fsSL \
+                https://github.com/bazelbuild/bazelisk/releases/download/v1.26.0/bazelisk-windows-amd64.exe \
+                -o "$HOME/.local/bin/bazel.exe"
+              echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
     env:
       BAZEL_CACHE_DIR: ${{ github.workspace }}/.bazel-cache
@@ -63,6 +73,7 @@ jobs:
           path: iamf-tools
 
       - name: Install dependencies
+        shell: bash
         run: ${{ matrix.install }}
 
       - name: Restore Bazel cache
@@ -75,12 +86,14 @@ jobs:
             bazel-iamf-bridge-${{ runner.os }}-
 
       - name: Inject bridge source
+        shell: bash
         run: |
           rm -rf iamf-tools/iamf/cli/mr_bridge
           cp -R mradm/tools/iamf_aom_bridge iamf-tools/iamf/cli/mr_bridge
 
       - name: Build bridge
         working-directory: iamf-tools
+        shell: bash
         run: >
           bazel
           --output_user_root="$BAZEL_CACHE_DIR"
@@ -88,11 +101,43 @@ jobs:
           //iamf/cli/mr_bridge:mr_iamf_aom_bridge
 
       - name: Package SDK
+        shell: bash
         run: |
           version="${GITHUB_SHA::12}"
           root="dist/mr-iamf-aom-sdk-${version}-${{ matrix.platform }}-${{ matrix.arch }}"
-          mkdir -p "$root/lib" "$root/include"
-          cp iamf-tools/bazel-bin/iamf/cli/mr_bridge/libmr_iamf_aom_bridge.* "$root/lib/"
+          mkdir -p "$root/bin" "$root/lib" "$root/include"
+          shopt -s nullglob
+          outputs=(iamf-tools/bazel-bin/iamf/cli/mr_bridge/*mr_iamf_aom_bridge*)
+          if (( ${#outputs[@]} == 0 )); then
+            echo "No bridge outputs found in bazel-bin/iamf/cli/mr_bridge" >&2
+            exit 1
+          fi
+          copied_runtime=0
+          copied_link=0
+          for file in "${outputs[@]}"; do
+            [[ -f "$file" ]] || continue
+            name="$(basename "$file")"
+            case "$name" in
+              *.dll)
+                cp "$file" "$root/bin/"
+                copied_runtime=1
+                ;;
+              *.dylib|*.so|*.so.*)
+                cp "$file" "$root/lib/"
+                copied_runtime=1
+                copied_link=1
+                ;;
+              *.lib|*.a)
+                cp "$file" "$root/lib/"
+                copied_link=1
+                ;;
+            esac
+          done
+          if (( copied_runtime == 0 || copied_link == 0 )); then
+            echo "Bridge SDK is missing runtime or link library output:" >&2
+            printf '  %s\n' "${outputs[@]}" >&2
+            exit 1
+          fi
           cp mradm/tools/iamf_aom_bridge/mr_iamf_aom_bridge.h "$root/include/"
           cp mradm/tools/iamf_aom_bridge/README.md "$root/README.md"
           tar -C dist -czf "$root.tar.gz" "$(basename "$root")"
