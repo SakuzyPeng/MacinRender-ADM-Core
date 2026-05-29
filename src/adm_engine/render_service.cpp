@@ -326,6 +326,11 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
     }
     if (request.options.iamf_container == RenderOptions::IamfContainer::mp4) {
+        if (final_ext != ".mp4") {
+            const auto msg = fmt::format(
+                "--iamf-container mp4 requires output path with .mp4 extension; got '{}'", final_ext);
+            return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+        }
         if (!audio::iamf_encoding_available()) {
             constexpr auto msg =
                 "--iamf-container mp4 requires a build configured with MR_ADM_ENABLE_IAMF=ON";
@@ -343,11 +348,6 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
                      fmt::format("ffmpeg {} detected; IAMF-in-MP4 ialb loudness box is unreliable "
                                  "below version 7.0 — consider installing mp4box (GPAC)",
                                  packager.ffmpeg_major));
-        }
-        if (final_ext != ".mp4") {
-            const auto msg = fmt::format(
-                "--iamf-container mp4 requires output path with .mp4 extension; got '{}'", final_ext);
-            return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
         }
     }
     const bool is_lossy_final = (is_flac_final || is_opus_final || is_apac_final || is_iamf_final || is_iamf_mp4_final);

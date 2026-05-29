@@ -1,14 +1,23 @@
 #include <array>
-#include <cstdio>
 #include <cstdint>
-#include <cstdlib>
+#include <cstring>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "adm/audio_io.h"
 #include "adm/errors.h"
 #if MR_ADM_ENABLE_IAMF
 #include "iamf_aom_bridge.h"
+#endif
+
+// ── Platform process helpers ──────────────────────────────────────────────
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 namespace mradm::audio {
@@ -19,60 +28,184 @@ namespace {
 constexpr uint32_t k_sample_rate = 48000U;
 #endif
 
-// Shell-safe single-quote wrapping for POSIX paths.
-std::string shell_quote(const std::string& s) {
-    std::string out = "'";
-    for (char c : s) {
-        if (c == '\'') { out += "'\\''"; }
-        else { out += c; }
-    }
-    return out + "'";
+// ── Cross-platform process helpers ───────────────────────────────────────
+
+struct RunResult {
+    int code{-1};
+    std::string output;
+};
+
+#if defined(_WIN32)
+
+static std::wstring to_wide(const std::string& s) {
+    if (s.empty()) { return {}; }
+    const int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), static_cast<int>(s.size()), nullptr, 0);
+    if (n <= 0) { return {}; }
+    std::wstring w(static_cast<std::size_t>(n), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), static_cast<int>(s.size()), w.data(), n);
+    return w;
 }
 
-// Run a shell command; capture combined stdout+stderr for error reporting.
-Result<void> run_packager_cmd(const std::string& cmd) {
-#if defined(_WIN32)
-    (void) cmd;
-    return make_error(ErrorCode::unsupported, "IAMF-to-MP4 packaging is not supported on Windows");
-#else
-    std::string captured;
-    // NOLINTNEXTLINE(cert-env33-c)
-    FILE* pipe = popen((cmd + " 2>&1").c_str(), "r");
-    if (pipe == nullptr) {
-        return make_error(ErrorCode::io_error, "failed to launch packager command");
+// Per MSDN CommandLineToArgvW quoting rules.
+static std::wstring win_quote_arg(const std::wstring& arg) {
+    bool needs_quote = arg.empty();
+    for (wchar_t c : arg) {
+        if (c == L' ' || c == L'\t' || c == L'"') { needs_quote = true; break; }
     }
-    std::array<char, 256> buf{};
-    while (fgets(buf.data(), static_cast<int>(buf.size()), pipe) != nullptr) {
-        captured += buf.data();
-        if (captured.size() > 4096U) { captured += "...(truncated)"; break; }
+    if (!needs_quote) { return arg; }
+
+    std::wstring out = L"\"";
+    int bs = 0;
+    for (wchar_t c : arg) {
+        if (c == L'\\') {
+            ++bs;
+        } else if (c == L'"') {
+            for (int i = 0; i < bs * 2; ++i) { out += L'\\'; }
+            out += L"\\\"";
+            bs = 0;
+        } else {
+            for (; bs > 0; --bs) { out += L'\\'; }
+            out += c;
+        }
     }
-    const int rc = pclose(pipe);
-    if (rc != 0) {
-        while (!captured.empty() && captured.back() == '\n') { captured.pop_back(); }
-        return make_error(ErrorCode::io_error, "packager command failed: " + captured);
-    }
-    return {};
-#endif
+    for (int i = 0; i < bs * 2; ++i) { out += L'\\'; }
+    return out + L'"';
 }
 
-// Returns the first of the given candidate names found in PATH, or empty string.
-std::string find_program(std::initializer_list<const char*> candidates) {
-#if defined(_WIN32)
-    (void) candidates;
-    return {};
-#else
+std::string find_in_path(std::initializer_list<const char*> candidates) {
     for (const char* name : candidates) {
-        std::string cmd = "command -v ";
-        cmd += name;
-        cmd += " >/dev/null 2>&1";
-        // NOLINTNEXTLINE(cert-env33-c)
-        if (std::system(cmd.c_str()) == 0) { return name; }
+        const auto wname = to_wide(name);
+        if (wname.empty()) { continue; }
+        wchar_t found[MAX_PATH]{};
+        if (SearchPathW(nullptr, wname.c_str(), L".exe", MAX_PATH, found, nullptr) > 0) { return name; }
     }
     return {};
-#endif
 }
+
+RunResult run_process(const std::string& prog, const std::vector<std::string>& args) {
+    std::wstring cmdline = win_quote_arg(to_wide(prog));
+    for (const auto& a : args) {
+        cmdline += L' ';
+        cmdline += win_quote_arg(to_wide(a));
+    }
+    std::vector<wchar_t> cmd_buf(cmdline.begin(), cmdline.end());
+    cmd_buf.push_back(L'\0');
+
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+
+    HANDLE pipe_r = nullptr;
+    HANDLE pipe_w = nullptr;
+    if (CreatePipe(&pipe_r, &pipe_w, &sa, 0) == 0) { return {-1, "CreatePipe failed"}; }
+    SetHandleInformation(pipe_r, HANDLE_FLAG_INHERIT, 0);
+
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    si.hStdOutput = pipe_w;
+    si.hStdError = pipe_w;
+    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    si.dwFlags = STARTF_USESTDHANDLES;
+
+    PROCESS_INFORMATION pi{};
+    const BOOL ok = CreateProcessW(nullptr, cmd_buf.data(), nullptr, nullptr,
+                                   TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+    CloseHandle(pipe_w);
+
+    if (ok == 0) {
+        CloseHandle(pipe_r);
+        return {-1, "CreateProcessW failed"};
+    }
+
+    std::string output;
+    std::array<char, 512> buf{};
+    DWORD n = 0;
+    while (ReadFile(pipe_r, buf.data(), static_cast<DWORD>(buf.size()), &n, nullptr) != 0 && n > 0) {
+        output.append(buf.data(), n);
+        if (output.size() > 4096U) { output += "...(truncated)"; break; }
+    }
+    CloseHandle(pipe_r);
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD exit_code = 0;
+    GetExitCodeProcess(pi.hProcess, &exit_code);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return {static_cast<int>(exit_code), std::move(output)};
+}
+
+#else // POSIX ---------------------------------------------------------------
+
+std::string find_in_path(std::initializer_list<const char*> candidates) {
+    const char* path_env = ::getenv("PATH"); // NOLINT(concurrency-mt-unsafe)
+    if (path_env == nullptr) { return {}; }
+    const std::string path_str(path_env);
+
+    for (const char* name : candidates) {
+        std::size_t start = 0;
+        while (start <= path_str.size()) {
+            const auto end = path_str.find(':', start);
+            const auto dir_end = (end == std::string::npos) ? path_str.size() : end;
+            if (dir_end > start) {
+                const auto candidate = path_str.substr(start, dir_end - start) + "/" + name;
+                if (::access(candidate.c_str(), X_OK) == 0) { return name; }
+            }
+            if (end == std::string::npos) { break; }
+            start = end + 1;
+        }
+    }
+    return {};
+}
+
+RunResult run_process(const std::string& prog, const std::vector<std::string>& args) {
+    std::array<int, 2> fds{-1, -1};
+    if (::pipe(fds.data()) != 0) { return {-1, "pipe() failed"}; }
+
+    const pid_t pid = ::fork();
+    if (pid < 0) {
+        ::close(fds[0]);
+        ::close(fds[1]);
+        return {-1, "fork() failed"};
+    }
+
+    if (pid == 0) {
+        ::close(fds[0]);
+        ::dup2(fds[1], STDOUT_FILENO);
+        ::dup2(fds[1], STDERR_FILENO);
+        ::close(fds[1]);
+
+        std::vector<const char*> argv;
+        argv.reserve(args.size() + 2U);
+        argv.push_back(prog.c_str());
+        for (const auto& a : args) { argv.push_back(a.c_str()); }
+        argv.push_back(nullptr);
+
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast) — execvp signature requires char* const*
+        ::execvp(prog.c_str(), const_cast<char* const*>(argv.data()));
+        ::_exit(127);
+    }
+
+    ::close(fds[1]);
+    std::string output;
+    std::array<char, 512> buf{};
+    ssize_t n = 0;
+    while ((n = ::read(fds[0], buf.data(), buf.size())) > 0) {
+        output.append(buf.data(), static_cast<std::size_t>(n));
+        if (output.size() > 4096U) { output += "...(truncated)"; break; }
+    }
+    ::close(fds[0]);
+
+    int status = 0;
+    ::waitpid(pid, &status, 0);
+    const int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    return {code, std::move(output)};
+}
+
+#endif // _WIN32
 
 } // namespace
+
+// ── IAMF bridge ──────────────────────────────────────────────────────────
 
 bool iamf_encoding_available() {
 #if MR_ADM_ENABLE_IAMF
@@ -134,29 +267,28 @@ Result<void> convert_to_iamf(const std::string& src_path,
 #endif
 }
 
+// ── IAMF-to-MP4 packaging ─────────────────────────────────────────────────
+
 IamfMp4PackagerInfo detect_iamf_mp4_packager() {
-    const auto mp4box = find_program({"mp4box", "MP4Box"});
+    const auto mp4box = find_in_path({"mp4box", "MP4Box"});
     if (!mp4box.empty()) {
         return {IamfMp4PackagerKind::mp4box, -1, mp4box};
     }
 
-#if !defined(_WIN32)
-    FILE* pipe = popen("ffmpeg -version 2>&1", "r");
-    if (pipe != nullptr) {
-        std::array<char, 256> line{};
-        IamfMp4PackagerInfo info;
-        if (fgets(line.data(), static_cast<int>(line.size()), pipe) != nullptr) {
-            int maj = 0;
-            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
-            if (sscanf(line.data(), "ffmpeg version %d.", &maj) == 1 && maj > 0) {
-                info = {IamfMp4PackagerKind::ffmpeg, maj, "ffmpeg"};
-            }
-        }
-        pclose(pipe);
-        if (info.kind != IamfMp4PackagerKind::none) { return info; }
-    }
-#endif
+    const auto ffmpeg = find_in_path({"ffmpeg"});
+    if (ffmpeg.empty()) { return {}; }
 
+    // Probe version: first line of `ffmpeg -version` is "ffmpeg version X.Y.Z ..."
+    const auto res = run_process(ffmpeg, {"-version"});
+    if (res.code != 0 || res.output.empty()) { return {}; }
+
+    int maj = 0;
+    const auto first_newline = res.output.find('\n');
+    const auto first_line = res.output.substr(0, first_newline);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
+    if (std::sscanf(first_line.c_str(), "ffmpeg version %d.", &maj) == 1 && maj > 0) {
+        return {IamfMp4PackagerKind::ffmpeg, maj, ffmpeg};
+    }
     return {};
 }
 
@@ -168,15 +300,23 @@ Result<void> package_iamf_to_mp4(const std::string& iamf_path, const std::string
     const auto info = detect_iamf_mp4_packager();
 
     if (info.kind == IamfMp4PackagerKind::mp4box) {
-        const std::string cmd =
-            info.executable + " -add " + shell_quote(iamf_path) + " -new " + shell_quote(mp4_path);
-        return run_packager_cmd(cmd);
+        const auto res = run_process(info.executable, {"-add", iamf_path, "-new", mp4_path});
+        if (res.code != 0) {
+            auto msg = res.output;
+            while (!msg.empty() && msg.back() == '\n') { msg.pop_back(); }
+            return make_error(ErrorCode::io_error, "mp4box packaging failed: " + msg);
+        }
+        return {};
     }
 
     if (info.kind == IamfMp4PackagerKind::ffmpeg) {
-        const std::string cmd =
-            info.executable + " -y -i " + shell_quote(iamf_path) + " -c copy " + shell_quote(mp4_path);
-        return run_packager_cmd(cmd);
+        const auto res = run_process(info.executable, {"-y", "-i", iamf_path, "-c", "copy", mp4_path});
+        if (res.code != 0) {
+            auto msg = res.output;
+            while (!msg.empty() && msg.back() == '\n') { msg.pop_back(); }
+            return make_error(ErrorCode::io_error, "ffmpeg packaging failed: " + msg);
+        }
+        return {};
     }
 
     return make_error(ErrorCode::unsupported,
