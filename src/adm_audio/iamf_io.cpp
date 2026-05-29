@@ -239,6 +239,12 @@ Result<void> convert_to_iamf(const std::string& src_path,
                              std::optional<double> loudness_lufs,
                              std::optional<double> peak_dbtp) {
 #if MR_ADM_ENABLE_IAMF
+    if (layout_id == "9.1.6" || layout_id == "atmos916") {
+        return make_error(ErrorCode::unsupported,
+                          "IAMF 9.1.6 output is disabled: the official AOM bridge requires expanded/Base-Enhanced "
+                          "IAMF for this layout, which is not currently compatible enough for release output");
+    }
+
     auto reader_res = FloatWavReader::open(src_path);
     if (!reader_res) {
         return tl::unexpected{reader_res.error()};
