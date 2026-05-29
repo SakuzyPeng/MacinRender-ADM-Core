@@ -246,6 +246,20 @@ Result<void> convert_to_iamf(const std::string& src_path,
                              std::optional<double> loudness_lufs = std::nullopt,
                              std::optional<double> peak_dbtp = std::nullopt);
 
+// IAMF-to-MP4 packaging (ISOBMFF Annex A encapsulation).
+// Uses mp4box (GPAC) as primary packager; falls back to ffmpeg.
+enum class IamfMp4PackagerKind : uint8_t { none, mp4box, ffmpeg };
+struct IamfMp4PackagerInfo {
+    IamfMp4PackagerKind kind{IamfMp4PackagerKind::none};
+    int ffmpeg_major{-1}; // populated only when kind == ffmpeg
+};
+// Detect the best available IAMF-to-MP4 packager in PATH (mp4box > ffmpeg).
+IamfMp4PackagerInfo detect_iamf_mp4_packager();
+bool iamf_mp4_packager_available();
+// Package a raw .iamf OBU stream into an ISOBMFF container (.mp4).
+// Returns unsupported if no suitable packager is found in PATH.
+Result<void> package_iamf_to_mp4(const std::string& iamf_path, const std::string& mp4_path);
+
 // Encode a fully post-processed float32 WAV (src_path) to Opus MKA (mka_path).
 // src_path must be 48000 Hz (Opus requirement). layout_id controls Opus channel
 // mapping where the format has standard semantics (5.1/7.1 Vorbis order,
