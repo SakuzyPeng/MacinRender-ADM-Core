@@ -222,7 +222,7 @@ class ReaderHandle {
 Result<void> apply_gain_to_file(const std::string& path, float gain, const std::string& layout_id = {});
 
 // Convert an existing float32 WAV to integer PCM in-place (temp + rename).
-// bit_depth must be 16 or 24. Limited to sample rates <= 65535 Hz by the
+// bit_depth must be 16, 24, or 32. Limited to sample rates <= 65535 Hz by the
 // underlying bw64 integer writer (libbw64 0.10.0 API constraint).
 Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth);
 
@@ -234,9 +234,10 @@ Result<void> convert_to_flac(const std::string& src_path, const std::string& fla
 
 bool iamf_encoding_available();
 
-// Encode a fully post-processed float32 WAV (src_path) to a standalone IAMF raw
-// OBU stream (iamf_path, .iamf extension) using the official AOM iamf-tools
-// bridge. Builds without MR_ADM_ENABLE_IAMF return ErrorCode::unsupported.
+// Encode a fully post-processed integer PCM WAV (src_path) to a standalone IAMF
+// raw OBU stream (iamf_path, .iamf extension) using the official AOM iamf-tools
+// bridge. The render pipeline converts its float staging WAV to 32-bit PCM
+// before calling this. Builds without MR_ADM_ENABLE_IAMF return ErrorCode::unsupported.
 // src_path must be 48000 Hz. bitrate_per_ch_kbps is an Opus VBR target hint.
 // loudness_lufs / peak_dbtp are post-gain values written into the Mix Presentation.
 Result<void> convert_to_iamf(const std::string& src_path,

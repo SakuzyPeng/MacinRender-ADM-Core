@@ -498,11 +498,15 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     }
 
     if (is_iamf_final) {
-        logs.log(LogLevel::info, "engine", "encoding float32 render to IAMF (Opus, raw OBU stream)");
+        logs.log(LogLevel::info, "engine", "encoding 32-bit PCM staging to IAMF (Opus, raw OBU stream)");
         const auto lufs =
             metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
         const auto peak =
             metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
+        auto conv_res = audio::downconvert_to_int(render_path, 32U);
+        if (!conv_res) {
+            return {conv_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, conv_res.error().message}}};
+        }
         auto iamf_res = audio::convert_to_iamf(
             render_path, output_path, output_layout, request.options.opus_bitrate_per_ch_kbps, lufs, peak);
         render_temp_guard->remove_now();
@@ -512,11 +516,15 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     }
 
     if (is_iamf_mp4_final) {
-        logs.log(LogLevel::info, "engine", "encoding float32 render to IAMF (Opus) and packaging to MP4");
+        logs.log(LogLevel::info, "engine", "encoding 32-bit PCM staging to IAMF (Opus) and packaging to MP4");
         const auto lufs =
             metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
         const auto peak =
             metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
+        auto conv_res = audio::downconvert_to_int(render_path, 32U);
+        if (!conv_res) {
+            return {conv_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, conv_res.error().message}}};
+        }
         auto iamf_res = audio::convert_to_iamf(render_path, iamf_temp_path.string(), output_layout,
                                                request.options.opus_bitrate_per_ch_kbps, lufs, peak);
         render_temp_guard->remove_now();

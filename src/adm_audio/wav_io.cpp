@@ -103,6 +103,12 @@ uint64_t FloatWavReader::read(float* out, uint64_t frames) {
 
 Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth) {
     try {
+        if (bit_depth != 16U && bit_depth != 24U && bit_depth != 32U) {
+            return make_error(ErrorCode::invalid_argument,
+                              fmt::format("integer PCM bit depth must be 16, 24, or 32; got {}", bit_depth),
+                              "path=" + path);
+        }
+
         auto reader_res = FloatWavReader::open(path);
         if (!reader_res) {
             return tl::unexpected{reader_res.error()};
