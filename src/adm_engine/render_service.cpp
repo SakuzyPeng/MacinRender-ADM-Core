@@ -303,8 +303,8 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     const bool is_apac_final = (final_ext == ".m4a" || final_ext == ".mp4") &&
                                request.options.iamf_container != RenderOptions::IamfContainer::mp4;
     const bool is_iamf_final = (final_ext == ".iamf");
-    const bool is_iamf_mp4_final = (request.options.iamf_container == RenderOptions::IamfContainer::mp4) &&
-                                   audio::iamf_encoding_available();
+    const bool is_iamf_mp4_final =
+        (request.options.iamf_container == RenderOptions::IamfContainer::mp4) && audio::iamf_encoding_available();
     if (is_flac_final) {
         if (!flac_supports_layout(output_layout)) {
             const auto msg = fmt::format(
@@ -334,24 +334,23 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     }
     if (request.options.iamf_container == RenderOptions::IamfContainer::mp4) {
         if (final_ext != ".mp4") {
-            const auto msg = fmt::format(
-                "--iamf-container mp4 requires output path with .mp4 extension; got '{}'", final_ext);
+            const auto msg =
+                fmt::format("--iamf-container mp4 requires output path with .mp4 extension; got '{}'", final_ext);
             return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
         }
         if (!audio::iamf_encoding_available()) {
-            constexpr auto msg =
-                "--iamf-container mp4 requires a build configured with MR_ADM_ENABLE_IAMF=ON";
+            constexpr auto msg = "--iamf-container mp4 requires a build configured with MR_ADM_ENABLE_IAMF=ON";
             return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
         }
         const auto packager = audio::detect_iamf_mp4_packager();
         if (packager.kind == audio::IamfMp4PackagerKind::none) {
-            constexpr auto msg =
-                "--iamf-container mp4 requires mp4box (GPAC) or ffmpeg in PATH; "
-                "install GPAC: https://gpac.io";
+            constexpr auto msg = "--iamf-container mp4 requires mp4box (GPAC) or ffmpeg in PATH; "
+                                 "install GPAC: https://gpac.io";
             return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
         }
         if (packager.kind == audio::IamfMp4PackagerKind::ffmpeg && packager.ffmpeg_major < 7) {
-            logs.log(LogLevel::warning, "engine",
+            logs.log(LogLevel::warning,
+                     "engine",
                      fmt::format("ffmpeg {} detected; IAMF-in-MP4 ialb loudness box is unreliable "
                                  "below version 7.0 — consider installing mp4box (GPAC)",
                                  packager.ffmpeg_major));
@@ -363,8 +362,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     const std::string render_path = is_lossy_final ? render_temp_path.string() : output_path;
     // For IAMF-in-MP4: intermediate .iamf temp alongside the render WAV temp.
     const auto iamf_temp_path = is_iamf_mp4_final
-                                    ? render_temp_path.parent_path() /
-                                          (render_temp_path.stem().string() + ".iamf")
+                                    ? render_temp_path.parent_path() / (render_temp_path.stem().string() + ".iamf")
                                     : std::filesystem::path{};
     auto iamf_temp_guard = is_iamf_mp4_final ? std::make_unique<TempFileGuard>(iamf_temp_path) : nullptr;
 
@@ -532,8 +530,8 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         if (!conv_res) {
             return {conv_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, conv_res.error().message}}};
         }
-        auto iamf_res = audio::convert_to_iamf(render_path, iamf_temp_path.string(), output_layout,
-                                               request.options.opus_bitrate_per_ch_kbps, lufs, peak);
+        auto iamf_res = audio::convert_to_iamf(
+            render_path, iamf_temp_path.string(), output_layout, request.options.opus_bitrate_per_ch_kbps, lufs, peak);
         render_temp_guard->remove_now();
         if (!iamf_res) {
             return {iamf_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, iamf_res.error().message}}};
