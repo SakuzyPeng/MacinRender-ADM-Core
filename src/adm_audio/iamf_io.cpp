@@ -31,6 +31,10 @@ std::string shell_quote(const std::string& s) {
 
 // Run a shell command; capture combined stdout+stderr for error reporting.
 Result<void> run_packager_cmd(const std::string& cmd) {
+#if defined(_WIN32)
+    (void) cmd;
+    return make_error(ErrorCode::unsupported, "IAMF-to-MP4 packaging is not supported on Windows");
+#else
     std::string captured;
     // NOLINTNEXTLINE(cert-env33-c)
     FILE* pipe = popen((cmd + " 2>&1").c_str(), "r");
@@ -48,14 +52,24 @@ Result<void> run_packager_cmd(const std::string& cmd) {
         return make_error(ErrorCode::io_error, "packager command failed: " + captured);
     }
     return {};
+#endif
 }
 
-bool program_exists(const char* prog) {
-    std::string cmd = "command -v ";
-    cmd += prog;
-    cmd += " >/dev/null 2>&1";
-    // NOLINTNEXTLINE(cert-env33-c)
-    return std::system(cmd.c_str()) == 0;
+// Returns the first of the given candidate names found in PATH, or empty string.
+std::string find_program(std::initializer_list<const char*> candidates) {
+#if defined(_WIN32)
+    (void) candidates;
+    return {};
+#else
+    for (const char* name : candidates) {
+        std::string cmd = "command -v ";
+        cmd += name;
+        cmd += " >/dev/null 2>&1";
+        // NOLINTNEXTLINE(cert-env33-c)
+        if (std::system(cmd.c_str()) == 0) { return name; }
+    }
+    return {};
+#endif
 }
 
 } // namespace
@@ -121,23 +135,29 @@ Result<void> convert_to_iamf(const std::string& src_path,
 }
 
 IamfMp4PackagerInfo detect_iamf_mp4_packager() {
-    if (program_exists("mp4box") || program_exists("MP4Box")) {
-        return {IamfMp4PackagerKind::mp4box, -1};
+    const auto mp4box = find_program({"mp4box", "MP4Box"});
+    if (!mp4box.empty()) {
+        return {IamfMp4PackagerKind::mp4box, -1, mp4box};
     }
 
+#if !defined(_WIN32)
     FILE* pipe = popen("ffmpeg -version 2>&1", "r");
-    if (pipe == nullptr) { return {}; }
-    std::array<char, 256> line{};
-    IamfMp4PackagerInfo info;
-    if (fgets(line.data(), static_cast<int>(line.size()), pipe) != nullptr) {
-        int maj = 0;
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
-        if (sscanf(line.data(), "ffmpeg version %d.", &maj) == 1 && maj > 0) {
-            info = {IamfMp4PackagerKind::ffmpeg, maj};
+    if (pipe != nullptr) {
+        std::array<char, 256> line{};
+        IamfMp4PackagerInfo info;
+        if (fgets(line.data(), static_cast<int>(line.size()), pipe) != nullptr) {
+            int maj = 0;
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
+            if (sscanf(line.data(), "ffmpeg version %d.", &maj) == 1 && maj > 0) {
+                info = {IamfMp4PackagerKind::ffmpeg, maj, "ffmpeg"};
+            }
         }
+        pclose(pipe);
+        if (info.kind != IamfMp4PackagerKind::none) { return info; }
     }
-    pclose(pipe);
-    return info;
+#endif
+
+    return {};
 }
 
 bool iamf_mp4_packager_available() {
@@ -149,13 +169,13 @@ Result<void> package_iamf_to_mp4(const std::string& iamf_path, const std::string
 
     if (info.kind == IamfMp4PackagerKind::mp4box) {
         const std::string cmd =
-            "mp4box -add " + shell_quote(iamf_path) + " -new " + shell_quote(mp4_path);
+            info.executable + " -add " + shell_quote(iamf_path) + " -new " + shell_quote(mp4_path);
         return run_packager_cmd(cmd);
     }
 
     if (info.kind == IamfMp4PackagerKind::ffmpeg) {
         const std::string cmd =
-            "ffmpeg -y -i " + shell_quote(iamf_path) + " -c copy " + shell_quote(mp4_path);
+            info.executable + " -y -i " + shell_quote(iamf_path) + " -c copy " + shell_quote(mp4_path);
         return run_packager_cmd(cmd);
     }
 

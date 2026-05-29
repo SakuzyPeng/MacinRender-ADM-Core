@@ -251,7 +251,8 @@ Result<void> convert_to_iamf(const std::string& src_path,
 enum class IamfMp4PackagerKind : uint8_t { none, mp4box, ffmpeg };
 struct IamfMp4PackagerInfo {
     IamfMp4PackagerKind kind{IamfMp4PackagerKind::none};
-    int ffmpeg_major{-1}; // populated only when kind == ffmpeg
+    int ffmpeg_major{-1};      // populated only when kind == ffmpeg
+    std::string executable;    // actual binary name found in PATH ("mp4box", "MP4Box", "ffmpeg")
 };
 // Detect the best available IAMF-to-MP4 packager in PATH (mp4box > ffmpeg).
 IamfMp4PackagerInfo detect_iamf_mp4_packager();
