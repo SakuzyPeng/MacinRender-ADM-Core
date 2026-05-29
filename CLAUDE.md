@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概要
 
-MacinRender ADM Core 是一个跨平台 ADM（ITU-R BS.2076 Audio Definition Model）空间音频渲染核心，使用 C++20 实现，提供 `mradm` 命令行工具和稳定 C ABI 库。输入是 ADM BWF/BW64 文件，输出包括多声道扬声器、HOA、双耳，以及 WAV / CAF / FLAC / Opus MKA / APAC 容器。详见 `README.md`。
+MacinRender ADM Core 是一个跨平台 ADM（ITU-R BS.2076 Audio Definition Model）空间音频渲染核心，使用 C++20 实现，提供 `mradm` 命令行工具和稳定 C ABI 库。输入是 ADM BWF/BW64 文件，输出包括多声道扬声器、HOA、双耳，以及 WAV / CAF / FLAC / Opus MKA / IAMF / APAC 容器。详见 `README.md`。
 
 项目长期方向是平台化重构（不是简单的 CLI 重写）：见 `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md`。
 
@@ -105,6 +105,7 @@ clang-tidy 依赖 `compile_commands.json`，必须先 `cmake --preset debug`。m
 - `MR_ADM_FLAC_PROVIDER=AUTO|VENDORED|SYSTEM` — Release 默认 vendored static，Debug 优先系统库
 - `MR_ADM_OPUS_PROVIDER=AUTO|VENDORED|SYSTEM` — 同上
 - `MR_ADM_ENABLE_SOFA=ON`（默认）— binaural 渲染器的用户 SOFA HRIR 支持
+- `MR_ADM_ENABLE_IAMF=OFF`（默认）— IAMF 编码，需配合 `MR_ADM_IAMF_AOM_ROOT=/path/to/iamf-sdk` 指向预构建的官方 AOM iamf-tools bridge SDK（提供 `lib/libmr_iamf_aom_bridge.*`）。关闭时 `.iamf` 输出直接返回 `unsupported`，**不**回退到任何手写 OBU writer
 - `MR_ADM_CORE_BUILD_CLI=ON`、`MR_ADM_CORE_BUILD_TESTS=ON`
 
 CI 显式使用 `MR_ADM_FLAC_PROVIDER=VENDORED` 与 `MR_ADM_OPUS_PROVIDER=VENDORED` 以消除 runner 差异（见 `docs/guides/CI.md`）。
@@ -126,6 +127,7 @@ ADMRenderHOA        PRIVATE: ebur128 + ADMAudio（HOA encode；output_layout="ho
 ADMRenderBinaural   PRIVATE: saf (hrir/sofa_reader/vbap/utilities) + ebur128 + ADMAudio
 ADMAudio            PRIVATE: dr_wav, dr_flac, FLAC, Opus, libbw64
                     macOS: AudioToolbox + CoreFoundation（APAC / CAF metadata）
+                    可选: IamfAomBridge（MR_ADM_ENABLE_IAMF）；IAMF 编码 + MP4 打包
 ADMPeak / ADMLoudness  PRIVATE: ebur128 + ADMAudio
 ADMEngine           PRIVATE: 上述所有；提供 RenderService 编排
 ADMCAPI             PUBLIC: ADMEngine；纯 C 头 + extern "C" 实现
@@ -159,6 +161,7 @@ mradm_exe (CLI)     PRIVATE: ADMEngine + 所有 renderer + CLI11 + spdlog
 
 - FLAC：固定 24-bit integer，最多 8 声道；超过 8ch（5.1.4、7.1.4、9.1.6、22.2）不支持
 - Opus MKA：输入采样率固定 48 kHz；1–2ch 用 mapping family 0，3–8ch family 1，9–255ch family 255
+- IAMF：仅 `MR_ADM_ENABLE_IAMF=ON` 构建可用；编码经 AOM iamf-tools bridge（用 integer PCM staging），输出 raw OBU stream（`.iamf`）+ Opus，面向 IAMF 测试/交付链路而非通用播放器。`--iamf-container mp4` 进一步打包为 ISOBMFF：运行时探测 PATH 中的打包器，**mp4box（GPAC）优先于 ffmpeg**（ffmpeg 需 ≥7），探测用 `fork`+`execvp` / `CreateProcessW`（不走 shell）；找不到则返回 `unsupported`。目前 IAMF 只开放到 `7.1.4`，`9.1.6`（需 expanded/Base-Enhanced IAMF）因播放器兼容性暂时禁用
 - APAC：**macOS-only**；通过 AudioToolbox；CI 在 Linux 上 `mr_adm_apac_smoke_tests` 自动 skip
 - 空间布局 / HOA 的 APAC 默认码率以 `7.1.4=2048 kbps` 为 12 声道基准缩放（README 输出格式表）
 - HOA 输出的响度归一化可用；测量先解码到 7.1.4 AllRAD 参考播放域，LFE 不计入 LUFS 但单独计入 True Peak
