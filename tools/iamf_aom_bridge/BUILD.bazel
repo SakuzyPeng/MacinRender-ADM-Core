@@ -1,0 +1,19 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_binary(
+    name = "mr_iamf_aom_bridge",
+    srcs = [
+        "mr_iamf_aom_bridge.cc",
+        "mr_iamf_aom_bridge.h",
+    ],
+    linkshared = True,
+    deps = [
+        "//iamf/cli:encoder_main_lib",
+        "//iamf/cli/proto:user_metadata_cc_proto",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@protobuf",
+    ],
+)

@@ -14,6 +14,8 @@ option(MR_ADM_CORE_FETCH_DEPS "Fetch CLI/fmt/spdlog dependencies when not found"
 option(MR_ADM_CORE_ENABLE_CLANG_TIDY "Run clang-tidy as part of compilation when available" OFF)
 option(MR_ADM_CORE_ENABLE_CPPCHECK "Run cppcheck as part of compilation when available" OFF)
 option(MR_ADM_ENABLE_SOFA "Enable user SOFA HRIR loading for the binaural renderer" ON)
+option(MR_ADM_ENABLE_IAMF "Enable IAMF encoding via the official AOM iamf-tools prebuilt bridge" OFF)
+set(MR_ADM_IAMF_AOM_ROOT "" CACHE PATH "Root directory of the prebuilt AOM iamf-tools bridge SDK")
 set(MR_ADM_FLAC_PROVIDER "AUTO" CACHE STRING "libFLAC provider: AUTO, SYSTEM, or VENDORED")
 set_property(CACHE MR_ADM_FLAC_PROVIDER PROPERTY STRINGS AUTO SYSTEM VENDORED)
 option(MR_ADM_USE_SYSTEM_FLAC "Shortcut for MR_ADM_FLAC_PROVIDER=SYSTEM" OFF)
@@ -41,6 +43,10 @@ include(GNUInstallDirs)
 include(MRWarnings)
 include(MRDependencies)
 include(MRStaticAnalysis)
+if(MR_ADM_ENABLE_IAMF)
+    include(MRIamfAomBridge)
+    mr_adm_core_find_iamf_aom_bridge()
+endif()
 
 # ── adm_core ──────────────────────────────────────────────────────────────────
 # Domain types, error handling, abstract IRenderer interface.
@@ -280,6 +286,10 @@ target_link_libraries(mr_adm_audio
     PUBLIC MacinRender::ADMCore
     PRIVATE dr_wav::dr_wav dr_flac::dr_flac FLAC::FLAC Opus::opus libbw64
 )
+target_compile_definitions(mr_adm_audio PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
+if(MR_ADM_ENABLE_IAMF)
+    target_link_libraries(mr_adm_audio PRIVATE MacinRender::IamfAomBridge)
+endif()
 if(APPLE)
     find_library(MR_ADM_AUDIOTOOLBOX_FW AudioToolbox REQUIRED)
     find_library(MR_ADM_COREFOUNDATION_FW CoreFoundation REQUIRED)
@@ -574,6 +584,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_iamf_smoke_tests tests/unit/iamf_smoke_test.cpp)
     target_link_libraries(mr_adm_iamf_smoke_tests PRIVATE MacinRender::ADMAudio)
+    target_compile_definitions(mr_adm_iamf_smoke_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
     mr_adm_core_apply_warnings(mr_adm_iamf_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_iamf_smoke_tests)
     add_test(NAME mr_adm_iamf_smoke_tests COMMAND mr_adm_iamf_smoke_tests)

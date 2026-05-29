@@ -316,6 +316,12 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
             return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
         }
     }
+    if (is_iamf_final && !audio::iamf_encoding_available()) {
+        constexpr auto msg =
+            "IAMF output requires a build configured with MR_ADM_ENABLE_IAMF=ON and the official AOM iamf-tools "
+            "bridge";
+        return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+    }
     const bool is_lossy_final = (is_flac_final || is_opus_final || is_apac_final || is_iamf_final);
     const auto render_temp_path = is_lossy_final ? unique_render_temp_path(final_path) : std::filesystem::path{};
     auto render_temp_guard = is_lossy_final ? std::make_unique<TempFileGuard>(render_temp_path) : nullptr;

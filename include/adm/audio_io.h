@@ -140,36 +140,6 @@ class FloatFlacReader {
     std::unique_ptr<Impl> impl_;
 };
 
-// Streaming writer for IAMF raw OBU streams (.iamf, no ISO BMFF container).
-// Accepts float32 input at 48000 Hz with an Opus encoder per substream.
-// layout_id must be one of: "0+2+0", "0+5+0", "2+5+0", "4+5+0", "wav71",
-//   "4+7+0", "9.1.6". 22.2 / 10.2.9.3, hoa3, and binaural are not supported.
-// loudness_lufs / peak_dbtp are written into the Mix Presentation OBU; pass
-// std::nullopt to record not-indicated (0x7FFF in Q7.8).
-class FloatIamfWriter {
-  public:
-    static Result<FloatIamfWriter> open(const std::string& path,
-                                        uint32_t channels,
-                                        uint32_t sample_rate,
-                                        uint32_t bitrate_per_ch_kbps = 0,
-                                        const std::string& layout_id = {},
-                                        std::optional<double> loudness_lufs = std::nullopt,
-                                        std::optional<double> peak_dbtp = std::nullopt);
-    ~FloatIamfWriter();
-    FloatIamfWriter(FloatIamfWriter&&) noexcept;
-    FloatIamfWriter& operator=(FloatIamfWriter&&) noexcept;
-    FloatIamfWriter(const FloatIamfWriter&) = delete;
-    FloatIamfWriter& operator=(const FloatIamfWriter&) = delete;
-
-    uint64_t write(const float* samples, uint64_t frame_count);
-    Result<void> close();
-
-  private:
-    FloatIamfWriter() = default;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
-
 // Streaming writer for Matroska Audio (.mka) files with Opus-encoded audio.
 // Accepts float32 input at 48000 Hz (the only rate Opus supports from external
 // input without resampling). Uses VBR at 128 kbps for stereo or 64 kbps × ch
@@ -262,11 +232,13 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth);
 // adjustments before quantisation.  FLAC channel count must be 1-8.
 Result<void> convert_to_flac(const std::string& src_path, const std::string& flac_path);
 
-// Encode a fully post-processed float32 WAV (src_path) to a standalone IAMF
-// raw OBU stream (iamf_path, .iamf extension). src_path must be 48000 Hz.
-// layout_id controls channel mapping and OBU metadata (see FloatIamfWriter).
-// bitrate_per_ch_kbps: VBR target per channel in kbps; 0 = 64 kbps/ch default.
-// loudness_lufs / peak_dbtp: post-gain values written into the Mix Presentation.
+bool iamf_encoding_available();
+
+// Encode a fully post-processed float32 WAV (src_path) to a standalone IAMF raw
+// OBU stream (iamf_path, .iamf extension) using the official AOM iamf-tools
+// bridge. Builds without MR_ADM_ENABLE_IAMF return ErrorCode::unsupported.
+// src_path must be 48000 Hz. bitrate_per_ch_kbps is an Opus VBR target hint.
+// loudness_lufs / peak_dbtp are post-gain values written into the Mix Presentation.
 Result<void> convert_to_iamf(const std::string& src_path,
                              const std::string& iamf_path,
                              const std::string& layout_id = {},

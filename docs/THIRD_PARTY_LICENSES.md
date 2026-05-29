@@ -14,6 +14,7 @@ MacinRender ADM Core 的项目源码采用 **MIT License**，以仓库根目录 
 
 - 默认发行构建不得启用 GPL-only 或会引入强 copyleft 义务的可选模块。
 - Release/多配置构建中，`libFLAC` 与 `libopus` 默认采用 vendored static provider；发行包仍需附带其许可证文本。
+- IAMF 编码通过预构建的官方 AOM iamf-tools bridge 接入；启用 `MR_ADM_ENABLE_IAMF=ON` 的发行包必须附带 bridge 及其依赖许可证，不得回退到项目内旧手写 OBU writer。
 - macOS-only APAC 输出依赖系统 AudioToolbox/CoreFoundation framework；这些 Apple SDK/framework 不随本项目二进制再分发，但功能应标记为 macOS only。
 - Linux 发行包以 Ubuntu 24.04 x86_64 为基线；`DEPENDENCIES.txt` 记录实际 `ldd` 清单，并在打包阶段拒绝缺失库、构建目录依赖和 `/usr/local` 依赖。
 - 用户提供的 SOFA/HRTF 数据文件不属于本项目许可证覆盖范围；若发行示例数据，必须单独记录该数据集许可证。
@@ -36,6 +37,7 @@ MacinRender ADM Core 的项目源码采用 **MIT License**，以仓库根目录 
 | `dr_libs` (`dr_wav`, `dr_flac`) | WAV/FLAC 轻量读写 | Unlicense 或 MIT-0 可选 | 可用 | 本项目按 MIT-0/Unlicense 宽松使用 |
 | `libFLAC` | FLAC 编码与 metadata | Xiph BSD-like | 可用 | 当前关闭 C++ libs/programs/docs/examples；源码包内 GPL/LGPL 文本不代表默认链接这些组件 |
 | `libopus` | Opus MKA 编码 | BSD-like + IETF patent IPR notices | 可用 | 发行文档需保留专利 IPR 链接说明 |
+| AOM `iamf-tools` bridge | IAMF raw OBU 编码 | BSD-3-Clause Clear + AOM Patent License 1.0 | 可用 | 预构建 SDK 形式接入；bridge 内部依赖需随实际包记录 |
 | Spatial Audio Framework (SAF) core | VBAP/MDAP/HRTF/FFT 等 DSP | ISC + permissive third-party code | 可用 | 仅在禁用 GPL 模块的配置下 |
 | SAF `saf_sofa_reader` | 用户 SOFA HRIR 读取 | ISC | 可用 | 默认可启用 |
 | SAF examples `spreader` (fork) | saf_spreader 双耳扩散渲染（实验性） | ISC，版权 2021 Leo McCormack | 可用 | fork 位于 `src/adm_render_binaural/spreader_mr.*`；最小改动：增加 `spreader_init_from_hrtf_grid()` 接口、修复 SOFA Q 未赋值 bug；不引入额外依赖 |
@@ -62,7 +64,7 @@ MacinRender ADM Core 的项目源码采用 **MIT License**，以仓库根目录 
 
 1. `LICENSE`：本项目 MIT 许可证。
 2. `THIRD_PARTY_NOTICES.md` 或 `licenses/` 目录：包含上表所有实际链接/打包依赖的许可证文本。
-3. 构建配置摘要：记录 `MR_ADM_FLAC_PROVIDER`、`MR_ADM_OPUS_PROVIDER`、`MR_ADM_ENABLE_SOFA`、SAF 可选模块开关，以及是否启用 APAC。
+3. 构建配置摘要：记录 `MR_ADM_FLAC_PROVIDER`、`MR_ADM_OPUS_PROVIDER`、`MR_ADM_ENABLE_SOFA`、`MR_ADM_ENABLE_IAMF`、SAF 可选模块开关，以及是否启用 APAC。
 4. 若包含示例 SOFA/HRTF/ADM 音频素材，素材许可证必须与代码许可证分开声明。
 
 当前首版 release package 会把本文复制为 `THIRD_PARTY_NOTICES.md`。它是工程审计用 notice 摘要；
