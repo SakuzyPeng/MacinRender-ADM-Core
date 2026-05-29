@@ -247,7 +247,8 @@ Result<void> convert_to_iamf(const std::string& src_path,
                              std::optional<double> peak_dbtp = std::nullopt);
 
 // IAMF-to-MP4 packaging (ISOBMFF Annex A encapsulation).
-// Uses mp4box (GPAC) as primary packager; falls back to ffmpeg.
+// Prefers mp4box (GPAC) over ffmpeg; the packager is selected once at
+// detection time and used as-is — no runtime fallback on failure.
 enum class IamfMp4PackagerKind : uint8_t { none, mp4box, ffmpeg };
 struct IamfMp4PackagerInfo {
     IamfMp4PackagerKind kind{IamfMp4PackagerKind::none};
