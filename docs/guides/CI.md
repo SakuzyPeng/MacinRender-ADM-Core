@@ -22,8 +22,9 @@
 | `macos-debug` | `macos-26` | `cmake --preset debug`、`cmake --build --preset debug`、`ctest --preset debug` | 主验证路径；覆盖 APAC smoke 和 CoreAudio layout |
 | `linux-debug` | `ubuntu-24.04` | `cmake --preset debug`、`cmake --build --preset debug`、`ctest --preset debug` | APAC 测试会自动 skip；验证跨平台核心 |
 
-这两个 job 均显式使用 `MR_ADM_FLAC_PROVIDER=VENDORED` 和 `MR_ADM_OPUS_PROVIDER=VENDORED`
-作为 CI 默认值，减少系统包差异。系统仍需安装 CMake、Ninja、Boost headers、ccache 和平台编译工具；
+这两个 job 均显式使用 `MR_ADM_FLAC_PROVIDER=VENDORED`、`MR_ADM_OPUS_PROVIDER=VENDORED`
+和 `MR_ADM_ENABLE_IAMF=OFF` 作为 CI 默认值，减少系统包差异，并避免普通 PR 构建 AOM
+`iamf-tools` bridge。系统仍需安装 CMake、Ninja、Boost headers、ccache 和平台编译工具；
 `libbw64/libadm/libear/SAF/FLAC/Opus` 由 FetchContent 或 vendored provider 处理。
 
 ### 第二阶段：质量 CI
@@ -60,6 +61,15 @@ release workflow 使用 `scripts/release/package.sh` 生成 macOS / Linux 包，
 `mradm backends`。Linux 支持基线为 Ubuntu 24.04 x86_64；Windows 支持基线为 Windows Server 2025 +
 MSVC。签名、notarization、GitHub Release 自动创建和完整 license bundle 留到后续阶段。
 
+### IAMF bridge 预构建
+
+IAMF 编码依赖官方 AOM `iamf-tools` bridge，但普通 CI、质量 CI 和默认 release 都显式关闭
+`MR_ADM_ENABLE_IAMF`，不会在每次提交时构建 Bazel 工具链。需要更新 bridge SDK 时，手动运行
+`.github/workflows/iamf-bridge-prebuild.yml`；该 workflow 会 checkout `AOMediaCodec/iamf-tools`，
+把 `tools/iamf_aom_bridge/` 注入为 `iamf/cli/mr_bridge`，构建 `libmr_iamf_aom_bridge.*`，
+并上传 `mr-iamf-aom-sdk-<platform>-<arch>` artifact。PR 只有修改 bridge workflow 或
+`tools/iamf_aom_bridge/**` 时才触发该预构建验证。
+
 ## 缓存策略
 
 CI 使用两层缓存，不缓存 CMake build tree。
@@ -68,6 +78,7 @@ CI 使用两层缓存，不缓存 CMake build tree。
 |---|---|---|---|
 | FetchContent | `.fc-cache` | 缓存第三方源码 checkout，降低网络波动 | OS + `cmake/MRDependencies.cmake` + `CMakeLists.txt` + `CMakePresets.json` |
 | ccache | `.ccache` | 缓存编译产物 | OS + job 类型 + commit SHA，带 OS/job restore key |
+| Bazel | `.bazel-cache` | 仅 IAMF bridge prebuild 使用，缓存 AOM `iamf-tools` 构建产物 | OS + iamf-tools ref + bridge source hash |
 
 所有 job 都 fresh configure。这样即使 CMake cache 或 FetchContent 状态变化，也不会复用旧 build tree。
 
@@ -121,6 +132,10 @@ sudo apt-get install -y clang-format clang-tidy cppcheck
 .github/workflows/release.yml
   tag v* / workflow_dispatch
   macOS/Linux tarballs + Windows zip, all with checksums
+
+.github/workflows/iamf-bridge-prebuild.yml
+  workflow_dispatch / bridge-related pull_request
+  macOS/Linux prebuilt AOM IAMF bridge SDK artifact
 ```
 
 ## 后续实施顺序
