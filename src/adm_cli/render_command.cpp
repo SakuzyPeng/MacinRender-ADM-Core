@@ -198,9 +198,8 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     }
     request.options.speaker_spread_mode = parse_speaker_spread_mode(opts.speaker_spread_mode_str);
     request.options.binaural_spread_mode = parse_binaural_spread_mode(opts.binaural_spread_mode_str);
-    request.options.iamf_container =
-        (opts.iamf_container_str == "mp4") ? mradm::RenderOptions::IamfContainer::mp4
-                                           : mradm::RenderOptions::IamfContainer::obu;
+    request.options.iamf_container = (opts.iamf_container_str == "mp4") ? mradm::RenderOptions::IamfContainer::mp4
+                                                                        : mradm::RenderOptions::IamfContainer::obu;
     return request;
 }
 
