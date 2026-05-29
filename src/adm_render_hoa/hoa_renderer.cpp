@@ -31,6 +31,14 @@ namespace mradm {
 
 namespace {
 
+#ifdef _MSC_VER
+#define MRADM_RESTRICT __restrict
+#elif defined(__GNUC__) || defined(__clang__)
+#define MRADM_RESTRICT __restrict__
+#else
+#define MRADM_RESTRICT
+#endif
+
 constexpr std::size_t k_hoa3_channels = 16; // (3+1)^2 = 4^2
 constexpr std::size_t k_diffuse_dirs = 32;
 constexpr std::size_t k_diffuse_delay_len = 1024;
@@ -274,7 +282,11 @@ struct HoaFrameGains {
 };
 
 struct DiffuseState {
-    std::array<std::array<float, k_diffuse_delay_len>, k_hoa3_channels> delay_lines{};
+    // Stored [delay_pos][sh] (transposed vs the natural [sh][delay_pos]): a single decorrelation
+    // tap then reads 16 contiguous SH samples, so the per-coefficient accumulation vectorises and
+    // the FMA units pipeline across coefficients instead of serialising one 32-deep reduction per
+    // coefficient. See add_diffuse_hoa().
+    std::array<Hoa3Coeffs, k_diffuse_delay_len> delay_lines{};
     std::size_t write_pos{0};
 };
 
@@ -352,7 +364,7 @@ void add_direct_hoa(float in_s, const Hoa3Coeffs& gains, float* out_frame) {
     }
 }
 
-void add_diffuse_hoa(const Hoa3Coeffs& diffuse_in, DiffuseState& state, float* out_frame) {
+void add_diffuse_hoa(const Hoa3Coeffs& diffuse_in, DiffuseState& state, float* MRADM_RESTRICT out_frame) {
     // Per-HOA-coefficient multi-tap decorrelation keeps objectDivergence direction
     // information separate instead of collapsing all diffuse energy into one mono bus.
     constexpr std::array<std::size_t, k_diffuse_dirs> k_delays = {
@@ -363,19 +375,29 @@ void add_diffuse_hoa(const Hoa3Coeffs& diffuse_in, DiffuseState& state, float* o
         1.F,  -1.F, 1.F, 1.F,  -1.F, -1.F, 1.F,  -1.F, -1.F, 1.F,  1.F, -1.F, 1.F,  -1.F, -1.F, 1.F,
         -1.F, 1.F,  1.F, -1.F, 1.F,  -1.F, -1.F, 1.F,  1.F,  -1.F, 1.F, -1.F, -1.F, 1.F,  -1.F, 1.F,
     };
-    const float k_cloud_weight = 1.0F / std::sqrt(static_cast<float>(k_diffuse_dirs));
+    // 1/sqrt(N) is constant across all calls; compute once instead of per frame/slot/channel.
+    static const float k_cloud_weight = 1.0F / std::sqrt(static_cast<float>(k_diffuse_dirs));
 
-    for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
-        auto& line = state.delay_lines.at(sh);
-        float sample = 0.0F;
-        for (std::size_t tap = 0; tap < k_diffuse_dirs; ++tap) {
-            const std::size_t read_pos =
-                (state.write_pos + k_diffuse_delay_len - k_delays.at(tap)) % k_diffuse_delay_len;
-            sample += line.at(read_pos) * k_polarity.at(tap) * k_cloud_weight;
+    // Tap-outer / coefficient-inner: each tap reads one contiguous 16-float row of the (transposed)
+    // delay line, and the inner loop accumulates 16 independent coefficient lanes. This lets the
+    // compiler vectorise across coefficients and pipeline the FMA units, instead of evaluating one
+    // 32-deep serial reduction per coefficient. Per coefficient the taps are still summed in order
+    // 0..31 with the identical (sample * polarity) * cloud_weight factoring, so the output is
+    // bit-identical to the previous coefficient-outer form.
+    Hoa3Coeffs acc{};
+    float* MRADM_RESTRICT acc_p = acc.data();
+    for (std::size_t tap = 0; tap < k_diffuse_dirs; ++tap) {
+        const std::size_t read_pos = (state.write_pos + k_diffuse_delay_len - k_delays.at(tap)) % k_diffuse_delay_len;
+        const float polarity = k_polarity.at(tap);
+        const float* MRADM_RESTRICT row = state.delay_lines.at(read_pos).data();
+        for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
+            acc_p[sh] += row[sh] * polarity * k_cloud_weight;
         }
-        out_frame[sh] += sample;
-        line.at(state.write_pos) = diffuse_in.at(sh);
     }
+    for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
+        out_frame[sh] += acc_p[sh];
+    }
+    state.delay_lines.at(state.write_pos) = diffuse_in;
 
     state.write_pos = (state.write_pos + 1U) % k_diffuse_delay_len;
 }
