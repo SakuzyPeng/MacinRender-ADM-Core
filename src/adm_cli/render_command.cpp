@@ -157,6 +157,12 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                      "Binaural Objects extent spread algorithm: auto (cloud), none, cloud, "
                      "saf-spreader [experimental: SAF covariance-matching STFT-domain spreader]")
         ->check(CLI::IsMember({"auto", "none", "cloud", "saf-spreader"}));
+    render_cmd
+        ->add_option("--iamf-container",
+                     opts.iamf_container_str,
+                     "IAMF output container [requires MR_ADM_ENABLE_IAMF build]: "
+                     "obu (raw .iamf stream, default) or mp4 (ISOBMFF via mp4box/ffmpeg)")
+        ->check(CLI::IsMember({"obu", "mp4"}));
     return render_cmd;
 }
 
@@ -192,6 +198,9 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     }
     request.options.speaker_spread_mode = parse_speaker_spread_mode(opts.speaker_spread_mode_str);
     request.options.binaural_spread_mode = parse_binaural_spread_mode(opts.binaural_spread_mode_str);
+    request.options.iamf_container =
+        (opts.iamf_container_str == "mp4") ? mradm::RenderOptions::IamfContainer::mp4
+                                           : mradm::RenderOptions::IamfContainer::obu;
     return request;
 }
 

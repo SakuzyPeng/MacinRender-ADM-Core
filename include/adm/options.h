@@ -69,6 +69,11 @@ struct RenderOptions {
     uint32_t object_smoothing_frames{8875};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
+    // IAMF output container when MR_ADM_ENABLE_IAMF=ON.
+    // obu: raw .iamf OBU stream (default); mp4: ISOBMFF encapsulation via mp4box/ffmpeg.
+    // Requires --iamf-container mp4 on the CLI; the engine ignores this field for non-IAMF outputs.
+    enum class IamfContainer : uint8_t { obu, mp4 };
+    IamfContainer iamf_container{IamfContainer::obu};
     // Internal diagnostics/tests only. The CLI never exposes this; normal users
     // cannot request speaker-stereo ADM rendering.
     bool internal_allow_speaker_stereo{false};
