@@ -22,8 +22,11 @@ int main() {
     // The prebuilt AOM bridge is validated by integration packaging tests. This
     // unit test only proves the build selected the official path.
     ok &= check(mradm::audio::iamf_encoding_available(), "IAMF bridge build selected");
-#else
     const auto res = mradm::audio::convert_to_iamf("/tmp/mr_missing_input.wav", "/tmp/mr_missing_output.iamf", "9.1.6");
+    ok &= check(!res.has_value(), "IAMF 9.1.6 is rejected before encode");
+    ok &= check(res.error().code == mradm::ErrorCode::unsupported, "IAMF 9.1.6 returns unsupported");
+#else
+    const auto res = mradm::audio::convert_to_iamf("/tmp/mr_missing_input.wav", "/tmp/mr_missing_output.iamf", "4+7+0");
     ok &= check(!mradm::audio::iamf_encoding_available(), "IAMF bridge is not available in this build");
     ok &= check(!res.has_value(), "IAMF conversion is unavailable without the official bridge");
     ok &= check(res.error().code == mradm::ErrorCode::unsupported, "IAMF disabled returns unsupported");

@@ -134,7 +134,7 @@ bool renderer_supports_layout(const mradm::CapabilityReport& caps, std::string_v
     });
 }
 
-constexpr std::array<LayoutInfo, 34> k_layout_infos{{
+constexpr std::array<LayoutInfo, 33> k_layout_infos{{
     {"wav",
      "binaural",
      2,
@@ -223,12 +223,6 @@ constexpr std::array<LayoutInfo, 34> k_layout_infos{{
     {"iamf", "5.1.4", 10, "IAMF kLayout5_1_4_ch (Opus VBR)", "FL FR SiL SiR TpFL TpFR TpBL TpBR C LFE (enc order)", ""},
     {"iamf", "7.1", 8, "IAMF kLayout7_1_ch (Opus VBR)", "FL FR Ls Rs Rls Rrs C LFE (wav71 reordered)", ""},
     {"iamf", "7.1.4", 12, "IAMF kLayout7_1_4_ch (Opus VBR)", "FL FR Ls Rs Rls Rrs TpFL TpFR TpBL TpBR C LFE", ""},
-    {"iamf",
-     "9.1.6",
-     16,
-     "IAMF Expanded 9.1.6 (Opus VBR)",
-     "FL FR Rls Rrs Lw Rw Ls Rs Vhl Vhr Ltr Rtr Ltm Rtm C LFE",
-     ""},
 }};
 
 int print_layouts(std::string format, const std::string& layout_filter, std::string renderer_filter) {

@@ -325,6 +325,13 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
             "bridge";
         return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
     }
+    if ((is_iamf_final || request.options.iamf_container == RenderOptions::IamfContainer::mp4) &&
+        output_layout == "9.1.6") {
+        constexpr auto msg =
+            "IAMF 9.1.6 output is disabled because expanded/Base-Enhanced IAMF is not currently compatible enough "
+            "for release output";
+        return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+    }
     if (request.options.iamf_container == RenderOptions::IamfContainer::mp4) {
         if (final_ext != ".mp4") {
             const auto msg = fmt::format(

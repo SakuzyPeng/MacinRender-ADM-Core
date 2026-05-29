@@ -109,7 +109,7 @@ WAV 可写 float32 / 24-bit / 16-bit PCM；`--output-bit-depth` 只影响 WAV。
 
 Opus MKA 是 Matroska Audio + Opus VBR，全平台可写。标准 5.1 / 7.1 会使用 Opus/Vorbis 声道语义；9.1.6、22.2 等更高阶离散布局使用透明多流编码并记录 metadata，播放器不保证自动识别完整空间布局。
 
-IAMF 输出为 raw OBU stream（`.iamf`）+ Opus，面向 IAMF 测试和交付链路，不是普通播放器通用容器。IAMF 编码只使用官方 AOM iamf-tools bridge；构建时需设置 `-DMR_ADM_ENABLE_IAMF=ON -DMR_ADM_IAMF_AOM_ROOT=/path/to/iamf-sdk`，其中 SDK 提供 `lib/libmr_iamf_aom_bridge.*`。未启用时 `.iamf` 输出会直接报 unsupported，不会回退到旧的手写 OBU writer。
+IAMF 输出为 raw OBU stream（`.iamf`）+ Opus，面向 IAMF 测试和交付链路，不是普通播放器通用容器。IAMF 编码只使用官方 AOM iamf-tools bridge；构建时需设置 `-DMR_ADM_ENABLE_IAMF=ON -DMR_ADM_IAMF_AOM_ROOT=/path/to/iamf-sdk`，其中 SDK 提供 `lib/libmr_iamf_aom_bridge.*`。当前 IAMF 只开放到 `7.1.4`；`9.1.6` 需要 expanded/Base-Enhanced IAMF，因播放器兼容性不足暂时禁用。未启用时 `.iamf` 输出会直接报 unsupported，不会回退到旧的手写 OBU writer。
 
 APAC 当前写入 MPEG-4 Audio 容器（`.m4a` / `.mp4`），macOS-only，依赖 AudioToolbox。空间布局和 HOA 默认使用稳定的总目标码率提示：以 `7.1.4` 的 2048 kbps 为 12 声道基准按声道数缩放，例如 `5.1.4` 约 1707 kbps，`9.1.6` / `hoa3` 约 2731 kbps，`22.2` 约 4096 kbps。APAC 是 VBR 编码，实际统计码率可能明显偏离目标值。
 
