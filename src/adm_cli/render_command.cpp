@@ -135,9 +135,9 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
     render_cmd
         ->add_option("--apac-bitrate",
                      opts.apac_bitrate,
-                     "APAC total VBR target/hint bitrate in kbps (64-6000); "
+                     "APAC total VBR target/hint bitrate in kbps (64-12000); "
                      "actual measured bitrate may differ substantially; omit for layout default")
-        ->check(CLI::Range(64U, 6000U));
+        ->check(CLI::Range(64U, 12000U));
     render_cmd->add_flag("--apac-drc-none{false},--apac-drc-music{true}",
                          opts.apac_drc_music,
                          "APAC DRC profile: --apac-drc-music (default) or --apac-drc-none");

@@ -62,11 +62,26 @@ class IRenderer {
     render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) = 0;
 };
 
+// File-level ADM scene summary returned by RenderService::probe().
+// Contains only the top-level counts and audio info; does not expose per-object
+// or per-block detail (use mradm::io::import_scene for that directly).
+struct SceneProbe {
+    uint32_t sample_rate{0};
+    uint16_t num_channels{0};
+    uint64_t num_frames{0};
+    uint32_t programme_count{0};
+    uint32_t object_count{0};
+};
+
 class RenderService {
   public:
     RenderService();
 
     [[nodiscard]] RenderResult render(const RenderRequest& request, ProgressSink& progress, LogSink& logs) const;
+
+    // Quickly import the ADM scene and return file-level metadata without rendering.
+    // Returns io_error if the file is missing or not a valid ADM BWF file.
+    [[nodiscard]] Result<SceneProbe> probe(const std::string& input_path) const;
 };
 
 } // namespace mradm
