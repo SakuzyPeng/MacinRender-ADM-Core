@@ -447,6 +447,134 @@ struct BinauralState {
 };
 // NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
 
+struct SafFree {
+    void operator()(void* ptr) const noexcept {
+        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
+        std::free(ptr);
+    }
+};
+using SafFloatPtr = std::unique_ptr<float, SafFree>;
+using SafIntPtr = std::unique_ptr<int, SafFree>;
+
+void compress_vbap_rows(
+    const float* rows, int row_stride, int num_dirs, std::size_t row_count, float* out_gains, int* out_dirs) {
+    for (std::size_t row = 0; row < row_count; ++row) {
+        std::array<float, 3> gains{};
+        std::array<int, 3> dirs{};
+        float gains_sum = 0.0F;
+        int nonzero = 0;
+        const float* row_data = rows + (row * static_cast<std::size_t>(row_stride));
+        for (int dir = 0; dir < num_dirs; ++dir) {
+            const float gain = row_data[dir];
+            if (gain > 0.0000001F && nonzero < 3) {
+                gains.at(static_cast<std::size_t>(nonzero)) = gain;
+                dirs.at(static_cast<std::size_t>(nonzero)) = dir;
+                gains_sum += gain;
+                ++nonzero;
+            }
+        }
+        for (int i = 0; i < nonzero; ++i) {
+            out_gains[(row * 3U) + static_cast<std::size_t>(i)] =
+                gains_sum > 0.0F ? std::max(gains.at(static_cast<std::size_t>(i)) / gains_sum, 0.0F) : 0.0F;
+            out_dirs[(row * 3U) + static_cast<std::size_t>(i)] = dirs.at(static_cast<std::size_t>(i));
+        }
+    }
+}
+
+[[nodiscard]] bool build_compressed_vbap_grid(BinauralState& bs) {
+    // SAF's generateVBAPgainTable3D() materialises the full grid x HRTF-dir table
+    // before compression. For the built-in 1-degree KEMAR grid that transient is
+    // 65,341 x 836 floats (about 208 MiB), which dominates max RSS. Build the same
+    // table in modest batches, compress each batch immediately, and keep only the
+    // 3-gain compressed representation used by compute_hrtf_into().
+    constexpr float k_add_dummy_limit_deg = 60.0F; // mirrors SAF ADD_DUMMY_LIMIT
+    constexpr std::size_t k_batch_grid_points = 2048U;
+
+    std::vector<float> triangulation_dirs = bs.grid_dirs_deg;
+    bool need_bottom_dummy = true;
+    bool need_top_dummy = true;
+    for (int i = 0; i < bs.num_dirs; ++i) {
+        const float el = bs.grid_dirs_deg[(static_cast<std::size_t>(i) * 2U) + 1U];
+        if (el <= -k_add_dummy_limit_deg) {
+            need_bottom_dummy = false;
+        }
+        if (el >= k_add_dummy_limit_deg) {
+            need_top_dummy = false;
+        }
+    }
+    if (need_bottom_dummy) {
+        triangulation_dirs.push_back(0.0F);
+        triangulation_dirs.push_back(-90.0F);
+    }
+    if (need_top_dummy) {
+        triangulation_dirs.push_back(0.0F);
+        triangulation_dirs.push_back(90.0F);
+    }
+
+    float* out_vertices = nullptr;
+    int* out_faces = nullptr;
+    int num_out_vertices = 0;
+    int num_out_faces = 0;
+    findLsTriplets(triangulation_dirs.data(),
+                   static_cast<int>(triangulation_dirs.size() / 2U),
+                   /*omitLargeTriangles=*/1,
+                   &out_vertices,
+                   &num_out_vertices,
+                   &out_faces,
+                   &num_out_faces);
+    SafFloatPtr out_vertices_guard{out_vertices};
+    SafIntPtr out_faces_guard{out_faces};
+    if (out_vertices == nullptr || out_faces == nullptr || num_out_faces <= 0) {
+        return false;
+    }
+
+    float* layout_inv_mtx = nullptr;
+    invertLsMtx3D(out_vertices, out_faces, num_out_faces, &layout_inv_mtx);
+    SafFloatPtr layout_inv_guard{layout_inv_mtx};
+    if (layout_inv_mtx == nullptr) {
+        return false;
+    }
+
+    const std::size_t n_gtable = static_cast<std::size_t>(k_n_azi) * static_cast<std::size_t>(k_n_elev);
+    bs.vbap_gains.assign(n_gtable * 3U, 0.0F);
+    bs.vbap_dirs.assign(n_gtable * 3U, 0);
+
+    std::vector<float> batch_dirs;
+    batch_dirs.reserve(k_batch_grid_points * 2U);
+    for (std::size_t base = 0; base < n_gtable; base += k_batch_grid_points) {
+        const std::size_t count = std::min(k_batch_grid_points, n_gtable - base);
+        batch_dirs.resize(count * 2U);
+        for (std::size_t i = 0; i < count; ++i) {
+            const std::size_t grid = base + i;
+            const auto az_idx = static_cast<int>(grid % static_cast<std::size_t>(k_n_azi));
+            const auto el_idx = static_cast<int>(grid / static_cast<std::size_t>(k_n_azi));
+            batch_dirs[(i * 2U) + 0U] = -180.0F + static_cast<float>(az_idx);
+            batch_dirs[(i * 2U) + 1U] = -90.0F + static_cast<float>(el_idx);
+        }
+
+        float* batch_table = nullptr;
+        vbap3D(batch_dirs.data(),
+               static_cast<int>(count),
+               num_out_vertices,
+               out_faces,
+               num_out_faces,
+               /*spread=*/0.0F,
+               layout_inv_mtx,
+               &batch_table);
+        SafFloatPtr batch_table_guard{batch_table};
+        if (batch_table == nullptr) {
+            return false;
+        }
+        compress_vbap_rows(batch_table,
+                           num_out_vertices,
+                           bs.num_dirs,
+                           count,
+                           bs.vbap_gains.data() + (base * 3U),
+                           bs.vbap_dirs.data() + (base * 3U));
+    }
+    return true;
+}
+
 // Build BinauralState once.  Returns nullptr on VBAP triangulation failure.
 std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_t block_size) {
     auto bs = std::make_unique<BinauralState>();
@@ -464,30 +592,10 @@ std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_
     bs->hrtf_fd.resize(static_cast<std::size_t>(bs->n_bands) * k_n_ears * static_cast<std::size_t>(bs->num_dirs));
     HRIRs2HRTFs(bs->hrtf_td.data(), bs->num_dirs, bs->hrir_len, bs->fft_size, bs->hrtf_fd.data());
 
-    // Build VBAP gain table for the HRTF measurement directions as "loudspeakers".
-    float* gtable_full = nullptr;
-    int n_gtable = 0;
-    int n_triangles = 0;
-    generateVBAPgainTable3D(bs->grid_dirs_deg.data(),
-                            bs->num_dirs,
-                            /*az_res=*/1,
-                            /*el_res=*/1,
-                            /*omitLargeTriangles=*/1,
-                            /*enableDummies=*/1,
-                            /*spread=*/0.0F,
-                            &gtable_full,
-                            &n_gtable,
-                            &n_triangles);
-    if (gtable_full == nullptr) {
+    // Build compressed VBAP gain table for the HRTF measurement directions as "loudspeakers".
+    if (!build_compressed_vbap_grid(*bs)) {
         return nullptr; // triangulation failed
     }
-
-    // Compress to 3-per-point amplitude-normalised table (sum of gains = 1).
-    bs->vbap_gains.resize(static_cast<std::size_t>(n_gtable) * 3);
-    bs->vbap_dirs.resize(static_cast<std::size_t>(n_gtable) * 3);
-    compressVBAPgainTable3D(gtable_full, n_gtable, bs->num_dirs, bs->vbap_gains.data(), bs->vbap_dirs.data());
-    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
-    std::free(gtable_full);
 
     return bs;
 }
