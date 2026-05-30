@@ -445,6 +445,25 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_io_smoke_tests)
     add_test(NAME mr_adm_io_smoke_tests COMMAND mr_adm_io_smoke_tests)
 
+    # Contract test for the stable C ABI. Links only the C ABI target (consumer
+    # view); libbw64/adm are pulled in solely to build the runtime fixture.
+    add_executable(mr_adm_c_api_tests tests/unit/c_api_fixture_test.cpp)
+    target_link_libraries(mr_adm_c_api_tests
+        PRIVATE
+            MacinRender::ADMCAPI
+            libbw64
+            adm
+    )
+    mr_adm_core_apply_warnings(mr_adm_c_api_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_c_api_tests)
+    add_test(NAME mr_adm_c_api_tests COMMAND mr_adm_c_api_tests)
+
+    add_executable(mr_adm_c_api_header_smoke tests/unit/c_api_header_smoke.c)
+    target_include_directories(mr_adm_c_api_header_smoke PRIVATE include)
+    mr_adm_core_apply_warnings(mr_adm_c_api_header_smoke)
+    mr_adm_core_apply_static_analysis(mr_adm_c_api_header_smoke)
+    add_test(NAME mr_adm_c_api_header_smoke COMMAND mr_adm_c_api_header_smoke)
+
     add_executable(mr_adm_semantic_policy_tests tests/unit/semantic_policy_test.cpp)
     target_link_libraries(mr_adm_semantic_policy_tests PRIVATE MacinRender::ADMCore)
     mr_adm_core_apply_warnings(mr_adm_semantic_policy_tests)

@@ -27,6 +27,17 @@ const char* stage_name(mradm::RenderStage stage) noexcept {
     return "unknown";
 }
 
+// Directly pin the C++ ErrorCode enum to the stable C ABI enum. errors.h asserts
+// the ErrorCode values independently; these cross-checks ensure the two enums stay
+// numerically identical, so a new error code cannot be added to one side only.
+static_assert(static_cast<int>(mradm::ErrorCode::ok) == ADM_ERROR_OK);
+static_assert(static_cast<int>(mradm::ErrorCode::invalid_argument) == ADM_ERROR_INVALID_ARGUMENT);
+static_assert(static_cast<int>(mradm::ErrorCode::unsupported) == ADM_ERROR_UNSUPPORTED);
+static_assert(static_cast<int>(mradm::ErrorCode::io_error) == ADM_ERROR_IO);
+static_assert(static_cast<int>(mradm::ErrorCode::render_failed) == ADM_ERROR_RENDER_FAILED);
+static_assert(static_cast<int>(mradm::ErrorCode::cancelled) == ADM_ERROR_CANCELLED);
+static_assert(static_cast<int>(mradm::ErrorCode::internal_error) == ADM_ERROR_INTERNAL);
+
 adm_error_code_t map_error(mradm::ErrorCode code) noexcept {
     switch (code) {
     case mradm::ErrorCode::ok:
