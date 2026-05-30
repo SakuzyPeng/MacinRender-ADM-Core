@@ -1,16 +1,50 @@
 #pragma once
 
 #include <algorithm>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <future>
+#include <mutex>
 #include <optional>
+#include <queue>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "adm/logging.h"
 #include "adm/scene.h"
 
 namespace mradm::render_common {
+
+// Single background thread that runs posted tasks strictly in FIFO order. Renderers use it to move
+// the loudness / true-peak measurement (libebur128) off the critical path so it overlaps with the
+// next block's read + mix. Because tasks run in submission order on one thread, the sequence of
+// ebur128 calls — and therefore the measured loudness / true peak — is bit-identical to running them
+// inline; only the audio output buffer must be double-buffered so the next block does not overwrite
+// a buffer still being measured (wait on the returned future before reuse).
+class SerialWorker {
+  public:
+    SerialWorker();
+    ~SerialWorker();
+    SerialWorker(const SerialWorker&) = delete;
+    SerialWorker& operator=(const SerialWorker&) = delete;
+    SerialWorker(SerialWorker&&) = delete;
+    SerialWorker& operator=(SerialWorker&&) = delete;
+
+    // Enqueue a task; the returned future becomes ready once the task has run.
+    std::future<void> post(std::function<void()> task);
+
+  private:
+    void run();
+
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    std::queue<std::packaged_task<void()>> tasks_;
+    bool stop_{false};
+    std::thread thread_;
+};
 
 struct PreparedObjectBlock {
     std::vector<SceneObjectBlock> sources;

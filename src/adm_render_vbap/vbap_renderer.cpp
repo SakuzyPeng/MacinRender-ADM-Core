@@ -624,12 +624,31 @@ Result<RenderMetrics> VbapRenderer::render(const RenderPlan& plan, ProgressSink&
         constexpr uint64_t k_min_block_size = 1024;
         const uint64_t k_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
-        std::vector<float> out_block(static_cast<std::size_t>(num_out_ch) * k_block_size);
+
+        // Loudness / true-peak measurement dominates this renderer (≈70% at 22.2). Run it on a
+        // background thread so it overlaps with the next block's read + mix. Double-buffer the output
+        // so the next block can be mixed while the meter still reads the previous one; reuse of a
+        // buffer waits on its outstanding measurement future. Block order is preserved on the worker,
+        // so the measured loudness / true peak is identical to the inline version.
+        constexpr std::size_t k_num_buffers = 2;
+        std::array<std::vector<float>, k_num_buffers> out_buffers;
+        for (auto& buffer : out_buffers) {
+            buffer.assign(static_cast<std::size_t>(num_out_ch) * k_block_size, 0.0F);
+        }
+        std::array<std::future<void>, k_num_buffers> meter_pending;
+        render_common::SerialWorker meter;
+        std::size_t buf_idx = 0;
         uint64_t frames_done = 0;
 
         while (frames_done < num_frames) {
             const uint64_t frames_now = std::min(k_block_size, num_frames - frames_done);
             const std::size_t out_samples = static_cast<std::size_t>(num_out_ch) * frames_now;
+
+            // Reclaim this buffer once the meter has finished its previous use of it.
+            if (meter_pending.at(buf_idx).valid()) {
+                meter_pending.at(buf_idx).get();
+            }
+            std::vector<float>& out_block = out_buffers.at(buf_idx);
 
             reader->read(in_block.data(), frames_now);
             std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
@@ -643,17 +662,30 @@ Result<RenderMetrics> VbapRenderer::render(const RenderPlan& plan, ProgressSink&
                                         plan.object_smoothing_frames};
             accumulate_gain_matrix(*gain_matrix, blk_idx, ctx, frames_now);
 
-            if (lufs_st) {
-                ebur128_add_frames_float(lufs_st.get(), out_block.data(), static_cast<std::size_t>(frames_now));
-            }
-
             if (writer.write(out_block.data(), frames_now) != frames_now) {
                 return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);
             }
+
+            if (lufs_st) {
+                ebur128_state* state = lufs_st.get();
+                const float* data = out_block.data();
+                const auto frame_count = static_cast<std::size_t>(frames_now);
+                meter_pending.at(buf_idx) =
+                    meter.post([state, data, frame_count] { ebur128_add_frames_float(state, data, frame_count); });
+            }
+
             frames_done += frames_now;
+            buf_idx = (buf_idx + 1) % k_num_buffers;
 
             const double frac = 0.3 + (0.6 * (static_cast<double>(frames_done) / static_cast<double>(num_frames)));
             progress.on_progress({RenderStage::rendering, frac, "rendering"});
+        }
+
+        // All audio is written; wait for outstanding measurements before querying global metrics.
+        for (auto& pending : meter_pending) {
+            if (pending.valid()) {
+                pending.get();
+            }
         }
 
         progress.on_progress({RenderStage::finished, 1.0, "done"});

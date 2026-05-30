@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <ebur128.h>
@@ -753,15 +754,33 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
 
         // Interleaved buffers used for I/O and the decorrelator.
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
-        std::vector<float> out_block(num_out_ch * k_block_size);  // interleaved direct
         std::vector<float> diffuse_in(num_out_ch * k_block_size); // interleaved diffuse
         std::vector<float> diffuse_out(num_out_ch * k_block_size);
         std::vector<float> ch_in_buf(k_block_size); // deinterleaved input scratch
+
+        // Loudness / true-peak measurement runs on a background thread (SerialWorker) so it overlaps
+        // the next block's mix + decorrelation. Double-buffer the interleaved output so the next block
+        // can be produced while the meter still reads the previous one; reuse waits on the outstanding
+        // measurement future. FIFO ordering keeps the measured loudness / TP bit-identical.
+        constexpr std::size_t k_num_buffers = 2;
+        std::array<std::vector<float>, k_num_buffers> out_buffers; // interleaved direct
+        for (auto& buffer : out_buffers) {
+            buffer.assign(num_out_ch * k_block_size, 0.0F);
+        }
+        std::array<std::future<void>, k_num_buffers> meter_pending;
+        render_common::SerialWorker meter;
+        std::size_t buf_idx = 0;
         uint64_t frames_done = 0;
 
         while (frames_done < num_frames) {
             const uint64_t frames_now = std::min(k_block_size, num_frames - frames_done);
             const std::size_t out_samples = num_out_ch * static_cast<std::size_t>(frames_now);
+
+            // Reclaim this output buffer once the meter has finished its previous use of it.
+            if (meter_pending.at(buf_idx).valid()) {
+                meter_pending.at(buf_idx).get();
+            }
+            std::vector<float>& out_block = out_buffers.at(buf_idx);
 
             reader->read(in_block.data(), frames_now);
 
@@ -809,17 +828,31 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
                 remap_wav71_to_wave_order(out_block, frames_now, num_out_ch);
             }
 
-            if (lufs_st) {
-                ebur128_add_frames_float(lufs_st.get(), out_block.data(), static_cast<std::size_t>(frames_now));
-            }
-
             if (writer.write(out_block.data(), frames_now) != frames_now) {
                 return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);
             }
+
+            // Offload loudness / true-peak measurement to the background meter (overlaps next block).
+            if (lufs_st) {
+                ebur128_state* state = lufs_st.get();
+                const float* data = out_block.data();
+                const auto frame_count = static_cast<std::size_t>(frames_now);
+                meter_pending.at(buf_idx) =
+                    meter.post([state, data, frame_count] { ebur128_add_frames_float(state, data, frame_count); });
+            }
+
             frames_done += frames_now;
+            buf_idx = (buf_idx + 1) % k_num_buffers;
 
             const double frac = 0.3 + (0.6 * (static_cast<double>(frames_done) / static_cast<double>(num_frames)));
             progress.on_progress({RenderStage::rendering, frac, "rendering"});
+        }
+
+        // All audio is written; wait for outstanding measurements before reading global metrics.
+        for (auto& pending : meter_pending) {
+            if (pending.valid()) {
+                pending.get();
+            }
         }
 
         progress.on_progress({RenderStage::finished, 1.0, "done"});

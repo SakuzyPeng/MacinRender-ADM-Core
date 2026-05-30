@@ -1,8 +1,51 @@
 #include "render_common.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace mradm::render_common {
+
+SerialWorker::SerialWorker() {
+    thread_ = std::thread([this] { run(); });
+}
+
+SerialWorker::~SerialWorker() {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        stop_ = true;
+    }
+    cv_.notify_all();
+    if (thread_.joinable()) {
+        thread_.join();
+    }
+}
+
+std::future<void> SerialWorker::post(std::function<void()> task) {
+    std::packaged_task<void()> packaged(std::move(task));
+    std::future<void> future = packaged.get_future();
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        tasks_.push(std::move(packaged));
+    }
+    cv_.notify_one();
+    return future;
+}
+
+void SerialWorker::run() {
+    for (;;) {
+        std::packaged_task<void()> task;
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            cv_.wait(lock, [this] { return stop_ || !tasks_.empty(); });
+            if (tasks_.empty()) {
+                return; // stop_ is set and nothing left to drain
+            }
+            task = std::move(tasks_.front());
+            tasks_.pop();
+        }
+        task();
+    }
+}
 
 PreparedObjectBlock prepare_object_block(const SceneObjectBlock& raw_block,
                                          const SceneObject& object,
