@@ -15,6 +15,7 @@
 #include <memory>
 #include <mutex>
 #include <numbers>
+#include <numeric>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -52,7 +53,6 @@ namespace {
 
 constexpr uint64_t k_min_block_size = 1024U;
 constexpr float k_spreader_extent_threshold_deg = 1.0F; // min extent to route via saf_spreader
-constexpr std::size_t k_spreader_group_target_lanes = 2U;
 constexpr int k_n_ears = 2;
 constexpr int k_n_azi = 361;  // (int)(360/1 + 0.5) + 1
 constexpr int k_n_elev = 181; // (int)(180/1 + 0.5) + 1
@@ -889,8 +889,23 @@ struct SpreaderGroup {
 };
 // NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
 
-std::vector<SpreaderGroup> build_spreader_groups(const std::vector<SpreaderTrack>& tracks) {
+std::vector<SpreaderGroup> build_spreader_groups(const std::vector<SpreaderTrack>& tracks,
+                                                 std::size_t target_group_count) {
     const auto adapter_max_lanes = static_cast<std::size_t>(BinauralSpreaderAdapter::max_sources());
+    if (tracks.empty()) {
+        return {};
+    }
+    target_group_count = std::max<std::size_t>(1U, target_group_count);
+    const std::size_t total_lanes =
+        std::accumulate(tracks.begin(), tracks.end(), std::size_t{0}, [&](std::size_t sum, const SpreaderTrack& track) {
+            return sum + std::min(static_cast<std::size_t>(track.n_sources), adapter_max_lanes);
+        });
+    const bool memory_pressure = total_lanes > (target_group_count * 2U);
+    const std::size_t target_lanes =
+        memory_pressure
+            ? std::max<std::size_t>(
+                  1U, std::min(adapter_max_lanes, (total_lanes + target_group_count - 1U) / target_group_count))
+            : 1U;
     std::vector<SpreaderGroup> groups;
     SpreaderGroup current;
 
@@ -906,9 +921,9 @@ std::vector<SpreaderGroup> build_spreader_groups(const std::vector<SpreaderTrack
         if (lane_count == 0U) {
             continue;
         }
-        // Keep groups small enough to preserve spreader-path parallelism. A single
-        // track may exceed the soft target, so only split between tracks.
-        if (!current.lanes.empty() && current.lanes.size() + lane_count > k_spreader_group_target_lanes) {
+        // Prefer one adapter per track. Pack tracks only once lane count is well
+        // beyond the parallel budget, where adapter memory starts to dominate.
+        if (!current.lanes.empty() && current.lanes.size() + lane_count > target_lanes) {
             flush_current();
         }
 
@@ -917,7 +932,7 @@ std::vector<SpreaderGroup> build_spreader_groups(const std::vector<SpreaderTrack
         for (std::size_t si = 0; si < lane_count; ++si) {
             current.lanes.push_back({track_slot, si});
         }
-        if (current.lanes.size() >= k_spreader_group_target_lanes) {
+        if (current.lanes.size() >= target_lanes) {
             flush_current();
         }
     }
@@ -1365,9 +1380,11 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     std::vector<SpreaderTrack> spreader_tracks;
     std::vector<SpreaderGroup> spreader_groups;
     std::vector<BinauralSpreaderAdapter> spreader_adapters;
+    const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
+    const std::size_t parallel_budget = (hw_threads > 0U) ? hw_threads : sources.size();
     if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
         spreader_tracks = build_spreader_tracks(plan.scene, logs);
-        spreader_groups = build_spreader_groups(spreader_tracks);
+        spreader_groups = build_spreader_groups(spreader_tracks, std::max<std::size_t>(1U, parallel_budget));
         spreader_adapters.reserve(spreader_groups.size());
         std::ranges::transform(spreader_groups, std::back_inserter(spreader_adapters), [&](const SpreaderGroup& group) {
             return BinauralSpreaderAdapter{bs->hrtf_td.data(),
@@ -1463,7 +1480,6 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     const bool spreader_mode = !spreader_adapters.empty();
     const std::size_t spr_delay =
         spreader_mode ? static_cast<std::size_t>(BinauralSpreaderAdapter::total_latency()) : 0U;
-    const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
     const std::size_t spreader_worker_count =
         (spreader_groups.size() > 1U && hw_threads > 1U) ? std::min(spreader_groups.size(), hw_threads) : 0U;
     TrackWorkerPool spreader_pool(spreader_worker_count);
