@@ -52,6 +52,7 @@ namespace {
 
 constexpr uint64_t k_min_block_size = 1024U;
 constexpr float k_spreader_extent_threshold_deg = 1.0F; // min extent to route via saf_spreader
+constexpr std::size_t k_spreader_group_target_lanes = 2U;
 constexpr int k_n_ears = 2;
 constexpr int k_n_azi = 361;  // (int)(360/1 + 0.5) + 1
 constexpr int k_n_elev = 181; // (int)(180/1 + 0.5) + 1
@@ -889,7 +890,7 @@ struct SpreaderGroup {
 // NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
 
 std::vector<SpreaderGroup> build_spreader_groups(const std::vector<SpreaderTrack>& tracks) {
-    const auto max_lanes = static_cast<std::size_t>(BinauralSpreaderAdapter::max_sources());
+    const auto adapter_max_lanes = static_cast<std::size_t>(BinauralSpreaderAdapter::max_sources());
     std::vector<SpreaderGroup> groups;
     SpreaderGroup current;
 
@@ -901,11 +902,13 @@ std::vector<SpreaderGroup> build_spreader_groups(const std::vector<SpreaderTrack
     };
 
     for (std::size_t ti = 0; ti < tracks.size(); ++ti) {
-        const std::size_t lane_count = std::min(static_cast<std::size_t>(tracks[ti].n_sources), max_lanes);
+        const std::size_t lane_count = std::min(static_cast<std::size_t>(tracks[ti].n_sources), adapter_max_lanes);
         if (lane_count == 0U) {
             continue;
         }
-        if (!current.lanes.empty() && current.lanes.size() + lane_count > max_lanes) {
+        // Keep groups small enough to preserve spreader-path parallelism. A single
+        // track may exceed the soft target, so only split between tracks.
+        if (!current.lanes.empty() && current.lanes.size() + lane_count > k_spreader_group_target_lanes) {
             flush_current();
         }
 
@@ -913,6 +916,9 @@ std::vector<SpreaderGroup> build_spreader_groups(const std::vector<SpreaderTrack
         current.track_indices.push_back(ti);
         for (std::size_t si = 0; si < lane_count; ++si) {
             current.lanes.push_back({track_slot, si});
+        }
+        if (current.lanes.size() >= k_spreader_group_target_lanes) {
+            flush_current();
         }
     }
     flush_current();
