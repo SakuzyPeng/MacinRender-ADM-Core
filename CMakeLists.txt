@@ -43,6 +43,7 @@ include(GNUInstallDirs)
 include(MRWarnings)
 include(MRDependencies)
 include(MRStaticAnalysis)
+find_package(Threads REQUIRED)
 if(MR_ADM_ENABLE_IAMF)
     include(MRIamfAomBridge)
     mr_adm_core_find_iamf_aom_bridge()
@@ -126,7 +127,7 @@ target_sources(
         src/adm_render_common/speaker_layouts.cpp
 )
 target_include_directories(mr_adm_render_common PUBLIC src/adm_render_common)
-target_link_libraries(mr_adm_render_common PUBLIC MacinRender::ADMCore)
+target_link_libraries(mr_adm_render_common PUBLIC MacinRender::ADMCore Threads::Threads)
 mr_adm_core_apply_warnings(mr_adm_render_common)
 mr_adm_core_apply_static_analysis(mr_adm_render_common)
 
@@ -209,7 +210,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_hoa
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio
+    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
 )
 target_include_directories(mr_adm_render_hoa
     SYSTEM PRIVATE

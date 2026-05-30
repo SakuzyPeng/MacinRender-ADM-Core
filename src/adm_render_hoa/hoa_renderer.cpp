@@ -27,6 +27,8 @@
 #include "adm/render.h"
 #include "adm/render_hoa.h"
 
+#include "render_common.h"
+
 namespace mradm {
 
 namespace {
@@ -618,8 +620,6 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         constexpr uint64_t k_min_block_size = 1024;
         const uint64_t k_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
         const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
-        std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
-        std::vector<float> out_block(static_cast<std::size_t>(k_num_out) * k_block_size);
         std::vector<float> measure_hoa_block(static_cast<std::size_t>(k_num_out) * k_block_size);
         std::vector<float> decoded_block(k_714_ch_sz * k_block_size);
         std::vector<std::array<DiffuseState, k_diffuse_slots>> diffuse_states(gain_matrix.size());
@@ -660,11 +660,90 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
             lfe_mix_block.resize(k_block_size, 0.F);
         }
 
+        // Loudness / true-peak measurement (LFE TP + 7.1.4 decode + two ebur128 states) is run on a
+        // background thread so it overlaps the next block's HOA encode. The measurement only reads the
+        // input and output buffers (both double-buffered below) plus const scene data; its scratch and
+        // ebur128 states are touched solely by the worker. Running blocks in FIFO order keeps the
+        // measured loudness / true peak bit-identical to the inline version.
+        const auto measure_block = [&](const float* in_data, const float* out_data, uint64_t fd, uint64_t fn) {
+            const std::size_t measure_samples = static_cast<std::size_t>(k_num_out) * fn;
+            if (lufs_st) {
+                std::copy_n(out_data, measure_samples, measure_hoa_block.begin());
+            }
+            if (lfe_tp_st) {
+                std::fill(lfe_mix_block.begin(), lfe_mix_block.begin() + static_cast<std::ptrdiff_t>(fn), 0.F);
+                for (const auto& cg : gain_matrix) {
+                    if (!cg.has_lfe_block) {
+                        continue;
+                    }
+                    for (std::size_t f = 0; f < fn; ++f) {
+                        const float in_s = in_data[(f * num_in_ch) + cg.input_channel];
+                        const HoaFrameGains lfe_gains = gains_at(cg, fd + f, k_default_interp, BlockFilter::lfe_only);
+                        lfe_mix_block[f] += in_s * lfe_gains.direct[0];
+                        if (lufs_st) {
+                            float* measure_hoa = measure_hoa_block.data() + (f * k_hoa3_channels);
+                            for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
+                                measure_hoa[sh] -= in_s * lfe_gains.direct.at(sh);
+                            }
+                        }
+                    }
+                }
+                ebur128_add_frames_float(lfe_tp_st.get(), lfe_mix_block.data(), static_cast<std::size_t>(fn));
+            }
+            if (lufs_st) {
+                // Decode 16ch HOA → 12ch 7.1.4 for BS.1770 playback-domain measurement.
+                // rows 0-2  → ch 0-2 (L R C); ch3 (LFE) = 0; rows 3-10 → ch 4-11.
+                for (std::size_t f = 0; f < fn; ++f) {
+                    const float* hoa = measure_hoa_block.data() + (f * k_hoa3_channels);
+                    float* dec = decoded_block.data() + (f * k_714_ch_sz);
+                    for (int ls = 0; ls < 3; ++ls) {
+                        float s = 0.F;
+                        const float* row = dec_mtx.data() + (static_cast<std::size_t>(ls) * k_hoa3_channels);
+                        for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
+                            s += row[sh] * hoa[sh];
+                        }
+                        dec[ls] = s;
+                    }
+                    dec[3] = 0.F; // LFE not decoded
+                    for (int ls = 3; ls < k_714_nls; ++ls) {
+                        float s = 0.F;
+                        const float* row = dec_mtx.data() + (static_cast<std::size_t>(ls) * k_hoa3_channels);
+                        for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
+                            s += row[sh] * hoa[sh];
+                        }
+                        dec[ls + 1] = s; // +1 to skip LFE slot at ch3
+                    }
+                }
+                ebur128_add_frames_float(lufs_st.get(), decoded_block.data(), static_cast<std::size_t>(fn));
+            }
+        };
+
+        // Double-buffer the input and output blocks so the next block can be encoded while the meter
+        // still reads the previous block's buffers; reuse waits on the outstanding measurement future.
+        constexpr std::size_t k_num_buffers = 2;
+        std::array<std::vector<float>, k_num_buffers> in_buffers;
+        std::array<std::vector<float>, k_num_buffers> out_buffers;
+        for (auto& buffer : in_buffers) {
+            buffer.assign(static_cast<std::size_t>(num_in_ch) * k_block_size, 0.0F);
+        }
+        for (auto& buffer : out_buffers) {
+            buffer.assign(static_cast<std::size_t>(k_num_out) * k_block_size, 0.0F);
+        }
+        std::array<std::future<void>, k_num_buffers> meter_pending;
+        render_common::SerialWorker meter;
+        std::size_t buf_idx = 0;
         uint64_t frames_done = 0;
 
         while (frames_done < num_frames) {
             const uint64_t frames_now = std::min(k_block_size, num_frames - frames_done);
             const std::size_t out_samples = static_cast<std::size_t>(k_num_out) * frames_now;
+
+            // Reclaim this block's buffers once the meter has finished its previous use of them.
+            if (meter_pending.at(buf_idx).valid()) {
+                meter_pending.at(buf_idx).get();
+            }
+            std::vector<float>& in_block = in_buffers.at(buf_idx);
+            std::vector<float>& out_block = out_buffers.at(buf_idx);
 
             reader->read(in_block.data(), frames_now);
             std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
@@ -719,70 +798,32 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
                 }
             }
 
-            if (lufs_st) {
-                std::copy_n(out_block.begin(), static_cast<std::ptrdiff_t>(out_samples), measure_hoa_block.begin());
-            }
-
-            if (lfe_tp_st) {
-                // Mix all LFE input channels into a mono buffer and remove the same W-only
-                // contribution from the HOA measurement buffer. gains_at(..., lfe_only)[0]
-                // is the combined_gain for LFE blocks; DirectSpeakers have jump_position=true
-                // so no interpolation occurs.
-                std::fill(lfe_mix_block.begin(), lfe_mix_block.begin() + static_cast<std::ptrdiff_t>(frames_now), 0.F);
-                for (const auto& cg : gain_matrix) {
-                    if (!cg.has_lfe_block) {
-                        continue;
-                    }
-                    for (std::size_t f = 0; f < frames_now; ++f) {
-                        const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
-                        const HoaFrameGains lfe_gains =
-                            gains_at(cg, frames_done + f, k_default_interp, BlockFilter::lfe_only);
-                        lfe_mix_block[f] += in_s * lfe_gains.direct[0];
-                        if (lufs_st) {
-                            float* measure_hoa = measure_hoa_block.data() + (f * k_hoa3_channels);
-                            for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
-                                measure_hoa[sh] -= in_s * lfe_gains.direct.at(sh);
-                            }
-                        }
-                    }
-                }
-                ebur128_add_frames_float(lfe_tp_st.get(), lfe_mix_block.data(), static_cast<std::size_t>(frames_now));
-            }
-
-            if (lufs_st) {
-                // Decode 16ch HOA → 12ch 7.1.4 for BS.1770 playback-domain measurement.
-                // rows 0-2  → ch 0-2 (L R C); ch3 (LFE) = 0; rows 3-10 → ch 4-11.
-                for (std::size_t f = 0; f < frames_now; ++f) {
-                    const float* hoa = measure_hoa_block.data() + (f * k_hoa3_channels);
-                    float* dec = decoded_block.data() + (f * k_714_ch_sz);
-                    for (int ls = 0; ls < 3; ++ls) {
-                        float s = 0.F;
-                        const float* row = dec_mtx.data() + (static_cast<std::size_t>(ls) * k_hoa3_channels);
-                        for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
-                            s += row[sh] * hoa[sh];
-                        }
-                        dec[ls] = s;
-                    }
-                    dec[3] = 0.F; // LFE not decoded
-                    for (int ls = 3; ls < k_714_nls; ++ls) {
-                        float s = 0.F;
-                        const float* row = dec_mtx.data() + (static_cast<std::size_t>(ls) * k_hoa3_channels);
-                        for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
-                            s += row[sh] * hoa[sh];
-                        }
-                        dec[ls + 1] = s; // +1 to skip LFE slot at ch3
-                    }
-                }
-                ebur128_add_frames_float(lufs_st.get(), decoded_block.data(), static_cast<std::size_t>(frames_now));
-            }
-
             if (writer.write(out_block.data(), frames_now) != frames_now) {
                 return make_error(ErrorCode::io_error, "short write while encoding HOA", "output=" + plan.output_path);
             }
+
+            // Offload loudness / true-peak measurement to the background meter (overlaps next block).
+            if (lufs_st || lfe_tp_st) {
+                const float* in_data = in_block.data();
+                const float* out_data = out_block.data();
+                const uint64_t fd = frames_done;
+                const uint64_t fn = frames_now;
+                meter_pending.at(buf_idx) = meter.post(
+                    [&measure_block, in_data, out_data, fd, fn] { measure_block(in_data, out_data, fd, fn); });
+            }
+
             frames_done += frames_now;
+            buf_idx = (buf_idx + 1) % k_num_buffers;
 
             const double frac = 0.3 + (0.6 * (static_cast<double>(frames_done) / static_cast<double>(num_frames)));
             progress.on_progress({RenderStage::rendering, frac, "encoding"});
+        }
+
+        // All audio is written; wait for outstanding measurements before reading global metrics.
+        for (auto& pending : meter_pending) {
+            if (pending.valid()) {
+                pending.get();
+            }
         }
 
         progress.on_progress({RenderStage::finished, 1.0, "done"});
