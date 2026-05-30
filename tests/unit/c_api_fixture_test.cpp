@@ -225,6 +225,20 @@ bool verify_options_null_setters() {
     ok = check(adm_render_options_set_loudness_target(nullptr, -23.0) == ADM_ERROR_OK,
                "NULL opts set_loudness_target should return OK") &&
          ok;
+    // void bool setters: null opts must not crash
+    adm_render_options_set_peak_limit(nullptr, 1);
+    adm_render_options_set_peak_normalize_to_limit(nullptr, 1);
+    adm_render_options_set_apac_drc_music(nullptr, 1);
+    // string setters: null opts → ADM_ERROR_OK (no-op)
+    ok = check(adm_render_options_set_sofa_path(nullptr, "/any/path.sofa") == ADM_ERROR_OK,
+               "NULL opts set_sofa_path should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_semantic_policy_path(nullptr, "/any/policy.json") == ADM_ERROR_OK,
+               "NULL opts set_semantic_policy_path should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_semantic_report_path(nullptr, "/any/report.json") == ADM_ERROR_OK,
+               "NULL opts set_semantic_report_path should return OK") &&
+         ok;
     return ok;
 }
 
@@ -336,6 +350,39 @@ bool verify_options_boundary_values(adm_render_options_t* opts) {
                "valid renderer should return OK") &&
          ok;
     ok = check(adm_render_options_set_output_layout(opts, "7.1.4") == ADM_ERROR_OK, "valid layout should return OK") &&
+         ok;
+    // void bool setters: 0/1 accepted, no crash.
+    adm_render_options_set_peak_limit(opts, 1);
+    adm_render_options_set_peak_limit(opts, 0);
+    adm_render_options_set_peak_normalize_to_limit(opts, 1);
+    adm_render_options_set_peak_normalize_to_limit(opts, 0);
+    adm_render_options_set_apac_drc_music(opts, 1);
+    adm_render_options_set_apac_drc_music(opts, 0);
+    // sofa_path: nullptr/"" → built-in KEMAR (clears field); valid path → stored.
+    ok = check(adm_render_options_set_sofa_path(opts, nullptr) == ADM_ERROR_OK,
+               "sofa_path nullptr (built-in KEMAR) should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_sofa_path(opts, "") == ADM_ERROR_OK,
+               "sofa_path \"\" (built-in KEMAR) should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_sofa_path(opts, "/valid/path.sofa") == ADM_ERROR_OK,
+               "sofa_path valid string should return OK") &&
+         ok;
+    // semantic paths: nullptr/"" → clears the field; valid path → stored.
+    ok = check(adm_render_options_set_semantic_policy_path(opts, nullptr) == ADM_ERROR_OK,
+               "semantic_policy_path nullptr (clear) should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_semantic_policy_path(opts, "") == ADM_ERROR_OK,
+               "semantic_policy_path \"\" (clear) should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_semantic_policy_path(opts, "/valid/policy.json") == ADM_ERROR_OK,
+               "semantic_policy_path valid string should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_semantic_report_path(opts, nullptr) == ADM_ERROR_OK,
+               "semantic_report_path nullptr (clear) should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_semantic_report_path(opts, "/valid/report.json") == ADM_ERROR_OK,
+               "semantic_report_path valid string should return OK") &&
          ok;
     return ok;
 }
