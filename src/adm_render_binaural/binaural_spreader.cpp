@@ -177,6 +177,10 @@ int BinauralSpreaderAdapter::processing_delay() {
     return spreader_getProcessingDelay();
 }
 
+int BinauralSpreaderAdapter::max_sources() {
+    return k_max_sources;
+}
+
 int BinauralSpreaderAdapter::total_latency() {
     // STFT processing delay plus the one-frame prime cushion (see prime()).
     return processing_delay() + k_frame_size;

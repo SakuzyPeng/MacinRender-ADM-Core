@@ -46,6 +46,9 @@ class BinauralSpreaderAdapter {
     // SAF STFT processing delay in samples (constant: 12 × HOP_SIZE = 1536).
     [[nodiscard]] static int processing_delay();
 
+    // Maximum number of source lanes supported by one SAF spreader instance.
+    [[nodiscard]] static int max_sources();
+
     // Total constant input→output latency after prime(): processing_delay() plus the
     // one-frame ring cushion. This is the amount the caller must compensate for.
     [[nodiscard]] static int total_latency();
