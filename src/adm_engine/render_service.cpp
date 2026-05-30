@@ -571,8 +571,31 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         }
     }
 
-    return {
-        {ErrorCode::ok, "", {}}, std::filesystem::path{output_path}, metrics, {{LogLevel::info, "render completed"}}};
+    // Return the post-processing effective values (gain-adjusted), matching what was
+    // written to the file's metadata. Raw renderer measurements live in `metrics`.
+    const RenderMetrics final_metrics{
+        metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt,
+        metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt,
+    };
+    return {{ErrorCode::ok, "", {}},
+            std::filesystem::path{output_path},
+            final_metrics,
+            {{LogLevel::info, "render completed"}}};
+}
+
+Result<SceneProbe> RenderService::probe(const std::string& input_path) const {
+    auto scene_result = io::import_scene(input_path);
+    if (!scene_result) {
+        return tl::unexpected(scene_result.error());
+    }
+    const auto& scene = *scene_result;
+    SceneProbe probe;
+    probe.sample_rate = scene.info.sample_rate;
+    probe.num_channels = scene.info.num_channels;
+    probe.num_frames = scene.info.num_frames;
+    probe.programme_count = static_cast<uint32_t>(scene.programmes.size());
+    probe.object_count = static_cast<uint32_t>(scene.objects.size());
+    return probe;
 }
 
 } // namespace mradm

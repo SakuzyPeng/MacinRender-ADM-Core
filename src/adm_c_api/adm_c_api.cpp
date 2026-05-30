@@ -1,5 +1,7 @@
+#include <cmath>
 #include <memory>
 #include <new>
+#include <optional>
 #include <string>
 
 #include "adm/c_api.h"
@@ -37,6 +39,30 @@ static_assert(static_cast<int>(mradm::ErrorCode::io_error) == ADM_ERROR_IO);
 static_assert(static_cast<int>(mradm::ErrorCode::render_failed) == ADM_ERROR_RENDER_FAILED);
 static_assert(static_cast<int>(mradm::ErrorCode::cancelled) == ADM_ERROR_CANCELLED);
 static_assert(static_cast<int>(mradm::ErrorCode::internal_error) == ADM_ERROR_INTERNAL);
+
+// v1.1 enum cross-checks.
+static_assert(static_cast<int>(mradm::RendererSelection::automatic) == ADM_RENDERER_AUTOMATIC);
+static_assert(static_cast<int>(mradm::RendererSelection::ear) == ADM_RENDERER_EAR);
+static_assert(static_cast<int>(mradm::RendererSelection::saf) == ADM_RENDERER_SAF);
+static_assert(static_cast<int>(mradm::RendererSelection::hoa) == ADM_RENDERER_HOA);
+static_assert(static_cast<int>(mradm::RendererSelection::apple) == ADM_RENDERER_APPLE);
+static_assert(static_cast<int>(mradm::RendererSelection::binaural) == ADM_RENDERER_BINAURAL);
+
+static_assert(static_cast<int>(mradm::OutputBitDepth::f32) == ADM_BIT_DEPTH_F32);
+static_assert(static_cast<int>(mradm::OutputBitDepth::i24) == ADM_BIT_DEPTH_I24);
+static_assert(static_cast<int>(mradm::OutputBitDepth::i16) == ADM_BIT_DEPTH_I16);
+
+static_assert(static_cast<int>(mradm::SpeakerSpreadMode::automatic) == ADM_SPEAKER_SPREAD_AUTOMATIC);
+static_assert(static_cast<int>(mradm::SpeakerSpreadMode::none) == ADM_SPEAKER_SPREAD_NONE);
+static_assert(static_cast<int>(mradm::SpeakerSpreadMode::mdap) == ADM_SPEAKER_SPREAD_MDAP);
+
+static_assert(static_cast<int>(mradm::BinauralSpreadMode::automatic) == ADM_BINAURAL_SPREAD_AUTOMATIC);
+static_assert(static_cast<int>(mradm::BinauralSpreadMode::none) == ADM_BINAURAL_SPREAD_NONE);
+static_assert(static_cast<int>(mradm::BinauralSpreadMode::cloud) == ADM_BINAURAL_SPREAD_CLOUD);
+static_assert(static_cast<int>(mradm::BinauralSpreadMode::saf_spreader) == ADM_BINAURAL_SPREAD_SAF_SPREADER);
+
+static_assert(static_cast<int>(mradm::RenderOptions::IamfContainer::obu) == ADM_IAMF_CONTAINER_OBU);
+static_assert(static_cast<int>(mradm::RenderOptions::IamfContainer::mp4) == ADM_IAMF_CONTAINER_MP4);
 
 adm_error_code_t map_error(mradm::ErrorCode code) noexcept {
     switch (code) {
@@ -84,7 +110,24 @@ struct adm_context_t {
 struct adm_render_result_t {
     adm_error_code_t code{ADM_ERROR_OK};
     std::string message;
+    std::string output_path;             // v1.1
+    std::optional<double> loudness_lufs; // v1.1
+    std::optional<double> peak_dbtp;     // v1.1
 };
+
+struct adm_render_options_t {
+    mradm::RenderOptions opts;
+};
+
+struct adm_scene_info_t {
+    uint32_t sample_rate{0};
+    uint32_t channels{0};
+    uint64_t frames{0};
+    uint32_t programme_count{0};
+    uint32_t object_count{0};
+};
+
+/* ── Version ──────────────────────────────────────────────────────────────── */
 
 int adm_api_version_major(void) noexcept {
     return ADM_API_VERSION_MAJOR;
@@ -96,9 +139,11 @@ int adm_api_version_patch(void) noexcept {
     return ADM_API_VERSION_PATCH;
 }
 
+/* ── Context ──────────────────────────────────────────────────────────────── */
+
 adm_context_t* adm_create_context(void) noexcept {
     try {
-        return new (std::nothrow) adm_context_t{};
+        return new adm_context_t{};
     } catch (...) {
         return nullptr;
     }
@@ -108,12 +153,240 @@ void adm_destroy_context(adm_context_t* context) noexcept {
     delete context;
 }
 
-adm_error_code_t adm_render_file(adm_context_t* context,
-                                 const char* input_path,
-                                 const char* output_path,
-                                 adm_progress_cb progress,
-                                 void* user_data,
-                                 adm_render_result_t** result) noexcept {
+/* ── Options builder ─────────────────────────────────────────────────────── */
+
+adm_render_options_t* adm_create_render_options(void) noexcept {
+    try {
+        return new adm_render_options_t{};
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void adm_destroy_render_options(adm_render_options_t* opts) noexcept {
+    delete opts;
+}
+
+adm_error_code_t adm_render_options_set_renderer(adm_render_options_t* opts, adm_renderer_t renderer) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (static_cast<int>(renderer) < ADM_RENDERER_AUTOMATIC || static_cast<int>(renderer) > ADM_RENDERER_BINAURAL) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.renderer = static_cast<mradm::RendererSelection>(renderer);
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_output_layout(adm_render_options_t* opts, const char* layout) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (layout == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        opts->opts.output_layout = layout;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_render_options_set_output_bit_depth(adm_render_options_t* opts,
+                                                         adm_output_bit_depth_t depth) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (static_cast<int>(depth) < ADM_BIT_DEPTH_F32 || static_cast<int>(depth) > ADM_BIT_DEPTH_I16) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.output_bit_depth = static_cast<mradm::OutputBitDepth>(depth);
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_loudness_target(adm_render_options_t* opts, double lufs) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (!std::isfinite(lufs) || lufs < -70.0 || lufs > 0.0) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.loudness_target_lufs = static_cast<float>(lufs);
+    opts->opts.measure_loudness = true;
+    return ADM_ERROR_OK;
+}
+
+void adm_render_options_set_peak_limit(adm_render_options_t* opts, int enabled) noexcept {
+    if (opts == nullptr) {
+        return;
+    }
+    opts->opts.peak_limit = (enabled != 0);
+}
+
+adm_error_code_t adm_render_options_set_peak_limit_dbtp(adm_render_options_t* opts, double dbtp) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (!std::isfinite(dbtp) || dbtp < -60.0 || dbtp > 0.0) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.peak_limit_dbtp = static_cast<float>(dbtp);
+    return ADM_ERROR_OK;
+}
+
+void adm_render_options_set_peak_normalize_to_limit(adm_render_options_t* opts, int enabled) noexcept {
+    if (opts == nullptr) {
+        return;
+    }
+    opts->opts.peak_normalize_to_limit = (enabled != 0);
+}
+
+adm_error_code_t adm_render_options_set_opus_bitrate_per_ch_kbps(adm_render_options_t* opts, uint32_t kbps) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (kbps != 0 && (kbps < 6 || kbps > 320)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.opus_bitrate_per_ch_kbps = kbps;
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_apac_bitrate_kbps(adm_render_options_t* opts, uint32_t kbps) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (kbps != 0 && (kbps < 64 || kbps > 12000)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.apac_bitrate_kbps = kbps;
+    return ADM_ERROR_OK;
+}
+
+void adm_render_options_set_apac_drc_music(adm_render_options_t* opts, int enabled) noexcept {
+    if (opts == nullptr) {
+        return;
+    }
+    opts->opts.apac_drc_music = (enabled != 0);
+}
+
+adm_error_code_t adm_render_options_set_sofa_path(adm_render_options_t* opts, const char* sofa_path) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    try {
+        if (sofa_path == nullptr || sofa_path[0] == '\0') {
+            opts->opts.sofa_path = std::nullopt;
+        } else {
+            opts->opts.sofa_path = std::filesystem::path{sofa_path};
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_render_options_set_semantic_policy_path(adm_render_options_t* opts, const char* path) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    try {
+        if (path == nullptr || path[0] == '\0') {
+            opts->opts.semantic_policy_path = std::nullopt;
+        } else {
+            opts->opts.semantic_policy_path = std::filesystem::path{path};
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_render_options_set_semantic_report_path(adm_render_options_t* opts, const char* path) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    try {
+        if (path == nullptr || path[0] == '\0') {
+            opts->opts.semantic_report_path = std::nullopt;
+        } else {
+            opts->opts.semantic_report_path = std::filesystem::path{path};
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_render_options_set_default_interp_ms(adm_render_options_t* opts, uint32_t ms) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (ms > 500) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.default_interp_ms = ms;
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_object_smoothing_frames(adm_render_options_t* opts, uint32_t frames) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (frames > 48000) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.object_smoothing_frames = frames;
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_speaker_spread_mode(adm_render_options_t* opts,
+                                                            adm_speaker_spread_mode_t mode) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (static_cast<int>(mode) < ADM_SPEAKER_SPREAD_AUTOMATIC || static_cast<int>(mode) > ADM_SPEAKER_SPREAD_MDAP) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.speaker_spread_mode = static_cast<mradm::SpeakerSpreadMode>(mode);
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_binaural_spread_mode(adm_render_options_t* opts,
+                                                             adm_binaural_spread_mode_t mode) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (static_cast<int>(mode) < ADM_BINAURAL_SPREAD_AUTOMATIC ||
+        static_cast<int>(mode) > ADM_BINAURAL_SPREAD_SAF_SPREADER) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.binaural_spread_mode = static_cast<mradm::BinauralSpreadMode>(mode);
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_iamf_container(adm_render_options_t* opts,
+                                                       adm_iamf_container_t container) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (static_cast<int>(container) < ADM_IAMF_CONTAINER_OBU || static_cast<int>(container) > ADM_IAMF_CONTAINER_MP4) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.iamf_container = static_cast<mradm::RenderOptions::IamfContainer>(container);
+    return ADM_ERROR_OK;
+}
+
+/* ── Render ──────────────────────────────────────────────────────────────── */
+
+adm_error_code_t adm_render_file_ex(adm_context_t* context,
+                                    const char* input_path,
+                                    const char* output_path,
+                                    const adm_render_options_t* opts,
+                                    adm_progress_cb progress,
+                                    void* user_data,
+                                    adm_render_result_t** result) noexcept {
     if (result != nullptr) {
         *result = nullptr;
     }
@@ -126,6 +399,9 @@ adm_error_code_t adm_render_file(adm_context_t* context,
         request.input_path = input_path;
         if (output_path != nullptr && output_path[0] != '\0') {
             request.output_path = output_path;
+        }
+        if (opts != nullptr) {
+            request.options = opts->opts;
         }
 
         CallbackProgressSink progress_sink(progress, user_data);
@@ -143,6 +419,13 @@ adm_error_code_t adm_render_file(adm_context_t* context,
         }
         c_result->code = code;
         c_result->message = cpp_result.error.message;
+        if (cpp_result.output_path.has_value()) {
+            c_result->output_path = cpp_result.output_path->string();
+        }
+        if (cpp_result.metrics.has_value()) {
+            c_result->loudness_lufs = cpp_result.metrics->measured_lufs;
+            c_result->peak_dbtp = cpp_result.metrics->measured_peak_dbtp;
+        }
         *result = c_result.release();
 
         return code;
@@ -150,6 +433,17 @@ adm_error_code_t adm_render_file(adm_context_t* context,
         return ADM_ERROR_INTERNAL;
     }
 }
+
+adm_error_code_t adm_render_file(adm_context_t* context,
+                                 const char* input_path,
+                                 const char* output_path,
+                                 adm_progress_cb progress,
+                                 void* user_data,
+                                 adm_render_result_t** result) noexcept {
+    return adm_render_file_ex(context, input_path, output_path, nullptr, progress, user_data, result);
+}
+
+/* ── Result ──────────────────────────────────────────────────────────────── */
 
 void adm_destroy_render_result(adm_render_result_t* result) noexcept {
     delete result;
@@ -167,4 +461,99 @@ const char* adm_render_result_message(const adm_render_result_t* result) noexcep
         return "result is null";
     }
     return result->message.c_str();
+}
+
+const char* adm_render_result_output_path(const adm_render_result_t* result) noexcept {
+    if (result == nullptr) {
+        return nullptr;
+    }
+    return result->output_path.c_str();
+}
+
+int adm_render_result_loudness_lufs(const adm_render_result_t* result, double* out_value) noexcept {
+    if (result == nullptr || !result->loudness_lufs.has_value()) {
+        return 0;
+    }
+    if (out_value != nullptr) {
+        *out_value = *result->loudness_lufs;
+    }
+    return 1;
+}
+
+int adm_render_result_peak_dbtp(const adm_render_result_t* result, double* out_value) noexcept {
+    if (result == nullptr || !result->peak_dbtp.has_value()) {
+        return 0;
+    }
+    if (out_value != nullptr) {
+        *out_value = *result->peak_dbtp;
+    }
+    return 1;
+}
+
+/* ── Probe ───────────────────────────────────────────────────────────────── */
+
+adm_error_code_t adm_probe_file(adm_context_t* context, const char* input_path, adm_scene_info_t** out) noexcept {
+    if (out != nullptr) {
+        *out = nullptr;
+    }
+    if (context == nullptr || input_path == nullptr || input_path[0] == '\0') {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        auto probe_result = context->service.probe(input_path);
+        if (!probe_result) {
+            return map_error(probe_result.error().code);
+        }
+
+        if (out == nullptr) {
+            return ADM_ERROR_OK;
+        }
+
+        // cppcheck-suppress unreadVariable -- info is read via *out = info below
+        auto* info = new (std::nothrow) adm_scene_info_t{};
+        if (info == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        info->sample_rate = probe_result->sample_rate;
+        info->channels = probe_result->num_channels;
+        info->frames = probe_result->num_frames;
+        info->programme_count = probe_result->programme_count;
+        info->object_count = probe_result->object_count;
+        *out = info;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+void adm_destroy_scene_info(adm_scene_info_t* info) noexcept {
+    delete info;
+}
+
+uint32_t adm_scene_info_sample_rate(const adm_scene_info_t* info) noexcept {
+    return info != nullptr ? info->sample_rate : 0U;
+}
+
+uint32_t adm_scene_info_channels(const adm_scene_info_t* info) noexcept {
+    return info != nullptr ? info->channels : 0U;
+}
+
+uint64_t adm_scene_info_frames(const adm_scene_info_t* info) noexcept {
+    return info != nullptr ? info->frames : 0ULL;
+}
+
+double adm_scene_info_duration_seconds(const adm_scene_info_t* info) noexcept {
+    if (info == nullptr || info->sample_rate == 0U) {
+        return 0.0;
+    }
+    return static_cast<double>(info->frames) / static_cast<double>(info->sample_rate);
+}
+
+uint32_t adm_scene_info_programme_count(const adm_scene_info_t* info) noexcept {
+    return info != nullptr ? info->programme_count : 0U;
+}
+
+uint32_t adm_scene_info_object_count(const adm_scene_info_t* info) noexcept {
+    return info != nullptr ? info->object_count : 0U;
 }
