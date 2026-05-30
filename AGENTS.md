@@ -14,6 +14,10 @@ This is a C++20 CMake project for ADM spatial-audio rendering. Public API header
 - `scripts/quality/check-changed.sh --build-dir build/debug`: run format, clang-tidy, and cppcheck on changed C/C++ files.
 - `scripts/quality/check-all.sh build/debug`: run the full local quality gate.
 
+Use Debug builds for correctness checks, fixture tests, and local quality gates. Use Release builds for performance,
+runtime, and RSS comparisons; Debug timing or memory data is only directional and should not be reported as final
+benchmark evidence.
+
 ## Coding Style & Naming Conventions
 
 Follow `.clang-format`: LLVM base style, 4-space indentation, no tabs, C++20, 120-column limit, sorted includes. `.editorconfig` requires LF endings, UTF-8, final newlines, and trimmed trailing whitespace. Naming follows `.clang-tidy`: namespaces, functions, variables, and enum constants use `lower_case`; classes and structs use `CamelCase`. Keep public headers free of backend-specific third-party types unless that header belongs to the backend boundary.
@@ -29,3 +33,8 @@ Recent history uses Conventional Commit style, for example `fix: ...`, `ci: ...`
 ## Agent-Specific Instructions
 
 Use Chinese for user-facing discussion by default, unless the user explicitly asks for another language. Do not edit generated build directories under `build/`. Preserve existing uncommitted user changes. For public C ABI work, review `docs/adr/0007-c-abi-stability-policy.md`; for error handling, follow `docs/adr/0005-error-handling-model.md`.
+
+When validating ADM semantic behavior, prefer the built-in semantic policy path (`--semantic-policy` and
+`--write-semantic-report`) over editing source ADM BWF/WAV files. For example, to force direct extent/spreader coverage
+on material whose extent blocks are fully diffuse, use a temporary policy that disables diffuse while preserving extent,
+then verify the effective metadata in the semantic report.
