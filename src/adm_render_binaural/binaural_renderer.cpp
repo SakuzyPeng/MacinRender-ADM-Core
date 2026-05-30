@@ -876,7 +876,64 @@ struct SpreaderTrack {
     std::vector<SpreaderBlock> blocks;
     int n_sources{1};
 };
+
+struct SpreaderLane {
+    std::size_t track_slot{0};
+    std::size_t source_index{0};
+};
+
+struct SpreaderGroup {
+    std::vector<std::size_t> track_indices;
+    std::vector<SpreaderLane> lanes;
+};
 // NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
+
+std::vector<SpreaderGroup> build_spreader_groups(const std::vector<SpreaderTrack>& tracks) {
+    const auto max_lanes = static_cast<std::size_t>(BinauralSpreaderAdapter::max_sources());
+    std::vector<SpreaderGroup> groups;
+    SpreaderGroup current;
+
+    auto flush_current = [&] {
+        if (!current.lanes.empty()) {
+            groups.push_back(std::move(current));
+            current = {};
+        }
+    };
+
+    for (std::size_t ti = 0; ti < tracks.size(); ++ti) {
+        const std::size_t lane_count = std::min(static_cast<std::size_t>(tracks[ti].n_sources), max_lanes);
+        if (lane_count == 0U) {
+            continue;
+        }
+        if (!current.lanes.empty() && current.lanes.size() + lane_count > max_lanes) {
+            flush_current();
+        }
+
+        const std::size_t track_slot = current.track_indices.size();
+        current.track_indices.push_back(ti);
+        for (std::size_t si = 0; si < lane_count; ++si) {
+            current.lanes.push_back({track_slot, si});
+        }
+    }
+    flush_current();
+    return groups;
+}
+
+const SpreaderBlock*
+active_spreader_block_at(const SpreaderTrack& track, uint64_t cursor, uint64_t chunk_end, uint64_t& next_boundary) {
+    for (const auto& block : track.blocks) {
+        if (block.end_sample <= cursor) {
+            continue;
+        }
+        if (block.start_sample <= cursor) {
+            next_boundary = std::min({next_boundary, block.end_sample, chunk_end});
+            return &block;
+        }
+        next_boundary = std::min({next_boundary, block.start_sample, chunk_end});
+        return nullptr;
+    }
+    return nullptr;
+}
 
 std::vector<SpreaderTrack> build_spreader_tracks(const AdmScene& scene, LogSink& logs) {
     std::vector<SpreaderTrack> tracks;
@@ -1300,23 +1357,27 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
 
     // Build spreader tracks and adapters for saf_spreader mode.
     std::vector<SpreaderTrack> spreader_tracks;
+    std::vector<SpreaderGroup> spreader_groups;
     std::vector<BinauralSpreaderAdapter> spreader_adapters;
     if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
         spreader_tracks = build_spreader_tracks(plan.scene, logs);
-        spreader_adapters.reserve(spreader_tracks.size());
-        std::ranges::transform(spreader_tracks, std::back_inserter(spreader_adapters), [&](const SpreaderTrack& st) {
+        spreader_groups = build_spreader_groups(spreader_tracks);
+        spreader_adapters.reserve(spreader_groups.size());
+        std::ranges::transform(spreader_groups, std::back_inserter(spreader_adapters), [&](const SpreaderGroup& group) {
             return BinauralSpreaderAdapter{bs->hrtf_td.data(),
                                            bs->grid_dirs_deg.data(),
                                            bs->num_dirs,
                                            bs->hrir_len,
                                            bs->sample_rate,
-                                           st.n_sources};
+                                           static_cast<int>(group.lanes.size())};
         });
-        logs.log(LogLevel::info,
-                 "binaural",
-                 fmt::format("{} spreader track(s) (saf_spreader, compensated latency {} samples)",
-                             spreader_tracks.size(),
-                             BinauralSpreaderAdapter::total_latency()));
+        logs.log(
+            LogLevel::info,
+            "binaural",
+            fmt::format("{} spreader track(s) in {} adapter group(s) (saf_spreader, compensated latency {} samples)",
+                        spreader_tracks.size(),
+                        spreader_groups.size(),
+                        BinauralSpreaderAdapter::total_latency()));
         // Prime each adapter: pre-fill the output ring with one frame so process_chunk
         // drains exactly n_frames (constant total_latency(), no gaps).
         for (auto& adapter : spreader_adapters) {
@@ -1398,7 +1459,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
         spreader_mode ? static_cast<std::size_t>(BinauralSpreaderAdapter::total_latency()) : 0U;
     const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
     const std::size_t spreader_worker_count =
-        (spreader_tracks.size() > 1U && hw_threads > 1U) ? std::min(spreader_tracks.size(), hw_threads) : 0U;
+        (spreader_groups.size() > 1U && hw_threads > 1U) ? std::min(spreader_groups.size(), hw_threads) : 0U;
     TrackWorkerPool spreader_pool(spreader_worker_count);
     const std::size_t ola_worker_count =
         (sources.size() > 1U && hw_threads > 1U) ? std::min(sources.size(), hw_threads) : 0U;
@@ -1604,77 +1665,81 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
             }
         }
 
-        // saf_spreader direct-source path: each track is independent (separate STFT state),
-        // so process them in parallel. Each track accumulates into its own l/r scratch buffer;
-        // results are reduced into l_buf/r_buf after all tracks finish.
+        // saf_spreader direct-source path: several independent ADM tracks may share one
+        // SAF spreader adapter as source lanes, amortising the adapter's HRTF-derived
+        // tables. Each adapter group accumulates into its own l/r scratch buffer;
+        // results are reduced into l_buf/r_buf after all groups finish.
         if (!spreader_adapters.empty()) {
             const uint64_t chunk_start_sp = frames_done;
             const uint64_t chunk_end_sp = frames_done + frames_now;
-            const std::size_t n_tracks = spreader_tracks.size();
+            const std::size_t n_groups = spreader_groups.size();
 
-            // Per-track output scratch (independent of l_buf/r_buf during parallel phase).
-            std::vector<std::vector<float>> spr_l(n_tracks, std::vector<float>(fn, 0.0F));
-            std::vector<std::vector<float>> spr_r(n_tracks, std::vector<float>(fn, 0.0F));
+            // Per-group output scratch (independent of l_buf/r_buf during parallel phase).
+            std::vector<std::vector<float>> spr_l(n_groups, std::vector<float>(fn, 0.0F));
+            std::vector<std::vector<float>> spr_r(n_groups, std::vector<float>(fn, 0.0F));
 
-            auto process_one_track = [&](std::size_t ti) {
-                const auto& st = spreader_tracks[ti];
-                auto& adapter = spreader_adapters[ti];
+            auto process_one_group = [&](std::size_t gi) {
+                const auto& group = spreader_groups[gi];
+                auto& adapter = spreader_adapters[gi];
                 const std::vector<float> zeros_full(fn, 0.0F);
-                std::vector<float> track_ch(fn);
+                std::vector<float> track_ch(group.track_indices.size() * fn, 0.0F);
+                std::vector<const float*> lane_ptrs(group.lanes.size(), zeros_full.data());
+                std::vector<const SpreaderBlock*> active_blocks(group.track_indices.size(), nullptr);
                 uint64_t sp_cursor = chunk_start_sp;
                 while (sp_cursor < chunk_end_sp) {
-                    const SpreaderBlock* active = nullptr;
                     uint64_t next_boundary = chunk_end_sp;
-                    for (const auto& sb : st.blocks) {
-                        if (sb.end_sample <= sp_cursor) {
-                            continue;
-                        }
-                        if (sb.start_sample <= sp_cursor) {
-                            active = &sb;
-                            next_boundary = std::min(sb.end_sample, chunk_end_sp);
-                        } else {
-                            next_boundary = std::min(sb.start_sample, chunk_end_sp);
-                        }
-                        break;
+                    for (std::size_t ts = 0; ts < group.track_indices.size(); ++ts) {
+                        active_blocks[ts] = active_spreader_block_at(
+                            spreader_tracks[group.track_indices[ts]], sp_cursor, chunk_end_sp, next_boundary);
                     }
                     const auto seg_off = static_cast<std::size_t>(sp_cursor - chunk_start_sp);
                     const auto seg_fn = static_cast<std::size_t>(next_boundary - sp_cursor);
-                    if (active != nullptr) {
-                        for (std::size_t si = 0; si < active->sources.size(); ++si) {
-                            const auto& ss = active->sources[si];
-                            adapter.set_source(
-                                static_cast<int>(si), ss.az, ss.el, ss.spread_deg, st.object_gain * ss.gain);
-                        }
-                        const uint16_t ic = st.channel_index;
-                        for (std::size_t f = 0; f < seg_fn; ++f) {
-                            track_ch[f] = (ic < num_in_ch) ? in_block[((seg_off + f) * num_in_ch) + ic] : 0.0F;
-                        }
-                        std::vector<const float*> mono_ptrs(active->sources.size(), track_ch.data());
-                        adapter.process_chunk(mono_ptrs.data(),
-                                              static_cast<int>(active->sources.size()),
-                                              seg_fn,
-                                              spr_l[ti].data() + seg_off,
-                                              spr_r[ti].data() + seg_off);
-                    } else {
-                        std::vector<const float*> silent_ptrs(static_cast<std::size_t>(st.n_sources),
-                                                              zeros_full.data());
-                        adapter.process_chunk(silent_ptrs.data(),
-                                              st.n_sources,
-                                              seg_fn,
-                                              spr_l[ti].data() + seg_off,
-                                              spr_r[ti].data() + seg_off);
+                    if (seg_fn == 0U) {
+                        break;
                     }
+
+                    for (std::size_t ts = 0; ts < group.track_indices.size(); ++ts) {
+                        const auto* active = active_blocks[ts];
+                        if (active == nullptr) {
+                            continue;
+                        }
+                        const auto& st = spreader_tracks[group.track_indices[ts]];
+                        const uint16_t ic = st.channel_index;
+                        float* track_buf = track_ch.data() + (ts * fn);
+                        for (std::size_t f = 0; f < seg_fn; ++f) {
+                            track_buf[f] = (ic < num_in_ch) ? in_block[((seg_off + f) * num_in_ch) + ic] : 0.0F;
+                        }
+                    }
+
+                    for (std::size_t li = 0; li < group.lanes.size(); ++li) {
+                        const auto& lane = group.lanes[li];
+                        const auto* active = active_blocks[lane.track_slot];
+                        if (active != nullptr && lane.source_index < active->sources.size()) {
+                            const auto& st = spreader_tracks[group.track_indices[lane.track_slot]];
+                            const auto& ss = active->sources[lane.source_index];
+                            adapter.set_source(
+                                static_cast<int>(li), ss.az, ss.el, ss.spread_deg, st.object_gain * ss.gain);
+                            lane_ptrs[li] = track_ch.data() + (lane.track_slot * fn);
+                        } else {
+                            lane_ptrs[li] = zeros_full.data();
+                        }
+                    }
+                    adapter.process_chunk(lane_ptrs.data(),
+                                          static_cast<int>(lane_ptrs.size()),
+                                          seg_fn,
+                                          spr_l[gi].data() + seg_off,
+                                          spr_r[gi].data() + seg_off);
                     sp_cursor = next_boundary;
                 }
             };
 
-            spreader_pool.parallel_for(n_tracks, process_one_track);
+            spreader_pool.parallel_for(n_groups, process_one_group);
 
-            // Reduce per-track scratch into l_buf / r_buf.
-            for (std::size_t ti = 0U; ti < n_tracks; ++ti) {
+            // Reduce per-group scratch into l_buf / r_buf.
+            for (std::size_t gi = 0U; gi < n_groups; ++gi) {
                 for (std::size_t f = 0U; f < fn; ++f) {
-                    l_buf[f] += spr_l[ti][f];
-                    r_buf[f] += spr_r[ti][f];
+                    l_buf[f] += spr_l[gi][f];
+                    r_buf[f] += spr_r[gi][f];
                 }
             }
         }
@@ -1710,10 +1775,10 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
             // Drain the spreader STFT tail (feed silence; exact-D latency means
             // exactly tn aligned output samples come out).
             const std::vector<float> zeros_tn(tn, 0.0F);
-            for (std::size_t ti = 0; ti < spreader_adapters.size(); ++ti) {
-                const int ns = spreader_tracks[ti].n_sources;
+            for (std::size_t gi = 0; gi < spreader_adapters.size(); ++gi) {
+                const int ns = static_cast<int>(spreader_groups[gi].lanes.size());
                 std::vector<const float*> zptrs(static_cast<std::size_t>(ns), zeros_tn.data());
-                spreader_adapters[ti].process_chunk(zptrs.data(), ns, tn, l_buf.data(), r_buf.data());
+                spreader_adapters[gi].process_chunk(zptrs.data(), ns, tn, l_buf.data(), r_buf.data());
             }
             if (!emit(l_buf.data(), r_buf.data(), tn)) {
                 return make_error(
