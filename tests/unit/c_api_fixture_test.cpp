@@ -218,7 +218,7 @@ bool verify_successful_render(adm_context_t* ctx, const std::filesystem::path& i
 // ── v1.1 tests ────────────────────────────────────────────────────────────
 
 bool verify_version_11() {
-    return check(adm_api_version_minor() == 1, "v1.1: minor version should be 1");
+    return check(adm_api_version_minor() >= 1, "v1.1: minor version should be >= 1");
 }
 
 bool verify_options_null_setters() {
@@ -415,6 +415,52 @@ bool verify_options_lifecycle() {
     return ok;
 }
 
+// ── v1.2 tests ────────────────────────────────────────────────────────────
+
+bool verify_version_12() {
+    return check(adm_api_version_minor() >= 2, "v1.2: minor version should be >= 2");
+}
+
+// Output time-range trim setters: NULL opts are no-ops; start rejects negative /
+// non-finite; end accepts a positive time, treats sec <= 0 as "clear", and rejects
+// non-finite.
+bool verify_render_trim_setters() {
+    bool ok = check(adm_render_options_set_render_start_sec(nullptr, 1.0) == ADM_ERROR_OK,
+                    "NULL opts set_render_start_sec should return OK");
+    ok = check(adm_render_options_set_render_end_sec(nullptr, 2.0) == ADM_ERROR_OK,
+               "NULL opts set_render_end_sec should return OK") &&
+         ok;
+
+    adm_render_options_t* opts = adm_create_render_options();
+    ok = check(opts != nullptr, "options creation should succeed") && ok;
+    if (opts != nullptr) {
+        ok = check(adm_render_options_set_render_start_sec(opts, 0.0) == ADM_ERROR_OK, "start 0.0 should return OK") &&
+             ok;
+        ok = check(adm_render_options_set_render_start_sec(opts, 1.5) == ADM_ERROR_OK, "start 1.5 should return OK") &&
+             ok;
+        ok = check(adm_render_options_set_render_end_sec(opts, 4.0) == ADM_ERROR_OK, "end 4.0 should return OK") && ok;
+        ok = check(adm_render_options_set_render_end_sec(opts, 0.0) == ADM_ERROR_OK,
+                   "end 0.0 (clear) should return OK") &&
+             ok;
+        ok = check(adm_render_options_set_render_end_sec(opts, -1.0) == ADM_ERROR_OK,
+                   "end -1.0 (clear) should return OK") &&
+             ok;
+        ok = check(adm_render_options_set_render_start_sec(opts, -0.1) == ADM_ERROR_INVALID_ARGUMENT,
+                   "negative start should return INVALID_ARGUMENT") &&
+             ok;
+        ok = check(adm_render_options_set_render_start_sec(opts, std::numeric_limits<double>::quiet_NaN()) ==
+                       ADM_ERROR_INVALID_ARGUMENT,
+                   "NaN start should return INVALID_ARGUMENT") &&
+             ok;
+        ok = check(adm_render_options_set_render_end_sec(opts, std::numeric_limits<double>::infinity()) ==
+                       ADM_ERROR_INVALID_ARGUMENT,
+                   "inf end should return INVALID_ARGUMENT") &&
+             ok;
+    }
+    adm_destroy_render_options(opts);
+    return ok;
+}
+
 bool verify_render_file_ex_compat(adm_context_t* ctx, const std::filesystem::path& input) {
     const auto out_old = unique_temp_wav_path("mr_c_api_compat_old");
     const auto out_new = unique_temp_wav_path("mr_c_api_compat_new");
@@ -460,6 +506,59 @@ bool verify_render_file_ex_compat(adm_context_t* ctx, const std::filesystem::pat
     }
     return static_cast<uint32_t>(static_cast<uint8_t>(buf[22])) |
            (static_cast<uint32_t>(static_cast<uint8_t>(buf[23])) << 8U);
+}
+
+// Count sample frames in a WAV by walking its chunks (channels + bits from fmt,
+// payload size from data). Avoids bw64, which may reject multi-channel EXTENSIBLE.
+[[nodiscard]] uint64_t wav_frame_count(const std::filesystem::path& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) {
+        return 0U;
+    }
+    const auto rd_u16 = [](const unsigned char* p) {
+        return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8U);
+    };
+    const auto rd_u32 = [](const unsigned char* p) {
+        return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8U) |
+               (static_cast<uint32_t>(p[2]) << 16U) | (static_cast<uint32_t>(p[3]) << 24U);
+    };
+    std::array<unsigned char, 12> riff{};
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    if (!f.read(reinterpret_cast<char*>(riff.data()), static_cast<std::streamsize>(riff.size()))) {
+        return 0U;
+    }
+    if (std::string_view{reinterpret_cast<const char*>(riff.data()), 4} != "RIFF" ||
+        std::string_view{reinterpret_cast<const char*>(riff.data()) + 8, 4} != "WAVE") {
+        return 0U;
+    }
+    uint32_t channels = 0U;
+    uint32_t bits = 0U;
+    uint32_t data_size = 0U;
+    std::array<unsigned char, 8> hdr{};
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    while (f.read(reinterpret_cast<char*>(hdr.data()), static_cast<std::streamsize>(hdr.size()))) {
+        const std::string_view id{reinterpret_cast<const char*>(hdr.data()), 4};
+        const uint32_t sz = rd_u32(hdr.data() + 4);
+        if (id == "fmt ") {
+            std::vector<unsigned char> fmt(sz);
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+            if (!f.read(reinterpret_cast<char*>(fmt.data()), static_cast<std::streamsize>(sz))) {
+                return 0U;
+            }
+            channels = rd_u16(fmt.data() + 2); // nChannels
+            bits = rd_u16(fmt.data() + 14);    // wBitsPerSample
+            f.seekg(sz & 1U, std::ios::cur);   // skip RIFF pad byte
+        } else if (id == "data") {
+            data_size = sz;
+            break;
+        } else {
+            f.seekg(static_cast<std::streamoff>(sz) + (sz & 1U), std::ios::cur);
+        }
+    }
+    if (channels == 0U || bits == 0U) {
+        return 0U;
+    }
+    return static_cast<uint64_t>(data_size) / (static_cast<uint64_t>(channels) * (bits / 8U));
 }
 
 // Larger fixture for loudness tests: 1 second of signal to satisfy EBU R128
@@ -591,6 +690,44 @@ bool verify_loudness_metrics(adm_context_t* ctx, const std::filesystem::path& in
     ok = check(adm_render_result_loudness_lufs(result, nullptr) == 1, "loudness_lufs(out=NULL) should return 1") && ok;
 
     adm_destroy_render_result(result);
+    return ok;
+}
+
+// v1.2 end-to-end: --start/--end wire through adm_render_file_ex and actually
+// shorten the output. input_1s is 1 s @ 48 kHz; [0.25s, 0.75s) keeps 24000 frames.
+bool verify_render_trim_wire_through(adm_context_t* ctx, const std::filesystem::path& input_1s) {
+    const auto out_full = unique_temp_wav_path("mr_c_api_trim_full");
+    const auto out_trim = unique_temp_wav_path("mr_c_api_trim_win");
+    FileGuard g_full(out_full);
+    FileGuard g_trim(out_trim);
+
+    // Baseline: no trim → full 1 s (48000 frames).
+    adm_render_result_t* r_full = nullptr;
+    const adm_error_code_t code_full = adm_render_file_ex(
+        ctx, input_1s.string().c_str(), out_full.string().c_str(), nullptr, nullptr, nullptr, &r_full);
+    bool ok = check(code_full == ADM_ERROR_OK, "untrimmed render should succeed");
+    adm_destroy_render_result(r_full);
+    ok = check(wav_frame_count(out_full) == 48000U, "untrimmed output should be 48000 frames (1 s)") && ok;
+
+    // Trimmed: [0.25s, 0.75s) → 24000 frames.
+    adm_render_options_t* opts = adm_create_render_options();
+    ok = check(opts != nullptr, "trim options creation should succeed") && ok;
+    if (opts == nullptr) {
+        return false;
+    }
+    ok = check(adm_render_options_set_render_start_sec(opts, 0.25) == ADM_ERROR_OK, "set_render_start_sec(0.25)") && ok;
+    ok = check(adm_render_options_set_render_end_sec(opts, 0.75) == ADM_ERROR_OK, "set_render_end_sec(0.75)") && ok;
+
+    adm_render_result_t* r_trim = nullptr;
+    const adm_error_code_t code_trim =
+        adm_render_file_ex(ctx, input_1s.string().c_str(), out_trim.string().c_str(), opts, nullptr, nullptr, &r_trim);
+    ok = check(code_trim == ADM_ERROR_OK, "trimmed render should succeed") && ok;
+    ok = check(r_trim != nullptr && adm_render_result_error_code(r_trim) == ADM_ERROR_OK, "trim result OK") && ok;
+    adm_destroy_render_result(r_trim);
+    adm_destroy_render_options(opts);
+
+    const uint64_t frames = wav_frame_count(out_trim);
+    ok = check(frames == 24000U, "trimmed output should be 24000 frames (0.5 s window)") && ok;
     return ok;
 }
 
@@ -1076,12 +1213,16 @@ int main() {
     // v1.1 tests
     ok = verify_version_11() && ok;
     ok = verify_options_lifecycle() && ok;
+    // v1.2 tests
+    ok = verify_version_12() && ok;
+    ok = verify_render_trim_setters() && ok;
     ok = verify_render_file_ex_compat(ctx, fixture.path()) && ok;
     ok = verify_hoa_render(ctx, fixture.path()) && ok;
     ok = verify_51_render(ctx, fixture.path()) && ok;
     {
         const FileGuard fixture_1s(write_fixture_1s());
         ok = verify_loudness_metrics(ctx, fixture_1s.path()) && ok;
+        ok = verify_render_trim_wire_through(ctx, fixture_1s.path()) && ok;
     }
     ok = verify_probe(ctx, fixture.path()) && ok;
     ok = verify_progress_callback(ctx, fixture.path()) && ok;

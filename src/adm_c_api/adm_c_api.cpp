@@ -427,6 +427,34 @@ adm_error_code_t adm_render_options_set_iamf_container(adm_render_options_t* opt
     return ADM_ERROR_OK;
 }
 
+adm_error_code_t adm_render_options_set_render_start_sec(adm_render_options_t* opts, double sec) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (!std::isfinite(sec) || sec < 0.0) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.render_start_sec = sec;
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_render_end_sec(adm_render_options_t* opts, double sec) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (!std::isfinite(sec)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    // sec <= 0 clears the end (render to the end); a positive end is validated
+    // against start at render time.
+    if (sec <= 0.0) {
+        opts->opts.render_end_sec = std::nullopt;
+    } else {
+        opts->opts.render_end_sec = sec;
+    }
+    return ADM_ERROR_OK;
+}
+
 /* ── Render ──────────────────────────────────────────────────────────────── */
 
 adm_error_code_t adm_render_file_ex(adm_context_t* context,
