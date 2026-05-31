@@ -704,6 +704,35 @@ adm_error_code_t adm_inspect_file_xml(adm_context_t* context, const char* input_
     }
 }
 
+adm_error_code_t adm_policy_template_json(adm_context_t* context, const char* input_path, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (context == nullptr || input_path == nullptr || input_path[0] == '\0') {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        auto tmpl_result = context->service.policy_template_json(input_path);
+        if (!tmpl_result) {
+            return map_error(tmpl_result.error().code);
+        }
+        if (out_json == nullptr) {
+            return ADM_ERROR_OK; // validate-only: scene parsed, allocate nothing
+        }
+        const std::string& tmpl = *tmpl_result;
+        auto* buffer = new (std::nothrow) char[tmpl.size() + 1];
+        if (buffer == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        std::char_traits<char>::copy(buffer, tmpl.c_str(), tmpl.size() + 1);
+        *out_json = buffer;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
 // Takes ownership of a char* the ABI handed out via char** out-params; the
 // non-const pointer type is part of the contract, so the const-pointer hint
 // does not apply here.

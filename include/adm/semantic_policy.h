@@ -134,4 +134,9 @@ struct SemanticPolicyReportOptions {
 [[nodiscard]] Result<void> write_semantic_policy_template_file(const std::filesystem::path& path,
                                                                const AdmScene& scene);
 
+// Build the editable neutral semantic-policy template for a scene as a JSON
+// string (UTF-8). Identical content to write_semantic_policy_template_file but
+// returned in-memory (for the C ABI / GUIs). Pure; does not fail.
+[[nodiscard]] std::string build_semantic_policy_template(const AdmScene& scene);
+
 } // namespace mradm

@@ -1329,7 +1329,7 @@ Result<void> write_semantic_report_file(const std::filesystem::path& path,
     return {};
 }
 
-Result<void> write_semantic_policy_template_file(const std::filesystem::path& path, const AdmScene& scene) {
+std::string build_semantic_policy_template(const AdmScene& scene) {
     Json doc = Json::object();
     doc["schema"] = SemanticPolicy::schema_id;
     doc["global"] = neutral_override_template();
@@ -1344,12 +1344,15 @@ Result<void> write_semantic_policy_template_file(const std::filesystem::path& pa
         }
         doc["objects"].push_back(std::move(rule));
     }
+    return doc.dump(2);
+}
 
+Result<void> write_semantic_policy_template_file(const std::filesystem::path& path, const AdmScene& scene) {
     std::ofstream out(path);
     if (!out) {
         return tl::unexpected{io_policy(path, "cannot open policy template for writing")};
     }
-    out << doc.dump(2) << '\n';
+    out << build_semantic_policy_template(scene) << '\n';
     if (!out) {
         return tl::unexpected{io_policy(path, "failed to write policy template")};
     }
