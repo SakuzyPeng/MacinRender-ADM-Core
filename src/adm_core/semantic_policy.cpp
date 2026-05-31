@@ -810,6 +810,68 @@ void apply_object_override(SceneObject& object, const SemanticPolicyOverride& po
     }
 }
 
+// HOA packs live outside scene.objects and are matched by object_id / pack_format
+// / all. Only gain/mute apply (the soundfield's per-channel gains are not touched).
+[[nodiscard]] bool hoa_rule_matches(const SceneHOATracks& pack, const SemanticObjectRule& rule) {
+    if (rule.all.value_or(false)) {
+        return true;
+    }
+    if (!rule.id.empty() && ascii_equal_ignore_case(pack.object_id, rule.id)) {
+        return true;
+    }
+    if (!rule.pack_format.empty() && ascii_equal_ignore_case(pack.pack_format_id, rule.pack_format)) {
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] std::vector<std::string> matched_hoa_rule_names(const SceneHOATracks& pack,
+                                                              const SemanticPolicy& policy) {
+    std::vector<std::string> out;
+    if (policy.global && policy.global->gain) {
+        out.emplace_back("global");
+    }
+    for (std::size_t i = 0; i < policy.objects.size(); ++i) {
+        if (policy.objects.at(i).gain && hoa_rule_matches(pack, policy.objects.at(i))) {
+            out.push_back(fmt::format("objects[{}]", i));
+        }
+    }
+    return out;
+}
+
+// Effective gain for a HOA pack: global gain first, then each matching rule's gain
+// (last-write-wins merge; gain has no per-block filter so merging is safe).
+[[nodiscard]] std::optional<GainPolicy> effective_hoa_gain(const SceneHOATracks& pack, const SemanticPolicy& policy) {
+    std::optional<GainPolicy> out;
+    const auto fold = [&](const GainPolicy& g) {
+        if (!out) {
+            out = GainPolicy{};
+        }
+        merge_policy(*out, g);
+    };
+    if (policy.global && policy.global->gain) {
+        fold(*policy.global->gain);
+    }
+    for (const auto& rule : policy.objects) {
+        if (rule.gain && hoa_rule_matches(pack, rule)) {
+            fold(*rule.gain);
+        }
+    }
+    return out;
+}
+
+void apply_hoa_gain(SceneHOATracks& pack, const GainPolicy& gain) {
+    if (gain.mute.has_value()) {
+        pack.mute = *gain.mute;
+    }
+    if (gain.scale.has_value()) {
+        pack.gain *= *gain.scale;
+    }
+    if (gain.gain_db.has_value()) {
+        pack.gain *= std::pow(10.0F, *gain.gain_db / 20.0F);
+    }
+}
+
 // True when the position policy would actually change a position: any absolute
 // or lock field, or a non-absent, non-zero offset component. A neutral template's
 // zero-offset position section is therefore inert.
@@ -1085,6 +1147,9 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     if (!rule.programme.empty()) {
         return "programme=" + rule.programme;
     }
+    if (!rule.pack_format.empty()) {
+        return "pack_format=" + rule.pack_format;
+    }
     if (rule.dialogue_id.has_value()) {
         return "dialogue_id=" + std::to_string(*rule.dialogue_id);
     }
@@ -1094,6 +1159,28 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
                            rule.importance_max.has_value() ? std::to_string(*rule.importance_max) : "");
     }
     return "all";
+}
+
+// HOA packs (separate from objects): report gain/mute original -> effective.
+[[nodiscard]] Json
+hoa_tracks_report_json(const AdmScene& original, const AdmScene& effective, const SemanticPolicy* policy) {
+    Json out = Json::array();
+    const std::size_t hoa_count = std::min(original.hoa_tracks.size(), effective.hoa_tracks.size());
+    for (std::size_t hi = 0; hi < hoa_count; ++hi) {
+        const auto& orig_pack = original.hoa_tracks.at(hi);
+        const auto& eff_pack = effective.hoa_tracks.at(hi);
+        Json pack = Json::object();
+        pack["object_id"] = eff_pack.object_id;
+        pack["pack_format_id"] = eff_pack.pack_format_id;
+        pack["matched_rules"] =
+            policy != nullptr ? matched_hoa_rule_names(orig_pack, *policy) : std::vector<std::string>{};
+        pack["original_gain"] = orig_pack.gain;
+        pack["effective_gain"] = eff_pack.gain;
+        pack["original_mute"] = orig_pack.mute;
+        pack["effective_mute"] = eff_pack.mute;
+        out.push_back(std::move(pack));
+    }
+    return out;
 }
 
 } // namespace
@@ -1160,7 +1247,8 @@ Result<SemanticPolicy> load_semantic_policy_file(const std::filesystem::path& pa
                                           "importance_max",
                                           "dialogue_id",
                                           "content",
-                                          "programme"});
+                                          "programme",
+                                          "pack_format"});
             if (!parsed) {
                 return tl::unexpected{parsed.error()};
             }
@@ -1172,7 +1260,8 @@ Result<SemanticPolicy> load_semantic_policy_file(const std::filesystem::path& pa
                                              std::pair{std::string_view{"name_glob"}, &rule.name_glob},
                                              std::pair{std::string_view{"track_uid"}, &rule.track_uid},
                                              std::pair{std::string_view{"content"}, &rule.content},
-                                             std::pair{std::string_view{"programme"}, &rule.programme}}) {
+                                             std::pair{std::string_view{"programme"}, &rule.programme},
+                                             std::pair{std::string_view{"pack_format"}, &rule.pack_format}}) {
                 if (item.contains(std::string{field})) {
                     auto value = read_string(item, field, path.string());
                     if (!value) {
@@ -1199,10 +1288,10 @@ Result<SemanticPolicy> load_semantic_policy_file(const std::filesystem::path& pa
                     *dst = *value;
                 }
             }
-            const bool has_match = !rule.id.empty() || !rule.name.empty() || !rule.name_glob.empty() ||
-                                   !rule.track_uid.empty() || !rule.content.empty() || !rule.programme.empty() ||
-                                   rule.all.has_value() || rule.importance_min.has_value() ||
-                                   rule.importance_max.has_value() || rule.dialogue_id.has_value();
+            const bool has_match =
+                !rule.id.empty() || !rule.name.empty() || !rule.name_glob.empty() || !rule.track_uid.empty() ||
+                !rule.content.empty() || !rule.programme.empty() || !rule.pack_format.empty() || rule.all.has_value() ||
+                rule.importance_min.has_value() || rule.importance_max.has_value() || rule.dialogue_id.has_value();
             if (!has_match) {
                 return tl::unexpected{
                     invalid_policy(path.string(), fmt::format("'objects[{}]' must define a match field", i))};
@@ -1225,10 +1314,12 @@ Result<void> apply_semantic_policy(AdmScene& scene,
     };
 
     for (const auto& rule : policy.objects) {
-        const bool matched = std::ranges::any_of(scene.objects, [&](const SceneObject& object) {
+        const bool matched_object = std::ranges::any_of(scene.objects, [&](const SceneObject& object) {
             return rule_matches(object, membership_for(object), rule);
         });
-        if (!matched && warnings != nullptr) {
+        const bool matched_hoa = std::ranges::any_of(
+            scene.hoa_tracks, [&](const SceneHOATracks& pack) { return hoa_rule_matches(pack, rule); });
+        if (!matched_object && !matched_hoa && warnings != nullptr) {
             warnings->push_back("semantic policy object rule did not match: " + rule_label(rule));
         }
     }
@@ -1250,6 +1341,13 @@ Result<void> apply_semantic_policy(AdmScene& scene,
                     apply_ds_override(ds, *ds_policy);
                 }
             }
+        }
+    }
+
+    // HOA packs (separate from scene.objects): gain/mute via id / pack_format / all.
+    for (auto& pack : scene.hoa_tracks) {
+        if (const auto gain = effective_hoa_gain(pack, policy)) {
+            apply_hoa_gain(pack, *gain);
         }
     }
     return {};
@@ -1318,6 +1416,8 @@ Result<void> write_semantic_report_file(const std::filesystem::path& path,
         doc["objects"].push_back(std::move(obj));
     }
 
+    doc["hoa_tracks"] = hoa_tracks_report_json(original, effective, policy);
+
     std::ofstream out(path);
     if (!out) {
         return tl::unexpected{io_policy(path, "cannot open report for writing")};
@@ -1342,6 +1442,15 @@ std::string build_semantic_policy_template(const AdmScene& scene) {
         if (!object.tracks.empty()) {
             rule["track_uid"] = object.tracks.front().track_uid;
         }
+        doc["objects"].push_back(std::move(rule));
+    }
+    // HOA packs: only gain/mute apply, so emit a lean neutral rule (no position /
+    // diffuse / etc. that are meaningless for a soundfield).
+    for (const auto& pack : scene.hoa_tracks) {
+        Json rule = Json::object();
+        rule["id"] = pack.object_id;
+        rule["pack_format"] = pack.pack_format_id;
+        rule["gain"] = neutral_gain_policy();
         doc["objects"].push_back(std::move(rule));
     }
     return doc.dump(2);

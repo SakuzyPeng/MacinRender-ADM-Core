@@ -314,6 +314,25 @@ mradm::AdmScene make_ds_scene() {
     return scene;
 }
 
+// Scene with a single HOA pack (3rd order), held in scene.hoa_tracks (not objects).
+mradm::AdmScene make_hoa_scene() {
+    mradm::AdmScene scene;
+    scene.info.sample_rate = 48000U;
+    mradm::SceneHOATracks pack;
+    pack.object_id = "AO_5001";
+    pack.pack_format_id = "AP_00031001";
+    pack.gain = 1.0F;
+    pack.mute = false;
+    mradm::SceneHOAChannel ch;
+    ch.track_uid = "ATU_00000001";
+    ch.order = 0;
+    ch.degree = 0;
+    ch.blocks.push_back(mradm::SceneHOAChannelBlock{});
+    pack.channels.push_back(ch);
+    scene.hoa_tracks.push_back(pack);
+    return scene;
+}
+
 bool apply_inline(mradm::AdmScene& scene, const std::string& json, const std::string& tag) {
     const auto path = write_temp_json("mr_semantic_" + tag + ".json", json);
     const FileGuard guard{path};
@@ -591,6 +610,89 @@ bool verify_direct_speakers() {
     return ok;
 }
 
+bool verify_hoa() {
+    bool ok = true;
+    // id (== object_id) match + gain scale.
+    {
+        auto scene = make_hoa_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_5001", "gain": { "scale": 0.5 } } ] })json",
+                           "hoa_id_gain");
+        ok &= check(near(scene.hoa_tracks.at(0).gain, 0.5F), "hoa id match halves pack gain");
+    }
+    // pack_format match + mute.
+    {
+        auto scene = make_hoa_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "pack_format": "AP_00031001", "gain": { "mute": true } } ] })json",
+                           "hoa_pack_mute");
+        ok &= check(scene.hoa_tracks.at(0).mute, "hoa pack_format match mutes pack");
+    }
+    // all match + gain_db (-6.02 dB ~= x0.5).
+    {
+        auto scene = make_hoa_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "all": true, "gain": { "gain_db": -6.0205999 } } ] })json",
+                           "hoa_all_db");
+        ok &= check(near(scene.hoa_tracks.at(0).gain, 0.5F), "hoa all match applies gain_db");
+    }
+    // global gain also reaches HOA packs.
+    {
+        auto scene = make_hoa_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "global": { "gain": { "scale": 0.25 } } })json",
+                           "hoa_global");
+        ok &= check(near(scene.hoa_tracks.at(0).gain, 0.25F), "global gain reaches HOA pack");
+    }
+    // A HOA-only rule (pack_format) must not be reported as unmatched.
+    {
+        auto scene = make_hoa_scene();
+        const auto path = write_temp_json("mr_semantic_hoa_warn.json", R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "pack_format": "AP_00031001", "gain": { "scale": 0.9 } } ] })json");
+        const FileGuard guard{path};
+        auto policy = mradm::load_semantic_policy_file(path);
+        ok &= check(policy.has_value(), "hoa-only rule parses");
+        std::vector<std::string> warnings;
+        if (policy) {
+            (void) mradm::apply_semantic_policy(scene, *policy, scene.info.sample_rate, &warnings);
+        }
+        ok &= check(warnings.empty(), "hoa-only rule is not flagged unmatched");
+    }
+    // HOA report should expose the matched rule, not just the effective values.
+    {
+        const auto original = make_hoa_scene();
+        const auto policy_path = write_temp_json("mr_semantic_hoa_report_policy.json",
+                                                 R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "pack_format": "AP_00031001", "gain": { "scale": 0.5 } } ] })json");
+        const FileGuard policy_guard{policy_path};
+        const auto report_path = std::filesystem::temp_directory_path() / "mr_semantic_hoa_report.json";
+        const FileGuard report_guard{report_path};
+        auto policy = mradm::load_semantic_policy_file(policy_path);
+        ok &= check(policy.has_value(), "hoa report policy parses");
+        if (policy) {
+            auto effective = original;
+            (void) mradm::apply_semantic_policy(effective, *policy, effective.info.sample_rate, nullptr);
+            mradm::SemanticPolicyReportOptions options;
+            auto result = mradm::write_semantic_report_file(report_path, original, effective, &*policy, options);
+            ok &= check(result.has_value(), "hoa report writes");
+            std::ifstream in(report_path);
+            std::string text;
+            for (std::string line; std::getline(in, line);) {
+                text += line;
+            }
+            ok &= check(text.find("\"hoa_tracks\"") != std::string::npos &&
+                            text.find("\"matched_rules\"") != std::string::npos &&
+                            text.find("\"objects[0]\"") != std::string::npos,
+                        "hoa report includes matched rule names");
+        }
+    }
+    return ok;
+}
+
 // The generated neutral template, applied unmodified, must not change the scene
 // — including muted objects, channel_lock=false blocks, and Cartesian positions.
 bool verify_template_apply_is_identity() {
@@ -630,6 +732,14 @@ bool verify_template_apply_is_identity() {
     bed.tracks.push_back(bed_track);
     scene.objects.push_back(bed);
 
+    // A HOA pack: its gain/mute must survive an unmodified template.
+    mradm::SceneHOATracks pack;
+    pack.object_id = "AO_3003";
+    pack.pack_format_id = "AP_00031001";
+    pack.gain = 0.8F;
+    pack.mute = false;
+    scene.hoa_tracks.push_back(pack);
+
     const auto write_result = mradm::write_semantic_policy_template_file(path, scene);
     bool ok = check(write_result.has_value(), "identity: template writes");
     auto policy = mradm::load_semantic_policy_file(path);
@@ -652,6 +762,8 @@ bool verify_template_apply_is_identity() {
                 "identity: Cartesian coordinates unchanged");
     const auto& ds_eff = applied.objects.at(1).tracks.at(0).ds_blocks.at(0);
     ok &= check(near(ds_eff.gain, 0.9F), "identity: DS LFE gain unchanged");
+    const auto& hoa_eff = applied.hoa_tracks.at(0);
+    ok &= check(near(hoa_eff.gain, 0.8F) && !hoa_eff.mute, "identity: HOA pack gain/mute unchanged");
     return ok;
 }
 
@@ -669,6 +781,7 @@ int main() {
     ok &= verify_match_dimensions();
     ok &= verify_channel_lock_full();
     ok &= verify_direct_speakers();
+    ok &= verify_hoa();
     ok &= verify_template_apply_is_identity();
     if (ok) {
         std::cout << "semantic policy test passed\n";
