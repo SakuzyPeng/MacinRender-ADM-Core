@@ -605,6 +605,25 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_flac_io_smoke_tests)
     add_test(NAME mr_adm_flac_io_smoke_tests COMMAND mr_adm_flac_io_smoke_tests)
 
+    add_executable(mr_adm_trim_file_smoke_tests tests/unit/trim_file_smoke_test.cpp)
+    target_link_libraries(mr_adm_trim_file_smoke_tests PRIVATE MacinRender::ADMAudio)
+    mr_adm_core_apply_warnings(mr_adm_trim_file_smoke_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_trim_file_smoke_tests)
+    add_test(NAME mr_adm_trim_file_smoke_tests COMMAND mr_adm_trim_file_smoke_tests)
+
+    # End-to-end output trim: --start/--end map to rendered frame ranges.
+    add_executable(mr_adm_render_trim_fixture_tests tests/unit/render_trim_fixture_test.cpp)
+    target_link_libraries(mr_adm_render_trim_fixture_tests
+        PRIVATE
+            MacinRender::ADMEngine
+            MacinRender::ADMAudio
+            libbw64
+            adm
+    )
+    mr_adm_core_apply_warnings(mr_adm_render_trim_fixture_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_render_trim_fixture_tests)
+    add_test(NAME mr_adm_render_trim_fixture_tests COMMAND mr_adm_render_trim_fixture_tests)
+
     add_executable(mr_adm_opus_mka_smoke_tests tests/unit/opus_mka_smoke_test.cpp)
     target_link_libraries(mr_adm_opus_mka_smoke_tests PRIVATE MacinRender::ADMAudio)
     mr_adm_core_apply_warnings(mr_adm_opus_mka_smoke_tests)

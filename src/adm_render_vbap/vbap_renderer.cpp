@@ -666,12 +666,16 @@ Result<RenderMetrics> VbapRenderer::render(const RenderPlan& plan, ProgressSink&
                 return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);
             }
 
+            // When an output trim is requested, feed the meter only the frames inside the window.
             if (lufs_st) {
-                ebur128_state* state = lufs_st.get();
-                const float* data = out_block.data();
-                const auto frame_count = static_cast<std::size_t>(frames_now);
-                meter_pending.at(buf_idx) =
-                    meter.post([state, data, frame_count] { ebur128_add_frames_float(state, data, frame_count); });
+                const auto chunk = render_common::meter_window_chunk(plan.meter_window, frames_done, frames_now);
+                if (chunk.frame_count > 0) {
+                    ebur128_state* state = lufs_st.get();
+                    const float* data = out_block.data() + (chunk.offset_frames * num_out_ch);
+                    const auto frame_count = chunk.frame_count;
+                    meter_pending.at(buf_idx) =
+                        meter.post([state, data, frame_count] { ebur128_add_frames_float(state, data, frame_count); });
+                }
             }
 
             frames_done += frames_now;

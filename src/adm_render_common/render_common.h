@@ -14,9 +14,35 @@
 #include <vector>
 
 #include "adm/logging.h"
+#include "adm/render.h"
 #include "adm/scene.h"
 
 namespace mradm::render_common {
+
+// Portion of an output block that should be fed to the loudness / True-Peak meter.
+struct MeterChunk {
+    std::size_t offset_frames{0}; // frames from the block start
+    std::size_t frame_count{0};   // 0 = block lies entirely outside the window (skip)
+};
+
+// Intersect an output block [block_start, block_start + block_len) with an optional
+// meter window (see RenderPlan::meter_window). A nullopt window measures the whole
+// block. Used so trimmed output reports the loudness / peak of the kept segment
+// while the backend still renders and writes the full timeline.
+[[nodiscard]] inline MeterChunk
+meter_window_chunk(const std::optional<MeterWindow>& window, uint64_t block_start, uint64_t block_len) {
+    if (!window) {
+        return {0, static_cast<std::size_t>(block_len)};
+    }
+    const uint64_t w_end = window->start_frame + window->frame_count;
+    const uint64_t b_end = block_start + block_len;
+    const uint64_t lo = std::max(block_start, window->start_frame);
+    const uint64_t hi = std::min(b_end, w_end);
+    if (hi <= lo) {
+        return {0, 0};
+    }
+    return {static_cast<std::size_t>(lo - block_start), static_cast<std::size_t>(hi - lo)};
+}
 
 // Single background thread that runs posted tasks strictly in FIFO order. Renderers use it to move
 // the loudness / true-peak measurement (libebur128) off the critical path so it overlaps with the

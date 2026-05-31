@@ -146,6 +146,92 @@ Result<void> apply_gain_to_file(const std::string& path, float gain, const std::
     return {};
 }
 
+// ── trim_file_frames ──────────────────────────────────────────────────────────
+
+Result<void>
+trim_file_frames(const std::string& path, uint64_t start_frame, uint64_t frame_count, const std::string& layout_id) {
+    const std::filesystem::path original_path{path};
+    const auto tmp_path = unique_sidecar_path(original_path, "trim_tmp");
+
+    {
+        auto reader_res = ReaderHandle::open(path);
+        if (!reader_res) {
+            return tl::unexpected{reader_res.error()};
+        }
+        auto& reader = *reader_res;
+
+        const uint32_t num_ch = reader.channels();
+        const uint32_t sr = reader.sample_rate();
+        const uint64_t total_frames = reader.frame_count();
+
+        // Clamp the range to the file: a start past the end yields no frames, and
+        // frame_count is capped at what remains after start_frame.
+        const uint64_t clamped_start = std::min(start_frame, total_frames);
+        const uint64_t avail = total_frames - clamped_start;
+        const uint64_t out_frames = std::min(frame_count, avail);
+        if (out_frames == 0) {
+            return make_error(ErrorCode::invalid_argument,
+                              "trim range selects no audio frames",
+                              fmt::format("path={} start_frame={} frame_count={} total_frames={}",
+                                          path,
+                                          start_frame,
+                                          frame_count,
+                                          total_frames));
+        }
+        // Whole-file range: nothing to do, leave the file untouched.
+        if (clamped_start == 0 && out_frames == total_frames) {
+            return {};
+        }
+
+        auto writer_res = WriterHandle::open(tmp_path.string(), num_ch, sr, layout_id);
+        if (!writer_res) {
+            return tl::unexpected{writer_res.error()};
+        }
+        auto& writer = *writer_res;
+
+        constexpr uint64_t k_block = 4096;
+        std::vector<float> buf(static_cast<std::size_t>(num_ch) * k_block);
+
+        // The readers are forward-only (no seek), so discard the head by reading it.
+        uint64_t to_skip = clamped_start;
+        while (to_skip > 0) {
+            const uint64_t n = std::min(k_block, to_skip);
+            const uint64_t got = reader.read(buf.data(), n);
+            if (got == 0) {
+                return make_error(ErrorCode::io_error, "short read while skipping to trim start", "path=" + path);
+            }
+            to_skip -= got;
+        }
+
+        uint64_t left = out_frames;
+        while (left > 0) {
+            const uint64_t n = std::min(k_block, left);
+            const uint64_t got = reader.read(buf.data(), n);
+            if (got == 0) {
+                return make_error(ErrorCode::io_error, "short read in trim_file_frames", "path=" + path);
+            }
+            if (writer.write(buf.data(), got) != got) {
+                return make_error(ErrorCode::io_error, "short write in trim_file_frames", "path=" + tmp_path.string());
+            }
+            left -= got;
+        }
+    }
+
+    std::error_code ec;
+    std::filesystem::rename(tmp_path, original_path, ec);
+    if (ec) {
+        std::error_code remove_ec;
+        std::filesystem::remove(original_path, remove_ec);
+        ec.clear();
+        std::filesystem::rename(tmp_path, original_path, ec);
+        if (ec) {
+            return make_error(ErrorCode::io_error,
+                              "failed to replace output after trim_file_frames: " + ec.message(),
+                              "path=" + path);
+        }
+    }
+    return {};
+}
 
 // ── WriterHandle ──────────────────────────────────────────────────────────────
 

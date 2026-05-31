@@ -16,6 +16,8 @@ struct RenderCliOptions {
     bool peak_normalize_to_limit{false};
     std::string output_bit_depth_str{"f32"};
     float loudness_target{std::numeric_limits<float>::quiet_NaN()};
+    double render_start{0.0};
+    double render_end{std::numeric_limits<double>::quiet_NaN()};
     uint32_t interp_ms{5};
     uint32_t object_smoothing_frames{8875};
     uint32_t opus_bitrate_per_ch{0};

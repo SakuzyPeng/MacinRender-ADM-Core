@@ -803,13 +803,18 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
             }
 
             // Offload loudness / true-peak measurement to the background meter (overlaps next block).
+            // When an output trim is requested, measure only the frames inside the window: pass the
+            // sub-range pointers and the absolute start frame so the LFE gain lookups stay correct.
             if (lufs_st || lfe_tp_st) {
-                const float* in_data = in_block.data();
-                const float* out_data = out_block.data();
-                const uint64_t fd = frames_done;
-                const uint64_t fn = frames_now;
-                meter_pending.at(buf_idx) = meter.post(
-                    [&measure_block, in_data, out_data, fd, fn] { measure_block(in_data, out_data, fd, fn); });
+                const auto chunk = render_common::meter_window_chunk(plan.meter_window, frames_done, frames_now);
+                if (chunk.frame_count > 0) {
+                    const float* in_data = in_block.data() + (chunk.offset_frames * num_in_ch);
+                    const float* out_data = out_block.data() + (chunk.offset_frames * k_num_out);
+                    const uint64_t fd = frames_done + chunk.offset_frames;
+                    const uint64_t fn = chunk.frame_count;
+                    meter_pending.at(buf_idx) = meter.post(
+                        [&measure_block, in_data, out_data, fd, fn] { measure_block(in_data, out_data, fd, fn); });
+                }
             }
 
             frames_done += frames_now;

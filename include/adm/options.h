@@ -69,6 +69,14 @@ struct RenderOptions {
     uint32_t object_smoothing_frames{8875};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
+    // Output time-range trim, in seconds, on the rendered timeline (which equals
+    // the input timeline). render_start_sec clips the head; render_end_sec is an
+    // absolute end time on the same timeline (nullopt = render to the end).
+    // The backend renders the full timeline but measures loudness/True-Peak only
+    // over the kept window, so the trimmed file's metrics/metadata describe the
+    // segment that is actually written.
+    double render_start_sec{0.0};
+    std::optional<double> render_end_sec;
     // IAMF output container when MR_ADM_ENABLE_IAMF=ON.
     // obu: raw .iamf OBU stream (default); mp4: ISOBMFF encapsulation via mp4box/ffmpeg.
     // Requires --iamf-container mp4 on the CLI; the engine ignores this field for non-IAMF outputs.
