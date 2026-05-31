@@ -365,6 +365,8 @@ target_sources(
     PRIVATE
         src/adm_engine/render_service.cpp
         src/adm_engine/scene_json.cpp
+        src/adm_engine/capability_json.cpp
+        src/adm_engine/layout_table.cpp
 )
 
 target_link_libraries(mr_adm_engine

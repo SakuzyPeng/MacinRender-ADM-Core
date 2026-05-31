@@ -843,6 +843,79 @@ bool verify_inspect_json(adm_context_t* ctx, const std::filesystem::path& input)
     return ok;
 }
 
+bool verify_capabilities_json(adm_context_t* ctx) {
+    char* json = nullptr;
+    const adm_error_code_t code = adm_capabilities_json(ctx, &json);
+    bool ok = check(code == ADM_ERROR_OK, "capabilities_json: should succeed");
+    ok = check(json != nullptr, "capabilities_json: out_json should be non-null") && ok;
+
+    if (json != nullptr) {
+        const std::string s{json};
+        ok = check(!s.empty(), "capabilities_json: JSON should be non-empty") && ok;
+        const auto has = [&s](const char* needle) { return s.find(needle) != std::string::npos; };
+        ok = check(has(R"("schema": "mradm.capabilities")") && has(R"("schema_version": 1)"),
+                   "capabilities_json: should carry schema + schema_version") &&
+             ok;
+        ok = check(has("\"backends\""), "capabilities_json: should contain backends array") && ok;
+        // All four renderer-selection backends should be present.
+        ok = check(has(R"("renderer": "ear")") && has(R"("renderer": "saf")") && has(R"("renderer": "hoa")") &&
+                       has(R"("renderer": "binaural")"),
+                   "capabilities_json: should list ear/saf/hoa/binaural backends") &&
+             ok;
+        // A representative capability flag and the per-backend layouts array.
+        ok = check(has("\"supports_hoa\"") && has("\"layouts\"") && has("\"channel_count\""),
+                   "capabilities_json: should contain capability flags and layouts") &&
+             ok;
+    }
+    adm_free_string(json);
+
+    // Error paths.
+    char* bad = nullptr;
+    ok = check(adm_capabilities_json(nullptr, &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "capabilities_json: NULL context should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_capabilities_json(ctx, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "capabilities_json: NULL out_json should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(bad == nullptr, "capabilities_json: out_json should stay NULL on failure") && ok;
+    return ok;
+}
+
+bool verify_layouts_json(adm_context_t* ctx) {
+    char* json = nullptr;
+    const adm_error_code_t code = adm_layouts_json(ctx, &json);
+    bool ok = check(code == ADM_ERROR_OK, "layouts_json: should succeed");
+    ok = check(json != nullptr, "layouts_json: out_json should be non-null") && ok;
+
+    if (json != nullptr) {
+        const std::string s{json};
+        ok = check(!s.empty(), "layouts_json: JSON should be non-empty") && ok;
+        const auto has = [&s](const char* needle) { return s.find(needle) != std::string::npos; };
+        ok = check(has(R"("schema": "mradm.layouts")") && has(R"("schema_version": 1)"),
+                   "layouts_json: should carry schema + schema_version") &&
+             ok;
+        ok = check(has("\"layouts\""), "layouts_json: should contain the layouts array") && ok;
+        // A known row: wav 7.1.4 with its channel order and count.
+        ok = check(has("L R C LFE Ls Rs Rls Rrs U+045 U-045 U+135 U-135") && has(R"("channels": 12)"),
+                   "layouts_json: should contain the wav 7.1.4 channel order") &&
+             ok;
+        ok = check(has("\"supported_by\""), "layouts_json: should contain supported_by per row") && ok;
+    }
+    adm_free_string(json);
+    adm_free_string(nullptr); // must not crash
+
+    // Error paths.
+    char* bad = nullptr;
+    ok = check(adm_layouts_json(nullptr, &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "layouts_json: NULL context should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_layouts_json(ctx, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "layouts_json: NULL out_json should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(bad == nullptr, "layouts_json: out_json should stay NULL on failure") && ok;
+    return ok;
+}
+
 bool verify_apac_unsupported_smoke(adm_context_t* ctx, const std::filesystem::path& input) {
     // On non-Apple platforms apac_io always returns UNSUPPORTED.
     // On Apple with AudioToolbox the render may succeed; we accept both.
@@ -933,6 +1006,8 @@ int main() {
     ok = verify_opus_render(ctx, fixture.path()) && ok;
     ok = verify_log_accessors(ctx, fixture.path()) && ok;
     ok = verify_inspect_json(ctx, fixture.path()) && ok;
+    ok = verify_capabilities_json(ctx) && ok;
+    ok = verify_layouts_json(ctx) && ok;
     ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;
     ok = verify_iamf_smoke(ctx, fixture.path()) && ok;
 

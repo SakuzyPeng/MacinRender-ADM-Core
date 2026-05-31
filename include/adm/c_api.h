@@ -18,7 +18,8 @@
  *   adm_render_file_ex, adm_render_result_output_path/loudness_lufs/peak_dbtp,
  *   adm_scene_info_t + adm_probe_file + accessors,
  *   adm_log_level_t + adm_render_result_log_count/log_entry,
- *   adm_inspect_file_json + adm_free_string.
+ *   adm_inspect_file_json + adm_free_string, adm_capabilities_json,
+ *   adm_layouts_json.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
@@ -356,6 +357,43 @@ adm_inspect_file_json(adm_context_t* context, const char* input_path, char** out
 /* Release a heap string returned by adm_inspect_file_json (and any future ABI
  * function documented as returning an owned string). Passing NULL is a safe no-op. */
 void adm_free_string(char* s) ADM_API_NOEXCEPT;
+
+/* ── v1.1 Capabilities (JSON) ────────────────────────────────────────────── */
+/*
+ * adm_capabilities_json: enumerate the available renderer backends and their
+ * capabilities as a JSON string (UTF-8). Mirrors the `mradm backends` field set:
+ * each backend carries its feature flags (objects / direct_speakers / hoa /
+ * channel_lock / object_divergence / screen_ref / diffuse) and a list of
+ * supported output layouts. Each backend's "renderer" field is the string a
+ * caller passes to adm_render_options_set_renderer ("ear"/"saf"/"hoa"/"binaural").
+ *
+ * The root object carries a stable schema identity for version detection:
+ *   "schema": "mradm.capabilities", "schema_version": 1
+ *
+ * On success returns ADM_ERROR_OK and writes a heap string to *out_json, owned
+ * by the CALLER and released with adm_free_string (never free()/delete).
+ * out_json must be non-NULL (returns ADM_ERROR_INVALID_ARGUMENT otherwise),
+ * as is context.
+ */
+adm_error_code_t adm_capabilities_json(adm_context_t* context, char** out_json) ADM_API_NOEXCEPT;
+
+/* ── v1.1 Layouts (JSON) ─────────────────────────────────────────────────── */
+/*
+ * adm_layouts_json: the output channel-order reference as a JSON string (UTF-8).
+ * Mirrors the `mradm layouts` field set: for each container format + layout, the
+ * channel count, container mapping description, final channel order, an optional
+ * note, and "supported_by" (which renderer backends support that layout —
+ * a subset of "ear"/"saf"/"hoa"/"binaural").
+ *
+ * The root object carries a stable schema identity for version detection:
+ *   "schema": "mradm.layouts", "schema_version": 1
+ *
+ * On success returns ADM_ERROR_OK and writes a heap string to *out_json, owned
+ * by the CALLER and released with adm_free_string (never free()/delete).
+ * out_json must be non-NULL (returns ADM_ERROR_INVALID_ARGUMENT otherwise),
+ * as is context.
+ */
+adm_error_code_t adm_layouts_json(adm_context_t* context, char** out_json) ADM_API_NOEXCEPT;
 
 #ifdef __cplusplus
 } /* extern "C" */
