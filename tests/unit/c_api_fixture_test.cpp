@@ -128,6 +128,20 @@ void progress_cb(double fraction, const char* stage, const char* /*message*/, vo
     state->last_stage = (stage != nullptr) ? stage : "";
 }
 
+struct FullProgressState {
+    struct Event {
+        double fraction;
+        std::string stage;
+        bool message_non_null{false};
+    };
+    std::vector<Event> events;
+};
+
+void full_progress_cb(double fraction, const char* stage, const char* message, void* user_data) {
+    auto* state = static_cast<FullProgressState*>(user_data);
+    state->events.push_back({fraction, stage != nullptr ? stage : "", message != nullptr});
+}
+
 bool verify_version() {
     return check(adm_api_version_major() == ADM_API_VERSION_MAJOR, "version major mismatch") &&
            check(adm_api_version_minor() == ADM_API_VERSION_MINOR, "version minor mismatch") &&
@@ -627,6 +641,141 @@ bool verify_probe(adm_context_t* ctx, const std::filesystem::path& input) {
     return ok;
 }
 
+bool verify_progress_callback(adm_context_t* ctx, const std::filesystem::path& input) {
+    // Null callback: render must still succeed without crashing.
+    const auto out_null = unique_temp_wav_path("mr_c_api_prog_null");
+    FileGuard g0(out_null);
+    bool ok =
+        check(adm_render_file(ctx, input.string().c_str(), out_null.string().c_str(), nullptr, nullptr, nullptr) ==
+                  ADM_ERROR_OK,
+              "render with null progress callback should succeed");
+
+    // Full capture: verify ordering and validity of all events.
+    const auto output = unique_temp_wav_path("mr_c_api_prog");
+    FileGuard guard(output);
+    FullProgressState state;
+    const adm_error_code_t code =
+        adm_render_file(ctx, input.string().c_str(), output.string().c_str(), &full_progress_cb, &state, nullptr);
+    ok = check(code == ADM_ERROR_OK, "progress capture render should succeed") && ok;
+    ok = check(!state.events.empty(), "at least one progress event should fire") && ok;
+
+    const auto is_valid_stage = [](const std::string& s) {
+        return s == "validating" || s == "probing" || s == "importing_scene" || s == "planning" || s == "rendering" ||
+               s == "post_processing" || s == "finished";
+    };
+    bool fractions_ok = true;
+    bool stages_ok = true;
+    bool messages_ok = true;
+    double prev = -1.0;
+    for (const auto& ev : state.events) {
+        if (ev.fraction < prev || ev.fraction < 0.0 || ev.fraction > 1.0) {
+            fractions_ok = false;
+        }
+        if (!is_valid_stage(ev.stage)) {
+            stages_ok = false;
+        }
+        if (!ev.message_non_null) {
+            messages_ok = false;
+        }
+        prev = ev.fraction;
+    }
+    ok = check(fractions_ok, "progress fractions should be non-decreasing and in [0, 1]") && ok;
+    ok = check(stages_ok, "all progress stage strings should be from the known set") && ok;
+    ok = check(messages_ok, "all progress message pointers should be non-null") && ok;
+    if (!state.events.empty()) {
+        ok = check(state.events.back().stage == "finished", "last progress stage should be 'finished'") && ok;
+        ok = check(state.events.back().fraction >= 0.99, "last progress fraction should reach ~1.0") && ok;
+    }
+    return ok;
+}
+
+bool verify_opus_render(adm_context_t* ctx, const std::filesystem::path& input) {
+    auto output = unique_temp_wav_path("mr_c_api_opus_51");
+    output.replace_extension(".mka");
+    FileGuard guard(output);
+
+    adm_render_options_t* opts = adm_create_render_options();
+    adm_render_options_set_output_layout(opts, "5.1");
+
+    adm_render_result_t* result = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input.string().c_str(), output.string().c_str(), opts, nullptr, nullptr, &result);
+    adm_destroy_render_options(opts);
+
+    bool ok = check(code == ADM_ERROR_OK, "Opus 5.1 MKA render should succeed");
+    ok = check(std::filesystem::exists(output), "MKA output file should exist on disk") && ok;
+    ok = check(std::filesystem::file_size(output) > 0, "MKA output file should be non-empty") && ok;
+    if (result != nullptr) {
+        const char* out_path = adm_render_result_output_path(result);
+        ok = check(out_path != nullptr, "result output_path should be non-null for MKA render") && ok;
+        if (out_path != nullptr) {
+            ok = check(std::filesystem::path{out_path}.extension() == ".mka",
+                       "result output_path should have .mka extension") &&
+                 ok;
+        }
+    }
+    adm_destroy_render_result(result);
+    return ok;
+}
+
+bool verify_apac_unsupported_smoke(adm_context_t* ctx, const std::filesystem::path& input) {
+    // On non-Apple platforms apac_io always returns UNSUPPORTED.
+    // On Apple with AudioToolbox the render may succeed; we accept both.
+    // Key invariants regardless of platform: no crash, result handle always allocated and destroyable.
+    auto output = unique_temp_wav_path("mr_c_api_apac_smoke");
+    output.replace_extension(".m4a");
+    FileGuard guard(output); // harmless remove if file was never created
+
+    adm_render_result_t* result = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input.string().c_str(), output.string().c_str(), nullptr, nullptr, nullptr, &result);
+
+    bool ok = check(result != nullptr, "APAC smoke: result must be allocated");
+#ifdef __APPLE__
+    ok = check(code == ADM_ERROR_OK || code == ADM_ERROR_UNSUPPORTED,
+               "APAC smoke (Apple): should return OK or UNSUPPORTED") &&
+         ok;
+    if (code == ADM_ERROR_OK) {
+        ok = check(std::filesystem::exists(output), "APAC smoke (Apple OK): .m4a file should exist") && ok;
+        ok =
+            check(std::filesystem::file_size(output) > 0, "APAC smoke (Apple OK): .m4a file should be non-empty") && ok;
+    }
+#else
+    ok = check(code == ADM_ERROR_UNSUPPORTED, "APAC smoke (non-Apple): must return UNSUPPORTED") && ok;
+#endif
+    adm_destroy_render_result(result);
+    return ok;
+}
+
+bool verify_iamf_smoke(adm_context_t* ctx, const std::filesystem::path& input) {
+    // When MR_ADM_ENABLE_IAMF=OFF (default CI): .iamf output must return UNSUPPORTED.
+    // When MR_ADM_ENABLE_IAMF=ON: render with a supported layout and expect success.
+    auto output = unique_temp_wav_path("mr_c_api_iamf_smoke");
+    output.replace_extension(".iamf");
+    FileGuard guard(output);
+
+#if MR_ADM_ENABLE_IAMF
+    adm_render_options_t* opts = adm_create_render_options();
+    adm_render_options_set_output_layout(opts, "5.1");
+    adm_render_result_t* result = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input.string().c_str(), output.string().c_str(), opts, nullptr, nullptr, &result);
+    adm_destroy_render_options(opts);
+    bool ok = check(result != nullptr, "IAMF smoke (enabled): result must be allocated");
+    ok = check(code == ADM_ERROR_OK, "IAMF smoke (enabled): render should succeed") && ok;
+    ok = check(std::filesystem::exists(output), "IAMF smoke (enabled): output file should exist") && ok;
+    ok = check(std::filesystem::file_size(output) > 0, "IAMF smoke (enabled): output file should be non-empty") && ok;
+#else
+    adm_render_result_t* result = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input.string().c_str(), output.string().c_str(), nullptr, nullptr, nullptr, &result);
+    bool ok = check(result != nullptr, "IAMF smoke (disabled): result must be allocated");
+    ok = check(code == ADM_ERROR_UNSUPPORTED, "IAMF smoke (disabled): must return UNSUPPORTED") && ok;
+#endif
+    adm_destroy_render_result(result);
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -655,6 +804,10 @@ int main() {
         ok = verify_loudness_metrics(ctx, fixture_1s.path()) && ok;
     }
     ok = verify_probe(ctx, fixture.path()) && ok;
+    ok = verify_progress_callback(ctx, fixture.path()) && ok;
+    ok = verify_opus_render(ctx, fixture.path()) && ok;
+    ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;
+    ok = verify_iamf_smoke(ctx, fixture.path()) && ok;
 
     adm_destroy_context(ctx);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
