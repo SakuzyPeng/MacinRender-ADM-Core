@@ -279,6 +279,41 @@ mradm::AdmScene make_rich_scene() {
     return scene;
 }
 
+// Scene with a single DirectSpeakers bed object: one normal channel (M+000) and
+// one LFE channel (low_pass_hz set), each on its own track.
+mradm::AdmScene make_ds_scene() {
+    mradm::AdmScene scene;
+    scene.info.sample_rate = 48000U;
+
+    mradm::SceneObject bed;
+    bed.id = "AO_4001";
+    bed.name = "Bed";
+
+    mradm::SceneTrackRef center_track;
+    center_track.track_uid = "ATU_00000001";
+    mradm::SceneDirectSpeakersBlock center;
+    center.speaker_labels = {"M+000"};
+    center.gain = 1.0F;
+    center.has_position = true;
+    center.azimuth = 0.0F;
+    center.elevation = 0.0F;
+    center.distance = 1.0F;
+    center_track.ds_blocks.push_back(center);
+    bed.tracks.push_back(center_track);
+
+    mradm::SceneTrackRef lfe_track;
+    lfe_track.track_uid = "ATU_00000002";
+    mradm::SceneDirectSpeakersBlock lfe;
+    lfe.speaker_labels = {"LFE"};
+    lfe.gain = 1.0F;
+    lfe.low_pass_hz = 120.0F; // marks this as LFE
+    lfe_track.ds_blocks.push_back(lfe);
+    bed.tracks.push_back(lfe_track);
+
+    scene.objects.push_back(bed);
+    return scene;
+}
+
 bool apply_inline(mradm::AdmScene& scene, const std::string& json, const std::string& tag) {
     const auto path = write_temp_json("mr_semantic_" + tag + ".json", json);
     const FileGuard guard{path};
@@ -467,6 +502,95 @@ bool verify_channel_lock_full() {
     return ok;
 }
 
+bool verify_direct_speakers() {
+    bool ok = true;
+    // DS block gain: scale + gain_db.
+    {
+        auto scene = make_ds_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_4001", "direct_speakers": { "gain": { "scale": 0.5 } } } ] })json",
+                           "ds_gain_scale");
+        ok &= check(near(scene.objects.at(0).tracks.at(0).ds_blocks.at(0).gain, 0.5F) &&
+                        near(scene.objects.at(0).tracks.at(1).ds_blocks.at(0).gain, 0.5F),
+                    "ds gain scale applies to all DS blocks");
+    }
+    // DS mute → ds.gain = 0.
+    {
+        auto scene = make_ds_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_4001", "direct_speakers": { "gain": { "mute": true } } } ] })json",
+                           "ds_mute");
+        ok &= check(near(scene.objects.at(0).tracks.at(0).ds_blocks.at(0).gain, 0.0F), "ds mute zeroes gain");
+    }
+    // speaker_label filter: only M+000 changes, LFE untouched.
+    {
+        auto scene = make_ds_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_4001", "direct_speakers": { "speaker_label": "M+000", "gain": { "scale": 0.25 } } } ] })json",
+                           "ds_label");
+        ok &= check(near(scene.objects.at(0).tracks.at(0).ds_blocks.at(0).gain, 0.25F), "label filter hits M+000");
+        ok &= check(near(scene.objects.at(0).tracks.at(1).ds_blocks.at(0).gain, 1.0F), "label filter spares LFE");
+    }
+    // lfe filter: lfe:true only LFE; lfe:false only non-LFE.
+    {
+        auto scene = make_ds_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_4001", "direct_speakers": { "lfe": true, "gain": { "mute": true } } } ] })json",
+                           "ds_lfe_true");
+        ok &= check(near(scene.objects.at(0).tracks.at(0).ds_blocks.at(0).gain, 1.0F), "lfe:true spares non-LFE");
+        ok &= check(near(scene.objects.at(0).tracks.at(1).ds_blocks.at(0).gain, 0.0F), "lfe:true mutes LFE");
+    }
+    {
+        auto scene = make_ds_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_4001", "direct_speakers": { "lfe": false, "gain": { "scale": 0.5 } } } ] })json",
+                           "ds_lfe_false");
+        ok &= check(near(scene.objects.at(0).tracks.at(0).ds_blocks.at(0).gain, 0.5F), "lfe:false hits non-LFE");
+        ok &= check(near(scene.objects.at(0).tracks.at(1).ds_blocks.at(0).gain, 1.0F), "lfe:false spares LFE");
+    }
+    // AND filter: speaker_label + lfe must both match.
+    {
+        auto scene = make_ds_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_4001", "direct_speakers": { "speaker_label": "M+000", "lfe": true, "gain": { "scale": 0.1 } } } ] })json",
+                           "ds_and");
+        ok &= check(near(scene.objects.at(0).tracks.at(0).ds_blocks.at(0).gain, 1.0F) &&
+                        near(scene.objects.at(0).tracks.at(1).ds_blocks.at(0).gain, 1.0F),
+                    "AND filter (M+000 && lfe) matches nothing");
+    }
+    // Position re-aim on a DS block, sets has_position.
+    {
+        auto scene = make_ds_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_4001", "direct_speakers": { "speaker_label": "M+000", "position": { "azimuth": 30.0 } } } ] })json",
+                           "ds_reaim");
+        const auto& c = scene.objects.at(0).tracks.at(0).ds_blocks.at(0);
+        ok &= check(c.has_position && near(c.azimuth, 30.0F), "ds position re-aim sets azimuth + has_position");
+    }
+    // Independent DS rules must NOT cross-contaminate filters: a global rule
+    // (M+000 only) + an object rule (LFE only) each apply with their own filter.
+    {
+        auto scene = make_ds_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "global": { "direct_speakers": { "speaker_label": "M+000", "gain": { "scale": 0.5 } } },
+  "objects": [ { "id": "AO_4001", "direct_speakers": { "lfe": true, "gain": { "mute": true } } } ] })json",
+                           "ds_no_cross_contam");
+        const auto& center = scene.objects.at(0).tracks.at(0).ds_blocks.at(0); // M+000
+        const auto& lfe = scene.objects.at(0).tracks.at(1).ds_blocks.at(0);    // LFE
+        ok &= check(near(center.gain, 0.5F), "global M+000 rule halves center independently");
+        ok &= check(near(lfe.gain, 0.0F), "object LFE rule mutes LFE independently");
+    }
+    return ok;
+}
+
 // The generated neutral template, applied unmodified, must not change the scene
 // — including muted objects, channel_lock=false blocks, and Cartesian positions.
 bool verify_template_apply_is_identity() {
@@ -492,6 +616,20 @@ bool verify_template_apply_is_identity() {
     obj.tracks.push_back(track);
     scene.objects.push_back(obj);
 
+    // A DirectSpeakers LFE channel: must keep its gain and stay unmuted.
+    mradm::SceneObject bed;
+    bed.id = "AO_3002";
+    bed.name = "LFE";
+    mradm::SceneTrackRef bed_track;
+    bed_track.track_uid = "ATU_00000002";
+    mradm::SceneDirectSpeakersBlock ds;
+    ds.speaker_labels = {"LFE"};
+    ds.gain = 0.9F;
+    ds.low_pass_hz = 120.0F;
+    bed_track.ds_blocks.push_back(ds);
+    bed.tracks.push_back(bed_track);
+    scene.objects.push_back(bed);
+
     const auto write_result = mradm::write_semantic_policy_template_file(path, scene);
     bool ok = check(write_result.has_value(), "identity: template writes");
     auto policy = mradm::load_semantic_policy_file(path);
@@ -512,6 +650,8 @@ bool verify_template_apply_is_identity() {
     ok &= check(b.position.cartesian, "identity: Cartesian position stays Cartesian");
     ok &= check(near(b.position.x, 0.3F) && near(b.position.y, 0.6F) && near(b.position.z, -0.2F),
                 "identity: Cartesian coordinates unchanged");
+    const auto& ds_eff = applied.objects.at(1).tracks.at(0).ds_blocks.at(0);
+    ok &= check(near(ds_eff.gain, 0.9F), "identity: DS LFE gain unchanged");
     return ok;
 }
 
@@ -528,6 +668,7 @@ int main() {
     ok &= verify_position_override();
     ok &= verify_match_dimensions();
     ok &= verify_channel_lock_full();
+    ok &= verify_direct_speakers();
     ok &= verify_template_apply_is_identity();
     if (ok) {
         std::cout << "semantic policy test passed\n";

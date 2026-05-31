@@ -26,6 +26,7 @@ constexpr std::string_view k_channel_lock_key = "channel_lock";
 constexpr std::string_view k_interpolation_key = "interpolation";
 constexpr std::string_view k_gain_key = "gain";
 constexpr std::string_view k_position_key = "position";
+constexpr std::string_view k_direct_speakers_key = "direct_speakers";
 
 [[nodiscard]] Error invalid_policy(const std::string& path, const std::string& message) {
     return {ErrorCode::invalid_argument, "invalid semantic policy: " + message, path};
@@ -392,6 +393,46 @@ template <typename T>
     return out;
 }
 
+[[nodiscard]] Result<DirectSpeakersPolicy> parse_direct_speakers(const Json& obj, const std::string& path) {
+    if (!obj.is_object()) {
+        return tl::unexpected{invalid_policy(path, "'direct_speakers' must be an object")};
+    }
+    std::string unknown;
+    if (has_unknown_keys(obj, {"speaker_label", "lfe", "gain", "position"}, unknown)) {
+        return tl::unexpected{invalid_policy(path, "unknown direct_speakers field '" + unknown + "'")};
+    }
+    DirectSpeakersPolicy out;
+    if (obj.contains("speaker_label")) {
+        auto value = read_string(obj, "speaker_label", path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        out.speaker_label = *value;
+    }
+    if (obj.contains("lfe")) {
+        auto value = read_bool(obj, "lfe", path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        out.lfe = *value;
+    }
+    if (obj.contains("gain")) {
+        auto value = parse_gain(obj.at("gain"), path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        out.gain = *value;
+    }
+    if (obj.contains("position")) {
+        auto value = parse_position(obj.at("position"), path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        out.position = *value;
+    }
+    return out;
+}
+
 [[nodiscard]] Result<SemanticPolicyOverride>
 parse_override(const Json& obj, const std::string& path, std::initializer_list<std::string_view> extra_keys = {}) {
     if (!obj.is_object()) {
@@ -404,7 +445,8 @@ parse_override(const Json& obj, const std::string& path, std::initializer_list<s
                                           k_channel_lock_key,
                                           k_interpolation_key,
                                           k_gain_key,
-                                          k_position_key};
+                                          k_position_key,
+                                          k_direct_speakers_key};
     allowed.insert(allowed.end(), extra_keys.begin(), extra_keys.end());
     for (const auto& [key, value] : obj.items()) {
         (void) value;
@@ -462,6 +504,13 @@ parse_override(const Json& obj, const std::string& path, std::initializer_list<s
             return tl::unexpected{value.error()};
         }
         out.position = *value;
+    }
+    if (obj.contains(std::string{k_direct_speakers_key})) {
+        auto value = parse_direct_speakers(obj.at(std::string{k_direct_speakers_key}), path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        out.direct_speakers = *value;
     }
     return out;
 }
@@ -521,6 +570,12 @@ void merge_policy(PositionPolicy& dst, const PositionPolicy& src) {
     }
 }
 
+// NOTE: DirectSpeakersPolicy is deliberately NOT mergeable. Each DS rule pairs a
+// per-block filter (speaker_label / lfe) with an action; merging two rules would
+// fuse their filters (e.g. "M+000" AND "lfe") and break both. DS policies are
+// instead collected into an ordered list and applied independently per ds_block
+// (see apply_semantic_policy).
+
 void merge_policy(InterpolationPolicy& dst, const InterpolationPolicy& src) {
     merge_optional(dst.honor_jump_position, src.honor_jump_position);
     merge_optional(dst.max_ms, src.max_ms);
@@ -569,6 +624,8 @@ void merge_override(SemanticPolicyOverride& dst, const SemanticPolicyOverride& s
         }
         merge_policy(*dst.position, *src.position);
     }
+    // direct_speakers is intentionally not merged here (see note above); it is
+    // collected and applied per-rule by apply_semantic_policy.
 }
 
 [[nodiscard]] std::string lower_ascii(std::string_view text) {
@@ -721,6 +778,23 @@ effective_override(const SceneObject& object, const ObjectMembership& membership
     return out;
 }
 
+// Ordered list of DirectSpeakers policies applicable to an object (global first,
+// then matching object rules in order). Each carries its own per-block filter and
+// is applied independently — they are NOT merged (see merge note above).
+[[nodiscard]] std::vector<const DirectSpeakersPolicy*>
+collect_ds_policies(const SceneObject& object, const ObjectMembership& membership, const SemanticPolicy& policy) {
+    std::vector<const DirectSpeakersPolicy*> out;
+    if (policy.global && policy.global->direct_speakers) {
+        out.push_back(&*policy.global->direct_speakers);
+    }
+    for (const auto& rule : policy.objects) {
+        if (rule.direct_speakers && rule_matches(object, membership, rule)) {
+            out.push_back(&*rule.direct_speakers);
+        }
+    }
+    return out;
+}
+
 // Object-level (per AudioObject) application: gain + mute. Called once per object.
 void apply_object_override(SceneObject& object, const SemanticPolicyOverride& policy) {
     if (policy.gain) {
@@ -736,47 +810,85 @@ void apply_object_override(SceneObject& object, const SemanticPolicyOverride& po
     }
 }
 
-// Block position override: absolute overwrite, then offset add, then lock (wins).
-// Cartesian positions are converted to polar first; output is always polar.
-void apply_position(SceneObjectBlock& block, const PositionPolicy& pos) {
-    // No-op guard: a position policy with no absolute / lock fields and only
-    // absent-or-zero offsets must leave the block untouched (including its
-    // Cartesian form). This keeps a neutral template's position section inert.
+// True when the position policy would actually change a position: any absolute
+// or lock field, or a non-absent, non-zero offset component. A neutral template's
+// zero-offset position section is therefore inert.
+[[nodiscard]] bool position_changes(const PositionPolicy& pos) {
     const auto nonzero = [](const std::optional<float>& v) { return v.has_value() && (*v > 0.0F || *v < 0.0F); };
     const bool offset_changes =
         pos.offset && (nonzero(pos.offset->azimuth) || nonzero(pos.offset->elevation) || nonzero(pos.offset->distance));
-    const bool changes = pos.azimuth.has_value() || pos.elevation.has_value() || pos.distance.has_value() ||
-                         pos.lock_azimuth.has_value() || pos.lock_elevation.has_value() || offset_changes;
-    if (!changes) {
-        return;
-    }
+    return pos.azimuth.has_value() || pos.elevation.has_value() || pos.distance.has_value() ||
+           pos.lock_azimuth.has_value() || pos.lock_elevation.has_value() || offset_changes;
+}
 
-    SceneBlockPosition polar = scene_position_to_polar(block.position);
-    polar.cartesian = false;
+// Shared polar position math: absolute overwrite, then offset add, then lock
+// (wins), then wrap azimuth / clamp elevation / non-negative distance. Mutates
+// az/el/dist in place. Caller guards with position_changes() before invoking.
+void compute_polar_position(float& azimuth, float& elevation, float& distance, const PositionPolicy& pos) {
     if (pos.azimuth.has_value()) {
-        polar.azimuth = *pos.azimuth;
+        azimuth = *pos.azimuth;
     }
     if (pos.elevation.has_value()) {
-        polar.elevation = *pos.elevation;
+        elevation = *pos.elevation;
     }
     if (pos.distance.has_value()) {
-        polar.distance = *pos.distance;
+        distance = *pos.distance;
     }
     if (pos.offset) {
-        polar.azimuth += pos.offset->azimuth.value_or(0.0F);
-        polar.elevation += pos.offset->elevation.value_or(0.0F);
-        polar.distance += pos.offset->distance.value_or(0.0F);
+        azimuth += pos.offset->azimuth.value_or(0.0F);
+        elevation += pos.offset->elevation.value_or(0.0F);
+        distance += pos.offset->distance.value_or(0.0F);
     }
     if (pos.lock_azimuth.has_value()) {
-        polar.azimuth = *pos.lock_azimuth;
+        azimuth = *pos.lock_azimuth;
     }
     if (pos.lock_elevation.has_value()) {
-        polar.elevation = *pos.lock_elevation;
+        elevation = *pos.lock_elevation;
     }
-    polar.azimuth = wrap_azimuth(polar.azimuth);
-    polar.elevation = std::clamp(polar.elevation, -90.0F, 90.0F);
-    polar.distance = std::max(0.0F, polar.distance);
+    azimuth = wrap_azimuth(azimuth);
+    elevation = std::clamp(elevation, -90.0F, 90.0F);
+    distance = std::max(0.0F, distance);
+}
+
+// Objects block position override. Cartesian positions are converted to polar
+// first; output is always polar. No-op when the policy makes no change.
+void apply_position(SceneObjectBlock& block, const PositionPolicy& pos) {
+    if (!position_changes(pos)) {
+        return;
+    }
+    SceneBlockPosition polar = scene_position_to_polar(block.position);
+    polar.cartesian = false;
+    compute_polar_position(polar.azimuth, polar.elevation, polar.distance, pos);
     block.position = polar;
+}
+
+// DirectSpeakers block override: filter by speaker_label / lfe (AND), then apply
+// gain (scale/gain_db; mute -> ds.gain = 0) and position re-aim.
+void apply_ds_override(SceneDirectSpeakersBlock& ds, const DirectSpeakersPolicy& policy) {
+    if (!policy.speaker_label.empty() && !std::ranges::any_of(ds.speaker_labels, [&](const std::string& label) {
+            return ascii_equal_ignore_case(label, policy.speaker_label);
+        })) {
+        return;
+    }
+    if (policy.lfe.has_value() && *policy.lfe != ds.low_pass_hz.has_value()) {
+        return;
+    }
+    if (policy.gain) {
+        if (policy.gain->mute.value_or(false)) {
+            ds.gain = 0.0F;
+        } else {
+            if (policy.gain->scale.has_value()) {
+                ds.gain *= *policy.gain->scale;
+            }
+            if (policy.gain->gain_db.has_value()) {
+                ds.gain *= std::pow(10.0F, *policy.gain->gain_db / 20.0F);
+            }
+        }
+    }
+    if (policy.position && position_changes(*policy.position)) {
+        compute_polar_position(ds.azimuth, ds.elevation, ds.distance, *policy.position);
+        ds.has_position = true;
+    }
 }
 
 void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& policy, uint32_t sample_rate) {
@@ -875,6 +987,22 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     return out;
 }
 
+[[nodiscard]] Json ds_block_json(const SceneDirectSpeakersBlock& ds) {
+    Json out = Json::object();
+    out["speaker_labels"] = ds.speaker_labels;
+    out["gain"] = ds.gain;
+    out["has_position"] = ds.has_position;
+    out["azimuth"] = ds.azimuth;
+    out["elevation"] = ds.elevation;
+    out["distance"] = ds.distance;
+    if (ds.low_pass_hz) {
+        out["low_pass_hz"] = *ds.low_pass_hz;
+    } else {
+        out["low_pass_hz"] = nullptr;
+    }
+    return out;
+}
+
 [[nodiscard]] Json capability_json(const CapabilityReport& caps) {
     Json out = Json::object();
     out["supports_channel_lock"] = caps.supports_channel_lock;
@@ -917,6 +1045,12 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     return Json{{"offset", {{"azimuth", 0.0F}, {"elevation", 0.0F}, {"distance", 0.0F}}}};
 }
 
+// Neutral DirectSpeakers = identity. No speaker_label/lfe filter (applies to all
+// DS blocks), no mute; gain x1 and zero-offset position are both no-ops.
+[[nodiscard]] Json neutral_direct_speakers_policy() {
+    return Json{{"gain", neutral_gain_policy()}, {"position", neutral_position_policy()}};
+}
+
 // The generated template, applied unmodified, must be an identity (no scene
 // change). channel_lock is intentionally omitted: it has no neutral value —
 // `enabled` forces the lock on/off either way — so users add it explicitly.
@@ -928,6 +1062,7 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     out["interpolation"] = neutral_interpolation_policy();
     out["gain"] = neutral_gain_policy();
     out["position"] = neutral_position_policy();
+    out["direct_speakers"] = neutral_direct_speakers_policy();
     return out;
 }
 
@@ -1099,11 +1234,21 @@ Result<void> apply_semantic_policy(AdmScene& scene,
     }
 
     for (auto& object : scene.objects) {
-        const auto policy_for_object = effective_override(object, membership_for(object), policy);
+        const auto& mem = membership_for(object);
+        const auto policy_for_object = effective_override(object, mem, policy);
         apply_object_override(object, policy_for_object);
+        // DS policies are applied per-rule (each with its own filter), in order,
+        // rather than merged — so independent rules (e.g. one targeting M+000 and
+        // one targeting LFE) don't cross-contaminate each other's filters.
+        const auto ds_policies = collect_ds_policies(object, mem, policy);
         for (auto& track : object.tracks) {
             for (auto& block : track.blocks) {
                 apply_override(block, policy_for_object, sample_rate);
+            }
+            for (auto& ds : track.ds_blocks) {
+                for (const auto* ds_policy : ds_policies) {
+                    apply_ds_override(ds, *ds_policy);
+                }
             }
         }
     }
@@ -1152,10 +1297,21 @@ Result<void> write_semantic_report_file(const std::filesystem::path& path,
             const std::size_t block_count = std::min(orig_track.blocks.size(), eff_track.blocks.size());
             for (std::size_t bi = 0; bi < block_count; ++bi) {
                 Json block = Json::object();
+                block["kind"] = "objects";
                 block["track_uid"] = eff_track.track_uid;
                 block["block_index"] = bi;
                 block["original"] = block_json(orig_track.blocks.at(bi));
                 block["effective"] = block_json(eff_track.blocks.at(bi));
+                obj["blocks"].push_back(std::move(block));
+            }
+            const std::size_t ds_count = std::min(orig_track.ds_blocks.size(), eff_track.ds_blocks.size());
+            for (std::size_t bi = 0; bi < ds_count; ++bi) {
+                Json block = Json::object();
+                block["kind"] = "directspeakers";
+                block["track_uid"] = eff_track.track_uid;
+                block["block_index"] = bi;
+                block["original"] = ds_block_json(orig_track.ds_blocks.at(bi));
+                block["effective"] = ds_block_json(eff_track.ds_blocks.at(bi));
                 obj["blocks"].push_back(std::move(block));
             }
         }
