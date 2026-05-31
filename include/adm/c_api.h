@@ -17,7 +17,8 @@
  *   adm_render_options_t + builder/setter/destroy,
  *   adm_render_file_ex, adm_render_result_output_path/loudness_lufs/peak_dbtp,
  *   adm_scene_info_t + adm_probe_file + accessors,
- *   adm_log_level_t + adm_render_result_log_count/log_entry.
+ *   adm_log_level_t + adm_render_result_log_count/log_entry,
+ *   adm_inspect_file_json + adm_free_string.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
@@ -329,6 +330,32 @@ uint64_t adm_scene_info_frames(const adm_scene_info_t* info) ADM_API_NOEXCEPT;
 double adm_scene_info_duration_seconds(const adm_scene_info_t* info) ADM_API_NOEXCEPT;
 uint32_t adm_scene_info_programme_count(const adm_scene_info_t* info) ADM_API_NOEXCEPT;
 uint32_t adm_scene_info_object_count(const adm_scene_info_t* info) ADM_API_NOEXCEPT;
+
+/* ── v1.1 Scene inspect (JSON) ───────────────────────────────────────────── */
+/*
+ * adm_inspect_file_json: import the full ADM scene and serialize it to a JSON
+ * string (UTF-8). The JSON mirrors the `mradm inspect` field set: file info,
+ * programmes, contents, objects (with per-track / per-block detail), HOA tracks,
+ * and import warnings. Optional fields are omitted when unset.
+ *
+ * The root object carries a stable schema identity for version detection:
+ *   "schema": "mradm.scene-inspect", "schema_version": 1
+ * schema_version is bumped only on a breaking change to the field set;
+ * additive fields keep version 1.
+ *
+ * On success returns ADM_ERROR_OK and, if out_json is non-NULL, writes a
+ * heap-allocated NUL-terminated string to *out_json. That string is owned by
+ * the CALLER and must be released with adm_free_string (never free()/delete).
+ * out_json may be NULL to just validate that the file parses, allocating nothing.
+ * Returns ADM_ERROR_INVALID_ARGUMENT for a NULL/empty input or context, and the
+ * mapped error (e.g. ADM_ERROR_IO) if the file is missing or not valid ADM.
+ */
+adm_error_code_t
+adm_inspect_file_json(adm_context_t* context, const char* input_path, char** out_json) ADM_API_NOEXCEPT;
+
+/* Release a heap string returned by adm_inspect_file_json (and any future ABI
+ * function documented as returning an owned string). Passing NULL is a safe no-op. */
+void adm_free_string(char* s) ADM_API_NOEXCEPT;
 
 #ifdef __cplusplus
 } /* extern "C" */

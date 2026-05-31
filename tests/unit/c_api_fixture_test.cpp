@@ -791,6 +791,58 @@ bool verify_log_accessors(adm_context_t* ctx, const std::filesystem::path& input
     return ok;
 }
 
+bool verify_inspect_json(adm_context_t* ctx, const std::filesystem::path& input) {
+    // Consume the ABI as an external caller would: receive an owned JSON string
+    // and inspect it via substring checks (no JSON parser pulled into this TU).
+    char* json = nullptr;
+    const adm_error_code_t code = adm_inspect_file_json(ctx, input.string().c_str(), &json);
+    bool ok = check(code == ADM_ERROR_OK, "inspect_json: should succeed on fixture");
+    ok = check(json != nullptr, "inspect_json: out_json should be non-null") && ok;
+
+    if (json != nullptr) {
+        const std::string s{json};
+        ok = check(!s.empty(), "inspect_json: JSON should be non-empty") && ok;
+        const auto has = [&s](const char* needle) { return s.find(needle) != std::string::npos; };
+        // Pin the stable schema identity so version drift is caught here.
+        ok = check(has(R"("schema": "mradm.scene-inspect")") && has(R"("schema_version": 1)"),
+                   "inspect_json: should carry schema + schema_version") &&
+             ok;
+        ok = check(has("\"programmes\"") && has("\"contents\"") && has("\"objects\""),
+                   "inspect_json: should contain the top-level tree keys") &&
+             ok;
+        ok = check(has("TestProgramme") && has("TestContent") && has("TestObject"),
+                   "inspect_json: should contain the fixture entity names") &&
+             ok;
+        // Fixture object block uses polar position az=30/el=10 (see write_fixture).
+        ok = check(has("\"azimuth\""), "inspect_json: should contain block position fields") && ok;
+    }
+    adm_free_string(json);
+    adm_free_string(nullptr); // must not crash
+
+    // validate-only: out_json == NULL parses the file but allocates nothing.
+    ok = check(adm_inspect_file_json(ctx, input.string().c_str(), nullptr) == ADM_ERROR_OK,
+               "inspect_json: validate-only (NULL out_json) should succeed") &&
+         ok;
+
+    // Error paths.
+    char* bad = nullptr;
+    ok = check(adm_inspect_file_json(nullptr, input.string().c_str(), &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "inspect_json: NULL context should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_inspect_file_json(ctx, nullptr, &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "inspect_json: NULL input should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_inspect_file_json(ctx, "", &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "inspect_json: empty input should be INVALID_ARGUMENT") &&
+         ok;
+    const auto missing = unique_temp_wav_path("mr_c_api_inspect_missing");
+    ok = check(adm_inspect_file_json(ctx, missing.string().c_str(), &bad) != ADM_ERROR_OK,
+               "inspect_json: missing file should fail") &&
+         ok;
+    ok = check(bad == nullptr, "inspect_json: out_json should stay NULL on failure") && ok;
+    return ok;
+}
+
 bool verify_apac_unsupported_smoke(adm_context_t* ctx, const std::filesystem::path& input) {
     // On non-Apple platforms apac_io always returns UNSUPPORTED.
     // On Apple with AudioToolbox the render may succeed; we accept both.
@@ -880,6 +932,7 @@ int main() {
     ok = verify_progress_callback(ctx, fixture.path()) && ok;
     ok = verify_opus_render(ctx, fixture.path()) && ok;
     ok = verify_log_accessors(ctx, fixture.path()) && ok;
+    ok = verify_inspect_json(ctx, fixture.path()) && ok;
     ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;
     ok = verify_iamf_smoke(ctx, fixture.path()) && ok;
 

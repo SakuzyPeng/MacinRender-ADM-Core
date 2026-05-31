@@ -82,6 +82,12 @@ class RenderService {
     // Quickly import the ADM scene and return file-level metadata without rendering.
     // Returns io_error if the file is missing or not a valid ADM BWF file.
     [[nodiscard]] Result<SceneProbe> probe(const std::string& input_path) const;
+
+    // Import the full ADM scene and serialize it to a JSON string (UTF-8).
+    // The JSON mirrors the `mradm inspect` field set: file info, programmes,
+    // contents, objects (with per-track/per-block detail), HOA tracks, and
+    // import warnings. Returns io_error if the file is missing or invalid.
+    [[nodiscard]] Result<std::string> inspect_json(const std::string& input_path) const;
 };
 
 } // namespace mradm

@@ -23,6 +23,8 @@
 #include "adm/render_vbap.h"
 #include "adm/semantic_policy.h"
 
+#include "scene_json.h"
+
 namespace mradm {
 
 namespace {
@@ -596,6 +598,14 @@ Result<SceneProbe> RenderService::probe(const std::string& input_path) const {
     probe.programme_count = static_cast<uint32_t>(scene.programmes.size());
     probe.object_count = static_cast<uint32_t>(scene.objects.size());
     return probe;
+}
+
+Result<std::string> RenderService::inspect_json(const std::string& input_path) const {
+    auto scene_result = io::import_scene(input_path);
+    if (!scene_result) {
+        return tl::unexpected(scene_result.error());
+    }
+    return engine::scene_to_json(*scene_result);
 }
 
 } // namespace mradm
