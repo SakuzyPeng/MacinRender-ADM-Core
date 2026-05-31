@@ -885,6 +885,46 @@ bool verify_inspect_xml(adm_context_t* ctx, const std::filesystem::path& input) 
     return ok;
 }
 
+bool verify_policy_template_json(adm_context_t* ctx, const std::filesystem::path& input) {
+    char* json = nullptr;
+    const adm_error_code_t code = adm_policy_template_json(ctx, input.string().c_str(), &json);
+    bool ok = check(code == ADM_ERROR_OK, "policy_template: should succeed on fixture");
+    ok = check(json != nullptr, "policy_template: out_json should be non-null") && ok;
+
+    if (json != nullptr) {
+        const std::string s{json};
+        ok = check(!s.empty(), "policy_template: JSON should be non-empty") && ok;
+        const auto has = [&s](const char* needle) { return s.find(needle) != std::string::npos; };
+        // A valid policy document carrying the policy schema + per-object rule.
+        ok = check(has(R"("schema": "mradm.semantic-policy.v1")"),
+                   "policy_template: carries the semantic-policy schema") &&
+             ok;
+        ok = check(has("\"global\"") && has("\"objects\""), "policy_template: has global + objects") && ok;
+        ok = check(has("TestObject"), "policy_template: includes the fixture object rule") && ok;
+    }
+    adm_free_string(json);
+
+    // validate-only: out_json == NULL parses the file but allocates nothing.
+    ok = check(adm_policy_template_json(ctx, input.string().c_str(), nullptr) == ADM_ERROR_OK,
+               "policy_template: validate-only (NULL out_json) should succeed") &&
+         ok;
+
+    // Error paths.
+    char* bad = nullptr;
+    ok = check(adm_policy_template_json(nullptr, input.string().c_str(), &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "policy_template: NULL context should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_policy_template_json(ctx, nullptr, &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "policy_template: NULL input should be INVALID_ARGUMENT") &&
+         ok;
+    const auto missing = unique_temp_wav_path("mr_c_api_tmpl_missing");
+    ok = check(adm_policy_template_json(ctx, missing.string().c_str(), &bad) != ADM_ERROR_OK,
+               "policy_template: missing file should fail") &&
+         ok;
+    ok = check(bad == nullptr, "policy_template: out_json should stay NULL on failure") && ok;
+    return ok;
+}
+
 bool verify_capabilities_json(adm_context_t* ctx) {
     char* json = nullptr;
     const adm_error_code_t code = adm_capabilities_json(ctx, &json);
@@ -1049,6 +1089,7 @@ int main() {
     ok = verify_log_accessors(ctx, fixture.path()) && ok;
     ok = verify_inspect_json(ctx, fixture.path()) && ok;
     ok = verify_inspect_xml(ctx, fixture.path()) && ok;
+    ok = verify_policy_template_json(ctx, fixture.path()) && ok;
     ok = verify_capabilities_json(ctx) && ok;
     ok = verify_layouts_json(ctx) && ok;
     ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;

@@ -121,6 +121,11 @@ class RenderService {
     // Mirrors `mradm inspect --xml`. Returns io_error if the file is missing,
     // not a valid BWF, or carries no axml chunk.
     [[nodiscard]] Result<std::string> axml(const std::string& input_path) const;
+
+    // Build the editable neutral semantic-policy template for the scene as a JSON
+    // string (UTF-8). Mirrors `mradm inspect --write-semantic-policy-template` but
+    // returned in-memory. Returns io_error if the file is missing or invalid.
+    [[nodiscard]] Result<std::string> policy_template_json(const std::string& input_path) const;
 };
 
 } // namespace mradm

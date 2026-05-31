@@ -626,4 +626,12 @@ Result<std::string> RenderService::axml(const std::string& input_path) const {
     return io::get_axml(input_path);
 }
 
+Result<std::string> RenderService::policy_template_json(const std::string& input_path) const {
+    auto scene_result = io::import_scene(input_path);
+    if (!scene_result) {
+        return tl::unexpected(scene_result.error());
+    }
+    return build_semantic_policy_template(*scene_result);
+}
+
 } // namespace mradm

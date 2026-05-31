@@ -155,6 +155,11 @@ C ABI 走 **两阶段稳定** 模型：
   另有 `adm_inspect_file_xml`（镜像 `mradm inspect --xml`）返回 BWF 内嵌的原始 `<axml>`
   ADM XML 块（verbatim），经 `RenderService::axml`（转调 `io::get_axml`）实现，同样用
   `adm_free_string` 释放、`out_xml==NULL` 仅校验。
+- **Policy template（JSON）**：`adm_policy_template_json`（镜像 `mradm inspect
+  --write-semantic-policy-template`）返回某场景的可编辑中性 semantic-policy 模板 JSON
+  （root 带 `"schema": "mradm.semantic-policy.v1"`，是合法 policy 文档），GUI 可在内存编辑后
+  再经 `adm_render_options_set_semantic_policy_path` 回灌。经 `RenderService::policy_template_json`
+  实现（转调 `build_semantic_policy_template`），同样 `adm_free_string` 释放、`out_json==NULL` 仅校验。
 - **Capabilities（JSON）**：`adm_capabilities_json` 枚举可用 renderer 后端及其能力，返回 JSON
   字符串（schema 1:1 镜像 `mradm backends`：每个后端的 feature flags + supported layouts，
   并带 `"renderer"` 字段对应 `adm_render_options_set_renderer` 的取值），`adm_free_string`
