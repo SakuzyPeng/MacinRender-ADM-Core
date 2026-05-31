@@ -1515,8 +1515,13 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
             out_block[(f * 2U) + 0U] = lb[local + f];
             out_block[(f * 2U) + 1U] = rb[local + f];
         }
+        // When an output trim is requested, feed the meter only the output frames inside the window.
         if (lufs_st) {
-            ebur128_add_frames_float(lufs_st.get(), out_block.data(), static_cast<size_t>(want));
+            const auto chunk = render_common::meter_window_chunk(plan.meter_window, out_written, want);
+            if (chunk.frame_count > 0) {
+                ebur128_add_frames_float(
+                    lufs_st.get(), out_block.data() + (chunk.offset_frames * 2U), chunk.frame_count);
+            }
         }
         if (writer.write(out_block.data(), want) != want) {
             return false;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -37,6 +38,16 @@ struct RenderResult {
     [[nodiscard]] bool success() const noexcept { return error.ok(); }
 };
 
+// Restricts a backend's inline loudness / True-Peak measurement to a frame
+// sub-range of the rendered output timeline. Backends still render and write the
+// full timeline (so decorrelator / delay state stays continuous); only the meter
+// is fed [start_frame, start_frame + frame_count). RenderService sets this when an
+// output trim is requested so the reported metrics describe the kept segment.
+struct MeterWindow {
+    uint64_t start_frame{0};
+    uint64_t frame_count{0};
+};
+
 // Input to a renderer backend: file paths, output layout, and pre-parsed scene metadata.
 struct RenderPlan {
     std::string input_path;
@@ -51,6 +62,9 @@ struct RenderPlan {
     uint32_t object_smoothing_frames{8875};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
+    // When set, restrict loudness / True-Peak measurement to this output frame
+    // window (matches the output trim); nullopt measures the whole render.
+    std::optional<MeterWindow> meter_window;
 };
 
 // Abstract renderer backend interface.

@@ -115,6 +115,16 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                      "Normalise integrated loudness to this LUFS target (enables loudness normalisation)")
         ->check(CLI::Range(-70.0F, 0.0F));
     render_cmd
+        ->add_option("--start",
+                     opts.render_start,
+                     "Trim output to start at this time in seconds (default: 0 = from the beginning)")
+        ->check(CLI::NonNegativeNumber);
+    render_cmd->add_option(
+        "--end",
+        opts.render_end,
+        "Trim output to end at this absolute time in seconds (default: render to the end); must be > --start. "
+        "Loudness/True-Peak are measured over the trimmed segment");
+    render_cmd
         ->add_option("--interp-ms",
                      opts.interp_ms,
                      "Default gain-interpolation ramp in ms when ADM block has no jumpPosition/interpolationLength "
@@ -195,6 +205,10 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     if (!std::isnan(opts.loudness_target)) {
         request.options.measure_loudness = true;
         request.options.loudness_target_lufs = opts.loudness_target;
+    }
+    request.options.render_start_sec = opts.render_start;
+    if (!std::isnan(opts.render_end)) {
+        request.options.render_end_sec = opts.render_end;
     }
     request.options.speaker_spread_mode = parse_speaker_spread_mode(opts.speaker_spread_mode_str);
     request.options.binaural_spread_mode = parse_binaural_spread_mode(opts.binaural_spread_mode_str);

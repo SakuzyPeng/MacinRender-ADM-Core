@@ -198,6 +198,65 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         logs.log(LogLevel::warning, "importer", w);
     }
 
+    // Resolve the optional output time-range trim against the rendered timeline
+    // (which equals the input timeline). We compute the frame range here, while
+    // the scene info is still available, and apply it to the rendered PCM below.
+    const uint32_t trim_sample_rate = scene_result->info.sample_rate;
+    const uint64_t trim_total_frames = scene_result->info.num_frames;
+    bool need_trim = false;
+    uint64_t trim_start_frame = 0;
+    uint64_t trim_frame_count = 0;
+    {
+        const double start_sec = request.options.render_start_sec;
+        const bool has_end = request.options.render_end_sec.has_value();
+        if (start_sec > 0.0 || has_end) {
+            if (start_sec < 0.0) {
+                const auto msg = fmt::format("--start must be >= 0 (got {:.6g}s)", start_sec);
+                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+            }
+            const double end_sec = request.options.render_end_sec.value_or(0.0);
+            if (has_end && end_sec <= start_sec) {
+                const auto msg =
+                    fmt::format("--end ({:.6g}s) must be greater than --start ({:.6g}s)", end_sec, start_sec);
+                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+            }
+            if (trim_sample_rate == 0) {
+                constexpr auto msg = "cannot apply time-range trim: input sample rate is unknown";
+                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+            }
+            const auto sr = static_cast<double>(trim_sample_rate);
+            trim_start_frame = static_cast<uint64_t>(std::llround(start_sec * sr));
+            if (trim_start_frame >= trim_total_frames) {
+                const auto msg = fmt::format("--start ({:.6g}s) is at or beyond the input duration ({:.6g}s)",
+                                             start_sec,
+                                             static_cast<double>(trim_total_frames) / sr);
+                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+            }
+            uint64_t end_frame = has_end ? static_cast<uint64_t>(std::llround(end_sec * sr)) : trim_total_frames;
+            end_frame = std::min(end_frame, trim_total_frames);
+            // The seconds-level "--end > --start" check above can still collapse to
+            // an empty frame range once rounded (e.g. both endpoints land in the same
+            // frame). Reject it here, before rendering, so we neither waste a full
+            // render nor leave an un-trimmed file for direct WAV/CAF outputs.
+            if (end_frame <= trim_start_frame) {
+                const auto msg = fmt::format("trim window [{:.6g}s, {:.6g}s) is shorter than one sample frame at {}Hz",
+                                             start_sec,
+                                             end_sec,
+                                             trim_sample_rate);
+                return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+            }
+            trim_frame_count = end_frame - trim_start_frame;
+            need_trim = true;
+            logs.log(LogLevel::info,
+                     "engine",
+                     fmt::format("output trim: frames [{}, {}) of {} @ {}Hz",
+                                 trim_start_frame,
+                                 trim_start_frame + trim_frame_count,
+                                 trim_total_frames,
+                                 trim_sample_rate));
+        }
+    }
+
     // Resolve output path.
     std::string output_path;
     if (request.output_path.has_value() && !request.output_path->empty()) {
@@ -380,9 +439,14 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     plan.object_smoothing_frames = request.options.object_smoothing_frames;
     plan.speaker_spread_mode = request.options.speaker_spread_mode;
     plan.binaural_spread_mode = request.options.binaural_spread_mode;
+    // Restrict the backend's inline metering to the trimmed window so the reported
+    // loudness / True-Peak describe the kept segment, not the full render.
+    if (need_trim) {
+        plan.meter_window = MeterWindow{trim_start_frame, trim_frame_count};
+    }
     plan.scene = std::move(*scene_result);
 
-    // Render (inline measurement of loudness + True Peak).
+    // Render (inline measurement of loudness + True Peak over the meter window).
     auto render_res = renderer->render(plan, progress, logs);
     if (!render_res) {
         return {render_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, render_res.error().message}}};
@@ -394,6 +458,17 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     }
     if (metrics.measured_peak_dbtp) {
         logs.log(LogLevel::info, "engine", fmt::format("measured true peak: {:.2f} dBTP", *metrics.measured_peak_dbtp));
+    }
+
+    // Apply the output time-range trim before gain/encode so every downstream step
+    // operates on the trimmed PCM. The backend already measured loudness/True-Peak
+    // over this same window (plan.meter_window), so `metrics`, the applied gain, and
+    // the file metadata all describe the trimmed segment.
+    if (need_trim) {
+        auto trim_res = audio::trim_file_frames(render_path, trim_start_frame, trim_frame_count, output_layout);
+        if (!trim_res) {
+            return {trim_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, trim_res.error().message}}};
+        }
     }
 
     // Compute combined gain: loudness target first, optional peak makeup second,

@@ -221,6 +221,17 @@ class ReaderHandle {
 // when the path is a CAF file; ignored for WAV and FLAC. No-op when |gain - 1| < 1e-6.
 Result<void> apply_gain_to_file(const std::string& path, float gain, const std::string& layout_id = {});
 
+// Trim an existing audio file in-place to the frame range [start_frame,
+// start_frame + frame_count) via a temp file + rename. Supports WAV, CAF, and
+// FLAC formats. layout_id is required when the path is a CAF file; ignored for
+// WAV and FLAC. start_frame is clamped to the file length and frame_count to the
+// frames remaining after start_frame. No-op when the range already covers the
+// whole file. Returns invalid_argument when frame_count resolves to zero.
+Result<void> trim_file_frames(const std::string& path,
+                              uint64_t start_frame,
+                              uint64_t frame_count,
+                              const std::string& layout_id = {});
+
 // Convert an existing float32 WAV to integer PCM in-place (temp + rename).
 // bit_depth must be 16, 24, or 32. Limited to sample rates <= 65535 Hz by the
 // underlying bw64 integer writer (libbw64 0.10.0 API constraint).
