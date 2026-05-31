@@ -1,5 +1,7 @@
 # MacinRender ADM Core
 
+[English](README.en.md) | 中文
+
 MacinRender ADM Core 是一个跨平台 ADM（Audio Definition Model，ITU-R BS.2076）空间音频渲染核心，使用 C++20 实现，提供命令行工具和 C ABI 库。
 
 它面向 ADM BWF / BW64 输入，可渲染到多声道扬声器、HOA 编码、HRTF 双耳，以及 WAV / CAF / FLAC / Opus MKA / IAMF / APAC 等交付格式。
@@ -26,6 +28,14 @@ cmake --build build/release
 ./build/release/mradm backends
 ./build/release/mradm layouts --format wav
 ./build/release/mradm layouts --format flac --renderer saf
+```
+
+常见渲染命令：
+
+```bash
+./build/release/mradm render -i input.wav -o out_binaural.wav --renderer binaural
+./build/release/mradm render -i input.wav -o out_714.flac --renderer ear --output-layout 7.1.4
+./build/release/mradm render -i input.wav -o out_trim.wav --start 12.5 --end 45.0
 ```
 
 ## 发行包
@@ -145,6 +155,8 @@ EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4
 | `--peak-limit-dbtp <dBTP>` | True Peak 限制目标 | `-1.0` |
 | `--peak-normalize-to-limit` | 在响度增益后，如 True Peak 低于 `--peak-limit-dbtp`，自动补全局增益到上限；需要开启 True Peak 限制 | 关闭 |
 | `--no-peak-limit` | 关闭 True Peak 限制 | - |
+| `--start <sec>` | 从渲染时间线该秒数开始裁剪输出；响度 / True Peak 只按保留片段计量 | `0` |
+| `--end <sec>` | 裁剪到渲染时间线该绝对秒数；必须大于 `--start`，未设置则渲染到结尾 | 关闭 |
 | `--interp-ms <ms>` | ADM 块无 jumpPosition 时的增益插值斜坡 | `5` |
 | `--object-smoothing-frames <frames>` | Objects 动态元数据去拉链平滑窗口；`0` 为逐样本跟随 ADM 块 | `8875` |
 | `--opus-bitrate-per-ch <kbps>` | Opus VBR 目标比特率 / 声道 | 自动 |
