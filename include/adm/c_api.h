@@ -16,7 +16,8 @@
  *   adm_binaural_spread_mode_t, adm_iamf_container_t,
  *   adm_render_options_t + builder/setter/destroy,
  *   adm_render_file_ex, adm_render_result_output_path/loudness_lufs/peak_dbtp,
- *   adm_scene_info_t + adm_probe_file + accessors.
+ *   adm_scene_info_t + adm_probe_file + accessors,
+ *   adm_log_level_t + adm_render_result_log_count/log_entry.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
@@ -111,12 +112,21 @@ typedef enum adm_binaural_spread_mode_t {
 
 typedef enum adm_iamf_container_t { ADM_IAMF_CONTAINER_OBU = 0, ADM_IAMF_CONTAINER_MP4 = 1 } adm_iamf_container_t;
 
+/* Severity of a captured diagnostic log entry (see adm_render_result_log_entry). */
+typedef enum adm_log_level_t {
+    ADM_LOG_DEBUG = 0,
+    ADM_LOG_INFO = 1,
+    ADM_LOG_WARNING = 2,
+    ADM_LOG_ERROR = 3
+} adm_log_level_t;
+
 #ifdef __cplusplus
 static_assert(sizeof(adm_renderer_t) == sizeof(int));
 static_assert(sizeof(adm_output_bit_depth_t) == sizeof(int));
 static_assert(sizeof(adm_speaker_spread_mode_t) == sizeof(int));
 static_assert(sizeof(adm_binaural_spread_mode_t) == sizeof(int));
 static_assert(sizeof(adm_iamf_container_t) == sizeof(int));
+static_assert(sizeof(adm_log_level_t) == sizeof(int));
 #endif
 
 /* ── Progress callback ───────────────────────────────────────────────────── */
@@ -269,6 +279,37 @@ const char* adm_render_result_output_path(const adm_render_result_t* result) ADM
  */
 int adm_render_result_loudness_lufs(const adm_render_result_t* result, double* out_value) ADM_API_NOEXCEPT;
 int adm_render_result_peak_dbtp(const adm_render_result_t* result, double* out_value) ADM_API_NOEXCEPT;
+
+/*
+ * Diagnostic log captured during the render that produced `result`.
+ * These are the warning/info/debug lines emitted by the engine and renderer
+ * backends (importer warnings, semantic-policy rewrites, backend identity,
+ * measured loudness/peak, gain adjustments, encoding steps). Use them to drive
+ * a log panel or surface non-fatal warnings to the user.
+ *
+ * NOTE: the terminal failure reason is always available via
+ * adm_render_result_message() / adm_render_result_error_code(), even on early
+ * errors that abort before any log line is emitted. An empty log does NOT imply
+ * the render succeeded — always check the error code.
+ */
+
+/* Number of captured log entries. Returns 0 if result is NULL. In the
+ * (practically unreachable) event of more than UINT32_MAX entries, the count is
+ * saturated at UINT32_MAX rather than truncated. */
+uint32_t adm_render_result_log_count(const adm_render_result_t* result) ADM_API_NOEXCEPT;
+
+/*
+ * Read the log entry at `index` (0-based, < adm_render_result_log_count).
+ * Returns 1 and writes the requested fields if index is valid; returns 0 if
+ * result is NULL or index is out of range. Any out pointer may be NULL.
+ * The strings written to *out_module / *out_message are owned by the result
+ * handle and remain valid until adm_destroy_render_result.
+ */
+int adm_render_result_log_entry(const adm_render_result_t* result,
+                                uint32_t index,
+                                adm_log_level_t* out_level,
+                                const char** out_module,
+                                const char** out_message) ADM_API_NOEXCEPT;
 
 /* ── v1.1 Probe ──────────────────────────────────────────────────────────── */
 /*

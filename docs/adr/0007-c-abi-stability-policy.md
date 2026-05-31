@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受  
-> 日期：2026-05-17  
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.1）  
+> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30）  
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -105,6 +105,47 @@ C ABI 走 **两阶段稳定** 模型：
 
 - Deprecated 函数 **至少保留 2 个 minor 版本**（例如在 1.3 标记 deprecated，最早在 1.5 才可删除），给绑定方迁移窗口。
 - Major 版本升级（2.0）可一次性删除所有已 deprecated 函数。
+
+## 变更记录（实际发布的 ABI 演化）
+
+记录已发布的 ABI 表面变化，便于绑定方查阅。所有变更均遵循上述兼容规则。
+
+### v1.0.0（首个稳定版本）
+
+阶段 2 切换时冻结的最小表面：
+
+- opaque：`adm_context_t`、`adm_render_result_t`
+- enum：`adm_error_code_t`（`ADM_ERROR_OK`..`ADM_ERROR_INTERNAL`，0..6）
+- callback：`adm_progress_cb`
+- 函数：版本查询 ×3、`adm_create_context` / `adm_destroy_context`、`adm_render_file`、
+  `adm_destroy_render_result`、`adm_render_result_error_code` / `adm_render_result_message`
+
+### v1.1.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+全部为新增符号 / opaque 内部扩展，**未触碰任何 v1.0 已有 signature、enum 值或 callback**，
+因此是 minor 升级。`include/adm/c_api.h` 顶部新增 `#include <stdint.h>`（C 标准头，符合写法约束）。
+
+- **新 enum**（值从 0 起，镜像对应 C++ 枚举，末尾可继续追加）：
+  `adm_renderer_t`、`adm_output_bit_depth_t`、`adm_speaker_spread_mode_t`、
+  `adm_binaural_spread_mode_t`、`adm_iamf_container_t`、`adm_log_level_t`。
+  每个加 `static_assert(sizeof == sizeof(int))`，并在 `adm_c_api.cpp` 加 enum 值 ↔ C++ 枚举的
+  交叉 `static_assert`。
+- **新 opaque**：`adm_render_options_t`（options builder 句柄）、`adm_scene_info_t`（probe 摘要句柄）。
+- **Options builder**：`adm_create_render_options` / `adm_destroy_render_options` + 一组 setter，
+  覆盖 CLI 全部用户选项（renderer、output_layout、bit_depth、loudness/peak、bitrate、interp、
+  smoothing、spread mode、iamf container、sofa/semantic 路径）。校验失败的 setter 返回
+  `adm_error_code_t`（非法 enum / NaN-inf / 越界 → `ADM_ERROR_INVALID_ARGUMENT`，OOM →
+  `ADM_ERROR_INTERNAL`），范围与 CLI（`src/adm_cli/render_command.cpp`）保持一致；不会失败的
+  POD setter 仍返回 `void`。
+- **Render**：`adm_render_file_ex`（带 options；`opts==NULL` 等价全默认）。旧 `adm_render_file`
+  转调 `_ex` 传 NULL，行为完全不变。
+- **Result 访问器**：`adm_render_result_output_path`、`adm_render_result_loudness_lufs` /
+  `adm_render_result_peak_dbtp`（返回 1/0 表达 optional），以及诊断日志
+  `adm_render_result_log_count` / `adm_render_result_log_entry`（渲染期捕获的
+  warning/info/debug 行，字符串归 result 句柄所有）。
+- **Probe**：`adm_probe_file` / `adm_destroy_scene_info` + 6 个标量访问器（sample_rate、
+  channels、frames、duration、programme/object count），经 `RenderService::probe` 实现，
+  不让 ABI 直接依赖 `ADMIo`（守 ADR 0003）。
 
 ## opaque 指针与 callback 生命周期
 

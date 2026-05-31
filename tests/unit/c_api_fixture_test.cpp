@@ -718,6 +718,79 @@ bool verify_opus_render(adm_context_t* ctx, const std::filesystem::path& input) 
     return ok;
 }
 
+bool verify_log_accessors(adm_context_t* ctx, const std::filesystem::path& input) {
+    const auto output = unique_temp_wav_path("mr_c_api_logs");
+    FileGuard guard(output);
+
+    adm_render_result_t* result = nullptr;
+    const adm_error_code_t code =
+        adm_render_file(ctx, input.string().c_str(), output.string().c_str(), nullptr, nullptr, &result);
+    bool ok = check(code == ADM_ERROR_OK, "log accessors: render should succeed");
+    ok = check(result != nullptr, "log accessors: result must be allocated") && ok;
+
+    const uint32_t count = adm_render_result_log_count(result);
+    ok = check(count > 0, "log accessors: at least one log entry should be captured") && ok;
+
+    // Every in-range entry must be valid; collect whether the engine module appears.
+    bool all_entries_valid = true;
+    bool saw_engine_module = false;
+    for (uint32_t i = 0; i < count; ++i) {
+        adm_log_level_t level = ADM_LOG_DEBUG;
+        const char* module = nullptr;
+        const char* message = nullptr;
+        if (adm_render_result_log_entry(result, i, &level, &module, &message) != 1) {
+            all_entries_valid = false;
+            continue;
+        }
+        if (module == nullptr || message == nullptr) {
+            all_entries_valid = false;
+            continue;
+        }
+        if (level < ADM_LOG_DEBUG || level > ADM_LOG_ERROR) {
+            all_entries_valid = false;
+        }
+        if (std::string{module} == "engine") {
+            saw_engine_module = true;
+        }
+    }
+    ok = check(all_entries_valid, "log accessors: every in-range entry should be valid") && ok;
+    ok = check(saw_engine_module, "log accessors: at least one entry should come from the 'engine' module") && ok;
+
+    // Out-of-range index returns 0.
+    ok = check(adm_render_result_log_entry(result, count, nullptr, nullptr, nullptr) == 0,
+               "log accessors: out-of-range index should return 0") &&
+         ok;
+
+    // Nullable out-params: passing all NULL still returns 1 for a valid index.
+    ok = check(adm_render_result_log_entry(result, 0, nullptr, nullptr, nullptr) == 1,
+               "log accessors: valid index with all-NULL out-params should return 1") &&
+         ok;
+
+    // Pointer stability: same index twice yields the same owned pointer.
+    const char* msg_a = nullptr;
+    const char* msg_b = nullptr;
+    adm_render_result_log_entry(result, 0, nullptr, nullptr, &msg_a);
+    adm_render_result_log_entry(result, 0, nullptr, nullptr, &msg_b);
+    ok = check(msg_a != nullptr && msg_a == msg_b, "log accessors: message pointer should be stable") && ok;
+
+    adm_destroy_render_result(result);
+
+    // NULL result: count 0, entry returns 0, no crash.
+    ok = check(adm_render_result_log_count(nullptr) == 0, "log accessors: NULL result log_count should be 0") && ok;
+    ok = check(adm_render_result_log_entry(nullptr, 0, nullptr, nullptr, nullptr) == 0,
+               "log accessors: NULL result log_entry should return 0") &&
+         ok;
+
+    // result==NULL render path (NullLogSink branch) must still succeed and not crash.
+    const auto out_noresult = unique_temp_wav_path("mr_c_api_logs_noresult");
+    FileGuard g2(out_noresult);
+    ok = check(adm_render_file(ctx, input.string().c_str(), out_noresult.string().c_str(), nullptr, nullptr, nullptr) ==
+                   ADM_ERROR_OK,
+               "log accessors: render without result handle should still succeed") &&
+         ok;
+    return ok;
+}
+
 bool verify_apac_unsupported_smoke(adm_context_t* ctx, const std::filesystem::path& input) {
     // On non-Apple platforms apac_io always returns UNSUPPORTED.
     // On Apple with AudioToolbox the render may succeed; we accept both.
@@ -806,6 +879,7 @@ int main() {
     ok = verify_probe(ctx, fixture.path()) && ok;
     ok = verify_progress_callback(ctx, fixture.path()) && ok;
     ok = verify_opus_render(ctx, fixture.path()) && ok;
+    ok = verify_log_accessors(ctx, fixture.path()) && ok;
     ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;
     ok = verify_iamf_smoke(ctx, fixture.path()) && ok;
 

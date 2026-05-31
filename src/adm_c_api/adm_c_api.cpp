@@ -1,8 +1,13 @@
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <mutex>
 #include <new>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include "adm/c_api.h"
 #include "adm/render.h"
@@ -64,6 +69,25 @@ static_assert(static_cast<int>(mradm::BinauralSpreadMode::saf_spreader) == ADM_B
 static_assert(static_cast<int>(mradm::RenderOptions::IamfContainer::obu) == ADM_IAMF_CONTAINER_OBU);
 static_assert(static_cast<int>(mradm::RenderOptions::IamfContainer::mp4) == ADM_IAMF_CONTAINER_MP4);
 
+static_assert(static_cast<int>(mradm::LogLevel::debug) == ADM_LOG_DEBUG);
+static_assert(static_cast<int>(mradm::LogLevel::info) == ADM_LOG_INFO);
+static_assert(static_cast<int>(mradm::LogLevel::warning) == ADM_LOG_WARNING);
+static_assert(static_cast<int>(mradm::LogLevel::error) == ADM_LOG_ERROR);
+
+adm_log_level_t to_c_log_level(mradm::LogLevel level) noexcept {
+    switch (level) {
+    case mradm::LogLevel::debug:
+        return ADM_LOG_DEBUG;
+    case mradm::LogLevel::info:
+        return ADM_LOG_INFO;
+    case mradm::LogLevel::warning:
+        return ADM_LOG_WARNING;
+    case mradm::LogLevel::error:
+        return ADM_LOG_ERROR;
+    }
+    return ADM_LOG_INFO;
+}
+
 adm_error_code_t map_error(mradm::ErrorCode code) noexcept {
     switch (code) {
     case mradm::ErrorCode::ok:
@@ -101,6 +125,30 @@ class CallbackProgressSink final : public mradm::ProgressSink {
     void* user_data_{nullptr};
 };
 
+// Internal storage for a single captured diagnostic log line.
+struct CLogEntry {
+    adm_log_level_t level{ADM_LOG_INFO};
+    std::string module;
+    std::string message;
+};
+
+// LogSink that captures every log line into a caller-owned vector. The mutex is
+// cheap insurance: renderer backends may log from worker threads (parallel
+// binaural spreaders), and log calls are rare relative to per-sample work.
+class CollectingLogSink final : public mradm::LogSink {
+  public:
+    explicit CollectingLogSink(std::vector<CLogEntry>& out) : out_(out) {}
+
+    void log(mradm::LogLevel level, std::string_view module, std::string_view message) override {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        out_.push_back({to_c_log_level(level), std::string(module), std::string(message)});
+    }
+
+  private:
+    std::vector<CLogEntry>& out_;
+    std::mutex mutex_;
+};
+
 } // namespace
 
 struct adm_context_t {
@@ -113,6 +161,7 @@ struct adm_render_result_t {
     std::string output_path;             // v1.1
     std::optional<double> loudness_lufs; // v1.1
     std::optional<double> peak_dbtp;     // v1.1
+    std::vector<CLogEntry> logs;         // v1.1
 };
 
 struct adm_render_options_t {
@@ -405,7 +454,12 @@ adm_error_code_t adm_render_file_ex(adm_context_t* context,
         }
 
         CallbackProgressSink progress_sink(progress, user_data);
-        mradm::NullLogSink log_sink;
+        // Only collect logs when the caller asked for a result handle to read them from.
+        std::vector<CLogEntry> captured;
+        CollectingLogSink collecting(captured);
+        mradm::NullLogSink null_sink;
+        mradm::LogSink& log_sink =
+            (result != nullptr) ? static_cast<mradm::LogSink&>(collecting) : static_cast<mradm::LogSink&>(null_sink);
         mradm::RenderResult cpp_result = context->service.render(request, progress_sink, log_sink);
 
         const adm_error_code_t code = map_error(cpp_result.error.code);
@@ -426,6 +480,7 @@ adm_error_code_t adm_render_file_ex(adm_context_t* context,
             c_result->loudness_lufs = cpp_result.metrics->measured_lufs;
             c_result->peak_dbtp = cpp_result.metrics->measured_peak_dbtp;
         }
+        c_result->logs = std::move(captured);
         *result = c_result.release();
 
         return code;
@@ -486,6 +541,37 @@ int adm_render_result_peak_dbtp(const adm_render_result_t* result, double* out_v
     }
     if (out_value != nullptr) {
         *out_value = *result->peak_dbtp;
+    }
+    return 1;
+}
+
+uint32_t adm_render_result_log_count(const adm_render_result_t* result) noexcept {
+    if (result == nullptr) {
+        return 0;
+    }
+    // Saturate rather than truncate: a count narrowed by the high bits would make
+    // the caller stop iterating early and silently miss the remaining entries.
+    const std::size_t n = result->logs.size();
+    return (n > UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(n);
+}
+
+int adm_render_result_log_entry(const adm_render_result_t* result,
+                                uint32_t index,
+                                adm_log_level_t* out_level,
+                                const char** out_module,
+                                const char** out_message) noexcept {
+    if (result == nullptr || index >= result->logs.size()) {
+        return 0;
+    }
+    const CLogEntry& entry = result->logs[index];
+    if (out_level != nullptr) {
+        *out_level = entry.level;
+    }
+    if (out_module != nullptr) {
+        *out_module = entry.module.c_str();
+    }
+    if (out_message != nullptr) {
+        *out_message = entry.message.c_str();
     }
     return 1;
 }
