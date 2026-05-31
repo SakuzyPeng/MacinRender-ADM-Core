@@ -237,6 +237,284 @@ bool verify_semantic_template_round_trips() {
     return ok;
 }
 
+// Scene with content / programme / importance / dialogue for match-dimension tests.
+mradm::AdmScene make_rich_scene() {
+    mradm::AdmScene scene;
+    scene.info.sample_rate = 48000U;
+
+    mradm::SceneObject dialog;
+    dialog.id = "AO_2001";
+    dialog.name = "Dialogue";
+    dialog.importance = 9;
+    dialog.dialogue_id = 1U; // dialogue
+    mradm::SceneTrackRef dtrack;
+    dtrack.track_uid = "ATU_00000001";
+    dtrack.blocks.push_back(mradm::SceneObjectBlock{});
+    dialog.tracks.push_back(dtrack);
+
+    mradm::SceneObject amb;
+    amb.id = "AO_2002";
+    amb.name = "Ambience";
+    amb.importance = 2;
+    amb.dialogue_id = 0U; // non-dialogue
+    mradm::SceneTrackRef atrack;
+    atrack.track_uid = "ATU_00000002";
+    atrack.blocks.push_back(mradm::SceneObjectBlock{});
+    amb.tracks.push_back(atrack);
+
+    scene.objects.push_back(dialog);
+    scene.objects.push_back(amb);
+
+    mradm::SceneContent content;
+    content.id = "ACO_1001";
+    content.name = "Main Dialogue";
+    content.object_ids = {"AO_2001"};
+    scene.contents.push_back(content);
+
+    mradm::SceneProgramme programme;
+    programme.id = "APR_1001";
+    programme.name = "English";
+    programme.content_ids = {"ACO_1001"};
+    scene.programmes.push_back(programme);
+    return scene;
+}
+
+bool apply_inline(mradm::AdmScene& scene, const std::string& json, const std::string& tag) {
+    const auto path = write_temp_json("mr_semantic_" + tag + ".json", json);
+    const FileGuard guard{path};
+    auto policy = mradm::load_semantic_policy_file(path);
+    if (!check(policy.has_value(), tag + ": policy parses")) {
+        if (!policy) {
+            std::cerr << policy.error().message << "\n";
+        }
+        return false;
+    }
+    auto result = mradm::apply_semantic_policy(scene, *policy, scene.info.sample_rate, nullptr);
+    return check(result.has_value(), tag + ": policy applies");
+}
+
+bool verify_gain_and_mute() {
+    bool ok = true;
+    {
+        auto scene = make_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "global": { "gain": { "scale": 0.5 } } })json",
+                           "gain_scale");
+        ok &= check(near(scene.objects.at(0).gain, 0.5F) && near(scene.objects.at(1).gain, 0.5F),
+                    "gain scale halves all object gains");
+    }
+    {
+        auto scene = make_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "global": { "gain": { "gain_db": -6.0205999 } } })json",
+                           "gain_db");
+        ok &= check(near(scene.objects.at(0).gain, 0.5F), "gain_db -6.02 dB halves object gain");
+    }
+    {
+        auto scene = make_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "name_glob": "*kick*", "gain": { "mute": true } } ] })json",
+                           "mute");
+        ok &= check(scene.objects.at(0).mute && !scene.objects.at(1).mute, "mute targets only matched object");
+    }
+    return ok;
+}
+
+bool verify_position_override() {
+    bool ok = true;
+    {
+        auto scene = make_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_1001", "position": { "azimuth": 30.0, "offset": { "azimuth": 10.0 }, "lock_elevation": 45.0 } } ] })json",
+                           "pos_abs_offset_lock");
+        const auto& p = scene.objects.at(0).tracks.at(0).blocks.at(0).position;
+        ok &= check(!p.cartesian, "position output is polar");
+        ok &= check(near(p.azimuth, 40.0F), "absolute + offset azimuth (30+10)");
+        ok &= check(near(p.elevation, 45.0F), "lock_elevation forces elevation");
+    }
+    {
+        auto scene = make_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_1001", "position": { "azimuth": 30.0, "lock_azimuth": 90.0 } } ] })json",
+                           "pos_lock_wins");
+        ok &= check(near(scene.objects.at(0).tracks.at(0).blocks.at(0).position.azimuth, 90.0F),
+                    "lock_azimuth wins over absolute");
+    }
+    {
+        auto scene = make_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_1001", "position": { "azimuth": 200.0, "elevation": 200.0 } } ] })json",
+                           "pos_clamp_wrap");
+        const auto& p = scene.objects.at(0).tracks.at(0).blocks.at(0).position;
+        ok &= check(near(p.azimuth, -160.0F), "azimuth wraps to [-180,180]");
+        ok &= check(near(p.elevation, 90.0F), "elevation clamps to 90");
+    }
+    {
+        // A real position change on a Cartesian block converts it to polar.
+        auto scene = make_scene();
+        auto& blk = scene.objects.at(0).tracks.at(0).blocks.at(0);
+        blk.position.cartesian = true;
+        blk.position.x = 0.0F;
+        blk.position.y = 1.0F; // front → azimuth 0
+        blk.position.z = 0.0F;
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_1001", "position": { "offset": { "azimuth": 10.0 } } } ] })json",
+                           "pos_cartesian");
+        ok &= check(!blk.position.cartesian, "cartesian block converted to polar on real change");
+        ok &= check(near(blk.position.azimuth, 10.0F), "front cartesian az 0 + offset 10 = 10");
+    }
+    {
+        // A zero-offset position policy must leave a Cartesian block untouched.
+        auto scene = make_scene();
+        auto& blk = scene.objects.at(0).tracks.at(0).blocks.at(0);
+        blk.position.cartesian = true;
+        blk.position.x = 0.2F;
+        blk.position.y = 0.5F;
+        blk.position.z = 0.1F;
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_1001", "position": { "offset": { "azimuth": 0.0, "elevation": 0.0, "distance": 0.0 } } } ] })json",
+                           "pos_zero_noop");
+        ok &= check(blk.position.cartesian, "zero-offset leaves block Cartesian");
+        ok &= check(near(blk.position.x, 0.2F) && near(blk.position.y, 0.5F) && near(blk.position.z, 0.1F),
+                    "zero-offset leaves coordinates unchanged");
+    }
+    return ok;
+}
+
+bool verify_match_dimensions() {
+    bool ok = true;
+    // all → both muted.
+    {
+        auto scene = make_rich_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "all": true, "gain": { "mute": true } } ] })json",
+                           "match_all");
+        ok &= check(scene.objects.at(0).mute && scene.objects.at(1).mute, "all matches every object");
+    }
+    // importance_max:5 → only low-importance ambience (2), not dialogue (9).
+    {
+        auto scene = make_rich_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "importance_max": 5, "gain": { "mute": true } } ] })json",
+                           "match_importance");
+        ok &=
+            check(!scene.objects.at(0).mute && scene.objects.at(1).mute, "importance_max matches low-importance only");
+    }
+    // dialogue_id:1 → only dialogue.
+    {
+        auto scene = make_rich_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "dialogue_id": 1, "gain": { "mute": true } } ] })json",
+                           "match_dialogue");
+        ok &= check(scene.objects.at(0).mute && !scene.objects.at(1).mute, "dialogue_id matches dialogue only");
+    }
+    // content by name, programme by id → only the dialogue object (member of both).
+    {
+        auto scene = make_rich_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "content": "Main Dialogue", "gain": { "mute": true } } ] })json",
+                           "match_content");
+        ok &= check(scene.objects.at(0).mute && !scene.objects.at(1).mute, "content name matches its member object");
+    }
+    {
+        auto scene = make_rich_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "programme": "APR_1001", "gain": { "mute": true } } ] })json",
+                           "match_programme");
+        ok &= check(scene.objects.at(0).mute && !scene.objects.at(1).mute, "programme id matches its member object");
+    }
+    return ok;
+}
+
+bool verify_channel_lock_full() {
+    bool ok = true;
+    // Force-enable + set max_distance on a block that has channel_lock off.
+    {
+        auto scene = make_scene();
+        scene.objects.at(1).tracks.at(0).blocks.at(0).channel_lock = false;
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_1002", "channel_lock": { "enabled": true, "max_distance": 0.3 } } ] })json",
+                           "cl_enable");
+        const auto& b = scene.objects.at(1).tracks.at(0).blocks.at(0);
+        ok &= check(b.channel_lock, "channel_lock force-enabled");
+        ok &= check(b.channel_lock_max_distance.has_value() && near(*b.channel_lock_max_distance, 0.3F),
+                    "channel_lock max_distance set");
+    }
+    // Disabling still clears max_distance (no regression).
+    {
+        auto scene = make_scene(); // kick has channel_lock=true, max_distance=0.5
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_1001", "channel_lock": { "enabled": false } } ] })json",
+                           "cl_disable");
+        const auto& b = scene.objects.at(0).tracks.at(0).blocks.at(0);
+        ok &= check(!b.channel_lock && !b.channel_lock_max_distance.has_value(), "disable clears max_distance");
+    }
+    return ok;
+}
+
+// The generated neutral template, applied unmodified, must not change the scene
+// — including muted objects, channel_lock=false blocks, and Cartesian positions.
+bool verify_template_apply_is_identity() {
+    const auto path = std::filesystem::temp_directory_path() / "mr_semantic_identity_test.json";
+    const FileGuard guard{path};
+
+    mradm::AdmScene scene;
+    scene.info.sample_rate = 48000U;
+    mradm::SceneObject obj;
+    obj.id = "AO_3001";
+    obj.name = "Muted Cartesian";
+    obj.gain = 0.75F;
+    obj.mute = true; // originally muted — must stay muted
+    mradm::SceneTrackRef track;
+    track.track_uid = "ATU_00000001";
+    mradm::SceneObjectBlock block;
+    block.channel_lock = false;      // must stay off
+    block.position.cartesian = true; // must stay Cartesian
+    block.position.x = 0.3F;
+    block.position.y = 0.6F;
+    block.position.z = -0.2F;
+    track.blocks.push_back(block);
+    obj.tracks.push_back(track);
+    scene.objects.push_back(obj);
+
+    const auto write_result = mradm::write_semantic_policy_template_file(path, scene);
+    bool ok = check(write_result.has_value(), "identity: template writes");
+    auto policy = mradm::load_semantic_policy_file(path);
+    ok &= check(policy.has_value(), "identity: template parses");
+    if (!policy) {
+        return false;
+    }
+
+    auto applied = scene;
+    auto result = mradm::apply_semantic_policy(applied, *policy, applied.info.sample_rate, nullptr);
+    ok &= check(result.has_value(), "identity: template applies");
+
+    const auto& a = applied.objects.at(0);
+    const auto& b = a.tracks.at(0).blocks.at(0);
+    ok &= check(a.mute, "identity: muted object stays muted");
+    ok &= check(near(a.gain, 0.75F), "identity: object gain unchanged");
+    ok &= check(!b.channel_lock, "identity: channel_lock stays off");
+    ok &= check(b.position.cartesian, "identity: Cartesian position stays Cartesian");
+    ok &= check(near(b.position.x, 0.3F) && near(b.position.y, 0.6F) && near(b.position.z, -0.2F),
+                "identity: Cartesian coordinates unchanged");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -246,6 +524,11 @@ int main() {
     ok &= verify_policy_id_matching_is_case_insensitive();
     ok &= verify_semantic_report();
     ok &= verify_semantic_template_round_trips();
+    ok &= verify_gain_and_mute();
+    ok &= verify_position_override();
+    ok &= verify_match_dimensions();
+    ok &= verify_channel_lock_full();
+    ok &= verify_template_apply_is_identity();
     if (ok) {
         std::cout << "semantic policy test passed\n";
         return 0;
