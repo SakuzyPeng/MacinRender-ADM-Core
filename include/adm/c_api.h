@@ -19,7 +19,7 @@
  *   adm_scene_info_t + adm_probe_file + accessors,
  *   adm_log_level_t + adm_render_result_log_count/log_entry,
  *   adm_inspect_file_json + adm_free_string, adm_capabilities_json,
- *   adm_layouts_json.
+ *   adm_layouts_json, adm_inspect_file_xml.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
@@ -353,6 +353,19 @@ uint32_t adm_scene_info_object_count(const adm_scene_info_t* info) ADM_API_NOEXC
  */
 adm_error_code_t
 adm_inspect_file_json(adm_context_t* context, const char* input_path, char** out_json) ADM_API_NOEXCEPT;
+
+/*
+ * adm_inspect_file_xml: return the raw <axml> chunk (ADM XML) embedded in the
+ * BWF file, verbatim (UTF-8). Mirrors `mradm inspect --xml`.
+ *
+ * On success returns ADM_ERROR_OK and, if out_xml is non-NULL, writes a
+ * heap-allocated NUL-terminated string to *out_xml, owned by the CALLER and
+ * released with adm_free_string (never free()/delete). out_xml may be NULL to
+ * just validate that the chunk can be read, allocating nothing. Returns
+ * ADM_ERROR_INVALID_ARGUMENT for a NULL/empty input or context, and the mapped
+ * error (e.g. ADM_ERROR_IO) if the file is missing, invalid, or has no axml.
+ */
+adm_error_code_t adm_inspect_file_xml(adm_context_t* context, const char* input_path, char** out_xml) ADM_API_NOEXCEPT;
 
 /* Release a heap string returned by adm_inspect_file_json (and any future ABI
  * function documented as returning an owned string). Passing NULL is a safe no-op. */

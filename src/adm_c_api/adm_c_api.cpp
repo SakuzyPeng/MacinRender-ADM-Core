@@ -675,6 +675,35 @@ adm_error_code_t adm_inspect_file_json(adm_context_t* context, const char* input
     }
 }
 
+adm_error_code_t adm_inspect_file_xml(adm_context_t* context, const char* input_path, char** out_xml) noexcept {
+    if (out_xml != nullptr) {
+        *out_xml = nullptr;
+    }
+    if (context == nullptr || input_path == nullptr || input_path[0] == '\0') {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        auto xml_result = context->service.axml(input_path);
+        if (!xml_result) {
+            return map_error(xml_result.error().code);
+        }
+        if (out_xml == nullptr) {
+            return ADM_ERROR_OK; // validate-only: chunk readable, allocate nothing
+        }
+        const std::string& xml = *xml_result;
+        auto* buffer = new (std::nothrow) char[xml.size() + 1];
+        if (buffer == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        std::char_traits<char>::copy(buffer, xml.c_str(), xml.size() + 1);
+        *out_xml = buffer;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
 // Takes ownership of a char* the ABI handed out via char** out-params; the
 // non-const pointer type is part of the contract, so the const-pointer hint
 // does not apply here.

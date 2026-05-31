@@ -152,6 +152,9 @@ C ABI 走 **两阶段稳定** 模型：
   实现（守 ADR 0003）；序列化用 nlohmann/json，但**全程 TU-local PRIVATE**，对外只返回
   `std::string`，无第三方类型跨边界（守 ADR 0003 / 0004）。该函数引入下述新所有权惯例。
   JSON root 带稳定标识 `"schema": "mradm.scene-inspect"` / `"schema_version": 1`。
+  另有 `adm_inspect_file_xml`（镜像 `mradm inspect --xml`）返回 BWF 内嵌的原始 `<axml>`
+  ADM XML 块（verbatim），经 `RenderService::axml`（转调 `io::get_axml`）实现，同样用
+  `adm_free_string` 释放、`out_xml==NULL` 仅校验。
 - **Capabilities（JSON）**：`adm_capabilities_json` 枚举可用 renderer 后端及其能力，返回 JSON
   字符串（schema 1:1 镜像 `mradm backends`：每个后端的 feature flags + supported layouts，
   并带 `"renderer"` 字段对应 `adm_render_options_set_renderer` 的取值），`adm_free_string`
