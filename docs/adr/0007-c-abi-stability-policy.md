@@ -151,6 +151,20 @@ C ABI 走 **两阶段稳定** 模型：
   hoa_tracks / import_warnings），`adm_free_string` 释放。经 `RenderService::inspect_json`
   实现（守 ADR 0003）；序列化用 nlohmann/json，但**全程 TU-local PRIVATE**，对外只返回
   `std::string`，无第三方类型跨边界（守 ADR 0003 / 0004）。该函数引入下述新所有权惯例。
+  JSON root 带稳定标识 `"schema": "mradm.scene-inspect"` / `"schema_version": 1`。
+- **Capabilities（JSON）**：`adm_capabilities_json` 枚举可用 renderer 后端及其能力，返回 JSON
+  字符串（schema 1:1 镜像 `mradm backends`：每个后端的 feature flags + supported layouts，
+  并带 `"renderer"` 字段对应 `adm_render_options_set_renderer` 的取值），`adm_free_string`
+  释放。经 `RenderService::capabilities_json` 实现（守 ADR 0003），同样 nlohmann TU-local
+  PRIVATE、对外只 `std::string`。JSON root 带 `"schema": "mradm.capabilities"` /
+  `"schema_version": 1`。
+- **Layouts（JSON）**：`adm_layouts_json` 返回输出声道顺序参考表（schema 1:1 镜像
+  `mradm layouts`：每个 format+layout 的 channels / container / order / note，外加派生的
+  `supported_by`——哪些 renderer 支持该布局），`adm_free_string` 释放。经
+  `RenderService::layouts_json` / `output_layouts` 实现；声道顺序表搬到引擎
+  （`src/adm_engine/layout_table.cpp`）做**单一数据源**，CLI `mradm layouts` 与 C ABI 共用，
+  消除原 CLI 本地表的漂移风险。nlohmann TU-local PRIVATE、对外只 `std::string`。
+  JSON root 带 `"schema": "mradm.layouts"` / `"schema_version": 1`。
 
 ## opaque 指针与 callback 生命周期
 

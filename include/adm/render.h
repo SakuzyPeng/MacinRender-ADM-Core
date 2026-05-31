@@ -73,6 +73,20 @@ struct SceneProbe {
     uint32_t object_count{0};
 };
 
+// One row of the output channel-order reference (mirrors `mradm layouts`):
+// for a given container format + layout, the channel count, container mapping
+// description, final channel order, an optional note, and which renderer
+// backends support the layout.
+struct OutputLayoutRow {
+    std::string format;                    // "wav" / "caf" / "flac" / "apac" / "iamf"
+    std::string layout;                    // "7.1.4" / "binaural" / "hoa3" / ...
+    uint32_t channels{0};                  // total output channels (including LFE)
+    std::string container;                 // container mapping description
+    std::string order;                     // final channel order
+    std::string note;                      // human-readable caveat; empty when none
+    std::vector<std::string> supported_by; // subset of {ear, saf, hoa, binaural}
+};
+
 class RenderService {
   public:
     RenderService();
@@ -88,6 +102,20 @@ class RenderService {
     // contents, objects (with per-track/per-block detail), HOA tracks, and
     // import warnings. Returns io_error if the file is missing or invalid.
     [[nodiscard]] Result<std::string> inspect_json(const std::string& input_path) const;
+
+    // Enumerate the available renderer backends and their capabilities, serialized
+    // to a JSON string (UTF-8). Mirrors the `mradm backends` field set: per-backend
+    // feature flags and the list of supported output layouts. Pure in-memory query
+    // (no I/O), so it does not fail.
+    [[nodiscard]] std::string capabilities_json() const;
+
+    // The output channel-order reference table (mirrors `mradm layouts`), with
+    // per-row supported_by computed from the renderer capabilities. Pure
+    // in-memory query (no I/O), so it does not fail.
+    [[nodiscard]] std::vector<OutputLayoutRow> output_layouts() const;
+
+    // The same table serialized to a JSON string (UTF-8) for the C ABI.
+    [[nodiscard]] std::string layouts_json() const;
 };
 
 } // namespace mradm

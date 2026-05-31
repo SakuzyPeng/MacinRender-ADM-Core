@@ -23,6 +23,8 @@
 #include "adm/render_vbap.h"
 #include "adm/semantic_policy.h"
 
+#include "capability_json.h"
+#include "layout_table.h"
 #include "scene_json.h"
 
 namespace mradm {
@@ -606,6 +608,18 @@ Result<std::string> RenderService::inspect_json(const std::string& input_path) c
         return tl::unexpected(scene_result.error());
     }
     return engine::scene_to_json(*scene_result);
+}
+
+std::string RenderService::capabilities_json() const {
+    return engine::capabilities_to_json();
+}
+
+std::vector<OutputLayoutRow> RenderService::output_layouts() const {
+    return engine::build_output_layouts();
+}
+
+std::string RenderService::layouts_json() const {
+    return engine::layouts_to_json();
 }
 
 } // namespace mradm

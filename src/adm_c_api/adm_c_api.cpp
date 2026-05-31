@@ -682,3 +682,49 @@ adm_error_code_t adm_inspect_file_json(adm_context_t* context, const char* input
 void adm_free_string(char* s) noexcept {
     delete[] s;
 }
+
+/* ── Capabilities (JSON) ─────────────────────────────────────────────────── */
+
+adm_error_code_t adm_capabilities_json(adm_context_t* context, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (context == nullptr || out_json == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        const std::string json = context->service.capabilities_json();
+        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        if (buffer == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
+        *out_json = buffer;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_layouts_json(adm_context_t* context, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (context == nullptr || out_json == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        const std::string json = context->service.layouts_json();
+        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        if (buffer == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
+        *out_json = buffer;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
