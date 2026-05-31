@@ -643,3 +643,42 @@ uint32_t adm_scene_info_programme_count(const adm_scene_info_t* info) noexcept {
 uint32_t adm_scene_info_object_count(const adm_scene_info_t* info) noexcept {
     return info != nullptr ? info->object_count : 0U;
 }
+
+/* ── Scene inspect (JSON) ────────────────────────────────────────────────── */
+
+adm_error_code_t adm_inspect_file_json(adm_context_t* context, const char* input_path, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (context == nullptr || input_path == nullptr || input_path[0] == '\0') {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        auto json_result = context->service.inspect_json(input_path);
+        if (!json_result) {
+            return map_error(json_result.error().code);
+        }
+        if (out_json == nullptr) {
+            return ADM_ERROR_OK; // validate-only: parsed successfully, allocate nothing
+        }
+        const std::string& json = *json_result;
+        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        if (buffer == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
+        *out_json = buffer;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+// Takes ownership of a char* the ABI handed out via char** out-params; the
+// non-const pointer type is part of the contract, so the const-pointer hint
+// does not apply here.
+// NOLINTNEXTLINE(readability-non-const-parameter)
+void adm_free_string(char* s) noexcept {
+    delete[] s;
+}

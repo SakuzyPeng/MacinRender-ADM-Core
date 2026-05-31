@@ -364,11 +364,17 @@ target_sources(
     mr_adm_engine
     PRIVATE
         src/adm_engine/render_service.cpp
+        src/adm_engine/scene_json.cpp
 )
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
     PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio
+)
+# nlohmann/json is header-only and used solely inside scene_json.cpp; keep it PRIVATE
+# so no third-party type leaks across the module boundary (ADR 0003 / 0004).
+target_include_directories(mr_adm_engine SYSTEM PRIVATE
+    "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
 )
 mr_adm_core_apply_warnings(mr_adm_engine)
 mr_adm_core_apply_static_analysis(mr_adm_engine)

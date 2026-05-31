@@ -146,6 +146,11 @@ C ABI 走 **两阶段稳定** 模型：
 - **Probe**：`adm_probe_file` / `adm_destroy_scene_info` + 6 个标量访问器（sample_rate、
   channels、frames、duration、programme/object count），经 `RenderService::probe` 实现，
   不让 ABI 直接依赖 `ADMIo`（守 ADR 0003）。
+- **Scene inspect（JSON）**：`adm_inspect_file_json` 解析整树并返回 JSON 字符串（schema 1:1
+  镜像 `mradm inspect`：file / programmes / contents / objects（逐 track / 逐 block）/
+  hoa_tracks / import_warnings），`adm_free_string` 释放。经 `RenderService::inspect_json`
+  实现（守 ADR 0003）；序列化用 nlohmann/json，但**全程 TU-local PRIVATE**，对外只返回
+  `std::string`，无第三方类型跨边界（守 ADR 0003 / 0004）。该函数引入下述新所有权惯例。
 
 ## opaque 指针与 callback 生命周期
 
@@ -154,7 +159,8 @@ C ABI 走 **两阶段稳定** 模型：
 - **创建/销毁配对**：`adm_create_context` ↔ `adm_destroy_context`，`adm_render_*` 返回的 `adm_render_result_t**` ↔ `adm_destroy_render_result`。调用方必须严格配对。
 - **线程亲缘性**：实验期暂不承诺多线程安全；稳定期至少承诺"不同 context 跨线程安全，单个 context 单线程使用"。如未来要支持单 context 跨线程，由独立 ADR 决定。
 - **callback 生命周期**：`adm_progress_cb` 仅在对应函数调用期间被调用；调用方可保证 callback 和 `user_data` 在该期间有效，无需考虑函数返回后的异步回调（除非未来明确引入异步 API）。
-- **字符串所有权**：返回 `const char*` 的函数（如 `adm_render_result_message`）保证字符串在对应 opaque 句柄被 destroy 前有效；调用方不得 free 该指针。
+- **字符串所有权（句柄持有）**：返回 `const char*` 的函数（如 `adm_render_result_message`、`adm_render_result_log_entry` 写出的 module/message）保证字符串在对应 opaque 句柄被 destroy 前有效；调用方不得 free 该指针。
+- **字符串所有权（调用方持有，v1.1 起）**：经 `char**` 出参返回**堆字符串**的函数（如 `adm_inspect_file_json`）把所有权转移给调用方；调用方必须、且只能用 `adm_free_string` 释放（不得用 `free()`/`delete`，因为分配器由 ABI 一侧决定）。`adm_free_string(NULL)` 是安全 no-op。未来其它返回堆字符串的函数复用同一释放函数。
 
 这些约定写入 `include/adm/c_api.h` 的注释中。
 
