@@ -20,12 +20,15 @@
  *   adm_log_level_t + adm_render_result_log_count/log_entry,
  *   adm_inspect_file_json + adm_free_string, adm_capabilities_json,
  *   adm_layouts_json, adm_inspect_file_xml, adm_policy_template_json.
+ *
+ * v1.2 新增（additive，SOVERSION 不变）：
+ *   adm_render_options_set_render_start_sec / adm_render_options_set_render_end_sec.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 1
+#define ADM_API_VERSION_MINOR 2
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -230,6 +233,17 @@ adm_error_code_t adm_render_options_set_binaural_spread_mode(adm_render_options_
                                                              adm_binaural_spread_mode_t mode) ADM_API_NOEXCEPT;
 adm_error_code_t adm_render_options_set_iamf_container(adm_render_options_t* opts,
                                                        adm_iamf_container_t container) ADM_API_NOEXCEPT;
+
+/* render_start_sec / render_end_sec: output time-range trim in seconds on the
+ * rendered timeline (which equals the input timeline). Loudness/True-Peak are
+ * measured over the trimmed segment.
+ *   start: must be finite and >= 0. Returns ADM_ERROR_INVALID_ARGUMENT otherwise.
+ *   end:   sec <= 0 clears it (render to the end); a positive end must be greater
+ *          than start, which is validated at render time. Non-finite returns
+ *          ADM_ERROR_INVALID_ARGUMENT.
+ * v1.2 */
+adm_error_code_t adm_render_options_set_render_start_sec(adm_render_options_t* opts, double sec) ADM_API_NOEXCEPT;
+adm_error_code_t adm_render_options_set_render_end_sec(adm_render_options_t* opts, double sec) ADM_API_NOEXCEPT;
 
 /* ── Render ──────────────────────────────────────────────────────────────── */
 /*
