@@ -102,6 +102,7 @@ struct SemanticObjectRule : SemanticPolicyOverride {
     std::optional<int> dialogue_id;    // object.dialogue_id == value
     std::string content;               // belongs to content with this id or name
     std::string programme;             // belongs to programme with this id or name
+    std::string pack_format;           // HOA match: == SceneHOATracks.pack_format_id
 };
 
 struct SemanticPolicy {

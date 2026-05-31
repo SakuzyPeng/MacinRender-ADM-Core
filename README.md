@@ -150,23 +150,34 @@ EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4
 | `--opus-bitrate-per-ch <kbps>` | Opus VBR 目标比特率 / 声道 | 自动 |
 | `--apac-bitrate <kbps>` | APAC 总目标比特率提示；未设置时空间布局 / HOA 按 7.1.4=2048 kbps 基准缩放 | 见输出格式说明 |
 | `--sofa <path>` | binaural 用户 SOFA HRIR 文件 | 内置 KEMAR |
-| `--semantic-policy <path>` | 渲染时应用 ADM Objects 语义控制 JSON，如 diffuse / extent / divergence 开关或缩放 | 关闭 |
-| `--write-semantic-report <path>` | 写出 policy 应用后的 effective semantic JSON，便于确认对象规则命中情况 | 关闭 |
+| `--semantic-policy <path>` | 渲染时应用 ADM 语义控制 JSON（覆盖 Objects / DirectSpeakers / HOA 的 gain·mute·position 及 diffuse / extent / divergence / channelLock / 插值等） | 关闭 |
+| `--write-semantic-report <path>` | 写出 policy 应用后的 effective semantic JSON，便于确认对象 / DS / HOA 规则命中与 original→effective 变化 | 关闭 |
 
 响度相关后处理顺序为：`--loudness-target` 先决定目标响度增益，`--peak-normalize-to-limit` 可选补峰到 True Peak 上限，最后 `--peak-limit-dbtp` 作为硬上限裁剪全局增益。
 
-Semantic policy 不修改原始 AXML，仅影响本次渲染。最小示例：
+Semantic policy 不修改原始 AXML，仅影响本次渲染。`inspect --write-semantic-policy-template` 会按场景生成一份可编辑的中性模板（原样应用不改变场景），编辑后用 `--semantic-policy` 应用：
 
 ```bash
 ./build/release/mradm inspect in.wav --write-semantic-policy-template policy.json
 ./build/release/mradm render -i in.wav -o out.flac --renderer binaural --semantic-policy policy.json
 ```
 
+`global` 作用于全部内容，`objects[]` 是按规则匹配的覆盖。匹配维度（OR 组合）：`id` / `name` / `name_glob` / `track_uid` / `all` / `importance_min·max` / `dialogue_id` / `content` / `programme`，以及 HOA 专用的 `pack_format`。覆盖项：
+
+- **Objects**：`gain`（`scale` / `gain_db` / `mute`，object 级）、`position`（绝对 `azimuth/elevation/distance` + `offset` + `lock_*`）、`diffuse` / `extent` / `divergence` / `channel_lock`（含 `max_distance`）/ `interpolation`。
+- **DirectSpeakers**：`direct_speakers`，含块内过滤器 `speaker_label` / `lfe`（AND）+ `gain`（`mute` 即静音该声道）+ `position` 重瞄。
+- **HOA**：匹配 `id` / `pack_format` / `all`，应用 `gain`（`scale` / `gain_db` / `mute`）到整个 pack。
+
 ```json
 {
   "schema": "mradm.semantic-policy.v1",
+  "global": { "gain": { "gain_db": -3 } },
   "objects": [
-    { "name_glob": "*kick*", "diffuse": { "enabled": false }, "extent": { "enabled": false } }
+    { "name_glob": "*kick*", "diffuse": { "enabled": false }, "extent": { "enabled": false } },
+    { "dialogue_id": 1, "gain": { "gain_db": 2 } },
+    { "id": "AO_1003", "position": { "azimuth": 30, "lock_elevation": 0 } },
+    { "all": true, "direct_speakers": { "lfe": true, "gain": { "gain_db": -6 } } },
+    { "pack_format": "AP_00031001", "gain": { "scale": 0.5 } }
   ]
 }
 ```
