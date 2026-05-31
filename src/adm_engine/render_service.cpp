@@ -622,4 +622,8 @@ std::string RenderService::layouts_json() const {
     return engine::layouts_to_json();
 }
 
+Result<std::string> RenderService::axml(const std::string& input_path) const {
+    return io::get_axml(input_path);
+}
+
 } // namespace mradm

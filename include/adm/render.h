@@ -116,6 +116,11 @@ class RenderService {
 
     // The same table serialized to a JSON string (UTF-8) for the C ABI.
     [[nodiscard]] std::string layouts_json() const;
+
+    // Return the raw <axml> chunk (ADM XML) embedded in the BWF file, verbatim.
+    // Mirrors `mradm inspect --xml`. Returns io_error if the file is missing,
+    // not a valid BWF, or carries no axml chunk.
+    [[nodiscard]] Result<std::string> axml(const std::string& input_path) const;
 };
 
 } // namespace mradm

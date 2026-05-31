@@ -843,6 +843,48 @@ bool verify_inspect_json(adm_context_t* ctx, const std::filesystem::path& input)
     return ok;
 }
 
+bool verify_inspect_xml(adm_context_t* ctx, const std::filesystem::path& input) {
+    char* xml = nullptr;
+    const adm_error_code_t code = adm_inspect_file_xml(ctx, input.string().c_str(), &xml);
+    bool ok = check(code == ADM_ERROR_OK, "inspect_xml: should succeed on fixture");
+    ok = check(xml != nullptr, "inspect_xml: out_xml should be non-null") && ok;
+
+    if (xml != nullptr) {
+        const std::string s{xml};
+        ok = check(!s.empty(), "inspect_xml: AXML should be non-empty") && ok;
+        const auto has = [&s](const char* needle) { return s.find(needle) != std::string::npos; };
+        // Raw ADM XML: the audioFormatExtended wrapper and the fixture entities.
+        ok = check(has("audioFormatExtended"), "inspect_xml: should contain the ADM XML root") && ok;
+        ok = check(has("TestObject") && has("TestProgramme"), "inspect_xml: should contain the fixture entity names") &&
+             ok;
+    }
+    adm_free_string(xml);
+    adm_free_string(nullptr); // must not crash
+
+    // validate-only: out_xml == NULL reads the chunk but allocates nothing.
+    ok = check(adm_inspect_file_xml(ctx, input.string().c_str(), nullptr) == ADM_ERROR_OK,
+               "inspect_xml: validate-only (NULL out_xml) should succeed") &&
+         ok;
+
+    // Error paths.
+    char* bad = nullptr;
+    ok = check(adm_inspect_file_xml(nullptr, input.string().c_str(), &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "inspect_xml: NULL context should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_inspect_file_xml(ctx, nullptr, &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "inspect_xml: NULL input should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_inspect_file_xml(ctx, "", &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "inspect_xml: empty input should be INVALID_ARGUMENT") &&
+         ok;
+    const auto missing = unique_temp_wav_path("mr_c_api_xml_missing");
+    ok = check(adm_inspect_file_xml(ctx, missing.string().c_str(), &bad) != ADM_ERROR_OK,
+               "inspect_xml: missing file should fail") &&
+         ok;
+    ok = check(bad == nullptr, "inspect_xml: out_xml should stay NULL on failure") && ok;
+    return ok;
+}
+
 bool verify_capabilities_json(adm_context_t* ctx) {
     char* json = nullptr;
     const adm_error_code_t code = adm_capabilities_json(ctx, &json);
@@ -1006,6 +1048,7 @@ int main() {
     ok = verify_opus_render(ctx, fixture.path()) && ok;
     ok = verify_log_accessors(ctx, fixture.path()) && ok;
     ok = verify_inspect_json(ctx, fixture.path()) && ok;
+    ok = verify_inspect_xml(ctx, fixture.path()) && ok;
     ok = verify_capabilities_json(ctx) && ok;
     ok = verify_layouts_json(ctx) && ok;
     ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;
