@@ -454,6 +454,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             libbw64
             adm
     )
+    target_compile_definitions(mr_adm_c_api_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
     mr_adm_core_apply_warnings(mr_adm_c_api_tests)
     mr_adm_core_apply_static_analysis(mr_adm_c_api_tests)
     add_test(NAME mr_adm_c_api_tests COMMAND mr_adm_c_api_tests)
