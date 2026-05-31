@@ -34,7 +34,32 @@ struct DivergencePolicy {
 };
 
 struct ChannelLockPolicy {
-    std::optional<bool> enabled;
+    std::optional<bool> enabled;       // false disables; true force-enables channel lock
+    std::optional<float> max_distance; // channelLockMaxDistance (applies when channel lock is on)
+};
+
+// Object-level level control (applied once per AudioObject, not per block).
+struct GainPolicy {
+    std::optional<float> scale;   // linear multiplier on object gain
+    std::optional<float> gain_db; // dB offset (multiplies by 10^(gain_db/20))
+    std::optional<bool> mute;     // sets object.mute
+};
+
+// Block-level position override. Absolute components overwrite, offset adds,
+// lock_* force a fixed value (winning over absolute + offset). Cartesian block
+// positions are converted to polar before applying; output is always polar.
+struct PositionPolicy {
+    std::optional<float> azimuth;   // absolute overwrite (degrees)
+    std::optional<float> elevation; // absolute overwrite (degrees)
+    std::optional<float> distance;  // absolute overwrite
+    struct Offset {
+        std::optional<float> azimuth;
+        std::optional<float> elevation;
+        std::optional<float> distance;
+    };
+    std::optional<Offset> offset;
+    std::optional<float> lock_azimuth;   // force azimuth to this value
+    std::optional<float> lock_elevation; // force elevation to this value
 };
 
 struct InterpolationPolicy {
@@ -48,6 +73,8 @@ struct SemanticPolicyOverride {
     std::optional<DivergencePolicy> divergence;
     std::optional<ChannelLockPolicy> channel_lock;
     std::optional<InterpolationPolicy> interpolation;
+    std::optional<GainPolicy> gain;         // object-level
+    std::optional<PositionPolicy> position; // block-level
 };
 
 struct SemanticObjectRule : SemanticPolicyOverride {
@@ -55,6 +82,13 @@ struct SemanticObjectRule : SemanticPolicyOverride {
     std::string name;
     std::string name_glob;
     std::string track_uid;
+    // Additional match dimensions (OR-combined with the identity fields above).
+    std::optional<bool> all;           // matches every object
+    std::optional<int> importance_min; // object.importance >= min (when present)
+    std::optional<int> importance_max; // object.importance <= max (when present)
+    std::optional<int> dialogue_id;    // object.dialogue_id == value
+    std::string content;               // belongs to content with this id or name
+    std::string programme;             // belongs to programme with this id or name
 };
 
 struct SemanticPolicy {

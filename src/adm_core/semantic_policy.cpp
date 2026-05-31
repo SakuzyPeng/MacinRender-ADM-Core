@@ -7,6 +7,9 @@
 #include <limits>
 #include <string_view>
 #include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
@@ -21,6 +24,8 @@ constexpr std::string_view k_extent_key = "extent";
 constexpr std::string_view k_divergence_key = "divergence";
 constexpr std::string_view k_channel_lock_key = "channel_lock";
 constexpr std::string_view k_interpolation_key = "interpolation";
+constexpr std::string_view k_gain_key = "gain";
+constexpr std::string_view k_position_key = "position";
 
 [[nodiscard]] Error invalid_policy(const std::string& path, const std::string& message) {
     return {ErrorCode::invalid_argument, "invalid semantic policy: " + message, path};
@@ -224,7 +229,7 @@ template <typename T>
         return tl::unexpected{invalid_policy(path, "'channel_lock' must be an object")};
     }
     std::string unknown;
-    if (has_unknown_keys(obj, {"enabled"}, unknown)) {
+    if (has_unknown_keys(obj, {"enabled", "max_distance"}, unknown)) {
         return tl::unexpected{invalid_policy(path, "unknown channel_lock field '" + unknown + "'")};
     }
     ChannelLockPolicy out;
@@ -234,6 +239,16 @@ template <typename T>
             return tl::unexpected{value.error()};
         }
         out.enabled = *value;
+    }
+    if (obj.contains("max_distance")) {
+        auto value = read_number<float>(obj, "max_distance", path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        if (*value < 0.0F) {
+            return tl::unexpected{invalid_policy(path, "'max_distance' must be >= 0")};
+        }
+        out.max_distance = *value;
     }
     return out;
 }
@@ -264,14 +279,132 @@ template <typename T>
     return out;
 }
 
+[[nodiscard]] Result<GainPolicy> parse_gain(const Json& obj, const std::string& path) {
+    if (!obj.is_object()) {
+        return tl::unexpected{invalid_policy(path, "'gain' must be an object")};
+    }
+    std::string unknown;
+    if (has_unknown_keys(obj, {"scale", "gain_db", "mute"}, unknown)) {
+        return tl::unexpected{invalid_policy(path, "unknown gain field '" + unknown + "'")};
+    }
+    GainPolicy out;
+    if (obj.contains("scale")) {
+        auto value = read_number<float>(obj, "scale", path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        if (*value < 0.0F) {
+            return tl::unexpected{invalid_policy(path, "'scale' must be >= 0")};
+        }
+        out.scale = *value;
+    }
+    if (obj.contains("gain_db")) {
+        auto value = read_number<float>(obj, "gain_db", path); // any finite dB offset
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        out.gain_db = *value;
+    }
+    if (obj.contains("mute")) {
+        auto value = read_bool(obj, "mute", path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        out.mute = *value;
+    }
+    return out;
+}
+
+[[nodiscard]] Result<PositionPolicy> parse_position(const Json& obj, const std::string& path) {
+    if (!obj.is_object()) {
+        return tl::unexpected{invalid_policy(path, "'position' must be an object")};
+    }
+    std::string unknown;
+    if (has_unknown_keys(
+            obj, {"azimuth", "elevation", "distance", "offset", "lock_azimuth", "lock_elevation"}, unknown)) {
+        return tl::unexpected{invalid_policy(path, "unknown position field '" + unknown + "'")};
+    }
+
+    // Read an optional finite float; `non_negative` enforces distance-style fields.
+    const auto read_opt = [&](std::string_view key, bool non_negative, std::optional<float>& dst) -> Result<void> {
+        if (!obj.contains(std::string{key})) {
+            return {};
+        }
+        auto value = read_number<float>(obj, key, path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        if (non_negative && *value < 0.0F) {
+            return tl::unexpected{invalid_policy(path, fmt::format("'{}' must be >= 0", key))};
+        }
+        dst = *value;
+        return {};
+    };
+
+    PositionPolicy out;
+    if (auto r = read_opt("azimuth", false, out.azimuth); !r) {
+        return tl::unexpected{r.error()};
+    }
+    if (auto r = read_opt("elevation", false, out.elevation); !r) {
+        return tl::unexpected{r.error()};
+    }
+    if (auto r = read_opt("distance", true, out.distance); !r) {
+        return tl::unexpected{r.error()};
+    }
+    if (auto r = read_opt("lock_azimuth", false, out.lock_azimuth); !r) {
+        return tl::unexpected{r.error()};
+    }
+    if (auto r = read_opt("lock_elevation", false, out.lock_elevation); !r) {
+        return tl::unexpected{r.error()};
+    }
+    if (obj.contains("offset")) {
+        const auto& off_json = obj.at("offset");
+        if (!off_json.is_object()) {
+            return tl::unexpected{invalid_policy(path, "'offset' must be an object")};
+        }
+        std::string off_unknown;
+        if (has_unknown_keys(off_json, {"azimuth", "elevation", "distance"}, off_unknown)) {
+            return tl::unexpected{invalid_policy(path, "unknown offset field '" + off_unknown + "'")};
+        }
+        PositionPolicy::Offset offset;
+        const auto read_off = [&](std::string_view key, std::optional<float>& dst) -> Result<void> {
+            if (!off_json.contains(std::string{key})) {
+                return {};
+            }
+            auto value = read_number<float>(off_json, key, path); // offsets may be negative
+            if (!value) {
+                return tl::unexpected{value.error()};
+            }
+            dst = *value;
+            return {};
+        };
+        if (auto r = read_off("azimuth", offset.azimuth); !r) {
+            return tl::unexpected{r.error()};
+        }
+        if (auto r = read_off("elevation", offset.elevation); !r) {
+            return tl::unexpected{r.error()};
+        }
+        if (auto r = read_off("distance", offset.distance); !r) {
+            return tl::unexpected{r.error()};
+        }
+        out.offset = offset;
+    }
+    return out;
+}
+
 [[nodiscard]] Result<SemanticPolicyOverride>
 parse_override(const Json& obj, const std::string& path, std::initializer_list<std::string_view> extra_keys = {}) {
     if (!obj.is_object()) {
         return tl::unexpected{invalid_policy(path, "policy section must be an object")};
     }
 
-    std::vector<std::string_view> allowed{
-        k_diffuse_key, k_extent_key, k_divergence_key, k_channel_lock_key, k_interpolation_key};
+    std::vector<std::string_view> allowed{k_diffuse_key,
+                                          k_extent_key,
+                                          k_divergence_key,
+                                          k_channel_lock_key,
+                                          k_interpolation_key,
+                                          k_gain_key,
+                                          k_position_key};
     allowed.insert(allowed.end(), extra_keys.begin(), extra_keys.end());
     for (const auto& [key, value] : obj.items()) {
         (void) value;
@@ -316,6 +449,20 @@ parse_override(const Json& obj, const std::string& path, std::initializer_list<s
         }
         out.interpolation = *value;
     }
+    if (obj.contains(std::string{k_gain_key})) {
+        auto value = parse_gain(obj.at(std::string{k_gain_key}), path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        out.gain = *value;
+    }
+    if (obj.contains(std::string{k_position_key})) {
+        auto value = parse_position(obj.at(std::string{k_position_key}), path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        out.position = *value;
+    }
     return out;
 }
 
@@ -349,6 +496,29 @@ void merge_policy(DivergencePolicy& dst, const DivergencePolicy& src) {
 
 void merge_policy(ChannelLockPolicy& dst, const ChannelLockPolicy& src) {
     merge_optional(dst.enabled, src.enabled);
+    merge_optional(dst.max_distance, src.max_distance);
+}
+
+void merge_policy(GainPolicy& dst, const GainPolicy& src) {
+    merge_optional(dst.scale, src.scale);
+    merge_optional(dst.gain_db, src.gain_db);
+    merge_optional(dst.mute, src.mute);
+}
+
+void merge_policy(PositionPolicy& dst, const PositionPolicy& src) {
+    merge_optional(dst.azimuth, src.azimuth);
+    merge_optional(dst.elevation, src.elevation);
+    merge_optional(dst.distance, src.distance);
+    merge_optional(dst.lock_azimuth, src.lock_azimuth);
+    merge_optional(dst.lock_elevation, src.lock_elevation);
+    if (src.offset) {
+        if (!dst.offset) {
+            dst.offset = PositionPolicy::Offset{};
+        }
+        merge_optional(dst.offset->azimuth, src.offset->azimuth);
+        merge_optional(dst.offset->elevation, src.offset->elevation);
+        merge_optional(dst.offset->distance, src.offset->distance);
+    }
 }
 
 void merge_policy(InterpolationPolicy& dst, const InterpolationPolicy& src) {
@@ -386,6 +556,18 @@ void merge_override(SemanticPolicyOverride& dst, const SemanticPolicyOverride& s
             dst.interpolation = InterpolationPolicy{};
         }
         merge_policy(*dst.interpolation, *src.interpolation);
+    }
+    if (src.gain) {
+        if (!dst.gain) {
+            dst.gain = GainPolicy{};
+        }
+        merge_policy(*dst.gain, *src.gain);
+    }
+    if (src.position) {
+        if (!dst.position) {
+            dst.position = PositionPolicy{};
+        }
+        merge_policy(*dst.position, *src.position);
     }
 }
 
@@ -430,7 +612,52 @@ void merge_override(SemanticPolicyOverride& dst, const SemanticPolicyOverride& s
     return lower_ascii(lhs) == lower_ascii(rhs);
 }
 
-[[nodiscard]] bool rule_matches(const SceneObject& object, const SemanticObjectRule& rule) {
+// Content / programme membership for one object, resolved from the scene graph.
+struct ObjectMembership {
+    std::vector<std::string> content_ids;
+    std::vector<std::string> content_names;
+    std::vector<std::string> programme_ids;
+    std::vector<std::string> programme_names;
+};
+
+// Precompute object_id -> membership by walking scene.contents (object_ids) and
+// scene.programmes (content_ids -> contents -> object_ids).
+[[nodiscard]] std::unordered_map<std::string, ObjectMembership> build_membership(const AdmScene& scene) {
+    std::unordered_map<std::string, ObjectMembership> out;
+    std::unordered_map<std::string, const SceneContent*> content_by_id;
+    for (const auto& content : scene.contents) {
+        content_by_id.emplace(content.id, &content);
+        for (const auto& oid : content.object_ids) {
+            auto& m = out[oid];
+            m.content_ids.push_back(content.id);
+            m.content_names.push_back(content.name);
+        }
+    }
+    for (const auto& programme : scene.programmes) {
+        for (const auto& cid : programme.content_ids) {
+            const auto it = content_by_id.find(cid);
+            if (it == content_by_id.end()) {
+                continue;
+            }
+            for (const auto& oid : it->second->object_ids) {
+                auto& m = out[oid];
+                m.programme_ids.push_back(programme.id);
+                m.programme_names.push_back(programme.name);
+            }
+        }
+    }
+    return out;
+}
+
+[[nodiscard]] bool any_equal_ignore_case(const std::vector<std::string>& values, std::string_view target) {
+    return std::ranges::any_of(values, [&](const std::string& v) { return ascii_equal_ignore_case(v, target); });
+}
+
+[[nodiscard]] bool
+rule_matches(const SceneObject& object, const ObjectMembership& membership, const SemanticObjectRule& rule) {
+    if (rule.all.value_or(false)) {
+        return true;
+    }
     if (!rule.id.empty() && ascii_equal_ignore_case(object.id, rule.id)) {
         return true;
     }
@@ -440,38 +667,116 @@ void merge_override(SemanticPolicyOverride& dst, const SemanticPolicyOverride& s
     if (!rule.name_glob.empty() && glob_match_lower(rule.name_glob, object.name)) {
         return true;
     }
-    if (!rule.track_uid.empty()) {
-        return std::ranges::any_of(object.tracks, [&](const SceneTrackRef& track) {
+    if (!rule.track_uid.empty() && std::ranges::any_of(object.tracks, [&](const SceneTrackRef& track) {
             return ascii_equal_ignore_case(track.track_uid, rule.track_uid);
-        });
+        })) {
+        return true;
+    }
+    if ((rule.importance_min || rule.importance_max) && object.importance.has_value()) {
+        const int imp = *object.importance;
+        if (imp >= rule.importance_min.value_or(std::numeric_limits<int>::min()) &&
+            imp <= rule.importance_max.value_or(std::numeric_limits<int>::max())) {
+            return true;
+        }
+    }
+    if (rule.dialogue_id && object.dialogue_id.has_value() && std::cmp_equal(*object.dialogue_id, *rule.dialogue_id)) {
+        return true;
+    }
+    if (!rule.content.empty() && (any_equal_ignore_case(membership.content_ids, rule.content) ||
+                                  any_equal_ignore_case(membership.content_names, rule.content))) {
+        return true;
+    }
+    if (!rule.programme.empty() && (any_equal_ignore_case(membership.programme_ids, rule.programme) ||
+                                    any_equal_ignore_case(membership.programme_names, rule.programme))) {
+        return true;
     }
     return false;
 }
 
-[[nodiscard]] std::vector<std::string> matched_rule_names(const SceneObject& object, const SemanticPolicy& policy) {
+[[nodiscard]] std::vector<std::string>
+matched_rule_names(const SceneObject& object, const ObjectMembership& membership, const SemanticPolicy& policy) {
     std::vector<std::string> out;
     if (policy.global.has_value()) {
         out.emplace_back("global");
     }
     for (std::size_t i = 0; i < policy.objects.size(); ++i) {
-        if (rule_matches(object, policy.objects.at(i))) {
+        if (rule_matches(object, membership, policy.objects.at(i))) {
             out.push_back(fmt::format("objects[{}]", i));
         }
     }
     return out;
 }
 
-[[nodiscard]] SemanticPolicyOverride effective_override(const SceneObject& object, const SemanticPolicy& policy) {
+[[nodiscard]] SemanticPolicyOverride
+effective_override(const SceneObject& object, const ObjectMembership& membership, const SemanticPolicy& policy) {
     SemanticPolicyOverride out;
     if (policy.global) {
         merge_override(out, *policy.global);
     }
     for (const auto& rule : policy.objects) {
-        if (rule_matches(object, rule)) {
+        if (rule_matches(object, membership, rule)) {
             merge_override(out, rule);
         }
     }
     return out;
+}
+
+// Object-level (per AudioObject) application: gain + mute. Called once per object.
+void apply_object_override(SceneObject& object, const SemanticPolicyOverride& policy) {
+    if (policy.gain) {
+        if (policy.gain->scale.has_value()) {
+            object.gain *= *policy.gain->scale;
+        }
+        if (policy.gain->gain_db.has_value()) {
+            object.gain *= std::pow(10.0F, *policy.gain->gain_db / 20.0F);
+        }
+        if (policy.gain->mute.has_value()) {
+            object.mute = *policy.gain->mute;
+        }
+    }
+}
+
+// Block position override: absolute overwrite, then offset add, then lock (wins).
+// Cartesian positions are converted to polar first; output is always polar.
+void apply_position(SceneObjectBlock& block, const PositionPolicy& pos) {
+    // No-op guard: a position policy with no absolute / lock fields and only
+    // absent-or-zero offsets must leave the block untouched (including its
+    // Cartesian form). This keeps a neutral template's position section inert.
+    const auto nonzero = [](const std::optional<float>& v) { return v.has_value() && (*v > 0.0F || *v < 0.0F); };
+    const bool offset_changes =
+        pos.offset && (nonzero(pos.offset->azimuth) || nonzero(pos.offset->elevation) || nonzero(pos.offset->distance));
+    const bool changes = pos.azimuth.has_value() || pos.elevation.has_value() || pos.distance.has_value() ||
+                         pos.lock_azimuth.has_value() || pos.lock_elevation.has_value() || offset_changes;
+    if (!changes) {
+        return;
+    }
+
+    SceneBlockPosition polar = scene_position_to_polar(block.position);
+    polar.cartesian = false;
+    if (pos.azimuth.has_value()) {
+        polar.azimuth = *pos.azimuth;
+    }
+    if (pos.elevation.has_value()) {
+        polar.elevation = *pos.elevation;
+    }
+    if (pos.distance.has_value()) {
+        polar.distance = *pos.distance;
+    }
+    if (pos.offset) {
+        polar.azimuth += pos.offset->azimuth.value_or(0.0F);
+        polar.elevation += pos.offset->elevation.value_or(0.0F);
+        polar.distance += pos.offset->distance.value_or(0.0F);
+    }
+    if (pos.lock_azimuth.has_value()) {
+        polar.azimuth = *pos.lock_azimuth;
+    }
+    if (pos.lock_elevation.has_value()) {
+        polar.elevation = *pos.lock_elevation;
+    }
+    polar.azimuth = wrap_azimuth(polar.azimuth);
+    polar.elevation = std::clamp(polar.elevation, -90.0F, 90.0F);
+    polar.distance = std::max(0.0F, polar.distance);
+    block.position = polar;
 }
 
 void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& policy, uint32_t sample_rate) {
@@ -513,9 +818,20 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
         }
     }
 
-    if (policy.channel_lock && policy.channel_lock->enabled.has_value() && !*policy.channel_lock->enabled) {
-        block.channel_lock = false;
-        block.channel_lock_max_distance.reset();
+    if (policy.channel_lock) {
+        if (policy.channel_lock->enabled.has_value()) {
+            block.channel_lock = *policy.channel_lock->enabled;
+            if (!block.channel_lock) {
+                block.channel_lock_max_distance.reset();
+            }
+        }
+        if (block.channel_lock && policy.channel_lock->max_distance.has_value()) {
+            block.channel_lock_max_distance = policy.channel_lock->max_distance;
+        }
+    }
+
+    if (policy.position) {
+        apply_position(block, *policy.position);
     }
 
     if (policy.interpolation) {
@@ -540,12 +856,22 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     out["divergence_azimuth_range"] = block.divergence_azimuth_range;
     out["divergence_position_range"] = block.divergence_position_range;
     out["channel_lock"] = block.channel_lock;
+    if (block.channel_lock_max_distance) {
+        out["channel_lock_max_distance"] = *block.channel_lock_max_distance;
+    } else {
+        out["channel_lock_max_distance"] = nullptr;
+    }
     out["jump_position"] = block.jump_position;
     if (block.interp_length_samples) {
         out["interp_length_samples"] = *block.interp_length_samples;
     } else {
         out["interp_length_samples"] = nullptr;
     }
+    // Position (always reported as polar for stable diffing).
+    const SceneBlockPosition polar = scene_position_to_polar(block.position);
+    out["azimuth"] = polar.azimuth;
+    out["elevation"] = polar.elevation;
+    out["distance"] = polar.distance;
     return out;
 }
 
@@ -574,21 +900,34 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     return Json{{"enabled", true}, {"scale", 1.0F}, {"range_scale", 1.0F}, {"max_range", 120.0F}};
 }
 
-[[nodiscard]] Json neutral_channel_lock_policy() {
-    return Json{{"enabled", true}};
-}
-
 [[nodiscard]] Json neutral_interpolation_policy() {
     return Json{{"honor_jump_position", true}, {"max_ms", 0U}};
 }
 
+// Neutral gain = identity. mute is intentionally omitted: its mere presence
+// would force object.mute, un-muting originally muted objects.
+[[nodiscard]] Json neutral_gain_policy() {
+    return Json{{"scale", 1.0F}, {"gain_db", 0.0F}};
+}
+
+// Neutral position = zero offset only (a no-op under apply_position's guard).
+// Absolute / lock keys are intentionally omitted: their mere presence would
+// overwrite the block position.
+[[nodiscard]] Json neutral_position_policy() {
+    return Json{{"offset", {{"azimuth", 0.0F}, {"elevation", 0.0F}, {"distance", 0.0F}}}};
+}
+
+// The generated template, applied unmodified, must be an identity (no scene
+// change). channel_lock is intentionally omitted: it has no neutral value —
+// `enabled` forces the lock on/off either way — so users add it explicitly.
 [[nodiscard]] Json neutral_override_template() {
     Json out = Json::object();
     out["diffuse"] = neutral_diffuse_policy();
     out["extent"] = neutral_extent_policy();
     out["divergence"] = neutral_divergence_policy();
-    out["channel_lock"] = neutral_channel_lock_policy();
     out["interpolation"] = neutral_interpolation_policy();
+    out["gain"] = neutral_gain_policy();
+    out["position"] = neutral_position_policy();
     return out;
 }
 
@@ -602,7 +941,24 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     if (!rule.name.empty()) {
         return "name=" + rule.name;
     }
-    return "name_glob=" + rule.name_glob;
+    if (!rule.name_glob.empty()) {
+        return "name_glob=" + rule.name_glob;
+    }
+    if (!rule.content.empty()) {
+        return "content=" + rule.content;
+    }
+    if (!rule.programme.empty()) {
+        return "programme=" + rule.programme;
+    }
+    if (rule.dialogue_id.has_value()) {
+        return "dialogue_id=" + std::to_string(*rule.dialogue_id);
+    }
+    if (rule.importance_min.has_value() || rule.importance_max.has_value()) {
+        return fmt::format("importance=[{},{}]",
+                           rule.importance_min.has_value() ? std::to_string(*rule.importance_min) : "",
+                           rule.importance_max.has_value() ? std::to_string(*rule.importance_max) : "");
+    }
+    return "all";
 }
 
 } // namespace
@@ -658,42 +1014,61 @@ Result<SemanticPolicy> load_semantic_policy_file(const std::filesystem::path& pa
             if (!item.is_object()) {
                 return tl::unexpected{invalid_policy(path.string(), fmt::format("'objects[{}]' must be an object", i))};
             }
-            auto parsed = parse_override(item, path.string(), {"id", "name", "name_glob", "track_uid"});
+            auto parsed = parse_override(item,
+                                         path.string(),
+                                         {"id",
+                                          "name",
+                                          "name_glob",
+                                          "track_uid",
+                                          "all",
+                                          "importance_min",
+                                          "importance_max",
+                                          "dialogue_id",
+                                          "content",
+                                          "programme"});
             if (!parsed) {
                 return tl::unexpected{parsed.error()};
             }
 
             SemanticObjectRule rule;
             static_cast<SemanticPolicyOverride&>(rule) = *parsed;
-            if (item.contains("id")) {
-                auto value = read_string(item, "id", path.string());
+            for (const auto& [field, dst] : {std::pair{std::string_view{"id"}, &rule.id},
+                                             std::pair{std::string_view{"name"}, &rule.name},
+                                             std::pair{std::string_view{"name_glob"}, &rule.name_glob},
+                                             std::pair{std::string_view{"track_uid"}, &rule.track_uid},
+                                             std::pair{std::string_view{"content"}, &rule.content},
+                                             std::pair{std::string_view{"programme"}, &rule.programme}}) {
+                if (item.contains(std::string{field})) {
+                    auto value = read_string(item, field, path.string());
+                    if (!value) {
+                        return tl::unexpected{value.error()};
+                    }
+                    *dst = *value;
+                }
+            }
+            if (item.contains("all")) {
+                auto value = read_bool(item, "all", path.string());
                 if (!value) {
                     return tl::unexpected{value.error()};
                 }
-                rule.id = *value;
+                rule.all = *value;
             }
-            if (item.contains("name")) {
-                auto value = read_string(item, "name", path.string());
-                if (!value) {
-                    return tl::unexpected{value.error()};
+            for (const auto& [field, dst] : {std::pair{std::string_view{"importance_min"}, &rule.importance_min},
+                                             std::pair{std::string_view{"importance_max"}, &rule.importance_max},
+                                             std::pair{std::string_view{"dialogue_id"}, &rule.dialogue_id}}) {
+                if (item.contains(std::string{field})) {
+                    auto value = read_number<int>(item, field, path.string());
+                    if (!value) {
+                        return tl::unexpected{value.error()};
+                    }
+                    *dst = *value;
                 }
-                rule.name = *value;
             }
-            if (item.contains("name_glob")) {
-                auto value = read_string(item, "name_glob", path.string());
-                if (!value) {
-                    return tl::unexpected{value.error()};
-                }
-                rule.name_glob = *value;
-            }
-            if (item.contains("track_uid")) {
-                auto value = read_string(item, "track_uid", path.string());
-                if (!value) {
-                    return tl::unexpected{value.error()};
-                }
-                rule.track_uid = *value;
-            }
-            if (rule.id.empty() && rule.name.empty() && rule.name_glob.empty() && rule.track_uid.empty()) {
+            const bool has_match = !rule.id.empty() || !rule.name.empty() || !rule.name_glob.empty() ||
+                                   !rule.track_uid.empty() || !rule.content.empty() || !rule.programme.empty() ||
+                                   rule.all.has_value() || rule.importance_min.has_value() ||
+                                   rule.importance_max.has_value() || rule.dialogue_id.has_value();
+            if (!has_match) {
                 return tl::unexpected{
                     invalid_policy(path.string(), fmt::format("'objects[{}]' must define a match field", i))};
             }
@@ -707,16 +1082,25 @@ Result<void> apply_semantic_policy(AdmScene& scene,
                                    const SemanticPolicy& policy,
                                    uint32_t sample_rate,
                                    std::vector<std::string>* warnings) {
+    const auto membership = build_membership(scene);
+    const ObjectMembership empty_membership;
+    const auto membership_for = [&](const SceneObject& object) -> const ObjectMembership& {
+        const auto it = membership.find(object.id);
+        return it != membership.end() ? it->second : empty_membership;
+    };
+
     for (const auto& rule : policy.objects) {
-        const bool matched =
-            std::ranges::any_of(scene.objects, [&](const SceneObject& object) { return rule_matches(object, rule); });
+        const bool matched = std::ranges::any_of(scene.objects, [&](const SceneObject& object) {
+            return rule_matches(object, membership_for(object), rule);
+        });
         if (!matched && warnings != nullptr) {
             warnings->push_back("semantic policy object rule did not match: " + rule_label(rule));
         }
     }
 
     for (auto& object : scene.objects) {
-        const auto policy_for_object = effective_override(object, policy);
+        const auto policy_for_object = effective_override(object, membership_for(object), policy);
+        apply_object_override(object, policy_for_object);
         for (auto& track : object.tracks) {
             for (auto& block : track.blocks) {
                 apply_override(block, policy_for_object, sample_rate);
@@ -740,14 +1124,25 @@ Result<void> write_semantic_report_file(const std::filesystem::path& path,
     doc["warnings"] = warnings;
     doc["objects"] = Json::array();
 
+    const auto membership = build_membership(original);
+    const ObjectMembership empty_membership;
+
     const std::size_t object_count = std::min(original.objects.size(), effective.objects.size());
     for (std::size_t oi = 0; oi < object_count; ++oi) {
         const auto& orig_obj = original.objects.at(oi);
         const auto& eff_obj = effective.objects.at(oi);
+        const auto mem_it = membership.find(orig_obj.id);
+        const ObjectMembership& mem = mem_it != membership.end() ? mem_it->second : empty_membership;
         Json obj = Json::object();
         obj["id"] = eff_obj.id;
         obj["name"] = eff_obj.name;
-        obj["matched_rules"] = policy != nullptr ? matched_rule_names(orig_obj, *policy) : std::vector<std::string>{};
+        obj["matched_rules"] =
+            policy != nullptr ? matched_rule_names(orig_obj, mem, *policy) : std::vector<std::string>{};
+        // Object-level gain/mute (changed by gain policy; not part of per-block detail).
+        obj["original_gain"] = orig_obj.gain;
+        obj["effective_gain"] = eff_obj.gain;
+        obj["original_mute"] = orig_obj.mute;
+        obj["effective_mute"] = eff_obj.mute;
         obj["blocks"] = Json::array();
 
         const std::size_t track_count = std::min(orig_obj.tracks.size(), eff_obj.tracks.size());
