@@ -67,14 +67,27 @@ struct InterpolationPolicy {
     std::optional<uint32_t> max_ms;
 };
 
+// Block-level control for DirectSpeakers (bed / channel) blocks. The optional
+// speaker_label / lfe fields filter which DS blocks of a matched object this
+// applies to (AND-combined; absent = no filter). gain/position reuse the same
+// policies as Objects; in this context gain.mute means "silence this block"
+// (ds.gain = 0, since a DS block has no mute field).
+struct DirectSpeakersPolicy {
+    std::string speaker_label;              // filter: only blocks whose speaker_labels include this (ci); empty = all
+    std::optional<bool> lfe;                // filter: true = LFE only, false = non-LFE only, absent = all
+    std::optional<GainPolicy> gain;         // scale/gain_db -> ds.gain; mute -> ds.gain = 0
+    std::optional<PositionPolicy> position; // re-aim the DS block (polar only); sets has_position
+};
+
 struct SemanticPolicyOverride {
     std::optional<DiffusePolicy> diffuse;
     std::optional<ExtentPolicy> extent;
     std::optional<DivergencePolicy> divergence;
     std::optional<ChannelLockPolicy> channel_lock;
     std::optional<InterpolationPolicy> interpolation;
-    std::optional<GainPolicy> gain;         // object-level
-    std::optional<PositionPolicy> position; // block-level
+    std::optional<GainPolicy> gain;                      // object-level
+    std::optional<PositionPolicy> position;              // block-level (Objects)
+    std::optional<DirectSpeakersPolicy> direct_speakers; // block-level (DirectSpeakers)
 };
 
 struct SemanticObjectRule : SemanticPolicyOverride {
