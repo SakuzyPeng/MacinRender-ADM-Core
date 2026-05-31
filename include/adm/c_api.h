@@ -196,7 +196,7 @@ void adm_render_options_set_peak_normalize_to_limit(adm_render_options_t* opts, 
 adm_error_code_t adm_render_options_set_opus_bitrate_per_ch_kbps(adm_render_options_t* opts,
                                                                  uint32_t kbps) ADM_API_NOEXCEPT;
 
-/* APAC total VBR target/hint bitrate in kbps (macOS only). 0 = layout default; otherwise [64, 12000].
+/* APAC total target/hint bitrate in kbps (macOS only). 0 = layout default; otherwise [64, 12000].
  * Returns ADM_ERROR_INVALID_ARGUMENT if kbps is outside [64, 12000] and not 0. */
 adm_error_code_t adm_render_options_set_apac_bitrate_kbps(adm_render_options_t* opts, uint32_t kbps) ADM_API_NOEXCEPT;
 
