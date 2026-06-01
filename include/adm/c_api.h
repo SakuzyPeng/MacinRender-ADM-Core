@@ -26,12 +26,17 @@
  *
  * v1.3 新增（additive，SOVERSION 不变）：
  *   adm_render_options_set_final_gain_db.
+ *
+ * v1.4 新增（additive，SOVERSION 不变）：
+ *   adm_cancel_token_t + adm_create_cancel_token / adm_cancel /
+ *   adm_reset_cancel_token / adm_destroy_cancel_token,
+ *   adm_render_options_set_cancel_token.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 3
+#define ADM_API_VERSION_MINOR 4
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -63,6 +68,7 @@ typedef struct adm_context_t adm_context_t;
 typedef struct adm_render_result_t adm_render_result_t;
 typedef struct adm_render_options_t adm_render_options_t; /* v1.1 */
 typedef struct adm_scene_info_t adm_scene_info_t;         /* v1.1 */
+typedef struct adm_cancel_token_t adm_cancel_token_t;     /* v1.4 */
 
 /* ── Error codes ─────────────────────────────────────────────────────────── */
 /*
@@ -255,6 +261,43 @@ adm_error_code_t adm_render_options_set_render_end_sec(adm_render_options_t* opt
  * a non-finite value returns ADM_ERROR_INVALID_ARGUMENT.
  * v1.3 */
 adm_error_code_t adm_render_options_set_final_gain_db(adm_render_options_t* opts, double db) ADM_API_NOEXCEPT;
+
+/* ── v1.4 Cancellation ───────────────────────────────────────────────────── */
+/*
+ * Cooperative cancellation for a running render. Typical use: the GUI creates one
+ * token, passes it to the render options, starts adm_render_file_ex on a worker
+ * thread, and calls adm_cancel from the UI thread when the user clicks "Cancel".
+ * The active render then aborts at the next internal chunk/stage boundary and
+ * returns ADM_ERROR_CANCELLED; any partially written output file is removed.
+ *
+ * adm_create_cancel_token / adm_destroy_cancel_token must be strictly paired.
+ * The token may be reused across renders: call adm_reset_cancel_token between
+ * renders to clear a prior cancellation. A token must outlive every render whose
+ * options reference it (it is borrowed, not owned, by the options object).
+ *
+ * THREAD SAFETY: unlike adm_context_t, a cancel token is explicitly safe to use
+ * from a thread other than the one running the render — adm_cancel may be called
+ * concurrently with an in-flight adm_render_file_ex that references the token.
+ * adm_create / adm_reset / adm_destroy are NOT thread-safe relative to a render
+ * in progress and must not race with it (reset/destroy only once the render has
+ * returned). adm_cancel is idempotent.
+ */
+adm_cancel_token_t* adm_create_cancel_token(void) ADM_API_NOEXCEPT;
+void adm_destroy_cancel_token(adm_cancel_token_t* token) ADM_API_NOEXCEPT;
+
+/* Request cancellation. Idempotent; thread-safe relative to a running render.
+ * Passing NULL is a safe no-op. */
+void adm_cancel(adm_cancel_token_t* token) ADM_API_NOEXCEPT;
+
+/* Clear a prior cancellation so the token can drive a fresh render. Must not race
+ * with a render in progress. Passing NULL is a safe no-op. */
+void adm_reset_cancel_token(adm_cancel_token_t* token) ADM_API_NOEXCEPT;
+
+/* Associate a cancel token with these render options. The token is borrowed and
+ * must outlive any render using these options. Passing token == NULL clears the
+ * association (the render becomes non-cancellable). When opts is NULL this is a
+ * safe no-op. */
+void adm_render_options_set_cancel_token(adm_render_options_t* opts, adm_cancel_token_t* token) ADM_API_NOEXCEPT;
 
 /* ── Render ──────────────────────────────────────────────────────────────── */
 /*

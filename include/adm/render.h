@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -65,6 +66,11 @@ struct RenderPlan {
     // When set, restrict loudness / True-Peak measurement to this output frame
     // window (matches the output trim); nullopt measures the whole render.
     std::optional<MeterWindow> meter_window;
+    // Cooperative cancellation token (copied from RenderOptions by RenderService).
+    // Backends check cancel_token.stop_requested() at chunk boundaries and return
+    // ErrorCode::cancelled when a stop is requested. A default-constructed token
+    // never stops.
+    std::stop_token cancel_token;
 };
 
 // Abstract renderer backend interface.

@@ -5,6 +5,7 @@
 #include <mutex>
 #include <new>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -155,6 +156,13 @@ struct adm_context_t {
     mradm::RenderService service;
 };
 
+struct adm_cancel_token_t {
+    // request_stop() (via adm_cancel) is safe to call from a thread other than the
+    // one running the render that holds a token from this source. Resetting swaps
+    // in a fresh source; the engine always pulls a token at render start.
+    std::stop_source source;
+};
+
 struct adm_render_result_t {
     adm_error_code_t code{ADM_ERROR_OK};
     std::string message;
@@ -166,6 +174,10 @@ struct adm_render_result_t {
 
 struct adm_render_options_t {
     mradm::RenderOptions opts;
+    // Borrowed (non-owning) cancel token. The live std::stop_token is resolved
+    // from this at render time so that adm_reset_cancel_token (which swaps in a
+    // fresh stop_source) is always observed. nullptr = non-cancellable.
+    adm_cancel_token_t* cancel_token{nullptr};
 };
 
 struct adm_scene_info_t {
@@ -467,6 +479,42 @@ adm_error_code_t adm_render_options_set_final_gain_db(adm_render_options_t* opts
     return ADM_ERROR_OK;
 }
 
+/* ── Cancellation (v1.4) ──────────────────────────────────────────────────── */
+
+adm_cancel_token_t* adm_create_cancel_token(void) noexcept {
+    try {
+        return new adm_cancel_token_t{};
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void adm_destroy_cancel_token(adm_cancel_token_t* token) noexcept {
+    delete token;
+}
+
+void adm_cancel(adm_cancel_token_t* token) noexcept {
+    if (token != nullptr) {
+        // std::stop_source::request_stop is thread-safe and idempotent.
+        token->source.request_stop();
+    }
+}
+
+void adm_reset_cancel_token(adm_cancel_token_t* token) noexcept {
+    if (token != nullptr) {
+        // A stop_source cannot be un-requested; swap in a fresh one. Any render in
+        // progress already holds its own stop_token copy, so this only affects the
+        // next render that resolves a token from this source.
+        token->source = std::stop_source{};
+    }
+}
+
+void adm_render_options_set_cancel_token(adm_render_options_t* opts, adm_cancel_token_t* token) noexcept {
+    if (opts != nullptr) {
+        opts->cancel_token = token;
+    }
+}
+
 /* ── Render ──────────────────────────────────────────────────────────────── */
 
 adm_error_code_t adm_render_file_ex(adm_context_t* context,
@@ -491,6 +539,9 @@ adm_error_code_t adm_render_file_ex(adm_context_t* context,
         }
         if (opts != nullptr) {
             request.options = opts->opts;
+            if (opts->cancel_token != nullptr) {
+                request.options.cancel_token = opts->cancel_token->source.get_token();
+            }
         }
 
         CallbackProgressSink progress_sink(progress, user_data);

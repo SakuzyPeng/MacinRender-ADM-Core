@@ -1533,6 +1533,9 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     progress.on_progress({RenderStage::rendering, 0.2, "rendering"});
 
     while (frames_done < num_frames) {
+        if (plan.cancel_token.stop_requested()) {
+            return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
+        }
         const uint64_t frames_now = std::min(render_block_size, num_frames - frames_done);
         const auto fn = static_cast<std::size_t>(frames_now);
 
