@@ -36,12 +36,15 @@
  *   adm_render_options_set_semantic_policy_json,
  *   adm_render_options_set_capture_semantic_report,
  *   adm_render_result_semantic_report_json.
+ *
+ * v1.6 新增（additive，SOVERSION 不变）：
+ *   adm_output_formats_json.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 5
+#define ADM_API_VERSION_MINOR 6
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -525,6 +528,34 @@ adm_error_code_t adm_capabilities_json(adm_context_t* context, char** out_json) 
  * as is context.
  */
 adm_error_code_t adm_layouts_json(adm_context_t* context, char** out_json) ADM_API_NOEXCEPT;
+
+/* ── v1.6 Output formats (JSON) ──────────────────────────────────────────── */
+/*
+ * adm_output_formats_json: the output container-format reference as a JSON string
+ * (UTF-8). For each output container the engine can produce, reports its file
+ * extensions, whether it is "available" in this build / on this platform (with a
+ * human-readable "available_reason" when not), and its constraints: "lossy",
+ * "max_channels" (0 = unlimited), "fixed_sample_rate" (0 = any), "supports_height",
+ * optional "bit_depths", and a bitrate range ("bitrate_kbps_per_ch" for Opus or
+ * "bitrate_kbps_total" for APAC, each {min, max, auto:0}). The root also carries a
+ * "features" object of build/platform flags: "apac", "iamf", "iamf_mp4_packager",
+ * "sofa". A GUI uses this to gray out unavailable formats and validate inputs,
+ * rather than hard-coding the platform/build matrix.
+ *
+ * The root object carries a stable schema identity for version detection:
+ *   "schema": "mradm.output-formats", "schema_version": 1
+ *
+ * On success returns ADM_ERROR_OK and writes a heap string to *out_json, owned by
+ * the CALLER and released with adm_free_string (never free()/delete). out_json
+ * must be non-NULL (returns ADM_ERROR_INVALID_ARGUMENT otherwise), as is context.
+ *
+ * Does no project-file I/O. NOTE: in IAMF-enabled builds, computing the
+ * "iamf_mp4_packager" flag probes PATH for an MP4 packager and may briefly spawn a
+ * short-lived `mp4box`/`ffmpeg -version` subprocess; in the default build
+ * (MR_ADM_ENABLE_IAMF=OFF) that flag is false and no probe runs. If you call this
+ * on a hot path, cache the result rather than re-querying.
+ */
+adm_error_code_t adm_output_formats_json(adm_context_t* context, char** out_json) ADM_API_NOEXCEPT;
 
 #ifdef __cplusplus
 } /* extern "C" */

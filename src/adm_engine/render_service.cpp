@@ -24,6 +24,7 @@
 #include "adm/semantic_policy.h"
 
 #include "capability_json.h"
+#include "format_table.h"
 #include "layout_table.h"
 #include "scene_json.h"
 
@@ -766,6 +767,10 @@ std::vector<OutputLayoutRow> RenderService::output_layouts() const {
 
 std::string RenderService::layouts_json() const {
     return engine::layouts_to_json();
+}
+
+std::string RenderService::output_formats_json() const {
+    return engine::output_formats_to_json();
 }
 
 Result<std::string> RenderService::axml(const std::string& input_path) const {
