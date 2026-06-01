@@ -1496,9 +1496,36 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     std::size_t out_skip = spr_delay;
     uint64_t out_written = 0;
 
-    // Skip out_skip leading samples, write at most (num_frames - out_written),
-    // interleaving L/R and measuring loudness. Used by both the main loop and the
-    // tail drain so the file ends at exactly num_frames. Returns false on short write.
+    // On-demand output window (RenderPlan::render_window). emit() writes only output
+    // frames inside [win_start, win_end) on the absolute output timeline; out_abs
+    // tracks that position (the next produced sample after the out_skip latency
+    // discard). The default (cloud/none) path additionally seeks the input and
+    // pre-rolls enough aligned blocks to converge the OLA overlap + diffuse delay,
+    // so the window is bit-identical to a full render then sliced. The experimental
+    // saf_spreader path keeps start_pos=0 (full STFT warm-up) and only trims the
+    // output, since reconstructing the spreader STFT state mid-stream is not worth the
+    // risk. When not windowed, win_start=0 / win_end=num_frames reproduces the full
+    // render exactly.
+    const bool windowed = plan.render_window.has_value();
+    const uint64_t win_start = windowed ? std::min(plan.render_window->start_frame, num_frames) : 0;
+    const uint64_t win_end = windowed ? std::min(win_start + plan.render_window->frame_count, num_frames) : num_frames;
+    uint64_t start_pos = 0;
+    if (windowed && !spreader_mode && win_start > 0) {
+        const uint64_t warmup_frames =
+            std::max<uint64_t>({render_block_size, static_cast<uint64_t>(bs->overlap_len), k_diffuse_delay_len});
+        const uint64_t warmup_blocks = (warmup_frames + render_block_size - 1U) / render_block_size;
+        const uint64_t start_block = win_start / render_block_size;
+        start_pos = (start_block > warmup_blocks) ? ((start_block - warmup_blocks) * render_block_size) : 0;
+    }
+    if (start_pos > 0) {
+        render_common::seek_reader_abs(*reader, start_pos);
+    }
+    frames_done = start_pos;      // input cursor
+    uint64_t out_abs = start_pos; // absolute output-timeline position of the next produced sample
+
+    // Skip out_skip leading (latency) samples, then write only the produced frames that
+    // fall inside [win_start, win_end), interleaving L/R and metering them. Used by both
+    // the main loop and the spreader tail drain. Returns false on short write.
     auto emit = [&](const float* lb, const float* rb, std::size_t count) -> bool {
         std::size_t local = 0;
         if (out_skip > 0) {
@@ -1507,21 +1534,24 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
             local = s;
         }
         const std::size_t avail = count - local;
-        const auto want = static_cast<uint64_t>(std::min<uint64_t>(avail, num_frames - out_written));
-        if (want == 0) {
+        if (avail == 0) {
             return true;
         }
-        for (std::size_t f = 0; f < want; ++f) {
-            out_block[(f * 2U) + 0U] = lb[local + f];
-            out_block[(f * 2U) + 1U] = rb[local + f];
+        const uint64_t base = out_abs; // absolute output frame of the first available sample
+        out_abs += avail;
+        const uint64_t lo = std::max(base, win_start);
+        const uint64_t hi = std::min(base + avail, win_end);
+        if (hi <= lo) {
+            return true; // this chunk lies entirely outside the window
         }
-        // When an output trim is requested, feed the meter only the output frames inside the window.
+        const std::size_t src_off = local + static_cast<std::size_t>(lo - base);
+        const auto want = static_cast<std::size_t>(hi - lo);
+        for (std::size_t f = 0; f < want; ++f) {
+            out_block[(f * 2U) + 0U] = lb[src_off + f];
+            out_block[(f * 2U) + 1U] = rb[src_off + f];
+        }
         if (lufs_st) {
-            const auto chunk = render_common::meter_window_chunk(plan.meter_window, out_written, want);
-            if (chunk.frame_count > 0) {
-                ebur128_add_frames_float(
-                    lufs_st.get(), out_block.data() + (chunk.offset_frames * 2U), chunk.frame_count);
-            }
+            ebur128_add_frames_float(lufs_st.get(), out_block.data(), want);
         }
         if (writer.write(out_block.data(), want) != want) {
             return false;
@@ -1532,7 +1562,7 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
 
     progress.on_progress({RenderStage::rendering, 0.2, "rendering"});
 
-    while (frames_done < num_frames) {
+    while (frames_done < num_frames && out_abs < win_end) {
         if (plan.cancel_token.stop_requested()) {
             return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
         }
@@ -1774,23 +1804,25 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
             }
         }
 
-        // Head-skip (out_skip) + truncate to num_frames handled inside emit().
+        // Head-skip (out_skip) + output-window clipping handled inside emit().
         if (!emit(l_buf.data(), r_buf.data(), fn)) {
             return make_error(ErrorCode::io_error, "short write during binaural render", "output=" + plan.output_path);
         }
 
         frames_done += frames_now;
-        const double frac = 0.2 + (0.7 * (static_cast<double>(frames_done) / static_cast<double>(num_frames)));
+        const uint64_t progress_done = std::min(frames_done, win_end) - start_pos;
+        const double progress_span = static_cast<double>(std::max<uint64_t>(1, win_end - start_pos));
+        const double frac = 0.2 + (0.7 * (static_cast<double>(progress_done) / progress_span));
         progress.on_progress({RenderStage::rendering, frac, "rendering"});
     }
 
     // saf_spreader tail: the input is exhausted but spr_delay samples of real
     // output are still in flight (STFT latency + delayed OLA path). Feed spr_delay
-    // silent samples through both paths and write them until the file reaches
-    // exactly num_frames. The leading warm-up was already dropped via out_skip.
+    // silent samples through both paths and write whichever samples fall inside the
+    // requested output window. The leading warm-up was already dropped via out_skip.
     if (spreader_mode) {
         uint64_t tail_remaining = spr_delay;
-        while (tail_remaining > 0 && out_written < num_frames) {
+        while (tail_remaining > 0 && out_abs < win_end) {
             const auto tn = static_cast<std::size_t>(std::min<uint64_t>(render_block_size, tail_remaining));
             std::vector<float> l_buf(tn, 0.0F);
             std::vector<float> r_buf(tn, 0.0F);
@@ -1819,7 +1851,13 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     }
 
     progress.on_progress({RenderStage::finished, 1.0, "done"});
-    logs.log(LogLevel::info, "binaural", fmt::format("wrote {} frames to {}", num_frames, plan.output_path));
+    logs.log(LogLevel::info,
+             "binaural",
+             fmt::format("wrote {} frames to {}{}",
+                         out_written,
+                         plan.output_path,
+                         windowed ? fmt::format(" (window [{}, {}) of {} frames)", win_start, win_end, num_frames)
+                                  : std::string{}));
 
     RenderMetrics metrics;
     if (lufs_st) {
@@ -1850,6 +1888,9 @@ CapabilityReport binaural_capabilities() {
     r.supports_channel_lock = true;
     r.supports_object_divergence = true;
     r.supports_diffuse = true;
+    // Default (cloud/none) path windows via seek + aligned pre-roll; the experimental
+    // saf_spreader path keeps full STFT warm-up and only trims output.
+    r.supports_render_window = true;
     r.supported_layouts = {
         // clang-format off
         {"0+2+0", "Binaural (KEMAR or user SOFA HRIR)", 2, false, 0, true, true},

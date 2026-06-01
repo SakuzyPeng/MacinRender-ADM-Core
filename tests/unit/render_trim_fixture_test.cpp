@@ -428,15 +428,18 @@ bool window_bit_exact(const std::filesystem::path& in_path,
     return check(exact, label);
 }
 
-// EAR (5.1), SAF/VBAP (5.1), HOA (hoa3) windowed render must each match a full render
-// then sliced, sample for sample. The diffuse fixture exercises EAR's decorrelator +
-// comp delay and HOA's 1024-tap diffuse delay line; VBAP is DSP-stateless.
+// EAR (5.1), SAF/VBAP (5.1), HOA (hoa3), and binaural windowed renders must each
+// match a full render then sliced, sample for sample. The diffuse fixture exercises
+// EAR's decorrelator + comp delay, HOA's 1024-tap diffuse delay line, and binaural
+// HRTF overlap/pre-roll; VBAP is DSP-stateless.
 bool verify_window_bit_exact_vs_full() {
     const auto in_path = write_varying_fixture();
     const FileGuard in_guard(in_path);
     bool ok = window_bit_exact(in_path, mradm::RendererSelection::ear, "0+5+0", "ear: window == full sliced");
     ok = window_bit_exact(in_path, mradm::RendererSelection::saf, "0+5+0", "vbap: window == full sliced") && ok;
     ok = window_bit_exact(in_path, mradm::RendererSelection::hoa, "hoa3", "hoa: window == full sliced") && ok;
+    ok =
+        window_bit_exact(in_path, mradm::RendererSelection::binaural, "0+2+0", "binaural: window == full sliced") && ok;
     return ok;
 }
 
