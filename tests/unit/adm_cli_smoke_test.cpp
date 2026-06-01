@@ -164,6 +164,7 @@ int main() {
         ok &= check(r.code == 0, "render --help: exit 0");
         ok &= check(r.out.find("--peak-normalize-to-limit") != std::string::npos,
                     "render --help: peak normalize option listed");
+        ok &= check(r.out.find("--final-gain-db") != std::string::npos, "render --help: final gain option listed");
         ok &=
             check(r.out.find("--semantic-policy") != std::string::npos, "render --help: semantic policy option listed");
         ok &= check(r.out.find("--write-semantic-report") != std::string::npos,

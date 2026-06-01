@@ -146,6 +146,7 @@ Query full channel-order tables with:
 | `--loudness-target <LUFS>` | Normalize integrated loudness; HOA is measured through a 7.1.4 AllRAD reference decode, with LFE excluded from LUFS | Off |
 | `--peak-limit-dbtp <dBTP>` | True Peak limit target | `-1.0` |
 | `--peak-normalize-to-limit` | After loudness gain, raise global gain up to `--peak-limit-dbtp` when True Peak is below the ceiling; requires peak limiting | Off |
+| `--final-gain-db <dB>` | Add unconstrained final gain after automatic loudness / peak staging; bypasses True Peak limiting and may exceed 0 dBFS | `0` |
 | `--no-peak-limit` | Disable True Peak limiting | - |
 | `--start <sec>` | Trim output so it starts at this second on the rendered timeline; loudness / True Peak are measured over the kept segment | `0` |
 | `--end <sec>` | Trim output to this absolute second on the rendered timeline; must be greater than `--start`, unset means render to the end | Off |
@@ -157,7 +158,7 @@ Query full channel-order tables with:
 | `--semantic-policy <path>` | Apply ADM semantic-control JSON during rendering | Off |
 | `--write-semantic-report <path>` | Write the effective semantic JSON after policy application | Off |
 
-Post-processing order: `--loudness-target` determines the loudness gain first, `--peak-normalize-to-limit` can optionally add peak makeup to the True Peak ceiling, and `--peak-limit-dbtp` is the final hard ceiling for global gain.
+Post-processing order: `--loudness-target` determines the loudness gain first, `--peak-normalize-to-limit` can optionally add peak makeup to the True Peak ceiling, and `--peak-limit-dbtp` clamps the automatic gain stage; `--final-gain-db` is added after those automatic stages, so it bypasses True Peak limiting.
 
 ## Semantic Policy
 

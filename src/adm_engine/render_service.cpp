@@ -180,6 +180,10 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         const auto msg = std::string{"peak normalization to limit requires peak limiting to be enabled"};
         return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
     }
+    if (!std::isfinite(request.options.final_gain_db)) {
+        const auto msg = std::string{"final gain must be finite"};
+        return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+    }
 
     // Probe input for early error detection and logging.
     progress.on_progress({RenderStage::probing, 0.05, "probing input"});
@@ -472,7 +476,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     }
 
     // Compute combined gain: loudness target first, optional peak makeup second,
-    // then peak ceiling as the final red line.
+    // peak ceiling third, then explicit final gain after the automatic stages.
     // Merging both into one apply_gain_to_file avoids a second read-write pass.
     double gain_db = 0.0;
 
@@ -520,6 +524,19 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         } else {
             logs.log(LogLevel::info, "engine", "true peak within target — no clamp");
         }
+    }
+
+    // Final gain: unconstrained user gain applied after all automatic staging.
+    // Added after the peak clamp is computed, so it deliberately bypasses peak
+    // limiting and may exceed the ceiling / 0 dBFS (integer outputs can clip).
+    // Folded into gain_db so the applied gain, file metadata, and reported metrics
+    // all include it.
+    if (std::abs(request.options.final_gain_db) >= 1e-9) {
+        gain_db += request.options.final_gain_db;
+        logs.log(
+            LogLevel::info,
+            "engine",
+            fmt::format("final gain {:+.2f} dB (unconstrained, bypasses peak limit)", request.options.final_gain_db));
     }
 
     if (std::abs(gain_db) >= 0.01) {

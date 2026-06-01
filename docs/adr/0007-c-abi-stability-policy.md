@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.2）
-> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 于 2026-06-01）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.3）
+> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 于 2026-06-01）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -186,6 +186,19 @@ C ABI 走 **两阶段稳定** 模型：
 - **响度/真峰口径**：后端对裁剪窗口内联计量，故裁剪后文件的 `adm_render_result_loudness_lufs` /
   `adm_render_result_peak_dbtp` 与写入的元数据均描述被保留段（不是完整渲染）；无额外文件遍历，
   无裁剪时与既有行为 bit-exact。
+- 字段经 `adm_render_file_ex` 直接透传到 `RenderService`，**未新增 render 入口**。
+
+### v1.3.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+只新增一个 options setter，**未触碰任何已有 signature、enum 值或 callback**，因此是 minor 升级。
+
+- **最终增益 setter**：`adm_render_options_set_final_gain_db`，设置一个**不受限制**的最终增益（dB），
+  在所有自动增益 staging（loudness 归一 / peak makeup / peak limit）**之后**无条件施加。它**故意绕过
+  peak limit**——在 peak clamp 计算完成后才叠加，因此可把信号推过峰值上限与 0 dBFS（integer 输出可能
+  削顶，由调用方负责）。`0` 为 no-op。**不设范围上限**（符合"不受限制"语义），但非有限值（NaN/inf）→
+  `ADM_ERROR_INVALID_ARGUMENT`。`opts==NULL` 按既有惯例返回 `ADM_ERROR_OK`（no-op）。
+- **口径**：增益被并入引擎的合并增益一次施加，故裁剪/响度处理后的 `adm_render_result_loudness_lufs` /
+  `adm_render_result_peak_dbtp` 与写入的元数据均**反映含 final gain 后**的实际文件电平。
 - 字段经 `adm_render_file_ex` 直接透传到 `RenderService`，**未新增 render 入口**。
 
 ## opaque 指针与 callback 生命周期

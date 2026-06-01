@@ -23,12 +23,15 @@
  *
  * v1.2 新增（additive，SOVERSION 不变）：
  *   adm_render_options_set_render_start_sec / adm_render_options_set_render_end_sec.
+ *
+ * v1.3 新增（additive，SOVERSION 不变）：
+ *   adm_render_options_set_final_gain_db.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 2
+#define ADM_API_VERSION_MINOR 3
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -244,6 +247,14 @@ adm_error_code_t adm_render_options_set_iamf_container(adm_render_options_t* opt
  * v1.2 */
 adm_error_code_t adm_render_options_set_render_start_sec(adm_render_options_t* opts, double sec) ADM_API_NOEXCEPT;
 adm_error_code_t adm_render_options_set_render_end_sec(adm_render_options_t* opts, double sec) ADM_API_NOEXCEPT;
+
+/* final_gain_db: unconstrained final gain in dB, applied after all automatic gain
+ * staging (loudness / peak). It bypasses peak limiting and may push the signal
+ * above the peak ceiling and above 0 dBFS (integer outputs can clip); it is
+ * reflected in the reported metrics and file metadata. 0 = no-op. No range limit;
+ * a non-finite value returns ADM_ERROR_INVALID_ARGUMENT.
+ * v1.3 */
+adm_error_code_t adm_render_options_set_final_gain_db(adm_render_options_t* opts, double db) ADM_API_NOEXCEPT;
 
 /* ── Render ──────────────────────────────────────────────────────────────── */
 /*

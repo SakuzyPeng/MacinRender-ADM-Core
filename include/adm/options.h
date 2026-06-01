@@ -44,6 +44,13 @@ struct RenderOptions {
     // Opt-in peak makeup: after loudness adjustment, raise global gain up to
     // peak_limit_dbtp when measured True Peak is below the ceiling.
     bool peak_normalize_to_limit{false};
+    // Unconstrained final gain in dB, applied after all automatic gain staging
+    // (loudness normalisation, peak makeup, peak limiting). Intentionally NOT
+    // subject to peak limiting: it is added after the peak clamp is computed, so it
+    // can push the signal above the peak ceiling and above 0 dBFS (integer outputs
+    // may then clip). 0 = no-op. Folded into the applied gain, so reported metrics
+    // and file metadata reflect it.
+    double final_gain_db{0.0};
     OutputBitDepth output_bit_depth{OutputBitDepth::f32};
     // Opus MKA output: target bitrate per channel in kbps (VBR hint).
     // 0 = auto (64 kbps/ch; minimum 128 kbps for stereo).
