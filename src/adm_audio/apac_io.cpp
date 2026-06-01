@@ -34,6 +34,14 @@ namespace {
 
 } // namespace
 
+bool apac_encoding_available() {
+#ifdef __APPLE__
+    return true;
+#else
+    return false;
+#endif
+}
+
 // Encode a fully post-processed float32 WAV to APAC in an MPEG-4 (.m4a / mp4f)
 // container using the AudioToolbox ExtAudioFile C API.  On non-Apple platforms the
 // function returns ErrorCode::unsupported immediately.

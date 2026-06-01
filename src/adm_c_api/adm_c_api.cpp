@@ -908,3 +908,25 @@ adm_error_code_t adm_layouts_json(adm_context_t* context, char** out_json) noexc
         return ADM_ERROR_INTERNAL;
     }
 }
+
+adm_error_code_t adm_output_formats_json(adm_context_t* context, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (context == nullptr || out_json == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        const std::string json = context->service.output_formats_json();
+        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        if (buffer == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
+        *out_json = buffer;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}

@@ -16,4 +16,9 @@ CapabilityReport binaural_capabilities();
 // Output is always 2-channel (L/R binaural); output_layout is ignored.
 std::unique_ptr<IRenderer> create_binaural_renderer();
 
+// Whether this build can load user SOFA HRIR files (MR_ADM_ENABLE_SOFA=ON, which
+// enables SAF's SOFA reader). When false, --sofa / adm_render_options_set_sofa_path
+// is rejected at render time and only the built-in KEMAR HRTF is available.
+bool binaural_sofa_supported();
+
 } // namespace mradm

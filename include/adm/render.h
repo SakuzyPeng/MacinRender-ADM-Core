@@ -142,6 +142,14 @@ class RenderService {
     // The same table serialized to a JSON string (UTF-8) for the C ABI.
     [[nodiscard]] std::string layouts_json() const;
 
+    // The output container-format reference serialized to a JSON string (UTF-8):
+    // per-format availability (build/platform) and constraints, plus a "features"
+    // object of build flags. Mirrors no CLI command today; drives a GUI's format
+    // picker. Does no project-file I/O and does not fail, but in IAMF-enabled builds
+    // the "iamf_mp4_packager" flag probes PATH and may spawn a short-lived
+    // mp4box/ffmpeg subprocess (no probe in the default MR_ADM_ENABLE_IAMF=OFF build).
+    [[nodiscard]] std::string output_formats_json() const;
+
     // Return the raw <axml> chunk (ADM XML) embedded in the BWF file, verbatim.
     // Mirrors `mradm inspect --xml`. Returns io_error if the file is missing,
     // not a valid BWF, or carries no axml chunk.

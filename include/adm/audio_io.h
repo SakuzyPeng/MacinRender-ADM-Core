@@ -302,6 +302,10 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
 // layouts, otherwise encoder default. The APAC encoder may produce a measured
 // average bitrate that differs substantially.
 // drc_music: true = Music DRC (cdrc=1), false = None (cdrc=0).
+// Whether APAC encoding is available in this build (macOS / AudioToolbox only).
+// On non-Apple platforms convert_to_apac returns ErrorCode::unsupported.
+bool apac_encoding_available();
+
 Result<void> convert_to_apac(const std::string& src_path,
                              const std::string& apac_path,
                              const std::string& layout_id = {},

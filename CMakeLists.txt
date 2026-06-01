@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 
 project(
     MacinRenderADMCore
-    VERSION 1.5.0
+    VERSION 1.6.0
     DESCRIPTION "Cross-platform ADM rendering core for MacinRender"
     LANGUAGES C CXX
 )
@@ -367,6 +367,7 @@ target_sources(
         src/adm_engine/scene_json.cpp
         src/adm_engine/capability_json.cpp
         src/adm_engine/layout_table.cpp
+        src/adm_engine/format_table.cpp
 )
 
 target_link_libraries(mr_adm_engine

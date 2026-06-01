@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.5）
-> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 / v1.5 于 2026-06-01）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.6）
+> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 / v1.5 / v1.6 于 2026-06-01）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -248,6 +248,27 @@ minor 升级。此前语义策略接口不对称——模板可经 `adm_policy_t
   （`load_semantic_policy_file` / `write_semantic_report_file`）转调之，文件输出字节不变；`RenderOptions`
   增 `semantic_policy_json` / `capture_semantic_report`，`RenderResult` 增 `semantic_report_json`。
   字段经既有 `adm_render_file_ex` 透传，**未新增 render 入口**。
+
+### v1.6.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+新增一个只读 JSON 查询，**未触碰任何已有 signature、enum 值或 callback**，因此是 minor 升级。补齐
+GUI 缺失的"输出容器可用性 / 约束"可编程查询——此前这套矩阵（FLAC ≤8ch、Opus 固定 48k、APAC macOS-only、
+IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GUI 只能硬编码、跨平台/不同构建易错。
+
+- **输出格式查询**：`adm_output_formats_json(context, out_json)` 返回 JSON（root 带
+  `"schema": "mradm.output-formats"` / `"schema_version": 1`），结构同 `adm_layouts_json`：`out_json`
+  须非 NULL，结果为**调用方拥有**的堆字符串，经 `adm_free_string` 释放。不做项目文件 I/O；但在 IAMF 开启的
+  构建中，计算 `iamf_mp4_packager` 标志会探测 PATH 并可能短暂 fork `mp4box`/`ffmpeg -version`（默认
+  `MR_ADM_ENABLE_IAMF=OFF` 构建该标志为 false、不探测）。调用方若在热路径上使用应缓存结果。
+- **内容**：`formats` 数组每项含 `format` / `extensions` / `available`（+ 不可用时的
+  `available_reason`）/ `lossy` / `max_channels`（0=无限）/ `fixed_sample_rate`（0=任意）/
+  `supports_height`，以及可选 `bit_depths`、`bitrate_kbps_per_ch`（Opus）或 `bitrate_kbps_total`
+  （APAC）。root 另带 `features` 对象：`apac` / `iamf` / `iamf_mp4_packager` / `sofa` 构建/平台开关。
+- **引擎实现**：新增静态格式表 `src/adm_engine/format_table.cpp`（与 `layout_table.cpp` 并列，nlohmann
+  TU-local PRIVATE、对外只 `std::string`），可用性来自 `audio::apac_encoding_available()`（新增，
+  `__APPLE__` 守卫）、`audio::iamf_encoding_available()` / `audio::iamf_mp4_packager_available()`（已有）、
+  `binaural_sofa_supported()`（新增，`SAF_ENABLE_SOFA_READER_MODULE` 守卫）。经
+  `RenderService::output_formats_json()` 暴露。**未新增 render 入口、未触碰渲染路径**。
 
 ## opaque 指针与 callback 生命周期
 

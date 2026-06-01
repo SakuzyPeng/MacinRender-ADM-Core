@@ -1456,6 +1456,63 @@ bool verify_layouts_json(adm_context_t* ctx) {
     return ok;
 }
 
+// ── v1.6 tests ────────────────────────────────────────────────────────────
+
+bool verify_version_16() {
+    return check(adm_api_version_minor() >= 6, "v1.6: minor version should be >= 6");
+}
+
+bool verify_output_formats_json(adm_context_t* ctx) {
+    char* json = nullptr;
+    const adm_error_code_t code = adm_output_formats_json(ctx, &json);
+    bool ok = check(code == ADM_ERROR_OK, "output_formats_json: should succeed");
+    ok = check(json != nullptr, "output_formats_json: out_json should be non-null") && ok;
+
+    if (json != nullptr) {
+        const std::string s{json};
+        const auto has = [&s](const char* needle) { return s.find(needle) != std::string::npos; };
+        ok = check(has(R"("schema": "mradm.output-formats")") && has(R"("schema_version": 1)"),
+                   "output_formats_json: should carry schema + schema_version") &&
+             ok;
+        ok = check(has("\"features\"") && has("\"formats\""), "output_formats_json: features + formats present") && ok;
+        // Every output container is enumerated.
+        ok = check(has(R"("format": "wav")") && has(R"("format": "caf")") && has(R"("format": "flac")") &&
+                       has(R"("format": "opus_mka")") && has(R"("format": "apac")") && has(R"("format": "iamf")") &&
+                       has(R"("format": "iamf_mp4")"),
+                   "output_formats_json: all containers enumerated") &&
+             ok;
+        // A known constraint: FLAC caps at 8 channels and rejects height layouts.
+        ok = check(has(R"("max_channels": 8)") && has(R"("supports_height": false)"),
+                   "output_formats_json: FLAC constraints present") &&
+             ok;
+        // Opus carries a per-channel bitrate range; APAC a total one.
+        ok = check(has("\"bitrate_kbps_per_ch\"") && has("\"bitrate_kbps_total\""),
+                   "output_formats_json: bitrate ranges present") &&
+             ok;
+        // APAC availability must match the build platform (macOS only).
+#ifdef __APPLE__
+        ok = check(has(R"("apac": true)"), "output_formats_json: apac feature true on macOS") && ok;
+#else
+        ok = check(has(R"("apac": false)"), "output_formats_json: apac feature false off-macOS") && ok;
+        ok = check(has(R"("available_reason": "macOS only (AudioToolbox)")"),
+                   "output_formats_json: apac unavailable reason off-macOS") &&
+             ok;
+#endif
+    }
+    adm_free_string(json);
+
+    // Error paths.
+    char* bad = nullptr;
+    ok = check(adm_output_formats_json(nullptr, &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "output_formats_json: NULL context should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_output_formats_json(ctx, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "output_formats_json: NULL out_json should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(bad == nullptr, "output_formats_json: out_json should stay NULL on failure") && ok;
+    return ok;
+}
+
 bool verify_apac_unsupported_smoke(adm_context_t* ctx, const std::filesystem::path& input) {
     // On non-Apple platforms apac_io always returns UNSUPPORTED.
     // On Apple with AudioToolbox the render may succeed; we accept both.
@@ -1569,6 +1626,9 @@ int main() {
     ok = verify_policy_template_json(ctx, fixture.path()) && ok;
     ok = verify_capabilities_json(ctx) && ok;
     ok = verify_layouts_json(ctx) && ok;
+    // v1.6 tests
+    ok = verify_version_16() && ok;
+    ok = verify_output_formats_json(ctx) && ok;
     ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;
     ok = verify_iamf_smoke(ctx, fixture.path()) && ok;
 

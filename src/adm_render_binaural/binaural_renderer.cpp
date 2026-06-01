@@ -1862,4 +1862,12 @@ std::unique_ptr<IRenderer> create_binaural_renderer() {
     return std::make_unique<BinauralRenderer>();
 }
 
+bool binaural_sofa_supported() {
+#ifdef SAF_ENABLE_SOFA_READER_MODULE
+    return true;
+#else
+    return false;
+#endif
+}
+
 } // namespace mradm
