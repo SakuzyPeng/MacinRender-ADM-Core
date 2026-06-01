@@ -351,6 +351,8 @@ CLI args / config
 
 ## 9. GUI 预留接口
 
+### 9.1 结构化交互能力
+
 虽然近期不做 GUI，但新架构需要从第一天开始为 GUI 保留以下能力：
 
 - 结构化进度：阶段、百分比、当前文件、当前任务、总任务数。
@@ -359,6 +361,81 @@ CLI args / config
 - 可恢复错误：输出冲突、格式不支持、特性降级、缺失依赖等需要可展示和可选择。
 - 非交互式请求模型：GUI 不应该模拟 stdin，也不应该依赖 CLI 输出文本。
 - 稳定 C ABI：Swift/Objective-C 层通过薄 wrapper 调用，不绑定内部 C++ 类。
+
+> 落地进度（2026-06-01）：上述能力已在 stable C ABI v1.4~v1.7 落地——取消（`adm_cancel_token_t`）、
+> 结构化日志（`adm_render_result_log_entry`）、进度阶段枚举（`adm_render_stage_from_string`）、
+> 内存语义策略读写、输出格式/构建能力查询（`adm_output_formats_json`）。详见
+> `docs/adr/0007-c-abi-stability-policy.md`。
+
+### 9.2 按需渲染与预览加速（RenderWindow / PreviewSession / checkpoint）
+
+> 状态：方向草案（2026-06-01）。面向 GUI 的预览 / 拖动（scrubbing）体验，不改变既有一次性渲染语义。
+
+**动机。** 当前输出区间裁剪（`RenderOptions::render_start_sec` / `render_end_sec`）的实现是
+“渲染完整时间线 → 渲染后 `audio::trim_file_frames` 裁文件”，`RenderPlan::meter_window` 也只缩窄
+响度/True-Peak 计量、不省计算。原因是后端持有**有限记忆的状态**：EAR 的 512-tap FIR 去相关器 +
+直达总线 `comp_delay`、各后端的增益插值 ramp（`default_interp_ms`）与控制率去抖
+（`object_smoothing_frames`）、binaural 的 HRIR 卷积尾巴；冷启动会在窗口头部产生瑕疵。GUI 反复预览
+同一文件的不同窗口时，还会重复支付 ADM import、HRIR 加载、SAF 增益/解码矩阵、HOA 解码矩阵、去相关
+FIR 设计等**不可变且昂贵**的构建。
+
+三层设计，依赖关系 1 → 2 →（3 视测量再定）：
+
+```text
+1. RenderWindow + pre-roll   单窗口只算需要的部分（基础，单次即省）
+        ↓ 复用
+2. PreviewSession 缓存        跨多次窗口渲染摊薄 import + 后端不可变大对象（拖动场景）
+        ↓ 仅在 profile 证明 pre-roll 仍是瓶颈时
+3. per-backend checkpoint     长尾状态后端的“就近恢复”，替代从远处 pre-roll
+```
+
+**第 1 层：RenderWindow + pre-roll（基础，可证明 bit-exact）。**
+只渲染 `[start - warmup, end)`，其中 `[start - warmup, start)` 用于预热状态但不写出，随后只写
+`[start, end)`。
+
+- `ReaderHandle::seek(uint64_t frame) -> Result<void>`：各 reader impl 转发（dr_wav
+  `drwav_seek_to_pcm_frame`、libbw64 seek、dr_flac seek）；无 seek 时退化为“读入丢弃”（省 DSP，不省 I/O）。
+- `RenderPlan` 增 `std::optional<RenderWindow> render_window{start, count}`（区别于只管计量的
+  `meter_window`）+ `uint64_t warmup_frames`。
+- `warmup` 由后端自报（建议进 `CapabilityReport` 或 `recommended_warmup_frames(plan)`）：EAR =
+  `comp_delay + decorr_taps`，binaural = HRIR 长度，VBAP/HOA ≈ 0；再统一并入
+  `max(…, object_smoothing_frames, interp_ramp)`。
+- 后端循环：seek → 跑 `[start - warmup, start)` 丢弃输出 → 只写 `[start, end)`；对象 block 索引在
+  `start - warmup` 处二分定位。
+- **bit-exact**：状态均为有限记忆，`warmup ≥ 状态长度` 时窗口输出与“全渲染后裁”逐样本一致；并省掉渲染后
+  `trim_file_frames` 的读改写。不支持 window 的后端保留 `trim_file_frames` 兜底。
+
+**第 2 层：PreviewSession（缓存不可变大对象）。**
+把后端 `render()` 拆为 `prepare(plan) -> PreparedState`（不可变、可共享：scene + 矩阵/HRTF/解码器）
+与 `render_window(prepared, window, …)`（廉价、每窗口调用）。`PreviewSession` 持有 import 后的
+`AdmScene` + 一张以 `(renderer, output_layout, sofa, semantic_policy_hash)` 为键的 `PreparedState`
+缓存（语义策略会改 scene，故进 key）。
+
+- ABI（additive）：opaque `adm_preview_session_t` + `adm_create_preview_session(ctx, input, opts)` /
+  `adm_preview_render_window(session, start_sec, end_sec, out, …)` / `adm_destroy_preview_session`。
+- 仍 bit-exact：相同 `PreparedState` + 相同窗口算法。
+- 注意：这是一次 `IRenderer` 接口扩展（prepare/render 拆分），属于本规划中较实质的后端改动。
+
+**第 3 层：per-backend checkpoint（仅按需）。**
+对 FIR/延迟/有限平滑后端，warmup 小且有界，pre-roll 已把任意窗口变成 O(warmup)，checkpoint 收益有限。
+它仅在某后端状态记忆超过可接受 pre-roll（超长尾），或拖动极频繁时有用：后端
+`serialize_state()/restore_state()`，session 稀疏存档，窗口渲染恢复最近 ≤ start 的存档再短回放；不支持
+序列化的后端回落到 pre-roll。**最具侵入性（每后端要能序列化全部 DSP 状态），应 profile 证明 pre-roll
+是瓶颈后再做。**
+
+**bit-exact 边界与回归。** 三层都保持与“全渲染后裁”逐样本一致：第 1 层靠 `warmup ≥ 状态`、第 2 层靠相同
+`PreparedState`、第 3 层靠状态快照精确。任一层均以现有 `mr_adm_render_trim_fixture_tests` 对全渲染做
+回归基线。
+
+**落地顺序。** 先做第 1 层（EAR 先行——状态最复杂、作基准），仅在请求了 trim 窗口时走 seek + pre-roll，
+无 trim 保持现状；用 trim fixture 验证逐样本一致后推广 VBAP/HOA/binaural。第 2 层在其上加 prepare/render
+拆分 + session ABI。第 3 层留到 profile 之后。
+
+**默认取舍（实现前可再议）。**
+- warmup **由后端自报**，不在引擎写死常数，随后端演进自适应。
+- 第 1 层**直接产出窗口长度文件**，仅对不支持 window 的后端保留 `trim_file_frames` 兜底。
+- 第 2 层的 `PreviewSession` 键以 `(input, renderer, layout, sofa, policy)` 为粒度；scene 本身（import 后、
+  应用策略前）可跨键复用。
 
 ## 10. 测试与回归基线
 
@@ -581,6 +658,19 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 - **M3 实现前**：`IRenderer::supports()` 返回的 `CapabilityReport` 接口形状（第一个后端接入前必须定型）。
 - **M3 实现前**：Golden fixture 与回归测试策略（M2 scene import 用 dump 文本对比即可；M3 出音频后才需正式策略）。
 - **M3 完成后**：Rust 首批试点模块选择（ADR 0002 已列候选区域，需要 M3 跑通后才有依据）。
+- **预览加速 Phase 1 实现前（见 9.2）**：`RenderWindow` 与 `warmup_frames` 的声明位置——放
+  `CapabilityReport` 字段、`IRenderer` 方法（如 `recommended_warmup_frames(plan)`），还是引擎按后端类型
+  查表。倾向后端自报；定型后影响 `ReaderHandle::seek` 签名与各后端渲染循环改造。
+- **预览加速 Phase 1 实现前**：`ReaderHandle::seek` 的失败语义，以及无 seek 能力后端的回退（读入丢弃
+  vs 拒绝 window）；window 输出是否完全取代渲染后 `trim_file_frames`，不支持 window 的后端如何兜底。
+- **预览加速 Phase 2 实现前（见 9.2）**：`IRenderer` 的 `prepare()/render_window()` 拆分形状——
+  `PreparedState` 是否 opaque、能否跨线程共享、与现有 `render()` 是否并存。这是 `adm_render` 接口变更，
+  需在第二个后端接入前定型，可能单独补 ADR。
+- **预览加速 Phase 2 实现前**：`PreviewSession` 缓存键粒度与失效（`(input, renderer, layout, sofa,
+  policy_hash)`）、内存上限/驱逐策略，以及 opaque `adm_preview_session_t` 的 ABI 生命周期与线程亲缘性约定
+  （是否沿用“单 session 单线程、跨 session 安全”）。
+- **预览加速 Phase 3（profile 后）**：是否存在后端的 pre-roll 真正成为瓶颈而需要 checkpoint；若需要，逐一
+  评估各后端 DSP 状态的可序列化性，不可序列化者保持 pre-roll 回退。
 
 下列问题已不再悬而未决：
 

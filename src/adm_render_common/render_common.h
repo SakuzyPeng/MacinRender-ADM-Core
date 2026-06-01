@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <functional>
 #include <future>
+#include <ios>
+#include <limits>
 #include <mutex>
 #include <optional>
 #include <queue>
@@ -18,6 +20,24 @@
 #include "adm/scene.h"
 
 namespace mradm::render_common {
+
+// Seek a frame-addressable reader (e.g. libbw64's Bw64Reader) to an absolute frame,
+// overflow-safe for long programs. Such readers take an int32 frame offset, so a
+// single cast overflows past ~2^31 frames (~12 h at 48 kHz); this issues segmented
+// INT32_MAX cur-relative seeks that accumulate to the full 64-bit offset. Templated
+// on the reader type so render_common stays third-party-free (the concrete reader is
+// supplied at the backend call site). The reader must support
+// seek(int32_t, std::ios_base::seekdir). Used for on-demand window rendering
+// (RenderPlan::render_window).
+template <typename Reader> void seek_reader_abs(Reader& reader, uint64_t frame) {
+    constexpr auto k_max_seek = static_cast<uint64_t>(std::numeric_limits<int32_t>::max());
+    reader.seek(0);
+    while (frame > k_max_seek) {
+        reader.seek(std::numeric_limits<int32_t>::max(), std::ios::cur);
+        frame -= k_max_seek;
+    }
+    reader.seek(static_cast<int32_t>(frame), std::ios::cur);
+}
 
 // Portion of an output block that should be fed to the loudness / True-Peak meter.
 struct MeterChunk {

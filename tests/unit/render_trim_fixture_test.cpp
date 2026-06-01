@@ -1,4 +1,6 @@
 #include <atomic>
+#include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -103,6 +105,74 @@ std::filesystem::path write_render_fixture() {
     std::vector<float> samples(k_frames, 0.0F);
     for (uint64_t f = k_frames / 2U; f < k_frames; ++f) {
         samples[f] = 0.5F;
+    }
+    writer->write(samples.data(), k_frames);
+    return path;
+}
+
+// A diffuse, moving object so rendering exercises stateful paths the windowed
+// pre-roll must warm up (direct compensation delay / decorrelator overlap) and
+// block-edge smoothing must keep aligned with the full-render block grid.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_diffuse_doc() {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DiffCF"}, adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block0{adm::SphericalPosition{adm::Azimuth{-30.0F}, adm::Elevation{0.0F}}};
+        block0.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
+        block0.set(adm::Duration{adm::Time{std::chrono::milliseconds{520}}});
+        block0.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        block0.set(adm::Gain{1.0F});
+        block0.set(adm::Diffuse{0.5F}); // split energy across direct + decorrelated diffuse bus
+        cf->add(block0);
+
+        adm::AudioBlockFormatObjects block1{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}}};
+        block1.set(adm::Rtime{adm::Time{std::chrono::milliseconds{520}}});
+        block1.set(adm::JumpPosition{adm::JumpPositionFlag{false}});
+        block1.set(adm::Gain{1.0F});
+        block1.set(adm::Diffuse{0.5F});
+        cf->add(block1);
+    }
+    doc->add(cf);
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"DiffPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"DiffSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"DiffTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"DiffObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"DiffContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"DiffProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+// 2 s of a per-sample-varying signal (so any pre-roll/delay error is visible) carried
+// by a diffuse object.
+std::filesystem::path write_varying_fixture() {
+    const auto [doc, uid_str] = make_diffuse_doc();
+    auto path = temp_path("mr_trim_vary_input", ".wav");
+    std::ostringstream xml_buf;
+    adm::writeXml(xml_buf, doc);
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+    auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);
+    std::vector<float> samples(k_frames);
+    for (uint64_t f = 0; f < k_frames; ++f) {
+        samples[f] = 0.5F * std::sin(static_cast<float>(f) * 0.013F);
     }
     writer->write(samples.data(), k_frames);
     return path;
@@ -306,6 +376,70 @@ bool verify_hoa_metrics_follow_trim_window() {
                  "HOA active second-half reports a true-peak");
 }
 
+// Phase 1 core guarantee: on-demand window rendering (seek + pre-roll) is
+// sample-identical to a full render then sliced. The window starts well past one
+// k_block_size block so the seek + pre-roll path actually engages; the diffuse +
+// varying-signal fixture means a missing/short pre-roll would corrupt the window head.
+bool window_bit_exact(const std::filesystem::path& in_path,
+                      mradm::RendererSelection renderer,
+                      const std::string& layout,
+                      const char* label) {
+    const auto full_path = temp_path("mr_trim_be_full", ".wav");
+    const FileGuard full_guard(full_path);
+    const auto win_path = temp_path("mr_trim_be_win", ".wav");
+    const FileGuard win_guard(win_path);
+
+    // [24000, 40000) frames. start 24000 spans >2 default blocks (k_block_size 8875),
+    // forcing a real reader seek and (for stateful backends) a pre-roll block.
+    constexpr uint64_t k_start = 24000U;
+    constexpr uint64_t k_count = 16000U;
+    const double start_sec = static_cast<double>(k_start) / k_sr;
+    const double end_sec = static_cast<double>(k_start + k_count) / k_sr;
+
+    if (!check(render_with_trim(in_path, full_path, 0.0, std::nullopt, renderer, layout).success(),
+               "full render succeeds")) {
+        return false;
+    }
+    if (!check(render_with_trim(in_path, win_path, start_sec, end_sec, renderer, layout).success(),
+               "windowed render succeeds")) {
+        return false;
+    }
+
+    auto full = mradm::audio::FloatWavReader::open(full_path.string());
+    auto win = mradm::audio::FloatWavReader::open(win_path.string());
+    if (!check(static_cast<bool>(full) && static_cast<bool>(win), "open both render outputs")) {
+        return false;
+    }
+    const uint32_t ch = full->channels();
+    if (!check(win->channels() == ch, "channel counts match") ||
+        !check(win->frame_count() == k_count, "windowed output is exactly the window length")) {
+        return false;
+    }
+
+    std::vector<float> full_buf(full->frame_count() * ch);
+    full->read(full_buf.data(), full->frame_count());
+    std::vector<float> win_buf(k_count * ch);
+    win->read(win_buf.data(), k_count);
+
+    bool exact = true;
+    for (uint64_t i = 0; i < k_count * ch && exact; ++i) {
+        exact = (win_buf[i] == full_buf[(k_start * ch) + i]);
+    }
+    return check(exact, label);
+}
+
+// EAR (5.1), SAF/VBAP (5.1), HOA (hoa3) windowed render must each match a full render
+// then sliced, sample for sample. The diffuse fixture exercises EAR's decorrelator +
+// comp delay and HOA's 1024-tap diffuse delay line; VBAP is DSP-stateless.
+bool verify_window_bit_exact_vs_full() {
+    const auto in_path = write_varying_fixture();
+    const FileGuard in_guard(in_path);
+    bool ok = window_bit_exact(in_path, mradm::RendererSelection::ear, "0+5+0", "ear: window == full sliced");
+    ok = window_bit_exact(in_path, mradm::RendererSelection::saf, "0+5+0", "vbap: window == full sliced") && ok;
+    ok = window_bit_exact(in_path, mradm::RendererSelection::hoa, "hoa3", "hoa: window == full sliced") && ok;
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -318,9 +452,10 @@ int main() {
     ok &= verify_subframe_window_rejected();
     ok &= verify_metrics_follow_trim_window();
     ok &= verify_hoa_metrics_follow_trim_window();
+    ok &= verify_window_bit_exact_vs_full();
     if (!ok) {
         return EXIT_FAILURE;
     }
-    std::cout << "render trim fixture tests passed (8/8)\n";
+    std::cout << "render trim fixture tests passed (9/9)\n";
     return EXIT_SUCCESS;
 }

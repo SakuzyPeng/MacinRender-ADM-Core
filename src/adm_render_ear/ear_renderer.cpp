@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <ebur128.h>
+#include <ios>
 #include <iterator>
 #include <limits>
 #include <map>
@@ -770,14 +771,41 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
         std::array<std::future<void>, k_num_buffers> meter_pending;
         render_common::SerialWorker meter;
         std::size_t buf_idx = 0;
-        uint64_t frames_done = 0;
 
-        while (frames_done < num_frames) {
+        // Output sub-window with warm-up pre-roll (RenderPlan::render_window). Blocks
+        // are processed on the SAME k_block_size grid as a full render so the
+        // decorrelator FFT segmentation and direct delay stay bit-identical; one
+        // block-aligned pre-roll block ahead of the window converges the decorrelator
+        // overlap (k_fir_len-1) and compensation delay. Gains are closed-form per
+        // absolute frame, so seeking needs no gain warm-up. When not windowed,
+        // win_start=0 / win_end=num_frames reproduces the full-timeline render exactly.
+        const bool windowed = plan.render_window.has_value();
+        const uint64_t win_start = windowed ? std::min(plan.render_window->start_frame, num_frames) : 0;
+        const uint64_t win_end =
+            windowed ? std::min(win_start + plan.render_window->frame_count, num_frames) : num_frames;
+        uint64_t start_pos = 0;
+        if (windowed && win_start >= k_block_size) {
+            start_pos = ((win_start / k_block_size) - 1) * k_block_size; // one full block of pre-roll
+        }
+        if (start_pos > 0) {
+            render_common::seek_reader_abs(*reader, start_pos);
+        }
+        const double progress_span = static_cast<double>(std::max<uint64_t>(1, win_end - start_pos));
+        uint64_t frames_done = start_pos;
+
+        while (frames_done < win_end) {
             if (plan.cancel_token.stop_requested()) {
                 return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
             }
             const uint64_t frames_now = std::min(k_block_size, num_frames - frames_done);
             const std::size_t out_samples = num_out_ch * static_cast<std::size_t>(frames_now);
+
+            // Sub-range of this block that lies inside the output window [win_start, win_end).
+            const uint64_t w_lo = std::max(frames_done, win_start);
+            const uint64_t w_hi = std::min(frames_done + frames_now, win_end);
+            const bool emit = w_hi > w_lo;
+            const std::size_t emit_off = emit ? static_cast<std::size_t>(w_lo - frames_done) : 0;
+            const std::size_t emit_count = emit ? static_cast<std::size_t>(w_hi - w_lo) : 0;
 
             // Reclaim this output buffer once the meter has finished its previous use of it.
             if (meter_pending.at(buf_idx).valid()) {
@@ -831,18 +859,30 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
                 remap_wav71_to_wave_order(out_block, frames_now, num_out_ch);
             }
 
-            if (writer.write(out_block.data(), frames_now) != frames_now) {
+            // Write only the in-window frames. Pre-roll blocks (emit == false) are
+            // processed for state warm-up but not written.
+            if (emit && writer.write(out_block.data() + (emit_off * num_out_ch), emit_count) != emit_count) {
                 return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);
             }
 
             // Offload loudness / true-peak measurement to the background meter (overlaps next block).
-            // When an output trim is requested, feed the meter only the frames inside the window.
+            // Windowed: meter exactly the written frames. Otherwise: honor meter_window
+            // (no-trim → whole block; trim fallback → kept part).
             if (lufs_st) {
-                const auto chunk = render_common::meter_window_chunk(plan.meter_window, frames_done, frames_now);
-                if (chunk.frame_count > 0) {
+                std::size_t meter_off = 0;
+                std::size_t meter_count = 0;
+                if (windowed) {
+                    meter_off = emit_off;
+                    meter_count = emit_count;
+                } else {
+                    const auto chunk = render_common::meter_window_chunk(plan.meter_window, frames_done, frames_now);
+                    meter_off = chunk.offset_frames;
+                    meter_count = static_cast<std::size_t>(chunk.frame_count);
+                }
+                if (meter_count > 0) {
                     ebur128_state* state = lufs_st.get();
-                    const float* data = out_block.data() + (chunk.offset_frames * num_out_ch);
-                    const auto frame_count = chunk.frame_count;
+                    const float* data = out_block.data() + (meter_off * num_out_ch);
+                    const auto frame_count = meter_count;
                     meter_pending.at(buf_idx) =
                         meter.post([state, data, frame_count] { ebur128_add_frames_float(state, data, frame_count); });
                 }
@@ -851,7 +891,8 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
             frames_done += frames_now;
             buf_idx = (buf_idx + 1) % k_num_buffers;
 
-            const double frac = 0.3 + (0.6 * (static_cast<double>(frames_done) / static_cast<double>(num_frames)));
+            const uint64_t progress_done = std::min(frames_done, win_end) - start_pos;
+            const double frac = 0.3 + (0.6 * (static_cast<double>(progress_done) / progress_span));
             progress.on_progress({RenderStage::rendering, frac, "rendering"});
         }
 
@@ -863,7 +904,13 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
         }
 
         progress.on_progress({RenderStage::finished, 1.0, "done"});
-        logs.log(LogLevel::info, "ear", fmt::format("wrote {} frames to {}", num_frames, plan.output_path));
+        logs.log(LogLevel::info,
+                 "ear",
+                 fmt::format("wrote {} frames to {}{}",
+                             win_end - win_start,
+                             plan.output_path,
+                             windowed ? fmt::format(" (window [{}, {}) of {} frames)", win_start, win_end, num_frames)
+                                      : std::string{}));
 
         RenderMetrics metrics;
         if (lufs_st) {
@@ -909,6 +956,7 @@ CapabilityReport ear_capabilities() {
     r.supports_object_divergence = true;
     r.supports_screen_ref = false;
     r.supports_diffuse = true;
+    r.supports_render_window = true; // seek + 1-block pre-roll; bit-exact windowed output
     for (const auto& spec : render_layouts::speaker_layouts()) {
         CapabilityReport::Layout layout;
         layout.id = std::string{spec.id};

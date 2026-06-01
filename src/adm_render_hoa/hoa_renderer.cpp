@@ -732,14 +732,49 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         std::array<std::future<void>, k_num_buffers> meter_pending;
         render_common::SerialWorker meter;
         std::size_t buf_idx = 0;
-        uint64_t frames_done = 0;
 
-        while (frames_done < num_frames) {
+        // On-demand output window (RenderPlan::render_window). HOA's diffuse path has a
+        // k_diffuse_delay_len-tap delay line and its smoothing samples gains at block
+        // edges, so blocks are processed on the same k_block_size grid as a full render
+        // and one aligned block (>= the 1024-tap delay) is pre-rolled before the window.
+        // The delay line is circular, indexed by absolute frame mod k_diffuse_delay_len,
+        // so each state's write_pos is seeded to start_pos % k_diffuse_delay_len to match
+        // the full render exactly; the pre-roll block then refills the line. Direct (non-
+        // diffuse) gains are closed-form per absolute frame. When not windowed,
+        // win_start=0 / win_end=num_frames reproduces the full-timeline encode.
+        const bool windowed = plan.render_window.has_value();
+        const uint64_t win_start = windowed ? std::min(plan.render_window->start_frame, num_frames) : 0;
+        const uint64_t win_end =
+            windowed ? std::min(win_start + plan.render_window->frame_count, num_frames) : num_frames;
+        uint64_t start_pos = 0;
+        if (windowed && win_start >= k_block_size) {
+            start_pos = ((win_start / k_block_size) - 1) * k_block_size; // one aligned pre-roll block
+        }
+        if (start_pos > 0) {
+            render_common::seek_reader_abs(*reader, start_pos);
+            const std::size_t init_write_pos = static_cast<std::size_t>(start_pos % k_diffuse_delay_len);
+            for (auto& slots : diffuse_states) {
+                for (auto& st : slots) {
+                    st.write_pos = init_write_pos;
+                }
+            }
+        }
+        const double progress_span = static_cast<double>(std::max<uint64_t>(1, win_end - start_pos));
+        uint64_t frames_done = start_pos;
+
+        while (frames_done < win_end) {
             if (plan.cancel_token.stop_requested()) {
                 return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
             }
             const uint64_t frames_now = std::min(k_block_size, num_frames - frames_done);
             const std::size_t out_samples = static_cast<std::size_t>(k_num_out) * frames_now;
+
+            // Sub-range of this block inside the output window [win_start, win_end).
+            const uint64_t w_lo = std::max(frames_done, win_start);
+            const uint64_t w_hi = std::min(frames_done + frames_now, win_end);
+            const bool emit = w_hi > w_lo;
+            const std::size_t emit_off = emit ? static_cast<std::size_t>(w_lo - frames_done) : 0;
+            const std::size_t emit_count = emit ? static_cast<std::size_t>(w_hi - w_lo) : 0;
 
             // Reclaim this block's buffers once the meter has finished its previous use of them.
             if (meter_pending.at(buf_idx).valid()) {
@@ -801,20 +836,31 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
                 }
             }
 
-            if (writer.write(out_block.data(), frames_now) != frames_now) {
+            // Write only the in-window frames; pre-roll blocks (emit == false) warm the
+            // diffuse delay line but are not written.
+            if (emit && writer.write(out_block.data() + (emit_off * k_num_out), emit_count) != emit_count) {
                 return make_error(ErrorCode::io_error, "short write while encoding HOA", "output=" + plan.output_path);
             }
 
             // Offload loudness / true-peak measurement to the background meter (overlaps next block).
-            // When an output trim is requested, measure only the frames inside the window: pass the
-            // sub-range pointers and the absolute start frame so the LFE gain lookups stay correct.
+            // Windowed: measure exactly the written frames. Otherwise honor meter_window. Either way
+            // pass the absolute start frame so the LFE gain lookups stay correct.
             if (lufs_st || lfe_tp_st) {
-                const auto chunk = render_common::meter_window_chunk(plan.meter_window, frames_done, frames_now);
-                if (chunk.frame_count > 0) {
-                    const float* in_data = in_block.data() + (chunk.offset_frames * num_in_ch);
-                    const float* out_data = out_block.data() + (chunk.offset_frames * k_num_out);
-                    const uint64_t fd = frames_done + chunk.offset_frames;
-                    const uint64_t fn = chunk.frame_count;
+                std::size_t meter_off = 0;
+                std::size_t meter_count = 0;
+                if (windowed) {
+                    meter_off = emit_off;
+                    meter_count = emit_count;
+                } else {
+                    const auto chunk = render_common::meter_window_chunk(plan.meter_window, frames_done, frames_now);
+                    meter_off = chunk.offset_frames;
+                    meter_count = static_cast<std::size_t>(chunk.frame_count);
+                }
+                if (meter_count > 0) {
+                    const float* in_data = in_block.data() + (meter_off * num_in_ch);
+                    const float* out_data = out_block.data() + (meter_off * k_num_out);
+                    const uint64_t fd = frames_done + meter_off;
+                    const uint64_t fn = meter_count;
                     meter_pending.at(buf_idx) = meter.post(
                         [&measure_block, in_data, out_data, fd, fn] { measure_block(in_data, out_data, fd, fn); });
                 }
@@ -823,7 +869,8 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
             frames_done += frames_now;
             buf_idx = (buf_idx + 1) % k_num_buffers;
 
-            const double frac = 0.3 + (0.6 * (static_cast<double>(frames_done) / static_cast<double>(num_frames)));
+            const uint64_t progress_done = std::min(frames_done, win_end) - start_pos;
+            const double frac = 0.3 + (0.6 * (static_cast<double>(progress_done) / progress_span));
             progress.on_progress({RenderStage::rendering, frac, "encoding"});
         }
 
@@ -835,7 +882,13 @@ Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& 
         }
 
         progress.on_progress({RenderStage::finished, 1.0, "done"});
-        logs.log(LogLevel::info, "hoa-encode", fmt::format("wrote {} frames to {}", num_frames, plan.output_path));
+        logs.log(LogLevel::info,
+                 "hoa-encode",
+                 fmt::format("wrote {} frames to {}{}",
+                             win_end - win_start,
+                             plan.output_path,
+                             windowed ? fmt::format(" (window [{}, {}) of {} frames)", win_start, win_end, num_frames)
+                                      : std::string{}));
 
         RenderMetrics metrics;
         if (lufs_st) {
@@ -879,6 +932,7 @@ CapabilityReport hoa_capabilities() {
     r.supports_hoa = false;
     r.supports_object_divergence = true;
     r.supports_diffuse = true;
+    r.supports_render_window = true; // block-aligned seek + 1 pre-roll block (diffuse delay line)
     r.supported_layouts = {
         {"hoa3", "HOA 3rd Order (16ch, ACN/SN3D)", 16, true, 0, false},
     };

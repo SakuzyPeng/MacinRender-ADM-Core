@@ -54,6 +54,22 @@ struct MeterWindow {
     uint64_t frame_count{0};
 };
 
+// Requests that a backend render ONLY the output frame window
+// [start_frame, start_frame + frame_count) instead of the full timeline. A backend
+// that advertises CapabilityReport::supports_render_window seeks its input and runs
+// an internal warm-up pre-roll (enough to converge any finite-memory DSP state:
+// decorrelator overlap, compensation delay, etc.), then writes exactly the window —
+// the output file is already trimmed and the inline meter measures only the window,
+// bit-identical to a full render followed by trim_file_frames. Backends that do not
+// support it ignore this field; RenderService then renders the full timeline and
+// trims afterward. Frames are on the output timeline, which equals the input
+// timeline. Set by RenderService in place of meter_window when the chosen backend
+// supports it.
+struct RenderWindow {
+    uint64_t start_frame{0};
+    uint64_t frame_count{0};
+};
+
 // Input to a renderer backend: file paths, output layout, and pre-parsed scene metadata.
 struct RenderPlan {
     std::string input_path;
@@ -71,6 +87,11 @@ struct RenderPlan {
     // When set, restrict loudness / True-Peak measurement to this output frame
     // window (matches the output trim); nullopt measures the whole render.
     std::optional<MeterWindow> meter_window;
+    // When set, render only this output sub-window with internal pre-roll instead of
+    // the full timeline (backends advertising supports_render_window). Mutually
+    // exclusive with meter_window: when render_window is set the backend meters
+    // exactly the frames it writes (the window).
+    std::optional<RenderWindow> render_window;
     // Cooperative cancellation token (copied from RenderOptions by RenderService).
     // Backends check cancel_token.stop_requested() at chunk boundaries and return
     // ErrorCode::cancelled when a stop is requested. A default-constructed token
