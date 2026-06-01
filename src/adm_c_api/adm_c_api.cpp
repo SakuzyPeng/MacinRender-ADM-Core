@@ -167,9 +167,10 @@ struct adm_render_result_t {
     adm_error_code_t code{ADM_ERROR_OK};
     std::string message;
     std::string output_path;             // v1.1
-    std::optional<double> loudness_lufs; // v1.1
-    std::optional<double> peak_dbtp;     // v1.1
-    std::vector<CLogEntry> logs;         // v1.1
+    std::optional<double> loudness_lufs;             // v1.1
+    std::optional<double> peak_dbtp;                 // v1.1
+    std::vector<CLogEntry> logs;                     // v1.1
+    std::optional<std::string> semantic_report_json; // v1.5
 };
 
 struct adm_render_options_t {
@@ -380,6 +381,28 @@ adm_error_code_t adm_render_options_set_semantic_report_path(adm_render_options_
     }
 }
 
+adm_error_code_t adm_render_options_set_semantic_policy_json(adm_render_options_t* opts, const char* json) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    try {
+        if (json == nullptr || json[0] == '\0') {
+            opts->opts.semantic_policy_json = std::nullopt;
+        } else {
+            opts->opts.semantic_policy_json = std::string{json};
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+void adm_render_options_set_capture_semantic_report(adm_render_options_t* opts, int enabled) noexcept {
+    if (opts != nullptr) {
+        opts->opts.capture_semantic_report = (enabled != 0);
+    }
+}
+
 adm_error_code_t adm_render_options_set_default_interp_ms(adm_render_options_t* opts, uint32_t ms) noexcept {
     if (opts == nullptr) {
         return ADM_ERROR_OK;
@@ -571,6 +594,7 @@ adm_error_code_t adm_render_file_ex(adm_context_t* context,
             c_result->loudness_lufs = cpp_result.metrics->measured_lufs;
             c_result->peak_dbtp = cpp_result.metrics->measured_peak_dbtp;
         }
+        c_result->semantic_report_json = std::move(cpp_result.semantic_report_json);
         c_result->logs = std::move(captured);
         *result = c_result.release();
 
@@ -634,6 +658,13 @@ int adm_render_result_peak_dbtp(const adm_render_result_t* result, double* out_v
         *out_value = *result->peak_dbtp;
     }
     return 1;
+}
+
+const char* adm_render_result_semantic_report_json(const adm_render_result_t* result) noexcept {
+    if (result == nullptr || !result->semantic_report_json.has_value()) {
+        return nullptr;
+    }
+    return result->semantic_report_json->c_str();
 }
 
 uint32_t adm_render_result_log_count(const adm_render_result_t* result) noexcept {

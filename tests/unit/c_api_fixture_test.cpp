@@ -916,6 +916,142 @@ bool verify_cancel_threaded(adm_context_t* ctx, const std::filesystem::path& inp
     return ok;
 }
 
+// ── v1.5 tests ────────────────────────────────────────────────────────────
+
+bool verify_version_15() {
+    return check(adm_api_version_minor() >= 5, "v1.5: minor version should be >= 5");
+}
+
+// Setter NULL safety + clear semantics for the in-memory semantic-policy entry points.
+bool verify_semantic_memory_setters() {
+    bool ok = check(adm_render_options_set_semantic_policy_json(nullptr, "x") == ADM_ERROR_OK,
+                    "NULL opts set_semantic_policy_json should return OK");
+    adm_render_options_set_capture_semantic_report(nullptr, 1); // NULL no-op, must not crash
+
+    adm_render_options_t* opts = adm_create_render_options();
+    ok = check(opts != nullptr, "options creation should succeed") && ok;
+    if (opts != nullptr) {
+        ok = check(adm_render_options_set_semantic_policy_json(opts, "{}") == ADM_ERROR_OK,
+                   "set_semantic_policy_json valid string should return OK") &&
+             ok;
+        ok = check(adm_render_options_set_semantic_policy_json(opts, "") == ADM_ERROR_OK,
+                   "set_semantic_policy_json \"\" (clear) should return OK") &&
+             ok;
+        ok = check(adm_render_options_set_semantic_policy_json(opts, nullptr) == ADM_ERROR_OK,
+                   "set_semantic_policy_json nullptr (clear) should return OK") &&
+             ok;
+        adm_render_options_set_capture_semantic_report(opts, 1);
+        adm_render_options_set_capture_semantic_report(opts, 0);
+    }
+    adm_destroy_render_options(opts);
+    return ok;
+}
+
+// End-to-end: an in-memory policy that globally mutes the scene wires through
+// adm_render_file_ex (no temp file), silences the output (peak metric becomes
+// absent), and — with capture enabled — yields an in-memory report reflecting the
+// mute. The result string is owned by the result handle (not adm_free_string).
+bool verify_semantic_policy_json_wire_through(adm_context_t* ctx, const std::filesystem::path& input) {
+    const auto out = unique_temp_wav_path("mr_c_api_poljson");
+    FileGuard g(out);
+
+    adm_render_options_t* opts = adm_create_render_options();
+    bool ok = check(opts != nullptr, "options creation should succeed");
+    if (opts == nullptr) {
+        return false;
+    }
+    // Global mute via the in-memory policy JSON.
+    const char* policy = R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"mute":true}}})";
+    ok = check(adm_render_options_set_semantic_policy_json(opts, policy) == ADM_ERROR_OK, "set in-memory policy") && ok;
+    adm_render_options_set_capture_semantic_report(opts, 1);
+
+    adm_render_result_t* r = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input.string().c_str(), out.string().c_str(), opts, nullptr, nullptr, &r);
+    ok = check(code == ADM_ERROR_OK, "in-memory policy render should succeed") && ok;
+
+    // Captured report present, correct schema, and reflects the mute — proving the
+    // in-memory JSON was parsed and applied to the scene before rendering.
+    const char* report = adm_render_result_semantic_report_json(r);
+    ok = check(report != nullptr, "captured semantic report should be non-NULL") && ok;
+    if (report != nullptr) {
+        const std::string text(report);
+        ok = check(text.find("mradm.semantic-report.v1") != std::string::npos, "report should carry report schema") &&
+             ok;
+        ok = check(text.find("\"effective_mute\": true") != std::string::npos, "report should reflect effective mute") &&
+             ok;
+    }
+    adm_destroy_render_result(r);
+
+    // Without capture, the report accessor returns NULL even though a render ran.
+    adm_render_options_set_capture_semantic_report(opts, 0);
+    adm_render_result_t* r2 = nullptr;
+    adm_render_file_ex(ctx, input.string().c_str(), out.string().c_str(), opts, nullptr, nullptr, &r2);
+    ok = check(adm_render_result_semantic_report_json(r2) == nullptr, "uncaptured report should be NULL") && ok;
+    adm_destroy_render_result(r2);
+
+    adm_destroy_render_options(opts);
+    return ok;
+}
+
+// Malformed in-memory policy JSON surfaces as a render error (not at set time).
+bool verify_semantic_policy_json_invalid(adm_context_t* ctx, const std::filesystem::path& input) {
+    const auto out = unique_temp_wav_path("mr_c_api_polbad");
+    FileGuard g(out);
+
+    adm_render_options_t* opts = adm_create_render_options();
+    bool ok = check(opts != nullptr, "options creation should succeed");
+    if (opts == nullptr) {
+        return false;
+    }
+    // Setter accepts any string; the error appears at render time.
+    ok = check(adm_render_options_set_semantic_policy_json(opts, "{ not valid json") == ADM_ERROR_OK,
+               "setter accepts malformed JSON (validated at render)") &&
+         ok;
+    adm_render_result_t* r = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input.string().c_str(), out.string().c_str(), opts, nullptr, nullptr, &r);
+    ok = check(code != ADM_ERROR_OK, "malformed in-memory policy should fail the render") && ok;
+    adm_destroy_render_result(r);
+    adm_destroy_render_options(opts);
+    return ok;
+}
+
+// A failure AFTER the semantic report is captured must still surface the report,
+// per the c_api.h contract ("available regardless of the render's error code").
+// FLAC + a height layout (7.1.4) is rejected during format validation, which runs
+// after the report is built — a deterministic, cross-platform late-stage failure.
+bool verify_semantic_report_on_late_failure(adm_context_t* ctx, const std::filesystem::path& input) {
+    const auto flac_out = std::filesystem::path(unique_temp_wav_path("mr_c_api_latefail")).replace_extension(".flac");
+    FileGuard g(flac_out);
+
+    adm_render_options_t* opts = adm_create_render_options();
+    bool ok = check(opts != nullptr, "options creation should succeed");
+    if (opts == nullptr) {
+        return false;
+    }
+    ok = check(adm_render_options_set_output_layout(opts, "7.1.4") == ADM_ERROR_OK, "set 7.1.4 layout") && ok;
+    const char* policy = R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"mute":true}}})";
+    ok = check(adm_render_options_set_semantic_policy_json(opts, policy) == ADM_ERROR_OK, "set in-memory policy") && ok;
+    adm_render_options_set_capture_semantic_report(opts, 1);
+
+    adm_render_result_t* r = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input.string().c_str(), flac_out.string().c_str(), opts, nullptr, nullptr, &r);
+    ok = check(code != ADM_ERROR_OK, "FLAC + height layout should fail at format validation") && ok;
+    // The report, captured before the failure, must still be readable.
+    const char* report = adm_render_result_semantic_report_json(r);
+    ok = check(report != nullptr, "report should be readable even when a later stage fails") && ok;
+    if (report != nullptr) {
+        ok = check(std::string(report).find("mradm.semantic-report.v1") != std::string::npos,
+                   "report schema present on failure") &&
+             ok;
+    }
+    adm_destroy_render_result(r);
+    adm_destroy_render_options(opts);
+    return ok;
+}
+
 bool verify_probe(adm_context_t* ctx, const std::filesystem::path& input) {
     // Valid probe.
     adm_scene_info_t* info = nullptr;
@@ -1409,6 +1545,12 @@ int main() {
     ok = verify_version_14() && ok;
     ok = verify_cancel_token_lifecycle() && ok;
     ok = verify_cancel_pre_render(ctx, fixture.path()) && ok;
+    // v1.5 tests
+    ok = verify_version_15() && ok;
+    ok = verify_semantic_memory_setters() && ok;
+    ok = verify_semantic_policy_json_wire_through(ctx, fixture.path()) && ok;
+    ok = verify_semantic_policy_json_invalid(ctx, fixture.path()) && ok;
+    ok = verify_semantic_report_on_late_failure(ctx, fixture.path()) && ok;
     ok = verify_render_file_ex_compat(ctx, fixture.path()) && ok;
     ok = verify_hoa_render(ctx, fixture.path()) && ok;
     ok = verify_51_render(ctx, fixture.path()) && ok;

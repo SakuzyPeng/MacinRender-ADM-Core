@@ -31,12 +31,17 @@
  *   adm_cancel_token_t + adm_create_cancel_token / adm_cancel /
  *   adm_reset_cancel_token / adm_destroy_cancel_token,
  *   adm_render_options_set_cancel_token.
+ *
+ * v1.5 新增（additive，SOVERSION 不变）：
+ *   adm_render_options_set_semantic_policy_json,
+ *   adm_render_options_set_capture_semantic_report,
+ *   adm_render_result_semantic_report_json.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 4
+#define ADM_API_VERSION_MINOR 5
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -226,6 +231,23 @@ adm_error_code_t adm_render_options_set_semantic_policy_path(adm_render_options_
 adm_error_code_t adm_render_options_set_semantic_report_path(adm_render_options_t* opts,
                                                              const char* path) ADM_API_NOEXCEPT;
 
+/* semantic_policy_json: an in-memory semantic-policy document (UTF-8 JSON, schema
+ * "mradm.semantic-policy.v1"). When set it takes precedence over any
+ * semantic_policy_path (a warning is logged if both are present), letting a GUI
+ * apply an edited policy without writing a temp file. The string is copied
+ * internally. NULL or "" clears the field. May return ADM_ERROR_INTERNAL on OOM.
+ * Malformed JSON is not diagnosed here — it surfaces as a render error.
+ * v1.5 */
+adm_error_code_t adm_render_options_set_semantic_policy_json(adm_render_options_t* opts,
+                                                             const char* json) ADM_API_NOEXCEPT;
+
+/* enabled: 1 = also capture the effective semantic report in-memory, retrievable
+ * after the render via adm_render_result_semantic_report_json; 0 = do not (default).
+ * Independent of semantic_report_path (which writes a file copy). When opts is NULL
+ * this is a safe no-op.
+ * v1.5 */
+void adm_render_options_set_capture_semantic_report(adm_render_options_t* opts, int enabled) ADM_API_NOEXCEPT;
+
 /* default_interp_ms: gain-interpolation ramp when ADM block carries no interpolationLength. [0, 500].
  * Returns ADM_ERROR_INVALID_ARGUMENT if ms > 500. */
 adm_error_code_t adm_render_options_set_default_interp_ms(adm_render_options_t* opts, uint32_t ms) ADM_API_NOEXCEPT;
@@ -349,6 +371,17 @@ const char* adm_render_result_output_path(const adm_render_result_t* result) ADM
  */
 int adm_render_result_loudness_lufs(const adm_render_result_t* result, double* out_value) ADM_API_NOEXCEPT;
 int adm_render_result_peak_dbtp(const adm_render_result_t* result, double* out_value) ADM_API_NOEXCEPT;
+
+/*
+ * adm_render_result_semantic_report_json (v1.5): the effective semantic-policy
+ * report (UTF-8 JSON, schema "mradm.semantic-report.v1") captured during the
+ * render, if the request enabled it via adm_render_options_set_capture_semantic_report.
+ * Returns NULL if not captured (flag off) or if result is NULL. The string is owned
+ * by the result handle and remains valid until adm_destroy_render_result (do NOT
+ * pass it to adm_free_string). Available regardless of the render's error code, so a
+ * GUI can show the report even when a later stage failed.
+ */
+const char* adm_render_result_semantic_report_json(const adm_render_result_t* result) ADM_API_NOEXCEPT;
 
 /*
  * Diagnostic log captured during the render that produced `result`.

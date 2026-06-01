@@ -5,6 +5,7 @@
 #include <cmath>
 #include <fstream>
 #include <limits>
+#include <sstream>
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
@@ -1186,18 +1187,17 @@ hoa_tracks_report_json(const AdmScene& original, const AdmScene& effective, cons
 } // namespace
 
 // NOLINTNEXTLINE(readability-function-size): linear validation keeps field errors local and explicit.
-Result<SemanticPolicy> load_semantic_policy_file(const std::filesystem::path& path) {
-    std::ifstream in(path);
-    if (!in) {
-        return tl::unexpected{io_policy(path, "cannot open file")};
-    }
-
+Result<SemanticPolicy> parse_semantic_policy(std::string_view json, std::string source_label) {
     Json doc;
     try {
-        in >> doc;
+        doc = Json::parse(json);
     } catch (const Json::parse_error& e) {
-        return tl::unexpected{invalid_policy(path.string(), e.what())};
+        return tl::unexpected{invalid_policy(source_label, e.what())};
     }
+    // Report problems against the source location: a file path (load_semantic_policy_file)
+    // or a synthetic label for in-memory callers (the C ABI). Wrapping it in a path keeps
+    // the validation body's existing path.string() calls unchanged.
+    const std::filesystem::path path = std::move(source_label);
     if (!doc.is_object()) {
         return tl::unexpected{invalid_policy(path.string(), "top-level value must be an object")};
     }
@@ -1302,6 +1302,16 @@ Result<SemanticPolicy> load_semantic_policy_file(const std::filesystem::path& pa
     return out;
 }
 
+Result<SemanticPolicy> load_semantic_policy_file(const std::filesystem::path& path) {
+    std::ifstream in(path);
+    if (!in) {
+        return tl::unexpected{io_policy(path, "cannot open file")};
+    }
+    std::stringstream buf;
+    buf << in.rdbuf();
+    return parse_semantic_policy(buf.str(), path.string());
+}
+
 Result<void> apply_semantic_policy(AdmScene& scene,
                                    const SemanticPolicy& policy,
                                    uint32_t sample_rate,
@@ -1353,12 +1363,11 @@ Result<void> apply_semantic_policy(AdmScene& scene,
     return {};
 }
 
-Result<void> write_semantic_report_file(const std::filesystem::path& path,
-                                        const AdmScene& original,
-                                        const AdmScene& effective,
-                                        const SemanticPolicy* policy,
-                                        const SemanticPolicyReportOptions& options,
-                                        const std::vector<std::string>& warnings) {
+std::string build_semantic_report(const AdmScene& original,
+                                  const AdmScene& effective,
+                                  const SemanticPolicy* policy,
+                                  const SemanticPolicyReportOptions& options,
+                                  const std::vector<std::string>& warnings) {
     Json doc = Json::object();
     doc["schema"] = "mradm.semantic-report.v1";
     doc["renderer"] = options.renderer;
@@ -1418,11 +1427,20 @@ Result<void> write_semantic_report_file(const std::filesystem::path& path,
 
     doc["hoa_tracks"] = hoa_tracks_report_json(original, effective, policy);
 
+    return doc.dump(2);
+}
+
+Result<void> write_semantic_report_file(const std::filesystem::path& path,
+                                        const AdmScene& original,
+                                        const AdmScene& effective,
+                                        const SemanticPolicy* policy,
+                                        const SemanticPolicyReportOptions& options,
+                                        const std::vector<std::string>& warnings) {
     std::ofstream out(path);
     if (!out) {
         return tl::unexpected{io_policy(path, "cannot open report for writing")};
     }
-    out << doc.dump(2) << '\n';
+    out << build_semantic_report(original, effective, policy, options, warnings) << '\n';
     if (!out) {
         return tl::unexpected{io_policy(path, "failed to write report")};
     }

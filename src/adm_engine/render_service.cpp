@@ -313,8 +313,11 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
 
     std::optional<SemanticPolicy> semantic_policy;
     std::vector<std::string> semantic_warnings;
-    const bool needs_semantic_report = request.options.semantic_report_path.has_value();
+    const bool needs_semantic_report =
+        request.options.semantic_report_path.has_value() || request.options.capture_semantic_report;
     const AdmScene original_scene = needs_semantic_report ? *scene_result : AdmScene{};
+    // Effective semantic report captured in-memory when requested; surfaced via RenderResult.
+    std::optional<std::string> semantic_report_json;
 
     auto output_layout = requested_layout;
     if (sel == RendererSelection::binaural) {
@@ -327,12 +330,28 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         output_layout = "binaural";
     }
 
-    if (request.options.semantic_policy_path.has_value()) {
+    // Resolve the semantic policy from either an in-memory JSON document (preferred,
+    // for GUIs editing a policy without a temp file) or a file path.
+    if (request.options.semantic_policy_json.has_value()) {
+        if (request.options.semantic_policy_path.has_value()) {
+            logs.log(LogLevel::warning,
+                     "semantic-policy",
+                     "in-memory semantic policy supplied; ignoring semantic_policy_path");
+        }
+        auto policy_res = parse_semantic_policy(*request.options.semantic_policy_json, "<memory>");
+        if (!policy_res) {
+            return {policy_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, policy_res.error().message}}};
+        }
+        semantic_policy = std::move(*policy_res);
+    } else if (request.options.semantic_policy_path.has_value()) {
         auto policy_res = load_semantic_policy_file(*request.options.semantic_policy_path);
         if (!policy_res) {
             return {policy_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, policy_res.error().message}}};
         }
         semantic_policy = std::move(*policy_res);
+    }
+
+    if (semantic_policy.has_value()) {
         auto apply_res =
             apply_semantic_policy(*scene_result, *semantic_policy, scene_result->info.sample_rate, &semantic_warnings);
         if (!apply_res) {
@@ -343,6 +362,16 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         }
     }
 
+    // From here on the semantic report may be captured; every error path must carry
+    // it back so the C ABI's adm_render_result_semantic_report_json stays readable
+    // regardless of the render's error code (see include/adm/c_api.h). Captured by
+    // reference; the success return moves it out afterwards, after the last call.
+    const auto fail_with_report = [&semantic_report_json](Error error,
+                                                          LogLevel level = LogLevel::error) -> RenderResult {
+        const std::string message = error.message;
+        return {std::move(error), std::nullopt, std::nullopt, {{level, message}}, semantic_report_json};
+    };
+
     if (needs_semantic_report) {
         const SemanticPolicyReportOptions report_options{
             .renderer = renderer_name(sel),
@@ -350,14 +379,23 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
                 request.options.semantic_policy_path ? request.options.semantic_policy_path->string() : std::string{},
             .capabilities = caps,
         };
-        auto report_res = write_semantic_report_file(*request.options.semantic_report_path,
-                                                     original_scene,
-                                                     *scene_result,
-                                                     semantic_policy ? &*semantic_policy : nullptr,
-                                                     report_options,
-                                                     semantic_warnings);
-        if (!report_res) {
-            return {report_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, report_res.error().message}}};
+        if (request.options.capture_semantic_report) {
+            semantic_report_json = build_semantic_report(original_scene,
+                                                         *scene_result,
+                                                         semantic_policy ? &*semantic_policy : nullptr,
+                                                         report_options,
+                                                         semantic_warnings);
+        }
+        if (request.options.semantic_report_path.has_value()) {
+            auto report_res = write_semantic_report_file(*request.options.semantic_report_path,
+                                                         original_scene,
+                                                         *scene_result,
+                                                         semantic_policy ? &*semantic_policy : nullptr,
+                                                         report_options,
+                                                         semantic_warnings);
+            if (!report_res) {
+                return fail_with_report(report_res.error());
+            }
         }
     }
 
@@ -382,43 +420,43 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
             const auto msg = fmt::format(
                 "FLAC output supports only non-height layouts (binaural, 5.1, 7.1); layout '{}' is not supported",
                 output_layout);
-            return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+            return fail_with_report({ErrorCode::unsupported, msg, {}});
         }
         const auto channels = channel_count_for_layout(caps, output_layout);
         if (channels.has_value() && *channels > 8U) {
             const auto msg =
                 fmt::format("FLAC supports 1-8 channels; layout '{}' renders {} channels", output_layout, *channels);
-            return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+            return fail_with_report({ErrorCode::unsupported, msg, {}});
         }
     }
     if (is_iamf_final && !audio::iamf_encoding_available()) {
         constexpr auto msg =
             "IAMF output requires a build configured with MR_ADM_ENABLE_IAMF=ON and the official AOM iamf-tools "
             "bridge";
-        return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+        return fail_with_report({ErrorCode::unsupported, msg, {}});
     }
     if ((is_iamf_final || request.options.iamf_container == RenderOptions::IamfContainer::mp4) &&
         output_layout == "9.1.6") {
         constexpr auto msg =
             "IAMF 9.1.6 output is disabled because expanded/Base-Enhanced IAMF is not currently compatible enough "
             "for release output";
-        return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+        return fail_with_report({ErrorCode::unsupported, msg, {}});
     }
     if (request.options.iamf_container == RenderOptions::IamfContainer::mp4) {
         if (final_ext != ".mp4") {
             const auto msg =
                 fmt::format("--iamf-container mp4 requires output path with .mp4 extension; got '{}'", final_ext);
-            return {{ErrorCode::invalid_argument, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+            return fail_with_report({ErrorCode::invalid_argument, msg, {}});
         }
         if (!audio::iamf_encoding_available()) {
             constexpr auto msg = "--iamf-container mp4 requires a build configured with MR_ADM_ENABLE_IAMF=ON";
-            return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+            return fail_with_report({ErrorCode::unsupported, msg, {}});
         }
         const auto packager = audio::detect_iamf_mp4_packager();
         if (packager.kind == audio::IamfMp4PackagerKind::none) {
             constexpr auto msg = "--iamf-container mp4 requires mp4box (GPAC) or ffmpeg in PATH; "
                                  "install GPAC: https://gpac.io";
-            return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+            return fail_with_report({ErrorCode::unsupported, msg, {}});
         }
         if (packager.kind == audio::IamfMp4PackagerKind::ffmpeg && packager.ffmpeg_major < 7) {
             logs.log(LogLevel::warning,
@@ -468,7 +506,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
             std::filesystem::remove(output_path, ec);
         }
         const auto level = render_res.error().code == ErrorCode::cancelled ? LogLevel::info : LogLevel::error;
-        return {render_res.error(), std::nullopt, std::nullopt, {{level, render_res.error().message}}};
+        return fail_with_report(render_res.error(), level);
     }
     const RenderMetrics& metrics = *render_res;
 
@@ -486,7 +524,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     if (need_trim) {
         auto trim_res = audio::trim_file_frames(render_path, trim_start_frame, trim_frame_count, output_layout);
         if (!trim_res) {
-            return {trim_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, trim_res.error().message}}};
+            return fail_with_report(trim_res.error());
         }
     }
 
@@ -559,7 +597,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         logs.log(LogLevel::info, "engine", fmt::format("applying total gain {:.4f} ({:.2f} dB)", gain_linear, gain_db));
         auto gain_res = audio::apply_gain_to_file(render_path, gain_linear, output_layout);
         if (!gain_res) {
-            return {gain_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, gain_res.error().message}}};
+            return fail_with_report(gain_res.error());
         }
     }
 
@@ -576,7 +614,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
             logs.log(LogLevel::info, "engine", fmt::format("converting to {}-bit integer PCM", depth));
             auto conv_res = audio::downconvert_to_int(render_path, depth);
             if (!conv_res) {
-                return {conv_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, conv_res.error().message}}};
+                return fail_with_report(conv_res.error());
             }
         }
     }
@@ -589,7 +627,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         auto flac_res = audio::convert_to_flac(render_path, output_path);
         render_temp_guard->remove_now();
         if (!flac_res) {
-            return {flac_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, flac_res.error().message}}};
+            return fail_with_report(flac_res.error());
         }
     }
 
@@ -599,7 +637,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
             render_path, output_path, output_layout, request.options.opus_bitrate_per_ch_kbps);
         render_temp_guard->remove_now();
         if (!opus_res) {
-            return {opus_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, opus_res.error().message}}};
+            return fail_with_report(opus_res.error());
         }
     }
 
@@ -609,7 +647,7 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
             render_path, output_path, output_layout, request.options.apac_bitrate_kbps, request.options.apac_drc_music);
         render_temp_guard->remove_now();
         if (!apac_res) {
-            return {apac_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, apac_res.error().message}}};
+            return fail_with_report(apac_res.error());
         }
     }
 
@@ -621,13 +659,13 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
             metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
         auto conv_res = audio::downconvert_to_int(render_path, 32U);
         if (!conv_res) {
-            return {conv_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, conv_res.error().message}}};
+            return fail_with_report(conv_res.error());
         }
         auto iamf_res = audio::convert_to_iamf(
             render_path, output_path, output_layout, request.options.opus_bitrate_per_ch_kbps, lufs, peak);
         render_temp_guard->remove_now();
         if (!iamf_res) {
-            return {iamf_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, iamf_res.error().message}}};
+            return fail_with_report(iamf_res.error());
         }
     }
 
@@ -639,18 +677,18 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
             metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
         auto conv_res = audio::downconvert_to_int(render_path, 32U);
         if (!conv_res) {
-            return {conv_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, conv_res.error().message}}};
+            return fail_with_report(conv_res.error());
         }
         auto iamf_res = audio::convert_to_iamf(
             render_path, iamf_temp_path.string(), output_layout, request.options.opus_bitrate_per_ch_kbps, lufs, peak);
         render_temp_guard->remove_now();
         if (!iamf_res) {
-            return {iamf_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, iamf_res.error().message}}};
+            return fail_with_report(iamf_res.error());
         }
         auto pkg_res = audio::package_iamf_to_mp4(iamf_temp_path.string(), output_path);
         iamf_temp_guard->remove_now();
         if (!pkg_res) {
-            return {pkg_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, pkg_res.error().message}}};
+            return fail_with_report(pkg_res.error());
         }
     }
 
@@ -691,7 +729,8 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     return {{ErrorCode::ok, "", {}},
             std::filesystem::path{output_path},
             final_metrics,
-            {{LogLevel::info, "render completed"}}};
+            {{LogLevel::info, "render completed"}},
+            std::move(semantic_report_json)};
 }
 
 Result<SceneProbe> RenderService::probe(const std::string& input_path) const {

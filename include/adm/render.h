@@ -35,6 +35,11 @@ struct RenderResult {
     std::optional<std::filesystem::path> output_path;
     std::optional<RenderMetrics> metrics;
     std::vector<Diagnostic> diagnostics;
+    // Effective semantic-policy report JSON (UTF-8), populated when the request set
+    // RenderOptions::capture_semantic_report. nullopt otherwise. The default member
+    // initializer lets the many aggregate error-returns omit this trailing field
+    // without tripping -Wmissing-field-initializers.
+    std::optional<std::string> semantic_report_json = std::nullopt;
 
     [[nodiscard]] bool success() const noexcept { return error.ok(); }
 };
