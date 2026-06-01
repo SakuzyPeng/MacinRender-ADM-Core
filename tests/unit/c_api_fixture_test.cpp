@@ -1052,6 +1052,32 @@ bool verify_semantic_report_on_late_failure(adm_context_t* ctx, const std::files
     return ok;
 }
 
+// ── v1.7 tests ────────────────────────────────────────────────────────────
+
+bool verify_version_17() {
+    return check(adm_api_version_minor() >= 7, "v1.7: minor version should be >= 7");
+}
+
+// adm_render_stage_from_string maps every documented stage string to its enum, and
+// returns ADM_STAGE_UNKNOWN for NULL / empty / unrecognized input.
+bool verify_render_stage_from_string() {
+    bool ok = check(adm_render_stage_from_string("validating") == ADM_STAGE_VALIDATING, "stage: validating");
+    ok = check(adm_render_stage_from_string("probing") == ADM_STAGE_PROBING, "stage: probing") && ok;
+    ok = check(adm_render_stage_from_string("importing_scene") == ADM_STAGE_IMPORTING_SCENE, "stage: importing_scene") &&
+         ok;
+    ok = check(adm_render_stage_from_string("planning") == ADM_STAGE_PLANNING, "stage: planning") && ok;
+    ok = check(adm_render_stage_from_string("rendering") == ADM_STAGE_RENDERING, "stage: rendering") && ok;
+    ok = check(adm_render_stage_from_string("post_processing") == ADM_STAGE_POST_PROCESSING, "stage: post_processing") &&
+         ok;
+    ok = check(adm_render_stage_from_string("finished") == ADM_STAGE_FINISHED, "stage: finished") && ok;
+    // Fallbacks.
+    ok = check(adm_render_stage_from_string(nullptr) == ADM_STAGE_UNKNOWN, "stage: NULL → UNKNOWN") && ok;
+    ok = check(adm_render_stage_from_string("") == ADM_STAGE_UNKNOWN, "stage: empty → UNKNOWN") && ok;
+    ok = check(adm_render_stage_from_string("Rendering") == ADM_STAGE_UNKNOWN, "stage: case-sensitive → UNKNOWN") && ok;
+    ok = check(adm_render_stage_from_string("nonsense") == ADM_STAGE_UNKNOWN, "stage: garbage → UNKNOWN") && ok;
+    return ok;
+}
+
 bool verify_probe(adm_context_t* ctx, const std::filesystem::path& input) {
     // Valid probe.
     adm_scene_info_t* info = nullptr;
@@ -1124,6 +1150,7 @@ bool verify_progress_callback(adm_context_t* ctx, const std::filesystem::path& i
     bool fractions_ok = true;
     bool stages_ok = true;
     bool messages_ok = true;
+    bool stage_enum_ok = true; // v1.7: every emitted stage string maps to a known enum
     double prev = -1.0;
     for (const auto& ev : state.events) {
         if (ev.fraction < prev || ev.fraction < 0.0 || ev.fraction > 1.0) {
@@ -1132,6 +1159,9 @@ bool verify_progress_callback(adm_context_t* ctx, const std::filesystem::path& i
         if (!is_valid_stage(ev.stage)) {
             stages_ok = false;
         }
+        if (adm_render_stage_from_string(ev.stage.c_str()) == ADM_STAGE_UNKNOWN) {
+            stage_enum_ok = false;
+        }
         if (!ev.message_non_null) {
             messages_ok = false;
         }
@@ -1139,9 +1169,13 @@ bool verify_progress_callback(adm_context_t* ctx, const std::filesystem::path& i
     }
     ok = check(fractions_ok, "progress fractions should be non-decreasing and in [0, 1]") && ok;
     ok = check(stages_ok, "all progress stage strings should be from the known set") && ok;
+    ok = check(stage_enum_ok, "every emitted stage string should map to a known adm_render_stage_t (no drift)") && ok;
     ok = check(messages_ok, "all progress message pointers should be non-null") && ok;
     if (!state.events.empty()) {
         ok = check(state.events.back().stage == "finished", "last progress stage should be 'finished'") && ok;
+        ok = check(adm_render_stage_from_string(state.events.back().stage.c_str()) == ADM_STAGE_FINISHED,
+                   "last stage should map to ADM_STAGE_FINISHED") &&
+             ok;
         ok = check(state.events.back().fraction >= 0.99, "last progress fraction should reach ~1.0") && ok;
     }
     return ok;
@@ -1629,6 +1663,9 @@ int main() {
     // v1.6 tests
     ok = verify_version_16() && ok;
     ok = verify_output_formats_json(ctx) && ok;
+    // v1.7 tests
+    ok = verify_version_17() && ok;
+    ok = verify_render_stage_from_string() && ok;
     ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;
     ok = verify_iamf_smoke(ctx, fixture.path()) && ok;
 
