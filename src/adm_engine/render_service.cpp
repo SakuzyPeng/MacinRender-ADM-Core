@@ -202,6 +202,11 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
         logs.log(LogLevel::warning, "importer", w);
     }
 
+    if (request.options.cancel_token.stop_requested()) {
+        constexpr auto msg = "render cancelled";
+        return {{ErrorCode::cancelled, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::info, msg}}};
+    }
+
     // Resolve the optional output time-range trim against the rendered timeline
     // (which equals the input timeline). We compute the frame range here, while
     // the scene info is still available, and apply it to the rendered PCM below.
@@ -448,12 +453,22 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     if (need_trim) {
         plan.meter_window = MeterWindow{trim_start_frame, trim_frame_count};
     }
+    plan.cancel_token = request.options.cancel_token;
     plan.scene = std::move(*scene_result);
 
     // Render (inline measurement of loudness + True Peak over the meter window).
     auto render_res = renderer->render(plan, progress, logs);
     if (!render_res) {
-        return {render_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, render_res.error().message}}};
+        // On any mid-render failure (including cancellation) a direct WAV/CAF
+        // target may hold a partially written file; lossy targets are covered by
+        // their TempFileGuard. Remove the partial direct output so a cancelled or
+        // failed render never leaves a truncated file behind.
+        if (!is_lossy_final) {
+            std::error_code ec;
+            std::filesystem::remove(output_path, ec);
+        }
+        const auto level = render_res.error().code == ErrorCode::cancelled ? LogLevel::info : LogLevel::error;
+        return {render_res.error(), std::nullopt, std::nullopt, {{level, render_res.error().message}}};
     }
     const RenderMetrics& metrics = *render_res;
 

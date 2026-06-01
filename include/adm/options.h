@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <stop_token>
 #include <string>
 
 namespace mradm {
@@ -92,6 +93,13 @@ struct RenderOptions {
     // Internal diagnostics/tests only. The CLI never exposes this; normal users
     // cannot request speaker-stereo ADM rendering.
     bool internal_allow_speaker_stereo{false};
+    // Cooperative cancellation. A default-constructed token has no associated
+    // stop-state, so stop_requested() is always false (renders never cancel).
+    // When a live token is supplied (via the C ABI cancel-token object or a
+    // std::stop_source), requesting a stop makes the active render abort at the
+    // next chunk/stage boundary and return ErrorCode::cancelled. The token only
+    // references shared state, so copying RenderOptions stays cheap and safe.
+    std::stop_token cancel_token;
 };
 
 struct RenderRequest {

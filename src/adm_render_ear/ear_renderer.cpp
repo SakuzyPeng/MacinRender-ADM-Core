@@ -773,6 +773,9 @@ Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& 
         uint64_t frames_done = 0;
 
         while (frames_done < num_frames) {
+            if (plan.cancel_token.stop_requested()) {
+                return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
+            }
             const uint64_t frames_now = std::min(k_block_size, num_frames - frames_done);
             const std::size_t out_samples = num_out_ch * static_cast<std::size_t>(frames_now);
 

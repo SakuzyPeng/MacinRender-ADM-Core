@@ -14,6 +14,7 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "adm/c_api.h"
@@ -803,6 +804,118 @@ bool verify_final_gain_wire_through(adm_context_t* ctx, const std::filesystem::p
     return ok;
 }
 
+// ── v1.4 tests ────────────────────────────────────────────────────────────
+
+bool verify_version_14() {
+    return check(adm_api_version_minor() >= 4, "v1.4: minor version should be >= 4");
+}
+
+// Cancel-token lifecycle + NULL safety: every entry point tolerates NULL, and
+// create/cancel/reset/destroy and set_cancel_token never crash.
+bool verify_cancel_token_lifecycle() {
+    adm_cancel(nullptr);
+    adm_reset_cancel_token(nullptr);
+    adm_destroy_cancel_token(nullptr);
+    adm_render_options_set_cancel_token(nullptr, nullptr);
+
+    adm_cancel_token_t* token = adm_create_cancel_token();
+    bool ok = check(token != nullptr, "cancel token creation should succeed");
+    if (token == nullptr) {
+        return false;
+    }
+    adm_cancel(token); // request
+    adm_cancel(token); // idempotent
+    adm_reset_cancel_token(token);
+
+    adm_render_options_t* opts = adm_create_render_options();
+    ok = check(opts != nullptr, "options creation should succeed") && ok;
+    if (opts != nullptr) {
+        adm_render_options_set_cancel_token(opts, token);   // associate
+        adm_render_options_set_cancel_token(opts, nullptr); // clear
+    }
+    adm_destroy_render_options(opts);
+    adm_destroy_cancel_token(token);
+    return ok;
+}
+
+// Deterministic end-to-end: cancelling before the render starts makes the engine
+// abort at its first checkpoint, return ADM_ERROR_CANCELLED, and leave no output
+// file. Resetting the same token then drives a successful render (token reuse).
+bool verify_cancel_pre_render(adm_context_t* ctx, const std::filesystem::path& input) {
+    const auto out = unique_temp_wav_path("mr_c_api_cancel");
+    FileGuard g(out);
+
+    adm_cancel_token_t* token = adm_create_cancel_token();
+    bool ok = check(token != nullptr, "cancel token creation should succeed");
+    adm_render_options_t* opts = adm_create_render_options();
+    ok = check(opts != nullptr, "options creation should succeed") && ok;
+    if (token == nullptr || opts == nullptr) {
+        adm_destroy_render_options(opts);
+        adm_destroy_cancel_token(token);
+        return false;
+    }
+    adm_render_options_set_cancel_token(opts, token);
+
+    // Pre-cancel → render must report CANCELLED and write nothing.
+    adm_cancel(token);
+    adm_render_result_t* r = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input.string().c_str(), out.string().c_str(), opts, nullptr, nullptr, &r);
+    ok = check(code == ADM_ERROR_CANCELLED, "pre-cancelled render should return CANCELLED") && ok;
+    ok = check(r != nullptr && adm_render_result_error_code(r) == ADM_ERROR_CANCELLED, "result code CANCELLED") && ok;
+    adm_destroy_render_result(r);
+    ok = check(!std::filesystem::exists(out), "cancelled render should leave no output file") && ok;
+
+    // Reset → same token + options now render successfully (token reuse).
+    adm_reset_cancel_token(token);
+    adm_render_result_t* r2 = nullptr;
+    const adm_error_code_t code2 =
+        adm_render_file_ex(ctx, input.string().c_str(), out.string().c_str(), opts, nullptr, nullptr, &r2);
+    ok = check(code2 == ADM_ERROR_OK, "render after reset should succeed") && ok;
+    adm_destroy_render_result(r2);
+    ok = check(std::filesystem::exists(out), "render after reset should produce output") && ok;
+
+    adm_destroy_render_options(opts);
+    adm_destroy_cancel_token(token);
+    return ok;
+}
+
+// Concurrent cancel from another thread while a render runs. The render either
+// finishes (OK) or is cancelled mid-flight; both are acceptable. The point is
+// that cross-thread adm_cancel neither crashes nor deadlocks, and a cancelled
+// render leaves no output behind. (Cross-thread safety rests on std::stop_source;
+// only the worker thread touches ctx, so the context contract is respected.)
+bool verify_cancel_threaded(adm_context_t* ctx, const std::filesystem::path& input_1s) {
+    const auto out = unique_temp_wav_path("mr_c_api_cancel_thr");
+    FileGuard g(out);
+
+    adm_cancel_token_t* token = adm_create_cancel_token();
+    adm_render_options_t* opts = adm_create_render_options();
+    if (token == nullptr || opts == nullptr) {
+        adm_destroy_render_options(opts);
+        adm_destroy_cancel_token(token);
+        return check(false, "threaded cancel: setup allocation failed");
+    }
+    adm_render_options_set_cancel_token(opts, token);
+
+    adm_render_result_t* r = nullptr;
+    adm_error_code_t code = ADM_ERROR_INTERNAL;
+    std::thread worker([&] {
+        code = adm_render_file_ex(ctx, input_1s.string().c_str(), out.string().c_str(), opts, nullptr, nullptr, &r);
+    });
+    adm_cancel(token); // race the in-flight render
+    worker.join();
+
+    bool ok = check(code == ADM_ERROR_OK || code == ADM_ERROR_CANCELLED, "threaded render should end OK or CANCELLED");
+    if (code == ADM_ERROR_CANCELLED) {
+        ok = check(!std::filesystem::exists(out), "cancelled threaded render should leave no output") && ok;
+    }
+    adm_destroy_render_result(r);
+    adm_destroy_render_options(opts);
+    adm_destroy_cancel_token(token);
+    return ok;
+}
+
 bool verify_probe(adm_context_t* ctx, const std::filesystem::path& input) {
     // Valid probe.
     adm_scene_info_t* info = nullptr;
@@ -1292,6 +1405,10 @@ int main() {
     ok = verify_version_13() && ok;
     ok = verify_final_gain_setter() && ok;
     ok = verify_final_gain_wire_through(ctx, fixture.path()) && ok;
+    // v1.4 tests
+    ok = verify_version_14() && ok;
+    ok = verify_cancel_token_lifecycle() && ok;
+    ok = verify_cancel_pre_render(ctx, fixture.path()) && ok;
     ok = verify_render_file_ex_compat(ctx, fixture.path()) && ok;
     ok = verify_hoa_render(ctx, fixture.path()) && ok;
     ok = verify_51_render(ctx, fixture.path()) && ok;
@@ -1299,6 +1416,7 @@ int main() {
         const FileGuard fixture_1s(write_fixture_1s());
         ok = verify_loudness_metrics(ctx, fixture_1s.path()) && ok;
         ok = verify_render_trim_wire_through(ctx, fixture_1s.path()) && ok;
+        ok = verify_cancel_threaded(ctx, fixture_1s.path()) && ok;
     }
     ok = verify_probe(ctx, fixture.path()) && ok;
     ok = verify_progress_callback(ctx, fixture.path()) && ok;

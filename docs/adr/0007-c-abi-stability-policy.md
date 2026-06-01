@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.3）
-> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 于 2026-06-01）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.4）
+> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 于 2026-06-01）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -200,6 +200,30 @@ C ABI 走 **两阶段稳定** 模型：
 - **口径**：增益被并入引擎的合并增益一次施加，故裁剪/响度处理后的 `adm_render_result_loudness_lufs` /
   `adm_render_result_peak_dbtp` 与写入的元数据均**反映含 final gain 后**的实际文件电平。
 - 字段经 `adm_render_file_ex` 直接透传到 `RenderService`，**未新增 render 入口**。
+
+### v1.4.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+新增一个 opaque 类型、四个生命周期函数与一个 options setter，**未触碰任何已有 signature、enum 值或
+callback**（已冻结的 `adm_progress_cb` 维持原样、未改返回值），因此是 minor 升级。面向 GUI 的「取消」按钮：
+此前 `ADM_ERROR_CANCELLED` 已在 enum 中定义但引擎无任何代码路径可产生它，本次将其打通为可达。
+
+- **取消句柄**：新增 opaque `adm_cancel_token_t`（内部包 `std::stop_source`）与
+  `adm_create_cancel_token` / `adm_destroy_cancel_token`（严格配对）/ `adm_cancel`（请求取消，幂等）/
+  `adm_reset_cancel_token`（换入新 `stop_source` 以复用 token）。所有函数对 `NULL` 均为安全 no-op。
+- **关联到渲染**：`adm_render_options_set_cancel_token` 把 token 以**借用指针**（非持有）挂到 options 上；
+  token 必须存活至引用它的渲染返回。`token==NULL` 清除关联（渲染变为不可取消），`opts==NULL` 为 no-op。
+  C 侧 options 仅保存指针，在 `adm_render_file_ex` 内才 `get_token()` 解析出 `std::stop_token`，
+  确保 `adm_reset_cancel_token` 换源后总能被下一次渲染观察到。
+- **线程语义**：与 `adm_context_t`「单线程 / 外部串行化」不同，`adm_cancel` **显式允许跨线程**——可与正在
+  另一线程执行、引用同一 token 的 `adm_render_file_ex` 并发调用（依托 `std::stop_source`/`std::stop_token`
+  的并发契约）。`adm_create` / `adm_reset` / `adm_destroy` **不**线程安全，须在渲染返回后才调用。
+- **引擎行为**：`RenderOptions` / `RenderPlan` 各增 `std::stop_token cancel_token`（std 类型，未违反
+  ADR 0003 的第三方边界）。`RenderService` 在导入后插入粗粒度检查点，各 renderer（EAR / VBAP / HOA /
+  binaural）在帧循环边界检查 `stop_requested()`，命中即返回 `ErrorCode::cancelled` → `ADM_ERROR_CANCELLED`。
+  取消（或任何中途失败）时，direct WAV/CAF 的部分写出文件会被删除（lossy 输出由既有 `TempFileGuard` 兜底），
+  故取消不留截断残件。
+- **未新增 render 入口**：token 经既有 `adm_render_file_ex`/options 透传，`adm_render_file` 与
+  `adm_render_file_ex(opts==NULL)` 行为不变（不可取消）。
 
 ## opaque 指针与 callback 生命周期
 
