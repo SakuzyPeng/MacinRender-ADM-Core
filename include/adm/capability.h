@@ -27,6 +27,12 @@ struct CapabilityReport {
     bool supports_object_divergence{false};
     bool supports_screen_ref{false};
     bool supports_diffuse{false};
+    // Internal optimization hint (not surfaced in capabilities JSON): the backend
+    // honors RenderPlan::render_window — it can render only the requested output
+    // sub-window using an internal warm-up pre-roll, bit-identical to a full render
+    // then trimmed. When false, RenderService renders the full timeline and trims
+    // the file afterward.
+    bool supports_render_window{false};
 };
 
 } // namespace mradm

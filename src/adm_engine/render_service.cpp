@@ -487,9 +487,15 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     plan.object_smoothing_frames = request.options.object_smoothing_frames;
     plan.speaker_spread_mode = request.options.speaker_spread_mode;
     plan.binaural_spread_mode = request.options.binaural_spread_mode;
-    // Restrict the backend's inline metering to the trimmed window so the reported
-    // loudness / True-Peak describe the kept segment, not the full render.
-    if (need_trim) {
+    // Output time-range trim: prefer on-demand window rendering when the backend
+    // supports it (seek + pre-roll → writes only the window, bit-identical to a full
+    // render then trimmed, and skips the post-render trim pass below). Otherwise fall
+    // back to a full render with the meter restricted to the kept window, then
+    // trim_file_frames. The two are mutually exclusive on the plan.
+    const bool window_render = need_trim && caps.supports_render_window;
+    if (window_render) {
+        plan.render_window = RenderWindow{trim_start_frame, trim_frame_count};
+    } else if (need_trim) {
         plan.meter_window = MeterWindow{trim_start_frame, trim_frame_count};
     }
     plan.cancel_token = request.options.cancel_token;
@@ -521,8 +527,9 @@ RenderResult RenderService::render(const RenderRequest& request, ProgressSink& p
     // Apply the output time-range trim before gain/encode so every downstream step
     // operates on the trimmed PCM. The backend already measured loudness/True-Peak
     // over this same window (plan.meter_window), so `metrics`, the applied gain, and
-    // the file metadata all describe the trimmed segment.
-    if (need_trim) {
+    // the file metadata all describe the trimmed segment. Skipped when window_render
+    // already produced a trimmed file (the backend wrote only the window).
+    if (need_trim && !window_render) {
         auto trim_res = audio::trim_file_frames(render_path, trim_start_frame, trim_frame_count, output_layout);
         if (!trim_res) {
             return fail_with_report(trim_res.error());
