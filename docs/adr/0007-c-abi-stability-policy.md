@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.4）
-> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 于 2026-06-01）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.5）
+> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 / v1.5 于 2026-06-01）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -224,6 +224,30 @@ callback**（已冻结的 `adm_progress_cb` 维持原样、未改返回值），
   故取消不留截断残件。
 - **未新增 render 入口**：token 经既有 `adm_render_file_ex`/options 透传，`adm_render_file` 与
   `adm_render_file_ex(opts==NULL)` 行为不变（不可取消）。
+
+### v1.5.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+新增两个 options setter、一个 result accessor，**未触碰任何已有 signature、enum 值或 callback**，因此是
+minor 升级。此前语义策略接口不对称——模板可经 `adm_policy_template_json` 取到内存字符串，但应用只能经
+`adm_render_options_set_semantic_policy_path`（文件路径）、report 也只能经 `set_semantic_report_path`
+写文件。本次把读写两端都补成内存接口，GUI 可全程不落临时文件。
+
+- **内存策略输入**：`adm_render_options_set_semantic_policy_json` 接受 UTF-8 JSON 字符串
+  （schema `mradm.semantic-policy.v1`），内部拷贝；`NULL`/`""` 清空。**优先级高于
+  `semantic_policy_path`**（两者并存时记一条 warning 并采用内存策略）。畸形 JSON 不在 setter 处诊断，
+  而是在渲染时作为错误浮现（与文件路径一致）。`opts==NULL` 返回 `ADM_ERROR_OK`，OOM 返回
+  `ADM_ERROR_INTERNAL`。
+- **内存报告捕获**：`adm_render_options_set_capture_semantic_report(opts, enabled)` 开启后，渲染会把
+  生效语义报告（schema `mradm.semantic-report.v1`）一并捕获到内存，经
+  `adm_render_result_semantic_report_json` 读取。与 `semantic_report_path`（写文件副本）相互独立，可同时使用。
+- **报告 accessor 生命周期**：返回的字符串由 result 句柄持有，存活至 `adm_destroy_render_result`，
+  **不可** 交给 `adm_free_string`（区别于 `adm_inspect_file_json` 等"调用方拥有"的接口）。未捕获或
+  `result==NULL` 时返回 `NULL`。无论渲染错误码为何都可读取，便于在后段失败时仍展示报告。
+- **引擎实现**：`semantic_policy.cpp` 把解析与报告生成各拆出纯内存函数
+  （`parse_semantic_policy(string_view,label)` / `build_semantic_report(...)->string`），文件版
+  （`load_semantic_policy_file` / `write_semantic_report_file`）转调之，文件输出字节不变；`RenderOptions`
+  增 `semantic_policy_json` / `capture_semantic_report`，`RenderResult` 增 `semantic_report_json`。
+  字段经既有 `adm_render_file_ex` 透传，**未新增 render 入口**。
 
 ## opaque 指针与 callback 生命周期
 

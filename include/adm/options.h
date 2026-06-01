@@ -67,8 +67,16 @@ struct RenderOptions {
     // Optional ADM semantic render policy JSON. Applied to the imported scene
     // before handing metadata to the selected renderer.
     std::optional<std::filesystem::path> semantic_policy_path;
+    // Optional in-memory semantic policy JSON (UTF-8). When set it takes precedence
+    // over semantic_policy_path, letting a GUI apply an edited policy without a temp
+    // file. nullopt = no in-memory policy.
+    std::optional<std::string> semantic_policy_json;
     // Optional effective semantic report JSON for debugging policy matches.
     std::optional<std::filesystem::path> semantic_report_path;
+    // When true, the effective semantic report is also captured in-memory and
+    // returned via RenderResult::semantic_report_json (independent of whether
+    // semantic_report_path requests a file copy).
+    bool capture_semantic_report{false};
     // Default gain-interpolation ramp used when jumpPosition=false and the ADM block
     // carries no explicit interpolationLength.  Set to 0 for instant switching.
     uint32_t default_interp_ms{5};

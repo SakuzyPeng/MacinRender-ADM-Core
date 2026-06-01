@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "adm/capability.h"
@@ -120,6 +121,12 @@ struct SemanticPolicyReportOptions {
 
 [[nodiscard]] Result<SemanticPolicy> load_semantic_policy_file(const std::filesystem::path& path);
 
+// Parse a semantic-policy document from an in-memory JSON string (UTF-8). Identical
+// validation to load_semantic_policy_file, but the source is a string rather than a
+// file — for the C ABI / GUIs that edit a policy in memory. source_label is used only
+// in error messages to identify the document (e.g. "<memory>" or a logical name).
+[[nodiscard]] Result<SemanticPolicy> parse_semantic_policy(std::string_view json, std::string source_label);
+
 [[nodiscard]] Result<void> apply_semantic_policy(AdmScene& scene,
                                                  const SemanticPolicy& policy,
                                                  uint32_t sample_rate,
@@ -131,6 +138,15 @@ struct SemanticPolicyReportOptions {
                                                       const SemanticPolicy* policy,
                                                       const SemanticPolicyReportOptions& options,
                                                       const std::vector<std::string>& warnings = {});
+
+// Build the effective semantic-policy report as a JSON string (UTF-8). Identical
+// content to write_semantic_report_file but returned in-memory (for the C ABI /
+// GUIs), so a caller can surface the report without a temp file. Pure; does not fail.
+[[nodiscard]] std::string build_semantic_report(const AdmScene& original,
+                                                const AdmScene& effective,
+                                                const SemanticPolicy* policy,
+                                                const SemanticPolicyReportOptions& options,
+                                                const std::vector<std::string>& warnings = {});
 
 [[nodiscard]] Result<void> write_semantic_policy_template_file(const std::filesystem::path& path,
                                                                const AdmScene& scene);
