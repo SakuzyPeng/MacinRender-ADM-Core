@@ -39,12 +39,15 @@
  *
  * v1.6 新增（additive，SOVERSION 不变）：
  *   adm_output_formats_json.
+ *
+ * v1.7 新增（additive，SOVERSION 不变）：
+ *   adm_render_stage_t + adm_render_stage_from_string.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 6
+#define ADM_API_VERSION_MINOR 7
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -142,6 +145,21 @@ typedef enum adm_log_level_t {
     ADM_LOG_ERROR = 3
 } adm_log_level_t;
 
+/* Render pipeline stage, the enum form of the `stage` string passed to
+ * adm_progress_cb. Obtain it with adm_render_stage_from_string(stage) inside the
+ * callback for phase-based progress UI / localization without string matching.
+ * ADM_STAGE_UNKNOWN is returned for a NULL or unrecognized string. v1.7 */
+typedef enum adm_render_stage_t {
+    ADM_STAGE_UNKNOWN = 0,
+    ADM_STAGE_VALIDATING = 1,
+    ADM_STAGE_PROBING = 2,
+    ADM_STAGE_IMPORTING_SCENE = 3,
+    ADM_STAGE_PLANNING = 4,
+    ADM_STAGE_RENDERING = 5,
+    ADM_STAGE_POST_PROCESSING = 6,
+    ADM_STAGE_FINISHED = 7
+} adm_render_stage_t;
+
 #ifdef __cplusplus
 static_assert(sizeof(adm_renderer_t) == sizeof(int));
 static_assert(sizeof(adm_output_bit_depth_t) == sizeof(int));
@@ -149,6 +167,7 @@ static_assert(sizeof(adm_speaker_spread_mode_t) == sizeof(int));
 static_assert(sizeof(adm_binaural_spread_mode_t) == sizeof(int));
 static_assert(sizeof(adm_iamf_container_t) == sizeof(int));
 static_assert(sizeof(adm_log_level_t) == sizeof(int));
+static_assert(sizeof(adm_render_stage_t) == sizeof(int));
 #endif
 
 /* ── Progress callback ───────────────────────────────────────────────────── */
@@ -158,6 +177,11 @@ static_assert(sizeof(adm_log_level_t) == sizeof(int));
  * for the callback's duration. user_data is passed through unchanged.
  */
 typedef void (*adm_progress_cb)(double fraction, const char* stage, const char* message, void* user_data);
+
+/* Map a progress callback's `stage` string to adm_render_stage_t. Returns
+ * ADM_STAGE_UNKNOWN for a NULL or unrecognized string. Pure, thread-safe, no
+ * allocation — safe to call directly inside the progress callback. v1.7 */
+adm_render_stage_t adm_render_stage_from_string(const char* stage) ADM_API_NOEXCEPT;
 
 /* ── Runtime version query ───────────────────────────────────────────────── */
 int adm_api_version_major(void) ADM_API_NOEXCEPT;

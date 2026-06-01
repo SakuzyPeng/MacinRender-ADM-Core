@@ -15,6 +15,10 @@
 
 namespace {
 
+// These stage strings are part of the progress callback's documented contract.
+// adm_render_stage_from_string() must recognize every string produced here; the
+// progress-callback test renders end-to-end and asserts no emitted stage maps to
+// ADM_STAGE_UNKNOWN, guarding the two against drift.
 const char* stage_name(mradm::RenderStage stage) noexcept {
     switch (stage) {
     case mradm::RenderStage::validating:
@@ -199,6 +203,38 @@ int adm_api_version_minor(void) noexcept {
 }
 int adm_api_version_patch(void) noexcept {
     return ADM_API_VERSION_PATCH;
+}
+
+/* ── Progress stage (v1.7) ──────────────────────────────────────────────────── */
+
+adm_render_stage_t adm_render_stage_from_string(const char* stage) noexcept {
+    if (stage == nullptr) {
+        return ADM_STAGE_UNKNOWN;
+    }
+    // Must mirror stage_name() above (kept in sync via the progress-callback test).
+    const std::string_view s{stage};
+    if (s == "validating") {
+        return ADM_STAGE_VALIDATING;
+    }
+    if (s == "probing") {
+        return ADM_STAGE_PROBING;
+    }
+    if (s == "importing_scene") {
+        return ADM_STAGE_IMPORTING_SCENE;
+    }
+    if (s == "planning") {
+        return ADM_STAGE_PLANNING;
+    }
+    if (s == "rendering") {
+        return ADM_STAGE_RENDERING;
+    }
+    if (s == "post_processing") {
+        return ADM_STAGE_POST_PROCESSING;
+    }
+    if (s == "finished") {
+        return ADM_STAGE_FINISHED;
+    }
+    return ADM_STAGE_UNKNOWN;
 }
 
 /* ── Context ──────────────────────────────────────────────────────────────── */

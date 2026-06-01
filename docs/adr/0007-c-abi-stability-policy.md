@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.6）
-> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 / v1.5 / v1.6 于 2026-06-01）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.7）
+> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 / v1.5 / v1.6 / v1.7 于 2026-06-01）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -269,6 +269,20 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
   `__APPLE__` 守卫）、`audio::iamf_encoding_available()` / `audio::iamf_mp4_packager_available()`（已有）、
   `binaural_sofa_supported()`（新增，`SAF_ENABLE_SOFA_READER_MODULE` 守卫）。经
   `RenderService::output_formats_json()` 暴露。**未新增 render 入口、未触碰渲染路径**。
+
+### v1.7.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+新增一个 enum 与一个纯映射函数，**未触碰任何已有 signature、enum 值或 callback**——特别地，已冻结的
+`adm_progress_cb`（`stage` 仍为 `const char*`）签名不变。补齐 GUI 做分阶段进度 / 本地化所需的阶段枚举。
+
+- **进度阶段枚举**：`adm_render_stage_t`（`ADM_STAGE_UNKNOWN=0` 起，至 `ADM_STAGE_FINISHED`）镜像
+  `mradm::RenderStage` 的语义集合；`ADM_STAGE_UNKNOWN` 用于 NULL/无法识别的字符串。
+- **映射函数**：`adm_render_stage_from_string(const char* stage)` 把回调里的 `stage` 字符串映射为枚举，
+  纯函数、线程安全、不分配，可直接在进度回调里调用。`stage` 字符串本就是回调契约的稳定部分；GUI 无需自行
+  字符串匹配。
+- **防漂移**：`stage_name()`（enum→string）与 `adm_render_stage_from_string()`（string→enum）共享同一组
+  字符串；进度回调测试端到端渲染并断言引擎实际发出的每个 stage 都不映射为 `ADM_STAGE_UNKNOWN`，守住两者一致。
+- **零回调改造**：未引入新回调类型、未新增 render 入口；既有调用方完全不受影响。
 
 ## opaque 指针与 callback 生命周期
 
