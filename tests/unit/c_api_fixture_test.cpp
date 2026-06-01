@@ -731,6 +731,78 @@ bool verify_render_trim_wire_through(adm_context_t* ctx, const std::filesystem::
     return ok;
 }
 
+// ── v1.3 tests ────────────────────────────────────────────────────────────
+
+bool verify_version_13() {
+    return check(adm_api_version_minor() >= 3, "v1.3: minor version should be >= 3");
+}
+
+// Final-gain setter: NULL opts are a no-op; any finite value is accepted (no range
+// limit, by design); non-finite is rejected.
+bool verify_final_gain_setter() {
+    bool ok = check(adm_render_options_set_final_gain_db(nullptr, 6.0) == ADM_ERROR_OK,
+                    "NULL opts set_final_gain_db should return OK");
+
+    adm_render_options_t* opts = adm_create_render_options();
+    ok = check(opts != nullptr, "options creation should succeed") && ok;
+    if (opts != nullptr) {
+        ok = check(adm_render_options_set_final_gain_db(opts, 0.0) == ADM_ERROR_OK, "final gain 0.0 OK") && ok;
+        ok = check(adm_render_options_set_final_gain_db(opts, 12.0) == ADM_ERROR_OK, "final gain +12 OK") && ok;
+        ok = check(adm_render_options_set_final_gain_db(opts, -30.0) == ADM_ERROR_OK, "final gain -30 OK") && ok;
+        ok = check(adm_render_options_set_final_gain_db(opts, 100.0) == ADM_ERROR_OK,
+                   "final gain +100 (no range limit) OK") &&
+             ok;
+        ok = check(adm_render_options_set_final_gain_db(opts, std::numeric_limits<double>::quiet_NaN()) ==
+                       ADM_ERROR_INVALID_ARGUMENT,
+                   "NaN final gain should return INVALID_ARGUMENT") &&
+             ok;
+        ok = check(adm_render_options_set_final_gain_db(opts, std::numeric_limits<double>::infinity()) ==
+                       ADM_ERROR_INVALID_ARGUMENT,
+                   "inf final gain should return INVALID_ARGUMENT") &&
+             ok;
+    }
+    adm_destroy_render_options(opts);
+    return ok;
+}
+
+// v1.3 end-to-end: +20 dB final gain wires through adm_render_file_ex, bypasses
+// the peak ceiling (default -1 dBTP), and is reflected in the reported peak.
+bool verify_final_gain_wire_through(adm_context_t* ctx, const std::filesystem::path& input) {
+    const auto out_a = unique_temp_wav_path("mr_c_api_fg_base");
+    const auto out_b = unique_temp_wav_path("mr_c_api_fg_boost");
+    FileGuard g_a(out_a);
+    FileGuard g_b(out_b);
+
+    // Baseline render (defaults: peak limit on, no final gain).
+    adm_render_result_t* r_a = nullptr;
+    adm_render_file_ex(ctx, input.string().c_str(), out_a.string().c_str(), nullptr, nullptr, nullptr, &r_a);
+    double peak_a = 0.0;
+    bool ok = check(adm_render_result_peak_dbtp(r_a, &peak_a) == 1, "baseline peak_dbtp should be present");
+    adm_destroy_render_result(r_a);
+
+    // +20 dB final gain.
+    adm_render_options_t* opts = adm_create_render_options();
+    ok = check(opts != nullptr, "options creation should succeed") && ok;
+    if (opts == nullptr) {
+        return false;
+    }
+    ok = check(adm_render_options_set_final_gain_db(opts, 20.0) == ADM_ERROR_OK, "set_final_gain_db(20)") && ok;
+    adm_render_result_t* r_b = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input.string().c_str(), out_b.string().c_str(), opts, nullptr, nullptr, &r_b);
+    ok = check(code == ADM_ERROR_OK, "final-gain render should succeed") && ok;
+    double peak_b = 0.0;
+    ok = check(adm_render_result_peak_dbtp(r_b, &peak_b) == 1, "final-gain peak_dbtp should be present") && ok;
+    adm_destroy_render_result(r_b);
+    adm_destroy_render_options(opts);
+
+    // +20 dB bypasses the -1 dBTP ceiling: reported peak must exceed 0 dBTP (only
+    // possible if final gain is unconstrained) and rise by ~20 dB (metrics reflect it).
+    ok = check(peak_b > 0.0, "final gain should push reported peak above 0 dBTP (bypasses peak limit)") && ok;
+    ok = check(std::abs((peak_b - peak_a) - 20.0) < 0.5, "reported peak should rise by ~20 dB (metrics reflect)") && ok;
+    return ok;
+}
+
 bool verify_probe(adm_context_t* ctx, const std::filesystem::path& input) {
     // Valid probe.
     adm_scene_info_t* info = nullptr;
@@ -1216,6 +1288,10 @@ int main() {
     // v1.2 tests
     ok = verify_version_12() && ok;
     ok = verify_render_trim_setters() && ok;
+    // v1.3 tests
+    ok = verify_version_13() && ok;
+    ok = verify_final_gain_setter() && ok;
+    ok = verify_final_gain_wire_through(ctx, fixture.path()) && ok;
     ok = verify_render_file_ex_compat(ctx, fixture.path()) && ok;
     ok = verify_hoa_render(ctx, fixture.path()) && ok;
     ok = verify_51_render(ctx, fixture.path()) && ok;

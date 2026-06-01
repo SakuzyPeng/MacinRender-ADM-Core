@@ -154,6 +154,7 @@ EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4
 | `--loudness-target <LUFS>` | 响度归一化目标；HOA 通过 7.1.4 AllRAD 参考解码测量，LFE 排除于 LUFS | 关闭 |
 | `--peak-limit-dbtp <dBTP>` | True Peak 限制目标 | `-1.0` |
 | `--peak-normalize-to-limit` | 在响度增益后，如 True Peak 低于 `--peak-limit-dbtp`，自动补全局增益到上限；需要开启 True Peak 限制 | 关闭 |
+| `--final-gain-db <dB>` | 在响度 / 峰值自动增益之后追加不受限制的最终增益；绕过 True Peak 限制，可能超过 0 dBFS | `0` |
 | `--no-peak-limit` | 关闭 True Peak 限制 | - |
 | `--start <sec>` | 从渲染时间线该秒数开始裁剪输出；响度 / True Peak 只按保留片段计量 | `0` |
 | `--end <sec>` | 裁剪到渲染时间线该绝对秒数；必须大于 `--start`，未设置则渲染到结尾 | 关闭 |
@@ -165,7 +166,7 @@ EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4
 | `--semantic-policy <path>` | 渲染时应用 ADM 语义控制 JSON（覆盖 Objects / DirectSpeakers / HOA 的 gain·mute·position 及 diffuse / extent / divergence / channelLock / 插值等） | 关闭 |
 | `--write-semantic-report <path>` | 写出 policy 应用后的 effective semantic JSON，便于确认对象 / DS / HOA 规则命中与 original→effective 变化 | 关闭 |
 
-响度相关后处理顺序为：`--loudness-target` 先决定目标响度增益，`--peak-normalize-to-limit` 可选补峰到 True Peak 上限，最后 `--peak-limit-dbtp` 作为硬上限裁剪全局增益。
+响度相关后处理顺序为：`--loudness-target` 先决定目标响度增益，`--peak-normalize-to-limit` 可选补峰到 True Peak 上限，`--peak-limit-dbtp` 裁剪自动阶段的全局增益；`--final-gain-db` 在这些自动阶段之后追加，故会绕过 True Peak 限制。
 
 Semantic policy 不修改原始 AXML，仅影响本次渲染。`inspect --write-semantic-policy-template` 会按场景生成一份可编辑的中性模板（原样应用不改变场景），编辑后用 `--semantic-policy` 应用：
 

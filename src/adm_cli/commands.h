@@ -14,6 +14,7 @@ struct RenderCliOptions {
     bool no_peak_limit{false};
     float peak_limit_dbtp{-1.0F};
     bool peak_normalize_to_limit{false};
+    double final_gain_db{0.0};
     std::string output_bit_depth_str{"f32"};
     float loudness_target{std::numeric_limits<float>::quiet_NaN()};
     double render_start{0.0};

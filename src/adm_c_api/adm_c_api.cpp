@@ -455,6 +455,18 @@ adm_error_code_t adm_render_options_set_render_end_sec(adm_render_options_t* opt
     return ADM_ERROR_OK;
 }
 
+adm_error_code_t adm_render_options_set_final_gain_db(adm_render_options_t* opts, double db) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    // Unconstrained by design: no range limit, but reject non-finite values.
+    if (!std::isfinite(db)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.final_gain_db = db;
+    return ADM_ERROR_OK;
+}
+
 /* ── Render ──────────────────────────────────────────────────────────────── */
 
 adm_error_code_t adm_render_file_ex(adm_context_t* context,
