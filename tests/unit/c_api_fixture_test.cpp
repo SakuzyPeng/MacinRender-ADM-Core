@@ -978,8 +978,9 @@ bool verify_semantic_policy_json_wire_through(adm_context_t* ctx, const std::fil
         const std::string text(report);
         ok = check(text.find("mradm.semantic-report.v1") != std::string::npos, "report should carry report schema") &&
              ok;
-        ok = check(text.find("\"effective_mute\": true") != std::string::npos, "report should reflect effective mute") &&
-             ok;
+        ok =
+            check(text.find("\"effective_mute\": true") != std::string::npos, "report should reflect effective mute") &&
+            ok;
     }
     adm_destroy_render_result(r);
 
@@ -1063,18 +1064,104 @@ bool verify_version_17() {
 bool verify_render_stage_from_string() {
     bool ok = check(adm_render_stage_from_string("validating") == ADM_STAGE_VALIDATING, "stage: validating");
     ok = check(adm_render_stage_from_string("probing") == ADM_STAGE_PROBING, "stage: probing") && ok;
-    ok = check(adm_render_stage_from_string("importing_scene") == ADM_STAGE_IMPORTING_SCENE, "stage: importing_scene") &&
-         ok;
+    ok =
+        check(adm_render_stage_from_string("importing_scene") == ADM_STAGE_IMPORTING_SCENE, "stage: importing_scene") &&
+        ok;
     ok = check(adm_render_stage_from_string("planning") == ADM_STAGE_PLANNING, "stage: planning") && ok;
     ok = check(adm_render_stage_from_string("rendering") == ADM_STAGE_RENDERING, "stage: rendering") && ok;
-    ok = check(adm_render_stage_from_string("post_processing") == ADM_STAGE_POST_PROCESSING, "stage: post_processing") &&
-         ok;
+    ok =
+        check(adm_render_stage_from_string("post_processing") == ADM_STAGE_POST_PROCESSING, "stage: post_processing") &&
+        ok;
     ok = check(adm_render_stage_from_string("finished") == ADM_STAGE_FINISHED, "stage: finished") && ok;
     // Fallbacks.
     ok = check(adm_render_stage_from_string(nullptr) == ADM_STAGE_UNKNOWN, "stage: NULL → UNKNOWN") && ok;
     ok = check(adm_render_stage_from_string("") == ADM_STAGE_UNKNOWN, "stage: empty → UNKNOWN") && ok;
     ok = check(adm_render_stage_from_string("Rendering") == ADM_STAGE_UNKNOWN, "stage: case-sensitive → UNKNOWN") && ok;
     ok = check(adm_render_stage_from_string("nonsense") == ADM_STAGE_UNKNOWN, "stage: garbage → UNKNOWN") && ok;
+    return ok;
+}
+
+// ── v1.8 tests ────────────────────────────────────────────────────────────
+
+bool verify_version_18() {
+    return check(adm_api_version_minor() >= 8, "v1.8: minor version should be >= 8");
+}
+
+// PreviewSession: create once (import + policy), render multiple windows reusing the
+// cached scene, plus NULL/error safety. Default options resolve to binaural 2ch.
+bool verify_preview_session(adm_context_t* ctx, const std::filesystem::path& input_1s) {
+    const std::string in = input_1s.string();
+
+    // create() error paths.
+    adm_preview_session_t* bad = nullptr;
+    bool ok = check(adm_create_preview_session(nullptr, in.c_str(), nullptr, &bad) == ADM_ERROR_INVALID_ARGUMENT,
+                    "preview create: NULL context → INVALID_ARGUMENT");
+    ok = check(adm_create_preview_session(ctx, nullptr, nullptr, &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "preview create: NULL input → INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_create_preview_session(ctx, in.c_str(), nullptr, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "preview create: NULL out → INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_create_preview_session(ctx, "/no/such/adm/file.wav", nullptr, &bad) != ADM_ERROR_OK,
+               "preview create: missing file should fail") &&
+         ok;
+    ok = check(bad == nullptr, "preview create: out stays NULL on failure") && ok;
+
+    // A real session.
+    adm_preview_session_t* session = nullptr;
+    ok = check(adm_create_preview_session(ctx, in.c_str(), nullptr, &session) == ADM_ERROR_OK,
+               "preview create succeeds") &&
+         ok;
+    ok = check(session != nullptr, "preview session handle non-NULL") && ok;
+    if (session == nullptr) {
+        return false;
+    }
+
+    // render_window error paths.
+    ok = check(adm_preview_render_window(nullptr, 0.0, 0.0, nullptr, nullptr, nullptr, nullptr) ==
+                   ADM_ERROR_INVALID_ARGUMENT,
+               "preview render: NULL session → INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_preview_render_window(session, -1.0, 0.0, nullptr, nullptr, nullptr, nullptr) ==
+                   ADM_ERROR_INVALID_ARGUMENT,
+               "preview render: negative start → INVALID_ARGUMENT") &&
+         ok;
+
+    // Multiple windows from the SAME session reuse the cached scene.
+    const auto out_a = unique_temp_wav_path("mr_c_api_preview_a");
+    const auto out_b = unique_temp_wav_path("mr_c_api_preview_b");
+    const auto out_c = unique_temp_wav_path("mr_c_api_preview_c");
+    FileGuard ga(out_a);
+    FileGuard gb(out_b);
+    FileGuard gc(out_c);
+
+    adm_render_result_t* ra = nullptr;
+    ok = check(adm_preview_render_window(session, 0.25, 0.75, out_a.string().c_str(), nullptr, nullptr, &ra) ==
+                   ADM_ERROR_OK,
+               "preview window [0.25,0.75) succeeds") &&
+         ok;
+    adm_destroy_render_result(ra);
+    ok = check(wav_frame_count(out_a) == 24000U, "preview window [0.25,0.75) → 24000 frames") && ok;
+
+    adm_render_result_t* rb = nullptr;
+    ok = check(adm_preview_render_window(session, 0.0, 0.5, out_b.string().c_str(), nullptr, nullptr, &rb) ==
+                   ADM_ERROR_OK,
+               "preview window [0,0.5) (reuses cached scene) succeeds") &&
+         ok;
+    adm_destroy_render_result(rb);
+    ok = check(wav_frame_count(out_b) == 24000U, "preview window [0,0.5) → 24000 frames") && ok;
+
+    // end_sec <= 0 means "to the end".
+    adm_render_result_t* rc = nullptr;
+    ok = check(adm_preview_render_window(session, 0.5, 0.0, out_c.string().c_str(), nullptr, nullptr, &rc) ==
+                   ADM_ERROR_OK,
+               "preview window [0.5, end) succeeds") &&
+         ok;
+    adm_destroy_render_result(rc);
+    ok = check(wav_frame_count(out_c) == 24000U, "preview window [0.5, end) → 24000 frames (to end)") && ok;
+
+    adm_destroy_preview_session(session);
+    adm_destroy_preview_session(nullptr); // must not crash
     return ok;
 }
 
@@ -1528,7 +1615,7 @@ bool verify_output_formats_json(adm_context_t* ctx) {
         ok = check(has(R"("apac": true)"), "output_formats_json: apac feature true on macOS") && ok;
 #else
         ok = check(has(R"("apac": false)"), "output_formats_json: apac feature false off-macOS") && ok;
-        ok = check(has(R"("available_reason": "macOS only (AudioToolbox)")"),
+        ok = check(has("\"available_reason\": \"macOS only (AudioToolbox)\""),
                    "output_formats_json: apac unavailable reason off-macOS") &&
              ok;
 #endif
@@ -1650,6 +1737,9 @@ int main() {
         ok = verify_loudness_metrics(ctx, fixture_1s.path()) && ok;
         ok = verify_render_trim_wire_through(ctx, fixture_1s.path()) && ok;
         ok = verify_cancel_threaded(ctx, fixture_1s.path()) && ok;
+        // v1.8 tests
+        ok = verify_version_18() && ok;
+        ok = verify_preview_session(ctx, fixture_1s.path()) && ok;
     }
     ok = verify_probe(ctx, fixture.path()) && ok;
     ok = verify_progress_callback(ctx, fixture.path()) && ok;

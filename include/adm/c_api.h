@@ -42,12 +42,16 @@
  *
  * v1.7 新增（additive，SOVERSION 不变）：
  *   adm_render_stage_t + adm_render_stage_from_string.
+ *
+ * v1.8 新增（additive，SOVERSION 不变）：
+ *   adm_preview_session_t + adm_create_preview_session /
+ *   adm_preview_render_window / adm_destroy_preview_session.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 7
+#define ADM_API_VERSION_MINOR 8
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -77,9 +81,10 @@ extern "C" {
 
 typedef struct adm_context_t adm_context_t;
 typedef struct adm_render_result_t adm_render_result_t;
-typedef struct adm_render_options_t adm_render_options_t; /* v1.1 */
-typedef struct adm_scene_info_t adm_scene_info_t;         /* v1.1 */
-typedef struct adm_cancel_token_t adm_cancel_token_t;     /* v1.4 */
+typedef struct adm_render_options_t adm_render_options_t;   /* v1.1 */
+typedef struct adm_scene_info_t adm_scene_info_t;           /* v1.1 */
+typedef struct adm_cancel_token_t adm_cancel_token_t;       /* v1.4 */
+typedef struct adm_preview_session_t adm_preview_session_t; /* v1.8 */
 
 /* ── Error codes ─────────────────────────────────────────────────────────── */
 /*
@@ -580,6 +585,59 @@ adm_error_code_t adm_layouts_json(adm_context_t* context, char** out_json) ADM_A
  * on a hot path, cache the result rather than re-querying.
  */
 adm_error_code_t adm_output_formats_json(adm_context_t* context, char** out_json) ADM_API_NOEXCEPT;
+
+/* ── v1.8 Preview session ────────────────────────────────────────────────── */
+/*
+ * A reusable preview / scrubbing session. adm_create_preview_session imports the ADM
+ * scene and applies the semantic policy from `opts` ONCE; adm_preview_render_window
+ * then renders arbitrary output sub-windows of that same (input, options) cheaply by
+ * reusing the cached scene (skipping re-import + policy) together with on-demand
+ * window rendering. Intended for GUI timeline scrubbing.
+ *
+ * adm_create_preview_session / adm_destroy_preview_session must be strictly paired.
+ * A session is NOT thread-safe; use one per thread or serialize access. The cancel
+ * token referenced by `opts` (if any) is captured at creation and applies to every
+ * window render. opts may be NULL (all defaults). The render trim fields of opts
+ * (set_render_start_sec / set_render_end_sec) are IGNORED — the window is supplied
+ * per call to adm_preview_render_window.
+ *
+ * Returns ADM_ERROR_INVALID_ARGUMENT for NULL context/input/out, the mapped import
+ * error (e.g. ADM_ERROR_IO) for a missing/invalid file, or a semantic-policy error.
+ * On success writes a session handle to *out.
+ */
+adm_error_code_t adm_create_preview_session(adm_context_t* context,
+                                            const char* input_path,
+                                            const adm_render_options_t* opts,
+                                            adm_preview_session_t** out) ADM_API_NOEXCEPT;
+
+void adm_destroy_preview_session(adm_preview_session_t* session) ADM_API_NOEXCEPT;
+
+/*
+ * Render the output window [start_sec, end_sec) of the session's cached scene to
+ * output_path. start_sec must be finite and >= 0. end_sec <= 0 means "to the end"
+ * (no tail trim); a positive end_sec must be greater than start_sec (validated at
+ * render time). output_path may be NULL to derive a path automatically. progress and
+ * result behave as in adm_render_file_ex (result may be NULL). The chosen backend
+ * renders only the window when it supports on-demand windowing; the reported
+ * loudness / True-Peak describe the window.
+ *
+ * RESULT ACCESSORS: adm_render_result_output_path / _loudness_lufs / _peak_dbtp and
+ * the log accessors work as usual. The semantic report is NOT one of them here: it is
+ * built once at session creation from the session's options and is NOT regenerated per
+ * window, so adm_render_result_semantic_report_json() on a preview result is always
+ * NULL regardless of the opts' capture_semantic_report flag. To inspect the effective
+ * policy, render once via adm_render_file_ex with capture enabled (or use
+ * adm_inspect_file_json) before/outside the preview loop.
+ *
+ * Returns ADM_ERROR_INVALID_ARGUMENT for a NULL session or out-of-range start/end.
+ */
+adm_error_code_t adm_preview_render_window(adm_preview_session_t* session,
+                                           double start_sec,
+                                           double end_sec,
+                                           const char* output_path,
+                                           adm_progress_cb progress,
+                                           void* user_data,
+                                           adm_render_result_t** result) ADM_API_NOEXCEPT;
 
 #ifdef __cplusplus
 } /* extern "C" */

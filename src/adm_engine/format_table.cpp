@@ -79,24 +79,22 @@ std::string output_formats_to_json() {
 
     // wav — always available; bit depth selectable.
     {
-        const FormatDesc d{"wav", {".wav"}, false, 0, 0, true,
-                           "Uncompressed PCM; not a preferred delivery format."};
+        const FormatDesc d{"wav", {".wav"}, false, 0, 0, true, "Uncompressed PCM; not a preferred delivery format."};
         json j = base_format_json(d, true, {});
         j["bit_depths"] = json::array({"f32", "i24", "i16"});
         formats.push_back(std::move(j));
     }
     // caf — always available; float32, CoreAudio channel layouts.
     {
-        const FormatDesc d{"caf", {".caf"}, false, 0, 0, true,
-                           "Float32 CoreAudio container; richer metadata on macOS."};
+        const FormatDesc d{
+            "caf", {".caf"}, false, 0, 0, true, "Float32 CoreAudio container; richer metadata on macOS."};
         json j = base_format_json(d, true, {});
         j["bit_depths"] = json::array({"f32"});
         formats.push_back(std::move(j));
     }
     // flac — always available; 1-8 channels, no height, fixed 24-bit.
     {
-        const FormatDesc d{"flac", {".flac"}, false, 8, 0, false,
-                           "1-8 channels; no height layouts; fixed 24-bit."};
+        const FormatDesc d{"flac", {".flac"}, false, 8, 0, false, "1-8 channels; no height layouts; fixed 24-bit."};
         json j = base_format_json(d, true, {});
         j["bit_depths"] = json::array({"i24"});
         formats.push_back(std::move(j));
@@ -110,7 +108,12 @@ std::string output_formats_to_json() {
     }
     // apac — macOS only; total target bitrate.
     {
-        const FormatDesc d{"apac", {".m4a", ".mp4"}, true, 24, 0, true,
+        const FormatDesc d{"apac",
+                           {".m4a", ".mp4"},
+                           true,
+                           24,
+                           0,
+                           true,
                            "macOS only; spatial/HOA default bitrate scales from 7.1.4 = 2048 kbps."};
         json j = base_format_json(d, apac, "macOS only (AudioToolbox)");
         j["bitrate_kbps_total"] = bitrate_range(64, 12000);
@@ -118,15 +121,14 @@ std::string output_formats_to_json() {
     }
     // iamf — requires MR_ADM_ENABLE_IAMF; raw OBU stream.
     {
-        const FormatDesc d{"iamf", {".iamf"}, true, 12, 48000, true,
-                           "Raw OBU stream (Opus); layouts up to 7.1.4 (9.1.6 disabled)."};
-        formats.push_back(
-            base_format_json(d, iamf, "requires MR_ADM_ENABLE_IAMF=ON and the AOM iamf-tools bridge"));
+        const FormatDesc d{
+            "iamf", {".iamf"}, true, 12, 48000, true, "Raw OBU stream (Opus); layouts up to 7.1.4 (9.1.6 disabled)."};
+        formats.push_back(base_format_json(d, iamf, "requires MR_ADM_ENABLE_IAMF=ON and the AOM iamf-tools bridge"));
     }
     // iamf_mp4 — requires IAMF build plus an MP4 packager in PATH.
     {
-        const FormatDesc d{"iamf_mp4", {".mp4"}, true, 12, 48000, true,
-                           "ISOBMFF-packaged IAMF; select via --iamf-container mp4."};
+        const FormatDesc d{
+            "iamf_mp4", {".mp4"}, true, 12, 48000, true, "ISOBMFF-packaged IAMF; select via --iamf-container mp4."};
         const std::string_view reason =
             !iamf ? std::string_view{"requires MR_ADM_ENABLE_IAMF=ON and the AOM iamf-tools bridge"}
                   : std::string_view{"requires mp4box (GPAC) or ffmpeg in PATH"};

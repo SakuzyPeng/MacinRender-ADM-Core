@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.7）
-> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 / v1.5 / v1.6 / v1.7 于 2026-06-01）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.8）
+> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 / v1.5 / v1.6 / v1.7 / v1.8 于 2026-06-01）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -283,6 +283,25 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - **防漂移**：`stage_name()`（enum→string）与 `adm_render_stage_from_string()`（string→enum）共享同一组
   字符串；进度回调测试端到端渲染并断言引擎实际发出的每个 stage 都不映射为 `ADM_STAGE_UNKNOWN`，守住两者一致。
 - **零回调改造**：未引入新回调类型、未新增 render 入口；既有调用方完全不受影响。
+
+### v1.8.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+新增一个 opaque 类型与三个函数,**未触碰任何已有 signature、enum 值或 callback**。面向 GUI 时间线拖动
+(scrubbing):此前每次渲染一个窗口都要重新 import ADM + 应用语义策略,反复预览同一文件代价高。
+
+- **预览会话**:opaque `adm_preview_session_t` + `adm_create_preview_session(ctx, input, opts, out)` /
+  `adm_preview_render_window(session, start_sec, end_sec, out_path, cb, ud, result)` /
+  `adm_destroy_preview_session`(create/destroy 严格配对)。create 时 import + 应用策略**一次**,缓存
+  处理后的 `AdmScene`;render_window 复用缓存 scene(跳过 import + 策略)+ Phase 1 的按需窗口渲染。
+- **窗口参数**:`start_sec` 须有限且 `>= 0`;`end_sec <= 0` 表示"到结尾"(与 `set_render_end_sec` 一致),
+  正值在渲染时校验 `> start`。`opts` 的 trim 字段被忽略——窗口由每次调用提供。`opts` 可为 NULL。
+- **生命周期/线程**:session 非线程安全(同 context,单线程或外部串行化);`opts` 引用的 cancel token 在
+  create 时捕获,作用于该 session 的每次窗口渲染。result 句柄语义同 `adm_render_file_ex`。
+- **引擎实现**:`RenderService::render` 增可选 `const AdmScene* preimported_scene` 参数(非 NULL 时直接
+  用、跳过 import / 策略 / 报告);新增 `RenderService::prepare_preview_scene` 与 `PreviewSession`
+  (`include/adm/render.h`)。语义策略 json/path 解析抽成 `resolve_and_apply_policy` 单一来源。
+  **未新增 render 文件入口、未触碰渲染算法**。Phase 2a:仅缓存 scene;后端 prepare/render 拆分(矩阵/HRTF
+  缓存)留待 Phase 2b。
 
 ## opaque 指针与 callback 生命周期
 
