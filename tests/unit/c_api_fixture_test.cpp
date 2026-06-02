@@ -1087,8 +1087,22 @@ bool verify_version_18() {
     return check(adm_api_version_minor() >= 8, "v1.8: minor version should be >= 8");
 }
 
+// Whether any of a result's captured log messages contains `needle`.
+bool result_logs_contain(const adm_render_result_t* result, const char* needle) {
+    const uint32_t n = adm_render_result_log_count(result);
+    for (uint32_t i = 0; i < n; ++i) {
+        const char* msg = nullptr;
+        if (adm_render_result_log_entry(result, i, nullptr, nullptr, &msg) == 1 && msg != nullptr &&
+            std::string(msg).find(needle) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // PreviewSession: create once (import + policy), render multiple windows reusing the
-// cached scene, plus NULL/error safety. Default options resolve to binaural 2ch.
+// cached scene AND backend prepared state (HRTF), plus NULL/error safety. Default
+// options resolve to binaural 2ch.
 bool verify_preview_session(adm_context_t* ctx, const std::filesystem::path& input_1s) {
     const std::string in = input_1s.string();
 
@@ -1140,6 +1154,8 @@ bool verify_preview_session(adm_context_t* ctx, const std::filesystem::path& inp
                    ADM_ERROR_OK,
                "preview window [0.25,0.75) succeeds") &&
          ok;
+    // The first window builds the backend prepared state (binaural HRTF), logged once.
+    ok = check(result_logs_contain(ra, "HRTF source:"), "first preview window builds HRTF (prepare ran)") && ok;
     adm_destroy_render_result(ra);
     ok = check(wav_frame_count(out_a) == 24000U, "preview window [0.25,0.75) → 24000 frames") && ok;
 
@@ -1148,6 +1164,10 @@ bool verify_preview_session(adm_context_t* ctx, const std::filesystem::path& inp
                    ADM_ERROR_OK,
                "preview window [0,0.5) (reuses cached scene) succeeds") &&
          ok;
+    // The second window reuses the cached prepared state: the HRTF is NOT rebuilt.
+    ok =
+        check(!result_logs_contain(rb, "HRTF source:"), "second preview window reuses cached HRTF (prepare skipped)") &&
+        ok;
     adm_destroy_render_result(rb);
     ok = check(wav_frame_count(out_b) == 24000U, "preview window [0,0.5) → 24000 frames") && ok;
 

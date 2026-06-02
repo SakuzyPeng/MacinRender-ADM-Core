@@ -516,7 +516,11 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
 class HoaRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
-    [[nodiscard]] Result<RenderMetrics> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override;
+    [[nodiscard]] Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) override;
+    [[nodiscard]] Result<RenderMetrics> render_window(const IPreparedRender& prepared,
+                                                      const RenderPlan& plan,
+                                                      ProgressSink& progress,
+                                                      LogSink& logs) override;
 };
 
 CapabilityReport HoaRenderer::capabilities() const {
@@ -524,7 +528,14 @@ CapabilityReport HoaRenderer::capabilities() const {
 }
 
 // NOLINTNEXTLINE(readability-function-size)
-Result<RenderMetrics> HoaRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+Result<std::shared_ptr<IPreparedRender>> HoaRenderer::prepare(const RenderPlan& /*plan*/, LogSink& /*logs*/) {
+    return std::static_pointer_cast<IPreparedRender>(std::make_shared<EmptyPreparedRender>());
+}
+
+Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& /*prepared*/,
+                                                 const RenderPlan& plan,
+                                                 ProgressSink& progress,
+                                                 LogSink& logs) {
     if (plan.output_layout != "hoa3") {
         return make_error(ErrorCode::unsupported,
                           fmt::format("unsupported HOA output layout '{}'; supported: hoa3", plan.output_layout),
