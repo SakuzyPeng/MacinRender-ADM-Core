@@ -262,7 +262,8 @@ Result<void> convert_to_iamf(const std::string& src_path,
                              const std::string& layout_id = {},
                              uint32_t bitrate_per_ch_kbps = 0,
                              std::optional<double> loudness_lufs = std::nullopt,
-                             std::optional<double> peak_dbtp = std::nullopt);
+                             std::optional<double> peak_dbtp = std::nullopt,
+                             const std::stop_token& cancel_token = {});
 
 // IAMF-to-MP4 packaging (ISOBMFF Annex A encapsulation).
 // Prefers mp4box (GPAC) over ffmpeg; the packager is selected once at

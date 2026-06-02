@@ -35,6 +35,15 @@ namespace {
 
 #if MR_ADM_ENABLE_IAMF
 constexpr uint32_t k_sample_rate = 48000U;
+
+// cppcheck-suppress constParameterCallback
+int iamf_should_cancel(void* user_data) {
+    if (user_data == nullptr) {
+        return 0;
+    }
+    const auto* cancel_token = static_cast<const std::stop_token*>(user_data);
+    return cancel_token->stop_requested() ? 1 : 0;
+}
 #endif
 
 // ── Cross-platform process helpers ───────────────────────────────────────
@@ -350,8 +359,12 @@ Result<void> convert_to_iamf(const std::string& src_path,
                              const std::string& layout_id,
                              uint32_t bitrate_per_ch_kbps,
                              std::optional<double> loudness_lufs,
-                             std::optional<double> peak_dbtp) {
+                             std::optional<double> peak_dbtp,
+                             const std::stop_token& cancel_token) {
 #if MR_ADM_ENABLE_IAMF
+    if (cancel_token.stop_requested()) {
+        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + iamf_path);
+    }
     if (layout_id == "9.1.6" || layout_id == "atmos916") {
         return make_error(ErrorCode::unsupported,
                           "IAMF 9.1.6 output is disabled: the official AOM bridge requires expanded/Base-Enhanced "
@@ -367,12 +380,13 @@ Result<void> convert_to_iamf(const std::string& src_path,
                           "IAMF output requires 48000 Hz; got " + std::to_string(reader_res->sample_rate()));
     }
 
-    if (mr_iamf_aom_bridge_abi_version() != MR_IAMF_AOM_BRIDGE_ABI_VERSION) {
+    const uint32_t bridge_abi = mr_iamf_aom_bridge_abi_version();
+    if (bridge_abi == 0U || bridge_abi > MR_IAMF_AOM_BRIDGE_ABI_VERSION) {
         return make_error(ErrorCode::io_error, "AOM IAMF bridge ABI version mismatch");
     }
 
     MrIamfAomEncodeOptions options{};
-    options.abi_version = MR_IAMF_AOM_BRIDGE_ABI_VERSION;
+    options.abi_version = bridge_abi >= 2U ? 2U : 1U;
     options.input_wav_path = src_path.c_str();
     options.output_iamf_path = iamf_path.c_str();
     options.layout_id = layout_id.c_str();
@@ -382,10 +396,18 @@ Result<void> convert_to_iamf(const std::string& src_path,
     options.loudness_lufs = loudness_lufs.value_or(0.0);
     options.has_peak_dbtp = peak_dbtp.has_value() ? 1 : 0;
     options.peak_dbtp = peak_dbtp.value_or(0.0);
+    if (bridge_abi >= 2U) {
+        options.struct_size = sizeof(options);
+        options.should_cancel = iamf_should_cancel;
+        options.cancel_user_data = const_cast<std::stop_token*>(&cancel_token);
+    }
 
     std::array<char, 2048> error_buffer{};
     const int rc = mr_iamf_aom_encode_wav_to_iamf(&options, error_buffer.data(), error_buffer.size());
-    if (rc != 0) {
+    if (rc == MR_IAMF_AOM_RESULT_CANCELLED || cancel_token.stop_requested()) {
+        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + iamf_path);
+    }
+    if (rc != MR_IAMF_AOM_RESULT_OK) {
         const std::string detail = error_buffer[0] != '\0' ? std::string(error_buffer.data()) : "unknown bridge error";
         return make_error(ErrorCode::io_error, "AOM IAMF bridge encode failed: " + detail, "path=" + iamf_path);
     }
@@ -398,6 +420,7 @@ Result<void> convert_to_iamf(const std::string& src_path,
     (void) bitrate_per_ch_kbps;
     (void) loudness_lufs;
     (void) peak_dbtp;
+    (void) cancel_token;
     return make_error(ErrorCode::unsupported,
                       "IAMF encoding requires MR_ADM_ENABLE_IAMF=ON and the official AOM iamf-tools bridge");
 #endif

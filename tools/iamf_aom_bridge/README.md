@@ -43,3 +43,8 @@ cmake --preset release \
 The bridge currently accepts rendered channel-based WAV input and writes raw
 `.iamf` Opus output. Unsupported layouts fail explicitly; MacinRender never
 falls back to the legacy hand-written IAMF writer.
+
+ABI v2 adds a cooperative cancellation callback. The bridge checks it before
+setup/finalization and inside the IAMF temporal-unit encode loop, allowing
+MacinRender's Ctrl-C / cancel token to stop raw IAMF encoding without waiting
+for the entire source file to finish.

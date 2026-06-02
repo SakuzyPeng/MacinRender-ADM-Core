@@ -1,4 +1,6 @@
 #include <iostream>
+#include <optional>
+#include <stop_token>
 #include <string>
 
 #include "adm/audio_io.h"
@@ -22,6 +24,17 @@ int main() {
     // The prebuilt AOM bridge is validated by integration packaging tests. This
     // unit test only proves the build selected the official path.
     ok &= check(mradm::audio::iamf_encoding_available(), "IAMF bridge build selected");
+    std::stop_source stop_source;
+    stop_source.request_stop();
+    const auto cancel_res = mradm::audio::convert_to_iamf("/tmp/mr_missing_input.wav",
+                                                          "/tmp/mr_missing_output.iamf",
+                                                          "4+7+0",
+                                                          0,
+                                                          std::nullopt,
+                                                          std::nullopt,
+                                                          stop_source.get_token());
+    ok &= check(!cancel_res.has_value(), "IAMF pre-cancel returns an error");
+    ok &= check(cancel_res.error().code == mradm::ErrorCode::cancelled, "IAMF pre-cancel returns cancelled");
     const auto res = mradm::audio::convert_to_iamf("/tmp/mr_missing_input.wav", "/tmp/mr_missing_output.iamf", "9.1.6");
     ok &= check(!res.has_value(), "IAMF 9.1.6 is rejected before encode");
     ok &= check(res.error().code == mradm::ErrorCode::unsupported, "IAMF 9.1.6 returns unsupported");
