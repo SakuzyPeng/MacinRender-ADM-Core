@@ -801,8 +801,13 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (auto cancelled = fail_if_cancelled()) {
             return std::move(*cancelled);
         }
-        auto iamf_res = audio::convert_to_iamf(
-            render_path, encoded_output_path, output_layout, request.options.opus_bitrate_per_ch_kbps, lufs, peak);
+        auto iamf_res = audio::convert_to_iamf(render_path,
+                                               encoded_output_path,
+                                               output_layout,
+                                               request.options.opus_bitrate_per_ch_kbps,
+                                               lufs,
+                                               peak,
+                                               plan.cancel_token);
         render_temp_guard->remove_now();
         if (!iamf_res) {
             return fail_with_report(iamf_res.error());
@@ -822,8 +827,13 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (auto cancelled = fail_if_cancelled()) {
             return std::move(*cancelled);
         }
-        auto iamf_res = audio::convert_to_iamf(
-            render_path, iamf_temp_path.string(), output_layout, request.options.opus_bitrate_per_ch_kbps, lufs, peak);
+        auto iamf_res = audio::convert_to_iamf(render_path,
+                                               iamf_temp_path.string(),
+                                               output_layout,
+                                               request.options.opus_bitrate_per_ch_kbps,
+                                               lufs,
+                                               peak,
+                                               plan.cancel_token);
         render_temp_guard->remove_now();
         if (!iamf_res) {
             return fail_with_report(iamf_res.error());

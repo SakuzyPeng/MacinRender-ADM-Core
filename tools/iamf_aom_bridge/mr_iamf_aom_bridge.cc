@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <sstream>
+#include <stddef.h>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -12,7 +13,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "google/protobuf/text_format.h"
-#include "iamf/cli/encoder_main_lib.h"
+#include "iamf/cli/mr_bridge/mr_iamf_aom_cancellable_encoder.h"
 #include "iamf/cli/proto/user_metadata.pb.h"
 
 namespace {
@@ -222,7 +223,17 @@ void write_error(char* error_buffer, size_t error_buffer_size, std::string_view 
 
 int fail(char* error_buffer, size_t error_buffer_size, std::string_view message) {
     write_error(error_buffer, error_buffer_size, message);
-    return -1;
+    return MR_IAMF_AOM_RESULT_ERROR;
+}
+
+bool has_v2_cancel_fields(const MrIamfAomEncodeOptions& options) {
+    return options.abi_version >= 2 &&
+           options.struct_size >= offsetof(MrIamfAomEncodeOptions, cancel_user_data) + sizeof(options.cancel_user_data);
+}
+
+bool should_cancel(const MrIamfAomEncodeOptions& options) {
+    return has_v2_cancel_fields(options) && options.should_cancel != nullptr &&
+           options.should_cancel(options.cancel_user_data) != 0;
 }
 
 } // namespace
@@ -237,8 +248,12 @@ int mr_iamf_aom_encode_wav_to_iamf(const MrIamfAomEncodeOptions* options,
     if (options == nullptr) {
         return fail(error_buffer, error_buffer_size, "options must not be null");
     }
-    if (options->abi_version != MR_IAMF_AOM_BRIDGE_ABI_VERSION) {
+    if (options->abi_version != 1 && options->abi_version != MR_IAMF_AOM_BRIDGE_ABI_VERSION) {
         return fail(error_buffer, error_buffer_size, "bridge ABI version mismatch");
+    }
+    if (should_cancel(*options)) {
+        write_error(error_buffer, error_buffer_size, "IAMF encode cancelled");
+        return MR_IAMF_AOM_RESULT_CANCELLED;
     }
     if (options->input_wav_path == nullptr || options->output_iamf_path == nullptr || options->layout_id == nullptr) {
         return fail(error_buffer, error_buffer_size, "input_wav_path, output_iamf_path, and layout_id are required");
@@ -265,7 +280,12 @@ int mr_iamf_aom_encode_wav_to_iamf(const MrIamfAomEncodeOptions* options,
         return fail(error_buffer, error_buffer_size, "failed to build IAMF user metadata");
     }
 
-    const absl::Status status = iamf_tools::TestMain(metadata, input_dir, output_dir);
+    const absl::Status status = iamf_tools::TestMainCancellable(
+        metadata, input_dir, output_dir, [&options] { return should_cancel(*options); });
+    if (status.code() == absl::StatusCode::kCancelled) {
+        write_error(error_buffer, error_buffer_size, status.ToString());
+        return MR_IAMF_AOM_RESULT_CANCELLED;
+    }
     if (!status.ok()) {
         return fail(error_buffer, error_buffer_size, status.ToString());
     }
@@ -274,5 +294,5 @@ int mr_iamf_aom_encode_wav_to_iamf(const MrIamfAomEncodeOptions* options,
         std::filesystem::remove(std::filesystem::path(output_dir) /
                                 absl::StrCat(prefix, "_rendered_id_42_sub_mix_0_layout_", i, ".wav"));
     }
-    return 0;
+    return MR_IAMF_AOM_RESULT_OK;
 }

@@ -7,7 +7,11 @@
 extern "C" {
 #endif
 
-#define MR_IAMF_AOM_BRIDGE_ABI_VERSION 1
+#define MR_IAMF_AOM_BRIDGE_ABI_VERSION 2
+
+#define MR_IAMF_AOM_RESULT_OK 0
+#define MR_IAMF_AOM_RESULT_ERROR -1
+#define MR_IAMF_AOM_RESULT_CANCELLED -2
 
 typedef enum MrIamfAomProfile {
     MR_IAMF_AOM_PROFILE_AUTO = 0,
@@ -19,6 +23,9 @@ typedef enum MrIamfAomProfile {
     MR_IAMF_AOM_PROFILE_ADVANCED2 = 6,
 } MrIamfAomProfile;
 
+typedef int (*MrIamfAomCancelCallback)(void* user_data);
+
+// cppcheck-suppress-begin unusedStructMember
 typedef struct MrIamfAomEncodeOptions {
     uint32_t abi_version;
     const char* input_wav_path;
@@ -30,7 +37,13 @@ typedef struct MrIamfAomEncodeOptions {
     double loudness_lufs;
     int has_peak_dbtp;
     double peak_dbtp;
+
+    /* v2 fields. For abi_version == 1 these fields are ignored. */
+    size_t struct_size;
+    MrIamfAomCancelCallback should_cancel;
+    void* cancel_user_data;
 } MrIamfAomEncodeOptions;
+// cppcheck-suppress-end unusedStructMember
 
 uint32_t mr_iamf_aom_bridge_abi_version(void);
 

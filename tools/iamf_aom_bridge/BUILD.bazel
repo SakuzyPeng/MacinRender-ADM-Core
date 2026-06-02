@@ -5,6 +5,8 @@ package(default_visibility = ["//visibility:public"])
 cc_binary(
     name = "mr_iamf_aom_bridge",
     srcs = [
+        "mr_iamf_aom_cancellable_encoder.cc",
+        "mr_iamf_aom_cancellable_encoder.h",
         "mr_iamf_aom_bridge.cc",
         "mr_iamf_aom_bridge.h",
     ],
