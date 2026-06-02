@@ -369,7 +369,19 @@ CLI args / config
 
 ### 9.2 按需渲染与预览加速（RenderWindow / PreviewSession / checkpoint）
 
-> 状态：方向草案（2026-06-01）。面向 GUI 的预览 / 拖动（scrubbing）体验，不改变既有一次性渲染语义。
+> 状态（2026-06-01）：Phase 1 + Phase 2（2a + 2b）已落地；Phase 3 仍为方向草案。面向 GUI 的预览 /
+> 拖动（scrubbing）体验，不改变既有一次性渲染语义。
+>
+> 落地摘要：
+> - **Phase 1（RenderWindow + pre-roll）已落地**：EAR/VBAP/HOA/binaural 四后端均支持按需窗口渲染
+>   （`RenderPlan::render_window` + `CapabilityReport::supports_render_window`），逐样本 bit-exact 于
+>   “全渲染后裁”，由 `render_trim_fixture_test::window_bit_exact` 守护。所有后端按 `k_block_size` 网格
+>   对齐（object smoothing 在块边缘采样增益），seek 经 `render_common::seek_reader_abs`（overflow-safe）。
+> - **Phase 2a（PreviewSession + scene 缓存）已落地（C ABI v1.8）**：`adm_preview_session_t` import +
+>   语义策略一次，逐窗口复用 `AdmScene`（跳过 re-import + 策略）。
+> - **Phase 2b（IRenderer prepare/render_window 拆分）已落地（纯内部，无 ABI 改动）**：四后端各有 PreparedState
+>   （binaural 缓存 HRTF+FFT、EAR/VBAP/HOA 缓存增益矩阵等），`RenderService::render` 经可选
+>   `prepared_cache` 槽 fill-once/reuse，PreviewSession 持有该槽。
 
 **动机。** 当前输出区间裁剪（`RenderOptions::render_start_sec` / `render_end_sec`）的实现是
 “渲染完整时间线 → 渲染后 `audio::trim_file_frames` 裁文件”，`RenderPlan::meter_window` 也只缩窄
@@ -658,23 +670,22 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 - **M3 实现前**：`IRenderer::supports()` 返回的 `CapabilityReport` 接口形状（第一个后端接入前必须定型）。
 - **M3 实现前**：Golden fixture 与回归测试策略（M2 scene import 用 dump 文本对比即可；M3 出音频后才需正式策略）。
 - **M3 完成后**：Rust 首批试点模块选择（ADR 0002 已列候选区域，需要 M3 跑通后才有依据）。
-- **预览加速 Phase 1 实现前（见 9.2）**：`RenderWindow` 与 `warmup_frames` 的声明位置——放
-  `CapabilityReport` 字段、`IRenderer` 方法（如 `recommended_warmup_frames(plan)`），还是引擎按后端类型
-  查表。倾向后端自报；定型后影响 `ReaderHandle::seek` 签名与各后端渲染循环改造。
-- **预览加速 Phase 1 实现前**：`ReaderHandle::seek` 的失败语义，以及无 seek 能力后端的回退（读入丢弃
-  vs 拒绝 window）；window 输出是否完全取代渲染后 `trim_file_frames`，不支持 window 的后端如何兜底。
-- **预览加速 Phase 2 实现前（见 9.2）**：`IRenderer` 的 `prepare()/render_window()` 拆分形状——
-  `PreparedState` 是否 opaque、能否跨线程共享、与现有 `render()` 是否并存。这是 `adm_render` 接口变更，
-  需在第二个后端接入前定型，可能单独补 ADR。
-- **预览加速 Phase 2 实现前**：`PreviewSession` 缓存键粒度与失效（`(input, renderer, layout, sofa,
-  policy_hash)`）、内存上限/驱逐策略，以及 opaque `adm_preview_session_t` 的 ABI 生命周期与线程亲缘性约定
-  （是否沿用“单 session 单线程、跨 session 安全”）。
 - **预览加速 Phase 3（profile 后）**：是否存在后端的 pre-roll 真正成为瓶颈而需要 checkpoint；若需要，逐一
   评估各后端 DSP 状态的可序列化性，不可序列化者保持 pre-roll 回退。
 
 下列问题已不再悬而未决：
 
 - **新旧 CLI 二进制名称**：正式 CLI 二进制名为 `mradm`，避免占用通用标准名 `adm`；不保留 `adm` 兼容入口。
+- **预览加速 Phase 1（已落地，见 9.2）**：`warmup`/对齐由各后端在 render_window 内部自报（非 `CapabilityReport`
+  字段，非引擎查表）；后端只声明 `supports_render_window` 布尔。无 seek 能力问题不复存在——四后端都直接读
+  `bw64::readFile` 并用 `render_common::seek_reader_abs`（segmented，overflow-safe），不经 `ReaderHandle`，
+  故 `ReaderHandle::seek` 未实现/不需要。window 输出取代 `trim_file_frames`（后者仅作非 window 后端兜底，目前
+  四后端均支持 window）。
+- **预览加速 Phase 2（已落地，见 9.2）**：`IRenderer` 拆为 `prepare()->shared_ptr<IPreparedRender>` +
+  `render_window(prepared,…)`，`render()` 降为非虚便捷包装；`IPreparedRender` 为 opaque 基类、不可拷贝、按
+  `const&` 只读访问故可跨线程共享。`PreviewSession` 键即“单一 session 的固定 options”——scene + prepared 在首
+  窗口构建一次后复用，无需独立缓存键/驱逐策略；`adm_preview_session_t` 沿用“单 session 单线程、跨 session 安全”。
+  未单独补 ADR（纯 additive ABI + 内部重构，记于 ADR 0007 v1.8.0）。
 
 ## 15. 下一步建议
 

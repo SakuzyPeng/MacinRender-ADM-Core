@@ -816,6 +816,10 @@ std::string RenderService::layouts_json() const {
     return engine::layouts_to_json();
 }
 
+OutputFormats RenderService::output_formats() const {
+    return engine::build_output_formats();
+}
+
 std::string RenderService::output_formats_json() const {
     return engine::output_formats_to_json();
 }

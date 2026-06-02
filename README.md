@@ -28,6 +28,7 @@ cmake --build build/release
 ./build/release/mradm backends
 ./build/release/mradm layouts --format wav
 ./build/release/mradm layouts --format flac --renderer saf
+./build/release/mradm formats
 ```
 
 常见渲染命令：

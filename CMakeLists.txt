@@ -415,6 +415,7 @@ if(MR_ADM_CORE_BUILD_CLI)
     target_sources(mradm_exe
         PRIVATE
             src/adm_cli/backends_command.cpp
+            src/adm_cli/formats_command.cpp
             src/adm_cli/inspect_command.cpp
             src/adm_cli/layouts_command.cpp
             src/adm_cli/main.cpp

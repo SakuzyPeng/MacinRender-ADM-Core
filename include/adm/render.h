@@ -171,6 +171,39 @@ struct OutputLayoutRow {
     std::vector<std::string> supported_by; // subset of {ear, saf, hoa, binaural}
 };
 
+// One output container format (mirrors `mradm formats` / adm_output_formats_json):
+// its file extensions, availability in this build/platform, and constraints.
+struct OutputFormatInfo {
+    std::string format;                  // "wav" / "caf" / "flac" / "opus_mka" / "apac" / "iamf" / "iamf_mp4"
+    std::vector<std::string> extensions; // e.g. {".m4a", ".mp4"}
+    bool available{true};
+    std::string available_reason; // human-readable; empty when available
+    bool lossy{false};
+    uint32_t max_channels{0};      // 0 = unlimited
+    uint32_t fixed_sample_rate{0}; // 0 = any
+    bool supports_height{false};
+    std::vector<std::string> bit_depths; // e.g. {"f32","i24","i16"}; empty when N/A
+    bool has_bitrate{false};             // true when a bitrate range applies
+    bool bitrate_per_channel{false};     // true = per channel (Opus), false = total (APAC)
+    uint32_t bitrate_min_kbps{0};
+    uint32_t bitrate_max_kbps{0};
+    std::string note; // human-readable caveat; empty when none
+};
+
+// Build / platform feature flags (mirrors the "features" object in the JSON).
+struct OutputFormatFeatures {
+    bool apac{false};
+    bool iamf{false};
+    bool iamf_mp4_packager{false};
+    bool sofa{false};
+};
+
+// The full output-format reference: per-build feature flags + the container list.
+struct OutputFormats {
+    OutputFormatFeatures features;
+    std::vector<OutputFormatInfo> formats;
+};
+
 class RenderService {
   public:
     RenderService();
@@ -223,6 +256,12 @@ class RenderService {
 
     // The same table serialized to a JSON string (UTF-8) for the C ABI.
     [[nodiscard]] std::string layouts_json() const;
+
+    // The output container-format reference (mirrors `mradm formats`): per-build
+    // feature flags + the container list with availability and constraints. Single
+    // source of truth shared with output_formats_json(). See output_formats_json()
+    // for the IAMF packager-probe caveat.
+    [[nodiscard]] OutputFormats output_formats() const;
 
     // The output container-format reference serialized to a JSON string (UTF-8):
     // per-format availability (build/platform) and constraints, plus a "features"
