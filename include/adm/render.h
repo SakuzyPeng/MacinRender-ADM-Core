@@ -137,7 +137,22 @@ class RenderService {
   public:
     RenderService();
 
-    [[nodiscard]] RenderResult render(const RenderRequest& request, ProgressSink& progress, LogSink& logs) const;
+    // Render a request. When preimported_scene is non-null it is used directly
+    // (copied) instead of importing from disk, and semantic-policy application plus
+    // the semantic report are skipped — the caller (PreviewSession) is responsible
+    // for having imported and applied the policy already. When null, the full path
+    // runs: import, semantic policy, optional report.
+    [[nodiscard]] RenderResult render(const RenderRequest& request,
+                                      ProgressSink& progress,
+                                      LogSink& logs,
+                                      const AdmScene* preimported_scene = nullptr) const;
+
+    // Import the ADM scene and apply the semantic policy from `options` (in-memory
+    // JSON preferred over file path), returning the policy-applied scene. Used by
+    // PreviewSession to do the expensive import + policy once, then reuse the scene
+    // across many window renders. Returns the import / policy error on failure.
+    [[nodiscard]] Result<AdmScene>
+    prepare_preview_scene(const std::filesystem::path& input_path, const RenderOptions& options, LogSink& logs) const;
 
     // Quickly import the ADM scene and return file-level metadata without rendering.
     // Returns io_error if the file is missing or not a valid ADM BWF file.
@@ -180,6 +195,41 @@ class RenderService {
     // string (UTF-8). Mirrors `mradm inspect --write-semantic-policy-template` but
     // returned in-memory. Returns io_error if the file is missing or invalid.
     [[nodiscard]] Result<std::string> policy_template_json(const std::string& input_path) const;
+};
+
+// A reusable preview / scrubbing session. Imports the ADM scene and applies the
+// semantic policy ONCE at creation, then renders arbitrary output sub-windows of the
+// same (input, options) cheaply by reusing the cached scene (skipping re-import +
+// policy) together with on-demand window rendering. Intended for GUI timeline
+// scrubbing. Not thread-safe; use one session per thread or serialize access.
+// (Phase 2a: the scene is cached; per-window backend state — gain matrices / HRTF —
+// is still rebuilt each call, which Phase 2b will cache.)
+class PreviewSession {
+  public:
+    // Import + apply the semantic policy from `options`. The output time-range trim
+    // fields (render_start_sec / render_end_sec) in `options` are ignored here — the
+    // window is supplied per call to render_window. Returns the import / policy error.
+    [[nodiscard]] static Result<PreviewSession>
+    create(std::filesystem::path input_path, RenderOptions options, LogSink& logs);
+
+    // Render the output window [start_sec, end_sec) of the cached scene to output_path.
+    // nullopt start = from the beginning; nullopt end = to the end. Reuses the cached
+    // scene; the chosen backend renders only the window (on-demand) when it supports it.
+    [[nodiscard]] RenderResult render_window(std::optional<double> start_sec,
+                                             std::optional<double> end_sec,
+                                             std::optional<std::filesystem::path> output_path,
+                                             ProgressSink& progress,
+                                             LogSink& logs) const;
+
+    [[nodiscard]] const AdmScene& scene() const noexcept { return scene_; }
+
+  private:
+    PreviewSession(std::filesystem::path input, RenderOptions options, AdmScene scene);
+
+    std::filesystem::path input_;
+    RenderOptions options_;
+    AdmScene scene_;
+    RenderService service_;
 };
 
 } // namespace mradm

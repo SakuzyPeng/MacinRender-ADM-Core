@@ -170,7 +170,7 @@ struct adm_cancel_token_t {
 struct adm_render_result_t {
     adm_error_code_t code{ADM_ERROR_OK};
     std::string message;
-    std::string output_path;             // v1.1
+    std::string output_path;                         // v1.1
     std::optional<double> loudness_lufs;             // v1.1
     std::optional<double> peak_dbtp;                 // v1.1
     std::vector<CLogEntry> logs;                     // v1.1
@@ -184,6 +184,32 @@ struct adm_render_options_t {
     // fresh stop_source) is always observed. nullptr = non-cancellable.
     adm_cancel_token_t* cancel_token{nullptr};
 };
+
+struct adm_preview_session_t {
+    mradm::PreviewSession session;
+};
+
+// Build an owned C result handle from a finished render. Shared by adm_render_file_ex
+// and adm_preview_render_window. Returns nullptr on allocation failure.
+static adm_render_result_t* make_c_result(mradm::RenderResult&& cpp_result, std::vector<CLogEntry>&& captured) {
+    // cppcheck-suppress unreadVariable -- c is used via operator-> and release()
+    auto c = std::unique_ptr<adm_render_result_t>(new (std::nothrow) adm_render_result_t{});
+    if (!c) {
+        return nullptr;
+    }
+    c->code = map_error(cpp_result.error.code);
+    c->message = cpp_result.error.message;
+    if (cpp_result.output_path.has_value()) {
+        c->output_path = cpp_result.output_path->string();
+    }
+    if (cpp_result.metrics.has_value()) {
+        c->loudness_lufs = cpp_result.metrics->measured_lufs;
+        c->peak_dbtp = cpp_result.metrics->measured_peak_dbtp;
+    }
+    c->semantic_report_json = std::move(cpp_result.semantic_report_json);
+    c->logs = std::move(captured);
+    return c.release();
+}
 
 struct adm_scene_info_t {
     uint32_t sample_rate{0};
@@ -616,24 +642,11 @@ adm_error_code_t adm_render_file_ex(adm_context_t* context,
         if (result == nullptr) {
             return code;
         }
-
-        auto c_result = std::unique_ptr<adm_render_result_t>(new (std::nothrow) adm_render_result_t{});
-        if (!c_result) {
+        auto* c_result = make_c_result(std::move(cpp_result), std::move(captured));
+        if (c_result == nullptr) {
             return ADM_ERROR_INTERNAL;
         }
-        c_result->code = code;
-        c_result->message = cpp_result.error.message;
-        if (cpp_result.output_path.has_value()) {
-            c_result->output_path = cpp_result.output_path->string();
-        }
-        if (cpp_result.metrics.has_value()) {
-            c_result->loudness_lufs = cpp_result.metrics->measured_lufs;
-            c_result->peak_dbtp = cpp_result.metrics->measured_peak_dbtp;
-        }
-        c_result->semantic_report_json = std::move(cpp_result.semantic_report_json);
-        c_result->logs = std::move(captured);
-        *result = c_result.release();
-
+        *result = c_result;
         return code;
     } catch (...) {
         return ADM_ERROR_INTERNAL;
@@ -647,6 +660,96 @@ adm_error_code_t adm_render_file(adm_context_t* context,
                                  void* user_data,
                                  adm_render_result_t** result) noexcept {
     return adm_render_file_ex(context, input_path, output_path, nullptr, progress, user_data, result);
+}
+
+/* ── Preview session (v1.8) ──────────────────────────────────────────────── */
+
+// cppcheck-suppress constParameterPointer -- context is non-const by the stable C ABI signature
+adm_error_code_t adm_create_preview_session(adm_context_t* context,
+                                            const char* input_path,
+                                            const adm_render_options_t* opts,
+                                            adm_preview_session_t** out) noexcept {
+    if (out != nullptr) {
+        *out = nullptr;
+    }
+    if (context == nullptr || input_path == nullptr || input_path[0] == '\0' || out == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        mradm::RenderOptions options;
+        if (opts != nullptr) {
+            options = opts->opts;
+            if (opts->cancel_token != nullptr) {
+                options.cancel_token = opts->cancel_token->source.get_token();
+            }
+        }
+        mradm::NullLogSink null_sink;
+        auto created = mradm::PreviewSession::create(input_path, std::move(options), null_sink);
+        if (!created) {
+            return map_error(created.error().code);
+        }
+        // cppcheck-suppress unreadVariable -- session is used (*out = session)
+        auto* session = new (std::nothrow) adm_preview_session_t{std::move(*created)};
+        if (session == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        *out = session;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+void adm_destroy_preview_session(adm_preview_session_t* session) noexcept {
+    delete session;
+}
+
+adm_error_code_t adm_preview_render_window(adm_preview_session_t* session,
+                                           double start_sec,
+                                           double end_sec,
+                                           const char* output_path,
+                                           adm_progress_cb progress,
+                                           void* user_data,
+                                           adm_render_result_t** result) noexcept {
+    if (result != nullptr) {
+        *result = nullptr;
+    }
+    if (session == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    if (!std::isfinite(start_sec) || start_sec < 0.0 || !std::isfinite(end_sec)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        // end_sec <= 0 means "to the end" (nullopt), matching set_render_end_sec.
+        const std::optional<double> end = (end_sec > 0.0) ? std::optional<double>{end_sec} : std::nullopt;
+        std::optional<std::filesystem::path> out_path;
+        if (output_path != nullptr && output_path[0] != '\0') {
+            out_path = std::filesystem::path{output_path};
+        }
+
+        CallbackProgressSink progress_sink(progress, user_data);
+        std::vector<CLogEntry> captured;
+        CollectingLogSink collecting(captured);
+        mradm::NullLogSink null_sink;
+        mradm::LogSink& log_sink =
+            (result != nullptr) ? static_cast<mradm::LogSink&>(collecting) : static_cast<mradm::LogSink&>(null_sink);
+        mradm::RenderResult cpp_result =
+            session->session.render_window(start_sec, end, std::move(out_path), progress_sink, log_sink);
+
+        const adm_error_code_t code = map_error(cpp_result.error.code);
+        if (result == nullptr) {
+            return code;
+        }
+        auto* c_result = make_c_result(std::move(cpp_result), std::move(captured));
+        if (c_result == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        *result = c_result;
+        return code;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
 }
 
 /* ── Result ──────────────────────────────────────────────────────────────── */
