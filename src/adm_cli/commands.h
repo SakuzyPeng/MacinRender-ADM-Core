@@ -55,3 +55,6 @@ void run_backends();
 
 CLI::App* add_layouts_command(CLI::App& app, LayoutCliOptions& opts);
 int run_layouts(const LayoutCliOptions& opts);
+
+CLI::App* add_formats_command(CLI::App& app);
+void run_formats();

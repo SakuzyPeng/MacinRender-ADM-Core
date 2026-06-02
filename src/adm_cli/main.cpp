@@ -27,6 +27,8 @@ int main(int argc, char** argv) {
     LayoutCliOptions layouts_opts;
     auto* layouts_cmd = add_layouts_command(app, layouts_opts);
 
+    auto* formats_cmd = add_formats_command(app);
+
     app.require_subcommand(1);
 
     try {
@@ -50,6 +52,10 @@ int main(int argc, char** argv) {
     }
     if (*layouts_cmd) {
         return run_layouts(layouts_opts);
+    }
+    if (*formats_cmd) {
+        run_formats();
+        return EXIT_SUCCESS;
     }
     return EXIT_SUCCESS;
 }

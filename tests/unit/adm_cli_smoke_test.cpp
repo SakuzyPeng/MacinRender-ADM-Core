@@ -158,6 +158,21 @@ int main() {
         ok &= check(r.out.find("4+7+0") == std::string::npos, "backends: old 4+7+0 layout not listed");
     }
 
+    // ── mradm formats lists output containers + constraints ──────────────────
+    {
+        auto r = run_cmd(mradm_exe + " formats");
+        ok &= check(r.code == 0, "formats: exit 0");
+        ok &= check(r.out.find("Build features:") != std::string::npos, "formats: build features header");
+        ok &= check(r.out.find("wav") != std::string::npos && r.out.find("flac") != std::string::npos &&
+                        r.out.find("opus_mka") != std::string::npos && r.out.find("apac") != std::string::npos &&
+                        r.out.find("iamf") != std::string::npos,
+                    "formats: all containers listed");
+        ok &= check(r.out.find("channels: up to 8") != std::string::npos, "formats: FLAC 8-channel cap shown");
+        ok &= check(r.out.find("bitrate (per channel): 6-320 kbps") != std::string::npos,
+                    "formats: Opus per-channel bitrate range shown");
+        ok &= check(r.out.find("iamf_mp4") != std::string::npos, "formats: iamf_mp4 container listed");
+    }
+
     // ── mradm render help exposes peak makeup ────────────────────────────────
     {
         auto r = run_cmd(mradm_exe + " render --help");
