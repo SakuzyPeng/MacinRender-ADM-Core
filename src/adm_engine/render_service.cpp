@@ -456,6 +456,12 @@ RenderResult RenderService::render(const RenderRequest& request,
         const std::string message = error.message;
         return {std::move(error), std::nullopt, std::nullopt, {{level, message}}, semantic_report_json};
     };
+    const auto fail_if_cancelled = [&request, &fail_with_report]() -> std::optional<RenderResult> {
+        if (!request.options.cancel_token.stop_requested()) {
+            return std::nullopt;
+        }
+        return fail_with_report({ErrorCode::cancelled, "render cancelled", {}}, LogLevel::info);
+    };
 
     if (needs_semantic_report) {
         const SemanticPolicyReportOptions report_options{
@@ -601,6 +607,9 @@ RenderResult RenderService::render(const RenderRequest& request,
         }
         prepared_slot = std::move(*prep_res);
     }
+    if (auto cancelled = fail_if_cancelled()) {
+        return std::move(*cancelled);
+    }
 
     // Render (inline measurement of loudness + True Peak over the meter window).
     auto render_res = renderer->render_window(*prepared_slot, plan, progress, logs);
@@ -615,6 +624,9 @@ RenderResult RenderService::render(const RenderRequest& request,
     const RenderMetrics& metrics = *render_res;
     if (!is_lossy_final) {
         output_guard.arm();
+    }
+    if (auto cancelled = fail_if_cancelled()) {
+        return std::move(*cancelled);
     }
 
     if (metrics.measured_lufs) {
@@ -634,6 +646,9 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (!trim_res) {
             return fail_with_report(trim_res.error());
         }
+    }
+    if (auto cancelled = fail_if_cancelled()) {
+        return std::move(*cancelled);
     }
 
     // Compute combined gain: loudness target first, optional peak makeup second,
@@ -708,6 +723,9 @@ RenderResult RenderService::render(const RenderRequest& request,
             return fail_with_report(gain_res.error());
         }
     }
+    if (auto cancelled = fail_if_cancelled()) {
+        return std::move(*cancelled);
+    }
 
     // Bit depth conversion: WAV output only.
     // CAF is always float32. For FLAC, the temp WAV stays float32 here so that
@@ -725,6 +743,9 @@ RenderResult RenderService::render(const RenderRequest& request,
                 return fail_with_report(conv_res.error());
             }
         }
+    }
+    if (auto cancelled = fail_if_cancelled()) {
+        return std::move(*cancelled);
     }
 
     // FLAC final encode: the temp WAV is now fully post-processed (float32, gain
@@ -803,6 +824,9 @@ RenderResult RenderService::render(const RenderRequest& request,
         }
     }
 
+    if (auto cancelled = fail_if_cancelled()) {
+        return std::move(*cancelled);
+    }
     if (is_lossy_final) {
         auto replace_res = replace_output_file(output_temp_path, final_path);
         if (!replace_res) {

@@ -1,6 +1,12 @@
+#include <atomic>
+#include <chrono>
 #include <cmath>
+#include <csignal>
+#include <cstdlib>
+#include <stop_token>
 #include <string>
 #include <string_view>
+#include <thread>
 
 #include <spdlog/spdlog.h>
 
@@ -9,6 +15,64 @@
 #include "commands.h"
 
 namespace {
+
+constexpr int k_sigint_exit_code = 130;
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): required by the C signal handler contract.
+volatile std::sig_atomic_t g_sigint_requested = 0;
+
+void handle_sigint(int /*signal*/) noexcept {
+    g_sigint_requested = 1;
+}
+
+using SignalHandler = void (*)(int);
+
+SignalHandler install_sigint_handler() {
+    g_sigint_requested = 0;
+    return std::signal(SIGINT, handle_sigint);
+}
+
+class RenderInterruptScope {
+  public:
+    explicit RenderInterruptScope(std::stop_source& stop_source)
+        : stop_source_(stop_source), previous_handler_(install_sigint_handler()) {
+        if (previous_handler_ == SIG_ERR) {
+            spdlog::warn("Ctrl-C cancellation is unavailable: failed to install SIGINT handler");
+            return;
+        }
+        watcher_ = std::thread([this] {
+            while (!done_.load(std::memory_order_acquire)) {
+                if (g_sigint_requested > 0) {
+                    spdlog::info("Ctrl-C received; cancelling render...");
+                    stop_source_.request_stop();
+                    return;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds{25});
+            }
+        });
+    }
+
+    RenderInterruptScope(const RenderInterruptScope&) = delete;
+    RenderInterruptScope& operator=(const RenderInterruptScope&) = delete;
+    RenderInterruptScope(RenderInterruptScope&&) = delete;
+    RenderInterruptScope& operator=(RenderInterruptScope&&) = delete;
+
+    ~RenderInterruptScope() {
+        done_.store(true, std::memory_order_release);
+        if (watcher_.joinable()) {
+            watcher_.join();
+        }
+        if (previous_handler_ != SIG_ERR) {
+            std::signal(SIGINT, previous_handler_);
+        }
+    }
+
+  private:
+    std::stop_source& stop_source_;
+    std::atomic_bool done_{false};
+    std::thread watcher_;
+    void (*previous_handler_)(int){SIG_ERR};
+};
 
 class SpdlogSink final : public mradm::LogSink {
   public:
@@ -226,8 +290,16 @@ int run_render_impl(const RenderCliOptions& opts) {
     mradm::RenderService service;
     ConsoleProgressSink progress;
     SpdlogSink logs;
-    mradm::RenderResult result = service.render(make_render_request(opts), progress, logs);
+    std::stop_source stop_source;
+    mradm::RenderRequest request = make_render_request(opts);
+    request.options.cancel_token = stop_source.get_token();
+    RenderInterruptScope interrupt_scope{stop_source};
+    mradm::RenderResult result = service.render(request, progress, logs);
     if (!result.success()) {
+        if (result.error.code == mradm::ErrorCode::cancelled) {
+            spdlog::info(result.error.message);
+            return k_sigint_exit_code;
+        }
         spdlog::error(result.error.message);
         return EXIT_FAILURE;
     }
