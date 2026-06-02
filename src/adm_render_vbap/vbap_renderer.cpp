@@ -548,6 +548,14 @@ void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
     }
 }
 
+// Immutable, reusable VBAP state: the resolved layout and the SAF VBAP gain matrix
+// (the expensive per-object gain-table computation). Reused across render_window()
+// calls (PreviewSession scrubbing); no per-output state.
+struct VbapPrepared final : IPreparedRender {
+    LayoutSpec layout;
+    std::vector<ChannelGainInfo> gain_matrix;
+};
+
 class VbapRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
@@ -562,22 +570,12 @@ CapabilityReport VbapRenderer::capabilities() const {
     return vbap_capabilities();
 }
 
-// NOLINTNEXTLINE(readability-function-size)
-Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan& /*plan*/, LogSink& /*logs*/) {
-    return std::static_pointer_cast<IPreparedRender>(std::make_shared<EmptyPreparedRender>());
-}
-
-Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& /*prepared*/,
-                                                  const RenderPlan& plan,
-                                                  ProgressSink& progress,
-                                                  LogSink& logs) {
+Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
     const std::string layout_id = plan.output_layout;
-    const auto layout = layout_spec(layout_id);
+    auto layout = layout_spec(layout_id);
     if (!layout.has_value()) {
         return make_error(ErrorCode::unsupported, fmt::format("unsupported VBAP output layout '{}'", layout_id), {});
     }
-
-    const auto& info = plan.scene.info;
 
     auto gain_matrix = build_gain_matrix(plan.scene, *layout, layout_id, logs, plan.speaker_spread_mode);
     if (!gain_matrix) {
@@ -587,11 +585,7 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& /*prepa
         logs.log(LogLevel::warning, "saf-vbap", "no renderable tracks found (all muted?), writing silence");
     }
 
-    const auto num_out_ch = static_cast<uint16_t>(layout->speakers.size());
-    const auto num_in_ch = info.num_channels;
-    const auto num_frames = info.num_frames;
-    const auto sample_rate = info.sample_rate;
-
+    const auto num_in_ch = plan.scene.info.num_channels;
     const auto invalid_channel =
         std::ranges::find_if(*gain_matrix, [num_in_ch](const auto& cg) { return cg.input_channel >= num_in_ch; });
     if (invalid_channel != gain_matrix->end()) {
@@ -602,14 +596,39 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& /*prepa
                           "input=" + plan.input_path);
     }
 
+    auto prepared = std::make_shared<VbapPrepared>();
+    prepared->layout = std::move(*layout);
+    prepared->gain_matrix = std::move(*gain_matrix);
+    return std::static_pointer_cast<IPreparedRender>(prepared);
+}
+
+// NOLINTNEXTLINE(readability-function-size)
+Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& prep,
+                                                  const RenderPlan& plan,
+                                                  ProgressSink& progress,
+                                                  LogSink& logs) {
+    const auto* prepared = dynamic_cast<const VbapPrepared*>(&prep);
+    if (prepared == nullptr) {
+        return make_error(
+            ErrorCode::internal_error, "saf-vbap: render_window received an incompatible prepared state", {});
+    }
+    const auto& layout = prepared->layout;
+    const auto& gain_matrix = prepared->gain_matrix;
+
+    const auto& info = plan.scene.info;
+    const auto num_out_ch = static_cast<uint16_t>(layout.speakers.size());
+    const auto num_in_ch = info.num_channels;
+    const auto num_frames = info.num_frames;
+    const auto sample_rate = info.sample_rate;
+
     try {
         logs.log(LogLevel::info,
                  "saf-vbap",
                  fmt::format("rendering {} tracks (Objects + DirectSpeakers) → {} channels, {} frames [{}]",
-                             gain_matrix->size(),
+                             gain_matrix.size(),
                              num_out_ch,
                              num_frames,
-                             is_2d_layout(*layout) ? "2D VBAP" : "3D VBAP"));
+                             is_2d_layout(layout) ? "2D VBAP" : "3D VBAP"));
         progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
 
         auto reader = bw64::readFile(plan.input_path);
@@ -623,7 +642,7 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& /*prepa
         const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
 
         // Current block index per channel — advanced monotonically as frames_done increases.
-        std::vector<std::size_t> blk_idx(gain_matrix->size(), 0);
+        std::vector<std::size_t> blk_idx(gain_matrix.size(), 0);
 
         struct EburFree {
             void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); }
@@ -690,7 +709,7 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& /*prepa
                                         num_out_ch,
                                         k_default_interp,
                                         plan.object_smoothing_frames};
-            accumulate_gain_matrix(*gain_matrix, blk_idx, ctx, frames_now);
+            accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now);
 
             // Sub-range of this block inside the output window [win_start, win_end).
             const uint64_t w_lo = std::max(frames_done, win_start);

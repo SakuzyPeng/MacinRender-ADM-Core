@@ -513,6 +513,14 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
     return result;
 }
 
+// Immutable, reusable HOA state: the per-object HOA encode gain matrix (the expensive
+// part). Reused across render_window() calls (PreviewSession scrubbing). The AllRAD
+// meter-decode matrix and the diffuse delay lines are cheap / per-output, so they stay
+// in render_window.
+struct HoaPrepared final : IPreparedRender {
+    std::vector<ChannelGainInfo> gain_matrix;
+};
+
 class HoaRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
@@ -527,33 +535,19 @@ CapabilityReport HoaRenderer::capabilities() const {
     return hoa_capabilities();
 }
 
-// NOLINTNEXTLINE(readability-function-size)
-Result<std::shared_ptr<IPreparedRender>> HoaRenderer::prepare(const RenderPlan& /*plan*/, LogSink& /*logs*/) {
-    return std::static_pointer_cast<IPreparedRender>(std::make_shared<EmptyPreparedRender>());
-}
-
-Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& /*prepared*/,
-                                                 const RenderPlan& plan,
-                                                 ProgressSink& progress,
-                                                 LogSink& logs) {
+Result<std::shared_ptr<IPreparedRender>> HoaRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
     if (plan.output_layout != "hoa3") {
         return make_error(ErrorCode::unsupported,
                           fmt::format("unsupported HOA output layout '{}'; supported: hoa3", plan.output_layout),
                           {});
     }
 
-    const auto& info = plan.scene.info;
-
     auto gain_matrix = build_gain_matrix(plan.scene, logs);
     if (gain_matrix.empty()) {
         logs.log(LogLevel::warning, "hoa-encode", "no renderable tracks found (all muted?), writing silence");
     }
 
-    const auto num_in_ch = info.num_channels;
-    const auto num_frames = info.num_frames;
-    const auto sample_rate = info.sample_rate;
-    constexpr uint16_t k_num_out = k_hoa3_channels_u16;
-
+    const auto num_in_ch = plan.scene.info.num_channels;
     const auto invalid_channel =
         std::ranges::find_if(gain_matrix, [num_in_ch](const auto& cg) { return cg.input_channel >= num_in_ch; });
     if (invalid_channel != gain_matrix.end()) {
@@ -563,6 +557,27 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& /*prepar
                                       num_in_ch),
                           "input=" + plan.input_path);
     }
+
+    auto prepared = std::make_shared<HoaPrepared>();
+    prepared->gain_matrix = std::move(gain_matrix);
+    return std::static_pointer_cast<IPreparedRender>(prepared);
+}
+
+// NOLINTNEXTLINE(readability-function-size)
+Result<RenderMetrics>
+HoaRenderer::render_window(const IPreparedRender& prep, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+    const auto* prepared = dynamic_cast<const HoaPrepared*>(&prep);
+    if (prepared == nullptr) {
+        return make_error(
+            ErrorCode::internal_error, "hoa-encode: render_window received an incompatible prepared state", {});
+    }
+    const auto& gain_matrix = prepared->gain_matrix;
+
+    const auto& info = plan.scene.info;
+    const auto num_in_ch = info.num_channels;
+    const auto num_frames = info.num_frames;
+    const auto sample_rate = info.sample_rate;
+    constexpr uint16_t k_num_out = k_hoa3_channels_u16;
 
     // Build 7.1.4 AllRAD decode matrix for BS.1770 playback-domain measurement.
     // LFE is NOT a spatial speaker — it is excluded from the AllRAD matrix and its
