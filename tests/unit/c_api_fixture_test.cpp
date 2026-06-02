@@ -5,6 +5,7 @@
 // a runtime-generated ADM fixture (no private audio material; see CLAUDE.md).
 // The default C ABI render (no options) resolves to binaural 2ch output.
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdlib>
@@ -59,7 +60,7 @@ std::filesystem::path unique_temp_wav_path(const char* stem) {
 }
 
 // Build a minimal single-Object ADM BW64 file with real audio samples.
-std::filesystem::path write_fixture() {
+std::filesystem::path write_fixture(uint32_t sample_rate = 48000U) {
     auto doc = adm::Document::create();
 
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"TestCF"}, adm::TypeDefinition::OBJECTS);
@@ -109,11 +110,24 @@ std::filesystem::path write_fixture() {
     auto path = unique_temp_wav_path("mr_c_api_fixture");
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(buf.str());
-    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
-    constexpr uint64_t k_frames = 9600U; // 0.2 s @ 48 kHz
+    auto writer = bw64::writeFile(path.string(), 1U, static_cast<uint16_t>(sample_rate), 24U, chna, axml);
+    const uint64_t k_frames = static_cast<uint64_t>(sample_rate) / 5U; // 0.2 s
     std::vector<float> samples(k_frames, 0.5F);
     writer->write(samples.data(), k_frames);
     return path;
+}
+
+bool has_output_sidecar(const std::filesystem::path& final_path, const char* purpose) {
+    const auto parent = final_path.parent_path();
+    const auto prefix = final_path.stem().string() + "." + std::string{purpose} + ".";
+    std::error_code ec;
+    const std::filesystem::directory_iterator begin(parent, ec);
+    if (ec) {
+        return true;
+    }
+    return std::ranges::any_of(begin, std::filesystem::directory_iterator{}, [&](const auto& entry) {
+        return entry.path().filename().string().starts_with(prefix);
+    });
 }
 
 struct ProgressState {
@@ -865,6 +879,8 @@ bool verify_cancel_pre_render(adm_context_t* ctx, const std::filesystem::path& i
     ok = check(r != nullptr && adm_render_result_error_code(r) == ADM_ERROR_CANCELLED, "result code CANCELLED") && ok;
     adm_destroy_render_result(r);
     ok = check(!std::filesystem::exists(out), "cancelled render should leave no output file") && ok;
+    ok = check(!has_output_sidecar(out, "render_tmp"), "pre-cancelled render should leave no render_tmp sidecar") && ok;
+    ok = check(!has_output_sidecar(out, "output_tmp"), "pre-cancelled render should leave no output_tmp sidecar") && ok;
 
     // Reset → same token + options now render successfully (token reuse).
     adm_reset_cancel_token(token);
@@ -909,6 +925,12 @@ bool verify_cancel_threaded(adm_context_t* ctx, const std::filesystem::path& inp
     bool ok = check(code == ADM_ERROR_OK || code == ADM_ERROR_CANCELLED, "threaded render should end OK or CANCELLED");
     if (code == ADM_ERROR_CANCELLED) {
         ok = check(!std::filesystem::exists(out), "cancelled threaded render should leave no output") && ok;
+        ok = check(!has_output_sidecar(out, "render_tmp"),
+                   "cancelled threaded render should leave no render_tmp sidecar") &&
+             ok;
+        ok = check(!has_output_sidecar(out, "output_tmp"),
+                   "cancelled threaded render should leave no output_tmp sidecar") &&
+             ok;
     }
     adm_destroy_render_result(r);
     adm_destroy_render_options(opts);
@@ -1048,6 +1070,38 @@ bool verify_semantic_report_on_late_failure(adm_context_t* ctx, const std::files
                    "report schema present on failure") &&
              ok;
     }
+    adm_destroy_render_result(r);
+    adm_destroy_render_options(opts);
+    return ok;
+}
+
+// Render succeeds into a staging WAV, then final Opus encoding rejects the 44.1 kHz
+// source. The failed render must not leave the final .mka, render_tmp WAV, or
+// output_tmp sidecar behind.
+bool verify_lossy_encode_failure_cleanup(adm_context_t* ctx) {
+    const FileGuard input_441(write_fixture(44100U));
+    const auto out =
+        std::filesystem::path(unique_temp_wav_path("mr_c_api_opus_fail_cleanup")).replace_extension(".mka");
+    FileGuard out_guard(out);
+
+    adm_render_options_t* opts = adm_create_render_options();
+    bool ok = check(opts != nullptr, "cleanup failure options creation should succeed");
+    if (opts == nullptr) {
+        return false;
+    }
+    adm_render_options_set_renderer(opts, ADM_RENDERER_SAF);
+    adm_render_options_set_output_layout(opts, "5.1");
+
+    adm_render_result_t* r = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input_441.path().string().c_str(), out.string().c_str(), opts, nullptr, nullptr, &r);
+    ok = check(code != ADM_ERROR_OK, "44.1 kHz Opus final encode should fail") && ok;
+    ok = check(!std::filesystem::exists(out), "failed Opus final encode should leave no final output") && ok;
+    ok =
+        check(!has_output_sidecar(out, "render_tmp"), "failed Opus final encode should clean render_tmp sidecar") && ok;
+    ok =
+        check(!has_output_sidecar(out, "output_tmp"), "failed Opus final encode should clean output_tmp sidecar") && ok;
+
     adm_destroy_render_result(r);
     adm_destroy_render_options(opts);
     return ok;
@@ -1787,6 +1841,7 @@ int main() {
     ok = verify_semantic_policy_json_wire_through(ctx, fixture.path()) && ok;
     ok = verify_semantic_policy_json_invalid(ctx, fixture.path()) && ok;
     ok = verify_semantic_report_on_late_failure(ctx, fixture.path()) && ok;
+    ok = verify_lossy_encode_failure_cleanup(ctx) && ok;
     ok = verify_render_file_ex_compat(ctx, fixture.path()) && ok;
     ok = verify_hoa_render(ctx, fixture.path()) && ok;
     ok = verify_51_render(ctx, fixture.path()) && ok;
