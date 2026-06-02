@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <random>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -101,9 +102,15 @@ uint64_t ReaderHandle::read(float* out, uint64_t frames) {
 
 // ── apply_gain_to_file ────────────────────────────────────────────────────────
 
-Result<void> apply_gain_to_file(const std::string& path, float gain, const std::string& layout_id) {
+Result<void> apply_gain_to_file(const std::string& path,
+                                float gain,
+                                const std::string& layout_id,
+                                const std::stop_token& cancel_token) {
     if (std::abs(gain - 1.0F) < 1e-6F) {
         return {};
+    }
+    if (cancel_token.stop_requested()) {
+        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
     }
 
     const std::filesystem::path original_path{path};
@@ -132,6 +139,9 @@ Result<void> apply_gain_to_file(const std::string& path, float gain, const std::
         uint64_t left = total_frames;
 
         while (left > 0) {
+            if (cancel_token.stop_requested()) {
+                return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
+            }
             const uint64_t n = std::min(k_block, left);
             const uint64_t got = reader.read(buf.data(), n);
             if (got == 0) {
@@ -152,6 +162,9 @@ Result<void> apply_gain_to_file(const std::string& path, float gain, const std::
         }
     }
 
+    if (cancel_token.stop_requested()) {
+        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
+    }
     std::error_code ec;
     std::filesystem::rename(tmp_path, original_path, ec);
     if (ec) {
@@ -171,8 +184,15 @@ Result<void> apply_gain_to_file(const std::string& path, float gain, const std::
 
 // ── trim_file_frames ──────────────────────────────────────────────────────────
 
-Result<void>
-trim_file_frames(const std::string& path, uint64_t start_frame, uint64_t frame_count, const std::string& layout_id) {
+Result<void> trim_file_frames(const std::string& path,
+                              uint64_t start_frame,
+                              uint64_t frame_count,
+                              const std::string& layout_id,
+                              const std::stop_token& cancel_token) {
+    if (cancel_token.stop_requested()) {
+        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
+    }
+
     const std::filesystem::path original_path{path};
     const auto tmp_path = unique_sidecar_path(original_path, "trim_tmp");
     TempPathGuard tmp_guard{tmp_path};
@@ -219,6 +239,9 @@ trim_file_frames(const std::string& path, uint64_t start_frame, uint64_t frame_c
         // The readers are forward-only (no seek), so discard the head by reading it.
         uint64_t to_skip = clamped_start;
         while (to_skip > 0) {
+            if (cancel_token.stop_requested()) {
+                return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
+            }
             const uint64_t n = std::min(k_block, to_skip);
             const uint64_t got = reader.read(buf.data(), n);
             if (got == 0) {
@@ -229,6 +252,9 @@ trim_file_frames(const std::string& path, uint64_t start_frame, uint64_t frame_c
 
         uint64_t left = out_frames;
         while (left > 0) {
+            if (cancel_token.stop_requested()) {
+                return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
+            }
             const uint64_t n = std::min(k_block, left);
             const uint64_t got = reader.read(buf.data(), n);
             if (got == 0) {
@@ -241,6 +267,9 @@ trim_file_frames(const std::string& path, uint64_t start_frame, uint64_t frame_c
         }
     }
 
+    if (cancel_token.stop_requested()) {
+        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
+    }
     std::error_code ec;
     std::filesystem::rename(tmp_path, original_path, ec);
     if (ec) {

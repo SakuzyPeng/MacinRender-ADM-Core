@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdint>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -50,15 +51,20 @@ Result<void> convert_to_apac(const std::string& src_path,
                              const std::string& apac_path,
                              const std::string& layout_id,
                              uint32_t bitrate_kbps,
-                             bool drc_music) {
+                             bool drc_music,
+                             const std::stop_token& cancel_token) {
 #ifndef __APPLE__
     (void) src_path;
     (void) apac_path;
     (void) layout_id;
     (void) bitrate_kbps;
     (void) drc_music;
+    (void) cancel_token;
     return make_error(ErrorCode::unsupported, "APAC encoding requires macOS (AudioToolbox)", {});
 #else
+    if (cancel_token.stop_requested()) {
+        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + apac_path);
+    }
     struct ApacLayout {
         AudioChannelLayoutTag tag;
         bool wav71_swap;
@@ -223,6 +229,10 @@ Result<void> convert_to_apac(const std::string& src_path,
     std::vector<float> buf(static_cast<std::size_t>(channels) * k_block);
     uint64_t left = reader.frame_count();
     while (left > 0) {
+        if (cancel_token.stop_requested()) {
+            ExtAudioFileDispose(ext_file);
+            return make_error(ErrorCode::cancelled, "render cancelled", "path=" + apac_path);
+        }
         const uint64_t n = std::min(k_block, left);
         const uint64_t got = reader.read(buf.data(), n);
         if (got == 0) {
@@ -254,6 +264,10 @@ Result<void> convert_to_apac(const std::string& src_path,
         return make_error(ErrorCode::io_error, "short read in convert_to_apac", "src=" + src_path);
     }
 
+    if (cancel_token.stop_requested()) {
+        ExtAudioFileDispose(ext_file);
+        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + apac_path);
+    }
     err = ExtAudioFileDispose(ext_file);
     if (err != noErr) {
         return make_error(ErrorCode::io_error,

@@ -642,7 +642,8 @@ RenderResult RenderService::render(const RenderRequest& request,
     // the file metadata all describe the trimmed segment. Skipped when window_render
     // already produced a trimmed file (the backend wrote only the window).
     if (need_trim && !window_render) {
-        auto trim_res = audio::trim_file_frames(render_path, trim_start_frame, trim_frame_count, output_layout);
+        auto trim_res =
+            audio::trim_file_frames(render_path, trim_start_frame, trim_frame_count, output_layout, plan.cancel_token);
         if (!trim_res) {
             return fail_with_report(trim_res.error());
         }
@@ -718,7 +719,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     if (std::abs(gain_db) >= 0.01) {
         const auto gain_linear = static_cast<float>(std::pow(10.0, gain_db / 20.0));
         logs.log(LogLevel::info, "engine", fmt::format("applying total gain {:.4f} ({:.2f} dB)", gain_linear, gain_db));
-        auto gain_res = audio::apply_gain_to_file(render_path, gain_linear, output_layout);
+        auto gain_res = audio::apply_gain_to_file(render_path, gain_linear, output_layout, plan.cancel_token);
         if (!gain_res) {
             return fail_with_report(gain_res.error());
         }
@@ -738,7 +739,7 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (render_ext != ".caf") {
             const uint16_t depth = (request.options.output_bit_depth == OutputBitDepth::i16) ? 16U : 24U;
             logs.log(LogLevel::info, "engine", fmt::format("converting to {}-bit integer PCM", depth));
-            auto conv_res = audio::downconvert_to_int(render_path, depth);
+            auto conv_res = audio::downconvert_to_int(render_path, depth, plan.cancel_token);
             if (!conv_res) {
                 return fail_with_report(conv_res.error());
             }
@@ -753,7 +754,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     // outcome to avoid leaving stale files on disk.
     if (is_flac_final) {
         logs.log(LogLevel::info, "engine", "encoding float32 render to FLAC (24-bit)");
-        auto flac_res = audio::convert_to_flac(render_path, encoded_output_path);
+        auto flac_res = audio::convert_to_flac(render_path, encoded_output_path, plan.cancel_token);
         render_temp_guard->remove_now();
         if (!flac_res) {
             return fail_with_report(flac_res.error());
@@ -762,8 +763,11 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     if (is_opus_final) {
         logs.log(LogLevel::info, "engine", "encoding float32 render to Opus MKA (VBR)");
-        auto opus_res = audio::convert_to_opus_mka(
-            render_path, encoded_output_path, output_layout, request.options.opus_bitrate_per_ch_kbps);
+        auto opus_res = audio::convert_to_opus_mka(render_path,
+                                                   encoded_output_path,
+                                                   output_layout,
+                                                   request.options.opus_bitrate_per_ch_kbps,
+                                                   plan.cancel_token);
         render_temp_guard->remove_now();
         if (!opus_res) {
             return fail_with_report(opus_res.error());
@@ -776,7 +780,8 @@ RenderResult RenderService::render(const RenderRequest& request,
                                                encoded_output_path,
                                                output_layout,
                                                request.options.apac_bitrate_kbps,
-                                               request.options.apac_drc_music);
+                                               request.options.apac_drc_music,
+                                               plan.cancel_token);
         render_temp_guard->remove_now();
         if (!apac_res) {
             return fail_with_report(apac_res.error());
@@ -789,9 +794,12 @@ RenderResult RenderService::render(const RenderRequest& request,
             metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
         const auto peak =
             metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
-        auto conv_res = audio::downconvert_to_int(render_path, 32U);
+        auto conv_res = audio::downconvert_to_int(render_path, 32U, plan.cancel_token);
         if (!conv_res) {
             return fail_with_report(conv_res.error());
+        }
+        if (auto cancelled = fail_if_cancelled()) {
+            return std::move(*cancelled);
         }
         auto iamf_res = audio::convert_to_iamf(
             render_path, encoded_output_path, output_layout, request.options.opus_bitrate_per_ch_kbps, lufs, peak);
@@ -807,9 +815,12 @@ RenderResult RenderService::render(const RenderRequest& request,
             metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
         const auto peak =
             metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
-        auto conv_res = audio::downconvert_to_int(render_path, 32U);
+        auto conv_res = audio::downconvert_to_int(render_path, 32U, plan.cancel_token);
         if (!conv_res) {
             return fail_with_report(conv_res.error());
+        }
+        if (auto cancelled = fail_if_cancelled()) {
+            return std::move(*cancelled);
         }
         auto iamf_res = audio::convert_to_iamf(
             render_path, iamf_temp_path.string(), output_layout, request.options.opus_bitrate_per_ch_kbps, lufs, peak);
@@ -817,7 +828,7 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (!iamf_res) {
             return fail_with_report(iamf_res.error());
         }
-        auto pkg_res = audio::package_iamf_to_mp4(iamf_temp_path.string(), encoded_output_path);
+        auto pkg_res = audio::package_iamf_to_mp4(iamf_temp_path.string(), encoded_output_path, plan.cancel_token);
         iamf_temp_guard->remove_now();
         if (!pkg_res) {
             return fail_with_report(pkg_res.error());

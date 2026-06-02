@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <dr_flac.h>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -244,7 +245,11 @@ Result<void> write_flac_metadata(const std::string& path, const MetadataFields& 
 // Encode a fully post-processed float32 WAV to FLAC (24-bit, compression level 5).
 // All loudness/peak adjustments must be applied to src_path before calling this so
 // that quantisation happens exactly once on the final sample values.
-Result<void> convert_to_flac(const std::string& src_path, const std::string& flac_path) {
+Result<void>
+convert_to_flac(const std::string& src_path, const std::string& flac_path, const std::stop_token& cancel_token) {
+    if (cancel_token.stop_requested()) {
+        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + flac_path);
+    }
     auto reader_res = FloatWavReader::open(src_path);
     if (!reader_res) {
         return tl::unexpected{reader_res.error()};
@@ -262,6 +267,9 @@ Result<void> convert_to_flac(const std::string& src_path, const std::string& fla
     uint64_t left = reader.frame_count();
 
     while (left > 0) {
+        if (cancel_token.stop_requested()) {
+            return make_error(ErrorCode::cancelled, "render cancelled", "path=" + flac_path);
+        }
         const uint64_t n = std::min(k_block, left);
         const uint64_t got = reader.read(buf.data(), n);
         if (got == 0) {
