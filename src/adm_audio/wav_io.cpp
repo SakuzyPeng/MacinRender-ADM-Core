@@ -20,6 +20,31 @@
 
 namespace mradm::audio {
 
+namespace {
+
+class TempPathGuard {
+  public:
+    explicit TempPathGuard(std::filesystem::path path) : path_(std::move(path)) {}
+    TempPathGuard(const TempPathGuard&) = delete;
+    TempPathGuard& operator=(const TempPathGuard&) = delete;
+    TempPathGuard(TempPathGuard&&) = delete;
+    TempPathGuard& operator=(TempPathGuard&&) = delete;
+    ~TempPathGuard() {
+        if (active_) {
+            std::error_code ec;
+            std::filesystem::remove(path_, ec);
+        }
+    }
+
+    void dismiss() noexcept { active_ = false; }
+
+  private:
+    std::filesystem::path path_;
+    bool active_{true};
+};
+
+} // namespace
+
 // ── FloatWavWriter ────────────────────────────────────────────────────────────
 
 struct FloatWavWriter::Impl {
@@ -129,6 +154,7 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth) {
         }
 
         const auto tmp_path = path + ".bitdepth_tmp";
+        TempPathGuard tmp_guard{tmp_path};
         {
             auto writer = bw64::writeFile(
                 tmp_path, static_cast<uint16_t>(channels), static_cast<uint16_t>(sample_rate), bit_depth);
@@ -149,6 +175,7 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth) {
         }
 
         std::filesystem::rename(tmp_path, path);
+        tmp_guard.dismiss();
         return {};
 
     } catch (const std::exception& e) {

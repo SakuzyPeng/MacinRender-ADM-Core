@@ -42,20 +42,31 @@ namespace {
     return tm_utc;
 }
 
-[[nodiscard]] std::filesystem::path unique_render_temp_path(const std::filesystem::path& final_path) {
+[[nodiscard]] std::filesystem::path unique_sidecar_temp_path(const std::filesystem::path& final_path,
+                                                             std::string_view purpose,
+                                                             std::string_view extension) {
     static thread_local std::mt19937_64 rng{std::random_device{}()};
     std::uniform_int_distribution<std::uint64_t> dist;
 
     const auto parent = final_path.parent_path();
     const auto stem = final_path.stem().string();
     for (int attempt = 0; attempt < 16; ++attempt) {
-        auto candidate = parent / fmt::format("{}.render_tmp.{:016x}.wav", stem, dist(rng));
+        auto candidate = parent / fmt::format("{}.{}.{:016x}{}", stem, purpose, dist(rng), extension);
         std::error_code ec;
         if (!std::filesystem::exists(candidate, ec)) {
             return candidate;
         }
     }
-    return parent / fmt::format("{}.render_tmp.{:016x}.wav", stem, dist(rng));
+    return parent / fmt::format("{}.{}.{:016x}{}", stem, purpose, dist(rng), extension);
+}
+
+[[nodiscard]] std::filesystem::path unique_render_temp_path(const std::filesystem::path& final_path) {
+    return unique_sidecar_temp_path(final_path, "render_tmp", ".wav");
+}
+
+[[nodiscard]] std::filesystem::path unique_output_temp_path(const std::filesystem::path& final_path) {
+    const auto ext = final_path.extension().string();
+    return unique_sidecar_temp_path(final_path, "output_tmp", ext.empty() ? ".tmp" : ext);
 }
 
 [[nodiscard]] std::string normalize_output_layout(const std::string& layout) {
@@ -154,10 +165,56 @@ class TempFileGuard {
         std::filesystem::remove(path_, ec);
         active_ = false;
     }
+    void dismiss() noexcept { active_ = false; }
 
   private:
     std::filesystem::path path_;
     bool active_{true};
+};
+
+[[nodiscard]] Result<void> replace_output_file(const std::filesystem::path& temp_path,
+                                               const std::filesystem::path& final_path) {
+    std::error_code ec;
+    std::filesystem::rename(temp_path, final_path, ec);
+    if (!ec) {
+        return {};
+    }
+
+    std::error_code remove_ec;
+    std::filesystem::remove(final_path, remove_ec);
+    ec.clear();
+    std::filesystem::rename(temp_path, final_path, ec);
+    if (ec) {
+        return make_error(
+            ErrorCode::io_error, "failed to replace output file: " + ec.message(), "path=" + final_path.string());
+    }
+    return {};
+}
+
+class OutputCleanupGuard {
+  public:
+    explicit OutputCleanupGuard(std::filesystem::path path) : path_(std::move(path)) {}
+    OutputCleanupGuard(const OutputCleanupGuard&) = delete;
+    OutputCleanupGuard& operator=(const OutputCleanupGuard&) = delete;
+    OutputCleanupGuard(OutputCleanupGuard&&) = delete;
+    OutputCleanupGuard& operator=(OutputCleanupGuard&&) = delete;
+    ~OutputCleanupGuard() { remove_now(); }
+
+    void arm() noexcept { active_ = true; }
+    void commit() noexcept { active_ = false; }
+
+    void remove_now() noexcept {
+        if (!active_) {
+            return;
+        }
+        std::error_code ec;
+        std::filesystem::remove(path_, ec);
+        active_ = false;
+    }
+
+  private:
+    std::filesystem::path path_;
+    bool active_{false};
 };
 
 // Resolve the semantic policy from options (in-memory JSON preferred over a file
@@ -498,6 +555,10 @@ RenderResult RenderService::render(const RenderRequest& request,
     const auto render_temp_path = is_lossy_final ? unique_render_temp_path(final_path) : std::filesystem::path{};
     auto render_temp_guard = is_lossy_final ? std::make_unique<TempFileGuard>(render_temp_path) : nullptr;
     const std::string render_path = is_lossy_final ? render_temp_path.string() : output_path;
+    const auto output_temp_path = is_lossy_final ? unique_output_temp_path(final_path) : std::filesystem::path{};
+    auto output_temp_guard = is_lossy_final ? std::make_unique<TempFileGuard>(output_temp_path) : nullptr;
+    const std::string encoded_output_path = is_lossy_final ? output_temp_path.string() : output_path;
+    OutputCleanupGuard output_guard{final_path};
     // For IAMF-in-MP4: intermediate .iamf temp alongside the render WAV temp.
     const auto iamf_temp_path = is_iamf_mp4_final
                                     ? render_temp_path.parent_path() / (render_temp_path.stem().string() + ".iamf")
@@ -544,18 +605,17 @@ RenderResult RenderService::render(const RenderRequest& request,
     // Render (inline measurement of loudness + True Peak over the meter window).
     auto render_res = renderer->render_window(*prepared_slot, plan, progress, logs);
     if (!render_res) {
-        // On any mid-render failure (including cancellation) a direct WAV/CAF
-        // target may hold a partially written file; lossy targets are covered by
-        // their TempFileGuard. Remove the partial direct output so a cancelled or
-        // failed render never leaves a truncated file behind.
         if (!is_lossy_final) {
-            std::error_code ec;
-            std::filesystem::remove(output_path, ec);
+            output_guard.arm();
+            output_guard.remove_now();
         }
         const auto level = render_res.error().code == ErrorCode::cancelled ? LogLevel::info : LogLevel::error;
         return fail_with_report(render_res.error(), level);
     }
     const RenderMetrics& metrics = *render_res;
+    if (!is_lossy_final) {
+        output_guard.arm();
+    }
 
     if (metrics.measured_lufs) {
         logs.log(LogLevel::info, "engine", fmt::format("measured loudness: {:.1f} LUFS", *metrics.measured_lufs));
@@ -672,7 +732,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     // outcome to avoid leaving stale files on disk.
     if (is_flac_final) {
         logs.log(LogLevel::info, "engine", "encoding float32 render to FLAC (24-bit)");
-        auto flac_res = audio::convert_to_flac(render_path, output_path);
+        auto flac_res = audio::convert_to_flac(render_path, encoded_output_path);
         render_temp_guard->remove_now();
         if (!flac_res) {
             return fail_with_report(flac_res.error());
@@ -682,7 +742,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     if (is_opus_final) {
         logs.log(LogLevel::info, "engine", "encoding float32 render to Opus MKA (VBR)");
         auto opus_res = audio::convert_to_opus_mka(
-            render_path, output_path, output_layout, request.options.opus_bitrate_per_ch_kbps);
+            render_path, encoded_output_path, output_layout, request.options.opus_bitrate_per_ch_kbps);
         render_temp_guard->remove_now();
         if (!opus_res) {
             return fail_with_report(opus_res.error());
@@ -691,8 +751,11 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     if (is_apac_final) {
         logs.log(LogLevel::info, "engine", fmt::format("encoding float32 render to APAC ({})", final_ext));
-        auto apac_res = audio::convert_to_apac(
-            render_path, output_path, output_layout, request.options.apac_bitrate_kbps, request.options.apac_drc_music);
+        auto apac_res = audio::convert_to_apac(render_path,
+                                               encoded_output_path,
+                                               output_layout,
+                                               request.options.apac_bitrate_kbps,
+                                               request.options.apac_drc_music);
         render_temp_guard->remove_now();
         if (!apac_res) {
             return fail_with_report(apac_res.error());
@@ -710,7 +773,7 @@ RenderResult RenderService::render(const RenderRequest& request,
             return fail_with_report(conv_res.error());
         }
         auto iamf_res = audio::convert_to_iamf(
-            render_path, output_path, output_layout, request.options.opus_bitrate_per_ch_kbps, lufs, peak);
+            render_path, encoded_output_path, output_layout, request.options.opus_bitrate_per_ch_kbps, lufs, peak);
         render_temp_guard->remove_now();
         if (!iamf_res) {
             return fail_with_report(iamf_res.error());
@@ -733,11 +796,19 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (!iamf_res) {
             return fail_with_report(iamf_res.error());
         }
-        auto pkg_res = audio::package_iamf_to_mp4(iamf_temp_path.string(), output_path);
+        auto pkg_res = audio::package_iamf_to_mp4(iamf_temp_path.string(), encoded_output_path);
         iamf_temp_guard->remove_now();
         if (!pkg_res) {
             return fail_with_report(pkg_res.error());
         }
+    }
+
+    if (is_lossy_final) {
+        auto replace_res = replace_output_file(output_temp_path, final_path);
+        if (!replace_res) {
+            return fail_with_report(replace_res.error());
+        }
+        output_temp_guard->dismiss();
     }
 
     // Write format-specific metadata (non-fatal on failure).
@@ -767,6 +838,7 @@ RenderResult RenderService::render(const RenderRequest& request,
             logs.log(LogLevel::warning, "engine", "metadata write failed: " + meta_res.error().message);
         }
     }
+    output_guard.commit();
 
     // Return the post-processing effective values (gain-adjusted), matching what was
     // written to the file's metadata. Raw renderer measurements live in `metrics`.

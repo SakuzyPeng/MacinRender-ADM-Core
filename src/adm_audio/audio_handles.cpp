@@ -16,6 +16,27 @@ namespace mradm::audio {
 
 namespace {
 
+class TempPathGuard {
+  public:
+    explicit TempPathGuard(std::filesystem::path path) : path_(std::move(path)) {}
+    TempPathGuard(const TempPathGuard&) = delete;
+    TempPathGuard& operator=(const TempPathGuard&) = delete;
+    TempPathGuard(TempPathGuard&&) = delete;
+    TempPathGuard& operator=(TempPathGuard&&) = delete;
+    ~TempPathGuard() {
+        if (active_) {
+            std::error_code ec;
+            std::filesystem::remove(path_, ec);
+        }
+    }
+
+    void dismiss() noexcept { active_ = false; }
+
+  private:
+    std::filesystem::path path_;
+    bool active_{true};
+};
+
 [[nodiscard]] std::filesystem::path unique_sidecar_path(const std::filesystem::path& original_path,
                                                         std::string_view purpose) {
     static thread_local std::mt19937_64 rng{std::random_device{}()};
@@ -87,6 +108,7 @@ Result<void> apply_gain_to_file(const std::string& path, float gain, const std::
 
     const std::filesystem::path original_path{path};
     const auto tmp_path = unique_sidecar_path(original_path, "gain_tmp");
+    TempPathGuard tmp_guard{tmp_path};
 
     {
         auto reader_res = ReaderHandle::open(path);
@@ -143,6 +165,7 @@ Result<void> apply_gain_to_file(const std::string& path, float gain, const std::
                               "path=" + path);
         }
     }
+    tmp_guard.dismiss();
     return {};
 }
 
@@ -152,6 +175,7 @@ Result<void>
 trim_file_frames(const std::string& path, uint64_t start_frame, uint64_t frame_count, const std::string& layout_id) {
     const std::filesystem::path original_path{path};
     const auto tmp_path = unique_sidecar_path(original_path, "trim_tmp");
+    TempPathGuard tmp_guard{tmp_path};
 
     {
         auto reader_res = ReaderHandle::open(path);
@@ -230,6 +254,7 @@ trim_file_frames(const std::string& path, uint64_t start_frame, uint64_t frame_c
                               "path=" + path);
         }
     }
+    tmp_guard.dismiss();
     return {};
 }
 
