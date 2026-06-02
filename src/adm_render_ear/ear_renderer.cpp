@@ -652,6 +652,15 @@ void remap_wav71_to_wave_order(std::vector<float>& block, std::size_t frames_now
     }
 }
 
+// Immutable, reusable EAR state: the resolved libear layout and the per-object gain
+// matrix (the expensive libear GainCalculator work). Reused across render_window()
+// calls (PreviewSession scrubbing). The decorrelator FFT state is cheap and per-output,
+// so it stays in render_window. ear::Layout never leaves this TU (ADR 0003).
+struct EarPrepared final : IPreparedRender {
+    ear::Layout layout;
+    std::vector<ChannelGainInfo> gain_matrix;
+};
+
 class EarRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
@@ -666,39 +675,48 @@ CapabilityReport EarRenderer::capabilities() const {
     return ear_capabilities();
 }
 
-Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& /*plan*/, LogSink& /*logs*/) {
-    return std::static_pointer_cast<IPreparedRender>(std::make_shared<EmptyPreparedRender>());
+Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
+    ear::Layout layout = make_ear_layout(plan.output_layout);
+    auto gain_matrix = build_gain_matrix(plan.scene, layout, logs);
+
+    if (gain_matrix.empty()) {
+        logs.log(LogLevel::warning, "ear", "no renderable tracks found (all muted?), writing silence");
+    }
+
+    const auto num_in_ch = plan.scene.info.num_channels;
+    const auto invalid_channel =
+        std::ranges::find_if(gain_matrix, [num_in_ch](const auto& cg) { return cg.input_channel >= num_in_ch; });
+    if (invalid_channel != gain_matrix.end()) {
+        return make_error(ErrorCode::render_failed,
+                          fmt::format("track channel index {} is outside input channel count {}",
+                                      invalid_channel->input_channel,
+                                      num_in_ch),
+                          "input=" + plan.input_path);
+    }
+
+    auto prepared = std::make_shared<EarPrepared>();
+    prepared->layout = std::move(layout);
+    prepared->gain_matrix = std::move(gain_matrix);
+    return std::static_pointer_cast<IPreparedRender>(prepared);
 }
 
 // NOLINTNEXTLINE(readability-function-size)
-Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& /*prepared*/,
-                                                 const RenderPlan& plan,
-                                                 ProgressSink& progress,
-                                                 LogSink& logs) {
+Result<RenderMetrics>
+EarRenderer::render_window(const IPreparedRender& prep, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
     try {
-        const auto& info = plan.scene.info;
-
-        const ear::Layout layout = make_ear_layout(plan.output_layout);
-        const auto gain_matrix = build_gain_matrix(plan.scene, layout, logs);
-
-        if (gain_matrix.empty()) {
-            logs.log(LogLevel::warning, "ear", "no renderable tracks found (all muted?), writing silence");
+        const auto* prepared = dynamic_cast<const EarPrepared*>(&prep);
+        if (prepared == nullptr) {
+            return make_error(
+                ErrorCode::internal_error, "ear: render_window received an incompatible prepared state", {});
         }
+        const auto& info = plan.scene.info;
+        const ear::Layout& layout = prepared->layout;
+        const auto& gain_matrix = prepared->gain_matrix;
 
         const auto num_out_ch = static_cast<uint16_t>(layout.channels().size());
         const auto num_in_ch = info.num_channels;
         const auto num_frames = info.num_frames;
         const auto sample_rate = info.sample_rate;
-
-        const auto invalid_channel =
-            std::ranges::find_if(gain_matrix, [num_in_ch](const auto& cg) { return cg.input_channel >= num_in_ch; });
-        if (invalid_channel != gain_matrix.end()) {
-            return make_error(ErrorCode::render_failed,
-                              fmt::format("track channel index {} is outside input channel count {}",
-                                          invalid_channel->input_channel,
-                                          num_in_ch),
-                              "input=" + plan.input_path);
-        }
 
         logs.log(
             LogLevel::info,
