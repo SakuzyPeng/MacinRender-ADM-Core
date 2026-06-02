@@ -1330,18 +1330,33 @@ void convolve_crossfaded_object_block(void* hfft,
 
 // ── Renderer ──────────────────────────────────────────────────────────────────
 
+// Immutable, reusable binaural state: the HRTF tables + VBAP grid (the expensive
+// SOFA load + FFT) and the scene-derived source / spreader-group lists. Reused across
+// render_window() calls (PreviewSession scrubbing). The per-output stateful pieces
+// (primed spreader adapters, OLA / diffuse-delay state, scratch) are rebuilt per call.
+struct BinauralPrepared final : IPreparedRender {
+    std::unique_ptr<BinauralState> bs;
+    std::vector<BinauralSource> sources;
+    std::vector<SpreaderTrack> spreader_tracks;
+    std::vector<SpreaderGroup> spreader_groups;
+    uint64_t render_block_size{0};
+};
+
 class BinauralRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
-    [[nodiscard]] Result<RenderMetrics> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override;
+    [[nodiscard]] Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) override;
+    [[nodiscard]] Result<RenderMetrics> render_window(const IPreparedRender& prepared,
+                                                      const RenderPlan& plan,
+                                                      ProgressSink& progress,
+                                                      LogSink& logs) override;
 };
 
 CapabilityReport BinauralRenderer::capabilities() const {
     return binaural_capabilities();
 }
 
-// NOLINTNEXTLINE(readability-function-size)
-Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+Result<std::shared_ptr<IPreparedRender>> BinauralRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
     const auto& info = plan.scene.info;
 
     if (info.sample_rate != 48000U) {
@@ -1353,7 +1368,6 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
     const uint64_t render_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
 
     // One-time setup: load HRIR dataset, then build HRTF table + VBAP grid.
-    progress.on_progress({RenderStage::planning, 0.1, "building HRTF table"});
     auto dataset_res = load_hrtf_dataset(plan);
     if (!dataset_res) {
         return tl::unexpected{dataset_res.error()};
@@ -1370,21 +1384,61 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                          bs->hrir_len,
                          info.sample_rate));
 
-    const auto sources = build_sources(plan.scene, logs, plan.binaural_spread_mode);
+    auto sources = build_sources(plan.scene, logs, plan.binaural_spread_mode);
     if (sources.empty()) {
         logs.log(LogLevel::warning, "binaural", "no renderable tracks found, writing silence");
     }
     logs.log(LogLevel::info, "binaural", fmt::format("{} source(s) to render", sources.size()));
 
-    // Build spreader tracks and adapters for saf_spreader mode.
+    // Build spreader track + group config for saf_spreader mode (the stateful, primed
+    // adapters are built per render in render_window since their STFT state is per-output).
     std::vector<SpreaderTrack> spreader_tracks;
     std::vector<SpreaderGroup> spreader_groups;
-    std::vector<BinauralSpreaderAdapter> spreader_adapters;
-    const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
-    const std::size_t parallel_budget = (hw_threads > 0U) ? hw_threads : sources.size();
     if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
+        const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
+        const std::size_t parallel_budget = (hw_threads > 0U) ? hw_threads : sources.size();
         spreader_tracks = build_spreader_tracks(plan.scene, logs);
         spreader_groups = build_spreader_groups(spreader_tracks, std::max<std::size_t>(1U, parallel_budget));
+        logs.log(
+            LogLevel::info,
+            "binaural",
+            fmt::format("{} spreader track(s) in {} adapter group(s) (saf_spreader, compensated latency {} samples)",
+                        spreader_tracks.size(),
+                        spreader_groups.size(),
+                        BinauralSpreaderAdapter::total_latency()));
+    }
+
+    auto prepared = std::make_shared<BinauralPrepared>();
+    prepared->bs = std::move(bs);
+    prepared->sources = std::move(sources);
+    prepared->spreader_tracks = std::move(spreader_tracks);
+    prepared->spreader_groups = std::move(spreader_groups);
+    prepared->render_block_size = render_block_size;
+    return std::static_pointer_cast<IPreparedRender>(prepared);
+}
+
+// NOLINTNEXTLINE(readability-function-size)
+Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& prep,
+                                                      const RenderPlan& plan,
+                                                      ProgressSink& progress,
+                                                      LogSink& logs) {
+    const auto* prepared = dynamic_cast<const BinauralPrepared*>(&prep);
+    if (prepared == nullptr) {
+        return make_error(
+            ErrorCode::internal_error, "binaural: render_window received an incompatible prepared state", {});
+    }
+    const auto& info = plan.scene.info;
+    const auto& bs = prepared->bs;
+    const auto& sources = prepared->sources;
+    const auto& spreader_tracks = prepared->spreader_tracks;
+    const auto& spreader_groups = prepared->spreader_groups;
+    const uint64_t render_block_size = prepared->render_block_size;
+    const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
+
+    // Per-output (stateful, primed) spreader adapters, rebuilt from the prepared HRTF
+    // tables + group config each render since their STFT state is per-output.
+    std::vector<BinauralSpreaderAdapter> spreader_adapters;
+    if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
         spreader_adapters.reserve(spreader_groups.size());
         std::ranges::transform(spreader_groups, std::back_inserter(spreader_adapters), [&](const SpreaderGroup& group) {
             return BinauralSpreaderAdapter{bs->hrtf_td.data(),
@@ -1394,13 +1448,6 @@ Result<RenderMetrics> BinauralRenderer::render(const RenderPlan& plan, ProgressS
                                            bs->sample_rate,
                                            static_cast<int>(group.lanes.size())};
         });
-        logs.log(
-            LogLevel::info,
-            "binaural",
-            fmt::format("{} spreader track(s) in {} adapter group(s) (saf_spreader, compensated latency {} samples)",
-                        spreader_tracks.size(),
-                        spreader_groups.size(),
-                        BinauralSpreaderAdapter::total_latency()));
         // Prime each adapter: pre-fill the output ring with one frame so process_chunk
         // drains exactly n_frames (constant total_latency(), no gaps).
         for (auto& adapter : spreader_adapters) {

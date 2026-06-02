@@ -551,7 +551,11 @@ void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
 class VbapRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
-    [[nodiscard]] Result<RenderMetrics> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override;
+    [[nodiscard]] Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) override;
+    [[nodiscard]] Result<RenderMetrics> render_window(const IPreparedRender& prepared,
+                                                      const RenderPlan& plan,
+                                                      ProgressSink& progress,
+                                                      LogSink& logs) override;
 };
 
 CapabilityReport VbapRenderer::capabilities() const {
@@ -559,7 +563,14 @@ CapabilityReport VbapRenderer::capabilities() const {
 }
 
 // NOLINTNEXTLINE(readability-function-size)
-Result<RenderMetrics> VbapRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan& /*plan*/, LogSink& /*logs*/) {
+    return std::static_pointer_cast<IPreparedRender>(std::make_shared<EmptyPreparedRender>());
+}
+
+Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& /*prepared*/,
+                                                  const RenderPlan& plan,
+                                                  ProgressSink& progress,
+                                                  LogSink& logs) {
     const std::string layout_id = plan.output_layout;
     const auto layout = layout_spec(layout_id);
     if (!layout.has_value()) {

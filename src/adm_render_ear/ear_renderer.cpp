@@ -655,15 +655,26 @@ void remap_wav71_to_wave_order(std::vector<float>& block, std::size_t frames_now
 class EarRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
-    [[nodiscard]] Result<RenderMetrics> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override;
+    [[nodiscard]] Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) override;
+    [[nodiscard]] Result<RenderMetrics> render_window(const IPreparedRender& prepared,
+                                                      const RenderPlan& plan,
+                                                      ProgressSink& progress,
+                                                      LogSink& logs) override;
 };
 
 CapabilityReport EarRenderer::capabilities() const {
     return ear_capabilities();
 }
 
+Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& /*plan*/, LogSink& /*logs*/) {
+    return std::static_pointer_cast<IPreparedRender>(std::make_shared<EmptyPreparedRender>());
+}
+
 // NOLINTNEXTLINE(readability-function-size)
-Result<RenderMetrics> EarRenderer::render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& /*prepared*/,
+                                                 const RenderPlan& plan,
+                                                 ProgressSink& progress,
+                                                 LogSink& logs) {
     try {
         const auto& info = plan.scene.info;
 

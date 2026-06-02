@@ -210,7 +210,8 @@ RenderService::RenderService() = default;
 RenderResult RenderService::render(const RenderRequest& request,
                                    ProgressSink& progress,
                                    LogSink& logs,
-                                   const AdmScene* preimported_scene) const {
+                                   const AdmScene* preimported_scene,
+                                   std::shared_ptr<IPreparedRender>* prepared_cache) const {
     progress.on_progress({RenderStage::validating, 0.0, "validating request"});
 
     if (request.input_path.empty()) {
@@ -527,8 +528,21 @@ RenderResult RenderService::render(const RenderRequest& request,
     plan.cancel_token = request.options.cancel_token;
     plan.scene = std::move(*scene_result);
 
+    // Build (or reuse) the backend's immutable prepared state. A PreviewSession passes
+    // a persistent cache slot so the gain matrices / HRTF are built once and reused
+    // across windows; without a cache, prepare runs per render.
+    std::shared_ptr<IPreparedRender> local_prepared;
+    std::shared_ptr<IPreparedRender>& prepared_slot = (prepared_cache != nullptr) ? *prepared_cache : local_prepared;
+    if (!prepared_slot) {
+        auto prep_res = renderer->prepare(plan, logs);
+        if (!prep_res) {
+            return fail_with_report(prep_res.error());
+        }
+        prepared_slot = std::move(*prep_res);
+    }
+
     // Render (inline measurement of loudness + True Peak over the meter window).
-    auto render_res = renderer->render(plan, progress, logs);
+    auto render_res = renderer->render_window(*prepared_slot, plan, progress, logs);
     if (!render_res) {
         // On any mid-render failure (including cancellation) a direct WAV/CAF
         // target may hold a partially written file; lossy targets are covered by
@@ -861,7 +875,7 @@ RenderResult PreviewSession::render_window(std::optional<double> start_sec,
     request.options = options_;
     request.options.render_start_sec = start_sec.value_or(0.0);
     request.options.render_end_sec = end_sec;
-    return service_.render(request, progress, logs, &scene_);
+    return service_.render(request, progress, logs, &scene_, &prepared_);
 }
 
 } // namespace mradm

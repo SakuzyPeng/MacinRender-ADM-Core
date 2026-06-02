@@ -99,13 +99,51 @@ struct RenderPlan {
     std::stop_token cancel_token;
 };
 
+// Immutable, reusable backend state produced by IRenderer::prepare() (gain matrices,
+// HRTF tables, decoders). Opaque base; each backend returns its own derived type and
+// downcasts in render_window(). May be shared across many render_window() calls — e.g.
+// a PreviewSession reuses it while scrubbing windows of the same (scene, layout,
+// options) — so it must not carry per-output or per-window mutable state.
+class IPreparedRender {
+  public:
+    IPreparedRender() = default;
+    virtual ~IPreparedRender() = default;
+    IPreparedRender(const IPreparedRender&) = delete;
+    IPreparedRender& operator=(const IPreparedRender&) = delete;
+    IPreparedRender(IPreparedRender&&) = delete;
+    IPreparedRender& operator=(IPreparedRender&&) = delete;
+};
+
+// Trivial prepared state for backends that have not yet split their preparation out
+// of render_window() (they ignore the prepared argument and rebuild per call).
+struct EmptyPreparedRender final : IPreparedRender {};
+
 // Abstract renderer backend interface.
 class IRenderer {
   public:
     virtual ~IRenderer() = default;
     [[nodiscard]] virtual CapabilityReport capabilities() const = 0;
+
+    // Build immutable, reusable state from the scene + layout + options in `plan`.
+    // Ignores plan.output_path / render_window / meter_window / cancel_token. The
+    // result may be reused across render_window() calls while those inputs are
+    // unchanged. Expensive work (gain matrices, HRTF FFT, decoders) belongs here.
+    [[nodiscard]] virtual Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) = 0;
+
+    // Render one output (window) using `prepared` — which MUST come from THIS
+    // renderer's prepare() — plus the per-call plan.output_path / render_window /
+    // meter_window / cancel_token.
     [[nodiscard]] virtual Result<RenderMetrics>
-    render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) = 0;
+    render_window(const IPreparedRender& prepared, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) = 0;
+
+    // Convenience: prepare + render_window in one call (the non-preview path).
+    [[nodiscard]] Result<RenderMetrics> render(const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+        auto prepared = prepare(plan, logs);
+        if (!prepared) {
+            return tl::unexpected{prepared.error()};
+        }
+        return render_window(**prepared, plan, progress, logs);
+    }
 };
 
 // File-level ADM scene summary returned by RenderService::probe().
@@ -142,10 +180,18 @@ class RenderService {
     // the semantic report are skipped — the caller (PreviewSession) is responsible
     // for having imported and applied the policy already. When null, the full path
     // runs: import, semantic policy, optional report.
+    //
+    // prepared_cache: optional slot holding the chosen backend's prepared state
+    // (gain matrices / HRTF). If non-null and empty, it is filled on this call and may
+    // be reused on subsequent calls with the same renderer / layout / options (a
+    // PreviewSession passes the same slot for every window). If null, prepared state is
+    // built per call. The caller must only reuse a slot across calls whose renderer
+    // selection and prepare-relevant options are unchanged.
     [[nodiscard]] RenderResult render(const RenderRequest& request,
                                       ProgressSink& progress,
                                       LogSink& logs,
-                                      const AdmScene* preimported_scene = nullptr) const;
+                                      const AdmScene* preimported_scene = nullptr,
+                                      std::shared_ptr<IPreparedRender>* prepared_cache = nullptr) const;
 
     // Import the ADM scene and apply the semantic policy from `options` (in-memory
     // JSON preferred over file path), returning the policy-applied scene. Used by
@@ -230,6 +276,10 @@ class PreviewSession {
     RenderOptions options_;
     AdmScene scene_;
     RenderService service_;
+    // Backend prepared state (gain matrices / HRTF), built lazily on the first
+    // render_window and reused for the rest. mutable: render_window is logically const
+    // (the session's inputs don't change) but fills this cache on first use.
+    mutable std::shared_ptr<IPreparedRender> prepared_;
 };
 
 } // namespace mradm
