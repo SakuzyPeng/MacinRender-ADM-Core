@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <variant>
 
@@ -219,7 +220,10 @@ class ReaderHandle {
 // Apply a linear gain to all samples in path, rewriting the file in-place via a
 // temp file + rename. Supports WAV, CAF, and FLAC formats. layout_id is required
 // when the path is a CAF file; ignored for WAV and FLAC. No-op when |gain - 1| < 1e-6.
-Result<void> apply_gain_to_file(const std::string& path, float gain, const std::string& layout_id = {});
+Result<void> apply_gain_to_file(const std::string& path,
+                                float gain,
+                                const std::string& layout_id = {},
+                                const std::stop_token& cancel_token = {});
 
 // Trim an existing audio file in-place to the frame range [start_frame,
 // start_frame + frame_count) via a temp file + rename. Supports WAV, CAF, and
@@ -230,18 +234,20 @@ Result<void> apply_gain_to_file(const std::string& path, float gain, const std::
 Result<void> trim_file_frames(const std::string& path,
                               uint64_t start_frame,
                               uint64_t frame_count,
-                              const std::string& layout_id = {});
+                              const std::string& layout_id = {},
+                              const std::stop_token& cancel_token = {});
 
 // Convert an existing float32 WAV to integer PCM in-place (temp + rename).
 // bit_depth must be 16, 24, or 32. Limited to sample rates <= 65535 Hz by the
 // underlying bw64 integer writer (libbw64 0.10.0 API constraint).
-Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth);
+Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth, const std::stop_token& cancel_token = {});
 
 // Encode a fully post-processed float32 WAV (src_path) to 24-bit FLAC (flac_path).
 // Use this as the final pipeline step for FLAC output — after apply_gain_to_file()
 // and downconvert_to_int() — so the float32 domain is preserved through all
 // adjustments before quantisation.  FLAC channel count must be 1-8.
-Result<void> convert_to_flac(const std::string& src_path, const std::string& flac_path);
+Result<void>
+convert_to_flac(const std::string& src_path, const std::string& flac_path, const std::stop_token& cancel_token = {});
 
 bool iamf_encoding_available();
 
@@ -272,7 +278,9 @@ IamfMp4PackagerInfo detect_iamf_mp4_packager();
 bool iamf_mp4_packager_available();
 // Package a raw .iamf OBU stream into an ISOBMFF container (.mp4).
 // Returns unsupported if no suitable packager is found in PATH.
-Result<void> package_iamf_to_mp4(const std::string& iamf_path, const std::string& mp4_path);
+Result<void> package_iamf_to_mp4(const std::string& iamf_path,
+                                 const std::string& mp4_path,
+                                 const std::stop_token& cancel_token = {});
 
 // Encode a fully post-processed float32 WAV (src_path) to Opus MKA (mka_path).
 // src_path must be 48000 Hz (Opus requirement). layout_id controls Opus channel
@@ -284,7 +292,8 @@ Result<void> package_iamf_to_mp4(const std::string& iamf_path, const std::string
 Result<void> convert_to_opus_mka(const std::string& src_path,
                                  const std::string& mka_path,
                                  const std::string& layout_id = {},
-                                 uint32_t bitrate_per_ch_kbps = 0);
+                                 uint32_t bitrate_per_ch_kbps = 0,
+                                 const std::stop_token& cancel_token = {});
 
 // Encode a fully post-processed float32 WAV (src_path) to APAC in an MPEG-4
 // container (.m4a / mp4f).  Requires macOS (AudioToolbox); returns
@@ -310,7 +319,8 @@ Result<void> convert_to_apac(const std::string& src_path,
                              const std::string& apac_path,
                              const std::string& layout_id = {},
                              uint32_t bitrate_kbps = 0,
-                             bool drc_music = true);
+                             bool drc_music = true,
+                             const std::stop_token& cancel_token = {});
 
 // Format-agnostic render output metadata.  Assembled by the engine layer and
 // passed to write_file_metadata(); format-specific encoding is handled there.

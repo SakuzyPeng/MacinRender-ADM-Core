@@ -8,6 +8,7 @@
 #include <cstring>
 #include <dr_wav.h>
 #include <filesystem>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -126,8 +127,11 @@ uint64_t FloatWavReader::read(float* out, uint64_t frames) {
 
 // ── downconvert_to_int ────────────────────────────────────────────────────────
 
-Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth) {
+Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth, const std::stop_token& cancel_token) {
     try {
+        if (cancel_token.stop_requested()) {
+            return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
+        }
         if (bit_depth != 16U && bit_depth != 24U && bit_depth != 32U) {
             return make_error(ErrorCode::invalid_argument,
                               fmt::format("integer PCM bit depth must be 16, 24, or 32; got {}", bit_depth),
@@ -164,6 +168,9 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth) {
             uint64_t left = total_frames;
 
             while (left > 0) {
+                if (cancel_token.stop_requested()) {
+                    return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
+                }
                 const uint64_t n = std::min(k_block, left);
                 const uint64_t got = reader.read(buf.data(), n);
                 if (got == 0) {
@@ -174,6 +181,9 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth) {
             }
         }
 
+        if (cancel_token.stop_requested()) {
+            return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
+        }
         std::filesystem::rename(tmp_path, path);
         tmp_guard.dismiss();
         return {};

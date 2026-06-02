@@ -1,8 +1,10 @@
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <unistd.h>
@@ -53,6 +55,57 @@ bool write_ramp_wav(const std::string& path, uint32_t channels, uint32_t sample_
         buf[static_cast<std::size_t>(f) * channels] = static_cast<float>(f);
     }
     return writer.write(buf.data(), frames) == frames;
+}
+
+bool has_sidecar(const std::filesystem::path& path, std::string_view purpose) {
+    const auto prefix = path.stem().string() + "." + std::string{purpose} + ".";
+    std::error_code ec;
+    const std::filesystem::directory_iterator begin(path.parent_path(), ec);
+    if (ec) {
+        return true;
+    }
+    return std::ranges::any_of(begin, std::filesystem::directory_iterator{}, [&](const auto& entry) {
+        return entry.path().filename().string().starts_with(prefix);
+    });
+}
+
+bool is_cancelled(const mradm::Result<void>& res) {
+    return !res && res.error().code == mradm::ErrorCode::cancelled;
+}
+
+bool verify_pre_cancel_audio_helpers() {
+    const auto path = temp_path("cancel_helpers");
+    const auto flac_path = path.parent_path() / (path.stem().string() + ".flac");
+    const auto opus_path = path.parent_path() / (path.stem().string() + ".mka");
+    const FileGuard wav_guard(path);
+    const FileGuard flac_guard(flac_path);
+    const FileGuard opus_guard(opus_path);
+    if (!check(write_ramp_wav(path.string(), 2, 48000, 256), "write cancel helper wav")) {
+        return false;
+    }
+
+    std::stop_source stop_source;
+    stop_source.request_stop();
+    const std::stop_token token = stop_source.get_token();
+
+    bool ok = true;
+    ok &= check(is_cancelled(mradm::audio::apply_gain_to_file(path.string(), 0.5F, {}, token)),
+                "pre-cancel apply_gain_to_file returns cancelled");
+    ok &= check(is_cancelled(mradm::audio::trim_file_frames(path.string(), 1, 10, {}, token)),
+                "pre-cancel trim_file_frames returns cancelled");
+    ok &= check(is_cancelled(mradm::audio::downconvert_to_int(path.string(), 24U, token)),
+                "pre-cancel downconvert_to_int returns cancelled");
+    ok &= check(is_cancelled(mradm::audio::convert_to_flac(path.string(), flac_path.string(), token)),
+                "pre-cancel convert_to_flac returns cancelled");
+    ok &= check(is_cancelled(mradm::audio::convert_to_opus_mka(path.string(), opus_path.string(), "0+2+0", 0, token)),
+                "pre-cancel convert_to_opus_mka returns cancelled");
+    ok &= check(std::filesystem::exists(path), "pre-cancel helpers preserve source wav");
+    ok &= check(!std::filesystem::exists(flac_path), "pre-cancel FLAC leaves no output");
+    ok &= check(!std::filesystem::exists(opus_path), "pre-cancel Opus leaves no output");
+    ok &= check(!has_sidecar(path, "gain_tmp"), "pre-cancel gain leaves no sidecar");
+    ok &= check(!has_sidecar(path, "trim_tmp"), "pre-cancel trim leaves no sidecar");
+    ok &= check(!std::filesystem::exists(path.string() + ".bitdepth_tmp"), "pre-cancel bitdepth leaves no sidecar");
+    return ok;
 }
 
 bool verify_trim_middle_range() {
@@ -146,9 +199,10 @@ int main() {
     ok &= verify_trim_clamps_count_to_end();
     ok &= verify_trim_start_beyond_end_fails();
     ok &= verify_trim_whole_file_is_noop();
+    ok &= verify_pre_cancel_audio_helpers();
     if (!ok) {
         return EXIT_FAILURE;
     }
-    std::cout << "trim_file_frames smoke tests passed (4/4)\n";
+    std::cout << "trim_file_frames smoke tests passed (5/5)\n";
     return EXIT_SUCCESS;
 }

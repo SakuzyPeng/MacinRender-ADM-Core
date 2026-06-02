@@ -1,10 +1,14 @@
 #include <algorithm>
 #include <array>
+#include <cerrno>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <iterator>
 #include <optional>
+#include <stop_token>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "adm/audio_io.h"
@@ -14,10 +18,12 @@
 #endif
 
 // ── Platform process helpers ──────────────────────────────────────────────
-#if defined(_WIN32)
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
+#include <csignal>
+#include <fcntl.h>
 #include <unistd.h>
 
 #include <sys/wait.h>
@@ -36,10 +42,13 @@ constexpr uint32_t k_sample_rate = 48000U;
 struct RunResult {
     int code{-1};
     std::string output;
+    bool cancelled{false};
 };
 
 constexpr std::size_t k_max_process_output = 4096U;
 constexpr const char* k_process_output_truncated = "...(truncated)";
+constexpr auto k_process_poll_interval = std::chrono::milliseconds{20};
+constexpr auto k_process_terminate_grace = std::chrono::milliseconds{500};
 
 void append_process_output(std::string& output, const char* data, std::size_t size) {
     if (output.size() >= k_max_process_output) {
@@ -56,7 +65,7 @@ void append_process_output(std::string& output, const char* data, std::size_t si
     }
 }
 
-#if defined(_WIN32)
+#ifdef _WIN32
 
 static std::wstring to_wide(const std::string& s) {
     if (s.empty()) {
@@ -118,7 +127,12 @@ std::string find_in_path(std::initializer_list<const char*> candidates) {
     return {};
 }
 
-RunResult run_process(const std::string& prog, const std::vector<std::string>& args) {
+RunResult
+run_process(const std::string& prog, const std::vector<std::string>& args, const std::stop_token& cancel_token = {}) {
+    if (cancel_token.stop_requested()) {
+        return {-1, "cancelled", true};
+    }
+
     std::wstring cmdline = win_quote_arg(to_wide(prog));
     for (const auto& a : args) {
         cmdline += L' ';
@@ -156,19 +170,39 @@ RunResult run_process(const std::string& prog, const std::vector<std::string>& a
     }
 
     std::string output;
-    std::array<char, 512> buf{};
-    DWORD n = 0;
-    while (ReadFile(pipe_r, buf.data(), static_cast<DWORD>(buf.size()), &n, nullptr) != 0 && n > 0) {
-        append_process_output(output, buf.data(), n);
-    }
-    CloseHandle(pipe_r);
+    std::thread reader([&output, pipe_r] {
+        std::array<char, 512> buf{};
+        DWORD n = 0;
+        while (ReadFile(pipe_r, buf.data(), static_cast<DWORD>(buf.size()), &n, nullptr) != 0 && n > 0) {
+            append_process_output(output, buf.data(), n);
+        }
+        CloseHandle(pipe_r);
+    });
 
+    bool cancelled = false;
+    for (;;) {
+        const DWORD wait = WaitForSingleObject(pi.hProcess, static_cast<DWORD>(k_process_poll_interval.count()));
+        if (wait == WAIT_OBJECT_0) {
+            break;
+        }
+        if (cancel_token.stop_requested()) {
+            cancelled = true;
+            TerminateProcess(pi.hProcess, 1U);
+            break;
+        }
+        if (wait != WAIT_TIMEOUT) {
+            break;
+        }
+    }
     WaitForSingleObject(pi.hProcess, INFINITE);
+    if (reader.joinable()) {
+        reader.join();
+    }
     DWORD exit_code = 0;
     GetExitCodeProcess(pi.hProcess, &exit_code);
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
-    return {static_cast<int>(exit_code), std::move(output)};
+    return {static_cast<int>(exit_code), std::move(output), cancelled};
 }
 
 #else // POSIX ---------------------------------------------------------------
@@ -200,7 +234,27 @@ std::string find_in_path(std::initializer_list<const char*> candidates) {
     return {};
 }
 
-RunResult run_process(const std::string& prog, const std::vector<std::string>& args) {
+void drain_available_output(int fd, std::string& output) {
+    std::array<char, 512> buf{};
+    for (;;) {
+        const ssize_t n = ::read(fd, buf.data(), buf.size());
+        if (n > 0) {
+            append_process_output(output, buf.data(), static_cast<std::size_t>(n));
+            continue;
+        }
+        if (n == 0 || errno == EAGAIN || errno == EWOULDBLOCK) {
+            break;
+        }
+        break;
+    }
+}
+
+RunResult
+run_process(const std::string& prog, const std::vector<std::string>& args, const std::stop_token& cancel_token = {}) {
+    if (cancel_token.stop_requested()) {
+        return {-1, "cancelled", true};
+    }
+
     std::array<int, 2> fds{-1, -1};
     if (::pipe(fds.data()) != 0) {
         return {-1, "pipe() failed"};
@@ -214,6 +268,7 @@ RunResult run_process(const std::string& prog, const std::vector<std::string>& a
     }
 
     if (pid == 0) {
+        ::setpgid(0, 0);
         ::close(fds[0]);
         ::dup2(fds[1], STDOUT_FILENO);
         ::dup2(fds[1], STDERR_FILENO);
@@ -230,19 +285,50 @@ RunResult run_process(const std::string& prog, const std::vector<std::string>& a
         ::_exit(127);
     }
 
+    ::setpgid(pid, pid);
     ::close(fds[1]);
-    std::string output;
-    std::array<char, 512> buf{};
-    ssize_t n = 0;
-    while ((n = ::read(fds[0], buf.data(), buf.size())) > 0) {
-        append_process_output(output, buf.data(), static_cast<std::size_t>(n));
+    const int flags = ::fcntl(fds[0], F_GETFL, 0);
+    if (flags >= 0) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg): fcntl is the POSIX API for non-blocking pipes.
+        ::fcntl(fds[0], F_SETFL, flags | O_NONBLOCK);
     }
-    ::close(fds[0]);
 
-    int status = 0;
-    ::waitpid(pid, &status, 0);
-    const int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-    return {code, std::move(output)};
+    std::string output;
+    int code = -1;
+    bool cancelled = false;
+    bool sent_kill = false;
+    auto terminate_deadline = std::chrono::steady_clock::time_point::max();
+
+    for (;;) {
+        drain_available_output(fds[0], output);
+        int status = 0;
+        const pid_t done = ::waitpid(pid, &status, WNOHANG);
+        if (done == pid) {
+            code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+            break;
+        }
+        if (done < 0) {
+            break;
+        }
+
+        if (!cancelled && cancel_token.stop_requested()) {
+            cancelled = true;
+            terminate_deadline = std::chrono::steady_clock::now() + k_process_terminate_grace;
+            if (::kill(-pid, SIGTERM) != 0) {
+                ::kill(pid, SIGTERM);
+            }
+        } else if (cancelled && !sent_kill && std::chrono::steady_clock::now() >= terminate_deadline) {
+            sent_kill = true;
+            if (::kill(-pid, SIGKILL) != 0) {
+                ::kill(pid, SIGKILL);
+            }
+        }
+        std::this_thread::sleep_for(k_process_poll_interval);
+    }
+
+    drain_available_output(fds[0], output);
+    ::close(fds[0]);
+    return {code, std::move(output), cancelled};
 }
 
 #endif // _WIN32
@@ -350,11 +436,19 @@ bool iamf_mp4_packager_available() {
     return detect_iamf_mp4_packager().kind != IamfMp4PackagerKind::none;
 }
 
-Result<void> package_iamf_to_mp4(const std::string& iamf_path, const std::string& mp4_path) {
+Result<void>
+package_iamf_to_mp4(const std::string& iamf_path, const std::string& mp4_path, const std::stop_token& cancel_token) {
+    if (cancel_token.stop_requested()) {
+        return make_error(ErrorCode::cancelled, "render cancelled", "path=" + mp4_path);
+    }
+
     const auto info = detect_iamf_mp4_packager();
 
     if (info.kind == IamfMp4PackagerKind::mp4box) {
-        const auto res = run_process(info.executable, {"-add", iamf_path, "-new", mp4_path});
+        const auto res = run_process(info.executable, {"-add", iamf_path, "-new", mp4_path}, cancel_token);
+        if (res.cancelled) {
+            return make_error(ErrorCode::cancelled, "render cancelled", "path=" + mp4_path);
+        }
         if (res.code != 0) {
             auto msg = res.output;
             while (!msg.empty() && msg.back() == '\n') {
@@ -366,7 +460,10 @@ Result<void> package_iamf_to_mp4(const std::string& iamf_path, const std::string
     }
 
     if (info.kind == IamfMp4PackagerKind::ffmpeg) {
-        const auto res = run_process(info.executable, {"-y", "-i", iamf_path, "-c", "copy", mp4_path});
+        const auto res = run_process(info.executable, {"-y", "-i", iamf_path, "-c", "copy", mp4_path}, cancel_token);
+        if (res.cancelled) {
+            return make_error(ErrorCode::cancelled, "render cancelled", "path=" + mp4_path);
+        }
         if (res.code != 0) {
             auto msg = res.output;
             while (!msg.empty() && msg.back() == '\n') {
