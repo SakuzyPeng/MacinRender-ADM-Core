@@ -680,7 +680,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     if(APPLE)
         add_executable(mr_adm_apple_smoke_tests tests/unit/apple_renderer_smoke_test.cpp)
-        target_link_libraries(mr_adm_apple_smoke_tests PRIVATE MacinRender::ADMRenderApple)
+        target_link_libraries(mr_adm_apple_smoke_tests
+            PRIVATE
+                MacinRender::ADMEngine
+                MacinRender::ADMRenderApple
+                MacinRender::ADMAudio
+                libbw64
+                adm
+        )
         mr_adm_core_apply_warnings(mr_adm_apple_smoke_tests)
         mr_adm_core_apply_static_analysis(mr_adm_apple_smoke_tests)
         add_test(NAME mr_adm_apple_smoke_tests COMMAND mr_adm_apple_smoke_tests)
