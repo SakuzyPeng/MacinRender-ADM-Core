@@ -509,8 +509,17 @@ RenderResult RenderService::render(const RenderRequest& request,
     });
     const bool is_flac_final = (final_ext == ".flac");
     const bool is_opus_final = (final_ext == ".mka");
-    const bool is_apac_final = (final_ext == ".m4a" || final_ext == ".mp4") &&
-                               request.options.iamf_container != RenderOptions::IamfContainer::mp4;
+    const bool wants_apac_caf = request.options.apac_container == RenderOptions::ApacContainer::caf;
+    if (wants_apac_caf && final_ext != ".caf") {
+        const auto msg = fmt::format("--apac-container caf requires output path with .caf extension; got '{}'",
+                                     final_ext.empty() ? std::string{"<none>"} : final_ext);
+        return fail_with_report({ErrorCode::invalid_argument, msg, {}});
+    }
+    const bool is_apac_mpeg4_final = (final_ext == ".m4a" || final_ext == ".mp4") &&
+                                     request.options.iamf_container != RenderOptions::IamfContainer::mp4 &&
+                                     !wants_apac_caf;
+    const bool is_apac_caf_final = wants_apac_caf && final_ext == ".caf";
+    const bool is_apac_final = is_apac_mpeg4_final || is_apac_caf_final;
     const bool is_iamf_final = (final_ext == ".iamf");
     const bool is_iamf_mp4_final =
         (request.options.iamf_container == RenderOptions::IamfContainer::mp4) && audio::iamf_encoding_available();
@@ -784,11 +793,13 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     if (is_apac_final) {
         logs.log(LogLevel::info, "engine", fmt::format("encoding float32 render to APAC ({})", final_ext));
+        const auto apac_container = is_apac_caf_final ? audio::ApacContainer::caf : audio::ApacContainer::mpeg4;
         auto apac_res = audio::convert_to_apac(render_path,
                                                encoded_output_path,
                                                output_layout,
                                                request.options.apac_bitrate_kbps,
                                                request.options.apac_drc_music,
+                                               apac_container,
                                                plan.cancel_token);
         render_temp_guard->remove_now();
         if (!apac_res) {

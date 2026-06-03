@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -52,6 +53,7 @@ Result<void> convert_to_apac(const std::string& src_path,
                              const std::string& layout_id,
                              uint32_t bitrate_kbps,
                              bool drc_music,
+                             ApacContainer container,
                              const std::stop_token& cancel_token) {
 #ifndef __APPLE__
     (void) src_path;
@@ -59,6 +61,7 @@ Result<void> convert_to_apac(const std::string& src_path,
     (void) layout_id;
     (void) bitrate_kbps;
     (void) drc_music;
+    (void) container;
     (void) cancel_token;
     return make_error(ErrorCode::unsupported, "APAC encoding requires macOS (AudioToolbox)", {});
 #else
@@ -133,10 +136,11 @@ Result<void> convert_to_apac(const std::string& src_path,
 
     AudioChannelLayout file_layout{};
     file_layout.mChannelLayoutTag = al->tag;
+    const AudioFileTypeID file_type = container == ApacContainer::caf ? kAudioFileCAFType : kAudioFileMPEG4Type;
 
     ExtAudioFileRef ext_file = nullptr;
-    OSStatus err = ExtAudioFileCreateWithURL(
-        url, kAudioFileMPEG4Type, &apac_asbd, &file_layout, kAudioFileFlags_EraseFile, &ext_file);
+    OSStatus err =
+        ExtAudioFileCreateWithURL(url, file_type, &apac_asbd, &file_layout, kAudioFileFlags_EraseFile, &ext_file);
     CFRelease(url);
     if (err != noErr) {
         return make_error(ErrorCode::io_error,

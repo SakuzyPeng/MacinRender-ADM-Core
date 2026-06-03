@@ -62,6 +62,10 @@ struct RenderOptions {
     uint32_t apac_bitrate_kbps{0};
     // APAC DRC profile: true = Music (cdrc=1), false = None (cdrc=0).
     bool apac_drc_music{true};
+    // APAC output container. MPEG-4 is selected by default for .m4a/.mp4; CAF is
+    // opt-in so ordinary .caf output remains float32 PCM unless explicitly requested.
+    enum class ApacContainer : uint8_t { mpeg4, caf };
+    ApacContainer apac_container{ApacContainer::mpeg4};
     // User SOFA HRIR file for the binaural renderer. Empty = built-in KEMAR.
     std::optional<std::filesystem::path> sofa_path;
     // Optional ADM semantic render policy JSON. Applied to the imported scene

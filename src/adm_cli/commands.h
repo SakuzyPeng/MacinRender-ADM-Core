@@ -24,6 +24,7 @@ struct RenderCliOptions {
     uint32_t opus_bitrate_per_ch{0};
     uint32_t apac_bitrate{0};
     bool apac_drc_music{true};
+    std::string apac_container_str{"mpeg4"};
     std::string sofa_path;
     std::string semantic_policy_path;
     std::string semantic_report_path;

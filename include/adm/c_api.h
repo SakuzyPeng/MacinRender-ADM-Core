@@ -46,12 +46,15 @@
  * v1.8 新增（additive，SOVERSION 不变）：
  *   adm_preview_session_t + adm_create_preview_session /
  *   adm_preview_render_window / adm_destroy_preview_session.
+ *
+ * v1.9 新增（additive，SOVERSION 不变）：
+ *   adm_apac_container_t + adm_render_options_set_apac_container.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 8
+#define ADM_API_VERSION_MINOR 9
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -142,6 +145,8 @@ typedef enum adm_binaural_spread_mode_t {
 
 typedef enum adm_iamf_container_t { ADM_IAMF_CONTAINER_OBU = 0, ADM_IAMF_CONTAINER_MP4 = 1 } adm_iamf_container_t;
 
+typedef enum adm_apac_container_t { ADM_APAC_CONTAINER_MPEG4 = 0, ADM_APAC_CONTAINER_CAF = 1 } adm_apac_container_t;
+
 /* Severity of a captured diagnostic log entry (see adm_render_result_log_entry). */
 typedef enum adm_log_level_t {
     ADM_LOG_DEBUG = 0,
@@ -171,6 +176,7 @@ static_assert(sizeof(adm_output_bit_depth_t) == sizeof(int));
 static_assert(sizeof(adm_speaker_spread_mode_t) == sizeof(int));
 static_assert(sizeof(adm_binaural_spread_mode_t) == sizeof(int));
 static_assert(sizeof(adm_iamf_container_t) == sizeof(int));
+static_assert(sizeof(adm_apac_container_t) == sizeof(int));
 static_assert(sizeof(adm_log_level_t) == sizeof(int));
 static_assert(sizeof(adm_render_stage_t) == sizeof(int));
 #endif
@@ -251,6 +257,11 @@ adm_error_code_t adm_render_options_set_apac_bitrate_kbps(adm_render_options_t* 
 
 /* enabled: 1 = Music DRC profile (default), 0 = None. */
 void adm_render_options_set_apac_drc_music(adm_render_options_t* opts, int enabled) ADM_API_NOEXCEPT;
+
+/* APAC output container. MPEG4 writes .m4a/.mp4 (default); CAF writes APAC-in-CAF
+ * and requires an output path with .caf extension at render time. v1.9 */
+adm_error_code_t adm_render_options_set_apac_container(adm_render_options_t* opts,
+                                                       adm_apac_container_t container) ADM_API_NOEXCEPT;
 
 /* sofa_path: user SOFA HRIR file path for binaural rendering. NULL or "" = built-in KEMAR.
  * May return ADM_ERROR_INTERNAL on OOM. */

@@ -85,9 +85,9 @@ The `apple` backend uses AudioToolbox AUSpatialMixer. It supports binaural, 5.1,
 | Opus | Lossy | Matroska Audio | `.mka` | Cross-platform; Opus VBR |
 | Opus | Lossy | IAMF raw OBU | `.iamf` | Requires the official AOM iamf-tools bridge SDK |
 | APAC | Lossy | MPEG-4 Audio | `.m4a` / `.mp4` | macOS-only; AudioToolbox |
-| APAC | Lossy | CAF | `.caf` | Container-capable, not implemented yet |
+| APAC | Lossy | CAF | `.caf` | macOS-only; requires `--apac-container caf` |
 
-The status column only describes what this project can currently write. It does not guarantee that a target system or player can preserve the spatial layout semantics during playback.
+The status column only describes what this project can currently write. It does not guarantee that a target system or player can preserve the spatial layout semantics during playback. Plain `.caf` output still writes float32 PCM by default; APAC-in-CAF requires `--apac-container caf`.
 
 ### Uncompressed / Lossless Output
 
@@ -107,13 +107,13 @@ cmake -S . -B build/release \
   -DMR_ADM_IAMF_AOM_ROOT=/path/to/iamf-sdk
 ```
 
-APAC output writes MPEG-4 Audio (`.m4a` / `.mp4`) on macOS via AudioToolbox. Spatial layouts and HOA use stable total-bitrate hints by default, scaled from a 7.1.4 baseline of 2048 kbps. AudioToolbox treats this as an encoder target / hint, so measured bitrate can differ substantially.
+APAC output writes MPEG-4 Audio (`.m4a` / `.mp4`) on macOS via AudioToolbox by default and currently requires 48 kHz. APAC-in-CAF is also available by using a `.caf` output path with `--apac-container caf`. Spatial layouts and HOA use stable total-bitrate hints by default, scaled from a 7.1.4 baseline of 2048 kbps. AudioToolbox treats this as an encoder target / hint, so measured bitrate can differ substantially.
 
 ### Containers, Layouts, and Playback
 
 Channel order and spatial layout semantics are determined by the combination of codec, container, and layout tag / mapping. Use `mradm layouts --format <fmt>` to query the implemented channel order for a given output format.
 
-HOA output needs special care. CAF PCM and APAC MPEG-4 are currently the most reliable direct HOA playback paths on macOS. WAV HOA3 writes an AmbiX `ambi` chunk and is better suited for AmbiX-aware tools. Opus MKA writes an ambisonics mapping but is not a general-purpose direct-monitoring format.
+HOA output needs special care. CAF PCM, APAC MPEG-4, and APAC CAF are currently the most reliable direct HOA playback paths on macOS. WAV HOA3 writes an AmbiX `ambi` chunk and is better suited for AmbiX-aware tools. Opus MKA writes an ambisonics mapping but is not a general-purpose direct-monitoring format.
 
 ## Output Layouts
 
@@ -158,6 +158,7 @@ Query full channel-order tables with:
 | `--object-smoothing-frames <frames>` | Smoothing window for dynamic Objects metadata; `0` follows ADM blocks sample-by-sample | `8875` |
 | `--opus-bitrate-per-ch <kbps>` | Opus VBR target bitrate per channel | Auto |
 | `--apac-bitrate <kbps>` | APAC total bitrate hint; when unset, spatial layouts / HOA scale from the 7.1.4=2048 kbps baseline | See output-format notes |
+| `--apac-container mpeg4\|caf` | APAC container; `caf` requires a `.caf` output path, while plain `.caf` remains PCM by default | `mpeg4` |
 | `--sofa <path>` | User SOFA HRIR file for binaural rendering | Built-in KEMAR |
 | `--semantic-policy <path>` | Apply ADM semantic-control JSON during rendering | Off |
 | `--write-semantic-report <path>` | Write the effective semantic JSON after policy application | Off |
