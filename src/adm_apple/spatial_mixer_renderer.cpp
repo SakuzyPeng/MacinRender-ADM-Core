@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -162,8 +163,43 @@ class AudioUnitGuard {
 // CoreAudio output channel-layout tags, matching caf_io.cpp's canonical project-layout
 // -> AudioChannelLayoutTag mapping so the AU's output channel order is identical to the
 // container writers' expected order (verified: VBAP pans ADM-left -> output channel 0).
+constexpr AudioChannelLayoutTag k_tag_mpeg_5_1_a = (121U << 16) | 6U;
+constexpr AudioChannelLayoutTag k_tag_wave_7_1 = (189U << 16) | 8U;
+constexpr AudioChannelLayoutTag k_tag_atmos_5_1_2 = (194U << 16) | 8U;
 constexpr AudioChannelLayoutTag k_tag_atmos_5_1_4 = (195U << 16) | 10U;
 constexpr AudioChannelLayoutTag k_tag_atmos_7_1_4 = (192U << 16) | 12U;
+constexpr AudioChannelLayoutTag k_tag_atmos_9_1_6 = (193U << 16) | 16U;
+constexpr AudioChannelLayoutTag k_tag_cicp_13 = (204U << 16) | 24U;
+
+struct AppleSpeakerLayout {
+    std::string_view id;
+    std::string_view display_name;
+    uint16_t channels;
+    uint16_t lfe_count;
+    bool is_3d;
+    AudioChannelLayoutTag layout_tag;
+};
+
+// clang-format off
+constexpr std::array<AppleSpeakerLayout, 7> k_apple_speaker_layouts{{
+    {"0+5+0",  "5.1",   6,  1, false, k_tag_mpeg_5_1_a},
+    {"wav71",  "7.1",   8,  1, false, k_tag_wave_7_1},
+    {"2+5+0",  "5.1.2", 8,  1, true,  k_tag_atmos_5_1_2},
+    {"4+5+0",  "5.1.4", 10, 1, true,  k_tag_atmos_5_1_4},
+    {"4+7+0",  "7.1.4", 12, 1, true,  k_tag_atmos_7_1_4},
+    {"9.1.6",  "9.1.6", 16, 1, true,  k_tag_atmos_9_1_6},
+    {"9+10+3", "22.2",  24, 2, true,  k_tag_cicp_13},
+}};
+// clang-format on
+
+[[nodiscard]] const AppleSpeakerLayout* find_apple_speaker_layout(std::string_view layout_id) {
+    const auto* const it = std::ranges::find_if(
+        k_apple_speaker_layouts, [layout_id](const AppleSpeakerLayout& layout) { return layout.id == layout_id; });
+    if (it == k_apple_speaker_layouts.end()) {
+        return nullptr;
+    }
+    return std::addressof(*it);
+}
 
 // Resolved output target for one render. binaural -> 2ch HRTF (Headphones output type,
 // no speaker layout); speaker -> Nch VBAP into a standard CoreAudio layout tag.
@@ -181,13 +217,13 @@ struct OutputProfile {
     if (layout_id == "binaural" || layout_id == "0+2+0") {
         return OutputProfile{.channels = 2, .binaural = true, .layout_tag = 0, .writer_layout = "binaural"};
     }
-    if (layout_id == "4+5+0") {
+    if (const auto* layout = find_apple_speaker_layout(layout_id); layout != nullptr) {
         return OutputProfile{
-            .channels = 10, .binaural = false, .layout_tag = k_tag_atmos_5_1_4, .writer_layout = "4+5+0"};
-    }
-    if (layout_id == "4+7+0") {
-        return OutputProfile{
-            .channels = 12, .binaural = false, .layout_tag = k_tag_atmos_7_1_4, .writer_layout = "4+7+0"};
+            .channels = layout->channels,
+            .binaural = false,
+            .layout_tag = layout->layout_tag,
+            .writer_layout = layout->id,
+        };
     }
     return std::nullopt;
 }
@@ -716,9 +752,16 @@ CapabilityReport apple_capabilities() {
     r.supports_render_window = false; // full render + file trim for now
     r.supported_layouts = {
         {"binaural", "Apple AUSpatialMixer binaural", 2, false, 0, true, true},
-        {"4+5+0", "5.1.4", 10, true, 1, false, false},
-        {"4+7+0", "7.1.4", 12, true, 1, false, false},
     };
+    for (const auto& layout : k_apple_speaker_layouts) {
+        r.supported_layouts.push_back({std::string{layout.id},
+                                       std::string{layout.display_name},
+                                       layout.channels,
+                                       layout.is_3d,
+                                       layout.lfe_count,
+                                       false,
+                                       false});
+    }
     return r;
 }
 

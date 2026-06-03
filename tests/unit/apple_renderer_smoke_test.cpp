@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -206,6 +207,26 @@ std::size_t loudest_channel(const std::vector<float>& samples, uint16_t channels
     return best;
 }
 
+struct ExpectedLayout {
+    const char* id;
+    const char* display_name;
+    uint16_t channels;
+    bool binaural;
+};
+
+// clang-format off
+constexpr std::array<ExpectedLayout, 8> k_expected_layouts{{
+    {"binaural", "binaural", 2U, true},
+    {"0+5+0",  "5.1",   6U,  false},
+    {"wav71",  "7.1",   8U,  false},
+    {"2+5+0",  "5.1.2", 8U,  false},
+    {"4+5+0",  "5.1.4", 10U, false},
+    {"4+7+0",  "7.1.4", 12U, false},
+    {"9.1.6",  "9.1.6", 16U, false},
+    {"9+10+3", "22.2",  24U, false},
+}};
+// clang-format on
+
 bool verify_capabilities() {
     const auto caps = mradm::apple_capabilities();
     bool ok = true;
@@ -221,9 +242,9 @@ bool verify_capabilities() {
                                              [&](const mradm::CapabilityReport::Layout& l) { return l.id == id; });
         return it != caps.supported_layouts.end() && it->channel_count == channels && it->is_binaural == binaural;
     };
-    ok &= check(has_layout("binaural", 2U, true), "binaural layout advertised");
-    ok &= check(has_layout("4+5+0", 10U, false), "5.1.4 layout advertised");
-    ok &= check(has_layout("4+7+0", 12U, false), "7.1.4 layout advertised");
+    for (const auto& layout : k_expected_layouts) {
+        ok &= check(has_layout(layout.id, layout.channels, layout.binaural), layout.display_name);
+    }
     return ok;
 }
 
@@ -269,6 +290,18 @@ bool verify_speaker_panning() {
     bool ok = true;
     ok &= check(loudest_channel(*left, 12U) == 0U, "ADM azimuth +30 pans to 7.1.4 front-left (ch0)");
     ok &= check(loudest_channel(*right, 12U) == 1U, "ADM azimuth -30 pans to 7.1.4 front-right (ch1)");
+    return ok;
+}
+
+bool verify_speaker_layouts_render() {
+    bool ok = true;
+    for (const auto& layout : k_expected_layouts) {
+        if (layout.binaural) {
+            continue;
+        }
+        const auto rendered = render_apple(0.0F, "mr_apple_layout", layout.id, layout.channels);
+        ok &= check(rendered.has_value(), layout.display_name);
+    }
     return ok;
 }
 
@@ -318,6 +351,7 @@ int main() {
     ok &= verify_directional_sign();
     ok &= verify_zero_gain_is_silent();
     ok &= verify_speaker_panning();
+    ok &= verify_speaker_layouts_render();
     ok &= verify_binaural_container_tag();
     return ok ? 0 : 1;
 }
