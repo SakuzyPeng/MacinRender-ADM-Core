@@ -5,6 +5,7 @@
 #include <ebur128.h>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -158,6 +159,50 @@ class AudioUnitGuard {
     return {};
 }
 
+// CoreAudio output channel-layout tags, matching caf_io.cpp's canonical project-layout
+// -> AudioChannelLayoutTag mapping so the AU's output channel order is identical to the
+// container writers' expected order (verified: VBAP pans ADM-left -> output channel 0).
+constexpr AudioChannelLayoutTag k_tag_atmos_5_1_4 = (195U << 16) | 10U;
+constexpr AudioChannelLayoutTag k_tag_atmos_7_1_4 = (192U << 16) | 12U;
+
+// Resolved output target for one render. binaural -> 2ch HRTF (Headphones output type,
+// no speaker layout); speaker -> Nch VBAP into a standard CoreAudio layout tag.
+// writer_layout is the container layout id passed to the writer: the binaural path
+// normalizes the default "0+2+0" alias to "binaural" so CAF/APAC tag the output with
+// kAudioChannelLayoutTag_Binaural rather than plain Stereo (it is a binaural signal).
+struct OutputProfile {
+    uint16_t channels{2};
+    bool binaural{true};
+    AudioChannelLayoutTag layout_tag{0};
+    std::string_view writer_layout{"binaural"};
+};
+
+[[nodiscard]] std::optional<OutputProfile> resolve_output_profile(std::string_view layout_id) {
+    if (layout_id == "binaural" || layout_id == "0+2+0") {
+        return OutputProfile{.channels = 2, .binaural = true, .layout_tag = 0, .writer_layout = "binaural"};
+    }
+    if (layout_id == "4+5+0") {
+        return OutputProfile{
+            .channels = 10, .binaural = false, .layout_tag = k_tag_atmos_5_1_4, .writer_layout = "4+5+0"};
+    }
+    if (layout_id == "4+7+0") {
+        return OutputProfile{
+            .channels = 12, .binaural = false, .layout_tag = k_tag_atmos_7_1_4, .writer_layout = "4+7+0"};
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] Result<void> set_output_layout_tag(AudioUnit unit, AudioChannelLayoutTag tag) {
+    AudioChannelLayout layout{};
+    layout.mChannelLayoutTag = tag;
+    const OSStatus status = AudioUnitSetProperty(
+        unit, kAudioUnitProperty_AudioChannelLayout, kAudioUnitScope_Output, 0, &layout, sizeof(layout));
+    if (status != noErr) {
+        return tl::unexpected{apple_status_error("failed to set output channel layout", status)};
+    }
+    return {};
+}
+
 // One resolved control point for a SpatialMixer input bus (already in AU convention).
 struct BusEvent {
     uint64_t start_sample{0};
@@ -175,11 +220,11 @@ struct BusPlan {
     std::vector<BusEvent> events; // sorted by start_sample
 };
 
-// Immutable render recipe: one BusPlan per SpatialMixer input element. The AU itself
-// (mutable DSP state) is created in render_window, not here, so this stays shareable
-// across PreviewSession windows.
+// Immutable render recipe: the resolved output target plus one BusPlan per SpatialMixer
+// input element. The AU itself (mutable DSP state) is created in render_window, not here,
+// so this stays shareable across PreviewSession windows.
 struct ApplePrepared final : IPreparedRender {
-    uint16_t output_channels{2};
+    OutputProfile profile;
     std::vector<BusPlan> buses;
 };
 
@@ -368,6 +413,13 @@ class AppleRenderer final : public IRenderer {
     [[nodiscard]] CapabilityReport capabilities() const override { return apple_capabilities(); }
 
     [[nodiscard]] Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& plan, LogSink& logs) override {
+        const auto profile = resolve_output_profile(plan.output_layout);
+        if (!profile) {
+            return make_error(ErrorCode::unsupported,
+                              fmt::format("apple backend does not support output layout '{}'", plan.output_layout),
+                              "layout=" + plan.output_layout);
+        }
+
         auto buses = build_bus_plans(plan.scene, logs);
 
         const auto num_in_ch = plan.scene.info.num_channels;
@@ -385,7 +437,7 @@ class AppleRenderer final : public IRenderer {
         }
 
         auto prepared = std::make_shared<ApplePrepared>();
-        prepared->output_channels = 2; // binaural HRTF
+        prepared->profile = *profile;
         prepared->buses = std::move(buses);
         return std::static_pointer_cast<IPreparedRender>(prepared);
     }
@@ -409,11 +461,25 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     const auto num_in_ch = info.num_channels;
     const auto num_frames = info.num_frames;
     const auto sample_rate = info.sample_rate;
-    const uint16_t num_out_ch = prepared->output_channels;
+    const auto& profile = prepared->profile;
+    const uint16_t num_out_ch = profile.channels;
+    const UInt32 spatialization_algorithm =
+        profile.binaural ? kSpatializationAlgorithm_HRTFHQ : kSpatializationAlgorithm_VectorBasedPanning;
     const auto& buses = prepared->buses;
 
+    // Normalize the container layout: a binaural HRTF render tags the output as binaural
+    // (not the "0+2+0" stereo alias it may have been requested as), so CAF/APAC carry
+    // kAudioChannelLayoutTag_Binaural instead of plain Stereo.
+    const std::string writer_layout{profile.writer_layout};
+    if (plan.output_layout != writer_layout) {
+        logs.log(LogLevel::info,
+                 "apple",
+                 fmt::format("output layout '{}' rendered as binaural HRTF; tagging container as '{}'",
+                             plan.output_layout,
+                             writer_layout));
+    }
     auto writer_res =
-        audio::WriterHandle::open(plan.output_path, num_out_ch, static_cast<uint32_t>(sample_rate), plan.output_layout);
+        audio::WriterHandle::open(plan.output_path, num_out_ch, static_cast<uint32_t>(sample_rate), writer_layout);
     if (!writer_res) {
         return tl::unexpected{writer_res.error()};
     }
@@ -451,14 +517,16 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     }
     AudioUnit unit = unit_res->get();
 
-    if (auto r = set_uint32_property(unit,
-                                     kAudioUnitProperty_SpatialMixerOutputType,
-                                     kAudioUnitScope_Global,
-                                     0,
-                                     kSpatialMixerOutputType_Headphones,
-                                     "output type");
-        !r) {
-        return tl::unexpected{r.error()};
+    if (profile.binaural) {
+        if (auto r = set_uint32_property(unit,
+                                         kAudioUnitProperty_SpatialMixerOutputType,
+                                         kAudioUnitScope_Global,
+                                         0,
+                                         kSpatialMixerOutputType_Headphones,
+                                         "output type");
+            !r) {
+            return tl::unexpected{r.error()};
+        }
     }
     if (auto r = set_uint32_property(unit,
                                      kAudioUnitProperty_ElementCount,
@@ -483,6 +551,13 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
         !r) {
         return tl::unexpected{r.error()};
     }
+    // Speaker output: a standard CoreAudio layout tag gives VBAP the speaker geometry and
+    // fixes the output channel order to match the container writers (caf_io.cpp mapping).
+    if (!profile.binaural) {
+        if (auto r = set_output_layout_tag(unit, profile.layout_tag); !r) {
+            return tl::unexpected{r.error()};
+        }
+    }
 
     std::vector<float> staging(static_cast<std::size_t>(num_in_ch) * k_render_block, 0.0F);
     std::vector<InputBusContext> contexts(buses.size());
@@ -499,7 +574,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                                          kAudioUnitProperty_SpatializationAlgorithm,
                                          kAudioUnitScope_Input,
                                          element,
-                                         kSpatializationAlgorithm_HRTFHQ,
+                                         spatialization_algorithm,
                                          "spatialization algorithm");
             !r) {
             return tl::unexpected{r.error()};
@@ -536,8 +611,12 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
 
     logs.log(LogLevel::info,
              "apple",
-             fmt::format(
-                 "AUSpatialMixer rendering {} buses → {}ch binaural, {} frames", buses.size(), num_out_ch, num_frames));
+             fmt::format("AUSpatialMixer rendering {} buses → {} ({}ch, {}), {} frames",
+                         buses.size(),
+                         plan.output_layout,
+                         num_out_ch,
+                         profile.binaural ? "HRTF binaural" : "VBAP speakers",
+                         num_frames));
     progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
 
     auto reader = bw64::readFile(plan.input_path);
@@ -626,17 +705,19 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
 CapabilityReport apple_capabilities() {
     CapabilityReport r;
     r.backend_name = "apple";
-    r.backend_version = "spatial-mixer-0.1";
+    r.backend_version = "spatial-mixer-0.2";
     r.supports_objects = true;
     r.supports_direct_speakers = true;
     r.supports_hoa = false;
-    r.supports_channel_lock = false;     // no discrete speakers for binaural -> dropped
+    r.supports_channel_lock = false;     // channelLock dropped (no resolved speaker set yet)
     r.supports_object_divergence = true; // expand_object_divergence -> parallel buses
     r.supports_screen_ref = false;
     r.supports_diffuse = false;       // SpatialMixer has no ADM decorrelator
     r.supports_render_window = false; // full render + file trim for now
     r.supported_layouts = {
         {"binaural", "Apple AUSpatialMixer binaural", 2, false, 0, true, true},
+        {"4+5+0", "5.1.4", 10, true, 1, false, false},
+        {"4+7+0", "7.1.4", 12, true, 1, false, false},
     };
     return r;
 }

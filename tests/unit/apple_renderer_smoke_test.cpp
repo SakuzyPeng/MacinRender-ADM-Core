@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <numbers>
 #include <optional>
@@ -119,7 +120,8 @@ double channel_energy(const std::vector<float>& samples, uint32_t channels, uint
     return e;
 }
 
-std::optional<std::vector<float>> render_apple_stereo(float azimuth, std::string_view stem, float gain = 1.0F) {
+std::optional<std::vector<float>> render_apple(
+    float azimuth, std::string_view stem, const std::string& layout, uint16_t expected_channels, float gain = 1.0F) {
     const auto in = write_fixture(azimuth, 8192U, gain);
     FileGuard in_guard(in);
     const auto out = temp_path(stem, ".wav");
@@ -129,7 +131,7 @@ std::optional<std::vector<float>> render_apple_stereo(float azimuth, std::string
     req.input_path = in;
     req.output_path = out;
     req.options.renderer = mradm::RendererSelection::apple;
-    req.options.output_layout = "binaural";
+    req.options.output_layout = layout;
     req.options.peak_limit = false;
     req.options.measure_loudness = false;
 
@@ -146,12 +148,62 @@ std::optional<std::vector<float>> render_apple_stereo(float azimuth, std::string
     if (!check(reader.has_value(), "apple output WAV opens")) {
         return std::nullopt;
     }
-    if (!check(reader->channels() == 2U, "apple output is stereo")) {
+    if (!check(reader->channels() == expected_channels, "apple output channel count")) {
         return std::nullopt;
     }
     std::vector<float> samples(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
     reader->read(samples.data(), reader->frame_count());
     return samples;
+}
+
+std::optional<std::vector<float>> render_apple_stereo(float azimuth, std::string_view stem, float gain = 1.0F) {
+    return render_apple(azimuth, stem, "binaural", 2U, gain);
+}
+
+uint32_t read_be32(const std::vector<unsigned char>& bytes, std::size_t offset) {
+    return (static_cast<uint32_t>(bytes[offset]) << 24U) | (static_cast<uint32_t>(bytes[offset + 1U]) << 16U) |
+           (static_cast<uint32_t>(bytes[offset + 2U]) << 8U) | static_cast<uint32_t>(bytes[offset + 3U]);
+}
+
+uint64_t read_be64(const std::vector<unsigned char>& bytes, std::size_t offset) {
+    return (static_cast<uint64_t>(read_be32(bytes, offset)) << 32U) | read_be32(bytes, offset + 4U);
+}
+
+// Read the mChannelLayoutTag from a CAF file's "chan" chunk (first UInt32 of its payload).
+std::optional<uint32_t> caf_channel_layout_tag(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::size_t offset = 8U; // skip "caff" header
+    while (offset + 12U <= bytes.size()) {
+        const auto id = std::string_view{reinterpret_cast<const char*>(bytes.data() + offset), 4U};
+        const uint64_t size = read_be64(bytes, offset + 4U);
+        const std::size_t payload = offset + 12U;
+        if (id == "chan") {
+            if (payload + 4U > bytes.size()) {
+                return std::nullopt;
+            }
+            return read_be32(bytes, payload);
+        }
+        if (size > bytes.size()) { // unknown/streaming size (e.g. data) — chan precedes it
+            break;
+        }
+        offset = payload + size;
+    }
+    return std::nullopt;
+}
+
+// Index of the highest-energy output channel.
+std::size_t loudest_channel(const std::vector<float>& samples, uint16_t channels) {
+    std::size_t best = 0;
+    double best_e = -1.0;
+    for (uint16_t c = 0; c < channels; ++c) {
+        const double e = channel_energy(samples, channels, c);
+        if (e > best_e) {
+            best_e = e;
+            best = c;
+        }
+    }
+    return best;
 }
 
 bool verify_capabilities() {
@@ -164,10 +216,14 @@ bool verify_capabilities() {
     ok &= check(caps.supports_object_divergence, "object divergence advertised");
     ok &= check(!caps.supports_diffuse, "diffuse unsupported");
     ok &= check(!caps.supports_render_window, "render window unsupported");
-    const auto it = std::ranges::find_if(caps.supported_layouts,
-                                         [](const mradm::CapabilityReport::Layout& l) { return l.id == "binaural"; });
-    ok &= check(it != caps.supported_layouts.end() && it->channel_count == 2U && it->is_binaural,
-                "binaural layout advertised");
+    const auto has_layout = [&](const std::string& id, uint16_t channels, bool binaural) {
+        const auto it = std::ranges::find_if(caps.supported_layouts,
+                                             [&](const mradm::CapabilityReport::Layout& l) { return l.id == id; });
+        return it != caps.supported_layouts.end() && it->channel_count == channels && it->is_binaural == binaural;
+    };
+    ok &= check(has_layout("binaural", 2U, true), "binaural layout advertised");
+    ok &= check(has_layout("4+5+0", 10U, false), "5.1.4 layout advertised");
+    ok &= check(has_layout("4+7+0", 12U, false), "7.1.4 layout advertised");
     return ok;
 }
 
@@ -201,6 +257,59 @@ bool verify_zero_gain_is_silent() {
     return check(energy < 1.0e-2, "gain=0 object renders as silence (dB floor, not 0 dB unity)");
 }
 
+// Speaker (VBAP) path: a 7.1.4 render must produce 12 channels and pan an ADM-left
+// object to the front-left speaker (channel 0 = M+030), an ADM-right object to the
+// front-right speaker (channel 1 = M-030). Guards VBAP + output layout order + sign flip.
+bool verify_speaker_panning() {
+    const auto left = render_apple(30.0F, "mr_apple_714_left", "4+7+0", 12U);
+    const auto right = render_apple(-30.0F, "mr_apple_714_right", "4+7+0", 12U);
+    if (!left || !right) {
+        return false;
+    }
+    bool ok = true;
+    ok &= check(loudest_channel(*left, 12U) == 0U, "ADM azimuth +30 pans to 7.1.4 front-left (ch0)");
+    ok &= check(loudest_channel(*right, 12U) == 1U, "ADM azimuth -30 pans to 7.1.4 front-right (ch1)");
+    return ok;
+}
+
+// A binaural HRTF render requested via the default "0+2+0" alias must tag the CAF
+// container as Binaural (106), not plain Stereo (101) — the output is a binaural signal
+// and must not be mistaken for a stereo mix (which players may re-virtualize).
+bool verify_binaural_container_tag() {
+    const auto in = write_fixture(0.0F, 4096U, 1.0F);
+    FileGuard in_guard(in);
+    const auto out = temp_path("mr_apple_tag", ".caf");
+    FileGuard out_guard(out);
+
+    mradm::RenderRequest req;
+    req.input_path = in;
+    req.output_path = out;
+    req.options.renderer = mradm::RendererSelection::apple;
+    req.options.output_layout = "0+2+0"; // default alias → must normalize to binaural tag
+    req.options.peak_limit = false;
+    req.options.measure_loudness = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!check(res.success(), "apple 0+2+0 → CAF render succeeds")) {
+        std::cerr << "context: " << res.error.message << " " << res.error.context << "\n";
+        return false;
+    }
+    const auto tag = caf_channel_layout_tag(out);
+    constexpr uint32_t k_binaural = (106U << 16) | 2U;
+    constexpr uint32_t k_stereo = (101U << 16) | 2U;
+    if (!tag.has_value()) {
+        check(false, "CAF has a chan chunk");
+        return false;
+    }
+    const uint32_t tag_value = tag.value();
+    bool ok = check(tag_value == k_binaural, "CAF tagged Binaural (106), not Stereo");
+    ok &= check(tag_value != k_stereo, "CAF not tagged plain Stereo for a binaural render");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -208,5 +317,7 @@ int main() {
     ok &= verify_capabilities();
     ok &= verify_directional_sign();
     ok &= verify_zero_gain_is_silent();
+    ok &= verify_speaker_panning();
+    ok &= verify_binaural_container_tag();
     return ok ? 0 : 1;
 }
