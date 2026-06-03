@@ -559,6 +559,45 @@ bool verify_ear_custom_916_direct_speakers(const mradm::RenderService& service,
     return ok;
 }
 
+bool verify_ear_direct_speakers_lfe_alias(const mradm::RenderService& service,
+                                          mradm::ProgressSink& progress,
+                                          mradm::LogSink& logs) {
+    auto fixture = make_single_direct_speaker_doc("RC_LFE", 45.0F, -35.264389F);
+    const auto in_path = write_input_fixture(fixture.uid, fixture.doc, "mr_ear_ds_lfe_alias_in.wav", 48000U, 1000U);
+    FileGuard in_guard{in_path};
+
+    const auto out_path = std::filesystem::temp_directory_path() / "mr_ear_ds_lfe_alias_out.wav";
+    FileGuard out_guard{out_path};
+
+    mradm::RenderRequest req;
+    req.input_path = in_path;
+    req.output_path = out_path;
+    req.options.output_layout = "0+5+0";
+    req.options.renderer = mradm::RendererSelection::ear;
+    req.options.peak_limit = false;
+
+    const auto res = service.render(req, progress, logs);
+    if (!res.success()) {
+        std::cerr << "FAIL: EAR DirectSpeakers LFE alias render failed: " << res.error.message << "\n";
+        return false;
+    }
+
+    constexpr std::size_t k_lfe_ch = 3U;
+    const auto sums = read_channel_sums(out_path, 6U);
+    bool ok = true;
+    ok &= check(sums.size() == 6U, "EAR DirectSpeakers LFE alias: output is 5.1");
+    if (sums.size() == 6U) {
+        ok &= check(sums[k_lfe_ch] > 0.0, "EAR DirectSpeakers RC_LFE routes to LFE");
+        for (std::size_t ch = 0; ch < sums.size(); ++ch) {
+            if (ch == k_lfe_ch) {
+                continue;
+            }
+            ok &= check(sums[ch] < 1.0e-9, "EAR DirectSpeakers RC_LFE does not leak to non-LFE channels");
+        }
+    }
+    return ok;
+}
+
 // Write a 2-channel BW64 fixture with one Objects UID (ch0) and one DS UID (ch1).
 std::filesystem::path write_mixed_input_fixture(const std::shared_ptr<adm::Document>& doc,
                                                 const std::string& obj_uid_str,
@@ -1541,6 +1580,7 @@ int main() {
     ok &= verify_direct_speakers_render_fixture(service, progress, logs);
     ok &= verify_ear_custom_916_objects(service, progress, logs);
     ok &= verify_ear_custom_916_direct_speakers(service, progress, logs);
+    ok &= verify_ear_direct_speakers_lfe_alias(service, progress, logs);
     ok &= verify_mixed_render_fixture(service, progress, logs);
     ok &= verify_ear_cartesian_objects(service, progress, logs);
     ok &= verify_position_offset(service, progress, logs);

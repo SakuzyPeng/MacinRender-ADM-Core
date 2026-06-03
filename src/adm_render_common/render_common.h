@@ -11,6 +11,7 @@
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <string>
 #include <string_view>
 #include <thread>
 #include <vector>
@@ -20,6 +21,13 @@
 #include "adm/scene.h"
 
 namespace mradm::render_common {
+
+// ADM producers are inconsistent: some LFE DirectSpeakers channels carry
+// channelFrequency lowPass, while others only encode the role in labels like
+// RC_LFE/RCLFE/LFE1. Use this helper before positional fallback/spatialization.
+[[nodiscard]] bool is_lfe_label(std::string_view raw) noexcept;
+[[nodiscard]] bool any_label_is_lfe(const std::vector<std::string>& labels) noexcept;
+[[nodiscard]] bool direct_speakers_block_is_lfe(const SceneDirectSpeakersBlock& block) noexcept;
 
 // Seek a frame-addressable reader (e.g. libbw64's Bw64Reader) to an absolute frame,
 // overflow-safe for long programs. Such readers take an int32 frame offset, so a
