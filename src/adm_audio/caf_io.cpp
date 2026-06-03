@@ -255,12 +255,13 @@ struct CafLayoutEntry {
     uint32_t channel_count;
 };
 // clang-format off
-constexpr std::array<CafLayoutEntry, 9> k_caf_tags = {{
+constexpr std::array<CafLayoutEntry, 10> k_caf_tags = {{
     {"0+2+0",   (101U << 16) | 2U,  2U}, // kAudioChannelLayoutTag_MPEG_2_0  / CICP_2  (L R)
     {"binaural", (106U << 16) | 2U,  2U}, // kAudioChannelLayoutTag_Binaural (BinauralLeft BinauralRight)
     {"0+5+0",  (121U << 16) | 6U,  6U},  // kAudioChannelLayoutTag_MPEG_5_1_A / CICP_6 (L R C LFE Ls Rs)
     {"wav71",  (189U << 16) | 8U,  8U},  // kAudioChannelLayoutTag_WAVE_7_1 (L R C LFE Rls Rrs Ls Rs)
     {"hoa3",   (190U << 16) | 16U, 16U}, // kAudioChannelLayoutTag_HOA_ACN_SN3D | 16 (ACN 0..15)
+    {"2+5+0",  (194U << 16) | 8U,  8U},  // kAudioChannelLayoutTag_Atmos_5_1_2
     {"4+5+0",  (195U << 16) | 10U, 10U}, // kAudioChannelLayoutTag_Atmos_5_1_4
     {"4+7+0",  (192U << 16) | 12U, 12U}, // kAudioChannelLayoutTag_Atmos_7_1_4
     {"9.1.6",  (193U << 16) | 16U, 16U}, // kAudioChannelLayoutTag_Atmos_9_1_6
@@ -269,7 +270,7 @@ constexpr std::array<CafLayoutEntry, 9> k_caf_tags = {{
 // clang-format on
 
 [[nodiscard]] const CafLayoutEntry* caf_layout_entry(std::string_view layout_id) {
-    const auto it =
+    const auto* const it =
         std::ranges::find_if(k_caf_tags, [layout_id](const CafLayoutEntry& e) { return layout_id == e.layout_id; });
     if (it == k_caf_tags.end()) {
         return nullptr;

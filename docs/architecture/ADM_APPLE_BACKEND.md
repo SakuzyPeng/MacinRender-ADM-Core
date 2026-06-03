@@ -11,7 +11,7 @@
 **首版范围**：
 
 - **双耳**：Headphones HRTF → 2ch（输出布局 `binaural`，容器 tag `kAudioChannelLayoutTag_Binaural`）。
-- **多声道扬声器**：VBAP / SoundField → `5.1.4` / `7.1.4` 等（复用现有 Atmos 布局 tag）。
+- **多声道扬声器**：VBAP / SoundField → `5.1`、`7.1`、`5.1.2`、`5.1.4`、`7.1.4`、`9.1.6`、`22.2`（复用现有 CoreAudio / Atmos / CICP 布局 tag）。
 - **不做** transaural（BuiltIn/External 机身扬声器串扰消除）：设备绑定、不可作为交付文件，只在实时播放有意义（见 §8）。
 - **不做** HOA 输出（`supports_hoa=false`）。
 
@@ -141,19 +141,19 @@ sm_distance  =  参考米数            // ADM 归一化→米；仅 DistanceAtt
 ## 9. 输出布局与容器 tag
 
 - **双耳 HRTF → 2ch**：布局 id `binaural`，容器 tag `kAudioChannelLayoutTag_Binaural`（106）。`caf_io.cpp` / `apac_io.cpp` 现状已对 `binaural` 打此 tag，与普通 `0+2+0` stereo 区分——直接复用。
-- **多声道 → 扬声器布局**：复用现有 Atmos tag（`caf_io.cpp`：`4+5+0`→Atmos_5_1_4、`4+7+0`→Atmos_7_1_4 …）。
+- **多声道 → 扬声器布局**：复用现有 CoreAudio tag（`caf_io.cpp`：`0+5+0`→MPEG_5_1_A、`wav71`→WAVE_7_1、`2+5+0`→Atmos_5_1_2、`4+5+0`→Atmos_5_1_4、`4+7+0`→Atmos_7_1_4、`9.1.6`→Atmos_9_1_6、`9+10+3`→CICP_13）。
 - 注意：双耳 tag 只在 CoreAudio 容器（CAF/APAC）存活；WAV/FLAC 无标准双耳标签，走这俩格式会丢失双耳元数据。
 
 ## 10. CapabilityReport（首版）
 
 ```
 backend_name = "apple"
-supported_layouts = [ binaural(is_binaural=true), 5.1.4(is_3d,lfe_count=1), 7.1.4, ... ]
+supported_layouts = [ binaural(is_binaural=true), 5.1, 7.1, 5.1.2, 5.1.4, 7.1.4, 9.1.6, 22.2 ]
 supports_objects          = true
 supports_direct_speakers  = true
 supports_hoa              = false
 supports_object_divergence= true   // expand_object_divergence
-supports_channel_lock     = true   // apply_channel_lock；仅扬声器输出，双耳 drop
+supports_channel_lock     = false  // 当前未构建 Apple 输出 speaker set；channelLock 暂 drop
 supports_diffuse          = false  // 无 ADM diffuse 去相关器；ReverbBlend 不等价
 supports_screen_ref       = false
 supports_render_window    = false  // 首版：全量渲染 + 文件裁剪（见 §12）
@@ -164,7 +164,7 @@ supports_render_window    = false  // 首版：全量渲染 + 文件裁剪（见
 无 bit-exact，改用基于性质/能量的断言（macOS-only，Linux 自动 skip，同 APAC）：
 
 - **坐标符号回归（必加）**：ADM azimuth=+30°（左）对象渲染后**左声道能量 > 右声道**——一次性逮住整声场镜像翻转。
-- **声道数 / 布局**：binaural=2ch、`7.1.4`=12ch 等正确。
+- **声道数 / 布局**：binaural=2ch、`5.1.2`=8ch、`7.1.4`=12ch、`22.2`=24ch 等正确。
 - **object/bed/LFE 分路**：bed 静态居位、LFE 不被空间化（能量集中而非弥散）。
 - **divergence/extent 展开**：开启后能量按预期向两侧/区域扩散。
 - **smoke**：不崩、输出文件有效、时长正确、响度/True Peak 在合理范围。
