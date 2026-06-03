@@ -155,6 +155,13 @@ mradm::OutputBitDepth parse_output_bit_depth(const std::string& value) {
     return mradm::OutputBitDepth::f32;
 }
 
+mradm::RenderOptions::ApacContainer parse_apac_container(const std::string& value) {
+    if (value == "caf") {
+        return mradm::RenderOptions::ApacContainer::caf;
+    }
+    return mradm::RenderOptions::ApacContainer::mpeg4;
+}
+
 CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
     auto* render_cmd = app.add_subcommand("render", "Render an ADM BWF file");
     render_cmd->add_option("-i,--input", opts.input, "Input ADM BWF/WAV path")->required();
@@ -219,6 +226,11 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
     render_cmd->add_flag("--apac-drc-none{false},--apac-drc-music{true}",
                          opts.apac_drc_music,
                          "APAC DRC profile: --apac-drc-music (default) or --apac-drc-none");
+    render_cmd
+        ->add_option("--apac-container",
+                     opts.apac_container_str,
+                     "APAC output container: mpeg4 (.m4a/.mp4, default) or caf (.caf)")
+        ->check(CLI::IsMember({"mpeg4", "caf"}));
     render_cmd->add_option("--sofa", opts.sofa_path, "User SOFA HRIR file for binaural rendering");
     render_cmd->add_option("--semantic-policy", opts.semantic_policy_path, "ADM semantic render policy JSON");
     render_cmd->add_option("--write-semantic-report",
@@ -262,6 +274,7 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     request.options.opus_bitrate_per_ch_kbps = opts.opus_bitrate_per_ch;
     request.options.apac_bitrate_kbps = opts.apac_bitrate;
     request.options.apac_drc_music = opts.apac_drc_music;
+    request.options.apac_container = parse_apac_container(opts.apac_container_str);
     if (!opts.sofa_path.empty()) {
         request.options.sofa_path = opts.sofa_path;
     }

@@ -377,7 +377,7 @@ CLI args / config
 >   （`RenderPlan::render_window` + `CapabilityReport::supports_render_window`），逐样本 bit-exact 于
 >   “全渲染后裁”，由 `render_trim_fixture_test::window_bit_exact` 守护。所有后端按 `k_block_size` 网格
 >   对齐（object smoothing 在块边缘采样增益），seek 经 `render_common::seek_reader_abs`（overflow-safe）。
-> - **Phase 2a（PreviewSession + scene 缓存）已落地（C ABI v1.8）**：`adm_preview_session_t` import +
+> - **Phase 2a（PreviewSession + scene 缓存）已落地（C ABI v1.8；当前 ABI v1.9）**：`adm_preview_session_t` import +
 >   语义策略一次，逐窗口复用 `AdmScene`（跳过 re-import + 策略）。
 > - **Phase 2b（IRenderer prepare/render_window 拆分）已落地（纯内部，无 ABI 改动）**：四后端各有 PreparedState
 >   （binaural 缓存 HRTF+FFT、EAR/VBAP/HOA 缓存增益矩阵等），`RenderService::render` 经可选

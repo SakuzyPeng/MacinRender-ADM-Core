@@ -78,14 +78,15 @@ OutputFormats build_output_formats() {
     // apac — macOS only; total target bitrate.
     out.formats.push_back(
         with_bitrate({.format = "apac",
-                      .extensions = {".m4a", ".mp4"},
+                      .extensions = {".m4a", ".mp4", ".caf"},
                       .available = apac,
                       .available_reason = apac ? std::string{} : std::string{"macOS only (AudioToolbox)"},
                       .lossy = true,
                       .max_channels = 24,
-                      .fixed_sample_rate = 0,
+                      .fixed_sample_rate = 48000,
                       .supports_height = true,
-                      .note = "macOS only; spatial/HOA default bitrate scales from 7.1.4 = 2048 kbps."},
+                      .note = "macOS only; .caf requires --apac-container caf; spatial/HOA default bitrate scales "
+                              "from 7.1.4 = 2048 kbps."},
                      /*per_channel=*/false,
                      64,
                      12000));

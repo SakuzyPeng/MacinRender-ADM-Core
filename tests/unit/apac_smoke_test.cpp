@@ -366,6 +366,41 @@ bool verify_apac_binaural() {
 #endif
 }
 
+bool verify_apac_caf_container() {
+    const std::string wav = "/tmp/mr_apac_caf_src.wav";
+    const std::string caf = "/tmp/mr_apac_caf.caf";
+    FileGuard gw(wav);
+    FileGuard gc(caf);
+    if (!write_test_wav(wav, 10, 48000, 48000)) {
+        return false;
+    }
+    auto res = mradm::audio::convert_to_apac(wav, caf, "5.1.4", 0U, true, mradm::audio::ApacContainer::caf);
+    if (!check(res.has_value(), "convert_to_apac(5.1.4 CAF) failed")) {
+        if (!res.has_value()) {
+            std::cerr << res.error().message << "\n";
+        }
+        return false;
+    }
+    if (!check(std::filesystem::exists(caf), "APAC CAF not created")) {
+        return false;
+    }
+    if (!check(std::filesystem::file_size(caf) > 10000U, "APAC CAF suspiciously small")) {
+        return false;
+    }
+    if (!check(file_contains_bytes(caf, "caff"), "APAC CAF contains CAF magic")) {
+        return false;
+    }
+    if (!check(file_contains_bytes(caf, "apac"), "APAC CAF desc contains apac format id")) {
+        return false;
+    }
+#ifdef __APPLE__
+    std::vector<float> decoded;
+    return check(decode_apac_to_pcm(caf, 10U, decoded), "APAC CAF decodes as 10ch");
+#else
+    return true;
+#endif
+}
+
 bool verify_apac_wrong_layout_rejected() {
     auto res = mradm::audio::convert_to_apac("/tmp/nope.wav", "/tmp/nope.m4a", "bogus-layout");
     return check(!res.has_value() && res.error().code == mradm::ErrorCode::unsupported,
@@ -413,13 +448,14 @@ int main() {
     ok &= verify_apac_222();
     ok &= verify_apac_hoa3();
     ok &= verify_apac_binaural();
+    ok &= verify_apac_caf_container();
     ok &= verify_apac_wrong_layout_rejected();
     ok &= verify_apac_wrong_samplerate_rejected();
     ok &= verify_apac_wrong_channelcount_rejected();
     if (!ok) {
         return EXIT_FAILURE;
     }
-    std::cout << "APAC smoke tests passed (9/9)\n";
+    std::cout << "APAC smoke tests passed (10/10)\n";
     return EXIT_SUCCESS;
 #endif
 }

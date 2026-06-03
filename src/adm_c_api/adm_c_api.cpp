@@ -73,6 +73,8 @@ static_assert(static_cast<int>(mradm::BinauralSpreadMode::saf_spreader) == ADM_B
 
 static_assert(static_cast<int>(mradm::RenderOptions::IamfContainer::obu) == ADM_IAMF_CONTAINER_OBU);
 static_assert(static_cast<int>(mradm::RenderOptions::IamfContainer::mp4) == ADM_IAMF_CONTAINER_MP4);
+static_assert(static_cast<int>(mradm::RenderOptions::ApacContainer::mpeg4) == ADM_APAC_CONTAINER_MPEG4);
+static_assert(static_cast<int>(mradm::RenderOptions::ApacContainer::caf) == ADM_APAC_CONTAINER_CAF);
 
 static_assert(static_cast<int>(mradm::LogLevel::debug) == ADM_LOG_DEBUG);
 static_assert(static_cast<int>(mradm::LogLevel::info) == ADM_LOG_INFO);
@@ -393,6 +395,19 @@ void adm_render_options_set_apac_drc_music(adm_render_options_t* opts, int enabl
         return;
     }
     opts->opts.apac_drc_music = (enabled != 0);
+}
+
+adm_error_code_t adm_render_options_set_apac_container(adm_render_options_t* opts,
+                                                       adm_apac_container_t container) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (static_cast<int>(container) < ADM_APAC_CONTAINER_MPEG4 ||
+        static_cast<int>(container) > ADM_APAC_CONTAINER_CAF) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.apac_container = static_cast<mradm::RenderOptions::ApacContainer>(container);
+    return ADM_ERROR_OK;
 }
 
 adm_error_code_t adm_render_options_set_sofa_path(adm_render_options_t* opts, const char* sofa_path) noexcept {

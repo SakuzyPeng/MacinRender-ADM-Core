@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.8）
-> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 / v1.5 / v1.6 / v1.7 / v1.8 于 2026-06-01）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.9）
+> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 / v1.5 / v1.6 / v1.7 / v1.8 于 2026-06-01，v1.9 于 2026-06-04）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -302,6 +302,16 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
   (`include/adm/render.h`)。语义策略 json/path 解析抽成 `resolve_and_apply_policy` 单一来源。
   **未新增 render 文件入口、未触碰渲染算法**。Phase 2a:仅缓存 scene;后端 prepare/render 拆分(矩阵/HRTF
   缓存)留待 Phase 2b。
+
+### v1.9.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+为 APAC-in-CAF 输出追加容器选择，不改变既有 `.caf` 默认 PCM 行为。
+
+- **新增 enum**：`adm_apac_container_t`，现有值为 `ADM_APAC_CONTAINER_MPEG4` 与 `ADM_APAC_CONTAINER_CAF`。
+- **新增 setter**：`adm_render_options_set_apac_container(opts, container)`；`MPEG4` 为默认，`CAF` 要求最终输出路径为
+  `.caf`，否则渲染时返回 invalid argument。
+- **兼容性**：未修改 `adm_render_file_ex`、result、callback 或已有 option setter；旧调用方输出 `.caf` 仍得到
+  float32 PCM CAF，只有显式设置 APAC CAF 容器时才写有损 APAC-in-CAF。
 
 ## opaque 指针与 callback 生命周期
 

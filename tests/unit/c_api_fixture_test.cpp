@@ -251,6 +251,9 @@ bool verify_options_null_setters() {
     ok = check(adm_render_options_set_binaural_spread_mode(nullptr, ADM_BINAURAL_SPREAD_CLOUD) == ADM_ERROR_OK,
                "NULL opts set_binaural_spread_mode should return OK") &&
          ok;
+    ok = check(adm_render_options_set_apac_container(nullptr, ADM_APAC_CONTAINER_CAF) == ADM_ERROR_OK,
+               "NULL opts set_apac_container should return OK") &&
+         ok;
     ok = check(adm_render_options_set_loudness_target(nullptr, -23.0) == ADM_ERROR_OK,
                "NULL opts set_loudness_target should return OK") &&
          ok;
@@ -296,6 +299,11 @@ bool verify_options_invalid_values(adm_render_options_t* opts) {
     ok = check(adm_render_options_set_iamf_container(opts, static_cast<adm_iamf_container_t>(99)) ==
                    ADM_ERROR_INVALID_ARGUMENT,
                "out-of-range iamf_container should return INVALID_ARGUMENT") &&
+         ok;
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    ok = check(adm_render_options_set_apac_container(opts, static_cast<adm_apac_container_t>(99)) ==
+                   ADM_ERROR_INVALID_ARGUMENT,
+               "out-of-range apac_container should return INVALID_ARGUMENT") &&
          ok;
     ok = check(adm_render_options_set_output_layout(opts, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
                "NULL layout should return INVALID_ARGUMENT") &&
@@ -368,6 +376,12 @@ bool verify_options_boundary_values(adm_render_options_t* opts) {
          ok;
     ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 12000) == ADM_ERROR_OK,
                "apac_bitrate 12000 (boundary) should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_apac_container(opts, ADM_APAC_CONTAINER_CAF) == ADM_ERROR_OK,
+               "apac_container CAF should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_apac_container(opts, ADM_APAC_CONTAINER_MPEG4) == ADM_ERROR_OK,
+               "apac_container MPEG4 should return OK") &&
          ok;
     ok = check(adm_render_options_set_default_interp_ms(opts, 500) == ADM_ERROR_OK,
                "interp_ms 500 (boundary) should return OK") &&
@@ -1141,6 +1155,12 @@ bool verify_version_18() {
     return check(adm_api_version_minor() >= 8, "v1.8: minor version should be >= 8");
 }
 
+// ── v1.9 tests ────────────────────────────────────────────────────────────
+
+bool verify_version_19() {
+    return check(adm_api_version_minor() >= 9, "v1.9: minor version should be >= 9");
+}
+
 // Whether any of a result's captured log messages contains `needle`.
 bool result_logs_contain(const adm_render_result_t* result, const char* needle) {
     const uint32_t n = adm_render_result_log_count(result);
@@ -1852,6 +1872,7 @@ int main() {
         ok = verify_cancel_threaded(ctx, fixture_1s.path()) && ok;
         // v1.8 tests
         ok = verify_version_18() && ok;
+        ok = verify_version_19() && ok;
         ok = verify_preview_session(ctx, fixture_1s.path()) && ok;
     }
     ok = verify_probe(ctx, fixture.path()) && ok;

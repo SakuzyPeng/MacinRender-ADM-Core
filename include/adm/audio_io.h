@@ -296,8 +296,14 @@ Result<void> convert_to_opus_mka(const std::string& src_path,
                                  uint32_t bitrate_per_ch_kbps = 0,
                                  const std::stop_token& cancel_token = {});
 
-// Encode a fully post-processed float32 WAV (src_path) to APAC in an MPEG-4
-// container (.m4a / mp4f).  Requires macOS (AudioToolbox); returns
+enum class ApacContainer {
+    mpeg4,
+    caf,
+};
+
+// Encode a fully post-processed float32 WAV (src_path) to APAC in the requested
+// container (.m4a / .mp4 MPEG-4 by default, or .caf). Requires macOS
+// (AudioToolbox); returns
 // ErrorCode::unsupported on other platforms.
 // layout_id controls channel mapping:
 //   "binaural" → request Binaural 2ch input layout (no swap; afinfo reports APAC output as Stereo)
@@ -321,6 +327,7 @@ Result<void> convert_to_apac(const std::string& src_path,
                              const std::string& layout_id = {},
                              uint32_t bitrate_kbps = 0,
                              bool drc_music = true,
+                             ApacContainer container = ApacContainer::mpeg4,
                              const std::stop_token& cancel_token = {});
 
 // Format-agnostic render output metadata.  Assembled by the engine layer and
