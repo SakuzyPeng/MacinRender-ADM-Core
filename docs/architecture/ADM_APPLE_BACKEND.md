@@ -94,15 +94,17 @@ AUSpatialMixer 经 render callback 拉输入，而项目后端是“自己读帧
 
 ## 6. ADM 语义映射（四档）
 
-后端只消费 `scene.h` 已降维的 position/gain；自身只需处理 SpatialMixer 缺原语的部分。逐维度状态登记进 `ADM_FEATURE_COVERAGE.md`（已有 SpatialMixer 列）。
+后端只消费 `scene.h` 已降维的 position/gain 等渲染输入；SpatialMixer 本身不是 ADM 语义引擎，只暴露空间化参数、算法、source mode、距离衰减、reverb 与全局头部姿态/追踪。支持范围必须区分 **AU 原生能力**、**项目层预处理**、**近似降级** 与 **不支持**，避免把 Apple 平台输出模式误报为 ADM 字段覆盖。
 
-**第一档 · 原生直映**：position→Azimuth/Elevation/Distance（§7）；gain→`kSpatialMixerParam_Gain`；jump/插值→render 回调驱动参数自动化（jump=瞬时设，非 jump=插值窗内 ramp）；DirectSpeakers→AmbienceBed；LFE→Bypass+LFEScreen。
+**第一档 · AU 原生直映**：position→Azimuth/Elevation/Distance（§7）；gain→`kSpatialMixerParam_Gain`；jump/插值→render 回调驱动参数自动化（jump=瞬时设，非 jump=插值窗内 ramp）；距离仅在启用 `kSpatialMixerRenderingFlags_DistanceAttenuation` 且配置 `MixerDistanceParams` 后参与响度衰减。DirectSpeakers 可按 bus channel layout 走 `AmbienceBed` 远场床层；LFE 走 `Bypass` + LFE channel layout，不空间化。
 
-**第二档 · domain 已解析→喂额外点源**：divergence→`expand_object_divergence()` 拆 3 点源；channelLock→`apply_channel_lock()` 吸附 az/el（**仅扬声器输出**；双耳无离散扬声器集，drop）；positionOffset→`apply_position_offset()`。
+**第二档 · 项目层预处理后喂 AU**：Cartesian position→`scene_position_to_polar()`；positionOffset→`apply_position_offset()`；divergence→`expand_object_divergence()` 拆 3 点源；channelLock→`apply_channel_lock()` 吸附 az/el（**仅扬声器输出**；双耳无离散扬声器集，drop）。这些不是 SpatialMixer 原生 ADM 语义，只能在 Capability/文档中标注为后端预处理支持。
 
-**第三档 · 缺原语只能近似（降级，明确标注）**：extent(w/h/d)→拆多个铺开点源覆盖（复用 binaural spreader 几何）；diffuse→SpatialMixer 无去相关器，`ReverbBlend` 粗代理或 drop，**无法匹配 EAR/binaural**。
+**第三档 · 缺 ADM 等价原语，只能近似（降级，明确标注）**：extent(width/height/depth)→拆多个铺开点源覆盖（复用 binaural spreader 几何或独立点云）；DirectSpeakers position range→首版忽略，后续最多用于选择/校正标称位置。此类能力不应写成原生支持，只能写成 spread approximation。
 
-**第四档 · 丢弃/不适用**：screenLock/screen_ref→libadm 无 screen 几何，drop；headLocked→离线无头追 moot、实时头追全局无法按源豁免；headphoneVirtualise→SpatialMixer 本职（原生满足）；importance/dialogue→元数据非渲染维度。
+**第四档 · 丢弃/不支持**：diffuse→SpatialMixer 无 ADM direct/diffuse 能量拆分与去相关器；`ReverbBlend` / internal reverb 是创作型房间效果，不能等同 ADM diffuse，首版 drop 或 warning，`supports_diffuse=false`。screenLock/screen_ref→缺 referenceScreen 几何，drop；headLocked→AU 只有全局 HeadYaw/Pitch/Roll 与全局 AirPods head tracking，无法表达 per-object headLocked，离线路径 drop；headphoneVirtualise→项目 importer 当前不建模该 ADM flag，SpatialMixer headphones/HRTF 只能算输出模式能力，不算字段语义支持；importance/dialogue→元数据/策略维度，不参与默认渲染数学。
+
+**非路径选择**：`AUAudioMix` 的 `kAUAudioMixProperty_SpatialAudioMixMetadata` 是 file asset remix metadata，不是公开 ADM→SpatialMixer 语义映射 API；首版不依赖它弥补上述字段缺口。
 
 ## 7. 坐标系转换（最易出错，实测确认）
 
@@ -151,8 +153,8 @@ supports_objects          = true
 supports_direct_speakers  = true
 supports_hoa              = false
 supports_object_divergence= true   // expand_object_divergence
-supports_channel_lock     = true   // apply_channel_lock（扬声器输出，部分）
-supports_diffuse          = false  // 诚实标注：无去相关器
+supports_channel_lock     = true   // apply_channel_lock；仅扬声器输出，双耳 drop
+supports_diffuse          = false  // 无 ADM diffuse 去相关器；ReverbBlend 不等价
 supports_screen_ref       = false
 supports_render_window    = false  // 首版：全量渲染 + 文件裁剪（见 §12）
 ```
