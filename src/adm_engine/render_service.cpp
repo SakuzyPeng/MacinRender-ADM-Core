@@ -23,6 +23,10 @@
 #include "adm/render_vbap.h"
 #include "adm/semantic_policy.h"
 
+#ifdef __APPLE__
+#include "adm/render_apple.h"
+#endif
+
 #include "capability_json.h"
 #include "format_table.h"
 #include "layout_table.h"
@@ -408,6 +412,10 @@ RenderResult RenderService::render(const RenderRequest& request,
         renderer = create_hoa_renderer();
     } else if (sel == RendererSelection::binaural) {
         renderer = create_binaural_renderer();
+#ifdef __APPLE__
+    } else if (sel == RendererSelection::apple) {
+        renderer = create_apple_renderer();
+#endif
     } else {
         const auto msg = fmt::format("renderer '{}' is not available in this build", static_cast<int>(sel));
         return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};

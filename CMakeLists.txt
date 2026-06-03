@@ -302,6 +302,33 @@ endif()
 mr_adm_core_apply_warnings(mr_adm_audio)
 mr_adm_core_apply_static_analysis(mr_adm_audio)
 
+# ── adm_apple ─────────────────────────────────────────────────────────────────
+# macOS-only AUSpatialMixer backend. Apple framework types are confined here.
+
+if(APPLE)
+    add_library(mr_adm_apple)
+    add_library(MacinRender::ADMRenderApple ALIAS mr_adm_apple)
+
+    target_sources(
+        mr_adm_apple
+        PRIVATE
+            src/adm_apple/spatial_mixer_renderer.cpp
+        PUBLIC
+            FILE_SET HEADERS
+            BASE_DIRS include
+            FILES
+                include/adm/render_apple.h
+    )
+
+    target_link_libraries(mr_adm_apple
+        PUBLIC MacinRender::ADMCore
+        PRIVATE libbw64 ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon ${MR_ADM_AUDIOTOOLBOX_FW}
+    )
+    target_include_directories(mr_adm_apple SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
+    mr_adm_core_apply_warnings(mr_adm_apple)
+    mr_adm_core_apply_static_analysis(mr_adm_apple)
+endif()
+
 # ── adm_peak ──────────────────────────────────────────────────────────────────
 # True Peak measurement (ITU-R BS.1770-4) via libebur128 + global gain rewrite.
 
@@ -374,6 +401,9 @@ target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
     PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio
 )
+if(APPLE)
+    target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)
+endif()
 # nlohmann/json is header-only and used solely inside scene_json.cpp; keep it PRIVATE
 # so no third-party type leaks across the module boundary (ADR 0003 / 0004).
 target_include_directories(mr_adm_engine SYSTEM PRIVATE
@@ -433,6 +463,9 @@ if(MR_ADM_CORE_BUILD_CLI)
             CLI11::CLI11
             spdlog::spdlog
     )
+    if(APPLE)
+        target_link_libraries(mradm_exe PRIVATE MacinRender::ADMRenderApple)
+    endif()
     mr_adm_core_apply_warnings(mradm_exe)
     mr_adm_core_apply_static_analysis(mradm_exe)
 endif()
@@ -645,6 +678,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_apac_smoke_tests)
     add_test(NAME mr_adm_apac_smoke_tests COMMAND mr_adm_apac_smoke_tests)
 
+    if(APPLE)
+        add_executable(mr_adm_apple_smoke_tests tests/unit/apple_renderer_smoke_test.cpp)
+        target_link_libraries(mr_adm_apple_smoke_tests PRIVATE MacinRender::ADMRenderApple)
+        mr_adm_core_apply_warnings(mr_adm_apple_smoke_tests)
+        mr_adm_core_apply_static_analysis(mr_adm_apple_smoke_tests)
+        add_test(NAME mr_adm_apple_smoke_tests COMMAND mr_adm_apple_smoke_tests)
+    endif()
+
     if(MR_ADM_CORE_BUILD_CLI)
         add_executable(mr_adm_cli_smoke_tests tests/unit/adm_cli_smoke_test.cpp)
         target_compile_definitions(mr_adm_cli_smoke_tests PRIVATE
@@ -680,6 +721,13 @@ install(
     TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_render_hoa mr_adm_render_binaural mr_adm_peak mr_adm_loudness mr_adm_engine mr_adm_audio
     FILE_SET HEADERS
 )
+
+if(APPLE)
+    install(
+        TARGETS mr_adm_apple
+        FILE_SET HEADERS
+    )
+endif()
 
 install(
     EXPORT MacinRenderADMCoreTargets
