@@ -3,6 +3,9 @@
 
 #include <fmt/format.h>
 
+#ifdef __APPLE__
+#include "adm/render_apple.h"
+#endif
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
@@ -85,6 +88,10 @@ void print_all_capabilities() {
     print_capabilities(mradm::hoa_capabilities());
     fmt::print("\n");
     print_capabilities(mradm::binaural_capabilities());
+#ifdef __APPLE__
+    fmt::print("\n");
+    print_capabilities(mradm::apple_capabilities());
+#endif
 }
 
 } // namespace

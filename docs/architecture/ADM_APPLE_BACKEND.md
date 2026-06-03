@@ -1,188 +1,210 @@
-# adm_apple 后端设计草案（AUSpatialMixer）
+# adm_apple 后端实现说明（AUSpatialMixer）
 
-> 状态：草案（design draft）。本文定义 `adm_apple` 平台渲染后端的目标、边界、`IRenderer` 落地、ADM 语义映射、坐标系转换与测试策略。落地前的所有能力数据均在 macOS SDK 26.5 上实测确认。
+> 状态：已实现（macOS-only）。本文记录 `adm_apple` 平台渲染后端的当前能力、ADM 语义映射、AUSpatialMixer 边界与后续缺口。
 >
 > 相关：ADR 0003（自有领域模型与后端边界）、ADR 0005（错误处理）、ADR 0007（C ABI）、`docs/architecture/CPP_ADM_PLATFORM_REWRITE.md`、`docs/architecture/ADM_FEATURE_COVERAGE.md`。
 
-## 1. 目标与范围
+## 1. 定位与范围
 
-`adm_apple` 是一个 **macOS-only 平台渲染后端**，以 Apple `AUSpatialMixer`（`kAudioUnitSubType_SpatialMixer = '3dem'`，AudioToolbox）实现 `IRenderer`，与 `adm_render_ear` / `adm_render_vbap` / `adm_render_hoa` / `adm_render_binaural` 平级（ADR 0003）。
+`adm_apple` 是一个 **macOS-only 平台渲染后端**，以 Apple `AUSpatialMixer`（AudioToolbox，`kAudioUnitSubType_SpatialMixer`）实现 `IRenderer`，与 `adm_render_ear` / `adm_render_vbap` / `adm_render_hoa` / `adm_render_binaural` 平级。
 
-**首版范围**：
+当前支持：
 
-- **双耳**：Headphones HRTF → 2ch（输出布局 `binaural`，容器 tag `kAudioChannelLayoutTag_Binaural`）。
-- **多声道扬声器**：VBAP / SoundField → `5.1`、`7.1`、`5.1.2`、`5.1.4`、`7.1.4`、`9.1.6`、`22.2`（复用现有 CoreAudio / Atmos / CICP 布局 tag）。
-- **不做** transaural（BuiltIn/External 机身扬声器串扰消除）：设备绑定、不可作为交付文件，只在实时播放有意义（见 §8）。
-- **不做** HOA 输出（`supports_hoa=false`）。
+- **双耳**：Headphones HRTF → 2ch（输出布局 `binaural`，CoreAudio 容器使用 `kAudioChannelLayoutTag_Binaural`）。
+- **多声道扬声器**：VBAP → `5.1`、`7.1`、`5.1.2`、`5.1.4`、`7.1.4`、`9.1.6`、`22.2`。
+- **输入内容**：Objects 与 DirectSpeakers；Objects 支持 position / gain / interpolation / objectDivergence；DirectSpeakers 支持静态方位与 LFE 旁路。
+- **按需窗口渲染**：支持 `RenderPlan::render_window`，CLI `--start` / `--end` 不再需要先渲染完整时间线再裁切。
 
-**用途边界**：离线文件渲染为主，**架构为未来 GUI 实时预览预留**——AU 配置与 ADM→参数映射必须与离线拉循环解耦（见 §4），实时路径可复用前者。head-tracking / headLocked 不在离线输出范围，但接口不堵死。
+不支持或暂不等价：
 
-**定位（重要）**：AUSpatialMixer 是黑盒，Apple 控制 HRTF / 声像数学，**无法 bit-exact**，且跨 macOS 版本 HRTF 库可变。`adm_apple` 是“平台风味”渲染器，面向 Apple 原生预览与交付，**不取代** libear/binaural 做规范级渲染。交付与回归对照仍走 EAR/binaural。
+- HOA 输出：`supports_hoa=false`。
+- diffuse：SpatialMixer 没有 ADM direct/diffuse 能量拆分与去相关器，`supports_diffuse=false`。
+- channelLock：当前 Apple 后端没有构建输出 speaker set，相关语义在预处理阶段降级，`supports_channel_lock=false`。
+- screen reference / screenLock / headLocked：离线路径不支持。
+- extent：当前没有 Apple 后端专用的 extent 点云铺开实现，不应标成已支持。
+- transaural / BuiltIn / External 设备串扰消除：设备绑定且更适合实时预览，不作为离线交付路径。
 
-## 2. 边界（ADR 0003）
+**定位（重要）**：AUSpatialMixer 是 Apple 黑盒，HRTF / VBAP 细节和版本行为不可 bit-exact。`adm_apple` 是平台风味渲染器，适合 Apple 原生生态预览与交付验证；规范级对照仍应使用 libear / SAF / binaural 等可审计后端。
 
-- 新模块 `src/adm_apple/`，CMake target `mr_adm_apple`，别名 `MacinRender::ADMRenderApple`。
-- **Apple 框架（AudioToolbox / CoreAudioTypes）只允许出现在 `src/adm_audio/` 与 `src/adm_apple/` 内部**（CLAUDE.md 既有约定）。`include/adm/*` 公共头不得出现任何 Apple 类型。
-- 后端**不重解析 ADM**：只消费 `RenderService` 填好的 `RenderPlan::scene`（`AdmScene`），复用 `scene.h` 的纯函数（`expand_object_divergence` / `apply_channel_lock` / `apply_position_offset` / `scene_position_to_polar`）。
-- 错误经 `mradm::Result<T>` 返回；内部可 `throw`，但不得跨公共边界（ADR 0005）。
+## 2. 模块边界
 
-## 3. 模块与构建接入
+- 模块：`src/adm_apple/`，target `mr_adm_apple`，别名 `MacinRender::ADMRenderApple`。
+- 工厂：`create_apple_renderer()`，公共边界为 `include/adm/render_apple.h`。
+- Apple 框架类型仅出现在 `src/adm_audio/` 与 `src/adm_apple/` 内部；`include/adm/*` 不暴露 AudioToolbox / CoreAudioTypes。
+- `render_service.cpp` 在 `__APPLE__` 下 dispatch `RendererSelection::apple`；非 Apple 平台保持 unsupported。
+- CLI 使用 `--renderer apple` 选择该后端。
 
-**接入点现状**：`RendererSelection::apple` 枚举、CLI `--renderer apple` 解析与校验、`renderer_name()` **均已就绪**。当前 `--renderer apple` 可解析，但 `render_service.cpp` 的 dispatch 缺 `apple` 分支，落入 `else` 返回 `unsupported`（"not available in this build"）。
+后端不重解析 ADM，只消费 `RenderService` 生成的 `RenderPlan::scene` / `AdmScene`，并复用共享语义预处理函数：
 
-**需新增**：
+- `scene_position_to_polar()`
+- `render_common::prepare_object_block()`
+- `render_common::direct_speakers_block_is_lfe()`
+- `expand_object_divergence()` 等由共享路径间接完成
 
-1. `src/adm_apple/spatial_mixer_renderer.{h,cpp}` + `create_apple_renderer()` 工厂（仿 `create_binaural_renderer()`）。
-2. CMakeLists.txt：`add_library(mr_adm_apple)` + 别名；`target_link_libraries(... PRIVATE libbw64 ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon ${MR_ADM_AUDIOTOOLBOX_FW})`；仅 `if(APPLE)` 编译。
-3. `render_service.cpp` dispatch 增加 `else if (sel == RendererSelection::apple) renderer = create_apple_renderer();`，并以 `#ifdef __APPLE__` 守护；非 Apple 平台保持现有 `unsupported` 行为。
-4. 构建开关（暂定）：跟随 APAC——macOS 始终编译、Linux 自动 skip、**不加 flag**。若后续需要可引入 `MR_ADM_ENABLE_APPLE`。
+## 3. IRenderer 结构
 
-**离线机制**：裸 `AudioUnit` + `AudioUnitRender` 拉（已实测可离线运行、非废弃 API）。**不使用**旧实现的 `AUGraph`（已废弃）。
-
-## 4. IRenderer 落地
-
-`IPreparedRender` 契约要求**不可变、可共享、无 per-window 可变状态**（一个 `PreviewSession` 跨窗口复用）。AUSpatialMixer 实例带内部 DSP 缓冲，是可变体——**配置好的 AU 不能进 prepared**。分层：
+`IPreparedRender` 必须不可变、可共享；AUSpatialMixer 实例有内部 DSP 状态，所以不能放进 prepared。Apple 后端采用“不可变配方 + 每次 render_window 新建 AU”的结构：
 
 ```cpp
-// 不可变“渲染配方”，跨 window 复用。无 Apple 类型泄漏到公共头：本结构定义在 .cpp 内部。
+struct OutputProfile {
+    uint16_t channels;
+    bool binaural;
+    AudioChannelLayoutTag layout_tag;
+    std::string_view writer_layout;
+};
+
+struct BusEvent {
+    uint64_t start_sample;
+    uint64_t end_sample;
+    float azimuth;   // SpatialMixer 约定，已从 ADM 符号翻转
+    float elevation;
+    float distance;
+    float gain;      // linear
+};
+
+struct BusPlan {
+    uint16_t source_channel;
+    UInt32 source_mode; // PointSource / AmbienceBed / Bypass
+    bool is_lfe;
+    std::vector<BusEvent> events;
+};
+
 struct ApplePrepared final : IPreparedRender {
-    struct BusConfig {
-        uint32_t bus;                 // 动态分配的输入 element 索引
-        uint16_t source_channel;      // BWF 源通道（拉输入用）
-        uint32_t spatialization_alg;  // HRTFHQ / VBAP / SoundField / UseOutputType
-        uint32_t source_mode;         // PointSource / AmbienceBed / Bypass
-        bool is_lfe;
-        // 静态位置（bed）或位置时间线引用（object）
-        std::optional<StaticDir> static_dir;        // bed：固定 az/el/dist
-        std::optional<size_t> object_block_ref;     // object：指向 scene 的 block 时间线
-        float gain;
-    };
-    OutputProfile output;             // 双耳(Binaural)或扬声器布局 + 算法/OutputType
-    std::vector<BusConfig> buses;     // divergence/extent 已展开
-    // ... 由 scene + layout + options 推导，全部 immutable
+    OutputProfile profile;
+    std::vector<BusPlan> buses;
 };
 ```
 
-- **`capabilities()`**：返回 §10 的 `CapabilityReport`。
-- **`prepare(plan, logs)`**：从 `plan.scene` + `plan.output_layout` + options 推导 `ApplePrepared`——分配 bus、展开 divergence/extent、解析 channelLock、确定每 bus 算法/sourceMode/静态位置。**不创建 AU 实例**。
-- **`render_window(prepared, plan, ...)`**：downcast `ApplePrepared` → 创建 AUSpatialMixer 实例 → 套用配方（逐 bus 设属性/参数）→ 打开 BW64 reader → 按 render quantum 拉 + 写输出（经 `MacinRender::ADMAudio` writer）→ 销毁 AU。
+`prepare()` 只解析输出布局、分配 bus、展开对象语义并生成事件表。`render_window()` 创建 SpatialMixer，设置输出布局、输入 bus、source mode、spatialization algorithm、LFE layout 与 render callback，然后拉取输出并写入目标文件。
 
-此分层与 binaural 后端（prepared 存 HRTF 表、render_window 建 OLA/spreader）同构，且**天然把 AU 配置与离线拉循环解耦**，满足“为实时预览预留”。
+## 4. 渲染管线
 
-## 5. 渲染管线
+### 4.1 拉模型桥接
 
-### 5.1 输入“拉模型”桥接
+AUSpatialMixer 通过 input render callback 拉取每条 input bus 的 PCM。项目渲染路径先按 block 从 BW64 读入 interleaved staging buffer；每条 bus 的 callback 从 staging buffer 拷贝自己绑定的源通道。输出端由 `AudioUnitRender` 驱动，写入项目统一的 `audio::WriterHandle`。
 
-AUSpatialMixer 经 render callback 拉输入，而项目后端是“自己读帧”。桥接：`render_window` 开 BW64 reader 顺序读块到暂存缓冲，每条输入 bus 挂一个**平凡 callback**，把已读好的对应源通道块递给 AU。`AudioUnitRender` 在输出端驱动整链。
+### 4.2 按需窗口
 
-### 5.2 bus 分配
+当 `RenderPlan::render_window` 存在时，Apple 后端：
 
-实测 AUSpatialMixer 默认 32 输入 element，可提至 **≥1024**（无实际约束）。
+1. 将源 reader seek 到请求窗口前一个对齐 render block（如果窗口起点足够靠后）。
+2. 预滚该 block 来更新 SpatialMixer 内部状态。
+3. 仍使用绝对 sample time 匹配 ADM 事件。
+4. 只写出请求窗口内的帧。
 
-- 基础：每个 object 源通道、每条 bed 通道各占一条 bus。
-- **膨胀**：divergence 展开为 3 源（占 3 bus）、extent 展开为 N 个铺开点源（占 N bus）。所需 bus 数 **超过源声道数** → 动态分配，按场景最大并发分解源数预留（仍远低于 1024）。
+这与其他支持 `supports_render_window=true` 的后端对齐，避免 `--start` / `--end` 先全量渲染再裁切。由于 SpatialMixer 是黑盒状态机，pre-roll 是保守折中，不承诺与全量渲染逐样本一致。
 
-### 5.3 Object vs Bed（两套处理，对齐旧实现）
+### 4.3 响度与 True Peak 测量
 
-| | Object | Bed / DirectSpeakers |
-|---|---|---|
-| SourceMode | `PointSource`（含距离建模） | `AmbienceBed`（远场，无近场/in-head） |
-| 位置 | 动态，逐 block 随时间 | 静态扬声器标称位置 |
-| LFE | — | `Bypass` + `LFEScreen` 声道布局，不空间化 |
+Apple 后端和其他主要后端一样在渲染过程中内联测量响度 / True Peak。当前实现使用双输出缓冲加 `render_common::SerialWorker` 异步调用 `ebur128_add_frames_float()`，使写文件 / AU render 与 meter 更新重叠。
 
-项目 `scene.h` 已天然二分 `SceneObjectBlock` vs `SceneDirectSpeakersBlock`，后端按 block 类型 dispatch；`RenderService` 已填好，无需自行辨别。ADM 理论上 DirectSpeakers 可时变，旧实现一律静态——首版对齐旧静态行为，动态 bed 留作可选增强。
+在同一 release 构建、同一 ADM BWF、float32 WAV 输出上的基线测速：
 
-## 6. ADM 语义映射（四档）
+| 输出 | 同步测量均值 | 异步测量均值 | 改善 |
+|---|---:|---:|---:|
+| Apple 22.2 | 9.297s | 7.357s | 20.9% |
+| Apple binaural | 5.013s | 4.387s | 12.5% |
 
-后端只消费 `scene.h` 已降维的 position/gain 等渲染输入；SpatialMixer 本身不是 ADM 语义引擎，只暴露空间化参数、算法、source mode、距离衰减、reverb 与全局头部姿态/追踪。支持范围必须区分 **AU 原生能力**、**项目层预处理**、**近似降级** 与 **不支持**，避免把 Apple 平台输出模式误报为 ADM 字段覆盖。
+测得 LUFS / True Peak 保持一致；测速仅用于本地性能基线，不代表跨机器稳定结果。
 
-**第一档 · AU 原生直映**：position→Azimuth/Elevation/Distance（§7）；gain→`kSpatialMixerParam_Gain`；jump/插值→render 回调驱动参数自动化（jump=瞬时设，非 jump=插值窗内 ramp）；距离仅在启用 `kSpatialMixerRenderingFlags_DistanceAttenuation` 且配置 `MixerDistanceParams` 后参与响度衰减。DirectSpeakers 可按 bus channel layout 走 `AmbienceBed` 远场床层；LFE 走 `Bypass` + LFE channel layout，不空间化。
+## 5. ADM 语义映射
 
-**第二档 · 项目层预处理后喂 AU**：Cartesian position→`scene_position_to_polar()`；positionOffset→`apply_position_offset()`；divergence→`expand_object_divergence()` 拆 3 点源；channelLock→`apply_channel_lock()` 吸附 az/el（**仅扬声器输出**；双耳无离散扬声器集，drop）。这些不是 SpatialMixer 原生 ADM 语义，只能在 Capability/文档中标注为后端预处理支持。
+### 5.1 原生直映
 
-**第三档 · 缺 ADM 等价原语，只能近似（降级，明确标注）**：extent(width/height/depth)→拆多个铺开点源覆盖（复用 binaural spreader 几何或独立点云）；DirectSpeakers position range→首版忽略，后续最多用于选择/校正标称位置。此类能力不应写成原生支持，只能写成 spread approximation。
+- Object position → SpatialMixer Azimuth / Elevation / Distance。
+- Object / DirectSpeakers gain → `kSpatialMixerParam_Gain`（linear → dB，静音落到 -120 dB）。
+- Object 插值 → 按事件块更新参数；SpatialMixer 自身会对控制变化做平滑。
+- DirectSpeakers → `AmbienceBed` 远场床层。
+- LFE → `Bypass`，并把 mono input bus 标为 `kAudioChannelLabel_LFEScreen`，不参与空间化。
 
-**第四档 · 丢弃/不支持**：diffuse→SpatialMixer 无 ADM direct/diffuse 能量拆分与去相关器；`ReverbBlend` / internal reverb 是创作型房间效果，不能等同 ADM diffuse，首版 drop 或 warning，`supports_diffuse=false`。screenLock/screen_ref→缺 referenceScreen 几何，drop；headLocked→AU 只有全局 HeadYaw/Pitch/Roll 与全局 AirPods head tracking，无法表达 per-object headLocked，离线路径 drop；headphoneVirtualise→项目 importer 当前不建模该 ADM flag，SpatialMixer headphones/HRTF 只能算输出模式能力，不算字段语义支持；importance/dialogue→元数据/策略维度，不参与默认渲染数学。
+### 5.2 项目层预处理
 
-**非路径选择**：`AUAudioMix` 的 `kAUAudioMixProperty_SpatialAudioMixMetadata` 是 file asset remix metadata，不是公开 ADM→SpatialMixer 语义映射 API；首版不依赖它弥补上述字段缺口。
+- Cartesian position → `scene_position_to_polar()`。
+- objectDivergence → 共享语义路径展开为并行点源 bus。
+- screenRef warning / unsupported 降级 → 共享 `prepare_object_block()` 路径处理。
+- LFE 识别 → 共享 `render_common::direct_speakers_block_is_lfe()`，同时识别 `channelFrequency.lowPass` 和 `RC_LFE` / `R-LFE` / `LFE1` / `Subwoofer` 等 LFE 标签。
 
-## 7. 坐标系转换（最易出错，实测确认）
+### 5.3 不支持或降级
+
+- diffuse：drop；不使用 SpatialMixer reverb 伪装 ADM diffuse。
+- channelLock：当前无输出 speaker set，drop。
+- extent：尚未实现后端专用铺开。后续可考虑复用 binaural spreader 几何或构建与输出布局相关的点云，但需要明确标注为 approximation。
+- screenLock / headLocked / headphoneVirtualise / importance / dialogue：不参与 Apple 离线渲染数学。
+
+## 6. 坐标系
 
 | 系统 | 约定 |
 |---|---|
-| 本项目 ADM（`scene.h`，极坐标） | azimuth **+ve=左**（BS.2051）、elevation +ve=上、front=0 |
-| Apple SpatialMixer 参数 | azimuth **+ve=右**（实测 +90→右声道更响）、elevation +ve=上、distance 单位**米**（0..10000） |
+| 本项目 ADM 极坐标 | azimuth +ve=左、elevation +ve=上、front=0 |
+| Apple SpatialMixer | azimuth +ve=右、elevation +ve=上、distance=米 |
 
-**核心映射（ADM polar → SpatialMixer 参数）**：
+核心映射：
 
+```text
+sm_azimuth   = -adm_azimuth
+sm_elevation =  adm_elevation  // clamp 到 [-90, 90]
+sm_distance  =  max(adm_distance, 1e-3)
 ```
-sm_azimuth   = -adm_azimuth        // ⚠️ 符号取反，漏了整个声场左右镜像
-sm_elevation =  adm_elevation       // 两侧 +ve=上，不翻；超 ±90 clamp
-sm_distance  =  参考米数            // ADM 归一化→米；仅 DistanceAttenuation flag 开启才影响响度，
-                                    // 否则取中性 1.0m（且 >1e-3 防 0）
-```
 
-直接从极坐标喂，**不绕 Cartesian 往返**（旧实现 `sphericalToCartesian` 用 `mathAz=90−az` 把 +方位当右，是符号混乱源）。
+符号翻转已有 smoke test 覆盖：ADM 左侧对象应产生左声道更高能量，防止整声场左右镜像。
 
-## 8. 工厂预设、算法与输出类型
+## 7. 输出布局
 
-**空间化算法**（`kAudioUnitProperty_SpatializationAlgorithm`，逐 bus）：0 EqualPowerPanning / 1 SphericalHead / 2 HRTF / 3 SoundField / **4 VBAP** / 5 StereoPassThrough / 6 HRTFHQ / 7 UseOutputType。
+| CLI layout | 显示名 | 声道数 | CoreAudio tag |
+|---|---|---:|---|
+| `binaural` / `0+2+0` | binaural | 2 | writer 使用 `kAudioChannelLayoutTag_Binaural` |
+| `0+5+0` | 5.1 | 6 | MPEG 5.1 A |
+| `wav71` | 7.1 | 8 | WAVE 7.1 |
+| `2+5+0` | 5.1.2 | 8 | Atmos 5.1.2 |
+| `4+5+0` | 5.1.4 | 10 | Atmos 5.1.4 |
+| `4+7+0` | 7.1.4 | 12 | Atmos 7.1.4 |
+| `9.1.6` | 9.1.6 | 16 | Atmos 9.1.6 |
+| `9+10+3` | 22.2 | 24 | CICP 13 |
 
-- 双耳输出：对象/床层用 **HRTFHQ**。
-- 多声道扬声器输出：用 **VBAP**（或 SoundField），不依赖 OutputType。
+双耳 tag 只在 CoreAudio 容器（CAF/APAC）中保留。WAV / FLAC 没有通用双耳标签，只能保留 2ch PCM 本身。
 
-**工厂预设**（`kAudioUnitProperty_PresentPreset`，实机确认 3 个）：`[0] Built-In Speaker Media Playback` / `[1] Headphone Media Playback Default`（≈ common media）/ `[2] Headphone Media Playback Movie`（≈ Apple TV 影院档）。
+## 8. CapabilityReport
 
-- **仅在双耳输出模式暴露**（如 `--apple-preset default|movie`）。预设是 2 声道重放语境的不透明内部调音，**多声道输出不暴露预设**（其对多声道 VBAP 仅有未定义副作用）。
-- ⚠️ `PresentPreset` 会重置每输入 bus 的 az/el/sourceMode → 顺序必须「先设预设 → 再下发 ADM 参数」。
-
-**OutputType**（Headphones/BuiltIn/External）都是 2ch 重放提示，不约束声道数；首版双耳走 Headphones，多声道不依赖它。
-
-## 9. 输出布局与容器 tag
-
-- **双耳 HRTF → 2ch**：布局 id `binaural`，容器 tag `kAudioChannelLayoutTag_Binaural`（106）。`caf_io.cpp` / `apac_io.cpp` 现状已对 `binaural` 打此 tag，与普通 `0+2+0` stereo 区分——直接复用。
-- **多声道 → 扬声器布局**：复用现有 CoreAudio tag（`caf_io.cpp`：`0+5+0`→MPEG_5_1_A、`wav71`→WAVE_7_1、`2+5+0`→Atmos_5_1_2、`4+5+0`→Atmos_5_1_4、`4+7+0`→Atmos_7_1_4、`9.1.6`→Atmos_9_1_6、`9+10+3`→CICP_13）。
-- 注意：双耳 tag 只在 CoreAudio 容器（CAF/APAC）存活；WAV/FLAC 无标准双耳标签，走这俩格式会丢失双耳元数据。
-
-## 10. CapabilityReport（首版）
-
-```
+```text
 backend_name = "apple"
-supported_layouts = [ binaural(is_binaural=true), 5.1, 7.1, 5.1.2, 5.1.4, 7.1.4, 9.1.6, 22.2 ]
-supports_objects          = true
-supports_direct_speakers  = true
-supports_hoa              = false
-supports_object_divergence= true   // expand_object_divergence
-supports_channel_lock     = false  // 当前未构建 Apple 输出 speaker set；channelLock 暂 drop
-supports_diffuse          = false  // 无 ADM diffuse 去相关器；ReverbBlend 不等价
-supports_screen_ref       = false
-supports_render_window    = false  // 首版：全量渲染 + 文件裁剪（见 §12）
+supported_layouts = [
+  binaural,
+  0+5+0,
+  wav71,
+  2+5+0,
+  4+5+0,
+  4+7+0,
+  9.1.6,
+  9+10+3
+]
+supports_objects           = true
+supports_direct_speakers   = true
+supports_hoa               = false
+supports_object_divergence = true
+supports_channel_lock      = false
+supports_diffuse           = false
+supports_screen_ref        = false
+supports_render_window     = true
 ```
 
-## 11. 测试与回归策略
+## 9. 测试与回归
 
-无 bit-exact，改用基于性质/能量的断言（macOS-only，Linux 自动 skip，同 APAC）：
+Apple smoke tests 覆盖：
 
-- **坐标符号回归（必加）**：ADM azimuth=+30°（左）对象渲染后**左声道能量 > 右声道**——一次性逮住整声场镜像翻转。
-- **声道数 / 布局**：binaural=2ch、`5.1.2`=8ch、`7.1.4`=12ch、`22.2`=24ch 等正确。
-- **object/bed/LFE 分路**：bed 静态居位、LFE 不被空间化（能量集中而非弥散）。
-- **divergence/extent 展开**：开启后能量按预期向两侧/区域扩散。
-- **smoke**：不崩、输出文件有效、时长正确、响度/True Peak 在合理范围。
-- **跨平台**：Linux 上 `mr_adm_apple_*_tests` 自动 skip（仿 `mr_adm_apac_smoke_tests`）。
+- capability report 与支持布局。
+- AUSpatialMixer 是否可创建；Linux / 非 Apple 自动 skip。
+- 坐标符号：ADM 左侧对象不能渲染成右侧更强。
+- gain dB floor：线性 0 / 极低增益不会变成 unity。
+- 7.1.4 / 22.2 等布局声道数与写出。
+- binaural 输出的 CoreAudio tag 归一化。
+- LFE 标签识别与 LFE bus 旁路配置。
+- render window 输出帧数。
 
-golden file 若用，必须容差化或钉 macOS 版本（Apple HRTF 跨版本可变）。
+不做 bit-exact golden。若后续增加 golden，应按 macOS / SDK 版本钉住容差。
 
-## 12. 分期
+## 10. 后续事项
 
-- **Phase 1（首版）**：离线，双耳 + 多声道扬声器；`supports_render_window=false`（全量渲染 + 文件裁剪，PreviewSession 仍可用，只是不省时）；预设仅双耳；坐标取反 + 回归断言；ADM 语义一/二档完整，三档近似且标注。
-- **Phase 2**：窗口化（`supports_render_window=true`，AU 内部状态需 pre-roll/seek，同其它后端的纪律，但本就无 bit-exact，定容差策略）。
-- **Phase 3**：实时预览路径（复用 prepare 的 AU 配置 + ADM→参数映射，换实时驱动循环；引入 head-tracking / headLocked / transaural builtin）。
-
-## 13. 风险与未决
-
-- **无 bit-exact / 跨版本不稳定**：Apple 黑盒 HRTF，回归只能容差/版本钉死。
-- **ADM 语义缺口**：extent/diffuse 仅近似，screenLock/headLocked drop——坐实平台风味定位。
-- **diffuse 近似手段**待定：`ReverbBlend` 代理 vs 直接 drop，需听感/能量评估后定。
-- **extent 铺开几何**：复用 binaural spreader 还是另立，待实现时评估。
-- **参数自动化粒度**：动态对象位置更新频率与 SpatialMixer 内部 ramp 的交互，待实测调参。
-- **构建开关**：跟随 APAC 不加 flag（暂定），未最终拍板。
+- extent：设计 Apple 专用 spread approximation，并用 semantic report 验证 effective metadata。
+- channelLock：为扬声器输出构建 Apple 输出 speaker set 后再启用。
+- diffuse：如要做近似，必须先定义可解释的能量 / 去相关策略，不能简单使用 SpatialMixer reverb 代替。
+- realtime preview：复用 prepared 配方与 AU 参数映射，另建实时驱动循环；head tracking / transaural 仅适合该方向。

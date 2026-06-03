@@ -7,6 +7,9 @@
 #include <fmt/format.h>
 
 #include "adm/render.h"
+#ifdef __APPLE__
+#include "adm/render_apple.h"
+#endif
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
@@ -90,6 +93,11 @@ std::string backend_name_for(std::string_view renderer) {
     if (renderer == "binaural") {
         return mradm::binaural_capabilities().backend_name;
     }
+#ifdef __APPLE__
+    if (renderer == "apple") {
+        return mradm::apple_capabilities().backend_name;
+    }
+#endif
     return {};
 }
 
@@ -159,8 +167,13 @@ CLI::App* add_layouts_command(CLI::App& app, LayoutCliOptions& opts) {
         ->required()
         ->check(CLI::IsMember({"wav", "wave", "caf", "flac", "apac", "m4a", "mp4", "iamf"}));
     layouts_cmd->add_option("--layout", opts.layout, "Optional layout filter, e.g. 7.1, 9.1.6, 22.2, binaural");
-    layouts_cmd->add_option("--renderer", opts.renderer, "Optional renderer filter: ear, saf, hoa, binaural")
-        ->check(CLI::IsMember({"ear", "saf", "hoa", "binaural"}));
+    std::vector<std::string> renderers{"ear", "saf", "hoa", "binaural"};
+    std::string renderer_help{"Optional renderer filter: ear, saf, hoa, binaural"};
+#ifdef __APPLE__
+    renderers.emplace_back("apple");
+    renderer_help += ", apple";
+#endif
+    layouts_cmd->add_option("--renderer", opts.renderer, renderer_help)->check(CLI::IsMember(renderers));
     return layouts_cmd;
 }
 

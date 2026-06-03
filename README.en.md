@@ -9,10 +9,10 @@ It reads ADM BWF / BW64 input and renders to loudspeaker layouts, HOA encoding, 
 ## Feature Overview
 
 - ADM scene import: reads BW64 ADM metadata through libbw64 / libadm and converts it into the project's own domain model.
-- Render backends: libear, SAF VBAP, HOA encoder, and HRTF binaural.
+- Render backends: libear, SAF VBAP, HOA encoder, HRTF binaural, and Apple AUSpatialMixer (macOS-only).
 - Objects / DirectSpeakers: supports timed blocks, gain, interpolation, diffuse, channelLock, objectDivergence, and related ADM semantics.
 - Post-processing: loudness normalization, True Peak limiting, bit-depth conversion, and CAF / FLAC / Opus / APAC metadata. HOA output is measured through a 7.1.4 AllRAD reference decode; LFE is excluded from LUFS but included in True Peak.
-- Platform boundary: core functionality targets macOS, Linux, and Windows; APAC encoding is macOS-only.
+- Platform boundary: core functionality targets macOS, Linux, and Windows; APAC encoding and the Apple AUSpatialMixer backend are macOS-only.
 
 ## Quick Start
 
@@ -35,6 +35,7 @@ Render examples:
 ```bash
 ./build/release/mradm render -i input.wav -o out_binaural.wav --renderer binaural
 ./build/release/mradm render -i input.wav -o out_714.flac --renderer ear --output-layout 7.1.4
+./build/release/mradm render -i input.wav -o out_222.wav --renderer apple --output-layout 22.2
 ./build/release/mradm render -i input.wav -o out_trim.wav --start 12.5 --end 45.0
 ```
 
@@ -66,8 +67,11 @@ macOS / Linux packages use `.tar.gz`; Windows packages use `.zip`. A `.sha256` f
 | SAF VBAP | `--renderer saf` | Objects / DirectSpeakers | Multichannel loudspeakers |
 | HOA encoder | `--renderer hoa` | Objects / DirectSpeakers | HOA3 16ch (ACN/SN3D) |
 | HRTF binaural | `--renderer binaural` | Objects / DirectSpeakers | 2ch binaural |
+| Apple AUSpatialMixer | `--renderer apple` | Objects / DirectSpeakers | 2ch binaural / multichannel loudspeakers (macOS-only) |
 
 The `binaural` backend uses SAF's built-in Genelec KEMAR HRTF by default. A user FIR SOFA HRIR file can be loaded with `--sofa <path>`. Current SOFA support is limited to SimpleFreeFieldHRIR / GeneralFIR, 2 receivers, 48 kHz, with no resampling.
+
+The `apple` backend uses AudioToolbox AUSpatialMixer. It supports binaural, 5.1, 7.1, 5.1.2, 5.1.4, 7.1.4, 9.1.6, and 22.2. It is an Apple platform-flavored renderer, not a bit-exact replacement for libear / SAF; HOA, diffuse, channelLock, and extent are not supported yet. `--start` / `--end` use on-demand window rendering with one render block of pre-roll to update SpatialMixer state.
 
 ## Output Formats
 
@@ -113,17 +117,17 @@ HOA output needs special care. CAF PCM and APAC MPEG-4 are currently the most re
 
 ## Output Layouts
 
-| Common name / CLI value | Channels | EAR | SAF VBAP |
-|---|---:|---|---|
-| `5.1` | 6 | yes | yes |
-| `5.1.2` | 8 | yes | yes |
-| `7.1` | 8 | yes | yes |
-| `5.1.4` | 10 | yes | yes |
-| `9.1.4` | 14 | yes | yes |
-| `7.1.4` | 12 | yes | yes |
-| `9.1.6` | 16 | yes | yes |
-| `22.2` | 24 | yes | yes |
-| `hoa3` | 16 | - | - |
+| Common name / CLI value | Channels | EAR | SAF VBAP | Apple |
+|---|---:|---|---|---|
+| `5.1` | 6 | yes | yes | yes |
+| `5.1.2` | 8 | yes | yes | yes |
+| `7.1` | 8 | yes | yes | yes |
+| `5.1.4` | 10 | yes | yes | yes |
+| `9.1.4` | 14 | yes | yes | - |
+| `7.1.4` | 12 | yes | yes | yes |
+| `9.1.6` | 16 | yes | yes | yes |
+| `22.2` | 24 | yes | yes | yes |
+| `hoa3` | 16 | - | - | - |
 
 EAR and SAF VBAP share the same project layout registry. `9.1.4` / `9.1.6` are implemented for the libear backend through project-side custom `ear::Layout` definitions.
 
@@ -140,7 +144,7 @@ Query full channel-order tables with:
 
 | Option | Description | Default |
 |---|---|---|
-| `--renderer auto\|ear\|saf\|hoa\|binaural` | Select the render backend | `auto` |
+| `--renderer auto\|ear\|saf\|hoa\|binaural\|apple` | Select the render backend | `auto` |
 | `--output-layout <layout>` | Output layout, for example `7.1.4` / `9.1.6` / `22.2` | Backend default |
 | `--output-bit-depth f32\|i24\|i16` | WAV output bit depth; CAF is fixed float32, FLAC is fixed 24-bit / up to 8 channels | `f32` |
 | `--loudness-target <LUFS>` | Normalize integrated loudness; HOA is measured through a 7.1.4 AllRAD reference decode, with LFE excluded from LUFS | Off |
@@ -225,6 +229,7 @@ cmake -S . -B build -DMR_ADM_ENABLE_SOFA=ON
 ## Documentation
 
 - [ADM feature coverage audit](docs/architecture/ADM_FEATURE_COVERAGE.md)
+- [Apple AUSpatialMixer backend implementation notes](docs/architecture/ADM_APPLE_BACKEND.md)
 - [C++ ADM platform rewrite plan](docs/architecture/CPP_ADM_PLATFORM_REWRITE.md)
 - [Architecture decision records](docs/adr/)
 - [Quality tooling](docs/guides/QUALITY.md)
