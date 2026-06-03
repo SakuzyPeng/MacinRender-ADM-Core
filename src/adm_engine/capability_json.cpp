@@ -8,6 +8,9 @@
 #include <nlohmann/json.hpp>
 
 #include "adm/capability.h"
+#ifdef __APPLE__
+#include "adm/render_apple.h"
+#endif
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
@@ -64,6 +67,9 @@ std::string capabilities_to_json() {
     backends.push_back(backend_to_json("saf", vbap_capabilities()));
     backends.push_back(backend_to_json("hoa", hoa_capabilities()));
     backends.push_back(backend_to_json("binaural", binaural_capabilities()));
+#ifdef __APPLE__
+    backends.push_back(backend_to_json("apple", apple_capabilities()));
+#endif
     root["backends"] = std::move(backends);
 
     return root.dump(2);

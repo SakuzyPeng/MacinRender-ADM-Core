@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <ebur128.h>
+#include <future>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -537,16 +538,26 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     EburPtr lufs_st{
         ebur128_init(num_out_ch, static_cast<unsigned long>(sample_rate), EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
 
-    std::vector<float> out_interleaved(static_cast<std::size_t>(num_out_ch) * k_render_block, 0.0F);
+    constexpr std::size_t k_num_buffers = 2;
+    std::array<std::vector<float>, k_num_buffers> out_buffers;
+    for (auto& buffer : out_buffers) {
+        buffer.assign(static_cast<std::size_t>(num_out_ch) * k_render_block, 0.0F);
+    }
+    std::array<std::future<void>, k_num_buffers> meter_pending;
+    render_common::SerialWorker meter;
+    std::size_t buf_idx = 0;
 
     // No renderable buses: write silence (still a valid, correctly-sized output).
     if (buses.empty()) {
-        std::ranges::fill(out_interleaved, 0.0F);
         uint64_t frames_done = start_pos;
         while (frames_done < win_end) {
             if (plan.cancel_token.stop_requested()) {
                 return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
             }
+            if (meter_pending.at(buf_idx).valid()) {
+                meter_pending.at(buf_idx).get();
+            }
+            const auto& out_interleaved = out_buffers.at(buf_idx);
             const uint64_t frames_now = std::min<uint64_t>(k_render_block, num_frames - frames_done);
             const uint64_t w_lo = std::max(frames_done, win_start);
             const uint64_t w_hi = std::min(frames_done + frames_now, win_end);
@@ -557,9 +568,18 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                 return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);
             }
             if (emit && lufs_st) {
-                ebur128_add_frames_float(lufs_st.get(), out_interleaved.data() + (emit_off * num_out_ch), emit_count);
+                ebur128_state* state = lufs_st.get();
+                const float* data = out_interleaved.data() + (emit_off * num_out_ch);
+                meter_pending.at(buf_idx) =
+                    meter.post([state, data, emit_count] { ebur128_add_frames_float(state, data, emit_count); });
             }
+            buf_idx = (buf_idx + 1U) % k_num_buffers;
             frames_done += frames_now;
+        }
+        for (auto& pending : meter_pending) {
+            if (pending.valid()) {
+                pending.get();
+            }
         }
         progress.on_progress({RenderStage::finished, 1.0, "done"});
         return collect_metrics(lufs_st.get(), num_out_ch);
@@ -697,6 +717,10 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
         if (plan.cancel_token.stop_requested()) {
             return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
         }
+        if (meter_pending.at(buf_idx).valid()) {
+            meter_pending.at(buf_idx).get();
+        }
+        auto& out_interleaved = out_buffers.at(buf_idx);
         const auto frames_now = static_cast<UInt32>(std::min<uint64_t>(k_render_block, num_frames - frames_done));
 
         reader->read(staging.data(), frames_now);
@@ -746,12 +770,22 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
         }
 
         if (emit && lufs_st) {
-            ebur128_add_frames_float(lufs_st.get(), out_interleaved.data() + (emit_off * num_out_ch), emit_count);
+            ebur128_state* state = lufs_st.get();
+            const float* data = out_interleaved.data() + (emit_off * num_out_ch);
+            meter_pending.at(buf_idx) =
+                meter.post([state, data, emit_count] { ebur128_add_frames_float(state, data, emit_count); });
         }
 
+        buf_idx = (buf_idx + 1U) % k_num_buffers;
         frames_done += frames_now;
         const double frac = 0.3 + (0.6 * (static_cast<double>(frames_done - start_pos) / progress_span));
         progress.on_progress({RenderStage::rendering, frac, "rendering"});
+    }
+
+    for (auto& pending : meter_pending) {
+        if (pending.valid()) {
+            pending.get();
+        }
     }
 
     progress.on_progress({RenderStage::finished, 1.0, "done"});

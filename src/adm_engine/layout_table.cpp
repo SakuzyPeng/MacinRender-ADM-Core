@@ -7,10 +7,14 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
 #include "adm/capability.h"
+#ifdef __APPLE__
+#include "adm/render_apple.h"
+#endif
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
@@ -179,12 +183,16 @@ std::vector<OutputLayoutRow> build_output_layouts() {
     static const auto saf = vbap_capabilities();
     static const auto hoa = hoa_capabilities();
     static const auto binaural = binaural_capabilities();
-    const std::array<std::pair<const char*, const CapabilityReport*>, 4> backends{{
+    std::vector<std::pair<const char*, const CapabilityReport*>> backends{
         {"ear", &ear},
         {"saf", &saf},
         {"hoa", &hoa},
         {"binaural", &binaural},
-    }};
+    };
+#ifdef __APPLE__
+    static const auto apple = apple_capabilities();
+    backends.emplace_back("apple", &apple);
+#endif
 
     std::vector<OutputLayoutRow> rows;
     rows.reserve(k_layout_infos.size());
