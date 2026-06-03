@@ -333,8 +333,7 @@ struct ApplePrepared final : IPreparedRender {
             if (!track.ds_blocks.empty()) {
                 BusPlan bp;
                 bp.source_channel = ch;
-                bp.is_lfe = std::ranges::any_of(
-                    track.ds_blocks, [](const SceneDirectSpeakersBlock& ds) { return ds.low_pass_hz.has_value(); });
+                bp.is_lfe = std::ranges::any_of(track.ds_blocks, render_common::direct_speakers_block_is_lfe);
                 bp.source_mode = bp.is_lfe ? kSpatialMixerSourceMode_Bypass : kSpatialMixerSourceMode_AmbienceBed;
                 for (const auto& ds : track.ds_blocks) {
                     BusEvent ev;
@@ -503,6 +502,20 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
         profile.binaural ? kSpatializationAlgorithm_HRTFHQ : kSpatializationAlgorithm_VectorBasedPanning;
     const auto& buses = prepared->buses;
 
+    // On-demand output window (RenderPlan::render_window). AUSpatialMixer is a
+    // black-box stateful AudioUnit, especially in HRTF mode, so windowed rendering
+    // starts one aligned render block before the requested window when possible.
+    // Pre-roll frames update SpatialMixer state but are not written. Absolute
+    // frame positions are still used for ADM events and AudioUnit sample time.
+    const bool windowed = plan.render_window.has_value();
+    const uint64_t win_start = windowed ? std::min(plan.render_window->start_frame, num_frames) : 0;
+    const uint64_t win_end = windowed ? std::min(win_start + plan.render_window->frame_count, num_frames) : num_frames;
+    uint64_t start_pos = 0;
+    if (windowed && win_start >= k_render_block) {
+        start_pos = ((win_start / k_render_block) - 1U) * k_render_block;
+    }
+    const uint64_t frames_to_write = win_end > win_start ? win_end - win_start : 0;
+
     // Normalize the container layout: a binaural HRTF render tags the output as binaural
     // (not the "0+2+0" stereo alias it may have been requested as), so CAF/APAC carry
     // kAudioChannelLayoutTag_Binaural instead of plain Stereo.
@@ -529,19 +542,24 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     // No renderable buses: write silence (still a valid, correctly-sized output).
     if (buses.empty()) {
         std::ranges::fill(out_interleaved, 0.0F);
-        uint64_t done = 0;
-        while (done < num_frames) {
+        uint64_t frames_done = start_pos;
+        while (frames_done < win_end) {
             if (plan.cancel_token.stop_requested()) {
                 return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
             }
-            const uint64_t frames_now = std::min<uint64_t>(k_render_block, num_frames - done);
-            if (writer.write(out_interleaved.data(), frames_now) != frames_now) {
+            const uint64_t frames_now = std::min<uint64_t>(k_render_block, num_frames - frames_done);
+            const uint64_t w_lo = std::max(frames_done, win_start);
+            const uint64_t w_hi = std::min(frames_done + frames_now, win_end);
+            const bool emit = w_hi > w_lo;
+            const std::size_t emit_off = emit ? static_cast<std::size_t>(w_lo - frames_done) : 0;
+            const std::size_t emit_count = emit ? static_cast<std::size_t>(w_hi - w_lo) : 0;
+            if (emit && writer.write(out_interleaved.data() + (emit_off * num_out_ch), emit_count) != emit_count) {
                 return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);
             }
-            if (lufs_st) {
-                ebur128_add_frames_float(lufs_st.get(), out_interleaved.data(), frames_now);
+            if (emit && lufs_st) {
+                ebur128_add_frames_float(lufs_st.get(), out_interleaved.data() + (emit_off * num_out_ch), emit_count);
             }
-            done += frames_now;
+            frames_done += frames_now;
         }
         progress.on_progress({RenderStage::finished, 1.0, "done"});
         return collect_metrics(lufs_st.get(), num_out_ch);
@@ -652,10 +670,13 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                          plan.output_layout,
                          num_out_ch,
                          profile.binaural ? "HRTF binaural" : "VBAP speakers",
-                         num_frames));
+                         frames_to_write));
     progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
 
     auto reader = bw64::readFile(plan.input_path);
+    if (start_pos > 0) {
+        render_common::seek_reader_abs(*reader, start_pos);
+    }
 
     // Output is non-interleaved; AudioUnitRender writes one buffer per output channel.
     std::vector<std::vector<float>> out_planar(num_out_ch, std::vector<float>(k_render_block, 0.0F));
@@ -669,10 +690,10 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     AudioTimeStamp time_stamp{};
     time_stamp.mFlags = kAudioTimeStampSampleTimeValid;
 
-    uint64_t frames_done = 0;
-    const double progress_span = static_cast<double>(std::max<uint64_t>(1, num_frames));
+    uint64_t frames_done = start_pos;
+    const double progress_span = static_cast<double>(std::max<uint64_t>(1, win_end - start_pos));
 
-    while (frames_done < num_frames) {
+    while (frames_done < win_end) {
         if (plan.cancel_token.stop_requested()) {
             return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
         }
@@ -714,25 +735,27 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
             }
         }
 
-        if (writer.write(out_interleaved.data(), frames_now) != frames_now) {
+        const uint64_t w_lo = std::max(frames_done, win_start);
+        const uint64_t w_hi = std::min(frames_done + frames_now, win_end);
+        const bool emit = w_hi > w_lo;
+        const std::size_t emit_off = emit ? static_cast<std::size_t>(w_lo - frames_done) : 0;
+        const std::size_t emit_count = emit ? static_cast<std::size_t>(w_hi - w_lo) : 0;
+
+        if (emit && writer.write(out_interleaved.data() + (emit_off * num_out_ch), emit_count) != emit_count) {
             return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);
         }
 
-        if (lufs_st) {
-            const auto chunk = render_common::meter_window_chunk(plan.meter_window, frames_done, frames_now);
-            if (chunk.frame_count > 0) {
-                ebur128_add_frames_float(
-                    lufs_st.get(), out_interleaved.data() + (chunk.offset_frames * num_out_ch), chunk.frame_count);
-            }
+        if (emit && lufs_st) {
+            ebur128_add_frames_float(lufs_st.get(), out_interleaved.data() + (emit_off * num_out_ch), emit_count);
         }
 
         frames_done += frames_now;
-        const double frac = 0.3 + (0.6 * (static_cast<double>(frames_done) / progress_span));
+        const double frac = 0.3 + (0.6 * (static_cast<double>(frames_done - start_pos) / progress_span));
         progress.on_progress({RenderStage::rendering, frac, "rendering"});
     }
 
     progress.on_progress({RenderStage::finished, 1.0, "done"});
-    logs.log(LogLevel::info, "apple", fmt::format("wrote {} frames to {}", num_frames, plan.output_path));
+    logs.log(LogLevel::info, "apple", fmt::format("wrote {} frames to {}", frames_to_write, plan.output_path));
     return collect_metrics(lufs_st.get(), num_out_ch);
 }
 
@@ -748,8 +771,8 @@ CapabilityReport apple_capabilities() {
     r.supports_channel_lock = false;     // channelLock dropped (no resolved speaker set yet)
     r.supports_object_divergence = true; // expand_object_divergence -> parallel buses
     r.supports_screen_ref = false;
-    r.supports_diffuse = false;       // SpatialMixer has no ADM decorrelator
-    r.supports_render_window = false; // full render + file trim for now
+    r.supports_diffuse = false;      // SpatialMixer has no ADM decorrelator
+    r.supports_render_window = true; // seek + one-block pre-roll for SpatialMixer state
     r.supported_layouts = {
         {"binaural", "Apple AUSpatialMixer binaural", 2, false, 0, true, true},
     };

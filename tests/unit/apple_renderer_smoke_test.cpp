@@ -24,6 +24,8 @@
 #include "adm/render.h"
 #include "adm/render_apple.h"
 
+#include "render_common.h"
+
 namespace {
 
 class FileGuard {
@@ -236,7 +238,7 @@ bool verify_capabilities() {
     ok &= check(!caps.supports_hoa, "hoa unsupported");
     ok &= check(caps.supports_object_divergence, "object divergence advertised");
     ok &= check(!caps.supports_diffuse, "diffuse unsupported");
-    ok &= check(!caps.supports_render_window, "render window unsupported");
+    ok &= check(caps.supports_render_window, "render window supported");
     const auto has_layout = [&](const std::string& id, uint16_t channels, bool binaural) {
         const auto it = std::ranges::find_if(caps.supported_layouts,
                                              [&](const mradm::CapabilityReport::Layout& l) { return l.id == id; });
@@ -245,6 +247,22 @@ bool verify_capabilities() {
     for (const auto& layout : k_expected_layouts) {
         ok &= check(has_layout(layout.id, layout.channels, layout.binaural), layout.display_name);
     }
+    return ok;
+}
+
+bool verify_lfe_label_detection() {
+    mradm::SceneDirectSpeakersBlock lfe;
+    lfe.speaker_labels = {"RC_LFE"};
+    mradm::SceneDirectSpeakersBlock non_lfe;
+    non_lfe.speaker_labels = {"M+030"};
+
+    bool ok = true;
+    ok &= check(mradm::render_common::is_lfe_label("RC_LFE"), "RC_LFE label identifies LFE");
+    ok &= check(mradm::render_common::is_lfe_label("R-LFE"), "R-LFE label identifies LFE");
+    ok &= check(mradm::render_common::is_lfe_label("low_frequency"), "low_frequency label identifies LFE");
+    ok &= check(mradm::render_common::is_lfe_label("Subwoofer"), "Subwoofer label identifies LFE");
+    ok &= check(mradm::render_common::direct_speakers_block_is_lfe(lfe), "RC_LFE label identifies LFE");
+    ok &= check(!mradm::render_common::direct_speakers_block_is_lfe(non_lfe), "front-left label is not LFE");
     return ok;
 }
 
@@ -343,15 +361,54 @@ bool verify_binaural_container_tag() {
     return ok;
 }
 
+bool verify_render_window_frame_count() {
+    constexpr uint32_t k_sample_rate = 48000U;
+    const auto in = write_fixture(0.0F, 4096U, 1.0F);
+    FileGuard in_guard(in);
+    const auto out = temp_path("mr_apple_window", ".wav");
+    FileGuard out_guard(out);
+
+    mradm::RenderRequest req;
+    req.input_path = in;
+    req.output_path = out;
+    req.options.renderer = mradm::RendererSelection::apple;
+    req.options.output_layout = "binaural";
+    req.options.peak_limit = false;
+    req.options.measure_loudness = false;
+    req.options.render_start_sec = 1024.0 / static_cast<double>(k_sample_rate);
+    req.options.render_end_sec = 2048.0 / static_cast<double>(k_sample_rate);
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    const auto res = service.render(req, progress, logs);
+    if (!check(res.success(), "apple render window succeeds")) {
+        std::cerr << "context: " << res.error.message << " " << res.error.context << "\n";
+        return false;
+    }
+
+    auto reader = mradm::audio::FloatWavReader::open(out.string());
+    if (!check(reader.has_value(), "apple render window output opens")) {
+        return false;
+    }
+
+    bool ok = true;
+    ok &= check(reader->channels() == 2U, "apple render window output is binaural");
+    ok &= check(reader->frame_count() == 1024U, "apple render window writes only requested frames");
+    return ok;
+}
+
 } // namespace
 
 int main() {
     bool ok = true;
     ok &= verify_capabilities();
+    ok &= verify_lfe_label_detection();
     ok &= verify_directional_sign();
     ok &= verify_zero_gain_is_silent();
     ok &= verify_speaker_panning();
     ok &= verify_speaker_layouts_render();
     ok &= verify_binaural_container_tag();
+    ok &= verify_render_window_frame_count();
     return ok ? 0 : 1;
 }

@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -206,26 +205,6 @@ Hoa3Coeffs encode_polar(float az_deg, float el_deg) noexcept {
         }
     }
     return result;
-}
-
-// Return true when any label in the list identifies an LFE channel.
-// Canonicalises by stripping non-alphanumeric characters and uppercasing so
-// that "RC_LFE", "RCLFE", "LFE", "LFE1", "LFE2", "LFEL", "LFER" all match.
-// This runs before the position check so that LFE channels with an explicit
-// position (e.g. RC_LFE at az=45, el=-30) are still encoded omnidirectionally.
-bool is_lfe_label(std::string_view raw) noexcept {
-    std::string key;
-    key.reserve(raw.size());
-    for (const char c : raw) {
-        if (std::isalnum(static_cast<unsigned char>(c)) != 0) {
-            key.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
-        }
-    }
-    return key == "LFE" || key == "LFE1" || key == "LFE2" || key == "LFEL" || key == "LFER" || key == "RCLFE";
-}
-
-bool any_label_is_lfe(const std::vector<std::string>& labels) noexcept {
-    return std::ranges::any_of(labels, [](const auto& l) { return is_lfe_label(l); });
 }
 
 // Parse a BS.2051 speaker label (e.g. "M+030", "U-045", "T+000") into (az, el) degrees.
@@ -463,7 +442,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
             for (const auto& ds : track.ds_blocks) {
                 Hoa3Coeffs sh{};
                 bool is_lfe = false;
-                if (ds.low_pass_hz.has_value() || any_label_is_lfe(ds.speaker_labels)) {
+                if (render_common::direct_speakers_block_is_lfe(ds)) {
                     // LFE: no directionality → encode as omnidirectional (W channel only, ACN 0).
                     // Label check runs before position so channels like RC_LFE (no lowPass element
                     // but carrying a nominal position) are still treated as non-directional.

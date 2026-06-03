@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cmath>
 #include <condition_variable>
 #include <cstddef>
@@ -182,15 +181,6 @@ std::pair<float, float> label_to_polar(const std::string& label) {
     };
     auto it = k_tab.find(label);
     return it != k_tab.end() ? it->second : std::pair<float, float>{std::numeric_limits<float>::quiet_NaN(), 0.0F};
-}
-
-bool is_lfe_label(const std::string& label) {
-    std::string upper(label.size(), '\0');
-    std::ranges::transform(label, upper.begin(), [](const char ch) {
-        return static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-    });
-    return upper == "LF" || upper.find("LFE") != std::string::npos || upper.find("SUB") != std::string::npos ||
-           upper.find("LOWFREQUENCY") != std::string::npos || upper.find("LOW_FREQUENCY") != std::string::npos;
 }
 
 int next_pow2_int(int value) {
@@ -1183,9 +1173,7 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs, 
 
             // DirectSpeakers-type blocks.
             for (const auto& ds : track.ds_blocks) {
-                const bool is_lfe =
-                    ds.low_pass_hz.has_value() ||
-                    std::ranges::any_of(ds.speaker_labels, [](const auto& label) { return is_lfe_label(label); });
+                const bool is_lfe = render_common::direct_speakers_block_is_lfe(ds);
                 if (is_lfe) {
                     BinauralSource src;
                     src.channel_index = channel_index;

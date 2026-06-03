@@ -1,9 +1,31 @@
 #include "render_common.h"
 
 #include <algorithm>
+#include <cctype>
+#include <string>
 #include <utility>
 
 namespace mradm::render_common {
+
+bool is_lfe_label(std::string_view raw) noexcept {
+    std::string key;
+    key.reserve(raw.size());
+    for (const char c : raw) {
+        if (std::isalnum(static_cast<unsigned char>(c)) != 0) {
+            key.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+        }
+    }
+    return key == "LF" || key.find("LFE") != std::string::npos || key.find("SUB") != std::string::npos ||
+           key.find("LOWFREQUENCY") != std::string::npos;
+}
+
+bool any_label_is_lfe(const std::vector<std::string>& labels) noexcept {
+    return std::ranges::any_of(labels, [](const auto& label) { return is_lfe_label(label); });
+}
+
+bool direct_speakers_block_is_lfe(const SceneDirectSpeakersBlock& block) noexcept {
+    return block.low_pass_hz.has_value() || any_label_is_lfe(block.speaker_labels);
+}
 
 SerialWorker::SerialWorker() {
     thread_ = std::thread([this] { run(); });

@@ -684,6 +684,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             PRIVATE
                 MacinRender::ADMEngine
                 MacinRender::ADMRenderApple
+                MacinRender::ADMRenderCommon
                 MacinRender::ADMAudio
                 libbw64
                 adm

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <ebur128.h>
@@ -52,6 +53,34 @@ struct ChannelGainInfo {
     uint16_t input_channel{0};
     std::vector<BlockGains> blocks; // sorted by start_sample
 };
+
+[[nodiscard]] std::string normalise_speaker_label_key(std::string_view raw) {
+    std::string key;
+    key.reserve(raw.size());
+    for (const char c : raw) {
+        if (std::isalnum(static_cast<unsigned char>(c)) != 0) {
+            key.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+        }
+    }
+    return key;
+}
+
+[[nodiscard]] std::string libear_lfe_label_for_block(const SceneDirectSpeakersBlock& ds) {
+    for (const auto& label : ds.speaker_labels) {
+        const std::string key = normalise_speaker_label_key(label);
+        if (key.find("LFE2") != std::string::npos || key == "LFER") {
+            return "LFE2";
+        }
+    }
+    return "LFE1";
+}
+
+[[nodiscard]] std::vector<std::string> speaker_labels_for_libear(const SceneDirectSpeakersBlock& ds) {
+    if (render_common::direct_speakers_block_is_lfe(ds)) {
+        return {libear_lfe_label_for_block(ds)};
+    }
+    return ds.speaker_labels;
+}
 
 // Accumulation uses non-interleaved (channel-major) temporary buffers so the
 // innermost loop over frames is a plain saxpy — SIMD-vectorisable by the compiler.
@@ -212,7 +241,8 @@ void append_object_blocks(const SceneTrackRef& track,
 
 [[nodiscard]] ear::DirectSpeakersTypeMetadata direct_speakers_metadata_from_block(const SceneDirectSpeakersBlock& ds) {
     ear::DirectSpeakersTypeMetadata meta;
-    meta.speakerLabels = ds.speaker_labels;
+    const bool is_lfe = render_common::direct_speakers_block_is_lfe(ds);
+    meta.speakerLabels = speaker_labels_for_libear(ds);
     // libear throws if audioPackFormatID is set without speaker labels (including
     // non-common-definition IDs). Only pass the ID when labels are also present so
     // that label-less custom DS blocks fall through to position-based routing.
@@ -247,6 +277,8 @@ void append_object_blocks(const SceneTrackRef& track,
     }
     if (ds.low_pass_hz) {
         meta.channelFrequency.lowPass = static_cast<double>(*ds.low_pass_hz);
+    } else if (is_lfe) {
+        meta.channelFrequency.lowPass = 120.0;
     }
     return meta;
 }
