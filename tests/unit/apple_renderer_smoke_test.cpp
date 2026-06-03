@@ -1,5 +1,6 @@
 #include <iostream>
 #include <memory>
+#include <ranges>
 #include <string>
 
 #include "adm/render_apple.h"
@@ -14,12 +15,9 @@ bool check(bool cond, const char* msg) {
 }
 
 bool has_layout(const mradm::CapabilityReport& caps, const std::string& id, uint16_t channels, bool binaural) {
-    for (const auto& layout : caps.supported_layouts) {
-        if (layout.id == id) {
-            return layout.channel_count == channels && layout.is_binaural == binaural;
-        }
-    }
-    return false;
+    const auto it = std::ranges::find_if(
+        caps.supported_layouts, [&](const mradm::CapabilityReport::Layout& layout) { return layout.id == id; });
+    return it != caps.supported_layouts.end() && it->channel_count == channels && it->is_binaural == binaural;
 }
 
 bool verify_capabilities() {
