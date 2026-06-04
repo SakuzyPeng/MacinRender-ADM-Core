@@ -521,6 +521,115 @@ bool verify_channel_lock_snaps() {
     return ok;
 }
 
+// Single DirectSpeakers (bed) channel at a fixed speaker position and label.
+std::pair<std::shared_ptr<adm::Document>, std::string>
+make_ds_doc(float azimuth, float elevation, const std::string& label) {
+    auto doc = adm::Document::create();
+    auto cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"AppleDsCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    {
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::SphericalSpeakerPosition{adm::Azimuth{azimuth}, adm::Elevation{elevation}, adm::Distance{1.0F}}};
+        block.add(adm::SpeakerLabel{label});
+        block.set(adm::Gain{1.0F});
+        cf->add(block);
+    }
+    doc->add(cf);
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"AppleDsPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"AppleDsSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"AppleDsTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"AppleDsObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"AppleDsContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"AppleDsProgramme"});
+    prog->addReference(content);
+    doc->add(prog);
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+// Render a single DirectSpeakers bed channel through the apple backend to `layout`.
+std::optional<std::vector<float>> render_ds(float azimuth,
+                                            float elevation,
+                                            const std::string& label,
+                                            const std::string& layout,
+                                            uint16_t channels,
+                                            std::string_view stem) {
+    constexpr uint32_t k_sr = 48000U;
+    constexpr uint32_t k_frames = 8192U;
+    const auto [doc, uid_str] = make_ds_doc(azimuth, elevation, label);
+    const auto in = temp_path("mr_apple_ds_input", ".wav");
+    FileGuard in_guard(in);
+    {
+        std::ostringstream xml_buf;
+        adm::writeXml(xml_buf, doc);
+        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+        auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+        auto writer = bw64::writeFile(in.string(), 1U, k_sr, 24U, chna, axml);
+        std::vector<float> samples(k_frames);
+        for (uint32_t i = 0; i < k_frames; ++i) {
+            samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
+                                          static_cast<float>(k_sr));
+        }
+        writer->write(samples.data(), k_frames);
+    }
+    const auto out = temp_path(stem, ".wav");
+    FileGuard out_guard(out);
+
+    mradm::RenderRequest req;
+    req.input_path = in;
+    req.output_path = out;
+    req.options.renderer = mradm::RendererSelection::apple;
+    req.options.output_layout = layout;
+    req.options.peak_limit = false;
+    req.options.measure_loudness = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    if (!check(service.render(req, progress, logs).success(), "apple DirectSpeakers render succeeds")) {
+        return std::nullopt;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(out.string());
+    if (!reader || reader->channels() != channels) {
+        return std::nullopt;
+    }
+    std::vector<float> samples(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
+    reader->read(samples.data(), reader->frame_count());
+    return samples;
+}
+
+// Speaker routing: a DirectSpeakers bed channel (AmbienceBed) must land on its output
+// speaker, and an LFE bed channel (Bypass) on the output LFE channel. 7.1.4 channel order:
+// ch0=L(M+030) ch1=R(M-030) ch2=C ch3=LFE.
+bool verify_bed_and_lfe_routing() {
+    const auto bed_l = render_ds(30.0F, 0.0F, "M+030", "4+7+0", 12U, "mr_apple_bed_l");
+    const auto bed_c = render_ds(0.0F, 0.0F, "M+000", "4+7+0", 12U, "mr_apple_bed_c");
+    const auto lfe = render_ds(45.0F, -30.0F, "RC_LFE", "4+7+0", 12U, "mr_apple_lfe");
+    if (!bed_l || !bed_c || !lfe) {
+        return false;
+    }
+    bool ok = true;
+    ok &= check(loudest_channel(*bed_l, 12U) == 0U, "bed M+030 routes to 7.1.4 front-left (ch0)");
+    ok &= check(loudest_channel(*bed_c, 12U) == 2U, "bed M+000 routes to 7.1.4 centre (ch2)");
+    ok &= check(loudest_channel(*lfe, 12U) == 3U, "LFE bed routes to 7.1.4 LFE channel (ch3)");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -536,5 +645,6 @@ int main() {
     ok &= verify_extent_spread();
     ok &= verify_spread_mode_none_disables_extent();
     ok &= verify_channel_lock_snaps();
+    ok &= verify_bed_and_lfe_routing();
     return ok ? 0 : 1;
 }

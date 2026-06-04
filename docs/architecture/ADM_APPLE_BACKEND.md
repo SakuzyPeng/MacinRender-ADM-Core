@@ -114,8 +114,8 @@ Apple 后端和其他主要后端一样在渲染过程中内联测量响度 / Tr
 - Object position → SpatialMixer Azimuth / Elevation / Distance。
 - Object / DirectSpeakers gain → `kSpatialMixerParam_Gain`（linear → dB，静音落到 -120 dB）。
 - Object 插值 → 按事件块更新参数；SpatialMixer 自身会对控制变化做平滑。
-- DirectSpeakers → `AmbienceBed` 远场床层。
-- LFE → `Bypass`，并把 mono input bus 标为 `kAudioChannelLabel_LFEScreen`，不参与空间化。
+- DirectSpeakers → `AmbienceBed` 远场床层（VBAP 下落到对应输出扬声器，已验证）。
+- LFE → `Bypass`，并把 mono input bus 标为 `kAudioChannelLabel_LFEScreen`，不参与空间化（落到输出 LFE 通道，已验证）。
 
 ### 5.2 项目层预处理
 
@@ -204,7 +204,7 @@ Apple smoke tests 覆盖：
 
 ## 10. 后续事项
 
-- extent dedup：binaural / HOA 仍各自保留 17 点 cloud 副本；可将它们也切到共享 `render_common::extent_disk_cloud`，但需逐字保留浮点运算并以各自的 bit-exact fixture 验证（本次为降低风险只接入了 Apple）。
-- bed / LFE 扬声器路由：验证 AmbienceBed 床层与 LFE Bypass 在多声道输出下落到正确扬声器/LFE 通道。
+- extent dedup：✅ 已完成（部分）。binaural / HOA / apple 共用 `render_common::k_extent_disk_samples` 采样表 + `extent_disk_radii` 半角映射（逐字节相同的部分）；几何环（normalize / direction / 输出）因 binaural 与 HOA 的实现真不同（双精度 vs 单精度、polar vs cartesian 分支、az/el vs SH 编码）无法合并，各保留本地。bit-exact 经 binaural / hoa / render_trim fixture 验证。
+- bed / LFE 扬声器路由：✅ 已验证。AmbienceBed 床层落到对应扬声器、LFE Bypass + LFEScreen 落到输出 LFE 通道，经 verify_bed_and_lfe_routing 在 7.1.4 下确认（M+030→ch0、M+000→ch2、LFE→ch3）。
 - diffuse：如要做近似，必须先定义可解释的能量 / 去相关策略，不能简单使用 SpatialMixer reverb 代替。
 - realtime preview：复用 prepared 配方与 AU 参数映射，另建实时驱动循环；head tracking / transaural 仅适合该方向。
