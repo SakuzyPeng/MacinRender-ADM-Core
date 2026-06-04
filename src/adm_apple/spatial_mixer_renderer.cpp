@@ -21,9 +21,23 @@
 #include "adm/scene.h"
 
 #include "render_common.h"
+#include "speaker_layouts.h"
 
 namespace mradm {
 namespace {
+
+// Build the resolved output speaker set (for channelLock) from a project speaker layout.
+// Returns empty for binaural output (no discrete speakers) so channelLock is dropped.
+[[nodiscard]] std::vector<SceneOutputSpeaker> output_speakers(std::string_view layout_id) {
+    std::vector<SceneOutputSpeaker> speakers;
+    if (const auto* layout = render_layouts::find_speaker_layout(layout_id)) {
+        speakers.reserve(layout->speakers.size());
+        std::ranges::transform(layout->speakers, std::back_inserter(speakers), [](const auto& spk) {
+            return SceneOutputSpeaker{spk.azimuth, spk.elevation, spk.is_lfe};
+        });
+    }
+    return speakers;
+}
 
 // AUSpatialMixer slice + control-rate update granularity (~10 ms at 48 kHz). The AU
 // smooths parameter changes between updates, so per-block az/el/gain is smooth enough.
@@ -304,11 +318,13 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
 
 // Build the immutable bus recipe from the resolved scene. Objects become PointSource
 // buses (divergence expands to parallel buses, padding inactive slots with silent
-// events); DirectSpeakers become AmbienceBed buses (LFE -> Bypass). channelLock is a
-// no-op for binaural (empty speaker set) -> dropped, per design.
-[[nodiscard]] std::vector<BusPlan> build_bus_plans(const AdmScene& scene, LogSink& logs, bool apply_extent) {
+// events); DirectSpeakers become AmbienceBed buses (LFE -> Bypass). channelLock snaps to
+// `speakers` (the resolved output layout for speaker output; empty for binaural -> dropped).
+[[nodiscard]] std::vector<BusPlan> build_bus_plans(const AdmScene& scene,
+                                                   LogSink& logs,
+                                                   bool apply_extent,
+                                                   const std::vector<SceneOutputSpeaker>& speakers) {
     std::vector<BusPlan> buses;
-    const std::vector<SceneOutputSpeaker> speakers; // binaural: no discrete speakers
     bool screen_ref_warned = false;
 
     for (const auto& obj : scene.objects) {
@@ -500,7 +516,13 @@ class AppleRenderer final : public IRenderer {
                                                        plan.binaural_spread_mode == BinauralSpreadMode::cloud)
                                                     : (plan.speaker_spread_mode != SpeakerSpreadMode::none);
 
-        auto buses = build_bus_plans(plan.scene, logs, apply_extent);
+        // channelLock snaps an object to the nearest output speaker. Speaker output has a
+        // resolved layout, so build its speaker set and let apply_channel_lock honor it;
+        // binaural has no discrete speakers, so the set stays empty and channelLock drops.
+        const std::vector<SceneOutputSpeaker> speakers =
+            profile->binaural ? std::vector<SceneOutputSpeaker>{} : output_speakers(plan.output_layout);
+
+        auto buses = build_bus_plans(plan.scene, logs, apply_extent, speakers);
 
         const auto num_in_ch = plan.scene.info.num_channels;
         const auto invalid =
@@ -846,7 +868,7 @@ CapabilityReport apple_capabilities() {
     r.supports_objects = true;
     r.supports_direct_speakers = true;
     r.supports_hoa = false;
-    r.supports_channel_lock = false;     // channelLock dropped (no resolved speaker set yet)
+    r.supports_channel_lock = true;      // snaps to the output speaker set (speaker output; binaural drops)
     r.supports_object_divergence = true; // expand_object_divergence -> parallel buses
     r.supports_screen_ref = false;
     r.supports_diffuse = false;      // SpatialMixer has no ADM decorrelator

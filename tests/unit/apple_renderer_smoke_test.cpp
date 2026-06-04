@@ -56,8 +56,9 @@ std::filesystem::path temp_path(std::string_view stem, std::string_view ext) {
 }
 
 // Single OBJECTS object at a fixed azimuth (ADM convention: +ve = left), linear gain,
-// and optional ADM width (0..1) to exercise extent spreading.
-std::pair<std::shared_ptr<adm::Document>, std::string> make_object_doc(float azimuth, float gain, float width) {
+// optional ADM width (0..1) for extent spreading, and optional channelLock.
+std::pair<std::shared_ptr<adm::Document>, std::string>
+make_object_doc(float azimuth, float gain, float width, bool channel_lock) {
     auto doc = adm::Document::create();
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"AppleCF"}, adm::TypeDefinition::OBJECTS);
     {
@@ -66,6 +67,11 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_object_doc(float azi
         block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
         if (width > 0.0F) {
             block.set(adm::Width{width});
+        }
+        if (channel_lock) {
+            adm::ChannelLock lock;
+            lock.set(adm::ChannelLockFlag{true});
+            block.set(lock);
         }
         cf->add(block);
     }
@@ -97,10 +103,10 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_object_doc(float azi
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
-std::filesystem::path write_fixture(float azimuth, uint32_t frames, float gain, float width) {
+std::filesystem::path write_fixture(float azimuth, uint32_t frames, float gain, float width, bool channel_lock) {
     constexpr uint32_t k_ch = 1U;
     constexpr uint32_t k_sr = 48000U;
-    const auto [doc, uid_str] = make_object_doc(azimuth, gain, width);
+    const auto [doc, uid_str] = make_object_doc(azimuth, gain, width, channel_lock);
     auto path = temp_path("mr_apple_input", ".wav");
 
     std::ostringstream xml_buf;
@@ -132,8 +138,9 @@ std::optional<std::vector<float>> render_apple(float azimuth,
                                                const std::string& layout,
                                                uint16_t expected_channels,
                                                float gain = 1.0F,
-                                               float width = 0.0F) {
-    const auto in = write_fixture(azimuth, 8192U, gain, width);
+                                               float width = 0.0F,
+                                               bool channel_lock = false) {
+    const auto in = write_fixture(azimuth, 8192U, gain, width, channel_lock);
     FileGuard in_guard(in);
     const auto out = temp_path(stem, ".wav");
     FileGuard out_guard(out);
@@ -335,7 +342,7 @@ bool verify_speaker_layouts_render() {
 // container as Binaural (106), not plain Stereo (101) — the output is a binaural signal
 // and must not be mistaken for a stereo mix (which players may re-virtualize).
 bool verify_binaural_container_tag() {
-    const auto in = write_fixture(0.0F, 4096U, 1.0F, 0.0F);
+    const auto in = write_fixture(0.0F, 4096U, 1.0F, 0.0F, false);
     FileGuard in_guard(in);
     const auto out = temp_path("mr_apple_tag", ".caf");
     FileGuard out_guard(out);
@@ -371,7 +378,7 @@ bool verify_binaural_container_tag() {
 
 bool verify_render_window_frame_count() {
     constexpr uint32_t k_sample_rate = 48000U;
-    const auto in = write_fixture(0.0F, 4096U, 1.0F, 0.0F);
+    const auto in = write_fixture(0.0F, 4096U, 1.0F, 0.0F, false);
     FileGuard in_guard(in);
     const auto out = temp_path("mr_apple_window", ".wav");
     FileGuard out_guard(out);
@@ -452,7 +459,7 @@ bool verify_extent_spread() {
 
 // Render a wide front object to 7.1.4 with an explicit speaker spread mode.
 std::optional<std::vector<float>> render_714_spread(float width, mradm::SpeakerSpreadMode mode, std::string_view stem) {
-    const auto in = write_fixture(0.0F, 8192U, 1.0F, width);
+    const auto in = write_fixture(0.0F, 8192U, 1.0F, width, false);
     FileGuard in_guard(in);
     const auto out = temp_path(stem, ".wav");
     FileGuard out_guard(out);
@@ -497,6 +504,23 @@ bool verify_spread_mode_none_disables_extent() {
     return ok;
 }
 
+// channelLock (speaker output): an object between two speakers snaps to the nearest one.
+// At az=20 (between M+000=ch2 and M+030=ch0) a locked object collapses onto a single
+// speaker, where a free object pans across both. Guards the resolved-speaker-set path.
+bool verify_channel_lock_snaps() {
+    const auto locked = render_apple(20.0F, "mr_apple_cl_on", "4+7+0", 12U, 1.0F, 0.0F, true);
+    const auto free = render_apple(20.0F, "mr_apple_cl_off", "4+7+0", 12U, 1.0F, 0.0F, false);
+    if (!locked || !free) {
+        return false;
+    }
+    const int locked_active = active_channels(*locked, 12U, 0.05);
+    const int free_active = active_channels(*free, 12U, 0.05);
+    bool ok = true;
+    ok &= check(locked_active < free_active, "channelLock concentrates onto fewer speakers than free VBAP");
+    ok &= check(locked_active == 1, "channelLock snaps the object to a single speaker");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -511,5 +535,6 @@ int main() {
     ok &= verify_render_window_frame_count();
     ok &= verify_extent_spread();
     ok &= verify_spread_mode_none_disables_extent();
+    ok &= verify_channel_lock_snaps();
     return ok ? 0 : 1;
 }
