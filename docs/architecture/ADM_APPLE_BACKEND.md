@@ -19,7 +19,7 @@
 
 - HOA 输出：`supports_hoa=false`。
 - diffuse：SpatialMixer 没有 ADM direct/diffuse 能量拆分与去相关器，`supports_diffuse=false`。
-- channelLock：当前 Apple 后端没有构建输出 speaker set，相关语义在预处理阶段降级，`supports_channel_lock=false`。
+- channelLock：✅ 已实现（扬声器输出）。`prepare()` 从 `render_layouts::find_speaker_layout` 构建输出 speaker set，`render_common::apply_channel_lock` 把对象吸附到最近非-LFE 扬声器，`supports_channel_lock=true`。binaural 输出无离散扬声器，speaker set 为空 → channelLock 自然 drop。
 - screen reference / screenLock / headLocked：离线路径不支持。
 - extent：✅ 已实现。复用项目共享的 17 点 disk cloud（`render_common::extent_disk_cloud`，与 binaural / HOA 同源），把 width/height/depth 展开为多个相干点源 bus，`supports_spread=true`。**与 VBAP 的有意分歧**：cloud 是纯点源，对所有 CoreAudio layout（含 2D 的 5.1 / 7.1）都生效；VBAP 的 SAF 2D API 无 spread 参数，故其 2D 路径不 spread，而 SpatialMixer 无此限制，因此 `automatic` 在 2D 上也会 spread（横向宽对象正确铺开）。`--speaker-spread-mode` / `--binaural-spread-mode none` 强制点源。仍属 approximation（相干点云有梳状滤波，不与 libear spreadingPanner 逐测匹配）。
 - transaural / BuiltIn / External 设备串扰消除：设备绑定且更适合实时预览，不作为离线交付路径。
@@ -127,7 +127,7 @@ Apple 后端和其他主要后端一样在渲染过程中内联测量响度 / Tr
 ### 5.3 不支持或降级
 
 - diffuse：drop；不使用 SpatialMixer reverb 伪装 ADM diffuse。
-- channelLock：当前无输出 speaker set，drop。
+- channelLock：✅ 扬声器输出已启用（speaker set 由 render_layouts 构建，apply_channel_lock 吸附最近扬声器）；binaural 无离散扬声器仍 drop。
 - extent：✅ 已实现为 approximation。共享 `render_common::extent_disk_cloud`（17 点 disk cloud：中心 + 内环 8 + 外环 8，权重 Σ=1）把每个 divergence 源展开为相干点源 bus；depth 已并入半角映射（depth*20）。受 `--speaker-spread-mode` / `--binaural-spread-mode` 门控；对所有 layout（含 2D）生效（见 §1，与 VBAP 2D 不 spread 的差异）。
 - screenLock / headLocked / headphoneVirtualise / importance / dialogue：不参与 Apple 离线渲染数学。
 
@@ -181,7 +181,7 @@ supports_objects           = true
 supports_direct_speakers   = true
 supports_hoa               = false
 supports_object_divergence = true
-supports_channel_lock      = false
+supports_channel_lock      = true   // 扬声器输出吸附最近扬声器；binaural drop
 supports_diffuse           = false
 supports_screen_ref        = false
 supports_render_window     = true
@@ -205,6 +205,6 @@ Apple smoke tests 覆盖：
 ## 10. 后续事项
 
 - extent dedup：binaural / HOA 仍各自保留 17 点 cloud 副本；可将它们也切到共享 `render_common::extent_disk_cloud`，但需逐字保留浮点运算并以各自的 bit-exact fixture 验证（本次为降低风险只接入了 Apple）。
-- channelLock：为扬声器输出构建 Apple 输出 speaker set 后再启用。
+- bed / LFE 扬声器路由：验证 AmbienceBed 床层与 LFE Bypass 在多声道输出下落到正确扬声器/LFE 通道。
 - diffuse：如要做近似，必须先定义可解释的能量 / 去相关策略，不能简单使用 SpatialMixer reverb 代替。
 - realtime preview：复用 prepared 配方与 AU 参数映射，另建实时驱动循环；head tracking / transaural 仅适合该方向。
