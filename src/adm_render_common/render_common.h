@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -115,14 +116,62 @@ struct PreparedObjectBlock {
                                                        std::string_view log_module,
                                                        bool& screen_ref_warned);
 
+// One sample of the canonical 17-point extent "disk cloud": a unit-disk coordinate
+// (x, y in [-1, 1]) and its linear gain weight. Layout: index 0 is the centre (weight 0,
+// skipped); 1..8 the outer ring (radius 1.0); 9..16 the inner ring (radius 0.5). The
+// active weights sum to 1 (linear partition of unity) — they multiply the source's linear
+// gain / SH coefficients directly, so this is a gain weight, not an energy/power weight.
+// Shared verbatim by the apple, binaural, and HOA extent paths — the sample values and
+// weights are bit-identical across them; only the per-backend geometry (vector normalise /
+// direction / output) differs, so each backend keeps its own tangent-frame loop.
+struct ExtentDiskSample {
+    float x{0.0F};
+    float y{0.0F};
+    float weight{0.0F}; // linear gain weight (active weights sum to 1)
+};
+
+inline constexpr float k_extent_disk_outer_weight = 1.0F / 12.0F; // outer ring total = 2/3
+inline constexpr float k_extent_disk_inner_weight = 1.0F / 24.0F; // inner ring total = 1/3
+
+inline constexpr std::array<ExtentDiskSample, 17> k_extent_disk_samples{{
+    {0.0F, 0.0F, 0.0F},
+    {1.0F, 0.0F, k_extent_disk_outer_weight},
+    {-1.0F, 0.0F, k_extent_disk_outer_weight},
+    {0.0F, 1.0F, k_extent_disk_outer_weight},
+    {0.0F, -1.0F, k_extent_disk_outer_weight},
+    {0.70710678F, 0.70710678F, k_extent_disk_outer_weight},
+    {-0.70710678F, 0.70710678F, k_extent_disk_outer_weight},
+    {0.70710678F, -0.70710678F, k_extent_disk_outer_weight},
+    {-0.70710678F, -0.70710678F, k_extent_disk_outer_weight},
+    {0.5F, 0.0F, k_extent_disk_inner_weight},
+    {-0.5F, 0.0F, k_extent_disk_inner_weight},
+    {0.0F, 0.5F, k_extent_disk_inner_weight},
+    {0.0F, -0.5F, k_extent_disk_inner_weight},
+    {0.35355339F, 0.35355339F, k_extent_disk_inner_weight},
+    {-0.35355339F, 0.35355339F, k_extent_disk_inner_weight},
+    {0.35355339F, -0.35355339F, k_extent_disk_inner_weight},
+    {-0.35355339F, -0.35355339F, k_extent_disk_inner_weight},
+}};
+
+// Disk half-angle radii (degrees) for an object's extent. width*60, height*45, depth*20,
+// with a distance-based spread scale (nearer sources subtend a wider angle). distance is
+// supplied by the caller (each backend computes it the same way). Bit-identical to the
+// formula previously inlined in the binaural and HOA renderers.
+struct ExtentRadii {
+    float width_radius{0.0F};
+    float height_radius{0.0F};
+};
+[[nodiscard]] ExtentRadii extent_disk_radii(float width, float height, float depth, float distance);
+
 // One direction of the 17-point "disk cloud" used to approximate ADM object extent
 // (width/height/depth) as a set of coherent point sources. azimuth/elevation are in the
-// project polar convention (azimuth +ve = left, BS.2051). weight is a partition of unity
-// (the active directions' weights sum to 1) so the cloud preserves the source's total gain.
+// project polar convention (azimuth +ve = left, BS.2051). weight is a linear gain weight: a
+// linear partition of unity (the active directions' weights sum to 1) so the cloud preserves
+// the source's total gain.
 struct ExtentDirection {
     float azimuth{0.0F};
     float elevation{0.0F};
-    float weight{1.0F};
+    float weight{1.0F}; // linear gain weight
 };
 
 // Expand an object block position + extent (width/height/depth, each 0..1) into the

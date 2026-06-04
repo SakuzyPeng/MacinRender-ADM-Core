@@ -55,12 +55,6 @@ struct Vec3 {
     float z{0.0F};
 };
 
-struct DiskSample {
-    float x{0.0F};
-    float y{0.0F};
-    float weight{0.0F};
-};
-
 [[nodiscard]] Vec3 normalize(Vec3 v) noexcept {
     const float len = std::max(1.0e-6F, std::hypot(v.x, v.y, v.z));
     return {v.x / len, v.y / len, v.z / len};
@@ -154,36 +148,17 @@ Hoa3Coeffs encode_polar(float az_deg, float el_deg) noexcept {
 
 [[nodiscard]] Hoa3Coeffs encode_extent(const SceneBlockPosition& pos, const SceneObjectBlock& block) {
     const float distance = distance_from_position(pos);
-    const float spread_scale = std::clamp(1.0F / std::max(0.4F, distance), 0.5F, 2.5F);
-    const float depth_radius = std::max(0.0F, block.depth) * 20.0F * spread_scale;
-    const float width_radius = (std::max(0.0F, block.width) * 60.0F * spread_scale) + depth_radius;
-    const float height_radius = (std::max(0.0F, block.height) * 45.0F * spread_scale) + depth_radius;
+    const auto [width_radius, height_radius] =
+        render_common::extent_disk_radii(block.width, block.height, block.depth, distance);
     if (width_radius <= 1.0e-4F && height_radius <= 1.0e-4F) {
         return encode_direction(direction_from_position(pos));
     }
 
+    // Shared 17-point disk cloud (render_common); the per-backend geometry below
+    // (direction_from_position / normalize / encode_direction) stays local and unchanged so
+    // the HOA output remains bit-identical.
     constexpr float k_deg2rad = static_cast<float>(std::numbers::pi) / 180.0F;
-    constexpr float k_outer_weight = 1.0F / 12.0F; // outer ring total = 2/3
-    constexpr float k_inner_weight = 1.0F / 24.0F; // inner ring total = 1/3
-    constexpr std::array<DiskSample, 17> k_samples = {{
-        {0.0F, 0.0F, 0.0F},
-        {1.0F, 0.0F, k_outer_weight},
-        {-1.0F, 0.0F, k_outer_weight},
-        {0.0F, 1.0F, k_outer_weight},
-        {0.0F, -1.0F, k_outer_weight},
-        {0.70710678F, 0.70710678F, k_outer_weight},
-        {-0.70710678F, 0.70710678F, k_outer_weight},
-        {0.70710678F, -0.70710678F, k_outer_weight},
-        {-0.70710678F, -0.70710678F, k_outer_weight},
-        {0.5F, 0.0F, k_inner_weight},
-        {-0.5F, 0.0F, k_inner_weight},
-        {0.0F, 0.5F, k_inner_weight},
-        {0.0F, -0.5F, k_inner_weight},
-        {0.35355339F, 0.35355339F, k_inner_weight},
-        {-0.35355339F, 0.35355339F, k_inner_weight},
-        {0.35355339F, -0.35355339F, k_inner_weight},
-        {-0.35355339F, -0.35355339F, k_inner_weight},
-    }};
+    const auto& k_samples = render_common::k_extent_disk_samples;
 
     const Vec3 center = direction_from_position(pos);
     Vec3 horizontal = cross({0.0F, 0.0F, 1.0F}, center);
