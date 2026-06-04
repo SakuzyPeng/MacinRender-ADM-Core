@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.9）
-> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 / v1.5 / v1.6 / v1.7 / v1.8 于 2026-06-01，v1.9 于 2026-06-04）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.10）
+> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 / v1.5 / v1.6 / v1.7 / v1.8 于 2026-06-01，v1.9 于 2026-06-04，v1.10 于 2026-06-05）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -313,13 +313,22 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - **兼容性**：未修改 `adm_render_file_ex`、result、callback 或已有 option setter；旧调用方输出 `.caf` 仍得到
   float32 PCM CAF，只有显式设置 APAC CAF 容器时才写有损 APAC-in-CAF。
 
+### v1.10.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+为 GUI 细粒度进度条追加结构化 progress v2；旧 `adm_progress_cb` 与既有 render/preview 入口保持不变。
+
+- **新增 enum**：`adm_progress_operation_t`，描述阶段内具体操作（validate/probe/import/policy/plan/prepare/render/trim/gain/bit-depth/FLAC/Opus/APAC/IAMF/package/metadata/finish）。
+- **新增结构体 callback**：`adm_progress_event_v2_t` + `adm_progress_v2_cb`。事件携带 `struct_size`、`adm_render_stage_t`、operation、整体进度、阶段进度、帧级 `current_frame/total_frames` 和临时 message 指针。
+- **新增入口**：`adm_render_file_ex2` 与 `adm_preview_render_window_v2`，参数与既有 `_ex` / preview render 对齐，只把 progress callback 换成 v2。旧入口继续从同一内部事件降级为 `fraction/stage/message`。
+- **进度口径**：整体进度按稳定阶段范围映射（前处理约 0.00–0.30、渲染 0.30–0.90、后处理/编码 0.90–0.99、完成 1.00），不承诺等价于耗时占比；GUI 可用帧字段和时间戳自行估算 ETA。
+
 ## opaque 指针与 callback 生命周期
 
 `adm_context_t`、`adm_render_result_t` 是 opaque pointer，调用方不应直接 dereference 或假设大小。生命周期约定：
 
 - **创建/销毁配对**：`adm_create_context` ↔ `adm_destroy_context`，`adm_render_*` 返回的 `adm_render_result_t**` ↔ `adm_destroy_render_result`。调用方必须严格配对。
 - **线程亲缘性**：实验期暂不承诺多线程安全；稳定期至少承诺"不同 context 跨线程安全，单个 context 单线程使用"。如未来要支持单 context 跨线程，由独立 ADR 决定。
-- **callback 生命周期**：`adm_progress_cb` 仅在对应函数调用期间被调用；调用方可保证 callback 和 `user_data` 在该期间有效，无需考虑函数返回后的异步回调（除非未来明确引入异步 API）。
+- **callback 生命周期**：`adm_progress_cb` / `adm_progress_v2_cb` 仅在对应函数调用期间被调用；调用方可保证 callback 和 `user_data` 在该期间有效，无需考虑函数返回后的异步回调（除非未来明确引入异步 API）。v2 事件里的 `message` 指针同样只在 callback 调用期间有效。
 - **字符串所有权（句柄持有）**：返回 `const char*` 的函数（如 `adm_render_result_message`、`adm_render_result_log_entry` 写出的 module/message）保证字符串在对应 opaque 句柄被 destroy 前有效；调用方不得 free 该指针。
 - **字符串所有权（调用方持有，v1.1 起）**：经 `char**` 出参返回**堆字符串**的函数（如 `adm_inspect_file_json`）把所有权转移给调用方；调用方必须、且只能用 `adm_free_string` 释放（不得用 `free()`/`delete`，因为分配器由 ABI 一侧决定）。`adm_free_string(NULL)` 是安全 no-op。未来其它返回堆字符串的函数复用同一释放函数。
 

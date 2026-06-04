@@ -629,7 +629,8 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& prep,
                              num_out_ch,
                              num_frames,
                              is_2d_layout(layout) ? "2D VBAP" : "3D VBAP"));
-        progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
+        progress.on_progress(
+            {RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "rendering audio"});
 
         auto reader = bw64::readFile(plan.input_path);
         auto writer_res = audio::WriterHandle::open(
@@ -683,7 +684,8 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& prep,
         if (start_pos > 0) {
             render_common::seek_reader_abs(*reader, start_pos);
         }
-        const double progress_span = static_cast<double>(std::max<uint64_t>(1, win_end - start_pos));
+        const uint64_t progress_total = std::max<uint64_t>(1, win_end - start_pos);
+        const auto progress_span = static_cast<double>(progress_total);
         uint64_t frames_done = start_pos;
 
         while (frames_done < win_end) {
@@ -747,8 +749,15 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& prep,
             buf_idx = (buf_idx + 1) % k_num_buffers;
 
             const uint64_t progress_done = std::min(frames_done, win_end) - start_pos;
-            const double frac = 0.3 + (0.6 * (static_cast<double>(progress_done) / progress_span));
-            progress.on_progress({RenderStage::rendering, frac, "rendering"});
+            const double stage_fraction = static_cast<double>(progress_done) / progress_span;
+            const double frac = 0.3 + (0.6 * stage_fraction);
+            progress.on_progress({RenderStage::rendering,
+                                  RenderOperation::render_audio,
+                                  frac,
+                                  stage_fraction,
+                                  progress_done,
+                                  progress_total,
+                                  "rendering"});
         }
 
         // All audio is written; wait for outstanding measurements before querying global metrics.
@@ -758,7 +767,7 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& prep,
             }
         }
 
-        progress.on_progress({RenderStage::finished, 1.0, "done"});
+        progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
         logs.log(LogLevel::info,
                  "saf-vbap",
                  fmt::format("wrote {} frames to {}{}",

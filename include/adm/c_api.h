@@ -49,12 +49,16 @@
  *
  * v1.9 新增（additive，SOVERSION 不变）：
  *   adm_apac_container_t + adm_render_options_set_apac_container.
+ *
+ * v1.10 新增（additive，SOVERSION 不变）：
+ *   adm_progress_operation_t + adm_progress_event_v2_t + adm_progress_v2_cb,
+ *   adm_render_file_ex2, adm_preview_render_window_v2.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 9
+#define ADM_API_VERSION_MINOR 10
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -170,6 +174,28 @@ typedef enum adm_render_stage_t {
     ADM_STAGE_FINISHED = 7
 } adm_render_stage_t;
 
+/* Fine-grained progress operation within a render stage. v1.10 */
+typedef enum adm_progress_operation_t {
+    ADM_PROGRESS_OPERATION_UNKNOWN = 0,
+    ADM_PROGRESS_OPERATION_VALIDATE_REQUEST = 1,
+    ADM_PROGRESS_OPERATION_PROBE_INPUT = 2,
+    ADM_PROGRESS_OPERATION_IMPORT_SCENE = 3,
+    ADM_PROGRESS_OPERATION_APPLY_SEMANTIC_POLICY = 4,
+    ADM_PROGRESS_OPERATION_PLAN_RENDER = 5,
+    ADM_PROGRESS_OPERATION_PREPARE_BACKEND = 6,
+    ADM_PROGRESS_OPERATION_RENDER_AUDIO = 7,
+    ADM_PROGRESS_OPERATION_TRIM_OUTPUT = 8,
+    ADM_PROGRESS_OPERATION_APPLY_GAIN = 9,
+    ADM_PROGRESS_OPERATION_CONVERT_BIT_DEPTH = 10,
+    ADM_PROGRESS_OPERATION_ENCODE_FLAC = 11,
+    ADM_PROGRESS_OPERATION_ENCODE_OPUS = 12,
+    ADM_PROGRESS_OPERATION_ENCODE_APAC = 13,
+    ADM_PROGRESS_OPERATION_ENCODE_IAMF = 14,
+    ADM_PROGRESS_OPERATION_PACKAGE_IAMF_MP4 = 15,
+    ADM_PROGRESS_OPERATION_WRITE_METADATA = 16,
+    ADM_PROGRESS_OPERATION_FINISH = 17
+} adm_progress_operation_t;
+
 #ifdef __cplusplus
 static_assert(sizeof(adm_renderer_t) == sizeof(int));
 static_assert(sizeof(adm_output_bit_depth_t) == sizeof(int));
@@ -179,6 +205,7 @@ static_assert(sizeof(adm_iamf_container_t) == sizeof(int));
 static_assert(sizeof(adm_apac_container_t) == sizeof(int));
 static_assert(sizeof(adm_log_level_t) == sizeof(int));
 static_assert(sizeof(adm_render_stage_t) == sizeof(int));
+static_assert(sizeof(adm_progress_operation_t) == sizeof(int));
 #endif
 
 /* ── Progress callback ───────────────────────────────────────────────────── */
@@ -188,6 +215,32 @@ static_assert(sizeof(adm_render_stage_t) == sizeof(int));
  * for the callback's duration. user_data is passed through unchanged.
  */
 typedef void (*adm_progress_cb)(double fraction, const char* stage, const char* message, void* user_data);
+
+/*
+ * v1.10 structured progress event for GUI integrations.
+ *
+ * overall_fraction is the stable whole-render progress in [0, 1].
+ * stage_fraction is progress within the current stage / operation in [0, 1].
+ * current_frame / total_frames are set when the operation has frame-level
+ * progress; otherwise both are 0. message is valid only for the callback's
+ * duration, matching adm_progress_cb. struct_size is set by the library to
+ * sizeof(adm_progress_event_v2_t), allowing additive tail fields in future
+ * minor versions.
+ */
+/* cppcheck-suppress-begin unusedStructMember */
+typedef struct adm_progress_event_v2_t {
+    uint32_t struct_size;
+    adm_render_stage_t stage;
+    adm_progress_operation_t operation;
+    double overall_fraction;
+    double stage_fraction;
+    uint64_t current_frame;
+    uint64_t total_frames;
+    const char* message;
+} adm_progress_event_v2_t;
+/* cppcheck-suppress-end unusedStructMember */
+
+typedef void (*adm_progress_v2_cb)(const adm_progress_event_v2_t* event, void* user_data);
 
 /* Map a progress callback's `stage` string to adm_render_stage_t. Returns
  * ADM_STAGE_UNKNOWN for a NULL or unrecognized string. Pure, thread-safe, no
@@ -390,6 +443,19 @@ adm_error_code_t adm_render_file_ex(adm_context_t* context,
                                     adm_progress_cb progress,
                                     void* user_data,
                                     adm_render_result_t** result) ADM_API_NOEXCEPT;
+
+/*
+ * adm_render_file_ex2 — v1.10 entry point with structured progress events.
+ * All parameters behave like adm_render_file_ex, except progress uses
+ * adm_progress_v2_cb. opts may be NULL (equivalent to all defaults).
+ */
+adm_error_code_t adm_render_file_ex2(adm_context_t* context,
+                                     const char* input_path,
+                                     const char* output_path,
+                                     const adm_render_options_t* opts,
+                                     adm_progress_v2_cb progress,
+                                     void* user_data,
+                                     adm_render_result_t** result) ADM_API_NOEXCEPT;
 
 /* ── Result lifecycle ────────────────────────────────────────────────────── */
 /*
@@ -649,6 +715,15 @@ adm_error_code_t adm_preview_render_window(adm_preview_session_t* session,
                                            adm_progress_cb progress,
                                            void* user_data,
                                            adm_render_result_t** result) ADM_API_NOEXCEPT;
+
+/* v1.10 structured-progress equivalent of adm_preview_render_window. */
+adm_error_code_t adm_preview_render_window_v2(adm_preview_session_t* session,
+                                              double start_sec,
+                                              double end_sec,
+                                              const char* output_path,
+                                              adm_progress_v2_cb progress,
+                                              void* user_data,
+                                              adm_render_result_t** result) ADM_API_NOEXCEPT;
 
 #ifdef __cplusplus
 } /* extern "C" */
