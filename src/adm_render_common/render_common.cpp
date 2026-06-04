@@ -1,11 +1,36 @@
 #include "render_common.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <cmath>
+#include <numbers>
 #include <string>
 #include <utility>
 
 namespace mradm::render_common {
+
+namespace {
+
+[[nodiscard]] SceneDirectionVector vec_cross(const SceneDirectionVector& a, const SceneDirectionVector& b) noexcept {
+    return {(a.y * b.z) - (a.z * b.y), (a.z * b.x) - (a.x * b.z), (a.x * b.y) - (a.y * b.x)};
+}
+
+[[nodiscard]] SceneDirectionVector vec_normalize(const SceneDirectionVector& v) noexcept {
+    const float len = std::max(1.0e-6F, std::hypot(v.x, v.y, v.z));
+    return {v.x / len, v.y / len, v.z / len};
+}
+
+// Inverse of direction_vector_from_polar: recover (azimuth, elevation) in degrees,
+// project convention (azimuth +ve = left).
+[[nodiscard]] std::pair<float, float> polar_from_direction(const SceneDirectionVector& dir) noexcept {
+    constexpr float k_rad2deg = 180.0F / std::numbers::pi_v<float>;
+    const float azimuth = std::atan2(-dir.x, dir.y) * k_rad2deg;
+    const float elevation = std::atan2(dir.z, std::hypot(dir.x, dir.y)) * k_rad2deg;
+    return {azimuth, elevation};
+}
+
+} // namespace
 
 bool is_lfe_label(std::string_view raw) noexcept {
     std::string key;
@@ -94,6 +119,74 @@ PreparedObjectBlock prepare_object_block(const SceneObjectBlock& raw_block,
         raw_block.jump_position,
         raw_block.interp_length_samples,
     };
+}
+
+std::vector<ExtentDirection>
+extent_disk_cloud(const SceneBlockPosition& position, float width, float height, float depth) {
+    const auto polar = scene_position_to_polar(position);
+
+    // Distance-dependent spread scaling: nearer objects subtend a wider angle.
+    const float spread_scale = std::clamp(1.0F / std::max(0.4F, polar.distance), 0.5F, 2.5F);
+    const float depth_radius = std::max(0.0F, depth) * 20.0F * spread_scale;
+    const float width_radius = (std::max(0.0F, width) * 60.0F * spread_scale) + depth_radius;
+    const float height_radius = (std::max(0.0F, height) * 45.0F * spread_scale) + depth_radius;
+
+    if (width_radius <= 1.0e-4F && height_radius <= 1.0e-4F) {
+        return {{polar.azimuth, polar.elevation, 1.0F}};
+    }
+
+    struct DiskSample {
+        float x{0.0F};
+        float y{0.0F};
+        float weight{0.0F};
+    };
+    constexpr float k_outer_weight = 1.0F / 12.0F; // outer ring total = 2/3
+    constexpr float k_inner_weight = 1.0F / 24.0F; // inner ring total = 1/3
+    constexpr std::array<DiskSample, 17> k_samples = {{
+        {0.0F, 0.0F, 0.0F},
+        {1.0F, 0.0F, k_outer_weight},
+        {-1.0F, 0.0F, k_outer_weight},
+        {0.0F, 1.0F, k_outer_weight},
+        {0.0F, -1.0F, k_outer_weight},
+        {0.70710678F, 0.70710678F, k_outer_weight},
+        {-0.70710678F, 0.70710678F, k_outer_weight},
+        {0.70710678F, -0.70710678F, k_outer_weight},
+        {-0.70710678F, -0.70710678F, k_outer_weight},
+        {0.5F, 0.0F, k_inner_weight},
+        {-0.5F, 0.0F, k_inner_weight},
+        {0.0F, 0.5F, k_inner_weight},
+        {0.0F, -0.5F, k_inner_weight},
+        {0.35355339F, 0.35355339F, k_inner_weight},
+        {-0.35355339F, 0.35355339F, k_inner_weight},
+        {0.35355339F, -0.35355339F, k_inner_weight},
+        {-0.35355339F, -0.35355339F, k_inner_weight},
+    }};
+    constexpr float k_deg2rad = std::numbers::pi_v<float> / 180.0F;
+
+    const SceneDirectionVector center = direction_vector_from_position(position);
+    SceneDirectionVector horizontal = vec_cross({0.0F, 0.0F, 1.0F}, center);
+    if (std::hypot(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
+        horizontal = {1.0F, 0.0F, 0.0F};
+    } else {
+        horizontal = vec_normalize(horizontal);
+    }
+    const SceneDirectionVector vertical = vec_normalize(vec_cross(center, horizontal));
+
+    std::vector<ExtentDirection> cloud;
+    cloud.reserve(k_samples.size() - 1U);
+    for (const auto& sample : k_samples) {
+        if (sample.weight <= 0.0F) {
+            continue;
+        }
+        const float h = std::tan(sample.x * width_radius * k_deg2rad);
+        const float v = std::tan(sample.y * height_radius * k_deg2rad);
+        const SceneDirectionVector dir = vec_normalize({(center.x + (horizontal.x * h)) + (vertical.x * v),
+                                                        (center.y + (horizontal.y * h)) + (vertical.y * v),
+                                                        (center.z + (horizontal.z * h)) + (vertical.z * v)});
+        const auto [azimuth, elevation] = polar_from_direction(dir);
+        cloud.push_back({azimuth, elevation, sample.weight});
+    }
+    return cloud;
 }
 
 } // namespace mradm::render_common

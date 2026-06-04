@@ -115,6 +115,26 @@ struct PreparedObjectBlock {
                                                        std::string_view log_module,
                                                        bool& screen_ref_warned);
 
+// One direction of the 17-point "disk cloud" used to approximate ADM object extent
+// (width/height/depth) as a set of coherent point sources. azimuth/elevation are in the
+// project polar convention (azimuth +ve = left, BS.2051). weight is a partition of unity
+// (the active directions' weights sum to 1) so the cloud preserves the source's total gain.
+struct ExtentDirection {
+    float azimuth{0.0F};
+    float elevation{0.0F};
+    float weight{1.0F};
+};
+
+// Expand an object block position + extent (width/height/depth, each 0..1) into the
+// 17-point disk cloud. When the effective extent is ~0 a single centre direction
+// (weight 1) is returned, so a point object stays a point. Otherwise the 16 ring
+// directions are returned (inner/outer rings, weights summing to 1), mapped around the
+// position via a tangent frame with tan() angular scaling. Pure; the radius mapping
+// (width*60, height*45, depth*20, distance-based spread scaling) matches the binaural /
+// HOA extent clouds.
+[[nodiscard]] std::vector<ExtentDirection>
+extent_disk_cloud(const SceneBlockPosition& position, float width, float height, float depth);
+
 template <typename Channel>
 [[nodiscard]] uint64_t block_active_length(const Channel& channel, std::size_t block_index) {
     const auto& block = channel.blocks[block_index];

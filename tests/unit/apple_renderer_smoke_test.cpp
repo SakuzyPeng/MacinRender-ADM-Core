@@ -55,14 +55,18 @@ std::filesystem::path temp_path(std::string_view stem, std::string_view ext) {
     return std::filesystem::temp_directory_path() / name;
 }
 
-// Single OBJECTS object at a fixed azimuth (ADM convention: +ve = left) and linear gain.
-std::pair<std::shared_ptr<adm::Document>, std::string> make_object_doc(float azimuth, float gain) {
+// Single OBJECTS object at a fixed azimuth (ADM convention: +ve = left), linear gain,
+// and optional ADM width (0..1) to exercise extent spreading.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_object_doc(float azimuth, float gain, float width) {
     auto doc = adm::Document::create();
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"AppleCF"}, adm::TypeDefinition::OBJECTS);
     {
         adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{azimuth}, adm::Elevation{0.0F}}};
         block.set(adm::Gain{gain});
         block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        if (width > 0.0F) {
+            block.set(adm::Width{width});
+        }
         cf->add(block);
     }
     doc->add(cf);
@@ -93,10 +97,10 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_object_doc(float azi
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
-std::filesystem::path write_fixture(float azimuth, uint32_t frames, float gain) {
+std::filesystem::path write_fixture(float azimuth, uint32_t frames, float gain, float width) {
     constexpr uint32_t k_ch = 1U;
     constexpr uint32_t k_sr = 48000U;
-    const auto [doc, uid_str] = make_object_doc(azimuth, gain);
+    const auto [doc, uid_str] = make_object_doc(azimuth, gain, width);
     auto path = temp_path("mr_apple_input", ".wav");
 
     std::ostringstream xml_buf;
@@ -123,9 +127,13 @@ double channel_energy(const std::vector<float>& samples, uint32_t channels, uint
     return e;
 }
 
-std::optional<std::vector<float>> render_apple(
-    float azimuth, std::string_view stem, const std::string& layout, uint16_t expected_channels, float gain = 1.0F) {
-    const auto in = write_fixture(azimuth, 8192U, gain);
+std::optional<std::vector<float>> render_apple(float azimuth,
+                                               std::string_view stem,
+                                               const std::string& layout,
+                                               uint16_t expected_channels,
+                                               float gain = 1.0F,
+                                               float width = 0.0F) {
+    const auto in = write_fixture(azimuth, 8192U, gain, width);
     FileGuard in_guard(in);
     const auto out = temp_path(stem, ".wav");
     FileGuard out_guard(out);
@@ -327,7 +335,7 @@ bool verify_speaker_layouts_render() {
 // container as Binaural (106), not plain Stereo (101) — the output is a binaural signal
 // and must not be mistaken for a stereo mix (which players may re-virtualize).
 bool verify_binaural_container_tag() {
-    const auto in = write_fixture(0.0F, 4096U, 1.0F);
+    const auto in = write_fixture(0.0F, 4096U, 1.0F, 0.0F);
     FileGuard in_guard(in);
     const auto out = temp_path("mr_apple_tag", ".caf");
     FileGuard out_guard(out);
@@ -363,7 +371,7 @@ bool verify_binaural_container_tag() {
 
 bool verify_render_window_frame_count() {
     constexpr uint32_t k_sample_rate = 48000U;
-    const auto in = write_fixture(0.0F, 4096U, 1.0F);
+    const auto in = write_fixture(0.0F, 4096U, 1.0F, 0.0F);
     FileGuard in_guard(in);
     const auto out = temp_path("mr_apple_window", ".wav");
     FileGuard out_guard(out);
@@ -398,6 +406,97 @@ bool verify_render_window_frame_count() {
     return ok;
 }
 
+// Number of output channels carrying more than `frac` of the total energy.
+int active_channels(const std::vector<float>& samples, uint16_t channels, double frac) {
+    double total = 0.0;
+    for (uint16_t c = 0; c < channels; ++c) {
+        total += channel_energy(samples, channels, c);
+    }
+    int active = 0;
+    for (uint16_t c = 0; c < channels; ++c) {
+        if (channel_energy(samples, channels, c) > frac * total) {
+            ++active;
+        }
+    }
+    return active;
+}
+
+double total_energy(const std::vector<float>& samples, uint16_t channels) {
+    double total = 0.0;
+    for (uint16_t c = 0; c < channels; ++c) {
+        total += channel_energy(samples, channels, c);
+    }
+    return total;
+}
+
+// Extent: a wide front object (ADM width) must spread energy across more 7.1.4 speakers
+// than a point object at the same position, and the 17-point cloud's partition-of-unity
+// weights must keep the total energy in the same ballpark (not silent, not exploded).
+bool verify_extent_spread() {
+    const auto point = render_apple(0.0F, "mr_apple_point", "4+7+0", 12U, 1.0F, 0.0F);
+    const auto wide = render_apple(0.0F, "mr_apple_wide", "4+7+0", 12U, 1.0F, 0.8F);
+    if (!point || !wide) {
+        return false;
+    }
+    const int point_active = active_channels(*point, 12U, 0.05);
+    const int wide_active = active_channels(*wide, 12U, 0.05);
+    const double point_e = total_energy(*point, 12U);
+    const double wide_e = total_energy(*wide, 12U);
+
+    bool ok = true;
+    ok &= check(wide_active > point_active, "width spreads energy across more speakers than a point");
+    ok &= check(wide_active >= 3, "wide front object lights up >= 3 speakers");
+    ok &= check(wide_e > 0.1 * point_e && wide_e < 10.0 * point_e, "extent keeps total energy in the same ballpark");
+    return ok;
+}
+
+// Render a wide front object to 7.1.4 with an explicit speaker spread mode.
+std::optional<std::vector<float>> render_714_spread(float width, mradm::SpeakerSpreadMode mode, std::string_view stem) {
+    const auto in = write_fixture(0.0F, 8192U, 1.0F, width);
+    FileGuard in_guard(in);
+    const auto out = temp_path(stem, ".wav");
+    FileGuard out_guard(out);
+
+    mradm::RenderRequest req;
+    req.input_path = in;
+    req.output_path = out;
+    req.options.renderer = mradm::RendererSelection::apple;
+    req.options.output_layout = "4+7+0";
+    req.options.speaker_spread_mode = mode;
+    req.options.peak_limit = false;
+    req.options.measure_loudness = false;
+
+    mradm::RenderService service;
+    mradm::NullProgressSink progress;
+    mradm::NullLogSink logs;
+    if (!check(service.render(req, progress, logs).success(), "apple spread-mode render succeeds")) {
+        return std::nullopt;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(out.string());
+    if (!reader || reader->channels() != 12U) {
+        return std::nullopt;
+    }
+    std::vector<float> samples(12U * reader->frame_count());
+    reader->read(samples.data(), reader->frame_count());
+    return samples;
+}
+
+// --speaker-spread-mode none must disable the extent cloud: a wide object renders as a
+// point (localized), aligning Apple with the VBAP/binaural spread-mode capability gating.
+bool verify_spread_mode_none_disables_extent() {
+    const auto spread = render_714_spread(0.8F, mradm::SpeakerSpreadMode::automatic, "mr_apple_spread_auto");
+    const auto none = render_714_spread(0.8F, mradm::SpeakerSpreadMode::none, "mr_apple_spread_none");
+    if (!spread || !none) {
+        return false;
+    }
+    const int spread_active = active_channels(*spread, 12U, 0.05);
+    const int none_active = active_channels(*none, 12U, 0.05);
+    bool ok = true;
+    ok &= check(none_active < spread_active, "speaker-spread-mode none renders a wide object as a point");
+    ok &= check(none_active <= 2, "spread-mode none keeps the wide object localized");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -410,5 +509,7 @@ int main() {
     ok &= verify_speaker_layouts_render();
     ok &= verify_binaural_container_tag();
     ok &= verify_render_window_frame_count();
+    ok &= verify_extent_spread();
+    ok &= verify_spread_mode_none_disables_extent();
     return ok ? 0 : 1;
 }
