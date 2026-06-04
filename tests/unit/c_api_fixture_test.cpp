@@ -12,9 +12,11 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -1795,6 +1797,45 @@ bool verify_apac_unsupported_smoke(adm_context_t* ctx, const std::filesystem::pa
     return ok;
 }
 
+bool file_contains_bytes(const std::filesystem::path& path, std::string_view needle) {
+    std::ifstream in(path, std::ios::binary);
+    const std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    return !std::ranges::search(bytes, needle).empty();
+}
+
+bool verify_apac_caf_smoke(adm_context_t* ctx, const std::filesystem::path& input) {
+    auto output = unique_temp_wav_path("mr_c_api_apac_caf_smoke");
+    output.replace_extension(".caf");
+    FileGuard guard(output); // harmless remove if file was never created
+
+    adm_render_options_t* opts = adm_create_render_options();
+    adm_render_options_set_apac_container(opts, ADM_APAC_CONTAINER_CAF);
+
+    adm_render_result_t* result = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input.string().c_str(), output.string().c_str(), opts, nullptr, nullptr, &result);
+    adm_destroy_render_options(opts);
+
+    bool ok = check(result != nullptr, "APAC CAF smoke: result must be allocated");
+#ifdef __APPLE__
+    ok = check(code == ADM_ERROR_OK || code == ADM_ERROR_UNSUPPORTED,
+               "APAC CAF smoke (Apple): should return OK or UNSUPPORTED") &&
+         ok;
+    if (code == ADM_ERROR_OK) {
+        ok = check(std::filesystem::exists(output), "APAC CAF smoke (Apple OK): .caf file should exist") && ok;
+        ok =
+            check(std::filesystem::file_size(output) > 0, "APAC CAF smoke (Apple OK): .caf file should be non-empty") &&
+            ok;
+        ok = check(file_contains_bytes(output, "caff"), "APAC CAF smoke: output contains CAF magic") && ok;
+        ok = check(file_contains_bytes(output, "apac"), "APAC CAF smoke: output contains apac format id") && ok;
+    }
+#else
+    ok = check(code == ADM_ERROR_UNSUPPORTED, "APAC CAF smoke (non-Apple): must return UNSUPPORTED") && ok;
+#endif
+    adm_destroy_render_result(result);
+    return ok;
+}
+
 bool verify_iamf_smoke(adm_context_t* ctx, const std::filesystem::path& input) {
     // When MR_ADM_ENABLE_IAMF=OFF (default CI): .iamf output must return UNSUPPORTED.
     // When MR_ADM_ENABLE_IAMF=ON: render with a supported layout and expect success.
@@ -1891,6 +1932,7 @@ int main() {
     ok = verify_version_17() && ok;
     ok = verify_render_stage_from_string() && ok;
     ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;
+    ok = verify_apac_caf_smoke(ctx, fixture.path()) && ok;
     ok = verify_iamf_smoke(ctx, fixture.path()) && ok;
 
     adm_destroy_context(ctx);
