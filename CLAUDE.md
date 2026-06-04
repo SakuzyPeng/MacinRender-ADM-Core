@@ -150,6 +150,7 @@ ADMRenderEar        PRIVATE: libear + saf + ebur128 + ADMAudio
 ADMRenderVBAP       PRIVATE: saf (vbap module) + ebur128 + ADMAudio
 ADMRenderHOA        PRIVATE: ebur128 + ADMAudio（HOA encode；output_layout="hoa3"）
 ADMRenderBinaural   PRIVATE: saf (hrir/sofa_reader/vbap/utilities) + ebur128 + ADMAudio
+ADMRenderApple      macOS-only（if(APPLE)）PRIVATE: AudioToolbox (AUSpatialMixer) + libbw64 + ebur128 + ADMAudio + ADMRenderCommon
 ADMAudio            PRIVATE: dr_wav, dr_flac, FLAC, Opus, libbw64
                     macOS: AudioToolbox + CoreFoundation（APAC / CAF metadata）
                     可选: IamfAomBridge（MR_ADM_ENABLE_IAMF）；IAMF 编码 + MP4 打包
@@ -166,7 +167,7 @@ mradm_exe (CLI)     PRIVATE: ADMEngine + 所有 renderer + CLI11 + spdlog
 - `libear` 类型只允许出现在 `src/adm_render_ear/` 内部
 - SAF 类型只允许出现在 `src/adm_render_vbap/`、`src/adm_render_hoa/`（仅必要时）、`src/adm_render_binaural/` 内部
 - CLI 不直接调用任何 renderer 或 IO 库；只构造 `RenderRequest`，调用 `RenderService`
-- Apple 框架（AudioToolbox、CoreAudio、CoreFoundation）只允许出现在 `src/adm_audio/` 与未来的 `adm_apple` 后端
+- Apple 框架（AudioToolbox、CoreAudio、CoreFoundation）只允许出现在 `src/adm_audio/` 与 `src/adm_apple/`（macOS-only AUSpatialMixer 后端，`if(APPLE)` 门控）
 
 输入路径：`libbw64/libadm` → `adm_io` 适配 → `adm::AdmScene` → `RenderPlan` → `IRenderer` 后端。`RenderPlan::scene` 由 `RenderService` 填好；**后端不得自行重新解析 ADM**。
 
@@ -191,6 +192,7 @@ mradm_exe (CLI)     PRIVATE: ADMEngine + 所有 renderer + CLI11 + spdlog
 - 空间布局 / HOA 的 APAC 默认码率以 `7.1.4=2048 kbps` 为 12 声道基准缩放（README 输出格式表）
 - HOA 输出的响度归一化可用；测量先解码到 7.1.4 AllRAD 参考播放域，LFE 不计入 LUFS 但单独计入 True Peak
 - binaural 默认使用 SAF 内置 KEMAR HRTF；`--sofa <path>` 支持 SimpleFreeFieldHRIR / GeneralFIR、2 receivers、48 kHz、**不重采样**
+- `--renderer apple`：**macOS-only** AUSpatialMixer 后端（`src/adm_apple/`），能力见 `apple_capabilities()`，在 Linux 不编译；`mr_adm_apple_smoke_tests` 在非 macOS 跳过
 - WAV `wav_io.cpp` 中定义 `DR_WAV_IMPLEMENTATION`；FLAC 解码 `dr_flac.cpp` 中定义 `DR_FLAC_IMPLEMENTATION`；编码用 `libFLAC`
 
 ## 代码风格
