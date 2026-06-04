@@ -265,26 +265,48 @@ struct ApplePrepared final : IPreparedRender {
     std::vector<BusPlan> buses;
 };
 
-[[nodiscard]] BusEvent object_source_event(const SceneObjectBlock& source,
-                                           const SceneObject& obj,
-                                           uint64_t start_sample,
-                                           uint64_t end_sample) {
-    const auto pos = scene_position_to_polar(source.position);
-    BusEvent ev;
-    ev.start_sample = start_sample;
-    ev.end_sample = end_sample;
-    ev.azimuth = sm_azimuth(pos.azimuth);
-    ev.elevation = std::clamp(pos.elevation, -90.0F, 90.0F);
-    ev.distance = std::max(pos.distance, 1.0e-3F);
-    ev.gain = source.gain * obj.gain;
-    return ev;
+// Flatten one prepared object block into per-bus events. When apply_extent is true each
+// divergence source is further expanded into the 17-point extent disk cloud (a point
+// object stays one point); when false the width/height/depth are ignored and the source
+// stays a single point, honoring --speaker-spread-mode / --binaural-spread-mode none.
+// The result is the set of coherent point sources for the block; slot i is fed to bus i.
+[[nodiscard]] std::vector<BusEvent>
+object_block_events(const render_common::PreparedObjectBlock& prepared, const SceneObject& obj, bool apply_extent) {
+    std::vector<BusEvent> events;
+    for (const auto& source : prepared.sources) {
+        const auto polar = scene_position_to_polar(source.position);
+        const float distance = std::max(polar.distance, 1.0e-3F);
+        if (!apply_extent) {
+            BusEvent ev;
+            ev.start_sample = prepared.start_sample;
+            ev.end_sample = prepared.end_sample;
+            ev.azimuth = sm_azimuth(polar.azimuth);
+            ev.elevation = std::clamp(polar.elevation, -90.0F, 90.0F);
+            ev.distance = distance;
+            ev.gain = source.gain * obj.gain;
+            events.push_back(ev);
+            continue;
+        }
+        const auto cloud = render_common::extent_disk_cloud(source.position, source.width, source.height, source.depth);
+        for (const auto& point : cloud) {
+            BusEvent ev;
+            ev.start_sample = prepared.start_sample;
+            ev.end_sample = prepared.end_sample;
+            ev.azimuth = sm_azimuth(point.azimuth);
+            ev.elevation = std::clamp(point.elevation, -90.0F, 90.0F);
+            ev.distance = distance;
+            ev.gain = source.gain * obj.gain * point.weight;
+            events.push_back(ev);
+        }
+    }
+    return events;
 }
 
 // Build the immutable bus recipe from the resolved scene. Objects become PointSource
 // buses (divergence expands to parallel buses, padding inactive slots with silent
 // events); DirectSpeakers become AmbienceBed buses (LFE -> Bypass). channelLock is a
 // no-op for binaural (empty speaker set) -> dropped, per design.
-[[nodiscard]] std::vector<BusPlan> build_bus_plans(const AdmScene& scene, LogSink& logs) {
+[[nodiscard]] std::vector<BusPlan> build_bus_plans(const AdmScene& scene, LogSink& logs, bool apply_extent) {
     std::vector<BusPlan> buses;
     const std::vector<SceneOutputSpeaker> speakers; // binaural: no discrete speakers
     bool screen_ref_warned = false;
@@ -300,29 +322,37 @@ struct ApplePrepared final : IPreparedRender {
             const uint16_t ch = *track.channel_index;
 
             if (!track.blocks.empty()) {
-                std::vector<render_common::PreparedObjectBlock> prepared;
-                prepared.reserve(track.blocks.size());
-                std::size_t max_sources = 1;
+                // Each block expands to a variable number of coherent point sources
+                // (divergence × extent cloud). Allocate one bus per slot up to the max
+                // across blocks; blocks with fewer sources pad the trailing slots silent.
+                struct BlockEvents {
+                    uint64_t start_sample{0};
+                    uint64_t end_sample{0};
+                    std::vector<BusEvent> events;
+                };
+                std::vector<BlockEvents> blocks;
+                blocks.reserve(track.blocks.size());
+                std::size_t max_slots = 1;
                 for (const auto& raw : track.blocks) {
                     auto pb = render_common::prepare_object_block(raw, obj, speakers, logs, "apple", screen_ref_warned);
-                    max_sources = std::max(max_sources, pb.sources.size());
-                    prepared.push_back(std::move(pb));
+                    BlockEvents be{pb.start_sample, pb.end_sample, object_block_events(pb, obj, apply_extent)};
+                    max_slots = std::max(max_slots, be.events.size());
+                    blocks.push_back(std::move(be));
                 }
 
-                std::vector<BusPlan> obj_buses(max_sources);
+                std::vector<BusPlan> obj_buses(max_slots);
                 for (auto& bp : obj_buses) {
                     bp.source_channel = ch;
                     bp.source_mode = kSpatialMixerSourceMode_PointSource;
                 }
-                for (const auto& pb : prepared) {
-                    for (std::size_t k = 0; k < max_sources; ++k) {
-                        if (k < pb.sources.size()) {
-                            obj_buses[k].events.push_back(
-                                object_source_event(pb.sources[k], obj, pb.start_sample, pb.end_sample));
+                for (const auto& be : blocks) {
+                    for (std::size_t k = 0; k < max_slots; ++k) {
+                        if (k < be.events.size()) {
+                            obj_buses[k].events.push_back(be.events[k]);
                         } else {
                             BusEvent silent;
-                            silent.start_sample = pb.start_sample;
-                            silent.end_sample = pb.end_sample;
+                            silent.start_sample = be.start_sample;
+                            silent.end_sample = be.end_sample;
                             obj_buses[k].events.push_back(silent);
                         }
                     }
@@ -456,7 +486,21 @@ class AppleRenderer final : public IRenderer {
                               "layout=" + plan.output_layout);
         }
 
-        auto buses = build_bus_plans(plan.scene, logs);
+        // Honor the spread-mode capability controls: binaural none/saf_spreader and
+        // speaker none disable extent spreading (the object renders as a point), aligning
+        // with the binaural and VBAP backends.
+        //
+        // Intentional divergence from VBAP: the extent disk cloud is just a set of point
+        // sources, so it applies on every CoreAudio layout — including 2D ones (5.1, 7.1),
+        // where a wide object correctly spreads across the horizontal speakers. VBAP cannot
+        // spread on 2D layouts (SAF's 2D VBAP API has no spread parameter), so its automatic
+        // mode is a no-op there; SpatialMixer has no such limitation, so automatic spreads on
+        // 2D too. Use --speaker-spread-mode none to force point rendering.
+        const bool apply_extent = profile->binaural ? (plan.binaural_spread_mode == BinauralSpreadMode::automatic ||
+                                                       plan.binaural_spread_mode == BinauralSpreadMode::cloud)
+                                                    : (plan.speaker_spread_mode != SpeakerSpreadMode::none);
+
+        auto buses = build_bus_plans(plan.scene, logs, apply_extent);
 
         const auto num_in_ch = plan.scene.info.num_channels;
         const auto invalid =
@@ -798,7 +842,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
 CapabilityReport apple_capabilities() {
     CapabilityReport r;
     r.backend_name = "apple";
-    r.backend_version = "spatial-mixer-0.2";
+    r.backend_version = "spatial-mixer-0.3";
     r.supports_objects = true;
     r.supports_direct_speakers = true;
     r.supports_hoa = false;
@@ -816,7 +860,7 @@ CapabilityReport apple_capabilities() {
                                        layout.channels,
                                        layout.is_3d,
                                        layout.lfe_count,
-                                       false,
+                                       true, // supports_spread: 17-point extent disk cloud
                                        false});
     }
     return r;
