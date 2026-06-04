@@ -113,7 +113,7 @@ Apple 后端和其他主要后端一样在渲染过程中内联测量响度 / Tr
 
 - Object position → SpatialMixer Azimuth / Elevation / Distance。
 - Object / DirectSpeakers gain → `kSpatialMixerParam_Gain`（linear → dB，静音落到 -120 dB）。
-- Object 插值 → 按事件块更新参数；SpatialMixer 自身会对控制变化做平滑。
+- Object 插值 / 平滑 → 按事件块更新参数；SpatialMixer 自身会对控制变化做平滑。项目级 `--object-smoothing-frames` / `RenderOptions::object_smoothing_frames` 当前不影响 Apple 后端；该参数只由 EAR / VBAP / HOA / binaural 等自有控制率路径消费。
 - DirectSpeakers → `AmbienceBed` 远场床层（VBAP 下落到对应输出扬声器，已验证）。
 - LFE → `Bypass`，并把 mono input bus 标为 `kAudioChannelLabel_LFEScreen`，不参与空间化（落到输出 LFE 通道，已验证）。
 

@@ -20,7 +20,7 @@ struct RenderCliOptions {
     double render_start{0.0};
     double render_end{std::numeric_limits<double>::quiet_NaN()};
     uint32_t interp_ms{5};
-    uint32_t object_smoothing_frames{8875};
+    uint32_t object_smoothing_frames{0};
     uint32_t opus_bitrate_per_ch{0};
     uint32_t apac_bitrate{0};
     bool apac_drc_music{true};

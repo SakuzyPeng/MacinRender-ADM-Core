@@ -389,8 +389,9 @@ bool window_bit_exact(const std::filesystem::path& in_path,
     const auto win_path = temp_path("mr_trim_be_win", ".wav");
     const FileGuard win_guard(win_path);
 
-    // [24000, 40000) frames. start 24000 spans >2 default blocks (k_block_size 8875),
-    // forcing a real reader seek and (for stateful backends) a pre-roll block.
+    // [24000, 40000) frames. start 24000 spans many minimum render blocks
+    // (k_block_size >= 1024), forcing a real reader seek and (for stateful backends)
+    // a pre-roll block.
     constexpr uint64_t k_start = 24000U;
     constexpr uint64_t k_count = 16000U;
     const double start_sec = static_cast<double>(k_start) / k_sr;

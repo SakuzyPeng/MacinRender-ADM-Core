@@ -71,7 +71,7 @@ macOS / Linux packages use `.tar.gz`; Windows packages use `.zip`. A `.sha256` f
 
 The `binaural` backend uses SAF's built-in Genelec KEMAR HRTF by default. A user FIR SOFA HRIR file can be loaded with `--sofa <path>`. Current SOFA support is limited to SimpleFreeFieldHRIR / GeneralFIR, 2 receivers, 48 kHz, with no resampling.
 
-The `apple` backend uses AudioToolbox AUSpatialMixer. It supports binaural, 5.1, 7.1, 5.1.2, 5.1.4, 7.1.4, 9.1.6, and 22.2. It is an Apple platform-flavored renderer, not a bit-exact replacement for libear / SAF; HOA, diffuse, channelLock, and extent are not supported yet. `--start` / `--end` use on-demand window rendering with one render block of pre-roll to update SpatialMixer state.
+The `apple` backend uses AudioToolbox AUSpatialMixer. It supports binaural, 5.1, 7.1, 5.1.2, 5.1.4, 7.1.4, 9.1.6, and 22.2. It is an Apple platform-flavored renderer, not a bit-exact replacement for libear / SAF; HOA and diffuse are not supported, while speaker-output channelLock and extent cloud approximation are supported. `--object-smoothing-frames` currently has no effect on the Apple backend because dynamic parameter smoothing is handled inside SpatialMixer. `--start` / `--end` use on-demand window rendering with one render block of pre-roll to update SpatialMixer state.
 
 ## Output Formats
 
@@ -155,7 +155,7 @@ Query full channel-order tables with:
 | `--start <sec>` | Trim output so it starts at this second on the rendered timeline; loudness / True Peak are measured over the kept segment | `0` |
 | `--end <sec>` | Trim output to this absolute second on the rendered timeline; must be greater than `--start`, unset means render to the end | Off |
 | `--interp-ms <ms>` | Gain interpolation ramp when an ADM block has no jumpPosition | `5` |
-| `--object-smoothing-frames <frames>` | Smoothing window for dynamic Objects metadata; `0` follows ADM blocks sample-by-sample | `8875` |
+| `--object-smoothing-frames <frames>` | Smoothing window for dynamic Objects metadata; `0` follows ADM blocks sample-by-sample; raise explicitly for extreme dynamic metadata; currently ignored by the Apple backend | `0` |
 | `--opus-bitrate-per-ch <kbps>` | Opus VBR target bitrate per channel | Auto |
 | `--apac-bitrate <kbps>` | APAC total bitrate hint; when unset, spatial layouts / HOA scale from the 7.1.4=2048 kbps baseline | See output-format notes |
 | `--apac-container mpeg4\|caf` | APAC container; `caf` requires a `.caf` output path, while plain `.caf` remains PCM by default | `mpeg4` |

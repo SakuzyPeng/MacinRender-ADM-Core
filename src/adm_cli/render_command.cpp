@@ -209,7 +209,8 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
         ->add_option("--object-smoothing-frames",
                      opts.object_smoothing_frames,
                      "De-zipper window for dense Objects metadata updates in sample frames "
-                     "(default: 8875, set to 0 for sample-accurate block switching)")
+                     "(default: 0 for sample-accurate block switching; "
+                     "currently ignored by the apple backend)")
         ->check(CLI::Range(0U, 48000U));
     render_cmd
         ->add_option("--opus-bitrate-per-ch",
