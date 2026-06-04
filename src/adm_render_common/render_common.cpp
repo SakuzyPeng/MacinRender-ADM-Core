@@ -121,46 +121,24 @@ PreparedObjectBlock prepare_object_block(const SceneObjectBlock& raw_block,
     };
 }
 
-std::vector<ExtentDirection>
-extent_disk_cloud(const SceneBlockPosition& position, float width, float height, float depth) {
-    const auto polar = scene_position_to_polar(position);
-
+ExtentRadii extent_disk_radii(float width, float height, float depth, float distance) {
     // Distance-dependent spread scaling: nearer objects subtend a wider angle.
-    const float spread_scale = std::clamp(1.0F / std::max(0.4F, polar.distance), 0.5F, 2.5F);
+    const float spread_scale = std::clamp(1.0F / std::max(0.4F, distance), 0.5F, 2.5F);
     const float depth_radius = std::max(0.0F, depth) * 20.0F * spread_scale;
     const float width_radius = (std::max(0.0F, width) * 60.0F * spread_scale) + depth_radius;
     const float height_radius = (std::max(0.0F, height) * 45.0F * spread_scale) + depth_radius;
+    return {width_radius, height_radius};
+}
+
+std::vector<ExtentDirection>
+extent_disk_cloud(const SceneBlockPosition& position, float width, float height, float depth) {
+    const auto polar = scene_position_to_polar(position);
+    const auto [width_radius, height_radius] = extent_disk_radii(width, height, depth, polar.distance);
 
     if (width_radius <= 1.0e-4F && height_radius <= 1.0e-4F) {
         return {{polar.azimuth, polar.elevation, 1.0F}};
     }
 
-    struct DiskSample {
-        float x{0.0F};
-        float y{0.0F};
-        float weight{0.0F};
-    };
-    constexpr float k_outer_weight = 1.0F / 12.0F; // outer ring total = 2/3
-    constexpr float k_inner_weight = 1.0F / 24.0F; // inner ring total = 1/3
-    constexpr std::array<DiskSample, 17> k_samples = {{
-        {0.0F, 0.0F, 0.0F},
-        {1.0F, 0.0F, k_outer_weight},
-        {-1.0F, 0.0F, k_outer_weight},
-        {0.0F, 1.0F, k_outer_weight},
-        {0.0F, -1.0F, k_outer_weight},
-        {0.70710678F, 0.70710678F, k_outer_weight},
-        {-0.70710678F, 0.70710678F, k_outer_weight},
-        {0.70710678F, -0.70710678F, k_outer_weight},
-        {-0.70710678F, -0.70710678F, k_outer_weight},
-        {0.5F, 0.0F, k_inner_weight},
-        {-0.5F, 0.0F, k_inner_weight},
-        {0.0F, 0.5F, k_inner_weight},
-        {0.0F, -0.5F, k_inner_weight},
-        {0.35355339F, 0.35355339F, k_inner_weight},
-        {-0.35355339F, 0.35355339F, k_inner_weight},
-        {0.35355339F, -0.35355339F, k_inner_weight},
-        {-0.35355339F, -0.35355339F, k_inner_weight},
-    }};
     constexpr float k_deg2rad = std::numbers::pi_v<float> / 180.0F;
 
     const SceneDirectionVector center = direction_vector_from_position(position);
@@ -173,8 +151,8 @@ extent_disk_cloud(const SceneBlockPosition& position, float width, float height,
     const SceneDirectionVector vertical = vec_normalize(vec_cross(center, horizontal));
 
     std::vector<ExtentDirection> cloud;
-    cloud.reserve(k_samples.size() - 1U);
-    for (const auto& sample : k_samples) {
+    cloud.reserve(k_extent_disk_samples.size() - 1U);
+    for (const auto& sample : k_extent_disk_samples) {
         if (sample.weight <= 0.0F) {
             continue;
         }
