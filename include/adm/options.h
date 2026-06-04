@@ -86,7 +86,9 @@ struct RenderOptions {
     uint32_t default_interp_ms{5};
     // De-zipper window for rapidly changing Objects metadata, in sample frames.
     // 0 disables renderer-side control-rate smoothing and follows ADM blocks sample-accurately.
-    uint32_t object_smoothing_frames{8875};
+    // Backend-dependent: the Apple AUSpatialMixer backend currently ignores this
+    // option and relies on SpatialMixer's internal parameter smoothing.
+    uint32_t object_smoothing_frames{0};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
     // Output time-range trim, in seconds, on the rendered timeline (which equals

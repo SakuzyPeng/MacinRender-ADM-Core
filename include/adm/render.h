@@ -80,8 +80,9 @@ struct RenderPlan {
     // Default gain-interpolation ramp in milliseconds (from RenderOptions).
     uint32_t default_interp_ms{5};
     // Renderer-side control-rate smoothing for dense Objects metadata updates.
-    // 0 disables smoothing.
-    uint32_t object_smoothing_frames{8875};
+    // 0 disables smoothing. Backend-dependent: the Apple AUSpatialMixer backend
+    // currently ignores this option and relies on SpatialMixer's internal smoothing.
+    uint32_t object_smoothing_frames{0};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
     // When set, restrict loudness / True-Peak measurement to this output frame
