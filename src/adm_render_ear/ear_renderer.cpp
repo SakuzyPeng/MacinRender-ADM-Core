@@ -733,8 +733,10 @@ Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& 
 }
 
 // NOLINTNEXTLINE(readability-function-size)
-Result<RenderMetrics>
-EarRenderer::render_window(const IPreparedRender& prep, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
+                                                 const RenderPlan& plan,
+                                                 ProgressSink& progress,
+                                                 LogSink& logs) { // NOLINT(readability-function-size)
     try {
         const auto* prepared = dynamic_cast<const EarPrepared*>(&prep);
         if (prepared == nullptr) {
@@ -755,7 +757,8 @@ EarRenderer::render_window(const IPreparedRender& prep, const RenderPlan& plan, 
             "ear",
             fmt::format("rendering {} tracks → {} channels, {} frames", gain_matrix.size(), num_out_ch, num_frames));
 
-        progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
+        progress.on_progress(
+            {RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "rendering audio"});
 
         constexpr uint64_t k_min_block_size = 1024;
         const uint64_t k_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
@@ -851,7 +854,8 @@ EarRenderer::render_window(const IPreparedRender& prep, const RenderPlan& plan, 
         if (start_pos > 0) {
             render_common::seek_reader_abs(*reader, start_pos);
         }
-        const double progress_span = static_cast<double>(std::max<uint64_t>(1, win_end - start_pos));
+        const uint64_t progress_total = std::max<uint64_t>(1, win_end - start_pos);
+        const auto progress_span = static_cast<double>(progress_total);
         uint64_t frames_done = start_pos;
 
         while (frames_done < win_end) {
@@ -953,8 +957,15 @@ EarRenderer::render_window(const IPreparedRender& prep, const RenderPlan& plan, 
             buf_idx = (buf_idx + 1) % k_num_buffers;
 
             const uint64_t progress_done = std::min(frames_done, win_end) - start_pos;
-            const double frac = 0.3 + (0.6 * (static_cast<double>(progress_done) / progress_span));
-            progress.on_progress({RenderStage::rendering, frac, "rendering"});
+            const double stage_fraction = static_cast<double>(progress_done) / progress_span;
+            const double frac = 0.3 + (0.6 * stage_fraction);
+            progress.on_progress({RenderStage::rendering,
+                                  RenderOperation::render_audio,
+                                  frac,
+                                  stage_fraction,
+                                  progress_done,
+                                  progress_total,
+                                  "rendering"});
         }
 
         // All audio is written; wait for outstanding measurements before reading global metrics.
@@ -964,7 +975,7 @@ EarRenderer::render_window(const IPreparedRender& prep, const RenderPlan& plan, 
             }
         }
 
-        progress.on_progress({RenderStage::finished, 1.0, "done"});
+        progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
         logs.log(LogLevel::info,
                  "ear",
                  fmt::format("wrote {} frames to {}{}",

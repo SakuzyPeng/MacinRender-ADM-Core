@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -37,6 +38,75 @@ const char* stage_name(mradm::RenderStage stage) noexcept {
         return "finished";
     }
     return "unknown";
+}
+
+adm_render_stage_t to_c_stage(mradm::RenderStage stage) noexcept {
+    switch (stage) {
+    case mradm::RenderStage::validating:
+        return ADM_STAGE_VALIDATING;
+    case mradm::RenderStage::probing:
+        return ADM_STAGE_PROBING;
+    case mradm::RenderStage::importing_scene:
+        return ADM_STAGE_IMPORTING_SCENE;
+    case mradm::RenderStage::planning:
+        return ADM_STAGE_PLANNING;
+    case mradm::RenderStage::rendering:
+        return ADM_STAGE_RENDERING;
+    case mradm::RenderStage::post_processing:
+        return ADM_STAGE_POST_PROCESSING;
+    case mradm::RenderStage::finished:
+        return ADM_STAGE_FINISHED;
+    }
+    return ADM_STAGE_UNKNOWN;
+}
+
+adm_progress_operation_t to_c_operation(mradm::RenderOperation operation) noexcept {
+    switch (operation) {
+    case mradm::RenderOperation::unknown:
+        return ADM_PROGRESS_OPERATION_UNKNOWN;
+    case mradm::RenderOperation::validate_request:
+        return ADM_PROGRESS_OPERATION_VALIDATE_REQUEST;
+    case mradm::RenderOperation::probe_input:
+        return ADM_PROGRESS_OPERATION_PROBE_INPUT;
+    case mradm::RenderOperation::import_scene:
+        return ADM_PROGRESS_OPERATION_IMPORT_SCENE;
+    case mradm::RenderOperation::apply_semantic_policy:
+        return ADM_PROGRESS_OPERATION_APPLY_SEMANTIC_POLICY;
+    case mradm::RenderOperation::plan_render:
+        return ADM_PROGRESS_OPERATION_PLAN_RENDER;
+    case mradm::RenderOperation::prepare_backend:
+        return ADM_PROGRESS_OPERATION_PREPARE_BACKEND;
+    case mradm::RenderOperation::render_audio:
+        return ADM_PROGRESS_OPERATION_RENDER_AUDIO;
+    case mradm::RenderOperation::trim_output:
+        return ADM_PROGRESS_OPERATION_TRIM_OUTPUT;
+    case mradm::RenderOperation::apply_gain:
+        return ADM_PROGRESS_OPERATION_APPLY_GAIN;
+    case mradm::RenderOperation::convert_bit_depth:
+        return ADM_PROGRESS_OPERATION_CONVERT_BIT_DEPTH;
+    case mradm::RenderOperation::encode_flac:
+        return ADM_PROGRESS_OPERATION_ENCODE_FLAC;
+    case mradm::RenderOperation::encode_opus:
+        return ADM_PROGRESS_OPERATION_ENCODE_OPUS;
+    case mradm::RenderOperation::encode_apac:
+        return ADM_PROGRESS_OPERATION_ENCODE_APAC;
+    case mradm::RenderOperation::encode_iamf:
+        return ADM_PROGRESS_OPERATION_ENCODE_IAMF;
+    case mradm::RenderOperation::package_iamf_mp4:
+        return ADM_PROGRESS_OPERATION_PACKAGE_IAMF_MP4;
+    case mradm::RenderOperation::write_metadata:
+        return ADM_PROGRESS_OPERATION_WRITE_METADATA;
+    case mradm::RenderOperation::finish:
+        return ADM_PROGRESS_OPERATION_FINISH;
+    }
+    return ADM_PROGRESS_OPERATION_UNKNOWN;
+}
+
+[[nodiscard]] double clamp_fraction(double value) noexcept {
+    if (!std::isfinite(value)) {
+        return 0.0;
+    }
+    return std::clamp(value, 0.0, 1.0);
 }
 
 // Directly pin the C++ ErrorCode enum to the stable C ABI enum. errors.h asserts
@@ -81,6 +151,26 @@ static_assert(static_cast<int>(mradm::LogLevel::info) == ADM_LOG_INFO);
 static_assert(static_cast<int>(mradm::LogLevel::warning) == ADM_LOG_WARNING);
 static_assert(static_cast<int>(mradm::LogLevel::error) == ADM_LOG_ERROR);
 
+static_assert(static_cast<int>(mradm::RenderOperation::unknown) == ADM_PROGRESS_OPERATION_UNKNOWN);
+static_assert(static_cast<int>(mradm::RenderOperation::validate_request) == ADM_PROGRESS_OPERATION_VALIDATE_REQUEST);
+static_assert(static_cast<int>(mradm::RenderOperation::probe_input) == ADM_PROGRESS_OPERATION_PROBE_INPUT);
+static_assert(static_cast<int>(mradm::RenderOperation::import_scene) == ADM_PROGRESS_OPERATION_IMPORT_SCENE);
+static_assert(static_cast<int>(mradm::RenderOperation::apply_semantic_policy) ==
+              ADM_PROGRESS_OPERATION_APPLY_SEMANTIC_POLICY);
+static_assert(static_cast<int>(mradm::RenderOperation::plan_render) == ADM_PROGRESS_OPERATION_PLAN_RENDER);
+static_assert(static_cast<int>(mradm::RenderOperation::prepare_backend) == ADM_PROGRESS_OPERATION_PREPARE_BACKEND);
+static_assert(static_cast<int>(mradm::RenderOperation::render_audio) == ADM_PROGRESS_OPERATION_RENDER_AUDIO);
+static_assert(static_cast<int>(mradm::RenderOperation::trim_output) == ADM_PROGRESS_OPERATION_TRIM_OUTPUT);
+static_assert(static_cast<int>(mradm::RenderOperation::apply_gain) == ADM_PROGRESS_OPERATION_APPLY_GAIN);
+static_assert(static_cast<int>(mradm::RenderOperation::convert_bit_depth) == ADM_PROGRESS_OPERATION_CONVERT_BIT_DEPTH);
+static_assert(static_cast<int>(mradm::RenderOperation::encode_flac) == ADM_PROGRESS_OPERATION_ENCODE_FLAC);
+static_assert(static_cast<int>(mradm::RenderOperation::encode_opus) == ADM_PROGRESS_OPERATION_ENCODE_OPUS);
+static_assert(static_cast<int>(mradm::RenderOperation::encode_apac) == ADM_PROGRESS_OPERATION_ENCODE_APAC);
+static_assert(static_cast<int>(mradm::RenderOperation::encode_iamf) == ADM_PROGRESS_OPERATION_ENCODE_IAMF);
+static_assert(static_cast<int>(mradm::RenderOperation::package_iamf_mp4) == ADM_PROGRESS_OPERATION_PACKAGE_IAMF_MP4);
+static_assert(static_cast<int>(mradm::RenderOperation::write_metadata) == ADM_PROGRESS_OPERATION_WRITE_METADATA);
+static_assert(static_cast<int>(mradm::RenderOperation::finish) == ADM_PROGRESS_OPERATION_FINISH);
+
 adm_log_level_t to_c_log_level(mradm::LogLevel level) noexcept {
     switch (level) {
     case mradm::LogLevel::debug:
@@ -124,11 +214,37 @@ class CallbackProgressSink final : public mradm::ProgressSink {
             return;
         }
         const std::string message(event.message);
-        callback_(event.fraction, stage_name(event.stage), message.c_str(), user_data_);
+        callback_(clamp_fraction(event.fraction), stage_name(event.stage), message.c_str(), user_data_);
     }
 
   private:
     adm_progress_cb callback_{nullptr};
+    void* user_data_{nullptr};
+};
+
+class CallbackProgressSinkV2 final : public mradm::ProgressSink {
+  public:
+    CallbackProgressSinkV2(adm_progress_v2_cb callback, void* user_data) : callback_(callback), user_data_(user_data) {}
+
+    void on_progress(const mradm::ProgressEvent& event) override {
+        if (callback_ == nullptr) {
+            return;
+        }
+        const std::string message(event.message);
+        adm_progress_event_v2_t c_event{};
+        c_event.struct_size = static_cast<uint32_t>(sizeof(adm_progress_event_v2_t));
+        c_event.stage = to_c_stage(event.stage);
+        c_event.operation = to_c_operation(event.operation);
+        c_event.overall_fraction = clamp_fraction(event.fraction);
+        c_event.stage_fraction = clamp_fraction(event.stage_fraction);
+        c_event.current_frame = event.current_frame;
+        c_event.total_frames = event.total_frames;
+        c_event.message = message.c_str();
+        callback_(&c_event, user_data_);
+    }
+
+  private:
+    adm_progress_v2_cb callback_{nullptr};
     void* user_data_{nullptr};
 };
 
@@ -193,6 +309,7 @@ struct adm_preview_session_t {
 
 // Build an owned C result handle from a finished render. Shared by adm_render_file_ex
 // and adm_preview_render_window. Returns nullptr on allocation failure.
+// NOLINTNEXTLINE(misc-use-anonymous-namespace,cppcoreguidelines-rvalue-reference-param-not-moved)
 static adm_render_result_t* make_c_result(mradm::RenderResult&& cpp_result, std::vector<CLogEntry>&& captured) {
     // cppcheck-suppress unreadVariable -- c is used via operator-> and release()
     auto c = std::unique_ptr<adm_render_result_t>(new (std::nothrow) adm_render_result_t{});
@@ -617,13 +734,13 @@ void adm_render_options_set_cancel_token(adm_render_options_t* opts, adm_cancel_
 
 /* ── Render ──────────────────────────────────────────────────────────────── */
 
-adm_error_code_t adm_render_file_ex(adm_context_t* context,
-                                    const char* input_path,
-                                    const char* output_path,
-                                    const adm_render_options_t* opts,
-                                    adm_progress_cb progress,
-                                    void* user_data,
-                                    adm_render_result_t** result) noexcept {
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
+static adm_error_code_t render_file_impl(adm_context_t* context,
+                                         const char* input_path,
+                                         const char* output_path,
+                                         const adm_render_options_t* opts,
+                                         mradm::ProgressSink& progress_sink,
+                                         adm_render_result_t** result) noexcept {
     if (result != nullptr) {
         *result = nullptr;
     }
@@ -644,7 +761,6 @@ adm_error_code_t adm_render_file_ex(adm_context_t* context,
             }
         }
 
-        CallbackProgressSink progress_sink(progress, user_data);
         // Only collect logs when the caller asked for a result handle to read them from.
         std::vector<CLogEntry> captured;
         CollectingLogSink collecting(captured);
@@ -666,6 +782,28 @@ adm_error_code_t adm_render_file_ex(adm_context_t* context,
     } catch (...) {
         return ADM_ERROR_INTERNAL;
     }
+}
+
+adm_error_code_t adm_render_file_ex(adm_context_t* context,
+                                    const char* input_path,
+                                    const char* output_path,
+                                    const adm_render_options_t* opts,
+                                    adm_progress_cb progress,
+                                    void* user_data,
+                                    adm_render_result_t** result) noexcept {
+    CallbackProgressSink progress_sink(progress, user_data);
+    return render_file_impl(context, input_path, output_path, opts, progress_sink, result);
+}
+
+adm_error_code_t adm_render_file_ex2(adm_context_t* context,
+                                     const char* input_path,
+                                     const char* output_path,
+                                     const adm_render_options_t* opts,
+                                     adm_progress_v2_cb progress,
+                                     void* user_data,
+                                     adm_render_result_t** result) noexcept {
+    CallbackProgressSinkV2 progress_sink(progress, user_data);
+    return render_file_impl(context, input_path, output_path, opts, progress_sink, result);
 }
 
 adm_error_code_t adm_render_file(adm_context_t* context,
@@ -719,13 +857,13 @@ void adm_destroy_preview_session(adm_preview_session_t* session) noexcept {
     delete session;
 }
 
-adm_error_code_t adm_preview_render_window(adm_preview_session_t* session,
-                                           double start_sec,
-                                           double end_sec,
-                                           const char* output_path,
-                                           adm_progress_cb progress,
-                                           void* user_data,
-                                           adm_render_result_t** result) noexcept {
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
+static adm_error_code_t preview_render_window_impl(adm_preview_session_t* session,
+                                                   double start_sec,
+                                                   double end_sec,
+                                                   const char* output_path,
+                                                   mradm::ProgressSink& progress_sink,
+                                                   adm_render_result_t** result) noexcept {
     if (result != nullptr) {
         *result = nullptr;
     }
@@ -743,7 +881,6 @@ adm_error_code_t adm_preview_render_window(adm_preview_session_t* session,
             out_path = std::filesystem::path{output_path};
         }
 
-        CallbackProgressSink progress_sink(progress, user_data);
         std::vector<CLogEntry> captured;
         CollectingLogSink collecting(captured);
         mradm::NullLogSink null_sink;
@@ -765,6 +902,28 @@ adm_error_code_t adm_preview_render_window(adm_preview_session_t* session,
     } catch (...) {
         return ADM_ERROR_INTERNAL;
     }
+}
+
+adm_error_code_t adm_preview_render_window(adm_preview_session_t* session,
+                                           double start_sec,
+                                           double end_sec,
+                                           const char* output_path,
+                                           adm_progress_cb progress,
+                                           void* user_data,
+                                           adm_render_result_t** result) noexcept {
+    CallbackProgressSink progress_sink(progress, user_data);
+    return preview_render_window_impl(session, start_sec, end_sec, output_path, progress_sink, result);
+}
+
+adm_error_code_t adm_preview_render_window_v2(adm_preview_session_t* session,
+                                              double start_sec,
+                                              double end_sec,
+                                              const char* output_path,
+                                              adm_progress_v2_cb progress,
+                                              void* user_data,
+                                              adm_render_result_t** result) noexcept {
+    CallbackProgressSinkV2 progress_sink(progress, user_data);
+    return preview_render_window_impl(session, start_sec, end_sec, output_path, progress_sink, result);
 }
 
 /* ── Result ──────────────────────────────────────────────────────────────── */

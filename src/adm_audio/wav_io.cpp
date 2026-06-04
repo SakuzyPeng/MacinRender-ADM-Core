@@ -44,6 +44,19 @@ class TempPathGuard {
     bool active_{true};
 };
 
+void emit_wav_progress(ProgressSink* progress,
+                       RenderOperation operation,
+                       double fraction,
+                       uint64_t current_frame,
+                       uint64_t total_frames,
+                       std::string_view message) {
+    if (progress == nullptr) {
+        return;
+    }
+    const double f = std::clamp(fraction, 0.0, 1.0);
+    progress->on_progress({RenderStage::post_processing, operation, f, f, current_frame, total_frames, message});
+}
+
 } // namespace
 
 // ── FloatWavWriter ────────────────────────────────────────────────────────────
@@ -127,7 +140,11 @@ uint64_t FloatWavReader::read(float* out, uint64_t frames) {
 
 // ── downconvert_to_int ────────────────────────────────────────────────────────
 
-Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth, const std::stop_token& cancel_token) {
+Result<void> downconvert_to_int(const std::string& path,
+                                uint16_t bit_depth,
+                                const std::stop_token& cancel_token,
+                                ProgressSink* progress,
+                                RenderOperation operation) {
     try {
         if (cancel_token.stop_requested()) {
             return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
@@ -147,6 +164,7 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth, con
         const uint32_t channels = reader.channels();
         const uint32_t sample_rate = reader.sample_rate();
         const uint64_t total_frames = reader.frame_count();
+        emit_wav_progress(progress, operation, 0.0, 0, total_frames, "converting bit depth");
 
         // libbw64 0.10.0 writeFile takes uint16_t sampleRate.
         if (sample_rate > std::numeric_limits<uint16_t>::max()) {
@@ -166,6 +184,7 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth, con
             constexpr uint64_t k_block = 4096;
             std::vector<float> buf(static_cast<std::size_t>(channels) * k_block);
             uint64_t left = total_frames;
+            uint64_t done = 0;
 
             while (left > 0) {
                 if (cancel_token.stop_requested()) {
@@ -178,6 +197,13 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth, con
                 }
                 writer->write(buf.data(), got);
                 left -= got;
+                done += got;
+                emit_wav_progress(progress,
+                                  operation,
+                                  static_cast<double>(done) / static_cast<double>(std::max<uint64_t>(1, total_frames)),
+                                  done,
+                                  total_frames,
+                                  "converting bit depth");
             }
         }
 
@@ -186,6 +212,7 @@ Result<void> downconvert_to_int(const std::string& path, uint16_t bit_depth, con
         }
         std::filesystem::rename(tmp_path, path);
         tmp_guard.dismiss();
+        emit_wav_progress(progress, operation, 1.0, total_frames, total_frames, "bit depth converted");
         return {};
 
     } catch (const std::exception& e) {

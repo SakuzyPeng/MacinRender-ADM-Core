@@ -518,8 +518,10 @@ Result<std::shared_ptr<IPreparedRender>> HoaRenderer::prepare(const RenderPlan& 
 }
 
 // NOLINTNEXTLINE(readability-function-size)
-Result<RenderMetrics>
-HoaRenderer::render_window(const IPreparedRender& prep, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) {
+Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
+                                                 const RenderPlan& plan,
+                                                 ProgressSink& progress,
+                                                 LogSink& logs) { // NOLINT(readability-function-size)
     const auto* prepared = dynamic_cast<const HoaPrepared*>(&prep);
     if (prepared == nullptr) {
         return make_error(
@@ -587,7 +589,7 @@ HoaRenderer::render_window(const IPreparedRender& prep, const RenderPlan& plan, 
                              gain_matrix.size(),
                              k_num_out,
                              num_frames));
-        progress.on_progress({RenderStage::rendering, 0.3, "encoding HOA"});
+        progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "encoding HOA"});
 
         auto reader = bw64::readFile(plan.input_path);
         auto writer_res = audio::WriterHandle::open(
@@ -732,14 +734,15 @@ HoaRenderer::render_window(const IPreparedRender& prep, const RenderPlan& plan, 
         }
         if (start_pos > 0) {
             render_common::seek_reader_abs(*reader, start_pos);
-            const std::size_t init_write_pos = static_cast<std::size_t>(start_pos % k_diffuse_delay_len);
+            const auto init_write_pos = static_cast<std::size_t>(start_pos % k_diffuse_delay_len);
             for (auto& slots : diffuse_states) {
                 for (auto& st : slots) {
                     st.write_pos = init_write_pos;
                 }
             }
         }
-        const double progress_span = static_cast<double>(std::max<uint64_t>(1, win_end - start_pos));
+        const uint64_t progress_total = std::max<uint64_t>(1, win_end - start_pos);
+        const auto progress_span = static_cast<double>(progress_total);
         uint64_t frames_done = start_pos;
 
         while (frames_done < win_end) {
@@ -850,8 +853,15 @@ HoaRenderer::render_window(const IPreparedRender& prep, const RenderPlan& plan, 
             buf_idx = (buf_idx + 1) % k_num_buffers;
 
             const uint64_t progress_done = std::min(frames_done, win_end) - start_pos;
-            const double frac = 0.3 + (0.6 * (static_cast<double>(progress_done) / progress_span));
-            progress.on_progress({RenderStage::rendering, frac, "encoding"});
+            const double stage_fraction = static_cast<double>(progress_done) / progress_span;
+            const double frac = 0.3 + (0.6 * stage_fraction);
+            progress.on_progress({RenderStage::rendering,
+                                  RenderOperation::render_audio,
+                                  frac,
+                                  stage_fraction,
+                                  progress_done,
+                                  progress_total,
+                                  "encoding"});
         }
 
         // All audio is written; wait for outstanding measurements before reading global metrics.
@@ -861,7 +871,7 @@ HoaRenderer::render_window(const IPreparedRender& prep, const RenderPlan& plan, 
             }
         }
 
-        progress.on_progress({RenderStage::finished, 1.0, "done"});
+        progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
         logs.log(LogLevel::info,
                  "hoa-encode",
                  fmt::format("wrote {} frames to {}{}",

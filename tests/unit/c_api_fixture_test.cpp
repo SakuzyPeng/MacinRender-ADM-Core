@@ -159,6 +159,21 @@ void full_progress_cb(double fraction, const char* stage, const char* message, v
     state->events.push_back({fraction, stage != nullptr ? stage : "", message != nullptr});
 }
 
+struct ProgressV2State {
+    std::vector<adm_progress_event_v2_t> events;
+    bool messages_non_null{true};
+};
+
+void progress_v2_cb(const adm_progress_event_v2_t* event, void* user_data) {
+    auto* state = static_cast<ProgressV2State*>(user_data);
+    if (event == nullptr) {
+        state->messages_non_null = false;
+        return;
+    }
+    state->messages_non_null = state->messages_non_null && event->message != nullptr;
+    state->events.push_back(*event);
+}
+
 bool verify_version() {
     return check(adm_api_version_major() == ADM_API_VERSION_MAJOR, "version major mismatch") &&
            check(adm_api_version_minor() == ADM_API_VERSION_MINOR, "version minor mismatch") &&
@@ -1163,6 +1178,92 @@ bool verify_version_19() {
     return check(adm_api_version_minor() >= 9, "v1.9: minor version should be >= 9");
 }
 
+// ── v1.10 tests ───────────────────────────────────────────────────────────
+
+bool verify_version_110() {
+    return check(adm_api_version_minor() >= 10, "v1.10: minor version should be >= 10");
+}
+
+bool verify_progress_v2_events(const ProgressV2State& state, bool require_post_processing, const char* label) {
+    (void) label;
+    bool ok = check(!state.events.empty(), "v2 progress: at least one event should fire");
+    ok = check(state.messages_non_null, "v2 progress: all messages should be non-null") && ok;
+
+    bool struct_size_ok = true;
+    bool stage_ok = true;
+    bool operation_ok = true;
+    bool overall_ok = true;
+    bool stage_fraction_ok = true;
+    bool render_frames_ok = false;
+    bool post_ok = !require_post_processing;
+    double prev = -1.0;
+    for (const auto& ev : state.events) {
+        struct_size_ok = struct_size_ok && ev.struct_size == sizeof(adm_progress_event_v2_t);
+        stage_ok = stage_ok && ev.stage != ADM_STAGE_UNKNOWN;
+        operation_ok = operation_ok && ev.operation != ADM_PROGRESS_OPERATION_UNKNOWN;
+        overall_ok =
+            overall_ok && ev.overall_fraction >= prev && ev.overall_fraction >= 0.0 && ev.overall_fraction <= 1.0;
+        stage_fraction_ok = stage_fraction_ok && ev.stage_fraction >= 0.0 && ev.stage_fraction <= 1.0;
+        if (ev.operation == ADM_PROGRESS_OPERATION_RENDER_AUDIO && ev.total_frames > 0) {
+            render_frames_ok = true;
+        }
+        if (ev.stage == ADM_STAGE_POST_PROCESSING) {
+            post_ok = true;
+        }
+        prev = ev.overall_fraction;
+    }
+    ok = check(struct_size_ok, "v2 progress: struct_size should match") && ok;
+    ok = check(stage_ok, "v2 progress: stage should be known") && ok;
+    ok = check(operation_ok, "v2 progress: operation should be known") && ok;
+    ok = check(overall_ok, "v2 progress: overall_fraction should be non-decreasing in [0,1]") && ok;
+    ok = check(stage_fraction_ok, "v2 progress: stage_fraction should be in [0,1]") && ok;
+    ok = check(render_frames_ok, "v2 progress: render events should carry total_frames") && ok;
+    ok = check(post_ok, "v2 progress: should include post-processing when requested") && ok;
+    if (!state.events.empty()) {
+        const auto& last = state.events.back();
+        ok = check(last.stage == ADM_STAGE_FINISHED, "v2 progress: last stage should be FINISHED") && ok;
+        ok = check(last.operation == ADM_PROGRESS_OPERATION_FINISH, "v2 progress: last operation should be FINISH") &&
+             ok;
+        ok = check(last.overall_fraction >= 0.99, "v2 progress: final progress should reach ~1.0") && ok;
+    }
+    return ok;
+}
+
+bool verify_progress_v2_render(adm_context_t* ctx, const std::filesystem::path& input) {
+    const auto out_null = unique_temp_wav_path("mr_c_api_prog_v2_null");
+    FileGuard g0(out_null);
+    bool ok = check(adm_render_file_ex2(
+                        ctx, input.string().c_str(), out_null.string().c_str(), nullptr, nullptr, nullptr, nullptr) ==
+                        ADM_ERROR_OK,
+                    "v2 progress: NULL callback render should succeed");
+
+    const auto output = unique_temp_wav_path("mr_c_api_prog_v2");
+    FileGuard guard(output);
+    ProgressV2State state;
+    const adm_error_code_t code = adm_render_file_ex2(
+        ctx, input.string().c_str(), output.string().c_str(), nullptr, &progress_v2_cb, &state, nullptr);
+    ok = check(code == ADM_ERROR_OK, "v2 progress: render should succeed") && ok;
+    ok = verify_progress_v2_events(state, true, "v2 progress render") && ok;
+    return ok;
+}
+
+bool verify_progress_v2_flac_post(adm_context_t* ctx, const std::filesystem::path& input) {
+    auto output = unique_temp_wav_path("mr_c_api_prog_v2_flac");
+    output.replace_extension(".flac");
+    FileGuard guard(output);
+
+    ProgressV2State state;
+    const adm_error_code_t code = adm_render_file_ex2(
+        ctx, input.string().c_str(), output.string().c_str(), nullptr, &progress_v2_cb, &state, nullptr);
+    bool ok = check(code == ADM_ERROR_OK, "v2 progress FLAC render should succeed");
+    ok = verify_progress_v2_events(state, true, "v2 progress FLAC") && ok;
+    const bool has_flac = std::ranges::any_of(state.events, [](const adm_progress_event_v2_t& ev) {
+        return ev.operation == ADM_PROGRESS_OPERATION_ENCODE_FLAC && ev.stage == ADM_STAGE_POST_PROCESSING;
+    });
+    ok = check(has_flac, "v2 progress FLAC should expose ENCODE_FLAC post-processing operation") && ok;
+    return ok;
+}
+
 // Whether any of a result's captured log messages contains `needle`.
 bool result_logs_contain(const adm_render_result_t* result, const char* needle) {
     const uint32_t n = adm_render_result_log_count(result);
@@ -1189,6 +1290,7 @@ bool result_logs_contain(const adm_render_result_t* result, const char* needle) 
 // split is bit-exact-verified in render_trim_fixture_test (window_bit_exact for ear/vbap/
 // hoa/binaural), so they intentionally have no separate per-backend cache-reuse assertion
 // here (there is no distinctive once-only prepare log to assert on for them).
+// NOLINTNEXTLINE(readability-function-size)
 bool verify_preview_session(adm_context_t* ctx, const std::filesystem::path& input_1s) {
     const std::string in = input_1s.string();
 
@@ -1231,9 +1333,11 @@ bool verify_preview_session(adm_context_t* ctx, const std::filesystem::path& inp
     const auto out_a = unique_temp_wav_path("mr_c_api_preview_a");
     const auto out_b = unique_temp_wav_path("mr_c_api_preview_b");
     const auto out_c = unique_temp_wav_path("mr_c_api_preview_c");
+    const auto out_v2 = unique_temp_wav_path("mr_c_api_preview_v2");
     FileGuard ga(out_a);
     FileGuard gb(out_b);
     FileGuard gc(out_c);
+    FileGuard gv2(out_v2);
 
     adm_render_result_t* ra = nullptr;
     ok = check(adm_preview_render_window(session, 0.25, 0.75, out_a.string().c_str(), nullptr, nullptr, &ra) ==
@@ -1265,6 +1369,17 @@ bool verify_preview_session(adm_context_t* ctx, const std::filesystem::path& inp
          ok;
     adm_destroy_render_result(rc);
     ok = check(wav_frame_count(out_c) == 24000U, "preview window [0.5, end) → 24000 frames (to end)") && ok;
+
+    ProgressV2State preview_v2_state;
+    adm_render_result_t* rv2 = nullptr;
+    ok = check(adm_preview_render_window_v2(
+                   session, 0.0, 0.25, out_v2.string().c_str(), &progress_v2_cb, &preview_v2_state, &rv2) ==
+                   ADM_ERROR_OK,
+               "preview v2 window succeeds") &&
+         ok;
+    adm_destroy_render_result(rv2);
+    ok = verify_progress_v2_events(preview_v2_state, true, "preview v2 progress") && ok;
+    ok = check(wav_frame_count(out_v2) == 12000U, "preview v2 window [0,0.25) → 12000 frames") && ok;
 
     adm_destroy_preview_session(session);
     adm_destroy_preview_session(nullptr); // must not crash
@@ -1913,7 +2028,6 @@ int main() {
         ok = verify_cancel_threaded(ctx, fixture_1s.path()) && ok;
         // v1.8 tests
         ok = verify_version_18() && ok;
-        ok = verify_version_19() && ok;
         ok = verify_preview_session(ctx, fixture_1s.path()) && ok;
     }
     ok = verify_probe(ctx, fixture.path()) && ok;
@@ -1931,6 +2045,12 @@ int main() {
     // v1.7 tests
     ok = verify_version_17() && ok;
     ok = verify_render_stage_from_string() && ok;
+    // v1.9 tests
+    ok = verify_version_19() && ok;
+    // v1.10 tests
+    ok = verify_version_110() && ok;
+    ok = verify_progress_v2_render(ctx, fixture.path()) && ok;
+    ok = verify_progress_v2_flac_post(ctx, fixture.path()) && ok;
     ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;
     ok = verify_apac_caf_smoke(ctx, fixture.path()) && ok;
     ok = verify_iamf_smoke(ctx, fixture.path()) && ok;

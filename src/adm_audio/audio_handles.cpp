@@ -57,6 +57,19 @@ class TempPathGuard {
     return parent / fmt::format("{}.{}.{:016x}{}", stem, purpose, dist(rng), ext);
 }
 
+void emit_audio_progress(ProgressSink* progress,
+                         RenderOperation operation,
+                         double fraction,
+                         uint64_t current_frame,
+                         uint64_t total_frames,
+                         std::string_view message) {
+    if (progress == nullptr) {
+        return;
+    }
+    const double f = std::clamp(fraction, 0.0, 1.0);
+    progress->on_progress({RenderStage::post_processing, operation, f, f, current_frame, total_frames, message});
+}
+
 } // namespace
 
 // ── ReaderHandle ──────────────────────────────────────────────────────────────
@@ -105,8 +118,11 @@ uint64_t ReaderHandle::read(float* out, uint64_t frames) {
 Result<void> apply_gain_to_file(const std::string& path,
                                 float gain,
                                 const std::string& layout_id,
-                                const std::stop_token& cancel_token) {
+                                const std::stop_token& cancel_token,
+                                ProgressSink* progress,
+                                RenderOperation operation) {
     if (std::abs(gain - 1.0F) < 1e-6F) {
+        emit_audio_progress(progress, operation, 1.0, 0, 0, "gain skipped");
         return {};
     }
     if (cancel_token.stop_requested()) {
@@ -127,6 +143,7 @@ Result<void> apply_gain_to_file(const std::string& path,
         const uint32_t num_ch = reader.channels();
         const uint32_t sr = reader.sample_rate();
         const uint64_t total_frames = reader.frame_count();
+        emit_audio_progress(progress, operation, 0.0, 0, total_frames, "applying gain");
 
         auto writer_res = WriterHandle::open(tmp_path.string(), num_ch, sr, layout_id);
         if (!writer_res) {
@@ -137,6 +154,7 @@ Result<void> apply_gain_to_file(const std::string& path,
         constexpr uint64_t k_block = 4096;
         std::vector<float> buf(static_cast<std::size_t>(num_ch) * k_block);
         uint64_t left = total_frames;
+        uint64_t done = 0;
 
         while (left > 0) {
             if (cancel_token.stop_requested()) {
@@ -156,6 +174,13 @@ Result<void> apply_gain_to_file(const std::string& path,
                     ErrorCode::io_error, "short write in apply_gain_to_file", "path=" + tmp_path.string());
             }
             left -= got;
+            done += got;
+            emit_audio_progress(progress,
+                                operation,
+                                static_cast<double>(done) / static_cast<double>(std::max<uint64_t>(1, total_frames)),
+                                done,
+                                total_frames,
+                                "applying gain");
         }
         if (left != 0) {
             return make_error(ErrorCode::io_error, "short read in apply_gain_to_file", "path=" + path);
@@ -179,6 +204,7 @@ Result<void> apply_gain_to_file(const std::string& path,
         }
     }
     tmp_guard.dismiss();
+    emit_audio_progress(progress, operation, 1.0, 0, 0, "gain applied");
     return {};
 }
 
@@ -188,7 +214,9 @@ Result<void> trim_file_frames(const std::string& path,
                               uint64_t start_frame,
                               uint64_t frame_count,
                               const std::string& layout_id,
-                              const std::stop_token& cancel_token) {
+                              const std::stop_token& cancel_token,
+                              ProgressSink* progress,
+                              RenderOperation operation) {
     if (cancel_token.stop_requested()) {
         return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
     }
@@ -224,8 +252,10 @@ Result<void> trim_file_frames(const std::string& path,
         }
         // Whole-file range: nothing to do, leave the file untouched.
         if (clamped_start == 0 && out_frames == total_frames) {
+            emit_audio_progress(progress, operation, 1.0, out_frames, out_frames, "trim skipped");
             return {};
         }
+        emit_audio_progress(progress, operation, 0.0, 0, out_frames, "trimming output");
 
         auto writer_res = WriterHandle::open(tmp_path.string(), num_ch, sr, layout_id);
         if (!writer_res) {
@@ -251,6 +281,7 @@ Result<void> trim_file_frames(const std::string& path,
         }
 
         uint64_t left = out_frames;
+        uint64_t done = 0;
         while (left > 0) {
             if (cancel_token.stop_requested()) {
                 return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
@@ -264,6 +295,13 @@ Result<void> trim_file_frames(const std::string& path,
                 return make_error(ErrorCode::io_error, "short write in trim_file_frames", "path=" + tmp_path.string());
             }
             left -= got;
+            done += got;
+            emit_audio_progress(progress,
+                                operation,
+                                static_cast<double>(done) / static_cast<double>(std::max<uint64_t>(1, out_frames)),
+                                done,
+                                out_frames,
+                                "trimming output");
         }
     }
 
@@ -284,6 +322,7 @@ Result<void> trim_file_frames(const std::string& path,
         }
     }
     tmp_guard.dismiss();
+    emit_audio_progress(progress, operation, 1.0, 0, 0, "trimmed output");
     return {};
 }
 

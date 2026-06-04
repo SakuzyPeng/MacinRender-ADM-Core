@@ -29,6 +29,23 @@ namespace mradm::audio {
 constexpr uint32_t k_flac_bits{24};
 constexpr float k_flac_scale{8388607.0F}; // 2^23 − 1, maps ±1.0f to ±8388607.
 
+namespace {
+
+void emit_flac_progress(ProgressSink* progress,
+                        RenderOperation operation,
+                        double fraction,
+                        uint64_t current_frame,
+                        uint64_t total_frames,
+                        std::string_view message) {
+    if (progress == nullptr) {
+        return;
+    }
+    const double f = std::clamp(fraction, 0.0, 1.0);
+    progress->on_progress({RenderStage::post_processing, operation, f, f, current_frame, total_frames, message});
+}
+
+} // namespace
+
 struct FloatFlacWriter::Impl {
     FLAC__StreamEncoder* encoder{nullptr};
     uint32_t channels{};
@@ -245,8 +262,11 @@ Result<void> write_flac_metadata(const std::string& path, const MetadataFields& 
 // Encode a fully post-processed float32 WAV to FLAC (24-bit, compression level 5).
 // All loudness/peak adjustments must be applied to src_path before calling this so
 // that quantisation happens exactly once on the final sample values.
-Result<void>
-convert_to_flac(const std::string& src_path, const std::string& flac_path, const std::stop_token& cancel_token) {
+Result<void> convert_to_flac(const std::string& src_path,
+                             const std::string& flac_path,
+                             const std::stop_token& cancel_token,
+                             ProgressSink* progress,
+                             RenderOperation operation) {
     if (cancel_token.stop_requested()) {
         return make_error(ErrorCode::cancelled, "render cancelled", "path=" + flac_path);
     }
@@ -265,6 +285,9 @@ convert_to_flac(const std::string& src_path, const std::string& flac_path, const
     constexpr uint64_t k_block = 4096;
     std::vector<float> buf(static_cast<std::size_t>(reader.channels()) * k_block);
     uint64_t left = reader.frame_count();
+    const uint64_t total_frames = left;
+    uint64_t done = 0;
+    emit_flac_progress(progress, operation, 0.0, 0, total_frames, "encoding FLAC");
 
     while (left > 0) {
         if (cancel_token.stop_requested()) {
@@ -279,10 +302,18 @@ convert_to_flac(const std::string& src_path, const std::string& flac_path, const
             return make_error(ErrorCode::io_error, "short write in convert_to_flac", "path=" + flac_path);
         }
         left -= got;
+        done += got;
+        emit_flac_progress(progress,
+                           operation,
+                           static_cast<double>(done) / static_cast<double>(std::max<uint64_t>(1, total_frames)),
+                           done,
+                           total_frames,
+                           "encoding FLAC");
     }
     if (left != 0) {
         return make_error(ErrorCode::io_error, "short read in convert_to_flac", "path=" + src_path);
     }
+    emit_flac_progress(progress, operation, 1.0, total_frames, total_frames, "FLAC encoded");
     return {};
 }
 

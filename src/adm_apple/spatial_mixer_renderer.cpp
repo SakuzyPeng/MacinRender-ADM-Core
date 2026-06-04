@@ -647,7 +647,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                 pending.get();
             }
         }
-        progress.on_progress({RenderStage::finished, 1.0, "done"});
+        progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
         return collect_metrics(lufs_st.get(), num_out_ch);
     }
 
@@ -757,7 +757,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                          num_out_ch,
                          profile.binaural ? "HRTF binaural" : "VBAP speakers",
                          frames_to_write));
-    progress.on_progress({RenderStage::rendering, 0.3, "rendering audio"});
+    progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "rendering audio"});
 
     auto reader = bw64::readFile(plan.input_path);
     if (start_pos > 0) {
@@ -777,7 +777,8 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     time_stamp.mFlags = kAudioTimeStampSampleTimeValid;
 
     uint64_t frames_done = start_pos;
-    const double progress_span = static_cast<double>(std::max<uint64_t>(1, win_end - start_pos));
+    const uint64_t progress_total = std::max<uint64_t>(1, win_end - start_pos);
+    const auto progress_span = static_cast<double>(progress_total);
 
     while (frames_done < win_end) {
         if (plan.cancel_token.stop_requested()) {
@@ -844,8 +845,16 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
 
         buf_idx = (buf_idx + 1U) % k_num_buffers;
         frames_done += frames_now;
-        const double frac = 0.3 + (0.6 * (static_cast<double>(frames_done - start_pos) / progress_span));
-        progress.on_progress({RenderStage::rendering, frac, "rendering"});
+        const uint64_t progress_done = std::min(frames_done, win_end) - start_pos;
+        const double stage_fraction = static_cast<double>(progress_done) / progress_span;
+        const double frac = 0.3 + (0.6 * stage_fraction);
+        progress.on_progress({RenderStage::rendering,
+                              RenderOperation::render_audio,
+                              frac,
+                              stage_fraction,
+                              progress_done,
+                              progress_total,
+                              "rendering"});
     }
 
     for (auto& pending : meter_pending) {
@@ -854,7 +863,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
         }
     }
 
-    progress.on_progress({RenderStage::finished, 1.0, "done"});
+    progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
     logs.log(LogLevel::info, "apple", fmt::format("wrote {} frames to {}", frames_to_write, plan.output_path));
     return collect_metrics(lufs_st.get(), num_out_ch);
 }

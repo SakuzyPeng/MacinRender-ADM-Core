@@ -152,6 +152,61 @@ namespace {
     return "unknown";
 }
 
+[[nodiscard]] double clamp_progress(double value) {
+    if (!std::isfinite(value)) {
+        return 0.0;
+    }
+    return std::clamp(value, 0.0, 1.0);
+}
+
+void emit_progress(ProgressSink& progress,
+                   RenderStage stage,
+                   RenderOperation operation,
+                   double fraction,
+                   double stage_fraction,
+                   std::string_view message,
+                   uint64_t current_frame = 0,
+                   uint64_t total_frames = 0) {
+    progress.on_progress({stage,
+                          operation,
+                          clamp_progress(fraction),
+                          clamp_progress(stage_fraction),
+                          current_frame,
+                          total_frames,
+                          message});
+}
+
+class ProgressRangeSink final : public ProgressSink {
+  public:
+    ProgressRangeSink(ProgressSink& downstream,
+                      RenderStage stage,
+                      RenderOperation operation,
+                      double start,
+                      double end,
+                      std::string_view fallback_message)
+        : downstream_(&downstream), stage_(stage), operation_(operation), start_(clamp_progress(start)),
+          end_(clamp_progress(end)), fallback_message_(fallback_message) {}
+
+    void on_progress(const ProgressEvent& event) override {
+        const double local = (event.stage == RenderStage::finished) ? 1.0 : clamp_progress(event.stage_fraction);
+        const double mapped = start_ + ((end_ - start_) * local);
+        const auto operation = (event.operation == RenderOperation::unknown || event.stage == RenderStage::finished)
+                                   ? operation_
+                                   : event.operation;
+        const auto message = event.message.empty() ? std::string_view{fallback_message_} : event.message;
+        downstream_->on_progress(
+            {stage_, operation, clamp_progress(mapped), local, event.current_frame, event.total_frames, message});
+    }
+
+  private:
+    ProgressSink* downstream_;
+    RenderStage stage_;
+    RenderOperation operation_;
+    double start_{0.0};
+    double end_{1.0};
+    std::string_view fallback_message_;
+};
+
 class TempFileGuard {
   public:
     explicit TempFileGuard(std::filesystem::path path) : path_(std::move(path)) {}
@@ -273,7 +328,7 @@ RenderResult RenderService::render(const RenderRequest& request,
                                    LogSink& logs,
                                    const AdmScene* preimported_scene,
                                    std::shared_ptr<IPreparedRender>* prepared_cache) const {
-    progress.on_progress({RenderStage::validating, 0.0, "validating request"});
+    emit_progress(progress, RenderStage::validating, RenderOperation::validate_request, 0.0, 0.0, "validating request");
 
     if (request.input_path.empty()) {
         return {{ErrorCode::invalid_argument, "input path is required", {}}, std::nullopt, std::nullopt, {}};
@@ -292,7 +347,13 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     // Probe input for early error detection and logging. A PreviewSession supplies an
     // already-imported, policy-applied scene (copied here); otherwise import from disk.
-    progress.on_progress({RenderStage::probing, 0.05, "probing input"});
+    emit_progress(progress, RenderStage::probing, RenderOperation::probe_input, 0.05, 0.0, "probing input");
+    emit_progress(progress,
+                  RenderStage::importing_scene,
+                  RenderOperation::import_scene,
+                  0.10,
+                  0.0,
+                  preimported_scene != nullptr ? "using cached scene" : "importing scene");
     Result<AdmScene> scene_result = (preimported_scene != nullptr) ? Result<AdmScene>{*preimported_scene}
                                                                    : io::import_scene(request.input_path.string());
     if (!scene_result) {
@@ -448,6 +509,12 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     // Resolve + apply the semantic policy (skipped when a preview session already did).
     if (preimported_scene == nullptr) {
+        emit_progress(progress,
+                      RenderStage::importing_scene,
+                      RenderOperation::apply_semantic_policy,
+                      0.18,
+                      0.0,
+                      "applying semantic policy");
         auto policy_res = resolve_and_apply_policy(*scene_result, request.options, semantic_warnings, logs);
         if (!policy_res) {
             return {policy_res.error(), std::nullopt, std::nullopt, {{LogLevel::error, policy_res.error().message}}};
@@ -589,6 +656,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     auto iamf_temp_guard = is_iamf_mp4_final ? std::make_unique<TempFileGuard>(iamf_temp_path) : nullptr;
 
     // Build plan.
+    emit_progress(progress, RenderStage::planning, RenderOperation::plan_render, 0.24, 0.0, "planning render");
     RenderPlan plan;
     plan.input_path = request.input_path.string();
     plan.output_path = render_path;
@@ -618,6 +686,8 @@ RenderResult RenderService::render(const RenderRequest& request,
     std::shared_ptr<IPreparedRender> local_prepared;
     std::shared_ptr<IPreparedRender>& prepared_slot = (prepared_cache != nullptr) ? *prepared_cache : local_prepared;
     if (!prepared_slot) {
+        emit_progress(
+            progress, RenderStage::planning, RenderOperation::prepare_backend, 0.28, 0.0, "preparing backend");
         auto prep_res = renderer->prepare(plan, logs);
         if (!prep_res) {
             return fail_with_report(prep_res.error());
@@ -629,7 +699,9 @@ RenderResult RenderService::render(const RenderRequest& request,
     }
 
     // Render (inline measurement of loudness + True Peak over the meter window).
-    auto render_res = renderer->render_window(*prepared_slot, plan, progress, logs);
+    ProgressRangeSink render_progress(
+        progress, RenderStage::rendering, RenderOperation::render_audio, 0.30, 0.90, "rendering audio");
+    auto render_res = renderer->render_window(*prepared_slot, plan, render_progress, logs);
     if (!render_res) {
         if (!is_lossy_final) {
             output_guard.arm();
@@ -659,8 +731,15 @@ RenderResult RenderService::render(const RenderRequest& request,
     // the file metadata all describe the trimmed segment. Skipped when window_render
     // already produced a trimmed file (the backend wrote only the window).
     if (need_trim && !window_render) {
-        auto trim_res =
-            audio::trim_file_frames(render_path, trim_start_frame, trim_frame_count, output_layout, plan.cancel_token);
+        ProgressRangeSink trim_progress(
+            progress, RenderStage::post_processing, RenderOperation::trim_output, 0.90, 0.92, "trimming output");
+        auto trim_res = audio::trim_file_frames(render_path,
+                                                trim_start_frame,
+                                                trim_frame_count,
+                                                output_layout,
+                                                plan.cancel_token,
+                                                &trim_progress,
+                                                RenderOperation::trim_output);
         if (!trim_res) {
             return fail_with_report(trim_res.error());
         }
@@ -736,7 +815,10 @@ RenderResult RenderService::render(const RenderRequest& request,
     if (std::abs(gain_db) >= 0.01) {
         const auto gain_linear = static_cast<float>(std::pow(10.0, gain_db / 20.0));
         logs.log(LogLevel::info, "engine", fmt::format("applying total gain {:.4f} ({:.2f} dB)", gain_linear, gain_db));
-        auto gain_res = audio::apply_gain_to_file(render_path, gain_linear, output_layout, plan.cancel_token);
+        ProgressRangeSink gain_progress(
+            progress, RenderStage::post_processing, RenderOperation::apply_gain, 0.92, 0.94, "applying gain");
+        auto gain_res = audio::apply_gain_to_file(
+            render_path, gain_linear, output_layout, plan.cancel_token, &gain_progress, RenderOperation::apply_gain);
         if (!gain_res) {
             return fail_with_report(gain_res.error());
         }
@@ -756,7 +838,14 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (render_ext != ".caf") {
             const uint16_t depth = (request.options.output_bit_depth == OutputBitDepth::i16) ? 16U : 24U;
             logs.log(LogLevel::info, "engine", fmt::format("converting to {}-bit integer PCM", depth));
-            auto conv_res = audio::downconvert_to_int(render_path, depth, plan.cancel_token);
+            ProgressRangeSink bitdepth_progress(progress,
+                                                RenderStage::post_processing,
+                                                RenderOperation::convert_bit_depth,
+                                                0.94,
+                                                0.955,
+                                                "converting bit depth");
+            auto conv_res = audio::downconvert_to_int(
+                render_path, depth, plan.cancel_token, &bitdepth_progress, RenderOperation::convert_bit_depth);
             if (!conv_res) {
                 return fail_with_report(conv_res.error());
             }
@@ -771,7 +860,9 @@ RenderResult RenderService::render(const RenderRequest& request,
     // outcome to avoid leaving stale files on disk.
     if (is_flac_final) {
         logs.log(LogLevel::info, "engine", "encoding float32 render to FLAC (24-bit)");
-        auto flac_res = audio::convert_to_flac(render_path, encoded_output_path, plan.cancel_token);
+        ProgressRangeSink flac_progress(
+            progress, RenderStage::post_processing, RenderOperation::encode_flac, 0.955, 0.985, "encoding FLAC");
+        auto flac_res = audio::convert_to_flac(render_path, encoded_output_path, plan.cancel_token, &flac_progress);
         render_temp_guard->remove_now();
         if (!flac_res) {
             return fail_with_report(flac_res.error());
@@ -780,6 +871,8 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     if (is_opus_final) {
         logs.log(LogLevel::info, "engine", "encoding float32 render to Opus MKA (VBR)");
+        emit_progress(
+            progress, RenderStage::post_processing, RenderOperation::encode_opus, 0.955, 0.0, "encoding Opus");
         auto opus_res = audio::convert_to_opus_mka(render_path,
                                                    encoded_output_path,
                                                    output_layout,
@@ -789,10 +882,13 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (!opus_res) {
             return fail_with_report(opus_res.error());
         }
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_opus, 0.985, 1.0, "Opus encoded");
     }
 
     if (is_apac_final) {
         logs.log(LogLevel::info, "engine", fmt::format("encoding float32 render to APAC ({})", final_ext));
+        emit_progress(
+            progress, RenderStage::post_processing, RenderOperation::encode_apac, 0.955, 0.0, "encoding APAC");
         const auto apac_container = is_apac_caf_final ? audio::ApacContainer::caf : audio::ApacContainer::mpeg4;
         auto apac_res = audio::convert_to_apac(render_path,
                                                encoded_output_path,
@@ -805,6 +901,7 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (!apac_res) {
             return fail_with_report(apac_res.error());
         }
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_apac, 0.985, 1.0, "APAC encoded");
     }
 
     if (is_iamf_final) {
@@ -813,13 +910,22 @@ RenderResult RenderService::render(const RenderRequest& request,
             metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
         const auto peak =
             metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
-        auto conv_res = audio::downconvert_to_int(render_path, 32U, plan.cancel_token);
+        ProgressRangeSink bitdepth_progress(progress,
+                                            RenderStage::post_processing,
+                                            RenderOperation::convert_bit_depth,
+                                            0.94,
+                                            0.955,
+                                            "converting bit depth");
+        auto conv_res = audio::downconvert_to_int(
+            render_path, 32U, plan.cancel_token, &bitdepth_progress, RenderOperation::convert_bit_depth);
         if (!conv_res) {
             return fail_with_report(conv_res.error());
         }
         if (auto cancelled = fail_if_cancelled()) {
             return std::move(*cancelled);
         }
+        emit_progress(
+            progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.955, 0.0, "encoding IAMF");
         auto iamf_res = audio::convert_to_iamf(render_path,
                                                encoded_output_path,
                                                output_layout,
@@ -831,6 +937,7 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (!iamf_res) {
             return fail_with_report(iamf_res.error());
         }
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.985, 1.0, "IAMF encoded");
     }
 
     if (is_iamf_mp4_final) {
@@ -839,13 +946,22 @@ RenderResult RenderService::render(const RenderRequest& request,
             metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt;
         const auto peak =
             metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt;
-        auto conv_res = audio::downconvert_to_int(render_path, 32U, plan.cancel_token);
+        ProgressRangeSink bitdepth_progress(progress,
+                                            RenderStage::post_processing,
+                                            RenderOperation::convert_bit_depth,
+                                            0.94,
+                                            0.955,
+                                            "converting bit depth");
+        auto conv_res = audio::downconvert_to_int(
+            render_path, 32U, plan.cancel_token, &bitdepth_progress, RenderOperation::convert_bit_depth);
         if (!conv_res) {
             return fail_with_report(conv_res.error());
         }
         if (auto cancelled = fail_if_cancelled()) {
             return std::move(*cancelled);
         }
+        emit_progress(
+            progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.955, 0.0, "encoding IAMF");
         auto iamf_res = audio::convert_to_iamf(render_path,
                                                iamf_temp_path.string(),
                                                output_layout,
@@ -857,11 +973,20 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (!iamf_res) {
             return fail_with_report(iamf_res.error());
         }
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.975, 1.0, "IAMF encoded");
+        emit_progress(progress,
+                      RenderStage::post_processing,
+                      RenderOperation::package_iamf_mp4,
+                      0.975,
+                      0.0,
+                      "packaging IAMF MP4");
         auto pkg_res = audio::package_iamf_to_mp4(iamf_temp_path.string(), encoded_output_path, plan.cancel_token);
         iamf_temp_guard->remove_now();
         if (!pkg_res) {
             return fail_with_report(pkg_res.error());
         }
+        emit_progress(
+            progress, RenderStage::post_processing, RenderOperation::package_iamf_mp4, 0.985, 1.0, "IAMF MP4 packaged");
     }
 
     if (auto cancelled = fail_if_cancelled()) {
@@ -877,6 +1002,8 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     // Write format-specific metadata (non-fatal on failure).
     {
+        emit_progress(
+            progress, RenderStage::post_processing, RenderOperation::write_metadata, 0.99, 0.0, "writing metadata");
         const std::time_t now = std::time(nullptr);
         const std::tm tm_utc = utc_time(now);
 
@@ -901,6 +1028,8 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (!meta_res) {
             logs.log(LogLevel::warning, "engine", "metadata write failed: " + meta_res.error().message);
         }
+        emit_progress(
+            progress, RenderStage::post_processing, RenderOperation::write_metadata, 0.995, 1.0, "metadata written");
     }
     output_guard.commit();
 
@@ -910,6 +1039,7 @@ RenderResult RenderService::render(const RenderRequest& request,
         metrics.measured_lufs ? std::optional<double>(*metrics.measured_lufs + gain_db) : std::nullopt,
         metrics.measured_peak_dbtp ? std::optional<double>(*metrics.measured_peak_dbtp + gain_db) : std::nullopt,
     };
+    emit_progress(progress, RenderStage::finished, RenderOperation::finish, 1.0, 1.0, "done");
     return {{ErrorCode::ok, "", {}},
             std::filesystem::path{output_path},
             final_metrics,

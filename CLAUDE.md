@@ -181,7 +181,9 @@ mradm_exe (CLI)     PRIVATE: ADMEngine + 所有 renderer + CLI11 + spdlog
 
 ## C ABI 稳定性（ADR 0007）
 
-当前 `include/adm/c_api.h` 是 **stable v1**，自 1.0.0 起承诺向后二进制兼容，并通过 `ADM_API_VERSION_*`、`SOVERSION 1` 与 deprecation 宏维护 ABI。修改 C ABI signature、enum 数值或对象生命周期语义时必须先走 ADR/版本策略评审。
+当前 `include/adm/c_api.h` 是 **stable v1.10**，自 1.0.0 起承诺向后二进制兼容，并通过 `ADM_API_VERSION_*`、`SOVERSION 1` 与 deprecation 宏维护 ABI。修改 C ABI signature、enum 数值或对象生命周期语义时必须先走 ADR/版本策略评审。
+
+GUI 新接入进度条优先使用 `adm_render_file_ex2` / `adm_preview_render_window_v2` 的结构化 progress v2；旧 `adm_progress_cb` 仅保留兼容单一 fraction/stage/message 的调用方。v2 的 `message` 指针与旧 callback 一样只在回调期间有效。
 
 ## 输出格式与渲染后端约束
 

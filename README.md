@@ -40,6 +40,14 @@ cmake --build build/release
 ./build/release/mradm render -i input.wav -o out_trim.wav --start 12.5 --end 45.0
 ```
 
+## C ABI 与 GUI 集成
+
+`include/adm/c_api.h` 提供稳定 v1 C ABI。新 GUI 接入应优先使用 `adm_render_file_ex2` 和
+`adm_preview_render_window_v2` 的结构化进度回调：事件包含稳定阶段枚举、操作枚举、整体进度、
+阶段内进度以及渲染/后处理可用时的帧级 `current_frame / total_frames`。旧 `adm_progress_cb`
+仍保留，用于兼容只需要单一 `fraction + stage + message` 的调用方；回调均为同步调用，字符串指针
+只在 callback 期间有效。
+
 ## 发行包
 
 GitHub Actions 的 release workflow 会在 tag `v*` 或手动触发时生成首版可审计发行包：

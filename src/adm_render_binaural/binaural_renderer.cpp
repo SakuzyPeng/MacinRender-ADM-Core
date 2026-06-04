@@ -1522,7 +1522,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
     const uint64_t win_end = windowed ? std::min(win_start + plan.render_window->frame_count, num_frames) : num_frames;
     uint64_t start_pos = 0;
     if (windowed && !spreader_mode && win_start > 0) {
-        const uint64_t warmup_frames =
+        const auto warmup_frames =
             std::max<uint64_t>({render_block_size, static_cast<uint64_t>(bs->overlap_len), k_diffuse_delay_len});
         const uint64_t warmup_blocks = (warmup_frames + render_block_size - 1U) / render_block_size;
         const uint64_t start_block = win_start / render_block_size;
@@ -1571,7 +1571,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
         return true;
     };
 
-    progress.on_progress({RenderStage::rendering, 0.2, "rendering"});
+    progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.2, 0.0, 0, 0, "rendering"});
 
     while (frames_done < num_frames && out_abs < win_end) {
         if (plan.cancel_token.stop_requested()) {
@@ -1822,9 +1822,17 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
 
         frames_done += frames_now;
         const uint64_t progress_done = std::min(frames_done, win_end) - start_pos;
-        const double progress_span = static_cast<double>(std::max<uint64_t>(1, win_end - start_pos));
-        const double frac = 0.2 + (0.7 * (static_cast<double>(progress_done) / progress_span));
-        progress.on_progress({RenderStage::rendering, frac, "rendering"});
+        const uint64_t progress_total = std::max<uint64_t>(1, win_end - start_pos);
+        const auto progress_span = static_cast<double>(progress_total);
+        const double stage_fraction = static_cast<double>(progress_done) / progress_span;
+        const double frac = 0.2 + (0.7 * stage_fraction);
+        progress.on_progress({RenderStage::rendering,
+                              RenderOperation::render_audio,
+                              frac,
+                              stage_fraction,
+                              progress_done,
+                              progress_total,
+                              "rendering"});
     }
 
     // saf_spreader tail: the input is exhausted but spr_delay samples of real
@@ -1861,7 +1869,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
         }
     }
 
-    progress.on_progress({RenderStage::finished, 1.0, "done"});
+    progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
     logs.log(LogLevel::info,
              "binaural",
              fmt::format("wrote {} frames to {}{}",
