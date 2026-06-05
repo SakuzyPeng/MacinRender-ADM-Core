@@ -1,0 +1,276 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="using:MacinRender.Gui.Controls"
+             x:Class="MacinRender.Gui.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <Color x:Key="WindowTint">#1C1C1E</Color>
+                    <SolidColorBrush x:Key="TextPrimary" Color="#F5F5F7"/>
+                    <SolidColorBrush x:Key="TextSecondary" Color="#AEAEB2"/>
+                    <SolidColorBrush x:Key="TextMuted" Color="#8E8E93"/>
+                    <SolidColorBrush x:Key="CardBg" Color="#2C2C2E"/>
+                    <SolidColorBrush x:Key="CardBorder" Color="#3A3A3C"/>
+                    <SolidColorBrush x:Key="MainBg" Color="#FF1C1C1E"/>
+                    <SolidColorBrush x:Key="SidebarBg" Color="#FF2C2C2E"/>
+                    <SolidColorBrush x:Key="NavHover" Color="#2C2C2E"/>
+                    <SolidColorBrush x:Key="NavActive" Color="#3A3A3C"/>
+                    <SolidColorBrush x:Key="RowBg" Color="#3A3A3C"/>
+                    <SolidColorBrush x:Key="LogBg" Color="#161618"/>
+                    <SolidColorBrush x:Key="Accent" Color="#0A84FF"/>
+                    <SolidColorBrush x:Key="WindowBg" Color="#001C1C1E"/>
+                    <SolidColorBrush x:Key="InputBg" Color="#FF3A3A3C"/>
+                    <SolidColorBrush x:Key="InputBgHover" Color="#FF454547"/>
+                    <SolidColorBrush x:Key="PopupBg" Color="#FF2E2E30"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <Color x:Key="WindowTint">#ECECEC</Color>
+                    <SolidColorBrush x:Key="TextPrimary" Color="#FF1D1D1F"/>
+                    <SolidColorBrush x:Key="TextSecondary" Color="#FF3A3A3C"/>
+                    <SolidColorBrush x:Key="TextMuted" Color="#FF8E8E93"/>
+                    <SolidColorBrush x:Key="CardBg" Color="#FFFFFFFF"/>
+                    <SolidColorBrush x:Key="CardBorder" Color="#1A000000"/>
+                    <SolidColorBrush x:Key="MainBg" Color="#FFEAEEF6"/>
+                    <SolidColorBrush x:Key="SidebarBg" Color="#FFFFFFFF"/>
+                    <SolidColorBrush x:Key="NavHover" Color="#12000000"/>
+                    <SolidColorBrush x:Key="NavActive" Color="#1F000000"/>
+                    <SolidColorBrush x:Key="RowBg" Color="#08000000"/>
+                    <SolidColorBrush x:Key="LogBg" Color="#0A000000"/>
+                    <SolidColorBrush x:Key="Accent" Color="#007AFF"/>
+                    <SolidColorBrush x:Key="WindowBg" Color="#F0F0F0F2"/>
+                    <SolidColorBrush x:Key="InputBg" Color="#FFFFFFFF"/>
+                    <SolidColorBrush x:Key="InputBgHover" Color="#FFF2F2F4"/>
+                    <SolidColorBrush x:Key="PopupBg" Color="#FFFFFFFF"/>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!-- 矢量图标(Lucide 线条,24 viewbox) -->
+            <StreamGeometry x:Key="IconRender">M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2</StreamGeometry>
+            <StreamGeometry x:Key="IconQueue">M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01</StreamGeometry>
+            <StreamGeometry x:Key="IconHistory">M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20zM12 7v5l3 2</StreamGeometry>
+            <StreamGeometry x:Key="IconSettings">M20 7h-9M14 17H5M17 14a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM7 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6z</StreamGeometry>
+            <StreamGeometry x:Key="IconTheme">M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z</StreamGeometry>
+            <StreamGeometry x:Key="IconSun">M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4</StreamGeometry>
+            <StreamGeometry x:Key="IconGlobe">M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20zM2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z</StreamGeometry>
+            <StreamGeometry x:Key="IconAdd">M5 12h14M12 5v14</StreamGeometry>
+            <StreamGeometry x:Key="IconTrash">M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6</StreamGeometry>
+            <StreamGeometry x:Key="IconPlay">M8 5v14l11-7z</StreamGeometry>
+            <StreamGeometry x:Key="IconStop">M7 7h10v10H7z</StreamGeometry>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+
+        <!-- 卡片 squircle -->
+        <Style Selector="ctrl|SquircleBorder.card">
+            <Setter Property="Background" Value="{DynamicResource CardBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="18"/>
+            <Setter Property="Padding" Value="16"/>
+        </Style>
+
+        <Style Selector="TextBlock.h1">
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+        </Style>
+        <Style Selector="TextBlock.h2">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+        </Style>
+
+        <!-- 强调按钮:系统蓝纯色,方角背景 + squircle 裁剪 -->
+        <Style Selector=":is(Button).accent">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="16,7"/>
+            <Setter Property="Transitions">
+                <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.10"/></Transitions>
+            </Setter>
+        </Style>
+        <Style Selector=":is(Button).accent /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}"/>
+            <Setter Property="CornerRadius" Value="0"/>
+        </Style>
+        <Style Selector=":is(Button).accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}"/>
+        </Style>
+        <Style Selector=":is(Button).accent:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}"/>
+        </Style>
+        <Style Selector=":is(Button).accent:pointerover"><Setter Property="Opacity" Value="0.85"/></Style>
+        <Style Selector=":is(Button).accent:pressed"><Setter Property="Opacity" Value="0.7"/></Style>
+        <Style Selector=":is(Button).accent:disabled"><Setter Property="Opacity" Value="0.35"/></Style>
+
+        <!-- 侧栏导航项 -->
+        <Style Selector=":is(Button).nav">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style Selector=":is(Button).nav /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="CornerRadius" Value="0"/>
+        </Style>
+        <Style Selector=":is(Button).nav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource NavHover}"/>
+        </Style>
+        <Style Selector=":is(Button).nav.active /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource NavActive}"/>
+        </Style>
+        <Style Selector=":is(Button).nav.active">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+        </Style>
+
+        <!-- 普通按钮(取消):方角背景,靠 squircle 裁剪 -->
+        <Style Selector="ctrl|SquircleButton.plain /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="0"/>
+        </Style>
+
+        <!-- 日志 ListBox:透明、紧凑行 -->
+        <Style Selector="ListBox.log">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.log ListBoxItem">
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Margin" Value="0,1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <!-- 柔和的悬停/选中态,替换 Fluent 默认强蓝 -->
+        <Style Selector="ListBox.log ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource NavHover}"/>
+        </Style>
+        <Style Selector="ListBox.log ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource NavActive}"/>
+        </Style>
+        <Style Selector="ListBox.log ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource NavActive}"/>
+        </Style>
+
+        <!-- 矢量图标:线条,描边跟随按钮前景色 -->
+        <Style Selector="Path.icon">
+            <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+            <Setter Property="StrokeThickness" Value="1.7"/>
+            <Setter Property="StrokeLineCap" Value="Round"/>
+            <Setter Property="StrokeJoin" Value="Round"/>
+            <Setter Property="Width" Value="17"/>
+            <Setter Property="Height" Value="17"/>
+            <Setter Property="Stretch" Value="Uniform"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <!-- 纯图标工具按钮:方形紧凑 -->
+        <Style Selector=":is(Button).iconbtn">
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="Padding" Value="7"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        </Style>
+        <!-- 实心图标(play/stop),填充跟随按钮前景色 -->
+        <Style Selector="Path.iconfill">
+            <Setter Property="Fill" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+            <Setter Property="Width" Value="13"/>
+            <Setter Property="Height" Value="13"/>
+            <Setter Property="Stretch" Value="Uniform"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- ComboBox 贴合 macOS 风:输入框背景 + 细边框 + 圆角 + 柔和箭头 + 圆角弹窗 -->
+        <Style Selector="ComboBox">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid>
+                        <ctrl:SquircleBorder x:Name="Bg"
+                                Background="{DynamicResource InputBg}"
+                                BorderBrush="{DynamicResource CardBorder}"
+                                BorderThickness="1" CornerRadius="8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <ContentControl Grid.Column="0"
+                                                Content="{TemplateBinding SelectionBoxItem}"
+                                                ContentTemplate="{TemplateBinding ItemTemplate}"
+                                                Margin="{TemplateBinding Padding}"
+                                                VerticalAlignment="Center"
+                                                Foreground="{TemplateBinding Foreground}"/>
+                                <Path Grid.Column="1" Margin="0,0,12,0"
+                                      Width="11" Height="7" Stretch="Uniform"
+                                      VerticalAlignment="Center"
+                                      Stroke="{DynamicResource TextMuted}" StrokeThickness="1.6"
+                                      StrokeLineCap="Round" StrokeJoin="Round"
+                                      Data="M4 8l6 6 6-6"/>
+                            </Grid>
+                        </ctrl:SquircleBorder>
+                        <Popup x:Name="PART_Popup"
+                               WindowManagerAddShadowHint="False"
+                               IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                               MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                               MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                               Placement="Bottom"
+                               IsLightDismissEnabled="True">
+                            <ctrl:SquircleBorder Background="{DynamicResource PopupBg}"
+                                    BorderBrush="{DynamicResource CardBorder}" BorderThickness="1"
+                                    CornerRadius="10" Padding="4" Margin="0,4,0,0">
+                                <ScrollViewer>
+                                    <ItemsPresenter/>
+                                </ScrollViewer>
+                            </ctrl:SquircleBorder>
+                        </Popup>
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ComboBox:pointerover /template/ ctrl|SquircleBorder#Bg">
+            <Setter Property="Background" Value="{DynamicResource InputBgHover}"/>
+        </Style>
+        <Style Selector="ComboBoxItem">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="2,1"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ctrl:SquircleBorder x:Name="ItemBg" Background="Transparent" CornerRadius="7">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Margin="10,6" VerticalAlignment="Center"/>
+                    </ctrl:SquircleBorder>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ComboBoxItem:pointerover /template/ ctrl|SquircleBorder#ItemBg">
+            <Setter Property="Background" Value="{DynamicResource NavActive}"/>
+        </Style>
+        <Style Selector="ComboBoxItem:selected /template/ ctrl|SquircleBorder#ItemBg">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        </Style>
+        <Style Selector="ComboBoxItem:selected">
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="ComboBoxItem:disabled">
+            <Setter Property="Opacity" Value="0.45"/>
+        </Style>
+    </Application.Styles>
+</Application>

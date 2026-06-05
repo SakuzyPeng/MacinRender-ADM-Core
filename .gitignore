@@ -3,6 +3,7 @@ build/
 cmake-build-*/
 out/
 bin/
+obj/
 lib/
 dist/
 
@@ -16,6 +17,7 @@ compile_commands.json
 # Local editor/system files
 .DS_Store
 .idea/
+.vs/
 .vscode/
 *.swp
 *.swo
