@@ -1,0 +1,297 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:MacinRender.Gui.ViewModels"
+        xmlns:m="using:MacinRender.Gui.Models"
+        xmlns:ctrl="using:MacinRender.Gui.Controls"
+        mc:Ignorable="d" d:DesignWidth="1120" d:DesignHeight="740"
+        x:Class="MacinRender.Gui.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="MacinRender ADM"
+        Width="1120" Height="740" MinWidth="940" MinHeight="600"
+        TransparencyLevelHint="AcrylicBlur,Mica,Blur"
+        Background="Transparent"
+        ExtendClientAreaToDecorationsHint="True">
+
+    <Panel>
+        <ExperimentalAcrylicBorder IsHitTestVisible="False">
+            <ExperimentalAcrylicBorder.Material>
+                <ExperimentalAcrylicMaterial
+                    BackgroundSource="Digger"
+                    TintColor="{DynamicResource WindowTint}"
+                    TintOpacity="1"
+                    MaterialOpacity="0.78" />
+            </ExperimentalAcrylicBorder.Material>
+        </ExperimentalAcrylicBorder>
+
+        <Grid RowDefinitions="20,*" Background="{DynamicResource MainBg}">
+            <!-- 顶部标题栏:红绿灯落在这里 + 可拖动窗口 -->
+            <Border Grid.Row="0" Background="Transparent" PointerPressed="OnTitleBarPressed"/>
+            <Grid Grid.Row="1" ColumnDefinitions="210,*">
+
+            <!-- 侧栏 -->
+            <ctrl:SquircleBorder Grid.Column="0" Background="{DynamicResource SidebarBg}"
+                    Margin="16,8,8,16" CornerRadius="14">
+                <Grid RowDefinitions="Auto,*,Auto" Margin="12,0">
+                    <StackPanel Grid.Row="0" Margin="4,16,0,0" Spacing="0">
+                        <TextBlock Classes="h1" Text="MacinRender"/>
+                        <TextBlock Classes="muted" Margin="0,1,0,0" Text="ADM 空间音频渲染"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Margin="0,20,0,0" Spacing="2">
+                        <!-- 一期仅渲染界面;其余导航(队列/历史/设置)暂隐藏,故不保留选中态 -->
+                        <ctrl:SquircleButton Classes="nav">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Path Classes="icon" Data="{StaticResource IconRender}"/>
+                                <TextBlock VerticalAlignment="Center" Text="渲染"/>
+                            </StackPanel>
+                        </ctrl:SquircleButton>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="2" Margin="0,0,0,16" Spacing="2">
+                        <ctrl:SquircleButton Classes="nav" Command="{Binding ToggleLanguageCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Path Classes="icon" Data="{StaticResource IconGlobe}"/>
+                                <TextBlock VerticalAlignment="Center" Text="{Binding LanguageText}"/>
+                            </StackPanel>
+                        </ctrl:SquircleButton>
+                        <ctrl:SquircleButton Classes="nav" Command="{Binding ToggleThemeCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Panel Width="17" Height="17">
+                                    <Path Classes="icon" Data="{StaticResource IconTheme}" IsVisible="{Binding IsDark}"/>
+                                    <Path Classes="icon" Data="{StaticResource IconSun}" IsVisible="{Binding !IsDark}"/>
+                                </Panel>
+                                <TextBlock VerticalAlignment="Center" Text="切换主题"/>
+                            </StackPanel>
+                        </ctrl:SquircleButton>
+                    </StackPanel>
+                </Grid>
+            </ctrl:SquircleBorder>
+
+            <!-- 主区:不滚动,卡片自适应窗口 -->
+            <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="8,0,16,16">
+                <StackPanel Grid.Row="0" Margin="2,6,0,12" Spacing="2">
+                    <TextBlock Classes="h1" FontSize="20" Text="渲染"/>
+                    <TextBlock Classes="muted"
+                               Text="导入 ADM BWF,选择渲染后端与输出格式,批量离线渲染"/>
+                </StackPanel>
+
+                <Grid Grid.Row="1" RowDefinitions="Auto,*">
+
+                    <!-- 输出设置:渲染(后端→布局) + 封装(编码器→容器→参数),四级联动 -->
+                    <ctrl:SquircleBorder Grid.Row="0" Classes="card" Margin="0,0,0,12">
+                        <StackPanel Spacing="12">
+                            <TextBlock Classes="h2" Text="输出设置"/>
+
+                            <!-- 渲染 -->
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                                <StackPanel Grid.Column="0" Spacing="5">
+                                    <TextBlock Classes="muted" Text="渲染后端"/>
+                                    <ComboBox HorizontalAlignment="Stretch"
+                                              ItemsSource="{Binding Backends}"
+                                              SelectedItem="{Binding SelectedBackend}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="m:BackendDef">
+                                                <TextBlock Text="{Binding Name}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="5">
+                                    <TextBlock Classes="muted" Text="输出布局"/>
+                                    <ComboBox HorizontalAlignment="Stretch"
+                                              ItemsSource="{Binding Layouts}"
+                                              SelectedItem="{Binding SelectedLayout}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="m:LayoutDef">
+                                                <TextBlock Text="{Binding Name}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- 封装:[编码器(有损让半列给码率)] | 容器 -->
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                                <Grid Grid.Column="0" ColumnDefinitions="*,*" ColumnSpacing="12">
+                                    <StackPanel Grid.Column="0" Grid.ColumnSpan="{Binding CodecColumnSpan}" Spacing="5">
+                                        <TextBlock Classes="muted" Text="编码器"/>
+                                        <ComboBox HorizontalAlignment="Stretch"
+                                                  ItemsSource="{Binding Codecs}"
+                                                  SelectedItem="{Binding SelectedCodec}">
+                                            <ComboBox.Styles>
+                                                <Style Selector="ComboBoxItem" x:DataType="m:CodecOption">
+                                                    <Setter Property="IsEnabled" Value="{Binding IsEnabled}"/>
+                                                </Style>
+                                            </ComboBox.Styles>
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="m:CodecOption">
+                                                    <TextBlock Text="{Binding Label}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="5" IsVisible="{Binding ShowBitrate}">
+                                        <TextBlock Classes="muted" Text="{Binding BitrateLabel}"/>
+                                        <NumericUpDown HorizontalAlignment="Stretch"
+                                                       Minimum="{Binding BitrateMin}" Maximum="{Binding BitrateMax}"
+                                                       Increment="32" FormatString="0"
+                                                       Value="{Binding Bitrate}"/>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Grid.Column="1" Spacing="5">
+                                    <TextBlock Classes="muted" Text="容器"/>
+                                    <ComboBox HorizontalAlignment="Stretch"
+                                              ItemsSource="{Binding Containers}"
+                                              SelectedItem="{Binding SelectedContainer}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="m:ContainerDef">
+                                                <TextBlock Text="{Binding Name}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </ctrl:SquircleBorder>
+
+                    <!-- 文件队列 + 日志:左右并列,占满剩余高度 -->
+                    <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="12">
+
+                    <!-- 文件队列(含总进度 + 操作) -->
+                    <ctrl:SquircleBorder Grid.Column="0" Classes="card">
+                        <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="12">
+                            <DockPanel Grid.Row="0">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
+                                    <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="清空队列"
+                                            Command="{Binding ClearQueueCommand}">
+                                        <Path Classes="icon" Data="{StaticResource IconTrash}"/>
+                                    </ctrl:SquircleButton>
+                                    <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="添加文件"
+                                            Command="{Binding AddFileCommand}">
+                                        <Path Classes="icon" Data="{StaticResource IconAdd}"/>
+                                    </ctrl:SquircleButton>
+                                </StackPanel>
+                                <TextBlock Classes="h2" VerticalAlignment="Center" Text="文件队列"/>
+                            </DockPanel>
+
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Files}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="m:RenderFileItem">
+                                        <ctrl:SquircleBorder Margin="0,0,0,6" Padding="12,9"
+                                                CornerRadius="12" Background="{DynamicResource RowBg}">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
+                                                <Ellipse Grid.Row="0" Grid.Column="0"
+                                                         Width="8" Height="8" Margin="0,0,10,0"
+                                                         VerticalAlignment="Center"
+                                                         Fill="{Binding StatusBrush}"/>
+                                                <TextBlock Grid.Row="0" Grid.Column="1"
+                                                           VerticalAlignment="Center" FontSize="13"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           Text="{Binding Name}"/>
+                                                <TextBlock Grid.Row="0" Grid.Column="2"
+                                                           VerticalAlignment="Center" Classes="muted"
+                                                           Text="{Binding StatusText}"/>
+                                                <ProgressBar Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                                                             Margin="0,8,0,0" Height="3"
+                                                             Minimum="0" Maximum="100"
+                                                             Foreground="{DynamicResource Accent}"
+                                                             Value="{Binding Progress}"/>
+                                            </Grid>
+                                        </ctrl:SquircleBorder>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            </ScrollViewer>
+
+                            <Border Grid.Row="2" Height="1" Margin="0,2" Background="{DynamicResource CardBorder}"/>
+
+                            <DockPanel Grid.Row="3">
+                                <ctrl:SquircleButton DockPanel.Dock="Right" Classes="accent"
+                                        MinWidth="108" VerticalAlignment="Center" Margin="16,0,0,0"
+                                        Command="{Binding PrimaryCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
+                                        <Path Classes="iconfill" Data="{StaticResource IconPlay}"
+                                              IsVisible="{Binding !IsRendering}"/>
+                                        <Path Classes="iconfill" Data="{StaticResource IconStop}"
+                                              IsVisible="{Binding IsRendering}"/>
+                                        <TextBlock VerticalAlignment="Center" Text="{Binding ActionButtonText}"/>
+                                    </StackPanel>
+                                </ctrl:SquircleButton>
+                                <StackPanel VerticalAlignment="Center" Spacing="6">
+                                    <TextBlock Classes="muted" Text="{Binding StatusText}"/>
+                                    <ProgressBar Height="6" Minimum="0" Maximum="100"
+                                                 Foreground="{DynamicResource Accent}"
+                                                 Value="{Binding OverallProgress}"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Grid>
+                    </ctrl:SquircleBorder>
+
+                    <!-- 日志(填充右半) -->
+                    <ctrl:SquircleBorder Grid.Column="1" Classes="card">
+                        <Grid RowDefinitions="Auto,*">
+                            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                <ctrl:SquircleButton DockPanel.Dock="Right" Classes="nav iconbtn"
+                                        ToolTip.Tip="清空日志"
+                                        Command="{Binding ClearLogsCommand}">
+                                    <Path Classes="icon" Data="{StaticResource IconTrash}"/>
+                                </ctrl:SquircleButton>
+                                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                    <TextBlock Classes="h2" Text="事件 / 日志"/>
+                                    <TextBlock x:Name="CopyHint" Classes="muted" Text="已复制 ✓" Opacity="0">
+                                        <TextBlock.Transitions>
+                                            <Transitions>
+                                                <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
+                                            </Transitions>
+                                        </TextBlock.Transitions>
+                                    </TextBlock>
+                                </StackPanel>
+                            </DockPanel>
+                                <ListBox x:Name="LogList" Classes="log" Grid.Row="1"
+                                         ItemsSource="{Binding Logs}"
+                                         SelectionMode="Single"
+                                         KeyDown="OnLogKeyDown"
+                                         Tapped="OnLogTapped">
+                                    <ListBox.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="复制全部" Click="OnCopyAllLogs"/>
+                                        </ContextMenu>
+                                    </ListBox.ContextMenu>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="m:LogLine">
+                                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                                <Ellipse Grid.Column="0" Width="7" Height="7"
+                                                         Margin="0,5,9,0" VerticalAlignment="Top"
+                                                         Fill="{Binding KindBrush}"/>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <TextBlock FontSize="13" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextPrimary}"
+                                                               Text="{Binding Title}"/>
+                                                    <TextBlock IsVisible="{Binding HasDetail}" FontSize="12"
+                                                               TextWrapping="Wrap"
+                                                               Foreground="{DynamicResource TextMuted}"
+                                                               Text="{Binding Detail}"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" FontSize="11" VerticalAlignment="Top"
+                                                           Margin="8,1,0,0"
+                                                           Foreground="{DynamicResource TextMuted}"
+                                                           Text="{Binding Time}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                        </Grid>
+                    </ctrl:SquircleBorder>
+
+                    </Grid>
+
+                </Grid>
+            </Grid>
+            </Grid>
+        </Grid>
+    </Panel>
+</Window>
