@@ -30,6 +30,7 @@ struct RenderCliOptions {
     std::string semantic_report_path;
     std::string speaker_spread_mode_str{"auto"};
     std::string binaural_spread_mode_str{"auto"};
+    std::string apple_spatial_preset_str{"off"};
     std::string iamf_container_str{"obu"};
 };
 

@@ -152,6 +152,18 @@ namespace {
     return "unknown";
 }
 
+[[nodiscard]] std::string apple_spatial_preset_name(AppleSpatialPreset preset) {
+    switch (preset) {
+    case AppleSpatialPreset::off:
+        return "off";
+    case AppleSpatialPreset::headphone_default:
+        return "headphone-default";
+    case AppleSpatialPreset::headphone_movie:
+        return "headphone-movie";
+    }
+    return "unknown";
+}
+
 [[nodiscard]] double clamp_progress(double value) {
     if (!std::isfinite(value)) {
         return 0.0;
@@ -538,6 +550,22 @@ RenderResult RenderService::render(const RenderRequest& request,
         return fail_with_report({ErrorCode::cancelled, "render cancelled", {}}, LogLevel::info);
     };
 
+    if (request.options.apple_spatial_preset != AppleSpatialPreset::off) {
+        if (sel != RendererSelection::apple) {
+            return fail_with_report({ErrorCode::invalid_argument,
+                                     fmt::format("--apple-spatial-preset {} requires --renderer apple",
+                                                 apple_spatial_preset_name(request.options.apple_spatial_preset)),
+                                     {}});
+        }
+        if (output_layout != "0+2+0" && output_layout != "binaural") {
+            return fail_with_report({ErrorCode::invalid_argument,
+                                     fmt::format("--apple-spatial-preset {} requires Apple binaural output; got '{}'",
+                                                 apple_spatial_preset_name(request.options.apple_spatial_preset),
+                                                 output_layout),
+                                     {}});
+        }
+    }
+
     if (needs_semantic_report) {
         const SemanticPolicyReportOptions report_options{
             .renderer = renderer_name(sel),
@@ -666,6 +694,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     plan.object_smoothing_frames = request.options.object_smoothing_frames;
     plan.speaker_spread_mode = request.options.speaker_spread_mode;
     plan.binaural_spread_mode = request.options.binaural_spread_mode;
+    plan.apple_spatial_preset = request.options.apple_spatial_preset;
     // Output time-range trim: prefer on-demand window rendering when the backend
     // supports it (seek + pre-roll → writes only the window, bit-identical to a full
     // render then trimmed, and skips the post-render trim pass below). Otherwise fall

@@ -85,6 +85,7 @@ struct RenderPlan {
     uint32_t object_smoothing_frames{0};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
+    AppleSpatialPreset apple_spatial_preset{AppleSpatialPreset::off};
     // When set, restrict loudness / True-Peak measurement to this output frame
     // window (matches the output trim); nullopt measures the whole render.
     std::optional<MeterWindow> meter_window;

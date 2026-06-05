@@ -14,6 +14,9 @@
 - **多声道扬声器**：VBAP → `5.1`、`7.1`、`5.1.2`、`5.1.4`、`7.1.4`、`9.1.6`、`22.2`。
 - **输入内容**：Objects 与 DirectSpeakers；Objects 支持 position / gain / interpolation / objectDivergence；DirectSpeakers 支持静态方位与 LFE 旁路。
 - **按需窗口渲染**：支持 `RenderPlan::render_window`，CLI `--start` / `--end` 不再需要先渲染完整时间线再裁切。
+- **Apple binaural factory preset**：`--apple-spatial-preset headphone-default|headphone-movie` 映射到
+  `kAudioUnitProperty_PresentPreset` 的 headphone media playback factory preset #1/#2。默认关闭，只对 Apple
+  binaural 生效。
 
 不支持或暂不等价：
 
@@ -114,6 +117,9 @@ Apple 后端和其他主要后端一样在渲染过程中内联测量响度 / Tr
 - Object position → SpatialMixer Azimuth / Elevation / Distance。
 - Object / DirectSpeakers gain → `kSpatialMixerParam_Gain`（linear → dB，静音落到 -120 dB）。
 - Object 插值 / 平滑 → 按事件块更新参数；SpatialMixer 自身会对控制变化做平滑。项目级 `--object-smoothing-frames` / `RenderOptions::object_smoothing_frames` 当前不影响 Apple 后端；该参数只由 EAR / VBAP / HOA / binaural 等自有控制率路径消费。
+- Apple binaural factory preset → 在 AudioUnit 创建后、输出格式 / bus 算法 / source mode / ADM 参数写入前应用
+  `kAudioUnitProperty_PresentPreset`。这是刻意顺序：PresentPreset 会重置若干 SpatialMixer 参数，后端随后重新写入
+  ADM 驱动配置，避免预设把床层或对象声像重置到中心。preset 模式不等同于 `ReverbRoomType`，也不对扬声器布局开放。
 - DirectSpeakers → `AmbienceBed` 远场床层（VBAP 下落到对应输出扬声器，已验证）。
 - LFE → `Bypass`，并把 mono input bus 标为 `kAudioChannelLabel_LFEScreen`，不参与空间化（落到输出 LFE 通道，已验证）。
 

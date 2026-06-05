@@ -35,6 +35,12 @@ enum class BinauralSpreadMode {
     saf_spreader, // experimental: SAF spreader OM mode (covariance-matching STFT domain)
 };
 
+enum class AppleSpatialPreset {
+    off,
+    headphone_default, // AUSpatialMixer factory preset #1: Headphone Media Playback Default
+    headphone_movie,   // AUSpatialMixer factory preset #2: Headphone Media Playback Movie
+};
+
 struct RenderOptions {
     RendererSelection renderer{RendererSelection::automatic};
     std::string output_layout{"0+2+0"};
@@ -91,6 +97,9 @@ struct RenderOptions {
     uint32_t object_smoothing_frames{0};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
+    // Apple AUSpatialMixer binaural only. PresentPreset resets several unit/bus
+    // parameters, so the Apple backend applies it before restoring ADM-driven setup.
+    AppleSpatialPreset apple_spatial_preset{AppleSpatialPreset::off};
     // Output time-range trim, in seconds, on the rendered timeline (which equals
     // the input timeline). render_start_sec clips the head; render_end_sec is an
     // absolute end time on the same timeline (nullopt = render to the end).

@@ -145,6 +145,16 @@ mradm::BinauralSpreadMode parse_binaural_spread_mode(const std::string& value) {
     return mradm::BinauralSpreadMode::automatic;
 }
 
+mradm::AppleSpatialPreset parse_apple_spatial_preset(const std::string& value) {
+    if (value == "headphone-default") {
+        return mradm::AppleSpatialPreset::headphone_default;
+    }
+    if (value == "headphone-movie") {
+        return mradm::AppleSpatialPreset::headphone_movie;
+    }
+    return mradm::AppleSpatialPreset::off;
+}
+
 mradm::OutputBitDepth parse_output_bit_depth(const std::string& value) {
     if (value == "i24") {
         return mradm::OutputBitDepth::i24;
@@ -249,6 +259,11 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                      "saf-spreader [experimental: SAF covariance-matching STFT-domain spreader]")
         ->check(CLI::IsMember({"auto", "none", "cloud", "saf-spreader"}));
     render_cmd
+        ->add_option("--apple-spatial-preset",
+                     opts.apple_spatial_preset_str,
+                     "Apple binaural AUSpatialMixer factory preset: off, headphone-default, headphone-movie")
+        ->check(CLI::IsMember({"off", "headphone-default", "headphone-movie"}));
+    render_cmd
         ->add_option("--iamf-container",
                      opts.iamf_container_str,
                      "IAMF output container [requires MR_ADM_ENABLE_IAMF build]: "
@@ -295,6 +310,7 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     }
     request.options.speaker_spread_mode = parse_speaker_spread_mode(opts.speaker_spread_mode_str);
     request.options.binaural_spread_mode = parse_binaural_spread_mode(opts.binaural_spread_mode_str);
+    request.options.apple_spatial_preset = parse_apple_spatial_preset(opts.apple_spatial_preset_str);
     request.options.iamf_container = (opts.iamf_container_str == "mp4") ? mradm::RenderOptions::IamfContainer::mp4
                                                                         : mradm::RenderOptions::IamfContainer::obu;
     return request;

@@ -51,6 +51,30 @@ constexpr UInt32 k_render_block = 512;
     return {ErrorCode::render_failed, std::move(message), os_status_message(status)};
 }
 
+[[nodiscard]] std::optional<SInt32> apple_spatial_preset_number(AppleSpatialPreset preset) {
+    switch (preset) {
+    case AppleSpatialPreset::off:
+        return std::nullopt;
+    case AppleSpatialPreset::headphone_default:
+        return 1;
+    case AppleSpatialPreset::headphone_movie:
+        return 2;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::string_view apple_spatial_preset_display_name(AppleSpatialPreset preset) {
+    switch (preset) {
+    case AppleSpatialPreset::off:
+        return "off";
+    case AppleSpatialPreset::headphone_default:
+        return "Headphone Media Playback Default";
+    case AppleSpatialPreset::headphone_movie:
+        return "Headphone Media Playback Movie";
+    }
+    return "unknown";
+}
+
 // SpatialMixer azimuth is +ve to the RIGHT; project ADM azimuth is +ve to the LEFT
 // (BS.2051). Negate when feeding the AU, or the whole soundfield mirrors L<->R.
 [[nodiscard]] float sm_azimuth(float adm_azimuth) {
@@ -140,6 +164,23 @@ class AudioUnitGuard {
     const OSStatus status = AudioUnitSetProperty(unit, property, scope, element, &value, sizeof(value));
     if (status != noErr) {
         return tl::unexpected{apple_status_error(fmt::format("failed to set AUSpatialMixer {}", label), status)};
+    }
+    return {};
+}
+
+[[nodiscard]] Result<void> set_present_preset(AudioUnit unit, AppleSpatialPreset spatial_preset) {
+    const auto preset_number = apple_spatial_preset_number(spatial_preset);
+    if (!preset_number.has_value()) {
+        return {};
+    }
+    AUPreset preset{};
+    preset.presetNumber = preset_number.value();
+    preset.presetName = nullptr;
+    const OSStatus status = AudioUnitSetProperty(
+        unit, kAudioUnitProperty_PresentPreset, kAudioUnitScope_Global, 0, &preset, sizeof(preset));
+    if (status != noErr) {
+        return tl::unexpected{apple_status_error(
+            fmt::format("failed to set AUSpatialMixer factory preset {}", preset_number.value()), status)};
     }
     return {};
 }
@@ -656,6 +697,21 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
         return tl::unexpected{unit_res.error()};
     }
     AudioUnit unit = unit_res->get();
+
+    if (plan.apple_spatial_preset != AppleSpatialPreset::off) {
+        if (!profile.binaural) {
+            return make_error(ErrorCode::invalid_argument,
+                              "apple factory spatial presets require binaural output",
+                              "layout=" + plan.output_layout);
+        }
+        if (auto r = set_present_preset(unit, plan.apple_spatial_preset); !r) {
+            return tl::unexpected{r.error()};
+        }
+        logs.log(LogLevel::info,
+                 "apple",
+                 fmt::format("applied AUSpatialMixer factory preset: {}",
+                             apple_spatial_preset_display_name(plan.apple_spatial_preset)));
+    }
 
     if (profile.binaural) {
         if (auto r = set_uint32_property(unit,
