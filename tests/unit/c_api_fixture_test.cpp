@@ -409,6 +409,9 @@ bool verify_options_boundary_values(adm_render_options_t* opts) {
     ok = check(adm_render_options_set_renderer(opts, ADM_RENDERER_HOA) == ADM_ERROR_OK,
                "valid renderer should return OK") &&
          ok;
+    ok = check(adm_render_options_set_renderer(opts, ADM_RENDERER_SAF_BINAURAL) == ADM_ERROR_OK,
+               "valid saf-binaural renderer should return OK") &&
+         ok;
     ok = check(adm_render_options_set_output_layout(opts, "7.1.4") == ADM_ERROR_OK, "valid layout should return OK") &&
          ok;
     // void bool setters: 0/1 accepted, no crash.
@@ -1184,6 +1187,12 @@ bool verify_version_110() {
     return check(adm_api_version_minor() >= 10, "v1.10: minor version should be >= 10");
 }
 
+// ── v1.11 tests ───────────────────────────────────────────────────────────
+
+bool verify_version_111() {
+    return check(adm_api_version_minor() >= 11, "v1.11: minor version should be >= 11");
+}
+
 bool verify_progress_v2_events(const ProgressV2State& state, bool require_post_processing, const char* label) {
     (void) label;
     bool ok = check(!state.events.empty(), "v2 progress: at least one event should fire");
@@ -1767,10 +1776,10 @@ bool verify_capabilities_json(adm_context_t* ctx) {
                    "capabilities_json: should carry schema + schema_version") &&
              ok;
         ok = check(has("\"backends\""), "capabilities_json: should contain backends array") && ok;
-        // All four renderer-selection backends should be present.
+        // Public renderer-selection backends should be present.
         ok = check(has(R"("renderer": "ear")") && has(R"("renderer": "saf")") && has(R"("renderer": "hoa")") &&
-                       has(R"("renderer": "binaural")"),
-                   "capabilities_json: should list ear/saf/hoa/binaural backends") &&
+                       has(R"("renderer": "saf-binaural")"),
+                   "capabilities_json: should list ear/saf/hoa/saf-binaural backends") &&
              ok;
         // A representative capability flag and the per-backend layouts array.
         ok = check(has("\"supports_hoa\"") && has("\"layouts\"") && has("\"channel_count\""),
@@ -2054,6 +2063,8 @@ int main() {
     ok = verify_apac_unsupported_smoke(ctx, fixture.path()) && ok;
     ok = verify_apac_caf_smoke(ctx, fixture.path()) && ok;
     ok = verify_iamf_smoke(ctx, fixture.path()) && ok;
+    // v1.11 tests
+    ok = verify_version_111() && ok;
 
     adm_destroy_context(ctx);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

@@ -7,7 +7,7 @@
 
 namespace mradm {
 
-// Returns the static capability report for the SAF binaural HRTF backend.
+// Returns the static capability report for the SAF HRTF binaural backend.
 CapabilityReport binaural_capabilities();
 
 // Creates a binaural IRenderer using SAF's built-in KEMAR HRTF dataset or a

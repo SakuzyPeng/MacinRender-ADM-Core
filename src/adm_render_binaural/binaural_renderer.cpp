@@ -1899,7 +1899,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
 
 CapabilityReport binaural_capabilities() {
     CapabilityReport r;
-    r.backend_name = "binaural-hrtf";
+    r.backend_name = "saf-binaural-hrtf";
     r.backend_version = "1.0";
     r.supports_objects = true;
     r.supports_direct_speakers = true;
@@ -1912,7 +1912,7 @@ CapabilityReport binaural_capabilities() {
     r.supports_render_window = true;
     r.supported_layouts = {
         // clang-format off
-        {"0+2+0", "Binaural (KEMAR or user SOFA HRIR)", 2, false, 0, true, true},
+        {"0+2+0", "SAF HRTF binaural (KEMAR or user SOFA HRIR)", 2, false, 0, true, true},
         // clang-format on
     };
     return r;

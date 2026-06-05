@@ -170,7 +170,7 @@ struct OutputLayoutRow {
     std::string container;                 // container mapping description
     std::string order;                     // final channel order
     std::string note;                      // human-readable caveat; empty when none
-    std::vector<std::string> supported_by; // subset of {ear, saf, hoa, binaural}
+    std::vector<std::string> supported_by; // subset of {ear, saf, hoa, saf-binaural}
 };
 
 // One output container format (mirrors `mradm formats` / adm_output_formats_json):

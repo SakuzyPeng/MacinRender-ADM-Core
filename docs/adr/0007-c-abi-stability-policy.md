@@ -322,6 +322,13 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - **新增入口**：`adm_render_file_ex2` 与 `adm_preview_render_window_v2`，参数与既有 `_ex` / preview render 对齐，只把 progress callback 换成 v2。旧入口继续从同一内部事件降级为 `fraction/stage/message`。
 - **进度口径**：整体进度按稳定阶段范围映射（前处理约 0.00–0.30、渲染 0.30–0.90、后处理/编码 0.90–0.99、完成 1.00），不承诺等价于耗时占比；GUI 可用帧字段和时间戳自行估算 ETA。
 
+### v1.11.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+为 SAF HRTF 双耳后端补清晰 renderer 名称。
+
+- **新增 enum 值**：`ADM_RENDERER_SAF_BINAURAL`，映射 C++ `RendererSelection::saf_binaural`。
+- **Capabilities / layouts JSON**：追加 `"renderer": "saf-binaural"` 与 `supported_by: "saf-binaural"`。
+
 ## opaque 指针与 callback 生命周期
 
 `adm_context_t`、`adm_render_result_t` 是 opaque pointer，调用方不应直接 dereference 或假设大小。生命周期约定：

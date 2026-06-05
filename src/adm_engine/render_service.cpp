@@ -148,6 +148,8 @@ namespace {
         return "apple";
     case RendererSelection::binaural:
         return "binaural";
+    case RendererSelection::saf_binaural:
+        return "saf-binaural";
     }
     return "unknown";
 }
@@ -467,12 +469,12 @@ RenderResult RenderService::render(const RenderRequest& request,
     // misleading for ADM content. Automatic 2ch output therefore means binaural.
     auto sel = request.options.renderer;
     if (sel == RendererSelection::automatic && (requests_speaker_stereo || requested_layout == "binaural")) {
-        sel = RendererSelection::binaural;
+        sel = RendererSelection::saf_binaural;
     }
     if ((sel == RendererSelection::ear || sel == RendererSelection::saf) && requests_speaker_stereo &&
         !request.options.internal_allow_speaker_stereo) {
         const auto msg =
-            std::string{"speaker stereo rendering is disabled; use --renderer binaural for 2ch ADM output"};
+            std::string{"speaker stereo rendering is disabled; use --renderer saf-binaural for 2ch ADM output"};
         return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
     }
 
@@ -483,7 +485,7 @@ RenderResult RenderService::render(const RenderRequest& request,
         renderer = create_vbap_renderer();
     } else if (sel == RendererSelection::hoa) {
         renderer = create_hoa_renderer();
-    } else if (sel == RendererSelection::binaural) {
+    } else if (sel == RendererSelection::binaural || sel == RendererSelection::saf_binaural) {
         renderer = create_binaural_renderer();
 #ifdef __APPLE__
     } else if (sel == RendererSelection::apple) {
@@ -496,6 +498,11 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     const auto caps = renderer->capabilities();
     logs.log(LogLevel::info, "engine", fmt::format("backend: {} {}", caps.backend_name, caps.backend_version));
+    if (sel == RendererSelection::binaural) {
+        logs.log(LogLevel::warning,
+                 "engine",
+                 "--renderer binaural is a legacy alias for --renderer saf-binaural; prefer saf-binaural");
+    }
 
     std::optional<SemanticPolicy> semantic_policy;
     std::vector<std::string> semantic_warnings;
@@ -509,11 +516,11 @@ RenderResult RenderService::render(const RenderRequest& request,
     std::optional<std::string> semantic_report_json;
 
     auto output_layout = requested_layout;
-    if (sel == RendererSelection::binaural) {
+    if (sel == RendererSelection::binaural || sel == RendererSelection::saf_binaural) {
         if (requested_layout != "0+2+0" && requested_layout != "binaural") {
             logs.log(LogLevel::warning,
                      "engine",
-                     fmt::format("binaural renderer always writes 2ch HRTF output; ignoring requested layout '{}'",
+                     fmt::format("SAF binaural renderer always writes 2ch HRTF output; ignoring requested layout '{}'",
                                  requested_layout));
         }
         output_layout = "binaural";

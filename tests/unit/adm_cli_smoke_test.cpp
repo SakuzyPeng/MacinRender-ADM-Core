@@ -147,6 +147,7 @@ int main() {
         auto r = run_cmd(mradm_exe + " backends");
         ok &= check(r.code == 0, "backends: exit 0");
         ok &= check(r.out.find("libear") != std::string::npos, "backends: 'libear' in output");
+        ok &= check(r.out.find("saf-binaural-hrtf") != std::string::npos, "backends: SAF binaural backend listed");
         ok &= check(r.out.find("stereo") == std::string::npos, "backends: speaker stereo layout not listed");
         ok &= check(r.out.find("binaural") != std::string::npos, "backends: binaural layout listed");
         ok &= check(r.out.find("7.1") != std::string::npos, "backends: 7.1 layout listed");
@@ -188,6 +189,7 @@ int main() {
                     "render --help: speaker-spread-mode option listed");
         ok &= check(r.out.find("--binaural-spread-mode") != std::string::npos,
                     "render --help: binaural-spread-mode option listed");
+        ok &= check(r.out.find("saf-binaural") != std::string::npos, "render --help: saf-binaural renderer listed");
         ok &= check(r.out.find("--apple-spatial-preset") != std::string::npos,
                     "render --help: apple-spatial-preset option listed");
     }
@@ -240,15 +242,28 @@ int main() {
         ok &= check(r.code == 0, "render --speaker-spread-mode none (5.1): exit 0");
     }
 
-    // ── --binaural-spread-mode none renders binaural without crashing ─────────
+    // ── --binaural-spread-mode none renders SAF binaural without crashing ─────
     {
-        const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_binaural_spread_none.flac";
+        const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_saf_binaural_spread_none.flac";
+        const FileGuard out_guard{out};
+        auto r = run_cmd(mradm_exe +
+                         " render --renderer saf-binaural --binaural-spread-mode none "
+                         "-o " +
+                         shell_quote(out.string()) + " -i " + fix);
+        ok &= check(r.code == 0, "render --binaural-spread-mode none: exit 0");
+    }
+
+    // ── legacy --renderer binaural remains accepted but warns ────────────────
+    {
+        const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_legacy_binaural.flac";
         const FileGuard out_guard{out};
         auto r = run_cmd(mradm_exe +
                          " render --renderer binaural --binaural-spread-mode none "
                          "-o " +
                          shell_quote(out.string()) + " -i " + fix);
-        ok &= check(r.code == 0, "render --binaural-spread-mode none: exit 0");
+        ok &= check(r.code == 0, "render --renderer binaural legacy alias: exit 0");
+        ok &= check(r.out.find("legacy alias for --renderer saf-binaural") != std::string::npos,
+                    "render --renderer binaural legacy alias: warning emitted");
     }
 
     // ── mradm inspect can write an editable semantic policy template ─────────
@@ -335,7 +350,7 @@ int main() {
     {
         const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_binaural_sofa_missing.wav";
         const FileGuard out_guard{out};
-        auto r = run_cmd(mradm_exe + " render --renderer binaural --sofa /nonexistent_mr_cli_test_xyz.sofa -o " +
+        auto r = run_cmd(mradm_exe + " render --renderer saf-binaural --sofa /nonexistent_mr_cli_test_xyz.sofa -o " +
                          shell_quote(out.string()) + " " + fix);
         ok &= check(r.code != 0, "render --sofa nonexistent: non-zero exit");
     }

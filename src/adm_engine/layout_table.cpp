@@ -187,7 +187,7 @@ std::vector<OutputLayoutRow> build_output_layouts() {
         {"ear", &ear},
         {"saf", &saf},
         {"hoa", &hoa},
-        {"binaural", &binaural},
+        {"saf-binaural", &binaural},
     };
 #ifdef __APPLE__
     static const auto apple = apple_capabilities();

@@ -66,7 +66,7 @@ std::string capabilities_to_json() {
     backends.push_back(backend_to_json("ear", ear_capabilities()));
     backends.push_back(backend_to_json("saf", vbap_capabilities()));
     backends.push_back(backend_to_json("hoa", hoa_capabilities()));
-    backends.push_back(backend_to_json("binaural", binaural_capabilities()));
+    backends.push_back(backend_to_json("saf-binaural", binaural_capabilities()));
 #ifdef __APPLE__
     backends.push_back(backend_to_json("apple", apple_capabilities()));
 #endif

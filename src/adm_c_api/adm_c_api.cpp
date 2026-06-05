@@ -127,6 +127,7 @@ static_assert(static_cast<int>(mradm::RendererSelection::saf) == ADM_RENDERER_SA
 static_assert(static_cast<int>(mradm::RendererSelection::hoa) == ADM_RENDERER_HOA);
 static_assert(static_cast<int>(mradm::RendererSelection::apple) == ADM_RENDERER_APPLE);
 static_assert(static_cast<int>(mradm::RendererSelection::binaural) == ADM_RENDERER_BINAURAL);
+static_assert(static_cast<int>(mradm::RendererSelection::saf_binaural) == ADM_RENDERER_SAF_BINAURAL);
 
 static_assert(static_cast<int>(mradm::OutputBitDepth::f32) == ADM_BIT_DEPTH_F32);
 static_assert(static_cast<int>(mradm::OutputBitDepth::i24) == ADM_BIT_DEPTH_I24);
@@ -414,7 +415,7 @@ adm_error_code_t adm_render_options_set_renderer(adm_render_options_t* opts, adm
     if (opts == nullptr) {
         return ADM_ERROR_OK;
     }
-    if (static_cast<int>(renderer) < ADM_RENDERER_AUTOMATIC || static_cast<int>(renderer) > ADM_RENDERER_BINAURAL) {
+    if (static_cast<int>(renderer) < ADM_RENDERER_AUTOMATIC || static_cast<int>(renderer) > ADM_RENDERER_SAF_BINAURAL) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     opts->opts.renderer = static_cast<mradm::RendererSelection>(renderer);
