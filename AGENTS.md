@@ -8,7 +8,7 @@ This is a C++20 CMake project for ADM spatial-audio rendering. Public API header
 
 - `cmake --preset debug`: configure a Debug build in `build/debug` and export `compile_commands.json`.
 - `cmake --build --preset debug`: build libraries, tests, and the `mradm` CLI.
-- `ctest --preset debug`: run all registered tests with failure output.
+- `ctest --preset debug --parallel "$(sysctl -n hw.ncpu)" --output-on-failure`: run all registered tests in parallel.
 - `cmake --preset release && cmake --build --preset release`: produce an optimized build in `build/release`.
 - `./build/debug/mradm backends`: smoke-check the CLI after a local build.
 - `scripts/quality/check-changed.sh --build-dir build/debug`: run format, clang-tidy, and cppcheck on changed C/C++ files.
@@ -24,7 +24,9 @@ Follow `.clang-format`: LLVM base style, 4-space indentation, no tabs, C++20, 12
 
 ## Testing Guidelines
 
-Tests are standalone C++ executables registered with CTest from `CMakeLists.txt`; there is no separate test framework requirement. Add new tests under `tests/unit/` with names such as `module_smoke_test.cpp` or `module_fixture_test.cpp`, then register them with `add_test`. Prefer smoke tests for API/error-path coverage and fixture tests for real ADM/audio behavior. Run `ctest --preset debug` before submitting changes.
+Tests are standalone C++ executables registered with CTest from `CMakeLists.txt`; there is no separate test framework requirement. Add new tests under `tests/unit/` with names such as `module_smoke_test.cpp` or `module_fixture_test.cpp`, then register them with `add_test`. Prefer smoke tests for API/error-path coverage and fixture tests for real ADM/audio behavior.
+
+Run the narrowest relevant test set by default instead of reflexively running the full suite. For example, use `ctest --preset debug -R "(c_api|cli|binaural)" --parallel "$(sysctl -n hw.ncpu)" --output-on-failure` for focused C ABI / CLI / backend work. When a full suite is warranted by broad engine, layout, ABI, or shared-rendering changes, run it with `--parallel "$(sysctl -n hw.ncpu)" --output-on-failure` so CTest uses the available cores.
 
 ## Commit & Pull Request Guidelines
 
