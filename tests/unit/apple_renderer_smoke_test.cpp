@@ -3,8 +3,10 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <numbers>
 #include <optional>
@@ -15,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include <AudioToolbox/AudioToolbox.h>
 #include <adm/adm.hpp>
 #include <adm/utilities/id_assignment.hpp>
 #include <adm/write.hpp>
@@ -53,6 +56,355 @@ std::filesystem::path temp_path(std::string_view stem, std::string_view ext) {
     const auto name = std::string(stem) + "_" + std::to_string(static_cast<int>(::getpid())) + "_" +
                       std::to_string(s_seq.fetch_add(1)) + std::string(ext);
     return std::filesystem::temp_directory_path() / name;
+}
+
+constexpr UInt32 k_probe_frames = 4096U;
+constexpr UInt32 k_probe_sample_rate = 48000U;
+constexpr UInt32 k_probe_render_block = 512U;
+// macOS 13/14 SpatialMixer property IDs; numeric IDs keep the diagnostic buildable
+// with SDKs that do not expose the personalized HRTF enum names.
+constexpr AudioUnitPropertyID k_spatial_mixer_personalized_hrtf_mode = 3113U;
+constexpr AudioUnitPropertyID k_spatial_mixer_any_input_is_using_personalized_hrtf = 3116U;
+constexpr UInt32 k_spatial_mixer_personalized_hrtf_off = 0U;
+constexpr UInt32 k_spatial_mixer_personalized_hrtf_on = 1U;
+
+std::string os_status_text(OSStatus status) {
+    return std::to_string(static_cast<int>(status));
+}
+
+class AudioUnitGuard {
+  public:
+    explicit AudioUnitGuard(AudioUnit unit) : unit_(unit) {}
+    AudioUnitGuard(const AudioUnitGuard&) = delete;
+    AudioUnitGuard& operator=(const AudioUnitGuard&) = delete;
+    AudioUnitGuard(AudioUnitGuard&& other) noexcept : unit_(other.unit_) { other.unit_ = nullptr; }
+    AudioUnitGuard& operator=(AudioUnitGuard&& other) noexcept {
+        if (this != &other) {
+            dispose();
+            unit_ = other.unit_;
+            other.unit_ = nullptr;
+        }
+        return *this;
+    }
+    ~AudioUnitGuard() { dispose(); }
+
+    [[nodiscard]] AudioUnit get() const noexcept { return unit_; }
+
+  private:
+    void dispose() noexcept {
+        if (unit_ != nullptr) {
+            AudioUnitUninitialize(unit_);
+            AudioComponentInstanceDispose(unit_);
+            unit_ = nullptr;
+        }
+    }
+
+    AudioUnit unit_{nullptr};
+};
+
+AudioStreamBasicDescription probe_pcm_float_format(UInt32 channels) {
+    AudioStreamBasicDescription fmt{};
+    fmt.mSampleRate = static_cast<double>(k_probe_sample_rate);
+    fmt.mFormatID = kAudioFormatLinearPCM;
+    fmt.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked | kAudioFormatFlagIsNonInterleaved |
+                       kAudioFormatFlagsNativeEndian;
+    fmt.mBytesPerPacket = sizeof(float);
+    fmt.mFramesPerPacket = 1;
+    fmt.mBytesPerFrame = sizeof(float);
+    fmt.mChannelsPerFrame = channels;
+    fmt.mBitsPerChannel = 32;
+    return fmt;
+}
+
+bool set_probe_uint32(AudioUnit unit,
+                      AudioUnitPropertyID property,
+                      AudioUnitScope scope,
+                      AudioUnitElement element,
+                      UInt32 value,
+                      const char* label) {
+    const OSStatus status = AudioUnitSetProperty(unit, property, scope, element, &value, sizeof(value));
+    if (status != noErr) {
+        std::cerr << "FAIL: AUSpatialMixer set " << label << " failed: " << os_status_text(status) << "\n";
+        return false;
+    }
+    return true;
+}
+
+bool set_probe_stream_format(AudioUnit unit, AudioUnitScope scope, AudioUnitElement element, UInt32 channels) {
+    auto fmt = probe_pcm_float_format(channels);
+    const OSStatus status =
+        AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat, scope, element, &fmt, sizeof(fmt));
+    if (status != noErr) {
+        std::cerr << "FAIL: AUSpatialMixer set stream format failed: " << os_status_text(status) << "\n";
+        return false;
+    }
+    return true;
+}
+
+std::optional<UInt32>
+get_probe_uint32(AudioUnit unit, AudioUnitPropertyID property, AudioUnitScope scope, AudioUnitElement element) {
+    UInt32 value = 0;
+    UInt32 size = sizeof(value);
+    const OSStatus status = AudioUnitGetProperty(unit, property, scope, element, &value, &size);
+    if (status != noErr) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+struct ProbeInputContext {
+    const std::vector<float>* samples{nullptr};
+};
+
+// cppcheck-suppress constParameterCallback ; AURenderCallback mandates void* (non-const).
+OSStatus probe_input_render_callback(void* ref_con,
+                                     AudioUnitRenderActionFlags* /*flags*/,
+                                     const AudioTimeStamp* time_stamp,
+                                     UInt32 /*bus_number*/,
+                                     UInt32 frames,
+                                     AudioBufferList* io_data) {
+    const auto* ctx = static_cast<const ProbeInputContext*>(ref_con);
+    const auto start = (time_stamp != nullptr && (time_stamp->mFlags & kAudioTimeStampSampleTimeValid) != 0U)
+                           ? static_cast<std::size_t>(std::max<Float64>(0.0, time_stamp->mSampleTime))
+                           : std::size_t{0};
+    for (UInt32 b = 0; b < io_data->mNumberBuffers; ++b) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index) - CoreAudio flexible array.
+        auto* out = static_cast<float*>(io_data->mBuffers[b].mData);
+        for (UInt32 f = 0; f < frames; ++f) {
+            const auto idx = start + f;
+            out[f] = idx < ctx->samples->size() ? ctx->samples->at(idx) : 0.0F;
+        }
+    }
+    return noErr;
+}
+
+struct HrtfProbeCase {
+    const char* name;
+    UInt32 algorithm;
+    std::optional<UInt32> personalized_mode;
+};
+
+struct HrtfProbeResult {
+    const char* name{""};
+    UInt32 algorithm{0};
+    std::optional<UInt32> algorithm_readback;
+    std::optional<UInt32> personalized_mode_readback;
+    std::optional<bool> any_personalized;
+    bool personalized_set_ok{false};
+    bool personalized_set_unsupported{false};
+    double left_energy{0.0};
+    double right_energy{0.0};
+    std::vector<float> samples;
+};
+
+std::optional<AudioUnitGuard> create_probe_spatial_mixer() {
+    AudioComponentDescription desc{};
+    desc.componentType = kAudioUnitType_Mixer;
+    desc.componentSubType = kAudioUnitSubType_SpatialMixer;
+    desc.componentManufacturer = kAudioUnitManufacturer_Apple;
+
+    AudioComponent comp = AudioComponentFindNext(nullptr, &desc);
+    if (comp == nullptr) {
+        std::cerr << "FAIL: AUSpatialMixer component unavailable\n";
+        return std::nullopt;
+    }
+    AudioUnit unit = nullptr;
+    const OSStatus status = AudioComponentInstanceNew(comp, &unit);
+    if (status != noErr || unit == nullptr) {
+        std::cerr << "FAIL: create AUSpatialMixer failed: " << os_status_text(status) << "\n";
+        return std::nullopt;
+    }
+    return AudioUnitGuard{unit};
+}
+
+bool hrtf_probe_enabled() {
+    const char* value = std::getenv("MR_ADM_APPLE_HRTF_PROBE");
+    return value != nullptr && std::string_view{value} == "1";
+}
+
+bool configure_hrtf_probe_unit(AudioUnit unit, const HrtfProbeCase& probe) {
+    return set_probe_uint32(unit, kAudioUnitProperty_ElementCount, kAudioUnitScope_Input, 0, 1U, "input count") &&
+           set_probe_uint32(unit,
+                            kAudioUnitProperty_MaximumFramesPerSlice,
+                            kAudioUnitScope_Global,
+                            0,
+                            k_probe_render_block,
+                            "maximum frames per slice") &&
+           set_probe_uint32(unit,
+                            kAudioUnitProperty_SpatialMixerOutputType,
+                            kAudioUnitScope_Global,
+                            0,
+                            kSpatialMixerOutputType_Headphones,
+                            "headphone output type") &&
+           set_probe_stream_format(unit, kAudioUnitScope_Output, 0, 2U) &&
+           set_probe_stream_format(unit, kAudioUnitScope_Input, 0, 1U) &&
+           set_probe_uint32(unit,
+                            kAudioUnitProperty_SpatializationAlgorithm,
+                            kAudioUnitScope_Input,
+                            0,
+                            probe.algorithm,
+                            "spatialization algorithm") &&
+           set_probe_uint32(unit,
+                            kAudioUnitProperty_SpatialMixerSourceMode,
+                            kAudioUnitScope_Input,
+                            0,
+                            kSpatialMixerSourceMode_PointSource,
+                            "point source mode");
+}
+
+bool apply_probe_personalized_mode(AudioUnit unit, const HrtfProbeCase& probe, HrtfProbeResult& result) {
+    if (probe.personalized_mode.has_value()) {
+        const UInt32 personalized_mode = probe.personalized_mode.value();
+        const OSStatus status = AudioUnitSetProperty(unit,
+                                                     k_spatial_mixer_personalized_hrtf_mode,
+                                                     kAudioUnitScope_Global,
+                                                     0,
+                                                     &personalized_mode,
+                                                     sizeof(personalized_mode));
+        result.personalized_set_ok = status == noErr;
+        result.personalized_set_unsupported = status != noErr;
+        if (status != noErr) {
+            std::cerr << "WARN: " << probe.name << " personalized HRTF property rejected: " << os_status_text(status)
+                      << "\n";
+            return false;
+        }
+    }
+    return true;
+}
+
+std::vector<float> make_probe_input() {
+    std::vector<float> input(k_probe_frames);
+    for (UInt32 i = 0; i < k_probe_frames; ++i) {
+        input[i] = 0.2F * std::sin(2.0F * std::numbers::pi_v<float> * 997.0F * static_cast<float>(i) /
+                                   static_cast<float>(k_probe_sample_rate));
+    }
+    return input;
+}
+
+bool attach_probe_input(AudioUnit unit, ProbeInputContext& input_context) {
+    AURenderCallbackStruct callback{};
+    callback.inputProc = &probe_input_render_callback;
+    callback.inputProcRefCon = &input_context;
+    const OSStatus callback_status = AudioUnitSetProperty(
+        unit, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0, &callback, sizeof(callback));
+    if (callback_status != noErr) {
+        std::cerr << "FAIL: set probe render callback failed: " << os_status_text(callback_status) << "\n";
+        return false;
+    }
+    return true;
+}
+
+bool initialize_probe_unit(AudioUnit unit, const char* name) {
+    const OSStatus init_status = AudioUnitInitialize(unit);
+    if (init_status != noErr) {
+        std::cerr << "FAIL: initialize " << name << " failed: " << os_status_text(init_status) << "\n";
+        return false;
+    }
+
+    AudioUnitSetParameter(unit, kSpatialMixerParam_Azimuth, kAudioUnitScope_Input, 0, -45.0F, 0);
+    AudioUnitSetParameter(unit, kSpatialMixerParam_Elevation, kAudioUnitScope_Input, 0, 0.0F, 0);
+    AudioUnitSetParameter(unit, kSpatialMixerParam_Distance, kAudioUnitScope_Input, 0, 1.0F, 0);
+    AudioUnitSetParameter(unit, kSpatialMixerParam_Gain, kAudioUnitScope_Input, 0, 0.0F, 0);
+    return true;
+}
+
+void read_probe_properties(AudioUnit unit, HrtfProbeResult& result) {
+    result.algorithm_readback =
+        get_probe_uint32(unit, kAudioUnitProperty_SpatializationAlgorithm, kAudioUnitScope_Input, 0);
+    result.personalized_mode_readback =
+        get_probe_uint32(unit, k_spatial_mixer_personalized_hrtf_mode, kAudioUnitScope_Global, 0);
+    if (auto any =
+            get_probe_uint32(unit, k_spatial_mixer_any_input_is_using_personalized_hrtf, kAudioUnitScope_Global, 0)) {
+        result.any_personalized = any.value() != 0U;
+    }
+}
+
+bool render_probe_output(AudioUnit unit, HrtfProbeResult& result) {
+    std::array<std::vector<float>, 2> planar{std::vector<float>(k_probe_render_block),
+                                             std::vector<float>(k_probe_render_block)};
+    std::vector<std::uint8_t> abl_storage(sizeof(AudioBufferList) + sizeof(AudioBuffer));
+    auto* abl = reinterpret_cast<AudioBufferList*>(abl_storage.data());
+    abl->mNumberBuffers = 2;
+    result.samples.resize(static_cast<std::size_t>(k_probe_frames) * 2U);
+    AudioTimeStamp time_stamp{};
+    time_stamp.mFlags = kAudioTimeStampSampleTimeValid;
+    for (UInt32 frames_done = 0; frames_done < k_probe_frames;) {
+        const UInt32 frames_now = std::min(k_probe_render_block, k_probe_frames - frames_done);
+        for (UInt32 ch = 0; ch < 2U; ++ch) {
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index) - CoreAudio flexible array.
+            abl->mBuffers[ch].mNumberChannels = 1;
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index) - CoreAudio flexible array.
+            abl->mBuffers[ch].mDataByteSize = frames_now * sizeof(float);
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index) - CoreAudio flexible array.
+            abl->mBuffers[ch].mData = planar[ch].data();
+        }
+
+        time_stamp.mSampleTime = static_cast<Float64>(frames_done);
+        AudioUnitRenderActionFlags flags = 0;
+        const OSStatus render_status = AudioUnitRender(unit, &flags, &time_stamp, 0, frames_now, abl);
+        if (render_status != noErr) {
+            std::cerr << "FAIL: AudioUnitRender " << result.name << " failed: " << os_status_text(render_status)
+                      << "\n";
+            return false;
+        }
+
+        for (UInt32 f = 0; f < frames_now; ++f) {
+            for (UInt32 ch = 0; ch < 2U; ++ch) {
+                // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index) - fixed 2-buffer ABL.
+                const float sample = planar[ch][f];
+                result.samples[(static_cast<std::size_t>(frames_done + f) * 2U) + ch] = sample;
+                if (ch == 0U) {
+                    result.left_energy += static_cast<double>(sample) * static_cast<double>(sample);
+                } else {
+                    result.right_energy += static_cast<double>(sample) * static_cast<double>(sample);
+                }
+            }
+        }
+        frames_done += frames_now;
+    }
+    return true;
+}
+
+std::optional<HrtfProbeResult> run_hrtf_probe(const HrtfProbeCase& probe) {
+    auto unit_guard = create_probe_spatial_mixer();
+    if (!unit_guard) {
+        return std::nullopt;
+    }
+    AudioUnit unit = unit_guard->get();
+    HrtfProbeResult result;
+    result.name = probe.name;
+    result.algorithm = probe.algorithm;
+
+    if (!configure_hrtf_probe_unit(unit, probe)) {
+        return std::nullopt;
+    }
+    if (!apply_probe_personalized_mode(unit, probe, result)) {
+        return result;
+    }
+
+    auto input = make_probe_input();
+    ProbeInputContext input_context{&input};
+    if (!attach_probe_input(unit, input_context) || !initialize_probe_unit(unit, probe.name)) {
+        return std::nullopt;
+    }
+
+    read_probe_properties(unit, result);
+    if (!render_probe_output(unit, result)) {
+        return std::nullopt;
+    }
+    return result;
+}
+
+double rms_difference(const std::vector<float>& lhs, const std::vector<float>& rhs) {
+    if (lhs.size() != rhs.size() || lhs.empty()) {
+        return 0.0;
+    }
+    double total = 0.0;
+    for (std::size_t i = 0; i < lhs.size(); ++i) {
+        const double diff = static_cast<double>(lhs[i]) - static_cast<double>(rhs[i]);
+        total += diff * diff;
+    }
+    return std::sqrt(total / static_cast<double>(lhs.size()));
 }
 
 // Single OBJECTS object at a fixed azimuth (ADM convention: +ve = left), linear gain,
@@ -133,13 +485,15 @@ double channel_energy(const std::vector<float>& samples, uint32_t channels, uint
     return e;
 }
 
-std::optional<std::vector<float>> render_apple(float azimuth,
-                                               std::string_view stem,
-                                               const std::string& layout,
-                                               uint16_t expected_channels,
-                                               float gain = 1.0F,
-                                               float width = 0.0F,
-                                               bool channel_lock = false) {
+std::optional<std::vector<float>>
+render_apple(float azimuth,
+             std::string_view stem,
+             const std::string& layout,
+             uint16_t expected_channels,
+             float gain = 1.0F,
+             float width = 0.0F,
+             bool channel_lock = false,
+             mradm::AppleSpatialPreset apple_spatial_preset = mradm::AppleSpatialPreset::off) {
     const auto in = write_fixture(azimuth, 8192U, gain, width, channel_lock);
     FileGuard in_guard(in);
     const auto out = temp_path(stem, ".wav");
@@ -152,6 +506,7 @@ std::optional<std::vector<float>> render_apple(float azimuth,
     req.options.output_layout = layout;
     req.options.peak_limit = false;
     req.options.measure_loudness = false;
+    req.options.apple_spatial_preset = apple_spatial_preset;
 
     mradm::RenderService service;
     mradm::NullProgressSink progress;
@@ -436,6 +791,21 @@ double total_energy(const std::vector<float>& samples, uint16_t channels) {
     return total;
 }
 
+bool verify_spatial_presets_render_binaural() {
+    bool ok = true;
+    for (const auto preset :
+         {mradm::AppleSpatialPreset::headphone_default, mradm::AppleSpatialPreset::headphone_movie}) {
+        const auto rendered = render_apple(0.0F, "mr_apple_spatial_preset", "binaural", 2U, 1.0F, 0.0F, false, preset);
+        if (!rendered.has_value()) {
+            check(false, "apple binaural factory preset renders");
+            ok = false;
+            continue;
+        }
+        ok &= check(total_energy(rendered.value(), 2U) > 1.0e-5, "apple binaural factory preset output is not silent");
+    }
+    return ok;
+}
+
 // Extent: a wide front object (ADM width) must spread energy across more 7.1.4 speakers
 // than a point object at the same position, and the 17-point cloud's partition-of-unity
 // weights must keep the total energy in the same ballpark (not silent, not exploded).
@@ -630,6 +1000,87 @@ bool verify_bed_and_lfe_routing() {
     return ok;
 }
 
+bool verify_spatial_mixer_hrtf_modes_probe() {
+    if (!hrtf_probe_enabled()) {
+        return true;
+    }
+
+    constexpr std::array<HrtfProbeCase, 4> k_hrtf_cases{{
+        {"HRTF", kSpatializationAlgorithm_HRTF, k_spatial_mixer_personalized_hrtf_off},
+        {"HRTFHQ", kSpatializationAlgorithm_HRTFHQ, k_spatial_mixer_personalized_hrtf_off},
+        {"UseOutputType", kSpatializationAlgorithm_UseOutputType, k_spatial_mixer_personalized_hrtf_off},
+        {"UseOutputType+pHRTF", kSpatializationAlgorithm_UseOutputType, k_spatial_mixer_personalized_hrtf_on},
+    }};
+
+    std::vector<HrtfProbeResult> results;
+    results.reserve(k_hrtf_cases.size());
+    bool ok = true;
+    for (const auto& probe : k_hrtf_cases) {
+        auto result = run_hrtf_probe(probe);
+        if (!result) {
+            ok = false;
+            continue;
+        }
+        const double total = result->left_energy + result->right_energy;
+        if (result->personalized_set_unsupported && probe.personalized_mode == k_spatial_mixer_personalized_hrtf_on) {
+            std::cerr << "WARN: skipping pHRTF actual-use assertion because the property is unavailable\n";
+            results.push_back(std::move(*result));
+            continue;
+        }
+        ok &= check(total > 1.0e-5, "AUSpatialMixer HRTF probe output is not silent");
+        ok &= check(result->algorithm_readback.value_or(probe.algorithm) == probe.algorithm,
+                    "AUSpatialMixer HRTF probe readback algorithm matches request");
+        if (probe.personalized_mode.has_value() && !result->personalized_set_unsupported) {
+            ok &= check(result->personalized_set_ok, "AUSpatialMixer personalized HRTF mode property can be set");
+            ok &= check(result->personalized_mode_readback.value_or(probe.personalized_mode.value()) ==
+                            probe.personalized_mode.value(),
+                        "AUSpatialMixer personalized HRTF mode readback matches request");
+        }
+        results.push_back(std::move(*result));
+    }
+
+    const auto use_output = std::ranges::find_if(
+        results, [](const HrtfProbeResult& r) { return std::string_view{r.name} == "UseOutputType"; });
+
+    std::cout << "AUSpatialMixer HRTF mode probe\n";
+    std::cout << std::fixed << std::setprecision(8);
+    for (const auto& result : results) {
+        const double total = result.left_energy + result.right_energy;
+        const double balance = total > 0.0 ? (result.left_energy - result.right_energy) / total : 0.0;
+        std::cout << "  " << result.name << ": requested_algorithm=" << result.algorithm << " readback_algorithm=";
+        if (result.algorithm_readback.has_value()) {
+            std::cout << result.algorithm_readback.value();
+        } else {
+            std::cout << "unavailable";
+        }
+        std::cout << " personalized_mode=";
+        if (result.personalized_mode_readback.has_value()) {
+            std::cout << result.personalized_mode_readback.value();
+        } else {
+            std::cout << "unavailable";
+        }
+        std::cout << " actual_personalized=";
+        if (result.any_personalized.has_value()) {
+            std::cout << (result.any_personalized.value() ? "yes" : "no");
+        } else {
+            std::cout << "unavailable";
+        }
+        std::cout << " total_energy=" << total << " lr_balance=" << balance;
+        if (use_output != results.end() && !result.samples.empty() && !use_output->samples.empty()) {
+            std::cout << " rms_diff_vs_use_output=" << rms_difference(result.samples, use_output->samples);
+        }
+        std::cout << "\n";
+    }
+
+    const auto phrtf = std::ranges::find_if(
+        results, [](const HrtfProbeResult& r) { return std::string_view{r.name} == "UseOutputType+pHRTF"; });
+    const auto phrtf_actual = phrtf != results.end() ? phrtf->any_personalized : std::optional<bool>{};
+    if (phrtf_actual.has_value()) {
+        std::cout << "  pHRTF actual use: " << (phrtf_actual.value() ? "enabled" : "not active") << "\n";
+    }
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -642,9 +1093,11 @@ int main() {
     ok &= verify_speaker_layouts_render();
     ok &= verify_binaural_container_tag();
     ok &= verify_render_window_frame_count();
+    ok &= verify_spatial_presets_render_binaural();
     ok &= verify_extent_spread();
     ok &= verify_spread_mode_none_disables_extent();
     ok &= verify_channel_lock_snaps();
     ok &= verify_bed_and_lfe_routing();
+    ok &= verify_spatial_mixer_hrtf_modes_probe();
     return ok ? 0 : 1;
 }

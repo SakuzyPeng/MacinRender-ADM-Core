@@ -188,6 +188,8 @@ int main() {
                     "render --help: speaker-spread-mode option listed");
         ok &= check(r.out.find("--binaural-spread-mode") != std::string::npos,
                     "render --help: binaural-spread-mode option listed");
+        ok &= check(r.out.find("--apple-spatial-preset") != std::string::npos,
+                    "render --help: apple-spatial-preset option listed");
     }
 
     // ── spread mode parse: valid values accepted, invalid rejected ────────────
@@ -213,6 +215,17 @@ int main() {
         {
             auto r = run_cmd(mradm_exe + " render --binaural-spread-mode invalid_xyz");
             ok &= check(r.code != 0, "render --binaural-spread-mode invalid: non-zero exit");
+        }
+        // --apple-spatial-preset: valid values
+        for (const auto* val : {"off", "headphone-default", "headphone-movie"}) {
+            auto r = run_cmd(mradm_exe + " render --help --apple-spatial-preset " + val);
+            const std::string msg = std::string("render --apple-spatial-preset ") + val + ": exit 0";
+            ok &= check(r.code == 0, msg.c_str());
+        }
+        // --apple-spatial-preset: invalid value
+        {
+            auto r = run_cmd(mradm_exe + " render --apple-spatial-preset invalid_xyz");
+            ok &= check(r.code != 0, "render --apple-spatial-preset invalid: non-zero exit");
         }
     }
 
