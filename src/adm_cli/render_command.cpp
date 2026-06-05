@@ -116,10 +116,25 @@ mradm::RendererSelection parse_renderer(const std::string& value) {
     if (value == "apple") {
         return mradm::RendererSelection::apple;
     }
+    if (value == "saf-binaural") {
+        return mradm::RendererSelection::saf_binaural;
+    }
     if (value == "binaural") {
         return mradm::RendererSelection::binaural;
     }
     return mradm::RendererSelection::automatic;
+}
+
+CLI::Validator renderer_validator() {
+    return CLI::Validator{[](const std::string& value) {
+                              if (value == "auto" || value == "ear" || value == "saf" || value == "hoa" ||
+                                  value == "saf-binaural" || value == "apple" || value == "binaural") {
+                                  return std::string{};
+                              }
+                              return std::string{"expected one of: auto, ear, saf, hoa, saf-binaural, apple"};
+                          },
+                          "auto,ear,saf,hoa,saf-binaural,apple",
+                          "renderer"};
 }
 
 mradm::SpeakerSpreadMode parse_speaker_spread_mode(const std::string& value) {
@@ -180,8 +195,8 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                            opts.layout,
                            "Output layout for non-binaural renderers; use 'mradm layouts --format <fmt>' for final "
                            "container channel order");
-    render_cmd->add_option("--renderer", opts.renderer, "Renderer backend: auto, ear, saf, hoa, binaural, apple")
-        ->check(CLI::IsMember({"auto", "ear", "saf", "hoa", "binaural", "apple"}));
+    render_cmd->add_option("--renderer", opts.renderer, "Renderer backend: auto, ear, saf, hoa, saf-binaural, apple")
+        ->check(renderer_validator());
     render_cmd->add_flag("--no-peak-limit", opts.no_peak_limit, "Disable True Peak limiting");
     render_cmd->add_option("--peak-limit-dbtp", opts.peak_limit_dbtp, "True Peak target in dBTP")
         ->check(CLI::Range(-60.0F, 0.0F));

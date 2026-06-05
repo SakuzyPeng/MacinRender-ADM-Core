@@ -53,12 +53,15 @@
  * v1.10 新增（additive，SOVERSION 不变）：
  *   adm_progress_operation_t + adm_progress_event_v2_t + adm_progress_v2_cb,
  *   adm_render_file_ex2, adm_preview_render_window_v2.
+ *
+ * v1.11 新增（additive，SOVERSION 不变）：
+ *   ADM_RENDERER_SAF_BINAURAL。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 10
+#define ADM_API_VERSION_MINOR 11
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -125,7 +128,8 @@ typedef enum adm_renderer_t {
     ADM_RENDERER_SAF = 2,
     ADM_RENDERER_HOA = 3,
     ADM_RENDERER_APPLE = 4,
-    ADM_RENDERER_BINAURAL = 5
+    ADM_RENDERER_BINAURAL = 5,
+    ADM_RENDERER_SAF_BINAURAL = 6
 } adm_renderer_t;
 
 typedef enum adm_output_bit_depth_t {
@@ -605,7 +609,7 @@ void adm_free_string(char* s) ADM_API_NOEXCEPT;
  * each backend carries its feature flags (objects / direct_speakers / hoa /
  * channel_lock / object_divergence / screen_ref / diffuse) and a list of
  * supported output layouts. Each backend's "renderer" field is the string a
- * caller passes to adm_render_options_set_renderer ("ear"/"saf"/"hoa"/"binaural").
+ * caller passes to adm_render_options_set_renderer ("ear"/"saf"/"hoa"/"saf-binaural").
  *
  * The root object carries a stable schema identity for version detection:
  *   "schema": "mradm.capabilities", "schema_version": 1
@@ -623,7 +627,7 @@ adm_error_code_t adm_capabilities_json(adm_context_t* context, char** out_json) 
  * Mirrors the `mradm layouts` field set: for each container format + layout, the
  * channel count, container mapping description, final channel order, an optional
  * note, and "supported_by" (which renderer backends support that layout —
- * a subset of "ear"/"saf"/"hoa"/"binaural").
+ * a subset of "ear"/"saf"/"hoa"/"saf-binaural").
  *
  * The root object carries a stable schema identity for version detection:
  *   "schema": "mradm.layouts", "schema_version": 1

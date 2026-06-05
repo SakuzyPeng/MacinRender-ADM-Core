@@ -20,6 +20,7 @@ enum class RendererSelection {
     hoa,
     apple,
     binaural,
+    saf_binaural, // SAF HRTF binaural backend
 };
 
 enum class SpeakerSpreadMode {

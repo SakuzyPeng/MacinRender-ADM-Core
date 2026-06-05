@@ -2,7 +2,6 @@
 #include <cctype>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include <fmt/format.h>
 
@@ -75,7 +74,34 @@ std::string normalize_layout_format(const std::string& format) {
 }
 
 bool renderer_supports_row(const mradm::OutputLayoutRow& row, std::string_view renderer) {
+    if (renderer == "binaural") {
+        renderer = "saf-binaural";
+    }
     return std::ranges::find(row.supported_by, renderer) != row.supported_by.end();
+}
+
+CLI::Validator renderer_validator() {
+    return CLI::Validator{[](const std::string& value) {
+                              if (value == "ear" || value == "saf" || value == "hoa" || value == "saf-binaural" ||
+                                  value == "binaural"
+#ifdef __APPLE__
+                                  || value == "apple"
+#endif
+                              ) {
+                                  return std::string{};
+                              }
+#ifdef __APPLE__
+                              return std::string{"expected one of: ear, saf, hoa, saf-binaural, apple"};
+#else
+                              return std::string{"expected one of: ear, saf, hoa, saf-binaural"};
+#endif
+                          },
+#ifdef __APPLE__
+                          "ear,saf,hoa,saf-binaural,apple",
+#else
+                          "ear,saf,hoa,saf-binaural",
+#endif
+                          "renderer"};
 }
 
 // Backend display name for the optional "Renderer:" header line. Only the name
@@ -90,7 +116,7 @@ std::string backend_name_for(std::string_view renderer) {
     if (renderer == "hoa") {
         return mradm::hoa_capabilities().backend_name;
     }
-    if (renderer == "binaural") {
+    if (renderer == "saf-binaural" || renderer == "binaural") {
         return mradm::binaural_capabilities().backend_name;
     }
 #ifdef __APPLE__
@@ -167,13 +193,11 @@ CLI::App* add_layouts_command(CLI::App& app, LayoutCliOptions& opts) {
         ->required()
         ->check(CLI::IsMember({"wav", "wave", "caf", "flac", "apac", "m4a", "mp4", "iamf"}));
     layouts_cmd->add_option("--layout", opts.layout, "Optional layout filter, e.g. 7.1, 9.1.6, 22.2, binaural");
-    std::vector<std::string> renderers{"ear", "saf", "hoa", "binaural"};
-    std::string renderer_help{"Optional renderer filter: ear, saf, hoa, binaural"};
+    std::string renderer_help{"Optional renderer filter: ear, saf, hoa, saf-binaural"};
 #ifdef __APPLE__
-    renderers.emplace_back("apple");
     renderer_help += ", apple";
 #endif
-    layouts_cmd->add_option("--renderer", opts.renderer, renderer_help)->check(CLI::IsMember(renderers));
+    layouts_cmd->add_option("--renderer", opts.renderer, renderer_help)->check(renderer_validator());
     return layouts_cmd;
 }
 
