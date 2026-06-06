@@ -330,6 +330,7 @@ enum class ApacContainer {
 // layouts, otherwise encoder default. The APAC encoder may produce a measured
 // average bitrate that differs substantially.
 // drc_music: true = Music DRC (cdrc=1), false = None (cdrc=0).
+// progress: optional frame-level encode progress, emitted as RenderOperation::encode_apac by default.
 // Whether APAC encoding is available in this build (macOS / AudioToolbox only).
 // On non-Apple platforms convert_to_apac returns ErrorCode::unsupported.
 bool apac_encoding_available();
@@ -340,7 +341,9 @@ Result<void> convert_to_apac(const std::string& src_path,
                              uint32_t bitrate_kbps = 0,
                              bool drc_music = true,
                              ApacContainer container = ApacContainer::mpeg4,
-                             const std::stop_token& cancel_token = {});
+                             const std::stop_token& cancel_token = {},
+                             ProgressSink* progress = nullptr,
+                             RenderOperation operation = RenderOperation::encode_apac);
 
 // Format-agnostic render output metadata.  Assembled by the engine layer and
 // passed to write_file_metadata(); format-specific encoding is handled there.

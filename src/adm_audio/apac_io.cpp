@@ -34,6 +34,19 @@ namespace {
     return std::string{op.data(), op.size()} + " failed (" + std::to_string(err) + ")";
 }
 
+void emit_apac_progress(ProgressSink* progress,
+                        RenderOperation operation,
+                        double fraction,
+                        uint64_t current_frame,
+                        uint64_t total_frames,
+                        std::string_view message) {
+    if (progress == nullptr) {
+        return;
+    }
+    const double f = std::clamp(fraction, 0.0, 1.0);
+    progress->on_progress({RenderStage::post_processing, operation, f, f, current_frame, total_frames, message});
+}
+
 } // namespace
 
 bool apac_encoding_available() {
@@ -54,7 +67,9 @@ Result<void> convert_to_apac(const std::string& src_path,
                              uint32_t bitrate_kbps,
                              bool drc_music,
                              ApacContainer container,
-                             const std::stop_token& cancel_token) {
+                             const std::stop_token& cancel_token,
+                             ProgressSink* progress,
+                             RenderOperation operation) {
 #ifndef __APPLE__
     (void) src_path;
     (void) apac_path;
@@ -63,6 +78,8 @@ Result<void> convert_to_apac(const std::string& src_path,
     (void) drc_music;
     (void) container;
     (void) cancel_token;
+    (void) progress;
+    (void) operation;
     return make_error(ErrorCode::unsupported, "APAC encoding requires macOS (AudioToolbox)", {});
 #else
     if (cancel_token.stop_requested()) {
@@ -232,6 +249,10 @@ Result<void> convert_to_apac(const std::string& src_path,
     constexpr uint64_t k_block = 4096;
     std::vector<float> buf(static_cast<std::size_t>(channels) * k_block);
     uint64_t left = reader.frame_count();
+    const uint64_t total_frames = left;
+    uint64_t done = 0;
+    emit_apac_progress(progress, operation, 0.0, 0, total_frames, "encoding APAC");
+
     while (left > 0) {
         if (cancel_token.stop_requested()) {
             ExtAudioFileDispose(ext_file);
@@ -262,6 +283,13 @@ Result<void> convert_to_apac(const std::string& src_path,
                               "path=" + apac_path);
         }
         left -= got;
+        done += got;
+        emit_apac_progress(progress,
+                           operation,
+                           static_cast<double>(done) / static_cast<double>(std::max<uint64_t>(1, total_frames)),
+                           done,
+                           total_frames,
+                           "encoding APAC");
     }
     if (left != 0) {
         ExtAudioFileDispose(ext_file);
@@ -278,6 +306,7 @@ Result<void> convert_to_apac(const std::string& src_path,
                           status_message("APAC: ExtAudioFileDispose", static_cast<int>(err)),
                           "path=" + apac_path);
     }
+    emit_apac_progress(progress, operation, 1.0, total_frames, total_frames, "APAC encoded");
     return {};
 #endif
 }

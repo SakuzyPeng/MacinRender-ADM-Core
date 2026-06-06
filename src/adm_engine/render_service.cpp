@@ -923,8 +923,8 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     if (is_apac_final) {
         logs.log(LogLevel::info, "engine", fmt::format("encoding float32 render to APAC ({})", final_ext));
-        emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::encode_apac, 0.955, 0.0, "encoding APAC");
+        ProgressRangeSink apac_progress(
+            progress, RenderStage::post_processing, RenderOperation::encode_apac, 0.955, 0.985, "encoding APAC");
         const auto apac_container = is_apac_caf_final ? audio::ApacContainer::caf : audio::ApacContainer::mpeg4;
         auto apac_res = audio::convert_to_apac(render_path,
                                                encoded_output_path,
@@ -932,12 +932,12 @@ RenderResult RenderService::render(const RenderRequest& request,
                                                request.options.apac_bitrate_kbps,
                                                request.options.apac_drc_music,
                                                apac_container,
-                                               plan.cancel_token);
+                                               plan.cancel_token,
+                                               &apac_progress);
         render_temp_guard->remove_now();
         if (!apac_res) {
             return fail_with_report(apac_res.error());
         }
-        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_apac, 0.985, 1.0, "APAC encoded");
     }
 
     if (is_iamf_final) {
