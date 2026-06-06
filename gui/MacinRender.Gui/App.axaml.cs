@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using System;
+using MacinRender.Gui.I18n;
 using MacinRender.Gui.Interop;
 using MacinRender.Gui.Models;
 using MacinRender.Gui.ViewModels;
@@ -20,6 +21,10 @@ public partial class App : Application
         // 用真实 C ABI 查询填充输出模型(backends/layouts/formats);失败即中止启动。
         LoadOutputModel();
 
+        // i18n:把当前语言字典灌入 App 资源(供 XAML {DynamicResource});切语言时刷新。
+        Localizer.Instance.PropertyChanged += (_, _) => ApplyLanguageResources();
+        ApplyLanguageResources();
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = new MainWindow
@@ -29,6 +34,14 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private void ApplyLanguageResources()
+    {
+        foreach (var key in Localizer.Instance.Keys)
+        {
+            Resources[key] = Localizer.Instance[key];
+        }
     }
 
     private static void LoadOutputModel()

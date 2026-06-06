@@ -165,7 +165,7 @@ public static class OutputModel
         }
 
         var allLayouts = m.Layouts.Select(l => l.Layout).Where(l => backends.Any(b => b.LayoutIds.Contains(l))).ToList();
-        backends.Insert(0, new BackendDef("automatic", "自动", allLayouts, AdmRenderer.Automatic));
+        backends.Insert(0, new BackendDef("automatic", "Auto", allLayouts, AdmRenderer.Automatic));
 
         Backends = backends;
         BackendById = backends.ToDictionary(b => b.Id);
@@ -186,10 +186,11 @@ public static class OutputModel
             list.Add(new CodecDef(id, name, sub, available, available ? "" : offReason));
         }
 
-        AddIfPresent("pcm", "PCM(未压缩)", SubOption.None, "");
-        AddIfPresent("flac", "FLAC(无损)", SubOption.None, "");
-        AddIfPresent("opus", "Opus(有损)", SubOption.BitratePerCh, "不可用");
-        AddIfPresent("apac", "APAC(有损)", SubOption.BitrateTotal, "macOS 专用");
+        // 编码器用纯专名(中英一致,免翻);有损/无损由码率框出现与否 + FixedNote 体现。
+        AddIfPresent("pcm", "PCM", SubOption.None, "");
+        AddIfPresent("flac", "FLAC", SubOption.None, "");
+        AddIfPresent("opus", "Opus", SubOption.BitratePerCh, "unavailable");
+        AddIfPresent("apac", "APAC", SubOption.BitrateTotal, "macOS only");
         return list.ToArray();
     }
 
@@ -219,7 +220,7 @@ public static class OutputModel
         "ear" => "EAR (BS.2127)",
         "saf" => "SAF VBAP",
         "hoa" => "HOA",
-        "saf-binaural" => "SAF 双耳",
+        "saf-binaural" => "SAF Binaural",
         "apple" => "Apple SpatialMixer",
         _ => string.IsNullOrEmpty(backendName) ? renderer : backendName,
     };
@@ -227,7 +228,7 @@ public static class OutputModel
     private static string FriendlyLayout(string layout) => layout switch
     {
         "binaural" => "Binaural",
-        "hoa3" => "HOA 3 阶",
+        "hoa3" => "HOA3",
         _ => layout,
     };
 
