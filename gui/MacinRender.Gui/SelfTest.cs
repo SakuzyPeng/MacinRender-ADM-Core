@@ -1,9 +1,11 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using MacinRender.Gui.Interop;
+using MacinRender.Gui.Models;
 using MacinRender.Gui.Services;
 
 namespace MacinRender.Gui;
@@ -52,6 +54,52 @@ internal static class SelfTest
             Console.Error.WriteLine($"[失败] adm_output_formats_json: {rc}");
             return 4;
         }
+
+        // 模型构建验证:support-matrix → OutputModel(GUI 启动走同一路径)。
+        SupportMatrixDoc? matrix;
+        try
+        {
+            matrix = AdmQueries.LoadSupportMatrix(ctx);
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            Console.Error.WriteLine($"[失败] libmradm_capi 缺少 adm_render_support_matrix_json: {ex.Message}");
+            return 7;
+        }
+
+        if (matrix is null)
+        {
+            Console.Error.WriteLine("[失败] adm_render_support_matrix_json 未返回有效矩阵");
+            return 7;
+        }
+
+        OutputModel.Initialize(matrix);
+        Console.WriteLine($"backends({OutputModel.Backends.Count}):");
+        foreach (var b in OutputModel.Backends.Where(b => b.Id != "automatic"))
+        {
+            Console.WriteLine($"  {b.Id} \"{b.Name}\" (renderer={b.Renderer}):");
+            foreach (var lid in b.LayoutIds)
+            {
+                var l = OutputModel.LayoutById[lid];
+                Console.WriteLine($"      [{lid}] \"{l.Name}\" {l.Channels}ch height={l.HasHeight}");
+            }
+        }
+        Console.WriteLine($"codecs: {string.Join(", ", OutputModel.Codecs.Select(c => $"{c.Id}={(c.Available ? "on" : "off")}"))}");
+        Console.WriteLine($"features: apac={OutputModel.ApacAvailable} iamf={OutputModel.IamfAvailable} sofa={OutputModel.SofaAvailable}");
+
+        Console.WriteLine("联动链抽查 (后端 → 编码器 → 该编码器支持的布局):");
+        void Chain(string backendId)
+        {
+            var backend = OutputModel.BackendById[backendId];
+            foreach (var c in OutputModel.Codecs.Where(c => OutputModel.IsCodecSupportedByBackend(backend, c.Id)))
+            {
+                var lays = backend.LayoutIds.Where(l => OutputModel.IsCodecSupported(backendId, l, c.Id));
+                Console.WriteLine($"  {backendId}/{c.Id} → [{string.Join(", ", lays)}]");
+            }
+        }
+
+        Chain("ear");
+        Chain("saf-binaural");
 
         if (string.IsNullOrEmpty(inputWav))
         {

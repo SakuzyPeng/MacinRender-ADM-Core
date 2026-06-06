@@ -14,7 +14,7 @@
         Background="Transparent"
         ExtendClientAreaToDecorationsHint="True">
 
-    <Panel>
+    <Panel DragDrop.AllowDrop="True">
         <ExperimentalAcrylicBorder IsHitTestVisible="False">
             <ExperimentalAcrylicBorder.Material>
                 <ExperimentalAcrylicMaterial
@@ -169,7 +169,8 @@
                                         <Path Classes="icon" Data="{StaticResource IconTrash}"/>
                                     </ctrl:SquircleButton>
                                     <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="添加文件"
-                                            Command="{Binding AddFileCommand}">
+                                            IsEnabled="{Binding !IsRendering}"
+                                            Click="OnAddFiles">
                                         <Path Classes="icon" Data="{StaticResource IconAdd}"/>
                                     </ctrl:SquircleButton>
                                 </StackPanel>
@@ -192,9 +193,31 @@
                                                            VerticalAlignment="Center" FontSize="13"
                                                            Foreground="{DynamicResource TextPrimary}"
                                                            Text="{Binding Name}"/>
-                                                <TextBlock Grid.Row="0" Grid.Column="2"
-                                                           VerticalAlignment="Center" Classes="muted"
-                                                           Text="{Binding StatusText}"/>
+                                                <Panel Grid.Row="0" Grid.Column="2" VerticalAlignment="Center"
+                                                       Margin="8,0,0,0">
+                                                    <!-- 待渲染:时钟图标 -->
+                                                    <Path Data="{StaticResource IconHistory}"
+                                                          Stroke="{DynamicResource TextMuted}" StrokeThickness="1.8"
+                                                          StrokeLineCap="Round" StrokeJoin="Round"
+                                                          Width="15" Height="15" Stretch="Uniform"
+                                                          IsVisible="{Binding IsPending}"/>
+                                                    <!-- 渲染中:阶段短词 -->
+                                                    <TextBlock Classes="muted" VerticalAlignment="Center"
+                                                               Text="{Binding StageText}"
+                                                               IsVisible="{Binding IsRenderingState}"/>
+                                                    <!-- 完成:绿勾 -->
+                                                    <Path Data="{StaticResource IconCheck}"
+                                                          Stroke="#30D158" StrokeThickness="2.2"
+                                                          StrokeLineCap="Round" StrokeJoin="Round"
+                                                          Width="16" Height="16" Stretch="Uniform"
+                                                          IsVisible="{Binding IsDone}"/>
+                                                    <!-- 失败:红叉 -->
+                                                    <Path Data="{StaticResource IconCross}"
+                                                          Stroke="#FF453A" StrokeThickness="2.2"
+                                                          StrokeLineCap="Round" StrokeJoin="Round"
+                                                          Width="15" Height="15" Stretch="Uniform"
+                                                          IsVisible="{Binding IsFailed}"/>
+                                                </Panel>
                                                 <ProgressBar Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
                                                              Margin="0,8,0,0" Height="3"
                                                              Minimum="0" Maximum="100"
