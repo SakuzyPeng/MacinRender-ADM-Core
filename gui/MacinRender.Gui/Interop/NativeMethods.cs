@@ -161,6 +161,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib)]
     internal static partial AdmErrorCode adm_capabilities_json(AdmContextHandle context, out IntPtr outJson);
 
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_render_support_matrix_json(AdmContextHandle context, out IntPtr outJson);
+
     // ── probe / scene info ──
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial AdmErrorCode adm_probe_file(AdmContextHandle context, string inputPath,

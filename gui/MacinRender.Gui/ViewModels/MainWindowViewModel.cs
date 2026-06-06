@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,13 +9,15 @@ using Avalonia;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MacinRender.Gui.Interop;
 using MacinRender.Gui.Models;
+using MacinRender.Gui.Services;
 
 namespace MacinRender.Gui.ViewModels;
 
 /// <summary>
-/// 花瓶 MVP 的 ViewModel:mock 数据 + 模拟进度,不接 C ABI、不做真实渲染。
-/// 输出设置走真实约束模型(OutputModel),四级联动 + 不兼容禁用。
+/// 渲染界面 ViewModel:输出设置由真实支持矩阵(OutputModel)驱动,
+/// 文件队列经稳定 C ABI 调 AdmRenderService 执行离线渲染。
 /// </summary>
 public partial class MainWindowViewModel : ObservableObject
 {
@@ -56,7 +60,6 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ActionButtonText))]
-    [NotifyCanExecuteChangedFor(nameof(AddFileCommand))]
     [NotifyCanExecuteChangedFor(nameof(ClearQueueCommand))]
     private bool _isRendering;
 
@@ -64,103 +67,76 @@ public partial class MainWindowViewModel : ObservableObject
 
     private bool CanEditQueue => !IsRendering;
 
+    private readonly AdmRenderService _renderService = new();
     private CancellationTokenSource? _cts;
-    private int _counter = 3;
     private SubOption _lastSub = SubOption.None;
+    private decimal _lastAutoBitrate; // 上次自动设的码率;与当前相等即视为"用户未手动改",可随布局重算
 
     public MainWindowViewModel()
     {
-        Files.Add(new RenderFileItem { Name = "intro_atmos.wav" });
-        Files.Add(new RenderFileItem { Name = "scene_02_objects.wav" });
-        Files.Add(new RenderFileItem { Name = "finale_bed+obj.wav" });
-        StatusText = $"就绪 — 队列中 {Files.Count} 个文件";
-        AddLog(LogKind.Info, "已加载文件", $"{Files.Count} 个 ADM BWF");
-        AddLog(LogKind.Info, "默认设置", "EAR · 7.1.4");
+        StatusText = "就绪 — 队列为空";
+        AddLog(LogKind.Info, "就绪", "点「添加文件」导入 ADM BWF");
 
-        RebuildLayouts(); // 触发四级联动初始化
+        RebuildCodecs(); // 触发联动初始化(后端→编码器→布局→容器)
     }
 
     // ── 联动 ──
 
-    partial void OnSelectedBackendChanged(BackendDef value) => RebuildLayouts();
-    partial void OnSelectedLayoutChanged(LayoutDef? value) => RebuildCodecs();
-    partial void OnSelectedCodecChanged(CodecOption? value)
+    // 单向联动链:后端 → 编码器 → 布局 → 容器。切下游永远不会回改上游已选项。
+    partial void OnSelectedBackendChanged(BackendDef value) => RebuildCodecs();
+    partial void OnSelectedCodecChanged(CodecOption? value) => RebuildLayouts();
+    partial void OnSelectedLayoutChanged(LayoutDef? value)
     {
         RebuildContainers();
         UpdateSubOptions();
     }
 
-    private void RebuildLayouts()
-    {
-        var keep = SelectedLayout;
-        Layouts.Clear();
-        foreach (var id in SelectedBackend.LayoutIds)
-        {
-            Layouts.Add(OutputModel.LayoutById[id]);
-        }
-
-        var next = keep is not null && Layouts.Contains(keep) ? keep : Layouts.FirstOrDefault();
-        if (!ReferenceEquals(next, SelectedLayout))
-        {
-            SelectedLayout = next; // → RebuildCodecs
-        }
-        else
-        {
-            RebuildCodecs();
-        }
-    }
-
+    // 编码器列表 = 当前后端在「任一支持布局」下可用的编码器(apac 在非 macOS 经 support-matrix 自动排除)。
     private void RebuildCodecs()
     {
-        var layout = SelectedLayout;
         var keepId = SelectedCodec?.Def.Id;
         Codecs.Clear();
         foreach (var def in OutputModel.Codecs)
         {
-            bool layoutOk;
-            string? layoutReason = null;
-            if (def.AllowedLayoutIds is { } whitelist)
+            if (OutputModel.IsCodecSupportedByBackend(SelectedBackend, def.Id))
             {
-                layoutOk = layout is null || whitelist.Contains(layout.Id);
-                if (!layoutOk)
-                {
-                    layoutReason = "不支持该布局";
-                }
+                Codecs.Add(new CodecOption(def, true, def.Name));
             }
-            else
-            {
-                bool fitsChannels = layout is null || layout.Channels <= def.MaxChannels;
-                bool fitsHeight = layout is null || def.SupportsHeight || !layout.HasHeight;
-                layoutOk = fitsChannels && fitsHeight;
-                if (!fitsChannels)
-                {
-                    layoutReason = $"超 {def.MaxChannels}ch";
-                }
-                else if (!fitsHeight)
-                {
-                    layoutReason = "不支持高度";
-                }
-            }
-
-            bool enabled = def.Available && layoutOk;
-            string label = def.Name;
-            if (!def.Available)
-            {
-                label = $"{def.Name} — {def.Reason}";
-            }
-            else if (layoutReason is not null)
-            {
-                label = $"{def.Name} — {layoutReason}";
-            }
-
-            Codecs.Add(new CodecOption(def, enabled, label));
         }
 
-        var next = Codecs.FirstOrDefault(c => c.Def.Id == keepId && c.IsEnabled)
-                   ?? Codecs.FirstOrDefault(c => c.IsEnabled);
+        var next = Codecs.FirstOrDefault(c => c.Def.Id == keepId) ?? Codecs.FirstOrDefault();
         if (!ReferenceEquals(next, SelectedCodec))
         {
-            SelectedCodec = next; // → RebuildContainers + UpdateSubOptions
+            SelectedCodec = next; // → RebuildLayouts
+        }
+        else
+        {
+            RebuildLayouts();
+        }
+    }
+
+    // 布局列表 = 当前后端 ∩ 当前编码器支持的布局 —— 不兼容的布局不出现,
+    // 故切布局永远不会反过来改掉已选编码器。
+    private void RebuildLayouts()
+    {
+        var keepId = SelectedLayout?.Id;
+        Layouts.Clear();
+        if (SelectedCodec is not null)
+        {
+            foreach (var id in SelectedBackend.LayoutIds)
+            {
+                if (OutputModel.IsCodecSupported(SelectedBackend.Id, id, SelectedCodec.Def.Id))
+                {
+                    Layouts.Add(OutputModel.LayoutById[id]);
+                }
+            }
+        }
+
+        var next = (keepId is not null ? Layouts.FirstOrDefault(l => l.Id == keepId) : null)
+                   ?? Layouts.FirstOrDefault();
+        if (!ReferenceEquals(next, SelectedLayout))
+        {
+            SelectedLayout = next; // → RebuildContainers + UpdateSubOptions
         }
         else
         {
@@ -173,11 +149,12 @@ public partial class MainWindowViewModel : ObservableObject
     {
         var keepId = SelectedContainer?.Id;
         Containers.Clear();
-        if (SelectedCodec is not null)
+        if (SelectedCodec is not null && SelectedLayout is not null)
         {
-            foreach (var cid in SelectedCodec.Def.ContainerIds)
+            foreach (var tid in OutputModel.SupportedContainers(SelectedBackend.Id, SelectedLayout.Id,
+                         SelectedCodec.Def.Id))
             {
-                Containers.Add(OutputModel.ContainerById[cid]);
+                Containers.Add(OutputModel.ContainerById[tid]);
             }
         }
 
@@ -203,7 +180,6 @@ public partial class MainWindowViewModel : ObservableObject
         {
             "pcm" => "32-bit float",
             "flac" => "固定 24-bit",
-            "iamf" => "Opus 内部编码",
             _ => ""
         };
 
@@ -226,10 +202,13 @@ public partial class MainWindowViewModel : ObservableObject
                 defaultKbps = Math.Round(2048m * ch / 12m); // APAC:7.1.4(12ch)=2048,按声道缩放
             }
 
-            // 仅在编码类型切换、或当前值越界时回默认;手动改过的码率保留
-            if (_lastSub != def.Sub || Bitrate < BitrateMin || Bitrate > BitrateMax)
+            // 回默认的条件:切编码类型 / 越界 / 当前仍是上次自动设的值(用户没手动改过)。
+            // 末项让 APAC 默认(随声道数变)在切换布局时自动跟随;一旦用户手动改过则保留。
+            bool stillAuto = Bitrate == _lastAutoBitrate;
+            if (_lastSub != def.Sub || Bitrate < BitrateMin || Bitrate > BitrateMax || stillAuto)
             {
                 Bitrate = defaultKbps;
+                _lastAutoBitrate = defaultKbps;
             }
         }
 
@@ -238,13 +217,31 @@ public partial class MainWindowViewModel : ObservableObject
 
     // ── 队列 / 日志 / 渲染 ──
 
-    [RelayCommand(CanExecute = nameof(CanEditQueue))]
-    private void AddFile()
+    /// <summary>由文件选择器(code-behind)调用,加入去重后的真实文件。</summary>
+    public void AddFiles(IEnumerable<string> paths)
     {
-        _counter++;
-        Files.Add(new RenderFileItem { Name = $"clip_{_counter:00}.wav" });
-        StatusText = $"就绪 — 队列中 {Files.Count} 个文件";
-        AddLog(LogKind.Info, "添加文件", $"clip_{_counter:00}.wav");
+        if (IsRendering)
+        {
+            return;
+        }
+
+        var added = new List<string>();
+        foreach (var p in paths)
+        {
+            if (string.IsNullOrEmpty(p) || Files.Any(f => f.InputPath == p))
+            {
+                continue;
+            }
+
+            Files.Add(new RenderFileItem { Name = Path.GetFileName(p), InputPath = p });
+            added.Add(Path.GetFileName(p));
+        }
+
+        if (added.Count > 0)
+        {
+            StatusText = $"就绪 — 队列中 {Files.Count} 个文件";
+            AddLog(LogKind.Info, "添加文件", added.Count == 1 ? added[0] : $"{added.Count} 个文件");
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanEditQueue))]
@@ -287,8 +284,15 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task RunRenderAsync()
     {
-        if (IsRendering || Files.Count == 0)
+        if (IsRendering)
         {
+            return;
+        }
+
+        if (Files.Count == 0)
+        {
+            StatusText = "队列为空";
+            AddLog(LogKind.Warn, "无文件", "先添加 ADM 文件再渲染");
             return;
         }
 
@@ -298,8 +302,9 @@ public partial class MainWindowViewModel : ObservableObject
         OverallProgress = 0;
         Logs.Clear();
 
-        var target = $"{SelectedLayout?.Name} · {SelectedContainer?.Name}";
-        AddLog(LogKind.Info, "开始渲染", $"{Files.Count} 个文件 · {target}");
+        var settings = BuildSettings();
+        AddLog(LogKind.Info, "开始渲染",
+            $"{Files.Count} 个文件 · {SelectedBackend.Name} · {SelectedLayout?.Name} · {SelectedContainer?.Name}");
 
         foreach (var f in Files)
         {
@@ -307,29 +312,75 @@ public partial class MainWindowViewModel : ObservableObject
             f.Status = FileStatus.Pending;
         }
 
+        int done = 0;
+        bool cancelled = false;
         try
         {
             for (int i = 0; i < Files.Count; i++)
             {
-                var f = Files[i];
-                f.Status = FileStatus.Rendering;
-                StatusText = $"渲染中 ({i + 1}/{Files.Count}) — {f.Name}";
-                AddLog(LogKind.Info, "正在渲染", $"{f.Name} → {SelectedLayout?.Name}");
-
-                for (int p = 1; p <= 20; p++)
+                if (token.IsCancellationRequested)
                 {
-                    await Task.Delay(70, token);
-                    f.Progress = p * 5;
-                    OverallProgress = (i + p / 20.0) / Files.Count * 100.0;
+                    cancelled = true;
+                    break;
                 }
 
-                f.Status = FileStatus.Done;
-                AddLog(LogKind.Success, "已完成", f.Name);
+                var f = Files[i];
+                int idx = i;
+                f.Status = FileStatus.Rendering;
+                StatusText = $"渲染中 ({i + 1}/{Files.Count}) — {f.Name}";
+
+                var progress = new Progress<RenderProgress>(p =>
+                {
+                    f.Progress = p.OverallFraction * 100.0;
+                    f.StageText = StageWord(p);
+                    OverallProgress = (idx + p.OverallFraction) / Files.Count * 100.0;
+                });
+
+                var outPath = DeriveOutputPath(f.InputPath);
+                var outcome = await _renderService.RenderAsync(f.InputPath, outPath, settings, progress, token);
+
+                if (token.IsCancellationRequested || outcome.ErrorCode == AdmErrorCode.Cancelled)
+                {
+                    f.Status = FileStatus.Pending;
+                    cancelled = true;
+                    break;
+                }
+
+                foreach (var log in outcome.Logs)
+                {
+                    if (log.Level >= AdmLogLevel.Warning)
+                    {
+                        AddLog(MapKind(log.Level), log.Module, log.Message);
+                    }
+                }
+
+                if (outcome.Success)
+                {
+                    f.Progress = 100;
+                    f.Status = FileStatus.Done;
+                    done++;
+                    var metric = outcome.LoudnessLufs is { } lu ? $"  ({lu:F1} LUFS)" : "";
+                    AddLog(LogKind.Success, "已完成",
+                        $"{f.Name} → {Path.GetFileName(outcome.OutputPath ?? outPath)}{metric}");
+                }
+                else
+                {
+                    f.Status = FileStatus.Failed;
+                    AddLog(LogKind.Error, "渲染失败", $"{f.Name}:{outcome.Message}");
+                }
             }
 
-            OverallProgress = 100;
-            StatusText = $"全部完成 — {Files.Count} 个文件";
-            AddLog(LogKind.Success, "全部完成", $"{Files.Count} 个文件");
+            if (cancelled)
+            {
+                StatusText = "已取消";
+                AddLog(LogKind.Warn, "已取消", "用户中断渲染");
+            }
+            else
+            {
+                OverallProgress = 100;
+                StatusText = $"完成 — {done}/{Files.Count} 个文件";
+                AddLog(LogKind.Success, "全部完成", $"{done}/{Files.Count} 成功");
+            }
         }
         catch (OperationCanceledException)
         {
@@ -351,6 +402,82 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    private RenderSettings BuildSettings()
+    {
+        var codec = SelectedCodec?.Def;
+        uint? opus = null;
+        uint? apac = null;
+        AdmApacContainer? apacContainer = null;
+
+        if (codec?.Sub == SubOption.BitratePerCh)
+        {
+            opus = (uint)Math.Clamp(Bitrate, BitrateMin, BitrateMax);
+        }
+        else if (codec?.Sub == SubOption.BitrateTotal)
+        {
+            apac = (uint)Math.Clamp(Bitrate, BitrateMin, BitrateMax);
+        }
+
+        if (codec?.Id == "apac")
+        {
+            apacContainer = SelectedContainer?.Id == "apac_caf" ? AdmApacContainer.Caf : AdmApacContainer.Mpeg4;
+        }
+
+        return new RenderSettings
+        {
+            Renderer = SelectedBackend.Renderer,
+            Layout = SelectedLayout?.Id ?? "binaural",
+            OpusBitratePerChKbps = opus,
+            ApacBitrateKbps = apac,
+            ApacContainer = apacContainer,
+        };
+    }
+
+    private string DeriveOutputPath(string input)
+    {
+        var dir = Path.GetDirectoryName(input) ?? ".";
+        var stem = Path.GetFileNameWithoutExtension(input);
+        var ext = SelectedContainer?.Ext ?? "wav";
+        var path = Path.Combine(dir, $"{stem}.{ext}");
+        if (string.Equals(path, input, StringComparison.OrdinalIgnoreCase))
+        {
+            path = Path.Combine(dir, $"{stem}.rendered.{ext}");
+        }
+
+        return path;
+    }
+
+    // 结构化进度 → 渲染阶段短词(校验/导入/准备/渲染/编码/封装),用 operation 细分。
+    private static string StageWord(RenderProgress p) => p.Operation switch
+    {
+        AdmProgressOperation.ValidateRequest or AdmProgressOperation.ProbeInput => "校验",
+        AdmProgressOperation.ImportScene or AdmProgressOperation.ApplySemanticPolicy => "导入",
+        AdmProgressOperation.PlanRender or AdmProgressOperation.PrepareBackend => "准备",
+        AdmProgressOperation.RenderAudio => "渲染",
+        AdmProgressOperation.TrimOutput or AdmProgressOperation.ApplyGain
+            or AdmProgressOperation.ConvertBitDepth or AdmProgressOperation.EncodeFlac
+            or AdmProgressOperation.EncodeOpus or AdmProgressOperation.EncodeApac
+            or AdmProgressOperation.EncodeIamf => "编码",
+        AdmProgressOperation.PackageIamfMp4 or AdmProgressOperation.WriteMetadata
+            or AdmProgressOperation.Finish => "封装",
+        _ => p.Stage switch
+        {
+            AdmRenderStage.Validating or AdmRenderStage.Probing => "校验",
+            AdmRenderStage.ImportingScene => "导入",
+            AdmRenderStage.Planning => "准备",
+            AdmRenderStage.PostProcessing => "编码",
+            _ => "渲染",
+        },
+    };
+
+    private static LogKind MapKind(AdmLogLevel level) => level switch
+    {
+        AdmLogLevel.Error => LogKind.Error,
+        AdmLogLevel.Warning => LogKind.Warn,
+        _ => LogKind.Info,
+    };
+
+    // 插到队首:最新日志显示在顶部。
     private void AddLog(LogKind kind, string title, string detail = "") =>
-        Logs.Add(new LogLine(kind, title, detail, DateTime.Now));
+        Logs.Insert(0, new LogLine(kind, title, detail, DateTime.Now));
 }

@@ -1,10 +1,12 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using MacinRender.Gui.Models;
 using MacinRender.Gui.ViewModels;
@@ -13,10 +15,41 @@ namespace MacinRender.Gui;
 
 public partial class MainWindow : Window
 {
+    private static readonly string[] AdmExtensions = { ".wav", ".bw64", ".adm", ".rf64" };
+
     public MainWindow()
     {
         InitializeComponent();
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DropEvent, OnDrop);
     }
+
+    private void OnDragOver(object? sender, DragEventArgs e)
+    {
+        bool ok = e.DataTransfer.Contains(DataFormat.File) && DataContext is MainWindowViewModel { IsRendering: false };
+        e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
+    }
+
+    private void OnDrop(object? sender, DragEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var paths = e.DataTransfer.TryGetFiles()?
+            .Select(f => f.TryGetLocalPath())
+            .Where(p => !string.IsNullOrEmpty(p) && IsAdmFile(p!))
+            .Select(p => p!)
+            .ToList();
+        if (paths is { Count: > 0 })
+        {
+            vm.AddFiles(paths);
+        }
+    }
+
+    private static bool IsAdmFile(string path) =>
+        AdmExtensions.Contains(Path.GetExtension(path).ToLowerInvariant());
 
     private void OnTitleBarPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -24,6 +57,37 @@ public partial class MainWindow : Window
         {
             BeginMoveDrag(e);
         }
+    }
+
+    private async void OnAddFiles(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "选择 ADM BWF 文件",
+            AllowMultiple = true,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("ADM 音频") { Patterns = new[] { "*.wav", "*.bw64", "*.adm" } },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        var paths = files
+            .Select(f => f.TryGetLocalPath())
+            .Where(p => !string.IsNullOrEmpty(p) && IsAdmFile(p!))
+            .Select(p => p!)
+            .ToList();
+        vm.AddFiles(paths);
     }
 
     private async void OnLogTapped(object? sender, TappedEventArgs e) => await CopySelectedAsync();
@@ -48,7 +112,8 @@ public partial class MainWindow : Window
     {
         if (DataContext is MainWindowViewModel vm)
         {
-            await SetClipboardAsync(string.Join("\n", vm.Logs.Select(LogText)));
+            // 显示是新→旧;复制全部按时间顺序(旧→新)更易读。
+            await SetClipboardAsync(string.Join("\n", vm.Logs.Reverse().Select(LogText)));
             ShowCopyHint();
         }
     }

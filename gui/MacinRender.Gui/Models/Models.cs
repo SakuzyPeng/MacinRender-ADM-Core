@@ -8,7 +8,8 @@ public enum FileStatus
 {
     Pending,
     Rendering,
-    Done
+    Done,
+    Failed
 }
 
 public enum LogKind
@@ -19,9 +20,12 @@ public enum LogKind
     Error
 }
 
-/// <summary>队列中的一个待渲染文件(花瓶 mock,无真实数据)。</summary>
+/// <summary>队列中的一个待渲染文件。</summary>
 public partial class RenderFileItem : ObservableObject
 {
+    /// <summary>真实输入文件绝对路径(渲染时传给 AdmRenderService)。</summary>
+    public string InputPath { get; init; } = "";
+
     [ObservableProperty]
     private string _name = "";
 
@@ -31,13 +35,27 @@ public partial class RenderFileItem : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(StatusBrush))]
+    [NotifyPropertyChangedFor(nameof(IsPending))]
+    [NotifyPropertyChangedFor(nameof(IsRenderingState))]
+    [NotifyPropertyChangedFor(nameof(IsDone))]
+    [NotifyPropertyChangedFor(nameof(IsFailed))]
     private FileStatus _status = FileStatus.Pending;
+
+    /// <summary>渲染中的阶段短词(校验/导入/准备/渲染/编码/封装),由进度回调更新。</summary>
+    [ObservableProperty]
+    private string _stageText = "";
+
+    public bool IsPending => Status == FileStatus.Pending;
+    public bool IsRenderingState => Status == FileStatus.Rendering;
+    public bool IsDone => Status == FileStatus.Done;
+    public bool IsFailed => Status == FileStatus.Failed;
 
     public string StatusText => Status switch
     {
         FileStatus.Pending => "待渲染",
         FileStatus.Rendering => "渲染中",
         FileStatus.Done => "完成",
+        FileStatus.Failed => "失败",
         _ => ""
     };
 
@@ -46,6 +64,7 @@ public partial class RenderFileItem : ObservableObject
         FileStatus.Pending => Color.Parse("#8E8E93"),
         FileStatus.Rendering => Color.Parse("#0A84FF"),
         FileStatus.Done => Color.Parse("#30D158"),
+        FileStatus.Failed => Color.Parse("#FF453A"),
         _ => Colors.Gray
     });
 }
