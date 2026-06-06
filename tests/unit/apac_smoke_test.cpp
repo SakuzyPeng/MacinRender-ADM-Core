@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -36,6 +37,58 @@ bool check(bool cond, const char* msg) {
         std::cerr << "FAIL: " << msg << "\n";
     }
     return cond;
+}
+
+struct ProgressSnapshot {
+    mradm::RenderStage stage{};
+    mradm::RenderOperation operation{};
+    double fraction{};
+    double stage_fraction{};
+    uint64_t current_frame{};
+    uint64_t total_frames{};
+};
+
+class CapturingProgressSink final : public mradm::ProgressSink {
+  public:
+    void on_progress(const mradm::ProgressEvent& event) override {
+        events_.push_back({event.stage,
+                           event.operation,
+                           event.fraction,
+                           event.stage_fraction,
+                           event.current_frame,
+                           event.total_frames});
+    }
+
+    [[nodiscard]] const std::vector<ProgressSnapshot>& events() const noexcept { return events_; }
+
+  private:
+    std::vector<ProgressSnapshot> events_;
+};
+
+bool verify_apac_progress(const CapturingProgressSink& progress, uint64_t expected_frames) {
+    const auto& events = progress.events();
+    bool ok = check(events.size() > 2U, "APAC progress should include intermediate frame events");
+    bool stage_ok = true;
+    bool operation_ok = true;
+    bool fraction_ok = true;
+    bool frame_ok = true;
+    bool midpoint_ok = false;
+    double prev = -1.0;
+    for (const auto& ev : events) {
+        stage_ok = stage_ok && ev.stage == mradm::RenderStage::post_processing;
+        operation_ok = operation_ok && ev.operation == mradm::RenderOperation::encode_apac;
+        fraction_ok = fraction_ok && ev.fraction >= prev && ev.fraction >= 0.0 && ev.fraction <= 1.0 &&
+                      ev.stage_fraction >= 0.0 && ev.stage_fraction <= 1.0;
+        frame_ok = frame_ok && ev.total_frames == expected_frames && ev.current_frame <= ev.total_frames;
+        midpoint_ok = midpoint_ok || (ev.current_frame > 0U && ev.current_frame < ev.total_frames);
+        prev = ev.fraction;
+    }
+    ok = check(stage_ok, "APAC progress stage should be post_processing") && ok;
+    ok = check(operation_ok, "APAC progress operation should be encode_apac") && ok;
+    ok = check(fraction_ok, "APAC progress fraction should be monotonic in [0,1]") && ok;
+    ok = check(frame_ok, "APAC progress frames should match input frame count") && ok;
+    ok = check(midpoint_ok, "APAC progress should report a non-terminal frame position") && ok;
+    return ok;
 }
 
 // Write a 1-second 48 kHz WAV with per-channel sine amplitudes taken from |amps|.
@@ -188,8 +241,13 @@ bool verify_apac_wav71_swap() {
         return false;
     }
 
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "wav71");
+    CapturingProgressSink progress;
+    auto res =
+        mradm::audio::convert_to_apac(wav, m4a, "wav71", 0U, true, mradm::audio::ApacContainer::mpeg4, {}, &progress);
     if (!check(res.has_value(), "convert_to_apac(wav71) failed")) {
+        return false;
+    }
+    if (!verify_apac_progress(progress, 48000U)) {
         return false;
     }
     if (!check(std::filesystem::exists(m4a), "wav71 .m4a not created")) {
