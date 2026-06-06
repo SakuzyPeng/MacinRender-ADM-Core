@@ -31,6 +31,7 @@
 #include "format_table.h"
 #include "layout_table.h"
 #include "scene_json.h"
+#include "support_matrix.h"
 
 namespace mradm {
 
@@ -1124,6 +1125,10 @@ OutputFormats RenderService::output_formats() const {
 
 std::string RenderService::output_formats_json() const {
     return engine::output_formats_to_json();
+}
+
+std::string RenderService::render_support_matrix_json() const {
+    return engine::render_support_matrix_to_json();
 }
 
 Result<std::string> RenderService::axml(const std::string& input_path) const {

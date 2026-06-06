@@ -273,6 +273,11 @@ class RenderService {
     // mp4box/ffmpeg subprocess (no probe in the default MR_ADM_ENABLE_IAMF=OFF build).
     [[nodiscard]] std::string output_formats_json() const;
 
+    // Renderer × layout × output-target support matrix serialized to JSON (UTF-8).
+    // This combines capabilities_json(), layouts_json(), and output_formats_json()
+    // into concrete supported/reason rows for GUI option pickers.
+    [[nodiscard]] std::string render_support_matrix_json() const;
+
     // Return the raw <axml> chunk (ADM XML) embedded in the BWF file, verbatim.
     // Mirrors `mradm inspect --xml`. Returns io_error if the file is missing,
     // not a valid BWF, or carries no axml chunk.

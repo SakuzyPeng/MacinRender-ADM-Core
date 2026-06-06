@@ -395,6 +395,7 @@ target_sources(
         src/adm_engine/capability_json.cpp
         src/adm_engine/layout_table.cpp
         src/adm_engine/format_table.cpp
+        src/adm_engine/support_matrix.cpp
 )
 
 target_link_libraries(mr_adm_engine
