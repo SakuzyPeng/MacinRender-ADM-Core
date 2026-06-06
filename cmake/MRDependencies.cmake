@@ -5,7 +5,7 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         return()
     endif()
 
-    if(NOT package_name STREQUAL "FLAC" AND NOT package_name STREQUAL "Opus")
+    if(MR_ADM_CORE_USE_INSTALLED_DEPS AND NOT package_name STREQUAL "FLAC" AND NOT package_name STREQUAL "Opus")
         find_package(${package_name} CONFIG QUIET)
     endif()
     if(TARGET ${target_name})
