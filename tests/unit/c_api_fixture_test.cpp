@@ -1193,6 +1193,62 @@ bool verify_version_111() {
     return check(adm_api_version_minor() >= 11, "v1.11: minor version should be >= 11");
 }
 
+// ── v1.12 tests ───────────────────────────────────────────────────────────
+
+bool verify_version_112() {
+    return check(adm_api_version_minor() >= 12, "v1.12: minor version should be >= 12");
+}
+
+bool verify_render_support_matrix_json(adm_context_t* ctx) {
+    char* json = nullptr;
+    const adm_error_code_t code = adm_render_support_matrix_json(ctx, &json);
+    bool ok = check(code == ADM_ERROR_OK, "render_support_matrix_json: should succeed");
+    ok = check(json != nullptr, "render_support_matrix_json: out_json should be non-null") && ok;
+
+    if (json != nullptr) {
+        const std::string s{json};
+        const auto has = [&s](const char* needle) { return s.find(needle) != std::string::npos; };
+        ok = check(has(R"("schema": "mradm.render-support-matrix")") && has(R"("schema_version": 1)"),
+                   "render_support_matrix_json: should carry schema + schema_version") &&
+             ok;
+        ok = check(has("\"features\"") && has("\"backends\"") && has("\"layouts\"") && has("\"targets\"") &&
+                       has("\"entries\""),
+                   "render_support_matrix_json: should include features/backends/layouts/targets/entries") &&
+             ok;
+        ok = check(has(R"("target": "apac_mpeg4")") && has(R"("target": "apac_caf")") && has(R"("required_option")") &&
+                       has(R"("value": "caf")"),
+                   "render_support_matrix_json: should distinguish APAC MPEG-4 and CAF targets") &&
+             ok;
+        ok = check(has(R"("target": "iamf")") && has(R"("target": "iamf_mp4")"),
+                   "render_support_matrix_json: should distinguish IAMF raw and MP4 targets") &&
+             ok;
+        ok = check(has(R"("renderer": "saf-binaural")") && has(R"("layout": "binaural")"),
+                   "render_support_matrix_json: should include SAF binaural + binaural layout") &&
+             ok;
+        ok = check(has(R"("supported": false)") && has(R"("reason")"),
+                   "render_support_matrix_json: should include unsupported rows with reasons") &&
+             ok;
+#ifdef __APPLE__
+        ok = check(has(R"("apac": true)"), "render_support_matrix_json: apac feature true on macOS") && ok;
+#else
+        ok = check(has(R"("apac": false)") && has("macOS only (AudioToolbox)"),
+                   "render_support_matrix_json: apac unavailable reason off-macOS") &&
+             ok;
+#endif
+    }
+    adm_free_string(json);
+
+    char* bad = nullptr;
+    ok = check(adm_render_support_matrix_json(nullptr, &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "render_support_matrix_json: NULL context should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_render_support_matrix_json(ctx, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "render_support_matrix_json: NULL out_json should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(bad == nullptr, "render_support_matrix_json: out_json should stay NULL on failure") && ok;
+    return ok;
+}
+
 bool verify_progress_v2_events(const ProgressV2State& state, bool require_post_processing, const char* label) {
     (void) label;
     bool ok = check(!state.events.empty(), "v2 progress: at least one event should fire");
@@ -2065,6 +2121,9 @@ int main() {
     ok = verify_iamf_smoke(ctx, fixture.path()) && ok;
     // v1.11 tests
     ok = verify_version_111() && ok;
+    // v1.12 tests
+    ok = verify_version_112() && ok;
+    ok = verify_render_support_matrix_json(ctx) && ok;
 
     adm_destroy_context(ctx);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

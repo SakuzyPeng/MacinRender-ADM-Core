@@ -56,12 +56,15 @@
  *
  * v1.11 新增（additive，SOVERSION 不变）：
  *   ADM_RENDERER_SAF_BINAURAL。
+ *
+ * v1.12 新增（additive，SOVERSION 不变）：
+ *   adm_render_support_matrix_json.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 11
+#define ADM_API_VERSION_MINOR 12
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -666,6 +669,31 @@ adm_error_code_t adm_layouts_json(adm_context_t* context, char** out_json) ADM_A
  * on a hot path, cache the result rather than re-querying.
  */
 adm_error_code_t adm_output_formats_json(adm_context_t* context, char** out_json) ADM_API_NOEXCEPT;
+
+/* ── v1.12 Render support matrix (JSON) ─────────────────────────────────── */
+/*
+ * adm_render_support_matrix_json: concrete renderer × layout × output-target
+ * support matrix as a JSON string (UTF-8). This combines the renderer
+ * capabilities, layout/channel-order table, and output format/container
+ * constraints into entries with:
+ *
+ *   renderer, layout, layout_id, channels, is_3d,
+ *   target, format, container, encoding, supported, optional reason
+ *
+ * Targets distinguish containers/options that share an extension or codec, e.g.
+ * "caf" (PCM CAF) versus "apac_caf", and "iamf" versus "iamf_mp4".
+ *
+ * The root object carries:
+ *   "schema": "mradm.render-support-matrix", "schema_version": 1
+ *
+ * On success returns ADM_ERROR_OK and writes a heap string to *out_json, owned by
+ * the CALLER and released with adm_free_string (never free()/delete). out_json
+ * must be non-NULL (returns ADM_ERROR_INVALID_ARGUMENT otherwise), as is context.
+ *
+ * Does no project-file I/O. Like adm_output_formats_json, IAMF-enabled builds may
+ * probe PATH for an MP4 packager while computing the IAMF MP4 availability flag.
+ */
+adm_error_code_t adm_render_support_matrix_json(adm_context_t* context, char** out_json) ADM_API_NOEXCEPT;
 
 /* ── v1.8 Preview session ────────────────────────────────────────────────── */
 /*

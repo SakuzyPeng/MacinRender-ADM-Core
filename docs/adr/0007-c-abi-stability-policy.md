@@ -329,6 +329,15 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - **新增 enum 值**：`ADM_RENDERER_SAF_BINAURAL`，映射 C++ `RendererSelection::saf_binaural`。
 - **Capabilities / layouts JSON**：追加 `"renderer": "saf-binaural"` 与 `supported_by: "saf-binaural"`。
 
+### v1.12.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+为 GUI 输出选项补“实际支持矩阵”，避免调用方手动拼接 backends/layouts/formats 三张表。
+
+- **新增入口**：`adm_render_support_matrix_json(context, out_json)`，返回调用方拥有的 UTF-8 JSON 字符串，仍用 `adm_free_string` 释放。
+- **内容**：root schema 为 `"mradm.render-support-matrix"` / `schema_version: 1`，包含 `features`、`backends`、`layouts`、`targets`、`entries`。每个 entry 给出 `renderer` / `layout` / `target` / `format` / `container` / `encoding` / `supported`，不支持时带 `reason`。
+- **目标拆分**：区分 PCM `caf` 与 `apac_caf`、`apac_mpeg4` 与 APAC CAF、raw `iamf` 与 `iamf_mp4`；APAC CAF / IAMF MP4 在 target 中声明需要的 option。
+- **口径**：这是基于当前构建、平台、renderer capability、layout 表、format/container 约束的静态支持矩阵，不读取具体 ADM 文件；输入采样率等项目级条件仍由 render/probe 流程最终校验。
+
 ## opaque 指针与 callback 生命周期
 
 `adm_context_t`、`adm_render_result_t` 是 opaque pointer，调用方不应直接 dereference 或假设大小。生命周期约定：
