@@ -9,6 +9,7 @@
         x:Class="MacinRender.Gui.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="MacinRender ADM"
+        Icon="/Assets/AppIcon.ico"
         Width="1120" Height="740" MinWidth="940" MinHeight="600"
         TransparencyLevelHint="AcrylicBlur,Mica,Blur"
         Background="Transparent"
