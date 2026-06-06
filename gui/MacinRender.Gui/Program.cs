@@ -9,8 +9,17 @@ class Program
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
     [STAThread]
-    public static void Main(string[] args) => BuildAvaloniaApp()
-        .StartWithClassicDesktopLifetime(args);
+    public static int Main(string[] args)
+    {
+        // headless 桥接层自检,不进 UI(详见 SelfTest)。
+        if (args.Length > 0 && args[0] == "--selftest")
+        {
+            return SelfTest.Run(args.Length > 1 ? args[1] : null).GetAwaiter().GetResult();
+        }
+
+        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        return 0;
+    }
 
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()

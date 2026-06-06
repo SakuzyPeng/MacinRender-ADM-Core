@@ -9,7 +9,18 @@
     <!-- 花瓶 MVP:验证 NativeAOT 链路。publish 时 -r osx-arm64 触发 AOT。 -->
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- P/Invoke 桥接层:[UnmanagedCallersOnly] 进度蹦床需要函数指针/unsafe。 -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <!-- 自包含 C ABI dylib(由 gui/copy-native.sh 从 build/release 拷入 runtimes/)。
+       复制到输出目录根,供 [LibraryImport("mradm_capi")] 运行时解析。
+       文件不入 git(构建产物),Condition 缺失时跳过,不阻断纯 UI 调试。 -->
+  <ItemGroup Condition="Exists('runtimes/osx-arm64/native/libmradm_capi.dylib')">
+    <None Include="runtimes/osx-arm64/native/libmradm_capi.dylib" Link="libmradm_capi.dylib">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.4" />
