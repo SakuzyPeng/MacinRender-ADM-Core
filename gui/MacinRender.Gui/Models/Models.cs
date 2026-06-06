@@ -1,6 +1,8 @@
 using System;
+using System.ComponentModel;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using MacinRender.Gui.I18n;
 
 namespace MacinRender.Gui.Models;
 
@@ -41,9 +43,16 @@ public partial class RenderFileItem : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsFailed))]
     private FileStatus _status = FileStatus.Pending;
 
-    /// <summary>渲染中的阶段短词(校验/导入/准备/渲染/编码/封装),由进度回调更新。</summary>
+    /// <summary>渲染中的阶段 i18n key(StageValidate/StageImport/…),由进度回调更新。</summary>
     [ObservableProperty]
-    private string _stageText = "";
+    [NotifyPropertyChangedFor(nameof(StageText))]
+    private string _stageKey = "";
+
+    /// <summary>阶段短词:据 StageKey 本地化;语言切换时由 RefreshLanguage 刷新。</summary>
+    public string StageText => string.IsNullOrEmpty(StageKey) ? "" : Localizer.Instance[StageKey];
+
+    /// <summary>语言切换时刷新阶段文本(StageKey 不变,但本地化结果变)。</summary>
+    public void RefreshLanguage() => OnPropertyChanged(nameof(StageText));
 
     public bool IsPending => Status == FileStatus.Pending;
     public bool IsRenderingState => Status == FileStatus.Rendering;
@@ -70,23 +79,29 @@ public partial class RenderFileItem : ObservableObject
 }
 
 /// <summary>
-/// 一条「事件 / 日志」:标题 + 详情 + 时间(对齐老项目的结构化事件,非终端流水)。
+/// 一条「事件 / 日志」:标题/详情用 i18n key + 参数惰性求值,语言切换时由 RefreshLanguage 刷新。
+/// detailKey 为空串 = 无详情;数据型详情(文件名/路径)用 "Raw" key("{0}")直通不翻。
 /// </summary>
-public sealed class LogLine
+public sealed class LogLine : INotifyPropertyChanged
 {
-    public LogLine(LogKind kind, string title, string detail, DateTime timestamp)
+    private readonly string _titleKey;
+    private readonly string _detailKey;
+    private readonly object?[] _detailArgs;
+
+    public LogLine(LogKind kind, string titleKey, string detailKey, object?[] detailArgs, DateTime timestamp)
     {
         Kind = kind;
-        Title = title;
-        Detail = detail;
+        _titleKey = titleKey;
+        _detailKey = detailKey;
+        _detailArgs = detailArgs;
         Time = timestamp.ToString("HH:mm:ss");
     }
 
     public LogKind Kind { get; }
-    public string Title { get; }
-    public string Detail { get; }
     public string Time { get; }
-    public bool HasDetail => !string.IsNullOrEmpty(Detail);
+    public string Title => Localizer.Instance[_titleKey];
+    public string Detail => string.IsNullOrEmpty(_detailKey) ? "" : Localizer.Instance.Format(_detailKey, _detailArgs);
+    public bool HasDetail => !string.IsNullOrEmpty(_detailKey);
 
     public IBrush KindBrush => new SolidColorBrush(Kind switch
     {
@@ -96,4 +111,13 @@ public sealed class LogLine
         LogKind.Error => Color.Parse("#FF453A"),
         _ => Colors.Gray
     });
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>语言切换时由 ViewModel 调用,刷新 Title/Detail 绑定(无须订阅 Localizer,避免泄漏)。</summary>
+    public void RefreshLanguage()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Title)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Detail)));
+    }
 }

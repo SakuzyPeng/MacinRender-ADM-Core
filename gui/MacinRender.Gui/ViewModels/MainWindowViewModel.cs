@@ -9,6 +9,7 @@ using Avalonia;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MacinRender.Gui.I18n;
 using MacinRender.Gui.Interop;
 using MacinRender.Gui.Models;
 using MacinRender.Gui.Services;
@@ -54,30 +55,60 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LanguageText))]
-    private bool _isEnglish; // 花瓶 mock:仅切换语言按钮自身文字
+    private bool _isEnglish; // 当前 UI 语言;按钮显示目标语言
 
-    public string LanguageText => IsEnglish ? "English" : "中文";
+    // 语言按钮显示「目标」语言(点了会切到的那个):中文界面显示 English,反之显示 中文。
+    public string LanguageText => IsEnglish ? "中文" : "English";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ActionButtonText))]
     [NotifyCanExecuteChangedFor(nameof(ClearQueueCommand))]
     private bool _isRendering;
 
-    public string ActionButtonText => IsRendering ? "取消" : "开始渲染";
+    public string ActionButtonText => L[IsRendering ? "Cancel" : "StartRender"];
 
     private bool CanEditQueue => !IsRendering;
 
+    private static Localizer L => Localizer.Instance;
     private readonly AdmRenderService _renderService = new();
     private CancellationTokenSource? _cts;
     private SubOption _lastSub = SubOption.None;
     private decimal _lastAutoBitrate; // 上次自动设的码率;与当前相等即视为"用户未手动改",可随布局重算
+    private string _statusKey = "StatusReadyEmpty"; // 状态栏当前 key + 参数,切语言时按此重算
+    private object?[] _statusArgs = Array.Empty<object?>();
 
     public MainWindowViewModel()
     {
-        StatusText = "就绪 — 队列为空";
-        AddLog(LogKind.Info, "就绪", "点「添加文件」导入 ADM BWF");
+        Localizer.Instance.PropertyChanged += (_, _) => OnLanguageChanged();
+        SetStatus("StatusReadyEmpty");
+        AddLog(LogKind.Info, "LogReady", "LogReadyHint");
 
         RebuildCodecs(); // 触发联动初始化(后端→编码器→布局→容器)
+    }
+
+    // 状态栏文案集中设置:记录 key+参数,切语言时重算(StatusText 含动态数据,故用 Format)。
+    private void SetStatus(string key, params object?[] args)
+    {
+        _statusKey = key;
+        _statusArgs = args;
+        StatusText = L.Format(key, args);
+    }
+
+    // 语言切换时刷新非 DynamicResource 绑定的 VM 文案(计算属性 + 状态栏 + 码率标签)。
+    private void OnLanguageChanged()
+    {
+        OnPropertyChanged(nameof(ActionButtonText));
+        SetStatus(_statusKey, _statusArgs);
+        UpdateSubOptions();
+        foreach (var log in Logs)
+        {
+            log.RefreshLanguage(); // 历史日志也随语言切换刷新 Title/Detail
+        }
+
+        foreach (var file in Files)
+        {
+            file.RefreshLanguage(); // 正在渲染项的阶段文本也刷新
+        }
     }
 
     // ── 联动 ──
@@ -179,7 +210,7 @@ public partial class MainWindowViewModel : ObservableObject
         FixedNote = def.Id switch
         {
             "pcm" => "32-bit float",
-            "flac" => "固定 24-bit",
+            "flac" => L["FixedNoteFlac"],
             _ => ""
         };
 
@@ -190,14 +221,14 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 BitrateMin = 6;
                 BitrateMax = 320;
-                BitrateLabel = "码率 kbps/声道";
+                BitrateLabel = L["BitratePerCh"];
                 defaultKbps = 64; // Opus 默认 64 kbps/声道
             }
             else
             {
                 BitrateMin = 64;
                 BitrateMax = 12000;
-                BitrateLabel = "码率 kbps 总";
+                BitrateLabel = L["BitrateTotal"];
                 int ch = SelectedLayout?.Channels ?? 12;
                 defaultKbps = Math.Round(2048m * ch / 12m); // APAC:7.1.4(12ch)=2048,按声道缩放
             }
@@ -239,8 +270,9 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (added.Count > 0)
         {
-            StatusText = $"就绪 — 队列中 {Files.Count} 个文件";
-            AddLog(LogKind.Info, "添加文件", added.Count == 1 ? added[0] : $"{added.Count} 个文件");
+            SetStatus("StatusReadyN", Files.Count);
+            AddLog(LogKind.Info, "LogAddFile", added.Count == 1 ? "Raw" : "NFiles",
+                added.Count == 1 ? added[0] : added.Count);
         }
     }
 
@@ -249,15 +281,20 @@ public partial class MainWindowViewModel : ObservableObject
     {
         Files.Clear();
         OverallProgress = 0;
-        StatusText = "队列已清空";
-        AddLog(LogKind.Info, "清空队列");
+        SetStatus("StatusQueueCleared");
+        AddLog(LogKind.Info, "TipClearQueue");
     }
 
     [RelayCommand]
     private void ClearLogs() => Logs.Clear();
 
     [RelayCommand]
-    private void ToggleLanguage() => IsEnglish = !IsEnglish;
+    private void ToggleLanguage()
+    {
+        var next = Localizer.Instance.Current == Lang.En ? Lang.Zh : Lang.En;
+        Localizer.Instance.SetLanguage(next);
+        IsEnglish = next == Lang.En;
+    }
 
     [RelayCommand]
     private void ToggleTheme()
@@ -291,8 +328,8 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (Files.Count == 0)
         {
-            StatusText = "队列为空";
-            AddLog(LogKind.Warn, "无文件", "先添加 ADM 文件再渲染");
+            SetStatus("StatusQueueEmpty");
+            AddLog(LogKind.Warn, "LogNoFile", "LogNoFileHint");
             return;
         }
 
@@ -303,8 +340,8 @@ public partial class MainWindowViewModel : ObservableObject
         Logs.Clear();
 
         var settings = BuildSettings();
-        AddLog(LogKind.Info, "开始渲染",
-            $"{Files.Count} 个文件 · {SelectedBackend.Name} · {SelectedLayout?.Name} · {SelectedContainer?.Name}");
+        AddLog(LogKind.Info, "LogStart", "Raw",
+            $"{Files.Count} × {SelectedBackend.Name} · {SelectedLayout?.Name} · {SelectedContainer?.Name}");
 
         foreach (var f in Files)
         {
@@ -327,12 +364,12 @@ public partial class MainWindowViewModel : ObservableObject
                 var f = Files[i];
                 int idx = i;
                 f.Status = FileStatus.Rendering;
-                StatusText = $"渲染中 ({i + 1}/{Files.Count}) — {f.Name}";
+                SetStatus("StatusRendering", i + 1, Files.Count, f.Name);
 
                 var progress = new Progress<RenderProgress>(p =>
                 {
                     f.Progress = p.OverallFraction * 100.0;
-                    f.StageText = StageWord(p);
+                    f.StageKey = StageWordKey(p);
                     OverallProgress = (idx + p.OverallFraction) / Files.Count * 100.0;
                 });
 
@@ -350,7 +387,7 @@ public partial class MainWindowViewModel : ObservableObject
                 {
                     if (log.Level >= AdmLogLevel.Warning)
                     {
-                        AddLog(MapKind(log.Level), log.Module, log.Message);
+                        AddLog(MapKind(log.Level), log.Module, "Raw", log.Message);
                     }
                 }
 
@@ -360,32 +397,32 @@ public partial class MainWindowViewModel : ObservableObject
                     f.Status = FileStatus.Done;
                     done++;
                     var metric = outcome.LoudnessLufs is { } lu ? $"  ({lu:F1} LUFS)" : "";
-                    AddLog(LogKind.Success, "已完成",
+                    AddLog(LogKind.Success, "LogDone", "Raw",
                         $"{f.Name} → {Path.GetFileName(outcome.OutputPath ?? outPath)}{metric}");
                 }
                 else
                 {
                     f.Status = FileStatus.Failed;
-                    AddLog(LogKind.Error, "渲染失败", $"{f.Name}:{outcome.Message}");
+                    AddLog(LogKind.Error, "LogFailed", "Raw", $"{f.Name}:{outcome.Message}");
                 }
             }
 
             if (cancelled)
             {
-                StatusText = "已取消";
-                AddLog(LogKind.Warn, "已取消", "用户中断渲染");
+                SetStatus("StatusCancelled");
+                AddLog(LogKind.Warn, "LogCancelled", "LogCancelDetail");
             }
             else
             {
                 OverallProgress = 100;
-                StatusText = $"完成 — {done}/{Files.Count} 个文件";
-                AddLog(LogKind.Success, "全部完成", $"{done}/{Files.Count} 成功");
+                SetStatus("StatusDone", done, Files.Count);
+                AddLog(LogKind.Success, "LogAllDone", "LogAllDoneDetail", done, Files.Count);
             }
         }
         catch (OperationCanceledException)
         {
-            StatusText = "已取消";
-            AddLog(LogKind.Warn, "已取消", "用户中断渲染");
+            SetStatus("StatusCancelled");
+            AddLog(LogKind.Warn, "LogCancelled", "LogCancelDetail");
             foreach (var f in Files)
             {
                 if (f.Status == FileStatus.Rendering)
@@ -447,26 +484,27 @@ public partial class MainWindowViewModel : ObservableObject
         return path;
     }
 
-    // 结构化进度 → 渲染阶段短词(校验/导入/准备/渲染/编码/封装),用 operation 细分。
-    private static string StageWord(RenderProgress p) => p.Operation switch
+    // 结构化进度 → 渲染阶段 i18n key(用 operation 细分);本地化由 RenderFileItem.StageText 完成,
+    // 故返回 key 而非翻译串 —— 这样语言切换时正在渲染项也能随 RefreshLanguage 刷新。
+    private static string StageWordKey(RenderProgress p) => p.Operation switch
     {
-        AdmProgressOperation.ValidateRequest or AdmProgressOperation.ProbeInput => "校验",
-        AdmProgressOperation.ImportScene or AdmProgressOperation.ApplySemanticPolicy => "导入",
-        AdmProgressOperation.PlanRender or AdmProgressOperation.PrepareBackend => "准备",
-        AdmProgressOperation.RenderAudio => "渲染",
+        AdmProgressOperation.ValidateRequest or AdmProgressOperation.ProbeInput => "StageValidate",
+        AdmProgressOperation.ImportScene or AdmProgressOperation.ApplySemanticPolicy => "StageImport",
+        AdmProgressOperation.PlanRender or AdmProgressOperation.PrepareBackend => "StagePlan",
+        AdmProgressOperation.RenderAudio => "StageRender",
         AdmProgressOperation.TrimOutput or AdmProgressOperation.ApplyGain
             or AdmProgressOperation.ConvertBitDepth or AdmProgressOperation.EncodeFlac
             or AdmProgressOperation.EncodeOpus or AdmProgressOperation.EncodeApac
-            or AdmProgressOperation.EncodeIamf => "编码",
+            or AdmProgressOperation.EncodeIamf => "StageEncode",
         AdmProgressOperation.PackageIamfMp4 or AdmProgressOperation.WriteMetadata
-            or AdmProgressOperation.Finish => "封装",
+            or AdmProgressOperation.Finish => "StagePackage",
         _ => p.Stage switch
         {
-            AdmRenderStage.Validating or AdmRenderStage.Probing => "校验",
-            AdmRenderStage.ImportingScene => "导入",
-            AdmRenderStage.Planning => "准备",
-            AdmRenderStage.PostProcessing => "编码",
-            _ => "渲染",
+            AdmRenderStage.Validating or AdmRenderStage.Probing => "StageValidate",
+            AdmRenderStage.ImportingScene => "StageImport",
+            AdmRenderStage.Planning => "StagePlan",
+            AdmRenderStage.PostProcessing => "StageEncode",
+            _ => "StageRender",
         },
     };
 
@@ -477,7 +515,7 @@ public partial class MainWindowViewModel : ObservableObject
         _ => LogKind.Info,
     };
 
-    // 插到队首:最新日志显示在顶部。
-    private void AddLog(LogKind kind, string title, string detail = "") =>
-        Logs.Insert(0, new LogLine(kind, title, detail, DateTime.Now));
+    // 插到队首:最新日志显示在顶部;title/detail 传 i18n key(detail 空=无详情,或 "Raw"+数据)。
+    private void AddLog(LogKind kind, string titleKey, string detailKey = "", params object?[] args) =>
+        Logs.Insert(0, new LogLine(kind, titleKey, detailKey, args, DateTime.Now));
 }

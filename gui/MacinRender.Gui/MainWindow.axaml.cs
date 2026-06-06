@@ -8,6 +8,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using MacinRender.Gui.I18n;
 using MacinRender.Gui.Models;
 using MacinRender.Gui.ViewModels;
 
@@ -68,11 +69,11 @@ public partial class MainWindow : Window
 
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "选择 ADM BWF 文件",
+            Title = Localizer.Instance["PickTitle"],
             AllowMultiple = true,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("ADM 音频") { Patterns = new[] { "*.wav", "*.bw64", "*.adm" } },
+                new FilePickerFileType(Localizer.Instance["PickFilter"]) { Patterns = new[] { "*.wav", "*.bw64", "*.adm" } },
                 FilePickerFileTypes.All,
             },
         });

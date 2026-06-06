@@ -36,7 +36,7 @@
                 <Grid RowDefinitions="Auto,*,Auto" Margin="12,0">
                     <StackPanel Grid.Row="0" Margin="4,16,0,0" Spacing="0">
                         <TextBlock Classes="h1" Text="MacinRender"/>
-                        <TextBlock Classes="muted" Margin="0,1,0,0" Text="ADM 空间音频渲染"/>
+                        <TextBlock Classes="muted" Margin="0,1,0,0" Text="{DynamicResource AppSubtitle}"/>
                     </StackPanel>
 
                     <StackPanel Grid.Row="1" Margin="0,20,0,0" Spacing="2">
@@ -44,7 +44,7 @@
                         <ctrl:SquircleButton Classes="nav">
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <Path Classes="icon" Data="{StaticResource IconRender}"/>
-                                <TextBlock VerticalAlignment="Center" Text="渲染"/>
+                                <TextBlock VerticalAlignment="Center" Text="{DynamicResource NavRender}"/>
                             </StackPanel>
                         </ctrl:SquircleButton>
                     </StackPanel>
@@ -62,7 +62,7 @@
                                     <Path Classes="icon" Data="{StaticResource IconTheme}" IsVisible="{Binding IsDark}"/>
                                     <Path Classes="icon" Data="{StaticResource IconSun}" IsVisible="{Binding !IsDark}"/>
                                 </Panel>
-                                <TextBlock VerticalAlignment="Center" Text="切换主题"/>
+                                <TextBlock VerticalAlignment="Center" Text="{DynamicResource SwitchTheme}"/>
                             </StackPanel>
                         </ctrl:SquircleButton>
                     </StackPanel>
@@ -72,9 +72,9 @@
             <!-- 主区:不滚动,卡片自适应窗口 -->
             <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="8,0,16,16">
                 <StackPanel Grid.Row="0" Margin="2,6,0,12" Spacing="2">
-                    <TextBlock Classes="h1" FontSize="20" Text="渲染"/>
+                    <TextBlock Classes="h1" FontSize="20" Text="{DynamicResource NavRender}"/>
                     <TextBlock Classes="muted"
-                               Text="导入 ADM BWF,选择渲染后端与输出格式,批量离线渲染"/>
+                               Text="{DynamicResource PageDesc}"/>
                 </StackPanel>
 
                 <Grid Grid.Row="1" RowDefinitions="Auto,*">
@@ -82,12 +82,12 @@
                     <!-- 输出设置:渲染(后端→布局) + 封装(编码器→容器→参数),四级联动 -->
                     <ctrl:SquircleBorder Grid.Row="0" Classes="card" Margin="0,0,0,12">
                         <StackPanel Spacing="12">
-                            <TextBlock Classes="h2" Text="输出设置"/>
+                            <TextBlock Classes="h2" Text="{DynamicResource OutputSettings}"/>
 
                             <!-- 渲染 -->
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                                 <StackPanel Grid.Column="0" Spacing="5">
-                                    <TextBlock Classes="muted" Text="渲染后端"/>
+                                    <TextBlock Classes="muted" Text="{DynamicResource Backend}"/>
                                     <ComboBox HorizontalAlignment="Stretch"
                                               ItemsSource="{Binding Backends}"
                                               SelectedItem="{Binding SelectedBackend}">
@@ -99,7 +99,7 @@
                                     </ComboBox>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Spacing="5">
-                                    <TextBlock Classes="muted" Text="输出布局"/>
+                                    <TextBlock Classes="muted" Text="{DynamicResource Layout}"/>
                                     <ComboBox HorizontalAlignment="Stretch"
                                               ItemsSource="{Binding Layouts}"
                                               SelectedItem="{Binding SelectedLayout}">
@@ -116,7 +116,7 @@
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                                 <Grid Grid.Column="0" ColumnDefinitions="*,*" ColumnSpacing="12">
                                     <StackPanel Grid.Column="0" Grid.ColumnSpan="{Binding CodecColumnSpan}" Spacing="5">
-                                        <TextBlock Classes="muted" Text="编码器"/>
+                                        <TextBlock Classes="muted" Text="{DynamicResource Codec}"/>
                                         <ComboBox HorizontalAlignment="Stretch"
                                                   ItemsSource="{Binding Codecs}"
                                                   SelectedItem="{Binding SelectedCodec}">
@@ -141,7 +141,7 @@
                                     </StackPanel>
                                 </Grid>
                                 <StackPanel Grid.Column="1" Spacing="5">
-                                    <TextBlock Classes="muted" Text="容器"/>
+                                    <TextBlock Classes="muted" Text="{DynamicResource Container}"/>
                                     <ComboBox HorizontalAlignment="Stretch"
                                               ItemsSource="{Binding Containers}"
                                               SelectedItem="{Binding SelectedContainer}">
@@ -164,17 +164,17 @@
                         <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="12">
                             <DockPanel Grid.Row="0">
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
-                                    <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="清空队列"
+                                    <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="{DynamicResource TipClearQueue}"
                                             Command="{Binding ClearQueueCommand}">
                                         <Path Classes="icon" Data="{StaticResource IconTrash}"/>
                                     </ctrl:SquircleButton>
-                                    <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="添加文件"
+                                    <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="{DynamicResource TipAddFile}"
                                             IsEnabled="{Binding !IsRendering}"
                                             Click="OnAddFiles">
                                         <Path Classes="icon" Data="{StaticResource IconAdd}"/>
                                     </ctrl:SquircleButton>
                                 </StackPanel>
-                                <TextBlock Classes="h2" VerticalAlignment="Center" Text="文件队列"/>
+                                <TextBlock Classes="h2" VerticalAlignment="Center" Text="{DynamicResource FileQueue}"/>
                             </DockPanel>
 
                             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
@@ -259,13 +259,13 @@
                         <Grid RowDefinitions="Auto,*">
                             <DockPanel Grid.Row="0" Margin="0,0,0,8">
                                 <ctrl:SquircleButton DockPanel.Dock="Right" Classes="nav iconbtn"
-                                        ToolTip.Tip="清空日志"
+                                        ToolTip.Tip="{DynamicResource TipClearLog}"
                                         Command="{Binding ClearLogsCommand}">
                                     <Path Classes="icon" Data="{StaticResource IconTrash}"/>
                                 </ctrl:SquircleButton>
                                 <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                                    <TextBlock Classes="h2" Text="事件 / 日志"/>
-                                    <TextBlock x:Name="CopyHint" Classes="muted" Text="已复制 ✓" Opacity="0">
+                                    <TextBlock Classes="h2" Text="{DynamicResource EventLog}"/>
+                                    <TextBlock x:Name="CopyHint" Classes="muted" Text="{DynamicResource Copied}" Opacity="0">
                                         <TextBlock.Transitions>
                                             <Transitions>
                                                 <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
@@ -281,7 +281,7 @@
                                          Tapped="OnLogTapped">
                                     <ListBox.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="复制全部" Click="OnCopyAllLogs"/>
+                                            <MenuItem Header="{DynamicResource CopyAll}" Click="OnCopyAllLogs"/>
                                         </ContextMenu>
                                     </ListBox.ContextMenu>
                                     <ListBox.ItemTemplate>
