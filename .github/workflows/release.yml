@@ -190,7 +190,7 @@ jobs:
 
   release-windows:
     name: Windows release
-    runs-on: windows-2022
+    runs-on: windows-2025-vs2026
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
@@ -386,7 +386,7 @@ jobs:
 
   release-gui-windows:
     name: Windows GUI release
-    runs-on: windows-2022
+    runs-on: windows-2025-vs2026
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache

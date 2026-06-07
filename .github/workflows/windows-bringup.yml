@@ -14,7 +14,7 @@ concurrency:
 jobs:
   msvc:
     name: Windows MSVC CLI
-    runs-on: windows-2022
+    runs-on: windows-2025-vs2026
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
