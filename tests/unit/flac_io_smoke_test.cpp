@@ -590,20 +590,27 @@ bool verify_render_service_flac_rejects_height_layouts() {
     return true;
 }
 
+bool run_check(std::string_view name, bool (*fn)()) {
+    std::cerr << "RUN: " << name << "\n";
+    const bool ok = fn();
+    std::cerr << (ok ? "PASS: " : "FAIL: ") << name << "\n";
+    return ok;
+}
+
 } // namespace
 
 int main() {
     bool ok = true;
-    ok &= verify_flac_roundtrip();
-    ok &= verify_flac_gain();
-    ok &= verify_flac_vorbis_comment();
-    ok &= verify_flac_channel_mask_value();
-    ok &= verify_render_service_flac_final_pipeline();
-    ok &= verify_render_service_flac_rejects_more_than_8_channels();
-    ok &= verify_render_service_flac_rejects_height_layouts();
+    ok &= run_check("roundtrip", verify_flac_roundtrip);
+    ok &= run_check("gain", verify_flac_gain);
+    ok &= run_check("vorbis_comment", verify_flac_vorbis_comment);
+    ok &= run_check("channel_mask", verify_flac_channel_mask_value);
+    ok &= run_check("render_service_final_pipeline", verify_render_service_flac_final_pipeline);
+    ok &= run_check("rejects_more_than_8_channels", verify_render_service_flac_rejects_more_than_8_channels);
+    ok &= run_check("rejects_height_layouts", verify_render_service_flac_rejects_height_layouts);
     if (!ok) {
         return EXIT_FAILURE;
     }
-    std::cout << "FLAC I/O smoke tests passed (6/6)\n";
+    std::cout << "FLAC I/O smoke tests passed (7/7)\n";
     return EXIT_SUCCESS;
 }
