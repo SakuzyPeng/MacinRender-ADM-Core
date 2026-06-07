@@ -48,20 +48,24 @@ PR changed / main full 的分层策略。
 
 | Job | 触发 | 内容 |
 |---|---|---|
-| `release-macos` | tag `v*`、手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-macos-arm64.tar.gz` 与 `.sha256` |
+| `release` | tag `v*`、手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-macos-arm64.tar.gz` 与 `.sha256` |
 | `release-linux-appimage` | tag `v*`、手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-linux-x86_64.AppImage` 与 `.sha256` |
 | `release-windows` | tag `v*`、手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-windows-x64.zip` 与 `.sha256` |
+| `release-gui-macos` | tag `v*`、手动触发 | 构建 GUI C ABI bundle、打包并上传 `MacinRender-Gui-<version>-macos-arm64.tar.gz` 与 `.sha256` |
+| `release-gui-windows` | tag `v*`、手动触发 | 构建 GUI C ABI bundle、打包并上传 `MacinRender-Gui-<version>-windows-x64.zip` 与 `.sha256` |
 
 release workflow 使用 `scripts/release/package.sh` 生成 macOS 包，使用
 `scripts/release/package-linux-appimage.sh` 生成 Linux AppImage，使用
-`scripts/release/package-windows.ps1` 生成 Windows 包。包内包含 `bin/mradm` 或 `bin/mradm.exe`、
-`LICENSE`、`THIRD_PARTY_NOTICES.md`、`BUILD_INFO.txt` 和依赖清单。macOS 包会拒绝
+`scripts/release/package-windows.ps1` 生成 Windows CLI 包，并使用
+`scripts/release/package-gui.sh` / `scripts/release/package-gui-windows.ps1` 生成 GUI 包。
+CLI 包内包含 `bin/mradm` 或 `bin/mradm.exe`，GUI 包内包含 `.app` 或 `app/MacinRender.Gui.exe`；
+所有包都包含 `LICENSE`、`THIRD_PARTY_NOTICES.md`、`BUILD_INFO.txt` 和依赖清单。macOS 包会拒绝
 `/opt/homebrew` 与 `/usr/local` 动态库，并只允许 Apple 系统库/framework；Linux CLI 包采用
 AppImage/standalone 形式，非核心运行时库打包进 AppImage，并拒绝缺失库、构建目录依赖和
 `/usr/local` 依赖；Windows 包只允许 Windows 系统 DLL 作为外部依赖，其他 `dumpbin /dependents`
-发现的 DLL 必须复制进包内 `bin/`。所有平台都会在上传前解包或抽取、校验 checksum，并运行
-`mradm --version` / `mradm backends`。Linux AppImage 构建基线为 Ubuntu 24.04 x86_64；
-Windows 支持基线为 Windows Server 2025 + MSVC。签名、notarization 和完整 license bundle
+发现的 DLL 必须复制进包内 `bin/` 或 `app/`。所有平台都会在上传前解包或抽取、校验 checksum，并运行
+CLI smoke 或 GUI `--selftest`。Linux AppImage 构建基线为 Ubuntu 24.04 x86_64；
+Windows CLI/GUI 支持基线为 Windows Server 2025 + MSVC。签名、notarization 和完整 license bundle
 留到后续阶段；tag `v*` 会自动创建或更新 GitHub Release。
 
 ### IAMF bridge 预构建
