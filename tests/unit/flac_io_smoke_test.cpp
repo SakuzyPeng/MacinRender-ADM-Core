@@ -9,8 +9,13 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <unistd.h>
 #include <vector>
+
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <FLAC/metadata.h>
 #include <adm/adm.hpp>
@@ -49,8 +54,13 @@ constexpr std::size_t sample_count(uint32_t channels, uint32_t frames) {
 
 std::filesystem::path temp_path(std::string_view stem, std::string_view ext) {
     static std::atomic<int> s_seq{0};
-    const auto name = std::string(stem) + "_" + std::to_string(static_cast<int>(::getpid())) + "_" +
-                      std::to_string(s_seq.fetch_add(1)) + std::string(ext);
+#ifdef _WIN32
+    const int pid = _getpid();
+#else
+    const int pid = static_cast<int>(::getpid());
+#endif
+    const auto name =
+        std::string(stem) + "_" + std::to_string(pid) + "_" + std::to_string(s_seq.fetch_add(1)) + std::string(ext);
     return std::filesystem::temp_directory_path() / name;
 }
 
@@ -182,7 +192,7 @@ bool verify_flac_roundtrip() {
     constexpr uint32_t k_frames = 1024U;
     constexpr float k_tol = 1e-6F;
 
-    const std::string path = "/tmp/mr_flac_roundtrip_test.flac";
+    const std::string path = temp_path("mr_flac_roundtrip_test", ".flac").string();
     FileGuard guard(path);
 
     std::vector<float> orig(sample_count(k_ch, k_frames));
@@ -235,7 +245,7 @@ bool verify_flac_gain() {
     constexpr float k_gain = 0.5F;
     constexpr float k_tol = 2e-6F;
 
-    const std::string path = "/tmp/mr_flac_gain_test.flac";
+    const std::string path = temp_path("mr_flac_gain_test", ".flac").string();
     FileGuard guard(path);
 
     {
@@ -281,7 +291,7 @@ bool verify_flac_vorbis_comment() {
     constexpr uint32_t k_sr = 48000U;
     constexpr uint32_t k_frames = 256U;
 
-    const std::string path = "/tmp/mr_flac_meta_test.flac";
+    const std::string path = temp_path("mr_flac_meta_test", ".flac").string();
     FileGuard guard(path);
 
     {
@@ -374,7 +384,7 @@ bool verify_flac_channel_mask_value() {
     constexpr uint32_t k_sr = 48000U;
     constexpr uint32_t k_frames = 128U;
 
-    const std::string path = "/tmp/mr_flac_mask_test.flac";
+    const std::string path = temp_path("mr_flac_mask_test", ".flac").string();
     FileGuard guard(path);
 
     {

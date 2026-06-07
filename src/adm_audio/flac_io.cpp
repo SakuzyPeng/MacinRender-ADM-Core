@@ -4,12 +4,23 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <dr_flac.h>
 #include <stop_token>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 
 #include <FLAC/metadata.h>
 #include <FLAC/stream_encoder.h>
@@ -44,12 +55,109 @@ void emit_flac_progress(ProgressSink* progress,
     progress->on_progress({RenderStage::post_processing, operation, f, f, current_frame, total_frames, message});
 }
 
+#ifdef _WIN32
+std::wstring utf8_to_wide(const std::string& path) {
+    if (path.empty()) {
+        return {};
+    }
+    const int size =
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.c_str(), static_cast<int>(path.size()), nullptr, 0);
+    if (size <= 0) {
+        return {};
+    }
+    std::wstring wide(static_cast<std::size_t>(size), L'\0');
+    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.c_str(), static_cast<int>(path.size()), wide.data(), size);
+    return wide;
+}
+#endif
+
+FILE* open_binary_write(const std::string& path) {
+#ifdef _WIN32
+    const std::wstring wide = utf8_to_wide(path);
+    if (wide.empty()) {
+        return nullptr;
+    }
+    return _wfopen(wide.c_str(), L"wb");
+#else
+    return std::fopen(path.c_str(), "wb");
+#endif
+}
+
+int seek_binary_file(FILE* file, FLAC__uint64 absolute_byte_offset) {
+#ifdef _WIN32
+    return _fseeki64(file, static_cast<__int64>(absolute_byte_offset), SEEK_SET);
+#else
+    return fseeko(file, static_cast<off_t>(absolute_byte_offset), SEEK_SET);
+#endif
+}
+
+bool tell_binary_file(FILE* file, FLAC__uint64* absolute_byte_offset) {
+#ifdef _WIN32
+    const __int64 pos = _ftelli64(file);
+    if (pos < 0) {
+        return false;
+    }
+    *absolute_byte_offset = static_cast<FLAC__uint64>(pos);
+    return true;
+#else
+    const off_t pos = ftello(file);
+    if (pos < 0) {
+        return false;
+    }
+    *absolute_byte_offset = static_cast<FLAC__uint64>(pos);
+    return true;
+#endif
+}
+
+FLAC__StreamEncoderWriteStatus flac_write_callback(const FLAC__StreamEncoder* /*encoder*/,
+                                                   const FLAC__byte buffer[],
+                                                   size_t bytes,
+                                                   uint32_t /*samples*/,
+                                                   uint32_t /*current_frame*/,
+                                                   void* client_data) {
+    auto* file = static_cast<FILE*>(client_data);
+    if (file == nullptr || std::fwrite(buffer, 1U, bytes, file) != bytes) {
+        return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
+    }
+    return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
+}
+
+FLAC__StreamEncoderSeekStatus
+flac_seek_callback(const FLAC__StreamEncoder* /*encoder*/, FLAC__uint64 absolute_byte_offset, void* client_data) {
+    auto* file = static_cast<FILE*>(client_data);
+    if (file == nullptr) {
+        return FLAC__STREAM_ENCODER_SEEK_STATUS_ERROR;
+    }
+    return seek_binary_file(file, absolute_byte_offset) == 0 ? FLAC__STREAM_ENCODER_SEEK_STATUS_OK
+                                                             : FLAC__STREAM_ENCODER_SEEK_STATUS_ERROR;
+}
+
+FLAC__StreamEncoderTellStatus
+flac_tell_callback(const FLAC__StreamEncoder* /*encoder*/, FLAC__uint64* absolute_byte_offset, void* client_data) {
+    auto* file = static_cast<FILE*>(client_data);
+    if (file == nullptr || absolute_byte_offset == nullptr || !tell_binary_file(file, absolute_byte_offset)) {
+        return FLAC__STREAM_ENCODER_TELL_STATUS_ERROR;
+    }
+    return FLAC__STREAM_ENCODER_TELL_STATUS_OK;
+}
+
 } // namespace
 
 struct FloatFlacWriter::Impl {
     FLAC__StreamEncoder* encoder{nullptr};
+    FILE* file{nullptr};
     uint32_t channels{};
     std::vector<FLAC__int32> int_buf;
+
+    ~Impl() {
+        if (encoder != nullptr) {
+            FLAC__stream_encoder_finish(encoder);
+            FLAC__stream_encoder_delete(encoder);
+        }
+        if (file != nullptr) {
+            std::fclose(file);
+        }
+    }
 };
 
 Result<FloatFlacWriter> FloatFlacWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate) {
@@ -68,9 +176,17 @@ Result<FloatFlacWriter> FloatFlacWriter::open(const std::string& path, uint32_t 
     FLAC__stream_encoder_set_sample_rate(enc, sample_rate);
     FLAC__stream_encoder_set_compression_level(enc, 5);
 
-    const FLAC__StreamEncoderInitStatus status = FLAC__stream_encoder_init_file(enc, path.c_str(), nullptr, nullptr);
+    FILE* file = open_binary_write(path);
+    if (file == nullptr) {
+        FLAC__stream_encoder_delete(enc);
+        return make_error(ErrorCode::io_error, "failed to open FLAC file for writing", "path=" + path);
+    }
+
+    const FLAC__StreamEncoderInitStatus status = FLAC__stream_encoder_init_stream(
+        enc, flac_write_callback, flac_seek_callback, flac_tell_callback, nullptr, file);
     if (status != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
         FLAC__stream_encoder_delete(enc);
+        std::fclose(file);
         return make_error(ErrorCode::io_error,
                           fmt::format("FLAC encoder init failed: {}", FLAC__StreamEncoderInitStatusString[status]),
                           "path=" + path);
@@ -79,16 +195,12 @@ Result<FloatFlacWriter> FloatFlacWriter::open(const std::string& path, uint32_t 
     FloatFlacWriter w;
     w.impl_ = std::make_unique<Impl>();
     w.impl_->encoder = enc;
+    w.impl_->file = file;
     w.impl_->channels = channels;
     return w;
 }
 
-FloatFlacWriter::~FloatFlacWriter() {
-    if (impl_ && impl_->encoder != nullptr) {
-        FLAC__stream_encoder_finish(impl_->encoder);
-        FLAC__stream_encoder_delete(impl_->encoder);
-    }
-}
+FloatFlacWriter::~FloatFlacWriter() = default;
 
 FloatFlacWriter::FloatFlacWriter(FloatFlacWriter&&) noexcept = default;
 FloatFlacWriter& FloatFlacWriter::operator=(FloatFlacWriter&&) noexcept = default;
