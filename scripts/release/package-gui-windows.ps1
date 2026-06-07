@@ -93,7 +93,10 @@ echo __VCINSTALLDIR__=%VCINSTALLDIR%
             }
         }
     }
-    return $dirs | Where-Object { $_ -and (Test-Path $_) } | ForEach-Object { (Resolve-Path $_).Path } | Select-Object -Unique
+    return $dirs |
+        Where-Object { ![string]::IsNullOrWhiteSpace([string]$_) -and (Test-Path ([string]$_)) } |
+        ForEach-Object { (Resolve-Path ([string]$_)).Path } |
+        Select-Object -Unique
 }
 
 function Test-SystemDll {
@@ -290,7 +293,10 @@ $dllSearchDirs += Get-MsvcPathDirs
 if ($env:PATH) {
     $dllSearchDirs += $env:PATH -split [System.IO.Path]::PathSeparator
 }
-$dllSearchDirs = $dllSearchDirs | Where-Object { $_ -and (Test-Path $_) } | ForEach-Object { (Resolve-Path $_).Path } | Select-Object -Unique
+$dllSearchDirs = $dllSearchDirs |
+    Where-Object { ![string]::IsNullOrWhiteSpace([string]$_) -and (Test-Path ([string]$_)) } |
+    ForEach-Object { (Resolve-Path ([string]$_)).Path } |
+    Select-Object -Unique
 
 $queue = [System.Collections.Generic.Queue[string]]::new()
 $seenBinaries = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
