@@ -61,6 +61,7 @@
             <StreamGeometry x:Key="IconStop">M7 7h10v10H7z</StreamGeometry>
             <StreamGeometry x:Key="IconCheck">M20 6L9 17l-5-5</StreamGeometry>
             <StreamGeometry x:Key="IconCross">M18 6L6 18M6 6l12 12</StreamGeometry>
+            <StreamGeometry x:Key="IconFolder">M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z</StreamGeometry>
         </ResourceDictionary>
     </Application.Resources>
 
@@ -273,6 +274,84 @@
         </Style>
         <Style Selector="ComboBoxItem:disabled">
             <Setter Property="Opacity" Value="0.45"/>
+        </Style>
+
+        <!-- ========== 动效 ========== -->
+        <!-- 注:hover 背景刻意不做 BrushTransition——叠在 DynamicResource 值上,过渡走完会被
+             DynamicResource 覆盖回 base(指针未移开却熄灭),故 hover 保持硬切。 -->
+        <!-- 进度条:数值平滑过渡,缓和编码段突进(全局,仅文件行/总进度两处) -->
+        <Style Selector="ProgressBar">
+            <Setter Property="Transitions">
+                <Transitions><DoubleTransition Property="Value" Duration="0:0:0.22" Easing="CubicEaseOut"/></Transitions>
+            </Setter>
+        </Style>
+
+        <!-- 文件行入场:淡入 + 轻微下滑(每项 realize 时播一次) -->
+        <Style Selector="ctrl|SquircleBorder.fileitem">
+            <Style.Animations>
+                <Animation Duration="0:0:0.28" Easing="CubicEaseOut">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="Opacity" Value="0"/>
+                        <Setter Property="TranslateTransform.Y" Value="-6"/>
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="Opacity" Value="1"/>
+                        <Setter Property="TranslateTransform.Y" Value="0"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+
+        <!-- 渲染中状态点:呼吸脉冲(条件 class pulse=IsRenderingState) -->
+        <Style Selector="Ellipse.pulse">
+            <Style.Animations>
+                <Animation Duration="0:0:1.1" IterationCount="INFINITE">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+
+        <!-- Replace 式图标互换(类 SF Symbols Replace):旧图标缩小淡出、新图标放大淡入。
+             两个图标常驻重叠 Panel,由条件 class on 决定谁显示,过渡 Opacity + scale。 -->
+        <Style Selector="Path.replace">
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+            <Setter Property="RenderTransform" Value="scale(0.4)"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.24" Easing="CubicEaseOut"/>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.24" Easing="CubicEaseOut"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Path.replace.on">
+            <Setter Property="Opacity" Value="1"/>
+            <Setter Property="RenderTransform" Value="scale(1)"/>
+        </Style>
+
+        <!-- 完成/失败图标:弹入(条件 class pop=IsDone/IsFailed,加 class 时播一次) -->
+        <Style Selector="Path.pop">
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+            <Style.Animations>
+                <Animation Duration="0:0:0.34" Easing="CubicEaseOut" FillMode="Forward">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="ScaleTransform.ScaleX" Value="0.3"/>
+                        <Setter Property="ScaleTransform.ScaleY" Value="0.3"/>
+                        <Setter Property="Opacity" Value="0"/>
+                    </KeyFrame>
+                    <KeyFrame Cue="65%">
+                        <Setter Property="ScaleTransform.ScaleX" Value="1.18"/>
+                        <Setter Property="ScaleTransform.ScaleY" Value="1.18"/>
+                        <Setter Property="Opacity" Value="1"/>
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="ScaleTransform.ScaleX" Value="1"/>
+                        <Setter Property="ScaleTransform.ScaleY" Value="1"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
         </Style>
     </Application.Styles>
 </Application>

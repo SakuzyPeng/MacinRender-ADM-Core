@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -22,6 +23,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
         AddHandler(DragDrop.DropEvent, OnDrop);
     }
 
@@ -29,24 +31,72 @@ public partial class MainWindow : Window
     {
         bool ok = e.DataTransfer.Contains(DataFormat.File) && DataContext is MainWindowViewModel { IsRendering: false };
         e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
+        DropHighlight.Opacity = ok ? 1 : 0;
     }
 
-    private void OnDrop(object? sender, DragEventArgs e)
+    private void OnDragLeave(object? sender, DragEventArgs e) => DropHighlight.Opacity = 0;
+
+    private async void OnDrop(object? sender, DragEventArgs e)
     {
+        DropHighlight.Opacity = 0;
         if (DataContext is not MainWindowViewModel vm)
         {
             return;
         }
 
-        var paths = e.DataTransfer.TryGetFiles()?
+        // 顶层拖入项:文件 + 文件夹混合都收下原始路径,展开延到后台。
+        var roots = e.DataTransfer.TryGetFiles()?
             .Select(f => f.TryGetLocalPath())
-            .Where(p => !string.IsNullOrEmpty(p) && IsAdmFile(p!))
+            .Where(p => !string.IsNullOrEmpty(p))
             .Select(p => p!)
             .ToList();
-        if (paths is { Count: > 0 })
+        if (roots is not { Count: > 0 })
         {
-            vm.AddFiles(paths);
+            return;
         }
+
+        // 大文件夹递归可能耗时,放后台线程,避免卡 UI。展开后由 VM 再做 probe 内容级判定。
+        var paths = await Task.Run(() => ExpandAdmFiles(roots));
+        await vm.AddFilesAsync(paths);
+    }
+
+    // 展开拖入项:文件直接收;文件夹递归遍历所有子目录找 ADM 文件。保持稳定顺序 + 去重。
+    private static List<string> ExpandAdmFiles(IEnumerable<string> roots)
+    {
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var root in roots)
+        {
+            if (Directory.Exists(root))
+            {
+                IEnumerable<string> files;
+                try
+                {
+                    files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+                        .Where(IsAdmFile)
+                        .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    continue;
+                }
+
+                foreach (var f in files)
+                {
+                    if (seen.Add(f))
+                    {
+                        result.Add(f);
+                    }
+                }
+            }
+            else if (File.Exists(root) && IsAdmFile(root) && seen.Add(root))
+            {
+                result.Add(root);
+            }
+        }
+
+        return result;
     }
 
     private static bool IsAdmFile(string path) =>
@@ -88,7 +138,75 @@ public partial class MainWindow : Window
             .Where(p => !string.IsNullOrEmpty(p) && IsAdmFile(p!))
             .Select(p => p!)
             .ToList();
-        vm.AddFiles(paths);
+        if (await vm.AddFilesAsync(paths) > 0)
+        {
+            FlashIcon(FlashAddFile);
+        }
+    }
+
+    private async void OnAddFolder(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = Localizer.Instance["PickFolderTitle"],
+            AllowMultiple = true,
+        });
+
+        var roots = folders
+            .Select(f => f.TryGetLocalPath())
+            .Where(p => !string.IsNullOrEmpty(p))
+            .Select(p => p!)
+            .ToList();
+        if (roots.Count == 0)
+        {
+            return;
+        }
+
+        // 复用拖拽那套:递归展开 ADM 文件(后台),再交 VM 做 probe 内容级判定。
+        var paths = await Task.Run(() => ExpandAdmFiles(roots));
+        if (await vm.AddFilesAsync(paths) > 0)
+        {
+            FlashIcon(FlashAddFolder);
+        }
+    }
+
+    // 清空队列/日志:Click 先于 Command 执行,故此时集合尚未清空,非空即代表"将要清掉" → 闪绿确认。
+    private void OnClearQueueClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel { Files.Count: > 0 })
+        {
+            FlashIcon(FlashClearQueue);
+        }
+    }
+
+    private void OnClearLogsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel { Logs.Count: > 0 })
+        {
+            FlashIcon(FlashClearLog);
+        }
+    }
+
+    // 主题/语言切换必然成功,无条件闪。主题图标 sun/moon 互换,两份绿副本都点亮,
+    // Command 翻转后当前可见的那个绿副本泛起(另一个被 IsVisible 折叠,不显示)。
+    private void OnToggleThemeClick(object? sender, RoutedEventArgs e)
+    {
+        FlashIcon(FlashThemeMoon);
+        FlashIcon(FlashThemeSun);
+    }
+
+    private void OnToggleLanguageClick(object? sender, RoutedEventArgs e) => FlashIcon(FlashGlobe);
+
+    // 成功微反馈:叠在原图标上的绿色副本短暂泛起再淡灭(Opacity transition 在 XAML)。
+    private static void FlashIcon(Control icon)
+    {
+        icon.Opacity = 1;
+        DispatcherTimer.RunOnce(() => icon.Opacity = 0, TimeSpan.FromSeconds(0.55));
     }
 
     private async void OnLogTapped(object? sender, TappedEventArgs e) => await CopySelectedAsync();
