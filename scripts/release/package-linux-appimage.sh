@@ -125,12 +125,12 @@ Terminal=true
 Categories=AudioVideo;Audio;
 EOF
 
-icon_file="$repo_root/gui/MacinRender.Gui/Assets/AppIcon.crossplatform.png"
+icon_file="$repo_root/gui/MacinRender.Gui/Assets/AppIcon.crossplatform.svg"
 if [[ ! -f "$icon_file" ]]; then
     echo "AppImage icon is missing: $icon_file" >&2
     exit 1
 fi
-appimage_icon="$work_dir/mradm.png"
+appimage_icon="$work_dir/mradm.svg"
 cp "$icon_file" "$appimage_icon"
 
 cp "$repo_root/LICENSE" "$appdir/usr/share/doc/macinrender-adm-core/LICENSE"

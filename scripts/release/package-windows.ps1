@@ -28,13 +28,20 @@ function Test-SystemDll {
 
     $systemDlls = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     @(
-        "advapi32.dll", "bcrypt.dll", "combase.dll", "comctl32.dll", "comdlg32.dll",
-        "crypt32.dll", "dbghelp.dll", "dnsapi.dll", "dwmapi.dll", "gdi32.dll",
-        "imm32.dll", "iphlpapi.dll", "kernel32.dll", "msvcrt.dll", "netapi32.dll",
-        "ntdll.dll", "ole32.dll", "oleaut32.dll", "powrprof.dll", "psapi.dll",
-        "rpcrt4.dll", "sechost.dll", "setupapi.dll", "shell32.dll", "shlwapi.dll",
-        "user32.dll", "userenv.dll", "uxtheme.dll", "version.dll", "winhttp.dll",
-        "winmm.dll", "winspool.drv", "ws2_32.dll"
+        "advapi32.dll", "bcrypt.dll", "bcryptprimitives.dll", "cfgmgr32.dll",
+        "combase.dll", "comctl32.dll", "comdlg32.dll", "coremessaging.dll",
+        "crypt32.dll", "cryptbase.dll", "cryptsp.dll", "d2d1.dll", "d3d11.dll",
+        "dbghelp.dll", "dcomp.dll", "dnsapi.dll", "dwrite.dll", "dwmapi.dll",
+        "dxgi.dll", "gdi32.dll", "gdi32full.dll", "gdiplus.dll", "hid.dll",
+        "imm32.dll", "iphlpapi.dll", "kernel32.dll", "kernelbase.dll", "mf.dll",
+        "mfplat.dll", "mfreadwrite.dll", "mpr.dll", "msvcp_win.dll", "msvcrt.dll",
+        "ncrypt.dll", "netapi32.dll", "ntdll.dll", "ole32.dll", "oleacc.dll",
+        "oleaut32.dll", "opengl32.dll", "powrprof.dll", "propsys.dll", "psapi.dll",
+        "rpcrt4.dll", "sechost.dll", "setupapi.dll", "shcore.dll", "shell32.dll",
+        "shlwapi.dll", "textinputframework.dll", "ucrtbase.dll", "user32.dll",
+        "userenv.dll", "usp10.dll", "uxtheme.dll", "version.dll", "winhttp.dll",
+        "wininet.dll", "winmm.dll", "winspool.drv", "wintypes.dll",
+        "windowscodecs.dll", "wintrust.dll", "ws2_32.dll"
     ) | ForEach-Object { [void]$systemDlls.Add($_) }
     return $systemDlls.Contains($Name)
 }
@@ -66,6 +73,37 @@ dumpbin /dependents "$Path"
         }
     }
     return $names | Sort-Object -Unique
+}
+
+function Get-MsvcPathDirs {
+    if (!($env:VCVARS64 -and (Test-Path $env:VCVARS64))) {
+        return @()
+    }
+
+    $cmdPath = Join-Path $env:TEMP ("mradm-vcvars-path-" + [System.Guid]::NewGuid().ToString("N") + ".cmd")
+    @"
+@echo off
+call "$env:VCVARS64" >nul
+echo __PATH__=%PATH%
+echo __VCToolsRedistDir__=%VCToolsRedistDir%
+"@ | Set-Content -Path $cmdPath -Encoding ASCII
+
+    try {
+        $output = & cmd /c $cmdPath
+    } finally {
+        Remove-Item -Force $cmdPath -ErrorAction SilentlyContinue
+    }
+
+    $dirs = @()
+    foreach ($line in $output) {
+        if ($line -like "__PATH__=*") {
+            $dirs += ($line.Substring("__PATH__=".Length) -split [System.IO.Path]::PathSeparator)
+        } elseif ($line -like "__VCToolsRedistDir__=*") {
+            $redist = $line.Substring("__VCToolsRedistDir__=".Length)
+            $dirs += Join-Path $redist "x64\Microsoft.VC143.CRT"
+        }
+    }
+    return $dirs | Where-Object { $_ -and (Test-Path $_) } | ForEach-Object { (Resolve-Path $_).Path } | Select-Object -Unique
 }
 
 function Find-Dll {
@@ -125,6 +163,7 @@ if ($VcpkgRoot -and (Test-Path $VcpkgRoot)) {
     $dllSearchDirs += Join-Path $VcpkgRoot "installed\x64-windows\bin"
 }
 $dllSearchDirs += Split-Path -Parent $binaryPath
+$dllSearchDirs += Get-MsvcPathDirs
 if ($env:PATH) {
     $dllSearchDirs += $env:PATH -split [System.IO.Path]::PathSeparator
 }
