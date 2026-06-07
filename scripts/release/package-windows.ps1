@@ -14,13 +14,13 @@ $ErrorActionPreference = "Stop"
 
 trap {
     if ($_.Exception.Message) {
-        Write-Error $_.Exception.Message
+        Write-Host "package-windows failure: $($_.Exception.Message)"
     }
     if ($_.InvocationInfo.PositionMessage) {
-        Write-Error $_.InvocationInfo.PositionMessage
+        Write-Host $_.InvocationInfo.PositionMessage
     }
     if ($_.ScriptStackTrace) {
-        Write-Error $_.ScriptStackTrace
+        Write-Host $_.ScriptStackTrace
     }
     throw
 }
@@ -98,6 +98,9 @@ function Test-SystemDll {
 function Get-DependentDllNames {
     param([Parameter(Mandatory = $true)][string]$Path)
 
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        throw "dependency scan path is empty"
+    }
     if (!($env:VCVARS64 -and (Test-ExistingPath $env:VCVARS64))) {
         throw "VCVARS64 must be set so dumpbin can scan Windows release dependencies"
     }
@@ -107,7 +110,7 @@ function Get-DependentDllNames {
 @echo off
 call "$env:VCVARS64" >nul
 dumpbin /dependents "$Path"
-"@ | Set-Content -Path $depsCmd -Encoding ASCII
+"@ | Set-Content -LiteralPath $depsCmd -Encoding ASCII
 
     try {
         $output = & cmd /c $depsCmd
@@ -136,7 +139,7 @@ call "$env:VCVARS64" >nul
 echo __PATH__=%PATH%
 echo __VCToolsRedistDir__=%VCToolsRedistDir%
 echo __VCINSTALLDIR__=%VCINSTALLDIR%
-"@ | Set-Content -Path $cmdPath -Encoding ASCII
+"@ | Set-Content -LiteralPath $cmdPath -Encoding ASCII
 
     try {
         $output = & cmd /c $cmdPath
@@ -158,7 +161,7 @@ echo __VCINSTALLDIR__=%VCINSTALLDIR%
             if (![string]::IsNullOrWhiteSpace($vcInstallDir)) {
                 $redistRoot = Join-Path $vcInstallDir "Redist\MSVC"
                 if (Test-ExistingPath $redistRoot) {
-                    $dirs += Get-ChildItem -Path $redistRoot -Directory |
+                    $dirs += Get-ChildItem -LiteralPath $redistRoot -Directory |
                         ForEach-Object { Join-Path $_.FullName "x64\Microsoft.VC143.CRT" }
                 }
             }
@@ -212,6 +215,7 @@ $binDir = Join-Path $packageRoot "bin"
 $archive = Join-Path $distDir "$packageName.zip"
 $checksum = "$archive.sha256"
 
+Write-Host "Preparing Windows CLI package: $packageName"
 Remove-IfExists @($packageRoot, $archive, $checksum)
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
 
@@ -235,6 +239,7 @@ $dllSearchDirs = $dllSearchDirs |
     ForEach-Object { Resolve-ExistingPath $_ } |
     Where-Object { $_ } |
     Select-Object -Unique
+Write-Host "DLL search directories: $($dllSearchDirs.Count)"
 
 $queue = [System.Collections.Generic.Queue[string]]::new()
 $seenBinaries = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -252,6 +257,7 @@ while ($queue.Count -gt 0) {
         continue
     }
 
+    Write-Host "Scanning dependencies: $resolvedScanPath"
     foreach ($dll in Get-DependentDllNames -Path $resolvedScanPath) {
         if (Test-SystemDll -Name $dll) {
             continue
@@ -279,22 +285,22 @@ if ($missingDlls.Count -gt 0) {
 }
 
 $depsFile = Join-Path $packageRoot "DEPENDENCIES.txt"
-@("Windows dependency scan:", "") | Set-Content -Path $depsFile -Encoding utf8
+@("Windows dependency scan:", "") | Set-Content -LiteralPath $depsFile -Encoding utf8
 foreach ($binary in Get-ChildItem -LiteralPath $binDir -File | Where-Object { $_.Extension -in @(".exe", ".dll") } | Sort-Object Name) {
-    "== bin\$($binary.Name)" | Add-Content -Path $depsFile -Encoding utf8
+    "== bin\$($binary.Name)" | Add-Content -LiteralPath $depsFile -Encoding utf8
     foreach ($dll in Get-DependentDllNames -Path $binary.FullName) {
         $classification = if (Test-SystemDll -Name $dll) { "system" } elseif (Test-ExistingPath (Join-Path $binDir $dll)) { "packaged" } else { "missing" }
-        "  $dll [$classification]" | Add-Content -Path $depsFile -Encoding utf8
+        "  $dll [$classification]" | Add-Content -LiteralPath $depsFile -Encoding utf8
         if ($classification -eq "missing") {
             throw "Windows release dependency escaped packaging: $dll required by $($binary.FullName)"
         }
     }
-    "" | Add-Content -Path $depsFile -Encoding utf8
+    "" | Add-Content -LiteralPath $depsFile -Encoding utf8
 }
 
-"Packaged DLL sources:" | Add-Content -Path $depsFile -Encoding utf8
+"Packaged DLL sources:" | Add-Content -LiteralPath $depsFile -Encoding utf8
 foreach ($entry in $packagedDlls.GetEnumerator() | Sort-Object Name) {
-    "  $($entry.Key) <= $($entry.Value)" | Add-Content -Path $depsFile -Encoding utf8
+    "  $($entry.Key) <= $($entry.Value)" | Add-Content -LiteralPath $depsFile -Encoding utf8
 }
 
 $buildInfo = @(
@@ -308,16 +314,12 @@ $buildInfo = @(
     "cmake_options: $(if ($CmakeOptions) { $CmakeOptions } else { 'not recorded' })",
     "dependency_policy: Windows packages may depend on Windows system DLLs only; every non-system DLL discovered by dumpbin /dependents must be copied into the package bin directory."
 )
-$buildInfo | Set-Content -Path (Join-Path $packageRoot "BUILD_INFO.txt") -Encoding utf8
+$buildInfo | Set-Content -LiteralPath (Join-Path $packageRoot "BUILD_INFO.txt") -Encoding utf8
 
-Push-Location -LiteralPath $distDir
-try {
-    Compress-Archive -Path $packageName -DestinationPath $archive -Force
-    $hash = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()
-    "$hash  $(Split-Path -Leaf $archive)" | Set-Content -Path $checksum -Encoding ASCII
-} finally {
-    Pop-Location
-}
+Write-Host "Compressing package: $archive"
+Compress-Archive -LiteralPath $packageRoot -DestinationPath $archive -Force
+$hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+"$hash  $(Split-Path -Leaf $archive)" | Set-Content -LiteralPath $checksum -Encoding ASCII
 
 Write-Host $archive
 Write-Host $checksum
