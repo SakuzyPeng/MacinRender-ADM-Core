@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -17,6 +18,7 @@
 #include <unistd.h>
 #endif
 
+#include <FLAC/callback.h>
 #include <FLAC/metadata.h>
 #include <adm/adm.hpp>
 #include <adm/utilities/id_assignment.hpp>
@@ -144,12 +146,62 @@ bool has_render_temp_sidecar(const std::filesystem::path& final_path) {
     });
 }
 
+FILE* open_metadata_read(const std::filesystem::path& path) {
+#ifdef _WIN32
+    return _wfopen(path.wstring().c_str(), L"rb");
+#else
+    return std::fopen(path.c_str(), "rb");
+#endif
+}
+
+int metadata_seek(FLAC__IOHandle handle, FLAC__int64 offset, int whence) {
+#ifdef _WIN32
+    return _fseeki64(static_cast<FILE*>(handle), static_cast<__int64>(offset), whence);
+#else
+    return fseeko(static_cast<FILE*>(handle), static_cast<off_t>(offset), whence);
+#endif
+}
+
+FLAC__int64 metadata_tell(FLAC__IOHandle handle) {
+#ifdef _WIN32
+    return static_cast<FLAC__int64>(_ftelli64(static_cast<FILE*>(handle)));
+#else
+    return static_cast<FLAC__int64>(ftello(static_cast<FILE*>(handle)));
+#endif
+}
+
+struct FileCloser {
+    void operator()(FILE* file) const {
+        if (file != nullptr) {
+            std::fclose(file);
+        }
+    }
+};
+
+using UniqueFile = std::unique_ptr<FILE, FileCloser>;
+
+bool read_metadata_chain(FLAC__Metadata_Chain* chain, const std::string& path) {
+    UniqueFile file(open_metadata_read(std::filesystem::path(path)));
+    if (file == nullptr) {
+        return false;
+    }
+
+    FLAC__IOCallbacks callbacks{};
+    callbacks.read = [](void* ptr, size_t size, size_t nmemb, FLAC__IOHandle handle) {
+        return std::fread(ptr, size, nmemb, static_cast<FILE*>(handle));
+    };
+    callbacks.seek = metadata_seek;
+    callbacks.tell = metadata_tell;
+    callbacks.eof = [](FLAC__IOHandle handle) { return std::feof(static_cast<FILE*>(handle)); };
+    return FLAC__metadata_chain_read_with_callbacks(chain, file.get(), callbacks) != 0;
+}
+
 bool flac_has_tag(const std::string& path, std::string_view prefix) {
     FLAC__Metadata_Chain* chain = FLAC__metadata_chain_new();
     if (chain == nullptr) {
         return false;
     }
-    if (FLAC__metadata_chain_read(chain, path.c_str()) == 0) {
+    if (!read_metadata_chain(chain, path)) {
         FLAC__metadata_chain_delete(chain);
         return false;
     }
@@ -320,7 +372,7 @@ bool verify_flac_vorbis_comment() {
     if (!check(chain != nullptr, "chain alloc")) {
         return false;
     }
-    if (!check(FLAC__metadata_chain_read(chain, path.c_str()) != 0, "chain read")) {
+    if (!check(read_metadata_chain(chain, path), "chain read")) {
         FLAC__metadata_chain_delete(chain);
         return false;
     }
@@ -411,7 +463,7 @@ bool verify_flac_channel_mask_value() {
     if (!check(chain != nullptr, "chain alloc (mask)")) {
         return false;
     }
-    if (!check(FLAC__metadata_chain_read(chain, path.c_str()) != 0, "chain read (mask)")) {
+    if (!check(read_metadata_chain(chain, path), "chain read (mask)")) {
         FLAC__metadata_chain_delete(chain);
         return false;
     }
