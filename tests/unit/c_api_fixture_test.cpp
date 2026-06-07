@@ -358,8 +358,8 @@ bool verify_options_invalid_values(adm_render_options_t* opts) {
     ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 63) == ADM_ERROR_INVALID_ARGUMENT,
                "apac_bitrate 63 (< 64) should return INVALID_ARGUMENT") &&
          ok;
-    ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 12001) == ADM_ERROR_INVALID_ARGUMENT,
-               "apac_bitrate 12001 (> 12000) should return INVALID_ARGUMENT") &&
+    ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 32769) == ADM_ERROR_INVALID_ARGUMENT,
+               "apac_bitrate 32769 (> 32768) should return INVALID_ARGUMENT") &&
          ok;
     ok = check(adm_render_options_set_default_interp_ms(opts, 501) == ADM_ERROR_INVALID_ARGUMENT,
                "interp_ms 501 (> 500) should return INVALID_ARGUMENT") &&
@@ -391,8 +391,8 @@ bool verify_options_boundary_values(adm_render_options_t* opts) {
     ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 0) == ADM_ERROR_OK,
                "apac_bitrate 0 (auto) should return OK") &&
          ok;
-    ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 12000) == ADM_ERROR_OK,
-               "apac_bitrate 12000 (boundary) should return OK") &&
+    ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 32768) == ADM_ERROR_OK,
+               "apac_bitrate 32768 (boundary) should return OK") &&
          ok;
     ok = check(adm_render_options_set_apac_container(opts, ADM_APAC_CONTAINER_CAF) == ADM_ERROR_OK,
                "apac_container CAF should return OK") &&
