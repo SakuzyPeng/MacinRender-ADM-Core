@@ -343,17 +343,21 @@ public partial class MainWindowViewModel : ObservableObject
         AddLog(LogKind.Info, "LogStart", "Raw",
             $"{Files.Count} × {SelectedBackend.Name} · {SelectedLayout?.Name} · {SelectedContainer?.Name}");
 
-        foreach (var f in Files)
+        // 渲染开始时的队列快照(遍历期间会增删 Files,故用快照驱动而非索引)。
+        var queue = Files.ToList();
+        foreach (var f in queue)
         {
             f.Progress = 0;
             f.Status = FileStatus.Pending;
         }
 
+        int total = queue.Count;
         int done = 0;
+        int processed = 0;
         bool cancelled = false;
         try
         {
-            for (int i = 0; i < Files.Count; i++)
+            foreach (var f in queue)
             {
                 if (token.IsCancellationRequested)
                 {
@@ -361,20 +365,21 @@ public partial class MainWindowViewModel : ObservableObject
                     break;
                 }
 
-                var f = Files[i];
-                int idx = i;
+                int idx = processed;
+                f.Progress = 0;
                 f.Status = FileStatus.Rendering;
-                SetStatus("StatusRendering", i + 1, Files.Count, f.Name);
+                SetStatus("StatusRendering", processed + 1, total, f.Name);
 
                 var progress = new Progress<RenderProgress>(p =>
                 {
                     f.Progress = p.OverallFraction * 100.0;
                     f.StageKey = StageWordKey(p);
-                    OverallProgress = (idx + p.OverallFraction) / Files.Count * 100.0;
+                    OverallProgress = (idx + p.OverallFraction) / total * 100.0;
                 });
 
                 var outPath = DeriveOutputPath(f.InputPath);
                 var outcome = await _renderService.RenderAsync(f.InputPath, outPath, settings, progress, token);
+                processed++;
 
                 if (token.IsCancellationRequested || outcome.ErrorCode == AdmErrorCode.Cancelled)
                 {
@@ -393,17 +398,22 @@ public partial class MainWindowViewModel : ObservableObject
 
                 if (outcome.Success)
                 {
-                    f.Progress = 100;
-                    f.Status = FileStatus.Done;
                     done++;
                     var metric = outcome.LoudnessLufs is { } lu ? $"  ({lu:F1} LUFS)" : "";
                     AddLog(LogKind.Success, "LogDone", "Raw",
                         $"{f.Name} → {Path.GetFileName(outcome.OutputPath ?? outPath)}{metric}");
+                    Files.Remove(f); // 成功 → 出队
                 }
                 else
                 {
                     f.Status = FileStatus.Failed;
+                    f.Progress = 0;
                     AddLog(LogKind.Error, "LogFailed", "Raw", $"{f.Name}:{outcome.Message}");
+                    // 失败 → 沉到队尾(其余文件正常排队)
+                    if (Files.Remove(f))
+                    {
+                        Files.Add(f);
+                    }
                 }
             }
 
@@ -415,8 +425,8 @@ public partial class MainWindowViewModel : ObservableObject
             else
             {
                 OverallProgress = 100;
-                SetStatus("StatusDone", done, Files.Count);
-                AddLog(LogKind.Success, "LogAllDone", "LogAllDoneDetail", done, Files.Count);
+                SetStatus("StatusDone", done, total);
+                AddLog(LogKind.Success, "LogAllDone", "LogAllDoneDetail", done, total);
             }
         }
         catch (OperationCanceledException)
