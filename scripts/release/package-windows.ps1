@@ -18,6 +18,74 @@ if (!(Test-Path $binaryPath)) {
     throw "binary is missing: $binaryPath"
 }
 
+function Test-SystemDll {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    $lower = $Name.ToLowerInvariant()
+    if ($lower -like "api-ms-win-*.dll" -or $lower -like "ext-ms-win-*.dll") {
+        return $true
+    }
+
+    $systemDlls = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    @(
+        "advapi32.dll", "bcrypt.dll", "combase.dll", "comctl32.dll", "comdlg32.dll",
+        "crypt32.dll", "dbghelp.dll", "dnsapi.dll", "dwmapi.dll", "gdi32.dll",
+        "imm32.dll", "iphlpapi.dll", "kernel32.dll", "msvcrt.dll", "netapi32.dll",
+        "ntdll.dll", "ole32.dll", "oleaut32.dll", "powrprof.dll", "psapi.dll",
+        "rpcrt4.dll", "sechost.dll", "setupapi.dll", "shell32.dll", "shlwapi.dll",
+        "user32.dll", "userenv.dll", "uxtheme.dll", "version.dll", "winhttp.dll",
+        "winmm.dll", "winspool.drv", "ws2_32.dll"
+    ) | ForEach-Object { [void]$systemDlls.Add($_) }
+    return $systemDlls.Contains($Name)
+}
+
+function Get-DependentDllNames {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (!($env:VCVARS64 -and (Test-Path $env:VCVARS64))) {
+        throw "VCVARS64 must be set so dumpbin can scan Windows release dependencies"
+    }
+
+    $depsCmd = Join-Path $env:TEMP ("mradm-release-deps-" + [System.Guid]::NewGuid().ToString("N") + ".cmd")
+    @"
+@echo off
+call "$env:VCVARS64" >nul
+dumpbin /dependents "$Path"
+"@ | Set-Content -Path $depsCmd -Encoding ASCII
+
+    try {
+        $output = & cmd /c $depsCmd
+    } finally {
+        Remove-Item -Force $depsCmd -ErrorAction SilentlyContinue
+    }
+
+    $names = @()
+    foreach ($line in $output) {
+        if ($line -match "^\s*([A-Za-z0-9_.+-]+\.(dll|drv))\s*$") {
+            $names += $Matches[1]
+        }
+    }
+    return $names | Sort-Object -Unique
+}
+
+function Find-Dll {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string[]]$SearchDirs
+    )
+
+    foreach ($dir in $SearchDirs) {
+        if ([string]::IsNullOrWhiteSpace($dir) -or !(Test-Path $dir)) {
+            continue
+        }
+        $candidate = Join-Path $dir $Name
+        if (Test-Path $candidate) {
+            return (Resolve-Path $candidate).Path
+        }
+    }
+    return $null
+}
+
 $shortSha = (& git -C $repoRoot rev-parse --short=12 HEAD).Trim()
 $commitSha = (& git -C $repoRoot rev-parse HEAD).Trim()
 if ($env:MRADM_VERSION) {
@@ -57,25 +125,67 @@ if ($VcpkgRoot -and (Test-Path $VcpkgRoot)) {
     $dllSearchDirs += Join-Path $VcpkgRoot "installed\x64-windows\bin"
 }
 $dllSearchDirs += Split-Path -Parent $binaryPath
+if ($env:PATH) {
+    $dllSearchDirs += $env:PATH -split [System.IO.Path]::PathSeparator
+}
+$dllSearchDirs = $dllSearchDirs | Where-Object { $_ -and (Test-Path $_) } | ForEach-Object { (Resolve-Path $_).Path } | Select-Object -Unique
 
-foreach ($dir in $dllSearchDirs | Select-Object -Unique) {
-    if (Test-Path $dir) {
-        Get-ChildItem -Path $dir -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue |
-            ForEach-Object { Copy-Item $_.FullName -Destination $binDir -Force }
+$queue = [System.Collections.Generic.Queue[string]]::new()
+$seenBinaries = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$packagedDlls = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$missingDlls = [System.Collections.Generic.List[string]]::new()
+$queue.Enqueue((Join-Path $binDir "mradm.exe"))
+
+while ($queue.Count -gt 0) {
+    $scanPath = $queue.Dequeue()
+    $resolvedScanPath = (Resolve-Path $scanPath).Path
+    if (!$seenBinaries.Add($resolvedScanPath)) {
+        continue
+    }
+
+    foreach ($dll in Get-DependentDllNames -Path $resolvedScanPath) {
+        if (Test-SystemDll -Name $dll) {
+            continue
+        }
+
+        $packagedPath = Join-Path $binDir $dll
+        if (!(Test-Path $packagedPath)) {
+            $source = Find-Dll -Name $dll -SearchDirs $dllSearchDirs
+            if (!$source) {
+                [void]$missingDlls.Add("$dll required by $resolvedScanPath")
+                continue
+            }
+            Copy-Item $source -Destination $packagedPath -Force
+            $packagedDlls[$dll] = $source
+        } elseif (!$packagedDlls.ContainsKey($dll)) {
+            $packagedDlls[$dll] = $packagedPath
+        }
+
+        $queue.Enqueue($packagedPath)
     }
 }
 
+if ($missingDlls.Count -gt 0) {
+    throw "Windows release package is missing non-system DLLs:`n$($missingDlls -join "`n")"
+}
+
 $depsFile = Join-Path $packageRoot "DEPENDENCIES.txt"
-if ($env:VCVARS64 -and (Test-Path $env:VCVARS64)) {
-    $depsCmd = Join-Path $env:TEMP "mradm-release-deps.cmd"
-    @"
-@echo off
-call "$env:VCVARS64"
-dumpbin /dependents "$binaryPath"
-"@ | Set-Content -Path $depsCmd -Encoding ASCII
-    cmd /c $depsCmd | Out-File -FilePath $depsFile -Encoding utf8
-} else {
-    "dumpbin dependency scan unavailable; VCVARS64 was not set." | Set-Content -Path $depsFile -Encoding utf8
+@("Windows dependency scan:", "") | Set-Content -Path $depsFile -Encoding utf8
+foreach ($binary in Get-ChildItem -Path $binDir -File | Where-Object { $_.Extension -in @(".exe", ".dll") } | Sort-Object Name) {
+    "== bin\$($binary.Name)" | Add-Content -Path $depsFile -Encoding utf8
+    foreach ($dll in Get-DependentDllNames -Path $binary.FullName) {
+        $classification = if (Test-SystemDll -Name $dll) { "system" } elseif (Test-Path (Join-Path $binDir $dll)) { "packaged" } else { "missing" }
+        "  $dll [$classification]" | Add-Content -Path $depsFile -Encoding utf8
+        if ($classification -eq "missing") {
+            throw "Windows release dependency escaped packaging: $dll required by $($binary.FullName)"
+        }
+    }
+    "" | Add-Content -Path $depsFile -Encoding utf8
+}
+
+"Packaged DLL sources:" | Add-Content -Path $depsFile -Encoding utf8
+foreach ($entry in $packagedDlls.GetEnumerator() | Sort-Object Name) {
+    "  $($entry.Key) <= $($entry.Value)" | Add-Content -Path $depsFile -Encoding utf8
 }
 
 $buildInfo = @(
@@ -87,7 +197,7 @@ $buildInfo = @(
     "arch: $Arch",
     "built_at_utc: $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))",
     "cmake_options: $(if ($CmakeOptions) { $CmakeOptions } else { 'not recorded' })",
-    "dependency_policy: Windows packages include mradm.exe plus copied runtime DLLs from the OpenBLAS, vcpkg, and build output directories."
+    "dependency_policy: Windows packages may depend on Windows system DLLs only; every non-system DLL discovered by dumpbin /dependents must be copied into the package bin directory."
 )
 $buildInfo | Set-Content -Path (Join-Path $packageRoot "BUILD_INFO.txt") -Encoding utf8
 

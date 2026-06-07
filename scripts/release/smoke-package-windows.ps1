@@ -40,6 +40,11 @@ try {
         }
     }
 
+    $deps = Join-Path $packageRoot "DEPENDENCIES.txt"
+    if (Select-String -Path $deps -Pattern "\[missing\]" -Quiet) {
+        throw "package dependency manifest contains missing DLLs"
+    }
+
     & (Join-Path $packageRoot "bin\mradm.exe") --version
     & (Join-Path $packageRoot "bin\mradm.exe") backends
 } finally {
