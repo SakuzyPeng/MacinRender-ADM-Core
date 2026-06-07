@@ -12,6 +12,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+trap {
+    if ($_.Exception.Message) {
+        Write-Error $_.Exception.Message
+    }
+    if ($_.InvocationInfo.PositionMessage) {
+        Write-Error $_.InvocationInfo.PositionMessage
+    }
+    if ($_.ScriptStackTrace) {
+        Write-Error $_.ScriptStackTrace
+    }
+    throw
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 
 function Test-ExistingPath {
@@ -24,10 +37,35 @@ function Test-ExistingPath {
     return Test-Path -LiteralPath $text
 }
 
+function Resolve-ExistingPath {
+    param([AllowNull()][object]$Path)
+
+    $text = [string]$Path
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return $null
+    }
+    if (!(Test-Path -LiteralPath $text)) {
+        return $null
+    }
+    return (Resolve-Path -LiteralPath $text).Path
+}
+
+function Remove-IfExists {
+    param([AllowNull()][object[]]$Paths)
+
+    foreach ($path in $Paths) {
+        $resolved = Resolve-ExistingPath $path
+        if ($resolved) {
+            Remove-Item -LiteralPath $resolved -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 $binaryPath = if ([System.IO.Path]::IsPathRooted($Binary)) { $Binary } else { Join-Path $repoRoot $Binary }
 if (!(Test-ExistingPath $binaryPath)) {
     throw "binary is missing: $binaryPath"
 }
+$binaryPath = Resolve-ExistingPath $binaryPath
 
 function Test-SystemDll {
     param([Parameter(Mandatory = $true)][string]$Name)
@@ -64,7 +102,7 @@ function Get-DependentDllNames {
         throw "VCVARS64 must be set so dumpbin can scan Windows release dependencies"
     }
 
-    $depsCmd = Join-Path $env:TEMP ("mradm-release-deps-" + [System.Guid]::NewGuid().ToString("N") + ".cmd")
+    $depsCmd = Join-Path ([System.IO.Path]::GetTempPath()) ("mradm-release-deps-" + [System.Guid]::NewGuid().ToString("N") + ".cmd")
     @"
 @echo off
 call "$env:VCVARS64" >nul
@@ -74,7 +112,7 @@ dumpbin /dependents "$Path"
     try {
         $output = & cmd /c $depsCmd
     } finally {
-        Remove-Item -Force $depsCmd -ErrorAction SilentlyContinue
+        Remove-IfExists @($depsCmd)
     }
 
     $names = @()
@@ -91,7 +129,7 @@ function Get-MsvcPathDirs {
         return @()
     }
 
-    $cmdPath = Join-Path $env:TEMP ("mradm-vcvars-path-" + [System.Guid]::NewGuid().ToString("N") + ".cmd")
+    $cmdPath = Join-Path ([System.IO.Path]::GetTempPath()) ("mradm-vcvars-path-" + [System.Guid]::NewGuid().ToString("N") + ".cmd")
     @"
 @echo off
 call "$env:VCVARS64" >nul
@@ -103,7 +141,7 @@ echo __VCINSTALLDIR__=%VCINSTALLDIR%
     try {
         $output = & cmd /c $cmdPath
     } finally {
-        Remove-Item -Force $cmdPath -ErrorAction SilentlyContinue
+        Remove-IfExists @($cmdPath)
     }
 
     $dirs = @()
@@ -127,8 +165,8 @@ echo __VCINSTALLDIR__=%VCINSTALLDIR%
         }
     }
     return $dirs |
-        Where-Object { Test-ExistingPath $_ } |
-        ForEach-Object { (Resolve-Path ([string]$_)).Path } |
+        ForEach-Object { Resolve-ExistingPath $_ } |
+        Where-Object { $_ } |
         Select-Object -Unique
 }
 
@@ -144,7 +182,7 @@ function Find-Dll {
         }
         $candidate = Join-Path $dir $Name
         if (Test-ExistingPath $candidate) {
-            return (Resolve-Path $candidate).Path
+            return Resolve-ExistingPath $candidate
         }
     }
     return $null
@@ -174,12 +212,12 @@ $binDir = Join-Path $packageRoot "bin"
 $archive = Join-Path $distDir "$packageName.zip"
 $checksum = "$archive.sha256"
 
-Remove-Item -Recurse -Force $packageRoot, $archive, $checksum -ErrorAction SilentlyContinue
+Remove-IfExists @($packageRoot, $archive, $checksum)
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
 
-Copy-Item $binaryPath -Destination (Join-Path $binDir "mradm.exe") -Force
-Copy-Item (Join-Path $repoRoot "LICENSE") -Destination (Join-Path $packageRoot "LICENSE") -Force
-Copy-Item (Join-Path $repoRoot "docs\THIRD_PARTY_LICENSES.md") -Destination (Join-Path $packageRoot "THIRD_PARTY_NOTICES.md") -Force
+Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $binDir "mradm.exe") -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE") -Destination (Join-Path $packageRoot "LICENSE") -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "docs\THIRD_PARTY_LICENSES.md") -Destination (Join-Path $packageRoot "THIRD_PARTY_NOTICES.md") -Force
 
 $dllSearchDirs = @()
 if (Test-ExistingPath $OpenBlasRoot) {
@@ -194,8 +232,8 @@ if ($env:PATH) {
     $dllSearchDirs += $env:PATH -split [System.IO.Path]::PathSeparator
 }
 $dllSearchDirs = $dllSearchDirs |
-    Where-Object { Test-ExistingPath $_ } |
-    ForEach-Object { (Resolve-Path ([string]$_)).Path } |
+    ForEach-Object { Resolve-ExistingPath $_ } |
+    Where-Object { $_ } |
     Select-Object -Unique
 
 $queue = [System.Collections.Generic.Queue[string]]::new()
@@ -206,7 +244,10 @@ $queue.Enqueue((Join-Path $binDir "mradm.exe"))
 
 while ($queue.Count -gt 0) {
     $scanPath = $queue.Dequeue()
-    $resolvedScanPath = (Resolve-Path $scanPath).Path
+    $resolvedScanPath = Resolve-ExistingPath $scanPath
+    if (!$resolvedScanPath) {
+        throw "queued dependency path is missing: $scanPath"
+    }
     if (!$seenBinaries.Add($resolvedScanPath)) {
         continue
     }
@@ -223,7 +264,7 @@ while ($queue.Count -gt 0) {
                 [void]$missingDlls.Add("$dll required by $resolvedScanPath")
                 continue
             }
-            Copy-Item $source -Destination $packagedPath -Force
+            Copy-Item -LiteralPath $source -Destination $packagedPath -Force
             $packagedDlls[$dll] = $source
         } elseif (!$packagedDlls.ContainsKey($dll)) {
             $packagedDlls[$dll] = $packagedPath
@@ -239,7 +280,7 @@ if ($missingDlls.Count -gt 0) {
 
 $depsFile = Join-Path $packageRoot "DEPENDENCIES.txt"
 @("Windows dependency scan:", "") | Set-Content -Path $depsFile -Encoding utf8
-foreach ($binary in Get-ChildItem -Path $binDir -File | Where-Object { $_.Extension -in @(".exe", ".dll") } | Sort-Object Name) {
+foreach ($binary in Get-ChildItem -LiteralPath $binDir -File | Where-Object { $_.Extension -in @(".exe", ".dll") } | Sort-Object Name) {
     "== bin\$($binary.Name)" | Add-Content -Path $depsFile -Encoding utf8
     foreach ($dll in Get-DependentDllNames -Path $binary.FullName) {
         $classification = if (Test-SystemDll -Name $dll) { "system" } elseif (Test-ExistingPath (Join-Path $binDir $dll)) { "packaged" } else { "missing" }
@@ -269,7 +310,7 @@ $buildInfo = @(
 )
 $buildInfo | Set-Content -Path (Join-Path $packageRoot "BUILD_INFO.txt") -Encoding utf8
 
-Push-Location $distDir
+Push-Location -LiteralPath $distDir
 try {
     Compress-Archive -Path $packageName -DestinationPath $archive -Force
     $hash = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()
