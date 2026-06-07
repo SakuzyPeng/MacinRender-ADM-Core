@@ -3,33 +3,11 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: scripts/release/package.sh --binary <path> --platform <macos|linux> --arch <arch> [--cmake-options <text>]
+Usage: scripts/release/package.sh --binary <path> --platform macos --arch <arch> [--cmake-options <text>]
 
-Creates dist/mradm-<version>-<platform>-<arch>.tar.gz and a matching .sha256 file.
+Creates dist/mradm-<version>-macos-<arch>.tar.gz and a matching .sha256 file.
+Use scripts/release/package-linux-appimage.sh for Linux release packages.
 EOF
-}
-
-validate_linux_dependencies() {
-    local deps_file="$1"
-    local repo_root="$2"
-
-    if grep -F 'not found' "$deps_file" >/dev/null; then
-        echo "Linux release binary has unresolved shared libraries:" >&2
-        grep -F 'not found' "$deps_file" >&2
-        exit 1
-    fi
-
-    if grep -F "$repo_root/" "$deps_file" >/dev/null; then
-        echo "Linux release binary links a build-tree dependency:" >&2
-        grep -F "$repo_root/" "$deps_file" >&2
-        exit 1
-    fi
-
-    if grep -E '=>[[:space:]]+/usr/local/' "$deps_file" >/dev/null; then
-        echo "Linux release binary links /usr/local, which is outside the Ubuntu 24.04 baseline:" >&2
-        grep -E '=>[[:space:]]+/usr/local/' "$deps_file" >&2
-        exit 1
-    fi
 }
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -73,13 +51,10 @@ if [[ -z "$binary" || -z "$platform" || -z "$arch" ]]; then
     exit 2
 fi
 
-case "$platform" in
-    macos|linux) ;;
-    *)
-        echo "unsupported platform '$platform'; expected macos or linux" >&2
-        exit 2
-        ;;
-esac
+if [[ "$platform" != "macos" ]]; then
+    echo "unsupported platform '$platform'; expected macos. Use package-linux-appimage.sh for Linux." >&2
+    exit 2
+fi
 
 binary_path="$repo_root/$binary"
 if [[ "$binary" = /* ]]; then
@@ -115,34 +90,26 @@ cp "$repo_root/LICENSE" "$package_root/LICENSE"
 cp "$repo_root/docs/THIRD_PARTY_LICENSES.md" "$package_root/THIRD_PARTY_NOTICES.md"
 
 deps_file="$package_root/DEPENDENCIES.txt"
-case "$platform" in
-    macos)
-        otool -L "$package_root/bin/mradm" > "$deps_file"
-        if grep -E '^[[:space:]]+(/opt/homebrew|/usr/local)' "$deps_file" >/dev/null; then
-            echo "macOS release binary links non-system libraries:" >&2
-            grep -E '^[[:space:]]+(/opt/homebrew|/usr/local)' "$deps_file" >&2
+otool -L "$package_root/bin/mradm" > "$deps_file"
+if grep -E '^[[:space:]]+(/opt/homebrew|/usr/local)' "$deps_file" >/dev/null; then
+    echo "macOS release binary links non-system libraries:" >&2
+    grep -E '^[[:space:]]+(/opt/homebrew|/usr/local)' "$deps_file" >&2
+    exit 1
+fi
+while IFS= read -r dep; do
+    [[ "$dep" =~ ^[[:space:]] ]] || continue
+    dep_path="$(awk '{print $1}' <<<"$dep")"
+    case "$dep_path" in
+        /usr/lib/libSystem.B.dylib|/usr/lib/libc++.1.dylib) ;;
+        /System/Library/Frameworks/Accelerate.framework/*) ;;
+        /System/Library/Frameworks/AudioToolbox.framework/*) ;;
+        /System/Library/Frameworks/CoreFoundation.framework/*) ;;
+        *)
+            echo "macOS release binary links unexpected dependency: $dep_path" >&2
             exit 1
-        fi
-        while IFS= read -r dep; do
-            [[ "$dep" =~ ^[[:space:]] ]] || continue
-            dep_path="$(awk '{print $1}' <<<"$dep")"
-            case "$dep_path" in
-                /usr/lib/libSystem.B.dylib|/usr/lib/libc++.1.dylib) ;;
-                /System/Library/Frameworks/Accelerate.framework/*) ;;
-                /System/Library/Frameworks/AudioToolbox.framework/*) ;;
-                /System/Library/Frameworks/CoreFoundation.framework/*) ;;
-                *)
-                    echo "macOS release binary links unexpected dependency: $dep_path" >&2
-                    exit 1
-                    ;;
-            esac
-        done < "$deps_file"
-        ;;
-    linux)
-        ldd "$package_root/bin/mradm" > "$deps_file"
-        validate_linux_dependencies "$deps_file" "$repo_root"
-        ;;
-esac
+            ;;
+    esac
+done < "$deps_file"
 
 cat > "$package_root/BUILD_INFO.txt" <<EOF
 name: MacinRender ADM Core
@@ -153,7 +120,7 @@ platform: $platform
 arch: $arch
 built_at_utc: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 cmake_options: ${cmake_options:-not recorded}
-dependency_policy: macOS packages may only link Apple system libraries/frameworks; Linux packages target Ubuntu 24.04 x86_64 and must not contain unresolved, /usr/local, or build-tree shared-library dependencies.
+dependency_policy: macOS packages may only link Apple system libraries/frameworks. Use the AppImage release script for Linux packages.
 EOF
 
 (
