@@ -20,6 +20,16 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $project = Join-Path $repoRoot "gui\MacinRender.Gui\MacinRender.Gui.csproj"
 $resolvedVcpkgRoot = if ($VcpkgRoot) { $VcpkgRoot } else { $env:VCPKG_INSTALLATION_ROOT }
 
+function Test-ExistingPath {
+    param([AllowNull()][object]$Path)
+
+    $text = [string]$Path
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return $false
+    }
+    return Test-Path -LiteralPath $text
+}
+
 function Quote-CmdArg {
     param([Parameter(Mandatory = $true)][string]$Value)
     return '"' + ($Value -replace '"', '\"') + '"'
@@ -28,7 +38,7 @@ function Quote-CmdArg {
 function Invoke-VcvarsCommand {
     param([Parameter(Mandatory = $true)][string[]]$CommandLines)
 
-    if (!($env:VCVARS64 -and (Test-Path $env:VCVARS64))) {
+    if (!($env:VCVARS64 -and (Test-ExistingPath $env:VCVARS64))) {
         throw "VCVARS64 must be set so Windows GUI packaging can use MSVC tools"
     }
 
@@ -54,7 +64,7 @@ function Invoke-VcvarsCommand {
 }
 
 function Get-MsvcPathDirs {
-    if (!($env:VCVARS64 -and (Test-Path $env:VCVARS64))) {
+    if (!($env:VCVARS64 -and (Test-ExistingPath $env:VCVARS64))) {
         return @()
     }
 
@@ -86,7 +96,7 @@ echo __VCINSTALLDIR__=%VCINSTALLDIR%
             $vcInstallDir = $line.Substring("__VCINSTALLDIR__=".Length)
             if (![string]::IsNullOrWhiteSpace($vcInstallDir)) {
                 $redistRoot = Join-Path $vcInstallDir "Redist\MSVC"
-                if (Test-Path $redistRoot) {
+                if (Test-ExistingPath $redistRoot) {
                     $dirs += Get-ChildItem -Path $redistRoot -Directory |
                         ForEach-Object { Join-Path $_.FullName "x64\Microsoft.VC143.CRT" }
                 }
@@ -94,7 +104,7 @@ echo __VCINSTALLDIR__=%VCINSTALLDIR%
         }
     }
     return $dirs |
-        Where-Object { ![string]::IsNullOrWhiteSpace([string]$_) -and (Test-Path ([string]$_)) } |
+        Where-Object { Test-ExistingPath $_ } |
         ForEach-Object { (Resolve-Path ([string]$_)).Path } |
         Select-Object -Unique
 }
@@ -130,7 +140,7 @@ function Test-SystemDll {
 function Get-DependentDllNames {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    if (!($env:VCVARS64 -and (Test-Path $env:VCVARS64))) {
+    if (!($env:VCVARS64 -and (Test-ExistingPath $env:VCVARS64))) {
         throw "VCVARS64 must be set so dumpbin can scan Windows GUI release dependencies"
     }
 
@@ -163,11 +173,11 @@ function Find-Dll {
     )
 
     foreach ($dir in $SearchDirs) {
-        if ([string]::IsNullOrWhiteSpace($dir) -or !(Test-Path $dir)) {
+        if (!(Test-ExistingPath $dir)) {
             continue
         }
         $candidate = Join-Path $dir $Name
-        if (Test-Path $candidate) {
+        if (Test-ExistingPath $candidate) {
             return (Resolve-Path $candidate).Path
         }
     }
@@ -197,7 +207,7 @@ if (!$SkipNative) {
     $toolchainFile = ""
     if ($resolvedVcpkgRoot) {
         $candidate = Join-Path $resolvedVcpkgRoot "scripts\buildsystems\vcpkg.cmake"
-        if (Test-Path $candidate) {
+        if (Test-ExistingPath $candidate) {
             $toolchainFile = (Resolve-Path $candidate).Path
         }
     }
@@ -222,7 +232,7 @@ if (!$SkipNative) {
     $nativeDll = @(
         (Join-Path $nativeBuildDir "mradm_capi.dll"),
         (Join-Path $nativeBuildDir "MinSizeRel\mradm_capi.dll")
-    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    ) | Where-Object { Test-ExistingPath $_ } | Select-Object -First 1
     if (!$nativeDll) {
         $nativeDll = Get-ChildItem -Path $nativeBuildDir -Filter "mradm_capi.dll" -Recurse -File |
             Select-Object -First 1 -ExpandProperty FullName
@@ -274,18 +284,18 @@ Copy-Item (Join-Path $repoRoot "LICENSE") -Destination (Join-Path $packageRoot "
 Copy-Item (Join-Path $repoRoot "docs\THIRD_PARTY_LICENSES.md") -Destination (Join-Path $packageRoot "THIRD_PARTY_NOTICES.md") -Force
 
 $exe = Join-Path $appDir "MacinRender.Gui.exe"
-if (!(Test-Path $exe)) {
+if (!(Test-ExistingPath $exe)) {
     throw "published GUI executable is missing: $exe"
 }
-if (!(Test-Path (Join-Path $appDir "mradm_capi.dll"))) {
+if (!(Test-ExistingPath (Join-Path $appDir "mradm_capi.dll"))) {
     throw "published GUI native bundle is missing: $(Join-Path $appDir 'mradm_capi.dll')"
 }
 
 $dllSearchDirs = @()
-if ($OpenBlasRoot -and (Test-Path $OpenBlasRoot)) {
+if (Test-ExistingPath $OpenBlasRoot) {
     $dllSearchDirs += Join-Path $OpenBlasRoot "bin"
 }
-if ($resolvedVcpkgRoot -and (Test-Path $resolvedVcpkgRoot)) {
+if (Test-ExistingPath $resolvedVcpkgRoot) {
     $dllSearchDirs += Join-Path $resolvedVcpkgRoot "installed\x64-windows\bin"
 }
 $dllSearchDirs += $appDir
@@ -294,7 +304,7 @@ if ($env:PATH) {
     $dllSearchDirs += $env:PATH -split [System.IO.Path]::PathSeparator
 }
 $dllSearchDirs = $dllSearchDirs |
-    Where-Object { ![string]::IsNullOrWhiteSpace([string]$_) -and (Test-Path ([string]$_)) } |
+    Where-Object { Test-ExistingPath $_ } |
     ForEach-Object { (Resolve-Path ([string]$_)).Path } |
     Select-Object -Unique
 
@@ -318,7 +328,7 @@ while ($queue.Count -gt 0) {
         }
 
         $packagedPath = Join-Path $appDir $dll
-        if (!(Test-Path $packagedPath)) {
+        if (!(Test-ExistingPath $packagedPath)) {
             $source = Find-Dll -Name $dll -SearchDirs $dllSearchDirs
             if (!$source) {
                 [void]$missingDlls.Add("$dll required by $resolvedScanPath")
@@ -343,7 +353,7 @@ $depsFile = Join-Path $packageRoot "DEPENDENCIES.txt"
 foreach ($binary in Get-ChildItem -Path $appDir -File | Where-Object { $_.Extension -in @(".exe", ".dll") } | Sort-Object Name) {
     "== app\$($binary.Name)" | Add-Content -Path $depsFile -Encoding utf8
     foreach ($dll in Get-DependentDllNames -Path $binary.FullName) {
-        $classification = if (Test-SystemDll -Name $dll) { "system" } elseif (Test-Path (Join-Path $appDir $dll)) { "packaged" } else { "missing" }
+        $classification = if (Test-SystemDll -Name $dll) { "system" } elseif (Test-ExistingPath (Join-Path $appDir $dll)) { "packaged" } else { "missing" }
         "  $dll [$classification]" | Add-Content -Path $depsFile -Encoding utf8
         if ($classification -eq "missing") {
             throw "Windows GUI release dependency escaped packaging: $dll required by $($binary.FullName)"
