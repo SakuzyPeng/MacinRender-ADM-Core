@@ -286,13 +286,13 @@ if ($missingDlls.Count -gt 0) {
 
 $depsFile = Join-Path $packageRoot "DEPENDENCIES.txt"
 @("Windows dependency scan:", "") | Set-Content -LiteralPath $depsFile -Encoding utf8
-foreach ($binary in Get-ChildItem -LiteralPath $binDir -File | Where-Object { $_.Extension -in @(".exe", ".dll") } | Sort-Object Name) {
-    "== bin\$($binary.Name)" | Add-Content -LiteralPath $depsFile -Encoding utf8
-    foreach ($dll in Get-DependentDllNames -Path $binary.FullName) {
+foreach ($dependencyBinary in Get-ChildItem -LiteralPath $binDir -File | Where-Object { $_.Extension -in @(".exe", ".dll") } | Sort-Object Name) {
+    "== bin\$($dependencyBinary.Name)" | Add-Content -LiteralPath $depsFile -Encoding utf8
+    foreach ($dll in Get-DependentDllNames -Path $dependencyBinary.FullName) {
         $classification = if (Test-SystemDll -Name $dll) { "system" } elseif (Test-ExistingPath (Join-Path $binDir $dll)) { "packaged" } else { "missing" }
         "  $dll [$classification]" | Add-Content -LiteralPath $depsFile -Encoding utf8
         if ($classification -eq "missing") {
-            throw "Windows release dependency escaped packaging: $dll required by $($binary.FullName)"
+            throw "Windows release dependency escaped packaging: $dll required by $($dependencyBinary.FullName)"
         }
     }
     "" | Add-Content -LiteralPath $depsFile -Encoding utf8
