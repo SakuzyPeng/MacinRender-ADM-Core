@@ -45,7 +45,41 @@ try {
         throw "package dependency manifest contains missing DLLs"
     }
 
-    & (Join-Path $packageRoot "app\MacinRender.Gui.exe") --selftest
+    $exe = Join-Path $packageRoot "app\MacinRender.Gui.exe"
+    $appDir = Split-Path -Parent $exe
+    $selftestStdout = Join-Path $workDir "gui-selftest.stdout.txt"
+    $selftestStderr = Join-Path $workDir "gui-selftest.stderr.txt"
+    $selftest = Start-Process `
+        -FilePath $exe `
+        -ArgumentList "--selftest" `
+        -WorkingDirectory $appDir `
+        -RedirectStandardOutput $selftestStdout `
+        -RedirectStandardError $selftestStderr `
+        -Wait `
+        -PassThru
+    if ($selftest.ExitCode -ne 0) {
+        $out = if (Test-Path $selftestStdout) { Get-Content $selftestStdout -Raw } else { "" }
+        $err = if (Test-Path $selftestStderr) { Get-Content $selftestStderr -Raw } else { "" }
+        throw "GUI selftest failed with exit code $($selftest.ExitCode)`nstdout:`n$out`nstderr:`n$err"
+    }
+
+    $stdout = Join-Path $workDir "gui-start.stdout.txt"
+    $stderr = Join-Path $workDir "gui-start.stderr.txt"
+    $process = Start-Process `
+        -FilePath $exe `
+        -WorkingDirectory $appDir `
+        -RedirectStandardOutput $stdout `
+        -RedirectStandardError $stderr `
+        -PassThru
+
+    if ($process.WaitForExit(8000)) {
+        $out = if (Test-Path $stdout) { Get-Content $stdout -Raw } else { "" }
+        $err = if (Test-Path $stderr) { Get-Content $stderr -Raw } else { "" }
+        throw "GUI exited during startup smoke with code $($process.ExitCode)`nstdout:`n$out`nstderr:`n$err"
+    }
+
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    $process.WaitForExit()
 } finally {
     Remove-Item -Recurse -Force $workDir -ErrorAction SilentlyContinue
 }

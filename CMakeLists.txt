@@ -447,23 +447,15 @@ mr_adm_core_apply_static_analysis(mr_adm_c_api)
 option(MR_ADM_BUILD_CAPI_BUNDLE "Build self-contained libmradm_capi shared lib for GUI/P-Invoke" OFF)
 
 if(MR_ADM_BUILD_CAPI_BUNDLE)
-    # SHARED 目标自身不引用任何 adm_* 符号,需要一个占位 TU 让链接成立。
-    add_library(mradm_capi_bundle SHARED src/adm_c_api/bundle_stub.cpp)
+    # 直接把 C ABI 源文件编进 SHARED 目标,让 Windows 导出扫描能看到 adm_* 入口。
+    add_library(mradm_capi_bundle SHARED src/adm_c_api/adm_c_api.cpp)
     set_target_properties(mradm_capi_bundle PROPERTIES
         OUTPUT_NAME mradm_capi
         VERSION   ${PROJECT_VERSION}
         SOVERSION ${PROJECT_VERSION_MAJOR}
         WINDOWS_EXPORT_ALL_SYMBOLS ON
     )
-    # 关键:bundle 不引用 c_api 任何符号,普通 link 会把整个静态 c_api 裁掉 → 空 dylib。
-    # 必须 force_load / --whole-archive 整个 c_api;其余依赖(engine→renderers→第三方)
-    # 顺着 c_api 的符号引用自然拉入,无需整库强链。
-    target_link_options(mradm_capi_bundle PRIVATE
-        "$<$<PLATFORM_ID:Darwin>:LINKER:-force_load,$<TARGET_FILE:mr_adm_c_api>>"
-        "$<$<PLATFORM_ID:Linux>:LINKER:--whole-archive,$<TARGET_FILE:mr_adm_c_api>,LINKER:--no-whole-archive>"
-        "$<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE:$<TARGET_FILE:mr_adm_c_api>>"
-    )
-    target_link_libraries(mradm_capi_bundle PRIVATE mr_adm_c_api)
+    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMEngine)
 endif()
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
