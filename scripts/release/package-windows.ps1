@@ -13,8 +13,19 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+
+function Test-ExistingPath {
+    param([AllowNull()][object]$Path)
+
+    $text = [string]$Path
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return $false
+    }
+    return Test-Path -LiteralPath $text
+}
+
 $binaryPath = if ([System.IO.Path]::IsPathRooted($Binary)) { $Binary } else { Join-Path $repoRoot $Binary }
-if (!(Test-Path $binaryPath)) {
+if (!(Test-ExistingPath $binaryPath)) {
     throw "binary is missing: $binaryPath"
 }
 
@@ -49,7 +60,7 @@ function Test-SystemDll {
 function Get-DependentDllNames {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    if (!($env:VCVARS64 -and (Test-Path $env:VCVARS64))) {
+    if (!($env:VCVARS64 -and (Test-ExistingPath $env:VCVARS64))) {
         throw "VCVARS64 must be set so dumpbin can scan Windows release dependencies"
     }
 
@@ -76,7 +87,7 @@ dumpbin /dependents "$Path"
 }
 
 function Get-MsvcPathDirs {
-    if (!($env:VCVARS64 -and (Test-Path $env:VCVARS64))) {
+    if (!($env:VCVARS64 -and (Test-ExistingPath $env:VCVARS64))) {
         return @()
     }
 
@@ -108,7 +119,7 @@ echo __VCINSTALLDIR__=%VCINSTALLDIR%
             $vcInstallDir = $line.Substring("__VCINSTALLDIR__=".Length)
             if (![string]::IsNullOrWhiteSpace($vcInstallDir)) {
                 $redistRoot = Join-Path $vcInstallDir "Redist\MSVC"
-                if (Test-Path $redistRoot) {
+                if (Test-ExistingPath $redistRoot) {
                     $dirs += Get-ChildItem -Path $redistRoot -Directory |
                         ForEach-Object { Join-Path $_.FullName "x64\Microsoft.VC143.CRT" }
                 }
@@ -116,7 +127,7 @@ echo __VCINSTALLDIR__=%VCINSTALLDIR%
         }
     }
     return $dirs |
-        Where-Object { ![string]::IsNullOrWhiteSpace([string]$_) -and (Test-Path ([string]$_)) } |
+        Where-Object { Test-ExistingPath $_ } |
         ForEach-Object { (Resolve-Path ([string]$_)).Path } |
         Select-Object -Unique
 }
@@ -128,11 +139,11 @@ function Find-Dll {
     )
 
     foreach ($dir in $SearchDirs) {
-        if ([string]::IsNullOrWhiteSpace($dir) -or !(Test-Path $dir)) {
+        if (!(Test-ExistingPath $dir)) {
             continue
         }
         $candidate = Join-Path $dir $Name
-        if (Test-Path $candidate) {
+        if (Test-ExistingPath $candidate) {
             return (Resolve-Path $candidate).Path
         }
     }
@@ -171,10 +182,10 @@ Copy-Item (Join-Path $repoRoot "LICENSE") -Destination (Join-Path $packageRoot "
 Copy-Item (Join-Path $repoRoot "docs\THIRD_PARTY_LICENSES.md") -Destination (Join-Path $packageRoot "THIRD_PARTY_NOTICES.md") -Force
 
 $dllSearchDirs = @()
-if ($OpenBlasRoot -and (Test-Path $OpenBlasRoot)) {
+if (Test-ExistingPath $OpenBlasRoot) {
     $dllSearchDirs += Join-Path $OpenBlasRoot "bin"
 }
-if ($VcpkgRoot -and (Test-Path $VcpkgRoot)) {
+if (Test-ExistingPath $VcpkgRoot) {
     $dllSearchDirs += Join-Path $VcpkgRoot "installed\x64-windows\bin"
 }
 $dllSearchDirs += Split-Path -Parent $binaryPath
@@ -183,7 +194,7 @@ if ($env:PATH) {
     $dllSearchDirs += $env:PATH -split [System.IO.Path]::PathSeparator
 }
 $dllSearchDirs = $dllSearchDirs |
-    Where-Object { ![string]::IsNullOrWhiteSpace([string]$_) -and (Test-Path ([string]$_)) } |
+    Where-Object { Test-ExistingPath $_ } |
     ForEach-Object { (Resolve-Path ([string]$_)).Path } |
     Select-Object -Unique
 
@@ -206,7 +217,7 @@ while ($queue.Count -gt 0) {
         }
 
         $packagedPath = Join-Path $binDir $dll
-        if (!(Test-Path $packagedPath)) {
+        if (!(Test-ExistingPath $packagedPath)) {
             $source = Find-Dll -Name $dll -SearchDirs $dllSearchDirs
             if (!$source) {
                 [void]$missingDlls.Add("$dll required by $resolvedScanPath")
@@ -231,7 +242,7 @@ $depsFile = Join-Path $packageRoot "DEPENDENCIES.txt"
 foreach ($binary in Get-ChildItem -Path $binDir -File | Where-Object { $_.Extension -in @(".exe", ".dll") } | Sort-Object Name) {
     "== bin\$($binary.Name)" | Add-Content -Path $depsFile -Encoding utf8
     foreach ($dll in Get-DependentDllNames -Path $binary.FullName) {
-        $classification = if (Test-SystemDll -Name $dll) { "system" } elseif (Test-Path (Join-Path $binDir $dll)) { "packaged" } else { "missing" }
+        $classification = if (Test-SystemDll -Name $dll) { "system" } elseif (Test-ExistingPath (Join-Path $binDir $dll)) { "packaged" } else { "missing" }
         "  $dll [$classification]" | Add-Content -Path $depsFile -Encoding utf8
         if ($classification -eq "missing") {
             throw "Windows release dependency escaped packaging: $dll required by $($binary.FullName)"
