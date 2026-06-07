@@ -350,7 +350,6 @@ public partial class MainWindowViewModel : ObservableObject
         var token = _cts.Token;
         IsRendering = true;
         OverallProgress = 0;
-        Logs.Clear();
 
         var settings = BuildSettings();
         AddLog(LogKind.Info, "LogStart", "Raw",
@@ -538,7 +537,16 @@ public partial class MainWindowViewModel : ObservableObject
         _ => LogKind.Info,
     };
 
+    // 日志软上限:超过即丢最旧的,防长期多批渲染无限累积(占内存 + 列表变长)。
+    private const int MaxLogs = 300;
+
     // 插到队首:最新日志显示在顶部;title/detail 传 i18n key(detail 空=无详情,或 "Raw"+数据)。
-    private void AddLog(LogKind kind, string titleKey, string detailKey = "", params object?[] args) =>
+    private void AddLog(LogKind kind, string titleKey, string detailKey = "", params object?[] args)
+    {
         Logs.Insert(0, new LogLine(kind, titleKey, detailKey, args, DateTime.Now));
+        while (Logs.Count > MaxLogs)
+        {
+            Logs.RemoveAt(Logs.Count - 1);
+        }
+    }
 }
