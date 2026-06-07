@@ -64,6 +64,7 @@ function Get-MsvcPathDirs {
 call "$env:VCVARS64" >nul
 echo __PATH__=%PATH%
 echo __VCToolsRedistDir__=%VCToolsRedistDir%
+echo __VCINSTALLDIR__=%VCINSTALLDIR%
 "@ | Set-Content -Path $cmdPath -Encoding ASCII
 
     try {
@@ -78,7 +79,18 @@ echo __VCToolsRedistDir__=%VCToolsRedistDir%
             $dirs += ($line.Substring("__PATH__=".Length) -split [System.IO.Path]::PathSeparator)
         } elseif ($line -like "__VCToolsRedistDir__=*") {
             $redist = $line.Substring("__VCToolsRedistDir__=".Length)
-            $dirs += Join-Path $redist "x64\Microsoft.VC143.CRT"
+            if (![string]::IsNullOrWhiteSpace($redist)) {
+                $dirs += Join-Path $redist "x64\Microsoft.VC143.CRT"
+            }
+        } elseif ($line -like "__VCINSTALLDIR__=*") {
+            $vcInstallDir = $line.Substring("__VCINSTALLDIR__=".Length)
+            if (![string]::IsNullOrWhiteSpace($vcInstallDir)) {
+                $redistRoot = Join-Path $vcInstallDir "Redist\MSVC"
+                if (Test-Path $redistRoot) {
+                    $dirs += Get-ChildItem -Path $redistRoot -Directory |
+                        ForEach-Object { Join-Path $_.FullName "x64\Microsoft.VC143.CRT" }
+                }
+            }
         }
     }
     return $dirs | Where-Object { $_ -and (Test-Path $_) } | ForEach-Object { (Resolve-Path $_).Path } | Select-Object -Unique
