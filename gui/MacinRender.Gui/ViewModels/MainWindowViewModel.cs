@@ -76,6 +76,7 @@ public partial class MainWindowViewModel : ObservableObject
     private decimal _lastAutoBitrate; // 上次自动设的码率;与当前相等即视为"用户未手动改",可随布局重算
     private string _statusKey = "StatusReadyEmpty"; // 状态栏当前 key + 参数,切语言时按此重算
     private object?[] _statusArgs = Array.Empty<object?>();
+    private bool _settingsReady; // 启动恢复完成前不持久化,避免把默认/中间联动态写盘
 
     public MainWindowViewModel()
     {
@@ -84,6 +85,9 @@ public partial class MainWindowViewModel : ObservableObject
         AddLog(LogKind.Info, "LogReady", "LogReadyHint");
 
         RebuildCodecs(); // 触发联动初始化(后端→编码器→布局→容器)
+
+        RestoreSettings(); // 应用上次保存的选择(在联动初始化之后,按链恢复)
+        _settingsReady = true; // 此后任何用户改动都持久化
     }
 
     // 状态栏文案集中设置:记录 key+参数,切语言时重算(StatusText 含动态数据,故用 Format)。
@@ -114,13 +118,30 @@ public partial class MainWindowViewModel : ObservableObject
     // ── 联动 ──
 
     // 单向联动链:后端 → 编码器 → 布局 → 容器。切下游永远不会回改上游已选项。
-    partial void OnSelectedBackendChanged(BackendDef value) => RebuildCodecs();
-    partial void OnSelectedCodecChanged(CodecOption? value) => RebuildLayouts();
+    // 每个用户可改维度的变化都触发持久化(_settingsReady 前的初始化/恢复态被 SaveSettings 内部忽略)。
+    partial void OnSelectedBackendChanged(BackendDef value)
+    {
+        RebuildCodecs();
+        SaveSettings();
+    }
+
+    partial void OnSelectedCodecChanged(CodecOption? value)
+    {
+        RebuildLayouts();
+        SaveSettings();
+    }
+
     partial void OnSelectedLayoutChanged(LayoutDef? value)
     {
         RebuildContainers();
         UpdateSubOptions();
+        SaveSettings();
     }
+
+    partial void OnSelectedContainerChanged(ContainerDef? value) => SaveSettings();
+    partial void OnBitrateChanged(decimal value) => SaveSettings();
+    partial void OnIsDarkChanged(bool value) => SaveSettings();
+    partial void OnIsEnglishChanged(bool value) => SaveSettings();
 
     // 编码器列表 = 当前后端在「任一支持布局」下可用的编码器(apac 在非 macOS 经 support-matrix 自动排除)。
     private void RebuildCodecs()
@@ -244,6 +265,82 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         _lastSub = def.Sub;
+    }
+
+    // ── 设置持久化 ──
+
+    // 启动时恢复上次选择。主题/语言先应用;输出设置按联动链顺序(后端→编码器→布局→容器→码率)恢复,
+    // 每步在当前支持矩阵里匹配 id,失配则保持默认(矩阵随平台/版本变,旧值可能已不可用)。
+    private void RestoreSettings()
+    {
+        var s = SettingsStore.Load();
+        if (s is null)
+        {
+            return;
+        }
+
+        if (s.IsEnglish != IsEnglish)
+        {
+            Localizer.Instance.SetLanguage(s.IsEnglish ? Lang.En : Lang.Zh);
+            IsEnglish = s.IsEnglish;
+        }
+
+        if (!s.IsDark && Application.Current is { } app)
+        {
+            app.RequestedThemeVariant = ThemeVariant.Light;
+            IsDark = false;
+        }
+
+        if (s.Backend is not null && OutputModel.BackendById.TryGetValue(s.Backend, out var backend)
+            && !ReferenceEquals(backend, SelectedBackend))
+        {
+            SelectedBackend = backend; // → 重建下游
+        }
+
+        if (s.Codec is not null && Codecs.FirstOrDefault(c => c.Def.Id == s.Codec) is { } codec
+            && !ReferenceEquals(codec, SelectedCodec))
+        {
+            SelectedCodec = codec;
+        }
+
+        if (s.Layout is not null && Layouts.FirstOrDefault(l => l.Id == s.Layout) is { } layout
+            && !ReferenceEquals(layout, SelectedLayout))
+        {
+            SelectedLayout = layout;
+        }
+
+        if (s.Container is not null && Containers.FirstOrDefault(c => c.Id == s.Container) is { } container
+            && !ReferenceEquals(container, SelectedContainer))
+        {
+            SelectedContainer = container;
+        }
+
+        // 码率最后恢复:SelectedLayout 变化时 UpdateSubOptions 已把 Bitrate 重算成默认,这里覆盖回保存值。
+        // 置 _lastAutoBitrate 为不等值 → 视作"用户手动码率",后续切布局不再自动覆盖。
+        if (s.Bitrate is { } br && ShowBitrate && br >= BitrateMin && br <= BitrateMax)
+        {
+            Bitrate = br;
+            _lastAutoBitrate = -1m;
+        }
+    }
+
+    private void SaveSettings()
+    {
+        if (!_settingsReady)
+        {
+            return;
+        }
+
+        SettingsStore.Save(new AppSettings
+        {
+            Backend = SelectedBackend.Id,
+            Codec = SelectedCodec?.Def.Id,
+            Layout = SelectedLayout?.Id,
+            Container = SelectedContainer?.Id,
+            Bitrate = ShowBitrate ? Bitrate : null,
+            IsDark = IsDark,
+            IsEnglish = IsEnglish,
+        });
     }
 
     // ── 队列 / 日志 / 渲染 ──
