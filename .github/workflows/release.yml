@@ -28,15 +28,6 @@ jobs:
             arch: arm64
             binary: build/release/mradm
             install: brew install cmake ninja boost ccache
-          - name: Linux release
-            runner: ubuntu-24.04
-            artifact: mradm-linux-x86_64
-            platform: linux
-            arch: x86_64
-            binary: build/release/mradm
-            install: |
-              sudo apt-get update
-              sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache libboost-all-dev libopenblas-dev liblapacke-dev
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -109,6 +100,88 @@ jobs:
           path: |
             dist/mradm-*-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
             dist/mradm-*-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz.sha256
+          if-no-files-found: error
+
+      - name: ccache stats
+        if: always()
+        run: ccache --show-stats || true
+
+  release-linux-appimage:
+    name: Linux AppImage release
+    runs-on: ubuntu-24.04
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPRESS: "true"
+      FC_CACHE_DIR: ${{ github.workspace }}/.fc-cache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache curl file patchelf desktop-file-utils libboost-all-dev libopenblas-dev liblapacke-dev
+          sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
+
+      - name: Restore FetchContent cache
+        uses: actions/cache@v5
+        with:
+          path: .fc-cache
+          key: fc-${{ runner.os }}-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            fc-${{ runner.os }}-
+
+      - name: Restore ccache
+        uses: actions/cache@v5
+        with:
+          path: .ccache
+          key: ccache-${{ runner.os }}-release-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-release-
+            ccache-${{ runner.os }}-
+
+      - name: Configure
+        run: >
+          cmake --preset release
+          -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
+          -DCMAKE_DISABLE_FIND_PACKAGE_fmt=TRUE
+          -DCMAKE_DISABLE_FIND_PACKAGE_spdlog=TRUE
+          -DCMAKE_DISABLE_FIND_PACKAGE_CLI11=TRUE
+          -DMR_ADM_FLAC_PROVIDER=VENDORED
+          -DMR_ADM_OPUS_PROVIDER=VENDORED
+          -DMR_ADM_ENABLE_IAMF=OFF
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build --preset release --target mradm_exe
+
+      - name: Smoke
+        run: |
+          build/release/mradm --version
+          build/release/mradm backends
+
+      - name: Package AppImage
+        run: >
+          scripts/release/package-linux-appimage.sh
+          --binary build/release/mradm
+          --arch x86_64
+
+      - name: AppImage smoke
+        run: |
+          appimage="$(ls dist/mradm-*-linux-x86_64.AppImage)"
+          scripts/release/smoke-linux-appimage.sh "$appimage"
+
+      - name: Upload AppImage release package
+        uses: actions/upload-artifact@v7
+        with:
+          name: mradm-linux-x86_64-AppImage
+          path: |
+            dist/mradm-*-linux-x86_64.AppImage
+            dist/mradm-*-linux-x86_64.AppImage.sha256
           if-no-files-found: error
 
       - name: ccache stats
@@ -316,6 +389,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - release
+      - release-linux-appimage
       - release-windows
       - release-gui-macos
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
