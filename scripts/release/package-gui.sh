@@ -70,16 +70,25 @@ if [[ "$skip_native" -eq 0 ]]; then
     esac
 
     native_build_dir="$repo_root/build/gui-native-package/$rid"
-    cmake -S "$repo_root" -B "$native_build_dir" -G Ninja \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-        -DCMAKE_OSX_ARCHITECTURES="$osx_arch" \
-        -DMR_ADM_BUILD_CAPI_BUNDLE=ON \
-        -DMR_ADM_CORE_BUILD_CLI=OFF \
-        -DMR_ADM_CORE_BUILD_TESTS=OFF \
-        -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF \
-        -DMR_ADM_FLAC_PROVIDER=VENDORED \
+    cmake_args=(
+        -S "$repo_root"
+        -B "$native_build_dir"
+        -G Ninja
+        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+        -DCMAKE_OSX_ARCHITECTURES="$osx_arch"
+        -DMR_ADM_BUILD_CAPI_BUNDLE=ON
+        -DMR_ADM_CORE_BUILD_CLI=OFF
+        -DMR_ADM_CORE_BUILD_TESTS=OFF
+        -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF
+        -DMR_ADM_FLAC_PROVIDER=VENDORED
         -DMR_ADM_OPUS_PROVIDER=VENDORED
+    )
+    if [[ -n "${FC_CACHE_DIR:-}" ]]; then
+        mkdir -p "$FC_CACHE_DIR"
+        cmake_args+=(-DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR")
+    fi
+    cmake "${cmake_args[@]}"
     cmake --build "$native_build_dir" --target mradm_capi_bundle
 
     native_lib="$native_build_dir/libmradm_capi.dylib"
