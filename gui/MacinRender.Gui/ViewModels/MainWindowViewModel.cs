@@ -248,16 +248,22 @@ public partial class MainWindowViewModel : ObservableObject
 
     // ── 队列 / 日志 / 渲染 ──
 
-    /// <summary>由文件选择器(code-behind)调用,加入去重后的真实文件。</summary>
-    public void AddFiles(IEnumerable<string> paths)
+    /// <summary>
+    /// 由拖拽 / 文件选择器(code-behind)调用。扩展名只是初筛,这里用 probe 做内容级 ADM 判定
+    /// (chna+axml):普通 wav / 非 ADM 文件被拒绝入队,只记一条"跳过 N 个"提示。再按路径去重入队。
+    /// </summary>
+    public async Task<int> AddFilesAsync(IReadOnlyList<string> paths)
     {
-        if (IsRendering)
+        if (IsRendering || paths.Count == 0)
         {
-            return;
+            return 0;
         }
 
+        var admPaths = await _renderService.FilterAdmAsync(paths);
+        int skipped = paths.Count - admPaths.Count;
+
         var added = new List<string>();
-        foreach (var p in paths)
+        foreach (var p in admPaths)
         {
             if (string.IsNullOrEmpty(p) || Files.Any(f => f.InputPath == p))
             {
@@ -274,6 +280,13 @@ public partial class MainWindowViewModel : ObservableObject
             AddLog(LogKind.Info, "LogAddFile", added.Count == 1 ? "Raw" : "NFiles",
                 added.Count == 1 ? added[0] : added.Count);
         }
+
+        if (skipped > 0)
+        {
+            AddLog(LogKind.Warn, "LogSkipNonAdm", "NFiles", skipped);
+        }
+
+        return added.Count;
     }
 
     [RelayCommand(CanExecute = nameof(CanEditQueue))]

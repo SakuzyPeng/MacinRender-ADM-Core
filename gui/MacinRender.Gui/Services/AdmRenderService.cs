@@ -28,6 +28,45 @@ public sealed class AdmRenderService
         return Task.Run(() => RenderBlocking(inputPath, outputPath, settings, progress, ct), ct);
     }
 
+    /// <summary>
+    /// 内容级 ADM 过滤:逐个 probe,只保留真正含 chna+axml 的 ADM 文件(普通 wav 被剔除)。
+    /// probe 轻量——只读容器头不解码音频。复用单 context 串行探测,符合"context 非线程安全"契约。
+    /// </summary>
+    public Task<List<string>> FilterAdmAsync(IReadOnlyList<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        return Task.Run(() => FilterAdm(paths));
+    }
+
+    private static List<string> FilterAdm(IReadOnlyList<string> paths)
+    {
+        var result = new List<string>(paths.Count);
+        using var ctx = NativeMethods.adm_create_context();
+        if (ctx.IsInvalid)
+        {
+            return result;
+        }
+
+        foreach (var p in paths)
+        {
+            if (string.IsNullOrEmpty(p))
+            {
+                continue;
+            }
+
+            var rc = NativeMethods.adm_probe_file(ctx, p, out var info);
+            using (info)
+            {
+                if (rc == AdmErrorCode.Ok && !info.IsInvalid)
+                {
+                    result.Add(p);
+                }
+            }
+        }
+
+        return result;
+    }
+
     private static unsafe RenderOutcome RenderBlocking(string inputPath, string? outputPath, RenderSettings s,
         IProgress<RenderProgress>? progress, CancellationToken ct)
     {

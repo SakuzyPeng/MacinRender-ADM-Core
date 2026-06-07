@@ -51,17 +51,39 @@
                     </StackPanel>
 
                     <StackPanel Grid.Row="2" Margin="0,0,0,16" Spacing="2">
-                        <ctrl:SquircleButton Classes="nav" Command="{Binding ToggleLanguageCommand}">
+                        <ctrl:SquircleButton Classes="nav" Command="{Binding ToggleLanguageCommand}"
+                                Click="OnToggleLanguageClick">
                             <StackPanel Orientation="Horizontal" Spacing="10">
-                                <Path Classes="icon" Data="{StaticResource IconGlobe}"/>
+                                <Panel Width="17" Height="17">
+                                    <Path Classes="icon" Data="{StaticResource IconGlobe}"/>
+                                    <Path x:Name="FlashGlobe" Classes="icon" Data="{StaticResource IconGlobe}"
+                                          Stroke="#30D158" Opacity="0">
+                                        <Path.Transitions>
+                                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                        </Path.Transitions>
+                                    </Path>
+                                </Panel>
                                 <TextBlock VerticalAlignment="Center" Text="{Binding LanguageText}"/>
                             </StackPanel>
                         </ctrl:SquircleButton>
-                        <ctrl:SquircleButton Classes="nav" Command="{Binding ToggleThemeCommand}">
+                        <ctrl:SquircleButton Classes="nav" Command="{Binding ToggleThemeCommand}"
+                                Click="OnToggleThemeClick">
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <Panel Width="17" Height="17">
-                                    <Path Classes="icon" Data="{StaticResource IconTheme}" IsVisible="{Binding IsDark}"/>
-                                    <Path Classes="icon" Data="{StaticResource IconSun}" IsVisible="{Binding !IsDark}"/>
+                                    <Path Classes="icon replace" Data="{StaticResource IconTheme}" Classes.on="{Binding IsDark}"/>
+                                    <Path Classes="icon replace" Data="{StaticResource IconSun}" Classes.on="{Binding !IsDark}"/>
+                                    <Path x:Name="FlashThemeMoon" Classes="icon" Data="{StaticResource IconTheme}"
+                                          Stroke="#30D158" Opacity="0" IsVisible="{Binding IsDark}">
+                                        <Path.Transitions>
+                                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                        </Path.Transitions>
+                                    </Path>
+                                    <Path x:Name="FlashThemeSun" Classes="icon" Data="{StaticResource IconSun}"
+                                          Stroke="#30D158" Opacity="0" IsVisible="{Binding !IsDark}">
+                                        <Path.Transitions>
+                                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                        </Path.Transitions>
+                                    </Path>
                                 </Panel>
                                 <TextBlock VerticalAlignment="Center" Text="{DynamicResource SwitchTheme}"/>
                             </StackPanel>
@@ -160,19 +182,49 @@
                     <!-- 文件队列 + 日志:左右并列,占满剩余高度 -->
                     <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="12">
 
-                    <!-- 文件队列(含总进度 + 操作) -->
-                    <ctrl:SquircleBorder Grid.Column="0" Classes="card">
+                    <!-- 文件队列(含总进度 + 操作);叠一层拖拽高亮 overlay -->
+                    <Grid Grid.Column="0">
+                    <ctrl:SquircleBorder Classes="card">
                         <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="12">
                             <DockPanel Grid.Row="0">
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
                                     <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="{DynamicResource TipClearQueue}"
-                                            Command="{Binding ClearQueueCommand}">
-                                        <Path Classes="icon" Data="{StaticResource IconTrash}"/>
+                                            Command="{Binding ClearQueueCommand}" Click="OnClearQueueClick">
+                                        <Panel>
+                                            <Path Classes="icon" Data="{StaticResource IconTrash}"/>
+                                            <Path x:Name="FlashClearQueue" Classes="icon" Data="{StaticResource IconTrash}"
+                                                  Stroke="#30D158" Opacity="0">
+                                                <Path.Transitions>
+                                                    <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                                </Path.Transitions>
+                                            </Path>
+                                        </Panel>
                                     </ctrl:SquircleButton>
                                     <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="{DynamicResource TipAddFile}"
                                             IsEnabled="{Binding !IsRendering}"
                                             Click="OnAddFiles">
-                                        <Path Classes="icon" Data="{StaticResource IconAdd}"/>
+                                        <Panel>
+                                            <Path Classes="icon" Data="{StaticResource IconAdd}"/>
+                                            <Path x:Name="FlashAddFile" Classes="icon" Data="{StaticResource IconAdd}"
+                                                  Stroke="#30D158" Opacity="0">
+                                                <Path.Transitions>
+                                                    <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                                </Path.Transitions>
+                                            </Path>
+                                        </Panel>
+                                    </ctrl:SquircleButton>
+                                    <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="{DynamicResource TipAddFolder}"
+                                            IsEnabled="{Binding !IsRendering}"
+                                            Click="OnAddFolder">
+                                        <Panel>
+                                            <Path Classes="icon" Data="{StaticResource IconFolder}"/>
+                                            <Path x:Name="FlashAddFolder" Classes="icon" Data="{StaticResource IconFolder}"
+                                                  Stroke="#30D158" Opacity="0">
+                                                <Path.Transitions>
+                                                    <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                                </Path.Transitions>
+                                            </Path>
+                                        </Panel>
                                     </ctrl:SquircleButton>
                                 </StackPanel>
                                 <TextBlock Classes="h2" VerticalAlignment="Center" Text="{DynamicResource FileQueue}"/>
@@ -183,12 +235,13 @@
                             <ItemsControl ItemsSource="{Binding Files}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="m:RenderFileItem">
-                                        <ctrl:SquircleBorder Margin="0,0,0,6" Padding="12,9"
+                                        <ctrl:SquircleBorder Classes="fileitem" Margin="0,0,0,6" Padding="12,9"
                                                 CornerRadius="12" Background="{DynamicResource RowBg}">
                                             <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
                                                 <Ellipse Grid.Row="0" Grid.Column="0"
                                                          Width="8" Height="8" Margin="0,0,10,0"
                                                          VerticalAlignment="Center"
+                                                         Classes.pulse="{Binding IsRenderingState}"
                                                          Fill="{Binding StatusBrush}"/>
                                                 <TextBlock Grid.Row="0" Grid.Column="1"
                                                            VerticalAlignment="Center" FontSize="13"
@@ -206,17 +259,19 @@
                                                     <TextBlock Classes="muted" VerticalAlignment="Center"
                                                                Text="{Binding StageText}"
                                                                IsVisible="{Binding IsRenderingState}"/>
-                                                    <!-- 完成:绿勾 -->
+                                                    <!-- 完成:绿勾(出现时弹入) -->
                                                     <Path Data="{StaticResource IconCheck}"
                                                           Stroke="#30D158" StrokeThickness="2.2"
                                                           StrokeLineCap="Round" StrokeJoin="Round"
                                                           Width="16" Height="16" Stretch="Uniform"
+                                                          Classes.pop="{Binding IsDone}"
                                                           IsVisible="{Binding IsDone}"/>
-                                                    <!-- 失败:红叉 -->
+                                                    <!-- 失败:红叉(出现时弹入) -->
                                                     <Path Data="{StaticResource IconCross}"
                                                           Stroke="#FF453A" StrokeThickness="2.2"
                                                           StrokeLineCap="Round" StrokeJoin="Round"
                                                           Width="15" Height="15" Stretch="Uniform"
+                                                          Classes.pop="{Binding IsFailed}"
                                                           IsVisible="{Binding IsFailed}"/>
                                                 </Panel>
                                                 <ProgressBar Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
@@ -238,10 +293,12 @@
                                         MinWidth="108" VerticalAlignment="Center" Margin="16,0,0,0"
                                         Command="{Binding PrimaryCommand}">
                                     <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
-                                        <Path Classes="iconfill" Data="{StaticResource IconPlay}"
-                                              IsVisible="{Binding !IsRendering}"/>
-                                        <Path Classes="iconfill" Data="{StaticResource IconStop}"
-                                              IsVisible="{Binding IsRendering}"/>
+                                        <Panel Width="13" Height="13" VerticalAlignment="Center">
+                                            <Path Classes="iconfill replace" Data="{StaticResource IconPlay}"
+                                                  Classes.on="{Binding !IsRendering}"/>
+                                            <Path Classes="iconfill replace" Data="{StaticResource IconStop}"
+                                                  Classes.on="{Binding IsRendering}"/>
+                                        </Panel>
                                         <TextBlock VerticalAlignment="Center" Text="{Binding ActionButtonText}"/>
                                     </StackPanel>
                                 </ctrl:SquircleButton>
@@ -254,6 +311,14 @@
                             </DockPanel>
                         </Grid>
                     </ctrl:SquircleBorder>
+                    <ctrl:SquircleBorder x:Name="DropHighlight" IsHitTestVisible="False"
+                            Background="Transparent" BorderBrush="{DynamicResource Accent}"
+                            BorderThickness="2" CornerRadius="18" Opacity="0">
+                        <ctrl:SquircleBorder.Transitions>
+                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.15"/></Transitions>
+                        </ctrl:SquircleBorder.Transitions>
+                    </ctrl:SquircleBorder>
+                    </Grid>
 
                     <!-- 日志(填充右半) -->
                     <ctrl:SquircleBorder Grid.Column="1" Classes="card">
@@ -261,8 +326,16 @@
                             <DockPanel Grid.Row="0" Margin="0,0,0,8">
                                 <ctrl:SquircleButton DockPanel.Dock="Right" Classes="nav iconbtn"
                                         ToolTip.Tip="{DynamicResource TipClearLog}"
-                                        Command="{Binding ClearLogsCommand}">
-                                    <Path Classes="icon" Data="{StaticResource IconTrash}"/>
+                                        Command="{Binding ClearLogsCommand}" Click="OnClearLogsClick">
+                                    <Panel>
+                                        <Path Classes="icon" Data="{StaticResource IconTrash}"/>
+                                        <Path x:Name="FlashClearLog" Classes="icon" Data="{StaticResource IconTrash}"
+                                              Stroke="#30D158" Opacity="0">
+                                            <Path.Transitions>
+                                                <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                            </Path.Transitions>
+                                        </Path>
+                                    </Panel>
                                 </ctrl:SquircleButton>
                                 <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                                     <TextBlock Classes="h2" Text="{DynamicResource EventLog}"/>
