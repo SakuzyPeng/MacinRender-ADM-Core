@@ -501,7 +501,7 @@ adm_error_code_t adm_render_options_set_apac_bitrate_kbps(adm_render_options_t* 
     if (opts == nullptr) {
         return ADM_ERROR_OK;
     }
-    if (kbps != 0 && (kbps < 64 || kbps > 12000)) {
+    if (kbps != 0 && (kbps < 64 || kbps > 32768)) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     opts->opts.apac_bitrate_kbps = kbps;
