@@ -384,6 +384,131 @@ jobs:
             dist/MacinRender-Gui-*-macos-arm64.tar.gz.sha256
           if-no-files-found: error
 
+  release-gui-windows:
+    name: Windows GUI release
+    runs-on: windows-2025
+
+    env:
+      FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-bincache
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\.vcpkg-bincache,readwrite
+      VCPKG_FEATURE_FLAGS: binarycaching
+      OPENBLAS_VERSION: 0.3.33
+      OPENBLAS_ROOT: ${{ github.workspace }}\.openblas
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore FetchContent cache
+        uses: actions/cache@v5
+        with:
+          path: .fc-cache
+          key: fc-gui-windows-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            fc-gui-windows-
+            fc-windows-
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v5
+        with:
+          path: .vcpkg-bincache
+          key: vcpkg-gui-release-windows-boost-${{ hashFiles('.github/workflows/release.yml') }}
+          restore-keys: |
+            vcpkg-gui-release-windows-boost-
+            vcpkg-release-windows-boost-
+            vcpkg-windows-boost-
+
+      - name: Restore OpenBLAS cache
+        uses: actions/cache@v5
+        with:
+          path: .openblas
+          key: openblas-windows-x64-${{ env.OPENBLAS_VERSION }}
+
+      - name: Install native dependencies
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
+          Write-Host "VCPKG_BINARY_SOURCES=$env:VCPKG_BINARY_SOURCES"
+          vcpkg install `
+            boost-format `
+            boost-functional `
+            boost-algorithm `
+            boost-integer `
+            boost-iterator `
+            boost-math `
+            boost-optional `
+            boost-range `
+            boost-rational `
+            boost-smart-ptr `
+            boost-variant `
+            --triplet x64-windows
+
+      - name: Install prebuilt OpenBLAS
+        shell: pwsh
+        run: |
+          $lib = Join-Path $env:OPENBLAS_ROOT "lib\libopenblas.lib"
+          if (!(Test-Path $lib)) {
+            New-Item -ItemType Directory -Force -Path "$env:OPENBLAS_ROOT" | Out-Null
+            $zip = Join-Path $env:RUNNER_TEMP "OpenBLAS-$env:OPENBLAS_VERSION-x64.zip"
+            $url = "https://github.com/OpenMathLib/OpenBLAS/releases/download/v$env:OPENBLAS_VERSION/OpenBLAS-$env:OPENBLAS_VERSION-x64.zip"
+            Invoke-WebRequest -Uri $url -OutFile $zip
+            Expand-Archive -Path $zip -DestinationPath "$env:OPENBLAS_ROOT" -Force
+          }
+          "OPENBLAS_LIBRARY=$lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "LAPACKE_LIBRARY=$lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "OPENBLAS_HEADER_PATH=$(Join-Path $env:OPENBLAS_ROOT 'include')" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "LAPACKE_HEADER_PATH=$(Join-Path $env:OPENBLAS_ROOT 'include')" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "$(Join-Path $env:OPENBLAS_ROOT 'bin')" | Out-File -FilePath $env:GITHUB_PATH -Append
+          Write-Host "Using prebuilt OpenBLAS: $lib"
+
+      - name: Locate MSVC environment
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ([string]::IsNullOrWhiteSpace($installPath)) {
+            throw "Visual Studio with VC tools was not found"
+          }
+          $vcvars = Join-Path $installPath "VC\Auxiliary\Build\vcvars64.bat"
+          if (!(Test-Path $vcvars)) {
+            throw "vcvars64.bat not found at $vcvars"
+          }
+          "VCVARS64=$vcvars" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Using MSVC environment: $vcvars"
+
+      - name: Package GUI
+        shell: pwsh
+        run: >
+          .\scripts\release\package-gui-windows.ps1
+          -Rid "win-x64"
+          -OpenBlasRoot "$env:OPENBLAS_ROOT"
+          -VcpkgRoot "$env:VCPKG_INSTALLATION_ROOT"
+          -CmakeOptions "MinSizeRel; MR_ADM_BUILD_CAPI_BUNDLE=ON; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF; SAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE"
+
+      - name: Package smoke
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -Path dist -Filter "MacinRender-Gui-*-windows-x64.zip" | Select-Object -First 1
+          if ($null -eq $archive) { throw "Windows GUI release package was not produced" }
+          .\scripts\release\smoke-gui-package-windows.ps1 -Archive $archive.FullName
+
+      - name: Upload GUI release package
+        uses: actions/upload-artifact@v7
+        with:
+          name: MacinRender-Gui-windows-x64
+          path: |
+            dist/MacinRender-Gui-*-windows-x64.zip
+            dist/MacinRender-Gui-*-windows-x64.zip.sha256
+          if-no-files-found: error
+
   publish-github-release:
     name: Publish GitHub release
     runs-on: ubuntu-24.04
@@ -392,6 +517,7 @@ jobs:
       - release-linux-appimage
       - release-windows
       - release-gui-macos
+      - release-gui-windows
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
 
     steps:

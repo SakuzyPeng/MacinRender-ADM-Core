@@ -453,6 +453,7 @@ if(MR_ADM_BUILD_CAPI_BUNDLE)
         OUTPUT_NAME mradm_capi
         VERSION   ${PROJECT_VERSION}
         SOVERSION ${PROJECT_VERSION_MAJOR}
+        WINDOWS_EXPORT_ALL_SYMBOLS ON
     )
     # 关键:bundle 不引用 c_api 任何符号,普通 link 会把整个静态 c_api 裁掉 → 空 dylib。
     # 必须 force_load / --whole-archive 整个 c_api;其余依赖(engine→renderers→第三方)
@@ -460,6 +461,7 @@ if(MR_ADM_BUILD_CAPI_BUNDLE)
     target_link_options(mradm_capi_bundle PRIVATE
         "$<$<PLATFORM_ID:Darwin>:LINKER:-force_load,$<TARGET_FILE:mr_adm_c_api>>"
         "$<$<PLATFORM_ID:Linux>:LINKER:--whole-archive,$<TARGET_FILE:mr_adm_c_api>,LINKER:--no-whole-archive>"
+        "$<$<PLATFORM_ID:Windows>:LINKER:/WHOLEARCHIVE:$<TARGET_FILE:mr_adm_c_api>>"
     )
     target_link_libraries(mradm_capi_bundle PRIVATE mr_adm_c_api)
 endif()
