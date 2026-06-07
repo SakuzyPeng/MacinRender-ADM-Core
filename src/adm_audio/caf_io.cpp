@@ -270,7 +270,7 @@ constexpr std::array<CafLayoutEntry, 10> k_caf_tags = {{
 // clang-format on
 
 [[nodiscard]] const CafLayoutEntry* caf_layout_entry(std::string_view layout_id) {
-    const auto* const it =
+    const auto it =
         std::ranges::find_if(k_caf_tags, [layout_id](const CafLayoutEntry& e) { return layout_id == e.layout_id; });
     if (it == k_caf_tags.end()) {
         return nullptr;
