@@ -190,7 +190,7 @@ jobs:
 
   release-windows:
     name: Windows release
-    runs-on: windows-2025
+    runs-on: windows-2022
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
@@ -354,7 +354,7 @@ jobs:
         run: brew install cmake ninja boost
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
@@ -386,7 +386,7 @@ jobs:
 
   release-gui-windows:
     name: Windows GUI release
-    runs-on: windows-2025
+    runs-on: windows-2022
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
@@ -403,7 +403,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
