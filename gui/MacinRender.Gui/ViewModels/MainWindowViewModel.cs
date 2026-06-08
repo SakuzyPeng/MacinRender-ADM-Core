@@ -80,6 +80,10 @@ public partial class MainWindowViewModel : ObservableObject
 
     public MainWindowViewModel()
     {
+        // 主题/语言已由 App 在建窗前应用;同步本地状态(驱动主题按钮图标 + 语言按钮文案),不反向触发切换。
+        IsDark = Application.Current?.ActualThemeVariant != ThemeVariant.Light;
+        IsEnglish = Localizer.Instance.Current == Lang.En;
+
         Localizer.Instance.PropertyChanged += (_, _) => OnLanguageChanged();
         SetStatus("StatusReadyEmpty");
         AddLog(LogKind.Info, "LogReady", "LogReadyHint");
@@ -269,7 +273,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     // ── 设置持久化 ──
 
-    // 启动时恢复上次选择。主题/语言先应用;输出设置按联动链顺序(后端→编码器→布局→容器→码率)恢复,
+    // 启动时恢复输出设置(主题/语言已由 App 建窗前应用)。按联动链顺序(后端→编码器→布局→容器→码率)恢复,
     // 每步在当前支持矩阵里匹配 id,失配则保持默认(矩阵随平台/版本变,旧值可能已不可用)。
     private void RestoreSettings()
     {
@@ -277,18 +281,6 @@ public partial class MainWindowViewModel : ObservableObject
         if (s is null)
         {
             return;
-        }
-
-        if (s.IsEnglish != IsEnglish)
-        {
-            Localizer.Instance.SetLanguage(s.IsEnglish ? Lang.En : Lang.Zh);
-            IsEnglish = s.IsEnglish;
-        }
-
-        if (!s.IsDark && Application.Current is { } app)
-        {
-            app.RequestedThemeVariant = ThemeVariant.Light;
-            IsDark = false;
         }
 
         if (s.Backend is not null && OutputModel.BackendById.TryGetValue(s.Backend, out var backend)
