@@ -614,8 +614,8 @@ adm_policy_template_json(adm_context_t* context, const char* input_path, char** 
  * policy set) for a plain ADM round-trip. Mirrors the `mradm export` subcommand.
  *
  * Stage 1 writes back Objects (object gain/mute; block gain/diffuse/extent/
- * divergence/channelLock/jumpPosition) and DirectSpeakers gain. Position,
- * HOA pack gain/mute, and block interpolationLength are not written back yet.
+ * divergence/channelLock/jumpPosition/interpolationLength) and DirectSpeakers
+ * gain. Position and HOA pack gain/mute are not written back yet.
  *
  * Returns ADM_ERROR_OK on success, ADM_ERROR_INVALID_ARGUMENT for a NULL/empty
  * context/input/output, and the mapped error (e.g. ADM_ERROR_IO,

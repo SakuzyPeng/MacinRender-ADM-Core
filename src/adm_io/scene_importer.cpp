@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -95,6 +96,17 @@ uint64_t saturating_add(uint64_t lhs, uint64_t rhs) {
         return max;
     }
     return lhs + rhs;
+}
+
+adm::InterpolationLength samples_to_interpolation_length(uint64_t samples, uint32_t sample_rate) {
+    if (sample_rate == 0) {
+        return adm::InterpolationLength{std::chrono::nanoseconds{0}};
+    }
+    const long double ns =
+        (static_cast<long double>(samples) * 1'000'000'000.0L) / static_cast<long double>(sample_rate);
+    const auto max_ns = static_cast<long double>(std::numeric_limits<int64_t>::max());
+    const auto clamped = static_cast<int64_t>(std::min(ns, max_ns));
+    return adm::InterpolationLength{std::chrono::nanoseconds{clamped}};
 }
 
 void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat>& cf,
@@ -829,7 +841,10 @@ namespace {
 // 改变的字段写回，未变字段保持文档原值，避免把 importer 的有损转换固化进输出。
 // original / effective 同源（同一次 import_scene），故遍历顺序与文档逐一对齐。
 
-void patch_objects_block(adm::AudioBlockFormatObjects& raw, const SceneObjectBlock& orig, const SceneObjectBlock& eff) {
+void patch_objects_block(adm::AudioBlockFormatObjects& raw,
+                         const SceneObjectBlock& orig,
+                         const SceneObjectBlock& eff,
+                         uint32_t sample_rate) {
     if (eff.gain != orig.gain) {
         raw.set(adm::Gain(eff.gain));
     }
@@ -862,10 +877,18 @@ void patch_objects_block(adm::AudioBlockFormatObjects& raw, const SceneObjectBlo
         }
         raw.set(channel_lock);
     }
-    if (eff.jump_position != orig.jump_position) {
-        // interpolationLength 阶段 1 不写回，get-modify-set 保留原插值长度。
+    if (eff.jump_position != orig.jump_position || eff.interp_length_samples != orig.interp_length_samples) {
         auto jump = raw.get<adm::JumpPosition>();
-        jump.set(adm::JumpPositionFlag(eff.jump_position));
+        if (eff.jump_position != orig.jump_position) {
+            jump.set(adm::JumpPositionFlag(eff.jump_position));
+        }
+        if (eff.interp_length_samples != orig.interp_length_samples) {
+            if (eff.interp_length_samples.has_value()) {
+                jump.set(samples_to_interpolation_length(*eff.interp_length_samples, sample_rate));
+            } else {
+                jump.unset<adm::InterpolationLength>();
+            }
+        }
         raw.set(jump);
     }
     // Position write-back is intentionally deferred: applying semantic position
@@ -881,7 +904,10 @@ void patch_direct_speakers_block(adm::AudioBlockFormatDirectSpeakers& raw,
     // Position write-back is intentionally deferred for DirectSpeakers as well.
 }
 
-void patch_track(const std::shared_ptr<adm::AudioTrackUid>& uid, const SceneTrackRef& orig, const SceneTrackRef& eff) {
+void patch_track(const std::shared_ptr<adm::AudioTrackUid>& uid,
+                 const SceneTrackRef& orig,
+                 const SceneTrackRef& eff,
+                 uint32_t sample_rate) {
     const auto pf = uid->getReference<adm::AudioPackFormat>();
     if (!pf) {
         return;
@@ -895,7 +921,7 @@ void patch_track(const std::shared_ptr<adm::AudioTrackUid>& uid, const SceneTrac
                 if (obj_block_index >= orig.blocks.size() || obj_block_index >= eff.blocks.size()) {
                     break;
                 }
-                patch_objects_block(raw, orig.blocks[obj_block_index], eff.blocks[obj_block_index]);
+                patch_objects_block(raw, orig.blocks[obj_block_index], eff.blocks[obj_block_index], sample_rate);
                 ++obj_block_index;
             }
         } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
@@ -1180,7 +1206,7 @@ Result<void> write_scene(const std::string& src_path,
                 if (track_index >= orig_obj.tracks.size() || track_index >= eff_obj.tracks.size()) {
                     break;
                 }
-                patch_track(uid, orig_obj.tracks[track_index], eff_obj.tracks[track_index]);
+                patch_track(uid, orig_obj.tracks[track_index], eff_obj.tracks[track_index], original.info.sample_rate);
                 ++track_index;
             }
             ++object_index;
