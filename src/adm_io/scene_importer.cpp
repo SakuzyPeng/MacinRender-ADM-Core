@@ -829,16 +829,6 @@ namespace {
 // 改变的字段写回，未变字段保持文档原值，避免把 importer 的有损转换固化进输出。
 // original / effective 同源（同一次 import_scene），故遍历顺序与文档逐一对齐。
 
-bool block_position_differs(const SceneBlockPosition& lhs, const SceneBlockPosition& rhs) {
-    if (lhs.cartesian != rhs.cartesian) {
-        return true;
-    }
-    if (lhs.cartesian) {
-        return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z;
-    }
-    return lhs.azimuth != rhs.azimuth || lhs.elevation != rhs.elevation || lhs.distance != rhs.distance;
-}
-
 void patch_objects_block(adm::AudioBlockFormatObjects& raw, const SceneObjectBlock& orig, const SceneObjectBlock& eff) {
     if (eff.gain != orig.gain) {
         raw.set(adm::Gain(eff.gain));
@@ -878,15 +868,8 @@ void patch_objects_block(adm::AudioBlockFormatObjects& raw, const SceneObjectBlo
         jump.set(adm::JumpPositionFlag(eff.jump_position));
         raw.set(jump);
     }
-    if (block_position_differs(orig.position, eff.position)) {
-        if (eff.position.cartesian) {
-            raw.set(adm::CartesianPosition(adm::X(eff.position.x), adm::Y(eff.position.y), adm::Z(eff.position.z)));
-        } else {
-            raw.set(adm::SphericalPosition(adm::Azimuth(eff.position.azimuth),
-                                           adm::Elevation(eff.position.elevation),
-                                           adm::Distance(eff.position.distance)));
-        }
-    }
+    // Position write-back is intentionally deferred: applying semantic position
+    // policy can change coordinate representation, which needs a separate design.
 }
 
 void patch_direct_speakers_block(adm::AudioBlockFormatDirectSpeakers& raw,
@@ -895,17 +878,7 @@ void patch_direct_speakers_block(adm::AudioBlockFormatDirectSpeakers& raw,
     if (eff.gain != orig.gain) {
         raw.set(adm::Gain(eff.gain));
     }
-    // 位置写回仅支持本就是球坐标的块：importer 把笛卡尔扬声器位置转成极坐标，
-    // 写回 spherical 会改变原始坐标系表达，故跳过笛卡尔块。
-    const bool position_changed = eff.has_position && (eff.azimuth != orig.azimuth || eff.elevation != orig.elevation ||
-                                                       eff.distance != orig.distance);
-    if (position_changed && raw.has<adm::SphericalSpeakerPosition>()) {
-        auto pos = raw.get<adm::SphericalSpeakerPosition>();
-        pos.set(adm::Azimuth(eff.azimuth));
-        pos.set(adm::Elevation(eff.elevation));
-        pos.set(adm::Distance(eff.distance));
-        raw.set(pos);
-    }
+    // Position write-back is intentionally deferred for DirectSpeakers as well.
 }
 
 void patch_track(const std::shared_ptr<adm::AudioTrackUid>& uid, const SceneTrackRef& orig, const SceneTrackRef& eff) {
