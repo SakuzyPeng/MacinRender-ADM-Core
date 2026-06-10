@@ -466,6 +466,7 @@ if(MR_ADM_CORE_BUILD_CLI)
     target_sources(mradm_exe
         PRIVATE
             src/adm_cli/backends_command.cpp
+            src/adm_cli/export_command.cpp
             src/adm_cli/formats_command.cpp
             src/adm_cli/inspect_command.cpp
             src/adm_cli/layouts_command.cpp
@@ -545,6 +546,17 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_io_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_io_fixture_tests)
     add_test(NAME mr_adm_io_fixture_tests COMMAND mr_adm_io_fixture_tests)
+
+    add_executable(mr_adm_scene_export_tests tests/unit/scene_export_fixture_test.cpp)
+    target_link_libraries(mr_adm_scene_export_tests
+        PRIVATE
+            MacinRender::ADMIo
+            libbw64
+            adm
+    )
+    mr_adm_core_apply_warnings(mr_adm_scene_export_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_scene_export_tests)
+    add_test(NAME mr_adm_scene_export_tests COMMAND mr_adm_scene_export_tests)
 
     add_executable(mr_adm_vbap_smoke_tests tests/unit/vbap_smoke_test.cpp)
     target_link_libraries(mr_adm_vbap_smoke_tests

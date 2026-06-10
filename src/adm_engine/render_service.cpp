@@ -908,8 +908,7 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     if (is_opus_final) {
         logs.log(LogLevel::info, "engine", "encoding float32 render to Opus MKA (VBR)");
-        emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::encode_opus, 0.90, 0.0, "encoding Opus");
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_opus, 0.90, 0.0, "encoding Opus");
         auto opus_res = audio::convert_to_opus_mka(render_path,
                                                    encoded_output_path,
                                                    output_layout,
@@ -961,8 +960,7 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (auto cancelled = fail_if_cancelled()) {
             return std::move(*cancelled);
         }
-        emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.90, 0.0, "encoding IAMF");
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.90, 0.0, "encoding IAMF");
         auto iamf_res = audio::convert_to_iamf(render_path,
                                                encoded_output_path,
                                                output_layout,
@@ -997,8 +995,7 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (auto cancelled = fail_if_cancelled()) {
             return std::move(*cancelled);
         }
-        emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.90, 0.0, "encoding IAMF");
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.90, 0.0, "encoding IAMF");
         auto iamf_res = audio::convert_to_iamf(render_path,
                                                iamf_temp_path.string(),
                                                output_layout,
@@ -1011,12 +1008,8 @@ RenderResult RenderService::render(const RenderRequest& request,
             return fail_with_report(iamf_res.error());
         }
         emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.96, 1.0, "IAMF encoded");
-        emit_progress(progress,
-                      RenderStage::post_processing,
-                      RenderOperation::package_iamf_mp4,
-                      0.96,
-                      0.0,
-                      "packaging IAMF MP4");
+        emit_progress(
+            progress, RenderStage::post_processing, RenderOperation::package_iamf_mp4, 0.96, 0.0, "packaging IAMF MP4");
         auto pkg_res = audio::package_iamf_to_mp4(iamf_temp_path.string(), encoded_output_path, plan.cancel_token);
         iamf_temp_guard->remove_now();
         if (!pkg_res) {
@@ -1141,6 +1134,26 @@ Result<std::string> RenderService::policy_template_json(const std::string& input
         return tl::unexpected(scene_result.error());
     }
     return build_semantic_policy_template(*scene_result);
+}
+
+Result<void> RenderService::export_file(const std::string& input_path,
+                                        const std::string& output_path,
+                                        const RenderOptions& options,
+                                        LogSink& logs) const {
+    auto original = io::import_scene(input_path);
+    if (!original) {
+        return tl::unexpected(original.error());
+    }
+    for (const auto& w : original->import_warnings) {
+        logs.log(LogLevel::warning, "importer", w);
+    }
+    AdmScene effective = *original;
+    std::vector<std::string> warnings;
+    auto policy_res = resolve_and_apply_policy(effective, options, warnings, logs);
+    if (!policy_res) {
+        return tl::unexpected(policy_res.error());
+    }
+    return io::write_scene(input_path, *original, effective, output_path);
 }
 
 Result<AdmScene> RenderService::prepare_preview_scene(const std::filesystem::path& input_path,
