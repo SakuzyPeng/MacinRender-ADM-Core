@@ -287,6 +287,15 @@ class RenderService {
     // string (UTF-8). Mirrors `mradm inspect --write-semantic-policy-template` but
     // returned in-memory. Returns io_error if the file is missing or invalid.
     [[nodiscard]] Result<std::string> policy_template_json(const std::string& input_path) const;
+
+    // Apply the semantic policy from `options` (in-memory JSON preferred over file
+    // path) and write a new ADM BWF at output_path, reusing the source PCM and chna
+    // chunk verbatim. With no policy in `options` this is a plain ADM round-trip.
+    // Mirrors `mradm export`. Returns io_error / unsupported on failure.
+    [[nodiscard]] Result<void> export_file(const std::string& input_path,
+                                           const std::string& output_path,
+                                           const RenderOptions& options,
+                                           LogSink& logs) const;
 };
 
 // A reusable preview / scrubbing session. Imports the ADM scene and applies the

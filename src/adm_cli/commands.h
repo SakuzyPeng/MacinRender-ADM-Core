@@ -46,6 +46,12 @@ struct LayoutCliOptions {
     std::string renderer;
 };
 
+struct ExportCliOptions {
+    std::string input;
+    std::string output;
+    std::string semantic_policy_path;
+};
+
 CLI::App* add_render_command(CLI::App& app, RenderCliOptions& opts);
 int run_render(const RenderCliOptions& opts);
 
@@ -60,3 +66,6 @@ int run_layouts(const LayoutCliOptions& opts);
 
 CLI::App* add_formats_command(CLI::App& app);
 void run_formats();
+
+CLI::App* add_export_command(CLI::App& app, ExportCliOptions& opts);
+int run_export(const ExportCliOptions& opts);

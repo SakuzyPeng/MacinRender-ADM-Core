@@ -29,6 +29,9 @@ int main(int argc, char** argv) {
 
     auto* formats_cmd = add_formats_command(app);
 
+    ExportCliOptions export_opts;
+    auto* export_cmd = add_export_command(app, export_opts);
+
     app.require_subcommand(1);
 
     try {
@@ -56,6 +59,9 @@ int main(int argc, char** argv) {
     if (*formats_cmd) {
         run_formats();
         return EXIT_SUCCESS;
+    }
+    if (*export_cmd) {
+        return run_export(export_opts);
     }
     return EXIT_SUCCESS;
 }

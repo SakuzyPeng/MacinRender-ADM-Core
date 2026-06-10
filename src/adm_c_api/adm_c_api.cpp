@@ -1169,6 +1169,29 @@ adm_error_code_t adm_policy_template_json(adm_context_t* context, const char* in
     }
 }
 
+adm_error_code_t adm_export_file(adm_context_t* context,
+                                 const char* input_path,
+                                 const char* output_path,
+                                 const adm_render_options_t* opts) noexcept {
+    if (context == nullptr || input_path == nullptr || input_path[0] == '\0' || output_path == nullptr ||
+        output_path[0] == '\0') {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        mradm::NullLogSink logs;
+        const mradm::RenderOptions default_options;
+        const mradm::RenderOptions& options = (opts != nullptr) ? opts->opts : default_options;
+        auto result = context->service.export_file(input_path, output_path, options, logs);
+        if (!result) {
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
 // Takes ownership of a char* the ABI handed out via char** out-params; the
 // non-const pointer type is part of the contract, so the const-pointer hint
 // does not apply here.

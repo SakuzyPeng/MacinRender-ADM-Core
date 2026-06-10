@@ -59,12 +59,15 @@
  *
  * v1.12 新增（additive，SOVERSION 不变）：
  *   adm_render_support_matrix_json.
+ *
+ * v1.13 新增（additive，SOVERSION 不变）：
+ *   adm_export_file.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 12
+#define ADM_API_VERSION_MINOR 13
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -600,6 +603,28 @@ adm_error_code_t adm_inspect_file_xml(adm_context_t* context, const char* input_
  */
 adm_error_code_t
 adm_policy_template_json(adm_context_t* context, const char* input_path, char** out_json) ADM_API_NOEXCEPT;
+
+/* ── v1.13 Semantic write-back (export) ──────────────────────────────────── */
+/*
+ * adm_export_file: apply the semantic policy carried by opts (in-memory JSON
+ * preferred over file path) and write a new ADM BWF at output_path, reusing the
+ * source file's PCM and chna chunk byte-for-byte (chunk-level RIFF/BW64 rewrite,
+ * no sample decode — bit-exact audio) — only the ADM metadata (axml) is rewritten
+ * with the policy-applied values. Pass opts == NULL (or opts with no
+ * policy set) for a plain ADM round-trip. Mirrors the `mradm export` subcommand.
+ *
+ * Stage 1 writes back Objects (object gain/mute; block gain/position/diffuse/
+ * extent/divergence/channelLock/jumpPosition) and DirectSpeakers (gain, spherical
+ * position); HOA pack gain/mute is not written back yet.
+ *
+ * Returns ADM_ERROR_OK on success, ADM_ERROR_INVALID_ARGUMENT for a NULL/empty
+ * context/input/output, and the mapped error (e.g. ADM_ERROR_IO,
+ * ADM_ERROR_UNSUPPORTED) on failure.
+ */
+adm_error_code_t adm_export_file(adm_context_t* context,
+                                 const char* input_path,
+                                 const char* output_path,
+                                 const adm_render_options_t* opts) ADM_API_NOEXCEPT;
 
 /* Release a heap string returned by adm_inspect_file_json (and any future ABI
  * function documented as returning an owned string). Passing NULL is a safe no-op. */
