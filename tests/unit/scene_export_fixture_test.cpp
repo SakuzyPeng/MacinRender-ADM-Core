@@ -1,4 +1,5 @@
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -54,6 +55,7 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc() {
         block.set(adm::Gain{0.8F});
         block.set(adm::Diffuse{0.3F});
         block.set(adm::Width{20.0F});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{false}, adm::InterpolationLength{std::chrono::seconds{1}}});
         cf->add(block);
     }
     doc->add(cf);
@@ -290,6 +292,59 @@ bool verify_export_gain_override() {
     return ok;
 }
 
+// interpolation.max_ms changes the block interpolationLength; unlike position, it
+// is representation-stable and should be written back.
+bool verify_export_interpolation_override() {
+    bool ok = true;
+    auto [doc, uid_str] = make_objects_doc();
+    auto src = write_fixture(uid_str, serialize_doc(doc), ramp_samples(96));
+    FileGuard src_guard{src};
+
+    auto original = mradm::io::import_scene(src.string());
+    if (!original) {
+        std::cerr << "FAIL: interpolation override source import: " << original.error().message << "\n";
+        return false;
+    }
+
+    const auto* before = first_block(*original);
+    ok &= check(before != nullptr && before->interp_length_samples == 48000U,
+                "interpolation override: source has 1s interpolationLength");
+
+    mradm::AdmScene effective = *original;
+    effective.objects[0].tracks[0].blocks[0].interp_length_samples = 12000U;
+
+    auto dst = std::filesystem::temp_directory_path() / "mr_adm_export_interpolation.wav";
+    FileGuard dst_guard{dst};
+    auto written = mradm::io::write_scene(src.string(), *original, effective, dst.string());
+    if (!written) {
+        std::cerr << "FAIL: write_scene interpolation override: " << written.error().message << "\n";
+        return false;
+    }
+
+    auto reimported = mradm::io::import_scene(dst.string());
+    if (!reimported) {
+        std::cerr << "FAIL: interpolation override output import: " << reimported.error().message << "\n";
+        return false;
+    }
+
+    const auto* blk = first_block(*reimported);
+    ok &= check(blk != nullptr, "interpolation override: block present");
+    if (blk != nullptr) {
+        ok &= check(blk->interp_length_samples == 12000U, "interpolation override: length 1s -> 0.25s");
+        ok &= check(std::fabs(blk->gain - 0.8F) < 0.001F, "interpolation override: gain unchanged");
+        ok &= check(std::fabs(blk->position.azimuth - 30.0F) < 0.01F,
+                    "interpolation override: azimuth unchanged");
+    }
+
+    ok &= check(read_data_chunk_bytes(src.string()) == read_data_chunk_bytes(dst.string()),
+                "interpolation override: data chunk byte-for-byte identical (bit-exact)");
+
+    if (ok) {
+        std::cout << "PASS: verify_export_interpolation_override\n";
+    }
+    return ok;
+}
+
 // Position override is intentionally not written back yet; coordinate-representation
 // changes need a separate design. The export should preserve the source position.
 bool verify_export_position_override_deferred() {
@@ -466,6 +521,7 @@ int main() {
     bool ok = true;
     ok &= verify_export_roundtrip();
     ok &= verify_export_gain_override();
+    ok &= verify_export_interpolation_override();
     ok &= verify_export_position_override_deferred();
     ok &= verify_export_bw64_roundtrip();
     return ok ? 0 : 1;
