@@ -338,6 +338,20 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - **目标拆分**：区分 PCM `caf` 与 `apac_caf`、`apac_mpeg4` 与 APAC CAF、raw `iamf` 与 `iamf_mp4`；APAC CAF / IAMF MP4 在 target 中声明需要的 option。
 - **口径**：这是基于当前构建、平台、renderer capability、layout 表、format/container 约束的静态支持矩阵，不读取具体 ADM 文件；输入采样率等项目级条件仍由 render/probe 流程最终校验。
 
+### v1.13.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+为 GUI/外部工具补通用 export 入口。
+
+- **新增入口**：`adm_export_file`，复用现有导出路径，保持 render/preview ABI 不变。
+
+### v1.14.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+为 IAMF scalable channel layers 增加显式 opt-in 配置；默认仍保持单层 IAMF 输出。
+
+- **新增 setter**：`adm_render_options_set_iamf_layers(opts, iamf_layers_csv)`，CSV 例：`5.1,5.1.2,5.1.4,7.1.4`；`NULL` 或空字符串清除配置。
+- **约束**：仅对 IAMF raw / IAMF MP4 输出生效；最后一层必须匹配最终输出布局，层级需单调增加，当前开放 `5.1`、`5.1.2`、`5.1.4`、`7.1`、`7.1.4`。
+- **兼容性**：旧调用方不设置该字段时行为不变；高度输出中包含平面层只记录 warning，不阻断用户显式请求。
+
 ## opaque 指针与 callback 生命周期
 
 `adm_context_t`、`adm_render_result_t` 是 opaque pointer，调用方不应直接 dereference 或假设大小。生命周期约定：

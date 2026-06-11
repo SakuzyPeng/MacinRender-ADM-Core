@@ -3,10 +3,12 @@
 #include <cmath>
 #include <csignal>
 #include <cstdlib>
+#include <sstream>
 #include <stop_token>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 #include <spdlog/spdlog.h>
 
@@ -123,6 +125,21 @@ mradm::RendererSelection parse_renderer(const std::string& value) {
         return mradm::RendererSelection::binaural;
     }
     return mradm::RendererSelection::automatic;
+}
+
+std::vector<std::string> parse_csv_list(const std::string& csv) {
+    std::vector<std::string> out;
+    std::istringstream stream(csv);
+    std::string item;
+    while (std::getline(stream, item, ',')) {
+        const auto first = item.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos) {
+            continue;
+        }
+        const auto last = item.find_last_not_of(" \t\r\n");
+        out.push_back(item.substr(first, last - first + 1));
+    }
+    return out;
 }
 
 CLI::Validator renderer_validator() {
@@ -284,6 +301,9 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                      "IAMF output container [requires MR_ADM_ENABLE_IAMF build]: "
                      "obu (raw .iamf stream, default) or mp4 (ISOBMFF via mp4box/ffmpeg)")
         ->check(CLI::IsMember({"obu", "mp4"}));
+    render_cmd->add_option("--iamf-layers",
+                           opts.iamf_layers_csv,
+                           "IAMF scalable channel layers, comma-separated; empty = single output layout");
     return render_cmd;
 }
 
@@ -328,6 +348,7 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     request.options.apple_spatial_preset = parse_apple_spatial_preset(opts.apple_spatial_preset_str);
     request.options.iamf_container = (opts.iamf_container_str == "mp4") ? mradm::RenderOptions::IamfContainer::mp4
                                                                         : mradm::RenderOptions::IamfContainer::obu;
+    request.options.iamf_layers = parse_csv_list(opts.iamf_layers_csv);
     return request;
 }
 

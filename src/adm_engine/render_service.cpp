@@ -1,15 +1,19 @@
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <random>
+#include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -110,6 +114,100 @@ namespace {
         return key;
     }
     return layout;
+}
+
+struct IamfLayerInfo {
+    std::string_view id;
+    std::string_view display;
+    int bed_channels;
+    int lfe_channels;
+    int height_channels;
+};
+
+[[nodiscard]] const IamfLayerInfo* iamf_layer_info(std::string_view layout_id) {
+    static constexpr std::array<IamfLayerInfo, 5> k_layers{{
+        {"0+5+0", "5.1", 5, 1, 0},
+        {"2+5+0", "5.1.2", 5, 1, 2},
+        {"4+5+0", "5.1.4", 5, 1, 4},
+        {"wav71", "7.1", 7, 1, 0},
+        {"4+7+0", "7.1.4", 7, 1, 4},
+    }};
+    const auto* const it =
+        std::ranges::find_if(k_layers, [layout_id](const IamfLayerInfo& layer) { return layer.id == layout_id; });
+    return it == std::end(k_layers) ? nullptr : it;
+}
+
+[[nodiscard]] std::string supported_iamf_layers_message() {
+    return "supported: 5.1, 5.1.2, 5.1.4, 7.1, 7.1.4";
+}
+
+[[nodiscard]] Result<std::vector<std::string>> validate_iamf_scalable_layers(const std::vector<std::string>& raw_layers,
+                                                                             std::string_view output_layout,
+                                                                             LogSink& logs) {
+    if (raw_layers.empty()) {
+        return std::vector<std::string>{};
+    }
+    if (raw_layers.size() > 7U) {
+        return make_error(ErrorCode::invalid_argument, "IAMF scalable layers support at most 7 layers");
+    }
+
+    const IamfLayerInfo* final_info = iamf_layer_info(output_layout);
+    if (final_info == nullptr) {
+        return make_error(ErrorCode::invalid_argument,
+                          fmt::format("IAMF scalable layers are not supported for output layout '{}'; {}",
+                                      output_layout,
+                                      supported_iamf_layers_message()));
+    }
+
+    std::vector<std::string> normalized;
+    normalized.reserve(raw_layers.size());
+    std::vector<const IamfLayerInfo*> infos;
+    infos.reserve(raw_layers.size());
+    for (const auto& raw : raw_layers) {
+        const std::string id = normalize_output_layout(raw);
+        const IamfLayerInfo* info = iamf_layer_info(id);
+        if (info == nullptr) {
+            return make_error(
+                ErrorCode::invalid_argument,
+                fmt::format("IAMF scalable layer '{}' is not supported; {}", raw, supported_iamf_layers_message()));
+        }
+        normalized.push_back(id);
+        infos.push_back(info);
+    }
+
+    if (normalized.back() != output_layout) {
+        return make_error(ErrorCode::invalid_argument,
+                          fmt::format("last IAMF scalable layer must match output layout '{}'; got '{}'",
+                                      final_info->display,
+                                      infos.back()->display));
+    }
+
+    for (size_t i = 1; i < infos.size(); ++i) {
+        const auto* prev = infos[i - 1];
+        const auto* cur = infos[i];
+        if (cur->bed_channels < prev->bed_channels || cur->lfe_channels < prev->lfe_channels ||
+            cur->height_channels < prev->height_channels) {
+            return make_error(ErrorCode::invalid_argument,
+                              fmt::format("IAMF scalable layers must be monotonic; '{}' cannot follow '{}'",
+                                          cur->display,
+                                          prev->display));
+        }
+    }
+
+    if (final_info->height_channels > 0) {
+        for (const auto* info : infos) {
+            if (info->height_channels == 0) {
+                logs.log(LogLevel::warning,
+                         "engine",
+                         fmt::format("IAMF scalable layers include flat layer '{}' for height output '{}'; "
+                                     "official guidance recommends height layouts, continuing",
+                                     info->display,
+                                     final_info->display));
+            }
+        }
+    }
+
+    return normalized;
 }
 
 [[nodiscard]] std::optional<uint16_t> channel_count_for_layout(const CapabilityReport& caps,
@@ -626,6 +724,18 @@ RenderResult RenderService::render(const RenderRequest& request,
     const bool is_iamf_final = (final_ext == ".iamf");
     const bool is_iamf_mp4_final =
         (request.options.iamf_container == RenderOptions::IamfContainer::mp4) && audio::iamf_encoding_available();
+    const bool requests_iamf_output =
+        is_iamf_final || request.options.iamf_container == RenderOptions::IamfContainer::mp4;
+    std::vector<std::string> iamf_layers;
+    if (requests_iamf_output) {
+        auto layers_res = validate_iamf_scalable_layers(request.options.iamf_layers, output_layout, logs);
+        if (!layers_res) {
+            return fail_with_report(layers_res.error());
+        }
+        iamf_layers = std::move(*layers_res);
+    } else if (!request.options.iamf_layers.empty()) {
+        logs.log(LogLevel::warning, "engine", "ignoring IAMF scalable layers for non-IAMF output");
+    }
     if (is_flac_final) {
         if (!flac_supports_layout(output_layout)) {
             const auto msg = fmt::format(
@@ -967,7 +1077,8 @@ RenderResult RenderService::render(const RenderRequest& request,
                                                request.options.opus_bitrate_per_ch_kbps,
                                                lufs,
                                                peak,
-                                               plan.cancel_token);
+                                               plan.cancel_token,
+                                               iamf_layers);
         render_temp_guard->remove_now();
         if (!iamf_res) {
             return fail_with_report(iamf_res.error());
@@ -1002,7 +1113,8 @@ RenderResult RenderService::render(const RenderRequest& request,
                                                request.options.opus_bitrate_per_ch_kbps,
                                                lufs,
                                                peak,
-                                               plan.cancel_token);
+                                               plan.cancel_token,
+                                               iamf_layers);
         render_temp_guard->remove_now();
         if (!iamf_res) {
             return fail_with_report(iamf_res.error());

@@ -1,6 +1,7 @@
 #include "mr_iamf_aom_bridge.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -27,6 +28,28 @@ struct LayoutInfo {
     uint32_t coupled_substream_count;
     std::vector<std::string_view> channel_labels;
 };
+
+std::string_view canonical_layout_id(std::string_view id) {
+    if (id == "stereo" || id == "2.0") {
+        return "0+2+0";
+    }
+    if (id == "5.1") {
+        return "0+5+0";
+    }
+    if (id == "5.1.2") {
+        return "2+5+0";
+    }
+    if (id == "5.1.4") {
+        return "4+5+0";
+    }
+    if (id == "7.1" || id == "0+7+0" || id == "wave_7_1" || id == "wave-7.1") {
+        return "wav71";
+    }
+    if (id == "7.1.4") {
+        return "4+7+0";
+    }
+    return id;
+}
 
 const LayoutInfo* find_layout(std::string_view id) {
     static const std::vector<LayoutInfo> k_layouts{
@@ -119,7 +142,8 @@ const LayoutInfo* find_layout(std::string_view id) {
           "CHANNEL_LABEL_LTB_4",
           "CHANNEL_LABEL_RTB_4"}},
     };
-    const auto it = std::ranges::find_if(k_layouts, [&](const LayoutInfo& layout) { return layout.id == id; });
+    const std::string_view canonical = canonical_layout_id(id);
+    const auto it = std::ranges::find_if(k_layouts, [&](const LayoutInfo& layout) { return layout.id == canonical; });
     return it == k_layouts.end() ? nullptr : &*it;
 }
 
@@ -131,7 +155,8 @@ std::string q78_field(const char* name, bool has_value, double value) {
 }
 
 std::string build_metadata_text(const MrIamfAomEncodeOptions& options,
-                                const LayoutInfo& layout,
+                                const LayoutInfo& final_layout,
+                                const std::vector<const LayoutInfo*>& layers,
                                 std::string_view wav_filename,
                                 std::string_view file_prefix) {
     const uint32_t bitrate = options.opus_bitrate_per_ch_kbps == 0 ? 64000 : options.opus_bitrate_per_ch_kbps * 1000U;
@@ -163,17 +188,21 @@ std::string build_metadata_text(const MrIamfAomEncodeOptions& options,
         << "  audio_element_type: AUDIO_ELEMENT_CHANNEL_BASED\n"
         << "  reserved: 0\n"
         << "  codec_config_id: 200\n";
-    for (uint32_t sid = 0; sid < layout.substream_count; ++sid) {
+    for (uint32_t sid = 0; sid < final_layout.substream_count; ++sid) {
         out << "  audio_substream_ids: " << sid << "\n";
     }
-    out << "  scalable_channel_layout_config { reserved: 0 channel_audio_layer_configs { loudspeaker_layout: "
-        << layout.loudspeaker_layout << " output_gain_is_present_flag: 0 recon_gain_is_present_flag: 0 reserved_a: 0 "
-        << "substream_count: " << layout.substream_count
-        << " coupled_substream_count: " << layout.coupled_substream_count;
-    if (!layout.expanded_loudspeaker_layout.empty()) {
-        out << " expanded_loudspeaker_layout: " << layout.expanded_loudspeaker_layout;
+    out << "  scalable_channel_layout_config { reserved: 0";
+    for (const LayoutInfo* layer : layers) {
+        out << " channel_audio_layer_configs { loudspeaker_layout: " << layer->loudspeaker_layout
+            << " output_gain_is_present_flag: 0 recon_gain_is_present_flag: 0 reserved_a: 0 "
+            << "substream_count: " << layer->substream_count
+            << " coupled_substream_count: " << layer->coupled_substream_count;
+        if (!layer->expanded_loudspeaker_layout.empty()) {
+            out << " expanded_loudspeaker_layout: " << layer->expanded_loudspeaker_layout;
+        }
+        out << " }";
     }
-    out << " } }\n"
+    out << " }\n"
         << "}\n"
         << "mix_presentation_metadata {\n"
         << "  mix_presentation_id: 42\n"
@@ -190,10 +219,15 @@ std::string build_metadata_text(const MrIamfAomEncodeOptions& options,
            "sound_system: SOUND_SYSTEM_A_0_2_0 reserved: 0 } } loudness { info_type_bit_masks: [] "
         << q78_field("integrated_loudness", options.has_loudness_lufs != 0, options.loudness_lufs)
         << q78_field("true_peak", options.has_peak_dbtp != 0, options.peak_dbtp) << "} }\n";
-    if (layout.sound_system != "SOUND_SYSTEM_A_0_2_0") {
+    std::vector<std::string_view> emitted_sound_systems{"SOUND_SYSTEM_A_0_2_0"};
+    for (const LayoutInfo* layer : layers) {
+        if (std::ranges::find(emitted_sound_systems, layer->sound_system) != emitted_sound_systems.end()) {
+            continue;
+        }
+        emitted_sound_systems.push_back(layer->sound_system);
         out << "    layouts { loudness_layout { layout_type: LAYOUT_TYPE_LOUDSPEAKERS_SS_CONVENTION ss_layout { "
                "sound_system: "
-            << layout.sound_system << " reserved: 0 } } loudness { info_type_bit_masks: [] "
+            << layer->sound_system << " reserved: 0 } } loudness { info_type_bit_masks: [] "
             << q78_field("integrated_loudness", options.has_loudness_lufs != 0, options.loudness_lufs)
             << q78_field("true_peak", options.has_peak_dbtp != 0, options.peak_dbtp) << "} }\n";
     }
@@ -204,8 +238,9 @@ std::string build_metadata_text(const MrIamfAomEncodeOptions& options,
         << "  samples_to_trim_at_end_includes_padding: false\n"
         << "  samples_to_trim_at_start_includes_codec_delay: false\n"
         << "  audio_element_id: 300\n";
-    for (size_t i = 0; i < layout.channel_labels.size(); ++i) {
-        out << "  channel_metadatas { channel_id: " << i << " channel_label: " << layout.channel_labels[i] << " }\n";
+    for (size_t i = 0; i < final_layout.channel_labels.size(); ++i) {
+        out << "  channel_metadatas { channel_id: " << i << " channel_label: " << final_layout.channel_labels[i]
+            << " }\n";
     }
     out << "}\n"
         << "temporal_delimiter_metadata { enable_temporal_delimiters: false }\n";
@@ -231,6 +266,62 @@ bool has_v2_cancel_fields(const MrIamfAomEncodeOptions& options) {
            options.struct_size >= offsetof(MrIamfAomEncodeOptions, cancel_user_data) + sizeof(options.cancel_user_data);
 }
 
+bool has_v3_scalable_layers_field(const MrIamfAomEncodeOptions& options) {
+    return options.abi_version >= 3 && options.struct_size >= offsetof(MrIamfAomEncodeOptions, scalable_layers_csv) +
+                                                                  sizeof(options.scalable_layers_csv);
+}
+
+std::string_view trim_ascii(std::string_view value) {
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front())) != 0) {
+        value.remove_prefix(1);
+    }
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back())) != 0) {
+        value.remove_suffix(1);
+    }
+    return value;
+}
+
+std::vector<const LayoutInfo*> parse_scalable_layers(const MrIamfAomEncodeOptions& options,
+                                                     const LayoutInfo& final_layout,
+                                                     char* error_buffer,
+                                                     size_t error_buffer_size) {
+    if (!has_v3_scalable_layers_field(options) || options.scalable_layers_csv == nullptr ||
+        options.scalable_layers_csv[0] == '\0') {
+        return {&final_layout};
+    }
+
+    std::vector<const LayoutInfo*> layers;
+    std::string_view csv{options.scalable_layers_csv};
+    while (true) {
+        const size_t comma = csv.find(',');
+        const std::string_view token = trim_ascii(csv.substr(0, comma));
+        if (!token.empty()) {
+            const LayoutInfo* layer = find_layout(token);
+            if (layer == nullptr) {
+                write_error(error_buffer, error_buffer_size, absl::StrCat("unsupported IAMF scalable layer: ", token));
+                return {};
+            }
+            layers.push_back(layer);
+        }
+        if (comma == std::string_view::npos) {
+            break;
+        }
+        csv.remove_prefix(comma + 1);
+    }
+
+    if (layers.empty() || layers.size() > 7U) {
+        write_error(error_buffer, error_buffer_size, "IAMF scalable layer count must be 1-7");
+        return {};
+    }
+    if (layers.back()->id != final_layout.id) {
+        write_error(error_buffer,
+                    error_buffer_size,
+                    absl::StrCat("last IAMF scalable layer must match final layout: ", final_layout.id));
+        return {};
+    }
+    return layers;
+}
+
 bool should_cancel(const MrIamfAomEncodeOptions& options) {
     return has_v2_cancel_fields(options) && options.should_cancel != nullptr &&
            options.should_cancel(options.cancel_user_data) != 0;
@@ -248,7 +339,7 @@ int mr_iamf_aom_encode_wav_to_iamf(const MrIamfAomEncodeOptions* options,
     if (options == nullptr) {
         return fail(error_buffer, error_buffer_size, "options must not be null");
     }
-    if (options->abi_version != 1 && options->abi_version != MR_IAMF_AOM_BRIDGE_ABI_VERSION) {
+    if (options->abi_version < 1 || options->abi_version > MR_IAMF_AOM_BRIDGE_ABI_VERSION) {
         return fail(error_buffer, error_buffer_size, "bridge ABI version mismatch");
     }
     if (should_cancel(*options)) {
@@ -263,6 +354,10 @@ int mr_iamf_aom_encode_wav_to_iamf(const MrIamfAomEncodeOptions* options,
     if (layout == nullptr) {
         return fail(error_buffer, error_buffer_size, absl::StrCat("unsupported IAMF layout: ", options->layout_id));
     }
+    const auto layers = parse_scalable_layers(*options, *layout, error_buffer, error_buffer_size);
+    if (layers.empty()) {
+        return MR_IAMF_AOM_RESULT_ERROR;
+    }
     if (options->profile != MR_IAMF_AOM_PROFILE_AUTO && options->profile != MR_IAMF_AOM_PROFILE_SIMPLE) {
         return fail(
             error_buffer, error_buffer_size, "this bridge build supports only auto/simple channel-based output");
@@ -275,7 +370,7 @@ int mr_iamf_aom_encode_wav_to_iamf(const MrIamfAomEncodeOptions* options,
     const auto prefix = output_path.stem().string();
 
     iamf_tools_cli_proto::UserMetadata metadata;
-    const std::string text = build_metadata_text(*options, *layout, input_path.filename().string(), prefix);
+    const std::string text = build_metadata_text(*options, *layout, layers, input_path.filename().string(), prefix);
     if (!google::protobuf::TextFormat::ParseFromString(text, &metadata)) {
         return fail(error_buffer, error_buffer_size, "failed to build IAMF user metadata");
     }
@@ -290,7 +385,7 @@ int mr_iamf_aom_encode_wav_to_iamf(const MrIamfAomEncodeOptions* options,
         return fail(error_buffer, error_buffer_size, status.ToString());
     }
 
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < 16; ++i) {
         std::filesystem::remove(std::filesystem::path(output_dir) /
                                 absl::StrCat(prefix, "_rendered_id_42_sub_mix_0_layout_", i, ".wav"));
     }

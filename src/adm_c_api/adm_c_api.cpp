@@ -16,6 +16,26 @@
 
 namespace {
 
+std::vector<std::string> split_csv_list(std::string_view csv) {
+    std::vector<std::string> out;
+    std::size_t pos = 0;
+    while (pos <= csv.size()) {
+        const std::size_t comma = csv.find(',', pos);
+        const std::size_t end = comma == std::string_view::npos ? csv.size() : comma;
+        std::string_view item = csv.substr(pos, end - pos);
+        const auto first = item.find_first_not_of(" \t\r\n");
+        if (first != std::string_view::npos) {
+            const auto last = item.find_last_not_of(" \t\r\n");
+            out.emplace_back(item.substr(first, last - first + 1));
+        }
+        if (comma == std::string_view::npos) {
+            break;
+        }
+        pos = comma + 1;
+    }
+    return out;
+}
+
 // These stage strings are part of the progress callback's documented contract.
 // adm_render_stage_from_string() must recognize every string produced here; the
 // progress-callback test renders end-to-end and asserts no emitted stage maps to
@@ -655,6 +675,19 @@ adm_error_code_t adm_render_options_set_iamf_container(adm_render_options_t* opt
     }
     opts->opts.iamf_container = static_cast<mradm::RenderOptions::IamfContainer>(container);
     return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_iamf_layers(adm_render_options_t* opts, const char* iamf_layers_csv) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    try {
+        opts->opts.iamf_layers =
+            iamf_layers_csv == nullptr ? std::vector<std::string>{} : split_csv_list(iamf_layers_csv);
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
 }
 
 adm_error_code_t adm_render_options_set_render_start_sec(adm_render_options_t* opts, double sec) noexcept {

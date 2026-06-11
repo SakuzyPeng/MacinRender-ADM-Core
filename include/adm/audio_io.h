@@ -6,6 +6,7 @@
 #include <stop_token>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "adm/errors.h"
 #include "adm/progress.h"
@@ -269,13 +270,15 @@ bool iamf_encoding_available();
 // before calling this. Builds without MR_ADM_ENABLE_IAMF return ErrorCode::unsupported.
 // src_path must be 48000 Hz. bitrate_per_ch_kbps is an Opus VBR target hint.
 // loudness_lufs / peak_dbtp are post-gain values written into the Mix Presentation.
+// scalable_layers is optional; empty preserves the current single-layer output.
 Result<void> convert_to_iamf(const std::string& src_path,
                              const std::string& iamf_path,
                              const std::string& layout_id = {},
                              uint32_t bitrate_per_ch_kbps = 0,
                              std::optional<double> loudness_lufs = std::nullopt,
                              std::optional<double> peak_dbtp = std::nullopt,
-                             const std::stop_token& cancel_token = {});
+                             const std::stop_token& cancel_token = {},
+                             const std::vector<std::string>& scalable_layers = {});
 
 // IAMF-to-MP4 packaging (ISOBMFF Annex A encapsulation).
 // Prefers mp4box (GPAC) over ffmpeg; the packager is selected once at
