@@ -240,6 +240,11 @@ struct FloatFlacWriter::Impl {
     uint32_t channels{};
     std::vector<FLAC__int32> int_buf;
 
+    Impl() = default;
+    Impl(const Impl&) = delete;
+    Impl& operator=(const Impl&) = delete;
+    Impl(Impl&&) = delete;
+    Impl& operator=(Impl&&) = delete;
     ~Impl() {
         if (encoder != nullptr) {
             FLAC__stream_encoder_finish(encoder);

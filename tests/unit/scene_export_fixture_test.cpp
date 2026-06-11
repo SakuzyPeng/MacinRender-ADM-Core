@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -332,8 +333,7 @@ bool verify_export_interpolation_override() {
     if (blk != nullptr) {
         ok &= check(blk->interp_length_samples == 12000U, "interpolation override: length 1s -> 0.25s");
         ok &= check(std::fabs(blk->gain - 0.8F) < 0.001F, "interpolation override: gain unchanged");
-        ok &= check(std::fabs(blk->position.azimuth - 30.0F) < 0.01F,
-                    "interpolation override: azimuth unchanged");
+        ok &= check(std::fabs(blk->position.azimuth - 30.0F) < 0.01F, "interpolation override: azimuth unchanged");
     }
 
     ok &= check(read_data_chunk_bytes(src.string()) == read_data_chunk_bytes(dst.string()),
@@ -381,8 +381,7 @@ bool verify_export_position_override_deferred() {
     ok &= check(blk != nullptr, "deferred position override: block present");
     if (blk != nullptr) {
         ok &= check(!blk->position.cartesian, "deferred position override: still polar");
-        ok &= check(std::fabs(blk->position.azimuth - 30.0F) < 0.01F,
-                    "deferred position override: azimuth unchanged");
+        ok &= check(std::fabs(blk->position.azimuth - 30.0F) < 0.01F, "deferred position override: azimuth unchanged");
         ok &= check(std::fabs(blk->position.elevation - 10.0F) < 0.01F,
                     "deferred position override: elevation unchanged");
         // Untouched fields stay put.
@@ -447,10 +446,10 @@ std::filesystem::path riff_fixture_to_bw64(const std::filesystem::path& riff_pat
         }
     };
 
-    uint64_t body = 4 + 8 + 28; // "WAVE" + ds64 header + ds64 payload
-    for (const auto& c : chunks) {
-        body += 8 + c.size + (c.size & 1ULL);
-    }
+    const uint64_t body =
+        std::accumulate(chunks.begin(), chunks.end(), uint64_t{4 + 8 + 28}, [](uint64_t acc, const Chunk& c) {
+            return acc + 8 + c.size + (c.size & 1ULL);
+        });
 
     out.write("BW64", 4);
     put_u32(0xFFFFFFFFU);
