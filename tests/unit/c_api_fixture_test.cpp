@@ -288,6 +288,9 @@ bool verify_options_null_setters() {
     ok = check(adm_render_options_set_semantic_report_path(nullptr, "/any/report.json") == ADM_ERROR_OK,
                "NULL opts set_semantic_report_path should return OK") &&
          ok;
+    ok = check(adm_render_options_set_iamf_layers(nullptr, "5.1,7.1.4") == ADM_ERROR_OK,
+               "NULL opts set_iamf_layers should return OK") &&
+         ok;
     return ok;
 }
 
@@ -413,6 +416,15 @@ bool verify_options_boundary_values(adm_render_options_t* opts) {
                "valid saf-binaural renderer should return OK") &&
          ok;
     ok = check(adm_render_options_set_output_layout(opts, "7.1.4") == ADM_ERROR_OK, "valid layout should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_iamf_layers(opts, "5.1,5.1.2,5.1.4,7.1.4") == ADM_ERROR_OK,
+               "iamf_layers valid CSV should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_iamf_layers(opts, nullptr) == ADM_ERROR_OK,
+               "iamf_layers nullptr should clear and return OK") &&
+         ok;
+    ok = check(adm_render_options_set_iamf_layers(opts, "") == ADM_ERROR_OK,
+               "iamf_layers empty string should clear and return OK") &&
          ok;
     // void bool setters: 0/1 accepted, no crash.
     adm_render_options_set_peak_limit(opts, 1);
@@ -1197,6 +1209,12 @@ bool verify_version_111() {
 
 bool verify_version_112() {
     return check(adm_api_version_minor() >= 12, "v1.12: minor version should be >= 12");
+}
+
+// ── v1.14 tests ───────────────────────────────────────────────────────────
+
+bool verify_version_114() {
+    return check(adm_api_version_minor() >= 14, "v1.14: minor version should be >= 14");
 }
 
 bool verify_render_support_matrix_json(adm_context_t* ctx) {
@@ -2045,6 +2063,32 @@ bool verify_iamf_smoke(adm_context_t* ctx, const std::filesystem::path& input) {
     return ok;
 }
 
+bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::path& input) {
+    auto output = unique_temp_wav_path("mr_c_api_iamf_layers_invalid");
+    output.replace_extension(".iamf");
+    FileGuard guard(output);
+
+    adm_render_options_t* opts = adm_create_render_options();
+    adm_render_options_set_output_layout(opts, "7.1.4");
+    adm_render_options_set_iamf_layers(opts, "5.1,7.1,5.1.2,7.1.4");
+
+    adm_render_result_t* result = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input.string().c_str(), output.string().c_str(), opts, nullptr, nullptr, &result);
+    adm_destroy_render_options(opts);
+
+    bool ok = check(result != nullptr, "IAMF layer validation: result must be allocated");
+    ok = check(code == ADM_ERROR_INVALID_ARGUMENT, "IAMF layer validation: non-monotonic layers rejected") && ok;
+    if (result != nullptr) {
+        const char* message = adm_render_result_message(result);
+        ok = check(message != nullptr && std::string(message).find("monotonic") != std::string::npos,
+                   "IAMF layer validation: message should name monotonic constraint") &&
+             ok;
+    }
+    adm_destroy_render_result(result);
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -2124,6 +2168,9 @@ int main() {
     // v1.12 tests
     ok = verify_version_112() && ok;
     ok = verify_render_support_matrix_json(ctx) && ok;
+    // v1.14 tests
+    ok = verify_version_114() && ok;
+    ok = verify_iamf_layer_validation(ctx, fixture.path()) && ok;
 
     adm_destroy_context(ctx);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

@@ -62,12 +62,15 @@
  *
  * v1.13 新增（additive，SOVERSION 不变）：
  *   adm_export_file.
+ *
+ * v1.14 新增（additive，SOVERSION 不变）：
+ *   adm_render_options_set_iamf_layers.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 13
+#define ADM_API_VERSION_MINOR 14
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -370,6 +373,11 @@ adm_error_code_t adm_render_options_set_binaural_spread_mode(adm_render_options_
                                                              adm_binaural_spread_mode_t mode) ADM_API_NOEXCEPT;
 adm_error_code_t adm_render_options_set_iamf_container(adm_render_options_t* opts,
                                                        adm_iamf_container_t container) ADM_API_NOEXCEPT;
+/* iamf_layers_csv: optional IAMF scalable channel layers, comma-separated
+ * ("5.1,5.1.2,5.1.4,7.1.4"). NULL or "" clears the list and preserves the
+ * default single-layer output_layout behavior. v1.14 */
+adm_error_code_t adm_render_options_set_iamf_layers(adm_render_options_t* opts,
+                                                    const char* iamf_layers_csv) ADM_API_NOEXCEPT;
 
 /* render_start_sec / render_end_sec: output time-range trim in seconds on the
  * rendered timeline (which equals the input timeline). Loudness/True-Peak are

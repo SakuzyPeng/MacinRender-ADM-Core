@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-#define MR_IAMF_AOM_BRIDGE_ABI_VERSION 2
+#define MR_IAMF_AOM_BRIDGE_ABI_VERSION 3
 
 #define MR_IAMF_AOM_RESULT_OK 0
 #define MR_IAMF_AOM_RESULT_ERROR -1
@@ -42,6 +42,9 @@ typedef struct MrIamfAomEncodeOptions {
     size_t struct_size;
     MrIamfAomCancelCallback should_cancel;
     void* cancel_user_data;
+
+    /* v3 fields. Optional comma-separated scalable channel layer ids. */
+    const char* scalable_layers_csv;
 } MrIamfAomEncodeOptions;
 // cppcheck-suppress-end unusedStructMember
 

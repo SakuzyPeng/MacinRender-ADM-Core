@@ -4,6 +4,7 @@
 #include <optional>
 #include <stop_token>
 #include <string>
+#include <vector>
 
 namespace mradm {
 
@@ -114,6 +115,9 @@ struct RenderOptions {
     // Requires --iamf-container mp4 on the CLI; the engine ignores this field for non-IAMF outputs.
     enum class IamfContainer : uint8_t { obu, mp4 };
     IamfContainer iamf_container{IamfContainer::obu};
+    // Optional IAMF scalable channel layer list. Empty = preserve the current single-layer
+    // output_layout behavior. When set, RenderService validates the list for IAMF outputs.
+    std::vector<std::string> iamf_layers;
     // Internal diagnostics/tests only. The CLI never exposes this; normal users
     // cannot request speaker-stereo ADM rendering.
     bool internal_allow_speaker_stereo{false};
