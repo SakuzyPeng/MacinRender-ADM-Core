@@ -70,3 +70,18 @@ void run_formats();
 
 CLI::App* add_export_command(CLI::App& app, ExportCliOptions& opts);
 int run_export(const ExportCliOptions& opts);
+
+// Hidden `__apac-encode` worker subcommand: the engine forks `mradm __apac-encode`
+// to run the AudioToolbox APAC encoder in an isolated, kill-able process behind a
+// stall watchdog. Not a user-facing command.
+struct ApacEncodeCliOptions {
+    std::string input;
+    std::string output;
+    std::string layout;
+    uint32_t bitrate{0};
+    bool drc_music{true};
+    std::string container{"mpeg4"};
+};
+
+CLI::App* add_apac_encode_command(CLI::App& app, ApacEncodeCliOptions& opts);
+int run_apac_encode(const ApacEncodeCliOptions& opts);
