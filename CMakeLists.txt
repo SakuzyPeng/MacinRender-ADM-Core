@@ -411,6 +411,10 @@ endif()
 target_include_directories(mr_adm_engine SYSTEM PRIVATE
     "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
 )
+# ADMAudio-internal headers (audio_io_internal.h): the engine orchestrates the
+# audio layer and reaches its internal subprocess worker (run_apac_encode_child).
+# PRIVATE so this stays an engine-only coupling and never leaks to the CLI / C ABI.
+target_include_directories(mr_adm_engine PRIVATE src/adm_audio)
 mr_adm_core_apply_warnings(mr_adm_engine)
 mr_adm_core_apply_static_analysis(mr_adm_engine)
 
@@ -465,6 +469,7 @@ if(MR_ADM_CORE_BUILD_CLI)
     set_target_properties(mradm_exe PROPERTIES OUTPUT_NAME mradm)
     target_sources(mradm_exe
         PRIVATE
+            src/adm_cli/apac_encode_command.cpp
             src/adm_cli/backends_command.cpp
             src/adm_cli/export_command.cpp
             src/adm_cli/formats_command.cpp
@@ -485,6 +490,7 @@ if(MR_ADM_CORE_BUILD_CLI)
             CLI11::CLI11
             spdlog::spdlog
     )
+    target_include_directories(mradm_exe PRIVATE src/adm_audio)
     if(APPLE)
         target_link_libraries(mradm_exe PRIVATE MacinRender::ADMRenderApple)
     endif()
@@ -707,6 +713,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_apac_smoke_tests tests/unit/apac_smoke_test.cpp)
     target_link_libraries(mr_adm_apac_smoke_tests PRIVATE MacinRender::ADMAudio)
+    # Pin the APAC stall-watchdog test to the real mradm subprocess helper (and
+    # order the build after it). Skipped when the CLI is not built.
+    if(TARGET mradm_exe)
+        target_compile_definitions(mr_adm_apac_smoke_tests
+            PRIVATE MRADM_EXE_PATH="$<TARGET_FILE:mradm_exe>")
+        add_dependencies(mr_adm_apac_smoke_tests mradm_exe)
+    endif()
     mr_adm_core_apply_warnings(mr_adm_apac_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_apac_smoke_tests)
     add_test(NAME mr_adm_apac_smoke_tests COMMAND mr_adm_apac_smoke_tests)
