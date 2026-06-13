@@ -191,16 +191,33 @@ std::string build_metadata_text(const MrIamfAomEncodeOptions& options,
     for (uint32_t sid = 0; sid < final_layout.substream_count; ++sid) {
         out << "  audio_substream_ids: " << sid << "\n";
     }
+    if (layers.size() > 1U) {
+        out << "  audio_element_params { param_definition_type: PARAM_DEFINITION_TYPE_DEMIXING "
+               "demixing_param { param_definition { parameter_id: 103 parameter_rate: 48000 "
+               "param_definition_mode: 0 reserved: 0 duration: 960 constant_subblock_duration: 960 } "
+               "default_demixing_info_parameter_data: { dmixp_mode: DMIXP_MODE_2 } default_w: 0 } }\n";
+        out << "  audio_element_params { param_definition_type: PARAM_DEFINITION_TYPE_RECON_GAIN "
+               "recon_gain_param { param_definition { parameter_id: 102 parameter_rate: 48000 "
+               "param_definition_mode: 0 reserved: 0 duration: 960 constant_subblock_duration: 960 } } }\n";
+    }
     out << "  scalable_channel_layout_config { reserved: 0";
-    for (const LayoutInfo* layer : layers) {
+    uint32_t previous_substream_count = 0;
+    uint32_t previous_coupled_substream_count = 0;
+    for (size_t layer_index = 0; layer_index < layers.size(); ++layer_index) {
+        const LayoutInfo* layer = layers[layer_index];
+        const uint32_t layer_substream_count = layer->substream_count - previous_substream_count;
+        const uint32_t layer_coupled_substream_count = layer->coupled_substream_count - previous_coupled_substream_count;
         out << " channel_audio_layer_configs { loudspeaker_layout: " << layer->loudspeaker_layout
-            << " output_gain_is_present_flag: 0 recon_gain_is_present_flag: 0 reserved_a: 0 "
-            << "substream_count: " << layer->substream_count
-            << " coupled_substream_count: " << layer->coupled_substream_count;
+            << " output_gain_is_present_flag: 0 recon_gain_is_present_flag: " << (layer_index == 0 ? 0 : 1)
+            << " reserved_a: 0 "
+            << "substream_count: " << layer_substream_count
+            << " coupled_substream_count: " << layer_coupled_substream_count;
         if (!layer->expanded_loudspeaker_layout.empty()) {
             out << " expanded_loudspeaker_layout: " << layer->expanded_loudspeaker_layout;
         }
         out << " }";
+        previous_substream_count = layer->substream_count;
+        previous_coupled_substream_count = layer->coupled_substream_count;
     }
     out << " }\n"
         << "}\n"
@@ -318,6 +335,17 @@ std::vector<const LayoutInfo*> parse_scalable_layers(const MrIamfAomEncodeOption
                     error_buffer_size,
                     absl::StrCat("last IAMF scalable layer must match final layout: ", final_layout.id));
         return {};
+    }
+    uint32_t previous_substream_count = 0;
+    uint32_t previous_coupled_substream_count = 0;
+    for (const LayoutInfo* layer : layers) {
+        if (layer->substream_count < previous_substream_count ||
+            layer->coupled_substream_count < previous_coupled_substream_count) {
+            write_error(error_buffer, error_buffer_size, "IAMF scalable layers must be monotonic");
+            return {};
+        }
+        previous_substream_count = layer->substream_count;
+        previous_coupled_substream_count = layer->coupled_substream_count;
     }
     return layers;
 }
