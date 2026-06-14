@@ -5,6 +5,7 @@
         xmlns:vm="using:MacinRender.Gui.ViewModels"
         xmlns:m="using:MacinRender.Gui.Models"
         xmlns:ctrl="using:MacinRender.Gui.Controls"
+        xmlns:views="using:MacinRender.Gui.Views"
         mc:Ignorable="d" d:DesignWidth="1120" d:DesignHeight="740"
         x:Class="MacinRender.Gui.MainWindow"
         x:DataType="vm:MainWindowViewModel"
@@ -41,11 +42,18 @@
                     </StackPanel>
 
                     <StackPanel Grid.Row="1" Margin="0,20,0,0" Spacing="2">
-                        <!-- 一期仅渲染界面;其余导航(队列/历史/设置)暂隐藏,故不保留选中态 -->
-                        <ctrl:SquircleButton Classes="nav">
+                        <ctrl:SquircleButton Classes="nav" Classes.on="{Binding IsBatchMode}"
+                                Command="{Binding ShowBatchModeCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <Path Classes="icon" Data="{StaticResource IconRender}"/>
                                 <TextBlock VerticalAlignment="Center" Text="{DynamicResource NavRender}"/>
+                            </StackPanel>
+                        </ctrl:SquircleButton>
+                        <ctrl:SquircleButton Classes="nav" Classes.on="{Binding IsSemanticMode}"
+                                Command="{Binding ShowSemanticModeCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Path Classes="icon" Data="{StaticResource IconRender}"/>
+                                <TextBlock VerticalAlignment="Center" Text="{DynamicResource NavSemantic}"/>
                             </StackPanel>
                         </ctrl:SquircleButton>
                     </StackPanel>
@@ -92,8 +100,15 @@
                 </Grid>
             </ctrl:SquircleBorder>
 
-            <!-- 主区:不滚动,卡片自适应窗口 -->
-            <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="8,0,16,16">
+            <!-- 语义编辑模式:与批渲染主区共用 Col 1,按模式切换可见性 -->
+            <!-- 外层 Panel 持 IsVisible(继承 MainWindowViewModel),内层 view 再切到子 VM -->
+            <Panel Grid.Column="1" IsVisible="{Binding IsSemanticMode}">
+                <views:SemanticEditorView DataContext="{Binding SemanticEditor}"/>
+            </Panel>
+
+            <!-- 主区:不滚动,卡片自适应窗口(批渲染) -->
+            <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="8,0,16,16"
+                  IsVisible="{Binding IsBatchMode}">
                 <StackPanel Grid.Row="0" Margin="2,6,0,12" Spacing="2">
                     <TextBlock Classes="h1" FontSize="20" Text="{DynamicResource NavRender}"/>
                     <TextBlock Classes="muted"

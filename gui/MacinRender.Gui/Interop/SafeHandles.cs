@@ -52,3 +52,12 @@ public sealed class AdmSceneInfoHandle() : SafeHandleZeroOrMinusOneIsInvalid(tru
         return true;
     }
 }
+
+public sealed class AdmPreviewSessionHandle() : SafeHandleZeroOrMinusOneIsInvalid(true)
+{
+    protected override bool ReleaseHandle()
+    {
+        NativeMethods.adm_destroy_preview_session(handle);
+        return true;
+    }
+}

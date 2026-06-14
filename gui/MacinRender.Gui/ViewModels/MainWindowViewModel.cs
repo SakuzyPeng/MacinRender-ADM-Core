@@ -25,6 +25,23 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<RenderFileItem> Files { get; } = new();
     public ObservableCollection<LogLine> Logs { get; } = new();
 
+    // ── 模式导航:批渲染 / 语义编辑(共用 Col 1 主区,按 IsBatchMode/IsSemanticMode 切换) ──
+    public SemanticEditorViewModel SemanticEditor { get; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBatchMode))]
+    [NotifyPropertyChangedFor(nameof(IsSemanticMode))]
+    private bool _semanticMode;
+
+    public bool IsBatchMode => !SemanticMode;
+    public bool IsSemanticMode => SemanticMode;
+
+    [RelayCommand]
+    private void ShowBatchMode() => SemanticMode = false;
+
+    [RelayCommand]
+    private void ShowSemanticMode() => SemanticMode = true;
+
     // ── 输出设置:渲染(后端→布局)+ 封装(编码器→容器→位深/码率) ──
     public ObservableCollection<BackendDef> Backends => OutputModel.Backends;
     public ObservableCollection<LayoutDef> Layouts { get; } = new();

@@ -2,11 +2,13 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using MacinRender.Gui.Interop;
 using MacinRender.Gui.Models;
 using MacinRender.Gui.Services;
+using MacinRender.Gui.ViewModels;
 
 namespace MacinRender.Gui;
 
@@ -111,6 +113,60 @@ internal static class SelfTest
         {
             Console.Error.WriteLine($"[失败] 输入不存在: {inputWav}");
             return 5;
+        }
+
+        // 语义编辑路径(#13):inspect → 对象 + 听感维度当前值;策略模板可达性(#14 当前值权威源)。
+        var inspectDoc = SemanticInspect.Parse(AdmQueries.FetchInspectJson(ctx, inputWav));
+        if (inspectDoc is null)
+        {
+            Console.Error.WriteLine("[失败] adm_inspect_file_json / 解析失败");
+            return 8;
+        }
+
+        Console.WriteLine($"语义 inspect: {inspectDoc.Objects.Count} 个对象");
+        foreach (var o in inspectDoc.Objects.Take(3))
+        {
+            var item = SemanticObjectItem.From(o);
+            Console.WriteLine($"  {item.Display} — {item.Summary}");
+        }
+
+        var tmpl = AdmQueries.FetchPolicyTemplateJson(ctx, inputWav);
+        Console.WriteLine($"policy_template_json: {(tmpl is null ? "null" : tmpl.Length + " 字符")}");
+
+        // 语义编辑器(#14):构造覆盖 → 拼 policy JSON → 喂核心校验可解析(相对变换:× scale / dB)。
+        if (inspectDoc.Objects.Count > 0)
+        {
+            var item = SemanticObjectItem.From(inspectDoc.Objects[0]);
+            item.DiffuseScale.Enabled = true;
+            item.DiffuseScale.Value = 0.5;
+            item.GainDb.Enabled = true;
+            item.GainDb.Value = -3.0;
+            var rule = item.BuildRule();
+            var policy = new JsonObject
+            {
+                ["schema"] = "mradm.semantic-policy.v1",
+                ["objects"] = new JsonArray(new JsonNode?[] { rule }),
+            }.ToJsonString();
+            Console.WriteLine($"编辑器 policy JSON: {policy}");
+
+            using var policyOpts = NativeMethods.adm_create_render_options();
+            NativeMethods.adm_render_options_set_renderer(policyOpts, AdmRenderer.Binaural);
+            NativeMethods.adm_render_options_set_output_layout(policyOpts, "binaural");
+            // setter 只保存字符串(malformed JSON 不在此诊断,见 c_api.h);Ok 仅证明 P/Invoke 可调。
+            var setRc = NativeMethods.adm_render_options_set_semantic_policy_json(policyOpts, policy);
+            Console.WriteLine($"set_semantic_policy_json(仅保存字符串): {setRc}");
+
+            // 真验解析:create_preview_session 在创建时 import + apply 该 policy,JSON 解析/校验错误在此暴露。
+            var psRc = NativeMethods.adm_create_preview_session(ctx, inputWav, policyOpts, out var session);
+            using (session)
+            {
+                Console.WriteLine($"create_preview_session(应用 policy,真验解析): {psRc}");
+                if (psRc != AdmErrorCode.Ok)
+                {
+                    Console.Error.WriteLine("[失败] 编辑器拼出的 policy JSON 在 preview session 创建时被核心拒绝");
+                    return 9;
+                }
+            }
         }
 
         string outPath = Path.Combine(Path.GetTempPath(), "mradm_selftest.flac");

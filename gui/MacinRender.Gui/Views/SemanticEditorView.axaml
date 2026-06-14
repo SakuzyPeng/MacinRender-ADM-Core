@@ -1,0 +1,196 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MacinRender.Gui.ViewModels"
+             xmlns:ctrl="using:MacinRender.Gui.Controls"
+             x:Class="MacinRender.Gui.Views.SemanticEditorView"
+             x:DataType="vm:SemanticEditorViewModel">
+
+    <Grid RowDefinitions="Auto,*" Margin="8,0,16,16">
+        <StackPanel Grid.Row="0" Margin="2,6,0,12" Spacing="2">
+            <TextBlock Classes="h1" FontSize="20" Text="{DynamicResource NavSemantic}"/>
+            <TextBlock Classes="muted" Text="{DynamicResource SemanticPageDesc}"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" RowDefinitions="Auto,*">
+
+            <!-- 载入栏 -->
+            <ctrl:SquircleBorder Grid.Row="0" Classes="card" Margin="0,0,0,12">
+                <DockPanel>
+                    <ctrl:SquircleButton DockPanel.Dock="Right" Classes="accent"
+                            MinWidth="108" VerticalAlignment="Center" Margin="16,0,0,0"
+                            IsEnabled="{Binding !IsLoading}" Click="OnLoadFile">
+                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource SemLoadFile}"/>
+                    </ctrl:SquircleButton>
+                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Classes="h2" Text="{DynamicResource SemFileHeader}"/>
+                        <TextBlock Classes="muted" Text="{Binding StatusText}"/>
+                    </StackPanel>
+                </DockPanel>
+            </ctrl:SquircleBorder>
+
+            <!-- 三栏:对象树 | 编辑器 | 验证 -->
+            <Grid Grid.Row="1" ColumnDefinitions="300,*,280" ColumnSpacing="12">
+
+                <!-- 对象列表 -->
+                <ctrl:SquircleBorder Grid.Column="0" Classes="card">
+                    <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                        <TextBlock Grid.Row="0" Classes="h2" Text="{DynamicResource SemObjects}"/>
+                        <ListBox Grid.Row="1" ItemsSource="{Binding Objects}"
+                                 SelectionMode="Single"
+                                 SelectedItem="{Binding SelectedObject}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SemanticObjectItem">
+                                    <StackPanel Spacing="2" Margin="0,2">
+                                        <TextBlock FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   Text="{Binding Display}"/>
+                                        <TextBlock Classes="muted" FontSize="11"
+                                                   IsVisible="{Binding Meta, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   Text="{Binding Meta}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </ctrl:SquircleBorder>
+
+                <!-- 编辑器:三栏(当前值 → 覆盖 → 生效值)+ 覆盖行;相对变换(× scale / dB) -->
+                <ctrl:SquircleBorder Grid.Column="1" Classes="card">
+                    <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                        <StackPanel Grid.Row="0" Spacing="1">
+                            <TextBlock Classes="h2"
+                                       Text="{Binding SelectedObject.Display, FallbackValue={x:Null}}"/>
+                            <TextBlock Classes="muted" FontSize="11"
+                                       Text="{Binding SelectedObject.Meta, FallbackValue={x:Null}}"/>
+                        </StackPanel>
+
+                        <!-- 未选中:提示 -->
+                        <TextBlock Grid.Row="1" Classes="muted" Opacity="0.7" VerticalAlignment="Top"
+                                   IsVisible="{Binding SelectedObject,
+                                       Converter={x:Static ObjectConverters.IsNull}}"
+                                   Text="{DynamicResource SemSelectHint}"/>
+
+                        <StackPanel Grid.Row="1" Spacing="6"
+                                    IsVisible="{Binding SelectedObject,
+                                        Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <!-- 列头 -->
+                            <Grid ColumnDefinitions="80,*,202,*" Margin="0,2,0,2">
+                                <TextBlock Grid.Column="1" Classes="muted" FontSize="11"
+                                           Text="{DynamicResource SemColCurrent}"/>
+                                <TextBlock Grid.Column="2" Classes="muted" FontSize="11"
+                                           Text="{DynamicResource SemColOverride}"/>
+                                <TextBlock Grid.Column="3" Classes="muted" FontSize="11"
+                                           Text="{DynamicResource SemColEffective}"/>
+                            </Grid>
+
+                            <!-- gain(dB 偏移) -->
+                            <Grid ColumnDefinitions="80,*,202,*">
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}" Text="gain"/>
+                                <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
+                                           Text="{Binding SelectedObject.GainDb.CurrentText}"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <CheckBox IsChecked="{Binding SelectedObject.GainDb.Enabled}"/>
+                                    <Slider Width="86" VerticalAlignment="Center"
+                                            Minimum="{Binding SelectedObject.GainDb.SliderMin}"
+                                            Maximum="{Binding SelectedObject.GainDb.SliderMax}"
+                                            Value="{Binding SelectedObject.GainDb.Value}"
+                                            IsEnabled="{Binding SelectedObject.GainDb.Enabled}"/>
+                                    <TextBlock VerticalAlignment="Center" MinWidth="48" FontSize="12"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               Text="{Binding SelectedObject.GainDb.ValueText}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="3" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Accent}"
+                                           Text="{Binding SelectedObject.GainDb.EffectiveText}"/>
+                            </Grid>
+
+                            <!-- diffuse(× scale) -->
+                            <Grid ColumnDefinitions="80,*,202,*">
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}" Text="diffuse"/>
+                                <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
+                                           Text="{Binding SelectedObject.DiffuseScale.CurrentText}"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <CheckBox IsChecked="{Binding SelectedObject.DiffuseScale.Enabled}"/>
+                                    <Slider Width="86" VerticalAlignment="Center"
+                                            Minimum="{Binding SelectedObject.DiffuseScale.SliderMin}"
+                                            Maximum="{Binding SelectedObject.DiffuseScale.SliderMax}"
+                                            Value="{Binding SelectedObject.DiffuseScale.Value}"
+                                            IsEnabled="{Binding SelectedObject.DiffuseScale.Enabled}"/>
+                                    <TextBlock VerticalAlignment="Center" MinWidth="48" FontSize="12"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               Text="{Binding SelectedObject.DiffuseScale.ValueText}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="3" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Accent}"
+                                           Text="{Binding SelectedObject.DiffuseScale.EffectiveText}"/>
+                            </Grid>
+
+                            <!-- extent(× scale,作用于 W/H/D) -->
+                            <Grid ColumnDefinitions="80,*,202,*">
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}" Text="extent"/>
+                                <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding SelectedObject.ExtentScale.CurrentText}"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <CheckBox IsChecked="{Binding SelectedObject.ExtentScale.Enabled}"/>
+                                    <Slider Width="86" VerticalAlignment="Center"
+                                            Minimum="{Binding SelectedObject.ExtentScale.SliderMin}"
+                                            Maximum="{Binding SelectedObject.ExtentScale.SliderMax}"
+                                            Value="{Binding SelectedObject.ExtentScale.Value}"
+                                            IsEnabled="{Binding SelectedObject.ExtentScale.Enabled}"/>
+                                    <TextBlock VerticalAlignment="Center" MinWidth="48" FontSize="12"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               Text="{Binding SelectedObject.ExtentScale.ValueText}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="3" VerticalAlignment="Center" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Accent}"
+                                           Text="{Binding SelectedObject.ExtentScale.EffectiveText}"/>
+                            </Grid>
+
+                            <!-- divergence(× scale) -->
+                            <Grid ColumnDefinitions="80,*,202,*">
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}" Text="divergence"/>
+                                <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
+                                           Text="{Binding SelectedObject.DivergenceScale.CurrentText}"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <CheckBox IsChecked="{Binding SelectedObject.DivergenceScale.Enabled}"/>
+                                    <Slider Width="86" VerticalAlignment="Center"
+                                            Minimum="{Binding SelectedObject.DivergenceScale.SliderMin}"
+                                            Maximum="{Binding SelectedObject.DivergenceScale.SliderMax}"
+                                            Value="{Binding SelectedObject.DivergenceScale.Value}"
+                                            IsEnabled="{Binding SelectedObject.DivergenceScale.Enabled}"/>
+                                    <TextBlock VerticalAlignment="Center" MinWidth="48" FontSize="12"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               Text="{Binding SelectedObject.DivergenceScale.ValueText}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="3" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Accent}"
+                                           Text="{Binding SelectedObject.DivergenceScale.EffectiveText}"/>
+                            </Grid>
+
+                            <TextBlock Classes="muted" FontSize="11" Opacity="0.7" Margin="0,8,0,0"
+                                       TextWrapping="Wrap" Text="{Binding OverrideSummary}"/>
+                        </StackPanel>
+                    </Grid>
+                </ctrl:SquircleBorder>
+
+                <!-- 验证(占位:试听 + report diff 在 #16/#17 接入) -->
+                <ctrl:SquircleBorder Grid.Column="2" Classes="card">
+                    <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                        <TextBlock Grid.Row="0" Classes="h2" Text="{DynamicResource SemVerify}"/>
+                        <TextBlock Grid.Row="1" Classes="muted" Opacity="0.7" TextWrapping="Wrap"
+                                   Text="{DynamicResource SemVerifyComing}"/>
+                    </Grid>
+                </ctrl:SquircleBorder>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -189,4 +189,35 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib)]
     internal static partial uint adm_scene_info_object_count(AdmSceneInfoHandle info);
+
+    // ── 语义编辑:结构化 inspect / 策略模板(JSON-out,out 字符串由调用方 adm_free_string) ──
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial AdmErrorCode adm_inspect_file_json(AdmContextHandle context, string inputPath,
+        out IntPtr outJson);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial AdmErrorCode adm_policy_template_json(AdmContextHandle context, string inputPath,
+        out IntPtr outJson);
+
+    // ── 生效语义报告:capture 开关 + 从 result 读回(report 拥有,勿 free;未启用为 NULL) ──
+    [LibraryImport(Lib)]
+    internal static partial void adm_render_options_set_capture_semantic_report(AdmRenderOptionsHandle opts,
+        int enabled);
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr adm_render_result_semantic_report_json(AdmRenderResultHandle result);
+
+    // ── 预览会话(试听):create 一次 apply 内存 policy,render_window_v2 渲窗口到文件 ──
+    // progress/userData 同 adm_render_file_ex2;outputPath 可为 null(自动派生)。
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial AdmErrorCode adm_create_preview_session(AdmContextHandle context, string inputPath,
+        AdmRenderOptionsHandle opts, out AdmPreviewSessionHandle session);
+
+    [LibraryImport(Lib)]
+    internal static partial void adm_destroy_preview_session(IntPtr session);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial AdmErrorCode adm_preview_render_window_v2(AdmPreviewSessionHandle session,
+        double startSec, double endSec, string? outputPath, IntPtr progress, IntPtr userData,
+        out AdmRenderResultHandle result);
 }
