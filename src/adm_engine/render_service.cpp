@@ -1,15 +1,19 @@
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <random>
+#include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -31,6 +35,7 @@
 #include "format_table.h"
 #include "layout_table.h"
 #include "scene_json.h"
+#include "support_matrix.h"
 
 namespace mradm {
 
@@ -109,6 +114,100 @@ namespace {
         return key;
     }
     return layout;
+}
+
+struct IamfLayerInfo {
+    std::string_view id;
+    std::string_view display;
+    int bed_channels;
+    int lfe_channels;
+    int height_channels;
+};
+
+[[nodiscard]] const IamfLayerInfo* iamf_layer_info(std::string_view layout_id) {
+    static constexpr std::array<IamfLayerInfo, 5> k_layers{{
+        {"0+5+0", "5.1", 5, 1, 0},
+        {"2+5+0", "5.1.2", 5, 1, 2},
+        {"4+5+0", "5.1.4", 5, 1, 4},
+        {"wav71", "7.1", 7, 1, 0},
+        {"4+7+0", "7.1.4", 7, 1, 4},
+    }};
+    const auto* const it =
+        std::ranges::find_if(k_layers, [layout_id](const IamfLayerInfo& layer) { return layer.id == layout_id; });
+    return it == std::end(k_layers) ? nullptr : it;
+}
+
+[[nodiscard]] std::string supported_iamf_layers_message() {
+    return "supported: 5.1, 5.1.2, 5.1.4, 7.1, 7.1.4";
+}
+
+[[nodiscard]] Result<std::vector<std::string>> validate_iamf_scalable_layers(const std::vector<std::string>& raw_layers,
+                                                                             std::string_view output_layout,
+                                                                             LogSink& logs) {
+    if (raw_layers.empty()) {
+        return std::vector<std::string>{};
+    }
+    if (raw_layers.size() > 7U) {
+        return make_error(ErrorCode::invalid_argument, "IAMF scalable layers support at most 7 layers");
+    }
+
+    const IamfLayerInfo* final_info = iamf_layer_info(output_layout);
+    if (final_info == nullptr) {
+        return make_error(ErrorCode::invalid_argument,
+                          fmt::format("IAMF scalable layers are not supported for output layout '{}'; {}",
+                                      output_layout,
+                                      supported_iamf_layers_message()));
+    }
+
+    std::vector<std::string> normalized;
+    normalized.reserve(raw_layers.size());
+    std::vector<const IamfLayerInfo*> infos;
+    infos.reserve(raw_layers.size());
+    for (const auto& raw : raw_layers) {
+        const std::string id = normalize_output_layout(raw);
+        const IamfLayerInfo* info = iamf_layer_info(id);
+        if (info == nullptr) {
+            return make_error(
+                ErrorCode::invalid_argument,
+                fmt::format("IAMF scalable layer '{}' is not supported; {}", raw, supported_iamf_layers_message()));
+        }
+        normalized.push_back(id);
+        infos.push_back(info);
+    }
+
+    if (normalized.back() != output_layout) {
+        return make_error(ErrorCode::invalid_argument,
+                          fmt::format("last IAMF scalable layer must match output layout '{}'; got '{}'",
+                                      final_info->display,
+                                      infos.back()->display));
+    }
+
+    for (size_t i = 1; i < infos.size(); ++i) {
+        const auto* prev = infos[i - 1];
+        const auto* cur = infos[i];
+        if (cur->bed_channels < prev->bed_channels || cur->lfe_channels < prev->lfe_channels ||
+            cur->height_channels < prev->height_channels) {
+            return make_error(ErrorCode::invalid_argument,
+                              fmt::format("IAMF scalable layers must be monotonic; '{}' cannot follow '{}'",
+                                          cur->display,
+                                          prev->display));
+        }
+    }
+
+    if (final_info->height_channels > 0) {
+        for (const auto* info : infos) {
+            if (info->height_channels == 0) {
+                logs.log(LogLevel::warning,
+                         "engine",
+                         fmt::format("IAMF scalable layers include flat layer '{}' for height output '{}'; "
+                                     "official guidance recommends height layouts, continuing",
+                                     info->display,
+                                     final_info->display));
+            }
+        }
+    }
+
+    return normalized;
 }
 
 [[nodiscard]] std::optional<uint16_t> channel_count_for_layout(const CapabilityReport& caps,
@@ -361,11 +460,11 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     // Probe input for early error detection and logging. A PreviewSession supplies an
     // already-imported, policy-applied scene (copied here); otherwise import from disk.
-    emit_progress(progress, RenderStage::probing, RenderOperation::probe_input, 0.05, 0.0, "probing input");
+    emit_progress(progress, RenderStage::probing, RenderOperation::probe_input, 0.03, 0.0, "probing input");
     emit_progress(progress,
                   RenderStage::importing_scene,
                   RenderOperation::import_scene,
-                  0.10,
+                  0.06,
                   0.0,
                   preimported_scene != nullptr ? "using cached scene" : "importing scene");
     Result<AdmScene> scene_result = (preimported_scene != nullptr) ? Result<AdmScene>{*preimported_scene}
@@ -531,7 +630,7 @@ RenderResult RenderService::render(const RenderRequest& request,
         emit_progress(progress,
                       RenderStage::importing_scene,
                       RenderOperation::apply_semantic_policy,
-                      0.18,
+                      0.10,
                       0.0,
                       "applying semantic policy");
         auto policy_res = resolve_and_apply_policy(*scene_result, request.options, semantic_warnings, logs);
@@ -625,6 +724,18 @@ RenderResult RenderService::render(const RenderRequest& request,
     const bool is_iamf_final = (final_ext == ".iamf");
     const bool is_iamf_mp4_final =
         (request.options.iamf_container == RenderOptions::IamfContainer::mp4) && audio::iamf_encoding_available();
+    const bool requests_iamf_output =
+        is_iamf_final || request.options.iamf_container == RenderOptions::IamfContainer::mp4;
+    std::vector<std::string> iamf_layers;
+    if (requests_iamf_output) {
+        auto layers_res = validate_iamf_scalable_layers(request.options.iamf_layers, output_layout, logs);
+        if (!layers_res) {
+            return fail_with_report(layers_res.error());
+        }
+        iamf_layers = std::move(*layers_res);
+    } else if (!request.options.iamf_layers.empty()) {
+        logs.log(LogLevel::warning, "engine", "ignoring IAMF scalable layers for non-IAMF output");
+    }
     if (is_flac_final) {
         if (!flac_supports_layout(output_layout)) {
             const auto msg = fmt::format(
@@ -691,7 +802,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     auto iamf_temp_guard = is_iamf_mp4_final ? std::make_unique<TempFileGuard>(iamf_temp_path) : nullptr;
 
     // Build plan.
-    emit_progress(progress, RenderStage::planning, RenderOperation::plan_render, 0.24, 0.0, "planning render");
+    emit_progress(progress, RenderStage::planning, RenderOperation::plan_render, 0.13, 0.0, "planning render");
     RenderPlan plan;
     plan.input_path = request.input_path.string();
     plan.output_path = render_path;
@@ -723,7 +834,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     std::shared_ptr<IPreparedRender>& prepared_slot = (prepared_cache != nullptr) ? *prepared_cache : local_prepared;
     if (!prepared_slot) {
         emit_progress(
-            progress, RenderStage::planning, RenderOperation::prepare_backend, 0.28, 0.0, "preparing backend");
+            progress, RenderStage::planning, RenderOperation::prepare_backend, 0.15, 0.0, "preparing backend");
         auto prep_res = renderer->prepare(plan, logs);
         if (!prep_res) {
             return fail_with_report(prep_res.error());
@@ -736,7 +847,7 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     // Render (inline measurement of loudness + True Peak over the meter window).
     ProgressRangeSink render_progress(
-        progress, RenderStage::rendering, RenderOperation::render_audio, 0.30, 0.90, "rendering audio");
+        progress, RenderStage::rendering, RenderOperation::render_audio, 0.15, 0.88, "rendering audio");
     auto render_res = renderer->render_window(*prepared_slot, plan, render_progress, logs);
     if (!render_res) {
         if (!is_lossy_final) {
@@ -768,7 +879,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     // already produced a trimmed file (the backend wrote only the window).
     if (need_trim && !window_render) {
         ProgressRangeSink trim_progress(
-            progress, RenderStage::post_processing, RenderOperation::trim_output, 0.90, 0.92, "trimming output");
+            progress, RenderStage::post_processing, RenderOperation::trim_output, 0.88, 0.885, "trimming output");
         auto trim_res = audio::trim_file_frames(render_path,
                                                 trim_start_frame,
                                                 trim_frame_count,
@@ -852,7 +963,7 @@ RenderResult RenderService::render(const RenderRequest& request,
         const auto gain_linear = static_cast<float>(std::pow(10.0, gain_db / 20.0));
         logs.log(LogLevel::info, "engine", fmt::format("applying total gain {:.4f} ({:.2f} dB)", gain_linear, gain_db));
         ProgressRangeSink gain_progress(
-            progress, RenderStage::post_processing, RenderOperation::apply_gain, 0.92, 0.94, "applying gain");
+            progress, RenderStage::post_processing, RenderOperation::apply_gain, 0.885, 0.89, "applying gain");
         auto gain_res = audio::apply_gain_to_file(
             render_path, gain_linear, output_layout, plan.cancel_token, &gain_progress, RenderOperation::apply_gain);
         if (!gain_res) {
@@ -877,8 +988,8 @@ RenderResult RenderService::render(const RenderRequest& request,
             ProgressRangeSink bitdepth_progress(progress,
                                                 RenderStage::post_processing,
                                                 RenderOperation::convert_bit_depth,
-                                                0.94,
-                                                0.955,
+                                                0.89,
+                                                0.90,
                                                 "converting bit depth");
             auto conv_res = audio::downconvert_to_int(
                 render_path, depth, plan.cancel_token, &bitdepth_progress, RenderOperation::convert_bit_depth);
@@ -897,7 +1008,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     if (is_flac_final) {
         logs.log(LogLevel::info, "engine", "encoding float32 render to FLAC (24-bit)");
         ProgressRangeSink flac_progress(
-            progress, RenderStage::post_processing, RenderOperation::encode_flac, 0.955, 0.985, "encoding FLAC");
+            progress, RenderStage::post_processing, RenderOperation::encode_flac, 0.90, 0.98, "encoding FLAC");
         auto flac_res = audio::convert_to_flac(render_path, encoded_output_path, plan.cancel_token, &flac_progress);
         render_temp_guard->remove_now();
         if (!flac_res) {
@@ -907,8 +1018,7 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     if (is_opus_final) {
         logs.log(LogLevel::info, "engine", "encoding float32 render to Opus MKA (VBR)");
-        emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::encode_opus, 0.955, 0.0, "encoding Opus");
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_opus, 0.90, 0.0, "encoding Opus");
         auto opus_res = audio::convert_to_opus_mka(render_path,
                                                    encoded_output_path,
                                                    output_layout,
@@ -918,13 +1028,13 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (!opus_res) {
             return fail_with_report(opus_res.error());
         }
-        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_opus, 0.985, 1.0, "Opus encoded");
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_opus, 0.98, 1.0, "Opus encoded");
     }
 
     if (is_apac_final) {
         logs.log(LogLevel::info, "engine", fmt::format("encoding float32 render to APAC ({})", final_ext));
-        emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::encode_apac, 0.955, 0.0, "encoding APAC");
+        ProgressRangeSink apac_progress(
+            progress, RenderStage::post_processing, RenderOperation::encode_apac, 0.90, 0.98, "encoding APAC");
         const auto apac_container = is_apac_caf_final ? audio::ApacContainer::caf : audio::ApacContainer::mpeg4;
         auto apac_res = audio::convert_to_apac(render_path,
                                                encoded_output_path,
@@ -932,12 +1042,12 @@ RenderResult RenderService::render(const RenderRequest& request,
                                                request.options.apac_bitrate_kbps,
                                                request.options.apac_drc_music,
                                                apac_container,
-                                               plan.cancel_token);
+                                               plan.cancel_token,
+                                               &apac_progress);
         render_temp_guard->remove_now();
         if (!apac_res) {
             return fail_with_report(apac_res.error());
         }
-        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_apac, 0.985, 1.0, "APAC encoded");
     }
 
     if (is_iamf_final) {
@@ -949,8 +1059,8 @@ RenderResult RenderService::render(const RenderRequest& request,
         ProgressRangeSink bitdepth_progress(progress,
                                             RenderStage::post_processing,
                                             RenderOperation::convert_bit_depth,
-                                            0.94,
-                                            0.955,
+                                            0.89,
+                                            0.90,
                                             "converting bit depth");
         auto conv_res = audio::downconvert_to_int(
             render_path, 32U, plan.cancel_token, &bitdepth_progress, RenderOperation::convert_bit_depth);
@@ -960,20 +1070,20 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (auto cancelled = fail_if_cancelled()) {
             return std::move(*cancelled);
         }
-        emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.955, 0.0, "encoding IAMF");
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.90, 0.0, "encoding IAMF");
         auto iamf_res = audio::convert_to_iamf(render_path,
                                                encoded_output_path,
                                                output_layout,
                                                request.options.opus_bitrate_per_ch_kbps,
                                                lufs,
                                                peak,
-                                               plan.cancel_token);
+                                               plan.cancel_token,
+                                               iamf_layers);
         render_temp_guard->remove_now();
         if (!iamf_res) {
             return fail_with_report(iamf_res.error());
         }
-        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.985, 1.0, "IAMF encoded");
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.98, 1.0, "IAMF encoded");
     }
 
     if (is_iamf_mp4_final) {
@@ -985,8 +1095,8 @@ RenderResult RenderService::render(const RenderRequest& request,
         ProgressRangeSink bitdepth_progress(progress,
                                             RenderStage::post_processing,
                                             RenderOperation::convert_bit_depth,
-                                            0.94,
-                                            0.955,
+                                            0.89,
+                                            0.90,
                                             "converting bit depth");
         auto conv_res = audio::downconvert_to_int(
             render_path, 32U, plan.cancel_token, &bitdepth_progress, RenderOperation::convert_bit_depth);
@@ -996,33 +1106,29 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (auto cancelled = fail_if_cancelled()) {
             return std::move(*cancelled);
         }
-        emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.955, 0.0, "encoding IAMF");
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.90, 0.0, "encoding IAMF");
         auto iamf_res = audio::convert_to_iamf(render_path,
                                                iamf_temp_path.string(),
                                                output_layout,
                                                request.options.opus_bitrate_per_ch_kbps,
                                                lufs,
                                                peak,
-                                               plan.cancel_token);
+                                               plan.cancel_token,
+                                               iamf_layers);
         render_temp_guard->remove_now();
         if (!iamf_res) {
             return fail_with_report(iamf_res.error());
         }
-        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.975, 1.0, "IAMF encoded");
-        emit_progress(progress,
-                      RenderStage::post_processing,
-                      RenderOperation::package_iamf_mp4,
-                      0.975,
-                      0.0,
-                      "packaging IAMF MP4");
+        emit_progress(progress, RenderStage::post_processing, RenderOperation::encode_iamf, 0.96, 1.0, "IAMF encoded");
+        emit_progress(
+            progress, RenderStage::post_processing, RenderOperation::package_iamf_mp4, 0.96, 0.0, "packaging IAMF MP4");
         auto pkg_res = audio::package_iamf_to_mp4(iamf_temp_path.string(), encoded_output_path, plan.cancel_token);
         iamf_temp_guard->remove_now();
         if (!pkg_res) {
             return fail_with_report(pkg_res.error());
         }
         emit_progress(
-            progress, RenderStage::post_processing, RenderOperation::package_iamf_mp4, 0.985, 1.0, "IAMF MP4 packaged");
+            progress, RenderStage::post_processing, RenderOperation::package_iamf_mp4, 0.98, 1.0, "IAMF MP4 packaged");
     }
 
     if (auto cancelled = fail_if_cancelled()) {
@@ -1126,6 +1232,10 @@ std::string RenderService::output_formats_json() const {
     return engine::output_formats_to_json();
 }
 
+std::string RenderService::render_support_matrix_json() const {
+    return engine::render_support_matrix_to_json();
+}
+
 Result<std::string> RenderService::axml(const std::string& input_path) const {
     return io::get_axml(input_path);
 }
@@ -1136,6 +1246,26 @@ Result<std::string> RenderService::policy_template_json(const std::string& input
         return tl::unexpected(scene_result.error());
     }
     return build_semantic_policy_template(*scene_result);
+}
+
+Result<void> RenderService::export_file(const std::string& input_path,
+                                        const std::string& output_path,
+                                        const RenderOptions& options,
+                                        LogSink& logs) const {
+    auto original = io::import_scene(input_path);
+    if (!original) {
+        return tl::unexpected(original.error());
+    }
+    for (const auto& w : original->import_warnings) {
+        logs.log(LogLevel::warning, "importer", w);
+    }
+    AdmScene effective = *original;
+    std::vector<std::string> warnings;
+    auto policy_res = resolve_and_apply_policy(effective, options, warnings, logs);
+    if (!policy_res) {
+        return tl::unexpected(policy_res.error());
+    }
+    return io::write_scene(input_path, *original, effective, output_path);
 }
 
 Result<AdmScene> RenderService::prepare_preview_scene(const std::filesystem::path& input_path,

@@ -89,7 +89,7 @@ OutputFormats build_output_formats() {
                               "from 7.1.4 = 2048 kbps."},
                      /*per_channel=*/false,
                      64,
-                     12000));
+                     32768));
     // iamf — requires MR_ADM_ENABLE_IAMF; raw OBU stream.
     out.formats.push_back({.format = "iamf",
                            .extensions = {".iamf"},

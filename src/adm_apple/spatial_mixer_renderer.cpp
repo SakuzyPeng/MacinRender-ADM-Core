@@ -249,7 +249,7 @@ constexpr std::array<AppleSpeakerLayout, 7> k_apple_speaker_layouts{{
 // clang-format on
 
 [[nodiscard]] const AppleSpeakerLayout* find_apple_speaker_layout(std::string_view layout_id) {
-    const auto* const it = std::ranges::find_if(
+    const auto it = std::ranges::find_if(
         k_apple_speaker_layouts, [layout_id](const AppleSpeakerLayout& layout) { return layout.id == layout_id; });
     if (it == k_apple_speaker_layouts.end()) {
         return nullptr;

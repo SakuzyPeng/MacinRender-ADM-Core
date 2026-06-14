@@ -288,6 +288,9 @@ bool verify_options_null_setters() {
     ok = check(adm_render_options_set_semantic_report_path(nullptr, "/any/report.json") == ADM_ERROR_OK,
                "NULL opts set_semantic_report_path should return OK") &&
          ok;
+    ok = check(adm_render_options_set_iamf_layers(nullptr, "5.1,7.1.4") == ADM_ERROR_OK,
+               "NULL opts set_iamf_layers should return OK") &&
+         ok;
     return ok;
 }
 
@@ -358,8 +361,8 @@ bool verify_options_invalid_values(adm_render_options_t* opts) {
     ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 63) == ADM_ERROR_INVALID_ARGUMENT,
                "apac_bitrate 63 (< 64) should return INVALID_ARGUMENT") &&
          ok;
-    ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 12001) == ADM_ERROR_INVALID_ARGUMENT,
-               "apac_bitrate 12001 (> 12000) should return INVALID_ARGUMENT") &&
+    ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 32769) == ADM_ERROR_INVALID_ARGUMENT,
+               "apac_bitrate 32769 (> 32768) should return INVALID_ARGUMENT") &&
          ok;
     ok = check(adm_render_options_set_default_interp_ms(opts, 501) == ADM_ERROR_INVALID_ARGUMENT,
                "interp_ms 501 (> 500) should return INVALID_ARGUMENT") &&
@@ -391,8 +394,8 @@ bool verify_options_boundary_values(adm_render_options_t* opts) {
     ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 0) == ADM_ERROR_OK,
                "apac_bitrate 0 (auto) should return OK") &&
          ok;
-    ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 12000) == ADM_ERROR_OK,
-               "apac_bitrate 12000 (boundary) should return OK") &&
+    ok = check(adm_render_options_set_apac_bitrate_kbps(opts, 32768) == ADM_ERROR_OK,
+               "apac_bitrate 32768 (boundary) should return OK") &&
          ok;
     ok = check(adm_render_options_set_apac_container(opts, ADM_APAC_CONTAINER_CAF) == ADM_ERROR_OK,
                "apac_container CAF should return OK") &&
@@ -413,6 +416,15 @@ bool verify_options_boundary_values(adm_render_options_t* opts) {
                "valid saf-binaural renderer should return OK") &&
          ok;
     ok = check(adm_render_options_set_output_layout(opts, "7.1.4") == ADM_ERROR_OK, "valid layout should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_iamf_layers(opts, "5.1,5.1.2,5.1.4,7.1.4") == ADM_ERROR_OK,
+               "iamf_layers valid CSV should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_iamf_layers(opts, nullptr) == ADM_ERROR_OK,
+               "iamf_layers nullptr should clear and return OK") &&
+         ok;
+    ok = check(adm_render_options_set_iamf_layers(opts, "") == ADM_ERROR_OK,
+               "iamf_layers empty string should clear and return OK") &&
          ok;
     // void bool setters: 0/1 accepted, no crash.
     adm_render_options_set_peak_limit(opts, 1);
@@ -1191,6 +1203,68 @@ bool verify_version_110() {
 
 bool verify_version_111() {
     return check(adm_api_version_minor() >= 11, "v1.11: minor version should be >= 11");
+}
+
+// ── v1.12 tests ───────────────────────────────────────────────────────────
+
+bool verify_version_112() {
+    return check(adm_api_version_minor() >= 12, "v1.12: minor version should be >= 12");
+}
+
+// ── v1.14 tests ───────────────────────────────────────────────────────────
+
+bool verify_version_114() {
+    return check(adm_api_version_minor() >= 14, "v1.14: minor version should be >= 14");
+}
+
+bool verify_render_support_matrix_json(adm_context_t* ctx) {
+    char* json = nullptr;
+    const adm_error_code_t code = adm_render_support_matrix_json(ctx, &json);
+    bool ok = check(code == ADM_ERROR_OK, "render_support_matrix_json: should succeed");
+    ok = check(json != nullptr, "render_support_matrix_json: out_json should be non-null") && ok;
+
+    if (json != nullptr) {
+        const std::string s{json};
+        const auto has = [&s](const char* needle) { return s.find(needle) != std::string::npos; };
+        ok = check(has(R"("schema": "mradm.render-support-matrix")") && has(R"("schema_version": 1)"),
+                   "render_support_matrix_json: should carry schema + schema_version") &&
+             ok;
+        ok = check(has("\"features\"") && has("\"backends\"") && has("\"layouts\"") && has("\"targets\"") &&
+                       has("\"entries\""),
+                   "render_support_matrix_json: should include features/backends/layouts/targets/entries") &&
+             ok;
+        ok = check(has(R"("target": "apac_mpeg4")") && has(R"("target": "apac_caf")") && has(R"("required_option")") &&
+                       has(R"("value": "caf")"),
+                   "render_support_matrix_json: should distinguish APAC MPEG-4 and CAF targets") &&
+             ok;
+        ok = check(has(R"("target": "iamf")") && has(R"("target": "iamf_mp4")"),
+                   "render_support_matrix_json: should distinguish IAMF raw and MP4 targets") &&
+             ok;
+        ok = check(has(R"("renderer": "saf-binaural")") && has(R"("layout": "binaural")"),
+                   "render_support_matrix_json: should include SAF binaural + binaural layout") &&
+             ok;
+        ok = check(has(R"("supported": false)") && has(R"("reason")"),
+                   "render_support_matrix_json: should include unsupported rows with reasons") &&
+             ok;
+#ifdef __APPLE__
+        ok = check(has(R"("apac": true)"), "render_support_matrix_json: apac feature true on macOS") && ok;
+#else
+        ok = check(has(R"("apac": false)") && has("macOS only (AudioToolbox)"),
+                   "render_support_matrix_json: apac unavailable reason off-macOS") &&
+             ok;
+#endif
+    }
+    adm_free_string(json);
+
+    char* bad = nullptr;
+    ok = check(adm_render_support_matrix_json(nullptr, &bad) == ADM_ERROR_INVALID_ARGUMENT,
+               "render_support_matrix_json: NULL context should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_render_support_matrix_json(ctx, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "render_support_matrix_json: NULL out_json should be INVALID_ARGUMENT") &&
+         ok;
+    ok = check(bad == nullptr, "render_support_matrix_json: out_json should stay NULL on failure") && ok;
+    return ok;
 }
 
 bool verify_progress_v2_events(const ProgressV2State& state, bool require_post_processing, const char* label) {
@@ -1989,6 +2063,32 @@ bool verify_iamf_smoke(adm_context_t* ctx, const std::filesystem::path& input) {
     return ok;
 }
 
+bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::path& input) {
+    auto output = unique_temp_wav_path("mr_c_api_iamf_layers_invalid");
+    output.replace_extension(".iamf");
+    FileGuard guard(output);
+
+    adm_render_options_t* opts = adm_create_render_options();
+    adm_render_options_set_output_layout(opts, "7.1.4");
+    adm_render_options_set_iamf_layers(opts, "5.1,7.1,5.1.2,7.1.4");
+
+    adm_render_result_t* result = nullptr;
+    const adm_error_code_t code =
+        adm_render_file_ex(ctx, input.string().c_str(), output.string().c_str(), opts, nullptr, nullptr, &result);
+    adm_destroy_render_options(opts);
+
+    bool ok = check(result != nullptr, "IAMF layer validation: result must be allocated");
+    ok = check(code == ADM_ERROR_INVALID_ARGUMENT, "IAMF layer validation: non-monotonic layers rejected") && ok;
+    if (result != nullptr) {
+        const char* message = adm_render_result_message(result);
+        ok = check(message != nullptr && std::string(message).find("monotonic") != std::string::npos,
+                   "IAMF layer validation: message should name monotonic constraint") &&
+             ok;
+    }
+    adm_destroy_render_result(result);
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -2065,6 +2165,12 @@ int main() {
     ok = verify_iamf_smoke(ctx, fixture.path()) && ok;
     // v1.11 tests
     ok = verify_version_111() && ok;
+    // v1.12 tests
+    ok = verify_version_112() && ok;
+    ok = verify_render_support_matrix_json(ctx) && ok;
+    // v1.14 tests
+    ok = verify_version_114() && ok;
+    ok = verify_iamf_layer_validation(ctx, fixture.path()) && ok;
 
     adm_destroy_context(ctx);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

@@ -14,7 +14,7 @@ concurrency:
 jobs:
   msvc:
     name: Windows MSVC CLI
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
@@ -124,7 +124,7 @@ jobs:
             -DCMAKE_CXX_COMPILER=cl ^
             -DCMAKE_TOOLCHAIN_FILE="%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
             -DFETCHCONTENT_BASE_DIR="%FC_CACHE_DIR%" ^
-            -DMR_ADM_CORE_BUILD_TESTS=OFF ^
+            -DMR_ADM_CORE_BUILD_TESTS=ON ^
             -DMR_ADM_FLAC_PROVIDER=VENDORED ^
             -DMR_ADM_OPUS_PROVIDER=VENDORED ^
             -DSAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE ^
@@ -137,13 +137,14 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/windows --target mradm_exe --config RelWithDebInfo
+          cmake --build build/windows --target mradm_exe mr_adm_flac_io_smoke_tests --config RelWithDebInfo
 
       - name: Smoke
         shell: pwsh
         run: |
           .\build\windows\mradm.exe --version
           .\build\windows\mradm.exe backends
+          .\build\windows\mr_adm_flac_io_smoke_tests.exe
 
       - name: Prepare artifact
         shell: pwsh

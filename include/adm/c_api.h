@@ -56,12 +56,21 @@
  *
  * v1.11 新增（additive，SOVERSION 不变）：
  *   ADM_RENDERER_SAF_BINAURAL。
+ *
+ * v1.12 新增（additive，SOVERSION 不变）：
+ *   adm_render_support_matrix_json.
+ *
+ * v1.13 新增（additive，SOVERSION 不变）：
+ *   adm_export_file.
+ *
+ * v1.14 新增（additive，SOVERSION 不变）：
+ *   adm_render_options_set_iamf_layers.
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 11
+#define ADM_API_VERSION_MINOR 14
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -308,8 +317,8 @@ void adm_render_options_set_peak_normalize_to_limit(adm_render_options_t* opts, 
 adm_error_code_t adm_render_options_set_opus_bitrate_per_ch_kbps(adm_render_options_t* opts,
                                                                  uint32_t kbps) ADM_API_NOEXCEPT;
 
-/* APAC total target/hint bitrate in kbps (macOS only). 0 = layout default; otherwise [64, 12000].
- * Returns ADM_ERROR_INVALID_ARGUMENT if kbps is outside [64, 12000] and not 0. */
+/* APAC total target/hint bitrate in kbps (macOS only). 0 = layout default; otherwise [64, 32768].
+ * Returns ADM_ERROR_INVALID_ARGUMENT if kbps is outside [64, 32768] and not 0. */
 adm_error_code_t adm_render_options_set_apac_bitrate_kbps(adm_render_options_t* opts, uint32_t kbps) ADM_API_NOEXCEPT;
 
 /* enabled: 1 = Music DRC profile (default), 0 = None. */
@@ -364,6 +373,11 @@ adm_error_code_t adm_render_options_set_binaural_spread_mode(adm_render_options_
                                                              adm_binaural_spread_mode_t mode) ADM_API_NOEXCEPT;
 adm_error_code_t adm_render_options_set_iamf_container(adm_render_options_t* opts,
                                                        adm_iamf_container_t container) ADM_API_NOEXCEPT;
+/* iamf_layers_csv: optional IAMF scalable channel layers, comma-separated
+ * ("5.1,5.1.2,5.1.4,7.1.4"). NULL or "" clears the list and preserves the
+ * default single-layer output_layout behavior. v1.14 */
+adm_error_code_t adm_render_options_set_iamf_layers(adm_render_options_t* opts,
+                                                    const char* iamf_layers_csv) ADM_API_NOEXCEPT;
 
 /* render_start_sec / render_end_sec: output time-range trim in seconds on the
  * rendered timeline (which equals the input timeline). Loudness/True-Peak are
@@ -598,6 +612,28 @@ adm_error_code_t adm_inspect_file_xml(adm_context_t* context, const char* input_
 adm_error_code_t
 adm_policy_template_json(adm_context_t* context, const char* input_path, char** out_json) ADM_API_NOEXCEPT;
 
+/* ── v1.13 Semantic write-back (export) ──────────────────────────────────── */
+/*
+ * adm_export_file: apply the semantic policy carried by opts (in-memory JSON
+ * preferred over file path) and write a new ADM BWF at output_path, reusing the
+ * source file's PCM and chna chunk byte-for-byte (chunk-level RIFF/BW64 rewrite,
+ * no sample decode — bit-exact audio) — only the ADM metadata (axml) is rewritten
+ * with the policy-applied values. Pass opts == NULL (or opts with no
+ * policy set) for a plain ADM round-trip. Mirrors the `mradm export` subcommand.
+ *
+ * Stage 1 writes back Objects (object gain/mute; block gain/diffuse/extent/
+ * divergence/channelLock/jumpPosition/interpolationLength) and DirectSpeakers
+ * gain. Position and HOA pack gain/mute are not written back yet.
+ *
+ * Returns ADM_ERROR_OK on success, ADM_ERROR_INVALID_ARGUMENT for a NULL/empty
+ * context/input/output, and the mapped error (e.g. ADM_ERROR_IO,
+ * ADM_ERROR_UNSUPPORTED) on failure.
+ */
+adm_error_code_t adm_export_file(adm_context_t* context,
+                                 const char* input_path,
+                                 const char* output_path,
+                                 const adm_render_options_t* opts) ADM_API_NOEXCEPT;
+
 /* Release a heap string returned by adm_inspect_file_json (and any future ABI
  * function documented as returning an owned string). Passing NULL is a safe no-op. */
 void adm_free_string(char* s) ADM_API_NOEXCEPT;
@@ -666,6 +702,31 @@ adm_error_code_t adm_layouts_json(adm_context_t* context, char** out_json) ADM_A
  * on a hot path, cache the result rather than re-querying.
  */
 adm_error_code_t adm_output_formats_json(adm_context_t* context, char** out_json) ADM_API_NOEXCEPT;
+
+/* ── v1.12 Render support matrix (JSON) ─────────────────────────────────── */
+/*
+ * adm_render_support_matrix_json: concrete renderer × layout × output-target
+ * support matrix as a JSON string (UTF-8). This combines the renderer
+ * capabilities, layout/channel-order table, and output format/container
+ * constraints into entries with:
+ *
+ *   renderer, layout, layout_id, channels, is_3d,
+ *   target, format, container, encoding, supported, optional reason
+ *
+ * Targets distinguish containers/options that share an extension or codec, e.g.
+ * "caf" (PCM CAF) versus "apac_caf", and "iamf" versus "iamf_mp4".
+ *
+ * The root object carries:
+ *   "schema": "mradm.render-support-matrix", "schema_version": 1
+ *
+ * On success returns ADM_ERROR_OK and writes a heap string to *out_json, owned by
+ * the CALLER and released with adm_free_string (never free()/delete). out_json
+ * must be non-NULL (returns ADM_ERROR_INVALID_ARGUMENT otherwise), as is context.
+ *
+ * Does no project-file I/O. Like adm_output_formats_json, IAMF-enabled builds may
+ * probe PATH for an MP4 packager while computing the IAMF MP4 availability flag.
+ */
+adm_error_code_t adm_render_support_matrix_json(adm_context_t* context, char** out_json) ADM_API_NOEXCEPT;
 
 /* ── v1.8 Preview session ────────────────────────────────────────────────── */
 /*

@@ -3,6 +3,7 @@ build/
 cmake-build-*/
 out/
 bin/
+obj/
 lib/
 dist/
 
@@ -16,6 +17,7 @@ compile_commands.json
 # Local editor/system files
 .DS_Store
 .idea/
+.vs/
 .vscode/
 *.swp
 *.swo
@@ -33,3 +35,6 @@ coverage/
 
 # Local experiments
 experiments/
+
+# GUI 本地拷入的自包含 C ABI 原生库(构建产物,由 gui/copy-native.sh 生成)
+gui/MacinRender.Gui/runtimes/

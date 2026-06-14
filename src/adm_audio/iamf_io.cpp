@@ -44,6 +44,17 @@ int iamf_should_cancel(void* user_data) {
     const auto* cancel_token = static_cast<const std::stop_token*>(user_data);
     return cancel_token->stop_requested() ? 1 : 0;
 }
+
+std::string join_csv(const std::vector<std::string>& values) {
+    std::string out;
+    for (const auto& value : values) {
+        if (!out.empty()) {
+            out += ",";
+        }
+        out += value;
+    }
+    return out;
+}
 #endif
 
 // ── Cross-platform process helpers ───────────────────────────────────────
@@ -360,7 +371,8 @@ Result<void> convert_to_iamf(const std::string& src_path,
                              uint32_t bitrate_per_ch_kbps,
                              std::optional<double> loudness_lufs,
                              std::optional<double> peak_dbtp,
-                             const std::stop_token& cancel_token) {
+                             const std::stop_token& cancel_token,
+                             const std::vector<std::string>& scalable_layers) {
 #if MR_ADM_ENABLE_IAMF
     if (cancel_token.stop_requested()) {
         return make_error(ErrorCode::cancelled, "render cancelled", "path=" + iamf_path);
@@ -384,9 +396,13 @@ Result<void> convert_to_iamf(const std::string& src_path,
     if (bridge_abi == 0U || bridge_abi > MR_IAMF_AOM_BRIDGE_ABI_VERSION) {
         return make_error(ErrorCode::io_error, "AOM IAMF bridge ABI version mismatch");
     }
+    if (!scalable_layers.empty() && bridge_abi < 3U) {
+        return make_error(ErrorCode::unsupported, "IAMF scalable layers require AOM bridge ABI v3 or newer");
+    }
+    const std::string layers_csv = join_csv(scalable_layers);
 
     MrIamfAomEncodeOptions options{};
-    options.abi_version = bridge_abi >= 2U ? 2U : 1U;
+    options.abi_version = bridge_abi >= 3U ? 3U : (bridge_abi >= 2U ? 2U : 1U);
     options.input_wav_path = src_path.c_str();
     options.output_iamf_path = iamf_path.c_str();
     options.layout_id = layout_id.c_str();
@@ -400,6 +416,9 @@ Result<void> convert_to_iamf(const std::string& src_path,
         options.struct_size = sizeof(options);
         options.should_cancel = iamf_should_cancel;
         options.cancel_user_data = const_cast<std::stop_token*>(&cancel_token);
+    }
+    if (bridge_abi >= 3U) {
+        options.scalable_layers_csv = layers_csv.empty() ? nullptr : layers_csv.c_str();
     }
 
     std::array<char, 2048> error_buffer{};
@@ -421,6 +440,7 @@ Result<void> convert_to_iamf(const std::string& src_path,
     (void) loudness_lufs;
     (void) peak_dbtp;
     (void) cancel_token;
+    (void) scalable_layers;
     return make_error(ErrorCode::unsupported,
                       "IAMF encoding requires MR_ADM_ENABLE_IAMF=ON and the official AOM iamf-tools bridge");
 #endif

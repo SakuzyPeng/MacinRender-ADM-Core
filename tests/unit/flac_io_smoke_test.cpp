@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -9,9 +10,15 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <unistd.h>
 #include <vector>
 
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
+#include <FLAC/callback.h>
 #include <FLAC/metadata.h>
 #include <adm/adm.hpp>
 #include <adm/utilities/id_assignment.hpp>
@@ -49,8 +56,13 @@ constexpr std::size_t sample_count(uint32_t channels, uint32_t frames) {
 
 std::filesystem::path temp_path(std::string_view stem, std::string_view ext) {
     static std::atomic<int> s_seq{0};
-    const auto name = std::string(stem) + "_" + std::to_string(static_cast<int>(::getpid())) + "_" +
-                      std::to_string(s_seq.fetch_add(1)) + std::string(ext);
+#ifdef _WIN32
+    const int pid = _getpid();
+#else
+    const int pid = static_cast<int>(::getpid());
+#endif
+    const auto name =
+        std::string(stem) + "_" + std::to_string(pid) + "_" + std::to_string(s_seq.fetch_add(1)) + std::string(ext);
     return std::filesystem::temp_directory_path() / name;
 }
 
@@ -134,12 +146,62 @@ bool has_render_temp_sidecar(const std::filesystem::path& final_path) {
     });
 }
 
+FILE* open_metadata_read(const std::filesystem::path& path) {
+#ifdef _WIN32
+    return _wfopen(path.wstring().c_str(), L"rb");
+#else
+    return std::fopen(path.c_str(), "rb");
+#endif
+}
+
+int metadata_seek(FLAC__IOHandle handle, FLAC__int64 offset, int whence) {
+#ifdef _WIN32
+    return _fseeki64(static_cast<FILE*>(handle), static_cast<__int64>(offset), whence);
+#else
+    return fseeko(static_cast<FILE*>(handle), static_cast<off_t>(offset), whence);
+#endif
+}
+
+FLAC__int64 metadata_tell(FLAC__IOHandle handle) {
+#ifdef _WIN32
+    return static_cast<FLAC__int64>(_ftelli64(static_cast<FILE*>(handle)));
+#else
+    return static_cast<FLAC__int64>(ftello(static_cast<FILE*>(handle)));
+#endif
+}
+
+struct FileCloser {
+    void operator()(FILE* file) const {
+        if (file != nullptr) {
+            std::fclose(file);
+        }
+    }
+};
+
+using UniqueFile = std::unique_ptr<FILE, FileCloser>;
+
+bool read_metadata_chain(FLAC__Metadata_Chain* chain, const std::string& path) {
+    UniqueFile file(open_metadata_read(std::filesystem::path(path)));
+    if (file == nullptr) {
+        return false;
+    }
+
+    FLAC__IOCallbacks callbacks{};
+    callbacks.read = [](void* ptr, size_t size, size_t nmemb, FLAC__IOHandle handle) {
+        return std::fread(ptr, size, nmemb, static_cast<FILE*>(handle));
+    };
+    callbacks.seek = metadata_seek;
+    callbacks.tell = metadata_tell;
+    callbacks.eof = [](FLAC__IOHandle handle) { return std::feof(static_cast<FILE*>(handle)); };
+    return FLAC__metadata_chain_read_with_callbacks(chain, file.get(), callbacks) != 0;
+}
+
 bool flac_has_tag(const std::string& path, std::string_view prefix) {
     FLAC__Metadata_Chain* chain = FLAC__metadata_chain_new();
     if (chain == nullptr) {
         return false;
     }
-    if (FLAC__metadata_chain_read(chain, path.c_str()) == 0) {
+    if (!read_metadata_chain(chain, path)) {
         FLAC__metadata_chain_delete(chain);
         return false;
     }
@@ -182,7 +244,7 @@ bool verify_flac_roundtrip() {
     constexpr uint32_t k_frames = 1024U;
     constexpr float k_tol = 1e-6F;
 
-    const std::string path = "/tmp/mr_flac_roundtrip_test.flac";
+    const std::string path = temp_path("mr_flac_roundtrip_test", ".flac").string();
     FileGuard guard(path);
 
     std::vector<float> orig(sample_count(k_ch, k_frames));
@@ -235,7 +297,7 @@ bool verify_flac_gain() {
     constexpr float k_gain = 0.5F;
     constexpr float k_tol = 2e-6F;
 
-    const std::string path = "/tmp/mr_flac_gain_test.flac";
+    const std::string path = temp_path("mr_flac_gain_test", ".flac").string();
     FileGuard guard(path);
 
     {
@@ -281,7 +343,7 @@ bool verify_flac_vorbis_comment() {
     constexpr uint32_t k_sr = 48000U;
     constexpr uint32_t k_frames = 256U;
 
-    const std::string path = "/tmp/mr_flac_meta_test.flac";
+    const std::string path = temp_path("mr_flac_meta_test", ".flac").string();
     FileGuard guard(path);
 
     {
@@ -310,7 +372,7 @@ bool verify_flac_vorbis_comment() {
     if (!check(chain != nullptr, "chain alloc")) {
         return false;
     }
-    if (!check(FLAC__metadata_chain_read(chain, path.c_str()) != 0, "chain read")) {
+    if (!check(read_metadata_chain(chain, path), "chain read")) {
         FLAC__metadata_chain_delete(chain);
         return false;
     }
@@ -374,7 +436,7 @@ bool verify_flac_channel_mask_value() {
     constexpr uint32_t k_sr = 48000U;
     constexpr uint32_t k_frames = 128U;
 
-    const std::string path = "/tmp/mr_flac_mask_test.flac";
+    const std::string path = temp_path("mr_flac_mask_test", ".flac").string();
     FileGuard guard(path);
 
     {
@@ -401,7 +463,7 @@ bool verify_flac_channel_mask_value() {
     if (!check(chain != nullptr, "chain alloc (mask)")) {
         return false;
     }
-    if (!check(FLAC__metadata_chain_read(chain, path.c_str()) != 0, "chain read (mask)")) {
+    if (!check(read_metadata_chain(chain, path), "chain read (mask)")) {
         FLAC__metadata_chain_delete(chain);
         return false;
     }
@@ -580,20 +642,27 @@ bool verify_render_service_flac_rejects_height_layouts() {
     return true;
 }
 
+bool run_check(std::string_view name, bool (*fn)()) {
+    std::cerr << "RUN: " << name << "\n";
+    const bool ok = fn();
+    std::cerr << (ok ? "PASS: " : "FAIL: ") << name << "\n";
+    return ok;
+}
+
 } // namespace
 
 int main() {
     bool ok = true;
-    ok &= verify_flac_roundtrip();
-    ok &= verify_flac_gain();
-    ok &= verify_flac_vorbis_comment();
-    ok &= verify_flac_channel_mask_value();
-    ok &= verify_render_service_flac_final_pipeline();
-    ok &= verify_render_service_flac_rejects_more_than_8_channels();
-    ok &= verify_render_service_flac_rejects_height_layouts();
+    ok &= run_check("roundtrip", verify_flac_roundtrip);
+    ok &= run_check("gain", verify_flac_gain);
+    ok &= run_check("vorbis_comment", verify_flac_vorbis_comment);
+    ok &= run_check("channel_mask", verify_flac_channel_mask_value);
+    ok &= run_check("render_service_final_pipeline", verify_render_service_flac_final_pipeline);
+    ok &= run_check("rejects_more_than_8_channels", verify_render_service_flac_rejects_more_than_8_channels);
+    ok &= run_check("rejects_height_layouts", verify_render_service_flac_rejects_height_layouts);
     if (!ok) {
         return EXIT_FAILURE;
     }
-    std::cout << "FLAC I/O smoke tests passed (6/6)\n";
+    std::cout << "FLAC I/O smoke tests passed (7/7)\n";
     return EXIT_SUCCESS;
 }
