@@ -31,6 +31,15 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private bool _isLoading;
 
+    // 被多数对象共享、展示时剥离的主前缀(空=无);用 chip 提示用户"剥了什么"。
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCommonPrefix))]
+    [NotifyPropertyChangedFor(nameof(CommonPrefixLabel))]
+    private string _commonPrefix = "";
+
+    public bool HasCommonPrefix => CommonPrefix.Length > 0;
+    public string CommonPrefixLabel => HasCommonPrefix ? L.Format("SemPrefix", CommonPrefix) : "";
+
     /// <summary>当前 policy JSON(无任何覆盖时为空串);供 #16/#17/#18 消费。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(OverrideSummary))]
@@ -86,14 +95,27 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             if (doc is null)
             {
                 LoadedPath = null;
+                CommonPrefix = "";
                 StatusText = L["SemLoadFailed"];
                 RebuildPolicy();
                 return;
             }
 
+            // 先扫所有对象名,检测可剥离的主前缀,再据此生成展示名。
+            var names = new List<string>(doc.Objects.Count);
+            foreach (var o in doc.Objects)
+            {
+                if (!string.IsNullOrEmpty(o.Name))
+                {
+                    names.Add(o.Name);
+                }
+            }
+
+            CommonPrefix = ObjectNaming.DetectCommonPrefix(names);
+
             foreach (var obj in doc.Objects)
             {
-                var item = SemanticObjectItem.From(obj);
+                var item = SemanticObjectItem.From(obj, CommonPrefix);
                 item.Changed += OnObjectChanged;
                 Objects.Add(item);
             }
@@ -290,7 +312,11 @@ public sealed class SemanticObjectItem
 
     public event Action? Changed;
 
-    public string Display => string.IsNullOrEmpty(Name) ? Id : $"{Name}  ({Id})";
+    /// <summary>展示名:已剥掉多数对象共享的主前缀(DAW 导出的曲名/文件名前缀);全名见 Tooltip。</summary>
+    public required string DisplayName { get; init; }
+
+    /// <summary>悬停全名 + id(剥前缀后用它兜底完整信息)。</summary>
+    public string Tooltip => string.IsNullOrEmpty(Name) ? Id : $"{Name}  ({Id})";
 
     public string Summary =>
         $"gain {GainDb.CurrentText} · diffuse {DiffuseScale.CurrentText} · " +
@@ -345,7 +371,7 @@ public sealed class SemanticObjectItem
         }
     }
 
-    internal static SemanticObjectItem From(InspectObject obj)
+    internal static SemanticObjectItem From(InspectObject obj, string commonPrefix = "")
     {
         var diffuse = new List<double>();
         var width = new List<double>();
@@ -368,6 +394,7 @@ public sealed class SemanticObjectItem
         {
             Id = obj.Id,
             Name = obj.Name,
+            DisplayName = ObjectNaming.Strip(string.IsNullOrEmpty(obj.Name) ? obj.Id : obj.Name, commonPrefix),
             Importance = obj.Importance,
             DialogueId = obj.DialogueId,
             OriginalMute = obj.Mute,

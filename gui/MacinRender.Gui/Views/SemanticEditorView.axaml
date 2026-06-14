@@ -33,18 +33,27 @@
 
                 <!-- 对象列表 -->
                 <ctrl:SquircleBorder Grid.Column="0" Classes="card">
-                    <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
                         <TextBlock Grid.Row="0" Classes="h2" Text="{DynamicResource SemObjects}"/>
-                        <ListBox Grid.Row="1" ItemsSource="{Binding Objects}"
+                        <!-- 剥离的主前缀提示(全名仍在每行 tooltip) -->
+                        <Border Grid.Row="1" IsVisible="{Binding HasCommonPrefix}"
+                                Background="{DynamicResource RowBg}" CornerRadius="8" Padding="8,5">
+                            <TextBlock Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding CommonPrefix}"
+                                       Text="{Binding CommonPrefixLabel}"/>
+                        </Border>
+                        <ListBox Grid.Row="2" ItemsSource="{Binding Objects}"
                                  SelectionMode="Single"
                                  SelectedItem="{Binding SelectedObject}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:SemanticObjectItem">
-                                    <StackPanel Spacing="2" Margin="0,2">
+                                    <StackPanel Spacing="2" Margin="0,2" ToolTip.Tip="{Binding Tooltip}">
                                         <TextBlock FontSize="13" FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
                                                    Foreground="{DynamicResource TextPrimary}"
-                                                   Text="{Binding Display}"/>
+                                                   Text="{Binding DisplayName}"/>
                                         <TextBlock Classes="muted" FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
                                                    IsVisible="{Binding Meta, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                                    Text="{Binding Meta}"/>
                                     </StackPanel>
@@ -59,7 +68,7 @@
                     <Grid RowDefinitions="Auto,*" RowSpacing="10">
                         <StackPanel Grid.Row="0" Spacing="1">
                             <TextBlock Classes="h2"
-                                       Text="{Binding SelectedObject.Display, FallbackValue={x:Null}}"/>
+                                       Text="{Binding SelectedObject.DisplayName, FallbackValue={x:Null}}"/>
                             <TextBlock Classes="muted" FontSize="11"
                                        Text="{Binding SelectedObject.Meta, FallbackValue={x:Null}}"/>
                         </StackPanel>

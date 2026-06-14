@@ -124,10 +124,14 @@ internal static class SelfTest
         }
 
         Console.WriteLine($"语义 inspect: {inspectDoc.Objects.Count} 个对象");
-        foreach (var o in inspectDoc.Objects.Take(3))
+        // 主前缀剥离(B):检测多数对象共享的前缀,展示名剥掉它(全名进 tooltip)。
+        var allNames = inspectDoc.Objects.Where(o => !string.IsNullOrEmpty(o.Name)).Select(o => o.Name).ToList();
+        var commonPrefix = ObjectNaming.DetectCommonPrefix(allNames);
+        Console.WriteLine($"主前缀: \"{commonPrefix}\"");
+        foreach (var o in inspectDoc.Objects.Take(4))
         {
-            var item = SemanticObjectItem.From(o);
-            Console.WriteLine($"  {item.Display} — {item.Summary}");
+            var item = SemanticObjectItem.From(o, commonPrefix);
+            Console.WriteLine($"  展示名 \"{item.DisplayName}\"  (全名 \"{o.Name}\")");
         }
 
         var tmpl = AdmQueries.FetchPolicyTemplateJson(ctx, inputWav);
