@@ -11,6 +11,7 @@ option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
 option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 option(MR_ADM_CORE_FETCH_DEPS "Fetch CLI/fmt/spdlog dependencies when not found" ON)
+option(MR_ADM_CORE_USE_INSTALLED_DEPS "Use installed CMake package configs before FetchContent dependencies" ON)
 option(MR_ADM_CORE_ENABLE_CLANG_TIDY "Run clang-tidy as part of compilation when available" OFF)
 option(MR_ADM_CORE_ENABLE_CPPCHECK "Run cppcheck as part of compilation when available" OFF)
 option(MR_ADM_ENABLE_SOFA "Enable user SOFA HRIR loading for the binaural renderer" ON)
@@ -395,6 +396,7 @@ target_sources(
         src/adm_engine/capability_json.cpp
         src/adm_engine/layout_table.cpp
         src/adm_engine/format_table.cpp
+        src/adm_engine/support_matrix.cpp
 )
 
 target_link_libraries(mr_adm_engine
@@ -409,6 +411,10 @@ endif()
 target_include_directories(mr_adm_engine SYSTEM PRIVATE
     "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
 )
+# ADMAudio-internal headers (audio_io_internal.h): the engine orchestrates the
+# audio layer and reaches its internal subprocess worker (run_apac_encode_child).
+# PRIVATE so this stays an engine-only coupling and never leaks to the CLI / C ABI.
+target_include_directories(mr_adm_engine PRIVATE src/adm_audio)
 mr_adm_core_apply_warnings(mr_adm_engine)
 mr_adm_core_apply_static_analysis(mr_adm_engine)
 
@@ -437,6 +443,25 @@ set_target_properties(mr_adm_c_api PROPERTIES
 mr_adm_core_apply_warnings(mr_adm_c_api)
 mr_adm_core_apply_static_analysis(mr_adm_c_api)
 
+# ── adm_c_api bundle (self-contained shared lib for GUI / P-Invoke) ────────────
+# 默认 OFF,不影响常规构建。开启后产出单个自包含 libmradm_capi.dylib/.so/.dll,
+# 把 c_api 与其全部静态依赖(engine → renderers → 第三方)whole-archive 进同一动态库,
+# 供托管侧(Avalonia GUI)经 [LibraryImport("mradm_capi")] 直接加载。
+# core 源码完全不动:这里只是多一个可选的链接目标。
+option(MR_ADM_BUILD_CAPI_BUNDLE "Build self-contained libmradm_capi shared lib for GUI/P-Invoke" OFF)
+
+if(MR_ADM_BUILD_CAPI_BUNDLE)
+    # 直接把 C ABI 源文件编进 SHARED 目标,让 Windows 导出扫描能看到 adm_* 入口。
+    add_library(mradm_capi_bundle SHARED src/adm_c_api/adm_c_api.cpp)
+    set_target_properties(mradm_capi_bundle PROPERTIES
+        OUTPUT_NAME mradm_capi
+        VERSION   ${PROJECT_VERSION}
+        SOVERSION ${PROJECT_VERSION_MAJOR}
+        WINDOWS_EXPORT_ALL_SYMBOLS ON
+    )
+    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMEngine)
+endif()
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 if(MR_ADM_CORE_BUILD_CLI)
@@ -444,7 +469,9 @@ if(MR_ADM_CORE_BUILD_CLI)
     set_target_properties(mradm_exe PROPERTIES OUTPUT_NAME mradm)
     target_sources(mradm_exe
         PRIVATE
+            src/adm_cli/apac_encode_command.cpp
             src/adm_cli/backends_command.cpp
+            src/adm_cli/export_command.cpp
             src/adm_cli/formats_command.cpp
             src/adm_cli/inspect_command.cpp
             src/adm_cli/layouts_command.cpp
@@ -463,6 +490,7 @@ if(MR_ADM_CORE_BUILD_CLI)
             CLI11::CLI11
             spdlog::spdlog
     )
+    target_include_directories(mradm_exe PRIVATE src/adm_audio)
     if(APPLE)
         target_link_libraries(mradm_exe PRIVATE MacinRender::ADMRenderApple)
     endif()
@@ -524,6 +552,17 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_io_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_io_fixture_tests)
     add_test(NAME mr_adm_io_fixture_tests COMMAND mr_adm_io_fixture_tests)
+
+    add_executable(mr_adm_scene_export_tests tests/unit/scene_export_fixture_test.cpp)
+    target_link_libraries(mr_adm_scene_export_tests
+        PRIVATE
+            MacinRender::ADMIo
+            libbw64
+            adm
+    )
+    mr_adm_core_apply_warnings(mr_adm_scene_export_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_scene_export_tests)
+    add_test(NAME mr_adm_scene_export_tests COMMAND mr_adm_scene_export_tests)
 
     add_executable(mr_adm_vbap_smoke_tests tests/unit/vbap_smoke_test.cpp)
     target_link_libraries(mr_adm_vbap_smoke_tests
@@ -674,6 +713,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_apac_smoke_tests tests/unit/apac_smoke_test.cpp)
     target_link_libraries(mr_adm_apac_smoke_tests PRIVATE MacinRender::ADMAudio)
+    # Pin the APAC stall-watchdog test to the real mradm subprocess helper (and
+    # order the build after it). Skipped when the CLI is not built.
+    if(TARGET mradm_exe)
+        target_compile_definitions(mr_adm_apac_smoke_tests
+            PRIVATE MRADM_EXE_PATH="$<TARGET_FILE:mradm_exe>")
+        add_dependencies(mr_adm_apac_smoke_tests mradm_exe)
+    endif()
     mr_adm_core_apply_warnings(mr_adm_apac_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_apac_smoke_tests)
     add_test(NAME mr_adm_apac_smoke_tests COMMAND mr_adm_apac_smoke_tests)

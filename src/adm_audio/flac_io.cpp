@@ -4,13 +4,27 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <dr_flac.h>
+#include <filesystem>
+#include <memory>
 #include <stop_token>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
+#include <FLAC/callback.h>
 #include <FLAC/metadata.h>
 #include <FLAC/stream_encoder.h>
 #include <fmt/format.h>
@@ -44,12 +58,202 @@ void emit_flac_progress(ProgressSink* progress,
     progress->on_progress({RenderStage::post_processing, operation, f, f, current_frame, total_frames, message});
 }
 
+#ifdef _WIN32
+std::wstring utf8_to_wide(const std::string& path) {
+    if (path.empty()) {
+        return {};
+    }
+    const int size =
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.c_str(), static_cast<int>(path.size()), nullptr, 0);
+    if (size <= 0) {
+        return {};
+    }
+    std::wstring wide(static_cast<std::size_t>(size), L'\0');
+    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.c_str(), static_cast<int>(path.size()), wide.data(), size);
+    return wide;
+}
+#endif
+
+FILE* open_binary_write(const std::string& path) {
+#ifdef _WIN32
+    const std::wstring wide = utf8_to_wide(path);
+    if (wide.empty()) {
+        return nullptr;
+    }
+    return _wfopen(wide.c_str(), L"wb");
+#else
+    return std::fopen(path.c_str(), "wb");
+#endif
+}
+
+FILE* open_binary_read(const std::string& path) {
+#ifdef _WIN32
+    const std::wstring wide = utf8_to_wide(path);
+    if (wide.empty()) {
+        return nullptr;
+    }
+    return _wfopen(wide.c_str(), L"rb");
+#else
+    return std::fopen(path.c_str(), "rb");
+#endif
+}
+
+int seek_binary_file(FILE* file, FLAC__uint64 absolute_byte_offset) {
+#ifdef _WIN32
+    return _fseeki64(file, static_cast<__int64>(absolute_byte_offset), SEEK_SET);
+#else
+    return fseeko(file, static_cast<off_t>(absolute_byte_offset), SEEK_SET);
+#endif
+}
+
+int seek_binary_file(FILE* file, FLAC__int64 offset, int whence) {
+#ifdef _WIN32
+    return _fseeki64(file, static_cast<__int64>(offset), whence);
+#else
+    return fseeko(file, static_cast<off_t>(offset), whence);
+#endif
+}
+
+bool tell_binary_file(FILE* file, FLAC__uint64* absolute_byte_offset) {
+#ifdef _WIN32
+    const __int64 pos = _ftelli64(file);
+    if (pos < 0) {
+        return false;
+    }
+    *absolute_byte_offset = static_cast<FLAC__uint64>(pos);
+    return true;
+#else
+    const off_t pos = ftello(file);
+    if (pos < 0) {
+        return false;
+    }
+    *absolute_byte_offset = static_cast<FLAC__uint64>(pos);
+    return true;
+#endif
+}
+
+FLAC__int64 tell_binary_file(FILE* file) {
+#ifdef _WIN32
+    return static_cast<FLAC__int64>(_ftelli64(file));
+#else
+    return static_cast<FLAC__int64>(ftello(file));
+#endif
+}
+
+bool replace_file(const std::string& src_path, const std::string& dst_path) {
+#ifdef _WIN32
+    const std::wstring src = utf8_to_wide(src_path);
+    const std::wstring dst = utf8_to_wide(dst_path);
+    if (src.empty() || dst.empty()) {
+        return false;
+    }
+    return MoveFileExW(src.c_str(), dst.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+    std::error_code ec;
+    std::filesystem::rename(src_path, dst_path, ec);
+    return !ec;
+#endif
+}
+
+FLAC__StreamEncoderWriteStatus flac_write_callback(const FLAC__StreamEncoder* /*encoder*/,
+                                                   const FLAC__byte buffer[],
+                                                   size_t bytes,
+                                                   uint32_t /*samples*/,
+                                                   uint32_t /*current_frame*/,
+                                                   void* client_data) {
+    auto* file = static_cast<FILE*>(client_data);
+    if (file == nullptr || std::fwrite(buffer, 1U, bytes, file) != bytes) {
+        return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
+    }
+    return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
+}
+
+FLAC__StreamEncoderSeekStatus
+flac_seek_callback(const FLAC__StreamEncoder* /*encoder*/, FLAC__uint64 absolute_byte_offset, void* client_data) {
+    auto* file = static_cast<FILE*>(client_data);
+    if (file == nullptr) {
+        return FLAC__STREAM_ENCODER_SEEK_STATUS_ERROR;
+    }
+    return seek_binary_file(file, absolute_byte_offset) == 0 ? FLAC__STREAM_ENCODER_SEEK_STATUS_OK
+                                                             : FLAC__STREAM_ENCODER_SEEK_STATUS_ERROR;
+}
+
+FLAC__StreamEncoderTellStatus
+flac_tell_callback(const FLAC__StreamEncoder* /*encoder*/, FLAC__uint64* absolute_byte_offset, void* client_data) {
+    auto* file = static_cast<FILE*>(client_data);
+    if (file == nullptr || absolute_byte_offset == nullptr || !tell_binary_file(file, absolute_byte_offset)) {
+        return FLAC__STREAM_ENCODER_TELL_STATUS_ERROR;
+    }
+    return FLAC__STREAM_ENCODER_TELL_STATUS_OK;
+}
+
+size_t flac_io_read_callback(void* ptr, size_t size, size_t nmemb, FLAC__IOHandle handle) {
+    return std::fread(ptr, size, nmemb, static_cast<FILE*>(handle));
+}
+
+size_t flac_io_write_callback(const void* ptr, size_t size, size_t nmemb, FLAC__IOHandle handle) {
+    return std::fwrite(ptr, size, nmemb, static_cast<FILE*>(handle));
+}
+
+int flac_io_seek_callback(FLAC__IOHandle handle, FLAC__int64 offset, int whence) {
+    return seek_binary_file(static_cast<FILE*>(handle), offset, whence);
+}
+
+FLAC__int64 flac_io_tell_callback(FLAC__IOHandle handle) {
+    return tell_binary_file(static_cast<FILE*>(handle));
+}
+
+int flac_io_eof_callback(FLAC__IOHandle handle) {
+    return std::feof(static_cast<FILE*>(handle));
+}
+
+struct FileCloser {
+    void operator()(FILE* file) const {
+        if (file != nullptr) {
+            std::fclose(file);
+        }
+    }
+};
+
+using UniqueFile = std::unique_ptr<FILE, FileCloser>;
+
+FLAC__IOCallbacks flac_metadata_source_callbacks() {
+    FLAC__IOCallbacks callbacks{};
+    callbacks.read = flac_io_read_callback;
+    callbacks.seek = flac_io_seek_callback;
+    callbacks.tell = flac_io_tell_callback;
+    callbacks.eof = flac_io_eof_callback;
+    return callbacks;
+}
+
+FLAC__IOCallbacks flac_metadata_temp_callbacks() {
+    FLAC__IOCallbacks callbacks{};
+    callbacks.write = flac_io_write_callback;
+    return callbacks;
+}
+
 } // namespace
 
 struct FloatFlacWriter::Impl {
     FLAC__StreamEncoder* encoder{nullptr};
+    FILE* file{nullptr};
     uint32_t channels{};
     std::vector<FLAC__int32> int_buf;
+
+    Impl() = default;
+    Impl(const Impl&) = delete;
+    Impl& operator=(const Impl&) = delete;
+    Impl(Impl&&) = delete;
+    Impl& operator=(Impl&&) = delete;
+    ~Impl() {
+        if (encoder != nullptr) {
+            FLAC__stream_encoder_finish(encoder);
+            FLAC__stream_encoder_delete(encoder);
+        }
+        if (file != nullptr) {
+            std::fclose(file);
+        }
+    }
 };
 
 Result<FloatFlacWriter> FloatFlacWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate) {
@@ -68,9 +272,17 @@ Result<FloatFlacWriter> FloatFlacWriter::open(const std::string& path, uint32_t 
     FLAC__stream_encoder_set_sample_rate(enc, sample_rate);
     FLAC__stream_encoder_set_compression_level(enc, 5);
 
-    const FLAC__StreamEncoderInitStatus status = FLAC__stream_encoder_init_file(enc, path.c_str(), nullptr, nullptr);
+    FILE* file = open_binary_write(path);
+    if (file == nullptr) {
+        FLAC__stream_encoder_delete(enc);
+        return make_error(ErrorCode::io_error, "failed to open FLAC file for writing", "path=" + path);
+    }
+
+    const FLAC__StreamEncoderInitStatus status = FLAC__stream_encoder_init_stream(
+        enc, flac_write_callback, flac_seek_callback, flac_tell_callback, nullptr, file);
     if (status != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
         FLAC__stream_encoder_delete(enc);
+        std::fclose(file);
         return make_error(ErrorCode::io_error,
                           fmt::format("FLAC encoder init failed: {}", FLAC__StreamEncoderInitStatusString[status]),
                           "path=" + path);
@@ -79,16 +291,12 @@ Result<FloatFlacWriter> FloatFlacWriter::open(const std::string& path, uint32_t 
     FloatFlacWriter w;
     w.impl_ = std::make_unique<Impl>();
     w.impl_->encoder = enc;
+    w.impl_->file = file;
     w.impl_->channels = channels;
     return w;
 }
 
-FloatFlacWriter::~FloatFlacWriter() {
-    if (impl_ && impl_->encoder != nullptr) {
-        FLAC__stream_encoder_finish(impl_->encoder);
-        FLAC__stream_encoder_delete(impl_->encoder);
-    }
-}
+FloatFlacWriter::~FloatFlacWriter() = default;
 
 FloatFlacWriter::FloatFlacWriter(FloatFlacWriter&&) noexcept = default;
 FloatFlacWriter& FloatFlacWriter::operator=(FloatFlacWriter&&) noexcept = default;
@@ -159,9 +367,19 @@ Result<void> write_flac_metadata(const std::string& path, const MetadataFields& 
         return make_error(ErrorCode::io_error, "FLAC metadata chain alloc failed", "path=" + path);
     }
 
-    if (FLAC__metadata_chain_read(chain, path.c_str()) == 0) {
+    UniqueFile source(open_binary_read(path));
+    if (source == nullptr) {
         FLAC__metadata_chain_delete(chain);
-        return make_error(ErrorCode::io_error, "FLAC metadata chain read failed", "path=" + path);
+        return make_error(ErrorCode::io_error, "failed to open FLAC file for metadata", "path=" + path);
+    }
+
+    const FLAC__IOCallbacks source_callbacks = flac_metadata_source_callbacks();
+    if (FLAC__metadata_chain_read_with_callbacks(chain, source.get(), source_callbacks) == 0) {
+        const auto status = FLAC__metadata_chain_status(chain);
+        FLAC__metadata_chain_delete(chain);
+        return make_error(ErrorCode::io_error,
+                          fmt::format("FLAC metadata chain read failed: {}", FLAC__Metadata_ChainStatusString[status]),
+                          "path=" + path);
     }
 
     FLAC__StreamMetadata* vc = FLAC__metadata_object_new(FLAC__METADATA_TYPE_VORBIS_COMMENT);
@@ -250,11 +468,31 @@ Result<void> write_flac_metadata(const std::string& path, const MetadataFields& 
     FLAC__metadata_iterator_delete(it);
 
     FLAC__metadata_chain_sort_padding(chain);
-    const FLAC__bool ok = FLAC__metadata_chain_write(chain, /*use_padding=*/1, /*preserve_file_stats=*/0);
+    const std::string temp_path = path + ".metadata_tmp";
+    UniqueFile temp(open_binary_write(temp_path));
+    if (temp == nullptr) {
+        FLAC__metadata_chain_delete(chain);
+        return make_error(ErrorCode::io_error, "failed to open FLAC metadata temp file", "path=" + temp_path);
+    }
+
+    const FLAC__IOCallbacks temp_callbacks = flac_metadata_temp_callbacks();
+    const FLAC__bool ok = FLAC__metadata_chain_write_with_callbacks_and_tempfile(
+        chain, /*use_padding=*/1, source.get(), source_callbacks, temp.get(), temp_callbacks);
+    const auto status = FLAC__metadata_chain_status(chain);
     FLAC__metadata_chain_delete(chain);
 
     if (ok == 0) {
-        return make_error(ErrorCode::io_error, "FLAC metadata chain write failed", "path=" + path);
+        std::filesystem::remove(temp_path);
+        return make_error(ErrorCode::io_error,
+                          fmt::format("FLAC metadata chain write failed: {}", FLAC__Metadata_ChainStatusString[status]),
+                          "path=" + path);
+    }
+
+    source.reset();
+    temp.reset();
+    if (!replace_file(temp_path, path)) {
+        std::filesystem::remove(temp_path);
+        return make_error(ErrorCode::io_error, "failed to replace FLAC file after metadata write", "path=" + path);
     }
     return {};
 }

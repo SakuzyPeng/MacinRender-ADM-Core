@@ -1,0 +1,394 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:MacinRender.Gui.ViewModels"
+        xmlns:m="using:MacinRender.Gui.Models"
+        xmlns:ctrl="using:MacinRender.Gui.Controls"
+        mc:Ignorable="d" d:DesignWidth="1120" d:DesignHeight="740"
+        x:Class="MacinRender.Gui.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="MacinRender ADM"
+        Icon="/Assets/AppIcon.ico"
+        Width="1120" Height="740" MinWidth="940" MinHeight="600"
+        TransparencyLevelHint="AcrylicBlur,Mica,Blur"
+        Background="Transparent"
+        ExtendClientAreaToDecorationsHint="True">
+
+    <Panel DragDrop.AllowDrop="True">
+        <ExperimentalAcrylicBorder IsHitTestVisible="False">
+            <ExperimentalAcrylicBorder.Material>
+                <ExperimentalAcrylicMaterial
+                    BackgroundSource="Digger"
+                    TintColor="{DynamicResource WindowTint}"
+                    TintOpacity="1"
+                    MaterialOpacity="0.78" />
+            </ExperimentalAcrylicBorder.Material>
+        </ExperimentalAcrylicBorder>
+
+        <Grid RowDefinitions="20,*" Background="{DynamicResource MainBg}">
+            <!-- 顶部标题栏:红绿灯落在这里 + 可拖动窗口 -->
+            <Border Grid.Row="0" Background="Transparent" PointerPressed="OnTitleBarPressed"/>
+            <Grid Grid.Row="1" ColumnDefinitions="210,*">
+
+            <!-- 侧栏 -->
+            <ctrl:SquircleBorder Grid.Column="0" Background="{DynamicResource SidebarBg}"
+                    Margin="16,8,8,16" CornerRadius="14">
+                <Grid RowDefinitions="Auto,*,Auto" Margin="12,0">
+                    <StackPanel Grid.Row="0" Margin="4,16,0,0" Spacing="0">
+                        <TextBlock Classes="h1" Text="MacinRender"/>
+                        <TextBlock Classes="muted" Margin="0,1,0,0" Text="{DynamicResource AppSubtitle}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Margin="0,20,0,0" Spacing="2">
+                        <!-- 一期仅渲染界面;其余导航(队列/历史/设置)暂隐藏,故不保留选中态 -->
+                        <ctrl:SquircleButton Classes="nav">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Path Classes="icon" Data="{StaticResource IconRender}"/>
+                                <TextBlock VerticalAlignment="Center" Text="{DynamicResource NavRender}"/>
+                            </StackPanel>
+                        </ctrl:SquircleButton>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="2" Margin="0,0,0,16" Spacing="2">
+                        <ctrl:SquircleButton Classes="nav" Command="{Binding ToggleLanguageCommand}"
+                                Click="OnToggleLanguageClick">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Panel Width="17" Height="17">
+                                    <Path Classes="icon" Data="{StaticResource IconGlobe}"/>
+                                    <Path x:Name="FlashGlobe" Classes="icon" Data="{StaticResource IconGlobe}"
+                                          Stroke="#30D158" Opacity="0">
+                                        <Path.Transitions>
+                                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                        </Path.Transitions>
+                                    </Path>
+                                </Panel>
+                                <TextBlock VerticalAlignment="Center" Text="{Binding LanguageText}"/>
+                            </StackPanel>
+                        </ctrl:SquircleButton>
+                        <ctrl:SquircleButton Classes="nav" Command="{Binding ToggleThemeCommand}"
+                                Click="OnToggleThemeClick">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Panel Width="17" Height="17">
+                                    <Path Classes="icon replace" Data="{StaticResource IconTheme}" Classes.on="{Binding IsDark}"/>
+                                    <Path Classes="icon replace" Data="{StaticResource IconSun}" Classes.on="{Binding !IsDark}"/>
+                                    <Path x:Name="FlashThemeMoon" Classes="icon" Data="{StaticResource IconTheme}"
+                                          Stroke="#30D158" Opacity="0" IsVisible="{Binding IsDark}">
+                                        <Path.Transitions>
+                                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                        </Path.Transitions>
+                                    </Path>
+                                    <Path x:Name="FlashThemeSun" Classes="icon" Data="{StaticResource IconSun}"
+                                          Stroke="#30D158" Opacity="0" IsVisible="{Binding !IsDark}">
+                                        <Path.Transitions>
+                                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                        </Path.Transitions>
+                                    </Path>
+                                </Panel>
+                                <TextBlock VerticalAlignment="Center" Text="{DynamicResource SwitchTheme}"/>
+                            </StackPanel>
+                        </ctrl:SquircleButton>
+                    </StackPanel>
+                </Grid>
+            </ctrl:SquircleBorder>
+
+            <!-- 主区:不滚动,卡片自适应窗口 -->
+            <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="8,0,16,16">
+                <StackPanel Grid.Row="0" Margin="2,6,0,12" Spacing="2">
+                    <TextBlock Classes="h1" FontSize="20" Text="{DynamicResource NavRender}"/>
+                    <TextBlock Classes="muted"
+                               Text="{DynamicResource PageDesc}"/>
+                </StackPanel>
+
+                <Grid Grid.Row="1" RowDefinitions="Auto,*">
+
+                    <!-- 输出设置:渲染(后端→布局) + 封装(编码器→容器→参数),四级联动 -->
+                    <ctrl:SquircleBorder Grid.Row="0" Classes="card" Margin="0,0,0,12">
+                        <StackPanel Spacing="12">
+                            <TextBlock Classes="h2" Text="{DynamicResource OutputSettings}"/>
+
+                            <!-- 渲染 -->
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                                <StackPanel Grid.Column="0" Spacing="5">
+                                    <TextBlock Classes="muted" Text="{DynamicResource Backend}"/>
+                                    <ComboBox HorizontalAlignment="Stretch"
+                                              ItemsSource="{Binding Backends}"
+                                              SelectedItem="{Binding SelectedBackend}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="m:BackendDef">
+                                                <TextBlock Text="{Binding Name}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="5">
+                                    <TextBlock Classes="muted" Text="{DynamicResource Layout}"/>
+                                    <ComboBox HorizontalAlignment="Stretch"
+                                              ItemsSource="{Binding Layouts}"
+                                              SelectedItem="{Binding SelectedLayout}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="m:LayoutDef">
+                                                <TextBlock Text="{Binding Name}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- 封装:[编码器(有损让半列给码率)] | 容器 -->
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                                <Grid Grid.Column="0" ColumnDefinitions="*,*" ColumnSpacing="12">
+                                    <StackPanel Grid.Column="0" Grid.ColumnSpan="{Binding CodecColumnSpan}" Spacing="5">
+                                        <TextBlock Classes="muted" Text="{DynamicResource Codec}"/>
+                                        <ComboBox HorizontalAlignment="Stretch"
+                                                  ItemsSource="{Binding Codecs}"
+                                                  SelectedItem="{Binding SelectedCodec}">
+                                            <ComboBox.Styles>
+                                                <Style Selector="ComboBoxItem" x:DataType="m:CodecOption">
+                                                    <Setter Property="IsEnabled" Value="{Binding IsEnabled}"/>
+                                                </Style>
+                                            </ComboBox.Styles>
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="m:CodecOption">
+                                                    <TextBlock Text="{Binding Label}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="5" IsVisible="{Binding ShowBitrate}">
+                                        <TextBlock Classes="muted" Text="{Binding BitrateLabel}"/>
+                                        <NumericUpDown HorizontalAlignment="Stretch"
+                                                       Minimum="{Binding BitrateMin}" Maximum="{Binding BitrateMax}"
+                                                       Increment="32" FormatString="0"
+                                                       Value="{Binding Bitrate}"/>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Grid.Column="1" Spacing="5">
+                                    <TextBlock Classes="muted" Text="{DynamicResource Container}"/>
+                                    <ComboBox HorizontalAlignment="Stretch"
+                                              ItemsSource="{Binding Containers}"
+                                              SelectedItem="{Binding SelectedContainer}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="m:ContainerDef">
+                                                <TextBlock Text="{Binding Name}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </ctrl:SquircleBorder>
+
+                    <!-- 文件队列 + 日志:左右并列,占满剩余高度 -->
+                    <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="12">
+
+                    <!-- 文件队列(含总进度 + 操作);叠一层拖拽高亮 overlay -->
+                    <Grid Grid.Column="0">
+                    <ctrl:SquircleBorder Classes="card">
+                        <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="12">
+                            <DockPanel Grid.Row="0">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
+                                    <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="{DynamicResource TipClearQueue}"
+                                            Command="{Binding ClearQueueCommand}" Click="OnClearQueueClick">
+                                        <Panel>
+                                            <Path Classes="icon" Data="{StaticResource IconTrash}"/>
+                                            <Path x:Name="FlashClearQueue" Classes="icon" Data="{StaticResource IconTrash}"
+                                                  Stroke="#30D158" Opacity="0">
+                                                <Path.Transitions>
+                                                    <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                                </Path.Transitions>
+                                            </Path>
+                                        </Panel>
+                                    </ctrl:SquircleButton>
+                                    <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="{DynamicResource TipAddFile}"
+                                            IsEnabled="{Binding !IsRendering}"
+                                            Click="OnAddFiles">
+                                        <Panel>
+                                            <Path Classes="icon" Data="{StaticResource IconAdd}"/>
+                                            <Path x:Name="FlashAddFile" Classes="icon" Data="{StaticResource IconAdd}"
+                                                  Stroke="#30D158" Opacity="0">
+                                                <Path.Transitions>
+                                                    <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                                </Path.Transitions>
+                                            </Path>
+                                        </Panel>
+                                    </ctrl:SquircleButton>
+                                    <ctrl:SquircleButton Classes="nav iconbtn" ToolTip.Tip="{DynamicResource TipAddFolder}"
+                                            IsEnabled="{Binding !IsRendering}"
+                                            Click="OnAddFolder">
+                                        <Panel>
+                                            <Path Classes="icon" Data="{StaticResource IconFolder}"/>
+                                            <Path x:Name="FlashAddFolder" Classes="icon" Data="{StaticResource IconFolder}"
+                                                  Stroke="#30D158" Opacity="0">
+                                                <Path.Transitions>
+                                                    <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                                </Path.Transitions>
+                                            </Path>
+                                        </Panel>
+                                    </ctrl:SquircleButton>
+                                </StackPanel>
+                                <TextBlock Classes="h2" VerticalAlignment="Center" Text="{DynamicResource FileQueue}"/>
+                            </DockPanel>
+
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Files}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="m:RenderFileItem">
+                                        <ctrl:SquircleBorder Classes="fileitem" Margin="0,0,0,6" Padding="12,9"
+                                                CornerRadius="12" Background="{DynamicResource RowBg}">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
+                                                <Ellipse Grid.Row="0" Grid.Column="0"
+                                                         Width="8" Height="8" Margin="0,0,10,0"
+                                                         VerticalAlignment="Center"
+                                                         Classes.pulse="{Binding IsRenderingState}"
+                                                         Fill="{Binding StatusBrush}"/>
+                                                <TextBlock Grid.Row="0" Grid.Column="1"
+                                                           VerticalAlignment="Center" FontSize="13"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           Text="{Binding Name}"/>
+                                                <Panel Grid.Row="0" Grid.Column="2" VerticalAlignment="Center"
+                                                       Margin="8,0,0,0">
+                                                    <!-- 待渲染:时钟图标 -->
+                                                    <Path Data="{StaticResource IconHistory}"
+                                                          Stroke="{DynamicResource TextMuted}" StrokeThickness="1.8"
+                                                          StrokeLineCap="Round" StrokeJoin="Round"
+                                                          Width="15" Height="15" Stretch="Uniform"
+                                                          IsVisible="{Binding IsPending}"/>
+                                                    <!-- 渲染中:阶段短词 -->
+                                                    <TextBlock Classes="muted" VerticalAlignment="Center"
+                                                               Text="{Binding StageText}"
+                                                               IsVisible="{Binding IsRenderingState}"/>
+                                                    <!-- 完成:绿勾(出现时弹入) -->
+                                                    <Path Data="{StaticResource IconCheck}"
+                                                          Stroke="#30D158" StrokeThickness="2.2"
+                                                          StrokeLineCap="Round" StrokeJoin="Round"
+                                                          Width="16" Height="16" Stretch="Uniform"
+                                                          Classes.pop="{Binding IsDone}"
+                                                          IsVisible="{Binding IsDone}"/>
+                                                    <!-- 失败:红叉(出现时弹入) -->
+                                                    <Path Data="{StaticResource IconCross}"
+                                                          Stroke="#FF453A" StrokeThickness="2.2"
+                                                          StrokeLineCap="Round" StrokeJoin="Round"
+                                                          Width="15" Height="15" Stretch="Uniform"
+                                                          Classes.pop="{Binding IsFailed}"
+                                                          IsVisible="{Binding IsFailed}"/>
+                                                </Panel>
+                                                <ProgressBar Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                                                             Margin="0,8,0,0" Height="3"
+                                                             Minimum="0" Maximum="100"
+                                                             Foreground="{DynamicResource Accent}"
+                                                             Value="{Binding Progress}"/>
+                                            </Grid>
+                                        </ctrl:SquircleBorder>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            </ScrollViewer>
+
+                            <Border Grid.Row="2" Height="1" Margin="0,2" Background="{DynamicResource CardBorder}"/>
+
+                            <DockPanel Grid.Row="3">
+                                <ctrl:SquircleButton DockPanel.Dock="Right" Classes="accent"
+                                        MinWidth="108" VerticalAlignment="Center" Margin="16,0,0,0"
+                                        Command="{Binding PrimaryCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
+                                        <Panel Width="13" Height="13" VerticalAlignment="Center">
+                                            <Path Classes="iconfill replace" Data="{StaticResource IconPlay}"
+                                                  Classes.on="{Binding !IsRendering}"/>
+                                            <Path Classes="iconfill replace" Data="{StaticResource IconStop}"
+                                                  Classes.on="{Binding IsRendering}"/>
+                                        </Panel>
+                                        <TextBlock VerticalAlignment="Center" Text="{Binding ActionButtonText}"/>
+                                    </StackPanel>
+                                </ctrl:SquircleButton>
+                                <StackPanel VerticalAlignment="Center" Spacing="6">
+                                    <TextBlock Classes="muted" Text="{Binding StatusText}"/>
+                                    <ProgressBar Height="6" Minimum="0" Maximum="100"
+                                                 Foreground="{DynamicResource Accent}"
+                                                 Value="{Binding OverallProgress}"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Grid>
+                    </ctrl:SquircleBorder>
+                    <ctrl:SquircleBorder x:Name="DropHighlight" IsHitTestVisible="False"
+                            Background="Transparent" BorderBrush="{DynamicResource Accent}"
+                            BorderThickness="2" CornerRadius="18" Opacity="0">
+                        <ctrl:SquircleBorder.Transitions>
+                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.15"/></Transitions>
+                        </ctrl:SquircleBorder.Transitions>
+                    </ctrl:SquircleBorder>
+                    </Grid>
+
+                    <!-- 日志(填充右半) -->
+                    <ctrl:SquircleBorder Grid.Column="1" Classes="card">
+                        <Grid RowDefinitions="Auto,*">
+                            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                <ctrl:SquircleButton DockPanel.Dock="Right" Classes="nav iconbtn"
+                                        ToolTip.Tip="{DynamicResource TipClearLog}"
+                                        Command="{Binding ClearLogsCommand}" Click="OnClearLogsClick">
+                                    <Panel>
+                                        <Path Classes="icon" Data="{StaticResource IconTrash}"/>
+                                        <Path x:Name="FlashClearLog" Classes="icon" Data="{StaticResource IconTrash}"
+                                              Stroke="#30D158" Opacity="0">
+                                            <Path.Transitions>
+                                                <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                            </Path.Transitions>
+                                        </Path>
+                                    </Panel>
+                                </ctrl:SquircleButton>
+                                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                    <TextBlock Classes="h2" Text="{DynamicResource EventLog}"/>
+                                    <TextBlock x:Name="CopyHint" Classes="muted" Text="{DynamicResource Copied}" Opacity="0">
+                                        <TextBlock.Transitions>
+                                            <Transitions>
+                                                <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
+                                            </Transitions>
+                                        </TextBlock.Transitions>
+                                    </TextBlock>
+                                </StackPanel>
+                            </DockPanel>
+                                <ListBox x:Name="LogList" Classes="log" Grid.Row="1"
+                                         ItemsSource="{Binding Logs}"
+                                         SelectionMode="Single"
+                                         KeyDown="OnLogKeyDown"
+                                         Tapped="OnLogTapped">
+                                    <ListBox.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="{DynamicResource CopyAll}" Click="OnCopyAllLogs"/>
+                                        </ContextMenu>
+                                    </ListBox.ContextMenu>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="m:LogLine">
+                                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                                <Ellipse Grid.Column="0" Width="7" Height="7"
+                                                         Margin="0,5,9,0" VerticalAlignment="Top"
+                                                         Fill="{Binding KindBrush}"/>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <TextBlock FontSize="13" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextPrimary}"
+                                                               Text="{Binding Title}"/>
+                                                    <TextBlock IsVisible="{Binding HasDetail}" FontSize="12"
+                                                               TextWrapping="Wrap"
+                                                               Foreground="{DynamicResource TextMuted}"
+                                                               Text="{Binding Detail}"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" FontSize="11" VerticalAlignment="Top"
+                                                           Margin="8,1,0,0"
+                                                           Foreground="{DynamicResource TextMuted}"
+                                                           Text="{Binding Time}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                        </Grid>
+                    </ctrl:SquircleBorder>
+
+                    </Grid>
+
+                </Grid>
+            </Grid>
+            </Grid>
+        </Grid>
+    </Panel>
+</Window>

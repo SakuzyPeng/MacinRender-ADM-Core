@@ -192,6 +192,7 @@ int main() {
         ok &= check(r.out.find("saf-binaural") != std::string::npos, "render --help: saf-binaural renderer listed");
         ok &= check(r.out.find("--apple-spatial-preset") != std::string::npos,
                     "render --help: apple-spatial-preset option listed");
+        ok &= check(r.out.find("--iamf-layers") != std::string::npos, "render --help: iamf-layers option listed");
     }
 
     // ── spread mode parse: valid values accepted, invalid rejected ────────────
@@ -228,6 +229,10 @@ int main() {
         {
             auto r = run_cmd(mradm_exe + " render --apple-spatial-preset invalid_xyz");
             ok &= check(r.code != 0, "render --apple-spatial-preset invalid: non-zero exit");
+        }
+        {
+            auto r = run_cmd(mradm_exe + " render --help --iamf-layers 5.1,5.1.2,5.1.4,7.1.4");
+            ok &= check(r.code == 0, "render --iamf-layers valid CSV parses");
         }
     }
 

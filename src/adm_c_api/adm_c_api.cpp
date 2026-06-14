@@ -16,6 +16,26 @@
 
 namespace {
 
+std::vector<std::string> split_csv_list(std::string_view csv) {
+    std::vector<std::string> out;
+    std::size_t pos = 0;
+    while (pos <= csv.size()) {
+        const std::size_t comma = csv.find(',', pos);
+        const std::size_t end = comma == std::string_view::npos ? csv.size() : comma;
+        std::string_view item = csv.substr(pos, end - pos);
+        const auto first = item.find_first_not_of(" \t\r\n");
+        if (first != std::string_view::npos) {
+            const auto last = item.find_last_not_of(" \t\r\n");
+            out.emplace_back(item.substr(first, last - first + 1));
+        }
+        if (comma == std::string_view::npos) {
+            break;
+        }
+        pos = comma + 1;
+    }
+    return out;
+}
+
 // These stage strings are part of the progress callback's documented contract.
 // adm_render_stage_from_string() must recognize every string produced here; the
 // progress-callback test renders end-to-end and asserts no emitted stage maps to
@@ -501,7 +521,7 @@ adm_error_code_t adm_render_options_set_apac_bitrate_kbps(adm_render_options_t* 
     if (opts == nullptr) {
         return ADM_ERROR_OK;
     }
-    if (kbps != 0 && (kbps < 64 || kbps > 12000)) {
+    if (kbps != 0 && (kbps < 64 || kbps > 32768)) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     opts->opts.apac_bitrate_kbps = kbps;
@@ -655,6 +675,19 @@ adm_error_code_t adm_render_options_set_iamf_container(adm_render_options_t* opt
     }
     opts->opts.iamf_container = static_cast<mradm::RenderOptions::IamfContainer>(container);
     return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_iamf_layers(adm_render_options_t* opts, const char* iamf_layers_csv) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    try {
+        opts->opts.iamf_layers =
+            iamf_layers_csv == nullptr ? std::vector<std::string>{} : split_csv_list(iamf_layers_csv);
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
 }
 
 adm_error_code_t adm_render_options_set_render_start_sec(adm_render_options_t* opts, double sec) noexcept {
@@ -1169,6 +1202,29 @@ adm_error_code_t adm_policy_template_json(adm_context_t* context, const char* in
     }
 }
 
+adm_error_code_t adm_export_file(adm_context_t* context,
+                                 const char* input_path,
+                                 const char* output_path,
+                                 const adm_render_options_t* opts) noexcept {
+    if (context == nullptr || input_path == nullptr || input_path[0] == '\0' || output_path == nullptr ||
+        output_path[0] == '\0') {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        mradm::NullLogSink logs;
+        const mradm::RenderOptions default_options;
+        const mradm::RenderOptions& options = (opts != nullptr) ? opts->opts : default_options;
+        auto result = context->service.export_file(input_path, output_path, options, logs);
+        if (!result) {
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
 // Takes ownership of a char* the ABI handed out via char** out-params; the
 // non-const pointer type is part of the contract, so the const-pointer hint
 // does not apply here.
@@ -1233,6 +1289,28 @@ adm_error_code_t adm_output_formats_json(adm_context_t* context, char** out_json
 
     try {
         const std::string json = context->service.output_formats_json();
+        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        if (buffer == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
+        *out_json = buffer;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_render_support_matrix_json(adm_context_t* context, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (context == nullptr || out_json == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        const std::string json = context->service.render_support_matrix_json();
         auto* buffer = new (std::nothrow) char[json.size() + 1];
         if (buffer == nullptr) {
             return ADM_ERROR_INTERNAL;

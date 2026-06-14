@@ -1,4 +1,6 @@
+#include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -36,6 +38,58 @@ bool check(bool cond, const char* msg) {
         std::cerr << "FAIL: " << msg << "\n";
     }
     return cond;
+}
+
+struct ProgressSnapshot {
+    mradm::RenderStage stage{};
+    mradm::RenderOperation operation{};
+    double fraction{};
+    double stage_fraction{};
+    uint64_t current_frame{};
+    uint64_t total_frames{};
+};
+
+class CapturingProgressSink final : public mradm::ProgressSink {
+  public:
+    void on_progress(const mradm::ProgressEvent& event) override {
+        events_.push_back({event.stage,
+                           event.operation,
+                           event.fraction,
+                           event.stage_fraction,
+                           event.current_frame,
+                           event.total_frames});
+    }
+
+    [[nodiscard]] const std::vector<ProgressSnapshot>& events() const noexcept { return events_; }
+
+  private:
+    std::vector<ProgressSnapshot> events_;
+};
+
+bool verify_apac_progress(const CapturingProgressSink& progress, uint64_t expected_frames) {
+    const auto& events = progress.events();
+    bool ok = check(events.size() > 2U, "APAC progress should include intermediate frame events");
+    bool stage_ok = true;
+    bool operation_ok = true;
+    bool fraction_ok = true;
+    bool frame_ok = true;
+    bool midpoint_ok = false;
+    double prev = -1.0;
+    for (const auto& ev : events) {
+        stage_ok = stage_ok && ev.stage == mradm::RenderStage::post_processing;
+        operation_ok = operation_ok && ev.operation == mradm::RenderOperation::encode_apac;
+        fraction_ok = fraction_ok && ev.fraction >= prev && ev.fraction >= 0.0 && ev.fraction <= 1.0 &&
+                      ev.stage_fraction >= 0.0 && ev.stage_fraction <= 1.0;
+        frame_ok = frame_ok && ev.total_frames == expected_frames && ev.current_frame <= ev.total_frames;
+        midpoint_ok = midpoint_ok || (ev.current_frame > 0U && ev.current_frame < ev.total_frames);
+        prev = ev.fraction;
+    }
+    ok = check(stage_ok, "APAC progress stage should be post_processing") && ok;
+    ok = check(operation_ok, "APAC progress operation should be encode_apac") && ok;
+    ok = check(fraction_ok, "APAC progress fraction should be monotonic in [0,1]") && ok;
+    ok = check(frame_ok, "APAC progress frames should match input frame count") && ok;
+    ok = check(midpoint_ok, "APAC progress should report a non-terminal frame position") && ok;
+    return ok;
 }
 
 // Write a 1-second 48 kHz WAV with per-channel sine amplitudes taken from |amps|.
@@ -188,8 +242,13 @@ bool verify_apac_wav71_swap() {
         return false;
     }
 
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "wav71");
+    CapturingProgressSink progress;
+    auto res =
+        mradm::audio::convert_to_apac(wav, m4a, "wav71", 0U, true, mradm::audio::ApacContainer::mpeg4, {}, &progress);
     if (!check(res.has_value(), "convert_to_apac(wav71) failed")) {
+        return false;
+    }
+    if (!verify_apac_progress(progress, 48000U)) {
         return false;
     }
     if (!check(std::filesystem::exists(m4a), "wav71 .m4a not created")) {
@@ -401,6 +460,40 @@ bool verify_apac_caf_container() {
 #endif
 }
 
+// Drives the parent-side stall watchdog: the encoder runs in a forked mradm
+// subprocess, and MRADM_APAC_TEST_FORCE_STALL makes that child spin forever in
+// the flush phase (emulating the AudioToolbox spin-hang observed at pathological
+// bitrates). With the flush budget shrunk via env, the watchdog must SIGKILL the
+// child and surface a clear error in well under the real 15 s budget — never hang.
+// Requires the subprocess path (helper set via MRADM_APAC_HELPER by the caller).
+bool verify_apac_stall_watchdog() {
+    const std::string wav = "/tmp/mr_apac_stall_src.wav";
+    const std::string m4a = "/tmp/mr_apac_stall.m4a";
+    FileGuard gw(wav);
+    FileGuard gm(m4a);
+    if (!write_test_wav(wav, 10, 48000, 48000)) { // 5.1.4, 1 s
+        return false;
+    }
+    ::setenv("MRADM_APAC_TEST_FORCE_STALL", "1", 1);
+    ::setenv("MRADM_APAC_FLUSH_BUDGET_MS", "1500", 1);
+    const auto t0 = std::chrono::steady_clock::now();
+    auto res = mradm::audio::convert_to_apac(wav, m4a, "5.1.4");
+    const auto elapsed = std::chrono::steady_clock::now() - t0;
+    ::unsetenv("MRADM_APAC_TEST_FORCE_STALL");
+    ::unsetenv("MRADM_APAC_FLUSH_BUDGET_MS");
+
+    bool ok = check(!res.has_value(), "forced flush stall must surface as an error, not a hang");
+    if (res.has_value()) {
+        return false;
+    }
+    ok = check(res.error().code == mradm::ErrorCode::io_error, "stall error code should be io_error") && ok;
+    ok = check(res.error().message.find("停滞") != std::string::npos, "stall error should advise lowering bitrate") &&
+         ok;
+    ok = check(elapsed < std::chrono::seconds{10}, "watchdog should fire within the shrunk budget, not hang") && ok;
+    ok = check(!std::filesystem::exists(m4a), "wedged/partial output should be removed on stall") && ok;
+    return ok;
+}
+
 bool verify_apac_wrong_layout_rejected() {
     auto res = mradm::audio::convert_to_apac("/tmp/nope.wav", "/tmp/nope.m4a", "bogus-layout");
     return check(!res.has_value() && res.error().code == mradm::ErrorCode::unsupported,
@@ -439,7 +532,16 @@ int main() {
 #ifndef __APPLE__
     std::cout << "APAC smoke tests skipped (not macOS)\n";
     return EXIT_SUCCESS;
+#elif !defined(MRADM_EXE_PATH)
+    // APAC now always encodes via a forked mradm subprocess (stall watchdog).
+    // Without the CLI there is no helper to fork, so the encoder is intentionally
+    // unavailable and there is nothing to exercise here.
+    std::cout << "APAC smoke tests skipped (requires the bundled mradm helper / CLI build)\n";
+    return EXIT_SUCCESS;
 #else
+    // Pin the subprocess helper to the freshly built mradm so the tests are
+    // hermetic (and the force-stall hook reachable) regardless of discovery.
+    ::setenv("MRADM_APAC_HELPER", MRADM_EXE_PATH, 1);
     bool ok = true;
     ok &= verify_apac_wav71_swap();
     ok &= verify_apac_atmos514();
@@ -452,10 +554,11 @@ int main() {
     ok &= verify_apac_wrong_layout_rejected();
     ok &= verify_apac_wrong_samplerate_rejected();
     ok &= verify_apac_wrong_channelcount_rejected();
+    ok &= verify_apac_stall_watchdog();
     if (!ok) {
         return EXIT_FAILURE;
     }
-    std::cout << "APAC smoke tests passed (10/10)\n";
+    std::cout << "APAC smoke tests passed\n";
     return EXIT_SUCCESS;
 #endif
 }

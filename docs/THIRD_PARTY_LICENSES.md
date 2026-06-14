@@ -16,7 +16,7 @@ MacinRender ADM Core 的项目源码采用 **MIT License**，以仓库根目录 
 - Release/多配置构建中，`libFLAC` 与 `libopus` 默认采用 vendored static provider；发行包仍需附带其许可证文本。
 - IAMF 编码通过预构建的官方 AOM iamf-tools bridge 接入；启用 `MR_ADM_ENABLE_IAMF=ON` 的发行包必须附带 bridge 及其依赖许可证。
 - macOS-only APAC 输出依赖系统 AudioToolbox/CoreFoundation framework；这些 Apple SDK/framework 不随本项目二进制再分发，但功能应标记为 macOS only。
-- Linux 发行包以 Ubuntu 24.04 x86_64 为基线；`DEPENDENCIES.txt` 记录实际 `ldd` 清单，并在打包阶段拒绝缺失库、构建目录依赖和 `/usr/local` 依赖。
+- Linux CLI 发行包采用 AppImage/standalone 形式；非核心运行时库应打包进 AppImage，`DEPENDENCIES.txt` 记录 `ldd` 清单和 AppDir 内 bundled libraries，并在打包阶段拒绝缺失库、构建目录依赖和 `/usr/local` 依赖。宿主内核、动态加载器、glibc 基线和其他核心平台设施仍由系统提供。
 - 用户提供的 SOFA/HRTF 数据文件不属于本项目许可证覆盖范围；若发行示例数据，必须单独记录该数据集许可证。
 
 ## 当前依赖许可证清单
