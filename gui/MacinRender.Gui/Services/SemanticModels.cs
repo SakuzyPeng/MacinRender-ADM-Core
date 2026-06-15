@@ -44,6 +44,24 @@ internal static class ObjectNaming
         return best;
     }
 
+    /// <summary>
+    /// 拆出末尾声道:名字以(空格/-/_)+ L|R 结尾时,返回(去声道的 stem, 'L'|'R');否则(原名, '\0')。
+    /// 要求 L/R 前必须有分隔符,避免误伤 "PEARL" 之类。用于 L/R 配对(一对默认同步编辑)。
+    /// </summary>
+    public static (string Stem, char Channel) SplitChannel(string name)
+    {
+        if (name.Length >= 2)
+        {
+            char last = char.ToUpperInvariant(name[^1]);
+            if ((last == 'L' || last == 'R') && name[^2] is ' ' or '-' or '_')
+            {
+                return (name[..^2], last);
+            }
+        }
+
+        return (name, '\0');
+    }
+
     /// <summary>剥掉主前缀;若不以该前缀开头或剥后为空,返回原名。</summary>
     public static string Strip(string name, string prefix) =>
         prefix.Length > 0 && name.StartsWith(prefix, StringComparison.Ordinal) && name.Length > prefix.Length

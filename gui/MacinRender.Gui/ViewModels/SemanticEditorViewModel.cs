@@ -13,34 +13,30 @@ using MacinRender.Gui.Services;
 namespace MacinRender.Gui.ViewModels;
 
 /// <summary>
-/// 语义编辑模式 ViewModel(单文档工作台)。载入单个 ADM → adm_inspect_file_json 列出对象 +
-/// 各听感维度的"当前值"(逐块实际值,区间感知)。编辑为"相对变换"(× scale / dB / 静音),
-/// 内存拼 mradm.semantic-policy.v1 JSON 供后续试听/渲染消费(#16/#17/#18)。
+/// 语义编辑模式 ViewModel(单文档工作台)。载入单个 ADM → adm_inspect_file_json,把对象按 L/R
+/// 配对成"行"(一对默认同步编辑,因为 L/R 基本要一起改),每行的听感维度"当前值"为成员区间并集
+/// (区间感知)。编辑为相对变换(× scale / dB),行级覆盖按成员展开成多条 id 规则,内存拼
+/// mradm.semantic-policy.v1 JSON 供后续试听/渲染消费(#16/#17/#18)。
 /// </summary>
 public sealed partial class SemanticEditorViewModel : ObservableObject
 {
     private static Localizer L => Localizer.Instance;
 
-    public ObservableCollection<SemanticObjectItem> Objects { get; } = new();
+    public ObservableCollection<SemanticRow> Rows { get; } = new();
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasFile))]
     private string? _loadedPath;
 
-    [ObservableProperty] private SemanticObjectItem? _selectedObject;
+    [ObservableProperty] private SemanticRow? _selectedRow;
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private bool _isLoading;
 
-    // 被多数对象共享、展示时剥离的主前缀(空=无);用 chip 提示用户"剥了什么"。
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasCommonPrefix))]
     [NotifyPropertyChangedFor(nameof(CommonPrefixLabel))]
     private string _commonPrefix = "";
 
-    public bool HasCommonPrefix => CommonPrefix.Length > 0;
-    public string CommonPrefixLabel => HasCommonPrefix ? L.Format("SemPrefix", CommonPrefix) : "";
-
-    /// <summary>当前 policy JSON(无任何覆盖时为空串);供 #16/#17/#18 消费。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(OverrideSummary))]
     private string _policyJson = "";
@@ -50,6 +46,8 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private int _overriddenObjectCount;
 
     public bool HasFile => !string.IsNullOrEmpty(LoadedPath);
+    public bool HasCommonPrefix => CommonPrefix.Length > 0;
+    public string CommonPrefixLabel => HasCommonPrefix ? L.Format("SemPrefix", CommonPrefix) : "";
 
     public string OverrideSummary =>
         OverriddenObjectCount == 0 ? L["SemNoOverride"] : L.Format("SemOverrideN", OverriddenObjectCount);
@@ -65,6 +63,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             }
 
             OnPropertyChanged(nameof(OverrideSummary));
+            OnPropertyChanged(nameof(CommonPrefixLabel));
         };
     }
 
@@ -85,13 +84,13 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
                 return ctx.IsInvalid ? null : SemanticInspect.Parse(AdmQueries.FetchInspectJson(ctx, path));
             });
 
-            foreach (var existing in Objects)
+            foreach (var existing in Rows)
             {
-                existing.Changed -= OnObjectChanged;
+                existing.Changed -= OnRowChanged;
             }
 
-            Objects.Clear();
-            SelectedObject = null;
+            Rows.Clear();
+            SelectedRow = null;
             if (doc is null)
             {
                 LoadedPath = null;
@@ -101,7 +100,6 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
                 return;
             }
 
-            // 先扫所有对象名,检测可剥离的主前缀,再据此生成展示名。
             var names = new List<string>(doc.Objects.Count);
             foreach (var o in doc.Objects)
             {
@@ -113,16 +111,21 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
             CommonPrefix = ObjectNaming.DetectCommonPrefix(names);
 
+            var items = new List<SemanticObjectItem>(doc.Objects.Count);
             foreach (var obj in doc.Objects)
             {
-                var item = SemanticObjectItem.From(obj, CommonPrefix);
-                item.Changed += OnObjectChanged;
-                Objects.Add(item);
+                items.Add(SemanticObjectItem.From(obj, CommonPrefix));
+            }
+
+            foreach (var row in SemanticRow.BuildRows(items))
+            {
+                row.Changed += OnRowChanged;
+                Rows.Add(row);
             }
 
             LoadedPath = path;
-            SelectedObject = Objects.Count > 0 ? Objects[0] : null;
-            StatusText = L.Format("SemLoaded", Objects.Count);
+            SelectedRow = Rows.Count > 0 ? Rows[0] : null;
+            StatusText = L.Format("SemLoaded", doc.Objects.Count);
             RebuildPolicy();
         }
         finally
@@ -131,16 +134,15 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         }
     }
 
-    private void OnObjectChanged() => RebuildPolicy();
+    private void OnRowChanged() => RebuildPolicy();
 
-    // 任一对象的覆盖变化 → 重拼整份 policy JSON(每个有覆盖的对象一条 id 规则)。
-    // 用 List<JsonNode?> + JsonArray 构造器(避开 JsonArray.Add<T> 的 AOT/trim 装箱告警)。
+    // 任一行的覆盖变化 → 重拼整份 policy JSON。行级覆盖按成员展开:一对 L/R = 两条同值 id 规则。
     private void RebuildPolicy()
     {
         var rules = new List<JsonNode?>();
-        foreach (var item in Objects)
+        foreach (var row in Rows)
         {
-            if (item.BuildRule() is { } rule)
+            foreach (var rule in row.BuildRules())
             {
                 rules.Add(rule);
             }
@@ -162,7 +164,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     }
 }
 
-/// <summary>min–max 区间;Max−Min 超阈视为"动态"(逐块变化),否则为常量单值。</summary>
+/// <summary>min–max 区间;Max−Min 超阈视为"动态"(逐块变化或成员间差异),否则常量单值。</summary>
 public readonly record struct DimRange(double Min, double Max)
 {
     public bool IsDynamic => Max - Min > 1e-4;
@@ -175,6 +177,8 @@ public readonly record struct DimRange(double Min, double Max)
 
     public DimRange ClampScaled(double scale, double lo, double hi) =>
         new(Math.Clamp(Min * scale, lo, hi), Math.Clamp(Max * scale, lo, hi));
+
+    public static DimRange Union(DimRange a, DimRange b) => new(Math.Min(a.Min, b.Min), Math.Max(a.Max, b.Max));
 
     public static DimRange Of(IReadOnlyList<double> values)
     {
@@ -196,8 +200,8 @@ public readonly record struct DimRange(double Min, double Max)
 }
 
 /// <summary>
-/// 一个标量"覆盖行":[☐ 覆盖] + 值控件。值是相对变换——ScaleLinear 为逐块 × 系数(钳到 [lo,hi]);
-/// GainDb 为 dB 偏移(对象级单值)。CurrentText/EffectiveText 即三栏的"当前值"与客户端即时"生效值"。
+/// 一个标量"覆盖行":[☐ 覆盖] + 值控件。相对变换——ScaleLinear 为逐块 × 系数(钳到 [lo,hi]);
+/// GainDb 为 dB 偏移。CurrentText/EffectiveText 即三栏的"当前值"与客户端即时"生效值"。
 /// </summary>
 public sealed partial class ScalarOverride : ObservableObject
 {
@@ -275,7 +279,7 @@ public sealed partial class ScalarOverride : ObservableObject
         return string.Join("  ", parts);
     }
 
-    /// <summary>启用时写出该维度的 policy 片段(scale 或 gain_db);未启用返回 null。</summary>
+    /// <summary>启用时写出该维度的 policy 片段(scale 或 gain_db);未启用返回 null。每次新建实例。</summary>
     public JsonObject? ToPolicyFragment()
     {
         if (!Enabled)
@@ -292,35 +296,31 @@ public sealed partial class ScalarOverride : ObservableObject
 }
 
 /// <summary>
-/// 场景树中的一个对象:身份 + 听感维度当前值(区间感知)+ 可编辑的相对覆盖。
-/// 当前值权威源是 adm_inspect_file_json 的逐块实际取值(扫全块求 min/max),非 policy_template_json
-/// (后者是中性骨架,不含实际值)。
+/// 单个对象的纯数据:身份 + 各听感维度的"当前值"区间(扫全块求 min/max,权威源 inspect)。
+/// 不持有覆盖——覆盖在 SemanticRow 层(行=1~2 个对象,L/R 对共享一份覆盖以同步编辑)。
 /// </summary>
 public sealed class SemanticObjectItem
 {
     public required string Id { get; init; }
     public required string Name { get; init; }
+    public required string DisplayName { get; init; }
     public int? Importance { get; init; }
     public int? DialogueId { get; init; }
-    public bool OriginalMute { get; init; }
+    public bool Mute { get; init; }
 
-    // 听感维度覆盖行(忠于 ADM 原词;gain 为 dB 偏移,其余为逐块 × scale)。
-    public required ScalarOverride GainDb { get; init; }
-    public required ScalarOverride DiffuseScale { get; init; }
-    public required ScalarOverride ExtentScale { get; init; }
-    public required ScalarOverride DivergenceScale { get; init; }
+    public DimRange GainRange { get; init; }
+    public DimRange DiffuseRange { get; init; }
+    public DimRange WidthRange { get; init; }
+    public DimRange HeightRange { get; init; }
+    public DimRange DepthRange { get; init; }
+    public DimRange DivergenceRange { get; init; }
 
-    public event Action? Changed;
-
-    /// <summary>展示名:已剥掉多数对象共享的主前缀(DAW 导出的曲名/文件名前缀);全名见 Tooltip。</summary>
-    public required string DisplayName { get; init; }
-
-    /// <summary>悬停全名 + id(剥前缀后用它兜底完整信息)。</summary>
     public string Tooltip => string.IsNullOrEmpty(Name) ? Id : $"{Name}  ({Id})";
 
     public string Summary =>
-        $"gain {GainDb.CurrentText} · diffuse {DiffuseScale.CurrentText} · " +
-        $"extent {ExtentScale.CurrentText} · divergence {DivergenceScale.CurrentText}";
+        $"gain {GainRange.Format()} · diffuse {DiffuseRange.Format()} · " +
+        $"extent {WidthRange.Format()}/{HeightRange.Format()}/{DepthRange.Format()} · " +
+        $"divergence {DivergenceRange.Format()}";
 
     public string Meta
     {
@@ -337,37 +337,12 @@ public sealed class SemanticObjectItem
                 parts.Add($"dialogue {dlg}");
             }
 
-            if (OriginalMute)
+            if (Mute)
             {
                 parts.Add("mute");
             }
 
             return string.Join(" · ", parts);
-        }
-    }
-
-    /// <summary>该对象的 policy 规则(无覆盖返回 null)。每维度片段 + id 匹配。</summary>
-    public JsonObject? BuildRule()
-    {
-        var rule = new JsonObject();
-        AddIf(rule, "gain", GainDb.ToPolicyFragment());
-        AddIf(rule, "diffuse", DiffuseScale.ToPolicyFragment());
-        AddIf(rule, "extent", ExtentScale.ToPolicyFragment());
-        AddIf(rule, "divergence", DivergenceScale.ToPolicyFragment());
-        if (rule.Count == 0)
-        {
-            return null;
-        }
-
-        rule["id"] = Id;
-        return rule;
-    }
-
-    private static void AddIf(JsonObject rule, string key, JsonObject? fragment)
-    {
-        if (fragment is not null)
-        {
-            rule[key] = fragment;
         }
     }
 
@@ -390,34 +365,174 @@ public sealed class SemanticObjectItem
             }
         }
 
-        var item = new SemanticObjectItem
+        return new SemanticObjectItem
         {
             Id = obj.Id,
             Name = obj.Name,
             DisplayName = ObjectNaming.Strip(string.IsNullOrEmpty(obj.Name) ? obj.Id : obj.Name, commonPrefix),
             Importance = obj.Importance,
             DialogueId = obj.DialogueId,
-            OriginalMute = obj.Mute,
-            GainDb = new ScalarOverride("gain", ScalarOverride.Mode.GainDb,
-                new[] { new ScalarOverride.Axis("", new DimRange(obj.Gain, obj.Gain)) }, 0.0, -24.0, 12.0),
-            DiffuseScale = new ScalarOverride("diffuse", ScalarOverride.Mode.ScaleLinear,
-                new[] { new ScalarOverride.Axis("", DimRange.Of(diffuse)) }, 1.0, 0.0, 4.0, 0.0, 1.0),
-            ExtentScale = new ScalarOverride("extent", ScalarOverride.Mode.ScaleLinear,
-                new[]
-                {
-                    new ScalarOverride.Axis("W", DimRange.Of(width)),
-                    new ScalarOverride.Axis("H", DimRange.Of(height)),
-                    new ScalarOverride.Axis("D", DimRange.Of(depth)),
-                }, 1.0, 0.0, 4.0),
-            DivergenceScale = new ScalarOverride("divergence", ScalarOverride.Mode.ScaleLinear,
-                new[] { new ScalarOverride.Axis("", DimRange.Of(divergence)) }, 1.0, 0.0, 4.0, 0.0, 1.0),
+            Mute = obj.Mute,
+            GainRange = new DimRange(obj.Gain, obj.Gain),
+            DiffuseRange = DimRange.Of(diffuse),
+            WidthRange = DimRange.Of(width),
+            HeightRange = DimRange.Of(height),
+            DepthRange = DimRange.Of(depth),
+            DivergenceRange = DimRange.Of(divergence),
         };
+    }
+}
 
-        foreach (var ov in new[] { item.GainDb, item.DiffuseScale, item.ExtentScale, item.DivergenceScale })
+/// <summary>
+/// 编辑/展示单元:1 个对象,或一个 L/R 对(同步编辑)。听感维度区间为成员并集;一份覆盖,
+/// 序列化时按成员展开成多条同值 id 规则。
+/// </summary>
+public sealed class SemanticRow
+{
+    public IReadOnlyList<SemanticObjectItem> Members { get; }
+    public string DisplayName { get; }
+    public string ChannelTag { get; }
+
+    public ScalarOverride GainDb { get; }
+    public ScalarOverride DiffuseScale { get; }
+    public ScalarOverride ExtentScale { get; }
+    public ScalarOverride DivergenceScale { get; }
+
+    public event Action? Changed;
+
+    private SemanticRow(IReadOnlyList<SemanticObjectItem> members, string displayName, string channelTag)
+    {
+        Members = members;
+        DisplayName = displayName;
+        ChannelTag = channelTag;
+
+        DimRange Union(Func<SemanticObjectItem, DimRange> sel)
         {
-            ov.Changed += () => item.Changed?.Invoke();
+            var r = sel(members[0]);
+            for (int k = 1; k < members.Count; k++)
+            {
+                r = DimRange.Union(r, sel(members[k]));
+            }
+
+            return r;
         }
 
-        return item;
+        GainDb = new ScalarOverride("gain", ScalarOverride.Mode.GainDb,
+            new[] { new ScalarOverride.Axis("", Union(m => m.GainRange)) }, 0.0, -24.0, 12.0);
+        DiffuseScale = new ScalarOverride("diffuse", ScalarOverride.Mode.ScaleLinear,
+            new[] { new ScalarOverride.Axis("", Union(m => m.DiffuseRange)) }, 1.0, 0.0, 4.0, 0.0, 1.0);
+        ExtentScale = new ScalarOverride("extent", ScalarOverride.Mode.ScaleLinear,
+            new[]
+            {
+                new ScalarOverride.Axis("W", Union(m => m.WidthRange)),
+                new ScalarOverride.Axis("H", Union(m => m.HeightRange)),
+                new ScalarOverride.Axis("D", Union(m => m.DepthRange)),
+            }, 1.0, 0.0, 4.0);
+        DivergenceScale = new ScalarOverride("divergence", ScalarOverride.Mode.ScaleLinear,
+            new[] { new ScalarOverride.Axis("", Union(m => m.DivergenceRange)) }, 1.0, 0.0, 4.0, 0.0, 1.0);
+
+        foreach (var ov in new[] { GainDb, DiffuseScale, ExtentScale, DivergenceScale })
+        {
+            ov.Changed += () => Changed?.Invoke();
+        }
+    }
+
+    public string Tooltip
+    {
+        get
+        {
+            if (Members.Count == 1)
+            {
+                return Members[0].Tooltip;
+            }
+
+            var lines = new List<string>(Members.Count);
+            foreach (var m in Members)
+            {
+                lines.Add(m.Tooltip);
+            }
+
+            return string.Join("\n", lines);
+        }
+    }
+
+    public string Meta => Members[0].Meta;
+
+    /// <summary>每个成员一条 id 规则(行覆盖按成员展开;一对 L/R = 两条同值规则)。无覆盖则不产出。</summary>
+    public IEnumerable<JsonObject> BuildRules()
+    {
+        foreach (var m in Members)
+        {
+            var rule = new JsonObject();
+            AddIf(rule, "gain", GainDb.ToPolicyFragment());
+            AddIf(rule, "diffuse", DiffuseScale.ToPolicyFragment());
+            AddIf(rule, "extent", ExtentScale.ToPolicyFragment());
+            AddIf(rule, "divergence", DivergenceScale.ToPolicyFragment());
+            if (rule.Count == 0)
+            {
+                continue;
+            }
+
+            rule["id"] = m.Id;
+            yield return rule;
+        }
+    }
+
+    private static void AddIf(JsonObject rule, string key, JsonObject? fragment)
+    {
+        if (fragment is not null)
+        {
+            rule[key] = fragment;
+        }
+    }
+
+    /// <summary>把对象按 L/R 配对成行(同 stem、相反声道、各一个);其余为单成员行。保留文档顺序。</summary>
+    public static List<SemanticRow> BuildRows(IReadOnlyList<SemanticObjectItem> items)
+    {
+        var rows = new List<SemanticRow>();
+        var used = new bool[items.Count];
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (used[i])
+            {
+                continue;
+            }
+
+            var (stem, channel) = ObjectNaming.SplitChannel(items[i].DisplayName);
+            if (channel != '\0')
+            {
+                int partner = -1;
+                for (int j = i + 1; j < items.Count; j++)
+                {
+                    if (used[j])
+                    {
+                        continue;
+                    }
+
+                    var (stemJ, channelJ) = ObjectNaming.SplitChannel(items[j].DisplayName);
+                    if (channelJ != '\0' && channelJ != channel &&
+                        string.Equals(stem, stemJ, StringComparison.OrdinalIgnoreCase))
+                    {
+                        partner = j;
+                        break;
+                    }
+                }
+
+                if (partner >= 0)
+                {
+                    used[i] = true;
+                    used[partner] = true;
+                    var left = channel == 'L' ? items[i] : items[partner];
+                    var right = channel == 'L' ? items[partner] : items[i];
+                    rows.Add(new SemanticRow(new[] { left, right }, stem, "L · R"));
+                    continue;
+                }
+            }
+
+            used[i] = true;
+            rows.Add(new SemanticRow(new[] { items[i] }, items[i].DisplayName, ""));
+        }
+
+        return rows;
     }
 }

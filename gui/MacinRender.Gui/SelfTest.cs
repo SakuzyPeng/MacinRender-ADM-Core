@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -140,18 +141,32 @@ internal static class SelfTest
         // 语义编辑器(#14):构造覆盖 → 拼 policy JSON → 喂核心校验可解析(相对变换:× scale / dB)。
         if (inspectDoc.Objects.Count > 0)
         {
-            var item = SemanticObjectItem.From(inspectDoc.Objects[0]);
-            item.DiffuseScale.Enabled = true;
-            item.DiffuseScale.Value = 0.5;
-            item.GainDb.Enabled = true;
-            item.GainDb.Value = -3.0;
-            var rule = item.BuildRule();
+            var editItems = new List<SemanticObjectItem>();
+            foreach (var o in inspectDoc.Objects)
+            {
+                editItems.Add(SemanticObjectItem.From(o, commonPrefix));
+            }
+
+            var rows = SemanticRow.BuildRows(editItems);
+            Console.WriteLine($"分组: {editItems.Count} 对象 → {rows.Count} 行(L/R 配对)");
+            // 取第一个 L/R 对(没有则取第一行),设覆盖,看行覆盖按成员展开成几条规则。
+            var editRow = rows.FirstOrDefault(r => r.Members.Count == 2) ?? rows[0];
+            editRow.DiffuseScale.Enabled = true;
+            editRow.DiffuseScale.Value = 0.5;
+            editRow.GainDb.Enabled = true;
+            editRow.GainDb.Value = -3.0;
+            var ruleNodes = new List<JsonNode?>();
+            foreach (var r in editRow.BuildRules())
+            {
+                ruleNodes.Add(r);
+            }
+
             var policy = new JsonObject
             {
                 ["schema"] = "mradm.semantic-policy.v1",
-                ["objects"] = new JsonArray(new JsonNode?[] { rule }),
+                ["objects"] = new JsonArray(ruleNodes.ToArray()),
             }.ToJsonString();
-            Console.WriteLine($"编辑器 policy JSON: {policy}");
+            Console.WriteLine($"编辑行 \"{editRow.DisplayName}\" ({editRow.Members.Count} 成员) → policy: {policy}");
 
             using var policyOpts = NativeMethods.adm_create_render_options();
             NativeMethods.adm_render_options_set_renderer(policyOpts, AdmRenderer.Binaural);
