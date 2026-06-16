@@ -20,7 +20,7 @@
 
 - **后端范围（最终）**：五个后端（EAR / VBAP / HOA / binaural / Apple）都要可热切换。但执行走垂直切片，不一次铺开（见 §9）。
 - **听感维度（一期）**：gain / diffuse / extent / divergence，沿用语义编辑 GUI 一期范围；不做 position / channelLock / interpolation。
-- **监听输出模型**：**未决**，但**不是后端重构的前置**，仅 §9 切片 6（热切换 + 监听 / 下混层）依赖它（见 §8）。
+- **监听输出模型**：**已定**——始终经物理设备，声道数不匹配就下混 / 双耳化（最贴 Logic：耳机 = 双耳）。见 §8。
 
 ## 2. 现状审计
 
@@ -173,10 +173,10 @@ struct LiveOverrides {
 引擎侧（建议新模块 `ADMRealtime`，PRIVATE 依赖各 renderer + 设备层；CLI/GUI 经 C ABI 接入）：
 
 - **MonitorEngine**：持有当前 `IRenderStream`、ring buffer、播放时钟、loop region、`LiveOverrides` 的原子快照；worker 线程 `process()` 填 ring，比对 `revision` 决定 gain 即时 / 重建 stream。
-- **设备层**：音频输出回调抽 ring。跨平台用 miniaudio（经 P/Invoke 或直接 C++）或平台原生（macOS CoreAudio / AVAudioEngine）——见 §8 决策。
+- **设备层**：音频输出回调抽 ring。后端默认 **miniaudio**（跨平台单头、MIT-0 / public-domain 双授权；经 `mr_adm_core_find_or_fetch` 接入，ADR 0004）。**但设备层必须有自有抽象接口**（`IAudioOutputDevice` / `AudioDeviceSink`）——miniaudio 类型不出模块边界（ADR 0003 风格）。逃生口：日后若 Linux 低延迟 / JACK 多声道路由需要更强能力，再加 RtAudio backend，不伤核心。设备层还负责 §8 的下混 / 双耳化与 §11 的输出边界重采样。
 - **热切换**：见 §7。
 
-C ABI（ADR 0007，additive，新 minor）：`adm_monitor_t` opaque + `adm_create_monitor` / `adm_monitor_play` / `adm_monitor_pause` / `adm_monitor_seek` / `adm_monitor_set_loop` / `adm_monitor_set_overrides`（JSON 或 C POD 数组，内部转 `LiveOverrides`；不能暴露 `std::vector` / `std::string`）/ `adm_monitor_switch_backend` / `adm_destroy_monitor`。结构化 progress / level meter 回调另议。
+C ABI（ADR 0007，additive，新 minor）：`adm_monitor_t` opaque + `adm_create_monitor` / `adm_monitor_play` / `adm_monitor_pause` / `adm_monitor_seek` / `adm_monitor_set_loop` / `adm_monitor_set_overrides`（JSON 或 C POD 数组，内部转 `LiveOverrides`；不能暴露 `std::vector` / `std::string`）/ `adm_monitor_switch_backend` / `adm_monitor_get_status`（轮询取播放状态、playhead、ring fill、underrun、override revision 等）/ `adm_monitor_get_levels`（轮询取 peak/rms 原子快照，见 §11 决策 3）/ `adm_destroy_monitor`。
 
 ## 7. 热切换渲染后端
 
@@ -184,15 +184,15 @@ C ABI（ADR 0007，additive，新 minor）：`adm_monitor_t` opaque + `adm_creat
 
 声道数变化（binaural 2ch → 7.1.4 12ch）由 §8 的监听 / 下混层吸收，**不**让上层感知物理声道变动。
 
-## 8. 监听输出模型（未决，gated 切片 6）
+## 8. 监听输出模型（已定）
 
-绕不开的物理事实：用户只能听到设备放得出的东西。耳机上「7.1.4 监听」本质是被双耳化的。三个候选（动设备 / 热切换层前必须敲定）：
+绕不开的物理事实：用户只能听到设备放得出的东西。耳机上「7.1.4 监听」本质是被双耳化的。
 
-1. **始终经物理设备，声道数不匹配就下混 / 双耳化**（最贴 Logic：耳机 = 双耳）。设备不变，切的是空间化算法。设备层最简单。
-2. **格式需设备支持，否则禁用该选项**。真多声道监听，但切换会重配音频设备（声道数变 → 设备重启，难无缝）。
-3. **永远双耳监听，后端只换算法**。输出固定 2ch 双耳，「切后端」= 换喂双耳的空间化路径。范围最小、最快，但听不到真扬声器布局差异。
+**决策：始终经物理设备，声道数不匹配就下混 / 双耳化**（最贴 Logic：耳机 = 双耳，多声道接口 = 按设备声道下混）。设备不变，切后端 / 切监听格式换的是上游空间化算法 + 下混目标，物理输出口固定。设备层（§6 的 `IAudioOutputDevice`）承担「stream 输出布局 → 物理设备布局」的下混 / 双耳化。
 
-**此决策不阻塞切片 1–3**（后端流式化 + 活参数层与设备映射解耦）。
+落选项备忘：②「格式需设备支持否则禁用」会因声道数变化触发设备重配（难无缝热切换）；③「永远双耳」最省事但听不到真扬声器布局差异——均不采用。
+
+此决策与后端流式化解耦，**不阻塞切片 1–5**；切片 6（热切换 + 下混层）按本决策落地。
 
 ## 9. 落地切片与工作量
 
@@ -205,22 +205,26 @@ C ABI（ADR 0007，additive，新 minor）：`adm_monitor_t` opaque + `adm_creat
 | 3 | **binaural stream**（OLA / spreader / diffuse / reader / cursor 提升为会话；算法不变） | 中-大 | 切片 1 |
 | 4 | **diffuse / extent / divergence = 廉价 re-prepare + reseek** | 中 | 切片 2、3 |
 | 5 | **EAR / VBAP / HOA stream**（套切片 3 同一模式） | 各中 | 切片 3 |
-| 6 | **热切换 + 交叉淡化 + 监听 / 下混层** | 中 | §8 决策、切片 5 |
+| 6 | **热切换 + 交叉淡化 + 监听 / 下混层**（按 §8：物理设备 + 下混 / 双耳化） | 中 | 切片 5 |
 
 切片 1 先用 Apple 验证「边播边出声 + 引擎 plumbing」；切片 3 用 binaural 验证「批 → 流」契约对最难的后端成立，契约一稳，切片 5 是复制。
 
 ## 10. 风险与注意
 
 - **binaural 精巧度**：1933 行，OLA 残差搬运（`:758`）、spreader 的 `prime()` 延迟补偿、diffuse 去相关——提升为会话时必须保证逐块输出与一次性 `render_window` **逐样本一致**。`process()` 外部请求帧数可能来自设备回调，不应改变 DSP 分块；stream 内部要固定 canonical block + FIFO（回归基线：与离线 binaural 渲染 bit 级对比一段定长窗口）。
-- **引擎 plumbing**：欠载（underrun）处理、时钟漂移、设备采样率（binaural 固定 48 kHz，设备非 48k 需重采样或拒绝）、loop region 边界回卷的 DSP 状态处理。
+- **引擎 plumbing**：欠载（underrun）处理、时钟漂移、设备采样率（binaural 固定 48 kHz；其他后端跟随素材/设备约束；跨边界不匹配需重采样或暂拒绝）、loop region 边界回卷的 DSP 状态处理。
 - **re-prepare 成本**：diffuse/extent/divergence 编辑重建源列表，必须实测其耗时落在「松手即更新」可接受范围；HRTF/VBAP 表务必复用不重算。
 - **ADR 0003 / 0007**：`IRenderStream` 接口零第三方类型；C ABI 仅 additive、新 minor、`SOVERSION 1` 不变。
 - **Apple-only**：Apple stream `if(APPLE)` 门控，跨平台 ctest 跳过，与现有 `mr_adm_apple_smoke_tests` 一致。
 - **平台覆盖**：实时引擎与设备层须跨平台（macOS + Linux）；设备后端选型（miniaudio vs 原生）影响 §8 与依赖管理（ADR 0004，走 `mr_adm_core_find_or_fetch`）。
 
-## 11. 未决事项
+## 11. 已定决策
 
-1. **监听输出模型**（§8 的 1/2/3）——切片 6 前必须定，切片 1–3 不阻塞。
-2. **设备后端选型**：miniaudio（跨平台、轻、单头）vs macOS 原生 CoreAudio + Linux 另接。倾向 miniaudio 统一，待评估。
-3. **level meter / 播放头回调**的 ABI 形状（实时 UI 需要电平 + 播放位置反馈）。
-4. **采样率不匹配**策略：拒绝 vs 设备侧重采样。
+四项（2026-06-16 敲定）：
+
+1. **监听输出模型**：始终经物理设备，声道数不匹配就下混 / 双耳化（见 §8）。
+2. **设备后端**：默认 **miniaudio**（跨平台单头、MIT-0 / public-domain 双授权，经 `mr_adm_core_find_or_fetch` 接入）。**设备层自有抽象接口** `IAudioOutputDevice` / `AudioDeviceSink`，miniaudio 类型不出模块边界（ADR 0003 风格）；逃生口：日后 Linux 低延迟 / JACK 多声道需要时加 RtAudio backend。
+3. **level meter / 播放头反馈**：**轻量轮询**——引擎在 worker 侧把播放状态、last-frame/playhead、ring fill、underrun、peak/rms 写进原子快照，GUI 定时（如 30/60 Hz）经 `adm_monitor_get_status` + `adm_monitor_get_levels` 拉取。无跨线程回调进托管代码、AOT/P-Invoke 友好、无重入风险。两个查询结构体都带 `struct_size` 字段，后续 minor 可追加字段。
+4. **采样率不匹配**：monitor 优先把物理设备开成当前 stream/sample 的采样率；涉及 binaural 时优先 48 kHz（当前 binaural 后端要求 48 kHz）。若设备锁定到不同采样率，才在**输出边界**做一次重采样（设备层职责）；切片 1 可先只支持 48 kHz，非 48 kHz 明确返回 unsupported，后续补重采样。
+
+后续仍待定的工程细节（非阻塞，落地时定）：crossfade 时长 / 曲线、ring buffer 容量与欠载策略、loop region 边界回卷的 DSP 状态处理。
