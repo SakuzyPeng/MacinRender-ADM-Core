@@ -88,6 +88,14 @@ internal static partial class NativeMethods
     internal static partial AdmErrorCode adm_render_options_set_semantic_policy_json(AdmRenderOptionsHandle opts,
         string? json);
 
+    // 输出时间裁切(秒)。取语义报告时渲极短窗口(报告是场景级、与窗口无关)以降本。
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_render_options_set_render_start_sec(AdmRenderOptionsHandle opts,
+        double sec);
+
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_render_options_set_render_end_sec(AdmRenderOptionsHandle opts, double sec);
+
     [LibraryImport(Lib)]
     internal static partial AdmErrorCode adm_render_options_set_speaker_spread_mode(AdmRenderOptionsHandle opts,
         AdmSpeakerSpreadMode mode);
