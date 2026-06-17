@@ -438,6 +438,18 @@ target_include_directories(mr_adm_engine PRIVATE src/adm_audio)
 mr_adm_core_apply_warnings(mr_adm_engine)
 mr_adm_core_apply_static_analysis(mr_adm_engine)
 
+# ── adm_realtime ──────────────────────────────────────────────────────────────
+# Realtime monitor engine: streaming render session (IRenderStream) pulled by a worker
+# into an SPSC ring, drained by an injected audio device. Sits beside ADMEngine. Deps grow
+# in later slices (ADMRendererFactory for the real stream factory, miniaudio for the device).
+add_library(mr_adm_realtime)
+add_library(MacinRender::ADMRealtime ALIAS mr_adm_realtime)
+target_sources(mr_adm_realtime PRIVATE src/adm_realtime/monitor_engine.cpp)
+target_include_directories(mr_adm_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
+target_link_libraries(mr_adm_realtime PUBLIC MacinRender::ADMCore PRIVATE Threads::Threads)
+mr_adm_core_apply_warnings(mr_adm_realtime)
+mr_adm_core_apply_static_analysis(mr_adm_realtime)
+
 # ── adm_c_api ─────────────────────────────────────────────────────────────────
 # C ABI wrapper. Links to ADMEngine to get RenderService::render() symbol.
 
@@ -587,8 +599,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # Realtime engine scaffolding: SPSC ring + IRenderStream/device/factory abstractions,
     # exercised with a deterministic PatternStream (no real backend). Cross-platform.
     add_executable(mr_adm_realtime_tests tests/unit/realtime_stream_fixture_test.cpp)
-    target_link_libraries(mr_adm_realtime_tests PRIVATE MacinRender::ADMCore Threads::Threads)
-    target_include_directories(mr_adm_realtime_tests PRIVATE src/adm_realtime)
+    target_link_libraries(mr_adm_realtime_tests PRIVATE MacinRender::ADMRealtime Threads::Threads)
     mr_adm_core_apply_warnings(mr_adm_realtime_tests)
     mr_adm_core_apply_static_analysis(mr_adm_realtime_tests)
     add_test(NAME mr_adm_realtime_tests COMMAND mr_adm_realtime_tests)

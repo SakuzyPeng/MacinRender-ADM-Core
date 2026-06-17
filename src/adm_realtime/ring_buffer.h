@@ -55,6 +55,13 @@ class FloatRingBuffer {
         return count;
     }
 
+    // Reset to empty. NOT thread-safe: only call when neither push() nor pop() can run
+    // concurrently (the monitor's seek handshake guarantees the consumer is idle first).
+    void clear() noexcept {
+        write_.store(0, std::memory_order_relaxed);
+        read_.store(0, std::memory_order_relaxed);
+    }
+
     // Consumer side. Reads up to `n` floats into `dst`; returns how many were read
     // (fewer than `n` when the buffer drains — an underrun the caller pads with silence).
     std::size_t pop(float* dst, std::size_t n) noexcept {

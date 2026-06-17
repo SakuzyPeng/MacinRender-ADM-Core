@@ -21,6 +21,9 @@ unusedStructMember:*/src/adm_cli/commands.h
 unusedStructMember:*/src/adm_render_binaural/binaural_spreader.h
 # ResolvedRenderer is built in renderer_factory.cpp and read in render_service.cpp.
 unusedStructMember:*/src/adm_renderer_factory/renderer_factory.h
+# MonitorStatus/MonitorLevels + engine members are written/read across monitor_engine.cpp
+# and consumers; cppcheck sees the header alone.
+unusedStructMember:*/src/adm_realtime/monitor_engine.h
 # SAF spreader is a local C fork of the upstream SAF example; keep cppcheck from
 # treating third-party C idioms as project C++ style issues.
 *:*/src/adm_render_binaural/spreader_mr.c
