@@ -1,10 +1,13 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "adm/capability.h"
@@ -120,6 +123,42 @@ class IPreparedRender {
 // of render_window() (they ignore the prepared argument and rebuild per call).
 struct EmptyPreparedRender final : IPreparedRender {};
 
+// A persistent, stateful streaming render session for realtime monitoring. Where
+// render_window() renders a window to a file in one batch, an IRenderStream is pulled
+// block-by-block: process() advances an internal playhead and carries DSP state
+// (convolution overlap, STFT, decorrelator delay) across calls, so consecutive blocks
+// join seamlessly. Lives on a worker thread that fills a ring buffer ahead of the audio
+// device; it may allocate / use a thread pool (it is NOT the hard-realtime audio
+// callback). See docs/architecture/REALTIME_MONITORING.md.
+class IRenderStream {
+  public:
+    virtual ~IRenderStream() = default;
+    IRenderStream(const IRenderStream&) = delete;
+    IRenderStream& operator=(const IRenderStream&) = delete;
+    IRenderStream(IRenderStream&&) = delete;
+    IRenderStream& operator=(IRenderStream&&) = delete;
+
+    // Render `frames` frames of interleaved PCM into `out` (out.size() must be
+    // >= frames * out_channels()). Returns the number of frames actually produced
+    // (fewer than requested at end-of-material or a loop boundary). The caller may
+    // request any `frames`; the implementation MUST use its own canonical block size
+    // plus a FIFO so the output is bit-identical to the offline render_window path
+    // regardless of how the device chunks its callbacks.
+    [[nodiscard]] virtual Result<std::size_t> process(std::span<float> out, std::size_t frames) = 0;
+
+    // Seek to an absolute output frame (after editing diffuse/extent/divergence, or a
+    // loop-region wrap). Must reset / pre-roll backend state so output after the seek is
+    // equivalent to the offline window render at the same position.
+    [[nodiscard]] virtual Result<void> seek(uint64_t frame) = 0;
+
+    [[nodiscard]] virtual uint32_t out_channels() const = 0;
+    [[nodiscard]] virtual uint32_t sample_rate() const = 0;
+    [[nodiscard]] virtual std::string_view output_layout() const = 0;
+
+  protected:
+    IRenderStream() = default;
+};
+
 // Abstract renderer backend interface.
 class IRenderer {
   public:
@@ -145,6 +184,18 @@ class IRenderer {
             return tl::unexpected{prepared.error()};
         }
         return render_window(**prepared, plan, progress, logs);
+    }
+
+    // Open a persistent streaming session (realtime monitoring) reusing `prepared` —
+    // which MUST come from THIS renderer's prepare(). Intentionally NOT pure virtual so
+    // backends adopt streaming incrementally; the default reports unsupported. See
+    // docs/architecture/REALTIME_MONITORING.md.
+    [[nodiscard]] virtual Result<std::unique_ptr<IRenderStream>>
+    open_stream(const IPreparedRender& prepared, const RenderPlan& plan, LogSink& logs) {
+        (void) prepared;
+        (void) plan;
+        (void) logs;
+        return make_error(ErrorCode::unsupported, "backend has no realtime stream", {});
     }
 };
 
