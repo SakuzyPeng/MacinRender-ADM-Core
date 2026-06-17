@@ -3,7 +3,6 @@
 #include <string>
 
 #include "audio_io_internal.h"
-
 #include "commands.h"
 
 CLI::App* add_apac_encode_command(CLI::App& app, ApacEncodeCliOptions& opts) {
@@ -20,12 +19,8 @@ CLI::App* add_apac_encode_command(CLI::App& app, ApacEncodeCliOptions& opts) {
 
 int run_apac_encode(const ApacEncodeCliOptions& opts) {
     const bool caf = opts.container == "caf";
-    auto result = mradm::audio::run_apac_encode_child(opts.input,
-                                                      opts.output,
-                                                      opts.layout,
-                                                      opts.bitrate,
-                                                      opts.drc_music,
-                                                      caf);
+    auto result =
+        mradm::audio::run_apac_encode_child(opts.input, opts.output, opts.layout, opts.bitrate, opts.drc_music, caf);
     if (!result.has_value()) {
         // Emit the "E <code> <message>" protocol line on stdout so the parent's
         // watchdog can reconstruct the mradm::Error. Heartbeat (P/F) lines were
