@@ -382,6 +382,26 @@ target_include_directories(mr_adm_loudness SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR
 mr_adm_core_apply_warnings(mr_adm_loudness)
 mr_adm_core_apply_static_analysis(mr_adm_loudness)
 
+# ── adm_renderer_factory ──────────────────────────────────────────────────────
+# Internal backend-resolution helper shared by ADMEngine (offline RenderService) and
+# ADMRealtime (realtime MonitorEngine), so the two never diverge on backend selection.
+# Knows every backend (create_*_renderer); kept OUT of ADMCore / public headers so the
+# core domain layer is not a backend registry (ADR 0003). Private internal library.
+
+add_library(mr_adm_renderer_factory)
+add_library(MacinRender::ADMRendererFactory ALIAS mr_adm_renderer_factory)
+target_sources(mr_adm_renderer_factory PRIVATE src/adm_renderer_factory/renderer_factory.cpp)
+target_include_directories(mr_adm_renderer_factory PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_renderer_factory)
+target_link_libraries(mr_adm_renderer_factory
+    PUBLIC MacinRender::ADMCore
+    PRIVATE MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural
+)
+if(APPLE)
+    target_link_libraries(mr_adm_renderer_factory PRIVATE MacinRender::ADMRenderApple)
+endif()
+mr_adm_core_apply_warnings(mr_adm_renderer_factory)
+mr_adm_core_apply_static_analysis(mr_adm_renderer_factory)
+
 # ── adm_engine ────────────────────────────────────────────────────────────────
 # Orchestration layer: implements RenderService, selects backends.
 
@@ -401,7 +421,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio
 )
 if(APPLE)
     target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)

@@ -21,19 +21,12 @@
 #include "adm/io.h"
 #include "adm/options.h"
 #include "adm/render.h"
-#include "adm/render_binaural.h"
-#include "adm/render_ear.h"
-#include "adm/render_hoa.h"
-#include "adm/render_vbap.h"
 #include "adm/semantic_policy.h"
-
-#ifdef __APPLE__
-#include "adm/render_apple.h"
-#endif
 
 #include "capability_json.h"
 #include "format_table.h"
 #include "layout_table.h"
+#include "renderer_factory.h"
 #include "scene_json.h"
 #include "support_matrix.h"
 
@@ -561,46 +554,22 @@ RenderResult RenderService::render(const RenderRequest& request,
 
     const auto requested_layout = normalize_output_layout(
         request.options.output_layout.empty() ? std::string{"0+2+0"} : request.options.output_layout);
-    const bool requests_speaker_stereo = (requested_layout == "0+2+0");
-
-    // Select backend. Speaker stereo rendering is intentionally not exposed:
-    // the current 2ch speaker projection is not a downmix and can be badly
-    // misleading for ADM content. Automatic 2ch output therefore means binaural.
-    auto sel = request.options.renderer;
-    if (sel == RendererSelection::automatic && (requests_speaker_stereo || requested_layout == "binaural")) {
-        sel = RendererSelection::saf_binaural;
+    // Resolve the backend (selection, legacy-alias, speaker-stereo guard, binaural layout
+    // forcing) via the shared factory so RenderService and the realtime MonitorEngine
+    // never diverge. effective_output_layout reflects e.g. SAF binaural forcing "binaural".
+    auto resolved =
+        resolve_renderer(request.options.renderer, requested_layout, request.options.internal_allow_speaker_stereo);
+    if (!resolved) {
+        return {resolved.error(), std::nullopt, std::nullopt, {{LogLevel::error, resolved.error().message}}};
     }
-    if ((sel == RendererSelection::ear || sel == RendererSelection::saf) && requests_speaker_stereo &&
-        !request.options.internal_allow_speaker_stereo) {
-        const auto msg =
-            std::string{"speaker stereo rendering is disabled; use --renderer saf-binaural for 2ch ADM output"};
-        return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
-    }
-
-    std::unique_ptr<IRenderer> renderer;
-    if (sel == RendererSelection::ear || sel == RendererSelection::automatic) {
-        renderer = create_ear_renderer();
-    } else if (sel == RendererSelection::saf) {
-        renderer = create_vbap_renderer();
-    } else if (sel == RendererSelection::hoa) {
-        renderer = create_hoa_renderer();
-    } else if (sel == RendererSelection::binaural || sel == RendererSelection::saf_binaural) {
-        renderer = create_binaural_renderer();
-#ifdef __APPLE__
-    } else if (sel == RendererSelection::apple) {
-        renderer = create_apple_renderer();
-#endif
-    } else {
-        const auto msg = fmt::format("renderer '{}' is not available in this build", static_cast<int>(sel));
-        return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
-    }
+    const auto sel = resolved->selected;
+    std::unique_ptr<IRenderer> renderer = std::move(resolved->renderer);
+    auto output_layout = std::move(resolved->effective_output_layout);
 
     const auto caps = renderer->capabilities();
     logs.log(LogLevel::info, "engine", fmt::format("backend: {} {}", caps.backend_name, caps.backend_version));
-    if (sel == RendererSelection::binaural) {
-        logs.log(LogLevel::warning,
-                 "engine",
-                 "--renderer binaural is a legacy alias for --renderer saf-binaural; prefer saf-binaural");
+    for (const auto& [level, message] : resolved->diagnostics) {
+        logs.log(level, "engine", message);
     }
 
     std::optional<SemanticPolicy> semantic_policy;
@@ -613,17 +582,6 @@ RenderResult RenderService::render(const RenderRequest& request,
     const AdmScene original_scene = needs_semantic_report ? *scene_result : AdmScene{};
     // Effective semantic report captured in-memory when requested; surfaced via RenderResult.
     std::optional<std::string> semantic_report_json;
-
-    auto output_layout = requested_layout;
-    if (sel == RendererSelection::binaural || sel == RendererSelection::saf_binaural) {
-        if (requested_layout != "0+2+0" && requested_layout != "binaural") {
-            logs.log(LogLevel::warning,
-                     "engine",
-                     fmt::format("SAF binaural renderer always writes 2ch HRTF output; ignoring requested layout '{}'",
-                                 requested_layout));
-        }
-        output_layout = "binaural";
-    }
 
     // Resolve + apply the semantic policy (skipped when a preview session already did).
     if (preimported_scene == nullptr) {
