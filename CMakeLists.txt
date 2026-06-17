@@ -769,6 +769,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         target_link_libraries(mr_adm_apple_smoke_tests
             PRIVATE
                 MacinRender::ADMEngine
+                MacinRender::ADMIo
                 MacinRender::ADMRenderApple
                 MacinRender::ADMRenderCommon
                 MacinRender::ADMAudio
