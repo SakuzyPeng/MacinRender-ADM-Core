@@ -53,7 +53,8 @@ resolve_renderer(RendererSelection requested, std::string requested_layout, bool
 
     if (sel == RendererSelection::binaural) {
         resolved.diagnostics.emplace_back(
-            LogLevel::warning, "--renderer binaural is a legacy alias for --renderer saf-binaural; prefer saf-binaural");
+            LogLevel::warning,
+            "--renderer binaural is a legacy alias for --renderer saf-binaural; prefer saf-binaural");
     }
     if (sel == RendererSelection::binaural || sel == RendererSelection::saf_binaural) {
         if (requested_layout != "0+2+0" && requested_layout != "binaural") {

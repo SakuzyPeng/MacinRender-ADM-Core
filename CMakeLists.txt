@@ -584,6 +584,15 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_scene_export_tests)
     add_test(NAME mr_adm_scene_export_tests COMMAND mr_adm_scene_export_tests)
 
+    # Realtime engine scaffolding: SPSC ring + IRenderStream/device/factory abstractions,
+    # exercised with a deterministic PatternStream (no real backend). Cross-platform.
+    add_executable(mr_adm_realtime_tests tests/unit/realtime_stream_fixture_test.cpp)
+    target_link_libraries(mr_adm_realtime_tests PRIVATE MacinRender::ADMCore Threads::Threads)
+    target_include_directories(mr_adm_realtime_tests PRIVATE src/adm_realtime)
+    mr_adm_core_apply_warnings(mr_adm_realtime_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_realtime_tests)
+    add_test(NAME mr_adm_realtime_tests COMMAND mr_adm_realtime_tests)
+
     add_executable(mr_adm_vbap_smoke_tests tests/unit/vbap_smoke_test.cpp)
     target_link_libraries(mr_adm_vbap_smoke_tests
         PRIVATE
