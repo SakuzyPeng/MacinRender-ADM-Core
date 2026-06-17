@@ -57,7 +57,7 @@ target_link_libraries(mr_adm_realtime
 
 | 文件 | 模块 | 职责 |
 |---|---|---|
-| `src/adm_engine/renderer_factory.h/.cpp` | ADMRendererFactory | 见 §5：`resolve_renderer(...) → ResolvedRenderer` |
+| `src/adm_renderer_factory/renderer_factory.h/.cpp` | ADMRendererFactory | 见 §5：`resolve_renderer(...) → ResolvedRenderer` |
 | `src/adm_realtime/monitor_engine.h/.cpp` | ADMRealtime | `MonitorEngine`：持 stream + ring + worker + clock + loop；play/pause/seek/get_status/get_levels |
 | `src/adm_realtime/render_stream_factory.h` | ADMRealtime | `IRenderStreamFactory` 抽象（**依赖注入点**，见 §4/§8）+ 真实实现（经 `resolve_renderer` + `prepare` + `open_stream`） |
 | `src/adm_realtime/ring_buffer.h` | ADMRealtime | SPSC float ring（header-only，无第三方） |
@@ -120,20 +120,21 @@ class IRenderStreamFactory {
 
 ```cpp
 struct ResolvedRenderer {
-    std::unique_ptr<IRenderer> renderer;
-    RendererSelection selected;          // 解析后的实际后端（automatic/legacy alias 归一）
-    std::string effective_output_layout; // 如 saf-binaural 强制为 "binaural"
-    // 诊断（legacy alias 告警等）——由调用方决定怎么记日志。
+    std::unique_ptr<IRenderer> renderer;     // canonical 句柄——派发用它,不要用 selected
+    RendererSelection selected;              // 仅供 reporting(renderer_name):stereo 时 automatic→
+                                             // saf_binaural,但 automatic(非 stereo)/legacy binaural 原样保留
+    std::string effective_output_layout;     // 如 saf-binaural 强制为 "binaural"
+    // 诊断(legacy alias 告警、layout 忽略告警)——由调用方决定怎么记日志(可与自家 "backend:" 行交错)。
     std::vector<std::pair<LogLevel, std::string>> diagnostics;
 };
 
+// 不接 LogSink:解析不自行记日志,所有用户可见消息经 diagnostics 返回由调用方落位。
 Result<ResolvedRenderer> resolve_renderer(RendererSelection requested,
-                                          std::string requested_layout,
-                                          bool internal_allow_speaker_stereo,
-                                          LogSink& logs);
+                                          std::string requested_layout, // 已归一化(normalize_output_layout)
+                                          bool internal_allow_speaker_stereo);
 ```
 
-**放置**：`src/adm_engine/renderer_factory.h/.cpp`，**不进 `include/adm/`、不进 ADMCore**——它天然依赖 `create_ear_renderer/create_vbap_renderer/...`，知道所有后端；放进 ADMCore 会把「核心模型层」污染成「后端注册层」。
+**放置**：`src/adm_renderer_factory/renderer_factory.h/.cpp`，**不进 `include/adm/`、不进 ADMCore**——它天然依赖 `create_ear_renderer/create_vbap_renderer/...`，知道所有后端；放进 ADMCore 会把「核心模型层」污染成「后端注册层」。一 target 一目录,故独立目录而非塞进 `src/adm_engine/`。
 
 **target**：做成**私有 internal 库 `MacinRender::ADMRendererFactory`**（`add_library(mr_adm_renderer_factory)`，PRIVATE 链各 renderer + Apple `if(APPLE)` 门控），只给 `ADMEngine` / `ADMRealtime` 链，不进任何 public header。
 
@@ -181,7 +182,7 @@ adm_error_code_t adm_monitor_get_levels(adm_monitor_t*, adm_monitor_levels_t* ou
 
 ## 8. 验证路径
 
-1. **既有回归**：`make_renderer` 重构后 `ctest --preset debug` 全绿（行为 bit 不变）。
+1. **既有回归**：`resolve_renderer` 重构后 `ctest --preset debug` 全绿（行为 bit 不变）。
 2. **新单测 `mr_adm_realtime_tests`**（跨平台，**无真实后端依赖**，经 §4.1 注入 `PatternStreamFactory + CapturePcmSink`）：
    - ring SPSC 正确性（多线程产/消、wrap、欠载计数）；
    - **`PatternStream`**：每帧输出确定函数 `sample(frame, ch) = frame * 0.001f + ch`。捕获 sink 收到的 PCM 与该函数**逐样本一致**，专抓：分块边界 off-by-one、`seek` 后状态没清（seek 到 F 后第一帧必须是 `sample(F,·)`）、ring wrap 写错、loop region 回卷、pause/resume 后 playhead 连续。`SilenceStream` 仅作补充（只证「没崩、长度对」）。

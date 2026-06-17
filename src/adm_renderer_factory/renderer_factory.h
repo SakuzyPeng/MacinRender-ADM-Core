@@ -19,10 +19,16 @@
 namespace mradm {
 
 // The full result of resolving a requested renderer + output layout: the constructed
-// backend, the renderer actually selected (automatic / legacy aliases normalised), the
-// effective output layout (e.g. SAF binaural forces "binaural"), and any user-facing
-// diagnostics the caller should log in order. Resolution emits no logs itself; the
-// caller decides placement (so it can interleave its own "backend:" line).
+// backend, the selection for *reporting*, the effective output layout (e.g. SAF binaural
+// forces "binaural"), and any user-facing diagnostics the caller should log in order.
+// Resolution emits no logs itself; the caller decides placement (so it can interleave its
+// own "backend:" line).
+//
+// `renderer` is the canonical handle — dispatch off it, not off `selected`. `selected`
+// mirrors what RenderService historically reported via renderer_name(): the automatic→
+// saf_binaural promotion for 2ch is applied, but automatic (non-stereo) stays automatic
+// and the legacy "binaural" alias is preserved as-is (with a diagnostic warning). It is
+// NOT a canonical backend id; two distinct `selected` values can map to one backend.
 struct ResolvedRenderer {
     std::unique_ptr<IRenderer> renderer;
     RendererSelection selected{RendererSelection::automatic};
