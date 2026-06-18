@@ -19,10 +19,19 @@ namespace mradm {
 
 namespace {
 
-// Seconds → absolute output frame, clamped to [0, total_frames].
+// Seconds → absolute output frame, clamped to [0, total_frames]. Compares against the
+// material duration before casting so an arbitrarily large (but finite) `seconds` never
+// produces an out-of-range double→uint64_t conversion (which is UB). NaN maps to 0.
 [[nodiscard]] uint64_t clamp_frame(double seconds, uint32_t sample_rate, uint64_t total_frames) {
-    const double clamped = std::max(0.0, seconds);
-    return std::min(static_cast<uint64_t>(clamped * sample_rate), total_frames);
+    if (!(seconds > 0.0) || sample_rate == 0) {
+        return 0;
+    }
+    const double duration_sec = static_cast<double>(total_frames) / static_cast<double>(sample_rate);
+    if (seconds >= duration_sec) {
+        return total_frames;
+    }
+    // seconds < duration ⇒ seconds * sample_rate < total_frames, so the cast is in range.
+    return static_cast<uint64_t>(seconds * static_cast<double>(sample_rate));
 }
 
 // Thread-safe, append-only diagnostics buffer. The monitor renders on a worker thread and

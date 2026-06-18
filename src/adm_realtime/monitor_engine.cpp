@@ -158,9 +158,12 @@ bool MonitorEngine::top_up_ring() {
         produced = true;
 
         if (looping && producer_pos_ >= loop_end) {
-            // Producer-side wrap: ring stays valid, no flush needed.
+            // Producer-side wrap: ring stays valid, no flush needed. On failure, stop
+            // producing rather than pretend the wrap happened.
             if (auto seek_res = stream_->seek(loop_start); !seek_res) {
-                logs_.log(LogLevel::warning, "monitor", seek_res.error().message);
+                logs_.log(LogLevel::error, "monitor", seek_res.error().message);
+                failed_.store(true, std::memory_order_relaxed);
+                return produced;
             }
             producer_pos_ = loop_start;
         }
@@ -224,14 +227,18 @@ void MonitorEngine::apply_seek_locked(uint64_t frame) {
         std::this_thread::yield();
     }
     ring_.clear();
-    if (auto seek_res = stream_->seek(frame); !seek_res) {
-        logs_.log(LogLevel::warning, "monitor", seek_res.error().message);
+    if (auto seek_res = stream_->seek(frame); seek_res) {
+        producer_pos_ = frame;
+        frames_played_.store(frame, std::memory_order_relaxed);
+        // Seeking re-arms production: a position before EOF has more to render.
+        ended_.store(false, std::memory_order_relaxed);
+        failed_.store(false, std::memory_order_relaxed);
+    } else {
+        // Don't fake a repositioned playhead: the stream is still wherever it was. Surface
+        // the failure instead of silently claiming the seek landed.
+        logs_.log(LogLevel::error, "monitor", seek_res.error().message);
+        failed_.store(true, std::memory_order_relaxed);
     }
-    producer_pos_ = frame;
-    frames_played_.store(frame, std::memory_order_relaxed);
-    // Seeking re-arms production: a position before EOF has more to render.
-    ended_.store(false, std::memory_order_relaxed);
-    failed_.store(false, std::memory_order_relaxed);
     flushing_.store(false, std::memory_order_seq_cst);
 }
 
