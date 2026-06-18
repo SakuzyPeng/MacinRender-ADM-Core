@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <span>
 
 #include "adm/errors.h"
@@ -39,5 +40,11 @@ class IAudioOutputDevice {
   protected:
     IAudioOutputDevice() = default;
 };
+
+// Default realtime output device, backed by miniaudio. When `use_null_backend` is true it
+// uses miniaudio's null backend (no hardware; the callback is driven off a timer) for
+// headless / CI use. Implementation in miniaudio_device.cpp — no miniaudio type crosses
+// this boundary (ADR 0003).
+[[nodiscard]] std::unique_ptr<IAudioOutputDevice> make_miniaudio_device(bool use_null_backend = false);
 
 } // namespace mradm::realtime

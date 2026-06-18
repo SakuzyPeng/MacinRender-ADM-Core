@@ -444,9 +444,13 @@ mr_adm_core_apply_static_analysis(mr_adm_engine)
 # in later slices (ADMRendererFactory for the real stream factory, miniaudio for the device).
 add_library(mr_adm_realtime)
 add_library(MacinRender::ADMRealtime ALIAS mr_adm_realtime)
-target_sources(mr_adm_realtime PRIVATE src/adm_realtime/monitor_engine.cpp)
+target_sources(mr_adm_realtime PRIVATE
+    src/adm_realtime/monitor_engine.cpp
+    src/adm_realtime/miniaudio_device.cpp
+)
 target_include_directories(mr_adm_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
-target_link_libraries(mr_adm_realtime PUBLIC MacinRender::ADMCore PRIVATE Threads::Threads)
+# miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
+target_link_libraries(mr_adm_realtime PUBLIC MacinRender::ADMCore PRIVATE Threads::Threads miniaudio)
 mr_adm_core_apply_warnings(mr_adm_realtime)
 mr_adm_core_apply_static_analysis(mr_adm_realtime)
 

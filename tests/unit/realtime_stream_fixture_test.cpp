@@ -550,6 +550,37 @@ bool test_monitor_malformed_stream() {
     return ok;
 }
 
+// End-to-end with the real device sink on miniaudio's null backend (no hardware; the
+// callback is timer-driven). Validates the device plumbing + lifecycle: the playhead
+// advances and the engine tears down the device + worker cleanly on destruction.
+bool test_monitor_miniaudio_null_device() {
+    bool ok = true;
+    PatternStreamFactory factory;
+    auto device = mradm::realtime::make_miniaudio_device(/*use_null_backend=*/true);
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, *device, scene, opts, logs);
+    if (!check(engine.has_value(), "miniaudio null: engine creates")) {
+        return false;
+    }
+    (*engine)->play();
+
+    uint64_t playhead = 0;
+    for (int i = 0; i < 300; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        playhead = (*engine)->status().playhead_frames;
+        if (playhead > 4096) {
+            break;
+        }
+    }
+    ok &= check(playhead > 4096, "miniaudio null: playhead advances under timer-driven callback");
+    ok &= check((*engine)->status().state == mradm::realtime::MonitorState::playing, "miniaudio null: still playing");
+    // The engine destructor (scope exit) must stop the device + join the worker without hang.
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -566,6 +597,7 @@ int main() {
     ok &= test_monitor_seek();
     ok &= test_monitor_eof();
     ok &= test_monitor_malformed_stream();
+    ok &= test_monitor_miniaudio_null_device();
 
     if (ok) {
         std::cout << "realtime stream/ring tests passed\n";
