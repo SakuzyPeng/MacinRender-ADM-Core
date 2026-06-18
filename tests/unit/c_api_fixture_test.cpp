@@ -2091,6 +2091,67 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 
 } // namespace
 
+// v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
+// create may fail with a device error, in which case the playback assertions are skipped.
+bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
+    bool ok = check(adm_api_version_minor() == 15, "C ABI minor version is 15");
+
+    // Argument validation (no device needed).
+    adm_monitor_t* probe = nullptr;
+    ok = check(adm_create_monitor(nullptr, input.string().c_str(), nullptr, &probe) == ADM_ERROR_INVALID_ARGUMENT,
+               "create_monitor null context rejected") &&
+         ok;
+    ok = check(adm_create_monitor(ctx, nullptr, nullptr, &probe) == ADM_ERROR_INVALID_ARGUMENT,
+               "create_monitor null input rejected") &&
+         ok;
+    ok = check(adm_create_monitor(ctx, input.string().c_str(), nullptr, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "create_monitor null out rejected") &&
+         ok;
+    ok = check(adm_monitor_play(nullptr) == ADM_ERROR_INVALID_ARGUMENT, "play(nullptr) rejected") && ok;
+    ok = check(adm_monitor_log_count(nullptr) == 0U, "log_count(nullptr) is 0") && ok;
+
+    adm_render_options_t* opts = adm_create_render_options();
+    adm_render_options_set_renderer(opts, ADM_RENDERER_SAF_BINAURAL);
+    adm_render_options_set_output_layout(opts, "binaural");
+    adm_monitor_t* monitor = nullptr;
+    const adm_error_code_t code = adm_create_monitor(ctx, input.string().c_str(), opts, &monitor);
+    adm_destroy_render_options(opts);
+
+    if (code != ADM_ERROR_OK) {
+        // No audio output device available (headless CI): must fail cleanly.
+        ok = check(monitor == nullptr, "failed create_monitor leaves out null") && ok;
+        std::cerr << "(no audio output device; skipping monitor playback assertions)\n";
+        return ok;
+    }
+    ok = check(monitor != nullptr, "create_monitor returns a monitor") && ok;
+
+    ok = check(adm_monitor_play(monitor) == ADM_ERROR_OK, "monitor play") && ok;
+
+    adm_monitor_status_t status{};
+    status.struct_size = sizeof(status);
+    ok = check(adm_monitor_get_status(monitor, &status) == ADM_ERROR_OK, "monitor get_status") && ok;
+
+    std::vector<float> peak(8U, 0.0F);
+    std::vector<float> rms(8U, 0.0F);
+    adm_monitor_levels_t levels{};
+    levels.struct_size = sizeof(levels);
+    levels.capacity = static_cast<uint32_t>(peak.size());
+    levels.peak = peak.data();
+    levels.rms = rms.data();
+    ok = check(adm_monitor_get_levels(monitor, &levels) == ADM_ERROR_OK, "monitor get_levels") && ok;
+    ok = check(levels.out_count >= 1U, "monitor levels report a channel count") && ok;
+
+    ok = check(adm_monitor_seek(monitor, 0.0) == ADM_ERROR_OK, "monitor seek") && ok;
+    ok = check(adm_monitor_set_loop(monitor, 0.0, 0.5) == ADM_ERROR_OK, "monitor set_loop") && ok;
+    ok = check(adm_monitor_pause(monitor) == ADM_ERROR_OK, "monitor pause") && ok;
+    ok = check(adm_monitor_log_entry(monitor, adm_monitor_log_count(monitor) + 100U, nullptr, nullptr, nullptr) == 0,
+               "monitor log_entry out-of-range is 0") &&
+         ok;
+
+    adm_destroy_monitor(monitor);
+    return ok;
+}
+
 int main() {
     if (!verify_version() || !verify_null_result_accessors()) {
         return EXIT_FAILURE;
@@ -2171,6 +2232,8 @@ int main() {
     // v1.14 tests
     ok = verify_version_114() && ok;
     ok = verify_iamf_layer_validation(ctx, fixture.path()) && ok;
+    // v1.15 tests
+    ok = verify_monitor_abi(ctx, fixture.path()) && ok;
 
     adm_destroy_context(ctx);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

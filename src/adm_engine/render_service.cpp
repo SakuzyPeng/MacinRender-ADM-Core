@@ -71,44 +71,6 @@ namespace {
     return unique_sidecar_temp_path(final_path, "output_tmp", ext.empty() ? ".tmp" : ext);
 }
 
-[[nodiscard]] std::string normalize_output_layout(const std::string& layout) {
-    std::string key = layout;
-    std::ranges::transform(
-        key, key.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
-
-    if (key.empty() || key == "stereo" || key == "2.0" || key == "0+2+0") {
-        return "0+2+0";
-    }
-    if (key == "5.1" || key == "0+5+0") {
-        return "0+5+0";
-    }
-    if (key == "5.1.2" || key == "2+5+0") {
-        return "2+5+0";
-    }
-    if (key == "7.1" || key == "wav71" || key == "wave_7_1" || key == "wave-7.1" || key == "0+7+0") {
-        return "wav71";
-    }
-    if (key == "5.1.4" || key == "atmos514" || key == "4+5+0") {
-        return "4+5+0";
-    }
-    if (key == "9.1.4" || key == "4+5+4") {
-        return "4+5+4";
-    }
-    if (key == "7.1.4" || key == "atmos714" || key == "4+7+0") {
-        return "4+7+0";
-    }
-    if (key == "9.1.6" || key == "atmos916") {
-        return "9.1.6";
-    }
-    if (key == "22.2" || key == "9+10+3") {
-        return "9+10+3";
-    }
-    if (key == "binaural" || key == "hoa3") {
-        return key;
-    }
-    return layout;
-}
-
 struct IamfLayerInfo {
     std::string_view id;
     std::string_view display;

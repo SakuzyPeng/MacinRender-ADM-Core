@@ -69,6 +69,7 @@ target_sources(
             include/adm/capability.h
             include/adm/errors.h
             include/adm/logging.h
+            include/adm/monitor.h
             include/adm/options.h
             include/adm/progress.h
             include/adm/render.h
@@ -412,6 +413,7 @@ target_sources(
     mr_adm_engine
     PRIVATE
         src/adm_engine/render_service.cpp
+        src/adm_engine/monitor_session.cpp
         src/adm_engine/scene_json.cpp
         src/adm_engine/capability_json.cpp
         src/adm_engine/layout_table.cpp
@@ -421,7 +423,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio
 )
 if(APPLE)
     target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)

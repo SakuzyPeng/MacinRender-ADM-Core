@@ -65,12 +65,18 @@
  *
  * v1.14 新增（additive，SOVERSION 不变）：
  *   adm_render_options_set_iamf_layers.
+ *
+ * v1.15 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_t + adm_create_monitor / adm_destroy_monitor / adm_monitor_play /
+ *   adm_monitor_pause / adm_monitor_seek / adm_monitor_set_loop / adm_monitor_get_status /
+ *   adm_monitor_get_levels / adm_monitor_log_count / adm_monitor_log_entry
+ *   (实时监听引擎；状态/电平/日志均轮询，无回调)。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 14
+#define ADM_API_VERSION_MINOR 15
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -789,6 +795,86 @@ adm_error_code_t adm_preview_render_window_v2(adm_preview_session_t* session,
                                               adm_progress_v2_cb progress,
                                               void* user_data,
                                               adm_render_result_t** result) ADM_API_NOEXCEPT;
+
+/* ── v1.15 Realtime monitor ───────────────────────────────────────────────── */
+/*
+ * A persistent realtime monitor: streams the rendered ADM scene to the default audio output
+ * device while play / pause / seek / loop control playback. Status, levels and the
+ * diagnostics log are POLLED (no callbacks into the caller — see the realtime monitoring
+ * design). A monitor is NOT thread-safe; serialize calls or use one per thread.
+ *
+ * adm_create_monitor imports the scene + applies the semantic policy from `opts`, resolves
+ * the backend, and starts the default output device. `opts` may be NULL (all defaults).
+ * Backends that require 48 kHz (binaural) reject other input rates. Returns the import /
+ * policy / backend error, ADM_ERROR_UNSUPPORTED when the backend has no realtime stream, or
+ * ADM_ERROR_INTERNAL when no audio output device is available. create / destroy must pair.
+ */
+typedef struct adm_monitor_t adm_monitor_t; /* v1.15 */
+
+adm_error_code_t adm_create_monitor(adm_context_t* context,
+                                    const char* input_path,
+                                    const adm_render_options_t* opts,
+                                    adm_monitor_t** out) ADM_API_NOEXCEPT;
+void adm_destroy_monitor(adm_monitor_t* monitor) ADM_API_NOEXCEPT;
+
+adm_error_code_t adm_monitor_play(adm_monitor_t* monitor) ADM_API_NOEXCEPT;
+adm_error_code_t adm_monitor_pause(adm_monitor_t* monitor) ADM_API_NOEXCEPT;
+adm_error_code_t adm_monitor_seek(adm_monitor_t* monitor, double seconds) ADM_API_NOEXCEPT;
+/* end_seconds <= start_seconds disables looping. */
+adm_error_code_t
+adm_monitor_set_loop(adm_monitor_t* monitor, double start_seconds, double end_seconds) ADM_API_NOEXCEPT;
+
+/* Playback state for adm_monitor_status_t.state. */
+typedef enum adm_monitor_state_t {
+    ADM_MONITOR_STOPPED = 0,
+    ADM_MONITOR_PLAYING = 1,
+    ADM_MONITOR_PAUSED = 2
+} adm_monitor_state_t;
+
+/*
+ * Polled status. Set struct_size = sizeof(adm_monitor_status_t) before the call; the library
+ * writes only the fields that fit, so callers built against an older header stay compatible
+ * as fields are appended in later minor versions.
+ */
+typedef struct adm_monitor_status_t {
+    uint32_t struct_size;
+    int32_t state; /* adm_monitor_state_t */
+    uint64_t playhead_frames;
+    uint64_t underruns;
+    uint64_t buffered_frames;
+    float ring_fill; /* 0..1 ring occupancy */
+    int32_t ended;   /* bool: reached end of material */
+    int32_t failed;  /* bool: a render error stopped production */
+} adm_monitor_status_t;
+adm_error_code_t adm_monitor_get_status(adm_monitor_t* monitor, adm_monitor_status_t* out) ADM_API_NOEXCEPT;
+
+/*
+ * Polled per-channel peak / RMS of the most recently played block. The caller provides peak
+ * / rms buffers of `capacity` floats; the library writes min(capacity, channels) values and
+ * sets out_count to the actual channel count. peak or rms may be NULL to skip that metric.
+ * Set struct_size = sizeof(adm_monitor_levels_t) before the call.
+ */
+typedef struct adm_monitor_levels_t {
+    uint32_t struct_size;
+    uint32_t capacity;
+    uint32_t out_count;
+    float* peak;
+    float* rms;
+} adm_monitor_levels_t;
+adm_error_code_t adm_monitor_get_levels(adm_monitor_t* monitor, adm_monitor_levels_t* out) ADM_API_NOEXCEPT;
+
+/*
+ * Polled diagnostics buffer (append-only for the monitor's lifetime). Read the count, then
+ * fetch entries [0, count). out_level receives an adm_log_level_t; the out_module /
+ * out_message pointers are owned by the monitor and remain valid only until the next
+ * adm_monitor_* call on the same monitor. Returns 1 on success, 0 on a bad index / args.
+ */
+uint32_t adm_monitor_log_count(adm_monitor_t* monitor) ADM_API_NOEXCEPT;
+int adm_monitor_log_entry(adm_monitor_t* monitor,
+                          uint32_t index,
+                          int32_t* out_level,
+                          const char** out_module,
+                          const char** out_message) ADM_API_NOEXCEPT;
 
 #ifdef __cplusplus
 } /* extern "C" */

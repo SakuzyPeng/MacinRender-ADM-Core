@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -12,6 +13,7 @@
 #include <vector>
 
 #include "adm/c_api.h"
+#include "adm/monitor.h"
 #include "adm/render.h"
 
 namespace {
@@ -326,6 +328,14 @@ struct adm_render_options_t {
 
 struct adm_preview_session_t {
     mradm::PreviewSession session;
+};
+
+struct adm_monitor_t {
+    std::unique_ptr<mradm::MonitorSession> session;
+    // Scratch storage backing the const char* returned by adm_monitor_log_entry; valid
+    // until the next adm_monitor_* call (as the header documents).
+    std::string log_module;
+    std::string log_message;
 };
 
 // Build an owned C result handle from a finished render. Shared by adm_render_file_ex
@@ -958,6 +968,180 @@ adm_error_code_t adm_preview_render_window_v2(adm_preview_session_t* session,
                                               adm_render_result_t** result) noexcept {
     CallbackProgressSinkV2 progress_sink(progress, user_data);
     return preview_render_window_impl(session, start_sec, end_sec, output_path, progress_sink, result);
+}
+
+/* ── Realtime monitor (v1.15) ──────────────────────────────────────────────── */
+
+// cppcheck-suppress constParameterPointer ; context is part of the fixed C ABI signature.
+adm_error_code_t adm_create_monitor(adm_context_t* context,
+                                    const char* input_path,
+                                    const adm_render_options_t* opts,
+                                    adm_monitor_t** out) noexcept {
+    if (out != nullptr) {
+        *out = nullptr;
+    }
+    if (context == nullptr || input_path == nullptr || input_path[0] == '\0' || out == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        mradm::RenderOptions options;
+        if (opts != nullptr) {
+            options = opts->opts;
+            if (opts->cancel_token != nullptr) {
+                options.cancel_token = opts->cancel_token->source.get_token();
+            }
+        }
+        auto created = mradm::MonitorSession::create(input_path, options);
+        if (!created) {
+            return map_error(created.error().code);
+        }
+        // cppcheck-suppress unreadVariable -- monitor is used (*out = monitor)
+        auto* monitor = new (std::nothrow) adm_monitor_t{std::move(*created), {}, {}};
+        if (monitor == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        *out = monitor;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+void adm_destroy_monitor(adm_monitor_t* monitor) noexcept {
+    delete monitor;
+}
+
+adm_error_code_t adm_monitor_play(adm_monitor_t* monitor) noexcept {
+    if (monitor == nullptr || !monitor->session) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        monitor->session->play();
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_monitor_pause(adm_monitor_t* monitor) noexcept {
+    if (monitor == nullptr || !monitor->session) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        monitor->session->pause();
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_monitor_seek(adm_monitor_t* monitor, double seconds) noexcept {
+    if (monitor == nullptr || !monitor->session || !std::isfinite(seconds)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        auto result = monitor->session->seek_seconds(seconds);
+        return result ? ADM_ERROR_OK : map_error(result.error().code);
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_monitor_set_loop(adm_monitor_t* monitor, double start_seconds, double end_seconds) noexcept {
+    if (monitor == nullptr || !monitor->session || !std::isfinite(start_seconds) || !std::isfinite(end_seconds)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        monitor->session->set_loop_seconds(start_seconds, end_seconds);
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_monitor_get_status(adm_monitor_t* monitor, adm_monitor_status_t* out) noexcept {
+    if (monitor == nullptr || !monitor->session || out == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        const mradm::MonitorStatusSnapshot s = monitor->session->status();
+        adm_monitor_status_t filled{};
+        filled.struct_size = out->struct_size;
+        filled.state = static_cast<int32_t>(s.state);
+        filled.playhead_frames = s.playhead_frames;
+        filled.underruns = s.underruns;
+        filled.buffered_frames = s.buffered_frames;
+        filled.ring_fill = s.ring_fill;
+        filled.ended = s.ended ? 1 : 0;
+        filled.failed = s.failed ? 1 : 0;
+        // struct_size forward-compat: copy only the bytes the caller's struct holds.
+        const std::size_t copy = std::min<std::size_t>(out->struct_size, sizeof(filled));
+        std::memcpy(out, &filled, copy);
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_monitor_get_levels(adm_monitor_t* monitor, adm_monitor_levels_t* out) noexcept {
+    if (monitor == nullptr || !monitor->session || out == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        const mradm::MonitorLevelsSnapshot l = monitor->session->levels();
+        out->out_count = l.channels;
+        const uint32_t n = std::min(out->capacity, l.channels);
+        for (uint32_t c = 0; c < n; ++c) {
+            if (out->peak != nullptr) {
+                out->peak[c] = l.peak.at(c);
+            }
+            if (out->rms != nullptr) {
+                out->rms[c] = l.rms.at(c);
+            }
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+uint32_t adm_monitor_log_count(adm_monitor_t* monitor) noexcept {
+    if (monitor == nullptr || !monitor->session) {
+        return 0;
+    }
+    try {
+        return static_cast<uint32_t>(monitor->session->log_count());
+    } catch (...) {
+        return 0;
+    }
+}
+
+int adm_monitor_log_entry(adm_monitor_t* monitor,
+                          uint32_t index,
+                          int32_t* out_level,
+                          const char** out_module,
+                          const char** out_message) noexcept {
+    if (monitor == nullptr || !monitor->session) {
+        return 0;
+    }
+    try {
+        mradm::LogLevel level{};
+        if (!monitor->session->log_entry(index, level, monitor->log_module, monitor->log_message)) {
+            return 0;
+        }
+        if (out_level != nullptr) {
+            *out_level = static_cast<int32_t>(level);
+        }
+        if (out_module != nullptr) {
+            *out_module = monitor->log_module.c_str();
+        }
+        if (out_message != nullptr) {
+            *out_message = monitor->log_message.c_str();
+        }
+        return 1;
+    } catch (...) {
+        return 0;
+    }
 }
 
 /* ── Result ──────────────────────────────────────────────────────────────── */

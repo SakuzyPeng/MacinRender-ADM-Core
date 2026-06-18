@@ -47,4 +47,10 @@ struct ResolvedRenderer {
 [[nodiscard]] Result<ResolvedRenderer>
 resolve_renderer(RendererSelection requested, std::string requested_layout, bool internal_allow_speaker_stereo);
 
+// Map a requested output-layout string (case-insensitive aliases like "5.1" / "atmos714" /
+// "stereo") to its canonical layout id ("0+5+0" / "4+7+0" / "0+2+0" / "binaural" / "hoa3"…).
+// Unknown values pass through unchanged. Shared by RenderService and the realtime monitor so
+// both accept the same aliases.
+[[nodiscard]] std::string normalize_output_layout(const std::string& layout);
+
 } // namespace mradm
