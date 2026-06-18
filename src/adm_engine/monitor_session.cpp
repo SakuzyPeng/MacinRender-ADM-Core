@@ -7,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include "adm/io.h"
 #include "adm/monitor.h"
 #include "adm/render.h"
 
@@ -19,6 +18,12 @@
 namespace mradm {
 
 namespace {
+
+// Seconds → absolute output frame, clamped to [0, total_frames].
+[[nodiscard]] uint64_t clamp_frame(double seconds, uint32_t sample_rate, uint64_t total_frames) {
+    const double clamped = std::max(0.0, seconds);
+    return std::min(static_cast<uint64_t>(clamped * sample_rate), total_frames);
+}
 
 // Thread-safe, append-only diagnostics buffer. The monitor renders on a worker thread and
 // resolves the backend at create time; this captures their warnings/errors for polling.
@@ -123,12 +128,12 @@ Result<std::unique_ptr<MonitorSession>> MonitorSession::create(const std::string
     std::unique_ptr<MonitorSession> session{new MonitorSession()};
     Impl& impl = *session->impl_;
 
-    auto scene = io::import_scene(input_path);
+    // Import + apply the semantic policy via the same path PreviewSession uses, so the
+    // monitored scene is the effective (policy-applied) scene — matching offline rendering.
+    RenderService service;
+    auto scene = service.prepare_preview_scene(input_path, options, impl.log_sink);
     if (!scene) {
         return tl::unexpected{scene.error()};
-    }
-    for (const auto& warning : scene->import_warnings) {
-        impl.log_sink.log(LogLevel::warning, "importer", warning);
     }
     impl.sample_rate = scene->info.sample_rate;
     impl.total_frames = scene->info.num_frames;
@@ -153,15 +158,14 @@ void MonitorSession::pause() {
 }
 
 Result<void> MonitorSession::seek_seconds(double seconds) {
-    const double clamped = std::max(0.0, seconds);
-    impl_->engine->seek(static_cast<uint64_t>(clamped * impl_->sample_rate));
+    // negative clamps to 0, past the end clamps to total_frames.
+    impl_->engine->seek(clamp_frame(seconds, impl_->sample_rate, impl_->total_frames));
     return {};
 }
 
 void MonitorSession::set_loop_seconds(double start_seconds, double end_seconds) {
-    const auto start = static_cast<uint64_t>(std::max(0.0, start_seconds) * impl_->sample_rate);
-    const auto end = static_cast<uint64_t>(std::max(0.0, end_seconds) * impl_->sample_rate);
-    impl_->engine->set_loop(start, end);
+    impl_->engine->set_loop(clamp_frame(start_seconds, impl_->sample_rate, impl_->total_frames),
+                            clamp_frame(end_seconds, impl_->sample_rate, impl_->total_frames));
 }
 
 MonitorStatusSnapshot MonitorSession::status() const {

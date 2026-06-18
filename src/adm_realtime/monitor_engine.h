@@ -79,7 +79,7 @@ class MonitorEngine {
     [[nodiscard]] MonitorLevels levels() const;
 
   private:
-    MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device);
+    MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device, LogSink& logs);
 
     void worker_loop();
     bool top_up_ring();                                         // producer side; returns true if it produced
@@ -88,6 +88,7 @@ class MonitorEngine {
 
     std::unique_ptr<IRenderStream> stream_;
     IAudioOutputDevice& device_;
+    LogSink& logs_; // runtime diagnostics (worker render/seek errors); must outlive the engine
     uint32_t channels_{0};
     uint32_t sample_rate_{0};
 

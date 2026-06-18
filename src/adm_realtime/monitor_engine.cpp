@@ -16,8 +16,8 @@ constexpr std::size_t k_ring_frames = 8192U;
 constexpr auto k_idle_nap = std::chrono::milliseconds(1);
 } // namespace
 
-MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device)
-    : stream_(std::move(stream)), device_(device), channels_(stream_->out_channels()),
+MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device, LogSink& logs)
+    : stream_(std::move(stream)), device_(device), logs_(logs), channels_(stream_->out_channels()),
       sample_rate_(stream_->sample_rate()), ring_(k_ring_frames * channels_),
       scratch_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F) {}
 
@@ -38,7 +38,7 @@ Result<std::unique_ptr<MonitorEngine>> MonitorEngine::create(IRenderStreamFactor
                           "render stream reports an invalid format (0 channels or 0 sample rate)");
     }
 
-    std::unique_ptr<MonitorEngine> engine{new MonitorEngine(std::move(*stream), device)};
+    std::unique_ptr<MonitorEngine> engine{new MonitorEngine(std::move(*stream), device, logs)};
 
     engine->worker_ = std::thread([engine = engine.get()] { engine->worker_loop(); });
 
@@ -145,6 +145,7 @@ bool MonitorEngine::top_up_ring() {
         auto result = stream_->process(std::span<float>(scratch_.data(), frames * channels_), frames);
         if (!result) {
             failed_.store(true, std::memory_order_relaxed); // render error: stop producing
+            logs_.log(LogLevel::error, "monitor", result.error().message);
             return produced;
         }
         const std::size_t got = *result;
@@ -157,10 +158,10 @@ bool MonitorEngine::top_up_ring() {
         produced = true;
 
         if (looping && producer_pos_ >= loop_end) {
-            // Producer-side wrap: ring stays valid, no flush needed. seek on a prepared
-            // stream is not expected to fail; a worker has no log channel yet (see C ABI
-            // step), so the result is intentionally discarded.
-            (void) stream_->seek(loop_start);
+            // Producer-side wrap: ring stays valid, no flush needed.
+            if (auto seek_res = stream_->seek(loop_start); !seek_res) {
+                logs_.log(LogLevel::warning, "monitor", seek_res.error().message);
+            }
             producer_pos_ = loop_start;
         }
         if (got < frames) {
@@ -223,7 +224,9 @@ void MonitorEngine::apply_seek_locked(uint64_t frame) {
         std::this_thread::yield();
     }
     ring_.clear();
-    (void) stream_->seek(frame); // discarded: no worker log channel yet (see C ABI step)
+    if (auto seek_res = stream_->seek(frame); !seek_res) {
+        logs_.log(LogLevel::warning, "monitor", seek_res.error().message);
+    }
     producer_pos_ = frame;
     frames_played_.store(frame, std::memory_order_relaxed);
     // Seeking re-arms production: a position before EOF has more to render.

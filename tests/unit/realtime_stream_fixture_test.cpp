@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <string>
 #include <string_view>
@@ -550,6 +551,71 @@ bool test_monitor_malformed_stream() {
     return ok;
 }
 
+// A stream whose process() always fails, to exercise the worker's error path + logging.
+class ErrorStream final : public mradm::IRenderStream {
+  public:
+    mradm::Result<std::size_t> process(std::span<float> /*out*/, std::size_t /*frames*/) override {
+        return mradm::make_error(mradm::ErrorCode::render_failed, "monitor test: forced stream error");
+    }
+    mradm::Result<void> seek(uint64_t /*frame*/) override { return {}; }
+    [[nodiscard]] uint32_t out_channels() const override { return 2U; }
+    [[nodiscard]] uint32_t sample_rate() const override { return 48000U; }
+    [[nodiscard]] std::string_view output_layout() const override { return "binaural"; }
+};
+
+class ErrorStreamFactory final : public mradm::realtime::IRenderStreamFactory {
+  public:
+    mradm::Result<std::unique_ptr<mradm::IRenderStream>>
+    open(const mradm::AdmScene& /*scene*/, const mradm::RenderOptions& /*opts*/, mradm::LogSink& /*logs*/) override {
+        return std::make_unique<ErrorStream>();
+    }
+};
+
+// Counts log entries (the monitor's BufferingLogSink analogue), to assert the worker
+// routes runtime render errors into the diagnostics log.
+class CountingLogSink final : public mradm::LogSink {
+  public:
+    void log(mradm::LogLevel /*level*/, std::string_view /*module*/, std::string_view /*message*/) override {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        ++count_;
+    }
+    [[nodiscard]] std::size_t count() const {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        return count_;
+    }
+
+  private:
+    mutable std::mutex mutex_;
+    std::size_t count_{0};
+};
+
+bool test_monitor_worker_logs_errors() {
+    bool ok = true;
+    ErrorStreamFactory factory;
+    ManualSink sink;
+    CountingLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+    if (!check(engine.has_value(), "error-stream: engine creates")) {
+        return false;
+    }
+    (*engine)->play();
+
+    bool failed = false;
+    for (int i = 0; i < 200000; ++i) {
+        if ((*engine)->status().failed) {
+            failed = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(20));
+    }
+    ok &= check(failed, "worker render error sets the failed state");
+    ok &= check(logs.count() >= 1U, "worker render error is written to the log sink");
+    return ok;
+}
+
 // End-to-end with the real device sink on miniaudio's null backend (no hardware; the
 // callback is timer-driven). Validates the device plumbing + lifecycle: the playhead
 // advances and the engine tears down the device + worker cleanly on destruction.
@@ -597,6 +663,7 @@ int main() {
     ok &= test_monitor_seek();
     ok &= test_monitor_eof();
     ok &= test_monitor_malformed_stream();
+    ok &= test_monitor_worker_logs_errors();
     ok &= test_monitor_miniaudio_null_device();
 
     if (ok) {
