@@ -690,6 +690,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_binaural_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
+            MacinRender::ADMRenderBinaural
+            MacinRender::ADMIo
             MacinRender::ADMAudio
             libbw64
             adm

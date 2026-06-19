@@ -22,7 +22,9 @@
 #include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
+#include "adm/io.h"
 #include "adm/render.h"
+#include "adm/render_binaural.h"
 
 namespace {
 
@@ -834,6 +836,152 @@ bool verify_external_sofa_when_available() {
     return ok;
 }
 
+// Drive BinauralStream over the whole timeline, pulling in the given (repeating) chunk
+// pattern, optionally applying live overrides before the first pull. Returns interleaved
+// stereo float PCM, or nullopt on error.
+std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::path& input,
+                                                         const std::vector<std::size_t>& chunk_pattern,
+                                                         const mradm::LiveOverrides* overrides) {
+    auto scene = mradm::io::import_scene(input.string());
+    if (!check(scene.has_value(), "stream: import scene")) {
+        return std::nullopt;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = input.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_binaural_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "stream: binaural prepare")) {
+        return std::nullopt;
+    }
+    auto stream = renderer->open_stream(**prepared, plan, logs);
+    if (!check(stream.has_value(), "stream: open_stream succeeds")) {
+        return std::nullopt;
+    }
+    if (overrides != nullptr) {
+        (*stream)->set_overrides(*overrides);
+    }
+
+    std::vector<float> out;
+    std::vector<float> buf;
+    std::size_t pi = 0;
+    while (true) {
+        const std::size_t frames = chunk_pattern[pi % chunk_pattern.size()];
+        ++pi;
+        buf.assign(frames * 2U, 0.0F);
+        auto produced = (*stream)->process(std::span<float>(buf), frames);
+        if (!check(produced.has_value(), "stream: process succeeds")) {
+            return std::nullopt;
+        }
+        if (*produced == 0) {
+            break;
+        }
+        out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * 2U));
+    }
+    return out;
+}
+
+// BinauralStream (realtime) reproduces the offline render_window render and is independent
+// of the caller's pull chunk size (canonical block + FIFO).
+bool verify_binaural_stream_matches_window() {
+    const auto in = write_fixture(30.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{120}, 8192U);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value(), "stream: import scene for reference")) {
+        return false;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_binaural_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "stream: reference prepare")) {
+        return false;
+    }
+
+    // Reference: the offline render_window path to a float WAV.
+    const auto ref_path = temp_path("mr_binaural_stream_ref", ".wav");
+    FileGuard ref_guard(ref_path);
+    mradm::RenderPlan window_plan = plan;
+    window_plan.output_path = ref_path.string();
+    if (!check(renderer->render_window(**prepared, window_plan, progress, logs).has_value(),
+               "stream: reference render_window")) {
+        return false;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(ref_path.string());
+    if (!check(reader.has_value() && reader->channels() == 2U, "stream: reference WAV opens (2ch)")) {
+        return false;
+    }
+    std::vector<float> ref(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
+    reader->read(ref.data(), reader->frame_count());
+
+    const auto uniform = render_binaural_stream(in, {1024}, nullptr);
+    const auto varied = render_binaural_stream(in, {333, 1000, 512, 7}, nullptr);
+    if (!uniform || !varied) {
+        return false;
+    }
+
+    bool ok = true;
+    ok &= check(uniform->size() == ref.size(), "stream output frame count matches render_window");
+    ok &= check(*uniform == *varied, "stream output is identical regardless of pull chunk size (FIFO correct)");
+
+    double max_diff = 0.0;
+    const std::size_t n = std::min(uniform->size(), ref.size());
+    for (std::size_t i = 0; i < n; ++i) {
+        max_diff = std::max(max_diff, std::fabs(static_cast<double>((*uniform)[i]) - static_cast<double>(ref[i])));
+    }
+    // Tolerance accounts only for the reference WAV's integer-PCM round-trip; the stream
+    // shares render_window's exact float math (chunk invariance above is the hard guarantee).
+    ok &= check(max_diff < 1.0e-4, "stream output matches the offline render_window render");
+    return ok;
+}
+
+// A live gain override scales the object's output by the override factor (linear gain
+// commutes with the HRTF convolution).
+bool verify_binaural_stream_gain_override() {
+    const auto in = write_fixture(30.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{120}, 8192U);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "override: import scene with an object")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+
+    const auto baseline = render_binaural_stream(in, {1024}, nullptr);
+    mradm::LiveOverrides ov;
+    ov.revision = 1;
+    ov.objects.push_back({object_id, -12.041F, 1.0F, 1.0F, 1.0F}); // ≈ 0.25 linear
+    const auto attenuated = render_binaural_stream(in, {1024}, &ov);
+    if (!baseline || !attenuated) {
+        return false;
+    }
+
+    auto buffer_rms = [](const std::vector<float>& v) {
+        double total = 0.0;
+        for (const float s : v) {
+            total += static_cast<double>(s) * static_cast<double>(s);
+        }
+        return v.empty() ? 0.0 : std::sqrt(total / static_cast<double>(v.size()));
+    };
+    const double b = buffer_rms(*baseline);
+    const double a = buffer_rms(*attenuated);
+
+    bool ok = check(attenuated->size() == baseline->size(), "override: same frame count as baseline");
+    ok &= check(b > 1.0e-3, "override: baseline has signal energy");
+    // Pure linear gain: ratio is exactly the scalar (0.25). Tight bounds either side.
+    ok &= check(a < b * 0.30 && a > b * 0.20, "override: -12 dB override scales output by ~0.25");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -850,5 +998,7 @@ int main() {
     ok &= verify_binaural_diffuse_bus();
     ok &= verify_binaural_mixed_divergence_keeps_center_slot();
     ok &= verify_external_sofa_when_available();
+    ok &= verify_binaural_stream_matches_window();
+    ok &= verify_binaural_stream_gain_override();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
