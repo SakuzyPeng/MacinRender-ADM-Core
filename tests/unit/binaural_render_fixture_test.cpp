@@ -982,6 +982,76 @@ bool verify_binaural_stream_gain_override() {
     return ok;
 }
 
+// A topology override (extent / diffuse / divergence scale) rebuilds the stream's source
+// list (cheap re-prepare, HRTF reused); reverting the scales to 1.0 reproduces the
+// unscaled render bit-for-bit.
+bool verify_binaural_stream_topology_reprepare() {
+    const auto in = write_fixture(ObjectFixtureOptions{.width = 1.0F}, 8192U);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "reprepare: import scene with an object")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_binaural_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "reprepare: prepare")) {
+        return false;
+    }
+
+    auto run = [&](const std::vector<mradm::LiveOverrides>& seq) -> std::optional<std::vector<float>> {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        if (!check(stream.has_value(), "reprepare: open_stream")) {
+            return std::nullopt;
+        }
+        for (const auto& ov : seq) {
+            (*stream)->set_overrides(ov);
+        }
+        std::vector<float> out;
+        std::vector<float> buf;
+        while (true) {
+            buf.assign(std::size_t{1024U} * 2U, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buf), 1024U);
+            if (!produced) {
+                return std::nullopt;
+            }
+            if (*produced == 0) {
+                break;
+            }
+            out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * 2U));
+        }
+        return out;
+    };
+
+    auto extent_override = [&](float scale) {
+        mradm::LiveOverrides o;
+        o.revision = 1;
+        o.objects.push_back({object_id, 0.0F, 1.0F, scale, 1.0F}); // extent_scale = scale
+        return o;
+    };
+
+    const auto baseline = run({});                                             // width = 1.0 (wide cloud)
+    const auto pointed = run({extent_override(0.0F)});                         // extent_scale 0 → collapses to a point
+    const auto reverted = run({extent_override(0.0F), extent_override(1.0F)}); // back to unscaled
+    if (!baseline || !pointed || !reverted) {
+        return false;
+    }
+
+    bool ok = check(baseline->size() == pointed->size() && baseline->size() == reverted->size(),
+                    "reprepare: all runs produce the same frame count");
+    ok &= check(sample_difference_energy(*baseline, *pointed) > 1.0e-6, "reprepare: extent scale changes the output");
+    ok &= check(*reverted == *baseline, "reprepare: reverting scales to 1.0 reproduces the unscaled render bit-exact");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1000,5 +1070,6 @@ int main() {
     ok &= verify_external_sofa_when_available();
     ok &= verify_binaural_stream_matches_window();
     ok &= verify_binaural_stream_gain_override();
+    ok &= verify_binaural_stream_topology_reprepare();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

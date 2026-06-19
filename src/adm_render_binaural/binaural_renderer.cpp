@@ -1471,6 +1471,8 @@ class BinauralStream final : public IRenderStream {
         (void) logs;
         return std::unique_ptr<BinauralStream>{new BinauralStream(prepared,
                                                                   std::move(reader),
+                                                                  plan.scene,
+                                                                  plan.binaural_spread_mode,
                                                                   info.num_channels,
                                                                   info.num_frames,
                                                                   info.sample_rate,
@@ -1514,9 +1516,25 @@ class BinauralStream final : public IRenderStream {
     }
 
     void set_overrides(const LiveOverrides& overrides) override {
+        // Gain: immediate (next block), applied as a per-object output scalar.
         live_gain_lin_.clear();
         for (const auto& ov : overrides.objects) {
             live_gain_lin_[ov.object_id] = std::pow(10.0F, ov.gain_db / 20.0F);
+        }
+        // Topology (diffuse / extent / divergence): only objects whose scales differ from
+        // unity matter. A change triggers a cheap re-prepare — rebuild the source list from
+        // a scaled copy of the scene (HRTF / VBAP tables in prepared_ are reused) and
+        // re-init the per-source DSP state. Unchanged ⇒ no rebuild (so plain gain edits and
+        // bit-exact reverts stay cheap).
+        std::unordered_map<std::string, std::array<float, 3>> topo;
+        for (const auto& ov : overrides.objects) {
+            if (ov.diffuse_scale != 1.0F || ov.extent_scale != 1.0F || ov.divergence_scale != 1.0F) {
+                topo[ov.object_id] = {ov.diffuse_scale, ov.extent_scale, ov.divergence_scale};
+            }
+        }
+        if (topo != applied_topology_) {
+            applied_topology_ = topo;
+            rebuild_sources(topo);
         }
     }
 
@@ -1527,17 +1545,34 @@ class BinauralStream final : public IRenderStream {
   private:
     BinauralStream(const BinauralPrepared& prepared,
                    std::unique_ptr<bw64::Bw64Reader> reader,
+                   AdmScene scene,
+                   BinauralSpreadMode spread_mode,
                    uint16_t num_in_ch,
                    uint64_t total_frames,
                    uint32_t sample_rate,
                    uint32_t object_smoothing_frames)
-        : prepared_(prepared), reader_(std::move(reader)), num_in_ch_(num_in_ch), total_frames_(total_frames),
-          sample_rate_(sample_rate), object_smoothing_frames_(object_smoothing_frames),
-          render_block_size_(prepared.render_block_size), ola_pool_(ola_worker_count(prepared.sources.size())),
+        : prepared_(prepared), reader_(std::move(reader)), scene_(std::move(scene)), spread_mode_(spread_mode),
+          sources_(prepared.sources), num_in_ch_(num_in_ch), total_frames_(total_frames), sample_rate_(sample_rate),
+          object_smoothing_frames_(object_smoothing_frames), render_block_size_(prepared.render_block_size),
+          ola_pool_(ola_worker_count(prepared.sources.size())),
           in_block_(static_cast<std::size_t>(num_in_ch) * prepared.render_block_size, 0.0F) {
+        // sources_ starts as a copy of the prepared list (== build_sources(scene_)); a
+        // topology override rebuilds it from a scaled scene_. bs (HRTF/VBAP) is never rebuilt.
+        init_per_source_state();
+    }
+
+    [[nodiscard]] static std::size_t ola_worker_count(std::size_t num_sources) {
+        const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
+        return (num_sources > 1U && hw_threads > 1U) ? std::min(num_sources, hw_threads) : 0U;
+    }
+
+    // (Re)create the per-source FFT plans + scratch sized to sources_, then reset the
+    // cross-call DSP state. Used at construction and after a topology rebuild.
+    void init_per_source_state() {
+        destroy_fft();
         const auto& bs = *prepared_.bs;
-        const std::size_t n = prepared_.sources.size();
-        src_cs_.resize(n);
+        src_cs_.clear();
+        src_cs_.resize(sources_.size());
         for (auto& cs : src_cs_) {
             saf_rfft_create(&cs.hfft, bs.fft_size);
             cs.scratch.resize(bs, static_cast<std::size_t>(render_block_size_));
@@ -1549,15 +1584,10 @@ class BinauralStream final : public IRenderStream {
         reset_dsp_state();
     }
 
-    [[nodiscard]] static std::size_t ola_worker_count(std::size_t num_sources) {
-        const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
-        return (num_sources > 1U && hw_threads > 1U) ? std::min(num_sources, hw_threads) : 0U;
-    }
-
     // Re-initialise the cross-call DSP state (the FFT plans in src_cs_ are stateless and
-    // kept). Used at construction and on seek.
+    // kept). Used at construction, on seek, and after a topology rebuild.
     void reset_dsp_state() {
-        const std::size_t n = prepared_.sources.size();
+        const std::size_t n = sources_.size();
         ola_.clear();
         ola_.reserve(n);
         for (std::size_t i = 0; i < n; ++i) {
@@ -1565,6 +1595,35 @@ class BinauralStream final : public IRenderStream {
         }
         diffuse_delay_.assign(n, DiffuseDelayState{});
         hrtf_cache_.assign(n, HrtfCache{});
+    }
+
+    // Cheap re-prepare: rebuild sources_ from a copy of the scene with each overridden
+    // object's block diffuse / extent (width,height,depth) / divergence multiplied by its
+    // scale (clamped to ADM's 0..1), then re-init per-source state. Empty `topo` rebuilds
+    // the unscaled scene, which reproduces the prepared list bit-for-bit.
+    void rebuild_sources(const std::unordered_map<std::string, std::array<float, 3>>& topo) {
+        AdmScene scaled = scene_;
+        for (auto& obj : scaled.objects) {
+            const auto it = topo.find(obj.id);
+            if (it == topo.end()) {
+                continue;
+            }
+            const float ds = it->second[0];
+            const float es = it->second[1];
+            const float dv = it->second[2];
+            for (auto& track : obj.tracks) {
+                for (auto& blk : track.blocks) {
+                    blk.diffuse = std::clamp(blk.diffuse * ds, 0.0F, 1.0F);
+                    blk.width = std::clamp(blk.width * es, 0.0F, 1.0F);
+                    blk.height = std::clamp(blk.height * es, 0.0F, 1.0F);
+                    blk.depth = std::clamp(blk.depth * es, 0.0F, 1.0F);
+                    blk.divergence = std::clamp(blk.divergence * dv, 0.0F, 1.0F);
+                }
+            }
+        }
+        NullLogSink null_logs;
+        sources_ = build_sources(scaled, null_logs, spread_mode_);
+        init_per_source_state();
     }
 
     void destroy_fft() {
@@ -1587,7 +1646,7 @@ class BinauralStream final : public IRenderStream {
         const auto fn = static_cast<std::size_t>(frames_now);
         reader_->read(in_block_.data(), frames_now);
 
-        const auto& sources = prepared_.sources;
+        const auto& sources = sources_;
         ola_pool_.parallel_for(sources.size(), [&](std::size_t si) {
             render_source_ola_block(sources[si],
                                     *prepared_.bs,
@@ -1621,6 +1680,9 @@ class BinauralStream final : public IRenderStream {
 
     const BinauralPrepared& prepared_; // borrowed; owner (factory) outlives the stream
     std::unique_ptr<bw64::Bw64Reader> reader_;
+    AdmScene scene_;                      // policy-applied scene, for topology re-prepare (scaled copy → build_sources)
+    BinauralSpreadMode spread_mode_;      // spread mode the prepared sources were built with
+    std::vector<BinauralSource> sources_; // own (rebuildable) source list; starts == prepared_.sources
     uint16_t num_in_ch_;
     uint64_t total_frames_;
     uint32_t sample_rate_;
@@ -1634,6 +1696,9 @@ class BinauralStream final : public IRenderStream {
     TrackWorkerPool ola_pool_;
     std::vector<float> in_block_;
     std::unordered_map<std::string, float> live_gain_lin_; // object_id → live linear gain (worker-only)
+    // object_id → {diffuse_scale, extent_scale, divergence_scale}; only non-unity entries.
+    // The last applied topology, so set_overrides rebuilds only when it actually changes.
+    std::unordered_map<std::string, std::array<float, 3>> applied_topology_;
 
     std::vector<float> fifo_; // interleaved L/R produced, not yet served
     std::size_t fifo_read_{0};
