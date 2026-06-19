@@ -2149,8 +2149,26 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
 
     // Clearing overrides (NULL + count 0) is valid; a populated set echoes its revision.
     ok = check(adm_monitor_set_overrides(monitor, nullptr, 0, 0) == ADM_ERROR_OK, "monitor clear overrides") && ok;
-    const adm_monitor_override_t ov{/*object_id=*/"AO_1001", /*gain_db=*/-6.0F, 1.0F, 1.0F, 1.0F};
+    adm_monitor_override_t ov{};
+    ov.struct_size = sizeof(adm_monitor_override_t);
+    ov.object_id = "AO_1001";
+    ov.gain_db = -6.0F;
+    ov.diffuse_scale = 1.0F;
+    ov.extent_scale = 1.0F;
+    ov.divergence_scale = 1.0F;
     ok = check(adm_monitor_set_overrides(monitor, &ov, 1, 7) == ADM_ERROR_OK, "monitor set overrides") && ok;
+
+    // Non-finite gain / scale is rejected; struct_size below the minimum is rejected.
+    adm_monitor_override_t bad = ov;
+    bad.gain_db = std::numeric_limits<float>::quiet_NaN();
+    ok = check(adm_monitor_set_overrides(monitor, &bad, 1, 8) == ADM_ERROR_INVALID_ARGUMENT,
+               "monitor set_overrides rejects NaN gain") &&
+         ok;
+    adm_monitor_override_t small = ov;
+    small.struct_size = 4U; // below the minimum (must cover through divergence_scale)
+    ok = check(adm_monitor_set_overrides(monitor, &small, 1, 9) == ADM_ERROR_INVALID_ARGUMENT,
+               "monitor set_overrides rejects undersized struct_size") &&
+         ok;
 
     ok = check(adm_monitor_pause(monitor) == ADM_ERROR_OK, "monitor pause") && ok;
     ok = check(adm_monitor_log_entry(monitor, adm_monitor_log_count(monitor) + 100U, nullptr, nullptr, nullptr) == 0,

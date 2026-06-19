@@ -74,8 +74,8 @@
  *
  * v1.16 新增（additive，SOVERSION 不变）：
  *   adm_monitor_override_t + adm_monitor_set_overrides（实时按对象覆盖，gain 即时生效；
- *   diffuse/extent/divergence 缩放为后续切片预留）。adm_monitor_status_t 追加
- *   override_revision 字段（struct_size 向后兼容）。
+ *   diffuse/extent/divergence 缩放在 binaural 后端经廉价 re-prepare 生效，未接入的后端
+ *   接受但忽略）。adm_monitor_status_t 追加 override_revision 字段（struct_size 向后兼容）。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
@@ -832,11 +832,16 @@ adm_monitor_set_loop(adm_monitor_t* monitor, double start_seconds, double end_se
 /*
  * v1.16: a single object's live monitoring override. gain_db is additive on top of the
  * object's baked gain and takes effect on the next rendered block (true realtime). The
- * *_scale fields are the realtime subset of the semantic policy's topology controls; they
- * are accepted now but only take effect once stream re-prepare lands (a later slice) — set
- * them to 1.0 for no change. object_id matches the scene's ADM audioObject id.
+ * *_scale fields are the realtime subset of the semantic policy's topology controls
+ * (multiplicative, 1.0 = no change): on the binaural backend they take effect via a cheap
+ * stream re-prepare; backends that have not yet wired them up (e.g. Apple, which honors
+ * only gain) accept the values but ignore them. object_id matches the scene's ADM
+ * audioObject id. Set struct_size = sizeof(adm_monitor_override_t) on every element; the
+ * library reads array elements using that as the stride, so fields may be appended in a
+ * later minor version without breaking callers built against this header.
  */
 typedef struct adm_monitor_override_t {
+    uint32_t struct_size;
     const char* object_id;
     float gain_db;
     float diffuse_scale;
@@ -846,9 +851,12 @@ typedef struct adm_monitor_override_t {
 
 /*
  * Replace the full set of live overrides (objects not listed render at their prepared
- * values). `overrides` may be NULL when count == 0 to clear all overrides. `revision` is
- * echoed back through adm_monitor_status_t.override_revision once the worker applies the
- * snapshot, so a UI can confirm its edit landed without a callback.
+ * values). `overrides` may be NULL when count == 0 to clear all overrides. Each element's
+ * struct_size must cover at least through divergence_scale; the first element's struct_size
+ * is the array stride. Non-finite gain_db / *_scale values are rejected with
+ * ADM_ERROR_INVALID_ARGUMENT. `revision` is echoed back through
+ * adm_monitor_status_t.override_revision once the worker applies the snapshot, so a UI can
+ * confirm its edit landed without a callback.
  */
 adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
                                            const adm_monitor_override_t* overrides,

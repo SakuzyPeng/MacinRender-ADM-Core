@@ -1070,9 +1070,29 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
     try {
         mradm::LiveOverrides live;
         live.revision = revision;
+        // The first element's struct_size is the array stride (all elements share it); it
+        // must cover at least through divergence_scale so every field we read is present.
+        // Reading via the stride lets callers built against a later (larger) struct pass an
+        // array we still parse correctly.
+        std::size_t stride = 0;
+        if (count > 0) {
+            stride = overrides[0].struct_size;
+            constexpr std::size_t k_min = offsetof(adm_monitor_override_t, divergence_scale) + sizeof(float);
+            if (stride < k_min) {
+                return ADM_ERROR_INVALID_ARGUMENT;
+            }
+        }
+        const auto* base = reinterpret_cast<const unsigned char*>(overrides);
         live.objects.reserve(count);
         for (uint32_t i = 0; i < count; ++i) {
-            const adm_monitor_override_t& src = overrides[i];
+            adm_monitor_override_t src{};
+            std::memcpy(&src, base + (static_cast<std::size_t>(i) * stride), std::min(stride, sizeof(src)));
+            // Reject non-finite gain / scales: a NaN would otherwise poison the bus gain or
+            // the topology rebuild downstream.
+            if (!std::isfinite(src.gain_db) || !std::isfinite(src.diffuse_scale) || !std::isfinite(src.extent_scale) ||
+                !std::isfinite(src.divergence_scale)) {
+                return ADM_ERROR_INVALID_ARGUMENT;
+            }
             mradm::LiveObjectOverride ov;
             ov.object_id = src.object_id != nullptr ? std::string{src.object_id} : std::string{};
             ov.gain_db = src.gain_db;
