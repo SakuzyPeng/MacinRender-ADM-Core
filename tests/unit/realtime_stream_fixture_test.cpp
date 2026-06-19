@@ -806,6 +806,40 @@ bool test_monitor_hot_switch() {
     return ok;
 }
 
+// A live override must survive a hot-switch: after setting a per-object gain and then
+// switching to a fresh backend, the new stream must still play with that gain (status
+// already reports the revision as applied). Both factories emit GainStream, which honors
+// the "obj0" override, so the carried-over snapshot is observable in the output tail.
+bool test_monitor_override_survives_switch() {
+    bool ok = true;
+    GainStreamFactory factory;
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+    if (!check(engine.has_value(), "override+switch: engine creates")) {
+        return false;
+    }
+    (*engine)->set_overrides(gain_override("obj0", -20.0F, 1)); // 0.1 linear
+    (*engine)->play();
+
+    constexpr std::size_t k_before = 3000;
+    ok &= check(drain_exact(**engine, sink, k_before), "override+switch: drains pre-switch audio");
+
+    // Switch to a brand-new GainStream (constructed with no override → unity by default).
+    (*engine)->switch_stream(std::make_unique<GainStream>(2U));
+
+    constexpr std::size_t k_after = 40000;
+    ok &= check(drain_exact(**engine, sink, k_after), "override+switch: drains post-switch audio");
+    const auto& cap = sink.captured();
+    // Without carrying the override to the incoming stream the tail would be ~1.0 (unity);
+    // with it the switched backend keeps the -20 dB (0.1) edit.
+    ok &= check(near(cap.back(), 0.1F), "override+switch: switched backend keeps the live override");
+    return ok;
+}
+
 // End-to-end with the real device sink on miniaudio's null backend (no hardware; the
 // callback is timer-driven). Validates the device plumbing + lifecycle: the playhead
 // advances and the engine tears down the device + worker cleanly on destruction.
@@ -856,6 +890,7 @@ int main() {
     ok &= test_monitor_worker_logs_errors();
     ok &= test_monitor_live_overrides();
     ok &= test_monitor_hot_switch();
+    ok &= test_monitor_override_survives_switch();
     ok &= test_monitor_miniaudio_null_device();
 
     if (ok) {

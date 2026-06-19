@@ -141,6 +141,9 @@ class MonitorEngine {
     bool overrides_pending_{false};
     LiveOverrides pending_overrides_;
     std::atomic<uint64_t> applied_override_revision_{0};
+    // Worker-owned copy of the last applied overrides, re-applied to an incoming stream on a
+    // hot-switch so a switched backend keeps the user's edits (status already shows them).
+    LiveOverrides current_overrides_;
 
     // Pending backend hot-switch (control thread → worker), guarded by control_mutex_.
     bool switch_pending_{false};

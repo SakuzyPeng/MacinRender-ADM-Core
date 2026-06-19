@@ -116,6 +116,16 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         return std::move(*stream);
     }
 
+    // Drop the most-recently retained backend. The caller MUST have already destroyed the
+    // stream returned by the matching open() (streams borrow the prepared state). Used when
+    // a just-opened backend is rejected (e.g. a hot-switch format mismatch) so repeated
+    // rejected switches don't accumulate prepared state for the session's lifetime.
+    void forget_last_backend() {
+        if (!keepalive_.empty()) {
+            keepalive_.pop_back();
+        }
+    }
+
   private:
     struct BackendKeepAlive {
         std::unique_ptr<IRenderer> renderer;
@@ -206,6 +216,9 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
     // The monitor output format is fixed; only same-format backend switches are live today.
     if ((*stream)->out_channels() != impl_->engine->out_channels() ||
         (*stream)->sample_rate() != impl_->engine->sample_rate()) {
+        // Drop the rejected stream + its retained backend so a failed switch leaks nothing.
+        stream->reset();
+        impl_->factory->forget_last_backend();
         return make_error(ErrorCode::unsupported,
                           "monitor backend switch requires the same output channel count and sample rate "
                           "(cross-format monitor downmix is not yet implemented)");

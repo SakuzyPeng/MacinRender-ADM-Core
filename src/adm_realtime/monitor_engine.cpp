@@ -147,16 +147,24 @@ void MonitorEngine::worker_loop() {
                 // Cheap; safe to do under the lock since it only updates the stream's
                 // override table, not its DSP. Apply even while paused so the revision
                 // reflects reality and a subsequent resume already has the right gains.
+                // During a crossfade both streams are audible, so apply to both. Remember
+                // the snapshot so a later hot-switch can re-apply it to the incoming stream.
                 stream_->set_overrides(pending_overrides_);
+                if (xfade_active_) {
+                    xfade_stream_->set_overrides(pending_overrides_);
+                }
+                current_overrides_ = pending_overrides_;
                 applied_override_revision_.store(pending_overrides_.revision, std::memory_order_relaxed);
                 overrides_pending_ = false;
             }
             if (switch_pending_) {
                 // Begin a crossfade to the incoming backend. Settle any in-flight fade
                 // first, then seek the incoming stream to the current playhead so it renders
-                // the same frames as the outgoing one. On seek failure keep the old stream.
+                // the same frames as the outgoing one, and re-apply the current overrides so
+                // the switched backend keeps the user's edits. On seek failure keep the old.
                 finalize_crossfade();
                 if (auto r = pending_stream_->seek(producer_pos_); r) {
+                    pending_stream_->set_overrides(current_overrides_);
                     xfade_stream_ = std::move(pending_stream_);
                     xfade_active_ = true;
                     xfade_pos_ = 0;
