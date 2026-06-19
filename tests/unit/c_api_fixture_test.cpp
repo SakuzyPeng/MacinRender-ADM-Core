@@ -9,6 +9,7 @@
 #include <array>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -2091,6 +2092,145 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 
 } // namespace
 
+// v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
+// create may fail with a device error, in which case the playback assertions are skipped.
+bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
+    bool ok = check(adm_api_version_minor() == 17, "C ABI minor version is 17");
+
+    // Argument validation (no device needed).
+    adm_monitor_t* probe = nullptr;
+    ok = check(adm_monitor_set_overrides(nullptr, nullptr, 0, 0) == ADM_ERROR_INVALID_ARGUMENT,
+               "set_overrides(nullptr) rejected") &&
+         ok;
+    ok = check(adm_monitor_switch_backend(nullptr, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "switch_backend(nullptr) rejected") &&
+         ok;
+    ok = check(adm_create_monitor(nullptr, input.string().c_str(), nullptr, &probe) == ADM_ERROR_INVALID_ARGUMENT,
+               "create_monitor null context rejected") &&
+         ok;
+    ok = check(adm_create_monitor(ctx, nullptr, nullptr, &probe) == ADM_ERROR_INVALID_ARGUMENT,
+               "create_monitor null input rejected") &&
+         ok;
+    ok = check(adm_create_monitor(ctx, input.string().c_str(), nullptr, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "create_monitor null out rejected") &&
+         ok;
+    ok = check(adm_monitor_play(nullptr) == ADM_ERROR_INVALID_ARGUMENT, "play(nullptr) rejected") && ok;
+    ok = check(adm_monitor_log_count(nullptr) == 0U, "log_count(nullptr) is 0") && ok;
+
+    adm_render_options_t* opts = adm_create_render_options();
+    adm_render_options_set_renderer(opts, ADM_RENDERER_SAF_BINAURAL);
+    adm_render_options_set_output_layout(opts, "binaural");
+    adm_monitor_t* monitor = nullptr;
+    const adm_error_code_t code = adm_create_monitor(ctx, input.string().c_str(), opts, &monitor);
+    adm_destroy_render_options(opts);
+
+    if (code != ADM_ERROR_OK) {
+        // No audio output device available (headless CI): must fail cleanly.
+        ok = check(monitor == nullptr, "failed create_monitor leaves out null") && ok;
+        std::cerr << "(no audio output device; skipping monitor playback assertions)\n";
+        return ok;
+    }
+    ok = check(monitor != nullptr, "create_monitor returns a monitor") && ok;
+
+    ok = check(adm_monitor_play(monitor) == ADM_ERROR_OK, "monitor play") && ok;
+
+    adm_monitor_status_t status{};
+    status.struct_size = sizeof(status);
+    ok = check(adm_monitor_get_status(monitor, &status) == ADM_ERROR_OK, "monitor get_status") && ok;
+
+    std::vector<float> peak(8U, 0.0F);
+    std::vector<float> rms(8U, 0.0F);
+    adm_monitor_levels_t levels{};
+    levels.struct_size = sizeof(levels);
+    levels.capacity = static_cast<uint32_t>(peak.size());
+    levels.peak = peak.data();
+    levels.rms = rms.data();
+    ok = check(adm_monitor_get_levels(monitor, &levels) == ADM_ERROR_OK, "monitor get_levels") && ok;
+    ok = check(levels.out_count >= 1U, "monitor levels report a channel count") && ok;
+
+    ok = check(adm_monitor_seek(monitor, 0.0) == ADM_ERROR_OK, "monitor seek") && ok;
+    ok = check(adm_monitor_set_loop(monitor, 0.0, 0.5) == ADM_ERROR_OK, "monitor set_loop") && ok;
+
+    // Clearing overrides (NULL + count 0) is valid; a populated set echoes its revision.
+    ok = check(adm_monitor_set_overrides(monitor, nullptr, 0, 0) == ADM_ERROR_OK, "monitor clear overrides") && ok;
+    adm_monitor_override_t ov{};
+    ov.struct_size = sizeof(adm_monitor_override_t);
+    ov.object_id = "AO_1001";
+    ov.gain_db = -6.0F;
+    ov.diffuse_scale = 1.0F;
+    ov.extent_scale = 1.0F;
+    ov.divergence_scale = 1.0F;
+    ok = check(adm_monitor_set_overrides(monitor, &ov, 1, 7) == ADM_ERROR_OK, "monitor set overrides") && ok;
+
+    // Non-finite gain / scale is rejected; struct_size below the minimum is rejected.
+    adm_monitor_override_t bad = ov;
+    bad.gain_db = std::numeric_limits<float>::quiet_NaN();
+    ok = check(adm_monitor_set_overrides(monitor, &bad, 1, 8) == ADM_ERROR_INVALID_ARGUMENT,
+               "monitor set_overrides rejects NaN gain") &&
+         ok;
+    adm_monitor_override_t small = ov;
+    small.struct_size = 4U; // below the minimum (must cover through divergence_scale)
+    ok = check(adm_monitor_set_overrides(monitor, &small, 1, 9) == ADM_ERROR_INVALID_ARGUMENT,
+               "monitor set_overrides rejects undersized struct_size") &&
+         ok;
+
+    // Forward-compat stride: simulate a caller built against a LARGER (future) struct by
+    // advertising struct_size > sizeof and laying elements out at that stride. The library
+    // must advance by the caller's struct_size to find element[1], not by its own sizeof.
+    {
+        const std::size_t fut_stride = sizeof(adm_monitor_override_t) + 16U; // pretend future appended fields
+        std::vector<unsigned char> raw(fut_stride * 2U, 0U);
+        auto place = [&](std::size_t idx, const char* id, float gain) {
+            adm_monitor_override_t e{};
+            e.struct_size = static_cast<uint32_t>(fut_stride);
+            e.object_id = id;
+            e.gain_db = gain;
+            e.diffuse_scale = 1.0F;
+            e.extent_scale = 1.0F;
+            e.divergence_scale = 1.0F;
+            std::memcpy(raw.data() + (idx * fut_stride), &e, sizeof(e));
+        };
+        // Positive control: both elements valid at the future stride → accepted.
+        place(0, "AO_1001", -3.0F);
+        place(1, "AO_1002", -6.0F);
+        const auto* arr = reinterpret_cast<const adm_monitor_override_t*>(raw.data());
+        ok = check(adm_monitor_set_overrides(monitor, arr, 2, 10) == ADM_ERROR_OK,
+                   "monitor set_overrides accepts future (oversized) struct_size stride") &&
+             ok;
+        // Poison ONLY element[1]'s gain. A correct stride reads it (NaN → reject); a buggy
+        // stride (== sizeof) would read element[1] from element[0]'s zero padding and miss it.
+        place(1, "AO_1002", std::numeric_limits<float>::quiet_NaN());
+        ok = check(adm_monitor_set_overrides(monitor, arr, 2, 11) == ADM_ERROR_INVALID_ARGUMENT,
+                   "monitor set_overrides strides by caller struct_size to reach element[1]") &&
+             ok;
+    }
+
+    // Same-format hot-switch (binaural → binaural) crossfades in and succeeds.
+    adm_render_options_t* sw_same = adm_create_render_options();
+    adm_render_options_set_renderer(sw_same, ADM_RENDERER_SAF_BINAURAL);
+    adm_render_options_set_output_layout(sw_same, "binaural");
+    ok =
+        check(adm_monitor_switch_backend(monitor, sw_same) == ADM_ERROR_OK, "monitor same-format backend switch") && ok;
+    adm_destroy_render_options(sw_same);
+
+    // Cross-format switch (stereo monitor ← 5.1) is folded to stereo by the downmix layer.
+    adm_render_options_t* sw_diff = adm_create_render_options();
+    adm_render_options_set_renderer(sw_diff, ADM_RENDERER_SAF);
+    adm_render_options_set_output_layout(sw_diff, "0+5+0");
+    ok = check(adm_monitor_switch_backend(monitor, sw_diff) == ADM_ERROR_OK,
+               "monitor cross-format switch downmixes 5.1 → stereo monitor") &&
+         ok;
+    adm_destroy_render_options(sw_diff);
+
+    ok = check(adm_monitor_pause(monitor) == ADM_ERROR_OK, "monitor pause") && ok;
+    ok = check(adm_monitor_log_entry(monitor, adm_monitor_log_count(monitor) + 100U, nullptr, nullptr, nullptr) == 0,
+               "monitor log_entry out-of-range is 0") &&
+         ok;
+
+    adm_destroy_monitor(monitor);
+    return ok;
+}
+
 int main() {
     if (!verify_version() || !verify_null_result_accessors()) {
         return EXIT_FAILURE;
@@ -2171,6 +2311,8 @@ int main() {
     // v1.14 tests
     ok = verify_version_114() && ok;
     ok = verify_iamf_layer_validation(ctx, fixture.path()) && ok;
+    // v1.15 tests
+    ok = verify_monitor_abi(ctx, fixture.path()) && ok;
 
     adm_destroy_context(ctx);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

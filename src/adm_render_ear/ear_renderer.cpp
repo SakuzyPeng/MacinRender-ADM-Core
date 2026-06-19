@@ -12,8 +12,10 @@
 #include <optional>
 #include <saf_utility_complex.h>
 #include <saf_utility_fft.h>
+#include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include <bw64/bw64.hpp>
@@ -51,6 +53,7 @@ struct BlockGains {
 
 struct ChannelGainInfo {
     uint16_t input_channel{0};
+    std::string object_id;          // owning SceneObject::id (empty for HOA-pack tracks); live gain key
     std::vector<BlockGains> blocks; // sorted by start_sample
 };
 
@@ -376,6 +379,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
             const uint16_t in_ch = *track.channel_index;
             auto& cg = by_channel[in_ch];
             cg.input_channel = in_ch;
+            cg.object_id = obj.id;
             append_object_blocks(track, obj, cg, objects_calc, speakers, num_out, logs, screen_ref_warned);
             append_direct_speakers_blocks(track, obj, cg, direct_speakers_calc, num_out);
         }
@@ -684,6 +688,99 @@ void remap_wav71_to_wave_order(std::vector<float>& block, std::size_t frames_now
     }
 }
 
+// Render one block [frames_done, frames_done+frames_now): accumulate the gain matrix into
+// the column-major direct/diffuse scratch, transpose to interleaved, run the FIR
+// decorrelator on the diffuse bus + the compensation delay on the direct bus, mix, and
+// (for wav71) remap to WAVE order — writing num_out_ch×frames_now interleaved into
+// out_block ([0, out_samples) only; caller sizes it). `decorr` + `blk_idx` carry the
+// decorrelator overlap / compensation-delay / block cursors across calls; the scratch
+// vectors are caller-owned and reused. Extracted verbatim from render_window's loop so the
+// offline batch path and the realtime EarStream share one implementation and cannot drift.
+void render_ear_block(const std::vector<ChannelGainInfo>& gain_matrix,
+                      std::vector<std::size_t>& blk_idx,
+                      DecorrState& decorr,
+                      const std::vector<float>& in_block,
+                      std::vector<float>& out_block,
+                      std::vector<float>& col_direct,
+                      std::vector<float>& col_diffuse,
+                      std::vector<float>& diffuse_in,
+                      std::vector<float>& diffuse_out,
+                      std::vector<float>& ch_in_buf,
+                      std::size_t col_stride,
+                      uint64_t frames_done,
+                      uint64_t frames_now,
+                      uint16_t num_in_ch,
+                      uint16_t num_out_ch,
+                      uint64_t default_interp,
+                      uint64_t object_smoothing_frames,
+                      const std::string& output_layout) {
+    const std::size_t out_samples = num_out_ch * static_cast<std::size_t>(frames_now);
+
+    // Zero the live region of the column-major accumulation buffers (per channel).
+    for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
+        std::fill_n(col_direct.data() + (ch * col_stride), frames_now, 0.0F);
+        std::fill_n(col_diffuse.data() + (ch * col_stride), frames_now, 0.0F);
+    }
+
+    AccumulateContext ctx;
+    ctx.input = in_block.data();
+    ctx.col_direct = col_direct.data();
+    ctx.col_diffuse = col_diffuse.data();
+    ctx.frames_done = frames_done;
+    ctx.num_in_ch = num_in_ch;
+    ctx.num_out_ch = num_out_ch;
+    ctx.default_interp = default_interp;
+    ctx.object_smoothing_frames = object_smoothing_frames;
+    ctx.frames_cap = col_stride;
+    accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now, ch_in_buf);
+
+    // Transpose column-major → interleaved for the decorrelator and delay.
+    for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
+        const float* src_d = col_direct.data() + (ch * col_stride);
+        const float* src_f = col_diffuse.data() + (ch * col_stride);
+        for (std::size_t f = 0; f < frames_now; ++f) {
+            out_block[(f * num_out_ch) + ch] = src_d[f];
+            diffuse_in[(f * num_out_ch) + ch] = src_f[f];
+        }
+    }
+
+    apply_decorrelator(decorr, diffuse_in, diffuse_out, frames_now, num_out_ch);
+    apply_direct_delay(decorr, out_block, frames_now, num_out_ch);
+    for (std::size_t s = 0; s < out_samples; ++s) {
+        out_block[s] += diffuse_out[s];
+    }
+    if (output_layout == "wav71") {
+        remap_wav71_to_wave_order(out_block, frames_now, num_out_ch);
+    }
+}
+
+// Build the FIR decorrelator state (FFT plan + per-channel frequency-domain filters +
+// zeroed overlap / compensation-delay buffers) for a layout. Shared by the offline
+// render_window and the realtime EarStream so the two never drift.
+void init_decorr_state(DecorrState& decorr, const ear::Layout& layout, uint16_t num_out_ch, uint64_t k_block_size) {
+    constexpr std::size_t k_fir_len = 512;
+    const std::size_t k_fft_len = next_power_of_two(static_cast<std::size_t>(k_block_size) + k_fir_len - 1U);
+    const std::size_t k_bins = (k_fft_len / 2U) + 1U;
+
+    saf_rfft_create(&decorr.hFFT, static_cast<int>(k_fft_len));
+    decorr.fft_len = k_fft_len;
+    decorr.bins = k_bins;
+    decorr.overlap_len = k_fir_len - 1U;
+    decorr.comp_delay = ear::decorrelatorCompensationDelay(); // 255
+    decorr.overlap.assign(num_out_ch, std::vector<float>(decorr.overlap_len, 0.0F));
+    decorr.dir_delay.assign(num_out_ch, std::vector<float>(static_cast<std::size_t>(decorr.comp_delay), 0.0F));
+
+    const auto raw_filters = ear::designDecorrelators<float>(layout);
+    decorr.filter_fd.resize(num_out_ch, std::vector<float_complex>(k_bins));
+    std::vector<float> fir_buf(k_fft_len, 0.0F);
+    for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
+        std::ranges::fill(fir_buf, 0.0F);
+        const auto& fir = raw_filters[ch];
+        std::ranges::copy(fir, fir_buf.begin());
+        saf_rfft_forward(decorr.hFFT, fir_buf.data(), decorr.filter_fd[ch].data());
+    }
+}
+
 // Immutable, reusable EAR state: the resolved libear layout and the per-object gain
 // matrix (the expensive libear GainCalculator work). Reused across render_window()
 // calls (PreviewSession scrubbing). The decorrelator FFT state is cheap and per-output,
@@ -691,6 +788,175 @@ void remap_wav71_to_wave_order(std::vector<float>& block, std::size_t frames_now
 struct EarPrepared final : IPreparedRender {
     ear::Layout layout;
     std::vector<ChannelGainInfo> gain_matrix;
+};
+
+// Realtime streaming EAR session over the same prepared libear layout + gain matrix as
+// render_window. It renders k_block_size-aligned blocks via the SAME render_ear_block the
+// offline path uses (carrying the FIR-decorrelator overlap + the direct compensation delay
+// across blocks) into a FIFO that process() serves at any requested frame count —
+// bit-identical to render_window for a gap-free run from frame 0. seek() zeroes the
+// decorrelator overlap / delay (a small discontinuity, acceptable for monitoring) and
+// repositions the reader. set_overrides applies live per-object gain by pre-scaling the
+// matching input channels before the (linear) gain mix + decorrelation — equal to scaling
+// the object gain. The expensive prepared state is borrowed; the factory keeps it alive.
+class EarStream final : public IRenderStream {
+  public:
+    [[nodiscard]] static Result<std::unique_ptr<EarStream>>
+    create(const EarPrepared& prepared, const RenderPlan& plan, LogSink& logs) {
+        auto reader = bw64::readFile(plan.input_path);
+        if (!reader) {
+            return make_error(
+                ErrorCode::io_error, "failed to open input for realtime ear stream", "input=" + plan.input_path);
+        }
+        (void) logs;
+        try {
+            return std::unique_ptr<EarStream>{new EarStream(prepared, std::move(reader), plan)};
+        } catch (const std::exception& e) {
+            return make_error(ErrorCode::render_failed, std::string("ear stream setup failed: ") + e.what(), {});
+        }
+    }
+
+    [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        std::size_t produced = 0;
+        while (produced < frames) {
+            if (fifo_read_ >= fifo_.size()) {
+                if (frames_done_ >= total_frames_) {
+                    break;
+                }
+                render_block();
+                if (fifo_read_ >= fifo_.size()) {
+                    break;
+                }
+            }
+            const std::size_t avail = (fifo_.size() - fifo_read_) / num_out_ch_;
+            const std::size_t take = std::min(frames - produced, avail);
+            std::copy_n(fifo_.data() + fifo_read_, take * num_out_ch_, out.data() + (produced * num_out_ch_));
+            fifo_read_ += take * num_out_ch_;
+            produced += take;
+        }
+        return produced;
+    }
+
+    [[nodiscard]] Result<void> seek(uint64_t frame) override {
+        for (auto& ov : decorr_.overlap) {
+            std::ranges::fill(ov, 0.0F);
+        }
+        for (auto& dl : decorr_.dir_delay) {
+            std::ranges::fill(dl, 0.0F);
+        }
+        std::ranges::fill(blk_idx_, std::size_t{0});
+        frames_done_ = std::min(frame, total_frames_);
+        render_common::seek_reader_abs(*reader_, frames_done_);
+        fifo_.clear();
+        fifo_read_ = 0;
+        return {};
+    }
+
+    void set_overrides(const LiveOverrides& overrides) override {
+        std::unordered_map<std::string, float> live;
+        for (const auto& ov : overrides.objects) {
+            live[ov.object_id] = std::pow(10.0F, ov.gain_db / 20.0F);
+        }
+        std::ranges::fill(channel_gain_, 1.0F);
+        any_live_gain_ = false;
+        // Semantic boundary: the override is projected object → input channel (each channel
+        // scaled by its owning object's gain). ADM's gain matrix is one object per input
+        // channel, so this is exact today; if independently-overridable objects ever shared
+        // one input channel they would scale together (last writer wins) — revisit then.
+        for (const auto& cg : prepared_.gain_matrix) {
+            if (const auto it = live.find(cg.object_id); it != live.end() && cg.input_channel < channel_gain_.size()) {
+                channel_gain_[cg.input_channel] = it->second;
+                any_live_gain_ = true;
+            }
+        }
+    }
+
+    [[nodiscard]] uint32_t out_channels() const override { return num_out_ch_; }
+    [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
+    [[nodiscard]] std::string_view output_layout() const override { return output_layout_; }
+
+  private:
+    EarStream(const EarPrepared& prepared, std::unique_ptr<bw64::Bw64Reader> reader, const RenderPlan& plan)
+        : prepared_(prepared), reader_(std::move(reader)), num_in_ch_(plan.scene.info.num_channels),
+          num_out_ch_(static_cast<uint16_t>(prepared.layout.channels().size())),
+          sample_rate_(plan.scene.info.sample_rate), total_frames_(plan.scene.info.num_frames),
+          output_layout_(plan.output_layout), object_smoothing_frames_(plan.object_smoothing_frames),
+          k_block_size_(std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
+          default_interp_(static_cast<uint64_t>(plan.scene.info.sample_rate) * plan.default_interp_ms / 1000U),
+          col_stride_(static_cast<std::size_t>(std::max<uint64_t>(1024U, plan.object_smoothing_frames))),
+          blk_idx_(prepared.gain_matrix.size(), 0),
+          col_direct_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F),
+          col_diffuse_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F),
+          diffuse_in_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F),
+          diffuse_out_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F), ch_in_buf_(col_stride_, 0.0F),
+          in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) * col_stride_, 0.0F),
+          channel_gain_(plan.scene.info.num_channels, 1.0F) {
+        init_decorr_state(decorr_, prepared.layout, num_out_ch_, k_block_size_);
+    }
+
+    void apply_live_gain(uint64_t frames_now) {
+        if (!any_live_gain_) {
+            return;
+        }
+        for (std::size_t f = 0; f < frames_now; ++f) {
+            float* frame = in_block_.data() + (f * num_in_ch_);
+            for (uint16_t c = 0; c < num_in_ch_; ++c) {
+                frame[c] *= channel_gain_[c];
+            }
+        }
+    }
+
+    void render_block() {
+        const uint64_t frames_now = std::min<uint64_t>(k_block_size_, total_frames_ - frames_done_);
+        reader_->read(in_block_.data(), frames_now);
+        apply_live_gain(frames_now);
+        fifo_.assign(static_cast<std::size_t>(num_out_ch_) * frames_now, 0.0F);
+        fifo_read_ = 0;
+        render_ear_block(prepared_.gain_matrix,
+                         blk_idx_,
+                         decorr_,
+                         in_block_,
+                         fifo_,
+                         col_direct_,
+                         col_diffuse_,
+                         diffuse_in_,
+                         diffuse_out_,
+                         ch_in_buf_,
+                         col_stride_,
+                         frames_done_,
+                         frames_now,
+                         num_in_ch_,
+                         num_out_ch_,
+                         default_interp_,
+                         object_smoothing_frames_,
+                         output_layout_);
+        frames_done_ += frames_now;
+    }
+
+    const EarPrepared& prepared_; // borrowed; owner (factory) outlives the stream
+    std::unique_ptr<bw64::Bw64Reader> reader_;
+    uint16_t num_in_ch_;
+    uint16_t num_out_ch_;
+    uint32_t sample_rate_;
+    uint64_t total_frames_;
+    std::string output_layout_;
+    uint64_t object_smoothing_frames_;
+    uint64_t k_block_size_;
+    uint64_t default_interp_;
+    std::size_t col_stride_;
+    std::vector<std::size_t> blk_idx_;
+    DecorrState decorr_;
+    std::vector<float> col_direct_;
+    std::vector<float> col_diffuse_;
+    std::vector<float> diffuse_in_;
+    std::vector<float> diffuse_out_;
+    std::vector<float> ch_in_buf_;
+    std::vector<float> in_block_;
+    std::vector<float> channel_gain_; // per-input-channel live gain multiplier (1.0 = none)
+    bool any_live_gain_{false};
+    std::vector<float> fifo_;
+    std::size_t fifo_read_{0};
+    uint64_t frames_done_{0};
 };
 
 class EarRenderer final : public IRenderer {
@@ -701,6 +967,20 @@ class EarRenderer final : public IRenderer {
                                                       const RenderPlan& plan,
                                                       ProgressSink& progress,
                                                       LogSink& logs) override;
+
+    [[nodiscard]] Result<std::unique_ptr<IRenderStream>>
+    open_stream(const IPreparedRender& prep, const RenderPlan& plan, LogSink& logs) override {
+        const auto* prepared = dynamic_cast<const EarPrepared*>(&prep);
+        if (prepared == nullptr) {
+            return make_error(
+                ErrorCode::internal_error, "ear: open_stream received an incompatible prepared state", {});
+        }
+        auto stream = EarStream::create(*prepared, plan, logs);
+        if (!stream) {
+            return tl::unexpected{stream.error()};
+        }
+        return std::unique_ptr<IRenderStream>{std::move(*stream)};
+    }
 };
 
 CapabilityReport EarRenderer::capabilities() const {
@@ -763,32 +1043,9 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
         constexpr uint64_t k_min_block_size = 1024;
         const uint64_t k_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
 
-        // Initialise decorrelator state for the diffuse bus.
-        // Filters designed as float; precomputed in frequency domain for FFT convolution.
-        constexpr std::size_t k_fir_len = 512;
-        const std::size_t k_fft_len = next_power_of_two(static_cast<std::size_t>(k_block_size) + k_fir_len - 1U);
-        const std::size_t k_bins = (k_fft_len / 2U) + 1U;
-
+        // Initialise the FIR decorrelator state for the diffuse bus (shared with EarStream).
         DecorrState decorr;
-        saf_rfft_create(&decorr.hFFT, static_cast<int>(k_fft_len));
-        decorr.fft_len = k_fft_len;
-        decorr.bins = k_bins;
-        decorr.overlap_len = k_fir_len - 1U;
-        decorr.comp_delay = ear::decorrelatorCompensationDelay(); // 255
-        decorr.overlap.assign(num_out_ch, std::vector<float>(decorr.overlap_len, 0.0F));
-        decorr.dir_delay.assign(num_out_ch, std::vector<float>(static_cast<std::size_t>(decorr.comp_delay), 0.0F));
-
-        {
-            const auto raw_filters = ear::designDecorrelators<float>(layout);
-            decorr.filter_fd.resize(num_out_ch, std::vector<float_complex>(k_bins));
-            std::vector<float> fir_buf(k_fft_len, 0.0F);
-            for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-                std::ranges::fill(fir_buf, 0.0F);
-                const auto& fir = raw_filters[ch];
-                std::ranges::copy(fir, fir_buf.begin());
-                saf_rfft_forward(decorr.hFFT, fir_buf.data(), decorr.filter_fd[ch].data());
-            }
-        }
+        init_decorr_state(decorr, layout, num_out_ch, k_block_size);
 
         // Open file for audio only — ADM metadata comes from plan.scene.
         auto reader = bw64::readFile(plan.input_path);
@@ -863,7 +1120,6 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
                 return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
             }
             const uint64_t frames_now = std::min(k_block_size, num_frames - frames_done);
-            const std::size_t out_samples = num_out_ch * static_cast<std::size_t>(frames_now);
 
             // Sub-range of this block that lies inside the output window [win_start, win_end).
             const uint64_t w_lo = std::max(frames_done, win_start);
@@ -880,49 +1136,24 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
 
             reader->read(in_block.data(), frames_now);
 
-            // Zero column-major accumulation buffers (only the live region per channel).
-            for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-                std::fill_n(col_direct.data() + (ch * col_stride), frames_now, 0.0F);
-                std::fill_n(col_diffuse.data() + (ch * col_stride), frames_now, 0.0F);
-            }
-
-            // Accumulate gains into column-major buffers (SIMD-friendly inner loop).
-            AccumulateContext ctx;
-            ctx.input = in_block.data();
-            ctx.col_direct = col_direct.data();
-            ctx.col_diffuse = col_diffuse.data();
-            ctx.frames_done = frames_done;
-            ctx.num_in_ch = num_in_ch;
-            ctx.num_out_ch = num_out_ch;
-            ctx.default_interp = k_default_interp;
-            ctx.object_smoothing_frames = plan.object_smoothing_frames;
-            ctx.frames_cap = col_stride;
-
-            accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now, ch_in_buf);
-
-            // Transpose column-major → interleaved for decorrelator and delay.
-            for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-                const float* src_d = col_direct.data() + (ch * col_stride);
-                const float* src_f = col_diffuse.data() + (ch * col_stride);
-                for (std::size_t f = 0; f < frames_now; ++f) {
-                    out_block[(f * num_out_ch) + ch] = src_d[f];
-                    diffuse_in[(f * num_out_ch) + ch] = src_f[f];
-                }
-            }
-
-            // Apply 512-tap FIR decorrelator to the diffuse input per channel.
-            apply_decorrelator(decorr, diffuse_in, diffuse_out, frames_now, num_out_ch);
-
-            // Delay the direct bus by comp_delay samples to align with diffuse.
-            apply_direct_delay(decorr, out_block, frames_now, num_out_ch);
-
-            // Mix delayed direct + decorrelated diffuse.
-            for (std::size_t s = 0; s < out_samples; ++s) {
-                out_block[s] += diffuse_out[s];
-            }
-            if (plan.output_layout == "wav71") {
-                remap_wav71_to_wave_order(out_block, frames_now, num_out_ch);
-            }
+            render_ear_block(gain_matrix,
+                             blk_idx,
+                             decorr,
+                             in_block,
+                             out_block,
+                             col_direct,
+                             col_diffuse,
+                             diffuse_in,
+                             diffuse_out,
+                             ch_in_buf,
+                             col_stride,
+                             frames_done,
+                             frames_now,
+                             num_in_ch,
+                             num_out_ch,
+                             k_default_interp,
+                             plan.object_smoothing_frames,
+                             plan.output_layout);
 
             // Write only the in-window frames. Pre-roll blocks (emit == false) are
             // processed for state warm-up but not written.

@@ -65,12 +65,28 @@
  *
  * v1.14 新增（additive，SOVERSION 不变）：
  *   adm_render_options_set_iamf_layers.
+ *
+ * v1.15 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_t + adm_create_monitor / adm_destroy_monitor / adm_monitor_play /
+ *   adm_monitor_pause / adm_monitor_seek / adm_monitor_set_loop / adm_monitor_get_status /
+ *   adm_monitor_get_levels / adm_monitor_log_count / adm_monitor_log_entry
+ *   (实时监听引擎；状态/电平/日志均轮询，无回调)。
+ *
+ * v1.16 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_override_t + adm_monitor_set_overrides（实时按对象覆盖，gain 即时生效；
+ *   diffuse/extent/divergence 缩放在 binaural 后端经廉价 re-prepare 生效，未接入的后端
+ *   接受但忽略）。adm_monitor_status_t 追加 override_revision 字段（struct_size 向后兼容）。
+ *
+ * v1.17 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_switch_backend（实时热切换渲染后端 / 布局，带短交叉淡化。立体声监听下
+ *   可把多声道 / HOA 折叠为立体声；非立体声监听且声道数不同、或采样率不同则返
+ *   ADM_ERROR_UNSUPPORTED）。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 14
+#define ADM_API_VERSION_MINOR 17
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -789,6 +805,132 @@ adm_error_code_t adm_preview_render_window_v2(adm_preview_session_t* session,
                                               adm_progress_v2_cb progress,
                                               void* user_data,
                                               adm_render_result_t** result) ADM_API_NOEXCEPT;
+
+/* ── v1.15 Realtime monitor ───────────────────────────────────────────────── */
+/*
+ * A persistent realtime monitor: streams the rendered ADM scene to the default audio output
+ * device while play / pause / seek / loop control playback. Status, levels and the
+ * diagnostics log are POLLED (no callbacks into the caller — see the realtime monitoring
+ * design). A monitor is NOT thread-safe; serialize calls or use one per thread.
+ *
+ * adm_create_monitor imports the scene + applies the semantic policy from `opts`, resolves
+ * the backend, and starts the default output device. `opts` may be NULL (all defaults).
+ * Backends that require 48 kHz (binaural) reject other input rates. Returns the import /
+ * policy / backend error, ADM_ERROR_UNSUPPORTED when the backend has no realtime stream, or
+ * ADM_ERROR_INTERNAL when no audio output device is available. create / destroy must pair.
+ */
+typedef struct adm_monitor_t adm_monitor_t; /* v1.15 */
+
+adm_error_code_t adm_create_monitor(adm_context_t* context,
+                                    const char* input_path,
+                                    const adm_render_options_t* opts,
+                                    adm_monitor_t** out) ADM_API_NOEXCEPT;
+void adm_destroy_monitor(adm_monitor_t* monitor) ADM_API_NOEXCEPT;
+
+adm_error_code_t adm_monitor_play(adm_monitor_t* monitor) ADM_API_NOEXCEPT;
+adm_error_code_t adm_monitor_pause(adm_monitor_t* monitor) ADM_API_NOEXCEPT;
+adm_error_code_t adm_monitor_seek(adm_monitor_t* monitor, double seconds) ADM_API_NOEXCEPT;
+/* end_seconds <= start_seconds disables looping. */
+adm_error_code_t
+adm_monitor_set_loop(adm_monitor_t* monitor, double start_seconds, double end_seconds) ADM_API_NOEXCEPT;
+
+/*
+ * v1.16: a single object's live monitoring override. gain_db is additive on top of the
+ * object's baked gain and takes effect on the next rendered block (true realtime). The
+ * *_scale fields are the realtime subset of the semantic policy's topology controls
+ * (multiplicative, 1.0 = no change): on the binaural backend they take effect via a cheap
+ * stream re-prepare; backends that have not yet wired them up (e.g. Apple, which honors
+ * only gain) accept the values but ignore them. object_id matches the scene's ADM
+ * audioObject id. Set struct_size = sizeof(adm_monitor_override_t) on every element; the
+ * library reads array elements using that as the stride, so fields may be appended in a
+ * later minor version without breaking callers built against this header.
+ */
+typedef struct adm_monitor_override_t {
+    uint32_t struct_size;
+    const char* object_id;
+    float gain_db;
+    float diffuse_scale;
+    float extent_scale;
+    float divergence_scale;
+} adm_monitor_override_t;
+
+/*
+ * Replace the full set of live overrides (objects not listed render at their prepared
+ * values). `overrides` may be NULL when count == 0 to clear all overrides. Each element's
+ * struct_size must cover at least through divergence_scale; the first element's struct_size
+ * is the array stride. Non-finite gain_db / *_scale values are rejected with
+ * ADM_ERROR_INVALID_ARGUMENT. `revision` is echoed back through
+ * adm_monitor_status_t.override_revision once the worker applies the snapshot, so a UI can
+ * confirm its edit landed without a callback.
+ */
+adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
+                                           const adm_monitor_override_t* overrides,
+                                           uint32_t count,
+                                           uint64_t revision) ADM_API_NOEXCEPT;
+
+/*
+ * v1.17: hot-switch the rendering backend / layout live, reusing the already-imported +
+ * policy-applied scene. `opts` selects the new renderer + output layout (other fields as in
+ * adm_render_options); NULL uses defaults. The new backend is prepared off the audio thread
+ * and crossfaded in. The new stream must run at the current monitor sample rate. A different
+ * channel count is folded into the monitor output when the monitor is stereo (multichannel
+ * speaker layouts by geometry, HOA by a first-order decode); other channel-count changes
+ * return ADM_ERROR_UNSUPPORTED. Returns the resolve / prepare error otherwise.
+ */
+adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_render_options_t* opts) ADM_API_NOEXCEPT;
+
+/* Playback state for adm_monitor_status_t.state. */
+typedef enum adm_monitor_state_t {
+    ADM_MONITOR_STOPPED = 0,
+    ADM_MONITOR_PLAYING = 1,
+    ADM_MONITOR_PAUSED = 2
+} adm_monitor_state_t;
+
+/*
+ * Polled status. Set struct_size = sizeof(adm_monitor_status_t) before the call; the library
+ * writes only the fields that fit, so callers built against an older header stay compatible
+ * as fields are appended in later minor versions.
+ */
+typedef struct adm_monitor_status_t {
+    uint32_t struct_size;
+    int32_t state; /* adm_monitor_state_t */
+    uint64_t playhead_frames;
+    uint64_t underruns;
+    uint64_t buffered_frames;
+    float ring_fill;            /* 0..1 ring occupancy */
+    int32_t ended;              /* bool: reached end of material */
+    int32_t failed;             /* bool: a render error stopped production */
+    uint64_t override_revision; /* v1.16: revision of the last applied live overrides */
+} adm_monitor_status_t;
+adm_error_code_t adm_monitor_get_status(adm_monitor_t* monitor, adm_monitor_status_t* out) ADM_API_NOEXCEPT;
+
+/*
+ * Polled per-channel peak / RMS of the most recently played block. The caller provides peak
+ * / rms buffers of `capacity` floats; the library writes min(capacity, channels) values and
+ * sets out_count to the actual channel count. peak or rms may be NULL to skip that metric.
+ * Set struct_size = sizeof(adm_monitor_levels_t) before the call.
+ */
+typedef struct adm_monitor_levels_t {
+    uint32_t struct_size;
+    uint32_t capacity;
+    uint32_t out_count;
+    float* peak;
+    float* rms;
+} adm_monitor_levels_t;
+adm_error_code_t adm_monitor_get_levels(adm_monitor_t* monitor, adm_monitor_levels_t* out) ADM_API_NOEXCEPT;
+
+/*
+ * Polled diagnostics buffer (append-only for the monitor's lifetime). Read the count, then
+ * fetch entries [0, count). out_level receives an adm_log_level_t; the out_module /
+ * out_message pointers are owned by the monitor and remain valid only until the next
+ * adm_monitor_* call on the same monitor. Returns 1 on success, 0 on a bad index / args.
+ */
+uint32_t adm_monitor_log_count(adm_monitor_t* monitor) ADM_API_NOEXCEPT;
+int adm_monitor_log_entry(adm_monitor_t* monitor,
+                          uint32_t index,
+                          int32_t* out_level,
+                          const char** out_module,
+                          const char** out_message) ADM_API_NOEXCEPT;
 
 #ifdef __cplusplus
 } /* extern "C" */

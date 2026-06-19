@@ -35,6 +35,7 @@ MacinRender ADM Core 的项目源码采用 **MIT License**，以仓库根目录 
 | kissfft（libear/SAF 内部） | FFT | BSD-3-Clause | 可用 | |
 | `libebur128` | LUFS/True Peak 测量 | MIT | 可用 | |
 | `dr_libs` (`dr_wav`, `dr_flac`) | WAV/FLAC 轻量读写 | Unlicense 或 MIT-0 可选 | 可用 | 本项目按 MIT-0/Unlicense 宽松使用 |
+| `miniaudio` | 实时音频设备输出（监听引擎） | public-domain (Unlicense) 或 MIT-0 双授权 | 可用 | header-only；实现仅在 `src/adm_realtime/miniaudio_device.cpp`；Linux 运行时 dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox framework |
 | `libFLAC` | FLAC 编码与 metadata | Xiph BSD-like | 可用 | 当前关闭 C++ libs/programs/docs/examples；源码包内 GPL/LGPL 文本不代表默认链接这些组件 |
 | `libopus` | Opus MKA 编码 | BSD-like + IETF patent IPR notices | 可用 | 发行文档需保留专利 IPR 链接说明 |
 | AOM `iamf-tools` bridge | IAMF raw OBU 编码 | BSD-3-Clause Clear + AOM Patent License 1.0 | 可用 | 预构建 SDK 形式接入；bridge 内部依赖需随实际包记录 |

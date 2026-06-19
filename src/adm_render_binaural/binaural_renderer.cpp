@@ -794,7 +794,8 @@ void advance_silence(OLAState& state, uint64_t frames_now, float* l_out, float* 
 // One renderable source extracted from the ADM scene.
 struct BinauralSource {
     uint16_t channel_index{0};
-    float gain{1.0F}; // object-level gain
+    float gain{1.0F};      // object-level gain
+    std::string object_id; // owning SceneObject::id, for live gain overrides
     bool bypass_lfe{false};
     bool smoothable_object{false};
     bool diffuse_bus{false};
@@ -1042,16 +1043,21 @@ struct BinauralSourceBank {
     std::array<BinauralSource, k_binaural_divergence_slots * k_binaural_extent_slots> diffuse;
 };
 
-void init_source_bank(BinauralSourceBank& bank, uint16_t channel_index, float object_gain) {
+void init_source_bank(BinauralSourceBank& bank,
+                      uint16_t channel_index,
+                      float object_gain,
+                      const std::string& object_id) {
     for (auto& src : bank.direct) {
         src.channel_index = channel_index;
         src.gain = object_gain;
+        src.object_id = object_id;
         src.smoothable_object = true;
         src.diffuse_bus = false;
     }
     for (auto& src : bank.diffuse) {
         src.channel_index = channel_index;
         src.gain = object_gain;
+        src.object_id = object_id;
         src.smoothable_object = true;
         src.diffuse_bus = true;
     }
@@ -1075,7 +1081,7 @@ void append_object_track_sources(const SceneObject& obj,
                                  std::vector<BinauralSource>& srcs,
                                  BinauralSpreadMode spread_mode) {
     BinauralSourceBank track_sources;
-    init_source_bank(track_sources, channel_index, obj.gain);
+    init_source_bank(track_sources, channel_index, obj.gain, obj.id);
 
     for (const auto& blk : track.blocks) {
         const auto prepared =
@@ -1154,6 +1160,7 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs, 
                     BinauralSource src;
                     src.channel_index = channel_index;
                     src.gain = obj.gain;
+                    src.object_id = obj.id;
                     src.bypass_lfe = true;
                     src.blocks.push_back({0.0F,
                                           0.0F,
@@ -1193,6 +1200,7 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs, 
                 BinauralSource src;
                 src.channel_index = channel_index;
                 src.gain = obj.gain;
+                src.object_id = obj.id;
                 src.blocks.push_back(
                     {az, el, ds.gain, ds.start_sample, std::min(ds.end_sample, obj.end_sample), true, std::nullopt});
                 srcs.push_back(std::move(src));
@@ -1292,6 +1300,129 @@ void convolve_crossfaded_object_block(void* hfft,
     state = std::move(end_state);
 }
 
+// Render one source's OLA (point / diffuse / LFE-bypass) contribution for the chunk
+// [chunk_start, chunk_start + frames_now) into cs.l_out / cs.r_out (zeroed here for
+// non-empty sources; empty-block sources leave the buffers untouched — they stay zero
+// from construction). Carries ola / diffuse / hrtf_cache across calls. Extracted verbatim
+// from render_window's per-source loop so the offline batch path and the realtime
+// BinauralStream share one implementation and cannot drift (bit-exactness contract).
+void render_source_ola_block(const BinauralSource& src,
+                             const BinauralState& bs,
+                             PerSourceConvState& cs,
+                             OLAState& ola,
+                             DiffuseDelayState& diffuse,
+                             HrtfCache& hrtf_cache,
+                             const float* in_block,
+                             uint16_t num_in_ch,
+                             uint64_t chunk_start,
+                             uint64_t frames_now,
+                             uint32_t object_smoothing_frames) {
+    if (src.blocks.empty()) {
+        return;
+    }
+
+    const auto fn = static_cast<std::size_t>(frames_now);
+    float* src_l = cs.l_out.data();
+    float* src_r = cs.r_out.data();
+    std::fill_n(src_l, fn, 0.0F);
+    std::fill_n(src_r, fn, 0.0F);
+
+    const uint64_t chunk_end = chunk_start + frames_now;
+
+    if (object_smoothing_frames > 0 && src.smoothable_object && !src.bypass_lfe) {
+        const auto* start_block = first_overlapping_block(src, chunk_start, chunk_end);
+        const auto* end_block = last_overlapping_block(src, chunk_start, chunk_end);
+        if (start_block != nullptr && end_block != nullptr && start_block != end_block && !end_block->jump_position) {
+            const uint64_t interp_len = end_block->interp_length_samples.value_or(object_smoothing_frames);
+            if (interp_len > 0U) {
+                copy_windowed_object_input(src, in_block, num_in_ch, chunk_start, frames_now, cs.ch_in.data());
+                const float* conv_in = cs.ch_in.data();
+                if (src.diffuse_bus) {
+                    decorrelate_diffuse_mono(diffuse, cs.ch_in.data(), frames_now, cs.diffuse_in.data());
+                    conv_in = cs.diffuse_in.data();
+                }
+                const auto& start_hrtf = get_cached_hrtf(bs, start_block->az, start_block->el, hrtf_cache);
+                const auto end_hrtf = hrtf_for_dir(bs, end_block->az, end_block->el);
+                convolve_crossfaded_object_block(cs.hfft,
+                                                 bs,
+                                                 conv_in,
+                                                 frames_now,
+                                                 src.gain * start_block->block_gain,
+                                                 src.gain * end_block->block_gain,
+                                                 start_hrtf,
+                                                 end_hrtf,
+                                                 ola,
+                                                 src_l,
+                                                 src_r,
+                                                 cs.scratch);
+                return;
+            }
+        }
+    }
+
+    uint64_t cursor = chunk_start;
+    std::size_t bi = first_relevant_block(src, chunk_start);
+
+    while (cursor < chunk_end) {
+        while (bi < src.blocks.size() && src.blocks[bi].end_sample <= cursor) {
+            ++bi;
+        }
+
+        if (bi >= src.blocks.size() || src.blocks[bi].start_sample >= chunk_end) {
+            const auto off = static_cast<std::size_t>(cursor - chunk_start);
+            advance_silence(ola, chunk_end - cursor, src_l + off, src_r + off);
+            break;
+        }
+
+        const auto& blk = src.blocks[bi];
+        if (cursor < blk.start_sample) {
+            const uint64_t silent_end = std::min<uint64_t>(blk.start_sample, chunk_end);
+            const auto off = static_cast<std::size_t>(cursor - chunk_start);
+            advance_silence(ola, silent_end - cursor, src_l + off, src_r + off);
+            cursor = silent_end;
+            continue;
+        }
+
+        const uint64_t seg_end = std::min<uint64_t>(blk.end_sample, chunk_end);
+        if (seg_end <= cursor) {
+            ++bi;
+            continue;
+        }
+
+        const auto off = static_cast<std::size_t>(cursor - chunk_start);
+        const uint64_t seg_frames = seg_end - cursor;
+        const auto seg_fn = static_cast<std::size_t>(seg_frames);
+
+        const uint16_t ic = src.channel_index;
+        for (std::size_t f = 0; f < seg_fn; ++f) {
+            cs.ch_in[f] = (ic < num_in_ch) ? in_block[((off + f) * num_in_ch) + ic] : 0.0F;
+        }
+
+        const float gain = src.gain * blk.block_gain;
+        if (src.bypass_lfe) {
+            for (std::size_t f = 0; f < seg_fn; ++f) {
+                const float sample = cs.ch_in[f] * gain;
+                src_l[off + f] += sample;
+                src_r[off + f] += sample;
+            }
+        } else {
+            const float* conv_in = cs.ch_in.data();
+            if (src.diffuse_bus) {
+                decorrelate_diffuse_mono(diffuse, cs.ch_in.data(), seg_frames, cs.diffuse_in.data());
+                conv_in = cs.diffuse_in.data();
+            }
+            const auto& hrtf = get_cached_hrtf(bs, blk.az, blk.el, hrtf_cache);
+            convolve_and_accumulate(
+                cs.hfft, bs, conv_in, seg_frames, gain, hrtf, ola, src_l + off, src_r + off, cs.scratch);
+        }
+
+        cursor = seg_end;
+        if (cursor >= blk.end_sample) {
+            ++bi;
+        }
+    }
+}
+
 // ── Renderer ──────────────────────────────────────────────────────────────────
 
 // Immutable, reusable binaural state: the HRTF tables + VBAP grid (the expensive
@@ -1306,6 +1437,274 @@ struct BinauralPrepared final : IPreparedRender {
     uint64_t render_block_size{0};
 };
 
+// Realtime streaming binaural session over the same prepared HRTF tables + source list as
+// render_window. It renders render_block_size-aligned blocks on demand into a FIFO, from
+// which process() serves any requested frame count via render_source_ola_block — the SAME
+// per-source OLA path render_window uses — so a gap-free run from frame 0 is bit-identical
+// to the offline render (the smoke test asserts this). saf_spreader mode (STFT latency
+// compensation) is not yet streamable and is rejected at open. seek() resets the per-source
+// OLA / diffuse / HRTF-cache state (a small discontinuity, acceptable for monitoring) and
+// repositions the reader. set_overrides applies a live per-object gain by scaling each
+// source's output (linear gain commutes with the HRTF convolution, so this equals scaling
+// the input). The expensive prepared state is borrowed by reference; the owning factory
+// keeps it alive for the stream's lifetime.
+class BinauralStream final : public IRenderStream {
+  public:
+    [[nodiscard]] static Result<std::unique_ptr<BinauralStream>>
+    create(const BinauralPrepared& prepared, const RenderPlan& plan, LogSink& logs) {
+        if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader && !prepared.spreader_groups.empty()) {
+            return make_error(ErrorCode::unsupported,
+                              "binaural realtime stream does not yet support saf_spreader mode (use cloud / none)",
+                              {});
+        }
+        const auto& info = plan.scene.info;
+        if (info.sample_rate != 48000U) {
+            return make_error(ErrorCode::invalid_argument,
+                              fmt::format("binaural renderer requires 48000 Hz input, got {}", info.sample_rate),
+                              "input=" + plan.input_path);
+        }
+        auto reader = bw64::readFile(plan.input_path);
+        if (!reader) {
+            return make_error(
+                ErrorCode::io_error, "failed to open input for realtime binaural stream", "input=" + plan.input_path);
+        }
+        (void) logs;
+        return std::unique_ptr<BinauralStream>{new BinauralStream(prepared,
+                                                                  std::move(reader),
+                                                                  plan.scene,
+                                                                  plan.binaural_spread_mode,
+                                                                  info.num_channels,
+                                                                  info.num_frames,
+                                                                  info.sample_rate,
+                                                                  plan.object_smoothing_frames)};
+    }
+
+    ~BinauralStream() override { destroy_fft(); }
+    BinauralStream(const BinauralStream&) = delete;
+    BinauralStream& operator=(const BinauralStream&) = delete;
+    BinauralStream(BinauralStream&&) = delete;
+    BinauralStream& operator=(BinauralStream&&) = delete;
+
+    [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        std::size_t produced = 0;
+        while (produced < frames) {
+            if (fifo_read_ >= fifo_.size()) {
+                if (frames_done_ >= total_frames_) {
+                    break; // end of material
+                }
+                render_block();
+                if (fifo_read_ >= fifo_.size()) {
+                    break;
+                }
+            }
+            const std::size_t avail = (fifo_.size() - fifo_read_) / 2U;
+            const std::size_t take = std::min(frames - produced, avail);
+            std::copy_n(fifo_.data() + fifo_read_, take * 2U, out.data() + (produced * 2U));
+            fifo_read_ += take * 2U;
+            produced += take;
+        }
+        return produced;
+    }
+
+    [[nodiscard]] Result<void> seek(uint64_t frame) override {
+        reset_dsp_state(); // small discontinuity (OLA / diffuse tails dropped); fine for monitoring
+        frames_done_ = std::min(frame, total_frames_);
+        render_common::seek_reader_abs(*reader_, frames_done_);
+        fifo_.clear();
+        fifo_read_ = 0;
+        return {};
+    }
+
+    void set_overrides(const LiveOverrides& overrides) override {
+        // Gain: immediate (next block), applied as a per-object output scalar.
+        live_gain_lin_.clear();
+        for (const auto& ov : overrides.objects) {
+            live_gain_lin_[ov.object_id] = std::pow(10.0F, ov.gain_db / 20.0F);
+        }
+        // Topology (diffuse / extent / divergence): only objects whose scales differ from
+        // unity matter. A change triggers a cheap re-prepare — rebuild the source list from
+        // a scaled copy of the scene (HRTF / VBAP tables in prepared_ are reused) and
+        // re-init the per-source DSP state. Unchanged ⇒ no rebuild (so plain gain edits and
+        // bit-exact reverts stay cheap).
+        std::unordered_map<std::string, std::array<float, 3>> topo;
+        for (const auto& ov : overrides.objects) {
+            if (ov.diffuse_scale != 1.0F || ov.extent_scale != 1.0F || ov.divergence_scale != 1.0F) {
+                topo[ov.object_id] = {ov.diffuse_scale, ov.extent_scale, ov.divergence_scale};
+            }
+        }
+        if (topo != applied_topology_) {
+            applied_topology_ = topo;
+            rebuild_sources(topo);
+        }
+    }
+
+    [[nodiscard]] uint32_t out_channels() const override { return 2U; }
+    [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
+    [[nodiscard]] std::string_view output_layout() const override { return "binaural"; }
+
+  private:
+    BinauralStream(const BinauralPrepared& prepared,
+                   std::unique_ptr<bw64::Bw64Reader> reader,
+                   AdmScene scene,
+                   BinauralSpreadMode spread_mode,
+                   uint16_t num_in_ch,
+                   uint64_t total_frames,
+                   uint32_t sample_rate,
+                   uint32_t object_smoothing_frames)
+        : prepared_(prepared), reader_(std::move(reader)), scene_(std::move(scene)), spread_mode_(spread_mode),
+          sources_(prepared.sources), num_in_ch_(num_in_ch), total_frames_(total_frames), sample_rate_(sample_rate),
+          object_smoothing_frames_(object_smoothing_frames), render_block_size_(prepared.render_block_size),
+          ola_pool_(ola_worker_count(prepared.sources.size())),
+          in_block_(static_cast<std::size_t>(num_in_ch) * prepared.render_block_size, 0.0F) {
+        // sources_ starts as a copy of the prepared list (== build_sources(scene_)); a
+        // topology override rebuilds it from a scaled scene_. bs (HRTF/VBAP) is never rebuilt.
+        init_per_source_state();
+    }
+
+    [[nodiscard]] static std::size_t ola_worker_count(std::size_t num_sources) {
+        const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
+        return (num_sources > 1U && hw_threads > 1U) ? std::min(num_sources, hw_threads) : 0U;
+    }
+
+    // (Re)create the per-source FFT plans + scratch sized to sources_, then reset the
+    // cross-call DSP state. Used at construction and after a topology rebuild.
+    void init_per_source_state() {
+        destroy_fft();
+        const auto& bs = *prepared_.bs;
+        src_cs_.clear();
+        src_cs_.resize(sources_.size());
+        for (auto& cs : src_cs_) {
+            saf_rfft_create(&cs.hfft, bs.fft_size);
+            cs.scratch.resize(bs, static_cast<std::size_t>(render_block_size_));
+            cs.l_out.resize(static_cast<std::size_t>(render_block_size_));
+            cs.r_out.resize(static_cast<std::size_t>(render_block_size_));
+            cs.ch_in.resize(static_cast<std::size_t>(render_block_size_));
+            cs.diffuse_in.resize(static_cast<std::size_t>(render_block_size_));
+        }
+        reset_dsp_state();
+    }
+
+    // Re-initialise the cross-call DSP state (the FFT plans in src_cs_ are stateless and
+    // kept). Used at construction, on seek, and after a topology rebuild.
+    void reset_dsp_state() {
+        const std::size_t n = sources_.size();
+        ola_.clear();
+        ola_.reserve(n);
+        for (std::size_t i = 0; i < n; ++i) {
+            ola_.emplace_back(prepared_.bs->overlap_len);
+        }
+        diffuse_delay_.assign(n, DiffuseDelayState{});
+        hrtf_cache_.assign(n, HrtfCache{});
+    }
+
+    // Cheap re-prepare: rebuild sources_ from a copy of the scene with each overridden
+    // object's block diffuse / extent (width,height,depth) / divergence multiplied by its
+    // scale (clamped to ADM's 0..1), then re-init per-source state. Empty `topo` rebuilds
+    // the unscaled scene, which reproduces the prepared list bit-for-bit.
+    void rebuild_sources(const std::unordered_map<std::string, std::array<float, 3>>& topo) {
+        AdmScene scaled = scene_;
+        for (auto& obj : scaled.objects) {
+            const auto it = topo.find(obj.id);
+            if (it == topo.end()) {
+                continue;
+            }
+            const float ds = it->second[0];
+            const float es = it->second[1];
+            const float dv = it->second[2];
+            for (auto& track : obj.tracks) {
+                for (auto& blk : track.blocks) {
+                    blk.diffuse = std::clamp(blk.diffuse * ds, 0.0F, 1.0F);
+                    blk.width = std::clamp(blk.width * es, 0.0F, 1.0F);
+                    blk.height = std::clamp(blk.height * es, 0.0F, 1.0F);
+                    blk.depth = std::clamp(blk.depth * es, 0.0F, 1.0F);
+                    blk.divergence = std::clamp(blk.divergence * dv, 0.0F, 1.0F);
+                }
+            }
+        }
+        NullLogSink null_logs;
+        sources_ = build_sources(scaled, null_logs, spread_mode_);
+        init_per_source_state();
+    }
+
+    void destroy_fft() {
+        for (auto& cs : src_cs_) {
+            if (cs.hfft != nullptr) {
+                saf_rfft_destroy(&cs.hfft);
+            }
+        }
+    }
+
+    [[nodiscard]] float live_gain_for(const std::string& object_id) const {
+        if (const auto it = live_gain_lin_.find(object_id); it != live_gain_lin_.end()) {
+            return it->second;
+        }
+        return 1.0F;
+    }
+
+    void render_block() {
+        const uint64_t frames_now = std::min<uint64_t>(render_block_size_, total_frames_ - frames_done_);
+        const auto fn = static_cast<std::size_t>(frames_now);
+        reader_->read(in_block_.data(), frames_now);
+
+        const auto& sources = sources_;
+        ola_pool_.parallel_for(sources.size(), [&](std::size_t si) {
+            render_source_ola_block(sources[si],
+                                    *prepared_.bs,
+                                    src_cs_[si],
+                                    ola_[si],
+                                    diffuse_delay_[si],
+                                    hrtf_cache_[si],
+                                    in_block_.data(),
+                                    num_in_ch_,
+                                    frames_done_,
+                                    frames_now,
+                                    object_smoothing_frames_);
+        });
+
+        // Reduce per-source L/R into the interleaved FIFO, applying the live per-object
+        // gain. With no overrides every gain is 1.0 and the summation order matches
+        // render_window's reduce, so the output is bit-identical to the offline render.
+        fifo_.assign(fn * 2U, 0.0F);
+        fifo_read_ = 0;
+        for (std::size_t si = 0; si < sources.size(); ++si) {
+            const float g = live_gain_for(sources[si].object_id);
+            const float* sl = src_cs_[si].l_out.data();
+            const float* sr = src_cs_[si].r_out.data();
+            for (std::size_t f = 0; f < fn; ++f) {
+                fifo_[(f * 2U) + 0U] += sl[f] * g;
+                fifo_[(f * 2U) + 1U] += sr[f] * g;
+            }
+        }
+        frames_done_ += frames_now;
+    }
+
+    const BinauralPrepared& prepared_; // borrowed; owner (factory) outlives the stream
+    std::unique_ptr<bw64::Bw64Reader> reader_;
+    AdmScene scene_;                      // policy-applied scene, for topology re-prepare (scaled copy → build_sources)
+    BinauralSpreadMode spread_mode_;      // spread mode the prepared sources were built with
+    std::vector<BinauralSource> sources_; // own (rebuildable) source list; starts == prepared_.sources
+    uint16_t num_in_ch_;
+    uint64_t total_frames_;
+    uint32_t sample_rate_;
+    uint32_t object_smoothing_frames_;
+    uint64_t render_block_size_;
+
+    std::vector<OLAState> ola_;
+    std::vector<DiffuseDelayState> diffuse_delay_;
+    std::vector<HrtfCache> hrtf_cache_;
+    std::vector<PerSourceConvState> src_cs_;
+    TrackWorkerPool ola_pool_;
+    std::vector<float> in_block_;
+    std::unordered_map<std::string, float> live_gain_lin_; // object_id → live linear gain (worker-only)
+    // object_id → {diffuse_scale, extent_scale, divergence_scale}; only non-unity entries.
+    // The last applied topology, so set_overrides rebuilds only when it actually changes.
+    std::unordered_map<std::string, std::array<float, 3>> applied_topology_;
+
+    std::vector<float> fifo_; // interleaved L/R produced, not yet served
+    std::size_t fifo_read_{0};
+    uint64_t frames_done_{0};
+};
+
 class BinauralRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
@@ -1314,6 +1713,20 @@ class BinauralRenderer final : public IRenderer {
                                                       const RenderPlan& plan,
                                                       ProgressSink& progress,
                                                       LogSink& logs) override;
+
+    [[nodiscard]] Result<std::unique_ptr<IRenderStream>>
+    open_stream(const IPreparedRender& prep, const RenderPlan& plan, LogSink& logs) override {
+        const auto* prepared = dynamic_cast<const BinauralPrepared*>(&prep);
+        if (prepared == nullptr) {
+            return make_error(
+                ErrorCode::internal_error, "binaural: open_stream received an incompatible prepared state", {});
+        }
+        auto stream = BinauralStream::create(*prepared, plan, logs);
+        if (!stream) {
+            return tl::unexpected{stream.error()};
+        }
+        return std::unique_ptr<IRenderStream>{std::move(*stream)};
+    }
 };
 
 CapabilityReport BinauralRenderer::capabilities() const {
@@ -1603,115 +2016,17 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
 
         // Process each OLA source independently; parallelise across sources.
         ola_pool.parallel_for(sources.size(), [&](std::size_t si) {
-            const auto& src = sources[si];
-            if (src.blocks.empty()) {
-                return;
-            }
-
-            auto& cs = src_cs[si];
-            float* src_l = cs.l_out.data();
-            float* src_r = cs.r_out.data();
-            std::fill_n(src_l, fn, 0.0F);
-            std::fill_n(src_r, fn, 0.0F);
-
-            const uint64_t chunk_start = frames_done;
-            const uint64_t chunk_end = frames_done + frames_now;
-
-            if (plan.object_smoothing_frames > 0 && src.smoothable_object && !src.bypass_lfe) {
-                const auto* start_block = first_overlapping_block(src, chunk_start, chunk_end);
-                const auto* end_block = last_overlapping_block(src, chunk_start, chunk_end);
-                if (start_block != nullptr && end_block != nullptr && start_block != end_block &&
-                    !end_block->jump_position) {
-                    const uint64_t interp_len = end_block->interp_length_samples.value_or(plan.object_smoothing_frames);
-                    if (interp_len > 0U) {
-                        copy_windowed_object_input(
-                            src, in_block.data(), num_in_ch, chunk_start, frames_now, cs.ch_in.data());
-                        const float* conv_in = cs.ch_in.data();
-                        if (src.diffuse_bus) {
-                            decorrelate_diffuse_mono(
-                                diffuse_delay[si], cs.ch_in.data(), frames_now, cs.diffuse_in.data());
-                            conv_in = cs.diffuse_in.data();
-                        }
-                        const auto& start_hrtf = get_cached_hrtf(*bs, start_block->az, start_block->el, hrtf_cache[si]);
-                        const auto end_hrtf = hrtf_for_dir(*bs, end_block->az, end_block->el);
-                        convolve_crossfaded_object_block(cs.hfft,
-                                                         *bs,
-                                                         conv_in,
-                                                         frames_now,
-                                                         src.gain * start_block->block_gain,
-                                                         src.gain * end_block->block_gain,
-                                                         start_hrtf,
-                                                         end_hrtf,
-                                                         ola[si],
-                                                         src_l,
-                                                         src_r,
-                                                         cs.scratch);
-                        return;
-                    }
-                }
-            }
-
-            uint64_t cursor = chunk_start;
-            std::size_t bi = first_relevant_block(src, chunk_start);
-
-            while (cursor < chunk_end) {
-                while (bi < src.blocks.size() && src.blocks[bi].end_sample <= cursor) {
-                    ++bi;
-                }
-
-                if (bi >= src.blocks.size() || src.blocks[bi].start_sample >= chunk_end) {
-                    const auto off = static_cast<std::size_t>(cursor - chunk_start);
-                    advance_silence(ola[si], chunk_end - cursor, src_l + off, src_r + off);
-                    break;
-                }
-
-                const auto& blk = src.blocks[bi];
-                if (cursor < blk.start_sample) {
-                    const uint64_t silent_end = std::min<uint64_t>(blk.start_sample, chunk_end);
-                    const auto off = static_cast<std::size_t>(cursor - chunk_start);
-                    advance_silence(ola[si], silent_end - cursor, src_l + off, src_r + off);
-                    cursor = silent_end;
-                    continue;
-                }
-
-                const uint64_t seg_end = std::min<uint64_t>(blk.end_sample, chunk_end);
-                if (seg_end <= cursor) {
-                    ++bi;
-                    continue;
-                }
-
-                const auto off = static_cast<std::size_t>(cursor - chunk_start);
-                const uint64_t seg_frames = seg_end - cursor;
-                const auto seg_fn = static_cast<std::size_t>(seg_frames);
-
-                const uint16_t ic = src.channel_index;
-                for (std::size_t f = 0; f < seg_fn; ++f) {
-                    cs.ch_in[f] = (ic < num_in_ch) ? in_block[((off + f) * num_in_ch) + ic] : 0.0F;
-                }
-
-                const float gain = src.gain * blk.block_gain;
-                if (src.bypass_lfe) {
-                    for (std::size_t f = 0; f < seg_fn; ++f) {
-                        const float sample = cs.ch_in[f] * gain;
-                        src_l[off + f] += sample;
-                        src_r[off + f] += sample;
-                    }
-                } else {
-                    const float* conv_in = cs.ch_in.data();
-                    if (src.diffuse_bus) {
-                        decorrelate_diffuse_mono(diffuse_delay[si], cs.ch_in.data(), seg_frames, cs.diffuse_in.data());
-                        conv_in = cs.diffuse_in.data();
-                    }
-                    const auto& hrtf = get_cached_hrtf(*bs, blk.az, blk.el, hrtf_cache[si]);
-                    convolve_and_accumulate(
-                        cs.hfft, *bs, conv_in, seg_frames, gain, hrtf, ola[si], src_l + off, src_r + off, cs.scratch);
-                }
-
-                cursor = seg_end;
-                if (cursor >= blk.end_sample) {
-                    ++bi;
-                }
-            }
+            render_source_ola_block(sources[si],
+                                    *bs,
+                                    src_cs[si],
+                                    ola[si],
+                                    diffuse_delay[si],
+                                    hrtf_cache[si],
+                                    in_block.data(),
+                                    num_in_ch,
+                                    frames_done,
+                                    frames_now,
+                                    plan.object_smoothing_frames);
         });
 
         // Reduce per-source outputs into the shared OLA destination.

@@ -24,6 +24,7 @@
 #include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
+#include "adm/io.h"
 #include "adm/render.h"
 #include "adm/render_apple.h"
 
@@ -410,7 +411,7 @@ double rms_difference(const std::vector<float>& lhs, const std::vector<float>& r
 // Single OBJECTS object at a fixed azimuth (ADM convention: +ve = left), linear gain,
 // optional ADM width (0..1) for extent spreading, and optional channelLock.
 std::pair<std::shared_ptr<adm::Document>, std::string>
-make_object_doc(float azimuth, float gain, float width, bool channel_lock) {
+make_object_doc(float azimuth, float gain, float width, bool channel_lock, bool mute = false) {
     auto doc = adm::Document::create();
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"AppleCF"}, adm::TypeDefinition::OBJECTS);
     {
@@ -444,6 +445,9 @@ make_object_doc(float azimuth, float gain, float width, bool channel_lock) {
     doc->add(uid);
     auto obj = adm::AudioObject::create(adm::AudioObjectName{"AppleObject"});
     obj->addReference(uid);
+    if (mute) {
+        obj->set(adm::Mute{true});
+    }
     doc->add(obj);
     auto content = adm::AudioContent::create(adm::AudioContentName{"AppleContent"});
     content->addReference(obj);
@@ -455,10 +459,11 @@ make_object_doc(float azimuth, float gain, float width, bool channel_lock) {
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
-std::filesystem::path write_fixture(float azimuth, uint32_t frames, float gain, float width, bool channel_lock) {
+std::filesystem::path
+write_fixture(float azimuth, uint32_t frames, float gain, float width, bool channel_lock, bool mute = false) {
     constexpr uint32_t k_ch = 1U;
     constexpr uint32_t k_sr = 48000U;
-    const auto [doc, uid_str] = make_object_doc(azimuth, gain, width, channel_lock);
+    const auto [doc, uid_str] = make_object_doc(azimuth, gain, width, channel_lock, mute);
     auto path = temp_path("mr_apple_input", ".wav");
 
     std::ostringstream xml_buf;
@@ -1081,6 +1086,216 @@ bool verify_spatial_mixer_hrtf_modes_probe() {
     return ok;
 }
 
+// Render the whole timeline through AppleStream, pulling in the given (repeating) chunk
+// pattern. Returns interleaved float PCM, or nullopt on error.
+std::optional<std::vector<float>> render_apple_stream_full(mradm::IRenderer& renderer,
+                                                           const mradm::IPreparedRender& prepared,
+                                                           const mradm::RenderPlan& plan,
+                                                           mradm::LogSink& logs,
+                                                           const std::vector<std::size_t>& chunk_pattern) {
+    auto stream = renderer.open_stream(prepared, plan, logs);
+    if (!check(stream.has_value(), "apple open_stream succeeds")) {
+        return std::nullopt;
+    }
+    const uint32_t ch = (*stream)->out_channels();
+    std::vector<float> out;
+    std::vector<float> buf;
+    std::size_t pi = 0;
+    while (true) {
+        const std::size_t frames = chunk_pattern[pi % chunk_pattern.size()];
+        ++pi;
+        buf.assign(frames * ch, 0.0F);
+        auto produced = (*stream)->process(std::span<float>(buf), frames);
+        if (!check(produced.has_value(), "apple stream process succeeds")) {
+            return std::nullopt;
+        }
+        const std::size_t got = *produced;
+        if (got == 0) {
+            break;
+        }
+        out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(got * ch));
+    }
+    return out;
+}
+
+// AppleStream (realtime) must reproduce the offline render_window render, and its output
+// must be independent of the caller's pull chunk size (FIFO + canonical k_render_block).
+bool verify_apple_stream_matches_window() {
+    const auto in = write_fixture(45.0F, 8192U, 1.0F, 0.0F, false);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value(), "stream: import scene")) {
+        return false;
+    }
+
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "stream: apple prepare")) {
+        return false;
+    }
+
+    // Reference: the offline render_window path to a float WAV.
+    const auto out_ref = temp_path("mr_apple_stream_ref", ".wav");
+    FileGuard out_guard(out_ref);
+    mradm::RenderPlan window_plan = plan;
+    window_plan.output_path = out_ref.string();
+    if (!check(renderer->render_window(**prepared, window_plan, progress, logs).has_value(),
+               "stream: reference render_window")) {
+        return false;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(out_ref.string());
+    if (!check(reader.has_value() && reader->channels() == 2U, "stream: reference WAV opens (2ch)")) {
+        return false;
+    }
+    std::vector<float> ref(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
+    reader->read(ref.data(), reader->frame_count());
+
+    // AppleStream, uniform vs. varied chunking (two fresh AUs, identical input/params/time).
+    const auto uniform = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024});
+    const auto varied = render_apple_stream_full(*renderer, **prepared, plan, logs, {333, 1000, 512, 7});
+    if (!uniform || !varied) {
+        return false;
+    }
+
+    bool ok = true;
+    ok &= check(uniform->size() == ref.size(), "stream output frame count matches render_window");
+    ok &= check(*uniform == *varied, "stream output is identical regardless of pull chunk size (FIFO correct)");
+
+    double max_diff = 0.0;
+    const std::size_t n = std::min(uniform->size(), ref.size());
+    for (std::size_t i = 0; i < n; ++i) {
+        max_diff = std::max(max_diff, std::fabs(static_cast<double>((*uniform)[i]) - static_cast<double>(ref[i])));
+    }
+    ok &= check(max_diff < 1.0e-4, "stream output matches the offline render_window render");
+    return ok;
+}
+
+// A scene with no renderable buses (here: a muted object) must open a silent stream — not
+// fail trying to drive a 0-input AUSpatialMixer — and produce full-length silence.
+bool verify_apple_stream_silent() {
+    constexpr uint32_t k_frames = 4096U;
+    const auto in = write_fixture(0.0F, k_frames, 1.0F, 0.0F, false, /*mute=*/true);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value(), "silent: import scene")) {
+        return false;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "silent: apple prepare")) {
+        return false;
+    }
+
+    const auto out = render_apple_stream_full(*renderer, **prepared, plan, logs, {512, 100});
+    if (!out) {
+        return check(false, "silent: open_stream + process succeeds for empty buses");
+    }
+    bool ok = true;
+    ok &= check(out->size() == static_cast<std::size_t>(k_frames) * 2U, "silent: full-length silence produced");
+    ok &= check(std::ranges::all_of(*out, [](float v) { return v == 0.0F; }), "silent: output is all zero");
+
+    // seek() on a silent stream must not dereference the (absent) AU / reader.
+    auto stream = renderer->open_stream(**prepared, plan, logs);
+    if (!stream) {
+        return check(false, "silent: open_stream for seek");
+    }
+    ok &= check((*stream)->seek(1000).has_value(), "silent: seek succeeds without AU/reader");
+    std::array<float, std::size_t{64} * 2U> buf{};
+    const auto produced = (*stream)->process(std::span<float>(buf), 64);
+    ok &= check(produced.has_value() && *produced == 64U, "silent: process after seek produces frames");
+    ok &= check(std::ranges::all_of(buf, [](float v) { return v == 0.0F; }), "silent: post-seek output is silence");
+    return ok;
+}
+
+// A live gain override (set_overrides) must scale the object's bus gain on the next block,
+// so the stream output is quieter by the override factor — validating BusPlan.object_id →
+// live gain map end to end through the real AUSpatialMixer.
+bool verify_apple_stream_gain_override() {
+    const auto in = write_fixture(45.0F, 8192U, 1.0F, 0.0F, false);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "override: import scene with an object")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "override: apple prepare")) {
+        return false;
+    }
+
+    const auto baseline = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024});
+    if (!baseline) {
+        return false;
+    }
+
+    // Fresh stream; apply -12.04 dB (≈ 0.25 linear) to the object before pulling.
+    auto stream = renderer->open_stream(**prepared, plan, logs);
+    if (!check(stream.has_value(), "override: open_stream")) {
+        return false;
+    }
+    mradm::LiveOverrides ov;
+    ov.revision = 1;
+    ov.objects.push_back({object_id, -12.041F, 1.0F, 1.0F, 1.0F});
+    (*stream)->set_overrides(ov);
+
+    const uint32_t ch = (*stream)->out_channels();
+    const std::size_t block_floats = std::size_t{1024U} * ch;
+    std::vector<float> overridden;
+    std::vector<float> buf(block_floats, 0.0F);
+    while (true) {
+        buf.assign(block_floats, 0.0F);
+        auto produced = (*stream)->process(std::span<float>(buf), 1024U);
+        if (!check(produced.has_value(), "override: process succeeds")) {
+            return false;
+        }
+        if (*produced == 0) {
+            break;
+        }
+        overridden.insert(overridden.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * ch));
+    }
+
+    bool ok = check(overridden.size() == baseline->size(), "override: same frame count as baseline");
+
+    auto buffer_rms = [](const std::vector<float>& v) {
+        double total = 0.0;
+        for (const float s : v) {
+            total += static_cast<double>(s) * static_cast<double>(s);
+        }
+        return v.empty() ? 0.0 : std::sqrt(total / static_cast<double>(v.size()));
+    };
+    const double b = buffer_rms(*baseline);
+    const double o = buffer_rms(overridden);
+    ok &= check(b > 1.0e-3, "override: baseline has signal energy");
+    // 0.25 linear; allow generous tolerance for HRTF spectral coloration around the scalar.
+    ok &= check(o < b * 0.5, "override: -12 dB override clearly attenuates the output");
+    ok &= check(o > b * 0.1, "override: attenuation is the gain scalar, not silence");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1098,6 +1313,9 @@ int main() {
     ok &= verify_spread_mode_none_disables_extent();
     ok &= verify_channel_lock_snaps();
     ok &= verify_bed_and_lfe_routing();
+    ok &= verify_apple_stream_matches_window();
+    ok &= verify_apple_stream_silent();
+    ok &= verify_apple_stream_gain_override();
     ok &= verify_spatial_mixer_hrtf_modes_probe();
     return ok ? 0 : 1;
 }
