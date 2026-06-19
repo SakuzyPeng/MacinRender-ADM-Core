@@ -9,7 +9,9 @@
 #include <memory>
 #include <numbers>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 // clang-format off
 // saf_utility_complex.h must precede saf_hoa.h: saf_hoa.h opens extern "C" and
@@ -467,12 +469,180 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
     return result;
 }
 
+// Encode one block [frames_done, frames_done+frames_now) of every channel's HOA
+// contribution into out_block (k_hoa3_channels interleaved per frame; caller zeroes it).
+// Carries the diffuse decorrelation delay lines (diffuse_states, per channel) across calls.
+// Extracted verbatim from render_window's encode loop so the offline batch path and the
+// realtime HoaStream share one implementation and cannot drift (bit-exactness contract).
+void encode_hoa_block(const std::vector<ChannelGainInfo>& gain_matrix,
+                      std::vector<std::array<DiffuseState, k_diffuse_slots>>& diffuse_states,
+                      const float* in_block,
+                      float* out_block,
+                      uint64_t frames_done,
+                      uint64_t frames_now,
+                      uint16_t num_in_ch,
+                      uint64_t default_interp,
+                      uint32_t object_smoothing_frames) {
+    for (std::size_t ci = 0; ci < gain_matrix.size(); ++ci) {
+        const auto& cg = gain_matrix.at(ci);
+        auto& diffuse_state = diffuse_states.at(ci);
+        const bool has_diffuse = cg.has_diffuse_block;
+        if (object_smoothing_frames > 0) {
+            const HoaFrameGains start_gains = gains_at(cg, frames_done, default_interp);
+            const HoaFrameGains end_gains = gains_at(cg, frames_done + frames_now - 1, default_interp);
+            for (std::size_t f = 0; f < frames_now; ++f) {
+                const float alpha = frames_now > 1 ? static_cast<float>(f) / static_cast<float>(frames_now - 1) : 0.0F;
+                const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
+                float* out_frame = out_block + (f * k_hoa3_channels);
+                Hoa3Coeffs direct_gains{};
+                for (std::size_t out_ch = 0; out_ch < k_hoa3_channels; ++out_ch) {
+                    direct_gains.at(out_ch) =
+                        (start_gains.direct.at(out_ch) * (1.0F - alpha)) + (end_gains.direct.at(out_ch) * alpha);
+                }
+                add_direct_hoa(in_s, direct_gains, out_frame);
+                if (has_diffuse) {
+                    for (std::size_t slot = 0; slot < k_diffuse_slots; ++slot) {
+                        Hoa3Coeffs diffuse_gains{};
+                        for (std::size_t out_ch = 0; out_ch < k_hoa3_channels; ++out_ch) {
+                            diffuse_gains.at(out_ch) = (start_gains.diffuse.at(slot).at(out_ch) * (1.0F - alpha)) +
+                                                       (end_gains.diffuse.at(slot).at(out_ch) * alpha);
+                            diffuse_gains.at(out_ch) *= in_s;
+                        }
+                        add_diffuse_hoa(diffuse_gains, diffuse_state.at(slot), out_frame);
+                    }
+                }
+            }
+            continue;
+        }
+        for (std::size_t f = 0; f < frames_now; ++f) {
+            const uint64_t abs_frame = frames_done + f;
+            const HoaFrameGains gains = gains_at(cg, abs_frame, default_interp);
+            const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
+            float* out_frame = out_block + (f * k_hoa3_channels);
+            add_direct_hoa(in_s, gains.direct, out_frame);
+            if (has_diffuse) {
+                for (std::size_t slot = 0; slot < k_diffuse_slots; ++slot) {
+                    Hoa3Coeffs diffuse_gains = gains.diffuse.at(slot);
+                    std::ranges::transform(
+                        diffuse_gains, diffuse_gains.begin(), [in_s](float coeff) { return coeff * in_s; });
+                    add_diffuse_hoa(diffuse_gains, diffuse_state.at(slot), out_frame);
+                }
+            }
+        }
+    }
+}
+
 // Immutable, reusable HOA state: the per-object HOA encode gain matrix (the expensive
 // part). Reused across render_window() calls (PreviewSession scrubbing). The AllRAD
 // meter-decode matrix and the diffuse delay lines are cheap / per-output, so they stay
 // in render_window.
 struct HoaPrepared final : IPreparedRender {
     std::vector<ChannelGainInfo> gain_matrix;
+};
+
+// Realtime streaming HOA session over the same prepared encode gain matrix as
+// render_window. It encodes k_block_size-aligned blocks via the SAME encode_hoa_block the
+// offline path uses (carrying the diffuse decorrelation delay lines across blocks) into a
+// FIFO of k_hoa3_channels SH channels — the encoded ambisonic signal, identical to what
+// render_window writes (the AllRAD 7.1.4 decode is metering-only and not part of the
+// output). A gap-free run from frame 0 is bit-identical to render_window. seek() resets the
+// diffuse delay lines (a small discontinuity, acceptable for monitoring), seeding the
+// circular write position to frame % delay-len to match the offline windowed indexing.
+// Live overrides are accepted but ignored (gain matrix baked per object at prepare).
+class HoaStream final : public IRenderStream {
+  public:
+    [[nodiscard]] static Result<std::unique_ptr<HoaStream>>
+    create(const HoaPrepared& prepared, const RenderPlan& plan, LogSink& logs) {
+        auto reader = bw64::readFile(plan.input_path);
+        if (!reader) {
+            return make_error(
+                ErrorCode::io_error, "failed to open input for realtime hoa stream", "input=" + plan.input_path);
+        }
+        (void) logs;
+        return std::unique_ptr<HoaStream>{new HoaStream(prepared, std::move(reader), plan)};
+    }
+
+    [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        std::size_t produced = 0;
+        while (produced < frames) {
+            if (fifo_read_ >= fifo_.size()) {
+                if (frames_done_ >= total_frames_) {
+                    break;
+                }
+                render_block();
+                if (fifo_read_ >= fifo_.size()) {
+                    break;
+                }
+            }
+            const std::size_t avail = (fifo_.size() - fifo_read_) / k_hoa3_channels;
+            const std::size_t take = std::min(frames - produced, avail);
+            std::copy_n(fifo_.data() + fifo_read_, take * k_hoa3_channels, out.data() + (produced * k_hoa3_channels));
+            fifo_read_ += take * k_hoa3_channels;
+            produced += take;
+        }
+        return produced;
+    }
+
+    [[nodiscard]] Result<void> seek(uint64_t frame) override {
+        frames_done_ = std::min(frame, total_frames_);
+        const auto write_pos = static_cast<std::size_t>(frames_done_ % k_diffuse_delay_len);
+        for (auto& slots : diffuse_states_) {
+            for (auto& st : slots) {
+                st = DiffuseState{};
+                st.write_pos = write_pos;
+            }
+        }
+        render_common::seek_reader_abs(*reader_, frames_done_);
+        fifo_.clear();
+        fifo_read_ = 0;
+        return {};
+    }
+
+    [[nodiscard]] uint32_t out_channels() const override { return k_hoa3_channels_u16; }
+    [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
+    [[nodiscard]] std::string_view output_layout() const override { return "hoa3"; }
+
+  private:
+    HoaStream(const HoaPrepared& prepared, std::unique_ptr<bw64::Bw64Reader> reader, const RenderPlan& plan)
+        : prepared_(prepared), reader_(std::move(reader)), num_in_ch_(plan.scene.info.num_channels),
+          sample_rate_(plan.scene.info.sample_rate), total_frames_(plan.scene.info.num_frames),
+          object_smoothing_frames_(plan.object_smoothing_frames),
+          k_block_size_(std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
+          default_interp_(static_cast<uint64_t>(plan.scene.info.sample_rate) * plan.default_interp_ms / 1000U),
+          diffuse_states_(prepared.gain_matrix.size()),
+          in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) *
+                    std::max<uint64_t>(1024U, plan.object_smoothing_frames)) {}
+
+    void render_block() {
+        const uint64_t frames_now = std::min<uint64_t>(k_block_size_, total_frames_ - frames_done_);
+        reader_->read(in_block_.data(), frames_now);
+        fifo_.assign(k_hoa3_channels * static_cast<std::size_t>(frames_now), 0.0F);
+        fifo_read_ = 0;
+        encode_hoa_block(prepared_.gain_matrix,
+                         diffuse_states_,
+                         in_block_.data(),
+                         fifo_.data(),
+                         frames_done_,
+                         frames_now,
+                         num_in_ch_,
+                         default_interp_,
+                         static_cast<uint32_t>(object_smoothing_frames_));
+        frames_done_ += frames_now;
+    }
+
+    const HoaPrepared& prepared_; // borrowed; owner (factory) outlives the stream
+    std::unique_ptr<bw64::Bw64Reader> reader_;
+    uint16_t num_in_ch_;
+    uint32_t sample_rate_;
+    uint64_t total_frames_;
+    uint64_t object_smoothing_frames_;
+    uint64_t k_block_size_;
+    uint64_t default_interp_;
+    std::vector<std::array<DiffuseState, k_diffuse_slots>> diffuse_states_;
+    std::vector<float> in_block_;
+    std::vector<float> fifo_;
+    std::size_t fifo_read_{0};
+    uint64_t frames_done_{0};
 };
 
 class HoaRenderer final : public IRenderer {
@@ -483,6 +653,20 @@ class HoaRenderer final : public IRenderer {
                                                       const RenderPlan& plan,
                                                       ProgressSink& progress,
                                                       LogSink& logs) override;
+
+    [[nodiscard]] Result<std::unique_ptr<IRenderStream>>
+    open_stream(const IPreparedRender& prep, const RenderPlan& plan, LogSink& logs) override {
+        const auto* prepared = dynamic_cast<const HoaPrepared*>(&prep);
+        if (prepared == nullptr) {
+            return make_error(
+                ErrorCode::internal_error, "hoa-encode: open_stream received an incompatible prepared state", {});
+        }
+        auto stream = HoaStream::create(*prepared, plan, logs);
+        if (!stream) {
+            return tl::unexpected{stream.error()};
+        }
+        return std::unique_ptr<IRenderStream>{std::move(*stream)};
+    }
 };
 
 CapabilityReport HoaRenderer::capabilities() const {
@@ -769,55 +953,15 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
             reader->read(in_block.data(), frames_now);
             std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
-            for (std::size_t ci = 0; ci < gain_matrix.size(); ++ci) {
-                const auto& cg = gain_matrix.at(ci);
-                auto& diffuse_state = diffuse_states.at(ci);
-                const bool has_diffuse = cg.has_diffuse_block;
-                if (plan.object_smoothing_frames > 0) {
-                    const HoaFrameGains start_gains = gains_at(cg, frames_done, k_default_interp);
-                    const HoaFrameGains end_gains = gains_at(cg, frames_done + frames_now - 1, k_default_interp);
-                    for (std::size_t f = 0; f < frames_now; ++f) {
-                        const float alpha =
-                            frames_now > 1 ? static_cast<float>(f) / static_cast<float>(frames_now - 1) : 0.0F;
-                        const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
-                        float* out_frame = out_block.data() + (f * k_num_out);
-                        Hoa3Coeffs direct_gains{};
-                        for (std::size_t out_ch = 0; out_ch < k_num_out; ++out_ch) {
-                            direct_gains.at(out_ch) = (start_gains.direct.at(out_ch) * (1.0F - alpha)) +
-                                                      (end_gains.direct.at(out_ch) * alpha);
-                        }
-                        add_direct_hoa(in_s, direct_gains, out_frame);
-                        if (has_diffuse) {
-                            for (std::size_t slot = 0; slot < k_diffuse_slots; ++slot) {
-                                Hoa3Coeffs diffuse_gains{};
-                                for (std::size_t out_ch = 0; out_ch < k_num_out; ++out_ch) {
-                                    diffuse_gains.at(out_ch) =
-                                        (start_gains.diffuse.at(slot).at(out_ch) * (1.0F - alpha)) +
-                                        (end_gains.diffuse.at(slot).at(out_ch) * alpha);
-                                    diffuse_gains.at(out_ch) *= in_s;
-                                }
-                                add_diffuse_hoa(diffuse_gains, diffuse_state.at(slot), out_frame);
-                            }
-                        }
-                    }
-                    continue;
-                }
-                for (std::size_t f = 0; f < frames_now; ++f) {
-                    const uint64_t abs_frame = frames_done + f;
-                    const HoaFrameGains gains = gains_at(cg, abs_frame, k_default_interp);
-                    const float in_s = in_block[(f * num_in_ch) + cg.input_channel];
-                    float* out_frame = out_block.data() + (f * k_num_out);
-                    add_direct_hoa(in_s, gains.direct, out_frame);
-                    if (has_diffuse) {
-                        for (std::size_t slot = 0; slot < k_diffuse_slots; ++slot) {
-                            Hoa3Coeffs diffuse_gains = gains.diffuse.at(slot);
-                            std::ranges::transform(
-                                diffuse_gains, diffuse_gains.begin(), [in_s](float coeff) { return coeff * in_s; });
-                            add_diffuse_hoa(diffuse_gains, diffuse_state.at(slot), out_frame);
-                        }
-                    }
-                }
-            }
+            encode_hoa_block(gain_matrix,
+                             diffuse_states,
+                             in_block.data(),
+                             out_block.data(),
+                             frames_done,
+                             frames_now,
+                             num_in_ch,
+                             k_default_interp,
+                             plan.object_smoothing_frames);
 
             // Write only the in-window frames; pre-roll blocks (emit == false) warm the
             // diffuse delay line but are not written.

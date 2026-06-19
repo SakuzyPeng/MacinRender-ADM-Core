@@ -12,6 +12,7 @@
 #include <numbers>
 #include <optional>
 #include <saf_vbap.h>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -556,6 +557,101 @@ struct VbapPrepared final : IPreparedRender {
     std::vector<ChannelGainInfo> gain_matrix;
 };
 
+// Realtime streaming VBAP session over the same prepared gain matrix as render_window.
+// VBAP carries no DSP state across blocks (just a monotonic per-channel block cursor), so
+// streaming is a thin loop: render k_block_size-aligned blocks via the SAME
+// accumulate_gain_matrix the offline path uses, into a FIFO that process() serves at any
+// requested frame count — bit-identical to render_window for a gap-free run from frame 0.
+// seek() resets the per-channel block cursors (the accumulators re-find the right block)
+// and repositions the reader. Live overrides are accepted but ignored (the gain matrix is
+// baked per object at prepare; per-object live gain on speaker layouts is a later increment).
+class VbapStream final : public IRenderStream {
+  public:
+    [[nodiscard]] static Result<std::unique_ptr<VbapStream>>
+    create(const VbapPrepared& prepared, const RenderPlan& plan, LogSink& logs) {
+        auto reader = bw64::readFile(plan.input_path);
+        if (!reader) {
+            return make_error(
+                ErrorCode::io_error, "failed to open input for realtime vbap stream", "input=" + plan.input_path);
+        }
+        (void) logs;
+        return std::unique_ptr<VbapStream>{new VbapStream(prepared, std::move(reader), plan)};
+    }
+
+    [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        std::size_t produced = 0;
+        while (produced < frames) {
+            if (fifo_read_ >= fifo_.size()) {
+                if (frames_done_ >= total_frames_) {
+                    break;
+                }
+                render_block();
+                if (fifo_read_ >= fifo_.size()) {
+                    break;
+                }
+            }
+            const std::size_t avail = (fifo_.size() - fifo_read_) / num_out_ch_;
+            const std::size_t take = std::min(frames - produced, avail);
+            std::copy_n(fifo_.data() + fifo_read_, take * num_out_ch_, out.data() + (produced * num_out_ch_));
+            fifo_read_ += take * num_out_ch_;
+            produced += take;
+        }
+        return produced;
+    }
+
+    [[nodiscard]] Result<void> seek(uint64_t frame) override {
+        std::ranges::fill(blk_idx_, std::size_t{0}); // accumulators advance forward; rewind to re-find
+        frames_done_ = std::min(frame, total_frames_);
+        render_common::seek_reader_abs(*reader_, frames_done_);
+        fifo_.clear();
+        fifo_read_ = 0;
+        return {};
+    }
+
+    [[nodiscard]] uint32_t out_channels() const override { return num_out_ch_; }
+    [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
+    [[nodiscard]] std::string_view output_layout() const override { return output_layout_; }
+
+  private:
+    VbapStream(const VbapPrepared& prepared, std::unique_ptr<bw64::Bw64Reader> reader, const RenderPlan& plan)
+        : prepared_(prepared), reader_(std::move(reader)), num_in_ch_(plan.scene.info.num_channels),
+          num_out_ch_(static_cast<uint16_t>(prepared.layout.speakers.size())),
+          sample_rate_(plan.scene.info.sample_rate), total_frames_(plan.scene.info.num_frames),
+          output_layout_(plan.output_layout), object_smoothing_frames_(plan.object_smoothing_frames),
+          k_block_size_(std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
+          default_interp_(static_cast<uint64_t>(plan.scene.info.sample_rate) * plan.default_interp_ms / 1000U),
+          blk_idx_(prepared.gain_matrix.size(), 0), in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) *
+                                                              std::max<uint64_t>(1024U, plan.object_smoothing_frames)) {
+    }
+
+    void render_block() {
+        const uint64_t frames_now = std::min<uint64_t>(k_block_size_, total_frames_ - frames_done_);
+        reader_->read(in_block_.data(), frames_now);
+        fifo_.assign(static_cast<std::size_t>(num_out_ch_) * frames_now, 0.0F);
+        fifo_read_ = 0;
+        const AccumulateContext ctx{
+            in_block_.data(), &fifo_, frames_done_, num_in_ch_, num_out_ch_, default_interp_, object_smoothing_frames_};
+        accumulate_gain_matrix(prepared_.gain_matrix, blk_idx_, ctx, frames_now);
+        frames_done_ += frames_now;
+    }
+
+    const VbapPrepared& prepared_; // borrowed; owner (factory) outlives the stream
+    std::unique_ptr<bw64::Bw64Reader> reader_;
+    uint16_t num_in_ch_;
+    uint16_t num_out_ch_;
+    uint32_t sample_rate_;
+    uint64_t total_frames_;
+    std::string output_layout_;
+    uint64_t object_smoothing_frames_;
+    uint64_t k_block_size_;
+    uint64_t default_interp_;
+    std::vector<std::size_t> blk_idx_; // per-channel monotonic block cursor
+    std::vector<float> in_block_;
+    std::vector<float> fifo_;
+    std::size_t fifo_read_{0};
+    uint64_t frames_done_{0};
+};
+
 class VbapRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override;
@@ -564,6 +660,20 @@ class VbapRenderer final : public IRenderer {
                                                       const RenderPlan& plan,
                                                       ProgressSink& progress,
                                                       LogSink& logs) override;
+
+    [[nodiscard]] Result<std::unique_ptr<IRenderStream>>
+    open_stream(const IPreparedRender& prep, const RenderPlan& plan, LogSink& logs) override {
+        const auto* prepared = dynamic_cast<const VbapPrepared*>(&prep);
+        if (prepared == nullptr) {
+            return make_error(
+                ErrorCode::internal_error, "saf-vbap: open_stream received an incompatible prepared state", {});
+        }
+        auto stream = VbapStream::create(*prepared, plan, logs);
+        if (!stream) {
+            return tl::unexpected{stream.error()};
+        }
+        return std::unique_ptr<IRenderStream>{std::move(*stream)};
+    }
 };
 
 CapabilityReport VbapRenderer::capabilities() const {

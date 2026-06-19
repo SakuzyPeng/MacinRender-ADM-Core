@@ -22,6 +22,7 @@
 #include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
+#include "adm/io.h"
 #include "adm/render.h"
 #include "adm/render_vbap.h"
 
@@ -1796,6 +1797,89 @@ bool verify_2d_layout_elevated_source_warning() {
     return ok;
 }
 
+// VbapStream (realtime) reproduces the offline render_window render and is independent of
+// the caller's pull chunk size (canonical block + FIFO). Drives the renderer directly so
+// no semantic policy / post-processing sits between stream and reference.
+bool verify_vbap_stream_matches_window() {
+    auto [doc, uid_str] = make_objects_doc(ObjectPositionMode::polar_front);
+    const auto in_path = write_input_fixture(doc, uid_str, 48000U, 4096U);
+    FileGuard in_guard{in_path};
+
+    auto scene = mradm::io::import_scene(in_path.string());
+    if (!check(scene.has_value(), "vbap stream: import scene")) {
+        return false;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = in_path.string();
+    plan.output_layout = "0+5+0";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_vbap_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "vbap stream: prepare")) {
+        return false;
+    }
+
+    const auto ref_path = std::filesystem::temp_directory_path() / "mr_vbap_stream_ref.wav";
+    FileGuard ref_guard{ref_path};
+    mradm::RenderPlan window_plan = plan;
+    window_plan.output_path = ref_path.string();
+    if (!check(renderer->render_window(**prepared, window_plan, progress, logs).has_value(),
+               "vbap stream: reference render_window")) {
+        return false;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(ref_path.string());
+    if (!check(reader.has_value(), "vbap stream: reference WAV opens")) {
+        return false;
+    }
+    const auto ch = static_cast<std::size_t>(reader->channels());
+    std::vector<float> ref(ch * reader->frame_count());
+    reader->read(ref.data(), reader->frame_count());
+
+    auto pull_stream = [&](const std::vector<std::size_t>& chunk_pattern) -> std::optional<std::vector<float>> {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        if (!check(stream.has_value(), "vbap stream: open_stream")) {
+            return std::nullopt;
+        }
+        const uint32_t oc = (*stream)->out_channels();
+        std::vector<float> out;
+        std::vector<float> buf;
+        std::size_t pi = 0;
+        while (true) {
+            const std::size_t frames = chunk_pattern[pi % chunk_pattern.size()];
+            ++pi;
+            buf.assign(frames * oc, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buf), frames);
+            if (!produced) {
+                return std::nullopt;
+            }
+            if (*produced == 0) {
+                break;
+            }
+            out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * oc));
+        }
+        return out;
+    };
+
+    const auto uniform = pull_stream({1024});
+    const auto varied = pull_stream({333, 1000, 512, 7});
+    if (!uniform || !varied) {
+        return false;
+    }
+
+    bool ok = check(uniform->size() == ref.size(), "vbap stream output frame count matches render_window");
+    ok &= check(*uniform == *varied, "vbap stream output is identical regardless of pull chunk size");
+    double max_diff = 0.0;
+    const std::size_t n = std::min(uniform->size(), ref.size());
+    for (std::size_t i = 0; i < n; ++i) {
+        max_diff = std::max(max_diff, std::fabs(static_cast<double>((*uniform)[i]) - static_cast<double>(ref[i])));
+    }
+    ok &= check(max_diff < 1.0e-4, "vbap stream output matches the offline render_window render");
+    return ok;
+}
+
 // NOLINTNEXTLINE(readability-function-size): linear smoke-test checklist.
 int main() {
     bool ok = true;
@@ -1892,6 +1976,7 @@ int main() {
     ok &= verify_default_interp_ms_controls_ramp();
     ok &= verify_register_vbap_layout();
     ok &= verify_2d_layout_elevated_source_warning();
+    ok &= verify_vbap_stream_matches_window();
 
     if (ok) {
         std::cout << "vbap smoke test passed\n";

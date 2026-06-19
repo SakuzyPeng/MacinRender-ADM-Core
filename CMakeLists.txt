@@ -616,6 +616,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMRenderVBAP
+            MacinRender::ADMIo
             MacinRender::ADMAudio
             libbw64
             adm
@@ -636,6 +637,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_ear_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
+            MacinRender::ADMRenderEar
+            MacinRender::ADMIo
             MacinRender::ADMAudio
             libbw64
             adm
@@ -664,6 +667,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_hoa_encode_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
+            MacinRender::ADMRenderHOA
+            MacinRender::ADMIo
             MacinRender::ADMAudio
             libbw64
             adm

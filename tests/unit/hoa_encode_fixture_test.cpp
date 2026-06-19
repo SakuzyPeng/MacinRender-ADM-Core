@@ -16,6 +16,7 @@
 #include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
+#include "adm/io.h"
 #include "adm/render.h"
 #include "adm/render_hoa.h"
 
@@ -997,6 +998,86 @@ bool verify_ds_off_axis_position() {
     return ok;
 }
 
+// HoaStream (realtime) reproduces the offline render_window encode and is independent of
+// the caller's pull chunk size (canonical block + FIFO). Uses the two-block diffuse fixture
+// + noise so the cross-block decorrelation delay line is exercised; > k_block_size frames
+// give multiple blocks. Drives the renderer directly (no RenderService post-processing).
+bool verify_hoa_stream_matches_window() {
+    auto [doc, uid] = make_two_block_diffuse_doc();
+    const auto noise = make_noise_samples(4096);
+    const auto in_path = write_fixture_samples(doc, uid, "stream_in", noise);
+    FileGuard in_guard{in_path};
+
+    auto scene = mradm::io::import_scene(in_path.string());
+    if (!check(scene.has_value(), "hoa stream: import scene")) {
+        return false;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = in_path.string();
+    plan.output_layout = "hoa3";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_hoa_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "hoa stream: prepare")) {
+        return false;
+    }
+
+    const auto ref_path = std::filesystem::temp_directory_path() / "mr_hoa_stream_ref.wav";
+    FileGuard ref_guard{ref_path};
+    mradm::RenderPlan window_plan = plan;
+    window_plan.output_path = ref_path.string();
+    if (!check(renderer->render_window(**prepared, window_plan, progress, logs).has_value(),
+               "hoa stream: reference render_window")) {
+        return false;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(ref_path.string());
+    if (!check(reader.has_value(), "hoa stream: reference WAV opens")) {
+        return false;
+    }
+    const auto ch = static_cast<std::size_t>(reader->channels());
+    std::vector<float> ref(ch * reader->frame_count());
+    reader->read(ref.data(), reader->frame_count());
+
+    auto pull_stream = [&](const std::vector<std::size_t>& chunk_pattern) -> std::vector<float> {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        std::vector<float> out;
+        if (!stream.has_value()) {
+            check(false, "hoa stream: open_stream");
+            return out;
+        }
+        const uint32_t oc = (*stream)->out_channels();
+        std::vector<float> buf;
+        std::size_t pi = 0;
+        while (true) {
+            const std::size_t frames = chunk_pattern[pi % chunk_pattern.size()];
+            ++pi;
+            buf.assign(frames * oc, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buf), frames);
+            if (!produced || *produced == 0) {
+                break;
+            }
+            out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * oc));
+        }
+        return out;
+    };
+
+    const auto uniform = pull_stream({1024});
+    const auto varied = pull_stream({333, 1000, 512, 7});
+
+    bool ok = check(uniform.size() == ref.size(), "hoa stream output frame count matches render_window");
+    ok &= check(uniform == varied, "hoa stream output is identical regardless of pull chunk size");
+    double max_diff = 0.0;
+    const std::size_t n = std::min(uniform.size(), ref.size());
+    for (std::size_t i = 0; i < n; ++i) {
+        max_diff = std::max(max_diff, std::fabs(static_cast<double>(uniform[i]) - static_cast<double>(ref[i])));
+    }
+    ok &= check(max_diff < 1.0e-4, "hoa stream output matches the offline render_window encode");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1032,6 +1113,7 @@ int main() {
     ok &= verify_ds_lfe_label_no_lowpass();
     ok &= verify_ds_off_axis_position();
     ok &= verify_lfe_metrics_separation();
+    ok &= verify_hoa_stream_matches_window();
 
     if (ok) {
         std::cout << "hoa encode fixture test passed\n";
