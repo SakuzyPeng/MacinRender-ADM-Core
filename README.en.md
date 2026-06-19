@@ -71,6 +71,8 @@ macOS / Linux packages use `.tar.gz`; Windows packages use `.zip`. A `.sha256` f
 
 The `binaural` backend uses SAF's built-in Genelec KEMAR HRTF by default. A user FIR SOFA HRIR file can be loaded with `--sofa <path>`. Current SOFA support is limited to SimpleFreeFieldHRIR / GeneralFIR, 2 receivers, 48 kHz, with no resampling.
 
+The recommended general-purpose external HRTF is the D1 KU100 SOFA from the [SADIE II Database](https://www.york.ac.uk/sadie-project/database.html), for example `D1_48K_24bit_256tap_FIR_SOFA.sofa` (also available from the [SOFA database SADIE index](https://sofacoustics.org/data/database/sadie/)). It is a 48 kHz, 256-tap SimpleFreeFieldHRIR dataset with dense direction sampling and low-frequency extension / diffuse-field EQ, making it a more balanced `--sofa` recommendation than the built-in KEMAR for many headphone checks. The SADIE II data is published by the University of York under the Apache License 2.0; when distributing data or using it academically, follow the dataset page and cite [DOI:10.3390/app8112029](https://doi.org/10.3390/app8112029).
+
 The `apple` backend uses AudioToolbox AUSpatialMixer. It supports binaural, 5.1, 7.1, 5.1.2, 5.1.4, 7.1.4, 9.1.6, and 22.2. It is an Apple platform-flavored renderer, not a bit-exact replacement for libear / SAF; HOA and diffuse are not supported, while speaker-output channelLock and extent cloud approximation are supported. `--object-smoothing-frames` currently has no effect on the Apple backend because dynamic parameter smoothing is handled inside SpatialMixer. `--start` / `--end` use on-demand window rendering with one render block of pre-roll to update SpatialMixer state.
 
 ## Output Formats
