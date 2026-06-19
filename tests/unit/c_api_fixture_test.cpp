@@ -9,6 +9,7 @@
 #include <array>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -2169,6 +2170,37 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     ok = check(adm_monitor_set_overrides(monitor, &small, 1, 9) == ADM_ERROR_INVALID_ARGUMENT,
                "monitor set_overrides rejects undersized struct_size") &&
          ok;
+
+    // Forward-compat stride: simulate a caller built against a LARGER (future) struct by
+    // advertising struct_size > sizeof and laying elements out at that stride. The library
+    // must advance by the caller's struct_size to find element[1], not by its own sizeof.
+    {
+        const std::size_t fut_stride = sizeof(adm_monitor_override_t) + 16U; // pretend future appended fields
+        std::vector<unsigned char> raw(fut_stride * 2U, 0U);
+        auto place = [&](std::size_t idx, const char* id, float gain) {
+            adm_monitor_override_t e{};
+            e.struct_size = static_cast<uint32_t>(fut_stride);
+            e.object_id = id;
+            e.gain_db = gain;
+            e.diffuse_scale = 1.0F;
+            e.extent_scale = 1.0F;
+            e.divergence_scale = 1.0F;
+            std::memcpy(raw.data() + (idx * fut_stride), &e, sizeof(e));
+        };
+        // Positive control: both elements valid at the future stride → accepted.
+        place(0, "AO_1001", -3.0F);
+        place(1, "AO_1002", -6.0F);
+        const auto* arr = reinterpret_cast<const adm_monitor_override_t*>(raw.data());
+        ok = check(adm_monitor_set_overrides(monitor, arr, 2, 10) == ADM_ERROR_OK,
+                   "monitor set_overrides accepts future (oversized) struct_size stride") &&
+             ok;
+        // Poison ONLY element[1]'s gain. A correct stride reads it (NaN → reject); a buggy
+        // stride (== sizeof) would read element[1] from element[0]'s zero padding and miss it.
+        place(1, "AO_1002", std::numeric_limits<float>::quiet_NaN());
+        ok = check(adm_monitor_set_overrides(monitor, arr, 2, 11) == ADM_ERROR_INVALID_ARGUMENT,
+                   "monitor set_overrides strides by caller struct_size to reach element[1]") &&
+             ok;
+    }
 
     ok = check(adm_monitor_pause(monitor) == ADM_ERROR_OK, "monitor pause") && ok;
     ok = check(adm_monitor_log_entry(monitor, adm_monitor_log_count(monitor) + 100U, nullptr, nullptr, nullptr) == 0,
