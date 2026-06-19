@@ -1880,6 +1880,68 @@ bool verify_vbap_stream_matches_window() {
     return ok;
 }
 
+// A live per-object gain override pre-scales the object's input channel, so the VBAP stream
+// output scales by the override factor (linear, commutes with the pan).
+bool verify_vbap_stream_gain_override() {
+    auto [doc, uid_str] = make_objects_doc(ObjectPositionMode::polar_front);
+    const auto in_path = write_input_fixture(doc, uid_str, 48000U, 4096U);
+    FileGuard in_guard{in_path};
+
+    auto scene = mradm::io::import_scene(in_path.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "vbap override: import scene")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+
+    mradm::RenderPlan plan;
+    plan.input_path = in_path.string();
+    plan.output_layout = "0+5+0";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_vbap_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "vbap override: prepare")) {
+        return false;
+    }
+
+    auto pull_rms = [&](bool with_override) -> double {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        if (!stream.has_value()) {
+            return -1.0;
+        }
+        if (with_override) {
+            mradm::LiveOverrides ov;
+            ov.revision = 1;
+            ov.objects.push_back({object_id, -20.0F, 1.0F, 1.0F, 1.0F}); // 0.1 linear
+            (*stream)->set_overrides(ov);
+        }
+        const uint32_t oc = (*stream)->out_channels();
+        const std::size_t block_floats = std::size_t{1024U} * oc;
+        std::vector<float> buf(block_floats, 0.0F);
+        double total = 0.0;
+        std::size_t n = 0;
+        while (true) {
+            buf.assign(block_floats, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buf), 1024U);
+            if (!produced || *produced == 0) {
+                break;
+            }
+            for (std::size_t i = 0; i < *produced * oc; ++i) {
+                total += static_cast<double>(buf[i]) * static_cast<double>(buf[i]);
+            }
+            n += *produced * oc;
+        }
+        return n > 0 ? std::sqrt(total / static_cast<double>(n)) : 0.0;
+    };
+
+    const double base = pull_rms(false);
+    const double over = pull_rms(true);
+    bool ok = check(base > 1.0e-3, "vbap override: baseline has energy");
+    ok &= check(over < base * 0.2 && over > base * 0.05, "vbap override: -20 dB scales output by ~0.1");
+    return ok;
+}
+
 // NOLINTNEXTLINE(readability-function-size): linear smoke-test checklist.
 int main() {
     bool ok = true;
@@ -1977,6 +2039,7 @@ int main() {
     ok &= verify_register_vbap_layout();
     ok &= verify_2d_layout_elevated_source_warning();
     ok &= verify_vbap_stream_matches_window();
+    ok &= verify_vbap_stream_gain_override();
 
     if (ok) {
         std::cout << "vbap smoke test passed\n";

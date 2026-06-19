@@ -1648,6 +1648,67 @@ bool verify_ear_stream_matches_window() {
     return ok;
 }
 
+// A live per-object gain override pre-scales the object's input channel, so the EAR stream
+// output scales by the override factor (linear, commutes with the gain mix + decorrelation).
+bool verify_ear_stream_gain_override() {
+    const auto in_path = write_diffuse_fixture(1.0F, 4096U);
+    FileGuard in_guard{in_path};
+
+    auto scene = mradm::io::import_scene(in_path.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "ear override: import scene")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+
+    mradm::RenderPlan plan;
+    plan.input_path = in_path.string();
+    plan.output_layout = "0+5+0";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_ear_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "ear override: prepare")) {
+        return false;
+    }
+
+    auto pull_rms = [&](bool with_override) -> double {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        if (!stream.has_value()) {
+            return -1.0;
+        }
+        if (with_override) {
+            mradm::LiveOverrides ov;
+            ov.revision = 1;
+            ov.objects.push_back({object_id, -20.0F, 1.0F, 1.0F, 1.0F}); // 0.1 linear
+            (*stream)->set_overrides(ov);
+        }
+        const uint32_t oc = (*stream)->out_channels();
+        const std::size_t block_floats = std::size_t{1024U} * oc;
+        std::vector<float> buf;
+        double total = 0.0;
+        std::size_t n = 0;
+        while (true) {
+            buf.assign(block_floats, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buf), 1024U);
+            if (!produced || *produced == 0) {
+                break;
+            }
+            for (std::size_t i = 0; i < *produced * oc; ++i) {
+                total += static_cast<double>(buf[i]) * static_cast<double>(buf[i]);
+            }
+            n += *produced * oc;
+        }
+        return n > 0 ? std::sqrt(total / static_cast<double>(n)) : 0.0;
+    };
+
+    const double base = pull_rms(false);
+    const double over = pull_rms(true);
+    bool ok = check(base > 1.0e-3, "ear override: baseline has energy");
+    ok &= check(over < base * 0.2 && over > base * 0.05, "ear override: -20 dB scales output by ~0.1");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1672,6 +1733,7 @@ int main() {
     ok &= verify_ds_cartesian_speaker_position(service, progress, logs);
     ok &= verify_ear_multiblock_inside_render_window(service, progress, logs);
     ok &= verify_ear_stream_matches_window();
+    ok &= verify_ear_stream_gain_override();
 
     if (ok) {
         std::cout << "ear_render fixture test passed\n";

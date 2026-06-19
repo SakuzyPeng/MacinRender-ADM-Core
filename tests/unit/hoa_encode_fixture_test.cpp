@@ -1078,6 +1078,69 @@ bool verify_hoa_stream_matches_window() {
     return ok;
 }
 
+// A live per-object gain override pre-scales the object's input channel, so the HOA stream
+// encode scales by the override factor.
+bool verify_hoa_stream_gain_override() {
+    auto [doc, uid] = make_two_block_diffuse_doc();
+    const auto noise = make_noise_samples(4096);
+    const auto in_path = write_fixture_samples(doc, uid, "gain_in", noise);
+    FileGuard in_guard{in_path};
+
+    auto scene = mradm::io::import_scene(in_path.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "hoa override: import scene")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+
+    mradm::RenderPlan plan;
+    plan.input_path = in_path.string();
+    plan.output_layout = "hoa3";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_hoa_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "hoa override: prepare")) {
+        return false;
+    }
+
+    auto pull_rms = [&](bool with_override) -> double {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        if (!stream.has_value()) {
+            return -1.0;
+        }
+        if (with_override) {
+            mradm::LiveOverrides ov;
+            ov.revision = 1;
+            ov.objects.push_back({object_id, -20.0F, 1.0F, 1.0F, 1.0F}); // 0.1 linear
+            (*stream)->set_overrides(ov);
+        }
+        const uint32_t oc = (*stream)->out_channels();
+        const std::size_t block_floats = std::size_t{1024U} * oc;
+        std::vector<float> buf;
+        double total = 0.0;
+        std::size_t n = 0;
+        while (true) {
+            buf.assign(block_floats, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buf), 1024U);
+            if (!produced || *produced == 0) {
+                break;
+            }
+            for (std::size_t i = 0; i < *produced * oc; ++i) {
+                total += static_cast<double>(buf[i]) * static_cast<double>(buf[i]);
+            }
+            n += *produced * oc;
+        }
+        return n > 0 ? std::sqrt(total / static_cast<double>(n)) : 0.0;
+    };
+
+    const double base = pull_rms(false);
+    const double over = pull_rms(true);
+    bool ok = check(base > 1.0e-3, "hoa override: baseline has energy");
+    ok &= check(over < base * 0.2 && over > base * 0.05, "hoa override: -20 dB scales output by ~0.1");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1114,6 +1177,7 @@ int main() {
     ok &= verify_ds_off_axis_position();
     ok &= verify_lfe_metrics_separation();
     ok &= verify_hoa_stream_matches_window();
+    ok &= verify_hoa_stream_gain_override();
 
     if (ok) {
         std::cout << "hoa encode fixture test passed\n";

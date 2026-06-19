@@ -15,6 +15,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include <bw64/bw64.hpp>
@@ -72,6 +73,7 @@ struct BlockGains {
 // One input channel with its full sorted block sequence.
 struct ChannelGainInfo {
     uint16_t input_channel{0};
+    std::string object_id;          // owning SceneObject::id, for live gain overrides
     std::vector<BlockGains> blocks; // sorted by start_sample
 };
 
@@ -373,6 +375,7 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
             const uint16_t in_ch = track.channel_index.value();
             auto& cg = by_channel[in_ch];
             cg.input_channel = in_ch;
+            cg.object_id = obj.id;
 
             // Objects blocks → VBAP panning.
             for (const auto& raw_block : track.blocks) {
@@ -563,8 +566,9 @@ struct VbapPrepared final : IPreparedRender {
 // accumulate_gain_matrix the offline path uses, into a FIFO that process() serves at any
 // requested frame count — bit-identical to render_window for a gap-free run from frame 0.
 // seek() resets the per-channel block cursors (the accumulators re-find the right block)
-// and repositions the reader. Live overrides are accepted but ignored (the gain matrix is
-// baked per object at prepare; per-object live gain on speaker layouts is a later increment).
+// and repositions the reader. set_overrides applies live per-object gain by pre-scaling the
+// matching input channels before the (linear) VBAP mix — equivalent to scaling the object
+// gain; topology scales (diffuse/extent/divergence) are not applicable to VBAP and ignored.
 class VbapStream final : public IRenderStream {
   public:
     [[nodiscard]] static Result<std::unique_ptr<VbapStream>>
@@ -608,6 +612,21 @@ class VbapStream final : public IRenderStream {
         return {};
     }
 
+    void set_overrides(const LiveOverrides& overrides) override {
+        std::unordered_map<std::string, float> live;
+        for (const auto& ov : overrides.objects) {
+            live[ov.object_id] = std::pow(10.0F, ov.gain_db / 20.0F);
+        }
+        std::ranges::fill(channel_gain_, 1.0F);
+        any_live_gain_ = false;
+        for (const auto& cg : prepared_.gain_matrix) {
+            if (const auto it = live.find(cg.object_id); it != live.end() && cg.input_channel < channel_gain_.size()) {
+                channel_gain_[cg.input_channel] = it->second;
+                any_live_gain_ = true;
+            }
+        }
+    }
+
     [[nodiscard]] uint32_t out_channels() const override { return num_out_ch_; }
     [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
     [[nodiscard]] std::string_view output_layout() const override { return output_layout_; }
@@ -621,12 +640,27 @@ class VbapStream final : public IRenderStream {
           k_block_size_(std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
           default_interp_(static_cast<uint64_t>(plan.scene.info.sample_rate) * plan.default_interp_ms / 1000U),
           blk_idx_(prepared.gain_matrix.size(), 0), in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) *
-                                                              std::max<uint64_t>(1024U, plan.object_smoothing_frames)) {
+                                                              std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
+          channel_gain_(plan.scene.info.num_channels, 1.0F) {}
+
+    // Pre-scale the matching input channels by their object's live gain (linear, so this
+    // equals scaling the object gain; the VBAP mix downstream is linear).
+    void apply_live_gain(uint64_t frames_now) {
+        if (!any_live_gain_) {
+            return;
+        }
+        for (std::size_t f = 0; f < frames_now; ++f) {
+            float* frame = in_block_.data() + (f * num_in_ch_);
+            for (uint16_t c = 0; c < num_in_ch_; ++c) {
+                frame[c] *= channel_gain_[c];
+            }
+        }
     }
 
     void render_block() {
         const uint64_t frames_now = std::min<uint64_t>(k_block_size_, total_frames_ - frames_done_);
         reader_->read(in_block_.data(), frames_now);
+        apply_live_gain(frames_now);
         fifo_.assign(static_cast<std::size_t>(num_out_ch_) * frames_now, 0.0F);
         fifo_read_ = 0;
         const AccumulateContext ctx{
@@ -647,6 +681,8 @@ class VbapStream final : public IRenderStream {
     uint64_t default_interp_;
     std::vector<std::size_t> blk_idx_; // per-channel monotonic block cursor
     std::vector<float> in_block_;
+    std::vector<float> channel_gain_; // per-input-channel live gain multiplier (1.0 = none)
+    bool any_live_gain_{false};
     std::vector<float> fifo_;
     std::size_t fifo_read_{0};
     uint64_t frames_done_{0};

@@ -15,6 +15,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include <bw64/bw64.hpp>
@@ -52,6 +53,7 @@ struct BlockGains {
 
 struct ChannelGainInfo {
     uint16_t input_channel{0};
+    std::string object_id;          // owning SceneObject::id (empty for HOA-pack tracks); live gain key
     std::vector<BlockGains> blocks; // sorted by start_sample
 };
 
@@ -377,6 +379,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
             const uint16_t in_ch = *track.channel_index;
             auto& cg = by_channel[in_ch];
             cg.input_channel = in_ch;
+            cg.object_id = obj.id;
             append_object_blocks(track, obj, cg, objects_calc, speakers, num_out, logs, screen_ref_warned);
             append_direct_speakers_blocks(track, obj, cg, direct_speakers_calc, num_out);
         }
@@ -793,8 +796,9 @@ struct EarPrepared final : IPreparedRender {
 // across blocks) into a FIFO that process() serves at any requested frame count —
 // bit-identical to render_window for a gap-free run from frame 0. seek() zeroes the
 // decorrelator overlap / delay (a small discontinuity, acceptable for monitoring) and
-// repositions the reader. Live overrides are accepted but ignored (gain matrix baked per
-// object at prepare). The expensive prepared state is borrowed; the factory keeps it alive.
+// repositions the reader. set_overrides applies live per-object gain by pre-scaling the
+// matching input channels before the (linear) gain mix + decorrelation — equal to scaling
+// the object gain. The expensive prepared state is borrowed; the factory keeps it alive.
 class EarStream final : public IRenderStream {
   public:
     [[nodiscard]] static Result<std::unique_ptr<EarStream>>
@@ -848,6 +852,21 @@ class EarStream final : public IRenderStream {
         return {};
     }
 
+    void set_overrides(const LiveOverrides& overrides) override {
+        std::unordered_map<std::string, float> live;
+        for (const auto& ov : overrides.objects) {
+            live[ov.object_id] = std::pow(10.0F, ov.gain_db / 20.0F);
+        }
+        std::ranges::fill(channel_gain_, 1.0F);
+        any_live_gain_ = false;
+        for (const auto& cg : prepared_.gain_matrix) {
+            if (const auto it = live.find(cg.object_id); it != live.end() && cg.input_channel < channel_gain_.size()) {
+                channel_gain_[cg.input_channel] = it->second;
+                any_live_gain_ = true;
+            }
+        }
+    }
+
     [[nodiscard]] uint32_t out_channels() const override { return num_out_ch_; }
     [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
     [[nodiscard]] std::string_view output_layout() const override { return output_layout_; }
@@ -866,13 +885,27 @@ class EarStream final : public IRenderStream {
           col_diffuse_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F),
           diffuse_in_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F),
           diffuse_out_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F), ch_in_buf_(col_stride_, 0.0F),
-          in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) * col_stride_, 0.0F) {
+          in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) * col_stride_, 0.0F),
+          channel_gain_(plan.scene.info.num_channels, 1.0F) {
         init_decorr_state(decorr_, prepared.layout, num_out_ch_, k_block_size_);
+    }
+
+    void apply_live_gain(uint64_t frames_now) {
+        if (!any_live_gain_) {
+            return;
+        }
+        for (std::size_t f = 0; f < frames_now; ++f) {
+            float* frame = in_block_.data() + (f * num_in_ch_);
+            for (uint16_t c = 0; c < num_in_ch_; ++c) {
+                frame[c] *= channel_gain_[c];
+            }
+        }
     }
 
     void render_block() {
         const uint64_t frames_now = std::min<uint64_t>(k_block_size_, total_frames_ - frames_done_);
         reader_->read(in_block_.data(), frames_now);
+        apply_live_gain(frames_now);
         fifo_.assign(static_cast<std::size_t>(num_out_ch_) * frames_now, 0.0F);
         fifo_read_ = 0;
         render_ear_block(prepared_.gain_matrix,
@@ -915,6 +948,8 @@ class EarStream final : public IRenderStream {
     std::vector<float> diffuse_out_;
     std::vector<float> ch_in_buf_;
     std::vector<float> in_block_;
+    std::vector<float> channel_gain_; // per-input-channel live gain multiplier (1.0 = none)
+    bool any_live_gain_{false};
     std::vector<float> fifo_;
     std::size_t fifo_read_{0};
     uint64_t frames_done_{0};

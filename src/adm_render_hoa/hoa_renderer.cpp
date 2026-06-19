@@ -12,6 +12,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 // clang-format off
 // saf_utility_complex.h must precede saf_hoa.h: saf_hoa.h opens extern "C" and
@@ -256,6 +257,7 @@ enum class BlockFilter : uint8_t { all, lfe_only };
 
 struct ChannelGainInfo {
     uint16_t input_channel{0};
+    std::string object_id;     // owning SceneObject::id, for live gain overrides
     bool has_lfe_block{false}; // true when any ds_block is LFE; used for separate TP tracking
     bool has_diffuse_block{false};
     std::vector<HoaBlock> blocks; // sorted ascending by start_sample
@@ -375,6 +377,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
             const uint16_t in_ch = track.channel_index.value();
             auto& cg = by_channel[in_ch];
             cg.input_channel = in_ch;
+            cg.object_id = obj.id;
 
             for (const auto& raw_block : track.blocks) {
                 const auto& off = obj.position_offset;
@@ -548,7 +551,9 @@ struct HoaPrepared final : IPreparedRender {
 // output). A gap-free run from frame 0 is bit-identical to render_window. seek() resets the
 // diffuse delay lines (a small discontinuity, acceptable for monitoring), seeding the
 // circular write position to frame % delay-len to match the offline windowed indexing.
-// Live overrides are accepted but ignored (gain matrix baked per object at prepare).
+// set_overrides applies live per-object gain by pre-scaling the matching input channels
+// before the (linear) HOA encode — equal to scaling the object gain, and it scales the
+// object's direct + diffuse alike. Topology scales are not yet wired for HOA.
 class HoaStream final : public IRenderStream {
   public:
     [[nodiscard]] static Result<std::unique_ptr<HoaStream>>
@@ -598,6 +603,21 @@ class HoaStream final : public IRenderStream {
         return {};
     }
 
+    void set_overrides(const LiveOverrides& overrides) override {
+        std::unordered_map<std::string, float> live;
+        for (const auto& ov : overrides.objects) {
+            live[ov.object_id] = std::pow(10.0F, ov.gain_db / 20.0F);
+        }
+        std::ranges::fill(channel_gain_, 1.0F);
+        any_live_gain_ = false;
+        for (const auto& cg : prepared_.gain_matrix) {
+            if (const auto it = live.find(cg.object_id); it != live.end() && cg.input_channel < channel_gain_.size()) {
+                channel_gain_[cg.input_channel] = it->second;
+                any_live_gain_ = true;
+            }
+        }
+    }
+
     [[nodiscard]] uint32_t out_channels() const override { return k_hoa3_channels_u16; }
     [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
     [[nodiscard]] std::string_view output_layout() const override { return "hoa3"; }
@@ -611,11 +631,25 @@ class HoaStream final : public IRenderStream {
           default_interp_(static_cast<uint64_t>(plan.scene.info.sample_rate) * plan.default_interp_ms / 1000U),
           diffuse_states_(prepared.gain_matrix.size()),
           in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) *
-                    std::max<uint64_t>(1024U, plan.object_smoothing_frames)) {}
+                    std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
+          channel_gain_(plan.scene.info.num_channels, 1.0F) {}
+
+    void apply_live_gain(uint64_t frames_now) {
+        if (!any_live_gain_) {
+            return;
+        }
+        for (std::size_t f = 0; f < frames_now; ++f) {
+            float* frame = in_block_.data() + (f * num_in_ch_);
+            for (uint16_t c = 0; c < num_in_ch_; ++c) {
+                frame[c] *= channel_gain_[c];
+            }
+        }
+    }
 
     void render_block() {
         const uint64_t frames_now = std::min<uint64_t>(k_block_size_, total_frames_ - frames_done_);
         reader_->read(in_block_.data(), frames_now);
+        apply_live_gain(frames_now);
         fifo_.assign(k_hoa3_channels * static_cast<std::size_t>(frames_now), 0.0F);
         fifo_read_ = 0;
         encode_hoa_block(prepared_.gain_matrix,
@@ -640,6 +674,8 @@ class HoaStream final : public IRenderStream {
     uint64_t default_interp_;
     std::vector<std::array<DiffuseState, k_diffuse_slots>> diffuse_states_;
     std::vector<float> in_block_;
+    std::vector<float> channel_gain_; // per-input-channel live gain multiplier (1.0 = none)
+    bool any_live_gain_{false};
     std::vector<float> fifo_;
     std::size_t fifo_read_{0};
     uint64_t frames_done_{0};
