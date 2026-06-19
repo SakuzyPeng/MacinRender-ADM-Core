@@ -71,8 +71,10 @@ class BufferingLogSink final : public LogSink {
 };
 
 // Production stream factory: resolve the backend, build a RenderPlan from the scene +
-// options, prepare it, and open a realtime stream. Holds the renderer + prepared state
-// alive for the returned stream's lifetime (streams may reference the prepared state).
+// options, prepare it, and open a realtime stream. Retains every backend's renderer +
+// prepared state for the session's lifetime: streams borrow the prepared state by
+// reference, and during a hot-switch crossfade two streams (outgoing + incoming) are live
+// at once, so neither prepared may be freed while a stream still references it.
 class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
   public:
     explicit RealtimeStreamFactory(std::string input_path) : input_path_(std::move(input_path)) {}
@@ -88,7 +90,7 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         for (const auto& [level, message] : resolved->diagnostics) {
             logs.log(level, "monitor", message);
         }
-        renderer_ = std::move(resolved->renderer);
+        std::unique_ptr<IRenderer> renderer = std::move(resolved->renderer);
 
         RenderPlan plan;
         plan.input_path = input_path_;
@@ -101,18 +103,26 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         plan.binaural_spread_mode = options.binaural_spread_mode;
         plan.apple_spatial_preset = options.apple_spatial_preset;
 
-        auto prepared = renderer_->prepare(plan, logs);
+        auto prepared = renderer->prepare(plan, logs);
         if (!prepared) {
             return tl::unexpected{prepared.error()};
         }
-        prepared_ = std::move(*prepared);
-        return renderer_->open_stream(*prepared_, plan, logs);
+        std::shared_ptr<IPreparedRender> prepared_state = std::move(*prepared);
+        auto stream = renderer->open_stream(*prepared_state, plan, logs);
+        if (!stream) {
+            return tl::unexpected{stream.error()};
+        }
+        keepalive_.push_back({std::move(renderer), std::move(prepared_state)});
+        return std::move(*stream);
     }
 
   private:
+    struct BackendKeepAlive {
+        std::unique_ptr<IRenderer> renderer;
+        std::shared_ptr<IPreparedRender> prepared;
+    };
     std::string input_path_;
-    std::unique_ptr<IRenderer> renderer_;
-    std::shared_ptr<IPreparedRender> prepared_;
+    std::vector<BackendKeepAlive> keepalive_;
 };
 
 } // namespace
@@ -125,6 +135,7 @@ struct MonitorSession::Impl {
     std::unique_ptr<RealtimeStreamFactory> factory;
     std::unique_ptr<realtime::IAudioOutputDevice> device;
     std::unique_ptr<realtime::MonitorEngine> engine;
+    AdmScene scene; // policy-applied scene, reused when hot-switching the backend
     uint32_t sample_rate{48000};
     uint64_t total_frames{0};
 };
@@ -146,11 +157,12 @@ Result<std::unique_ptr<MonitorSession>> MonitorSession::create(const std::string
     }
     impl.sample_rate = scene->info.sample_rate;
     impl.total_frames = scene->info.num_frames;
+    impl.scene = std::move(*scene);
 
     impl.factory = std::make_unique<RealtimeStreamFactory>(input_path);
     impl.device = realtime::make_miniaudio_device(/*use_null_backend=*/false);
 
-    auto engine = realtime::MonitorEngine::create(*impl.factory, *impl.device, *scene, options, impl.log_sink);
+    auto engine = realtime::MonitorEngine::create(*impl.factory, *impl.device, impl.scene, options, impl.log_sink);
     if (!engine) {
         return tl::unexpected{engine.error()};
     }
@@ -179,6 +191,27 @@ void MonitorSession::set_loop_seconds(double start_seconds, double end_seconds) 
 
 void MonitorSession::set_overrides(const LiveOverrides& overrides) {
     impl_->engine->set_overrides(overrides);
+}
+
+Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
+    // Prepare the new backend off the audio thread (resolve + prepare + open_stream),
+    // reusing the policy-applied scene. The factory retains its prepared state.
+    auto stream = impl_->factory->open(impl_->scene, options, impl_->log_sink);
+    if (!stream) {
+        return tl::unexpected{stream.error()};
+    }
+    if (*stream == nullptr) {
+        return make_error(ErrorCode::internal_error, "monitor switch_backend produced a null stream");
+    }
+    // The monitor output format is fixed; only same-format backend switches are live today.
+    if ((*stream)->out_channels() != impl_->engine->out_channels() ||
+        (*stream)->sample_rate() != impl_->engine->sample_rate()) {
+        return make_error(ErrorCode::unsupported,
+                          "monitor backend switch requires the same output channel count and sample rate "
+                          "(cross-format monitor downmix is not yet implemented)");
+    }
+    impl_->engine->switch_stream(std::move(*stream));
+    return {};
 }
 
 MonitorStatusSnapshot MonitorSession::status() const {

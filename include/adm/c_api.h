@@ -76,12 +76,16 @@
  *   adm_monitor_override_t + adm_monitor_set_overrides（实时按对象覆盖，gain 即时生效；
  *   diffuse/extent/divergence 缩放在 binaural 后端经廉价 re-prepare 生效，未接入的后端
  *   接受但忽略）。adm_monitor_status_t 追加 override_revision 字段（struct_size 向后兼容）。
+ *
+ * v1.17 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_switch_backend（实时热切换渲染后端 / 布局，带短交叉淡化；要求同声道数 +
+ *   同采样率，跨格式监听下混暂未实现，返回 ADM_ERROR_UNSUPPORTED）。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 16
+#define ADM_API_VERSION_MINOR 17
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -862,6 +866,17 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
                                            const adm_monitor_override_t* overrides,
                                            uint32_t count,
                                            uint64_t revision) ADM_API_NOEXCEPT;
+
+/*
+ * v1.17: hot-switch the rendering backend / layout live, reusing the already-imported +
+ * policy-applied scene. `opts` selects the new renderer + output layout (other fields as in
+ * adm_render_options); NULL uses defaults. The new backend is prepared off the audio thread
+ * and crossfaded in. The new stream MUST produce the same channel count + sample rate as the
+ * current monitor output — a different monitor layout returns ADM_ERROR_UNSUPPORTED (cross-
+ * format monitor downmix is not yet implemented). Returns the resolve / prepare error
+ * otherwise.
+ */
+adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_render_options_t* opts) ADM_API_NOEXCEPT;
 
 /* Playback state for adm_monitor_status_t.state. */
 typedef enum adm_monitor_state_t {

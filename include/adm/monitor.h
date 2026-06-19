@@ -70,6 +70,15 @@ class MonitorSession {
     // gain only). The applied revision is reported via status().override_revision.
     void set_overrides(const LiveOverrides& overrides);
 
+    // Hot-switch the rendering backend / layout live (e.g. EAR↔VBAP↔Apple at the same
+    // layout, or binaural↔Apple-binaural), reusing the already-imported + policy-applied
+    // scene. The new backend is prepared off the audio thread, then crossfaded in. The new
+    // stream MUST produce the same channel count + sample rate as the current monitor
+    // output; a mismatch (a different monitor layout / channel count) returns
+    // ErrorCode::unsupported (cross-format monitor downmix is not yet implemented). Returns
+    // the backend resolve / prepare error on failure.
+    [[nodiscard]] Result<void> switch_backend(const RenderOptions& options);
+
     [[nodiscard]] MonitorStatusSnapshot status() const;
     [[nodiscard]] MonitorLevelsSnapshot levels() const;
 

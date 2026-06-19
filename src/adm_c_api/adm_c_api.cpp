@@ -1108,6 +1108,22 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
     }
 }
 
+adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_render_options_t* opts) noexcept {
+    if (monitor == nullptr || !monitor->session) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        mradm::RenderOptions options;
+        if (opts != nullptr) {
+            options = opts->opts;
+        }
+        auto result = monitor->session->switch_backend(options);
+        return result ? ADM_ERROR_OK : map_error(result.error().code);
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
 adm_error_code_t adm_monitor_get_status(adm_monitor_t* monitor, adm_monitor_status_t* out) noexcept {
     if (monitor == nullptr || !monitor->session || out == nullptr) {
         return ADM_ERROR_INVALID_ARGUMENT;

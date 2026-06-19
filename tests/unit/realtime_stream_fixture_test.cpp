@@ -728,6 +728,84 @@ bool test_monitor_live_overrides() {
     return ok;
 }
 
+// A stream that emits a constant value on every sample (distinct per stream), so a
+// hot-switch crossfade is observable: the captured output transitions old-value → new-value.
+class ConstStream final : public mradm::IRenderStream {
+  public:
+    ConstStream(uint32_t channels, float value) : channels_(channels), value_(value) {}
+    mradm::Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        std::fill_n(out.data(), frames * channels_, value_);
+        playhead_ += frames;
+        return frames;
+    }
+    mradm::Result<void> seek(uint64_t frame) override {
+        playhead_ = frame;
+        return {};
+    }
+    [[nodiscard]] uint32_t out_channels() const override { return channels_; }
+    [[nodiscard]] uint32_t sample_rate() const override { return 48000U; }
+    [[nodiscard]] std::string_view output_layout() const override { return "binaural"; }
+
+  private:
+    uint32_t channels_;
+    float value_;
+    uint64_t playhead_{0};
+};
+
+class ConstStreamFactory final : public mradm::realtime::IRenderStreamFactory {
+  public:
+    explicit ConstStreamFactory(float value) : value_(value) {}
+    mradm::Result<std::unique_ptr<mradm::IRenderStream>>
+    open(const mradm::AdmScene& /*scene*/, const mradm::RenderOptions& /*opts*/, mradm::LogSink& /*logs*/) override {
+        return std::make_unique<ConstStream>(2U, value_);
+    }
+
+  private:
+    float value_;
+};
+
+// Hot-switch with crossfade: starting on a 0.25 stream, switching to a 0.75 stream must
+// (after the ring drains + the fade completes) land the output on the new stream's value,
+// while the earliest captured audio still reflects the old stream.
+bool test_monitor_hot_switch() {
+    bool ok = true;
+    ConstStreamFactory factory{0.25F};
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+    if (!check(engine.has_value(), "hot-switch: engine creates")) {
+        return false;
+    }
+    (*engine)->play();
+
+    constexpr std::size_t k_before = 3000;
+    ok &= check(drain_exact(**engine, sink, k_before), "hot-switch: drains pre-switch audio");
+    ok &= check(near(sink.captured().front(), 0.25F), "hot-switch: starts on the old stream (0.25)");
+
+    (*engine)->switch_stream(std::make_unique<ConstStream>(2U, 0.75F));
+
+    // Drain well past the ring depth + crossfade window so only the new stream remains.
+    constexpr std::size_t k_after = 40000;
+    ok &= check(drain_exact(**engine, sink, k_after), "hot-switch: drains post-switch audio");
+    const auto& cap = sink.captured();
+    ok &= check(near(cap.back(), 0.75F), "hot-switch: output settles on the new stream (0.75)");
+
+    // A crossfade (not a hard cut) means some captured frame sits strictly between the two
+    // constant values — evidence the blend ran rather than an instantaneous switch.
+    bool saw_blend = false;
+    for (std::size_t f = 0; f < cap.size() && !saw_blend; ++f) {
+        const float v = cap[f];
+        if (v > 0.25F + 1.0e-3F && v < 0.75F - 1.0e-3F) {
+            saw_blend = true;
+        }
+    }
+    ok &= check(saw_blend, "hot-switch: a linear crossfade is present between the two streams");
+    return ok;
+}
+
 // End-to-end with the real device sink on miniaudio's null backend (no hardware; the
 // callback is timer-driven). Validates the device plumbing + lifecycle: the playhead
 // advances and the engine tears down the device + worker cleanly on destruction.
@@ -777,6 +855,7 @@ int main() {
     ok &= test_monitor_malformed_stream();
     ok &= test_monitor_worker_logs_errors();
     ok &= test_monitor_live_overrides();
+    ok &= test_monitor_hot_switch();
     ok &= test_monitor_miniaudio_null_device();
 
     if (ok) {

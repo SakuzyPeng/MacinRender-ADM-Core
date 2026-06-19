@@ -14,12 +14,16 @@ namespace {
 constexpr uint64_t k_chunk_frames = 1024U;
 constexpr std::size_t k_ring_frames = 8192U;
 constexpr auto k_idle_nap = std::chrono::milliseconds(1);
+// Linear crossfade length for a backend hot-switch (~43 ms at 48 kHz): long enough to mask
+// the discontinuity between two renderers, short enough to feel immediate.
+constexpr uint64_t k_crossfade_frames = 2048U;
 } // namespace
 
 MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device, LogSink& logs)
     : stream_(std::move(stream)), device_(device), logs_(logs), channels_(stream_->out_channels()),
       sample_rate_(stream_->sample_rate()), ring_(k_ring_frames * channels_),
-      scratch_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F) {}
+      scratch_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F),
+      scratch_b_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F) {}
 
 Result<std::unique_ptr<MonitorEngine>> MonitorEngine::create(IRenderStreamFactory& factory,
                                                              IAudioOutputDevice& device,
@@ -100,6 +104,25 @@ void MonitorEngine::set_overrides(const LiveOverrides& overrides) {
     wake_.notify_all();
 }
 
+void MonitorEngine::switch_stream(std::unique_ptr<IRenderStream> next) {
+    {
+        const std::lock_guard<std::mutex> lock(control_mutex_);
+        pending_stream_ = std::move(next);
+        switch_pending_ = true;
+    }
+    wake_.notify_all();
+}
+
+void MonitorEngine::finalize_crossfade() {
+    // Snap to the incoming stream (drop the old one). Worker-side; called when a fade
+    // completes, or to settle a mid-flight fade before a seek / a new switch.
+    if (xfade_active_) {
+        stream_ = std::move(xfade_stream_);
+        xfade_active_ = false;
+        xfade_pos_ = 0;
+    }
+}
+
 void MonitorEngine::set_loop(uint64_t start_frame, uint64_t end_frame) {
     // Disable when the range is empty/inverted.
     if (end_frame <= start_frame) {
@@ -128,15 +151,33 @@ void MonitorEngine::worker_loop() {
                 applied_override_revision_.store(pending_overrides_.revision, std::memory_order_relaxed);
                 overrides_pending_ = false;
             }
+            if (switch_pending_) {
+                // Begin a crossfade to the incoming backend. Settle any in-flight fade
+                // first, then seek the incoming stream to the current playhead so it renders
+                // the same frames as the outgoing one. On seek failure keep the old stream.
+                finalize_crossfade();
+                if (auto r = pending_stream_->seek(producer_pos_); r) {
+                    xfade_stream_ = std::move(pending_stream_);
+                    xfade_active_ = true;
+                    xfade_pos_ = 0;
+                    ended_.store(false, std::memory_order_relaxed); // incoming re-arms production
+                    failed_.store(false, std::memory_order_relaxed);
+                } else {
+                    logs_.log(LogLevel::error, "monitor", r.error().message);
+                    pending_stream_.reset();
+                }
+                switch_pending_ = false;
+            }
             const bool producer_done =
                 ended_.load(std::memory_order_relaxed) || failed_.load(std::memory_order_relaxed);
             // Idle (don't spin on process()) when not playing or the stream is exhausted /
             // failed. A seek re-arms production (clears ended_/failed_) and wakes us; a
-            // pending override wakes us too so it applies promptly even while paused.
+            // pending override / switch wakes us too so it applies promptly even while paused.
             if (state_.load(std::memory_order_seq_cst) != MonitorState::playing || producer_done) {
                 wake_.wait(lock, [this] {
                     const bool done = ended_.load(std::memory_order_relaxed) || failed_.load(std::memory_order_relaxed);
                     return quit_.load(std::memory_order_acquire) || seek_pending_ || overrides_pending_ ||
+                           switch_pending_ ||
                            (state_.load(std::memory_order_seq_cst) == MonitorState::playing && !done);
                 });
                 continue;
@@ -156,7 +197,9 @@ bool MonitorEngine::top_up_ring() {
         uint64_t frames = k_chunk_frames;
         const uint64_t loop_end = loop_end_.load(std::memory_order_relaxed);
         const uint64_t loop_start = loop_start_.load(std::memory_order_relaxed);
-        const bool looping = loop_end > loop_start;
+        // Loop-region clamping is suspended during a crossfade (both streams must stay in
+        // lockstep over the short fade window; a loop wrap mid-fade is not worth the desync).
+        const bool looping = !xfade_active_ && loop_end > loop_start;
         if (looping && producer_pos_ < loop_end) {
             frames = std::min<uint64_t>(frames, loop_end - producer_pos_);
         }
@@ -167,7 +210,32 @@ bool MonitorEngine::top_up_ring() {
             logs_.log(LogLevel::error, "monitor", result.error().message);
             return produced;
         }
-        const std::size_t got = *result;
+        std::size_t got = *result;
+
+        if (xfade_active_) {
+            // Render the incoming stream over the same frames and linearly blend old→new.
+            auto in_res = xfade_stream_->process(std::span<float>(scratch_b_.data(), frames * channels_), frames);
+            if (!in_res) {
+                failed_.store(true, std::memory_order_relaxed);
+                logs_.log(LogLevel::error, "monitor", in_res.error().message);
+                return produced;
+            }
+            got = std::min(got, *in_res);
+            for (std::size_t f = 0; f < got; ++f) {
+                const double p = static_cast<double>(xfade_pos_ + f);
+                const float t = static_cast<float>(std::min(1.0, p / static_cast<double>(k_crossfade_frames)));
+                for (uint32_t c = 0; c < channels_; ++c) {
+                    const std::size_t i = (f * channels_) + c;
+                    scratch_[i] = (scratch_[i] * (1.0F - t)) + (scratch_b_[i] * t);
+                }
+            }
+            xfade_pos_ += got;
+            // Finalize when the ramp completes or either stream ran short (end of material).
+            if (xfade_pos_ >= k_crossfade_frames || got < frames) {
+                finalize_crossfade();
+            }
+        }
+
         if (got == 0) {
             ended_.store(true, std::memory_order_relaxed); // end of material (non-looping)
             return produced;
@@ -236,6 +304,9 @@ std::size_t MonitorEngine::pull(std::span<float> out, std::size_t frames) {
 }
 
 void MonitorEngine::apply_seek_locked(uint64_t frame) {
+    // Settle any in-flight crossfade to the incoming stream, so the seek targets the stream
+    // that will actually be playing afterwards.
+    finalize_crossfade();
     // Block the audio thread from touching the ring, then wait for any in-flight pop to
     // finish (bounded by one callback). seq_cst on flushing_/in_pop_ gives a total order:
     // a pull either sees flushing_ and skips the ring, or it set in_pop_ first and we wait

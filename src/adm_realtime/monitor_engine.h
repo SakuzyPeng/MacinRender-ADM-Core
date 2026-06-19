@@ -80,8 +80,18 @@ class MonitorEngine {
     // block boundary (gain immediate). The applied revision shows up in status().
     void set_overrides(const LiveOverrides& overrides);
 
+    // Hot-swap the rendering stream (e.g. a different backend / same layout) with a short
+    // linear crossfade. `next` MUST report the same out_channels() and sample_rate() as the
+    // current stream (the caller validates this). The worker seeks `next` to the current
+    // playhead and crossfades; takes effect after the ring drains, like the other edits.
+    void switch_stream(std::unique_ptr<IRenderStream> next);
+
     [[nodiscard]] MonitorStatus status() const;
     [[nodiscard]] MonitorLevels levels() const;
+
+    // Fixed monitor output format (set at creation). Used to validate a hot-switch.
+    [[nodiscard]] uint32_t out_channels() const { return channels_; }
+    [[nodiscard]] uint32_t sample_rate() const { return sample_rate_; }
 
   private:
     MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device, LogSink& logs);
@@ -90,6 +100,7 @@ class MonitorEngine {
     bool top_up_ring();                                         // producer side; returns true if it produced
     std::size_t pull(std::span<float> out, std::size_t frames); // consumer side (audio thread)
     void apply_seek_locked(uint64_t frame);                     // worker/control side, under control_mutex_
+    void finalize_crossfade();                                  // worker side: snap to the incoming stream
 
     std::unique_ptr<IRenderStream> stream_;
     IAudioOutputDevice& device_;
@@ -98,7 +109,8 @@ class MonitorEngine {
     uint32_t sample_rate_{0};
 
     FloatRingBuffer ring_;
-    std::vector<float> scratch_; // worker production scratch (one canonical chunk)
+    std::vector<float> scratch_;   // worker production scratch (one canonical chunk)
+    std::vector<float> scratch_b_; // second chunk, for the incoming stream during a crossfade
 
     std::thread worker_;
     std::mutex control_mutex_; // serialises play/pause/seek/set_loop + worker command apply
@@ -129,6 +141,15 @@ class MonitorEngine {
     bool overrides_pending_{false};
     LiveOverrides pending_overrides_;
     std::atomic<uint64_t> applied_override_revision_{0};
+
+    // Pending backend hot-switch (control thread → worker), guarded by control_mutex_.
+    bool switch_pending_{false};
+    std::unique_ptr<IRenderStream> pending_stream_;
+    // Crossfade state, worker-owned: while active, top_up_ring renders both stream_ (old)
+    // and xfade_stream_ (incoming) and linearly blends across k_crossfade_frames.
+    std::unique_ptr<IRenderStream> xfade_stream_;
+    bool xfade_active_{false};
+    uint64_t xfade_pos_{0};
 
     // Levels, written by the audio thread, read by status pollers.
     std::array<std::atomic<float>, k_max_level_channels> peak_{};

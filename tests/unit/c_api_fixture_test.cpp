@@ -2095,12 +2095,15 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
-    bool ok = check(adm_api_version_minor() == 16, "C ABI minor version is 16");
+    bool ok = check(adm_api_version_minor() == 17, "C ABI minor version is 17");
 
     // Argument validation (no device needed).
     adm_monitor_t* probe = nullptr;
     ok = check(adm_monitor_set_overrides(nullptr, nullptr, 0, 0) == ADM_ERROR_INVALID_ARGUMENT,
                "set_overrides(nullptr) rejected") &&
+         ok;
+    ok = check(adm_monitor_switch_backend(nullptr, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "switch_backend(nullptr) rejected") &&
          ok;
     ok = check(adm_create_monitor(nullptr, input.string().c_str(), nullptr, &probe) == ADM_ERROR_INVALID_ARGUMENT,
                "create_monitor null context rejected") &&
@@ -2201,6 +2204,23 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
                    "monitor set_overrides strides by caller struct_size to reach element[1]") &&
              ok;
     }
+
+    // Same-format hot-switch (binaural → binaural) crossfades in and succeeds; a
+    // cross-format switch (→ 5.1, different channel count) is rejected as unsupported.
+    adm_render_options_t* sw_same = adm_create_render_options();
+    adm_render_options_set_renderer(sw_same, ADM_RENDERER_SAF_BINAURAL);
+    adm_render_options_set_output_layout(sw_same, "binaural");
+    ok =
+        check(adm_monitor_switch_backend(monitor, sw_same) == ADM_ERROR_OK, "monitor same-format backend switch") && ok;
+    adm_destroy_render_options(sw_same);
+
+    adm_render_options_t* sw_diff = adm_create_render_options();
+    adm_render_options_set_renderer(sw_diff, ADM_RENDERER_SAF);
+    adm_render_options_set_output_layout(sw_diff, "0+5+0");
+    ok = check(adm_monitor_switch_backend(monitor, sw_diff) == ADM_ERROR_UNSUPPORTED,
+               "monitor cross-format switch rejected (different channel count)") &&
+         ok;
+    adm_destroy_render_options(sw_diff);
 
     ok = check(adm_monitor_pause(monitor) == ADM_ERROR_OK, "monitor pause") && ok;
     ok = check(adm_monitor_log_entry(monitor, adm_monitor_log_count(monitor) + 100U, nullptr, nullptr, nullptr) == 0,
