@@ -610,6 +610,10 @@ class HoaStream final : public IRenderStream {
         }
         std::ranges::fill(channel_gain_, 1.0F);
         any_live_gain_ = false;
+        // Semantic boundary: the override is projected object → input channel (each channel
+        // scaled by its owning object's gain). ADM's gain matrix is one object per input
+        // channel, so this is exact today; if independently-overridable objects ever shared
+        // one input channel they would scale together (last writer wins) — revisit then.
         for (const auto& cg : prepared_.gain_matrix) {
             if (const auto it = live.find(cg.object_id); it != live.end() && cg.input_channel < channel_gain_.size()) {
                 channel_gain_[cg.input_channel] = it->second;
