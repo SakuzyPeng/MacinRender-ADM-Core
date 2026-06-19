@@ -68,6 +68,7 @@ target_sources(
         FILES
             include/adm/capability.h
             include/adm/errors.h
+            include/adm/live_override.h
             include/adm/logging.h
             include/adm/monitor.h
             include/adm/options.h

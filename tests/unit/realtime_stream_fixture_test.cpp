@@ -616,6 +616,118 @@ bool test_monitor_worker_logs_errors() {
     return ok;
 }
 
+// A stream that emits a constant sample equal to its current live gain for object "obj0"
+// (1.0 when no override). It implements set_overrides like a real backend, so the engine's
+// worker → set_overrides → next-block plumbing is observable in the captured PCM.
+class GainStream final : public mradm::IRenderStream {
+  public:
+    explicit GainStream(uint32_t channels) : channels_(channels) {}
+
+    mradm::Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        for (std::size_t f = 0; f < frames; ++f) {
+            for (uint32_t c = 0; c < channels_; ++c) {
+                out[(f * channels_) + c] = gain_;
+            }
+        }
+        playhead_ += frames;
+        return frames;
+    }
+    mradm::Result<void> seek(uint64_t frame) override {
+        playhead_ = frame;
+        return {};
+    }
+    void set_overrides(const mradm::LiveOverrides& overrides) override {
+        gain_ = 1.0F;
+        for (const auto& ov : overrides.objects) {
+            if (ov.object_id == "obj0") {
+                gain_ = std::pow(10.0F, ov.gain_db / 20.0F);
+            }
+        }
+    }
+    [[nodiscard]] uint32_t out_channels() const override { return channels_; }
+    [[nodiscard]] uint32_t sample_rate() const override { return 48000U; }
+    [[nodiscard]] std::string_view output_layout() const override { return "binaural"; }
+
+  private:
+    uint32_t channels_;
+    float gain_{1.0F};
+    uint64_t playhead_{0};
+};
+
+class GainStreamFactory final : public mradm::realtime::IRenderStreamFactory {
+  public:
+    mradm::Result<std::unique_ptr<mradm::IRenderStream>>
+    open(const mradm::AdmScene& /*scene*/, const mradm::RenderOptions& /*opts*/, mradm::LogSink& /*logs*/) override {
+        return std::make_unique<GainStream>(2U);
+    }
+};
+
+mradm::LiveOverrides gain_override(const std::string& object_id, float gain_db, uint64_t revision) {
+    mradm::LiveOverrides ov;
+    ov.revision = revision;
+    ov.objects.push_back({object_id, gain_db, 1.0F, 1.0F, 1.0F});
+    return ov;
+}
+
+// Live gain overrides: applied before play take effect from the first block; applied
+// mid-play take effect on later blocks (eventual, once the ring drains); the engine
+// reports the last applied revision through status().
+bool test_monitor_live_overrides() {
+    bool ok = true;
+    GainStreamFactory factory;
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+    if (!check(engine.has_value(), "overrides: engine creates")) {
+        return false;
+    }
+
+    // Override applied while stopped (ring empty) → the very first rendered block uses it.
+    (*engine)->set_overrides(gain_override("obj0", -6.0206F, 1)); // -6.02 dB ≈ 0.5 linear
+    (*engine)->play();
+
+    constexpr std::size_t k_phase_a = 4000;
+    ok &= check(drain_exact(**engine, sink, k_phase_a), "overrides: phase A drains");
+    const auto& cap_a = sink.captured();
+    bool a_half = true;
+    for (std::size_t f = 0; f < k_phase_a && a_half; ++f) {
+        a_half &= near(cap_a[f * 2U], 0.5F);
+    }
+    ok &= check(a_half, "overrides: pre-play gain (0.5) applies from the first block");
+
+    // Wait for the engine to publish the applied revision (worker side).
+    uint64_t rev = 0;
+    for (int i = 0; i < 100000; ++i) {
+        rev = (*engine)->status().override_revision;
+        if (rev == 1U) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(20));
+    }
+    ok &= check(rev == 1U, "overrides: status reports applied revision 1");
+
+    // Override changed mid-play: not heard immediately (the ring holds old audio), but the
+    // tail of a long drain (> ring capacity) must reflect the new gain.
+    (*engine)->set_overrides(gain_override("obj0", -20.0F, 2)); // -20 dB = 0.1 linear
+    constexpr std::size_t k_phase_b = 30000;
+    ok &= check(drain_exact(**engine, sink, k_phase_b), "overrides: phase B drains past the ring");
+    const auto& cap_b = sink.captured();
+    ok &= check(near(cap_b.back(), 0.1F), "overrides: mid-play gain (0.1) reaches the output tail");
+
+    for (int i = 0; i < 100000; ++i) {
+        rev = (*engine)->status().override_revision;
+        if (rev == 2U) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(20));
+    }
+    ok &= check(rev == 2U, "overrides: status reports applied revision 2");
+    return ok;
+}
+
 // End-to-end with the real device sink on miniaudio's null backend (no hardware; the
 // callback is timer-driven). Validates the device plumbing + lifecycle: the playhead
 // advances and the engine tears down the device + worker cleanly on destruction.
@@ -664,6 +776,7 @@ int main() {
     ok &= test_monitor_eof();
     ok &= test_monitor_malformed_stream();
     ok &= test_monitor_worker_logs_errors();
+    ok &= test_monitor_live_overrides();
     ok &= test_monitor_miniaudio_null_device();
 
     if (ok) {

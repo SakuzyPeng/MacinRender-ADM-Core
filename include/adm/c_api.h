@@ -71,12 +71,17 @@
  *   adm_monitor_pause / adm_monitor_seek / adm_monitor_set_loop / adm_monitor_get_status /
  *   adm_monitor_get_levels / adm_monitor_log_count / adm_monitor_log_entry
  *   (实时监听引擎；状态/电平/日志均轮询，无回调)。
+ *
+ * v1.16 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_override_t + adm_monitor_set_overrides（实时按对象覆盖，gain 即时生效；
+ *   diffuse/extent/divergence 缩放为后续切片预留）。adm_monitor_status_t 追加
+ *   override_revision 字段（struct_size 向后兼容）。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 15
+#define ADM_API_VERSION_MINOR 16
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -824,6 +829,32 @@ adm_error_code_t adm_monitor_seek(adm_monitor_t* monitor, double seconds) ADM_AP
 adm_error_code_t
 adm_monitor_set_loop(adm_monitor_t* monitor, double start_seconds, double end_seconds) ADM_API_NOEXCEPT;
 
+/*
+ * v1.16: a single object's live monitoring override. gain_db is additive on top of the
+ * object's baked gain and takes effect on the next rendered block (true realtime). The
+ * *_scale fields are the realtime subset of the semantic policy's topology controls; they
+ * are accepted now but only take effect once stream re-prepare lands (a later slice) — set
+ * them to 1.0 for no change. object_id matches the scene's ADM audioObject id.
+ */
+typedef struct adm_monitor_override_t {
+    const char* object_id;
+    float gain_db;
+    float diffuse_scale;
+    float extent_scale;
+    float divergence_scale;
+} adm_monitor_override_t;
+
+/*
+ * Replace the full set of live overrides (objects not listed render at their prepared
+ * values). `overrides` may be NULL when count == 0 to clear all overrides. `revision` is
+ * echoed back through adm_monitor_status_t.override_revision once the worker applies the
+ * snapshot, so a UI can confirm its edit landed without a callback.
+ */
+adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
+                                           const adm_monitor_override_t* overrides,
+                                           uint32_t count,
+                                           uint64_t revision) ADM_API_NOEXCEPT;
+
 /* Playback state for adm_monitor_status_t.state. */
 typedef enum adm_monitor_state_t {
     ADM_MONITOR_STOPPED = 0,
@@ -842,9 +873,10 @@ typedef struct adm_monitor_status_t {
     uint64_t playhead_frames;
     uint64_t underruns;
     uint64_t buffered_frames;
-    float ring_fill; /* 0..1 ring occupancy */
-    int32_t ended;   /* bool: reached end of material */
-    int32_t failed;  /* bool: a render error stopped production */
+    float ring_fill;            /* 0..1 ring occupancy */
+    int32_t ended;              /* bool: reached end of material */
+    int32_t failed;             /* bool: a render error stopped production */
+    uint64_t override_revision; /* v1.16: revision of the last applied live overrides */
 } adm_monitor_status_t;
 adm_error_code_t adm_monitor_get_status(adm_monitor_t* monitor, adm_monitor_status_t* out) ADM_API_NOEXCEPT;
 

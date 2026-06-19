@@ -1222,6 +1222,80 @@ bool verify_apple_stream_silent() {
     return ok;
 }
 
+// A live gain override (set_overrides) must scale the object's bus gain on the next block,
+// so the stream output is quieter by the override factor — validating BusPlan.object_id →
+// live gain map end to end through the real AUSpatialMixer.
+bool verify_apple_stream_gain_override() {
+    const auto in = write_fixture(45.0F, 8192U, 1.0F, 0.0F, false);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "override: import scene with an object")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "override: apple prepare")) {
+        return false;
+    }
+
+    const auto baseline = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024});
+    if (!baseline) {
+        return false;
+    }
+
+    // Fresh stream; apply -12.04 dB (≈ 0.25 linear) to the object before pulling.
+    auto stream = renderer->open_stream(**prepared, plan, logs);
+    if (!check(stream.has_value(), "override: open_stream")) {
+        return false;
+    }
+    mradm::LiveOverrides ov;
+    ov.revision = 1;
+    ov.objects.push_back({object_id, -12.041F, 1.0F, 1.0F, 1.0F});
+    (*stream)->set_overrides(ov);
+
+    const uint32_t ch = (*stream)->out_channels();
+    const std::size_t block_floats = std::size_t{1024U} * ch;
+    std::vector<float> overridden;
+    std::vector<float> buf(block_floats, 0.0F);
+    while (true) {
+        buf.assign(block_floats, 0.0F);
+        auto produced = (*stream)->process(std::span<float>(buf), 1024U);
+        if (!check(produced.has_value(), "override: process succeeds")) {
+            return false;
+        }
+        if (*produced == 0) {
+            break;
+        }
+        overridden.insert(overridden.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * ch));
+    }
+
+    bool ok = check(overridden.size() == baseline->size(), "override: same frame count as baseline");
+
+    auto buffer_rms = [](const std::vector<float>& v) {
+        double total = 0.0;
+        for (const float s : v) {
+            total += static_cast<double>(s) * static_cast<double>(s);
+        }
+        return v.empty() ? 0.0 : std::sqrt(total / static_cast<double>(v.size()));
+    };
+    const double b = buffer_rms(*baseline);
+    const double o = buffer_rms(overridden);
+    ok &= check(b > 1.0e-3, "override: baseline has signal energy");
+    // 0.25 linear; allow generous tolerance for HRTF spectral coloration around the scalar.
+    ok &= check(o < b * 0.5, "override: -12 dB override clearly attenuates the output");
+    ok &= check(o > b * 0.1, "override: attenuation is the gain scalar, not silence");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1241,6 +1315,7 @@ int main() {
     ok &= verify_bed_and_lfe_routing();
     ok &= verify_apple_stream_matches_window();
     ok &= verify_apple_stream_silent();
+    ok &= verify_apple_stream_gain_override();
     ok &= verify_spatial_mixer_hrtf_modes_probe();
     return ok ? 0 : 1;
 }

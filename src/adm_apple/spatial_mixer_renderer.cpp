@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include <AudioToolbox/AudioToolbox.h>
@@ -309,6 +310,7 @@ struct BusPlan {
     uint16_t source_channel{0};
     UInt32 source_mode{kSpatialMixerSourceMode_PointSource};
     bool is_lfe{false};
+    std::string object_id;        // owning SceneObject::id, for live gain overrides
     std::vector<BusEvent> events; // sorted by start_sample
 };
 
@@ -401,6 +403,7 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
                 for (auto& bp : obj_buses) {
                     bp.source_channel = ch;
                     bp.source_mode = kSpatialMixerSourceMode_PointSource;
+                    bp.object_id = obj.id;
                 }
                 for (const auto& be : blocks) {
                     for (std::size_t k = 0; k < max_slots; ++k) {
@@ -421,6 +424,7 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
             if (!track.ds_blocks.empty()) {
                 BusPlan bp;
                 bp.source_channel = ch;
+                bp.object_id = obj.id;
                 bp.is_lfe = std::ranges::any_of(track.ds_blocks, render_common::direct_speakers_block_is_lfe);
                 bp.source_mode = bp.is_lfe ? kSpatialMixerSourceMode_Bypass : kSpatialMixerSourceMode_AmbienceBed;
                 for (const auto& ds : track.ds_blocks) {
@@ -768,11 +772,31 @@ class AppleStream final : public IRenderStream {
         return {};
     }
 
+    // Worker-thread only (same thread as process()): rebuild the per-object live gain
+    // multiplier table. Absent objects render at unity (the prepared gain). The next
+    // render_slice picks the new values up; already-FIFO'd / ring-buffered audio is not
+    // re-rendered, so the change is heard after the current buffer drains.
+    void set_overrides(const LiveOverrides& overrides) override {
+        live_gain_lin_.clear();
+        for (const auto& ov : overrides.objects) {
+            // dB → linear; the bus gain is multiplied by this on top of the baked gain.
+            live_gain_lin_[ov.object_id] = std::pow(10.0F, ov.gain_db / 20.0F);
+        }
+    }
+
     [[nodiscard]] uint32_t out_channels() const override { return num_out_ch_; }
     [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
     [[nodiscard]] std::string_view output_layout() const override { return profile_.writer_layout; }
 
   private:
+    // Live gain multiplier (linear) for a bus's owning object, or 1.0 when unset.
+    [[nodiscard]] float live_gain_for(const std::string& object_id) const {
+        if (const auto it = live_gain_lin_.find(object_id); it != live_gain_lin_.end()) {
+            return it->second;
+        }
+        return 1.0F;
+    }
+
     AppleStream(AudioUnitGuard unit,
                 OutputProfile profile,
                 std::vector<BusPlan> buses,
@@ -811,7 +835,8 @@ class AppleStream final : public IRenderStream {
             const float azimuth = ev != nullptr ? ev->azimuth : 0.0F;
             const float elevation = ev != nullptr ? ev->elevation : 0.0F;
             const float distance = ev != nullptr ? ev->distance : 1.0F;
-            const float gain_db = linear_gain_to_db(ev != nullptr ? ev->gain : 0.0F);
+            const float base_gain = ev != nullptr ? ev->gain : 0.0F;
+            const float gain_db = linear_gain_to_db(base_gain * live_gain_for(buses_[i].object_id));
             const OSStatus s = set_bus_parameters(
                 unit_.get(), static_cast<AudioUnitElement>(i), azimuth, elevation, distance, gain_db);
             if (s != noErr) {
@@ -866,6 +891,7 @@ class AppleStream final : public IRenderStream {
     std::size_t fifo_read_{0};
     bool ended_{false};
     bool silent_{false};
+    std::unordered_map<std::string, float> live_gain_lin_; // object_id → live linear gain (worker-only)
     // Declared LAST so it is destroyed FIRST: ~AudioUnitGuard runs AudioUnitUninitialize
     // before staging_/contexts_ (which the AU's input pull callbacks reference) are freed.
     AudioUnitGuard unit_;

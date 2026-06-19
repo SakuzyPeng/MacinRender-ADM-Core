@@ -91,6 +91,15 @@ void MonitorEngine::seek(uint64_t frame) {
     wake_.notify_all();
 }
 
+void MonitorEngine::set_overrides(const LiveOverrides& overrides) {
+    {
+        const std::lock_guard<std::mutex> lock(control_mutex_);
+        pending_overrides_ = overrides;
+        overrides_pending_ = true;
+    }
+    wake_.notify_all();
+}
+
 void MonitorEngine::set_loop(uint64_t start_frame, uint64_t end_frame) {
     // Disable when the range is empty/inverted.
     if (end_frame <= start_frame) {
@@ -110,14 +119,24 @@ void MonitorEngine::worker_loop() {
                 apply_seek_locked(seek_target_);
                 seek_pending_ = false;
             }
+            if (overrides_pending_) {
+                // Hand the snapshot to the stream (gain takes effect on the next block).
+                // Cheap; safe to do under the lock since it only updates the stream's
+                // override table, not its DSP. Apply even while paused so the revision
+                // reflects reality and a subsequent resume already has the right gains.
+                stream_->set_overrides(pending_overrides_);
+                applied_override_revision_.store(pending_overrides_.revision, std::memory_order_relaxed);
+                overrides_pending_ = false;
+            }
             const bool producer_done =
                 ended_.load(std::memory_order_relaxed) || failed_.load(std::memory_order_relaxed);
             // Idle (don't spin on process()) when not playing or the stream is exhausted /
-            // failed. A seek re-arms production (clears ended_/failed_) and wakes us.
+            // failed. A seek re-arms production (clears ended_/failed_) and wakes us; a
+            // pending override wakes us too so it applies promptly even while paused.
             if (state_.load(std::memory_order_seq_cst) != MonitorState::playing || producer_done) {
                 wake_.wait(lock, [this] {
                     const bool done = ended_.load(std::memory_order_relaxed) || failed_.load(std::memory_order_relaxed);
-                    return quit_.load(std::memory_order_acquire) || seek_pending_ ||
+                    return quit_.load(std::memory_order_acquire) || seek_pending_ || overrides_pending_ ||
                            (state_.load(std::memory_order_seq_cst) == MonitorState::playing && !done);
                 });
                 continue;
@@ -253,6 +272,7 @@ MonitorStatus MonitorEngine::status() const {
     s.ring_fill = cap > 0 ? static_cast<float>(buffered_floats) / static_cast<float>(cap) : 0.0F;
     s.ended = ended_.load(std::memory_order_relaxed);
     s.failed = failed_.load(std::memory_order_relaxed);
+    s.override_revision = applied_override_revision_.load(std::memory_order_relaxed);
     return s;
 }
 

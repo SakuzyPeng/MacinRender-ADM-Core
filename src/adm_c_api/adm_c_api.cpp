@@ -1059,6 +1059,35 @@ adm_error_code_t adm_monitor_set_loop(adm_monitor_t* monitor, double start_secon
     }
 }
 
+adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
+                                           const adm_monitor_override_t* overrides,
+                                           uint32_t count,
+                                           uint64_t revision) noexcept {
+    // overrides may be NULL only when clearing all overrides (count == 0).
+    if (monitor == nullptr || !monitor->session || (overrides == nullptr && count != 0)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        mradm::LiveOverrides live;
+        live.revision = revision;
+        live.objects.reserve(count);
+        for (uint32_t i = 0; i < count; ++i) {
+            const adm_monitor_override_t& src = overrides[i];
+            mradm::LiveObjectOverride ov;
+            ov.object_id = src.object_id != nullptr ? std::string{src.object_id} : std::string{};
+            ov.gain_db = src.gain_db;
+            ov.diffuse_scale = src.diffuse_scale;
+            ov.extent_scale = src.extent_scale;
+            ov.divergence_scale = src.divergence_scale;
+            live.objects.push_back(std::move(ov));
+        }
+        monitor->session->set_overrides(live);
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
 adm_error_code_t adm_monitor_get_status(adm_monitor_t* monitor, adm_monitor_status_t* out) noexcept {
     if (monitor == nullptr || !monitor->session || out == nullptr) {
         return ADM_ERROR_INVALID_ARGUMENT;
@@ -1074,6 +1103,7 @@ adm_error_code_t adm_monitor_get_status(adm_monitor_t* monitor, adm_monitor_stat
         filled.ring_fill = s.ring_fill;
         filled.ended = s.ended ? 1 : 0;
         filled.failed = s.failed ? 1 : 0;
+        filled.override_revision = s.override_revision;
         // struct_size forward-compat: copy only the bytes the caller's struct holds.
         const std::size_t copy = std::min<std::size_t>(out->struct_size, sizeof(filled));
         std::memcpy(out, &filled, copy);

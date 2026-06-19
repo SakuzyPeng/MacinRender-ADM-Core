@@ -177,6 +177,10 @@ void MonitorSession::set_loop_seconds(double start_seconds, double end_seconds) 
                             clamp_frame(end_seconds, impl_->sample_rate, impl_->total_frames));
 }
 
+void MonitorSession::set_overrides(const LiveOverrides& overrides) {
+    impl_->engine->set_overrides(overrides);
+}
+
 MonitorStatusSnapshot MonitorSession::status() const {
     const realtime::MonitorStatus s = impl_->engine->status();
     MonitorStatusSnapshot out;
@@ -187,6 +191,7 @@ MonitorStatusSnapshot MonitorSession::status() const {
     out.ring_fill = s.ring_fill;
     out.ended = s.ended;
     out.failed = s.failed;
+    out.override_revision = s.override_revision;
     return out;
 }
 

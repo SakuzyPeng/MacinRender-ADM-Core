@@ -7,6 +7,7 @@
 #include <string>
 
 #include "adm/errors.h"
+#include "adm/live_override.h"
 #include "adm/logging.h"
 #include "adm/options.h"
 
@@ -22,10 +23,11 @@ struct MonitorStatusSnapshot {
     MonitorPlaybackState state{MonitorPlaybackState::stopped};
     std::uint64_t playhead_frames{0}; // frames actually played out
     std::uint64_t underruns{0};
-    std::uint64_t buffered_frames{0}; // frames rendered ahead of the playhead
-    float ring_fill{0.0F};            // 0..1 ring occupancy
-    bool ended{false};                // stream reached end of material
-    bool failed{false};               // a render error stopped production
+    std::uint64_t buffered_frames{0};   // frames rendered ahead of the playhead
+    float ring_fill{0.0F};              // 0..1 ring occupancy
+    bool ended{false};                  // stream reached end of material
+    bool failed{false};                 // a render error stopped production
+    std::uint64_t override_revision{0}; // revision of the last applied live overrides
 };
 
 // Per-channel peak / RMS of the most recently played block.
@@ -62,6 +64,10 @@ class MonitorSession {
     [[nodiscard]] Result<void> seek_seconds(double seconds);
     // Loop [start, end). end <= start disables looping.
     void set_loop_seconds(double start_seconds, double end_seconds);
+    // Apply live per-object overrides (gain immediate; diffuse/extent/divergence scales
+    // are accepted but only take effect once re-prepare lands in a later slice). The
+    // applied revision is reported via status().override_revision.
+    void set_overrides(const LiveOverrides& overrides);
 
     [[nodiscard]] MonitorStatusSnapshot status() const;
     [[nodiscard]] MonitorLevelsSnapshot levels() const;

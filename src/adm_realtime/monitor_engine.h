@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "adm/errors.h"
+#include "adm/live_override.h"
 #include "adm/logging.h"
 #include "adm/options.h"
 #include "adm/scene.h"
@@ -35,10 +36,11 @@ struct MonitorStatus {
     MonitorState state{MonitorState::stopped};
     uint64_t playhead_frames{0}; // frames actually played out (consumer side)
     uint64_t underruns{0};
-    uint64_t buffered_frames{0}; // frames currently rendered-ahead in the ring
-    float ring_fill{0.0F};       // 0..1 occupancy of the ring
-    bool ended{false};           // stream reached end-of-material (no more to render)
-    bool failed{false};          // a stream render error stopped production
+    uint64_t buffered_frames{0};   // frames currently rendered-ahead in the ring
+    float ring_fill{0.0F};         // 0..1 occupancy of the ring
+    bool ended{false};             // stream reached end-of-material (no more to render)
+    bool failed{false};            // a stream render error stopped production
+    uint64_t override_revision{0}; // revision of the last live overrides the worker applied
 };
 
 inline constexpr std::size_t k_max_level_channels = 64U;
@@ -74,6 +76,9 @@ class MonitorEngine {
     void seek(uint64_t frame);
     // Loop output frames [start_frame, end_frame). end_frame <= start_frame disables looping.
     void set_loop(uint64_t start_frame, uint64_t end_frame);
+    // Queue live per-object overrides; the worker hands them to the stream at the next
+    // block boundary (gain immediate). The applied revision shows up in status().
+    void set_overrides(const LiveOverrides& overrides);
 
     [[nodiscard]] MonitorStatus status() const;
     [[nodiscard]] MonitorLevels levels() const;
@@ -118,6 +123,12 @@ class MonitorEngine {
     // Pending user seek, applied by the worker. Guarded by control_mutex_.
     bool seek_pending_{false};
     uint64_t seek_target_{0};
+
+    // Pending live overrides, applied by the worker via stream_->set_overrides(). Guarded
+    // by control_mutex_. applied_override_revision_ is published for status() polling.
+    bool overrides_pending_{false};
+    LiveOverrides pending_overrides_;
+    std::atomic<uint64_t> applied_override_revision_{0};
 
     // Levels, written by the audio thread, read by status pollers.
     std::array<std::atomic<float>, k_max_level_channels> peak_{};

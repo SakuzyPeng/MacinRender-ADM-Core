@@ -12,6 +12,7 @@
 
 #include "adm/capability.h"
 #include "adm/errors.h"
+#include "adm/live_override.h"
 #include "adm/logging.h"
 #include "adm/options.h"
 #include "adm/progress.h"
@@ -150,6 +151,13 @@ class IRenderStream {
     // loop-region wrap). Must reset / pre-roll backend state so output after the seek is
     // equivalent to the offline window render at the same position.
     [[nodiscard]] virtual Result<void> seek(uint64_t frame) = 0;
+
+    // Apply live per-object overrides. Called on the worker thread at block boundaries
+    // (never the audio callback). Gain takes effect on the next process() block; the
+    // topology-changing scales (diffuse/extent/divergence) require a stream re-prepare
+    // handled above this layer (slice 4). NOT pure virtual so backends adopt it
+    // incrementally; the default ignores overrides (gain stays at the prepared value).
+    virtual void set_overrides(const LiveOverrides& overrides) { (void) overrides; }
 
     [[nodiscard]] virtual uint32_t out_channels() const = 0;
     [[nodiscard]] virtual uint32_t sample_rate() const = 0;

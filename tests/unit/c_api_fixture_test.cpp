@@ -2094,10 +2094,13 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
-    bool ok = check(adm_api_version_minor() == 15, "C ABI minor version is 15");
+    bool ok = check(adm_api_version_minor() == 16, "C ABI minor version is 16");
 
     // Argument validation (no device needed).
     adm_monitor_t* probe = nullptr;
+    ok = check(adm_monitor_set_overrides(nullptr, nullptr, 0, 0) == ADM_ERROR_INVALID_ARGUMENT,
+               "set_overrides(nullptr) rejected") &&
+         ok;
     ok = check(adm_create_monitor(nullptr, input.string().c_str(), nullptr, &probe) == ADM_ERROR_INVALID_ARGUMENT,
                "create_monitor null context rejected") &&
          ok;
@@ -2143,6 +2146,12 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
 
     ok = check(adm_monitor_seek(monitor, 0.0) == ADM_ERROR_OK, "monitor seek") && ok;
     ok = check(adm_monitor_set_loop(monitor, 0.0, 0.5) == ADM_ERROR_OK, "monitor set_loop") && ok;
+
+    // Clearing overrides (NULL + count 0) is valid; a populated set echoes its revision.
+    ok = check(adm_monitor_set_overrides(monitor, nullptr, 0, 0) == ADM_ERROR_OK, "monitor clear overrides") && ok;
+    const adm_monitor_override_t ov{/*object_id=*/"AO_1001", /*gain_db=*/-6.0F, 1.0F, 1.0F, 1.0F};
+    ok = check(adm_monitor_set_overrides(monitor, &ov, 1, 7) == ADM_ERROR_OK, "monitor set overrides") && ok;
+
     ok = check(adm_monitor_pause(monitor) == ADM_ERROR_OK, "monitor pause") && ok;
     ok = check(adm_monitor_log_entry(monitor, adm_monitor_log_count(monitor) + 100U, nullptr, nullptr, nullptr) == 0,
                "monitor log_entry out-of-range is 0") &&
