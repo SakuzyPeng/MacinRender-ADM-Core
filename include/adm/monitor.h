@@ -73,10 +73,10 @@ class MonitorSession {
     // Hot-switch the rendering backend / layout live (e.g. EAR↔VBAP↔Apple at the same
     // layout, or binaural↔Apple-binaural), reusing the already-imported + policy-applied
     // scene. The new backend is prepared off the audio thread, then crossfaded in. The new
-    // stream MUST produce the same channel count + sample rate as the current monitor
-    // output; a mismatch (a different monitor layout / channel count) returns
-    // ErrorCode::unsupported (cross-format monitor downmix is not yet implemented). Returns
-    // the backend resolve / prepare error on failure.
+    // stream must run at the current monitor sample rate. A different channel count is folded
+    // into the fixed monitor output when the monitor is stereo (speaker layouts by geometry,
+    // HOA by a first-order decode); other channel-count changes return
+    // ErrorCode::unsupported. Returns the backend resolve / prepare error on failure.
     [[nodiscard]] Result<void> switch_backend(const RenderOptions& options);
 
     [[nodiscard]] MonitorStatusSnapshot status() const;

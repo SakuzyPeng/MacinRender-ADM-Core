@@ -78,8 +78,9 @@
  *   接受但忽略）。adm_monitor_status_t 追加 override_revision 字段（struct_size 向后兼容）。
  *
  * v1.17 新增（additive，SOVERSION 不变）：
- *   adm_monitor_switch_backend（实时热切换渲染后端 / 布局，带短交叉淡化；要求同声道数 +
- *   同采样率，跨格式监听下混暂未实现，返回 ADM_ERROR_UNSUPPORTED）。
+ *   adm_monitor_switch_backend（实时热切换渲染后端 / 布局，带短交叉淡化。立体声监听下
+ *   可把多声道 / HOA 折叠为立体声；非立体声监听且声道数不同、或采样率不同则返
+ *   ADM_ERROR_UNSUPPORTED）。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
@@ -871,10 +872,10 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
  * v1.17: hot-switch the rendering backend / layout live, reusing the already-imported +
  * policy-applied scene. `opts` selects the new renderer + output layout (other fields as in
  * adm_render_options); NULL uses defaults. The new backend is prepared off the audio thread
- * and crossfaded in. The new stream MUST produce the same channel count + sample rate as the
- * current monitor output — a different monitor layout returns ADM_ERROR_UNSUPPORTED (cross-
- * format monitor downmix is not yet implemented). Returns the resolve / prepare error
- * otherwise.
+ * and crossfaded in. The new stream must run at the current monitor sample rate. A different
+ * channel count is folded into the monitor output when the monitor is stereo (multichannel
+ * speaker layouts by geometry, HOA by a first-order decode); other channel-count changes
+ * return ADM_ERROR_UNSUPPORTED. Returns the resolve / prepare error otherwise.
  */
 adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_render_options_t* opts) ADM_API_NOEXCEPT;
 

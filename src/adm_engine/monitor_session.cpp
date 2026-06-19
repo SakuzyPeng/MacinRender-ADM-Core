@@ -1,7 +1,10 @@
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <numbers>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -11,9 +14,11 @@
 #include "adm/render.h"
 
 #include "audio_output_device.h"
+#include "downmix_stream.h"
 #include "monitor_engine.h"
 #include "render_stream_factory.h"
 #include "renderer_factory.h"
+#include "speaker_layouts.h"
 
 namespace mradm {
 
@@ -32,6 +37,65 @@ namespace {
     }
     // seconds < duration ⇒ seconds * sample_rate < total_frames, so the cast is in range.
     return static_cast<uint64_t>(seconds * static_cast<double>(sample_rate));
+}
+
+// Constant-power stereo fold of one source speaker at `azimuth` (degrees, +ve = left,
+// BS.2051). az is clamped to ±90° so rear speakers fold to the nearest side. Returns the
+// {L, R} gains.
+[[nodiscard]] std::pair<float, float> stereo_pan_for_azimuth(float azimuth) {
+    const float az = std::clamp(azimuth, -90.0F, 90.0F);
+    const float a = ((az / 90.0F) + 1.0F) * 0.5F; // 0 = hard right, 0.5 = center, 1 = hard left
+    const float angle = a * (std::numbers::pi_v<float> / 2.0F);
+    return {std::sin(angle), std::cos(angle)};
+}
+
+// Build a downmix / upmix matrix [monitor_channels × src_channels] (row-major) mapping a
+// source layout to the fixed monitor output. Returns nullopt when the conversion is not
+// supported (cross-format to a non-stereo monitor). Equal channel counts → identity.
+// Stereo monitor: speaker layouts fold by geometry (LFE → both at −6 dB), HOA3 uses a
+// first-order horizontal W/Y decode, plain stereo passes through.
+[[nodiscard]] std::optional<std::vector<float>>
+build_downmix_matrix(uint32_t src_channels, std::string_view src_layout, uint32_t monitor_channels) {
+    if (src_channels == 0 || monitor_channels == 0) {
+        return std::nullopt;
+    }
+    if (src_channels == monitor_channels) {
+        std::vector<float> identity(static_cast<std::size_t>(monitor_channels) * src_channels, 0.0F);
+        for (uint32_t c = 0; c < monitor_channels; ++c) {
+            identity[(static_cast<std::size_t>(c) * src_channels) + c] = 1.0F;
+        }
+        return identity;
+    }
+    if (monitor_channels != 2) {
+        return std::nullopt; // only stereo monitor folds are implemented
+    }
+
+    std::vector<float> m(std::size_t{2U} * src_channels, 0.0F);
+    auto set_lr = [&](uint32_t s, float l, float r) {
+        m[s] = l;                // L row
+        m[src_channels + s] = r; // R row
+    };
+
+    if (src_layout == "hoa3" && src_channels >= 4) {
+        // ACN/SN3D: W = ch0, Y(left) = ch1. First-order horizontal stereo decode.
+        set_lr(0, 0.7071F, 0.7071F); // W → both
+        set_lr(1, 0.5F, -0.5F);      // Y → L positive, R negative
+        return m;
+    }
+    if (const auto* layout = render_layouts::find_speaker_layout(src_layout);
+        layout != nullptr && layout->speakers.size() == src_channels) {
+        for (uint32_t s = 0; s < src_channels; ++s) {
+            const auto& spk = layout->speakers[s];
+            if (spk.is_lfe) {
+                set_lr(s, 0.5F, 0.5F); // fold LFE into both at −6 dB
+                continue;
+            }
+            const auto [l, r] = stereo_pan_for_azimuth(spk.azimuth);
+            set_lr(s, l, r);
+        }
+        return m;
+    }
+    return std::nullopt; // unknown source layout → cannot fold safely
 }
 
 // Thread-safe, append-only diagnostics buffer. The monitor renders on a worker thread and
@@ -213,15 +277,28 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
     if (*stream == nullptr) {
         return make_error(ErrorCode::internal_error, "monitor switch_backend produced a null stream");
     }
-    // The monitor output format is fixed; only same-format backend switches are live today.
-    if ((*stream)->out_channels() != impl_->engine->out_channels() ||
-        (*stream)->sample_rate() != impl_->engine->sample_rate()) {
-        // Drop the rejected stream + its retained backend so a failed switch leaks nothing.
+    const uint32_t monitor_channels = impl_->engine->out_channels();
+    // No resampling across a switch: the monitor device runs at a fixed rate.
+    if ((*stream)->sample_rate() != impl_->engine->sample_rate()) {
         stream->reset();
         impl_->factory->forget_last_backend();
-        return make_error(ErrorCode::unsupported,
-                          "monitor backend switch requires the same output channel count and sample rate "
-                          "(cross-format monitor downmix is not yet implemented)");
+        return make_error(ErrorCode::unsupported, "monitor backend switch requires the same sample rate");
+    }
+    // Same channel count → hand the stream straight to the engine. Otherwise wrap it in a
+    // DownmixStream that folds the new layout into the fixed monitor channel count (e.g.
+    // 7.1.4 / HOA → stereo headphones), so the engine still sees a monitor-format stream.
+    if ((*stream)->out_channels() != monitor_channels) {
+        auto matrix = build_downmix_matrix((*stream)->out_channels(), (*stream)->output_layout(), monitor_channels);
+        if (!matrix) {
+            stream->reset();
+            impl_->factory->forget_last_backend();
+            return make_error(ErrorCode::unsupported,
+                              "monitor cannot fold this layout to the current monitor output "
+                              "(only stereo-monitor downmix of speaker / HOA layouts is supported)");
+        }
+        impl_->engine->switch_stream(
+            std::make_unique<realtime::DownmixStream>(std::move(*stream), std::move(*matrix), monitor_channels));
+        return {};
     }
     impl_->engine->switch_stream(std::move(*stream));
     return {};

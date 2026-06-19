@@ -2205,8 +2205,7 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
              ok;
     }
 
-    // Same-format hot-switch (binaural → binaural) crossfades in and succeeds; a
-    // cross-format switch (→ 5.1, different channel count) is rejected as unsupported.
+    // Same-format hot-switch (binaural → binaural) crossfades in and succeeds.
     adm_render_options_t* sw_same = adm_create_render_options();
     adm_render_options_set_renderer(sw_same, ADM_RENDERER_SAF_BINAURAL);
     adm_render_options_set_output_layout(sw_same, "binaural");
@@ -2214,11 +2213,12 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
         check(adm_monitor_switch_backend(monitor, sw_same) == ADM_ERROR_OK, "monitor same-format backend switch") && ok;
     adm_destroy_render_options(sw_same);
 
+    // Cross-format switch (stereo monitor ← 5.1) is folded to stereo by the downmix layer.
     adm_render_options_t* sw_diff = adm_create_render_options();
     adm_render_options_set_renderer(sw_diff, ADM_RENDERER_SAF);
     adm_render_options_set_output_layout(sw_diff, "0+5+0");
-    ok = check(adm_monitor_switch_backend(monitor, sw_diff) == ADM_ERROR_UNSUPPORTED,
-               "monitor cross-format switch rejected (different channel count)") &&
+    ok = check(adm_monitor_switch_backend(monitor, sw_diff) == ADM_ERROR_OK,
+               "monitor cross-format switch downmixes 5.1 → stereo monitor") &&
          ok;
     adm_destroy_render_options(sw_diff);
 

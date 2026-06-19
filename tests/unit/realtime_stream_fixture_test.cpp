@@ -20,6 +20,7 @@
 #include "adm/scene.h"
 
 #include "audio_output_device.h"
+#include "downmix_stream.h"
 #include "monitor_engine.h"
 #include "render_stream_factory.h"
 #include "ring_buffer.h"
@@ -764,6 +765,48 @@ class ConstStreamFactory final : public mradm::realtime::IRenderStreamFactory {
     float value_;
 };
 
+// Emits a per-channel constant equal to (channel index + 1), so a downmix matrix's effect
+// is exactly predictable.
+class ChannelIndexStream final : public mradm::IRenderStream {
+  public:
+    explicit ChannelIndexStream(uint32_t channels) : channels_(channels) {}
+    mradm::Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        for (std::size_t f = 0; f < frames; ++f) {
+            for (uint32_t c = 0; c < channels_; ++c) {
+                out[(f * channels_) + c] = static_cast<float>(c + 1);
+            }
+        }
+        return frames;
+    }
+    mradm::Result<void> seek(uint64_t /*frame*/) override { return {}; }
+    [[nodiscard]] uint32_t out_channels() const override { return channels_; }
+    [[nodiscard]] uint32_t sample_rate() const override { return 48000U; }
+    [[nodiscard]] std::string_view output_layout() const override { return "test"; }
+
+  private:
+    uint32_t channels_;
+};
+
+// DownmixStream applies its [monitor × src] matrix per frame and reports the monitor count.
+bool test_downmix_stream() {
+    bool ok = true;
+    // 4-channel source (values 1,2,3,4) → stereo: L = ch0 + ch2, R = ch1 + ch3.
+    const std::vector<float> matrix{1.0F, 0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 1.0F};
+    mradm::realtime::DownmixStream stream(std::make_unique<ChannelIndexStream>(4U), matrix, 2U);
+
+    ok &= check(stream.out_channels() == 2U, "downmix: reports the monitor channel count");
+    std::array<float, 6> out{}; // 3 frames × 2ch
+    auto produced = stream.process(std::span<float>(out), 3U);
+    ok &= check(produced.has_value() && *produced == 3U, "downmix: produces the requested frames");
+    bool exact = true;
+    for (std::size_t f = 0; f < 3U; ++f) {
+        exact &= near(out[(f * 2U) + 0U], 4.0F); // 1 + 3
+        exact &= near(out[(f * 2U) + 1U], 6.0F); // 2 + 4
+    }
+    ok &= check(exact, "downmix: matrix folds 4ch → stereo as specified");
+    return ok;
+}
+
 // Hot-switch with crossfade: starting on a 0.25 stream, switching to a 0.75 stream must
 // (after the ring drains + the fade completes) land the output on the new stream's value,
 // while the earliest captured audio still reflects the old stream.
@@ -891,6 +934,7 @@ int main() {
     ok &= test_monitor_live_overrides();
     ok &= test_monitor_hot_switch();
     ok &= test_monitor_override_survives_switch();
+    ok &= test_downmix_stream();
     ok &= test_monitor_miniaudio_null_device();
 
     if (ok) {
