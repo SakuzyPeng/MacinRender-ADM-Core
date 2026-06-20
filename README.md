@@ -180,6 +180,7 @@ EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4
 | `--interp-ms <ms>` | ADM 块无 jumpPosition 时的增益插值斜坡 | `5` |
 | `--object-smoothing-frames <frames>` | Objects 动态元数据去拉链平滑窗口；`0` 为逐样本跟随 ADM 块；极端动态素材可显式调大；Apple 后端当前忽略此参数 | `0` |
 | `--apple-spatial-preset off\|headphone-default\|headphone-movie` | Apple binaural 专用 AUSpatialMixer factory preset；preset 会先应用，再重新写入 ADM 驱动的空间参数；扬声器布局不支持 | `off` |
+| `--listener-yaw <deg>` / `--listener-pitch <deg>` / `--listener-roll <deg>` | Apple binaural 专用听者头部朝向；yaw 为 `[-180, 180]` 且 `+` 向左，pitch 为 `[-90, 90]` 且 `+` 向上，roll 为 `[-180, 180]` | `0` |
 | `--opus-bitrate-per-ch <kbps>` | Opus VBR 目标比特率 / 声道 | 自动 |
 | `--apac-bitrate <kbps>` | APAC 总目标比特率提示；未设置时空间布局 / HOA 按 7.1.4=2048 kbps 基准缩放 | 见输出格式说明 |
 | `--apac-container mpeg4\|caf` | APAC 容器；`caf` 要求输出路径为 `.caf`，普通 `.caf` 默认仍为 PCM | `mpeg4` |
