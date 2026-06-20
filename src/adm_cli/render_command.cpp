@@ -296,6 +296,20 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                      "Apple binaural AUSpatialMixer factory preset: off, headphone-default, headphone-movie")
         ->check(CLI::IsMember({"off", "headphone-default", "headphone-movie"}));
     render_cmd
+        ->add_option("--listener-yaw",
+                     opts.listener_yaw,
+                     "Listener head yaw in degrees, +left (Apple binaural backend only, macOS)")
+        ->check(CLI::Range(-180.0, 180.0));
+    render_cmd
+        ->add_option("--listener-pitch",
+                     opts.listener_pitch,
+                     "Listener head pitch in degrees, +up (Apple binaural backend only, macOS)")
+        ->check(CLI::Range(-90.0, 90.0));
+    render_cmd
+        ->add_option(
+            "--listener-roll", opts.listener_roll, "Listener head roll in degrees (Apple binaural backend only, macOS)")
+        ->check(CLI::Range(-180.0, 180.0));
+    render_cmd
         ->add_option("--iamf-container",
                      opts.iamf_container_str,
                      "IAMF output container [requires MR_ADM_ENABLE_IAMF build]: "
@@ -346,6 +360,15 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     request.options.speaker_spread_mode = parse_speaker_spread_mode(opts.speaker_spread_mode_str);
     request.options.binaural_spread_mode = parse_binaural_spread_mode(opts.binaural_spread_mode_str);
     request.options.apple_spatial_preset = parse_apple_spatial_preset(opts.apple_spatial_preset_str);
+    if (!std::isnan(opts.listener_yaw)) {
+        request.options.listener_orientation.yaw_deg = static_cast<float>(opts.listener_yaw);
+    }
+    if (!std::isnan(opts.listener_pitch)) {
+        request.options.listener_orientation.pitch_deg = static_cast<float>(opts.listener_pitch);
+    }
+    if (!std::isnan(opts.listener_roll)) {
+        request.options.listener_orientation.roll_deg = static_cast<float>(opts.listener_roll);
+    }
     request.options.iamf_container = (opts.iamf_container_str == "mp4") ? mradm::RenderOptions::IamfContainer::mp4
                                                                         : mradm::RenderOptions::IamfContainer::obu;
     request.options.iamf_layers = parse_csv_list(opts.iamf_layers_csv);

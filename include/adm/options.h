@@ -43,6 +43,17 @@ enum class AppleSpatialPreset {
     headphone_movie,   // AUSpatialMixer factory preset #2: Headphone Media Playback Movie
 };
 
+// 听者头部朝向：相对默认正前（方位 0）的头部旋转，单位度。yaw 取与 ADM 方位一致的
+// 正向约定（+ 向左），pitch + 向上，roll + 向右倾。目前仅 Apple AUSpatialMixer binaural
+// 后端实装（映射到 HeadYaw/Pitch/Roll 全局参数）；其它后端忽略。默认全 0 = 头部正前，
+// 与未设置完全一致。
+struct ListenerOrientation {
+    float yaw_deg{0.0F};   // [-180, 180]
+    float pitch_deg{0.0F}; // [-90, 90]
+    float roll_deg{0.0F};  // [-180, 180]
+    [[nodiscard]] bool is_identity() const noexcept { return yaw_deg == 0.0F && pitch_deg == 0.0F && roll_deg == 0.0F; }
+};
+
 struct RenderOptions {
     RendererSelection renderer{RendererSelection::automatic};
     std::string output_layout{"0+2+0"};
@@ -102,6 +113,8 @@ struct RenderOptions {
     // Apple AUSpatialMixer binaural only. PresentPreset resets several unit/bus
     // parameters, so the Apple backend applies it before restoring ADM-driven setup.
     AppleSpatialPreset apple_spatial_preset{AppleSpatialPreset::off};
+    // 听者头部朝向。目前仅 Apple binaural 后端实装（HeadYaw/Pitch/Roll）；其它后端忽略。
+    ListenerOrientation listener_orientation{};
     // Output time-range trim, in seconds, on the rendered timeline (which equals
     // the input timeline). render_start_sec clips the head; render_end_sec is an
     // absolute end time on the same timeline (nullopt = render to the end).

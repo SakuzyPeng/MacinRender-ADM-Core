@@ -493,7 +493,8 @@ render_apple(float azimuth,
              float gain = 1.0F,
              float width = 0.0F,
              bool channel_lock = false,
-             mradm::AppleSpatialPreset apple_spatial_preset = mradm::AppleSpatialPreset::off) {
+             mradm::AppleSpatialPreset apple_spatial_preset = mradm::AppleSpatialPreset::off,
+             const mradm::ListenerOrientation& listener = {}) {
     const auto in = write_fixture(azimuth, 8192U, gain, width, channel_lock);
     FileGuard in_guard(in);
     const auto out = temp_path(stem, ".wav");
@@ -507,6 +508,7 @@ render_apple(float azimuth,
     req.options.peak_limit = false;
     req.options.measure_loudness = false;
     req.options.apple_spatial_preset = apple_spatial_preset;
+    req.options.listener_orientation = listener;
 
     mradm::RenderService service;
     mradm::NullProgressSink progress;
@@ -1081,6 +1083,29 @@ bool verify_spatial_mixer_hrtf_modes_probe() {
     return ok;
 }
 
+// Listener head orientation: a +90° yaw (head turned left) must move a front point source
+// toward the right ear, and the binaural output must differ from the identity (head-forward)
+// render. Locks the Apple backend's HeadYaw sign convention.
+bool verify_listener_orientation() {
+    const auto forward = render_apple(0.0F, "mr_apple_yaw_identity", "binaural", 2U);
+    mradm::ListenerOrientation yaw_left{};
+    yaw_left.yaw_deg = 90.0F;
+    const auto turned = render_apple(
+        0.0F, "mr_apple_yaw_left", "binaural", 2U, 1.0F, 0.0F, false, mradm::AppleSpatialPreset::off, yaw_left);
+    if (!forward || !turned) {
+        return check(false, "listener-orientation renders succeed");
+    }
+    bool ok = true;
+    const double id_l = channel_energy(*forward, 2U, 0U);
+    const double id_r = channel_energy(*forward, 2U, 1U);
+    const double turn_l = channel_energy(*turned, 2U, 0U);
+    const double turn_r = channel_energy(*turned, 2U, 1U);
+    ok &= check(rms_difference(*forward, *turned) > 1.0e-4, "listener yaw changes the binaural output");
+    ok &= check(std::abs(id_l - id_r) < 0.25 * (id_l + id_r), "identity orientation keeps a front source L/R balanced");
+    ok &= check(turn_r > turn_l, "yaw=+90 (head turned left) moves a front source toward the right ear");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1099,5 +1124,6 @@ int main() {
     ok &= verify_channel_lock_snaps();
     ok &= verify_bed_and_lfe_routing();
     ok &= verify_spatial_mixer_hrtf_modes_probe();
+    ok &= verify_listener_orientation();
     return ok ? 0 : 1;
 }
