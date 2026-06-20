@@ -788,3 +788,10 @@ install(
     NAMESPACE MacinRender::
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/MacinRenderADMCore"
 )
+
+# Optional untracked local targets (developer scratch / experiments). The `local/`
+# directory is git-ignored; this hook lets it reuse the main build (deps already
+# resolved) without polluting any tracked target. No-op when the directory is absent.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/local/CMakeLists.txt")
+    add_subdirectory(local)
+endif()
