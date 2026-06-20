@@ -813,6 +813,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     plan.speaker_spread_mode = request.options.speaker_spread_mode;
     plan.binaural_spread_mode = request.options.binaural_spread_mode;
     plan.apple_spatial_preset = request.options.apple_spatial_preset;
+    plan.listener_orientation = request.options.listener_orientation;
     // Output time-range trim: prefer on-demand window rendering when the backend
     // supports it (seek + pre-roll → writes only the window, bit-identical to a full
     // render then trimmed, and skips the post-render trim pass below). Otherwise fall

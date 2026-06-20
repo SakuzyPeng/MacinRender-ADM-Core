@@ -465,6 +465,21 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
     return status;
 }
 
+// Set the global listener head-orientation parameters (HeadYaw/Pitch/Roll). The project
+// domain convention is yaw +left (matching ADM azimuth); SpatialMixer's own azimuth is
+// +right, so yaw is mirrored like sm_azimuth(). pitch (+up) and roll follow the unit's own
+// sign. Only meaningful for binaural (headphone) output. Short-circuits on first failure.
+[[nodiscard]] OSStatus set_listener_orientation(AudioUnit unit, const ListenerOrientation& o) {
+    OSStatus status = AudioUnitSetParameter(unit, kSpatialMixerParam_HeadYaw, kAudioUnitScope_Global, 0, -o.yaw_deg, 0);
+    if (status == noErr) {
+        status = AudioUnitSetParameter(unit, kSpatialMixerParam_HeadPitch, kAudioUnitScope_Global, 0, o.pitch_deg, 0);
+    }
+    if (status == noErr) {
+        status = AudioUnitSetParameter(unit, kSpatialMixerParam_HeadRoll, kAudioUnitScope_Global, 0, o.roll_deg, 0);
+    }
+    return status;
+}
+
 [[nodiscard]] const BusEvent* active_event(const BusPlan& bus, uint64_t frame, std::size_t& cursor) {
     while (cursor + 1 < bus.events.size() && frame >= bus.events[cursor + 1].start_sample) {
         ++cursor;
@@ -803,6 +818,21 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     const OSStatus init_status = AudioUnitInitialize(unit);
     if (init_status != noErr) {
         return tl::unexpected{apple_status_error("failed to initialize AUSpatialMixer", init_status)};
+    }
+
+    // Listener head orientation (binaural only). A factory preset resets unit/bus
+    // parameters, so this must come after both the preset and AudioUnitInitialize.
+    if (profile.binaural && !plan.listener_orientation.is_identity()) {
+        const OSStatus head_status = set_listener_orientation(unit, plan.listener_orientation);
+        if (head_status != noErr) {
+            return tl::unexpected{apple_status_error("failed to set listener orientation", head_status)};
+        }
+        logs.log(LogLevel::info,
+                 "apple",
+                 fmt::format("listener orientation: yaw={:.1f} pitch={:.1f} roll={:.1f} deg",
+                             static_cast<double>(plan.listener_orientation.yaw_deg),
+                             static_cast<double>(plan.listener_orientation.pitch_deg),
+                             static_cast<double>(plan.listener_orientation.roll_deg)));
     }
 
     logs.log(LogLevel::info,
