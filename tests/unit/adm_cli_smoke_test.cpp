@@ -192,10 +192,13 @@ int main() {
         ok &= check(r.out.find("saf-binaural") != std::string::npos, "render --help: saf-binaural renderer listed");
         ok &= check(r.out.find("--apple-spatial-preset") != std::string::npos,
                     "render --help: apple-spatial-preset option listed");
+        ok &= check(r.out.find("--listener-yaw") != std::string::npos, "render --help: listener-yaw option listed");
+        ok &= check(r.out.find("--listener-pitch") != std::string::npos, "render --help: listener-pitch option listed");
+        ok &= check(r.out.find("--listener-roll") != std::string::npos, "render --help: listener-roll option listed");
         ok &= check(r.out.find("--iamf-layers") != std::string::npos, "render --help: iamf-layers option listed");
     }
 
-    // ── spread mode parse: valid values accepted, invalid rejected ────────────
+    // ── render option parse: valid values accepted, invalid rejected ──────────
     {
         // --speaker-spread-mode: valid values
         for (const auto* val : {"auto", "none", "mdap"}) {
@@ -229,6 +232,31 @@ int main() {
         {
             auto r = run_cmd(mradm_exe + " render --apple-spatial-preset invalid_xyz");
             ok &= check(r.code != 0, "render --apple-spatial-preset invalid: non-zero exit");
+        }
+        // --listener-yaw/--listener-pitch/--listener-roll: range validation
+        for (const auto* opt : {"--listener-yaw", "--listener-roll"}) {
+            auto r_min = run_cmd(mradm_exe + " render --help " + opt + " -180");
+            const std::string msg_min = std::string("render ") + opt + " min boundary parses";
+            ok &= check(r_min.code == 0, msg_min.c_str());
+            auto r_max = run_cmd(mradm_exe + " render --help " + opt + " 180");
+            const std::string msg_max = std::string("render ") + opt + " max boundary parses";
+            ok &= check(r_max.code == 0, msg_max.c_str());
+            auto r_low = run_cmd(mradm_exe + " render " + opt + " -181");
+            const std::string msg_low = std::string("render ") + opt + " below range rejected";
+            ok &= check(r_low.code != 0, msg_low.c_str());
+            auto r_high = run_cmd(mradm_exe + " render " + opt + " 181");
+            const std::string msg_high = std::string("render ") + opt + " above range rejected";
+            ok &= check(r_high.code != 0, msg_high.c_str());
+        }
+        {
+            auto r_min = run_cmd(mradm_exe + " render --help --listener-pitch -90");
+            ok &= check(r_min.code == 0, "render --listener-pitch min boundary parses");
+            auto r_max = run_cmd(mradm_exe + " render --help --listener-pitch 90");
+            ok &= check(r_max.code == 0, "render --listener-pitch max boundary parses");
+            auto r_low = run_cmd(mradm_exe + " render --listener-pitch -91");
+            ok &= check(r_low.code != 0, "render --listener-pitch below range rejected");
+            auto r_high = run_cmd(mradm_exe + " render --listener-pitch 91");
+            ok &= check(r_high.code != 0, "render --listener-pitch above range rejected");
         }
         {
             auto r = run_cmd(mradm_exe + " render --help --iamf-layers 5.1,5.1.2,5.1.4,7.1.4");
