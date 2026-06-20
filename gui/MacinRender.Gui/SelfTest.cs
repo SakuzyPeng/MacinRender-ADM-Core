@@ -104,9 +104,24 @@ internal static class SelfTest
         Chain("ear");
         Chain("saf-binaural");
 
+        // 监听入口可解析性(即使没给 wav 也跑):bogus 路径应得到干净错误码,而非
+        // EntryPointNotFound / 崩溃 —— 验证 v1.15–v1.17 的 adm_monitor_* 符号确实在 dylib 里。
+        try
+        {
+            using var probeOpts = NativeMethods.adm_create_render_options();
+            var probeRc = NativeMethods.adm_create_monitor(ctx, "/nonexistent.wav", probeOpts, out var probeMon);
+            probeMon.Dispose();
+            Console.WriteLine($"adm_monitor_* 入口可解析(create_monitor bogus → {probeRc})");
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            Console.Error.WriteLine($"[失败] libmradm_capi 缺少 adm_monitor_* 入口(dylib 落后于 v1.17?): {ex.Message}");
+            return 10;
+        }
+
         if (string.IsNullOrEmpty(inputWav))
         {
-            Console.WriteLine("(未给 wav,跳过真实渲染。加载/查询链路 OK。)");
+            Console.WriteLine("(未给 wav,跳过真实渲染。加载/查询/监听入口链路 OK。)");
             return 0;
         }
 
@@ -185,6 +200,47 @@ internal static class SelfTest
                     Console.Error.WriteLine("[失败] 编辑器拼出的 policy JSON 在 preview session 创建时被核心拒绝");
                     return 9;
                 }
+            }
+        }
+
+        // 实时监听桥接(v1.15–v1.17):create → 轮询 status/levels/logs → 覆盖 → 热切换 → stop。
+        // headless/CI 无音频设备时 create 会失败,容忍跳过(契约同 c_api 监听测试)。
+        Console.WriteLine("实时监听桥接:");
+        using (var monitor = new MonitorService())
+        {
+            var startRc = monitor.Start(inputWav,
+                new RenderSettings { Renderer = AdmRenderer.SafBinaural, Layout = "binaural" });
+            if (startRc != AdmErrorCode.Ok)
+            {
+                Console.WriteLine($"  create_monitor={startRc}(可能无音频设备,跳过监听断言)");
+            }
+            else
+            {
+                monitor.Play();
+                Thread.Sleep(120);
+                var st = monitor.GetStatus();
+                Console.WriteLine($"  status: state={st?.State} playhead={st?.PlayheadFrames} " +
+                                  $"ringFill={st?.RingFill:P0} ended={st?.Ended} failed={st?.Failed}");
+                var lv = monitor.GetLevels(8);
+                var peak0 = lv is { Peak.Count: > 0 } ? lv.Peak[0].ToString("F4") : "—";
+                Console.WriteLine($"  levels: {lv?.Peak.Count ?? 0} 声道  peak[0]={peak0}");
+
+                if (inspectDoc.Objects.Count > 0 && !string.IsNullOrEmpty(inspectDoc.Objects[0].Id))
+                {
+                    var oid = inspectDoc.Objects[0].Id;
+                    var ovRc = monitor.SetOverrides([new MonitorOverride(oid, GainDb: -6.0f)], revision: 1);
+                    Console.WriteLine($"  set_overrides({oid} -6 dB)={ovRc}");
+                }
+
+                // 热切换到 Apple binaural(同声道数);Apple 不可用时返回 unsupported,容忍。
+                var swRc = monitor.SwitchBackend(
+                    new RenderSettings { Renderer = AdmRenderer.Apple, Layout = "binaural" });
+                Console.WriteLine($"  switch_backend(apple/binaural)={swRc}");
+
+                monitor.Pause();
+                var monLogs = new List<RenderLogEntry>();
+                monitor.ReadLogs(0, monLogs);
+                Console.WriteLine($"  日志: {monLogs.Count} 条");
             }
         }
 

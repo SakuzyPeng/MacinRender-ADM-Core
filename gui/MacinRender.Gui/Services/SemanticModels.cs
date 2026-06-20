@@ -31,7 +31,7 @@ internal static class ObjectNaming
             }
         }
 
-        int need = Math.Max(2, (int) Math.Ceiling(names.Count * 0.4));
+        int need = Math.Max(2, (int)Math.Ceiling(names.Count * 0.4));
         string best = "";
         foreach (var (prefix, count) in counts)
         {

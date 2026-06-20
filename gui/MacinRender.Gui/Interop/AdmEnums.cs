@@ -79,6 +79,13 @@ public enum AdmRenderStage
     Finished = 7,
 }
 
+public enum AdmMonitorState
+{
+    Stopped = 0,
+    Playing = 1,
+    Paused = 2,
+}
+
 public enum AdmProgressOperation
 {
     Unknown = 0,

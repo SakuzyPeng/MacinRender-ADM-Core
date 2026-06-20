@@ -141,7 +141,9 @@ public sealed class AdmRenderService
         progress.Report(new RenderProgress(evt->OverallFraction, evt->Stage, evt->Operation, message));
     }
 
-    private static void ApplySettings(AdmRenderOptionsHandle opts, RenderSettings s)
+    // Shared option-builder, also reused by MonitorService (only renderer / layout / sofa /
+    // semantic-policy are relevant to monitoring; the encode-only setters are harmless no-ops).
+    internal static void ApplySettings(AdmRenderOptionsHandle opts, RenderSettings s)
     {
         NativeMethods.adm_render_options_set_renderer(opts, s.Renderer);
         NativeMethods.adm_render_options_set_output_layout(opts, s.Layout);

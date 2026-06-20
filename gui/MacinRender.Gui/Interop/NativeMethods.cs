@@ -228,4 +228,49 @@ internal static partial class NativeMethods
     internal static partial AdmErrorCode adm_preview_render_window_v2(AdmPreviewSessionHandle session,
         double startSec, double endSec, string? outputPath, IntPtr progress, IntPtr userData,
         out AdmRenderResultHandle result);
+
+    // ── 实时监听(v1.15–v1.17;状态/电平/日志均轮询,无回调) ──
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial AdmErrorCode adm_create_monitor(AdmContextHandle context, string inputPath,
+        AdmRenderOptionsHandle opts, out AdmMonitorHandle outMonitor);
+
+    [LibraryImport(Lib)]
+    internal static partial void adm_destroy_monitor(IntPtr monitor);
+
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_monitor_play(AdmMonitorHandle monitor);
+
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_monitor_pause(AdmMonitorHandle monitor);
+
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_monitor_seek(AdmMonitorHandle monitor, double seconds);
+
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_monitor_set_loop(AdmMonitorHandle monitor, double startSeconds,
+        double endSeconds);
+
+    // overrides = 指向 AdmMonitorOverride[count] 的原生内存(每元素 StructSize 作 stride);count==0 时可为 NULL。
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_monitor_set_overrides(AdmMonitorHandle monitor, IntPtr overrides,
+        uint count, ulong revision);
+
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_monitor_switch_backend(AdmMonitorHandle monitor,
+        AdmRenderOptionsHandle opts);
+
+    // status/levels:调用方先把 StructSize 设为 sizeof(struct)。
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_monitor_get_status(AdmMonitorHandle monitor, ref AdmMonitorStatus outStatus);
+
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_monitor_get_levels(AdmMonitorHandle monitor, ref AdmMonitorLevels outLevels);
+
+    [LibraryImport(Lib)]
+    internal static partial uint adm_monitor_log_count(AdmMonitorHandle monitor);
+
+    // 返回 1 表示 index 有效并写入各 out;module/message 是 monitor 拥有的 const char*(仅在下次 adm_monitor_* 前有效),勿 free。
+    [LibraryImport(Lib)]
+    internal static partial int adm_monitor_log_entry(AdmMonitorHandle monitor, uint index, out AdmLogLevel level,
+        out IntPtr module, out IntPtr message);
 }
