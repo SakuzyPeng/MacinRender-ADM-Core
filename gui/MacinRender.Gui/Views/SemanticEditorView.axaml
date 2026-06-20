@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MacinRender.Gui.ViewModels"
+             xmlns:svc="using:MacinRender.Gui.Services"
              xmlns:ctrl="using:MacinRender.Gui.Controls"
              x:Class="MacinRender.Gui.Views.SemanticEditorView"
              x:DataType="vm:SemanticEditorViewModel">
@@ -11,7 +12,7 @@
             <TextBlock Classes="muted" Text="{DynamicResource SemanticPageDesc}"/>
         </StackPanel>
 
-        <Grid Grid.Row="1" RowDefinitions="Auto,*">
+        <Grid Grid.Row="1" RowDefinitions="Auto,Auto,*">
 
             <!-- 载入栏 -->
             <ctrl:SquircleBorder Grid.Row="0" Classes="card" Margin="0,0,0,12">
@@ -28,8 +29,64 @@
                 </DockPanel>
             </ctrl:SquircleBorder>
 
+            <!-- 监听条:传输 + 后端 A/B + 电平表 + 状态(载入栏下,只在已载入文件时可用) -->
+            <ctrl:SquircleBorder Grid.Row="1" Classes="card" Margin="0,0,0,12" Padding="12,8"
+                                 IsEnabled="{Binding HasFile}">
+                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
+
+                    <!-- 开始/停止监听 -->
+                    <ctrl:SquircleButton Grid.Column="0" Classes="accent" MinWidth="96" VerticalAlignment="Center"
+                            IsEnabled="{Binding !IsMonitorBusy}" Command="{Binding ToggleMonitorCommand}">
+                        <TextBlock VerticalAlignment="Center" Text="{Binding MonitorToggleText}"/>
+                    </ctrl:SquircleButton>
+
+                    <!-- 播放 / 暂停 -->
+                    <ctrl:SquircleButton Grid.Column="1" Width="40" VerticalAlignment="Center"
+                            IsEnabled="{Binding IsMonitoring}" Command="{Binding PlayPauseCommand}">
+                        <Panel>
+                            <Path Classes="icon" Data="{StaticResource IconPlay}" IsVisible="{Binding !IsPlaying}"/>
+                            <Path Classes="icon" Data="{StaticResource IconPause}" IsVisible="{Binding IsPlaying}"/>
+                        </Panel>
+                    </ctrl:SquircleButton>
+
+                    <!-- 当前时间 -->
+                    <TextBlock Grid.Column="2" VerticalAlignment="Center" MinWidth="40" FontSize="12"
+                               Foreground="{DynamicResource TextPrimary}" Text="{Binding PlayheadText}"/>
+
+                    <!-- seek -->
+                    <Slider Grid.Column="3" VerticalAlignment="Center" Minimum="0"
+                            Maximum="{Binding DurationSeconds}" Value="{Binding PlayheadSeconds}"
+                            IsEnabled="{Binding IsMonitoring}"/>
+
+                    <!-- 总时长 -->
+                    <TextBlock Grid.Column="4" VerticalAlignment="Center" MinWidth="40" FontSize="12"
+                               Classes="muted" Text="{Binding DurationText}"/>
+
+                    <!-- 后端 A/B -->
+                    <ComboBox Grid.Column="5" MinWidth="128" VerticalAlignment="Center"
+                              ItemsSource="{Binding MonitorBackends}"
+                              SelectedItem="{Binding SelectedMonitorBackend}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="svc:MonitorBackendOption">
+                                <TextBlock Text="{Binding Label}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <!-- L/R 电平表 -->
+                    <StackPanel Grid.Column="6" VerticalAlignment="Center" Spacing="3" Width="64">
+                        <ProgressBar Height="6" Minimum="0" Maximum="1" Value="{Binding PeakLeft}"/>
+                        <ProgressBar Height="6" Minimum="0" Maximum="1" Value="{Binding PeakRight}"/>
+                    </StackPanel>
+
+                    <!-- 状态 -->
+                    <TextBlock Grid.Column="7" VerticalAlignment="Center" MinWidth="72" FontSize="11"
+                               Classes="muted" TextTrimming="CharacterEllipsis" Text="{Binding MonitorStatus}"/>
+                </Grid>
+            </ctrl:SquircleBorder>
+
             <!-- 两栏:对象树 | 编辑器 -->
-            <Grid Grid.Row="1" ColumnDefinitions="300,*" ColumnSpacing="12">
+            <Grid Grid.Row="2" ColumnDefinitions="300,*" ColumnSpacing="12">
 
                 <!-- 对象列表 -->
                 <ctrl:SquircleBorder Grid.Column="0" Classes="card">

@@ -27,6 +27,17 @@ public partial class MainWindow : Window
         AddHandler(DragDrop.DropEvent, OnDrop);
     }
 
+    // 关窗时停掉实时监听,确保音频设备 + worker 干净收尾(否则等 SafeHandle 终结器不可靠)。
+    protected override void OnClosed(EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.SemanticEditor.StopMonitor();
+        }
+
+        base.OnClosed(e);
+    }
+
     private void OnDragOver(object? sender, DragEventArgs e)
     {
         bool ok = e.DataTransfer.Contains(DataFormat.File) && DataContext is MainWindowViewModel { IsRendering: false };

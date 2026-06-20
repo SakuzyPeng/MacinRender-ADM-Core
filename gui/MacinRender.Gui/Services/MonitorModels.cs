@@ -27,3 +27,6 @@ public sealed record MonitorOverride(
     float DiffuseScale = 1.0f,
     float ExtentScale = 1.0f,
     float DivergenceScale = 1.0f);
+
+/// <summary>监听后端 A/B 选项:展示名 + 渲染器 + 监听布局。立体声监听下可跨布局(经下混)。</summary>
+public sealed record MonitorBackendOption(string Label, AdmRenderer Renderer, string Layout);

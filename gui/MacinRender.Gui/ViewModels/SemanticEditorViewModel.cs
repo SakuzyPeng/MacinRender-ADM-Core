@@ -5,7 +5,9 @@ using System.Globalization;
 using System.IO;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using MacinRender.Gui.I18n;
 using MacinRender.Gui.Interop;
 using MacinRender.Gui.Services;
@@ -64,7 +66,16 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
             OnPropertyChanged(nameof(OverrideSummary));
             OnPropertyChanged(nameof(CommonPrefixLabel));
+            OnPropertyChanged(nameof(MonitorToggleText));
         };
+
+        // 监听后端 A/B(默认双耳:拓扑维度需 binaural re-prepare 才听得到)。下拉项为中性专名,免翻。
+        MonitorBackends.Add(new MonitorBackendOption("双耳 · SAF", AdmRenderer.SafBinaural, "binaural"));
+        MonitorBackends.Add(new MonitorBackendOption("双耳 · Apple", AdmRenderer.Apple, "binaural"));
+        _selectedMonitorBackend = MonitorBackends[0];
+
+        _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) }; // ~30 Hz
+        _pollTimer.Tick += (_, _) => PollMonitor();
     }
 
     public async Task LoadFileAsync(string path)
@@ -74,6 +85,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             return;
         }
 
+        StopMonitor(); // 换文件先停掉旧监听
         IsLoading = true;
         StatusText = L.Format("SemLoading", Path.GetFileName(path));
         try
@@ -134,7 +146,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         }
     }
 
-    private void OnRowChanged() => RebuildPolicy();
+    private void OnRowChanged()
+    {
+        RebuildPolicy();
+        _overridesDirty = true; // 监听中:由轮询定时器去抖后推送(见 PollMonitor)
+    }
 
     // 任一行的覆盖变化 → 重拼整份 policy JSON。行级覆盖按成员展开:一对 L/R = 两条同值 id 规则。
     private void RebuildPolicy()
@@ -161,6 +177,231 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             ["objects"] = new JsonArray(rules.ToArray()),
         };
         PolicyJson = doc.ToJsonString();
+    }
+
+    // ── 实时监听(同一份行编辑既驱动 policy,也实时 SetOverrides;契约:monitor 非线程安全 → 全 UI 线程) ──
+
+    private readonly MonitorService _monitor = new();
+    private readonly DispatcherTimer _pollTimer;
+    private bool _applyingPoll;   // 轮询写 PlayheadSeconds 时置位,避免被当成用户拖动 seek
+    private bool _overridesDirty; // 行覆盖变更标记,轮询时去抖推送
+    private ulong _overrideRevision;
+    private uint _sampleRate;
+
+    public ObservableCollection<MonitorBackendOption> MonitorBackends { get; } = new();
+
+    [ObservableProperty] private MonitorBackendOption _selectedMonitorBackend;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MonitorToggleText))]
+    private bool _isMonitoring;
+
+    [ObservableProperty] private bool _isMonitorBusy; // 启动监听中(import + 开设备),按钮禁用
+
+    public string MonitorToggleText => IsMonitoring ? L["SemMonStop"] : L["SemMonStart"];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPlaying))]
+    private AdmMonitorState _monitorState = AdmMonitorState.Stopped;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PlayheadText))]
+    private double _playheadSeconds;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DurationText))]
+    private double _durationSeconds;
+
+    [ObservableProperty] private float _peakLeft;
+    [ObservableProperty] private float _peakRight;
+    [ObservableProperty] private string _monitorStatus = "";
+
+    public bool IsPlaying => MonitorState == AdmMonitorState.Playing;
+    public string PlayheadText => FormatTime(PlayheadSeconds);
+    public string DurationText => FormatTime(DurationSeconds);
+
+    private static string FormatTime(double seconds)
+    {
+        if (double.IsNaN(seconds) || seconds < 0)
+        {
+            seconds = 0;
+        }
+
+        var total = (int)seconds;
+        return $"{total / 60}:{total % 60:00}";
+    }
+
+    [RelayCommand]
+    private async Task ToggleMonitorAsync()
+    {
+        if (IsMonitoring)
+        {
+            StopMonitor();
+            return;
+        }
+
+        if (!HasFile || IsMonitorBusy)
+        {
+            return;
+        }
+
+        var path = LoadedPath!;
+        var backend = SelectedMonitorBackend;
+        IsMonitorBusy = true;
+        MonitorStatus = L["SemMonStarting"];
+
+        // import + apply policy + 开设备可能略耗时 → 后台启动,await 后回 UI 线程(串行,无并发触 monitor)。
+        var (rc, sr, dur) = await Task.Run(() =>
+        {
+            var probe = ProbeDuration(path);
+            var start = _monitor.Start(path,
+                new RenderSettings { Renderer = backend.Renderer, Layout = backend.Layout });
+            return (start, probe.SampleRate, probe.Duration);
+        });
+
+        IsMonitorBusy = false;
+        if (rc != AdmErrorCode.Ok)
+        {
+            MonitorStatus = L.Format("SemMonStartFailed", rc.ToString());
+            return;
+        }
+
+        _sampleRate = sr;
+        DurationSeconds = dur;
+        IsMonitoring = true;
+        PushOverrides();          // 把当前编辑立即应用到新监听
+        _monitor.Play();
+        MonitorState = AdmMonitorState.Playing;
+        _pollTimer.Start();
+    }
+
+    [RelayCommand]
+    private void PlayPause()
+    {
+        if (!IsMonitoring)
+        {
+            return;
+        }
+
+        if (MonitorState == AdmMonitorState.Playing)
+        {
+            _monitor.Pause();
+            MonitorState = AdmMonitorState.Paused;
+        }
+        else
+        {
+            _monitor.Play();
+            MonitorState = AdmMonitorState.Playing;
+        }
+    }
+
+    public void StopMonitor()
+    {
+        _pollTimer.Stop();
+        _monitor.Stop();
+        IsMonitoring = false;
+        MonitorState = AdmMonitorState.Stopped;
+        PlayheadSeconds = 0;
+        PeakLeft = 0;
+        PeakRight = 0;
+        MonitorStatus = "";
+    }
+
+    partial void OnSelectedMonitorBackendChanged(MonitorBackendOption value)
+    {
+        if (value is null || !IsMonitoring)
+        {
+            return;
+        }
+
+        var rc = _monitor.SwitchBackend(new RenderSettings { Renderer = value.Renderer, Layout = value.Layout });
+        if (rc != AdmErrorCode.Ok)
+        {
+            MonitorStatus = L.Format("SemMonSwitchFailed", rc.ToString());
+        }
+    }
+
+    partial void OnPlayheadSecondsChanged(double value)
+    {
+        if (_applyingPoll || !IsMonitoring)
+        {
+            return; // 轮询回写,非用户拖动
+        }
+
+        _monitor.Seek(value);
+    }
+
+    private void PollMonitor()
+    {
+        if (!IsMonitoring)
+        {
+            return;
+        }
+
+        if (_overridesDirty)
+        {
+            PushOverrides();
+            _overridesDirty = false;
+        }
+
+        var st = _monitor.GetStatus();
+        if (st is not null)
+        {
+            if (_sampleRate > 0)
+            {
+                _applyingPoll = true;
+                PlayheadSeconds = st.PlayheadFrames / (double)_sampleRate;
+                _applyingPoll = false;
+            }
+
+            MonitorState = st.State; // 引擎为准
+            MonitorStatus = st.Ended
+                ? L["SemMonEnded"]
+                : (st.Underruns > 0 ? L.Format("SemMonUnderruns", st.Underruns) : "");
+        }
+
+        var lv = _monitor.GetLevels(2);
+        if (lv is { Peak.Count: >= 1 })
+        {
+            PeakLeft = lv.Peak[0];
+            PeakRight = lv.Peak.Count > 1 ? lv.Peak[1] : lv.Peak[0];
+        }
+    }
+
+    private void PushOverrides()
+    {
+        if (!IsMonitoring)
+        {
+            return;
+        }
+
+        var list = new List<MonitorOverride>();
+        foreach (var row in Rows)
+        {
+            list.AddRange(row.BuildLiveOverrides());
+        }
+
+        _monitor.SetOverrides(list, ++_overrideRevision);
+    }
+
+    private static (uint SampleRate, double Duration) ProbeDuration(string path)
+    {
+        using var ctx = NativeMethods.adm_create_context();
+        if (ctx.IsInvalid)
+        {
+            return (0, 0);
+        }
+
+        var rc = NativeMethods.adm_probe_file(ctx, path, out var info);
+        using (info)
+        {
+            if (rc != AdmErrorCode.Ok || info.IsInvalid)
+            {
+                return (0, 0);
+            }
+
+            return (NativeMethods.adm_scene_info_sample_rate(info), NativeMethods.adm_scene_info_duration_seconds(info));
+        }
     }
 }
 
@@ -483,6 +724,25 @@ public sealed class SemanticRow
         if (fragment is not null)
         {
             rule[key] = fragment;
+        }
+    }
+
+    /// <summary>把本行覆盖投影成实时监听覆盖,按成员展开(每对象一条)。无启用维度则不产出。
+    /// 与 BuildRules 同源:gain=dB 偏移(未启用 0),其余=× 倍(未启用 1.0)。</summary>
+    public IEnumerable<MonitorOverride> BuildLiveOverrides()
+    {
+        if (!GainDb.Enabled && !DiffuseScale.Enabled && !ExtentScale.Enabled && !DivergenceScale.Enabled)
+        {
+            yield break;
+        }
+
+        var gainDb = (float)(GainDb.Enabled ? GainDb.Value : 0.0);
+        var diffuse = (float)(DiffuseScale.Enabled ? DiffuseScale.Value : 1.0);
+        var extent = (float)(ExtentScale.Enabled ? ExtentScale.Value : 1.0);
+        var divergence = (float)(DivergenceScale.Enabled ? DivergenceScale.Value : 1.0);
+        foreach (var m in Members)
+        {
+            yield return new MonitorOverride(m.Id, gainDb, diffuse, extent, divergence);
         }
     }
 
