@@ -41,20 +41,28 @@
 #include "adm/render.h"
 #include "adm/render_binaural.h"
 
+#include "binaural_internal.h"
 #include "binaural_spreader.h"
 #include "render_common.h"
 
 namespace mradm {
 
-namespace {
+// The module-private HRTF state and interpolation entry points live in binaural_internal so the
+// test-only probe (binaural_test_probe.cpp) can share them without compiling test code into the
+// production library. Bring them into scope for the renderer code below.
+using namespace binaural_internal;
+
+// This block reopens binaural_internal (declared in binaural_internal.h): the renderer's private
+// helpers, HRTF state and interpolation routines all live here so the test probe can reuse the
+// declared subset without test code entering the production library.
+namespace binaural_internal {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 constexpr uint64_t k_min_block_size = 1024U;
 constexpr float k_spreader_extent_threshold_deg = 1.0F; // min extent to route via saf_spreader
-constexpr int k_n_ears = 2;
-constexpr int k_n_azi = 361;  // (int)(360/1 + 0.5) + 1
-constexpr int k_n_elev = 181; // (int)(180/1 + 0.5) + 1
+constexpr int k_n_azi = 361;                            // (int)(360/1 + 0.5) + 1
+constexpr int k_n_elev = 181;                           // (int)(180/1 + 0.5) + 1
 constexpr std::size_t k_binaural_divergence_slots = 3U;
 constexpr std::size_t k_binaural_center_slot = 1U;
 constexpr std::size_t k_binaural_extent_slots = 17U;
@@ -296,15 +304,7 @@ std::pair<float, float> sofa_cart_to_polar(float x, float y, float z) {
 #endif
 
 // ── HRTF dataset and pre-computed state ───────────────────────────────────────
-
-struct HrtfDataset {
-    std::string name;
-    int sample_rate{0};
-    int hrir_len{0};
-    int num_dirs{0};
-    std::vector<float> dirs_deg; // FLAT: [num_dirs × 2] az/el in degrees
-    std::vector<float> hrirs;    // FLAT: [num_dirs × 2 × hrir_len]
-};
+// HrtfDataset and BinauralState are declared in binaural_internal.h (shared with the test probe).
 
 HrtfDataset built_in_kemar_dataset() {
     HrtfDataset ds;
@@ -413,30 +413,6 @@ Result<HrtfDataset> load_hrtf_dataset(const RenderPlan& plan) {
     }
     return built_in_kemar_dataset();
 }
-
-// NOLINTBEGIN(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
-struct BinauralState {
-    int num_dirs{0};
-    int hrir_len{0};
-    int fft_size{0};
-    int n_bands{0};
-    int overlap_len{0};
-    std::string dataset_name;
-    // HRTFs in frequency domain; FLAT: [n_bands × k_n_ears × num_dirs]
-    std::vector<float_complex> hrtf_fd;
-    // Compressed VBAP table: amplitude-normalised gains + direction indices per grid point.
-    std::vector<float> vbap_gains; // FLAT: [N_gtable × 3]
-    std::vector<int> vbap_dirs;    // FLAT: [N_gtable × 3]
-    // Time-domain HRTFs and grid for saf_spreader mode.
-    std::vector<float> hrtf_td;       // [num_dirs × k_n_ears × hrir_len]
-    std::vector<float> grid_dirs_deg; // [num_dirs × 2]
-    int sample_rate{0};
-
-    BinauralState() = default;
-    BinauralState(const BinauralState&) = delete;
-    BinauralState& operator=(const BinauralState&) = delete;
-};
-// NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
 
 struct SafFree {
     void operator()(void* ptr) const noexcept {
@@ -592,24 +568,40 @@ std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_
 }
 
 // Interpolate HRTF at (az_deg, el_deg) into an existing buffer (no allocation after first call).
+//
+// Magnitude-preserving, phase-from-complex interpolation. Direct complex VBAP weighting combs the
+// far-ear high frequencies at off-grid directions (neighbouring HRTFs have different ITDs, so their
+// complex spectra cancel where the phases misalign). To suppress that comb we take the MAGNITUDE
+// from a weighted sum of |H| (real, non-negative → cannot comb) and the PHASE from the weighted sum
+// of the complex spectra: out = (Σ wₖ|Hₖ|) · (Σ wₖHₖ)/|Σ wₖHₖ|.
+//
+// At a grid point exactly one VBAP gain is 1, so out == the raw measured HRTF (verified by the
+// fixture test). Caveats — this is a comb-suppression heuristic, NOT a physically rigorous ITD /
+// group-delay model: (1) |H| summation replaces every phase-driven cancellation with the average
+// magnitude, so it also fills in genuine inter-direction notches, not just interpolation comb; it
+// must not be tuned past the point where lateral grid points or real-content regressions appear.
+// (2) The phase is unstable where |Σ wₖHₖ| → 0 and falls back to 0; it does not reconstruct true
+// interpolated group delay. Constrained by the binaural fixture invariants (grid-point identity +
+// off-grid far-ear improvement without lateral regression).
 void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<float_complex>& out) {
     const auto g = static_cast<std::size_t>(vbap_grid_idx(az_deg, el_deg));
     const auto gbase = g * 3U;
-    const float w0 = bs.vbap_gains[gbase + 0U];
-    const float w1 = bs.vbap_gains[gbase + 1U];
-    const float w2 = bs.vbap_gains[gbase + 2U];
-    const int d0 = bs.vbap_dirs[gbase + 0U];
-    const int d1 = bs.vbap_dirs[gbase + 1U];
-    const int d2 = bs.vbap_dirs[gbase + 2U];
+    const auto nd = static_cast<std::size_t>(bs.num_dirs);
     out.resize(static_cast<std::size_t>(bs.n_bands) * k_n_ears);
-    for (int band = 0; band < bs.n_bands; ++band) {
-        for (int ear = 0; ear < k_n_ears; ++ear) {
-            const auto base = (static_cast<std::ptrdiff_t>(band) * k_n_ears * bs.num_dirs) +
-                              (static_cast<std::ptrdiff_t>(ear) * bs.num_dirs);
-            out[(static_cast<std::size_t>(band) * k_n_ears) + static_cast<std::size_t>(ear)] =
-                crmulf(bs.hrtf_fd[static_cast<std::size_t>(base + d0)], w0) +
-                crmulf(bs.hrtf_fd[static_cast<std::size_t>(base + d1)], w1) +
-                crmulf(bs.hrtf_fd[static_cast<std::size_t>(base + d2)], w2);
+    for (int b = 0; b < bs.n_bands; ++b) {
+        for (std::size_t ear = 0; ear < k_n_ears; ++ear) {
+            float mag = 0.0F;
+            float_complex cpx{0.0F, 0.0F};
+            for (std::size_t k = 0; k < 3U; ++k) {
+                const float gain = bs.vbap_gains[gbase + k];
+                const auto dir = static_cast<std::size_t>(bs.vbap_dirs[gbase + k]);
+                const auto h = bs.hrtf_fd[(static_cast<std::size_t>(b) * k_n_ears * nd) + (ear * nd) + dir];
+                mag += gain * std::abs(h);
+                cpx += gain * h;
+            }
+            const float acpx = std::abs(cpx);
+            out[(static_cast<std::size_t>(b) * k_n_ears) + ear] =
+                acpx > 1e-9F ? cpx * (mag / acpx) : float_complex{mag, 0.0F};
         }
     }
 }
@@ -1895,7 +1887,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
     return metrics;
 }
 
-} // namespace
+} // namespace binaural_internal
 
 CapabilityReport binaural_capabilities() {
     CapabilityReport r;
