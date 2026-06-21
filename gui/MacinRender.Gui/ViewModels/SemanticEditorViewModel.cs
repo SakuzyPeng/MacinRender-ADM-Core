@@ -127,10 +127,13 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
             CommonPrefix = ObjectNaming.DetectCommonPrefix(names);
 
+            // ADM 里声床(bed)也是 AudioObject,但引用 DirectSpeakers pack(track 里是 ds_blocks 而非
+            // object_blocks)。声床照样纳入编辑,但听感维度(diffuse/extent/divergence)是 Objects-only,
+            // 对声床无意义 → 只暴露 gain(对象级,实时与导出一致)。无 object_blocks 即判为声床。
             var items = new List<SemanticObjectItem>(doc.Objects.Count);
             foreach (var obj in doc.Objects)
             {
-                items.Add(SemanticObjectItem.From(obj, CommonPrefix));
+                items.Add(SemanticObjectItem.From(obj, CommonPrefix, isBed: !HasObjectBlocks(obj)));
             }
 
             foreach (var row in SemanticRow.BuildRows(items))
@@ -148,6 +151,21 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         {
             IsLoading = false;
         }
+    }
+
+    // typeDefinition=Objects 判别:含至少一个带 object_blocks 的 track。声床(DirectSpeakers)
+    // 只有 ds_blocks,HOA 走 hoa_tracks 不进 objects → 二者均返回 false,不在语义编辑器列出。
+    private static bool HasObjectBlocks(InspectObject obj)
+    {
+        foreach (var t in obj.Tracks)
+        {
+            if (t.ObjectBlocks.Count > 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void OnRowChanged()
@@ -771,6 +789,9 @@ public sealed class SemanticObjectItem
     public int? DialogueId { get; init; }
     public bool Mute { get; init; }
 
+    // typeDefinition=DirectSpeakers(声床/bed):只 gain 可编辑,听感维度不适用。
+    public bool IsBed { get; init; }
+
     public DimRange GainRange { get; init; }
     public DimRange DiffuseRange { get; init; }
     public DimRange WidthRange { get; init; }
@@ -790,6 +811,11 @@ public sealed class SemanticObjectItem
         get
         {
             var parts = new List<string>();
+            if (IsBed)
+            {
+                parts.Add("bed");
+            }
+
             if (Importance is { } imp)
             {
                 parts.Add($"importance {imp}");
@@ -809,7 +835,7 @@ public sealed class SemanticObjectItem
         }
     }
 
-    internal static SemanticObjectItem From(InspectObject obj, string commonPrefix = "")
+    internal static SemanticObjectItem From(InspectObject obj, string commonPrefix = "", bool isBed = false)
     {
         var diffuse = new List<double>();
         var width = new List<double>();
@@ -833,6 +859,7 @@ public sealed class SemanticObjectItem
             Id = obj.Id,
             Name = obj.Name,
             DisplayName = ObjectNaming.Strip(string.IsNullOrEmpty(obj.Name) ? obj.Id : obj.Name, commonPrefix),
+            IsBed = isBed,
             Importance = obj.Importance,
             DialogueId = obj.DialogueId,
             Mute = obj.Mute,
@@ -856,6 +883,10 @@ public sealed class SemanticRow
     public string DisplayName { get; }
     public string ChannelTag { get; }
 
+    // 声床行:只 gain 可编辑,隐藏 diffuse/extent/divergence(Objects-only)。
+    public bool IsBed { get; }
+    public bool ShowPerceptual => !IsBed;
+
     public ScalarOverride GainDb { get; }
     public ScalarOverride DiffuseScale { get; }
     public ScalarOverride ExtentScale { get; }
@@ -868,6 +899,7 @@ public sealed class SemanticRow
         Members = members;
         DisplayName = displayName;
         ChannelTag = channelTag;
+        IsBed = members.Count > 0 && members[0].IsBed;
 
         DimRange Union(Func<SemanticObjectItem, DimRange> sel)
         {
@@ -937,9 +969,12 @@ public sealed class SemanticRow
         {
             var rule = new JsonObject();
             AddIf(rule, "gain", GainDb.ToPolicyFragment());
-            AddIf(rule, "diffuse", DiffuseScale.ToPolicyFragment());
-            AddIf(rule, "extent", ExtentScale.ToPolicyFragment());
-            AddIf(rule, "divergence", DivergenceScale.ToPolicyFragment());
+            if (!IsBed) // 声床只 gain;听感维度对 DirectSpeakers 无意义,不产出策略片段
+            {
+                AddIf(rule, "diffuse", DiffuseScale.ToPolicyFragment());
+                AddIf(rule, "extent", ExtentScale.ToPolicyFragment());
+                AddIf(rule, "divergence", DivergenceScale.ToPolicyFragment());
+            }
             if (rule.Count == 0)
             {
                 continue;

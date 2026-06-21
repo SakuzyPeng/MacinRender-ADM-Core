@@ -308,8 +308,9 @@
                                            Text="{Binding SelectedRow.GainDb.EffectiveText}"/>
                             </Grid>
 
-                            <!-- diffuse(× scale) -->
-                            <Grid ColumnDefinitions="80,*,202,*">
+                            <!-- diffuse(× scale)。声床(bed)无此维度 → 隐藏 -->
+                            <Grid ColumnDefinitions="80,*,202,*"
+                                  IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
                                            Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.DiffuseScale}"
                                            ToolTip.Tip="{DynamicResource SemResetHint}"
@@ -338,8 +339,9 @@
                                            Text="{Binding SelectedRow.DiffuseScale.EffectiveText}"/>
                             </Grid>
 
-                            <!-- extent(× scale,作用于 W/H/D) -->
-                            <Grid ColumnDefinitions="80,*,202,*">
+                            <!-- extent(× scale,作用于 W/H/D)。声床(bed)无此维度 → 隐藏 -->
+                            <Grid ColumnDefinitions="80,*,202,*"
+                                  IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
                                            Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.ExtentScale}"
                                            ToolTip.Tip="{DynamicResource SemResetHint}"
@@ -369,8 +371,9 @@
                                            Text="{Binding SelectedRow.ExtentScale.EffectiveText}"/>
                             </Grid>
 
-                            <!-- divergence(× scale) -->
-                            <Grid ColumnDefinitions="80,*,202,*">
+                            <!-- divergence(× scale)。声床(bed)无此维度 → 隐藏 -->
+                            <Grid ColumnDefinitions="80,*,202,*"
+                                  IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
                                            Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.DivergenceScale}"
                                            ToolTip.Tip="{DynamicResource SemResetHint}"
