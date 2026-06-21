@@ -129,6 +129,12 @@ internal static partial class NativeMethods
         string? outputPath, AdmRenderOptionsHandle opts, IntPtr progress, IntPtr userData,
         out AdmRenderResultHandle result);
 
+    // ── export(写回生效 ADM,v1.13)──
+    // 应用 opts 携带的语义策略,把改写后的 ADM 写到 outputPath(复用源 PCM/chna,bit-exact)。
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial AdmErrorCode adm_export_file(AdmContextHandle context, string inputPath,
+        string outputPath, AdmRenderOptionsHandle opts);
+
     // ── result ──
     [LibraryImport(Lib)]
     internal static partial void adm_destroy_render_result(IntPtr result);

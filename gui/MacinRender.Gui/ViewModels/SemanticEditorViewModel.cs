@@ -28,6 +28,8 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasFile))]
+    [NotifyPropertyChangedFor(nameof(CanExport))]
+    [NotifyPropertyChangedFor(nameof(CanPlay))]
     private string? _loadedPath;
 
     [ObservableProperty] private SemanticRow? _selectedRow;
@@ -66,7 +68,6 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
             OnPropertyChanged(nameof(OverrideSummary));
             OnPropertyChanged(nameof(CommonPrefixLabel));
-            OnPropertyChanged(nameof(MonitorToggleText));
         };
 
         // 监听后端 A/B(默认双耳:拓扑维度需 binaural re-prepare 才听得到)。下拉项为中性专名,免翻。
@@ -179,6 +180,48 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         PolicyJson = doc.ToJsonString();
     }
 
+    /// <summary>清空所有对象的全部覆盖(双击「对象」标题触发)。</summary>
+    public void ResetAllOverrides()
+    {
+        foreach (var row in Rows)
+        {
+            row.ResetAll();
+        }
+    }
+
+    // ── 导出生效 ADM(把当前语义覆盖固化写回新 BWF,复用源 PCM;格式选择留给二级窗口的渲染路径) ──
+
+    private readonly AdmRenderService _renderSvc = new();
+
+    [ObservableProperty] private bool _isExporting;
+
+    public bool CanExport => HasFile && !IsExporting;
+
+    /// <summary>把当前 policy 应用到源 ADM,写回到 outputPath。由 View 选好保存路径后调用。</summary>
+    public async Task ExportToAsync(string outputPath)
+    {
+        if (!HasFile || IsExporting || string.IsNullOrEmpty(outputPath))
+        {
+            return;
+        }
+
+        IsExporting = true;
+        OnPropertyChanged(nameof(CanExport));
+        StatusText = L["SemExporting"];
+        try
+        {
+            var rc = await _renderSvc.ExportAsync(LoadedPath!, outputPath, string.IsNullOrEmpty(PolicyJson) ? null : PolicyJson);
+            StatusText = rc == AdmErrorCode.Ok
+                ? L.Format("SemExported", Path.GetFileName(outputPath))
+                : L.Format("SemExportFailed", rc.ToString());
+        }
+        finally
+        {
+            IsExporting = false;
+            OnPropertyChanged(nameof(CanExport));
+        }
+    }
+
     // ── 实时监听(同一份行编辑既驱动 policy,也实时 SetOverrides;契约:monitor 非线程安全 → 全 UI 线程) ──
 
     private readonly MonitorService _monitor = new();
@@ -193,12 +236,17 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [ObservableProperty] private MonitorBackendOption _selectedMonitorBackend;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MonitorToggleText))]
+    [NotifyPropertyChangedFor(nameof(CanSeek))]
     private bool _isMonitoring;
 
-    [ObservableProperty] private bool _isMonitorBusy; // 启动监听中(import + 开设备),按钮禁用
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSeek))]
+    [NotifyPropertyChangedFor(nameof(CanPlay))]
+    private bool _isMonitorBusy; // 启动监听中(import + 开设备),按钮禁用
 
-    public string MonitorToggleText => IsMonitoring ? L["SemMonStop"] : L["SemMonStart"];
+    // 播放器按钮可用态:播放键需有文件且不在启动中;回到开头 / seek 需正在监听。
+    public bool CanPlay => HasFile && !IsMonitorBusy;
+    public bool CanSeek => IsMonitoring && !IsMonitorBusy;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPlaying))]
@@ -212,13 +260,63 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(DurationText))]
     private double _durationSeconds;
 
-    [ObservableProperty] private float _peakLeft;
-    [ObservableProperty] private float _peakRight;
+    // 电平表宽度(像素),与 XAML 里的表条宽度一致;填充宽度 = norm*该宽度。
+    private const double MeterWidthPx = 96.0;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PeakLeftText))]
+    [NotifyPropertyChangedFor(nameof(PeakLeftFillWidth))]
+    private float _peakLeft;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PeakRightText))]
+    [NotifyPropertyChangedFor(nameof(PeakRightFillWidth))]
+    private float _peakRight;
+
     [ObservableProperty] private string _monitorStatus = "";
+
+    // LUFS(ITU-R BS.1770)三窗读数;UI 一次显示一个,点击在 M / S / I 间循环。
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LufsValueText))]
+    private float _momentaryLufs = float.NegativeInfinity;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LufsValueText))]
+    private float _shorttermLufs = float.NegativeInfinity;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LufsValueText))]
+    private float _integratedLufs = float.NegativeInfinity;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LufsValueText))]
+    [NotifyPropertyChangedFor(nameof(LufsModeLabel))]
+    private int _lufsMode; // 0 = momentary(M), 1 = short-term(S), 2 = integrated(I)
 
     public bool IsPlaying => MonitorState == AdmMonitorState.Playing;
     public string PlayheadText => FormatTime(PlayheadSeconds);
     public string DurationText => FormatTime(DurationSeconds);
+
+    // 电平表:线性峰值 → dBFS 文本 + 遮罩宽度。底层是固定的 绿→黄→红 渐变,右侧盖一块遮罩,
+    // 宽度 =(1-norm)*表宽——电平越高遮罩越窄、露出越多渐变(越靠近 0 dBFS 越红)。
+    public string PeakLeftText => DbfsText(PeakLeft);
+    public string PeakRightText => DbfsText(PeakRight);
+    public double PeakLeftFillWidth => DbfsNorm(PeakLeft) * MeterWidthPx;
+    public double PeakRightFillWidth => DbfsNorm(PeakRight) * MeterWidthPx;
+
+    public string LufsModeLabel => LufsMode switch { 0 => "LUFS-M", 1 => "LUFS-S", _ => "LUFS-I" };
+
+    public string LufsValueText
+    {
+        get
+        {
+            var v = LufsMode switch { 0 => MomentaryLufs, 1 => ShorttermLufs, _ => IntegratedLufs };
+            return float.IsFinite(v) ? v.ToString("0.0", CultureInfo.InvariantCulture) : "-∞";
+        }
+    }
+
+    [RelayCommand]
+    private void CycleLufsMode() => LufsMode = (LufsMode + 1) % 3;
 
     private static string FormatTime(double seconds)
     {
@@ -231,15 +329,68 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         return $"{total / 60}:{total % 60:00}";
     }
 
-    [RelayCommand]
-    private async Task ToggleMonitorAsync()
+    private static string DbfsText(float lin) =>
+        lin <= 1.0e-6F ? "-∞" : (20.0 * Math.Log10(lin)).ToString("0.0", CultureInfo.InvariantCulture);
+
+    private static double DbfsNorm(float lin)
     {
-        if (IsMonitoring)
+        if (lin <= 1.0e-6F)
         {
-            StopMonitor();
+            return 0.0;
+        }
+
+        var db = 20.0 * Math.Log10(lin);
+        return Math.Clamp((db + 60.0) / 60.0, 0.0, 1.0);
+    }
+
+    // 像常见播放器:主播放键在未监听时自动开监听并播放,之后在播放 / 暂停间切换——永不出现死键。
+    [RelayCommand]
+    private async Task TogglePlayAsync()
+    {
+        if (IsMonitorBusy)
+        {
             return;
         }
 
+        if (!IsMonitoring)
+        {
+            await StartMonitorAsync();
+            return;
+        }
+
+        if (MonitorState == AdmMonitorState.Playing)
+        {
+            _monitor.Pause();
+            MonitorState = AdmMonitorState.Paused;
+        }
+        else
+        {
+            _monitor.Play();
+            MonitorState = AdmMonitorState.Playing;
+        }
+    }
+
+    // 回到开头:⏮。
+    [RelayCommand]
+    private void SeekToStart() => SeekRelative(double.NegativeInfinity);
+
+    // 相对 seek(秒):方向键 ±5s 用。NegativeInfinity = 回到开头。钳到 [0, 时长]。
+    public void SeekRelative(double deltaSeconds)
+    {
+        if (!IsMonitoring)
+        {
+            return;
+        }
+
+        var target = double.IsNegativeInfinity(deltaSeconds)
+            ? 0.0
+            : Math.Clamp(PlayheadSeconds + deltaSeconds, 0.0, DurationSeconds);
+        _monitor.Seek(target);
+        PlayheadSeconds = target;
+    }
+
+    private async Task StartMonitorAsync()
+    {
         if (!HasFile || IsMonitorBusy)
         {
             return;
@@ -275,26 +426,6 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         _pollTimer.Start();
     }
 
-    [RelayCommand]
-    private void PlayPause()
-    {
-        if (!IsMonitoring)
-        {
-            return;
-        }
-
-        if (MonitorState == AdmMonitorState.Playing)
-        {
-            _monitor.Pause();
-            MonitorState = AdmMonitorState.Paused;
-        }
-        else
-        {
-            _monitor.Play();
-            MonitorState = AdmMonitorState.Playing;
-        }
-    }
-
     public void StopMonitor()
     {
         _pollTimer.Stop();
@@ -304,6 +435,9 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         PlayheadSeconds = 0;
         PeakLeft = 0;
         PeakRight = 0;
+        MomentaryLufs = float.NegativeInfinity;
+        ShorttermLufs = float.NegativeInfinity;
+        IntegratedLufs = float.NegativeInfinity;
         MonitorStatus = "";
     }
 
@@ -354,19 +488,27 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
                 _applyingPoll = false;
             }
 
-            MonitorState = st.State; // 引擎为准
-            MonitorStatus = st.Ended
-                ? L["SemMonEnded"]
-                : (st.Underruns > 0 ? L.Format("SemMonUnderruns", st.Underruns) : "");
+            MonitorState = st.State;                                  // 引擎为准
+            MonitorStatus = st.Ended ? L["SemMonEnded"] : st.Failed ? L["SemMonFailed"] : "";
         }
 
         var lv = _monitor.GetLevels(2);
         if (lv is { Peak.Count: >= 1 })
         {
-            PeakLeft = lv.Peak[0];
-            PeakRight = lv.Peak.Count > 1 ? lv.Peak[1] : lv.Peak[0];
+            // 弹道:瞬时块峰值逐块剧烈起伏,直接画会抽搐 → 快起跳(取新峰)、慢回落(按系数衰减)。
+            PeakLeft = SmoothPeak(PeakLeft, lv.Peak[0]);
+            PeakRight = SmoothPeak(PeakRight, lv.Peak.Count > 1 ? lv.Peak[1] : lv.Peak[0]);
+            MomentaryLufs = lv.MomentaryLufs;
+            ShorttermLufs = lv.ShorttermLufs;
+            IntegratedLufs = lv.IntegratedLufs;
         }
     }
+
+    // 表头回落系数(每 ~33ms tick):新峰更高则立即跟上,否则向当前值缓慢衰减,避免逐块抖动。
+    private const float MeterDecayPerTick = 0.85F;
+
+    private static float SmoothPeak(float prev, float raw) =>
+        raw >= prev ? raw : Math.Max(raw, prev * MeterDecayPerTick);
 
     private void PushOverrides()
     {
@@ -458,6 +600,7 @@ public sealed partial class ScalarOverride : ObservableObject
     private readonly Mode _mode;
     private readonly double _clampLo;
     private readonly double _clampHi;
+    private readonly double _defaultValue;
 
     public string Label { get; }
     public double SliderMin { get; }
@@ -471,6 +614,7 @@ public sealed partial class ScalarOverride : ObservableObject
         _mode = mode;
         _axes = axes;
         _value = defaultValue;
+        _defaultValue = defaultValue;
         SliderMin = sliderMin;
         SliderMax = sliderMax;
         _clampLo = clampLo;
@@ -484,10 +628,41 @@ public sealed partial class ScalarOverride : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EffectiveText))]
     [NotifyPropertyChangedFor(nameof(ValueText))]
+    [NotifyPropertyChangedFor(nameof(ValueEntry))]
     private double _value;
 
     partial void OnEnabledChanged(bool value) => Changed?.Invoke();
     partial void OnValueChanged(double value) => Changed?.Invoke();
+
+    /// <summary>清掉本维度覆盖:取消勾选 + 值回到中性默认(gain 0 dB / scale ×1)。</summary>
+    public void Reset()
+    {
+        Enabled = false;
+        Value = _defaultValue;
+    }
+
+    // 单位装饰(贴在可输入框两侧):scale 用前缀 ×,gain 用后缀 dB。
+    public string UnitPrefix => _mode == Mode.ScaleLinear ? "×" : "";
+    public string UnitSuffix => _mode == Mode.GainDb ? "dB" : "";
+
+    /// <summary>覆盖值的可编辑文本(只含数字,不含单位)。提交时解析 + 钳到滑块范围,并自动勾选
+    /// 启用——直接键入数值即视为要应用该覆盖(与拖滑块同效,但免去先勾选)。</summary>
+    public string ValueEntry
+    {
+        get => _mode == Mode.GainDb
+            ? Value.ToString("0.0", CultureInfo.InvariantCulture)
+            : Value.ToString("0.00", CultureInfo.InvariantCulture);
+        set
+        {
+            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
+            {
+                Enabled = true;
+                Value = Math.Clamp(v, SliderMin, SliderMax);
+            }
+
+            OnPropertyChanged(); // 回写规范化后的文本(拒绝非法输入 / 反映钳制结果)
+        }
+    }
 
     public string ValueText => _mode == Mode.GainDb
         ? Value.ToString("+0.0;-0.0;0", CultureInfo.InvariantCulture) + " dB"
@@ -676,6 +851,15 @@ public sealed class SemanticRow
         {
             ov.Changed += () => Changed?.Invoke();
         }
+    }
+
+    /// <summary>清空本行(对象 / L·R 对)全部维度覆盖。</summary>
+    public void ResetAll()
+    {
+        GainDb.Reset();
+        DiffuseScale.Reset();
+        ExtentScale.Reset();
+        DivergenceScale.Reset();
     }
 
     public string Tooltip

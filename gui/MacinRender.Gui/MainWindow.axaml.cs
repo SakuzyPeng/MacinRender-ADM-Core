@@ -25,6 +25,32 @@ public partial class MainWindow : Window
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
         AddHandler(DragDrop.DropEvent, OnDrop);
+        // 隧道阶段抢在子控件前看键:监听中用 ←/→ 快退/快进 5 秒(文本框内不拦,留给编辑光标)。
+        AddHandler(KeyDownEvent, OnGlobalKeyDown, RoutingStrategies.Tunnel);
+    }
+
+    private const double SeekStepSeconds = 5.0;
+
+    private void OnGlobalKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Left or Key.Right))
+        {
+            return;
+        }
+
+        // 文本框内方向键留给编辑(移动光标),不抢。
+        if (FocusManager?.GetFocusedElement() is TextBox)
+        {
+            return;
+        }
+
+        if (DataContext is not MainWindowViewModel { SemanticEditor: { IsMonitoring: true } se })
+        {
+            return;
+        }
+
+        se.SeekRelative(e.Key == Key.Left ? -SeekStepSeconds : SeekStepSeconds);
+        e.Handled = true;
     }
 
     // 关窗时停掉实时监听,确保音频设备 + worker 干净收尾(否则等 SafeHandle 终结器不可靠)。

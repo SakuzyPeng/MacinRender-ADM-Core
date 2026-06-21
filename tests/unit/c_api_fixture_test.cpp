@@ -2095,7 +2095,7 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
-    bool ok = check(adm_api_version_minor() == 17, "C ABI minor version is 17");
+    bool ok = check(adm_api_version_minor() == 18, "C ABI minor version is 18");
 
     // Argument validation (no device needed).
     adm_monitor_t* probe = nullptr;
@@ -2147,6 +2147,11 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     levels.rms = rms.data();
     ok = check(adm_monitor_get_levels(monitor, &levels) == ADM_ERROR_OK, "monitor get_levels") && ok;
     ok = check(levels.out_count >= 1U, "monitor levels report a channel count") && ok;
+    // v1.18 LUFS: present in the struct and either a finite value or the -inf silence
+    // sentinel (no playback may have happened yet on a headless runner).
+    ok = check(!std::isnan(levels.momentary_lufs) && !std::isnan(levels.integrated_lufs),
+               "monitor levels LUFS fields are populated (finite or -inf, not NaN)") &&
+         ok;
 
     ok = check(adm_monitor_seek(monitor, 0.0) == ADM_ERROR_OK, "monitor seek") && ok;
     ok = check(adm_monitor_set_loop(monitor, 0.0, 0.5) == ADM_ERROR_OK, "monitor set_loop") && ok;

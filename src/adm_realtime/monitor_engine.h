@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -45,11 +46,15 @@ struct MonitorStatus {
 
 inline constexpr std::size_t k_max_level_channels = 64U;
 
-// Per-channel peak / RMS of the most recently played block.
+// Per-channel peak / RMS of the most recently played block, plus program loudness (LUFS,
+// ITU-R BS.1770) of the monitored output. LUFS is -inf when below the gate / silent.
 struct MonitorLevels {
     uint32_t channels{0};
     std::array<float, k_max_level_channels> peak{};
     std::array<float, k_max_level_channels> rms{};
+    float momentary_lufs{-std::numeric_limits<float>::infinity()};  // 400 ms window
+    float shortterm_lufs{-std::numeric_limits<float>::infinity()};  // 3 s window
+    float integrated_lufs{-std::numeric_limits<float>::infinity()}; // gated, since the last seek
 };
 
 class MonitorEngine {
@@ -101,6 +106,7 @@ class MonitorEngine {
     std::size_t pull(std::span<float> out, std::size_t frames); // consumer side (audio thread)
     void apply_seek_locked(uint64_t frame);                     // worker/control side, under control_mutex_
     void finalize_crossfade();                                  // worker side: snap to the incoming stream
+    void rebuild_meter();                                       // (re)create the LUFS meter for the current format
 
     std::unique_ptr<IRenderStream> stream_;
     IAudioOutputDevice& device_;
@@ -157,6 +163,13 @@ class MonitorEngine {
     // Levels, written by the audio thread, read by status pollers.
     std::array<std::atomic<float>, k_max_level_channels> peak_{};
     std::array<std::atomic<float>, k_max_level_channels> rms_{};
+
+    // Realtime LUFS meter (libebur128) over the produced monitor signal. Held as void* so
+    // ebur128.h stays out of this header (ADR 0003: third-party types confined to the .cpp).
+    // Fed by the worker (top_up_ring), reset by the worker (apply_seek), queried by the UI
+    // poll thread (levels()) — all serialised by meter_mutex_.
+    void* meter_{nullptr};
+    mutable std::mutex meter_mutex_;
 };
 
 } // namespace mradm::realtime

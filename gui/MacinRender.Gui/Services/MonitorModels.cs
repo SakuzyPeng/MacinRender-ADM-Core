@@ -14,10 +14,14 @@ public sealed record MonitorStatusSnapshot(
     bool Failed,
     ulong OverrideRevision);
 
-/// <summary>轮询所得的逐声道 peak / rms(adm_monitor_get_levels)。</summary>
+/// <summary>轮询所得的逐声道 peak / rms 及监听输出的整体 LUFS(adm_monitor_get_levels,v1.18)。
+/// LUFS 为 ITU-R BS.1770 响度;静音 / 低于门限时为 -inf。</summary>
 public sealed record MonitorLevelsSnapshot(
     IReadOnlyList<float> Peak,
-    IReadOnlyList<float> Rms);
+    IReadOnlyList<float> Rms,
+    float MomentaryLufs,
+    float ShorttermLufs,
+    float IntegratedLufs);
 
 /// <summary>一条按对象的实时覆盖。gain 即时;*_scale 为拓扑(binaural 经廉价 re-prepare,
 /// 其它后端接受但忽略),默认 1.0 表示不变。</summary>

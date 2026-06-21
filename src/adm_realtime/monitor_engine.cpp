@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <ebur128.h>
+#include <limits>
 
 namespace mradm::realtime {
 
@@ -23,7 +25,9 @@ MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutput
     : stream_(std::move(stream)), device_(device), logs_(logs), channels_(stream_->out_channels()),
       sample_rate_(stream_->sample_rate()), ring_(k_ring_frames * channels_),
       scratch_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F),
-      scratch_b_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F) {}
+      scratch_b_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F) {
+    rebuild_meter();
+}
 
 Result<std::unique_ptr<MonitorEngine>> MonitorEngine::create(IRenderStreamFactory& factory,
                                                              IAudioOutputDevice& device,
@@ -67,6 +71,34 @@ MonitorEngine::~MonitorEngine() {
     wake_.notify_all();
     if (worker_.joinable()) {
         worker_.join();
+    }
+    // Worker is joined and the device stopped, so no thread touches the meter anymore.
+    if (meter_ != nullptr) {
+        auto* st = static_cast<ebur128_state*>(meter_);
+        ebur128_destroy(&st);
+        meter_ = nullptr;
+    }
+}
+
+void MonitorEngine::rebuild_meter() {
+    // (Re)create the libebur128 state for the current monitor format. Called at construction
+    // and on every seek (so integrated loudness restarts from the new position). MODE_S
+    // implies MODE_M, MODE_I implies MODE_M — so momentary / short-term / integrated are all
+    // available. Guarded against the UI-thread query in levels().
+    const std::lock_guard<std::mutex> lock(meter_mutex_);
+    if (meter_ != nullptr) {
+        auto* old = static_cast<ebur128_state*>(meter_);
+        ebur128_destroy(&old);
+        meter_ = nullptr;
+    }
+    if (channels_ == 0 || sample_rate_ == 0) {
+        return;
+    }
+    ebur128_state* st = ebur128_init(channels_, sample_rate_, EBUR128_MODE_S | EBUR128_MODE_I);
+    meter_ = st;
+    if (st != nullptr && channels_ == 2) {
+        ebur128_set_channel(st, 0, EBUR128_LEFT);
+        ebur128_set_channel(st, 1, EBUR128_RIGHT);
     }
 }
 
@@ -201,7 +233,13 @@ void MonitorEngine::worker_loop() {
 
 bool MonitorEngine::top_up_ring() {
     bool produced = false;
-    while (ring_.available_write() >= scratch_.size()) {
+    // Produce at most one ring's worth per call, then return so the worker loop re-checks for a
+    // pending command (seek / override / switch). Without this bound, a consumer that drains as
+    // fast as we produce keeps available_write above a chunk indefinitely, so this loop never
+    // exits and the worker never returns to apply queued commands — starving mid-play edits
+    // exactly when production is near the consume rate.
+    std::size_t budget = (ring_.capacity() / scratch_.size()) + 1;
+    while (ring_.available_write() >= scratch_.size() && budget-- > 0) {
         uint64_t frames = k_chunk_frames;
         const uint64_t loop_end = loop_end_.load(std::memory_order_relaxed);
         const uint64_t loop_start = loop_start_.load(std::memory_order_relaxed);
@@ -247,6 +285,15 @@ bool MonitorEngine::top_up_ring() {
         if (got == 0) {
             ended_.store(true, std::memory_order_relaxed); // end of material (non-looping)
             return produced;
+        }
+        // Feed the final (post-crossfade) monitored signal into the loudness meter. Producer
+        // side — not the hard-realtime audio callback — so a brief mutex is fine; this leads
+        // playback by at most the ring depth, acceptable for a meter.
+        {
+            const std::lock_guard<std::mutex> lock(meter_mutex_);
+            if (meter_ != nullptr) {
+                ebur128_add_frames_float(static_cast<ebur128_state*>(meter_), scratch_.data(), got);
+            }
         }
         ring_.push(scratch_.data(), got * channels_); // available_write checked: full push
         producer_pos_ += got;
@@ -337,6 +384,9 @@ void MonitorEngine::apply_seek_locked(uint64_t frame) {
         logs_.log(LogLevel::error, "monitor", seek_res.error().message);
         failed_.store(true, std::memory_order_relaxed);
     }
+    // The playhead jumped: restart loudness integration from the new position (momentary /
+    // short-term windows would otherwise span the discontinuity).
+    rebuild_meter();
     flushing_.store(false, std::memory_order_seq_cst);
 }
 
@@ -361,6 +411,27 @@ MonitorLevels MonitorEngine::levels() const {
     for (std::size_t c = 0; c < l.channels; ++c) {
         l.peak.at(c) = peak_.at(c).load(std::memory_order_relaxed);
         l.rms.at(c) = rms_.at(c).load(std::memory_order_relaxed);
+    }
+    // Query program loudness. ebur128 returns -HUGE_VAL (→ -inf) below the gate; non-finite
+    // values are normalised to -inf so the UI can render a single "silence" sentinel.
+    const auto to_lufs = [](double v) {
+        return std::isfinite(v) ? static_cast<float>(v) : -std::numeric_limits<float>::infinity();
+    };
+    {
+        const std::lock_guard<std::mutex> lock(meter_mutex_);
+        if (meter_ != nullptr) {
+            auto* st = static_cast<ebur128_state*>(meter_);
+            double v = 0.0;
+            if (ebur128_loudness_momentary(st, &v) == EBUR128_SUCCESS) {
+                l.momentary_lufs = to_lufs(v);
+            }
+            if (ebur128_loudness_shortterm(st, &v) == EBUR128_SUCCESS) {
+                l.shortterm_lufs = to_lufs(v);
+            }
+            if (ebur128_loudness_global(st, &v) == EBUR128_SUCCESS) {
+                l.integrated_lufs = to_lufs(v);
+            }
+        }
     }
     return l;
 }

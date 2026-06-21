@@ -6,6 +6,38 @@
              x:Class="MacinRender.Gui.Views.SemanticEditorView"
              x:DataType="vm:SemanticEditorViewModel">
 
+    <UserControl.Resources>
+        <!-- 电平表渐变(固定刻度色):低位绿 → 中段黄 → 接近 0 dBFS 红。表条按填充宽度裁剪揭示。 -->
+        <LinearGradientBrush x:Key="MeterBrush" StartPoint="0%,0%" EndPoint="100%,0%">
+            <GradientStop Offset="0.0" Color="#34C759"/>
+            <GradientStop Offset="0.62" Color="#5BD66B"/>
+            <GradientStop Offset="0.80" Color="#E3CC3F"/>
+            <GradientStop Offset="0.92" Color="#FF9F0A"/>
+            <GradientStop Offset="1.0" Color="#FF453A"/>
+        </LinearGradientBrush>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <!-- 紧凑数值输入框:压掉 Fluent TextBox 默认的高 MinHeight / 厚内边距,缩到文字大小。 -->
+        <Style Selector="TextBox.numeric">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <!-- 电平表填充:Width 过渡,使两次轮询(~33ms)间的宽度变化滑动而非跳变。 -->
+        <Style Selector="Border.meterfill">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Width" Duration="0:0:0.06" Easing="LinearEasing"/>
+                </Transitions>
+            </Setter>
+        </Style>
+    </UserControl.Styles>
+
     <Grid RowDefinitions="Auto,*" Margin="8,0,16,16">
         <StackPanel Grid.Row="0" Margin="2,6,0,12" Spacing="2">
             <TextBlock Classes="h1" FontSize="20" Text="{DynamicResource NavSemantic}"/>
@@ -14,13 +46,23 @@
 
         <Grid Grid.Row="1" RowDefinitions="Auto,Auto,*">
 
-            <!-- 载入栏 -->
+            <!-- 载入栏(右侧:导出生效 ADM + 载入文件;导出填掉原来的空白) -->
             <ctrl:SquircleBorder Grid.Row="0" Classes="card" Margin="0,0,0,12">
                 <DockPanel>
-                    <ctrl:SquircleButton DockPanel.Dock="Right" Classes="accent"
-                            MinWidth="108" VerticalAlignment="Center" Margin="16,0,0,0"
-                            IsEnabled="{Binding !IsLoading}" Click="OnLoadFile">
-                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource SemLoadFile}"/>
+                    <ctrl:SquircleButton DockPanel.Dock="Right" Classes="headericon accent"
+                            VerticalAlignment="Center" Margin="8,0,0,0"
+                            IsEnabled="{Binding !IsLoading}" Click="OnLoadFile"
+                            ToolTip.Tip="{DynamicResource SemLoadFile}">
+                        <Grid Width="24" Height="24" IsHitTestVisible="False">
+                            <Path Classes="icon" Data="{StaticResource IconFolder}"/>
+                        </Grid>
+                    </ctrl:SquircleButton>
+                    <ctrl:SquircleButton DockPanel.Dock="Right" Classes="headericon" VerticalAlignment="Center"
+                            IsEnabled="{Binding CanExport}" Click="OnExport"
+                            ToolTip.Tip="{DynamicResource SemExport}">
+                        <Grid Width="24" Height="24" IsHitTestVisible="False">
+                            <Path Classes="icon" Data="{StaticResource IconDownload}"/>
+                        </Grid>
                     </ctrl:SquircleButton>
                     <StackPanel VerticalAlignment="Center" Spacing="2">
                         <TextBlock Classes="h2" Text="{DynamicResource SemFileHeader}"/>
@@ -34,20 +76,28 @@
                                  IsEnabled="{Binding HasFile}">
                 <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
 
-                    <!-- 开始/停止监听 -->
-                    <ctrl:SquircleButton Grid.Column="0" Classes="accent" MinWidth="96" VerticalAlignment="Center"
-                            IsEnabled="{Binding !IsMonitorBusy}" Command="{Binding ToggleMonitorCommand}">
-                        <TextBlock VerticalAlignment="Center" Text="{Binding MonitorToggleText}"/>
-                    </ctrl:SquircleButton>
-
-                    <!-- 播放 / 暂停 -->
-                    <ctrl:SquircleButton Grid.Column="1" Width="40" VerticalAlignment="Center"
-                            IsEnabled="{Binding IsMonitoring}" Command="{Binding PlayPauseCommand}">
-                        <Panel>
-                            <Path Classes="icon" Data="{StaticResource IconPlay}" IsVisible="{Binding !IsPlaying}"/>
-                            <Path Classes="icon" Data="{StaticResource IconPause}" IsVisible="{Binding IsPlaying}"/>
-                        </Panel>
-                    </ctrl:SquircleButton>
+                    <!-- 播放器传输键:⏮ 回到开头 · ▶/⏸ 播放/暂停(未监听时自动开监听并播放)。
+                         Padding=0 抵掉 accent 给文字用的 16,7 内边距,让图标在按钮内居中。 -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <ctrl:SquircleButton Width="38" Height="32" Padding="0" VerticalAlignment="Center"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                IsEnabled="{Binding CanSeek}" Command="{Binding SeekToStartCommand}"
+                                ToolTip.Tip="{DynamicResource SemMonToStart}">
+                            <Canvas Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    IsHitTestVisible="False">
+                                <Path Classes="transporticon" Data="{StaticResource IconToStart}"/>
+                            </Canvas>
+                        </ctrl:SquircleButton>
+                        <ctrl:SquircleButton Classes="accent" Width="48" Height="32" Padding="0" VerticalAlignment="Center"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                IsEnabled="{Binding CanPlay}" Command="{Binding TogglePlayCommand}">
+                            <Canvas Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    IsHitTestVisible="False">
+                                <Path Classes="transporticon" Data="{StaticResource IconPlay}" IsVisible="{Binding !IsPlaying}"/>
+                                <Path Classes="transporticon" Data="{StaticResource IconPause}" IsVisible="{Binding IsPlaying}"/>
+                            </Canvas>
+                        </ctrl:SquircleButton>
+                    </StackPanel>
 
                     <!-- 当前时间 -->
                     <TextBlock Grid.Column="2" VerticalAlignment="Center" MinWidth="40" FontSize="12"
@@ -73,14 +123,45 @@
                         </ComboBox.ItemTemplate>
                     </ComboBox>
 
-                    <!-- L/R 电平表 -->
-                    <StackPanel Grid.Column="6" VerticalAlignment="Center" Spacing="3" Width="64">
-                        <ProgressBar Height="6" Minimum="0" Maximum="1" Value="{Binding PeakLeft}"/>
-                        <ProgressBar Height="6" Minimum="0" Maximum="1" Value="{Binding PeakRight}"/>
+                    <!-- 电平表:L/R 峰值(dBFS,色随电平 低绿近 0 红)+ LUFS 读数(点击在 M/S/I 间切换)。
+                         ProgressBar 默认 MinWidth=200,显式 MinWidth=0 压回,否则溢出盖住相邻列。 -->
+                    <StackPanel Grid.Column="6" VerticalAlignment="Center" Spacing="2">
+                        <Grid ColumnDefinitions="12,96,42" ColumnSpacing="4">
+                            <TextBlock Grid.Column="0" Classes="muted" FontSize="10" VerticalAlignment="Center" Text="L"/>
+                            <Panel Grid.Column="1" Height="6">
+                                <Border CornerRadius="3" Background="{DynamicResource RowBg}"/>
+                                <Border Classes="meterfill" HorizontalAlignment="Left" CornerRadius="3" ClipToBounds="True"
+                                        Width="{Binding PeakLeftFillWidth}">
+                                    <Border Width="96" HorizontalAlignment="Left" Background="{StaticResource MeterBrush}"/>
+                                </Border>
+                            </Panel>
+                            <TextBlock Grid.Column="2" FontSize="10" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextPrimary}" Text="{Binding PeakLeftText}"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="12,96,42" ColumnSpacing="4">
+                            <TextBlock Grid.Column="0" Classes="muted" FontSize="10" VerticalAlignment="Center" Text="R"/>
+                            <Panel Grid.Column="1" Height="6">
+                                <Border CornerRadius="3" Background="{DynamicResource RowBg}"/>
+                                <Border Classes="meterfill" HorizontalAlignment="Left" CornerRadius="3" ClipToBounds="True"
+                                        Width="{Binding PeakRightFillWidth}">
+                                    <Border Width="96" HorizontalAlignment="Left" Background="{StaticResource MeterBrush}"/>
+                                </Border>
+                            </Panel>
+                            <TextBlock Grid.Column="2" FontSize="10" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextPrimary}" Text="{Binding PeakRightText}"/>
+                        </Grid>
+                        <!-- 点击切换 LUFS 窗(M 瞬时 / S 短期 / I 累计) -->
+                        <Button Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                Command="{Binding CycleLufsModeCommand}"
+                                ToolTip.Tip="LUFS: M=momentary S=short-term I=integrated">
+                            <TextBlock FontSize="10" Foreground="{DynamicResource Accent}">
+                                <Run Text="{Binding LufsModeLabel}"/><Run Text=" "/><Run Text="{Binding LufsValueText}"/>
+                            </TextBlock>
+                        </Button>
                     </StackPanel>
 
-                    <!-- 状态 -->
-                    <TextBlock Grid.Column="7" VerticalAlignment="Center" MinWidth="72" FontSize="11"
+                    <!-- 状态(错误 / 到尾) -->
+                    <TextBlock Grid.Column="7" VerticalAlignment="Center" MinWidth="56" FontSize="11"
                                Classes="muted" TextTrimming="CharacterEllipsis" Text="{Binding MonitorStatus}"/>
                 </Grid>
             </ctrl:SquircleBorder>
@@ -91,7 +172,8 @@
                 <!-- 对象列表 -->
                 <ctrl:SquircleBorder Grid.Column="0" Classes="card">
                     <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
-                        <TextBlock Grid.Row="0" Classes="h2" Text="{DynamicResource SemObjects}"/>
+                        <TextBlock Grid.Row="0" Classes="h2" Cursor="Hand" DoubleTapped="OnResetAll"
+                                   ToolTip.Tip="{DynamicResource SemResetHint}" Text="{DynamicResource SemObjects}"/>
                         <!-- 剥离的主前缀提示(全名仍在每行 tooltip) -->
                         <Border Grid.Row="1" IsVisible="{Binding HasCommonPrefix}"
                                 Background="{DynamicResource RowBg}" CornerRadius="8" Padding="8,5">
@@ -131,7 +213,8 @@
                 <ctrl:SquircleBorder Grid.Column="1" Classes="card">
                     <Grid RowDefinitions="Auto,*" RowSpacing="10">
                         <StackPanel Grid.Row="0" Spacing="1">
-                            <TextBlock Classes="h2"
+                            <TextBlock Classes="h2" Cursor="Hand" DoubleTapped="OnResetRow"
+                                       ToolTip.Tip="{DynamicResource SemResetHint}"
                                        Text="{Binding SelectedRow.DisplayName, FallbackValue={x:Null}}"/>
                             <TextBlock Classes="muted" FontSize="11"
                                        Text="{Binding SelectedRow.Meta, FallbackValue={x:Null}}"/>
@@ -159,6 +242,8 @@
                             <!-- gain(dB 偏移) -->
                             <Grid ColumnDefinitions="80,*,202,*">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.GainDb}"
+                                           ToolTip.Tip="{DynamicResource SemResetHint}"
                                            Foreground="{DynamicResource TextPrimary}" Text="gain"/>
                                 <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
                                            Text="{Binding SelectedRow.GainDb.CurrentText}"/>
@@ -170,9 +255,14 @@
                                             Maximum="{Binding SelectedRow.GainDb.SliderMax}"
                                             Value="{Binding SelectedRow.GainDb.Value}"
                                             IsEnabled="{Binding SelectedRow.GainDb.Enabled}"/>
-                                    <TextBlock VerticalAlignment="Center" MinWidth="48" FontSize="12"
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               Text="{Binding SelectedRow.GainDb.ValueText}"/>
+                                    <Grid ColumnDefinitions="12,44,Auto" VerticalAlignment="Center">
+                                        <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.GainDb.UnitPrefix}"/>
+                                        <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                 Text="{Binding SelectedRow.GainDb.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.GainDb.UnitSuffix}"/>
+                                    </Grid>
                                 </StackPanel>
                                 <TextBlock Grid.Column="3" VerticalAlignment="Center"
                                            Foreground="{DynamicResource Accent}"
@@ -182,6 +272,8 @@
                             <!-- diffuse(× scale) -->
                             <Grid ColumnDefinitions="80,*,202,*">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.DiffuseScale}"
+                                           ToolTip.Tip="{DynamicResource SemResetHint}"
                                            Foreground="{DynamicResource TextPrimary}" Text="diffuse"/>
                                 <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
                                            Text="{Binding SelectedRow.DiffuseScale.CurrentText}"/>
@@ -193,9 +285,14 @@
                                             Maximum="{Binding SelectedRow.DiffuseScale.SliderMax}"
                                             Value="{Binding SelectedRow.DiffuseScale.Value}"
                                             IsEnabled="{Binding SelectedRow.DiffuseScale.Enabled}"/>
-                                    <TextBlock VerticalAlignment="Center" MinWidth="48" FontSize="12"
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               Text="{Binding SelectedRow.DiffuseScale.ValueText}"/>
+                                    <Grid ColumnDefinitions="12,44,Auto" VerticalAlignment="Center">
+                                        <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.DiffuseScale.UnitPrefix}"/>
+                                        <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                 Text="{Binding SelectedRow.DiffuseScale.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.DiffuseScale.UnitSuffix}"/>
+                                    </Grid>
                                 </StackPanel>
                                 <TextBlock Grid.Column="3" VerticalAlignment="Center"
                                            Foreground="{DynamicResource Accent}"
@@ -205,6 +302,8 @@
                             <!-- extent(× scale,作用于 W/H/D) -->
                             <Grid ColumnDefinitions="80,*,202,*">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.ExtentScale}"
+                                           ToolTip.Tip="{DynamicResource SemResetHint}"
                                            Foreground="{DynamicResource TextPrimary}" Text="extent"/>
                                 <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
                                            TextWrapping="Wrap"
@@ -217,9 +316,14 @@
                                             Maximum="{Binding SelectedRow.ExtentScale.SliderMax}"
                                             Value="{Binding SelectedRow.ExtentScale.Value}"
                                             IsEnabled="{Binding SelectedRow.ExtentScale.Enabled}"/>
-                                    <TextBlock VerticalAlignment="Center" MinWidth="48" FontSize="12"
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               Text="{Binding SelectedRow.ExtentScale.ValueText}"/>
+                                    <Grid ColumnDefinitions="12,44,Auto" VerticalAlignment="Center">
+                                        <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.ExtentScale.UnitPrefix}"/>
+                                        <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                 Text="{Binding SelectedRow.ExtentScale.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.ExtentScale.UnitSuffix}"/>
+                                    </Grid>
                                 </StackPanel>
                                 <TextBlock Grid.Column="3" VerticalAlignment="Center" TextWrapping="Wrap"
                                            Foreground="{DynamicResource Accent}"
@@ -229,6 +333,8 @@
                             <!-- divergence(× scale) -->
                             <Grid ColumnDefinitions="80,*,202,*">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.DivergenceScale}"
+                                           ToolTip.Tip="{DynamicResource SemResetHint}"
                                            Foreground="{DynamicResource TextPrimary}" Text="divergence"/>
                                 <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
                                            Text="{Binding SelectedRow.DivergenceScale.CurrentText}"/>
@@ -240,9 +346,14 @@
                                             Maximum="{Binding SelectedRow.DivergenceScale.SliderMax}"
                                             Value="{Binding SelectedRow.DivergenceScale.Value}"
                                             IsEnabled="{Binding SelectedRow.DivergenceScale.Enabled}"/>
-                                    <TextBlock VerticalAlignment="Center" MinWidth="48" FontSize="12"
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               Text="{Binding SelectedRow.DivergenceScale.ValueText}"/>
+                                    <Grid ColumnDefinitions="12,44,Auto" VerticalAlignment="Center">
+                                        <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.DivergenceScale.UnitPrefix}"/>
+                                        <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                 Text="{Binding SelectedRow.DivergenceScale.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.DivergenceScale.UnitSuffix}"/>
+                                    </Grid>
                                 </StackPanel>
                                 <TextBlock Grid.Column="3" VerticalAlignment="Center"
                                            Foreground="{DynamicResource Accent}"

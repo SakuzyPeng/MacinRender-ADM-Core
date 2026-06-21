@@ -91,6 +91,48 @@ class PatternStreamFactory final : public mradm::realtime::IRenderStreamFactory 
     uint64_t total_{0};
 };
 
+// A steady 1 kHz sine (oscillating, non-silent) for the loudness meter: ebur128's K-weighting
+// has a high-pass stage, so a DC-ish ramp like PatternStream reads as near-silence — a real
+// tone is needed to assert a finite, sane LUFS.
+class SineStream final : public mradm::IRenderStream {
+  public:
+    explicit SineStream(uint32_t channels) : channels_(channels) {}
+
+    mradm::Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        constexpr double k_twopi = 6.283185307179586;
+        const double w = k_twopi * 1000.0 / 48000.0; // 1 kHz @ 48 kHz
+        for (std::size_t f = 0; f < frames; ++f) {
+            const float v = static_cast<float>(0.5 * std::sin(w * static_cast<double>(playhead_ + f)));
+            for (uint32_t c = 0; c < channels_; ++c) {
+                out[(f * channels_) + c] = v;
+            }
+        }
+        playhead_ += frames;
+        return frames;
+    }
+
+    mradm::Result<void> seek(uint64_t frame) override {
+        playhead_ = frame;
+        return {};
+    }
+
+    [[nodiscard]] uint32_t out_channels() const override { return channels_; }
+    [[nodiscard]] uint32_t sample_rate() const override { return 48000U; }
+    [[nodiscard]] std::string_view output_layout() const override { return "binaural"; }
+
+  private:
+    uint32_t channels_;
+    uint64_t playhead_{0};
+};
+
+class SineStreamFactory final : public mradm::realtime::IRenderStreamFactory {
+  public:
+    mradm::Result<std::unique_ptr<mradm::IRenderStream>>
+    open(const mradm::AdmScene& /*scene*/, const mradm::RenderOptions& /*opts*/, mradm::LogSink& /*logs*/) override {
+        return std::make_unique<SineStream>(2U);
+    }
+};
+
 // Synchronous test device: pulls `total_frames` in fixed `device_block` chunks (a block
 // size unrelated to any stream-internal sizing) and captures the interleaved output, so a
 // test can assert the device→pull→stream path is sample-exact.
@@ -916,6 +958,41 @@ bool test_monitor_miniaudio_null_device() {
 
 } // namespace
 
+// Realtime loudness meter: silent before playback, then a finite, sane LUFS once a tone has
+// played through the 400 ms momentary / 3 s short-term windows. Locks in that the ebur128
+// meter is wired through engine → levels() (v1.18).
+bool test_monitor_lufs() {
+    bool ok = true;
+    SineStreamFactory factory;
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+    ok &= check(engine.has_value(), "lufs: engine creates");
+    if (!engine.has_value()) {
+        return ok;
+    }
+
+    // Before play() the worker idles, so the meter has no frames → loudness reads silence.
+    ok &= check(!std::isfinite((*engine)->levels().momentary_lufs), "lufs: silent (-inf) before playback");
+
+    (*engine)->play();
+    // Drain > 3 s (144000 frames) so both the momentary and short-term windows are populated;
+    // the producer leads the consumer, so the meter has at least this many frames by now.
+    ok &= check(drain_exact(**engine, sink, 160000), "lufs: drained > 3 s of tone");
+
+    const auto lv = (*engine)->levels();
+    // A 0.5-amplitude sine lands near -9 LUFS; assert a sane finite ballpark, not an exact
+    // value (gating / K-weighting specifics), and strictly below 0 LUFS full scale.
+    ok &= check(std::isfinite(lv.momentary_lufs) && lv.momentary_lufs > -40.0F && lv.momentary_lufs < 0.0F,
+                "lufs: momentary finite & sane for a sine");
+    ok &= check(std::isfinite(lv.shortterm_lufs) && lv.shortterm_lufs > -40.0F, "lufs: shortterm finite");
+    ok &= check(std::isfinite(lv.integrated_lufs) && lv.integrated_lufs > -40.0F, "lufs: integrated finite");
+    return ok;
+}
+
 int main() {
     bool ok = true;
     ok &= test_ring_basic();
@@ -936,6 +1013,7 @@ int main() {
     ok &= test_monitor_override_survives_switch();
     ok &= test_downmix_stream();
     ok &= test_monitor_miniaudio_null_device();
+    ok &= test_monitor_lufs();
 
     if (ok) {
         std::cout << "realtime stream/ring tests passed\n";

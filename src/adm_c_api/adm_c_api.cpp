@@ -1165,6 +1165,13 @@ adm_error_code_t adm_monitor_get_levels(adm_monitor_t* monitor, adm_monitor_leve
                 out->rms[c] = l.rms.at(c);
             }
         }
+        // v1.18 LUFS: only write fields the caller's struct_size actually reserves, so a
+        // pre-v1.18 caller (smaller struct) is never written past its end.
+        if (out->struct_size >= offsetof(adm_monitor_levels_t, integrated_lufs) + sizeof(float)) {
+            out->momentary_lufs = l.momentary_lufs;
+            out->shortterm_lufs = l.shortterm_lufs;
+            out->integrated_lufs = l.integrated_lufs;
+        }
         return ADM_ERROR_OK;
     } catch (...) {
         return ADM_ERROR_INTERNAL;

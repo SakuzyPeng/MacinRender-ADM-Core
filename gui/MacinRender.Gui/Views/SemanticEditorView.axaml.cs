@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.IO;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
@@ -50,6 +52,78 @@ public partial class SemanticEditorView : UserControl
         if (!string.IsNullOrEmpty(path))
         {
             await vm.LoadFileAsync(path);
+        }
+    }
+
+    // 导出生效 ADM:选好保存路径后交 VM 写回(adm_export_file,复用源 PCM)。
+    private async void OnExport(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SemanticEditorViewModel { CanExport: true } vm)
+        {
+            return;
+        }
+
+        var top = TopLevel.GetTopLevel(this);
+        if (top is null)
+        {
+            return;
+        }
+
+        var suggested = string.IsNullOrEmpty(vm.LoadedPath)
+            ? "effective.wav"
+            : Path.GetFileNameWithoutExtension(vm.LoadedPath) + ".effective.wav";
+        var file = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = Localizer.Instance["SemExport"],
+            SuggestedFileName = suggested,
+            DefaultExtension = "wav",
+            FileTypeChoices = new List<FilePickerFileType>
+            {
+                new("ADM BWF") { Patterns = new[] { "*.wav" } },
+            },
+        });
+
+        var path = file?.TryGetLocalPath();
+        if (!string.IsNullOrEmpty(path))
+        {
+            await vm.ExportToAsync(path);
+        }
+    }
+
+    // 双击「对象」标题 → 清空全部对象覆盖。
+    private void OnResetAll(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is SemanticEditorViewModel vm)
+        {
+            vm.ResetAllOverrides();
+        }
+    }
+
+    // 双击对象名(编辑器标题)→ 清空当前对象覆盖。
+    private void OnResetRow(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is SemanticEditorViewModel { SelectedRow: { } row })
+        {
+            row.ResetAll();
+        }
+    }
+
+    // 双击维度名(gain/diffuse/extent/divergence)→ 清空该维度覆盖(Tag 绑定该 ScalarOverride)。
+    private void OnResetDim(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { Tag: ScalarOverride ov })
+        {
+            ov.Reset();
+        }
+    }
+
+    // 回车提交数值输入框:把焦点移回视图,触发 TextBox 失焦 → 绑定回写并规范化文本。
+    private void OnValueEntryKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            Focus();
+            e.Handled = true;
         }
     }
 }

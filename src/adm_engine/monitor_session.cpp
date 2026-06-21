@@ -324,6 +324,9 @@ MonitorLevelsSnapshot MonitorSession::levels() const {
     out.channels = l.channels;
     out.peak = l.peak;
     out.rms = l.rms;
+    out.momentary_lufs = l.momentary_lufs;
+    out.shortterm_lufs = l.shortterm_lufs;
+    out.integrated_lufs = l.integrated_lufs;
     return out;
 }
 

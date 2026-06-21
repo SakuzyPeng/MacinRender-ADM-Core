@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -30,11 +31,15 @@ struct MonitorStatusSnapshot {
     std::uint64_t override_revision{0}; // revision of the last applied live overrides
 };
 
-// Per-channel peak / RMS of the most recently played block.
+// Per-channel peak / RMS of the most recently played block, plus program loudness (LUFS,
+// ITU-R BS.1770) of the monitored output. LUFS is -inf when below the gate / silent.
 struct MonitorLevelsSnapshot {
     std::uint32_t channels{0};
     std::array<float, k_monitor_max_level_channels> peak{};
     std::array<float, k_monitor_max_level_channels> rms{};
+    float momentary_lufs{-std::numeric_limits<float>::infinity()};  // 400 ms window
+    float shortterm_lufs{-std::numeric_limits<float>::infinity()};  // 3 s window
+    float integrated_lufs{-std::numeric_limits<float>::infinity()}; // gated, since the last seek
 };
 
 // A persistent realtime monitor over an ADM file: it streams the rendered scene to the

@@ -29,6 +29,37 @@ public sealed class AdmRenderService
     }
 
     /// <summary>
+    /// 把语义策略应用到源 ADM 并写回成新的 ADM BWF(adm_export_file,v1.13)。复用源 PCM/chna
+    /// (bit-exact),只重写 axml 元数据。semanticPolicyJson 为空 = 纯 round-trip 导出。
+    /// </summary>
+    public Task<AdmErrorCode> ExportAsync(string inputPath, string outputPath, string? semanticPolicyJson)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(inputPath);
+        ArgumentException.ThrowIfNullOrEmpty(outputPath);
+        return Task.Run(() =>
+        {
+            using var ctx = NativeMethods.adm_create_context();
+            if (ctx.IsInvalid)
+            {
+                return AdmErrorCode.Internal;
+            }
+
+            using var opts = NativeMethods.adm_create_render_options();
+            if (opts.IsInvalid)
+            {
+                return AdmErrorCode.Internal;
+            }
+
+            if (!string.IsNullOrEmpty(semanticPolicyJson))
+            {
+                NativeMethods.adm_render_options_set_semantic_policy_json(opts, semanticPolicyJson);
+            }
+
+            return NativeMethods.adm_export_file(ctx, inputPath, outputPath, opts);
+        });
+    }
+
+    /// <summary>
     /// 内容级 ADM 过滤:逐个 probe,只保留真正含 chna+axml 的 ADM 文件(普通 wav 被剔除)。
     /// probe 轻量——只读容器头不解码音频。复用单 context 串行探测,符合"context 非线程安全"契约。
     /// </summary>

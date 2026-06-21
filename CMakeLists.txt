@@ -453,7 +453,10 @@ target_sources(mr_adm_realtime PRIVATE
 )
 target_include_directories(mr_adm_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
 # miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
-target_link_libraries(mr_adm_realtime PUBLIC MacinRender::ADMCore PRIVATE Threads::Threads miniaudio)
+# ebur128 is PRIVATE too: the realtime LUFS meter lives inside monitor_engine.cpp only.
+target_link_libraries(mr_adm_realtime PUBLIC MacinRender::ADMCore PRIVATE Threads::Threads miniaudio ebur128)
+# libebur128 uses legacy include_directories() that does not propagate via the target.
+target_include_directories(mr_adm_realtime SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
 mr_adm_core_apply_warnings(mr_adm_realtime)
 mr_adm_core_apply_static_analysis(mr_adm_realtime)
 

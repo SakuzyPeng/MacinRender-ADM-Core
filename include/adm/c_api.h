@@ -81,12 +81,18 @@
  *   adm_monitor_switch_backend（实时热切换渲染后端 / 布局，带短交叉淡化。立体声监听下
  *   可把多声道 / HOA 折叠为立体声；非立体声监听且声道数不同、或采样率不同则返
  *   ADM_ERROR_UNSUPPORTED）。
+ *
+ * v1.18 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_levels_t 追加 momentary_lufs / shortterm_lufs / integrated_lufs 字段
+ *   （监听输出的实时 LUFS，ITU-R BS.1770，经 libebur128；静音 / 低于门限时为 -inf。
+ *   integrated 在每次 seek 后重新累计）。struct_size 守护：旧调用方按其 sizeof 仅读取
+ *   已有字段，新字段仅在 struct_size 覆盖其偏移时写入。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 17
+#define ADM_API_VERSION_MINOR 18
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -905,10 +911,15 @@ typedef struct adm_monitor_status_t {
 adm_error_code_t adm_monitor_get_status(adm_monitor_t* monitor, adm_monitor_status_t* out) ADM_API_NOEXCEPT;
 
 /*
- * Polled per-channel peak / RMS of the most recently played block. The caller provides peak
- * / rms buffers of `capacity` floats; the library writes min(capacity, channels) values and
- * sets out_count to the actual channel count. peak or rms may be NULL to skip that metric.
+ * Polled per-channel peak / RMS of the most recently played block, plus program loudness
+ * (LUFS) of the monitored output. The caller provides peak / rms buffers of `capacity` floats;
+ * the library writes min(capacity, channels) values and sets out_count to the actual channel
+ * count. peak or rms may be NULL to skip that metric.
  * Set struct_size = sizeof(adm_monitor_levels_t) before the call.
+ *
+ * v1.18: momentary_lufs / shortterm_lufs / integrated_lufs (ITU-R BS.1770, via libebur128).
+ * -inf (HUGE_VALF negated) below the gate / when silent. Only written when struct_size covers
+ * their offset, so a v1.17 caller's smaller struct is untouched.
  */
 typedef struct adm_monitor_levels_t {
     uint32_t struct_size;
@@ -916,6 +927,9 @@ typedef struct adm_monitor_levels_t {
     uint32_t out_count;
     float* peak;
     float* rms;
+    float momentary_lufs;  /* v1.18: 400 ms window */
+    float shortterm_lufs;  /* v1.18: 3 s window */
+    float integrated_lufs; /* v1.18: gated, since the last seek */
 } adm_monitor_levels_t;
 adm_error_code_t adm_monitor_get_levels(adm_monitor_t* monitor, adm_monitor_levels_t* out) ADM_API_NOEXCEPT;
 

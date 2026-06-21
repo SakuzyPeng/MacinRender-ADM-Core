@@ -31,6 +31,12 @@ public struct AdmMonitorLevels
     public uint OutCount;
     public IntPtr Peak;
     public IntPtr Rms;
+
+    // v1.18: program loudness (LUFS, ITU-R BS.1770) of the monitored output. -inf below the
+    // gate / silent. Only written when StructSize covers them (set StructSize = sizeof before).
+    public float MomentaryLufs;
+    public float ShorttermLufs;
+    public float IntegratedLufs;
 }
 
 // A single object's live override (object_id is a UTF-8 char* the caller owns for the call).

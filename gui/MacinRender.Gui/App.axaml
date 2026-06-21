@@ -60,9 +60,11 @@
             <StreamGeometry x:Key="IconPlay">M8 5v14l11-7z</StreamGeometry>
             <StreamGeometry x:Key="IconPause">M8 5v14M16 5v14</StreamGeometry>
             <StreamGeometry x:Key="IconStop">M7 7h10v10H7z</StreamGeometry>
+            <StreamGeometry x:Key="IconToStart">M7 5v14M18 5l-9 7 9 7z</StreamGeometry>
             <StreamGeometry x:Key="IconCheck">M20 6L9 17l-5-5</StreamGeometry>
             <StreamGeometry x:Key="IconCross">M18 6L6 18M6 6l12 12</StreamGeometry>
             <StreamGeometry x:Key="IconFolder">M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z</StreamGeometry>
+            <StreamGeometry x:Key="IconDownload">M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3</StreamGeometry>
         </ResourceDictionary>
     </Application.Resources>
 
@@ -117,6 +119,40 @@
         <Style Selector=":is(Button).accent:pointerover"><Setter Property="Opacity" Value="0.85"/></Style>
         <Style Selector=":is(Button).accent:pressed"><Setter Property="Opacity" Value="0.7"/></Style>
         <Style Selector=":is(Button).accent:disabled"><Setter Property="Opacity" Value="0.35"/></Style>
+
+        <!-- 顶栏动作按钮:固定视觉/命中尺寸,内容居中。 -->
+        <Style Selector="ctrl|SquircleButton.headericon">
+            <Setter Property="Width" Value="42"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Radius" Value="10"/>
+            <Setter Property="Background" Value="{DynamicResource RowBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.headericon /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}"/>
+            <Setter Property="CornerRadius" Value="0"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.headericon:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource InputBgHover}"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.headericon:pressed">
+            <Setter Property="Opacity" Value="0.75"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.headericon:disabled">
+            <Setter Property="Opacity" Value="0.35"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.headericon.accent">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.headericon.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        </Style>
 
         <!-- 侧栏导航项 -->
         <Style Selector=":is(Button).nav">
@@ -180,6 +216,7 @@
             <Setter Property="Width" Value="17"/>
             <Setter Property="Height" Value="17"/>
             <Setter Property="Stretch" Value="Uniform"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <!-- 纯图标工具按钮:方形紧凑 -->
@@ -195,6 +232,16 @@
             <Setter Property="Height" Value="13"/>
             <Setter Property="Stretch" Value="Uniform"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <!-- 播放器传输键图标:保留 24x24 坐标系,避免 Path 按几何边界拉伸后视觉偏心。Fill 填实闭合
+             子路径(play / rewind 三角形),Stroke 画开放子路径(pause 两根竖线 / rewind 竖条)。 -->
+        <Style Selector="Path.transporticon">
+            <Setter Property="Fill" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+            <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+            <Setter Property="StrokeThickness" Value="1.9"/>
+            <Setter Property="StrokeLineCap" Value="Round"/>
+            <Setter Property="StrokeJoin" Value="Round"/>
+            <Setter Property="Stretch" Value="None"/>
         </Style>
 
         <!-- ComboBox 贴合 macOS 风:输入框背景 + 细边框 + 圆角 + 柔和箭头 + 圆角弹窗 -->

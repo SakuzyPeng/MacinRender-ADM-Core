@@ -178,7 +178,8 @@ public sealed class MonitorService : IDisposable
             }
 
             var n = (int)Math.Min(levels.OutCount, (uint)capacity);
-            return new MonitorLevelsSnapshot(peak[..n], rms[..n]);
+            return new MonitorLevelsSnapshot(
+                peak[..n], rms[..n], levels.MomentaryLufs, levels.ShorttermLufs, levels.IntegratedLufs);
         }
     }
 
