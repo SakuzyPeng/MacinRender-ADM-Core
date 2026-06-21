@@ -90,6 +90,42 @@ public partial class SemanticEditorView : UserControl
         }
     }
 
+    // 选监听用自定义 HRIR(SOFA)→ 交 VM(SAF 双耳后端时即时重载)。
+    private async void OnPickMonitorSofa(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SemanticEditorViewModel vm)
+        {
+            return;
+        }
+
+        var path = await MainWindow.PickSofaAsync(this);
+        if (!string.IsNullOrEmpty(path))
+        {
+            vm.SetMonitorSofa(path);
+        }
+    }
+
+    // 顶栏 HRIR 两态按钮:未选择时选择 SOFA;已选择时清除,回到默认 HRTF。
+    private async void OnToggleMonitorSofa(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SemanticEditorViewModel vm)
+        {
+            return;
+        }
+
+        if (vm.HasMonitorSofa)
+        {
+            vm.ClearMonitorSofaCommand.Execute(null);
+            return;
+        }
+
+        var path = await MainWindow.PickSofaAsync(this);
+        if (!string.IsNullOrEmpty(path))
+        {
+            vm.SetMonitorSofa(path);
+        }
+    }
+
     // 双击「对象」标题 → 清空全部对象覆盖。
     private void OnResetAll(object? sender, TappedEventArgs e)
     {

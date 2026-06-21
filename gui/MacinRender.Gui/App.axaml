@@ -154,6 +154,32 @@
             <Setter Property="Background" Value="{DynamicResource Accent}"/>
         </Style>
 
+        <!-- 监听 HRIR/SOFA 两态按钮:未选中为中性底,选中后用强调色提示已载入自定义 HRIR。 -->
+        <Style Selector="ctrl|SquircleButton.sofabtn">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="Radius" Value="10"/>
+            <Setter Property="Background" Value="{DynamicResource RowBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.sofabtn /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}"/>
+            <Setter Property="CornerRadius" Value="0"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.sofabtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource InputBgHover}"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.sofabtn.on">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.sofabtn.on:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        </Style>
+
         <!-- 侧栏导航项 -->
         <Style Selector=":is(Button).nav">
             <Setter Property="Background" Value="Transparent"/>

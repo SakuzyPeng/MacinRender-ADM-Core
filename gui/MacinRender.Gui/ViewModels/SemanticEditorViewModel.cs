@@ -30,6 +30,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasFile))]
     [NotifyPropertyChangedFor(nameof(CanExport))]
     [NotifyPropertyChangedFor(nameof(CanPlay))]
+    [NotifyPropertyChangedFor(nameof(LoadedFileName))]
     private string? _loadedPath;
 
     [ObservableProperty] private SemanticRow? _selectedRow;
@@ -50,6 +51,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private int _overriddenObjectCount;
 
     public bool HasFile => !string.IsNullOrEmpty(LoadedPath);
+    public string LoadedFileName => HasFile ? Path.GetFileName(LoadedPath!) : "";
     public bool HasCommonPrefix => CommonPrefix.Length > 0;
     public string CommonPrefixLabel => HasCommonPrefix ? L.Format("SemPrefix", CommonPrefix) : "";
 
@@ -74,6 +76,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         MonitorBackends.Add(new MonitorBackendOption("双耳 · SAF", AdmRenderer.SafBinaural, "binaural"));
         MonitorBackends.Add(new MonitorBackendOption("双耳 · Apple", AdmRenderer.Apple, "binaural"));
         _selectedMonitorBackend = MonitorBackends[0];
+        MonitorSofaPath = SettingsStore.Load()?.MonitorSofaPath;
 
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) }; // ~30 Hz
         _pollTimer.Tick += (_, _) => PollMonitor();
@@ -233,7 +236,37 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     public ObservableCollection<MonitorBackendOption> MonitorBackends { get; } = new();
 
-    [ObservableProperty] private MonitorBackendOption _selectedMonitorBackend;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MonitorSofaApplicable))]
+    private MonitorBackendOption _selectedMonitorBackend;
+
+    // 监听用自定义 HRIR(SOFA):只对「双耳·SAF」有效(Apple 双耳用自家 HRTF)。改路径即时重载。
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMonitorSofa))]
+    [NotifyPropertyChangedFor(nameof(MonitorSofaFileName))]
+    [NotifyPropertyChangedFor(nameof(MonitorSofaSummary))]
+    private string? _monitorSofaPath;
+
+    public bool MonitorSofaApplicable =>
+        Models.OutputModel.SofaAvailable && SelectedMonitorBackend?.Renderer == AdmRenderer.SafBinaural;
+    public bool HasMonitorSofa => !string.IsNullOrEmpty(MonitorSofaPath);
+    public string MonitorSofaFileName => HasMonitorSofa ? Path.GetFileNameWithoutExtension(MonitorSofaPath!) : "";
+    public string MonitorSofaSummary => HasMonitorSofa ? $"HRIR: {MonitorSofaFileName}" : L["SemSofaNone"];
+
+    public void SetMonitorSofa(string path) => MonitorSofaPath = path;
+
+    [RelayCommand]
+    private void ClearMonitorSofa() => MonitorSofaPath = null;
+
+    // SOFA 路径变了:监听中且当前是 SAF 双耳 → 用同后端热切换重载新 HRIR。
+    partial void OnMonitorSofaPathChanged(string? value)
+    {
+        SettingsStore.Update(s => s.MonitorSofaPath = value);
+        if (IsMonitoring && MonitorSofaApplicable)
+        {
+            ApplyMonitorBackend(SelectedMonitorBackend);
+        }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSeek))]
@@ -261,7 +294,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private double _durationSeconds;
 
     // 电平表宽度(像素),与 XAML 里的表条宽度一致;填充宽度 = norm*该宽度。
-    private const double MeterWidthPx = 96.0;
+    private const double MeterWidthPx = 150.0;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PeakLeftText))]
@@ -402,11 +435,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         MonitorStatus = L["SemMonStarting"];
 
         // import + apply policy + 开设备可能略耗时 → 后台启动,await 后回 UI 线程(串行,无并发触 monitor)。
+        var settings = MonitorRenderSettings(backend);
         var (rc, sr, dur) = await Task.Run(() =>
         {
             var probe = ProbeDuration(path);
-            var start = _monitor.Start(path,
-                new RenderSettings { Renderer = backend.Renderer, Layout = backend.Layout });
+            var start = _monitor.Start(path, settings);
             return (start, probe.SampleRate, probe.Duration);
         });
 
@@ -443,12 +476,26 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     partial void OnSelectedMonitorBackendChanged(MonitorBackendOption value)
     {
-        if (value is null || !IsMonitoring)
+        if (value is not null && IsMonitoring)
         {
-            return;
+            ApplyMonitorBackend(value);
         }
+    }
 
-        var rc = _monitor.SwitchBackend(new RenderSettings { Renderer = value.Renderer, Layout = value.Layout });
+    // 监听用 RenderSettings:SOFA 仅在 SAF 双耳后端带上(Apple 用自家 HRTF)。
+    private RenderSettings MonitorRenderSettings(MonitorBackendOption backend) => new()
+    {
+        Renderer = backend.Renderer,
+        Layout = backend.Layout,
+        SofaPath = Models.OutputModel.SofaAvailable && backend.Renderer == AdmRenderer.SafBinaural
+            ? MonitorSofaPath
+            : null,
+    };
+
+    // 热切换到指定后端(重载 HRIR / 换后端);失败回显状态。
+    private void ApplyMonitorBackend(MonitorBackendOption backend)
+    {
+        var rc = _monitor.SwitchBackend(MonitorRenderSettings(backend));
         if (rc != AdmErrorCode.Ok)
         {
             MonitorStatus = L.Format("SemMonSwitchFailed", rc.ToString());

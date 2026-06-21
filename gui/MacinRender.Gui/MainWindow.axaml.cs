@@ -66,7 +66,8 @@ public partial class MainWindow : Window
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {
-        bool ok = e.DataTransfer.Contains(DataFormat.File) && DataContext is MainWindowViewModel { IsRendering: false };
+        bool ok = e.DataTransfer.Contains(DataFormat.File) &&
+            DataContext is MainWindowViewModel { IsRendering: false, SemanticEditor.IsLoading: false };
         e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
         DropHighlight.Opacity = ok ? 1 : 0;
     }
@@ -92,8 +93,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 大文件夹递归可能耗时,放后台线程,避免卡 UI。展开后由 VM 再做 probe 内容级判定。
+        // 大文件夹递归可能耗时,放后台线程,避免卡 UI。批渲染交给 VM 再做 probe 内容级判定;
+        // 语义编辑只载入第一个 ADM 候选。
         var paths = await Task.Run(() => ExpandAdmFiles(roots));
+        if (vm.IsSemanticMode)
+        {
+            if (paths.Count > 0)
+            {
+                await vm.SemanticEditor.LoadFileAsync(paths[0]);
+            }
+            return;
+        }
+
         await vm.AddFilesAsync(paths);
     }
 
@@ -138,6 +149,44 @@ public partial class MainWindow : Window
 
     private static bool IsAdmFile(string path) =>
         AdmExtensions.Contains(Path.GetExtension(path).ToLowerInvariant());
+
+    // 选自定义 HRIR(SOFA)文件 → 交 VM(BuildSettings 在 SAF 双耳后端时带上)。
+    private async void OnPickSofa(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var path = await PickSofaAsync(this);
+        if (!string.IsNullOrEmpty(path))
+        {
+            vm.SetSofa(path);
+        }
+    }
+
+    // 共用的 SOFA 选择器:返回本地路径或 null。
+    internal static async Task<string?> PickSofaAsync(Control owner)
+    {
+        var top = TopLevel.GetTopLevel(owner);
+        if (top is null)
+        {
+            return null;
+        }
+
+        var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Localizer.Instance["SemSofaPick"],
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("SOFA HRIR") { Patterns = new[] { "*.sofa" } },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+    }
 
     private void OnTitleBarPressed(object? sender, PointerPressedEventArgs e)
     {

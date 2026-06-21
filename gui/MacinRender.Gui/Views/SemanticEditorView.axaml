@@ -67,6 +67,8 @@
                     <StackPanel VerticalAlignment="Center" Spacing="2">
                         <TextBlock Classes="h2" Text="{DynamicResource SemFileHeader}"/>
                         <TextBlock Classes="muted" Text="{Binding StatusText}"/>
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}" TextTrimming="CharacterEllipsis"
+                                   IsVisible="{Binding HasFile}" Text="{Binding LoadedFileName}"/>
                     </StackPanel>
                 </DockPanel>
             </ctrl:SquircleBorder>
@@ -74,7 +76,7 @@
             <!-- 监听条:传输 + 后端 A/B + 电平表 + 状态(载入栏下,只在已载入文件时可用) -->
             <ctrl:SquircleBorder Grid.Row="1" Classes="card" Margin="0,0,0,12" Padding="12,8"
                                  IsEnabled="{Binding HasFile}">
-                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
 
                     <!-- 播放器传输键:⏮ 回到开头 · ▶/⏸ 播放/暂停(未监听时自动开监听并播放)。
                          Padding=0 抵掉 accent 给文字用的 16,7 内边距,让图标在按钮内居中。 -->
@@ -100,51 +102,64 @@
                     </StackPanel>
 
                     <!-- 当前时间 -->
-                    <TextBlock Grid.Column="2" VerticalAlignment="Center" MinWidth="40" FontSize="12"
+                    <TextBlock Grid.Column="1" VerticalAlignment="Center" MinWidth="40" FontSize="12"
                                Foreground="{DynamicResource TextPrimary}" Text="{Binding PlayheadText}"/>
 
                     <!-- seek -->
-                    <Slider Grid.Column="3" VerticalAlignment="Center" Minimum="0"
+                    <Slider Grid.Column="2" VerticalAlignment="Center" Minimum="0"
                             Maximum="{Binding DurationSeconds}" Value="{Binding PlayheadSeconds}"
                             IsEnabled="{Binding IsMonitoring}"/>
 
                     <!-- 总时长 -->
-                    <TextBlock Grid.Column="4" VerticalAlignment="Center" MinWidth="40" FontSize="12"
+                    <TextBlock Grid.Column="3" VerticalAlignment="Center" MinWidth="40" FontSize="12"
                                Classes="muted" Text="{Binding DurationText}"/>
 
-                    <!-- 后端 A/B -->
-                    <ComboBox Grid.Column="5" MinWidth="128" VerticalAlignment="Center"
-                              ItemsSource="{Binding MonitorBackends}"
-                              SelectedItem="{Binding SelectedMonitorBackend}">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="svc:MonitorBackendOption">
-                                <TextBlock Text="{Binding Label}"/>
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
+                    <!-- 后端 A/B + 自定义 HRIR(SOFA,仅「双耳·SAF」时显示) -->
+                    <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <ComboBox Width="154" VerticalAlignment="Center"
+                                  ItemsSource="{Binding MonitorBackends}"
+                                  SelectedItem="{Binding SelectedMonitorBackend}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="svc:MonitorBackendOption">
+                                    <TextBlock Text="{Binding Label}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <ctrl:SquircleButton Classes="sofabtn" Classes.on="{Binding HasMonitorSofa}" Width="104"
+                                IsVisible="{Binding MonitorSofaApplicable}" Click="OnToggleMonitorSofa"
+                                ToolTip.Tip="{Binding MonitorSofaSummary}">
+                            <Panel>
+                                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12"
+                                           IsVisible="{Binding !HasMonitorSofa}" Text="HRIR"/>
+                                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12"
+                                           MaxWidth="82" TextTrimming="CharacterEllipsis"
+                                           IsVisible="{Binding HasMonitorSofa}" Text="{Binding MonitorSofaFileName}"/>
+                            </Panel>
+                        </ctrl:SquircleButton>
+                    </StackPanel>
 
                     <!-- 电平表:L/R 峰值(dBFS,色随电平 低绿近 0 红)+ LUFS 读数(点击在 M/S/I 间切换)。
                          ProgressBar 默认 MinWidth=200,显式 MinWidth=0 压回,否则溢出盖住相邻列。 -->
-                    <StackPanel Grid.Column="6" VerticalAlignment="Center" Spacing="2">
-                        <Grid ColumnDefinitions="12,96,42" ColumnSpacing="4">
+                    <StackPanel Grid.Column="5" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="2">
+                        <Grid ColumnDefinitions="12,150,44" ColumnSpacing="6">
                             <TextBlock Grid.Column="0" Classes="muted" FontSize="10" VerticalAlignment="Center" Text="L"/>
                             <Panel Grid.Column="1" Height="6">
                                 <Border CornerRadius="3" Background="{DynamicResource RowBg}"/>
                                 <Border Classes="meterfill" HorizontalAlignment="Left" CornerRadius="3" ClipToBounds="True"
                                         Width="{Binding PeakLeftFillWidth}">
-                                    <Border Width="96" HorizontalAlignment="Left" Background="{StaticResource MeterBrush}"/>
+                                    <Border Width="150" HorizontalAlignment="Left" Background="{StaticResource MeterBrush}"/>
                                 </Border>
                             </Panel>
                             <TextBlock Grid.Column="2" FontSize="10" VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextPrimary}" Text="{Binding PeakLeftText}"/>
                         </Grid>
-                        <Grid ColumnDefinitions="12,96,42" ColumnSpacing="4">
+                        <Grid ColumnDefinitions="12,150,44" ColumnSpacing="6">
                             <TextBlock Grid.Column="0" Classes="muted" FontSize="10" VerticalAlignment="Center" Text="R"/>
                             <Panel Grid.Column="1" Height="6">
                                 <Border CornerRadius="3" Background="{DynamicResource RowBg}"/>
                                 <Border Classes="meterfill" HorizontalAlignment="Left" CornerRadius="3" ClipToBounds="True"
                                         Width="{Binding PeakRightFillWidth}">
-                                    <Border Width="96" HorizontalAlignment="Left" Background="{StaticResource MeterBrush}"/>
+                                    <Border Width="150" HorizontalAlignment="Left" Background="{StaticResource MeterBrush}"/>
                                 </Border>
                             </Panel>
                             <TextBlock Grid.Column="2" FontSize="10" VerticalAlignment="Center"
@@ -160,9 +175,9 @@
                         </Button>
                     </StackPanel>
 
-                    <!-- 状态(错误 / 到尾) -->
-                    <TextBlock Grid.Column="7" VerticalAlignment="Center" MinWidth="56" FontSize="11"
-                               Classes="muted" TextTrimming="CharacterEllipsis" Text="{Binding MonitorStatus}"/>
+                    <!-- 状态(错误 / 到尾):仅有内容时占位,空时不占死宽度 -->
+                    <TextBlock Grid.Column="6" VerticalAlignment="Center" FontSize="11"
+                               Classes="muted" TextWrapping="Wrap" MaxWidth="96" Text="{Binding MonitorStatus}"/>
                 </Grid>
             </ctrl:SquircleBorder>
 

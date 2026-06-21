@@ -48,10 +48,30 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<CodecOption> Codecs { get; } = new();
     public ObservableCollection<ContainerDef> Containers { get; } = new();
 
-    [ObservableProperty] private BackendDef _selectedBackend = OutputModel.BackendById["ear"];
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SofaApplicable))]
+    private BackendDef _selectedBackend = OutputModel.BackendById["ear"];
     [ObservableProperty] private LayoutDef? _selectedLayout;
     [ObservableProperty] private CodecOption? _selectedCodec;
     [ObservableProperty] private ContainerDef? _selectedContainer;
+
+    // 自定义 HRIR(SOFA):只对 SAF 双耳后端(binaural / saf-binaural)有效;Apple 双耳用自家 HRTF。
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSofa))]
+    [NotifyPropertyChangedFor(nameof(SofaFileName))]
+    private string? _sofaPath;
+
+    public bool SofaApplicable =>
+        OutputModel.SofaAvailable && SelectedBackend.Renderer is AdmRenderer.Binaural or AdmRenderer.SafBinaural;
+    public bool HasSofa => !string.IsNullOrEmpty(SofaPath);
+    public string SofaFileName => HasSofa ? Path.GetFileName(SofaPath!) : "";
+
+    public void SetSofa(string path) => SofaPath = path;
+
+    [RelayCommand]
+    private void ClearSofa() => SofaPath = null;
+
+    partial void OnSofaPathChanged(string? value) => SaveSettings();
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CodecColumnSpan))]
@@ -331,6 +351,11 @@ public partial class MainWindowViewModel : ObservableObject
             Bitrate = br;
             _lastAutoBitrate = -1m;
         }
+
+        if (!string.IsNullOrEmpty(s.SofaPath))
+        {
+            SofaPath = s.SofaPath;
+        }
     }
 
     private void SaveSettings()
@@ -349,6 +374,8 @@ public partial class MainWindowViewModel : ObservableObject
             Bitrate = ShowBitrate ? Bitrate : null,
             IsDark = IsDark,
             IsEnglish = IsEnglish,
+            SofaPath = SofaPath,
+            MonitorSofaPath = SemanticEditor.MonitorSofaPath,
         });
     }
 
@@ -595,6 +622,7 @@ public partial class MainWindowViewModel : ObservableObject
             OpusBitratePerChKbps = opus,
             ApacBitrateKbps = apac,
             ApacContainer = apacContainer,
+            SofaPath = SofaApplicable ? SofaPath : null, // 仅 SAF 双耳后端传 SOFA
         };
     }
 

@@ -15,6 +15,8 @@ public sealed class AppSettings
     public decimal? Bitrate { get; set; }
     public bool IsDark { get; set; } = true;
     public bool IsEnglish { get; set; }
+    public string? SofaPath { get; set; } // 批渲染自定义 HRIR(SOFA)路径
+    public string? MonitorSofaPath { get; set; } // 语义监听自定义 HRIR(SOFA)路径
 }
 
 // source generator:AOT/trim 安全,无运行时反射序列化。
@@ -64,5 +66,12 @@ public static class SettingsStore
         {
             // 持久化失败不影响功能。
         }
+    }
+
+    public static void Update(Action<AppSettings> update)
+    {
+        var settings = Load() ?? new AppSettings();
+        update(settings);
+        Save(settings);
     }
 }
