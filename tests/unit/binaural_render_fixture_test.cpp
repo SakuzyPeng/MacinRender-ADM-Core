@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -23,6 +25,8 @@
 
 #include "adm/audio_io.h"
 #include "adm/render.h"
+
+#include "binaural_test_probe.h"
 
 namespace {
 
@@ -834,10 +838,128 @@ bool verify_external_sofa_when_available() {
     return ok;
 }
 
+// Invariant 1: at a measurement grid point the magnitude/phase-split interpolation must reproduce
+// the raw measured HRTF (a single VBAP gain of 1 → no interpolation). Guards against insertion of
+// interpolation artefacts at the exact measured directions.
+bool verify_binaural_grid_point_identity() {
+    bool ok = true;
+    bool tested_any_grid_point = false;
+    // KEMAR's built-in grid includes the cardinal horizontal directions; sweep azimuth and pick the
+    // ones that resolve to a single grid point.
+    for (float az : {0.0F, 30.0F, 90.0F, 180.0F, -90.0F}) {
+        for (int ear = 0; ear < 2; ++ear) {
+            const auto p = mradm::binaural_detail::probe_hrtf_interpolation(az, 0.0F, ear);
+            if (!check(p.valid, "grid-point probe builds KEMAR state")) {
+                return false;
+            }
+            if (!p.grid_point) {
+                continue;
+            }
+            tested_any_grid_point = true;
+            double max_abs_db = 0.0;
+            for (std::size_t b = 0; b < p.interp_mag.size(); ++b) {
+                if (p.freqs[b] < 200.0F || p.freqs[b] >= 18000.0F) {
+                    continue;
+                }
+                const double a = 20.0 * std::log10(static_cast<double>(p.interp_mag[b]) + 1e-9);
+                const double r = 20.0 * std::log10(static_cast<double>(p.grid_raw_mag[b]) + 1e-9);
+                max_abs_db = std::max(max_abs_db, std::abs(a - r));
+            }
+            ok &= check(max_abs_db < 0.01, "grid-point interpolation reproduces raw measured HRTF (<0.01 dB)");
+        }
+    }
+    ok &= check(tested_any_grid_point, "at least one azimuth resolved to a KEMAR grid point");
+    return ok;
+}
+
+// Invariant 2: off-grid the split interpolation must keep the magnitude inside the convex hull of
+// the contributing measured directions (min_k|H| ≤ |interp| ≤ max_k|H|). This is the mathematical
+// guarantee that it cannot fabricate a comb notch deeper than any neighbour, nor fill a notch that
+// every neighbour shares — the core safety property versus naive complex weighting (which combs).
+bool verify_binaural_offgrid_convex_magnitude() {
+    bool ok = true;
+    bool tested_any_offgrid = false;
+    // Deliberately off-grid azimuth/elevation pairs, including lateral and elevated directions.
+    const std::array<std::pair<float, float>, 5> dirs{
+        {{37.0F, 10.0F}, {70.0F, 25.0F}, {-55.0F, 15.0F}, {120.0F, 0.0F}, {25.0F, 50.0F}}};
+    for (const auto& [az, el] : dirs) {
+        for (int ear = 0; ear < 2; ++ear) {
+            const auto p = mradm::binaural_detail::probe_hrtf_interpolation(az, el, ear);
+            if (!check(p.valid, "off-grid probe builds KEMAR state")) {
+                return false;
+            }
+            if (p.grid_point) {
+                continue;
+            }
+            tested_any_offgrid = true;
+            // Allow a small numerical slack on the convex bound (float FFT / round-off).
+            constexpr float k_slack = 1.0e-4F;
+            bool within = true;
+            for (std::size_t b = 0; b < p.interp_mag.size(); ++b) {
+                if (p.freqs[b] < 200.0F || p.freqs[b] >= 18000.0F) {
+                    continue;
+                }
+                const float lo = p.nbr_min_mag[b] - (k_slack * p.nbr_max_mag[b]) - k_slack;
+                const float hi = p.nbr_max_mag[b] + (k_slack * p.nbr_max_mag[b]) + k_slack;
+                if (p.interp_mag[b] < lo || p.interp_mag[b] > hi) {
+                    within = false;
+                }
+            }
+            ok &= check(within, "off-grid magnitude stays within the neighbour convex hull (no fabricated comb)");
+        }
+    }
+    ok &= check(tested_any_offgrid, "at least one direction resolved to an off-grid query");
+    return ok;
+}
+
+double probe_band_mean_db(const mradm::binaural_detail::HrtfInterpProbe& p, float lo, float hi) {
+    double sum = 0.0;
+    int n = 0;
+    for (std::size_t b = 0; b < p.interp_mag.size(); ++b) {
+        if (p.freqs[b] < lo || p.freqs[b] >= hi) {
+            continue;
+        }
+        sum += 20.0 * std::log10(static_cast<double>(p.interp_mag[b]) + 1e-9);
+        ++n;
+    }
+    return n > 0 ? sum / n : 0.0;
+}
+
+// Invariant 3: a concrete lateral regression guard (not a tautology). At lateral off-grid
+// directions the far (contralateral) ear must stay head-shadowed in the high band — the split
+// interpolation must NOT lift the far-ear magnitude up toward the near ear. We assert a minimum
+// interaural level difference in 4–10 kHz; complex weighting that combed, or an over-aggressive
+// notch-fill, would shrink this ILD below the floor.
+bool verify_binaural_lateral_head_shadow() {
+    bool ok = true;
+    struct Lateral {
+        float az;
+        int near_ear;
+        int far_ear;
+    };
+    // KEMAR convention (measured): az>0 → ear 0 is the near ear, ear 1 the shadowed far ear; az<0
+    // mirrors. Measured 4–10 kHz ILD at these directions is ~19–25 dB; the 12 dB floor catches a
+    // far-ear notch-fill / comb regression while leaving headroom for dataset/interpolation jitter.
+    const std::array<Lateral, 3> dirs{{{100.0F, 0, 1}, {120.0F, 0, 1}, {-100.0F, 1, 0}}};
+    for (const auto& d : dirs) {
+        const auto near_p = mradm::binaural_detail::probe_hrtf_interpolation(d.az, 0.0F, d.near_ear);
+        const auto far_p = mradm::binaural_detail::probe_hrtf_interpolation(d.az, 0.0F, d.far_ear);
+        if (!check(near_p.valid && far_p.valid, "lateral probe builds KEMAR state")) {
+            return false;
+        }
+        const double ild = probe_band_mean_db(near_p, 4000.0F, 10000.0F) - probe_band_mean_db(far_p, 4000.0F, 10000.0F);
+        ok &= check(ild > 12.0, "lateral far ear stays head-shadowed (4-10kHz ILD > 12 dB)");
+    }
+    return ok;
+}
+
 } // namespace
 
 int main() {
     bool ok = true;
+    ok &= verify_binaural_grid_point_identity();
+    ok &= verify_binaural_offgrid_convex_magnitude();
+    ok &= verify_binaural_lateral_head_shadow();
     ok &= verify_binaural_render_is_stereo_and_directional();
     ok &= verify_binaural_time_gate_respects_block_start();
     ok &= verify_binaural_lfe_bypasses_hrtf();

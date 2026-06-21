@@ -639,14 +639,23 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_hoa_decode_fixture_tests COMMAND mr_adm_hoa_decode_fixture_tests)
 
     # Fixture test: SAF KEMAR HRTF binaural renderer timing and fixed stereo output layout.
-    add_executable(mr_adm_binaural_fixture_tests tests/unit/binaural_render_fixture_test.cpp)
+    # The interpolation invariant probe is its own test-only translation unit (binaural_test_probe.cpp),
+    # compiled here and NOT into the production ADMRenderBinaural library.
+    add_executable(mr_adm_binaural_fixture_tests
+        tests/unit/binaural_render_fixture_test.cpp
+        src/adm_render_binaural/binaural_test_probe.cpp)
     target_link_libraries(mr_adm_binaural_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
+            MacinRender::ADMRenderBinaural
             MacinRender::ADMAudio
             libbw64
             adm
     )
+    # Test-only access to the non-installed binaural internal/probe headers + SAF's float_complex.
+    target_include_directories(mr_adm_binaural_fixture_tests SYSTEM PRIVATE
+        "${saf_SOURCE_DIR}/modules/saf_utilities")
+    target_include_directories(mr_adm_binaural_fixture_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural")
     mr_adm_core_apply_warnings(mr_adm_binaural_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_binaural_fixture_tests)
     add_test(NAME mr_adm_binaural_fixture_tests COMMAND mr_adm_binaural_fixture_tests)
