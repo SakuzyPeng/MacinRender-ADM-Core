@@ -75,9 +75,10 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             OnPropertyChanged(nameof(CommonPrefixLabel));
         };
 
-        // 监听后端 A/B(默认双耳:拓扑维度需 binaural re-prepare 才听得到)。下拉项为中性专名,免翻。
-        MonitorBackends.Add(new MonitorBackendOption("双耳 · SAF", AdmRenderer.SafBinaural, "binaural"));
-        MonitorBackends.Add(new MonitorBackendOption("双耳 · Apple", AdmRenderer.Apple, "binaural"));
+        // 监听后端 A/B(默认双耳:拓扑维度需 binaural re-prepare 才听得到)。下拉项为中性专名(后端名在前),
+        // 不进 i18n 字典 → 语言无关、不随切换变化(与其它专名下拉一致)。
+        MonitorBackends.Add(new MonitorBackendOption("SAF · Binaural", AdmRenderer.SafBinaural, "binaural"));
+        MonitorBackends.Add(new MonitorBackendOption("Apple · Binaural", AdmRenderer.Apple, "binaural"));
         _selectedMonitorBackend = MonitorBackends[0];
         MonitorSofaPath = SettingsStore.Load()?.MonitorSofaPath;
 
