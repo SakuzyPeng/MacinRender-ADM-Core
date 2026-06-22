@@ -49,6 +49,8 @@
 
             <!-- 矢量图标(Lucide 线条,24 viewbox) -->
             <StreamGeometry x:Key="IconRender">M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2</StreamGeometry>
+            <!-- 语义编辑导航图标:sliders(横向推子 + 旋钮),区别于渲染的波形图标 -->
+            <StreamGeometry x:Key="IconSemantic">M21 4H14M10 4H3M21 12H12M8 12H3M21 20H16M12 20H3M14 2v4M8 10v4M16 18v4</StreamGeometry>
             <StreamGeometry x:Key="IconQueue">M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01</StreamGeometry>
             <StreamGeometry x:Key="IconHistory">M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20zM12 7v5l3 2</StreamGeometry>
             <StreamGeometry x:Key="IconSettings">M20 7h-9M14 17H5M17 14a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM7 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6z</StreamGeometry>
@@ -299,6 +301,36 @@
             <Setter Property="StrokeLineCap" Value="Round"/>
             <Setter Property="StrokeJoin" Value="Round"/>
             <Setter Property="Stretch" Value="None"/>
+        </Style>
+
+        <!-- 启动监听转圈:容器不旋转,只动画圆环 dash offset;几何固定在中心,不会因 transform 中心漂移甩出去。 -->
+        <Style Selector="Grid.spinnerhost">
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Ellipse.spinnericon">
+            <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+            <Setter Property="StrokeThickness" Value="2.2"/>
+            <Setter Property="StrokeLineCap" Value="Round"/>
+            <Setter Property="Fill" Value="{x:Null}"/>
+            <Setter Property="Width" Value="17"/>
+            <Setter Property="Height" Value="17"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="StrokeDashArray" Value="15,6"/>
+            <Setter Property="StrokeDashOffset" Value="0"/>
+            <Style.Animations>
+                <Animation Duration="0:0:0.85" IterationCount="INFINITE">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="StrokeDashOffset" Value="0"/>
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="StrokeDashOffset" Value="-21"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
         </Style>
 
         <!-- ComboBox 贴合 macOS 风:输入框背景 + 细边框 + 圆角 + 柔和箭头 + 圆角弹窗 -->

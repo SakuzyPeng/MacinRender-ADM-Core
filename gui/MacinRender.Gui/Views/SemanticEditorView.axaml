@@ -124,11 +124,16 @@
                         <ctrl:SquircleButton Classes="accent" Width="48" Height="32" Padding="0" VerticalAlignment="Center"
                                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 IsEnabled="{Binding CanPlay}" Command="{Binding TogglePlayCommand}">
-                            <Canvas Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                    IsHitTestVisible="False">
-                                <Path Classes="transporticon" Data="{StaticResource IconPlay}" IsVisible="{Binding !IsPlaying}"/>
-                                <Path Classes="transporticon" Data="{StaticResource IconPause}" IsVisible="{Binding IsPlaying}"/>
-                            </Canvas>
+                            <Panel Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   IsHitTestVisible="False">
+                                <Canvas Width="24" Height="24">
+                                    <Path Classes="transporticon" Data="{StaticResource IconPlay}" IsVisible="{Binding ShowPlayIcon}"/>
+                                    <Path Classes="transporticon" Data="{StaticResource IconPause}" IsVisible="{Binding ShowPauseIcon}"/>
+                                </Canvas>
+                                <Grid Classes="spinnerhost" IsVisible="{Binding ShowSpinner}">
+                                    <Ellipse Classes="spinnericon"/>
+                                </Grid>
+                            </Panel>
                         </ctrl:SquircleButton>
                     </StackPanel>
 

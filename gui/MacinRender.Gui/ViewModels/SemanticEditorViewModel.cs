@@ -295,15 +295,25 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSeek))]
-    [NotifyPropertyChangedFor(nameof(CanPlay))]
-    private bool _isMonitorBusy; // 启动监听中(import + 开设备),按钮禁用
+    [NotifyPropertyChangedFor(nameof(ShowSpinner))]
+    [NotifyPropertyChangedFor(nameof(ShowPlayIcon))]
+    [NotifyPropertyChangedFor(nameof(ShowPauseIcon))]
+    private bool _isMonitorBusy; // 启动监听中(import + 开设备):播放键显示转圈,点击被忽略
 
-    // 播放器按钮可用态:播放键需有文件且不在启动中;回到开头 / seek 需正在监听。
-    public bool CanPlay => HasFile && !IsMonitorBusy;
+    // 播放器按钮可用态:播放键有文件即可用(启动中点击被 TogglePlayAsync 忽略,但保持启用以显示转圈);
+    // 回到开头 / seek 需正在监听。
+    public bool CanPlay => HasFile;
     public bool CanSeek => IsMonitoring && !IsMonitorBusy;
+
+    // 播放键三态图标:启动中 = 转圈;否则 播放 / 暂停 二选一。
+    public bool ShowSpinner => IsMonitorBusy;
+    public bool ShowPlayIcon => !IsMonitorBusy && !IsPlaying;
+    public bool ShowPauseIcon => !IsMonitorBusy && IsPlaying;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPlaying))]
+    [NotifyPropertyChangedFor(nameof(ShowPlayIcon))]
+    [NotifyPropertyChangedFor(nameof(ShowPauseIcon))]
     private AdmMonitorState _monitorState = AdmMonitorState.Stopped;
 
     [ObservableProperty]
@@ -453,7 +463,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         var path = LoadedPath!;
         var backend = SelectedMonitorBackend;
         IsMonitorBusy = true;
-        MonitorStatus = L["SemMonStarting"];
+        MonitorStatus = ""; // 启动状态由播放键转圈体现,不占状态栏文字(避免挤压电平表)
 
         // import + apply policy + 开设备可能略耗时 → 后台启动,await 后回 UI 线程(串行,无并发触 monitor)。
         var settings = MonitorRenderSettings(backend);

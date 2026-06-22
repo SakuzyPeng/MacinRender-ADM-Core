@@ -42,17 +42,17 @@
                     </StackPanel>
 
                     <StackPanel Grid.Row="1" Margin="0,20,0,0" Spacing="2">
-                        <ctrl:SquircleButton Classes="nav" Classes.on="{Binding IsBatchMode}"
+                        <ctrl:SquircleButton Classes="nav" Classes.active="{Binding IsBatchMode}"
                                 Command="{Binding ShowBatchModeCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <Path Classes="icon" Data="{StaticResource IconRender}"/>
                                 <TextBlock VerticalAlignment="Center" Text="{DynamicResource NavRender}"/>
                             </StackPanel>
                         </ctrl:SquircleButton>
-                        <ctrl:SquircleButton Classes="nav" Classes.on="{Binding IsSemanticMode}"
+                        <ctrl:SquircleButton Classes="nav" Classes.active="{Binding IsSemanticMode}"
                                 Command="{Binding ShowSemanticModeCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="10">
-                                <Path Classes="icon" Data="{StaticResource IconRender}"/>
+                                <Path Classes="icon" Data="{StaticResource IconSemantic}"/>
                                 <TextBlock VerticalAlignment="Center" Text="{DynamicResource NavSemantic}"/>
                             </StackPanel>
                         </ctrl:SquircleButton>
