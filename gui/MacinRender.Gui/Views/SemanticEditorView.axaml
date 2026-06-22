@@ -77,24 +77,57 @@
 
         <Grid Grid.Row="1" RowDefinitions="Auto,Auto,*">
 
-            <!-- 载入栏(右侧:导出生效 ADM + 载入文件;导出填掉原来的空白) -->
+            <!-- 载入栏:文件信息(左,填充;文件名可换 2 行)| 监听引擎(后端 + HRIR,从监听条挪上来)| 导出 | 载入 -->
             <ctrl:SquircleBorder Grid.Row="0" Classes="card" Margin="0,0,0,12">
-                <DockPanel>
-                    <ctrl:SquircleButton DockPanel.Dock="Right" Classes="headericon accent"
-                            VerticalAlignment="Center" Margin="8,0,0,0"
-                            IsEnabled="{Binding !IsLoading}" Click="OnLoadFile"
-                            ToolTip.Tip="{DynamicResource SemLoadFile}">
-                        <Grid Width="24" Height="24" IsHitTestVisible="False">
-                            <Path Classes="icon" Data="{StaticResource IconFolder}"/>
-                            <Path x:Name="FlashLoadFile" Classes="icon" Data="{StaticResource IconFolder}"
-                                  Stroke="#30D158" Opacity="0">
-                                <Path.Transitions>
-                                    <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
-                                </Path.Transitions>
-                            </Path>
-                        </Grid>
-                    </ctrl:SquircleButton>
-                    <ctrl:SquircleButton DockPanel.Dock="Right" Classes="headericon" VerticalAlignment="Center"
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="12">
+                    <!-- 文件信息:填充左侧;窗口窄时文件名换行(最多 2 行),不被后端块挤到截断 -->
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Classes="h2" Text="{DynamicResource SemFileHeader}"/>
+                        <TextBlock Classes="muted" Text="{Binding StatusText}"/>
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                   TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                   IsVisible="{Binding HasFile}" Text="{Binding LoadedFileName}"/>
+                    </StackPanel>
+
+                    <!-- 监听引擎:后端 A/B + 自定义 HRIR(SOFA,仅「双耳·SAF」时显示;下拉=默认+最近 MRU + 浏览) -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <ComboBox Width="154" VerticalAlignment="Center"
+                                  ItemsSource="{Binding MonitorBackends}"
+                                  SelectedItem="{Binding SelectedMonitorBackend}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="svc:MonitorBackendOption">
+                                    <TextBlock Text="{Binding Label}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                                    IsVisible="{Binding MonitorSofaApplicable}">
+                            <ComboBox Width="132" VerticalAlignment="Center"
+                                      ItemsSource="{Binding MonitorSofa.Options}"
+                                      SelectedItem="{Binding MonitorSofa.Selected}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:SofaOption">
+                                        <TextBlock Text="{Binding Label}" ToolTip.Tip="{Binding Tooltip}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <ctrl:SquircleButton Classes="headericon" Click="OnPickMonitorSofa"
+                                    ToolTip.Tip="{DynamicResource SemSofaPick}">
+                                <Grid Width="24" Height="24" IsHitTestVisible="False">
+                                    <Path Classes="icon" Data="{StaticResource IconAdd}"/>
+                                    <Path x:Name="FlashMonitorSofa" Classes="icon" Data="{StaticResource IconAdd}"
+                                          Stroke="#30D158" Opacity="0">
+                                        <Path.Transitions>
+                                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                        </Path.Transitions>
+                                    </Path>
+                                </Grid>
+                            </ctrl:SquircleButton>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- 导出生效 ADM -->
+                    <ctrl:SquircleButton Grid.Column="2" Classes="headericon" VerticalAlignment="Center"
                             IsEnabled="{Binding CanExport}" Click="OnExport"
                             ToolTip.Tip="{DynamicResource SemExport}">
                         <Grid Width="24" Height="24" IsHitTestVisible="False">
@@ -107,19 +140,28 @@
                             </Path>
                         </Grid>
                     </ctrl:SquircleButton>
-                    <StackPanel VerticalAlignment="Center" Spacing="2">
-                        <TextBlock Classes="h2" Text="{DynamicResource SemFileHeader}"/>
-                        <TextBlock Classes="muted" Text="{Binding StatusText}"/>
-                        <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}" TextTrimming="CharacterEllipsis"
-                                   IsVisible="{Binding HasFile}" Text="{Binding LoadedFileName}"/>
-                    </StackPanel>
-                </DockPanel>
+
+                    <!-- 载入文件 -->
+                    <ctrl:SquircleButton Grid.Column="3" Classes="headericon accent" VerticalAlignment="Center"
+                            IsEnabled="{Binding !IsLoading}" Click="OnLoadFile"
+                            ToolTip.Tip="{DynamicResource SemLoadFile}">
+                        <Grid Width="24" Height="24" IsHitTestVisible="False">
+                            <Path Classes="icon" Data="{StaticResource IconFolder}"/>
+                            <Path x:Name="FlashLoadFile" Classes="icon" Data="{StaticResource IconFolder}"
+                                  Stroke="#30D158" Opacity="0">
+                                <Path.Transitions>
+                                    <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                </Path.Transitions>
+                            </Path>
+                        </Grid>
+                    </ctrl:SquircleButton>
+                </Grid>
             </ctrl:SquircleBorder>
 
-            <!-- 监听条:传输 + 后端 A/B + 电平表 + 状态(载入栏下,只在已载入文件时可用) -->
+            <!-- 监听条:传输 + 进度条(占满)+ 电平表 + 状态(后端/HRIR 已挪到上方文件卡片)。只在已载入文件时可用 -->
             <ctrl:SquircleBorder Grid.Row="1" Classes="card" Margin="0,0,0,12" Padding="12,8"
                                  IsEnabled="{Binding HasFile}">
-                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
 
                     <!-- 播放器传输键:⏮ 回到开头 · ▶/⏸ 播放/暂停(未监听时自动开监听并播放)。
                          Padding=0 抵掉 accent 给文字用的 16,7 内边距,让图标在按钮内居中。 -->
@@ -162,33 +204,9 @@
                     <TextBlock Grid.Column="3" VerticalAlignment="Center" MinWidth="40" FontSize="12"
                                Classes="muted" Text="{Binding DurationText}"/>
 
-                    <!-- 后端 A/B + 自定义 HRIR(SOFA,仅「双耳·SAF」时显示) -->
-                    <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <ComboBox Width="154" VerticalAlignment="Center"
-                                  ItemsSource="{Binding MonitorBackends}"
-                                  SelectedItem="{Binding SelectedMonitorBackend}">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate x:DataType="svc:MonitorBackendOption">
-                                    <TextBlock Text="{Binding Label}"/>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                        <ctrl:SquircleButton Classes="sofabtn" Classes.on="{Binding HasMonitorSofa}" Width="104"
-                                IsVisible="{Binding MonitorSofaApplicable}" Click="OnToggleMonitorSofa"
-                                ToolTip.Tip="{Binding MonitorSofaSummary}">
-                            <Panel>
-                                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12"
-                                           IsVisible="{Binding !HasMonitorSofa}" Text="HRIR"/>
-                                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12"
-                                           MaxWidth="82" TextTrimming="CharacterEllipsis"
-                                           IsVisible="{Binding HasMonitorSofa}" Text="{Binding MonitorSofaFileName}"/>
-                            </Panel>
-                        </ctrl:SquircleButton>
-                    </StackPanel>
-
                     <!-- 电平表:L/R 峰值(dBFS,色随电平 低绿近 0 红)+ LUFS 读数(点击在 M/S/I 间切换)。
                          ProgressBar 默认 MinWidth=200,显式 MinWidth=0 压回,否则溢出盖住相邻列。 -->
-                    <StackPanel Grid.Column="5" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="2">
+                    <StackPanel Grid.Column="4" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="2">
                         <Grid ColumnDefinitions="12,150,44" ColumnSpacing="6">
                             <TextBlock Grid.Column="0" Classes="muted" FontSize="10" VerticalAlignment="Center" Text="L"/>
                             <Panel Grid.Column="1" Height="6">
@@ -224,7 +242,7 @@
                     </StackPanel>
 
                     <!-- 状态(错误 / 到尾):仅有内容时占位,空时不占死宽度 -->
-                    <TextBlock Grid.Column="6" VerticalAlignment="Center" FontSize="11"
+                    <TextBlock Grid.Column="5" VerticalAlignment="Center" FontSize="11"
                                Classes="muted" TextWrapping="Wrap" MaxWidth="96" Text="{Binding MonitorStatus}"/>
                 </Grid>
             </ctrl:SquircleBorder>
@@ -235,11 +253,14 @@
                 <!-- 对象列表 -->
                 <ctrl:SquircleBorder Grid.Column="0" Classes="card">
                     <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
-                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
                             <TextBlock Grid.Column="0" Classes="h2" Cursor="Hand" DoubleTapped="OnResetAll"
                                        ToolTip.Tip="{DynamicResource SemResetHint}" Text="{DynamicResource SemObjects}"/>
-                            <!-- 覆盖计数:挪到标题右侧,无覆盖时不显示 -->
-                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted" FontSize="11"
+                            <!-- 对象总数:挪到标题旁(从文件状态行移来) -->
+                            <TextBlock Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" Classes="muted" FontSize="11"
+                                       IsVisible="{Binding HasFile}" Text="{Binding ObjectCountText}"/>
+                            <!-- 覆盖计数:标题右侧,无覆盖时不显示 -->
+                            <TextBlock Grid.Column="2" VerticalAlignment="Center" Classes="muted" FontSize="11"
                                        IsVisible="{Binding HasOverrides}" Text="{Binding OverrideSummary}"/>
                         </Grid>
                         <!-- 剥离的主前缀提示(全名仍在每行 tooltip) -->
@@ -413,8 +434,9 @@
                                 <Grid ColumnDefinitions="80,280,90">
                                     <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold" Cursor="Hand"
                                                Classes="axislink" Classes.unlinked="{Binding !SelectedRow.Extent.WidthLinked}"
-                                               Tag="W" Tapped="OnToggleAxisLink"
-                                               ToolTip.Tip="单击切换 Width 联动" Text="Width"/>
+                                               Tag="W" DoubleTapped="OnResetExtent"
+                                               PointerPressed="OnAxisPointerPressed" PointerReleased="OnAxisPointerReleased"
+                                               ToolTip.Tip="长按切换 Width 联动 · 双击重置 extent" Text="Width"/>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                         <CheckBox IsChecked="{Binding SelectedRow.Extent.Width.Enabled}"/>
                                         <Slider Width="86" VerticalAlignment="Center"
@@ -435,8 +457,9 @@
                                 <Grid ColumnDefinitions="80,280,90">
                                     <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold" Cursor="Hand"
                                                Classes="axislink" Classes.unlinked="{Binding !SelectedRow.Extent.HeightLinked}"
-                                               Tag="H" Tapped="OnToggleAxisLink"
-                                               ToolTip.Tip="单击切换 Height 联动" Text="Height"/>
+                                               Tag="H" DoubleTapped="OnResetExtent"
+                                               PointerPressed="OnAxisPointerPressed" PointerReleased="OnAxisPointerReleased"
+                                               ToolTip.Tip="长按切换 Height 联动 · 双击重置 extent" Text="Height"/>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                         <CheckBox IsChecked="{Binding SelectedRow.Extent.Height.Enabled}"/>
                                         <Slider Width="86" VerticalAlignment="Center"
@@ -457,8 +480,9 @@
                                 <Grid ColumnDefinitions="80,280,90">
                                     <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold" Cursor="Hand"
                                                Classes="axislink" Classes.unlinked="{Binding !SelectedRow.Extent.DepthLinked}"
-                                               Tag="D" Tapped="OnToggleAxisLink"
-                                               ToolTip.Tip="单击切换 Depth 联动" Text="Depth"/>
+                                               Tag="D" DoubleTapped="OnResetExtent"
+                                               PointerPressed="OnAxisPointerPressed" PointerReleased="OnAxisPointerReleased"
+                                               ToolTip.Tip="长按切换 Depth 联动 · 双击重置 extent" Text="Depth"/>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                         <CheckBox IsChecked="{Binding SelectedRow.Extent.Depth.Enabled}"/>
                                         <Slider Width="86" VerticalAlignment="Center"

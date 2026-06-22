@@ -53,6 +53,13 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     public bool HasOverrides => OverriddenObjectCount > 0;
 
+    // 场景对象总数(原始 inspect 计数),显示在「对象」卡片标题旁(从文件状态行挪过来)。
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ObjectCountText))]
+    private int _objectCount;
+
+    public string ObjectCountText => ObjectCount > 0 ? L.Format("SemObjectsN", ObjectCount) : "";
+
     public bool HasFile => !string.IsNullOrEmpty(LoadedPath);
     public string LoadedFileName => HasFile ? Path.GetFileName(LoadedPath!) : "";
     public bool HasCommonPrefix => CommonPrefix.Length > 0;
@@ -73,6 +80,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
             OnPropertyChanged(nameof(OverrideSummary));
             OnPropertyChanged(nameof(CommonPrefixLabel));
+            OnPropertyChanged(nameof(ObjectCountText));
         };
 
         // 监听后端 A/B(默认双耳:拓扑维度需 binaural re-prepare 才听得到)。下拉项为中性专名(后端名在前),
@@ -81,6 +89,13 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         MonitorBackends.Add(new MonitorBackendOption("Apple · Binaural", AdmRenderer.Apple, "binaural"));
         _selectedMonitorBackend = MonitorBackends[0];
         MonitorSofaPath = SettingsStore.Load()?.MonitorSofaPath;
+        MonitorSofa = new SofaSelector(MonitorSofaPath);
+        MonitorSofa.SelectionChanged += path => MonitorSofaPath = path;
+        // 迁移友好:旧设置仅有 MonitorSofaPath、无 MRU 时,确保它进 MRU 并选中。
+        if (!string.IsNullOrEmpty(MonitorSofaPath) && File.Exists(MonitorSofaPath))
+        {
+            MonitorSofa.Pick(MonitorSofaPath);
+        }
 
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) }; // ~30 Hz
         _pollTimer.Tick += (_, _) => PollMonitor();
@@ -115,6 +130,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             {
                 LoadedPath = null;
                 CommonPrefix = "";
+                ObjectCount = 0;
                 StatusText = L["SemLoadFailed"];
                 RebuildPolicy();
                 return false;
@@ -148,7 +164,8 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
             LoadedPath = path;
             SelectedRow = Rows.Count > 0 ? Rows[0] : null;
-            StatusText = L.Format("SemLoaded", doc.Objects.Count);
+            ObjectCount = doc.Objects.Count;
+            StatusText = L["SemLoaded"];
             RebuildPolicy();
             return true;
         }
@@ -266,25 +283,16 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(MonitorSofaApplicable))]
     private MonitorBackendOption _selectedMonitorBackend;
 
-    // 监听用自定义 HRIR(SOFA):只对「双耳·SAF」有效(Apple 双耳用自家 HRTF)。改路径即时重载。
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasMonitorSofa))]
-    [NotifyPropertyChangedFor(nameof(MonitorSofaFileName))]
-    [NotifyPropertyChangedFor(nameof(MonitorSofaSummary))]
-    private string? _monitorSofaPath;
+    // 监听用自定义 HRIR(SOFA):只对「双耳·SAF」有效(Apple 双耳用自家 HRTF)。改选择即时重载。
+    // MonitorSofa 是 MRU 下拉选择器(默认 + 最近),驱动 MonitorSofaPath(真实路径,下游/持久化消费)。
+    [ObservableProperty] private string? _monitorSofaPath;
+
+    public SofaSelector MonitorSofa { get; }
 
     public bool MonitorSofaApplicable =>
         Models.OutputModel.SofaAvailable && SelectedMonitorBackend?.Renderer == AdmRenderer.SafBinaural;
-    public bool HasMonitorSofa => !string.IsNullOrEmpty(MonitorSofaPath);
-    public string MonitorSofaFileName => HasMonitorSofa ? Path.GetFileNameWithoutExtension(MonitorSofaPath!) : "";
-    public string MonitorSofaSummary => HasMonitorSofa ? $"HRIR: {MonitorSofaFileName}" : L["SemSofaNone"];
 
-    public void SetMonitorSofa(string path) => MonitorSofaPath = path;
-
-    [RelayCommand]
-    private void ClearMonitorSofa() => MonitorSofaPath = null;
-
-    // SOFA 路径变了:监听中且当前是 SAF 双耳 → 用同后端热切换重载新 HRIR。
+    // SOFA 路径变了:持久化;监听中且当前是 SAF 双耳 → 用同后端热切换重载新 HRIR。
     partial void OnMonitorSofaPathChanged(string? value)
     {
         SettingsStore.Update(s => s.MonitorSofaPath = value);

@@ -26,6 +26,59 @@ public partial class SemanticEditorView : UserControl
             seek.AddHandler(Thumb.DragStartedEvent, OnSeekDragStarted);
             seek.AddHandler(Thumb.DragCompletedEvent, OnSeekDragCompleted);
         }
+
+        // 长按计时器(手动实现长按:鼠标按下达阈值即切换该轴联动,见 OnAxisPointerPressed)。
+        _holdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _holdTimer.Tick += (_, _) =>
+        {
+            _holdTimer.Stop();
+            ToggleAxisLink(_holdAxis);
+            _holdAxis = null;
+        };
+    }
+
+    // ── extent 轴名长按切换联动 ──
+    // 改长按(而非单击)是为了和"双击重置"彻底分开:快速双击的两次按下都在 500ms 阈值前 release,
+    // 计时器被取消 → 不会误触联动切换;只有真正按住不放达阈值才切换。
+    private readonly DispatcherTimer _holdTimer;
+    private string? _holdAxis;
+
+    private void OnAxisPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control { Tag: string which })
+        {
+            _holdAxis = which;
+            _holdTimer.Stop();
+            _holdTimer.Start();
+        }
+    }
+
+    private void OnAxisPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        _holdTimer.Stop();
+        _holdAxis = null;
+    }
+
+    // 切换某轴联动(Tag = "W"/"H"/"D")。联动轴共享值;未联动轴独立。
+    private void ToggleAxisLink(string? which)
+    {
+        if (which is null || DataContext is not SemanticEditorViewModel { SelectedRow.Extent: { } ext })
+        {
+            return;
+        }
+
+        switch (which)
+        {
+            case "W":
+                ext.WidthLinked = !ext.WidthLinked;
+                break;
+            case "H":
+                ext.HeightLinked = !ext.HeightLinked;
+                break;
+            case "D":
+                ext.DepthLinked = !ext.DepthLinked;
+                break;
+        }
     }
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
@@ -126,7 +179,7 @@ public partial class SemanticEditorView : UserControl
         DispatcherTimer.RunOnce(() => icon.Opacity = 0, TimeSpan.FromSeconds(0.55));
     }
 
-    // 选监听用自定义 HRIR(SOFA)→ 交 VM(SAF 双耳后端时即时重载)。
+    // 浏览监听用自定义 HRIR(SOFA)→ 加入 MRU 并选中(SAF 双耳后端时即时重载)。成功闪绿。
     private async void OnPickMonitorSofa(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not SemanticEditorViewModel vm)
@@ -137,28 +190,12 @@ public partial class SemanticEditorView : UserControl
         var path = await MainWindow.PickSofaAsync(this);
         if (!string.IsNullOrEmpty(path))
         {
-            vm.SetMonitorSofa(path);
-        }
-    }
-
-    // 顶栏 HRIR 两态按钮:未选择时选择 SOFA;已选择时清除,回到默认 HRTF。
-    private async void OnToggleMonitorSofa(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is not SemanticEditorViewModel vm)
-        {
-            return;
-        }
-
-        if (vm.HasMonitorSofa)
-        {
-            vm.ClearMonitorSofaCommand.Execute(null);
-            return;
-        }
-
-        var path = await MainWindow.PickSofaAsync(this);
-        if (!string.IsNullOrEmpty(path))
-        {
-            vm.SetMonitorSofa(path);
+            vm.MonitorSofa.Pick(path);
+            var flash = this.FindControl<Control>("FlashMonitorSofa");
+            if (flash is not null)
+            {
+                FlashIcon(flash);
+            }
         }
     }
 
@@ -189,26 +226,13 @@ public partial class SemanticEditorView : UserControl
         }
     }
 
-    // 单击 extent 轴名 → 切换该轴是否联动(联动轴共享值)。Tag = "W"/"H"/"D"。
-    private void OnToggleAxisLink(object? sender, TappedEventArgs e)
+    // 双击 extent 轴名 → 重置整个 extent(三轴回中性 + 联动复位为默认)。extent 是单一听感维度,
+    // 三轴是其分面 → 与其它维度"双击维度名即重置"一致。长按切换联动与双击互不干扰(见 OnAxisPointerPressed)。
+    private void OnResetExtent(object? sender, TappedEventArgs e)
     {
-        if (DataContext is not SemanticEditorViewModel { SelectedRow.Extent: { } ext } ||
-            sender is not Control { Tag: string which })
+        if (DataContext is SemanticEditorViewModel { SelectedRow.Extent: { } ext })
         {
-            return;
-        }
-
-        switch (which)
-        {
-            case "W":
-                ext.WidthLinked = !ext.WidthLinked;
-                break;
-            case "H":
-                ext.HeightLinked = !ext.HeightLinked;
-                break;
-            case "D":
-                ext.DepthLinked = !ext.DepthLinked;
-                break;
+            ext.Reset();
         }
     }
 

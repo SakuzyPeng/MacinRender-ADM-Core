@@ -93,6 +93,18 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 纯 SOFA 拖入:加入共享 MRU 并选中(按当前模式路由到对应 HRIR 选择器)。混入 ADM 时仍按 ADM 处理。
+        if (roots.All(IsSofaFile))
+        {
+            var selector = vm.IsSemanticMode ? vm.SemanticEditor.MonitorSofa : vm.Sofa;
+            foreach (var sofa in roots)
+            {
+                selector.Pick(sofa); // 末个生效选中,其余进 MRU
+            }
+
+            return;
+        }
+
         // 大文件夹递归可能耗时,放后台线程,避免卡 UI。批渲染交给 VM 再做 probe 内容级判定;
         // 语义编辑只载入第一个 ADM 候选。
         var paths = await Task.Run(() => ExpandAdmFiles(roots));
@@ -150,6 +162,9 @@ public partial class MainWindow : Window
     private static bool IsAdmFile(string path) =>
         AdmExtensions.Contains(Path.GetExtension(path).ToLowerInvariant());
 
+    private static bool IsSofaFile(string path) =>
+        string.Equals(Path.GetExtension(path), ".sofa", StringComparison.OrdinalIgnoreCase);
+
     // 选自定义 HRIR(SOFA)文件 → 交 VM(BuildSettings 在 SAF 双耳后端时带上)。
     private async void OnPickSofa(object? sender, RoutedEventArgs e)
     {
@@ -161,13 +176,10 @@ public partial class MainWindow : Window
         var path = await PickSofaAsync(this);
         if (!string.IsNullOrEmpty(path))
         {
-            vm.SetSofa(path);
+            vm.Sofa.Pick(path); // 加入共享 MRU 并选中(下次监听/批渲染下拉里都在)
             FlashIcon(FlashSofaPick);
         }
     }
-
-    // 清除 SOFA(按钮仅在已选时可见 → 必然成功),闪绿确认。Click 与 ClearSofaCommand 并行触发。
-    private void OnClearSofaClick(object? sender, RoutedEventArgs e) => FlashIcon(FlashSofaClear);
 
     // 共用的 SOFA 选择器:返回本地路径或 null。
     internal static async Task<string?> PickSofaAsync(Control owner)

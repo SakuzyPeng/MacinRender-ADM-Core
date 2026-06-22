@@ -153,36 +153,22 @@
                                     </StackPanel>
                                     <StackPanel Spacing="5" IsVisible="{Binding SofaApplicable}">
                                         <TextBlock Classes="muted" Text="{DynamicResource SemSofaLabel}"/>
-                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
-                                            <ctrl:SquircleBorder Grid.Column="0" Background="{DynamicResource InputBg}"
-                                                                 CornerRadius="8" Padding="10,7" VerticalAlignment="Center">
-                                                <Panel>
-                                                    <TextBlock Foreground="{DynamicResource TextPrimary}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               IsVisible="{Binding HasSofa}" Text="{Binding SofaFileName}"
-                                                               ToolTip.Tip="{Binding SofaPath}"/>
-                                                    <TextBlock Classes="muted" IsVisible="{Binding !HasSofa}"
-                                                               Text="{DynamicResource SemSofaNone}"/>
-                                                </Panel>
-                                            </ctrl:SquircleBorder>
+                                        <!-- HRIR 下拉(默认 + 最近 MRU)+ 浏览;清除=选回默认项 -->
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                            <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                                      ItemsSource="{Binding Sofa.Options}"
+                                                      SelectedItem="{Binding Sofa.Selected}">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:SofaOption">
+                                                        <TextBlock Text="{Binding Label}" ToolTip.Tip="{Binding Tooltip}"/>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
                                             <ctrl:SquircleButton Grid.Column="1" Classes="headericon" Click="OnPickSofa"
                                                     ToolTip.Tip="{DynamicResource SemSofaPick}">
                                                 <Grid Width="24" Height="24" IsHitTestVisible="False">
-                                                    <Path Classes="icon" Data="{StaticResource IconFolder}"/>
-                                                    <Path x:Name="FlashSofaPick" Classes="icon" Data="{StaticResource IconFolder}"
-                                                          Stroke="#30D158" Opacity="0">
-                                                        <Path.Transitions>
-                                                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
-                                                        </Path.Transitions>
-                                                    </Path>
-                                                </Grid>
-                                            </ctrl:SquircleButton>
-                                            <ctrl:SquircleButton Grid.Column="2" Classes="headericon"
-                                                    IsVisible="{Binding HasSofa}" Command="{Binding ClearSofaCommand}"
-                                                    Click="OnClearSofaClick" ToolTip.Tip="{DynamicResource SemSofaClear}">
-                                                <Grid Width="24" Height="24" IsHitTestVisible="False">
-                                                    <Path Classes="icon" Data="{StaticResource IconTrash}"/>
-                                                    <Path x:Name="FlashSofaClear" Classes="icon" Data="{StaticResource IconTrash}"
+                                                    <Path Classes="icon" Data="{StaticResource IconAdd}"/>
+                                                    <Path x:Name="FlashSofaPick" Classes="icon" Data="{StaticResource IconAdd}"
                                                           Stroke="#30D158" Opacity="0">
                                                         <Path.Transitions>
                                                             <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -15,8 +16,9 @@ public sealed class AppSettings
     public decimal? Bitrate { get; set; }
     public bool IsDark { get; set; } = true;
     public bool IsEnglish { get; set; }
-    public string? SofaPath { get; set; } // 批渲染自定义 HRIR(SOFA)路径
-    public string? MonitorSofaPath { get; set; } // 语义监听自定义 HRIR(SOFA)路径
+    public string? SofaPath { get; set; } // 批渲染自定义 HRIR(SOFA)路径(当前选择)
+    public string? MonitorSofaPath { get; set; } // 语义监听自定义 HRIR(SOFA)路径(当前选择)
+    public List<string>? RecentSofaPaths { get; set; } // 最近用过的 SOFA(MRU,最近在前;批渲染 + 监听共享)
 }
 
 // source generator:AOT/trim 安全,无运行时反射序列化。
