@@ -269,7 +269,7 @@
                                     IsVisible="{Binding SelectedRow,
                                         Converter={x:Static ObjectConverters.IsNotNull}}">
                             <!-- 列头 -->
-                            <Grid ColumnDefinitions="80,*,202,*" Margin="0,2,0,2">
+                            <Grid ColumnDefinitions="80,*,280,*" Margin="0,2,0,2">
                                 <TextBlock Grid.Column="1" Classes="muted" FontSize="11"
                                            Text="{DynamicResource SemColCurrent}"/>
                                 <TextBlock Grid.Column="2" Classes="muted" FontSize="11"
@@ -279,7 +279,7 @@
                             </Grid>
 
                             <!-- gain(dB 偏移) -->
-                            <Grid ColumnDefinitions="80,*,202,*">
+                            <Grid ColumnDefinitions="80,*,280,*">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
                                            Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.GainDb}"
                                            ToolTip.Tip="{DynamicResource SemResetHint}"
@@ -309,7 +309,7 @@
                             </Grid>
 
                             <!-- diffuse(× scale)。声床(bed)无此维度 → 隐藏 -->
-                            <Grid ColumnDefinitions="80,*,202,*"
+                            <Grid ColumnDefinitions="80,*,280,*"
                                   IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
                                            Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.DiffuseScale}"
@@ -339,40 +339,45 @@
                                            Text="{Binding SelectedRow.DiffuseScale.EffectiveText}"/>
                             </Grid>
 
-                            <!-- extent(× scale,作用于 W/H/D)。声床(bed)无此维度 → 隐藏 -->
-                            <Grid ColumnDefinitions="80,*,202,*"
+                            <!-- extent:W/H/D 三轴缩放。链条开启时任一轴输入同步三轴。声床(bed)无此维度 → 隐藏 -->
+                            <Grid ColumnDefinitions="80,*,280,*"
                                   IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
-                                           Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.ExtentScale}"
+                                           Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.Extent}"
                                            ToolTip.Tip="{DynamicResource SemResetHint}"
                                            Foreground="{DynamicResource TextPrimary}" Text="extent"/>
                                 <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
                                            TextWrapping="Wrap"
-                                           Text="{Binding SelectedRow.ExtentScale.CurrentText}"/>
+                                           Text="{Binding SelectedRow.Extent.CurrentText}"/>
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">
-                                    <CheckBox IsChecked="{Binding SelectedRow.ExtentScale.Enabled}"/>
-                                    <Slider Width="86" VerticalAlignment="Center"
-                                            Minimum="{Binding SelectedRow.ExtentScale.SliderMin}"
-                                            Maximum="{Binding SelectedRow.ExtentScale.SliderMax}"
-                                            Value="{Binding SelectedRow.ExtentScale.Value}"
-                                            IsEnabled="{Binding SelectedRow.ExtentScale.Enabled}"/>
-                                    <Grid ColumnDefinitions="12,44,Auto" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.ExtentScale.UnitPrefix}"/>
+                                    <CheckBox IsChecked="{Binding SelectedRow.Extent.Enabled}"/>
+                                    <ctrl:SquircleButton Classes="sofabtn" Classes.on="{Binding SelectedRow.Extent.Linked}"
+                                            Width="28" Height="22" Padding="0" Tag="{Binding SelectedRow.Extent}"
+                                            Click="OnToggleExtentLink" ToolTip.Tip="同步 W/H/D">
+                                        <Grid Width="17" Height="17" IsHitTestVisible="False">
+                                            <Path Classes="icon" Data="{StaticResource IconLink}"/>
+                                        </Grid>
+                                    </ctrl:SquircleButton>
+                                    <Grid ColumnDefinitions="Auto,44,Auto,44,Auto,44" ColumnSpacing="4" VerticalAlignment="Center">
+                                        <TextBlock Grid.Column="0" VerticalAlignment="Center" FontSize="12" Classes="muted" Text="W ×"/>
                                         <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
-                                                 Text="{Binding SelectedRow.ExtentScale.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
-                                        <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
-                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.ExtentScale.UnitSuffix}"/>
+                                                 Text="{Binding SelectedRow.Extent.WidthEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="12" Classes="muted" Text="H ×"/>
+                                        <TextBox Grid.Column="3" Classes="numeric" VerticalAlignment="Center"
+                                                 Text="{Binding SelectedRow.Extent.HeightEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        <TextBlock Grid.Column="4" VerticalAlignment="Center" FontSize="12" Classes="muted" Text="D ×"/>
+                                        <TextBox Grid.Column="5" Classes="numeric" VerticalAlignment="Center"
+                                                 Text="{Binding SelectedRow.Extent.DepthEntry}" KeyDown="OnValueEntryKeyDown"/>
                                     </Grid>
                                 </StackPanel>
                                 <TextBlock Grid.Column="3" VerticalAlignment="Center" TextWrapping="Wrap"
                                            Foreground="{DynamicResource Accent}"
-                                           Text="{Binding SelectedRow.ExtentScale.EffectiveText}"/>
+                                           Text="{Binding SelectedRow.Extent.EffectiveText}"/>
                             </Grid>
 
                             <!-- divergence(× scale)。声床(bed)无此维度 → 隐藏 -->
-                            <Grid ColumnDefinitions="80,*,202,*"
+                            <Grid ColumnDefinitions="80,*,280,*"
                                   IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
                                            Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.DivergenceScale}"

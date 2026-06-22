@@ -2095,7 +2095,7 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
-    bool ok = check(adm_api_version_minor() == 18, "C ABI minor version is 18");
+    bool ok = check(adm_api_version_minor() == 19, "C ABI minor version is 19");
 
     // Argument validation (no device needed).
     adm_monitor_t* probe = nullptr;
@@ -2165,17 +2165,33 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     ov.diffuse_scale = 1.0F;
     ov.extent_scale = 1.0F;
     ov.divergence_scale = 1.0F;
+    ov.extent_width_scale = 1.0F;
+    ov.extent_height_scale = 1.0F;
+    ov.extent_depth_scale = 1.0F;
     ok = check(adm_monitor_set_overrides(monitor, &ov, 1, 7) == ADM_ERROR_OK, "monitor set overrides") && ok;
+    adm_monitor_override_t legacy = ov;
+    legacy.struct_size = static_cast<uint32_t>(offsetof(adm_monitor_override_t, extent_width_scale));
+    legacy.extent_width_scale = 0.0F;
+    legacy.extent_height_scale = 0.0F;
+    legacy.extent_depth_scale = 0.0F;
+    ok = check(adm_monitor_set_overrides(monitor, &legacy, 1, 8) == ADM_ERROR_OK,
+               "monitor set_overrides accepts legacy struct_size without extent axis fields") &&
+         ok;
 
     // Non-finite gain / scale is rejected; struct_size below the minimum is rejected.
     adm_monitor_override_t bad = ov;
     bad.gain_db = std::numeric_limits<float>::quiet_NaN();
-    ok = check(adm_monitor_set_overrides(monitor, &bad, 1, 8) == ADM_ERROR_INVALID_ARGUMENT,
+    ok = check(adm_monitor_set_overrides(monitor, &bad, 1, 9) == ADM_ERROR_INVALID_ARGUMENT,
                "monitor set_overrides rejects NaN gain") &&
+         ok;
+    bad = ov;
+    bad.extent_width_scale = std::numeric_limits<float>::quiet_NaN();
+    ok = check(adm_monitor_set_overrides(monitor, &bad, 1, 10) == ADM_ERROR_INVALID_ARGUMENT,
+               "monitor set_overrides rejects NaN extent width scale") &&
          ok;
     adm_monitor_override_t small = ov;
     small.struct_size = 4U; // below the minimum (must cover through divergence_scale)
-    ok = check(adm_monitor_set_overrides(monitor, &small, 1, 9) == ADM_ERROR_INVALID_ARGUMENT,
+    ok = check(adm_monitor_set_overrides(monitor, &small, 1, 11) == ADM_ERROR_INVALID_ARGUMENT,
                "monitor set_overrides rejects undersized struct_size") &&
          ok;
 
@@ -2193,19 +2209,22 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
             e.diffuse_scale = 1.0F;
             e.extent_scale = 1.0F;
             e.divergence_scale = 1.0F;
+            e.extent_width_scale = 1.0F;
+            e.extent_height_scale = 1.0F;
+            e.extent_depth_scale = 1.0F;
             std::memcpy(raw.data() + (idx * fut_stride), &e, sizeof(e));
         };
         // Positive control: both elements valid at the future stride → accepted.
         place(0, "AO_1001", -3.0F);
         place(1, "AO_1002", -6.0F);
         const auto* arr = reinterpret_cast<const adm_monitor_override_t*>(raw.data());
-        ok = check(adm_monitor_set_overrides(monitor, arr, 2, 10) == ADM_ERROR_OK,
+        ok = check(adm_monitor_set_overrides(monitor, arr, 2, 12) == ADM_ERROR_OK,
                    "monitor set_overrides accepts future (oversized) struct_size stride") &&
              ok;
         // Poison ONLY element[1]'s gain. A correct stride reads it (NaN → reject); a buggy
         // stride (== sizeof) would read element[1] from element[0]'s zero padding and miss it.
         place(1, "AO_1002", std::numeric_limits<float>::quiet_NaN());
-        ok = check(adm_monitor_set_overrides(monitor, arr, 2, 11) == ADM_ERROR_INVALID_ARGUMENT,
+        ok = check(adm_monitor_set_overrides(monitor, arr, 2, 13) == ADM_ERROR_INVALID_ARGUMENT,
                    "monitor set_overrides strides by caller struct_size to reach element[1]") &&
              ok;
     }

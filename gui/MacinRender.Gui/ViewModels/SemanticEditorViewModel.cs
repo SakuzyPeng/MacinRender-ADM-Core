@@ -647,11 +647,16 @@ public readonly record struct DimRange(double Min, double Max)
     }
 }
 
+public interface IResettableOverride
+{
+    void Reset();
+}
+
 /// <summary>
 /// 一个标量"覆盖行":[☐ 覆盖] + 值控件。相对变换——ScaleLinear 为逐块 × 系数(钳到 [lo,hi]);
 /// GainDb 为 dB 偏移。CurrentText/EffectiveText 即三栏的"当前值"与客户端即时"生效值"。
 /// </summary>
-public sealed partial class ScalarOverride : ObservableObject
+public sealed partial class ScalarOverride : ObservableObject, IResettableOverride
 {
     public enum Mode
     {
@@ -776,6 +781,162 @@ public sealed partial class ScalarOverride : ObservableObject
     private static double LinToDb(double linear) => linear <= 1.0e-6 ? -120.0 : 20.0 * Math.Log10(linear);
 }
 
+/// <summary>extent 专用三轴覆盖。Linked=true 时任一轴输入同步 W/H/D;解除后三轴独立。</summary>
+public sealed partial class ExtentOverride : ObservableObject, IResettableOverride
+{
+    private const double DefaultScale = 1.0;
+    private const double SliderMin = 0.0;
+    private const double SliderMax = 4.0;
+    private readonly DimRange _width;
+    private readonly DimRange _height;
+    private readonly DimRange _depth;
+    private bool _syncing;
+
+    public event Action? Changed;
+
+    public ExtentOverride(DimRange width, DimRange height, DimRange depth)
+    {
+        _width = width;
+        _height = height;
+        _depth = depth;
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EffectiveText))]
+    private bool _enabled;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EffectiveText))]
+    private bool _linked = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EffectiveText))]
+    [NotifyPropertyChangedFor(nameof(WidthEntry))]
+    private double _widthScale = DefaultScale;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EffectiveText))]
+    [NotifyPropertyChangedFor(nameof(HeightEntry))]
+    private double _heightScale = DefaultScale;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EffectiveText))]
+    [NotifyPropertyChangedFor(nameof(DepthEntry))]
+    private double _depthScale = DefaultScale;
+
+    partial void OnEnabledChanged(bool value) => Changed?.Invoke();
+
+    partial void OnLinkedChanged(bool value)
+    {
+        if (value)
+        {
+            SyncAxes(WidthScale);
+        }
+        Changed?.Invoke();
+    }
+
+    partial void OnWidthScaleChanged(double value) => OnAxisChanged(value);
+    partial void OnHeightScaleChanged(double value) => OnAxisChanged(value);
+    partial void OnDepthScaleChanged(double value) => OnAxisChanged(value);
+
+    public string WidthEntry
+    {
+        get => FormatScale(WidthScale);
+        set => SetAxis(value, v => WidthScale = v);
+    }
+
+    public string HeightEntry
+    {
+        get => FormatScale(HeightScale);
+        set => SetAxis(value, v => HeightScale = v);
+    }
+
+    public string DepthEntry
+    {
+        get => FormatScale(DepthScale);
+        set => SetAxis(value, v => DepthScale = v);
+    }
+
+    public string CurrentText => Render(scaled: false);
+    public string EffectiveText => Enabled ? Render(scaled: true) : CurrentText;
+
+    public void Reset()
+    {
+        Enabled = false;
+        Linked = true;
+        WidthScale = DefaultScale;
+        HeightScale = DefaultScale;
+        DepthScale = DefaultScale;
+    }
+
+    public JsonObject? ToPolicyFragment()
+    {
+        if (!Enabled)
+        {
+            return null;
+        }
+
+        if (Linked && NearlyEqual(WidthScale, HeightScale) && NearlyEqual(WidthScale, DepthScale))
+        {
+            return new JsonObject { ["scale"] = WidthScale };
+        }
+
+        return new JsonObject
+        {
+            ["width_scale"] = WidthScale,
+            ["height_scale"] = HeightScale,
+            ["depth_scale"] = DepthScale,
+        };
+    }
+
+    private void OnAxisChanged(double value)
+    {
+        if (_syncing)
+        {
+            return;
+        }
+
+        if (Linked)
+        {
+            SyncAxes(value);
+        }
+        Changed?.Invoke();
+    }
+
+    private void SyncAxes(double value)
+    {
+        _syncing = true;
+        WidthScale = value;
+        HeightScale = value;
+        DepthScale = value;
+        _syncing = false;
+    }
+
+    private void SetAxis(string text, Action<double> set)
+    {
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
+        {
+            Enabled = true;
+            set(Math.Clamp(v, SliderMin, SliderMax));
+        }
+
+        OnPropertyChanged(nameof(WidthEntry));
+        OnPropertyChanged(nameof(HeightEntry));
+        OnPropertyChanged(nameof(DepthEntry));
+    }
+
+    private string Render(bool scaled)
+    {
+        var width = scaled ? _width.ClampScaled(WidthScale, 0.0, 1.0) : _width;
+        var height = scaled ? _height.ClampScaled(HeightScale, 0.0, 1.0) : _height;
+        var depth = scaled ? _depth.ClampScaled(DepthScale, 0.0, 1.0) : _depth;
+        return $"W {width.Format()}  H {height.Format()}  D {depth.Format()}";
+    }
+
+    private static string FormatScale(double value) => value.ToString("0.00", CultureInfo.InvariantCulture);
+    private static bool NearlyEqual(double a, double b) => Math.Abs(a - b) <= 1.0e-6;
+}
+
 /// <summary>
 /// 单个对象的纯数据:身份 + 各听感维度的"当前值"区间(扫全块求 min/max,权威源 inspect)。
 /// 不持有覆盖——覆盖在 SemanticRow 层(行=1~2 个对象,L/R 对共享一份覆盖以同步编辑)。
@@ -889,7 +1050,7 @@ public sealed class SemanticRow
 
     public ScalarOverride GainDb { get; }
     public ScalarOverride DiffuseScale { get; }
-    public ScalarOverride ExtentScale { get; }
+    public ExtentOverride Extent { get; }
     public ScalarOverride DivergenceScale { get; }
 
     public event Action? Changed;
@@ -916,20 +1077,14 @@ public sealed class SemanticRow
             new[] { new ScalarOverride.Axis("", Union(m => m.GainRange)) }, 0.0, -24.0, 12.0);
         DiffuseScale = new ScalarOverride("diffuse", ScalarOverride.Mode.ScaleLinear,
             new[] { new ScalarOverride.Axis("", Union(m => m.DiffuseRange)) }, 1.0, 0.0, 4.0, 0.0, 1.0);
-        ExtentScale = new ScalarOverride("extent", ScalarOverride.Mode.ScaleLinear,
-            new[]
-            {
-                new ScalarOverride.Axis("W", Union(m => m.WidthRange)),
-                new ScalarOverride.Axis("H", Union(m => m.HeightRange)),
-                new ScalarOverride.Axis("D", Union(m => m.DepthRange)),
-            }, 1.0, 0.0, 4.0);
+        Extent = new ExtentOverride(Union(m => m.WidthRange), Union(m => m.HeightRange), Union(m => m.DepthRange));
         DivergenceScale = new ScalarOverride("divergence", ScalarOverride.Mode.ScaleLinear,
             new[] { new ScalarOverride.Axis("", Union(m => m.DivergenceRange)) }, 1.0, 0.0, 4.0, 0.0, 1.0);
 
-        foreach (var ov in new[] { GainDb, DiffuseScale, ExtentScale, DivergenceScale })
-        {
-            ov.Changed += () => Changed?.Invoke();
-        }
+        GainDb.Changed += () => Changed?.Invoke();
+        DiffuseScale.Changed += () => Changed?.Invoke();
+        Extent.Changed += () => Changed?.Invoke();
+        DivergenceScale.Changed += () => Changed?.Invoke();
     }
 
     /// <summary>清空本行(对象 / L·R 对)全部维度覆盖。</summary>
@@ -937,7 +1092,7 @@ public sealed class SemanticRow
     {
         GainDb.Reset();
         DiffuseScale.Reset();
-        ExtentScale.Reset();
+        Extent.Reset();
         DivergenceScale.Reset();
     }
 
@@ -972,7 +1127,7 @@ public sealed class SemanticRow
             if (!IsBed) // 声床只 gain;听感维度对 DirectSpeakers 无意义,不产出策略片段
             {
                 AddIf(rule, "diffuse", DiffuseScale.ToPolicyFragment());
-                AddIf(rule, "extent", ExtentScale.ToPolicyFragment());
+                AddIf(rule, "extent", Extent.ToPolicyFragment());
                 AddIf(rule, "divergence", DivergenceScale.ToPolicyFragment());
             }
             if (rule.Count == 0)
@@ -997,18 +1152,20 @@ public sealed class SemanticRow
     /// 与 BuildRules 同源:gain=dB 偏移(未启用 0),其余=× 倍(未启用 1.0)。</summary>
     public IEnumerable<MonitorOverride> BuildLiveOverrides()
     {
-        if (!GainDb.Enabled && !DiffuseScale.Enabled && !ExtentScale.Enabled && !DivergenceScale.Enabled)
+        if (!GainDb.Enabled && !DiffuseScale.Enabled && !Extent.Enabled && !DivergenceScale.Enabled)
         {
             yield break;
         }
 
         var gainDb = (float)(GainDb.Enabled ? GainDb.Value : 0.0);
         var diffuse = (float)(DiffuseScale.Enabled ? DiffuseScale.Value : 1.0);
-        var extent = (float)(ExtentScale.Enabled ? ExtentScale.Value : 1.0);
+        var extentWidth = (float)(Extent.Enabled ? Extent.WidthScale : 1.0);
+        var extentHeight = (float)(Extent.Enabled ? Extent.HeightScale : 1.0);
+        var extentDepth = (float)(Extent.Enabled ? Extent.DepthScale : 1.0);
         var divergence = (float)(DivergenceScale.Enabled ? DivergenceScale.Value : 1.0);
         foreach (var m in Members)
         {
-            yield return new MonitorOverride(m.Id, gainDb, diffuse, extent, divergence);
+            yield return new MonitorOverride(m.Id, gainDb, diffuse, 1.0f, divergence, extentWidth, extentHeight, extentDepth);
         }
     }
 

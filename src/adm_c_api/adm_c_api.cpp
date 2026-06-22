@@ -1087,10 +1087,21 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
         for (uint32_t i = 0; i < count; ++i) {
             adm_monitor_override_t src{};
             std::memcpy(&src, base + (static_cast<std::size_t>(i) * stride), std::min(stride, sizeof(src)));
+            const auto has_field = [stride](std::size_t offset, std::size_t size) { return stride >= offset + size; };
+            if (!has_field(offsetof(adm_monitor_override_t, extent_width_scale), sizeof(float))) {
+                src.extent_width_scale = 1.0F;
+            }
+            if (!has_field(offsetof(adm_monitor_override_t, extent_height_scale), sizeof(float))) {
+                src.extent_height_scale = 1.0F;
+            }
+            if (!has_field(offsetof(adm_monitor_override_t, extent_depth_scale), sizeof(float))) {
+                src.extent_depth_scale = 1.0F;
+            }
             // Reject non-finite gain / scales: a NaN would otherwise poison the bus gain or
             // the topology rebuild downstream.
             if (!std::isfinite(src.gain_db) || !std::isfinite(src.diffuse_scale) || !std::isfinite(src.extent_scale) ||
-                !std::isfinite(src.divergence_scale)) {
+                !std::isfinite(src.divergence_scale) || !std::isfinite(src.extent_width_scale) ||
+                !std::isfinite(src.extent_height_scale) || !std::isfinite(src.extent_depth_scale)) {
                 return ADM_ERROR_INVALID_ARGUMENT;
             }
             mradm::LiveObjectOverride ov;
@@ -1099,6 +1110,9 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
             ov.diffuse_scale = src.diffuse_scale;
             ov.extent_scale = src.extent_scale;
             ov.divergence_scale = src.divergence_scale;
+            ov.extent_width_scale = src.extent_width_scale;
+            ov.extent_height_scale = src.extent_height_scale;
+            ov.extent_depth_scale = src.extent_depth_scale;
             live.objects.push_back(std::move(ov));
         }
         monitor->session->set_overrides(live);

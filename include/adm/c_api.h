@@ -87,12 +87,18 @@
  *   （监听输出的实时 LUFS，ITU-R BS.1770，经 libebur128；静音 / 低于门限时为 -inf。
  *   integrated 在每次 seek 后重新累计）。struct_size 守护：旧调用方按其 sizeof 仅读取
  *   已有字段，新字段仅在 struct_size 覆盖其偏移时写入。
+ *
+ * v1.19 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_override_t 追加 extent_width_scale / extent_height_scale / extent_depth_scale
+ *   字段（在公共 extent_scale 之上对 width / height / depth 分别再缩放，实现 extent 三轴
+ *   独立调节）。struct_size 守护：旧调用方按其 sizeof 仅传至 divergence_scale，缺省的三轴
+ *   乘子按 1.0 处理（等价旧行为）；新字段仅在 struct_size 覆盖其偏移时读取。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 18
+#define ADM_API_VERSION_MINOR 19
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -856,8 +862,11 @@ typedef struct adm_monitor_override_t {
     const char* object_id;
     float gain_db;
     float diffuse_scale;
-    float extent_scale;
+    float extent_scale; /* legacy/common multiplier for width/height/depth */
     float divergence_scale;
+    float extent_width_scale;  /* v1.19: additional width multiplier; default 1.0 when absent */
+    float extent_height_scale; /* v1.19: additional height multiplier; default 1.0 when absent */
+    float extent_depth_scale;  /* v1.19: additional depth multiplier; default 1.0 when absent */
 } adm_monitor_override_t;
 
 /*

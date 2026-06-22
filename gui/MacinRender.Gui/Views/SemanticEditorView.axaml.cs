@@ -144,12 +144,20 @@ public partial class SemanticEditorView : UserControl
         }
     }
 
-    // 双击维度名(gain/diffuse/extent/divergence)→ 清空该维度覆盖(Tag 绑定该 ScalarOverride)。
+    // 双击维度名(gain/diffuse/extent/divergence)→ 清空该维度覆盖。
     private void OnResetDim(object? sender, TappedEventArgs e)
     {
-        if (sender is Control { Tag: ScalarOverride ov })
+        if (sender is Control { Tag: IResettableOverride ov })
         {
             ov.Reset();
+        }
+    }
+
+    private void OnToggleExtentLink(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: ExtentOverride ov })
+        {
+            ov.Linked = !ov.Linked;
         }
     }
 

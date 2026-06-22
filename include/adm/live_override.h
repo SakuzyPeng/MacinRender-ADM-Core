@@ -17,8 +17,11 @@ struct LiveObjectOverride {
     std::string object_id;        // SceneObject::id this override applies to
     float gain_db{0.0F};          // additive gain in dB on top of the baked object gain (immediate)
     float diffuse_scale{1.0F};    // multiplies the block diffuse (binaural re-prepare; others ignore)
-    float extent_scale{1.0F};     // multiplies width/height/depth (binaural re-prepare; others ignore)
+    float extent_scale{1.0F};     // legacy/common multiplier for width/height/depth
     float divergence_scale{1.0F}; // multiplies divergence (binaural re-prepare; others ignore)
+    float extent_width_scale{1.0F};
+    float extent_height_scale{1.0F};
+    float extent_depth_scale{1.0F};
 };
 
 // The full live-override snapshot handed to a stream. `revision` increments on every

@@ -61,6 +61,13 @@ constexpr std::size_t k_binaural_extent_slots = 17U;
 constexpr std::size_t k_binaural_extent_center_slot = 0U;
 constexpr std::size_t k_diffuse_delay_len = 32U;
 
+constexpr std::size_t k_topology_diffuse = 0U;
+constexpr std::size_t k_topology_width = 1U;
+constexpr std::size_t k_topology_height = 2U;
+constexpr std::size_t k_topology_depth = 3U;
+constexpr std::size_t k_topology_divergence = 4U;
+using LiveTopologyScales = std::array<float, 5>;
+
 class TrackWorkerPool {
   public:
     explicit TrackWorkerPool(std::size_t worker_count) {
@@ -1526,10 +1533,19 @@ class BinauralStream final : public IRenderStream {
         // a scaled copy of the scene (HRTF / VBAP tables in prepared_ are reused) and
         // re-init the per-source DSP state. Unchanged ⇒ no rebuild (so plain gain edits and
         // bit-exact reverts stay cheap).
-        std::unordered_map<std::string, std::array<float, 3>> topo;
+        std::unordered_map<std::string, LiveTopologyScales> topo;
         for (const auto& ov : overrides.objects) {
-            if (ov.diffuse_scale != 1.0F || ov.extent_scale != 1.0F || ov.divergence_scale != 1.0F) {
-                topo[ov.object_id] = {ov.diffuse_scale, ov.extent_scale, ov.divergence_scale};
+            const LiveTopologyScales scales{
+                ov.diffuse_scale,
+                ov.extent_scale * ov.extent_width_scale,
+                ov.extent_scale * ov.extent_height_scale,
+                ov.extent_scale * ov.extent_depth_scale,
+                ov.divergence_scale,
+            };
+            if (scales[k_topology_diffuse] != 1.0F || scales[k_topology_width] != 1.0F ||
+                scales[k_topology_height] != 1.0F || scales[k_topology_depth] != 1.0F ||
+                scales[k_topology_divergence] != 1.0F) {
+                topo[ov.object_id] = scales;
             }
         }
         if (topo != applied_topology_) {
@@ -1601,23 +1617,21 @@ class BinauralStream final : public IRenderStream {
     // object's block diffuse / extent (width,height,depth) / divergence multiplied by its
     // scale (clamped to ADM's 0..1), then re-init per-source state. Empty `topo` rebuilds
     // the unscaled scene, which reproduces the prepared list bit-for-bit.
-    void rebuild_sources(const std::unordered_map<std::string, std::array<float, 3>>& topo) {
+    void rebuild_sources(const std::unordered_map<std::string, LiveTopologyScales>& topo) {
         AdmScene scaled = scene_;
         for (auto& obj : scaled.objects) {
             const auto it = topo.find(obj.id);
             if (it == topo.end()) {
                 continue;
             }
-            const float ds = it->second[0];
-            const float es = it->second[1];
-            const float dv = it->second[2];
+            const auto& s = it->second;
             for (auto& track : obj.tracks) {
                 for (auto& blk : track.blocks) {
-                    blk.diffuse = std::clamp(blk.diffuse * ds, 0.0F, 1.0F);
-                    blk.width = std::clamp(blk.width * es, 0.0F, 1.0F);
-                    blk.height = std::clamp(blk.height * es, 0.0F, 1.0F);
-                    blk.depth = std::clamp(blk.depth * es, 0.0F, 1.0F);
-                    blk.divergence = std::clamp(blk.divergence * dv, 0.0F, 1.0F);
+                    blk.diffuse = std::clamp(blk.diffuse * s[k_topology_diffuse], 0.0F, 1.0F);
+                    blk.width = std::clamp(blk.width * s[k_topology_width], 0.0F, 1.0F);
+                    blk.height = std::clamp(blk.height * s[k_topology_height], 0.0F, 1.0F);
+                    blk.depth = std::clamp(blk.depth * s[k_topology_depth], 0.0F, 1.0F);
+                    blk.divergence = std::clamp(blk.divergence * s[k_topology_divergence], 0.0F, 1.0F);
                 }
             }
         }
@@ -1696,9 +1710,9 @@ class BinauralStream final : public IRenderStream {
     TrackWorkerPool ola_pool_;
     std::vector<float> in_block_;
     std::unordered_map<std::string, float> live_gain_lin_; // object_id → live linear gain (worker-only)
-    // object_id → {diffuse_scale, extent_scale, divergence_scale}; only non-unity entries.
+    // object_id → non-unity topology scales; only non-unity entries.
     // The last applied topology, so set_overrides rebuilds only when it actually changes.
-    std::unordered_map<std::string, std::array<float, 3>> applied_topology_;
+    std::unordered_map<std::string, LiveTopologyScales> applied_topology_;
 
     std::vector<float> fifo_; // interleaved L/R produced, not yet served
     std::size_t fifo_read_{0};

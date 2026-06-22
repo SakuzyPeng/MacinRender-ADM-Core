@@ -1037,17 +1037,27 @@ bool verify_binaural_stream_topology_reprepare() {
         o.objects.push_back({object_id, 0.0F, 1.0F, scale, 1.0F}); // extent_scale = scale
         return o;
     };
+    auto extent_width_override = [&](float scale) {
+        mradm::LiveOverrides o;
+        o.revision = 1;
+        o.objects.push_back({object_id, 0.0F, 1.0F, 1.0F, 1.0F, scale, 1.0F, 1.0F});
+        return o;
+    };
 
     const auto baseline = run({});                                             // width = 1.0 (wide cloud)
     const auto pointed = run({extent_override(0.0F)});                         // extent_scale 0 → collapses to a point
+    const auto width_pointed = run({extent_width_override(0.0F)});             // width_scale 0 also collapses width
     const auto reverted = run({extent_override(0.0F), extent_override(1.0F)}); // back to unscaled
-    if (!baseline || !pointed || !reverted) {
+    if (!baseline || !pointed || !width_pointed || !reverted) {
         return false;
     }
 
-    bool ok = check(baseline->size() == pointed->size() && baseline->size() == reverted->size(),
+    bool ok = check(baseline->size() == pointed->size() && baseline->size() == width_pointed->size() &&
+                        baseline->size() == reverted->size(),
                     "reprepare: all runs produce the same frame count");
     ok &= check(sample_difference_energy(*baseline, *pointed) > 1.0e-6, "reprepare: extent scale changes the output");
+    ok &= check(sample_difference_energy(*baseline, *width_pointed) > 1.0e-6,
+                "reprepare: extent width scale changes the output");
     ok &= check(*reverted == *baseline, "reprepare: reverting scales to 1.0 reproduces the unscaled render bit-exact");
     return ok;
 }

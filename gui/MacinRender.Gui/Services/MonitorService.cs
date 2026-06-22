@@ -116,6 +116,9 @@ public sealed class MonitorService : IDisposable
                     DiffuseScale = overrides[i].DiffuseScale,
                     ExtentScale = overrides[i].ExtentScale,
                     DivergenceScale = overrides[i].DivergenceScale,
+                    ExtentWidthScale = overrides[i].ExtentWidthScale,
+                    ExtentHeightScale = overrides[i].ExtentHeightScale,
+                    ExtentDepthScale = overrides[i].ExtentDepthScale,
                 };
                 Marshal.StructureToPtr(native, arr + (i * stride), false);
             }

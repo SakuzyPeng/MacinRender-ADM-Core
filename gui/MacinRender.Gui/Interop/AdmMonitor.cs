@@ -49,4 +49,7 @@ public struct AdmMonitorOverride
     public float DiffuseScale;
     public float ExtentScale;
     public float DivergenceScale;
+    public float ExtentWidthScale;
+    public float ExtentHeightScale;
+    public float ExtentDepthScale;
 }
