@@ -22,6 +22,12 @@ struct LiveObjectOverride {
     float extent_width_scale{1.0F};
     float extent_height_scale{1.0F};
     float extent_depth_scale{1.0F};
+    // Optional DirectSpeakers channel filter: when non-empty, this override applies only to the
+    // bed channel whose speaker label matches (case/separator-insensitive), letting a single bed
+    // (one AudioObject, many channels) be gained per channel. Empty = the whole object (default).
+    // Mirrors the export-path DirectSpeakersPolicy.speaker_label so live and export stay in sync.
+    // Trails the numeric fields so existing positional initializers keep compiling.
+    std::string speaker_label;
 };
 
 // The full live-override snapshot handed to a stream. `revision` increments on every

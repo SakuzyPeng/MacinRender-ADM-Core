@@ -15,7 +15,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 #include <bw64/bw64.hpp>
@@ -74,6 +73,7 @@ struct BlockGains {
 struct ChannelGainInfo {
     uint16_t input_channel{0};
     std::string object_id;          // owning SceneObject::id, for live gain overrides
+    std::string speaker_label_key;  // normalized DirectSpeakers label (empty for Objects); per-channel live gain key
     std::vector<BlockGains> blocks; // sorted by start_sample
 };
 
@@ -376,6 +376,12 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
             auto& cg = by_channel[in_ch];
             cg.input_channel = in_ch;
             cg.object_id = obj.id;
+            // Capture the channel's DirectSpeakers label so a per-channel live override can target
+            // one bed channel (Objects tracks have no ds_blocks → key stays empty → whole-object).
+            if (!track.ds_blocks.empty() && !track.ds_blocks.front().speaker_labels.empty()) {
+                cg.speaker_label_key =
+                    render_common::canonicalise_speaker_label(track.ds_blocks.front().speaker_labels.front());
+            }
 
             // Objects blocks → VBAP panning.
             for (const auto& raw_block : track.blocks) {
@@ -613,19 +619,18 @@ class VbapStream final : public IRenderStream {
     }
 
     void set_overrides(const LiveOverrides& overrides) override {
-        std::unordered_map<std::string, float> live;
-        for (const auto& ov : overrides.objects) {
-            live[ov.object_id] = std::pow(10.0F, ov.gain_db / 20.0F);
-        }
         std::ranges::fill(channel_gain_, 1.0F);
         any_live_gain_ = false;
-        // Semantic boundary: the override is projected object → input channel (each channel
-        // scaled by its owning object's gain). ADM's gain matrix is one object per input
-        // channel, so this is exact today; if independently-overridable objects ever shared
-        // one input channel they would scale together (last writer wins) — revisit then.
+        // The override is projected object → input channel (each channel scaled by its owning
+        // object's gain). A per-channel override (DirectSpeakers speaker_label) targets one bed
+        // channel; an empty-label override scales every channel of the object (whole-object).
         for (const auto& cg : prepared_.gain_matrix) {
-            if (const auto it = live.find(cg.object_id); it != live.end() && cg.input_channel < channel_gain_.size()) {
-                channel_gain_[cg.input_channel] = it->second;
+            if (cg.input_channel >= channel_gain_.size()) {
+                continue;
+            }
+            if (const auto g =
+                    render_common::resolve_live_channel_gain(overrides, cg.object_id, cg.speaker_label_key)) {
+                channel_gain_[cg.input_channel] = *g;
                 any_live_gain_ = true;
             }
         }

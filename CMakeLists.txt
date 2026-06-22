@@ -641,6 +641,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMRenderEar
+            MacinRender::ADMRenderCommon
             MacinRender::ADMIo
             MacinRender::ADMAudio
             libbw64

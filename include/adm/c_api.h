@@ -93,12 +93,18 @@
  *   字段（在公共 extent_scale 之上对 width / height / depth 分别再缩放，实现 extent 三轴
  *   独立调节）。struct_size 守护：旧调用方按其 sizeof 仅传至 divergence_scale，缺省的三轴
  *   乘子按 1.0 处理（等价旧行为）；新字段仅在 struct_size 覆盖其偏移时读取。
+ *
+ * v1.20 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_override_t 追加 speaker_label 字段（const char*，可选 DirectSpeakers 声道过滤）。
+ *   非空时该 override 只作用于 speaker label 匹配的那个声床声道，使单个声床（一个 audioObject、
+ *   多声道）可按声道独立调 gain；NULL / "" 表示整对象（旧行为）。与导出端语义策略的
+ *   DirectSpeakers speaker_label 过滤一致。struct_size 守护：旧调用方不带此字段按整对象处理。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 19
+#define ADM_API_VERSION_MINOR 20
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -867,6 +873,11 @@ typedef struct adm_monitor_override_t {
     float extent_width_scale;  /* v1.19: additional width multiplier; default 1.0 when absent */
     float extent_height_scale; /* v1.19: additional height multiplier; default 1.0 when absent */
     float extent_depth_scale;  /* v1.19: additional depth multiplier; default 1.0 when absent */
+    /* v1.20: optional DirectSpeakers channel filter. When non-NULL and non-empty, this override
+       applies only to the bed channel whose speaker label matches (case/separator-insensitive),
+       so one bed (one audioObject, many channels) can be gained per channel. NULL/"" = the whole
+       object (default). Mirrors the export semantic-policy DirectSpeakers speaker_label filter. */
+    const char* speaker_label;
 } adm_monitor_override_t;
 
 /*

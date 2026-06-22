@@ -1097,6 +1097,9 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
             if (!has_field(offsetof(adm_monitor_override_t, extent_depth_scale), sizeof(float))) {
                 src.extent_depth_scale = 1.0F;
             }
+            if (!has_field(offsetof(adm_monitor_override_t, speaker_label), sizeof(const char*))) {
+                src.speaker_label = nullptr; // legacy caller: whole-object override
+            }
             // Reject non-finite gain / scales: a NaN would otherwise poison the bus gain or
             // the topology rebuild downstream.
             if (!std::isfinite(src.gain_db) || !std::isfinite(src.diffuse_scale) || !std::isfinite(src.extent_scale) ||
@@ -1106,6 +1109,7 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
             }
             mradm::LiveObjectOverride ov;
             ov.object_id = src.object_id != nullptr ? std::string{src.object_id} : std::string{};
+            ov.speaker_label = src.speaker_label != nullptr ? std::string{src.speaker_label} : std::string{};
             ov.gain_db = src.gain_db;
             ov.diffuse_scale = src.diffuse_scale;
             ov.extent_scale = src.extent_scale;

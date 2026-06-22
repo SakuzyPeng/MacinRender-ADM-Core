@@ -2095,7 +2095,7 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
-    bool ok = check(adm_api_version_minor() == 19, "C ABI minor version is 19");
+    bool ok = check(adm_api_version_minor() == 20, "C ABI minor version is 20");
 
     // Argument validation (no device needed).
     adm_monitor_t* probe = nullptr;
@@ -2168,6 +2168,7 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     ov.extent_width_scale = 1.0F;
     ov.extent_height_scale = 1.0F;
     ov.extent_depth_scale = 1.0F;
+    ov.speaker_label = "M+030"; // v1.20: per-channel DirectSpeakers filter (whole-object when NULL)
     ok = check(adm_monitor_set_overrides(monitor, &ov, 1, 7) == ADM_ERROR_OK, "monitor set overrides") && ok;
     adm_monitor_override_t legacy = ov;
     legacy.struct_size = static_cast<uint32_t>(offsetof(adm_monitor_override_t, extent_width_scale));
@@ -2176,6 +2177,13 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     legacy.extent_depth_scale = 0.0F;
     ok = check(adm_monitor_set_overrides(monitor, &legacy, 1, 8) == ADM_ERROR_OK,
                "monitor set_overrides accepts legacy struct_size without extent axis fields") &&
+         ok;
+    // A struct_size that stops before speaker_label must be accepted (field ignored → whole-object),
+    // even when the bytes past struct_size hold a non-NULL pointer the library must not read.
+    adm_monitor_override_t pre_label = ov;
+    pre_label.struct_size = static_cast<uint32_t>(offsetof(adm_monitor_override_t, speaker_label));
+    ok = check(adm_monitor_set_overrides(monitor, &pre_label, 1, 8) == ADM_ERROR_OK,
+               "monitor set_overrides accepts legacy struct_size without speaker_label field") &&
          ok;
 
     // Non-finite gain / scale is rejected; struct_size below the minimum is rejected.

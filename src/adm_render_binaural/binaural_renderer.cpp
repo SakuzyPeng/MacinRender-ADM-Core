@@ -801,8 +801,9 @@ void advance_silence(OLAState& state, uint64_t frames_now, float* l_out, float* 
 // One renderable source extracted from the ADM scene.
 struct BinauralSource {
     uint16_t channel_index{0};
-    float gain{1.0F};      // object-level gain
-    std::string object_id; // owning SceneObject::id, for live gain overrides
+    float gain{1.0F};              // object-level gain
+    std::string object_id;         // owning SceneObject::id, for live gain overrides
+    std::string speaker_label_key; // normalized DirectSpeakers label (empty for Objects); per-channel live gain key
     bool bypass_lfe{false};
     bool smoothable_object{false};
     bool diffuse_bus{false};
@@ -1162,12 +1163,17 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs, 
 
             // DirectSpeakers-type blocks.
             for (const auto& ds : track.ds_blocks) {
+                // Per-channel live-gain key: the channel's normalized speaker label (empty → whole-object).
+                const std::string ds_label_key =
+                    ds.speaker_labels.empty() ? std::string{}
+                                              : render_common::canonicalise_speaker_label(ds.speaker_labels.front());
                 const bool is_lfe = render_common::direct_speakers_block_is_lfe(ds);
                 if (is_lfe) {
                     BinauralSource src;
                     src.channel_index = channel_index;
                     src.gain = obj.gain;
                     src.object_id = obj.id;
+                    src.speaker_label_key = ds_label_key;
                     src.bypass_lfe = true;
                     src.blocks.push_back({0.0F,
                                           0.0F,
@@ -1208,6 +1214,7 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs, 
                 src.channel_index = channel_index;
                 src.gain = obj.gain;
                 src.object_id = obj.id;
+                src.speaker_label_key = ds_label_key;
                 src.blocks.push_back(
                     {az, el, ds.gain, ds.start_sample, std::min(ds.end_sample, obj.end_sample), true, std::nullopt});
                 srcs.push_back(std::move(src));
@@ -1523,11 +1530,10 @@ class BinauralStream final : public IRenderStream {
     }
 
     void set_overrides(const LiveOverrides& overrides) override {
-        // Gain: immediate (next block), applied as a per-object output scalar.
-        live_gain_lin_.clear();
-        for (const auto& ov : overrides.objects) {
-            live_gain_lin_[ov.object_id] = std::pow(10.0F, ov.gain_db / 20.0F);
-        }
+        // Gain: immediate (next block), applied as a per-source output scalar. The snapshot is
+        // resolved per source at mix time (object_id + DirectSpeakers speaker_label) so a single
+        // bed can be gained per channel; an empty-label override scales the whole object.
+        live_overrides_ = overrides;
         // Topology (diffuse / extent / divergence): only objects whose scales differ from
         // unity matter. A change triggers a cheap re-prepare — rebuild the source list from
         // a scaled copy of the scene (HRTF / VBAP tables in prepared_ are reused) and
@@ -1648,11 +1654,9 @@ class BinauralStream final : public IRenderStream {
         }
     }
 
-    [[nodiscard]] float live_gain_for(const std::string& object_id) const {
-        if (const auto it = live_gain_lin_.find(object_id); it != live_gain_lin_.end()) {
-            return it->second;
-        }
-        return 1.0F;
+    [[nodiscard]] float live_gain_for(const BinauralSource& src) const {
+        return render_common::resolve_live_channel_gain(live_overrides_, src.object_id, src.speaker_label_key)
+            .value_or(1.0F);
     }
 
     void render_block() {
@@ -1681,7 +1685,7 @@ class BinauralStream final : public IRenderStream {
         fifo_.assign(fn * 2U, 0.0F);
         fifo_read_ = 0;
         for (std::size_t si = 0; si < sources.size(); ++si) {
-            const float g = live_gain_for(sources[si].object_id);
+            const float g = live_gain_for(sources[si]);
             const float* sl = src_cs_[si].l_out.data();
             const float* sr = src_cs_[si].r_out.data();
             for (std::size_t f = 0; f < fn; ++f) {
@@ -1709,7 +1713,7 @@ class BinauralStream final : public IRenderStream {
     std::vector<PerSourceConvState> src_cs_;
     TrackWorkerPool ola_pool_;
     std::vector<float> in_block_;
-    std::unordered_map<std::string, float> live_gain_lin_; // object_id → live linear gain (worker-only)
+    LiveOverrides live_overrides_; // live override snapshot; gain resolved per source (worker-only)
     // object_id → non-unity topology scales; only non-unity entries.
     // The last applied topology, so set_overrides rebuilds only when it actually changes.
     std::unordered_map<std::string, LiveTopologyScales> applied_topology_;
