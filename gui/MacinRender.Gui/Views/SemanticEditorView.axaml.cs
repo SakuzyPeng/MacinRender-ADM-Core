@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -17,9 +18,35 @@ public partial class SemanticEditorView : UserControl
     public SemanticEditorView()
     {
         InitializeComponent();
+        // 进度条 Thumb 拖动起止:Thumb 的 DragStarted/DragCompleted 路由事件冒泡到 Slider 上接住。
+        // 本视图用手写 InitializeComponent(AvaloniaXamlLoader.Load),命名字段不自动赋值 → 用 FindControl 取。
+        var seek = this.FindControl<Slider>("SeekSlider");
+        if (seek is not null)
+        {
+            seek.AddHandler(Thumb.DragStartedEvent, OnSeekDragStarted);
+            seek.AddHandler(Thumb.DragCompletedEvent, OnSeekDragCompleted);
+        }
     }
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
+
+    // 开始拖动 thumb:进入 scrub(引擎照旧从原位置播,不被刷屏 seek 打断)。
+    private void OnSeekDragStarted(object? sender, VectorEventArgs e)
+    {
+        if (DataContext is SemanticEditorViewModel vm)
+        {
+            vm.BeginScrub();
+        }
+    }
+
+    // 松开 thumb:退出 scrub 并做一次干净 seek 跳到目标位置。
+    private void OnSeekDragCompleted(object? sender, VectorEventArgs e)
+    {
+        if (DataContext is SemanticEditorViewModel vm)
+        {
+            vm.EndScrub();
+        }
+    }
 
     // 文件选择走视图 code-behind(同批渲染界面),拿到本地路径后交 VM 载入 + inspect。
     private async void OnLoadFile(object? sender, RoutedEventArgs e)

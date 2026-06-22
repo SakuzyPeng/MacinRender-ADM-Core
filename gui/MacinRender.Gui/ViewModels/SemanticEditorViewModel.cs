@@ -255,6 +255,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private readonly MonitorService _monitor = new();
     private readonly DispatcherTimer _pollTimer;
     private bool _applyingPoll;   // 轮询写 PlayheadSeconds 时置位,避免被当成用户拖动 seek
+    private bool _scrubbing;      // 用户正拖动进度条:拖动中只刷新画面、不动引擎,松手才真正 seek 一次
     private bool _overridesDirty; // 行覆盖变更标记,轮询时去抖推送
     private ulong _overrideRevision;
     private uint _sampleRate;
@@ -498,6 +499,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     {
         _pollTimer.Stop();
         _monitor.Stop();
+        _scrubbing = false;
         IsMonitoring = false;
         MonitorState = AdmMonitorState.Stopped;
         PlayheadSeconds = 0;
@@ -539,12 +541,25 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     partial void OnPlayheadSecondsChanged(double value)
     {
-        if (_applyingPoll || !IsMonitoring)
+        if (_applyingPoll || _scrubbing || !IsMonitoring)
         {
-            return; // 轮询回写,非用户拖动
+            return; // 轮询回写 / 拖动中(只刷新画面,松手才 seek),非即时 seek
         }
 
-        _monitor.Seek(value);
+        _monitor.Seek(value); // 单击轨道跳转:一次性 ValueChanged → 一次干净 seek
+    }
+
+    // 进度条拖动起止(由 View 监听 Thumb 拖动事件驱动):拖动中引擎照旧从原位置播放、不被刷屏式
+    // seek 打断(避免碎片拼接的嘈杂);松手时只做一次干净 seek 跳到目标。
+    public void BeginScrub() => _scrubbing = true;
+
+    public void EndScrub()
+    {
+        _scrubbing = false;
+        if (IsMonitoring)
+        {
+            _monitor.Seek(PlayheadSeconds);
+        }
     }
 
     private void PollMonitor()
@@ -563,7 +578,8 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         var st = _monitor.GetStatus();
         if (st is not null)
         {
-            if (_sampleRate > 0)
+            // 拖动中不回写进度条:让 thumb 跟手指走,松手 EndScrub 后再恢复跟随引擎播放头。
+            if (_sampleRate > 0 && !_scrubbing)
             {
                 _applyingPoll = true;
                 PlayheadSeconds = st.PlayheadFrames / (double)_sampleRate;

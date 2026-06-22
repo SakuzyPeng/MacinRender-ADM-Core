@@ -153,8 +153,8 @@
                     <TextBlock Grid.Column="1" VerticalAlignment="Center" MinWidth="40" FontSize="12"
                                Foreground="{DynamicResource TextPrimary}" Text="{Binding PlayheadText}"/>
 
-                    <!-- seek -->
-                    <Slider Grid.Column="2" VerticalAlignment="Center" Minimum="0"
+                    <!-- seek(拖动中只刷新画面,松手才真正 seek 一次:见 code-behind 监听 Thumb 拖动) -->
+                    <Slider x:Name="SeekSlider" Grid.Column="2" VerticalAlignment="Center" Minimum="0"
                             Maximum="{Binding DurationSeconds}" Value="{Binding PlayheadSeconds}"
                             IsEnabled="{Binding IsMonitoring}"/>
 
