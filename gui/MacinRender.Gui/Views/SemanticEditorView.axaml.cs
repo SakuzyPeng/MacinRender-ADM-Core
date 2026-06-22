@@ -153,11 +153,26 @@ public partial class SemanticEditorView : UserControl
         }
     }
 
-    private void OnToggleExtentLink(object? sender, RoutedEventArgs e)
+    // 单击 extent 轴名 → 切换该轴是否联动(联动轴共享值)。Tag = "W"/"H"/"D"。
+    private void OnToggleAxisLink(object? sender, TappedEventArgs e)
     {
-        if (sender is Control { Tag: ExtentOverride ov })
+        if (DataContext is not SemanticEditorViewModel { SelectedRow.Extent: { } ext } ||
+            sender is not Control { Tag: string which })
         {
-            ov.Linked = !ov.Linked;
+            return;
+        }
+
+        switch (which)
+        {
+            case "W":
+                ext.WidthLinked = !ext.WidthLinked;
+                break;
+            case "H":
+                ext.HeightLinked = !ext.HeightLinked;
+                break;
+            case "D":
+                ext.DepthLinked = !ext.DepthLinked;
+                break;
         }
     }
 

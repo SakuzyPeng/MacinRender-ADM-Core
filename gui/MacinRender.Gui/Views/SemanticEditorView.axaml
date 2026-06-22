@@ -28,6 +28,13 @@
             <Setter Property="CornerRadius" Value="4"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
+        <!-- extent 轴名:可点击切换联动。联动=accent(同组共享值),未联动=灰(独立)。 -->
+        <Style Selector="TextBlock.axislink">
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+        </Style>
+        <Style Selector="TextBlock.axislink.unlinked">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+        </Style>
         <!-- 电平表填充:Width 过渡,使两次轮询(~33ms)间的宽度变化滑动而非跳变。 -->
         <Style Selector="Border.meterfill">
             <Setter Property="Transitions">
@@ -211,8 +218,13 @@
                 <!-- 对象列表 -->
                 <ctrl:SquircleBorder Grid.Column="0" Classes="card">
                     <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
-                        <TextBlock Grid.Row="0" Classes="h2" Cursor="Hand" DoubleTapped="OnResetAll"
-                                   ToolTip.Tip="{DynamicResource SemResetHint}" Text="{DynamicResource SemObjects}"/>
+                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Classes="h2" Cursor="Hand" DoubleTapped="OnResetAll"
+                                       ToolTip.Tip="{DynamicResource SemResetHint}" Text="{DynamicResource SemObjects}"/>
+                            <!-- 覆盖计数:挪到标题右侧,无覆盖时不显示 -->
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted" FontSize="11"
+                                       IsVisible="{Binding HasOverrides}" Text="{Binding OverrideSummary}"/>
+                        </Grid>
                         <!-- 剥离的主前缀提示(全名仍在每行 tooltip) -->
                         <Border Grid.Row="1" IsVisible="{Binding HasCommonPrefix}"
                                 Background="{DynamicResource RowBg}" CornerRadius="8" Padding="8,5">
@@ -226,12 +238,16 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:SemanticRow">
                                     <StackPanel Spacing="2" Margin="0,2" ToolTip.Tip="{Binding Tooltip}">
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <TextBlock Grid.Column="0" FontSize="13" FontWeight="SemiBold"
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <!-- 已设覆盖标记:accent 圆点(随覆盖变化实时显隐) -->
+                                            <Ellipse Grid.Column="0" Width="6" Height="6" Margin="0,0,6,0"
+                                                     VerticalAlignment="Center" Fill="{DynamicResource Accent}"
+                                                     IsVisible="{Binding HasOverride}"/>
+                                            <TextBlock Grid.Column="1" FontSize="13" FontWeight="SemiBold"
                                                        TextTrimming="CharacterEllipsis"
                                                        Foreground="{DynamicResource TextPrimary}"
                                                        Text="{Binding DisplayName}"/>
-                                            <Border Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center"
+                                            <Border Grid.Column="2" Margin="6,0,0,0" VerticalAlignment="Center"
                                                     Background="{DynamicResource RowBg}" CornerRadius="5" Padding="5,1"
                                                     IsVisible="{Binding ChannelTag, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                                                 <TextBlock Classes="muted" FontSize="10" Text="{Binding ChannelTag}"/>
@@ -269,27 +285,24 @@
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                       IsVisible="{Binding SelectedRow,
                                           Converter={x:Static ObjectConverters.IsNotNull}}">
-                        <StackPanel Spacing="6">
-                            <!-- 列头 -->
-                            <Grid ColumnDefinitions="80,*,280,*" Margin="0,2,0,2">
+                        <!-- 编辑区整体水平居中;内容不超出视口时垂直也居中,超出则从顶部滚动 -->
+                        <StackPanel Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <!-- 列头(三列:维度名 | 覆盖 | 生效值;移除冗余的"当前值"列) -->
+                            <Grid ColumnDefinitions="80,280,90" Margin="0,2,0,2">
                                 <TextBlock Grid.Column="1" Classes="muted" FontSize="11"
-                                           Text="{DynamicResource SemColCurrent}"/>
-                                <TextBlock Grid.Column="2" Classes="muted" FontSize="11"
                                            Text="{DynamicResource SemColOverride}"/>
-                                <TextBlock Grid.Column="3" Classes="muted" FontSize="11"
+                                <TextBlock Grid.Column="2" Classes="muted" FontSize="11"
                                            Text="{DynamicResource SemColEffective}"/>
                             </Grid>
 
                             <!-- gain(dB 偏移)。声床改用按声道 gain(下方列表)→ 隐藏整对象 gain 行 -->
-                            <Grid ColumnDefinitions="80,*,280,*"
+                            <Grid ColumnDefinitions="80,280,90"
                                   IsVisible="{Binding SelectedRow.ShowObjectGain, FallbackValue=True}">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
                                            Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.GainDb}"
                                            ToolTip.Tip="{DynamicResource SemResetHint}"
                                            Foreground="{DynamicResource TextPrimary}" Text="gain"/>
-                                <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
-                                           Text="{Binding SelectedRow.GainDb.CurrentText}"/>
-                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">
                                     <CheckBox IsChecked="{Binding SelectedRow.GainDb.Enabled}"/>
                                     <Slider Width="86" VerticalAlignment="Center"
@@ -306,7 +319,7 @@
                                                    FontSize="12" Classes="muted" Text="{Binding SelectedRow.GainDb.UnitSuffix}"/>
                                     </Grid>
                                 </StackPanel>
-                                <TextBlock Grid.Column="3" VerticalAlignment="Center"
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center"
                                            Foreground="{DynamicResource Accent}"
                                            Text="{Binding SelectedRow.GainDb.EffectiveText}"/>
                             </Grid>
@@ -316,15 +329,13 @@
                                           IsVisible="{Binding SelectedRow.IsBed, FallbackValue=False}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:BedChannelGroup">
-                                        <Grid ColumnDefinitions="80,*,280,*" Margin="0,0,0,4">
+                                        <Grid ColumnDefinitions="80,280,90" Margin="0,0,0,4">
                                             <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
                                                        Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding Gain}"
                                                        ToolTip.Tip="{DynamicResource SemResetHint}"
                                                        TextTrimming="CharacterEllipsis"
                                                        Foreground="{DynamicResource TextPrimary}" Text="{Binding DisplayLabel}"/>
-                                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
-                                                       Text="{Binding Gain.CurrentText}"/>
-                                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                                                         VerticalAlignment="Center">
                                                 <CheckBox IsChecked="{Binding Gain.Enabled}"/>
                                                 <Slider Width="86" VerticalAlignment="Center"
@@ -341,7 +352,7 @@
                                                                FontSize="12" Classes="muted" Text="{Binding Gain.UnitSuffix}"/>
                                                 </Grid>
                                             </StackPanel>
-                                            <TextBlock Grid.Column="3" VerticalAlignment="Center"
+                                            <TextBlock Grid.Column="2" VerticalAlignment="Center"
                                                        Foreground="{DynamicResource Accent}"
                                                        Text="{Binding Gain.EffectiveText}"/>
                                         </Grid>
@@ -350,15 +361,13 @@
                             </ItemsControl>
 
                             <!-- diffuse(× scale)。声床(bed)无此维度 → 隐藏 -->
-                            <Grid ColumnDefinitions="80,*,280,*"
+                            <Grid ColumnDefinitions="80,280,90"
                                   IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
                                            Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.DiffuseScale}"
                                            ToolTip.Tip="{DynamicResource SemResetHint}"
                                            Foreground="{DynamicResource TextPrimary}" Text="diffuse"/>
-                                <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
-                                           Text="{Binding SelectedRow.DiffuseScale.CurrentText}"/>
-                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">
                                     <CheckBox IsChecked="{Binding SelectedRow.DiffuseScale.Enabled}"/>
                                     <Slider Width="86" VerticalAlignment="Center"
@@ -375,58 +384,91 @@
                                                    FontSize="12" Classes="muted" Text="{Binding SelectedRow.DiffuseScale.UnitSuffix}"/>
                                     </Grid>
                                 </StackPanel>
-                                <TextBlock Grid.Column="3" VerticalAlignment="Center"
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center"
                                            Foreground="{DynamicResource Accent}"
                                            Text="{Binding SelectedRow.DiffuseScale.EffectiveText}"/>
                             </Grid>
 
-                            <!-- extent:W/H/D 三轴缩放。链条开启时任一轴输入同步三轴。声床(bed)无此维度 → 隐藏 -->
-                            <Grid ColumnDefinitions="80,*,280,*"
-                                  IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
-                                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
-                                           Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.Extent}"
-                                           ToolTip.Tip="{DynamicResource SemResetHint}"
-                                           Foreground="{DynamicResource TextPrimary}" Text="extent"/>
-                                <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
-                                           TextWrapping="Wrap"
-                                           Text="{Binding SelectedRow.Extent.CurrentText}"/>
-                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
-                                            VerticalAlignment="Center">
-                                    <CheckBox IsChecked="{Binding SelectedRow.Extent.Enabled}"/>
-                                    <ctrl:SquircleButton Classes="sofabtn" Classes.on="{Binding SelectedRow.Extent.Linked}"
-                                            Width="28" Height="22" Padding="0" Tag="{Binding SelectedRow.Extent}"
-                                            Click="OnToggleExtentLink" ToolTip.Tip="同步 W/H/D">
-                                        <Grid Width="17" Height="17" IsHitTestVisible="False">
-                                            <Path Classes="icon" Data="{StaticResource IconLink}"/>
+                            <!-- extent → 三条常驻独立行 Width / Height / Depth。单击轴名切换该轴是否联动
+                                 (联动=accent、共享值;未联动=灰、独立)。声床(bed)无此维度 → 隐藏 -->
+                            <StackPanel Spacing="6"
+                                        IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
+                                <Grid ColumnDefinitions="80,280,90">
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold" Cursor="Hand"
+                                               Classes="axislink" Classes.unlinked="{Binding !SelectedRow.Extent.WidthLinked}"
+                                               Tag="W" Tapped="OnToggleAxisLink"
+                                               ToolTip.Tip="单击切换 Width 联动" Text="Width"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <CheckBox IsChecked="{Binding SelectedRow.Extent.Width.Enabled}"/>
+                                        <Slider Width="86" VerticalAlignment="Center"
+                                                Minimum="{Binding SelectedRow.Extent.Width.SliderMin}"
+                                                Maximum="{Binding SelectedRow.Extent.Width.SliderMax}"
+                                                Value="{Binding SelectedRow.Extent.Width.Value}"
+                                                IsEnabled="{Binding SelectedRow.Extent.Width.Enabled}"/>
+                                        <Grid ColumnDefinitions="12,44" VerticalAlignment="Center">
+                                            <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                       FontSize="12" Classes="muted" Text="×"/>
+                                            <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                     Text="{Binding SelectedRow.Extent.Width.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
                                         </Grid>
-                                    </ctrl:SquircleButton>
-                                    <Grid ColumnDefinitions="Auto,44,Auto,44,Auto,44" ColumnSpacing="4" VerticalAlignment="Center">
-                                        <TextBlock Grid.Column="0" VerticalAlignment="Center" FontSize="12" Classes="muted" Text="W ×"/>
-                                        <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
-                                                 Text="{Binding SelectedRow.Extent.WidthEntry}" KeyDown="OnValueEntryKeyDown"/>
-                                        <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="12" Classes="muted" Text="H ×"/>
-                                        <TextBox Grid.Column="3" Classes="numeric" VerticalAlignment="Center"
-                                                 Text="{Binding SelectedRow.Extent.HeightEntry}" KeyDown="OnValueEntryKeyDown"/>
-                                        <TextBlock Grid.Column="4" VerticalAlignment="Center" FontSize="12" Classes="muted" Text="D ×"/>
-                                        <TextBox Grid.Column="5" Classes="numeric" VerticalAlignment="Center"
-                                                 Text="{Binding SelectedRow.Extent.DepthEntry}" KeyDown="OnValueEntryKeyDown"/>
-                                    </Grid>
-                                </StackPanel>
-                                <TextBlock Grid.Column="3" VerticalAlignment="Center" TextWrapping="Wrap"
-                                           Foreground="{DynamicResource Accent}"
-                                           Text="{Binding SelectedRow.Extent.EffectiveText}"/>
-                            </Grid>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"
+                                               Text="{Binding SelectedRow.Extent.Width.EffectiveText}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="80,280,90">
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold" Cursor="Hand"
+                                               Classes="axislink" Classes.unlinked="{Binding !SelectedRow.Extent.HeightLinked}"
+                                               Tag="H" Tapped="OnToggleAxisLink"
+                                               ToolTip.Tip="单击切换 Height 联动" Text="Height"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <CheckBox IsChecked="{Binding SelectedRow.Extent.Height.Enabled}"/>
+                                        <Slider Width="86" VerticalAlignment="Center"
+                                                Minimum="{Binding SelectedRow.Extent.Height.SliderMin}"
+                                                Maximum="{Binding SelectedRow.Extent.Height.SliderMax}"
+                                                Value="{Binding SelectedRow.Extent.Height.Value}"
+                                                IsEnabled="{Binding SelectedRow.Extent.Height.Enabled}"/>
+                                        <Grid ColumnDefinitions="12,44" VerticalAlignment="Center">
+                                            <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                       FontSize="12" Classes="muted" Text="×"/>
+                                            <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                     Text="{Binding SelectedRow.Extent.Height.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        </Grid>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"
+                                               Text="{Binding SelectedRow.Extent.Height.EffectiveText}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="80,280,90">
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold" Cursor="Hand"
+                                               Classes="axislink" Classes.unlinked="{Binding !SelectedRow.Extent.DepthLinked}"
+                                               Tag="D" Tapped="OnToggleAxisLink"
+                                               ToolTip.Tip="单击切换 Depth 联动" Text="Depth"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <CheckBox IsChecked="{Binding SelectedRow.Extent.Depth.Enabled}"/>
+                                        <Slider Width="86" VerticalAlignment="Center"
+                                                Minimum="{Binding SelectedRow.Extent.Depth.SliderMin}"
+                                                Maximum="{Binding SelectedRow.Extent.Depth.SliderMax}"
+                                                Value="{Binding SelectedRow.Extent.Depth.Value}"
+                                                IsEnabled="{Binding SelectedRow.Extent.Depth.Enabled}"/>
+                                        <Grid ColumnDefinitions="12,44" VerticalAlignment="Center">
+                                            <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                       FontSize="12" Classes="muted" Text="×"/>
+                                            <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                     Text="{Binding SelectedRow.Extent.Depth.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        </Grid>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"
+                                               Text="{Binding SelectedRow.Extent.Depth.EffectiveText}"/>
+                                </Grid>
+                            </StackPanel>
 
                             <!-- divergence(× scale)。声床(bed)无此维度 → 隐藏 -->
-                            <Grid ColumnDefinitions="80,*,280,*"
+                            <Grid ColumnDefinitions="80,280,90"
                                   IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
                                            Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.DivergenceScale}"
                                            ToolTip.Tip="{DynamicResource SemResetHint}"
                                            Foreground="{DynamicResource TextPrimary}" Text="divergence"/>
-                                <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
-                                           Text="{Binding SelectedRow.DivergenceScale.CurrentText}"/>
-                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">
                                     <CheckBox IsChecked="{Binding SelectedRow.DivergenceScale.Enabled}"/>
                                     <Slider Width="86" VerticalAlignment="Center"
@@ -443,13 +485,11 @@
                                                    FontSize="12" Classes="muted" Text="{Binding SelectedRow.DivergenceScale.UnitSuffix}"/>
                                     </Grid>
                                 </StackPanel>
-                                <TextBlock Grid.Column="3" VerticalAlignment="Center"
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center"
                                            Foreground="{DynamicResource Accent}"
                                            Text="{Binding SelectedRow.DivergenceScale.EffectiveText}"/>
                             </Grid>
 
-                            <TextBlock Classes="muted" FontSize="11" Opacity="0.7" Margin="0,8,0,0"
-                                       TextWrapping="Wrap" Text="{Binding OverrideSummary}"/>
                         </StackPanel>
                         </ScrollViewer>
                     </Grid>

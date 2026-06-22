@@ -48,7 +48,10 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(OverrideSummary))]
+    [NotifyPropertyChangedFor(nameof(HasOverrides))]
     private int _overriddenObjectCount;
+
+    public bool HasOverrides => OverriddenObjectCount > 0;
 
     public bool HasFile => !string.IsNullOrEmpty(LoadedPath);
     public string LoadedFileName => HasFile ? Path.GetFileName(LoadedPath!) : "";
@@ -781,159 +784,139 @@ public sealed partial class ScalarOverride : ObservableObject, IResettableOverri
     private static double LinToDb(double linear) => linear <= 1.0e-6 ? -120.0 : 20.0 * Math.Log10(linear);
 }
 
-/// <summary>extent 专用三轴覆盖。Linked=true 时任一轴输入同步 W/H/D;解除后三轴独立。</summary>
+/// <summary>extent 的三个常驻独立轴(Width/Height/Depth,各为一条标准覆盖行)+ 两个相邻链(W↔H、H↔D)。
+/// 链开启时,编辑链所连通的任一轴会把值 / 启用同步到同组各轴(两链皆开 = 三轴齐动)。</summary>
 public sealed partial class ExtentOverride : ObservableObject, IResettableOverride
 {
-    private const double DefaultScale = 1.0;
-    private const double SliderMin = 0.0;
-    private const double SliderMax = 4.0;
-    private readonly DimRange _width;
-    private readonly DimRange _height;
-    private readonly DimRange _depth;
+    public ScalarOverride Width { get; }
+    public ScalarOverride Height { get; }
+    public ScalarOverride Depth { get; }
+
+    private readonly ScalarOverride[] _axes;
     private bool _syncing;
 
     public event Action? Changed;
 
     public ExtentOverride(DimRange width, DimRange height, DimRange depth)
     {
-        _width = width;
-        _height = height;
-        _depth = depth;
+        Width = MakeAxis("Width", width);
+        Height = MakeAxis("Height", height);
+        Depth = MakeAxis("Depth", depth);
+        _axes = new[] { Width, Height, Depth };
+        for (int i = 0; i < _axes.Length; i++)
+        {
+            int idx = i;
+            _axes[i].Changed += () => OnAxisChanged(idx);
+        }
     }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(EffectiveText))]
-    private bool _enabled;
+    private static ScalarOverride MakeAxis(string label, DimRange range) => new(label, ScalarOverride.Mode.ScaleLinear,
+        new[] { new ScalarOverride.Axis("", range) }, 1.0, 0.0, 4.0, 0.0, 1.0);
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(EffectiveText))]
-    private bool _linked = true;
+    // 每轴一个"联动"标志(单击轴名切换)。所有联动轴共享同一值 / 启用;未联动轴独立。
+    [ObservableProperty] private bool _widthLinked = true;
+    [ObservableProperty] private bool _heightLinked = true;
+    [ObservableProperty] private bool _depthLinked = true;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(EffectiveText))]
-    [NotifyPropertyChangedFor(nameof(WidthEntry))]
-    private double _widthScale = DefaultScale;
+    public bool AnyEnabled => Width.Enabled || Height.Enabled || Depth.Enabled;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(EffectiveText))]
-    [NotifyPropertyChangedFor(nameof(HeightEntry))]
-    private double _heightScale = DefaultScale;
+    partial void OnWidthLinkedChanged(bool value) => OnLinkToggled(0, value);
+    partial void OnHeightLinkedChanged(bool value) => OnLinkToggled(1, value);
+    partial void OnDepthLinkedChanged(bool value) => OnLinkToggled(2, value);
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(EffectiveText))]
-    [NotifyPropertyChangedFor(nameof(DepthEntry))]
-    private double _depthScale = DefaultScale;
+    private bool[] LinkedFlags => new[] { WidthLinked, HeightLinked, DepthLinked };
 
-    partial void OnEnabledChanged(bool value) => Changed?.Invoke();
-
-    partial void OnLinkedChanged(bool value)
+    // 接入联动组时,该轴吸附到组内已有联动轴的当前值(以第一个其它联动轴为锚)。
+    private void OnLinkToggled(int idx, bool linked)
     {
-        if (value)
+        if (linked)
         {
-            SyncAxes(WidthScale);
+            var flags = LinkedFlags;
+            for (int k = 0; k < _axes.Length; k++)
+            {
+                if (k != idx && flags[k])
+                {
+                    _syncing = true;
+                    _axes[idx].Value = _axes[k].Value;
+                    _axes[idx].Enabled = _axes[k].Enabled;
+                    _syncing = false;
+                    break;
+                }
+            }
         }
+
         Changed?.Invoke();
     }
 
-    partial void OnWidthScaleChanged(double value) => OnAxisChanged(value);
-    partial void OnHeightScaleChanged(double value) => OnAxisChanged(value);
-    partial void OnDepthScaleChanged(double value) => OnAxisChanged(value);
-
-    public string WidthEntry
-    {
-        get => FormatScale(WidthScale);
-        set => SetAxis(value, v => WidthScale = v);
-    }
-
-    public string HeightEntry
-    {
-        get => FormatScale(HeightScale);
-        set => SetAxis(value, v => HeightScale = v);
-    }
-
-    public string DepthEntry
-    {
-        get => FormatScale(DepthScale);
-        set => SetAxis(value, v => DepthScale = v);
-    }
-
-    public string CurrentText => Render(scaled: false);
-    public string EffectiveText => Enabled ? Render(scaled: true) : CurrentText;
-
     public void Reset()
     {
-        Enabled = false;
-        Linked = true;
-        WidthScale = DefaultScale;
-        HeightScale = DefaultScale;
-        DepthScale = DefaultScale;
+        _syncing = true;
+        Width.Reset();
+        Height.Reset();
+        Depth.Reset();
+        _syncing = false;
+        WidthLinked = true;
+        HeightLinked = true;
+        DepthLinked = true;
+        Changed?.Invoke();
     }
 
+    /// <summary>启用的轴各产一个 *_scale;三轴全启用且相等时折叠成单个 scale。未启用的轴不写(保持不变)。</summary>
     public JsonObject? ToPolicyFragment()
     {
-        if (!Enabled)
+        if (!AnyEnabled)
         {
             return null;
         }
 
-        if (Linked && NearlyEqual(WidthScale, HeightScale) && NearlyEqual(WidthScale, DepthScale))
+        if (Width.Enabled && Height.Enabled && Depth.Enabled && NearlyEqual(Width.Value, Height.Value) &&
+            NearlyEqual(Width.Value, Depth.Value))
         {
-            return new JsonObject { ["scale"] = WidthScale };
+            return new JsonObject { ["scale"] = Width.Value };
         }
 
-        return new JsonObject
+        var o = new JsonObject();
+        if (Width.Enabled)
         {
-            ["width_scale"] = WidthScale,
-            ["height_scale"] = HeightScale,
-            ["depth_scale"] = DepthScale,
-        };
+            o["width_scale"] = Width.Value;
+        }
+
+        if (Height.Enabled)
+        {
+            o["height_scale"] = Height.Value;
+        }
+
+        if (Depth.Enabled)
+        {
+            o["depth_scale"] = Depth.Value;
+        }
+
+        return o;
     }
 
-    private void OnAxisChanged(double value)
+    // 编辑某联动轴 → 把它的 value + enabled 同步到其它所有联动轴(未联动轴不受影响)。
+    private void OnAxisChanged(int idx)
     {
-        if (_syncing)
+        var flags = LinkedFlags;
+        if (!_syncing && flags[idx])
         {
-            return;
+            _syncing = true;
+            var src = _axes[idx];
+            for (int j = 0; j < _axes.Length; j++)
+            {
+                if (j != idx && flags[j])
+                {
+                    _axes[j].Value = src.Value;
+                    _axes[j].Enabled = src.Enabled;
+                }
+            }
+
+            _syncing = false;
         }
 
-        if (Linked)
-        {
-            SyncAxes(value);
-        }
         Changed?.Invoke();
     }
 
-    private void SyncAxes(double value)
-    {
-        _syncing = true;
-        WidthScale = value;
-        HeightScale = value;
-        DepthScale = value;
-        _syncing = false;
-    }
-
-    private void SetAxis(string text, Action<double> set)
-    {
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
-        {
-            Enabled = true;
-            set(Math.Clamp(v, SliderMin, SliderMax));
-        }
-
-        OnPropertyChanged(nameof(WidthEntry));
-        OnPropertyChanged(nameof(HeightEntry));
-        OnPropertyChanged(nameof(DepthEntry));
-    }
-
-    private string Render(bool scaled)
-    {
-        var width = scaled ? _width.ClampScaled(WidthScale, 0.0, 1.0) : _width;
-        var height = scaled ? _height.ClampScaled(HeightScale, 0.0, 1.0) : _height;
-        var depth = scaled ? _depth.ClampScaled(DepthScale, 0.0, 1.0) : _depth;
-        return $"W {width.Format()}  H {height.Format()}  D {depth.Format()}";
-    }
-
-    private static string FormatScale(double value) => value.ToString("0.00", CultureInfo.InvariantCulture);
     private static bool NearlyEqual(double a, double b) => Math.Abs(a - b) <= 1.0e-6;
 }
 
@@ -1074,11 +1057,33 @@ public sealed class SemanticObjectItem
 /// 编辑/展示单元:1 个对象,或一个 L/R 对(同步编辑)。听感维度区间为成员并集;一份覆盖,
 /// 序列化时按成员展开成多条同值 id 规则。
 /// </summary>
-public sealed class SemanticRow
+public sealed class SemanticRow : ObservableObject
 {
     public IReadOnlyList<SemanticObjectItem> Members { get; }
     public string DisplayName { get; }
     public string ChannelTag { get; }
+
+    // 本行是否已设任意覆盖(供左侧列表把已改对象变色)。随覆盖变化实时通知。
+    public bool HasOverride
+    {
+        get
+        {
+            if (GainDb.Enabled || DiffuseScale.Enabled || DivergenceScale.Enabled || Extent.AnyEnabled)
+            {
+                return true;
+            }
+
+            foreach (var bc in BedChannels)
+            {
+                if (bc.Gain.Enabled)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
 
     // 声床行:diffuse/extent/divergence(Objects-only)隐藏;gain 按声道独立(BedChannels),
     // 而非整对象一个 GainDb。Objects 行反之:用 GainDb + 听感维度,BedChannels 为空。
@@ -1104,7 +1109,7 @@ public sealed class SemanticRow
         var bedChannels = IsBed ? BuildBedGroups(members[0].BedChannels) : new List<BedChannelGroup>();
         foreach (var bc in bedChannels)
         {
-            bc.Gain.Changed += () => Changed?.Invoke();
+            bc.Gain.Changed += OnChildChanged;
         }
 
         BedChannels = bedChannels;
@@ -1128,10 +1133,17 @@ public sealed class SemanticRow
         DivergenceScale = new ScalarOverride("divergence", ScalarOverride.Mode.ScaleLinear,
             new[] { new ScalarOverride.Axis("", Union(m => m.DivergenceRange)) }, 1.0, 0.0, 4.0, 0.0, 1.0);
 
-        GainDb.Changed += () => Changed?.Invoke();
-        DiffuseScale.Changed += () => Changed?.Invoke();
-        Extent.Changed += () => Changed?.Invoke();
-        DivergenceScale.Changed += () => Changed?.Invoke();
+        GainDb.Changed += OnChildChanged;
+        DiffuseScale.Changed += OnChildChanged;
+        Extent.Changed += OnChildChanged;
+        DivergenceScale.Changed += OnChildChanged;
+    }
+
+    // 任一子覆盖变化:对外抛 Changed(驱动 policy / 监听),并刷新 HasOverride(列表变色)。
+    private void OnChildChanged()
+    {
+        Changed?.Invoke();
+        OnPropertyChanged(nameof(HasOverride));
     }
 
     /// <summary>清空本行(对象 / L·R 对 / 声床)全部覆盖。</summary>
@@ -1248,16 +1260,16 @@ public sealed class SemanticRow
             yield break;
         }
 
-        if (!GainDb.Enabled && !DiffuseScale.Enabled && !Extent.Enabled && !DivergenceScale.Enabled)
+        if (!GainDb.Enabled && !DiffuseScale.Enabled && !Extent.AnyEnabled && !DivergenceScale.Enabled)
         {
             yield break;
         }
 
         var gainDb = (float)(GainDb.Enabled ? GainDb.Value : 0.0);
         var diffuse = (float)(DiffuseScale.Enabled ? DiffuseScale.Value : 1.0);
-        var extentWidth = (float)(Extent.Enabled ? Extent.WidthScale : 1.0);
-        var extentHeight = (float)(Extent.Enabled ? Extent.HeightScale : 1.0);
-        var extentDepth = (float)(Extent.Enabled ? Extent.DepthScale : 1.0);
+        var extentWidth = (float)(Extent.Width.Enabled ? Extent.Width.Value : 1.0);
+        var extentHeight = (float)(Extent.Height.Enabled ? Extent.Height.Value : 1.0);
+        var extentDepth = (float)(Extent.Depth.Enabled ? Extent.Depth.Value : 1.0);
         var divergence = (float)(DivergenceScale.Enabled ? DivergenceScale.Value : 1.0);
         foreach (var m in Members)
         {
