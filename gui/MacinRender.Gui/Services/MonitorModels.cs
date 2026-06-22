@@ -38,3 +38,7 @@ public sealed record MonitorOverride(
 
 /// <summary>监听后端 A/B 选项:展示名 + 渲染器 + 监听布局。立体声监听下可跨布局(经下混)。</summary>
 public sealed record MonitorBackendOption(string Label, AdmRenderer Renderer, string Layout);
+
+/// <summary>一个可选输出设备(adm_monitor_output_devices_json 的托管投影)。Id 为不透明 token
+/// (空 = 系统默认设备);Name 为展示名;IsDefault 标记系统默认设备。</summary>
+public sealed record MonitorDevice(string Id, string Name, bool IsDefault);

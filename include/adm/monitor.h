@@ -6,6 +6,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "adm/errors.h"
 #include "adm/live_override.h"
@@ -42,20 +43,33 @@ struct MonitorLevelsSnapshot {
     float integrated_lufs{-std::numeric_limits<float>::infinity()}; // gated, since the last seek
 };
 
-// A persistent realtime monitor over an ADM file: it streams the rendered scene to the
-// default audio output device while play / pause / seek / loop control playback, and
-// status / levels / diagnostics are polled. The heavy realtime machinery (streaming render
-// session, SPSC ring, worker thread, audio device) is hidden behind a pimpl so this public
-// header carries no third-party / backend types (ADR 0003). Declared here (ADMCore-level
-// header) but implemented in ADMEngine, like RenderService.
+// A selectable audio output device, as seen by the UI. `id` is an opaque token round-tripped
+// back to create() / set_output_device() to open that exact device; empty = system default.
+struct AudioOutputDeviceInfo {
+    std::string id;
+    std::string name;
+    bool is_default{false};
+};
+
+// A persistent realtime monitor over an ADM file: it streams the rendered scene to an audio
+// output device while play / pause / seek / loop control playback, and status / levels /
+// diagnostics are polled. The heavy realtime machinery (streaming render session, SPSC ring,
+// worker thread, audio device) is hidden behind a pimpl so this public header carries no
+// third-party / backend types (ADR 0003). Declared here (ADMCore-level header) but
+// implemented in ADMEngine, like RenderService.
 class MonitorSession {
   public:
+    // Enumerate the system's audio output devices. Empty list = enumeration unavailable
+    // (callers fall back to the default device). Static: no session needed.
+    [[nodiscard]] static std::vector<AudioOutputDeviceInfo> list_output_devices();
+
     // Import `input_path`, resolve the backend + apply the semantic policy from `options`,
-    // and start monitoring through the default audio output device. Returns the import /
+    // and start monitoring through the chosen audio output device (`device_id` from
+    // list_output_devices(); empty / unresolvable = system default). Returns the import /
     // policy / backend error, ErrorCode::unsupported when the resolved backend has no
     // realtime stream, or an internal error when no audio output device is available.
-    [[nodiscard]] static Result<std::unique_ptr<MonitorSession>> create(const std::string& input_path,
-                                                                        const RenderOptions& options);
+    [[nodiscard]] static Result<std::unique_ptr<MonitorSession>>
+    create(const std::string& input_path, const RenderOptions& options, const std::string& device_id = {});
 
     ~MonitorSession();
     MonitorSession(const MonitorSession&) = delete;
@@ -83,6 +97,12 @@ class MonitorSession {
     // HOA by a first-order decode); other channel-count changes return
     // ErrorCode::unsupported. Returns the backend resolve / prepare error on failure.
     [[nodiscard]] Result<void> switch_backend(const RenderOptions& options);
+
+    // Switch the audio output device live (`device_id` from list_output_devices(); empty =
+    // system default). The current playhead, play/pause state, backend and live overrides are
+    // preserved across a brief device re-open (no crossfade — a short gap is expected). A
+    // no-op if `device_id` is already current. Returns the device-open / backend error.
+    [[nodiscard]] Result<void> set_output_device(const std::string& device_id);
 
     [[nodiscard]] MonitorStatusSnapshot status() const;
     [[nodiscard]] MonitorLevelsSnapshot levels() const;

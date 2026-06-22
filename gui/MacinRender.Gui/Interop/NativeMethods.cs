@@ -235,10 +235,23 @@ internal static partial class NativeMethods
         double startSec, double endSec, string? outputPath, IntPtr progress, IntPtr userData,
         out AdmRenderResultHandle result);
 
-    // ── 实时监听(v1.15–v1.17;状态/电平/日志均轮询,无回调) ──
+    // ── 实时监听(v1.15–v1.21;状态/电平/日志均轮询,无回调) ──
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial AdmErrorCode adm_create_monitor(AdmContextHandle context, string inputPath,
         AdmRenderOptionsHandle opts, out AdmMonitorHandle outMonitor);
+
+    // v1.21: 创建时指定输出设备(deviceId 为 null/"" = 默认设备)。
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial AdmErrorCode adm_create_monitor_ex(AdmContextHandle context, string inputPath,
+        AdmRenderOptionsHandle opts, string? deviceId, out AdmMonitorHandle outMonitor);
+
+    // v1.21: 枚举输出设备(JSON-out,out 字符串由调用方 adm_free_string)。
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_monitor_output_devices_json(AdmContextHandle context, out IntPtr outJson);
+
+    // v1.21: 播放中即时切换输出设备(deviceId 为 null/"" = 默认设备)。
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial AdmErrorCode adm_monitor_set_output_device(AdmMonitorHandle monitor, string? deviceId);
 
     [LibraryImport(Lib)]
     internal static partial void adm_destroy_monitor(IntPtr monitor);

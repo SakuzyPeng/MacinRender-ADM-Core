@@ -37,6 +37,17 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private bool _isLoading;
 
+    // 状态文案当前 key + 参数:存 key 而非已求值字符串,切语言时按此重译(与批渲染一致)。
+    private string _statusKey = "SemNoFile";
+    private object?[] _statusArgs = Array.Empty<object?>();
+
+    private void SetStatus(string key, params object?[] args)
+    {
+        _statusKey = key;
+        _statusArgs = args;
+        StatusText = L.Format(key, args);
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasCommonPrefix))]
     [NotifyPropertyChangedFor(nameof(CommonPrefixLabel))]
@@ -70,17 +81,14 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     public SemanticEditorViewModel()
     {
-        StatusText = L["SemNoFile"];
+        SetStatus("SemNoFile");
         Localizer.Instance.PropertyChanged += (_, _) =>
         {
-            if (!HasFile)
-            {
-                StatusText = L["SemNoFile"];
-            }
-
+            SetStatus(_statusKey, _statusArgs); // 按 key 重译当前状态(随语言切换)
             OnPropertyChanged(nameof(OverrideSummary));
             OnPropertyChanged(nameof(CommonPrefixLabel));
             OnPropertyChanged(nameof(ObjectCountText));
+            RefreshDevices(); // 「系统默认」项标签随语言切换
         };
 
         // 监听后端 A/B(默认双耳:拓扑维度需 binaural re-prepare 才听得到)。下拉项为中性专名(后端名在前),
@@ -88,7 +96,8 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         MonitorBackends.Add(new MonitorBackendOption("SAF · Binaural", AdmRenderer.SafBinaural, "binaural"));
         MonitorBackends.Add(new MonitorBackendOption("Apple · Binaural", AdmRenderer.Apple, "binaural"));
         _selectedMonitorBackend = MonitorBackends[0];
-        MonitorSofaPath = SettingsStore.Load()?.MonitorSofaPath;
+        var saved = SettingsStore.Load();
+        MonitorSofaPath = saved?.MonitorSofaPath;
         MonitorSofa = new SofaSelector(MonitorSofaPath);
         MonitorSofa.SelectionChanged += path => MonitorSofaPath = path;
         // 迁移友好:旧设置仅有 MonitorSofaPath、无 MRU 时,确保它进 MRU 并选中。
@@ -96,6 +105,9 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         {
             MonitorSofa.Pick(MonitorSofaPath);
         }
+
+        _pendingDeviceId = saved?.MonitorDeviceId ?? "";
+        RefreshDevices();
 
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) }; // ~30 Hz
         _pollTimer.Tick += (_, _) => PollMonitor();
@@ -110,7 +122,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
         StopMonitor(); // 换文件先停掉旧监听
         IsLoading = true;
-        StatusText = L.Format("SemLoading", Path.GetFileName(path));
+        SetStatus("SemLoading", Path.GetFileName(path));
         try
         {
             var doc = await Task.Run(() =>
@@ -131,7 +143,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
                 LoadedPath = null;
                 CommonPrefix = "";
                 ObjectCount = 0;
-                StatusText = L["SemLoadFailed"];
+                SetStatus("SemLoadFailed");
                 RebuildPolicy();
                 return false;
             }
@@ -165,7 +177,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             LoadedPath = path;
             SelectedRow = Rows.Count > 0 ? Rows[0] : null;
             ObjectCount = doc.Objects.Count;
-            StatusText = L["SemLoaded"];
+            SetStatus("SemLoaded");
             RebuildPolicy();
             return true;
         }
@@ -250,14 +262,20 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
         IsExporting = true;
         OnPropertyChanged(nameof(CanExport));
-        StatusText = L["SemExporting"];
+        SetStatus("SemExporting");
         try
         {
             var rc = await _renderSvc.ExportAsync(LoadedPath!, outputPath, string.IsNullOrEmpty(PolicyJson) ? null : PolicyJson);
             bool ok = rc == AdmErrorCode.Ok;
-            StatusText = ok
-                ? L.Format("SemExported", Path.GetFileName(outputPath))
-                : L.Format("SemExportFailed", rc.ToString());
+            if (ok)
+            {
+                SetStatus("SemExported", Path.GetFileName(outputPath));
+            }
+            else
+            {
+                SetStatus("SemExportFailed", rc.ToString());
+            }
+
             return ok;
         }
         finally
@@ -282,6 +300,47 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MonitorSofaApplicable))]
     private MonitorBackendOption _selectedMonitorBackend;
+
+    // 输出设备选择:列表 = 「系统默认」(Id 空)+ 枚举所得设备。改变时即时切换(监听中)或下次生效。
+    public ObservableCollection<MonitorDevice> MonitorDevices { get; } = new();
+
+    [ObservableProperty] private MonitorDevice _selectedMonitorDevice = new("", "", true); // RefreshDevices 立即覆盖
+
+    private string _pendingDeviceId = ""; // 启动时从 settings 恢复的设备 id,RefreshDevices 用它重选
+
+    // 重建设备列表(系统默认 + 枚举),尽量保持当前选择(按 Id)。在构造 / 语言切换 / 开始监听前调用。
+    private void RefreshDevices()
+    {
+        var keepId = SelectedMonitorDevice?.Id ?? _pendingDeviceId;
+        MonitorDevices.Clear();
+        MonitorDevices.Add(new MonitorDevice("", L["SemDeviceDefault"], true));
+        foreach (var d in MonitorService.ListOutputDevices())
+        {
+            MonitorDevices.Add(d);
+        }
+
+        SelectedMonitorDevice = System.Linq.Enumerable.FirstOrDefault(MonitorDevices, d => d.Id == keepId) ??
+                                MonitorDevices[0];
+    }
+
+    // 选了设备:持久化;监听中即时切换(保留播放头/状态/后端/覆盖)。
+    partial void OnSelectedMonitorDeviceChanged(MonitorDevice value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        SettingsStore.Update(s => s.MonitorDeviceId = value.Id);
+        if (IsMonitoring)
+        {
+            var rc = _monitor.SetOutputDevice(value.Id);
+            if (rc != AdmErrorCode.Ok)
+            {
+                MonitorStatus = L.Format("SemMonSwitchFailed", rc.ToString());
+            }
+        }
+    }
 
     // 监听用自定义 HRIR(SOFA):只对「双耳·SAF」有效(Apple 双耳用自家 HRTF)。改选择即时重载。
     // MonitorSofa 是 MRU 下拉选择器(默认 + 最近),驱动 MonitorSofaPath(真实路径,下游/持久化消费)。
@@ -478,12 +537,15 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         IsMonitorBusy = true;
         MonitorStatus = ""; // 启动状态由播放键转圈体现,不占状态栏文字(避免挤压电平表)
 
+        RefreshDevices(); // 设备可能已插拔 → 开始前刷新列表(保持当前选择)
+        var deviceId = SelectedMonitorDevice?.Id ?? "";
+
         // import + apply policy + 开设备可能略耗时 → 后台启动,await 后回 UI 线程(串行,无并发触 monitor)。
         var settings = MonitorRenderSettings(backend);
         var (rc, sr, dur) = await Task.Run(() =>
         {
             var probe = ProbeDuration(path);
-            var start = _monitor.Start(path, settings);
+            var start = _monitor.Start(path, settings, deviceId);
             return (start, probe.SampleRate, probe.Duration);
         });
 

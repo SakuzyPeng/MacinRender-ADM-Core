@@ -19,6 +19,7 @@ public sealed class AppSettings
     public string? SofaPath { get; set; } // 批渲染自定义 HRIR(SOFA)路径(当前选择)
     public string? MonitorSofaPath { get; set; } // 语义监听自定义 HRIR(SOFA)路径(当前选择)
     public List<string>? RecentSofaPaths { get; set; } // 最近用过的 SOFA(MRU,最近在前;批渲染 + 监听共享)
+    public string? MonitorDeviceId { get; set; } // 监听输出设备 token(空 = 系统默认)
 }
 
 // source generator:AOT/trim 安全,无运行时反射序列化。

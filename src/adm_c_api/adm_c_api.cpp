@@ -973,10 +973,11 @@ adm_error_code_t adm_preview_render_window_v2(adm_preview_session_t* session,
 /* ── Realtime monitor (v1.15) ──────────────────────────────────────────────── */
 
 // cppcheck-suppress constParameterPointer ; context is part of the fixed C ABI signature.
-adm_error_code_t adm_create_monitor(adm_context_t* context,
-                                    const char* input_path,
-                                    const adm_render_options_t* opts,
-                                    adm_monitor_t** out) noexcept {
+adm_error_code_t adm_create_monitor_ex(adm_context_t* context,
+                                       const char* input_path,
+                                       const adm_render_options_t* opts,
+                                       const char* device_id,
+                                       adm_monitor_t** out) noexcept {
     if (out != nullptr) {
         *out = nullptr;
     }
@@ -991,7 +992,8 @@ adm_error_code_t adm_create_monitor(adm_context_t* context,
                 options.cancel_token = opts->cancel_token->source.get_token();
             }
         }
-        auto created = mradm::MonitorSession::create(input_path, options);
+        const std::string device = device_id != nullptr ? std::string{device_id} : std::string{};
+        auto created = mradm::MonitorSession::create(input_path, options, device);
         if (!created) {
             return map_error(created.error().code);
         }
@@ -1001,6 +1003,74 @@ adm_error_code_t adm_create_monitor(adm_context_t* context,
             return ADM_ERROR_INTERNAL;
         }
         *out = monitor;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_create_monitor(adm_context_t* context,
+                                    const char* input_path,
+                                    const adm_render_options_t* opts,
+                                    adm_monitor_t** out) noexcept {
+    return adm_create_monitor_ex(context, input_path, opts, nullptr, out);
+}
+
+adm_error_code_t adm_monitor_output_devices_json(adm_context_t* context, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (context == nullptr || out_json == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        // Minimal JSON string escape (", \, and control chars) — device names are arbitrary.
+        auto escape = [](const std::string& s) {
+            std::string e;
+            e.reserve(s.size() + 2);
+            for (const char c : s) {
+                switch (c) {
+                case '"':
+                    e += R"(\")";
+                    break;
+                case '\\':
+                    e += R"(\\)";
+                    break;
+                case '\n':
+                    e += "\\n";
+                    break;
+                case '\r':
+                    e += "\\r";
+                    break;
+                case '\t':
+                    e += "\\t";
+                    break;
+                default:
+                    e += c;
+                    break;
+                }
+            }
+            return e;
+        };
+
+        std::string json = "[";
+        bool first = true;
+        for (const auto& d : mradm::MonitorSession::list_output_devices()) {
+            if (!first) {
+                json += ',';
+            }
+            first = false;
+            json += "{\"id\":\"" + escape(d.id) + "\",\"name\":\"" + escape(d.name) +
+                    "\",\"default\":" + (d.is_default ? "true" : "false") + "}";
+        }
+        json += "]";
+
+        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        if (buffer == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
+        *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
         return ADM_ERROR_INTERNAL;
@@ -1136,6 +1206,19 @@ adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_re
             options = opts->opts;
         }
         auto result = monitor->session->switch_backend(options);
+        return result ? ADM_ERROR_OK : map_error(result.error().code);
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_monitor_set_output_device(adm_monitor_t* monitor, const char* device_id) noexcept {
+    if (monitor == nullptr || !monitor->session) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        const std::string device = device_id != nullptr ? std::string{device_id} : std::string{};
+        auto result = monitor->session->set_output_device(device);
         return result ? ADM_ERROR_OK : map_error(result.error().code);
     } catch (...) {
         return ADM_ERROR_INTERNAL;

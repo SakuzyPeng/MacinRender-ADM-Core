@@ -209,7 +209,10 @@ struct MonitorSession::Impl {
     std::unique_ptr<RealtimeStreamFactory> factory;
     std::unique_ptr<realtime::IAudioOutputDevice> device;
     std::unique_ptr<realtime::MonitorEngine> engine;
-    AdmScene scene; // policy-applied scene, reused when hot-switching the backend
+    AdmScene scene;                  // policy-applied scene, reused when hot-switching the backend
+    RenderOptions current_options;   // last-used options (create / switch_backend), to rebuild on device switch
+    LiveOverrides current_overrides; // last-applied overrides, re-applied after a device switch
+    std::string device_id;           // current output device token ("" = default)
     uint32_t sample_rate{48000};
     uint64_t total_frames{0};
 };
@@ -217,8 +220,16 @@ struct MonitorSession::Impl {
 MonitorSession::MonitorSession() : impl_(std::make_unique<Impl>()) {}
 MonitorSession::~MonitorSession() = default;
 
-Result<std::unique_ptr<MonitorSession>> MonitorSession::create(const std::string& input_path,
-                                                               const RenderOptions& options) {
+std::vector<AudioOutputDeviceInfo> MonitorSession::list_output_devices() {
+    std::vector<AudioOutputDeviceInfo> out;
+    for (const auto& d : realtime::enumerate_output_devices()) {
+        out.push_back(AudioOutputDeviceInfo{d.id, d.name, d.is_default});
+    }
+    return out;
+}
+
+Result<std::unique_ptr<MonitorSession>>
+MonitorSession::create(const std::string& input_path, const RenderOptions& options, const std::string& device_id) {
     std::unique_ptr<MonitorSession> session{new MonitorSession()};
     Impl& impl = *session->impl_;
 
@@ -232,9 +243,11 @@ Result<std::unique_ptr<MonitorSession>> MonitorSession::create(const std::string
     impl.sample_rate = scene->info.sample_rate;
     impl.total_frames = scene->info.num_frames;
     impl.scene = std::move(*scene);
+    impl.current_options = options;
+    impl.device_id = device_id;
 
     impl.factory = std::make_unique<RealtimeStreamFactory>(input_path);
-    impl.device = realtime::make_miniaudio_device(/*use_null_backend=*/false);
+    impl.device = realtime::make_miniaudio_device(/*use_null_backend=*/false, device_id);
 
     auto engine = realtime::MonitorEngine::create(*impl.factory, *impl.device, impl.scene, options, impl.log_sink);
     if (!engine) {
@@ -264,6 +277,7 @@ void MonitorSession::set_loop_seconds(double start_seconds, double end_seconds) 
 }
 
 void MonitorSession::set_overrides(const LiveOverrides& overrides) {
+    impl_->current_overrides = overrides; // kept so a device switch can re-apply the user's edits
     impl_->engine->set_overrides(overrides);
 }
 
@@ -298,9 +312,60 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
         }
         impl_->engine->switch_stream(
             std::make_unique<realtime::DownmixStream>(std::move(*stream), std::move(*matrix), monitor_channels));
+        impl_->current_options = options; // remember the live backend so a device switch rebuilds it
         return {};
     }
     impl_->engine->switch_stream(std::move(*stream));
+    impl_->current_options = options; // remember the live backend so a device switch rebuilds it
+    return {};
+}
+
+Result<void> MonitorSession::set_output_device(const std::string& device_id) {
+    if (device_id == impl_->device_id) {
+        return {}; // already on this device
+    }
+
+    // Snapshot what must survive the device re-open: playhead, play state, and (re-applied)
+    // live overrides. The backend is rebuilt from the retained scene + current_options.
+    const realtime::MonitorStatus snap = impl_->engine->status();
+    const uint64_t playhead = snap.playhead_frames;
+    const bool was_playing = snap.state == realtime::MonitorState::playing;
+
+    // Stop the old engine + device first (engine borrows the device by reference), so two
+    // devices never pull at once. Then open the new device and rebuild the engine on it.
+    impl_->engine.reset();
+    impl_->device.reset();
+
+    auto open_on = [&](const std::string& id) -> Result<void> {
+        impl_->device = realtime::make_miniaudio_device(/*use_null_backend=*/false, id);
+        auto engine = realtime::MonitorEngine::create(
+            *impl_->factory, *impl_->device, impl_->scene, impl_->current_options, impl_->log_sink);
+        if (!engine) {
+            impl_->device.reset();
+            return tl::unexpected{engine.error()};
+        }
+        impl_->engine = std::move(*engine);
+        impl_->device_id = id;
+        return {};
+    };
+
+    auto opened = open_on(device_id);
+    if (!opened) {
+        // Fall back to the system default so the session keeps playing rather than dying on a
+        // bad device id (e.g. the device was unplugged between enumeration and selection).
+        impl_->log_sink.log(LogLevel::warning, "monitor", "切换输出设备失败,回落到默认设备:" + opened.error().message);
+        auto fallback = open_on(std::string{});
+        if (!fallback) {
+            return tl::unexpected{fallback.error()};
+        }
+    }
+
+    // Restore playhead + edits + play state on the freshly rebuilt engine.
+    impl_->engine->seek(playhead);
+    impl_->engine->set_overrides(impl_->current_overrides);
+    if (was_playing) {
+        impl_->engine->play();
+    }
     return {};
 }
 

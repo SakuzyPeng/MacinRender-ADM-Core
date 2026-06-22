@@ -20,8 +20,34 @@ public sealed class MonitorService : IDisposable
 
     public bool IsActive => _monitor is { IsInvalid: false };
 
-    /// <summary>导入 + 应用语义策略 + 解析后端 + 打开默认音频设备开始监听。返回 ABI 错误码。</summary>
-    public AdmErrorCode Start(string inputPath, RenderSettings settings)
+    /// <summary>枚举系统输出设备(adm_monitor_output_devices_json)。失败 / 无设备返回空列表。
+    /// 不需要活动会话:内部开一个临时 context 查询。</summary>
+    public static IReadOnlyList<MonitorDevice> ListOutputDevices()
+    {
+        using var ctx = NativeMethods.adm_create_context();
+        if (ctx.IsInvalid)
+        {
+            return System.Array.Empty<MonitorDevice>();
+        }
+
+        var dtos = AdmQueries.LoadOutputDevices(ctx);
+        if (dtos is null)
+        {
+            return System.Array.Empty<MonitorDevice>();
+        }
+
+        var list = new List<MonitorDevice>(dtos.Count);
+        foreach (var d in dtos)
+        {
+            list.Add(new MonitorDevice(d.Id, d.Name, d.Default));
+        }
+
+        return list;
+    }
+
+    /// <summary>导入 + 应用语义策略 + 解析后端 + 打开输出设备开始监听。deviceId 为 null/"" = 默认设备。
+    /// 返回 ABI 错误码。</summary>
+    public AdmErrorCode Start(string inputPath, RenderSettings settings, string? deviceId = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(inputPath);
         ArgumentNullException.ThrowIfNull(settings);
@@ -43,7 +69,7 @@ public sealed class MonitorService : IDisposable
             }
 
             AdmRenderService.ApplySettings(opts, settings);
-            var rc = NativeMethods.adm_create_monitor(ctx, inputPath, opts, out var monitor);
+            var rc = NativeMethods.adm_create_monitor_ex(ctx, inputPath, opts, deviceId, out var monitor);
             if (rc != AdmErrorCode.Ok || monitor.IsInvalid)
             {
                 monitor.Dispose();
@@ -66,6 +92,12 @@ public sealed class MonitorService : IDisposable
     public AdmErrorCode SetLoop(double startSeconds, double endSeconds) =>
         _monitor is { IsInvalid: false } m
             ? NativeMethods.adm_monitor_set_loop(m, startSeconds, endSeconds)
+            : AdmErrorCode.InvalidArgument;
+
+    /// <summary>播放中即时切换输出设备(deviceId 为 null/"" = 默认设备)。保留播放头/状态/后端/覆盖。</summary>
+    public AdmErrorCode SetOutputDevice(string? deviceId) =>
+        _monitor is { IsInvalid: false } m
+            ? NativeMethods.adm_monitor_set_output_device(m, deviceId)
             : AdmErrorCode.InvalidArgument;
 
     /// <summary>热切换后端 / 布局(立体声监听下可跨布局,经下混)。</summary>

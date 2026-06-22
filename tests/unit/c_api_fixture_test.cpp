@@ -2095,7 +2095,19 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
-    bool ok = check(adm_api_version_minor() == 20, "C ABI minor version is 20");
+    bool ok = check(adm_api_version_minor() == 21, "C ABI minor version is 21");
+
+    // v1.21 device enumeration (no device needed; headless returns an empty JSON array).
+    char* dev_json = nullptr;
+    ok = check(adm_monitor_output_devices_json(ctx, &dev_json) == ADM_ERROR_OK, "output_devices_json ok") && ok;
+    ok = check(dev_json != nullptr && dev_json[0] == '[', "output_devices_json returns a JSON array") && ok;
+    adm_free_string(dev_json);
+    ok = check(adm_monitor_output_devices_json(nullptr, &dev_json) == ADM_ERROR_INVALID_ARGUMENT,
+               "output_devices_json null context rejected") &&
+         ok;
+    ok = check(adm_monitor_set_output_device(nullptr, "") == ADM_ERROR_INVALID_ARGUMENT,
+               "set_output_device(nullptr) rejected") &&
+         ok;
 
     // Argument validation (no device needed).
     adm_monitor_t* probe = nullptr;
@@ -2253,6 +2265,13 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
                "monitor cross-format switch downmixes 5.1 → stereo monitor") &&
          ok;
     adm_destroy_render_options(sw_diff);
+
+    // v1.21 live output-device switch: "" = default device (no-op, monitor opened on default);
+    // a bogus token rebuilds on the default device (graceful fallback) rather than failing.
+    ok = check(adm_monitor_set_output_device(monitor, "") == ADM_ERROR_OK, "set_output_device default no-op") && ok;
+    ok = check(adm_monitor_set_output_device(monitor, "deadbeef") == ADM_ERROR_OK,
+               "set_output_device bogus token falls back to default device") &&
+         ok;
 
     ok = check(adm_monitor_pause(monitor) == ADM_ERROR_OK, "monitor pause") && ok;
     ok = check(adm_monitor_log_entry(monitor, adm_monitor_log_count(monitor) + 100U, nullptr, nullptr, nullptr) == 0,

@@ -109,13 +109,27 @@ internal static class SelfTest
         try
         {
             using var probeOpts = NativeMethods.adm_create_render_options();
-            var probeRc = NativeMethods.adm_create_monitor(ctx, "/nonexistent.wav", probeOpts, out var probeMon);
+            var probeRc = NativeMethods.adm_create_monitor_ex(ctx, "/nonexistent.wav", probeOpts, null, out var probeMon);
             probeMon.Dispose();
-            Console.WriteLine($"adm_monitor_* 入口可解析(create_monitor bogus → {probeRc})");
+            Console.WriteLine($"adm_monitor_* 入口可解析(create_monitor_ex bogus → {probeRc})");
+
+            // v1.21 输出设备枚举(独立 context;返回 JSON 数组,可能为空)。
+            var devices = MonitorService.ListOutputDevices();
+            string defName = "?";
+            foreach (var d in devices)
+            {
+                if (d.IsDefault)
+                {
+                    defName = d.Name;
+                    break;
+                }
+            }
+
+            Console.WriteLine($"输出设备枚举:{devices.Count} 个" + (devices.Count > 0 ? $"(默认:{defName})" : ""));
         }
         catch (EntryPointNotFoundException ex)
         {
-            Console.Error.WriteLine($"[失败] libmradm_capi 缺少 adm_monitor_* 入口(dylib 落后于 v1.17?): {ex.Message}");
+            Console.Error.WriteLine($"[失败] libmradm_capi 缺少 adm_monitor_* 入口(dylib 落后于 v1.21?): {ex.Message}");
             return 10;
         }
 

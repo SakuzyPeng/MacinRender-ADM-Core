@@ -5,6 +5,8 @@
 #include <functional>
 #include <memory>
 #include <span>
+#include <string>
+#include <vector>
 
 #include "adm/errors.h"
 
@@ -41,10 +43,25 @@ class IAudioOutputDevice {
     IAudioOutputDevice() = default;
 };
 
+// A selectable playback device, as seen by the UI. `id` is an opaque token (a serialized
+// miniaudio device id, hex-encoded) round-tripped back to make_miniaudio_device to open that
+// exact device; it never exposes a miniaudio type (ADR 0003). `name` is the human label.
+struct AudioDeviceInfo {
+    std::string id;
+    std::string name;
+    bool is_default{false};
+};
+
+// Enumerate the system's playback devices (default backend). Returns an empty list on
+// failure (no devices / enumeration error) — callers fall back to the default device.
+[[nodiscard]] std::vector<AudioDeviceInfo> enumerate_output_devices();
+
 // Default realtime output device, backed by miniaudio. When `use_null_backend` is true it
 // uses miniaudio's null backend (no hardware; the callback is driven off a timer) for
-// headless / CI use. Implementation in miniaudio_device.cpp — no miniaudio type crosses
-// this boundary (ADR 0003).
-[[nodiscard]] std::unique_ptr<IAudioOutputDevice> make_miniaudio_device(bool use_null_backend = false);
+// headless / CI use. `device_id` is an opaque token from enumerate_output_devices(); empty
+// (or unresolvable) opens the system default device. Implementation in miniaudio_device.cpp
+// — no miniaudio type crosses this boundary (ADR 0003).
+[[nodiscard]] std::unique_ptr<IAudioOutputDevice> make_miniaudio_device(bool use_null_backend = false,
+                                                                        const std::string& device_id = {});
 
 } // namespace mradm::realtime

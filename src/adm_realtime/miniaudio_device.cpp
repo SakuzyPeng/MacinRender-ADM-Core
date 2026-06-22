@@ -13,7 +13,9 @@
 #include <memory>
 #include <miniaudio.h>
 #include <span>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "audio_output_device.h"
 
@@ -21,9 +23,52 @@ namespace mradm::realtime {
 
 namespace {
 
+// Serialize an opaque ma_device_id (a backend-specific fixed-size union) to a lowercase hex
+// token, and back. The token round-trips a specific device across enumerate→open within a
+// session on the same machine/backend; it is not portable and not meant to be (a stale token
+// simply fails to match and we fall back to the default device).
+std::string device_id_to_token(const ma_device_id& id) {
+    static constexpr char k_hex[] = "0123456789abcdef";
+    const auto* bytes = reinterpret_cast<const unsigned char*>(&id);
+    std::string token;
+    token.reserve(sizeof(ma_device_id) * 2);
+    for (std::size_t i = 0; i < sizeof(ma_device_id); ++i) {
+        token.push_back(k_hex[bytes[i] >> 4]);
+        token.push_back(k_hex[bytes[i] & 0x0F]);
+    }
+    return token;
+}
+
+// Parse a hex token back into a ma_device_id. Returns false on any malformed input.
+bool token_to_device_id(const std::string& token, ma_device_id& out) {
+    if (token.size() != sizeof(ma_device_id) * 2) {
+        return false;
+    }
+    auto nibble = [](char c) -> int {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if (c >= 'a' && c <= 'f') {
+            return (c - 'a') + 10;
+        }
+        return -1;
+    };
+    auto* bytes = reinterpret_cast<unsigned char*>(&out);
+    for (std::size_t i = 0; i < sizeof(ma_device_id); ++i) {
+        const int hi = nibble(token[i * 2]);
+        const int lo = nibble(token[(i * 2) + 1]);
+        if (hi < 0 || lo < 0) {
+            return false;
+        }
+        bytes[i] = static_cast<unsigned char>((hi << 4) | lo);
+    }
+    return true;
+}
+
 class MiniaudioDevice final : public IAudioOutputDevice {
   public:
-    explicit MiniaudioDevice(bool use_null_backend) : use_null_backend_(use_null_backend) {}
+    MiniaudioDevice(bool use_null_backend, std::string device_id)
+        : use_null_backend_(use_null_backend), device_id_(std::move(device_id)) {}
 
     ~MiniaudioDevice() override { stop(); }
     MiniaudioDevice(const MiniaudioDevice&) = delete;
@@ -43,6 +88,13 @@ class MiniaudioDevice final : public IAudioOutputDevice {
         config.sampleRate = sample_rate;
         config.dataCallback = &data_callback;
         config.pUserData = this;
+
+        // A specific device requested: resolve the token to a device id and point miniaudio at
+        // it (resolved_id_ must outlive ma_device_init). A malformed/stale token leaves
+        // pDeviceID null → the system default device (graceful fallback).
+        if (!device_id_.empty() && token_to_device_id(device_id_, resolved_id_)) {
+            config.playback.pDeviceID = &resolved_id_;
+        }
 
         // The null backend gives a hardware-free, timer-driven device for headless / CI.
         if (use_null_backend_) {
@@ -104,6 +156,8 @@ class MiniaudioDevice final : public IAudioOutputDevice {
     }
 
     bool use_null_backend_;
+    std::string device_id_;      // opaque token; empty = default device
+    ma_device_id resolved_id_{}; // parsed token, referenced by config during ma_device_init
     PullFn pull_;
     ma_context context_{};
     ma_device device_{};
@@ -115,8 +169,30 @@ class MiniaudioDevice final : public IAudioOutputDevice {
 
 } // namespace
 
-std::unique_ptr<IAudioOutputDevice> make_miniaudio_device(bool use_null_backend) {
-    return std::make_unique<MiniaudioDevice>(use_null_backend);
+std::vector<AudioDeviceInfo> enumerate_output_devices() {
+    std::vector<AudioDeviceInfo> result;
+    ma_context context{};
+    if (ma_context_init(nullptr, 0, nullptr, &context) != MA_SUCCESS) {
+        return result; // no enumeration → caller uses the default device
+    }
+
+    ma_device_info* playback = nullptr;
+    ma_uint32 playback_count = 0;
+    if (ma_context_get_devices(&context, &playback, &playback_count, nullptr, nullptr) == MA_SUCCESS &&
+        playback != nullptr) {
+        result.reserve(playback_count);
+        for (ma_uint32 i = 0; i < playback_count; ++i) {
+            const ma_device_info& info = playback[i];
+            result.push_back(
+                AudioDeviceInfo{device_id_to_token(info.id), std::string{info.name}, info.isDefault != MA_FALSE});
+        }
+    }
+    ma_context_uninit(&context);
+    return result;
+}
+
+std::unique_ptr<IAudioOutputDevice> make_miniaudio_device(bool use_null_backend, const std::string& device_id) {
+    return std::make_unique<MiniaudioDevice>(use_null_backend, device_id);
 }
 
 } // namespace mradm::realtime

@@ -99,12 +99,19 @@
  *   非空时该 override 只作用于 speaker label 匹配的那个声床声道，使单个声床（一个 audioObject、
  *   多声道）可按声道独立调 gain；NULL / "" 表示整对象（旧行为）。与导出端语义策略的
  *   DirectSpeakers speaker_label 过滤一致。struct_size 守护：旧调用方不带此字段按整对象处理。
+ *
+ * v1.21 新增（additive，SOVERSION 不变）：
+ *   实时监听的输出设备选择。adm_monitor_output_devices_json 枚举系统播放设备（JSON 数组
+ *   [{id,name,default}]，id 为不透明 token，需 adm_free_string 释放）。adm_create_monitor_ex
+ *   在 adm_create_monitor 基础上增加 device_id 形参（NULL/"" = 默认设备）。
+ *   adm_monitor_set_output_device 在播放中即时切换输出设备（保留播放头 / 播放态 / 后端 / 覆盖，
+ *   设备重开有短暂间隙、无交叉淡化）。旧 adm_create_monitor 等价于 device_id=NULL。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 20
+#define ADM_API_VERSION_MINOR 21
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -843,6 +850,28 @@ adm_error_code_t adm_create_monitor(adm_context_t* context,
                                     const char* input_path,
                                     const adm_render_options_t* opts,
                                     adm_monitor_t** out) ADM_API_NOEXCEPT;
+
+/*
+ * v1.21: enumerate the system's audio output devices as a JSON array, e.g.
+ *   [{"id":"<token>","name":"Built-in Output","default":true}, ...]
+ * `id` is an opaque token to pass to adm_create_monitor_ex / adm_monitor_set_output_device
+ * (empty list = enumeration unavailable; callers fall back to the default device). On success
+ * *out_json is owned by the CALLER and released with adm_free_string (never free()/delete).
+ */
+adm_error_code_t adm_monitor_output_devices_json(adm_context_t* context, char** out_json) ADM_API_NOEXCEPT;
+
+/*
+ * v1.21: like adm_create_monitor, but opens the output device identified by `device_id`
+ * (a token from adm_monitor_output_devices_json). device_id == NULL or "" opens the system
+ * default device — i.e. adm_create_monitor(ctx, path, opts, out) is exactly
+ * adm_create_monitor_ex(ctx, path, opts, NULL, out). An unresolvable token falls back to the
+ * default device.
+ */
+adm_error_code_t adm_create_monitor_ex(adm_context_t* context,
+                                       const char* input_path,
+                                       const adm_render_options_t* opts,
+                                       const char* device_id,
+                                       adm_monitor_t** out) ADM_API_NOEXCEPT;
 void adm_destroy_monitor(adm_monitor_t* monitor) ADM_API_NOEXCEPT;
 
 adm_error_code_t adm_monitor_play(adm_monitor_t* monitor) ADM_API_NOEXCEPT;
@@ -904,6 +933,16 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
  * return ADM_ERROR_UNSUPPORTED. Returns the resolve / prepare error otherwise.
  */
 adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_render_options_t* opts) ADM_API_NOEXCEPT;
+
+/*
+ * v1.21: switch the audio output device live. `device_id` is a token from
+ * adm_monitor_output_devices_json; NULL / "" selects the system default. The playhead,
+ * play/pause state, current backend and live overrides are preserved across a brief device
+ * re-open (a short audio gap is expected; no crossfade). A no-op if already on that device.
+ * An unresolvable token falls back to the default device. Returns the device-open / backend
+ * error.
+ */
+adm_error_code_t adm_monitor_set_output_device(adm_monitor_t* monitor, const char* device_id) ADM_API_NOEXCEPT;
 
 /* Playback state for adm_monitor_status_t.state. */
 typedef enum adm_monitor_state_t {
