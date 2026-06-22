@@ -169,13 +169,25 @@
                                                     ToolTip.Tip="{DynamicResource SemSofaPick}">
                                                 <Grid Width="24" Height="24" IsHitTestVisible="False">
                                                     <Path Classes="icon" Data="{StaticResource IconFolder}"/>
+                                                    <Path x:Name="FlashSofaPick" Classes="icon" Data="{StaticResource IconFolder}"
+                                                          Stroke="#30D158" Opacity="0">
+                                                        <Path.Transitions>
+                                                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                                        </Path.Transitions>
+                                                    </Path>
                                                 </Grid>
                                             </ctrl:SquircleButton>
                                             <ctrl:SquircleButton Grid.Column="2" Classes="headericon"
                                                     IsVisible="{Binding HasSofa}" Command="{Binding ClearSofaCommand}"
-                                                    ToolTip.Tip="{DynamicResource SemSofaClear}">
+                                                    Click="OnClearSofaClick" ToolTip.Tip="{DynamicResource SemSofaClear}">
                                                 <Grid Width="24" Height="24" IsHitTestVisible="False">
                                                     <Path Classes="icon" Data="{StaticResource IconTrash}"/>
+                                                    <Path x:Name="FlashSofaClear" Classes="icon" Data="{StaticResource IconTrash}"
+                                                          Stroke="#30D158" Opacity="0">
+                                                        <Path.Transitions>
+                                                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                                        </Path.Transitions>
+                                                    </Path>
                                                 </Grid>
                                             </ctrl:SquircleButton>
                                         </Grid>

@@ -86,11 +86,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         _pollTimer.Tick += (_, _) => PollMonitor();
     }
 
-    public async Task LoadFileAsync(string path)
+    public async Task<bool> LoadFileAsync(string path)
     {
         if (string.IsNullOrEmpty(path) || IsLoading)
         {
-            return;
+            return false;
         }
 
         StopMonitor(); // 换文件先停掉旧监听
@@ -117,7 +117,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
                 CommonPrefix = "";
                 StatusText = L["SemLoadFailed"];
                 RebuildPolicy();
-                return;
+                return false;
             }
 
             var names = new List<string>(doc.Objects.Count);
@@ -150,6 +150,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             SelectedRow = Rows.Count > 0 ? Rows[0] : null;
             StatusText = L.Format("SemLoaded", doc.Objects.Count);
             RebuildPolicy();
+            return true;
         }
         finally
         {
@@ -222,12 +223,12 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     public bool CanExport => HasFile && !IsExporting;
 
-    /// <summary>把当前 policy 应用到源 ADM,写回到 outputPath。由 View 选好保存路径后调用。</summary>
-    public async Task ExportToAsync(string outputPath)
+    /// <summary>把当前 policy 应用到源 ADM,写回到 outputPath。由 View 选好保存路径后调用。返回是否成功。</summary>
+    public async Task<bool> ExportToAsync(string outputPath)
     {
         if (!HasFile || IsExporting || string.IsNullOrEmpty(outputPath))
         {
-            return;
+            return false;
         }
 
         IsExporting = true;
@@ -236,9 +237,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         try
         {
             var rc = await _renderSvc.ExportAsync(LoadedPath!, outputPath, string.IsNullOrEmpty(PolicyJson) ? null : PolicyJson);
-            StatusText = rc == AdmErrorCode.Ok
+            bool ok = rc == AdmErrorCode.Ok;
+            StatusText = ok
                 ? L.Format("SemExported", Path.GetFileName(outputPath))
                 : L.Format("SemExportFailed", rc.ToString());
+            return ok;
         }
         finally
         {

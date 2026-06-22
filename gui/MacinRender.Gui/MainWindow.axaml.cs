@@ -162,8 +162,12 @@ public partial class MainWindow : Window
         if (!string.IsNullOrEmpty(path))
         {
             vm.SetSofa(path);
+            FlashIcon(FlashSofaPick);
         }
     }
+
+    // 清除 SOFA(按钮仅在已选时可见 → 必然成功),闪绿确认。Click 与 ClearSofaCommand 并行触发。
+    private void OnClearSofaClick(object? sender, RoutedEventArgs e) => FlashIcon(FlashSofaClear);
 
     // 共用的 SOFA 选择器:返回本地路径或 null。
     internal static async Task<string?> PickSofaAsync(Control owner)

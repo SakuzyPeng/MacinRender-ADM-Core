@@ -86,6 +86,12 @@
                             ToolTip.Tip="{DynamicResource SemLoadFile}">
                         <Grid Width="24" Height="24" IsHitTestVisible="False">
                             <Path Classes="icon" Data="{StaticResource IconFolder}"/>
+                            <Path x:Name="FlashLoadFile" Classes="icon" Data="{StaticResource IconFolder}"
+                                  Stroke="#30D158" Opacity="0">
+                                <Path.Transitions>
+                                    <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                </Path.Transitions>
+                            </Path>
                         </Grid>
                     </ctrl:SquircleButton>
                     <ctrl:SquircleButton DockPanel.Dock="Right" Classes="headericon" VerticalAlignment="Center"
@@ -93,6 +99,12 @@
                             ToolTip.Tip="{DynamicResource SemExport}">
                         <Grid Width="24" Height="24" IsHitTestVisible="False">
                             <Path Classes="icon" Data="{StaticResource IconDownload}"/>
+                            <Path x:Name="FlashExport" Classes="icon" Data="{StaticResource IconDownload}"
+                                  Stroke="#30D158" Opacity="0">
+                                <Path.Transitions>
+                                    <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                </Path.Transitions>
+                            </Path>
                         </Grid>
                     </ctrl:SquircleButton>
                     <StackPanel VerticalAlignment="Center" Spacing="2">

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Avalonia.Controls;
@@ -5,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using MacinRender.Gui.I18n;
 using MacinRender.Gui.ViewModels;
 
@@ -49,9 +51,9 @@ public partial class SemanticEditorView : UserControl
         }
 
         var path = files[0].TryGetLocalPath();
-        if (!string.IsNullOrEmpty(path))
+        if (!string.IsNullOrEmpty(path) && await vm.LoadFileAsync(path))
         {
-            await vm.LoadFileAsync(path);
+            FlashIcon(FlashLoadFile);
         }
     }
 
@@ -84,10 +86,17 @@ public partial class SemanticEditorView : UserControl
         });
 
         var path = file?.TryGetLocalPath();
-        if (!string.IsNullOrEmpty(path))
+        if (!string.IsNullOrEmpty(path) && await vm.ExportToAsync(path))
         {
-            await vm.ExportToAsync(path);
+            FlashIcon(FlashExport);
         }
+    }
+
+    // 成功微反馈:叠在原图标上的绿色副本短暂泛起再淡灭(Opacity transition 在 XAML)。与批渲染同一套。
+    private static void FlashIcon(Control icon)
+    {
+        icon.Opacity = 1;
+        DispatcherTimer.RunOnce(() => icon.Opacity = 0, TimeSpan.FromSeconds(0.55));
     }
 
     // 选监听用自定义 HRIR(SOFA)→ 交 VM(SAF 双耳后端时即时重载)。
