@@ -24,7 +24,7 @@ public sealed record MonitorLevelsSnapshot(
     float IntegratedLufs);
 
 /// <summary>一条按对象的实时覆盖。gain 即时;*_scale 为拓扑(binaural 经廉价 re-prepare,
-/// 其它后端接受但忽略),默认 1.0 表示不变。</summary>
+/// 其它后端接受但忽略),默认 1.0 表示不变。SpeakerLabel 非空时只作用于该声床声道(否则整对象)。</summary>
 public sealed record MonitorOverride(
     string ObjectId,
     float GainDb = 0.0f,
@@ -33,7 +33,8 @@ public sealed record MonitorOverride(
     float DivergenceScale = 1.0f,
     float ExtentWidthScale = 1.0f,
     float ExtentHeightScale = 1.0f,
-    float ExtentDepthScale = 1.0f);
+    float ExtentDepthScale = 1.0f,
+    string? SpeakerLabel = null);
 
 /// <summary>监听后端 A/B 选项:展示名 + 渲染器 + 监听布局。立体声监听下可跨布局(经下混)。</summary>
 public sealed record MonitorBackendOption(string Label, AdmRenderer Renderer, string Layout);

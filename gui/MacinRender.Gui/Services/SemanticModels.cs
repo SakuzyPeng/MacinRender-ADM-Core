@@ -104,6 +104,18 @@ internal sealed class InspectTrack
 {
     public string TrackUid { get; set; } = "";
     public List<InspectObjectBlock> ObjectBlocks { get; set; } = new();
+    public List<InspectDsBlock> DsBlocks { get; set; } = new();
+}
+
+// DirectSpeakers block: only the fields the bed-channel editor needs (label + current gain +
+// position, for robust L/R pairing by opposite azimuth rather than fragile label string matching).
+internal sealed class InspectDsBlock
+{
+    public List<string> SpeakerLabels { get; set; } = new();
+    public double Gain { get; set; } = 1.0;
+    public bool HasPosition { get; set; }
+    public double Azimuth { get; set; }
+    public double Elevation { get; set; }
 }
 
 internal sealed class InspectObjectBlock

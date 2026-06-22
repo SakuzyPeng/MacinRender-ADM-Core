@@ -103,11 +103,15 @@ public sealed class MonitorService : IDisposable
         var stride = Marshal.SizeOf<AdmMonitorOverride>();
         var arr = Marshal.AllocHGlobal(stride * overrides.Count);
         var idPtrs = new IntPtr[overrides.Count];
+        var labelPtrs = new IntPtr[overrides.Count];
         try
         {
             for (var i = 0; i < overrides.Count; i++)
             {
                 idPtrs[i] = Marshal.StringToCoTaskMemUTF8(overrides[i].ObjectId);
+                labelPtrs[i] = string.IsNullOrEmpty(overrides[i].SpeakerLabel)
+                    ? IntPtr.Zero
+                    : Marshal.StringToCoTaskMemUTF8(overrides[i].SpeakerLabel);
                 var native = new AdmMonitorOverride
                 {
                     StructSize = (uint)stride,
@@ -119,6 +123,7 @@ public sealed class MonitorService : IDisposable
                     ExtentWidthScale = overrides[i].ExtentWidthScale,
                     ExtentHeightScale = overrides[i].ExtentHeightScale,
                     ExtentDepthScale = overrides[i].ExtentDepthScale,
+                    SpeakerLabel = labelPtrs[i],
                 };
                 Marshal.StructureToPtr(native, arr + (i * stride), false);
             }
@@ -128,6 +133,14 @@ public sealed class MonitorService : IDisposable
         finally
         {
             foreach (var p in idPtrs)
+            {
+                if (p != IntPtr.Zero)
+                {
+                    Marshal.FreeCoTaskMem(p);
+                }
+            }
+
+            foreach (var p in labelPtrs)
             {
                 if (p != IntPtr.Zero)
                 {

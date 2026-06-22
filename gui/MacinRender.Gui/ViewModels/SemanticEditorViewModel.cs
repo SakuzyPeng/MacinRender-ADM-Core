@@ -937,6 +937,28 @@ public sealed partial class ExtentOverride : ObservableObject, IResettableOverri
     private static bool NearlyEqual(double a, double b) => Math.Abs(a - b) <= 1.0e-6;
 }
 
+/// <summary>声床一个声道的纯数据:speaker label(命中键)+ 当前 gain(线性,= ds.gain × object.gain)
+/// + 位置(用于按相反方位角做稳健的 L/R 配对,而非脆弱的标签字符串匹配)。</summary>
+public readonly record struct BedChannelData(
+    string SpeakerLabel, double GainLinear, bool HasPosition, double Azimuth, double Elevation);
+
+/// <summary>声床的一个编辑单元:单声道或一对 L/R(同步编辑,共享一个 gain)。SpeakerLabels 含 1~2 个
+/// 标签,导出 / 实时各自按标签展开成同值规则。DisplayLabel 为剥掉公共前缀后的显示名。</summary>
+public sealed class BedChannelGroup
+{
+    public IReadOnlyList<string> SpeakerLabels { get; }
+    public string DisplayLabel { get; }
+    public ScalarOverride Gain { get; }
+
+    public BedChannelGroup(IReadOnlyList<string> speakerLabels, string displayLabel, double currentGainLinear)
+    {
+        SpeakerLabels = speakerLabels;
+        DisplayLabel = displayLabel;
+        Gain = new ScalarOverride(displayLabel, ScalarOverride.Mode.GainDb,
+            new[] { new ScalarOverride.Axis("", new DimRange(currentGainLinear, currentGainLinear)) }, 0.0, -24.0, 12.0);
+    }
+}
+
 /// <summary>
 /// 单个对象的纯数据:身份 + 各听感维度的"当前值"区间(扫全块求 min/max,权威源 inspect)。
 /// 不持有覆盖——覆盖在 SemanticRow 层(行=1~2 个对象,L/R 对共享一份覆盖以同步编辑)。
@@ -952,6 +974,9 @@ public sealed class SemanticObjectItem
 
     // typeDefinition=DirectSpeakers(声床/bed):只 gain 可编辑,听感维度不适用。
     public bool IsBed { get; init; }
+
+    // 声床各声道(每 track 一个:speaker label + 当前 gain 线性)。Objects 为空。按声道独立 gain 用。
+    public IReadOnlyList<BedChannelData> BedChannels { get; init; } = System.Array.Empty<BedChannelData>();
 
     public DimRange GainRange { get; init; }
     public DimRange DiffuseRange { get; init; }
@@ -1003,6 +1028,7 @@ public sealed class SemanticObjectItem
         var height = new List<double>();
         var depth = new List<double>();
         var divergence = new List<double>();
+        var bedChannels = new List<BedChannelData>();
         foreach (var track in obj.Tracks)
         {
             foreach (var b in track.ObjectBlocks)
@@ -1013,6 +1039,15 @@ public sealed class SemanticObjectItem
                 depth.Add(b.Depth);
                 divergence.Add(b.Divergence);
             }
+
+            // Bed channels: each DirectSpeakers track is one speaker channel. Take the first ds_block's
+            // first label as the channel identity (matches the renderer's per-channel live-gain key).
+            if (isBed && track.DsBlocks.Count > 0 && track.DsBlocks[0].SpeakerLabels.Count > 0)
+            {
+                var ds = track.DsBlocks[0];
+                bedChannels.Add(new BedChannelData(
+                    ds.SpeakerLabels[0], ds.Gain * obj.Gain, ds.HasPosition, ds.Azimuth, ds.Elevation));
+            }
         }
 
         return new SemanticObjectItem
@@ -1021,6 +1056,7 @@ public sealed class SemanticObjectItem
             Name = obj.Name,
             DisplayName = ObjectNaming.Strip(string.IsNullOrEmpty(obj.Name) ? obj.Id : obj.Name, commonPrefix),
             IsBed = isBed,
+            BedChannels = bedChannels,
             Importance = obj.Importance,
             DialogueId = obj.DialogueId,
             Mute = obj.Mute,
@@ -1044,9 +1080,12 @@ public sealed class SemanticRow
     public string DisplayName { get; }
     public string ChannelTag { get; }
 
-    // 声床行:只 gain 可编辑,隐藏 diffuse/extent/divergence(Objects-only)。
+    // 声床行:diffuse/extent/divergence(Objects-only)隐藏;gain 按声道独立(BedChannels),
+    // 而非整对象一个 GainDb。Objects 行反之:用 GainDb + 听感维度,BedChannels 为空。
     public bool IsBed { get; }
     public bool ShowPerceptual => !IsBed;
+    public bool ShowObjectGain => !IsBed; // 声床用按声道 gain 取代整对象 gain 行
+    public IReadOnlyList<BedChannelGroup> BedChannels { get; }
 
     public ScalarOverride GainDb { get; }
     public ScalarOverride DiffuseScale { get; }
@@ -1061,6 +1100,14 @@ public sealed class SemanticRow
         DisplayName = displayName;
         ChannelTag = channelTag;
         IsBed = members.Count > 0 && members[0].IsBed;
+
+        var bedChannels = IsBed ? BuildBedGroups(members[0].BedChannels) : new List<BedChannelGroup>();
+        foreach (var bc in bedChannels)
+        {
+            bc.Gain.Changed += () => Changed?.Invoke();
+        }
+
+        BedChannels = bedChannels;
 
         DimRange Union(Func<SemanticObjectItem, DimRange> sel)
         {
@@ -1087,13 +1134,17 @@ public sealed class SemanticRow
         DivergenceScale.Changed += () => Changed?.Invoke();
     }
 
-    /// <summary>清空本行(对象 / L·R 对)全部维度覆盖。</summary>
+    /// <summary>清空本行(对象 / L·R 对 / 声床)全部覆盖。</summary>
     public void ResetAll()
     {
         GainDb.Reset();
         DiffuseScale.Reset();
         Extent.Reset();
         DivergenceScale.Reset();
+        foreach (var bc in BedChannels)
+        {
+            bc.Gain.Reset();
+        }
     }
 
     public string Tooltip
@@ -1120,16 +1171,42 @@ public sealed class SemanticRow
     /// <summary>每个成员一条 id 规则(行覆盖按成员展开;一对 L/R = 两条同值规则)。无覆盖则不产出。</summary>
     public IEnumerable<JsonObject> BuildRules()
     {
+        // 声床:按声道产 direct_speakers 规则({id, direct_speakers:{speaker_label, gain:{gain_db}}})。
+        if (IsBed)
+        {
+            foreach (var bc in BedChannels)
+            {
+                // 配对组按各成员声道展开:每个 speaker_label 一条同值 direct_speakers 规则。
+                foreach (var label in bc.SpeakerLabels)
+                {
+                    var gain = bc.Gain.ToPolicyFragment(); // 每次新建实例,可安全挂到不同规则
+                    if (gain is null)
+                    {
+                        continue;
+                    }
+
+                    yield return new JsonObject
+                    {
+                        ["id"] = Members[0].Id,
+                        ["direct_speakers"] = new JsonObject
+                        {
+                            ["speaker_label"] = label,
+                            ["gain"] = gain,
+                        },
+                    };
+                }
+            }
+
+            yield break;
+        }
+
         foreach (var m in Members)
         {
             var rule = new JsonObject();
             AddIf(rule, "gain", GainDb.ToPolicyFragment());
-            if (!IsBed) // 声床只 gain;听感维度对 DirectSpeakers 无意义,不产出策略片段
-            {
-                AddIf(rule, "diffuse", DiffuseScale.ToPolicyFragment());
-                AddIf(rule, "extent", Extent.ToPolicyFragment());
-                AddIf(rule, "divergence", DivergenceScale.ToPolicyFragment());
-            }
+            AddIf(rule, "diffuse", DiffuseScale.ToPolicyFragment());
+            AddIf(rule, "extent", Extent.ToPolicyFragment());
+            AddIf(rule, "divergence", DivergenceScale.ToPolicyFragment());
             if (rule.Count == 0)
             {
                 continue;
@@ -1152,6 +1229,25 @@ public sealed class SemanticRow
     /// 与 BuildRules 同源:gain=dB 偏移(未启用 0),其余=× 倍(未启用 1.0)。</summary>
     public IEnumerable<MonitorOverride> BuildLiveOverrides()
     {
+        // 声床:每个启用的声道一条 override,带 speaker_label 命中该声道(实时按声道生效)。
+        if (IsBed)
+        {
+            foreach (var bc in BedChannels)
+            {
+                if (!bc.Gain.Enabled)
+                {
+                    continue;
+                }
+
+                foreach (var label in bc.SpeakerLabels) // 配对组:每声道一条带 speaker_label 的覆盖
+                {
+                    yield return new MonitorOverride(Members[0].Id, (float)bc.Gain.Value, SpeakerLabel: label);
+                }
+            }
+
+            yield break;
+        }
+
         if (!GainDb.Enabled && !DiffuseScale.Enabled && !Extent.Enabled && !DivergenceScale.Enabled)
         {
             yield break;
@@ -1167,6 +1263,97 @@ public sealed class SemanticRow
         {
             yield return new MonitorOverride(m.Id, gainDb, diffuse, 1.0f, divergence, extentWidth, extentHeight, extentDepth);
         }
+    }
+
+    // 把声床声道按"方位角相反、仰角相同"两两配成 L/R(共享一个 gain);中置 / LFE / 无对侧者单列。
+    // 用位置而非标签字符串,避开 RC_LFE 之类标签含 "L" 的误判。显示名剥掉公共前缀(如有)。
+    private static List<BedChannelGroup> BuildBedGroups(IReadOnlyList<BedChannelData> channels)
+    {
+        var labels = new List<string>(channels.Count);
+        foreach (var c in channels)
+        {
+            labels.Add(c.SpeakerLabel);
+        }
+
+        var prefix = CommonLabelPrefix(labels); // 剥掉如 "RC_" 的公共前缀,避免 80px 列截断
+        string Display(BedChannelData c) => ObjectNaming.Strip(c.SpeakerLabel, prefix);
+
+        const double azTol = 1.0;
+        const double elTol = 1.0;
+        var groups = new List<BedChannelGroup>();
+        var used = new bool[channels.Count];
+        for (int i = 0; i < channels.Count; i++)
+        {
+            if (used[i])
+            {
+                continue;
+            }
+
+            var ci = channels[i];
+            int partner = -1;
+            if (ci.HasPosition && Math.Abs(ci.Azimuth) > azTol) // 中置(az≈0)不配对
+            {
+                for (int j = i + 1; j < channels.Count; j++)
+                {
+                    if (used[j])
+                    {
+                        continue;
+                    }
+
+                    var cj = channels[j];
+                    if (cj.HasPosition && Math.Abs(ci.Azimuth + cj.Azimuth) < azTol &&
+                        Math.Abs(ci.Elevation - cj.Elevation) < elTol)
+                    {
+                        partner = j;
+                        break;
+                    }
+                }
+            }
+
+            if (partner >= 0)
+            {
+                used[i] = true;
+                used[partner] = true;
+                // 左 = 方位角为正(BS.2051:+az 在左)。
+                var left = ci.Azimuth >= 0 ? ci : channels[partner];
+                var right = ci.Azimuth >= 0 ? channels[partner] : ci;
+                groups.Add(new BedChannelGroup(new[] { left.SpeakerLabel, right.SpeakerLabel },
+                    $"{Display(left)} · {Display(right)}", left.GainLinear));
+            }
+            else
+            {
+                used[i] = true;
+                groups.Add(new BedChannelGroup(new[] { ci.SpeakerLabel }, Display(ci), ci.GainLinear));
+            }
+        }
+
+        return groups;
+    }
+
+    // 声床标签的公共前缀(切在分隔符 _ - 空格 / 边界,无最小长度限制 → 能剥掉短前缀如 "RC_";
+    // 无分隔符边界则返回空,如 "M+030"/"M-030" 公共串 "M" 不剥)。仅用于显示。
+    private static string CommonLabelPrefix(IReadOnlyList<string> labels)
+    {
+        if (labels.Count < 2)
+        {
+            return "";
+        }
+
+        var common = labels[0];
+        foreach (var l in labels)
+        {
+            int n = Math.Min(common.Length, l.Length);
+            int k = 0;
+            while (k < n && common[k] == l[k])
+            {
+                k++;
+            }
+
+            common = common[..k];
+        }
+
+        int cut = common.LastIndexOfAny(new[] { '_', '-', ' ', '/' });
+        return cut >= 0 ? common[..(cut + 1)] : "";
     }
 
     /// <summary>把对象按 L/R 配对成行(同 stem、相反声道、各一个);其余为单成员行。保留文档顺序。</summary>

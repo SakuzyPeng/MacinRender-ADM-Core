@@ -265,9 +265,11 @@
                                        Converter={x:Static ObjectConverters.IsNull}}"
                                    Text="{DynamicResource SemSelectHint}"/>
 
-                        <StackPanel Grid.Row="1" Spacing="6"
-                                    IsVisible="{Binding SelectedRow,
-                                        Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <!-- 套 ScrollViewer:多声道声床(7.1.2=10 行)等行数超出卡片高度时可滚动,不被裁切 -->
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                      IsVisible="{Binding SelectedRow,
+                                          Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <StackPanel Spacing="6">
                             <!-- 列头 -->
                             <Grid ColumnDefinitions="80,*,280,*" Margin="0,2,0,2">
                                 <TextBlock Grid.Column="1" Classes="muted" FontSize="11"
@@ -278,8 +280,9 @@
                                            Text="{DynamicResource SemColEffective}"/>
                             </Grid>
 
-                            <!-- gain(dB 偏移) -->
-                            <Grid ColumnDefinitions="80,*,280,*">
+                            <!-- gain(dB 偏移)。声床改用按声道 gain(下方列表)→ 隐藏整对象 gain 行 -->
+                            <Grid ColumnDefinitions="80,*,280,*"
+                                  IsVisible="{Binding SelectedRow.ShowObjectGain, FallbackValue=True}">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
                                            Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.GainDb}"
                                            ToolTip.Tip="{DynamicResource SemResetHint}"
@@ -307,6 +310,44 @@
                                            Foreground="{DynamicResource Accent}"
                                            Text="{Binding SelectedRow.GainDb.EffectiveText}"/>
                             </Grid>
+
+                            <!-- 声床:按声道 gain(每行一个 speaker label,独立 dB 偏移)。仅声床行显示 -->
+                            <ItemsControl ItemsSource="{Binding SelectedRow.BedChannels}"
+                                          IsVisible="{Binding SelectedRow.IsBed, FallbackValue=False}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:BedChannelGroup">
+                                        <Grid ColumnDefinitions="80,*,280,*" Margin="0,0,0,4">
+                                            <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                                       Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding Gain}"
+                                                       ToolTip.Tip="{DynamicResource SemResetHint}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextPrimary}" Text="{Binding DisplayLabel}"/>
+                                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Classes="muted"
+                                                       Text="{Binding Gain.CurrentText}"/>
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                                        VerticalAlignment="Center">
+                                                <CheckBox IsChecked="{Binding Gain.Enabled}"/>
+                                                <Slider Width="86" VerticalAlignment="Center"
+                                                        Minimum="{Binding Gain.SliderMin}"
+                                                        Maximum="{Binding Gain.SliderMax}"
+                                                        Value="{Binding Gain.Value}"
+                                                        IsEnabled="{Binding Gain.Enabled}"/>
+                                                <Grid ColumnDefinitions="12,44,Auto" VerticalAlignment="Center">
+                                                    <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                               FontSize="12" Classes="muted" Text="{Binding Gain.UnitPrefix}"/>
+                                                    <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                             Text="{Binding Gain.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                                    <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
+                                                               FontSize="12" Classes="muted" Text="{Binding Gain.UnitSuffix}"/>
+                                                </Grid>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="3" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource Accent}"
+                                                       Text="{Binding Gain.EffectiveText}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
                             <!-- diffuse(× scale)。声床(bed)无此维度 → 隐藏 -->
                             <Grid ColumnDefinitions="80,*,280,*"
@@ -410,6 +451,7 @@
                             <TextBlock Classes="muted" FontSize="11" Opacity="0.7" Margin="0,8,0,0"
                                        TextWrapping="Wrap" Text="{Binding OverrideSummary}"/>
                         </StackPanel>
+                        </ScrollViewer>
                     </Grid>
                 </ctrl:SquircleBorder>
             </Grid>

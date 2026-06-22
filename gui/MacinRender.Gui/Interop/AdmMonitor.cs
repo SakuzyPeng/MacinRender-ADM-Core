@@ -52,4 +52,8 @@ public struct AdmMonitorOverride
     public float ExtentWidthScale;
     public float ExtentHeightScale;
     public float ExtentDepthScale;
+
+    // v1.20: optional DirectSpeakers channel filter (UTF-8 char*, caller-owned for the call).
+    // Non-NULL restricts the override to one bed channel; IntPtr.Zero = whole object.
+    public IntPtr SpeakerLabel;
 }
