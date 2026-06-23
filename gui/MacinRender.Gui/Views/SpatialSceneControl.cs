@@ -69,6 +69,14 @@ internal sealed class SpatialSceneControl : Control
     // 每帧复用,避免重复分配(掉帧优化)。
     private readonly List<(SpatialObject Obj, SpatialSample S, Vec3 View)> _samples = new();
     private readonly List<(double T, bool JumpInto)> _trailPts = new();
+    private readonly List<(int Idx, double Depth)> _faceOrder = new();
+
+    // 角色静态层缓存:角色只随相机/朝向变 → 缓存按深度序的投影像素四边形 + 画刷,
+    // 相机不动复用(每帧只重画缓存),旋转/缩放/朝向变才重建一次。
+    private readonly List<(Geometry Geo, IImmutableBrush Brush)> _charCache = new();
+    private readonly Dictionary<uint, IImmutableBrush> _charBrushes = new();
+    private bool _charBuilt;
+    private double _ccYaw, _ccPitch, _ccScale, _ccCx, _ccCy, _ccHYaw, _ccHPitch, _ccHRoll;
 
     // 对象名 FormattedText 缓存(文本/字号/颜色恒定,只位置每帧变)。场景切换时清空。
     private readonly Dictionary<string, FormattedText> _labels = new();
@@ -267,43 +275,46 @@ internal sealed class SpatialSceneControl : Control
         }
     }
 
-    // 头立方体一个面:UV 序角点 c00(左上) c10(右上) c11(右下) c01(左下) + 法线 + 底色 + 是否前脸。
-    private readonly struct Face
+    // 角色一个部位盒子的一个面:UV 序角点 c00(左上) c10(右上) c11(右下) c01(左下) + 法线
+    // + 该面在皮肤纹理上的像素矩形(Tx,Ty,Tw,Th)。绘制时逐像素采样此矩形。
+    private readonly struct SkinFace
     {
         public readonly Vec3 C00;
         public readonly Vec3 C10;
         public readonly Vec3 C11;
         public readonly Vec3 C01;
         public readonly Vec3 Normal;
-        public readonly Color Base;
-        public readonly bool IsFront;
+        public readonly int Tx;
+        public readonly int Ty;
+        public readonly int Tw;
+        public readonly int Th;
 
-        public Face(Vec3 c00, Vec3 c10, Vec3 c11, Vec3 c01, Vec3 normal, Color baseColor, bool isFront)
+        public SkinFace(Vec3 c00, Vec3 c10, Vec3 c11, Vec3 c01, Vec3 normal, int tx, int ty, int tw, int th)
         {
             C00 = c00;
             C10 = c10;
             C11 = c11;
             C01 = c01;
             Normal = normal;
-            Base = baseColor;
-            IsFront = isFront;
+            Tx = tx;
+            Ty = ty;
+            Tw = tw;
+            Th = th;
         }
 
         public Vec3 Uv(double u, double v)
         {
-            Vec3 top = Lerp(C00, C10, u);
-            Vec3 bot = Lerp(C01, C11, u);
-            return Lerp(top, bot, v);
+            Vec3 top = Vec3.Lerp(C00, C10, u);
+            Vec3 bot = Vec3.Lerp(C01, C11, u);
+            return Vec3.Lerp(top, bot, v);
         }
-
-        private static Vec3 Lerp(Vec3 a, Vec3 b, double t) => Vec3.Lerp(a, b, t);
     }
 
     private void DrawHeadAndObjects(DrawingContext context)
     {
         var scene = Scene;
 
-        // 对象当前状态 + 深度,按相对人头(深度 0)前后两批,实现人头遮挡。
+        // 对象当前状态 + 深度,按相对角色(深度 0)前后两批,实现角色遮挡。
         _samples.Clear();
         if (scene is not null)
         {
@@ -330,9 +341,9 @@ internal sealed class SpatialSceneControl : Control
 
         DrawTrajectories(context, scene);
         DrawBeds(context, scene);
-        DrawHead(context);
+        DrawCharacter(context);
 
-        // 近批(深度 <= 0,在人头前)后画。
+        // 近批(深度 <= 0,在角色前)后画。
         foreach (var item in _samples)
         {
             if (item.View.Y <= 0)
@@ -342,66 +353,100 @@ internal sealed class SpatialSceneControl : Control
         }
     }
 
-    private const double HeadHalf = 0.18;
-
-    private void DrawHead(DrawingContext context)
+    // 完整 Minecraft 角色:6 部位盒子(头/身/双臂/双腿)。RotateHead = 听者/角色朝向。
+    // 静态层缓存:相机/朝向不变就复用缓存几何,只在变化时重建(背面剔除 + 深度排序 + 逐像素投影)。
+    private void DrawCharacter(DrawingContext context)
     {
-        // 背面剔除:凸立方体只有朝相机的面(旋转后法线 Y<0,指向观察者)可见,且彼此不重叠 →
-        // 无需画家排序,直接画可见面即可。相比画全 6 面 + 排序,几何量与分配都大幅减少。
-        foreach (var f in s_faces)
+        if (!_charBuilt || _yaw != _ccYaw || _pitch != _ccPitch || _scale != _ccScale ||
+            _cx != _ccCx || _cy != _ccCy || _headYaw != _ccHYaw || _headPitch != _ccHPitch ||
+            _headRoll != _ccHRoll)
         {
-            if (RotateCamera(RotateHead(f.Normal)).Y >= 0)
+            RebuildCharacter();
+            _ccYaw = _yaw;
+            _ccPitch = _pitch;
+            _ccScale = _scale;
+            _ccCx = _cx;
+            _ccCy = _cy;
+            _ccHYaw = _headYaw;
+            _ccHPitch = _headPitch;
+            _ccHRoll = _headRoll;
+            _charBuilt = true;
+        }
+
+        foreach (var (geo, brush) in _charCache)
+        {
+            context.DrawGeometry(brush, null, geo);
+        }
+    }
+
+    private void RebuildCharacter()
+    {
+        _charCache.Clear();
+
+        // 可见面(背面剔除)按面心深度排序(画家算法,跨部位)。
+        _faceOrder.Clear();
+        for (int i = 0; i < s_parts.Length; i++)
+        {
+            if (RotateCamera(RotateHead(s_parts[i].Normal)).Y >= 0)
             {
                 continue;
             }
 
-            double shade = FaceShade(f.Normal);
-            FillFaceRect(context, f, 0, 0, 1, 1, Shade(f.Base, shade));
-            if (f.IsFront)
+            _faceOrder.Add((i, RotateCamera(RotateHead(s_parts[i].Uv(0.5, 0.5))).Y));
+        }
+
+        _faceOrder.Sort((a, b) => b.Depth.CompareTo(a.Depth)); // 远 → 近
+        foreach (var (idx, _) in _faceOrder)
+        {
+            CollectSkinFace(s_parts[idx]);
+        }
+    }
+
+    // 逐像素采样面的皮肤矩形,每个不透明像素 → 一个投影四边形几何 + 共享画刷,按深度序存入缓存。
+    private void CollectSkinFace(in SkinFace f)
+    {
+        double shade = FaceShade(f.Normal);
+        for (int py = 0; py < f.Th; py++)
+        {
+            double v0 = py / (double)f.Th;
+            double v1 = (py + 1) / (double)f.Th;
+            for (int px = 0; px < f.Tw; px++)
             {
-                DrawSteveFace(context, f, shade);
+                uint argb = s_charSkin.At(f.Tx + px, f.Ty + py);
+                if ((argb >> 24) == 0)
+                {
+                    continue; // 透明像素跳过
+                }
+
+                Color c = Shade(FromArgb(argb), shade);
+                uint key = ((uint)c.A << 24) | ((uint)c.R << 16) | ((uint)c.G << 8) | c.B;
+                if (!_charBrushes.TryGetValue(key, out var brush))
+                {
+                    brush = new ImmutableSolidColorBrush(c);
+                    _charBrushes[key] = brush;
+                }
+
+                double u0 = px / (double)f.Tw;
+                double u1 = (px + 1) / (double)f.Tw;
+                _charCache.Add((Quad(
+                    Project(RotateCamera(RotateHead(f.Uv(u0, v0)))),
+                    Project(RotateCamera(RotateHead(f.Uv(u1, v0)))),
+                    Project(RotateCamera(RotateHead(f.Uv(u1, v1)))),
+                    Project(RotateCamera(RotateHead(f.Uv(u0, v1))))), brush));
             }
         }
     }
 
-    // 前脸像素五官(Steve 风格),UV 0..1,v=0 顶。
-    private void DrawSteveFace(DrawingContext context, Face f, double shade)
+    private static StreamGeometry Quad(Point p00, Point p10, Point p11, Point p01)
     {
-        Color hair = Shade(s_hair, shade);
-        Color white = Shade(s_eyeWhite, shade);
-        Color iris = Shade(s_iris, shade);
-        Color skinDark = Shade(s_skinDark, shade);
-        Color mouth = Shade(s_mouth, shade);
-
-        FillFaceRect(context, f, 0.0, 0.0, 1.0, 0.18, hair);     // 刘海
-        FillFaceRect(context, f, 0.19, 0.30, 0.44, 0.36, hair);  // 左眉
-        FillFaceRect(context, f, 0.56, 0.30, 0.81, 0.36, hair);  // 右眉
-        FillFaceRect(context, f, 0.19, 0.37, 0.44, 0.50, white); // 左眼白
-        FillFaceRect(context, f, 0.56, 0.37, 0.81, 0.50, white); // 右眼白
-        FillFaceRect(context, f, 0.31, 0.37, 0.44, 0.50, iris);  // 左瞳(内侧)
-        FillFaceRect(context, f, 0.56, 0.37, 0.69, 0.50, iris);  // 右瞳(内侧)
-        FillFaceRect(context, f, 0.44, 0.50, 0.56, 0.61, skinDark); // 鼻
-        FillFaceRect(context, f, 0.31, 0.66, 0.69, 0.72, mouth);    // 嘴
-    }
-
-    private void FillFaceRect(DrawingContext context, Face f, double u0, double v0, double u1, double v1, Color color)
-    {
-        Point p00 = Project(RotateCamera(RotateHead(f.Uv(u0, v0))));
-        Point p10 = Project(RotateCamera(RotateHead(f.Uv(u1, v0))));
-        Point p11 = Project(RotateCamera(RotateHead(f.Uv(u1, v1))));
-        Point p01 = Project(RotateCamera(RotateHead(f.Uv(u0, v1))));
-
         var geo = new StreamGeometry();
-        using (var gc = geo.Open())
-        {
-            gc.BeginFigure(p00, true);
-            gc.LineTo(p10);
-            gc.LineTo(p11);
-            gc.LineTo(p01);
-            gc.EndFigure(true);
-        }
-
-        context.DrawGeometry(new ImmutableSolidColorBrush(color), null, geo);
+        using var gc = geo.Open();
+        gc.BeginFigure(p00, true);
+        gc.LineTo(p10);
+        gc.LineTo(p11);
+        gc.LineTo(p01);
+        gc.EndFigure(true);
+        return geo;
     }
 
     private double FaceShade(Vec3 normalLocal)
@@ -743,41 +788,61 @@ internal sealed class SpatialSceneControl : Control
     private static readonly IPen s_cubePen =
         new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(0x55, 0xAE, 0xAE, 0xB2)), 1.0);
 
-    private static readonly Color s_skin = Color.FromRgb(0xBB, 0x8B, 0x61);
-    private static readonly Color s_skinDark = Color.FromRgb(0x9C, 0x70, 0x4C);
-    private static readonly Color s_hair = Color.FromRgb(0x45, 0x30, 0x1E);
-    private static readonly Color s_eyeWhite = Color.FromRgb(0xE6, 0xE6, 0xE6);
-    private static readonly Color s_iris = Color.FromRgb(0x4A, 0x5B, 0x8C);
-    private static readonly Color s_mouth = Color.FromRgb(0x6B, 0x4A, 0x38);
+    // 当前皮肤(默认程序化原创;阶段 2 可由导入的 64×64 PNG 替换)。
+    private static readonly CharacterSkin s_charSkin = CharacterSkin.Default;
 
-    // 人头 6 面(几何 + 法线 + 底色恒定 → 静态一次构建,不每帧分配)。UV 序角点见 Face。
-    private static readonly Face[] s_faces = BuildFaces();
+    // 角色总高 32 像素(脚 my=0,头中心 my=28);缩放使头中心落在原点 z=0、脚落在立方体底 z=-1。
+    private const double CharScale = 1.0 / 28.0;
 
-    private static Face[] BuildFaces()
+    // Minecraft 坐标(x 右、y 上脚=0、z 前+脸朝)→ 模型坐标(X=右、Y=前、Z=上)。
+    private static Vec3 M(double mx, double my, double mz) =>
+        new(mx * CharScale, mz * CharScale, (my - 28) * CharScale);
+
+    // 角色全部部位的可见面(几何 + 法线 + 皮肤 UV 矩形),静态一次构建。
+    private static readonly SkinFace[] s_parts = BuildParts();
+
+    private static SkinFace[] BuildParts()
     {
-        const double h = HeadHalf;
-        return new[]
-        {
-            // 前脸(+Y,肤色):u→+X,v→-Z
-            new Face(new Vec3(-h, h, h), new Vec3(h, h, h), new Vec3(h, h, -h), new Vec3(-h, h, -h),
-                new Vec3(0, 1, 0), s_skin, true),
-            // 后脑(-Y,发色)
-            new Face(new Vec3(h, -h, h), new Vec3(-h, -h, h), new Vec3(-h, -h, -h), new Vec3(h, -h, -h),
-                new Vec3(0, -1, 0), s_hair, false),
-            // 右(+X,发色)
-            new Face(new Vec3(h, h, h), new Vec3(h, -h, h), new Vec3(h, -h, -h), new Vec3(h, h, -h),
-                new Vec3(1, 0, 0), s_hair, false),
-            // 左(-X,发色)
-            new Face(new Vec3(-h, -h, h), new Vec3(-h, h, h), new Vec3(-h, h, -h), new Vec3(-h, -h, -h),
-                new Vec3(-1, 0, 0), s_hair, false),
-            // 顶(+Z,发色)
-            new Face(new Vec3(-h, -h, h), new Vec3(h, -h, h), new Vec3(h, h, h), new Vec3(-h, h, h),
-                new Vec3(0, 0, 1), s_hair, false),
-            // 底(-Z,肤色:脖子)
-            new Face(new Vec3(-h, h, -h), new Vec3(h, h, -h), new Vec3(h, -h, -h), new Vec3(-h, -h, -h),
-                new Vec3(0, 0, -1), s_skin, false),
-        };
+        var list = new List<SkinFace>(36);
+        //      mc 包围盒          front  back   right  left   top    bottom (各面 UV 左上像素)
+        AddBox(list, -4, 24, -4, 4, 32, 4, 8, 8, 24, 8, 0, 8, 16, 8, 8, 0, 16, 0);   // 头 8×8×8
+        AddBox(list, -4, 12, -2, 4, 24, 2, 20, 20, 32, 20, 16, 20, 28, 20, 20, 16, 28, 16); // 身 8×12×4
+        AddBox(list, -8, 12, -2, -4, 24, 2, 44, 20, 52, 20, 40, 20, 48, 20, 44, 16, 48, 16); // 右臂 4×12×4
+        AddBox(list, 4, 12, -2, 8, 24, 2, 36, 52, 44, 52, 32, 52, 40, 52, 36, 48, 40, 48); // 左臂
+        AddBox(list, -4, 0, -2, 0, 12, 2, 4, 20, 12, 20, 0, 20, 8, 20, 4, 16, 8, 16);   // 右腿 4×12×4
+        AddBox(list, 0, 0, -2, 4, 12, 2, 20, 52, 28, 52, 16, 52, 24, 52, 20, 48, 24, 48); // 左腿
+        return list.ToArray();
     }
+
+    // 由 mc 包围盒 + 6 面 UV 左上像素生成 6 个 SkinFace(面像素尺寸由盒子维度决定)。
+    private static void AddBox(List<SkinFace> list, int x0, int y0, int z0, int x1, int y1, int z1,
+        int fx, int fy, int bx, int by, int rx, int ry, int lx, int ly, int tx, int ty, int box, int boy)
+    {
+        int w = x1 - x0;
+        int h = y1 - y0;
+        int d = z1 - z0;
+        // front +z(脸):u→+x,v→-y(顶);像素 w×h
+        list.Add(new SkinFace(M(x0, y1, z1), M(x1, y1, z1), M(x1, y0, z1), M(x0, y0, z1),
+            new Vec3(0, 1, 0), fx, fy, w, h));
+        // back -z
+        list.Add(new SkinFace(M(x1, y1, z0), M(x0, y1, z0), M(x0, y0, z0), M(x1, y0, z0),
+            new Vec3(0, -1, 0), bx, by, w, h));
+        // right +x:u→-z(前→后);像素 d×h
+        list.Add(new SkinFace(M(x1, y1, z1), M(x1, y1, z0), M(x1, y0, z0), M(x1, y0, z1),
+            new Vec3(1, 0, 0), rx, ry, d, h));
+        // left -x:u→+z
+        list.Add(new SkinFace(M(x0, y1, z0), M(x0, y1, z1), M(x0, y0, z1), M(x0, y0, z0),
+            new Vec3(-1, 0, 0), lx, ly, d, h));
+        // top +y:u→+x,v→+z;像素 w×d
+        list.Add(new SkinFace(M(x0, y1, z0), M(x1, y1, z0), M(x1, y1, z1), M(x0, y1, z1),
+            new Vec3(0, 0, 1), tx, ty, w, d));
+        // bottom -y
+        list.Add(new SkinFace(M(x0, y0, z1), M(x1, y0, z1), M(x1, y0, z0), M(x0, y0, z0),
+            new Vec3(0, 0, -1), box, boy, w, d));
+    }
+
+    private static Color FromArgb(uint v) =>
+        Color.FromArgb((byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v);
 
     private static readonly Color[] s_palette =
     {
