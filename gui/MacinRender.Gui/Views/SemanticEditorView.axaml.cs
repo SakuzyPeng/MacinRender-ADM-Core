@@ -101,6 +101,29 @@ public partial class SemanticEditorView : UserControl
         }
     }
 
+    // 空间视图:唤出独立窗口(单例,重复点聚焦已有)。DataContext 共享同一 VM → 播放头/模型实时联动。
+    private SpatialWindow? _spatialWindow;
+
+    private void OnOpenSpatial(object? sender, RoutedEventArgs e)
+    {
+        if (_spatialWindow is not null)
+        {
+            _spatialWindow.Activate();
+            return;
+        }
+
+        _spatialWindow = new SpatialWindow { DataContext = DataContext };
+        _spatialWindow.Closed += (_, _) => _spatialWindow = null;
+        if (TopLevel.GetTopLevel(this) is Window owner)
+        {
+            _spatialWindow.Show(owner);
+        }
+        else
+        {
+            _spatialWindow.Show();
+        }
+    }
+
     // 文件选择走视图 code-behind(同批渲染界面),拿到本地路径后交 VM 载入 + inspect。
     private async void OnLoadFile(object? sender, RoutedEventArgs e)
     {

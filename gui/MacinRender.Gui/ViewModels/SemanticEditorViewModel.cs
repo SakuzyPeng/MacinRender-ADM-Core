@@ -71,6 +71,21 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     public string ObjectCountText => ObjectCount > 0 ? L.Format("SemObjectsN", ObjectCount) : "";
 
+    // 空间视图几何模型(载入时构建);独立窗口绑定它 + PlayheadSeconds 做伪 3D 动画。
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanShowSpatial))]
+    private SpatialScene? _spatialModel;
+
+    public bool CanShowSpatial => SpatialModel is { IsEmpty: false };
+
+    // 空间视图:是否在对象点旁显示名称(默认开,窗口里可切换)。
+    [ObservableProperty]
+    private bool _showObjectLabels = true;
+
+    // 空间视图:轨迹模式。false = 拖尾淡出(默认);true = 累积保留(轨迹经过即不消失)。
+    [ObservableProperty]
+    private bool _persistTrail;
+
     public bool HasFile => !string.IsNullOrEmpty(LoadedPath);
     public string LoadedFileName => HasFile ? Path.GetFileName(LoadedPath!) : "";
     public bool HasCommonPrefix => CommonPrefix.Length > 0;
@@ -143,6 +158,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
                 LoadedPath = null;
                 CommonPrefix = "";
                 ObjectCount = 0;
+                SpatialModel = null;
                 SetStatus("SemLoadFailed");
                 RebuildPolicy();
                 return false;
@@ -177,6 +193,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             LoadedPath = path;
             SelectedRow = Rows.Count > 0 ? Rows[0] : null;
             ObjectCount = doc.Objects.Count;
+            SpatialModel = SpatialScene.Build(doc);
             SetStatus("SemLoaded");
             RebuildPolicy();
             return true;

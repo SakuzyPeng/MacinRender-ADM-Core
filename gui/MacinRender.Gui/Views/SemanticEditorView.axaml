@@ -77,9 +77,9 @@
 
         <Grid Grid.Row="1" RowDefinitions="Auto,Auto,*">
 
-            <!-- 载入栏:文件信息(左,填充;文件名可换 2 行)| 监听引擎(后端 + HRIR,从监听条挪上来)| 导出 | 载入 -->
+            <!-- 载入栏:文件信息(左,填充;文件名可换 2 行)| 监听引擎(后端 + HRIR)| 空间视图 | 导出 | 载入 -->
             <ctrl:SquircleBorder Grid.Row="0" Classes="card" Margin="0,0,0,12">
-                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="12">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="12">
                     <!-- 文件信息:填充左侧;窗口窄时文件名换行(最多 2 行),不被后端块挤到截断 -->
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
                         <!-- 标题 + 状态同一行(状态不再独占一行);状态为空时折叠 -->
@@ -141,8 +141,17 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- 导出生效 ADM -->
+                    <!-- 空间视图:唤出独立窗口(共享同一 VM → 播放头/模型实时联动) -->
                     <ctrl:SquircleButton Grid.Column="2" Classes="headericon" VerticalAlignment="Center"
+                            IsEnabled="{Binding CanShowSpatial}" Click="OnOpenSpatial"
+                            ToolTip.Tip="{DynamicResource SemSpatialView}">
+                        <Grid Width="24" Height="24" IsHitTestVisible="False">
+                            <Path Classes="icon" Data="{StaticResource IconGlobe}"/>
+                        </Grid>
+                    </ctrl:SquircleButton>
+
+                    <!-- 导出生效 ADM -->
+                    <ctrl:SquircleButton Grid.Column="3" Classes="headericon" VerticalAlignment="Center"
                             IsEnabled="{Binding CanExport}" Click="OnExport"
                             ToolTip.Tip="{DynamicResource SemExport}">
                         <Grid Width="24" Height="24" IsHitTestVisible="False">
@@ -157,7 +166,7 @@
                     </ctrl:SquircleButton>
 
                     <!-- 载入文件 -->
-                    <ctrl:SquircleButton Grid.Column="3" Classes="headericon accent" VerticalAlignment="Center"
+                    <ctrl:SquircleButton Grid.Column="4" Classes="headericon accent" VerticalAlignment="Center"
                             IsEnabled="{Binding !IsLoading}" Click="OnLoadFile"
                             ToolTip.Tip="{DynamicResource SemLoadFile}">
                         <Grid Width="24" Height="24" IsHitTestVisible="False">

@@ -80,13 +80,23 @@ internal static class ObjectNaming
     }
 }
 
-// adm_inspect_file_json (schema "mradm.scene-inspect" v1) 的部分 DTO —— 只取语义编辑
-// 需要的字段(对象 + 首块的听感维度当前值)。System.Text.Json 源生成器,AOT 安全。
-// 字段 snake_case 由 SnakeCaseLower 策略映射;dialogue_id / track_uid / object_blocks 等自动对上。
+// adm_inspect_file_json (schema "mradm.scene-inspect" v1) 的部分 DTO —— 取语义编辑 + 空间视图
+// 需要的字段。System.Text.Json 源生成器,AOT 安全。
+// 字段 snake_case 由 SnakeCaseLower 策略映射;dialogue_id / track_uid / object_blocks /
+// start_sample / interp_length_samples 等自动对上。
 
 internal sealed class InspectDoc
 {
+    public InspectFile? File { get; set; }
     public List<InspectObject> Objects { get; set; } = new();
+}
+
+// 文件级时间基准:空间视图用 num_frames/sample_rate 把样本位置换算成秒、对齐播放头。
+internal sealed class InspectFile
+{
+    public uint SampleRate { get; set; }
+    public ulong NumFrames { get; set; }
+    public double DurationSeconds { get; set; }
 }
 
 internal sealed class InspectObject
@@ -97,6 +107,7 @@ internal sealed class InspectObject
     public bool Mute { get; set; }
     public int? Importance { get; set; }
     public int? DialogueId { get; set; }
+    public ulong? EndSample { get; set; } // 省略 = 活到片尾
     public List<InspectTrack> Tracks { get; set; } = new();
 }
 
@@ -107,8 +118,8 @@ internal sealed class InspectTrack
     public List<InspectDsBlock> DsBlocks { get; set; } = new();
 }
 
-// DirectSpeakers block: only the fields the bed-channel editor needs (label + current gain +
-// position, for robust L/R pairing by opposite azimuth rather than fragile label string matching).
+// DirectSpeakers block: label + current gain + position. Position pairs L/R by opposite azimuth
+// (robust vs label strings) for the bed editor, and places static bed points in the spatial view.
 internal sealed class InspectDsBlock
 {
     public List<string> SpeakerLabels { get; set; } = new();
@@ -116,6 +127,19 @@ internal sealed class InspectDsBlock
     public bool HasPosition { get; set; }
     public double Azimuth { get; set; }
     public double Elevation { get; set; }
+    public double Distance { get; set; } = 1.0;
+}
+
+// 位置:cartesian=true 用 x/y/z,否则用 azimuth/elevation/distance(scene_to_json 二选一序列化)。
+internal sealed class InspectPosition
+{
+    public bool Cartesian { get; set; }
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double Z { get; set; }
+    public double Azimuth { get; set; }
+    public double Elevation { get; set; }
+    public double Distance { get; set; } = 1.0;
 }
 
 internal sealed class InspectObjectBlock
@@ -126,6 +150,13 @@ internal sealed class InspectObjectBlock
     public double Height { get; set; }
     public double Depth { get; set; }
     public double Divergence { get; set; }
+
+    // 空间视图:位置 + 时间窗 + 插值线索(轨迹关键帧)。
+    public InspectPosition? Position { get; set; }
+    public ulong StartSample { get; set; }
+    public ulong? EndSample { get; set; } // 省略 = 到片尾
+    public bool JumpPosition { get; set; }
+    public ulong? InterpLengthSamples { get; set; }
 }
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]

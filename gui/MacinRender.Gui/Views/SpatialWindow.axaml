@@ -1,0 +1,67 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:MacinRender.Gui.ViewModels"
+        xmlns:ctrl="using:MacinRender.Gui.Controls"
+        xmlns:views="using:MacinRender.Gui.Views"
+        mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="560"
+        x:Class="MacinRender.Gui.Views.SpatialWindow"
+        x:DataType="vm:SemanticEditorViewModel"
+        Width="640" Height="560" MinWidth="420" MinHeight="380"
+        Background="#16181C">
+
+    <Grid RowDefinitions="*,Auto" Background="#16181C">
+
+        <!-- 伪 3D 视口 -->
+        <views:SpatialSceneControl Grid.Row="0"
+                                   Scene="{Binding SpatialModel}"
+                                   CurrentTime="{Binding PlayheadSeconds}"
+                                   ShowLabels="{Binding ShowObjectLabels}"
+                                   PersistTrail="{Binding PersistTrail}"/>
+
+        <!-- 操作提示(角标) -->
+        <TextBlock Grid.Row="0" Margin="12,10,0,0" FontSize="11"
+                   HorizontalAlignment="Left" VerticalAlignment="Top"
+                   Foreground="#80FFFFFF" Text="{DynamicResource SemSpatialHint}"/>
+
+        <!-- 显示开关(角标):名称 / 保留轨迹 -->
+        <StackPanel Grid.Row="0" Margin="0,6,12,0" Spacing="2"
+                    HorizontalAlignment="Right" VerticalAlignment="Top">
+            <CheckBox FontSize="11" Foreground="#B0FFFFFF"
+                      IsChecked="{Binding ShowObjectLabels}"
+                      Content="{DynamicResource SemSpatialLabels}"/>
+            <CheckBox FontSize="11" Foreground="#B0FFFFFF"
+                      IsChecked="{Binding PersistTrail}"
+                      Content="{DynamicResource SemSpatialKeep}"/>
+        </StackPanel>
+
+        <!-- 传输条:播放/暂停 + 时间 + scrub(与监听同步;无监听时拖动只预览动画) -->
+        <Grid Grid.Row="1" Margin="14,10,14,14" ColumnDefinitions="Auto,Auto,*,Auto"
+              ColumnSpacing="10">
+            <ctrl:SquircleButton Grid.Column="0" Classes="accent" Width="44" Height="30" Padding="0"
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    IsEnabled="{Binding CanPlay}" Command="{Binding TogglePlayCommand}">
+                <Panel Width="22" Height="22" IsHitTestVisible="False">
+                    <Canvas Width="24" Height="24">
+                        <Path Classes="transporticon" Data="{StaticResource IconPlay}" IsVisible="{Binding ShowPlayIcon}"/>
+                        <Path Classes="transporticon" Data="{StaticResource IconPause}" IsVisible="{Binding ShowPauseIcon}"/>
+                    </Canvas>
+                    <Grid Classes="spinnerhost" IsVisible="{Binding ShowSpinner}">
+                        <Ellipse Classes="spinnericon"/>
+                    </Grid>
+                </Panel>
+            </ctrl:SquircleButton>
+
+            <TextBlock Grid.Column="1" VerticalAlignment="Center" MinWidth="40" FontSize="12"
+                       Foreground="#F5F5F7" Text="{Binding PlayheadText}"/>
+
+            <Slider x:Name="SeekSlider" Grid.Column="2" VerticalAlignment="Center" Minimum="0"
+                    Maximum="{Binding DurationSeconds}" Value="{Binding PlayheadSeconds}"
+                    IsEnabled="{Binding HasFile}"/>
+
+            <TextBlock Grid.Column="3" VerticalAlignment="Center" MinWidth="40" FontSize="12"
+                       Foreground="#9A9A9F" Text="{Binding DurationText}"/>
+        </Grid>
+    </Grid>
+</Window>
