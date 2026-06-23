@@ -49,6 +49,30 @@ public sealed class SpatialObject
     public IReadOnlyList<SpatialKeyframe> Keyframes { get; init; } = Array.Empty<SpatialKeyframe>();
     public IReadOnlyList<BedPoint> BedPoints { get; init; } = Array.Empty<BedPoint>();
 
+    // 最后一个 TimeSeconds <= t 的关键帧索引(keyframe 按时间升序 → 二分);t 在首帧之前返回 0。
+    public int IndexAtOrBefore(double t)
+    {
+        var kfs = Keyframes;
+        int lo = 0;
+        int hi = kfs.Count - 1;
+        int found = 0;
+        while (lo <= hi)
+        {
+            int mid = (lo + hi) >> 1;
+            if (kfs[mid].TimeSeconds <= t)
+            {
+                found = mid;
+                lo = mid + 1;
+            }
+            else
+            {
+                hi = mid - 1;
+            }
+        }
+
+        return found;
+    }
+
     // 在时刻 t 解算位置 / extent / 增益 / 是否活跃(线性插值近似,可视化用)。
     public SpatialSample SampleAt(double t)
     {
@@ -57,20 +81,7 @@ public sealed class SpatialObject
             return new SpatialSample(false, default, 0, 0, 0, 0);
         }
 
-        // 定位当前 block:最后一个 TimeSeconds <= t 的关键帧。
-        int i = 0;
-        for (int k = 0; k < Keyframes.Count; k++)
-        {
-            if (Keyframes[k].TimeSeconds <= t)
-            {
-                i = k;
-            }
-            else
-            {
-                break;
-            }
-        }
-
+        int i = IndexAtOrBefore(t);
         var cur = Keyframes[i];
         Vec3 pos = cur.Position;
         // 从上一 block 目标位置插值进入当前 block(jump 时 InterpSeconds=0,即瞬跳)。
