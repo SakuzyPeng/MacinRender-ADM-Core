@@ -33,6 +33,7 @@ public sealed class SpatialKeyframe
     public double Depth;
     public double Gain = 1.0;    // block 增益(线性)
     public double InterpSeconds; // 进入本 block 的插值时长(jump=0 则瞬跳)
+    public bool Jump;            // jumpPosition:进入本 block 时瞬移(轨迹画虚线,非真实经过路径)
 }
 
 public sealed class SpatialObject
@@ -204,6 +205,7 @@ public sealed class SpatialScene
                 Depth = blk.Depth,
                 Gain = blk.Gain,
                 InterpSeconds = interp,
+                Jump = blk.JumpPosition,
             });
         }
 

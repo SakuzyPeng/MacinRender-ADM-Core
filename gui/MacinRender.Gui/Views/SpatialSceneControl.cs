@@ -439,38 +439,46 @@ internal sealed class SpatialSceneControl : Control
             return;
         }
 
-        // 收集窗口内真实轨迹的时间断点,加上两端,排序。
-        var times = new List<double> { t0 };
+        // 收集窗口内真实轨迹的时间断点(标注是否为瞬移点),加上两端,排序。
+        // JumpInto=true 表示到达该时刻意味着位置在此刻阶跃(进入 jump block)→ 这一段画虚线。
+        var pts = new List<(double T, bool JumpInto)> { (t0, false) };
         foreach (var kf in obj.Keyframes)
         {
             double a = kf.TimeSeconds;
             double b = kf.TimeSeconds + kf.InterpSeconds;
             if (a > t0 && a < now)
             {
-                times.Add(a);
+                pts.Add((a, kf.Jump));
             }
 
-            if (b > t0 && b < now)
+            if (b > t0 && b < now && b > a)
             {
-                times.Add(b);
+                pts.Add((b, false)); // 插值终点(jump 时 b==a,跳过)
             }
         }
 
-        times.Add(now);
-        times.Sort();
+        pts.Add((now, false));
+        pts.Sort((x, y) => x.T.CompareTo(y.T));
 
-        Point prev = Project(RotateCamera(obj.SampleAt(times[0]).Position));
-        for (int i = 1; i < times.Count; i++)
+        Point prev = Project(RotateCamera(obj.SampleAt(pts[0].T).Position));
+        for (int i = 1; i < pts.Count; i++)
         {
-            var smp = obj.SampleAt(times[i]);
+            var smp = obj.SampleAt(pts[i].T);
             Point cur = Project(RotateCamera(smp.Position));
-            double f = (times[i] - t0) / span; // 0 = 尾(旧)→ 1 = 头(现在)
+            double f = (pts[i].T - t0) / span; // 0 = 尾(旧)→ 1 = 头(现在)
             double alpha = 0.5 * f * (smp.Active ? 1.0 : 0.35);
             double w = 0.8 + (2.0 * f);
-            context.DrawLine(new Pen(new SolidColorBrush(WithAlpha(col, alpha)), w), prev, cur);
+            var pen = pts[i].JumpInto
+                ? DashPen(col, alpha, 1.2)
+                : new Pen(new SolidColorBrush(WithAlpha(col, alpha)), w);
+            context.DrawLine(pen, prev, cur);
             prev = cur;
         }
     }
+
+    // 瞬移段虚线 pen(jumpPosition):dash 单位是线宽倍数。
+    private static Pen DashPen(Color col, double alpha, double width) =>
+        new(new SolidColorBrush(WithAlpha(col, alpha)), width) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
 
     // 累积:连接固定的轨迹拐点(每个已开始 block 的目标位置 = keyframe 顶点)直到播放头,
     // 末端在插值中途时收到当前实时位置。顶点不随播放头变 → 真"足迹",不抽动。
@@ -482,7 +490,8 @@ internal sealed class SpatialSceneControl : Control
             return; // 对象尚未开始
         }
 
-        var pen = new Pen(new SolidColorBrush(WithAlpha(col, 0.42)), 1.4);
+        var solid = new Pen(new SolidColorBrush(WithAlpha(col, 0.42)), 1.4);
+        var dashed = DashPen(col, 0.42, 1.2);
         Point prev = Project(RotateCamera(kfs[0].Position));
         for (int i = 1; i < kfs.Count; i++)
         {
@@ -496,7 +505,8 @@ internal sealed class SpatialSceneControl : Control
             bool arrived = kf.TimeSeconds + kf.InterpSeconds <= now;
             Vec3 target = arrived ? kf.Position : obj.SampleAt(now).Position;
             Point cur = Project(RotateCamera(target));
-            context.DrawLine(pen, prev, cur);
+            // jump:瞬移段画虚线(并非真实经过的路径)。
+            context.DrawLine(kf.Jump ? dashed : solid, prev, cur);
             prev = cur;
             if (!arrived)
             {
