@@ -1,0 +1,571 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MacinRender.Gui.ViewModels"
+             xmlns:svc="using:MacinRender.Gui.Services"
+             xmlns:ctrl="using:MacinRender.Gui.Controls"
+             x:Class="MacinRender.Gui.Views.SemanticEditorView"
+             x:DataType="vm:SemanticEditorViewModel">
+
+    <UserControl.Resources>
+        <!-- 电平表渐变(固定刻度色):低位绿 → 中段黄 → 接近 0 dBFS 红。表条按填充宽度裁剪揭示。 -->
+        <LinearGradientBrush x:Key="MeterBrush" StartPoint="0%,0%" EndPoint="100%,0%">
+            <GradientStop Offset="0.0" Color="#34C759"/>
+            <GradientStop Offset="0.62" Color="#5BD66B"/>
+            <GradientStop Offset="0.80" Color="#E3CC3F"/>
+            <GradientStop Offset="0.92" Color="#FF9F0A"/>
+            <GradientStop Offset="1.0" Color="#FF453A"/>
+        </LinearGradientBrush>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <!-- 紧凑数值输入框:压掉 Fluent TextBox 默认的高 MinHeight / 厚内边距,缩到文字大小。 -->
+        <Style Selector="TextBox.numeric">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <!-- extent 轴名:可点击切换联动。联动=accent(同组共享值),未联动=灰(独立)。 -->
+        <Style Selector="TextBlock.axislink">
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+        </Style>
+        <Style Selector="TextBlock.axislink.unlinked">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+        </Style>
+        <!-- 电平表填充:Width 过渡,使两次轮询(~33ms)间的宽度变化滑动而非跳变。 -->
+        <Style Selector="Border.meterfill">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Width" Duration="0:0:0.06" Easing="LinearEasing"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="ListBox.semanticRows">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.semanticRows ListBoxItem">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Margin" Value="0,2"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <Style Selector="ListBox.semanticRows ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <Style Selector="ListBox.semanticRows ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowBg}"/>
+        </Style>
+        <Style Selector="ListBox.semanticRows ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource NavActive}"/>
+        </Style>
+        <Style Selector="ListBox.semanticRows ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource NavActive}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,*" Margin="8,0,16,16">
+        <StackPanel Grid.Row="0" Margin="2,6,0,12" Spacing="2">
+            <TextBlock Classes="h1" FontSize="20" Text="{DynamicResource NavSemantic}"/>
+            <TextBlock Classes="muted" Text="{DynamicResource SemanticPageDesc}"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" RowDefinitions="Auto,Auto,*">
+
+            <!-- 载入栏:文件信息(左,填充;文件名可换 2 行)| 监听引擎(后端 + HRIR)| 空间视图 | 导出 | 载入 -->
+            <ctrl:SquircleBorder Grid.Row="0" Classes="card" Margin="0,0,0,12">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="12">
+                    <!-- 文件信息:填充左侧;窗口窄时文件名换行(最多 2 行),不被后端块挤到截断 -->
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                        <!-- 标题 + 状态同一行(状态不再独占一行);状态为空时折叠 -->
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Classes="h2" VerticalAlignment="Bottom" Text="{DynamicResource SemFileHeader}"/>
+                            <TextBlock Classes="muted" VerticalAlignment="Bottom" Text="{Binding StatusText}"
+                                       IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        </StackPanel>
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                   TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                   IsVisible="{Binding HasFile}" Text="{Binding LoadedFileName}"/>
+                    </StackPanel>
+
+                    <!-- 监听引擎:后端 A/B + 自定义 HRIR(SOFA,仅「双耳·SAF」时显示;下拉=默认+最近 MRU + 浏览) -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <ComboBox Width="154" VerticalAlignment="Center"
+                                  ItemsSource="{Binding MonitorBackends}"
+                                  SelectedItem="{Binding SelectedMonitorBackend}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="svc:MonitorBackendOption">
+                                    <TextBlock Text="{Binding Label}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <!-- 输出设备(系统默认 + 枚举所得);改变时即时切换(监听中)或下次生效 -->
+                        <ComboBox Width="160" VerticalAlignment="Center"
+                                  ItemsSource="{Binding MonitorDevices}"
+                                  SelectedItem="{Binding SelectedMonitorDevice}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="svc:MonitorDevice">
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Name}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                                    IsVisible="{Binding MonitorSofaApplicable}">
+                            <ComboBox Width="132" VerticalAlignment="Center"
+                                      ItemsSource="{Binding MonitorSofa.Options}"
+                                      SelectedItem="{Binding MonitorSofa.Selected}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:SofaOption">
+                                        <TextBlock Text="{Binding Label}" ToolTip.Tip="{Binding Tooltip}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <ctrl:SquircleButton Classes="headericon" Click="OnPickMonitorSofa"
+                                    ToolTip.Tip="{DynamicResource SemSofaPick}">
+                                <Grid Width="24" Height="24" IsHitTestVisible="False">
+                                    <Path Classes="icon" Data="{StaticResource IconAdd}"/>
+                                    <Path x:Name="FlashMonitorSofa" Classes="icon" Data="{StaticResource IconAdd}"
+                                          Stroke="#30D158" Opacity="0">
+                                        <Path.Transitions>
+                                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                        </Path.Transitions>
+                                    </Path>
+                                </Grid>
+                            </ctrl:SquircleButton>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- 空间视图:唤出独立窗口(共享同一 VM → 播放头/模型实时联动) -->
+                    <ctrl:SquircleButton Grid.Column="2" Classes="headericon" VerticalAlignment="Center"
+                            IsEnabled="{Binding CanShowSpatial}" Click="OnOpenSpatial"
+                            ToolTip.Tip="{DynamicResource SemSpatialView}">
+                        <Grid Width="24" Height="24" IsHitTestVisible="False">
+                            <Path Classes="icon" Data="{StaticResource IconGlobe}"/>
+                        </Grid>
+                    </ctrl:SquircleButton>
+
+                    <!-- 导出生效 ADM -->
+                    <ctrl:SquircleButton Grid.Column="3" Classes="headericon" VerticalAlignment="Center"
+                            IsEnabled="{Binding CanExport}" Click="OnExport"
+                            ToolTip.Tip="{DynamicResource SemExport}">
+                        <Grid Width="24" Height="24" IsHitTestVisible="False">
+                            <Path Classes="icon" Data="{StaticResource IconDownload}"/>
+                            <Path x:Name="FlashExport" Classes="icon" Data="{StaticResource IconDownload}"
+                                  Stroke="#30D158" Opacity="0">
+                                <Path.Transitions>
+                                    <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                </Path.Transitions>
+                            </Path>
+                        </Grid>
+                    </ctrl:SquircleButton>
+
+                    <!-- 载入文件 -->
+                    <ctrl:SquircleButton Grid.Column="4" Classes="headericon accent" VerticalAlignment="Center"
+                            IsEnabled="{Binding !IsLoading}" Click="OnLoadFile"
+                            ToolTip.Tip="{DynamicResource SemLoadFile}">
+                        <Grid Width="24" Height="24" IsHitTestVisible="False">
+                            <Path Classes="icon" Data="{StaticResource IconFolder}"/>
+                            <Path x:Name="FlashLoadFile" Classes="icon" Data="{StaticResource IconFolder}"
+                                  Stroke="#30D158" Opacity="0">
+                                <Path.Transitions>
+                                    <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                </Path.Transitions>
+                            </Path>
+                        </Grid>
+                    </ctrl:SquircleButton>
+                </Grid>
+            </ctrl:SquircleBorder>
+
+            <!-- 监听条:传输 + 进度条(占满)+ 电平表 + 状态(后端/HRIR 已挪到上方文件卡片)。只在已载入文件时可用 -->
+            <ctrl:SquircleBorder Grid.Row="1" Classes="card" Margin="0,0,0,12" Padding="12,8"
+                                 IsEnabled="{Binding HasFile}">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
+
+                    <!-- 播放器传输键:⏮ 回到开头 · ▶/⏸ 播放/暂停(未监听时自动开监听并播放)。
+                         Padding=0 抵掉 accent 给文字用的 16,7 内边距,让图标在按钮内居中。 -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <ctrl:SquircleButton Width="38" Height="32" Padding="0" VerticalAlignment="Center"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                IsEnabled="{Binding CanSeek}" Command="{Binding SeekToStartCommand}"
+                                ToolTip.Tip="{DynamicResource SemMonToStart}">
+                            <Canvas Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    IsHitTestVisible="False">
+                                <Path Classes="transporticon" Data="{StaticResource IconToStart}"/>
+                            </Canvas>
+                        </ctrl:SquircleButton>
+                        <ctrl:SquircleButton Classes="accent" Width="48" Height="32" Padding="0" VerticalAlignment="Center"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                IsEnabled="{Binding CanPlay}" Command="{Binding TogglePlayCommand}">
+                            <Panel Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   IsHitTestVisible="False">
+                                <Canvas Width="24" Height="24">
+                                    <Path Classes="transporticon" Data="{StaticResource IconPlay}" IsVisible="{Binding ShowPlayIcon}"/>
+                                    <Path Classes="transporticon" Data="{StaticResource IconPause}" IsVisible="{Binding ShowPauseIcon}"/>
+                                </Canvas>
+                                <Grid Classes="spinnerhost" IsVisible="{Binding ShowSpinner}">
+                                    <Ellipse Classes="spinnericon"/>
+                                </Grid>
+                            </Panel>
+                        </ctrl:SquircleButton>
+                    </StackPanel>
+
+                    <!-- 当前时间 -->
+                    <TextBlock Grid.Column="1" VerticalAlignment="Center" MinWidth="40" FontSize="12"
+                               Foreground="{DynamicResource TextPrimary}" Text="{Binding PlayheadText}"/>
+
+                    <!-- seek(拖动中只刷新画面,松手才真正 seek 一次:见 code-behind 监听 Thumb 拖动) -->
+                    <Slider x:Name="SeekSlider" Grid.Column="2" VerticalAlignment="Center" Minimum="0"
+                            Maximum="{Binding DurationSeconds}" Value="{Binding PlayheadSeconds}"
+                            IsEnabled="{Binding IsMonitoring}"/>
+
+                    <!-- 总时长 -->
+                    <TextBlock Grid.Column="3" VerticalAlignment="Center" MinWidth="40" FontSize="12"
+                               Classes="muted" Text="{Binding DurationText}"/>
+
+                    <!-- 电平表:L/R 峰值(dBFS,色随电平 低绿近 0 红)+ LUFS 读数(点击在 M/S/I 间切换)。
+                         ProgressBar 默认 MinWidth=200,显式 MinWidth=0 压回,否则溢出盖住相邻列。 -->
+                    <StackPanel Grid.Column="4" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="2">
+                        <Grid ColumnDefinitions="12,150,44" ColumnSpacing="6">
+                            <TextBlock Grid.Column="0" Classes="muted" FontSize="10" VerticalAlignment="Center" Text="L"/>
+                            <Panel Grid.Column="1" Height="6">
+                                <Border CornerRadius="3" Background="{DynamicResource RowBg}"/>
+                                <Border Classes="meterfill" HorizontalAlignment="Left" CornerRadius="3" ClipToBounds="True"
+                                        Width="{Binding PeakLeftFillWidth}">
+                                    <Border Width="150" HorizontalAlignment="Left" Background="{StaticResource MeterBrush}"/>
+                                </Border>
+                            </Panel>
+                            <TextBlock Grid.Column="2" FontSize="10" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextPrimary}" Text="{Binding PeakLeftText}"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="12,150,44" ColumnSpacing="6">
+                            <TextBlock Grid.Column="0" Classes="muted" FontSize="10" VerticalAlignment="Center" Text="R"/>
+                            <Panel Grid.Column="1" Height="6">
+                                <Border CornerRadius="3" Background="{DynamicResource RowBg}"/>
+                                <Border Classes="meterfill" HorizontalAlignment="Left" CornerRadius="3" ClipToBounds="True"
+                                        Width="{Binding PeakRightFillWidth}">
+                                    <Border Width="150" HorizontalAlignment="Left" Background="{StaticResource MeterBrush}"/>
+                                </Border>
+                            </Panel>
+                            <TextBlock Grid.Column="2" FontSize="10" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextPrimary}" Text="{Binding PeakRightText}"/>
+                        </Grid>
+                        <!-- 点击切换 LUFS 窗(M 瞬时 / S 短期 / I 累计) -->
+                        <Button Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                Command="{Binding CycleLufsModeCommand}"
+                                ToolTip.Tip="LUFS: M=momentary S=short-term I=integrated">
+                            <TextBlock FontSize="10" Foreground="{DynamicResource Accent}">
+                                <Run Text="{Binding LufsModeLabel}"/><Run Text=" "/><Run Text="{Binding LufsValueText}"/>
+                            </TextBlock>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- 状态(错误 / 到尾):仅有内容时占位,空时不占死宽度 -->
+                    <TextBlock Grid.Column="5" VerticalAlignment="Center" FontSize="11"
+                               Classes="muted" TextWrapping="Wrap" MaxWidth="96" Text="{Binding MonitorStatus}"/>
+                </Grid>
+            </ctrl:SquircleBorder>
+
+            <!-- 两栏:对象树 | 编辑器 -->
+            <Grid Grid.Row="2" ColumnDefinitions="300,*" ColumnSpacing="12">
+
+                <!-- 对象列表 -->
+                <ctrl:SquircleBorder Grid.Column="0" Classes="card">
+                    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
+                            <TextBlock Grid.Column="0" Classes="h2" Cursor="Hand" DoubleTapped="OnResetAll"
+                                       ToolTip.Tip="{DynamicResource SemResetHint}" Text="{DynamicResource SemObjects}"/>
+                            <!-- 对象总数:挪到标题旁(从文件状态行移来) -->
+                            <TextBlock Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" Classes="muted" FontSize="11"
+                                       IsVisible="{Binding HasFile}" Text="{Binding ObjectCountText}"/>
+                            <!-- 覆盖计数:标题右侧,无覆盖时不显示 -->
+                            <TextBlock Grid.Column="2" VerticalAlignment="Center" Classes="muted" FontSize="11"
+                                       IsVisible="{Binding HasOverrides}" Text="{Binding OverrideSummary}"/>
+                        </Grid>
+                        <!-- 剥离的主前缀提示(全名仍在每行 tooltip) -->
+                        <Border Grid.Row="1" IsVisible="{Binding HasCommonPrefix}"
+                                Background="{DynamicResource RowBg}" CornerRadius="8" Padding="8,5">
+                            <TextBlock Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding CommonPrefix}"
+                                       Text="{Binding CommonPrefixLabel}"/>
+                        </Border>
+                        <ListBox Grid.Row="2" Classes="semanticRows" ItemsSource="{Binding Rows}"
+                                 SelectionMode="Single"
+                                 SelectedItem="{Binding SelectedRow}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SemanticRow">
+                                    <StackPanel Spacing="2" Margin="0,2" ToolTip.Tip="{Binding Tooltip}">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <!-- 已设覆盖标记:accent 圆点(随覆盖变化实时显隐) -->
+                                            <Ellipse Grid.Column="0" Width="6" Height="6" Margin="0,0,6,0"
+                                                     VerticalAlignment="Center" Fill="{DynamicResource Accent}"
+                                                     IsVisible="{Binding HasOverride}"/>
+                                            <TextBlock Grid.Column="1" FontSize="13" FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       Text="{Binding DisplayName}"/>
+                                            <Border Grid.Column="2" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                    Background="{DynamicResource RowBg}" CornerRadius="5" Padding="5,1"
+                                                    IsVisible="{Binding ChannelTag, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                <TextBlock Classes="muted" FontSize="10" Text="{Binding ChannelTag}"/>
+                                            </Border>
+                                        </Grid>
+                                        <TextBlock Classes="muted" FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   IsVisible="{Binding Meta, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   Text="{Binding Meta}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </ctrl:SquircleBorder>
+
+                <!-- 编辑器:三栏(当前值 → 覆盖 → 生效值)+ 覆盖行;相对变换(× scale / dB) -->
+                <ctrl:SquircleBorder Grid.Column="1" Classes="card">
+                    <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                        <StackPanel Grid.Row="0" Spacing="1">
+                            <TextBlock Classes="h2" Cursor="Hand" DoubleTapped="OnResetRow"
+                                       ToolTip.Tip="{DynamicResource SemResetHint}"
+                                       Text="{Binding SelectedRow.DisplayName, FallbackValue={x:Null}}"/>
+                            <TextBlock Classes="muted" FontSize="11"
+                                       Text="{Binding SelectedRow.Meta, FallbackValue={x:Null}}"/>
+                        </StackPanel>
+
+                        <!-- 未选中:提示 -->
+                        <TextBlock Grid.Row="1" Classes="muted" Opacity="0.7" VerticalAlignment="Top"
+                                   IsVisible="{Binding SelectedRow,
+                                       Converter={x:Static ObjectConverters.IsNull}}"
+                                   Text="{DynamicResource SemSelectHint}"/>
+
+                        <!-- 套 ScrollViewer:多声道声床(7.1.2=10 行)等行数超出卡片高度时可滚动,不被裁切 -->
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                      IsVisible="{Binding SelectedRow,
+                                          Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <!-- 编辑区整体水平居中;内容不超出视口时垂直也居中,超出则从顶部滚动 -->
+                        <StackPanel Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <!-- 列头(三列:维度名 | 覆盖 | 生效值;移除冗余的"当前值"列) -->
+                            <Grid ColumnDefinitions="80,280,90" Margin="0,2,0,2">
+                                <TextBlock Grid.Column="1" Classes="muted" FontSize="11"
+                                           Text="{DynamicResource SemColOverride}"/>
+                                <TextBlock Grid.Column="2" Classes="muted" FontSize="11"
+                                           Text="{DynamicResource SemColEffective}"/>
+                            </Grid>
+
+                            <!-- gain(dB 偏移)。声床改用按声道 gain(下方列表)→ 隐藏整对象 gain 行 -->
+                            <Grid ColumnDefinitions="80,280,90"
+                                  IsVisible="{Binding SelectedRow.ShowObjectGain, FallbackValue=True}">
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.GainDb}"
+                                           ToolTip.Tip="{DynamicResource SemResetHint}"
+                                           Foreground="{DynamicResource TextPrimary}" Text="gain"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <CheckBox IsChecked="{Binding SelectedRow.GainDb.Enabled}"/>
+                                    <Slider Width="86" VerticalAlignment="Center"
+                                            Minimum="{Binding SelectedRow.GainDb.SliderMin}"
+                                            Maximum="{Binding SelectedRow.GainDb.SliderMax}"
+                                            Value="{Binding SelectedRow.GainDb.Value}"
+                                            IsEnabled="{Binding SelectedRow.GainDb.Enabled}"/>
+                                    <Grid ColumnDefinitions="12,44,Auto" VerticalAlignment="Center">
+                                        <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.GainDb.UnitPrefix}"/>
+                                        <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                 Text="{Binding SelectedRow.GainDb.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.GainDb.UnitSuffix}"/>
+                                    </Grid>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Accent}"
+                                           Text="{Binding SelectedRow.GainDb.EffectiveText}"/>
+                            </Grid>
+
+                            <!-- 声床:按声道 gain(每行一个 speaker label,独立 dB 偏移)。仅声床行显示 -->
+                            <ItemsControl ItemsSource="{Binding SelectedRow.BedChannels}"
+                                          IsVisible="{Binding SelectedRow.IsBed, FallbackValue=False}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:BedChannelGroup">
+                                        <Grid ColumnDefinitions="80,280,90" Margin="0,0,0,4">
+                                            <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                                       Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding Gain}"
+                                                       ToolTip.Tip="{DynamicResource SemResetHint}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextPrimary}" Text="{Binding DisplayLabel}"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                        VerticalAlignment="Center">
+                                                <CheckBox IsChecked="{Binding Gain.Enabled}"/>
+                                                <Slider Width="86" VerticalAlignment="Center"
+                                                        Minimum="{Binding Gain.SliderMin}"
+                                                        Maximum="{Binding Gain.SliderMax}"
+                                                        Value="{Binding Gain.Value}"
+                                                        IsEnabled="{Binding Gain.Enabled}"/>
+                                                <Grid ColumnDefinitions="12,44,Auto" VerticalAlignment="Center">
+                                                    <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                               FontSize="12" Classes="muted" Text="{Binding Gain.UnitPrefix}"/>
+                                                    <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                             Text="{Binding Gain.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                                    <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
+                                                               FontSize="12" Classes="muted" Text="{Binding Gain.UnitSuffix}"/>
+                                                </Grid>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource Accent}"
+                                                       Text="{Binding Gain.EffectiveText}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- diffuse(× scale)。声床(bed)无此维度 → 隐藏 -->
+                            <StackPanel Spacing="2" IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
+                            <Grid ColumnDefinitions="80,280,90">
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.DiffuseScale}"
+                                           ToolTip.Tip="{DynamicResource SemResetHint}"
+                                           Foreground="{DynamicResource TextPrimary}" Text="diffuse"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <CheckBox IsChecked="{Binding SelectedRow.DiffuseScale.Enabled}"/>
+                                    <Slider Width="86" VerticalAlignment="Center"
+                                            Minimum="{Binding SelectedRow.DiffuseScale.SliderMin}"
+                                            Maximum="{Binding SelectedRow.DiffuseScale.SliderMax}"
+                                            Value="{Binding SelectedRow.DiffuseScale.Value}"
+                                            IsEnabled="{Binding SelectedRow.DiffuseScale.Enabled}"/>
+                                    <Grid ColumnDefinitions="12,44,Auto" VerticalAlignment="Center">
+                                        <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.DiffuseScale.UnitPrefix}"/>
+                                        <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                 Text="{Binding SelectedRow.DiffuseScale.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.DiffuseScale.UnitSuffix}"/>
+                                    </Grid>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Accent}"
+                                           Text="{Binding SelectedRow.DiffuseScale.EffectiveText}"/>
+                            </Grid>
+                                <!-- Apple 监听后端无去相关器:提示 diffuse 监听中听不到(控件仍可编辑,服务于导出 policy) -->
+                                <TextBlock Margin="80,0,0,0" FontSize="12" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Warning}"
+                                           Text="{DynamicResource SemDiffuseAppleHint}"
+                                           IsVisible="{Binding MonitorDiffuseInaudible}"/>
+                            </StackPanel>
+
+                            <!-- extent → 三条常驻独立行 Width / Height / Depth。单击轴名切换该轴是否联动
+                                 (联动=accent、共享值;未联动=灰、独立)。声床(bed)无此维度 → 隐藏 -->
+                            <StackPanel Spacing="6"
+                                        IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
+                                <Grid ColumnDefinitions="80,280,90">
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold" Cursor="Hand"
+                                               Classes="axislink" Classes.unlinked="{Binding !SelectedRow.Extent.WidthLinked}"
+                                               Tag="W" DoubleTapped="OnResetExtent"
+                                               PointerPressed="OnAxisPointerPressed" PointerReleased="OnAxisPointerReleased"
+                                               ToolTip.Tip="长按切换 Width 联动 · 双击重置 extent" Text="Width"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <CheckBox IsChecked="{Binding SelectedRow.Extent.Width.Enabled}"/>
+                                        <Slider Width="86" VerticalAlignment="Center"
+                                                Minimum="{Binding SelectedRow.Extent.Width.SliderMin}"
+                                                Maximum="{Binding SelectedRow.Extent.Width.SliderMax}"
+                                                Value="{Binding SelectedRow.Extent.Width.Value}"
+                                                IsEnabled="{Binding SelectedRow.Extent.Width.Enabled}"/>
+                                        <Grid ColumnDefinitions="12,44" VerticalAlignment="Center">
+                                            <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                       FontSize="12" Classes="muted" Text="×"/>
+                                            <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                     Text="{Binding SelectedRow.Extent.Width.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        </Grid>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"
+                                               Text="{Binding SelectedRow.Extent.Width.EffectiveText}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="80,280,90">
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold" Cursor="Hand"
+                                               Classes="axislink" Classes.unlinked="{Binding !SelectedRow.Extent.HeightLinked}"
+                                               Tag="H" DoubleTapped="OnResetExtent"
+                                               PointerPressed="OnAxisPointerPressed" PointerReleased="OnAxisPointerReleased"
+                                               ToolTip.Tip="长按切换 Height 联动 · 双击重置 extent" Text="Height"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <CheckBox IsChecked="{Binding SelectedRow.Extent.Height.Enabled}"/>
+                                        <Slider Width="86" VerticalAlignment="Center"
+                                                Minimum="{Binding SelectedRow.Extent.Height.SliderMin}"
+                                                Maximum="{Binding SelectedRow.Extent.Height.SliderMax}"
+                                                Value="{Binding SelectedRow.Extent.Height.Value}"
+                                                IsEnabled="{Binding SelectedRow.Extent.Height.Enabled}"/>
+                                        <Grid ColumnDefinitions="12,44" VerticalAlignment="Center">
+                                            <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                       FontSize="12" Classes="muted" Text="×"/>
+                                            <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                     Text="{Binding SelectedRow.Extent.Height.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        </Grid>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"
+                                               Text="{Binding SelectedRow.Extent.Height.EffectiveText}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="80,280,90">
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold" Cursor="Hand"
+                                               Classes="axislink" Classes.unlinked="{Binding !SelectedRow.Extent.DepthLinked}"
+                                               Tag="D" DoubleTapped="OnResetExtent"
+                                               PointerPressed="OnAxisPointerPressed" PointerReleased="OnAxisPointerReleased"
+                                               ToolTip.Tip="长按切换 Depth 联动 · 双击重置 extent" Text="Depth"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <CheckBox IsChecked="{Binding SelectedRow.Extent.Depth.Enabled}"/>
+                                        <Slider Width="86" VerticalAlignment="Center"
+                                                Minimum="{Binding SelectedRow.Extent.Depth.SliderMin}"
+                                                Maximum="{Binding SelectedRow.Extent.Depth.SliderMax}"
+                                                Value="{Binding SelectedRow.Extent.Depth.Value}"
+                                                IsEnabled="{Binding SelectedRow.Extent.Depth.Enabled}"/>
+                                        <Grid ColumnDefinitions="12,44" VerticalAlignment="Center">
+                                            <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                       FontSize="12" Classes="muted" Text="×"/>
+                                            <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                     Text="{Binding SelectedRow.Extent.Depth.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        </Grid>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"
+                                               Text="{Binding SelectedRow.Extent.Depth.EffectiveText}"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <!-- divergence(× scale)。声床(bed)无此维度 → 隐藏 -->
+                            <Grid ColumnDefinitions="80,280,90"
+                                  IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.DivergenceScale}"
+                                           ToolTip.Tip="{DynamicResource SemResetHint}"
+                                           Foreground="{DynamicResource TextPrimary}" Text="divergence"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <CheckBox IsChecked="{Binding SelectedRow.DivergenceScale.Enabled}"/>
+                                    <Slider Width="86" VerticalAlignment="Center"
+                                            Minimum="{Binding SelectedRow.DivergenceScale.SliderMin}"
+                                            Maximum="{Binding SelectedRow.DivergenceScale.SliderMax}"
+                                            Value="{Binding SelectedRow.DivergenceScale.Value}"
+                                            IsEnabled="{Binding SelectedRow.DivergenceScale.Enabled}"/>
+                                    <Grid ColumnDefinitions="12,44,Auto" VerticalAlignment="Center">
+                                        <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.DivergenceScale.UnitPrefix}"/>
+                                        <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
+                                                 Text="{Binding SelectedRow.DivergenceScale.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                        <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
+                                                   FontSize="12" Classes="muted" Text="{Binding SelectedRow.DivergenceScale.UnitSuffix}"/>
+                                    </Grid>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Accent}"
+                                           Text="{Binding SelectedRow.DivergenceScale.EffectiveText}"/>
+                            </Grid>
+
+                        </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </ctrl:SquircleBorder>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

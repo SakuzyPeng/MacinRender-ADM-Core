@@ -32,7 +32,7 @@ namespace {
 
 } // namespace
 
-bool is_lfe_label(std::string_view raw) noexcept {
+std::string normalise_speaker_label_key(std::string_view raw) {
     std::string key;
     key.reserve(raw.size());
     for (const char c : raw) {
@@ -40,6 +40,44 @@ bool is_lfe_label(std::string_view raw) noexcept {
             key.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
         }
     }
+    return key;
+}
+
+std::string canonicalise_speaker_label(std::string_view raw) {
+    std::string key;
+    key.reserve(raw.size());
+    for (const char c : raw) {
+        if (std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '+' || c == '-') {
+            key.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+        }
+    }
+    return key;
+}
+
+std::optional<float> resolve_live_channel_gain(const LiveOverrides& overrides,
+                                               std::string_view object_id,
+                                               std::string_view channel_label_key) {
+    const LiveObjectOverride* whole = nullptr;
+    const LiveObjectOverride* specific = nullptr;
+    for (const auto& ov : overrides.objects) {
+        if (ov.object_id != object_id) {
+            continue;
+        }
+        if (ov.speaker_label.empty()) {
+            whole = &ov; // whole-object override (legacy / Objects / bed-wide)
+        } else if (!channel_label_key.empty() && canonicalise_speaker_label(ov.speaker_label) == channel_label_key) {
+            specific = &ov; // per-channel override wins over the whole-object one
+        }
+    }
+    const LiveObjectOverride* pick = (specific != nullptr) ? specific : whole;
+    if (pick == nullptr) {
+        return std::nullopt;
+    }
+    return std::pow(10.0F, pick->gain_db / 20.0F);
+}
+
+bool is_lfe_label(std::string_view raw) noexcept {
+    const std::string key = normalise_speaker_label_key(raw);
     return key == "LF" || key.find("LFE") != std::string::npos || key.find("SUB") != std::string::npos ||
            key.find("LOWFREQUENCY") != std::string::npos;
 }

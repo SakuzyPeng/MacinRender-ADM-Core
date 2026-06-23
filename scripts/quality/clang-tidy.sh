@@ -34,6 +34,13 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     if [[ -n "$sdk_path" ]]; then
         extra_args+=(--extra-arg=-isysroot --extra-arg="$sdk_path")
     fi
+    # Homebrew clang-tidy parses Apple SDK headers with upstream Clang, not
+    # Apple Clang. Keep the compile database target/arch intact and only add
+    # SDK compatibility flags for diagnostics/macros that otherwise fail in
+    # system headers before project code is checked.
+    extra_args+=(--extra-arg=-Wno-elaborated-enum-base)
+    extra_args+=('--extra-arg=-DINFINITY=__builtin_huge_valf()')
+    extra_args+=('--extra-arg=-DNAN=__builtin_nanf("")')
 fi
 
 files=()

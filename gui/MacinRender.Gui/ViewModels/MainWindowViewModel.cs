@@ -25,16 +25,46 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<RenderFileItem> Files { get; } = new();
     public ObservableCollection<LogLine> Logs { get; } = new();
 
+    // ── 模式导航:批渲染 / 语义编辑(共用 Col 1 主区,按 IsBatchMode/IsSemanticMode 切换) ──
+    public SemanticEditorViewModel SemanticEditor { get; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBatchMode))]
+    [NotifyPropertyChangedFor(nameof(IsSemanticMode))]
+    private bool _semanticMode;
+
+    public bool IsBatchMode => !SemanticMode;
+    public bool IsSemanticMode => SemanticMode;
+
+    [RelayCommand]
+    private void ShowBatchMode() => SemanticMode = false;
+
+    [RelayCommand]
+    private void ShowSemanticMode() => SemanticMode = true;
+
     // ── 输出设置:渲染(后端→布局)+ 封装(编码器→容器→位深/码率) ──
     public ObservableCollection<BackendDef> Backends => OutputModel.Backends;
     public ObservableCollection<LayoutDef> Layouts { get; } = new();
     public ObservableCollection<CodecOption> Codecs { get; } = new();
     public ObservableCollection<ContainerDef> Containers { get; } = new();
 
-    [ObservableProperty] private BackendDef _selectedBackend = OutputModel.BackendById["ear"];
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SofaApplicable))]
+    private BackendDef _selectedBackend = OutputModel.BackendById["ear"];
     [ObservableProperty] private LayoutDef? _selectedLayout;
     [ObservableProperty] private CodecOption? _selectedCodec;
     [ObservableProperty] private ContainerDef? _selectedContainer;
+
+    // 自定义 HRIR(SOFA):只对 SAF 双耳后端(binaural / saf-binaural)有效;Apple 双耳用自家 HRTF。
+    // Sofa 是 MRU 下拉选择器(默认 + 最近,与监听共享 SofaLibrary),驱动 SofaPath(真实路径,下游/持久化)。
+    public SofaSelector Sofa { get; } = new(null);
+
+    [ObservableProperty] private string? _sofaPath;
+
+    public bool SofaApplicable =>
+        OutputModel.SofaAvailable && SelectedBackend.Renderer is AdmRenderer.Binaural or AdmRenderer.SafBinaural;
+
+    partial void OnSofaPathChanged(string? value) => SaveSettings();
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CodecColumnSpan))]
@@ -89,6 +119,8 @@ public partial class MainWindowViewModel : ObservableObject
         AddLog(LogKind.Info, "LogReady", "LogReadyHint");
 
         RebuildCodecs(); // 触发联动初始化(后端→编码器→布局→容器)
+
+        Sofa.SelectionChanged += path => SofaPath = path; // 下拉选择 → 真实路径(下游/持久化)
 
         RestoreSettings(); // 应用上次保存的选择(在联动初始化之后,按链恢复)
         _settingsReady = true; // 此后任何用户改动都持久化
@@ -314,6 +346,12 @@ public partial class MainWindowViewModel : ObservableObject
             Bitrate = br;
             _lastAutoBitrate = -1m;
         }
+
+        // 恢复上次的当前 SOFA:若仍存在则确保它进 MRU 并选中(迁移友好——旧设置无 RecentSofaPaths 时也能恢复)。
+        if (!string.IsNullOrEmpty(s.SofaPath) && File.Exists(s.SofaPath))
+        {
+            Sofa.Pick(s.SofaPath);
+        }
     }
 
     private void SaveSettings()
@@ -323,15 +361,18 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        SettingsStore.Save(new AppSettings
+        // 读-改-写:保留 RecentSofaPaths(由 SofaLibrary 维护),避免整体覆盖把 MRU 清掉。
+        SettingsStore.Update(s =>
         {
-            Backend = SelectedBackend.Id,
-            Codec = SelectedCodec?.Def.Id,
-            Layout = SelectedLayout?.Id,
-            Container = SelectedContainer?.Id,
-            Bitrate = ShowBitrate ? Bitrate : null,
-            IsDark = IsDark,
-            IsEnglish = IsEnglish,
+            s.Backend = SelectedBackend.Id;
+            s.Codec = SelectedCodec?.Def.Id;
+            s.Layout = SelectedLayout?.Id;
+            s.Container = SelectedContainer?.Id;
+            s.Bitrate = ShowBitrate ? Bitrate : null;
+            s.IsDark = IsDark;
+            s.IsEnglish = IsEnglish;
+            s.SofaPath = SofaPath;
+            s.MonitorSofaPath = SemanticEditor.MonitorSofaPath;
         });
     }
 
@@ -578,6 +619,7 @@ public partial class MainWindowViewModel : ObservableObject
             OpusBitratePerChKbps = opus,
             ApacBitrateKbps = apac,
             ApacContainer = apacContainer,
+            SofaPath = SofaApplicable ? SofaPath : null, // 仅 SAF 双耳后端传 SOFA
         };
     }
 

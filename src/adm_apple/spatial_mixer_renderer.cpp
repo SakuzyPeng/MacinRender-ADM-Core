@@ -309,7 +309,9 @@ struct BusPlan {
     uint16_t source_channel{0};
     UInt32 source_mode{kSpatialMixerSourceMode_PointSource};
     bool is_lfe{false};
-    std::vector<BusEvent> events; // sorted by start_sample
+    std::string object_id;         // owning SceneObject::id, for live gain overrides
+    std::string speaker_label_key; // normalized DirectSpeakers label (empty for Objects); per-channel live gain key
+    std::vector<BusEvent> events;  // sorted by start_sample
 };
 
 // Immutable render recipe: the resolved output target plus one BusPlan per SpatialMixer
@@ -401,6 +403,7 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
                 for (auto& bp : obj_buses) {
                     bp.source_channel = ch;
                     bp.source_mode = kSpatialMixerSourceMode_PointSource;
+                    bp.object_id = obj.id;
                 }
                 for (const auto& be : blocks) {
                     for (std::size_t k = 0; k < max_slots; ++k) {
@@ -421,6 +424,12 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
             if (!track.ds_blocks.empty()) {
                 BusPlan bp;
                 bp.source_channel = ch;
+                bp.object_id = obj.id;
+                // Per-channel live-gain key: this DS track's normalized speaker label (empty → whole-object).
+                if (!track.ds_blocks.front().speaker_labels.empty()) {
+                    bp.speaker_label_key =
+                        render_common::canonicalise_speaker_label(track.ds_blocks.front().speaker_labels.front());
+                }
                 bp.is_lfe = std::ranges::any_of(track.ds_blocks, render_common::direct_speakers_block_is_lfe);
                 bp.source_mode = bp.is_lfe ? kSpatialMixerSourceMode_Bypass : kSpatialMixerSourceMode_AmbienceBed;
                 for (const auto& ds : track.ds_blocks) {
@@ -446,6 +455,21 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
     return buses;
 }
 
+// Set the global listener head-orientation parameters (HeadYaw/Pitch/Roll). The project
+// domain convention is yaw +left (matching ADM azimuth); SpatialMixer's own azimuth is
+// +right, so yaw is mirrored like sm_azimuth(). pitch (+up) and roll follow the unit's own
+// sign. Only meaningful for binaural (headphone) output. Short-circuits on first failure.
+[[nodiscard]] OSStatus set_listener_orientation(AudioUnit unit, const ListenerOrientation& o) {
+    OSStatus status = AudioUnitSetParameter(unit, kSpatialMixerParam_HeadYaw, kAudioUnitScope_Global, 0, -o.yaw_deg, 0);
+    if (status == noErr) {
+        status = AudioUnitSetParameter(unit, kSpatialMixerParam_HeadPitch, kAudioUnitScope_Global, 0, o.pitch_deg, 0);
+    }
+    if (status == noErr) {
+        status = AudioUnitSetParameter(unit, kSpatialMixerParam_HeadRoll, kAudioUnitScope_Global, 0, o.roll_deg, 0);
+    }
+    return status;
+}
+
 // Set the four per-source SpatialMixer parameters for one input bus, short-circuiting on
 // the first failure so a bad parameter set surfaces instead of silently continuing.
 [[nodiscard]] OSStatus set_bus_parameters(
@@ -461,21 +485,6 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
     }
     if (status == noErr) {
         status = AudioUnitSetParameter(unit, kSpatialMixerParam_Gain, kAudioUnitScope_Input, element, gain_db, 0);
-    }
-    return status;
-}
-
-// Set the global listener head-orientation parameters (HeadYaw/Pitch/Roll). The project
-// domain convention is yaw +left (matching ADM azimuth); SpatialMixer's own azimuth is
-// +right, so yaw is mirrored like sm_azimuth(). pitch (+up) and roll follow the unit's own
-// sign. Only meaningful for binaural (headphone) output. Short-circuits on first failure.
-[[nodiscard]] OSStatus set_listener_orientation(AudioUnit unit, const ListenerOrientation& o) {
-    OSStatus status = AudioUnitSetParameter(unit, kSpatialMixerParam_HeadYaw, kAudioUnitScope_Global, 0, -o.yaw_deg, 0);
-    if (status == noErr) {
-        status = AudioUnitSetParameter(unit, kSpatialMixerParam_HeadPitch, kAudioUnitScope_Global, 0, o.pitch_deg, 0);
-    }
-    if (status == noErr) {
-        status = AudioUnitSetParameter(unit, kSpatialMixerParam_HeadRoll, kAudioUnitScope_Global, 0, o.roll_deg, 0);
     }
     return status;
 }
@@ -546,6 +555,385 @@ using EburPtr = std::unique_ptr<ebur128_state, EburDeleter>;
     return metrics;
 }
 
+// Configure a freshly created AUSpatialMixer for a render: factory preset, output type /
+// format / layout, per-input-bus stream format + algorithm + source mode + LFE + the
+// staging pull callback, then AudioUnitInitialize. Shared by the offline render_window and
+// the realtime AppleStream so the two never drift. `staging_data` must remain valid (and
+// large enough: num_in_ch * k_render_block) for the unit's lifetime — the per-bus pull
+// callbacks read it; `contexts` is resized to buses.size() and likewise must outlive use.
+// NOLINTNEXTLINE(readability-function-size)
+[[nodiscard]] Result<void> configure_spatial_mixer_unit(AudioUnit unit,
+                                                        const OutputProfile& profile,
+                                                        const std::vector<BusPlan>& buses,
+                                                        uint16_t num_in_ch,
+                                                        uint16_t num_out_ch,
+                                                        double sample_rate,
+                                                        UInt32 spatialization_algorithm,
+                                                        AppleSpatialPreset preset,
+                                                        const ListenerOrientation& listener_orientation,
+                                                        const std::string& output_layout,
+                                                        const float* staging_data,
+                                                        std::vector<InputBusContext>& contexts,
+                                                        LogSink& logs) {
+    if (preset != AppleSpatialPreset::off) {
+        if (!profile.binaural) {
+            return make_error(ErrorCode::invalid_argument,
+                              "apple factory spatial presets require binaural output",
+                              "layout=" + output_layout);
+        }
+        if (auto r = set_present_preset(unit, preset); !r) {
+            return tl::unexpected{r.error()};
+        }
+        logs.log(LogLevel::info,
+                 "apple",
+                 fmt::format("applied AUSpatialMixer factory preset: {}", apple_spatial_preset_display_name(preset)));
+    }
+
+    if (profile.binaural) {
+        if (auto r = set_uint32_property(unit,
+                                         kAudioUnitProperty_SpatialMixerOutputType,
+                                         kAudioUnitScope_Global,
+                                         0,
+                                         kSpatialMixerOutputType_Headphones,
+                                         "output type");
+            !r) {
+            return tl::unexpected{r.error()};
+        }
+    }
+    if (auto r = set_uint32_property(unit,
+                                     kAudioUnitProperty_ElementCount,
+                                     kAudioUnitScope_Input,
+                                     0,
+                                     static_cast<UInt32>(buses.size()),
+                                     "input element count");
+        !r) {
+        return tl::unexpected{r.error()};
+    }
+    if (auto r = set_uint32_property(unit,
+                                     kAudioUnitProperty_MaximumFramesPerSlice,
+                                     kAudioUnitScope_Global,
+                                     0,
+                                     k_render_block,
+                                     "maximum frames per slice");
+        !r) {
+        return tl::unexpected{r.error()};
+    }
+    if (auto r = set_stream_format(unit, kAudioUnitScope_Output, 0, num_out_ch, sample_rate, "output stream format");
+        !r) {
+        return tl::unexpected{r.error()};
+    }
+    // Speaker output: a standard CoreAudio layout tag gives VBAP the speaker geometry and
+    // fixes the output channel order to match the container writers (caf_io.cpp mapping).
+    if (!profile.binaural) {
+        if (auto r = set_output_layout_tag(unit, profile.layout_tag); !r) {
+            return tl::unexpected{r.error()};
+        }
+    }
+
+    contexts.assign(buses.size(), InputBusContext{});
+    for (std::size_t i = 0; i < buses.size(); ++i) {
+        const auto& bus = buses[i];
+        const auto element = static_cast<AudioUnitElement>(i);
+        if (auto r = set_stream_format(unit, kAudioUnitScope_Input, element, 1, sample_rate, "input stream format");
+            !r) {
+            return tl::unexpected{r.error()};
+        }
+        if (auto r = set_uint32_property(unit,
+                                         kAudioUnitProperty_SpatializationAlgorithm,
+                                         kAudioUnitScope_Input,
+                                         element,
+                                         spatialization_algorithm,
+                                         "spatialization algorithm");
+            !r) {
+            return tl::unexpected{r.error()};
+        }
+        if (auto r = set_uint32_property(unit,
+                                         kAudioUnitProperty_SpatialMixerSourceMode,
+                                         kAudioUnitScope_Input,
+                                         element,
+                                         bus.source_mode,
+                                         "source mode");
+            !r) {
+            return tl::unexpected{r.error()};
+        }
+        if (bus.is_lfe) {
+            if (auto r = set_lfe_input_layout(unit, element); !r) {
+                return tl::unexpected{r.error()};
+            }
+        }
+        contexts[i] = InputBusContext{staging_data, bus.source_channel, num_in_ch};
+        AURenderCallbackStruct callback{};
+        callback.inputProc = &input_render_callback;
+        callback.inputProcRefCon = &contexts[i];
+        const OSStatus status = AudioUnitSetProperty(
+            unit, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, element, &callback, sizeof(callback));
+        if (status != noErr) {
+            return tl::unexpected{apple_status_error("failed to set input render callback", status)};
+        }
+    }
+
+    const OSStatus init_status = AudioUnitInitialize(unit);
+    if (init_status != noErr) {
+        return tl::unexpected{apple_status_error("failed to initialize AUSpatialMixer", init_status)};
+    }
+
+    // Listener head orientation (binaural only). A factory preset resets unit/bus
+    // parameters, so this must come after both the preset and AudioUnitInitialize.
+    // Applied here in the shared setup so both render_window and the realtime stream
+    // pick it up.
+    if (profile.binaural && !listener_orientation.is_identity()) {
+        const OSStatus head_status = set_listener_orientation(unit, listener_orientation);
+        if (head_status != noErr) {
+            return tl::unexpected{apple_status_error("failed to set listener orientation", head_status)};
+        }
+        logs.log(LogLevel::info,
+                 "apple",
+                 fmt::format("listener orientation: yaw={:.1f} pitch={:.1f} roll={:.1f} deg",
+                             static_cast<double>(listener_orientation.yaw_deg),
+                             static_cast<double>(listener_orientation.pitch_deg),
+                             static_cast<double>(listener_orientation.roll_deg)));
+    }
+    return {};
+}
+
+// Realtime streaming session over the same AUSpatialMixer recipe as render_window. It
+// renders k_render_block-aligned slices on demand into a FIFO, from which process() serves
+// any requested frame count. The slice cadence + per-block parameter updates + AU sample
+// time match render_window exactly, so a gap-free run from frame 0 is bit-identical to the
+// offline path (the smoke test asserts this). seek() resets the AU + readers (a small
+// discontinuity, acceptable for monitoring).
+class AppleStream final : public IRenderStream {
+  public:
+    [[nodiscard]] static Result<std::unique_ptr<AppleStream>>
+    create(const ApplePrepared& prepared, const RenderPlan& plan, LogSink& logs) {
+        const auto& info = plan.scene.info;
+        const uint16_t num_in_ch = info.num_channels;
+        const auto& profile = prepared.profile;
+        const uint16_t num_out_ch = profile.channels;
+        const UInt32 algo =
+            profile.binaural ? kSpatializationAlgorithm_HRTFHQ : kSpatializationAlgorithm_VectorBasedPanning;
+
+        // No renderable buses → silent stream: skip AU + reader entirely (mirrors the
+        // offline render_window empty-bus fast path); process() emits silence.
+        const bool silent = prepared.buses.empty();
+
+        AudioUnitGuard guard{nullptr};
+        if (!silent) {
+            auto unit_res = create_spatial_mixer_unit();
+            if (!unit_res) {
+                return tl::unexpected{unit_res.error()};
+            }
+            guard = std::move(*unit_res);
+        }
+
+        std::unique_ptr<AppleStream> stream{new AppleStream(std::move(guard),
+                                                            prepared.profile,
+                                                            prepared.buses,
+                                                            num_in_ch,
+                                                            num_out_ch,
+                                                            info.sample_rate,
+                                                            info.num_frames,
+                                                            silent)};
+
+        if (silent) {
+            return stream;
+        }
+
+        if (auto r = configure_spatial_mixer_unit(stream->unit_.get(),
+                                                  stream->profile_,
+                                                  stream->buses_,
+                                                  num_in_ch,
+                                                  num_out_ch,
+                                                  static_cast<double>(info.sample_rate),
+                                                  algo,
+                                                  plan.apple_spatial_preset,
+                                                  plan.listener_orientation,
+                                                  plan.output_layout,
+                                                  stream->staging_.data(),
+                                                  stream->contexts_,
+                                                  logs);
+            !r) {
+            return tl::unexpected{r.error()};
+        }
+
+        stream->reader_ = bw64::readFile(plan.input_path);
+        if (!stream->reader_) {
+            return make_error(
+                ErrorCode::io_error, "failed to open input for realtime apple stream", "input=" + plan.input_path);
+        }
+        return stream;
+    }
+
+    [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        std::size_t produced = 0;
+        while (produced < frames) {
+            if (fifo_read_ >= fifo_.size()) {
+                if (ended_) {
+                    break;
+                }
+                if (auto r = render_slice(); !r) {
+                    return tl::unexpected{r.error()};
+                }
+                if (fifo_read_ >= fifo_.size()) {
+                    break; // slice produced nothing (EOF)
+                }
+            }
+            const std::size_t avail = (fifo_.size() - fifo_read_) / num_out_ch_;
+            const std::size_t take = std::min(frames - produced, avail);
+            std::copy_n(fifo_.data() + fifo_read_, take * num_out_ch_, out.data() + (produced * num_out_ch_));
+            fifo_read_ += take * num_out_ch_;
+            produced += take;
+        }
+        return produced;
+    }
+
+    [[nodiscard]] Result<void> seek(uint64_t frame) override {
+        // Silent stream has no AU / reader: just reposition the silence cursor.
+        if (silent_) {
+            fifo_.clear();
+            fifo_read_ = 0;
+            producer_pos_ = frame;
+            ended_ = false;
+            return {};
+        }
+        // Reset the black-box AU state, reposition the reader, rewind the per-bus event
+        // cursors (active_event only advances forward), and drop the FIFO.
+        const OSStatus status = AudioUnitReset(unit_.get(), kAudioUnitScope_Global, 0);
+        if (status != noErr) {
+            return tl::unexpected{apple_status_error("failed to reset AUSpatialMixer on seek", status)};
+        }
+        render_common::seek_reader_abs(*reader_, frame);
+        std::ranges::fill(ev_cursor_, std::size_t{0});
+        fifo_.clear();
+        fifo_read_ = 0;
+        producer_pos_ = frame;
+        ended_ = false;
+        return {};
+    }
+
+    // Worker-thread only (same thread as process()): rebuild the per-object live gain
+    // multiplier table. Absent objects render at unity (the prepared gain). The next
+    // render_slice picks the new values up; already-FIFO'd / ring-buffered audio is not
+    // re-rendered, so the change is heard after the current buffer drains.
+    void set_overrides(const LiveOverrides& overrides) override {
+        // Store the snapshot; the per-bus gain is resolved at render time by object_id + the bus's
+        // DirectSpeakers speaker label, so a single bed can be gained per channel (empty label →
+        // whole object). The next render_slice picks the new values up.
+        live_overrides_ = overrides;
+    }
+
+    [[nodiscard]] uint32_t out_channels() const override { return num_out_ch_; }
+    [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
+    [[nodiscard]] std::string_view output_layout() const override { return profile_.writer_layout; }
+
+  private:
+    // Live gain multiplier (linear) for one bus, resolved by its owning object id + DirectSpeakers
+    // speaker label (per-channel override wins over whole-object); 1.0 when no override applies.
+    [[nodiscard]] float live_gain_for(const BusPlan& bus) const {
+        return render_common::resolve_live_channel_gain(live_overrides_, bus.object_id, bus.speaker_label_key)
+            .value_or(1.0F);
+    }
+
+    AppleStream(AudioUnitGuard unit,
+                OutputProfile profile,
+                std::vector<BusPlan> buses,
+                uint16_t num_in_ch,
+                uint16_t num_out_ch,
+                uint32_t sample_rate,
+                uint64_t total_frames,
+                bool silent)
+        : profile_(profile), buses_(std::move(buses)),
+          staging_(static_cast<std::size_t>(num_in_ch) * k_render_block, 0.0F),
+          out_planar_(num_out_ch, std::vector<float>(k_render_block, 0.0F)),
+          abl_storage_(sizeof(AudioBufferList) + (sizeof(AudioBuffer) * (static_cast<std::size_t>(num_out_ch) - 1))),
+          ev_cursor_(buses_.size(), 0), num_out_ch_(num_out_ch), sample_rate_(sample_rate), total_frames_(total_frames),
+          silent_(silent), unit_(std::move(unit)) {}
+
+    [[nodiscard]] Result<void> render_slice() {
+        if (producer_pos_ >= total_frames_) {
+            ended_ = true;
+            return {};
+        }
+        const auto frames_now = static_cast<UInt32>(std::min<uint64_t>(k_render_block, total_frames_ - producer_pos_));
+        fifo_.assign(static_cast<std::size_t>(frames_now) * num_out_ch_, 0.0F);
+        fifo_read_ = 0;
+
+        // No renderable buses (all muted / empty scene): emit silence, matching the offline
+        // render_window fast path and avoiding driving an AUSpatialMixer with 0 input buses.
+        if (silent_) {
+            producer_pos_ += frames_now;
+            return {};
+        }
+
+        reader_->read(staging_.data(), frames_now);
+
+        for (std::size_t i = 0; i < buses_.size(); ++i) {
+            const BusEvent* ev = active_event(buses_[i], producer_pos_, ev_cursor_[i]);
+            const float azimuth = ev != nullptr ? ev->azimuth : 0.0F;
+            const float elevation = ev != nullptr ? ev->elevation : 0.0F;
+            const float distance = ev != nullptr ? ev->distance : 1.0F;
+            const float base_gain = ev != nullptr ? ev->gain : 0.0F;
+            const float gain_db = linear_gain_to_db(base_gain * live_gain_for(buses_[i]));
+            const OSStatus s = set_bus_parameters(
+                unit_.get(), static_cast<AudioUnitElement>(i), azimuth, elevation, distance, gain_db);
+            if (s != noErr) {
+                return tl::unexpected{apple_status_error("failed to set SpatialMixer input parameter", s)};
+            }
+        }
+
+        auto* abl = reinterpret_cast<AudioBufferList*>(abl_storage_.data());
+        abl->mNumberBuffers = num_out_ch_;
+        // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
+        for (uint16_t ch = 0; ch < num_out_ch_; ++ch) {
+            abl->mBuffers[ch].mNumberChannels = 1;
+            abl->mBuffers[ch].mDataByteSize = frames_now * sizeof(float);
+            abl->mBuffers[ch].mData = out_planar_[ch].data();
+        }
+        // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
+        AudioTimeStamp time_stamp{};
+        time_stamp.mFlags = kAudioTimeStampSampleTimeValid;
+        time_stamp.mSampleTime = static_cast<Float64>(producer_pos_);
+        AudioUnitRenderActionFlags flags = 0;
+        const OSStatus render_status = AudioUnitRender(unit_.get(), &flags, &time_stamp, 0, frames_now, abl);
+        if (render_status != noErr) {
+            return tl::unexpected{apple_status_error("AudioUnitRender failed", render_status)};
+        }
+
+        // fifo_ was sized + zeroed at the top of this slice; interleave the AU output into it.
+        // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
+        for (uint16_t ch = 0; ch < num_out_ch_; ++ch) {
+            const float* src = out_planar_[ch].data();
+            for (UInt32 f = 0; f < frames_now; ++f) {
+                fifo_[(static_cast<std::size_t>(f) * num_out_ch_) + ch] = src[f];
+            }
+        }
+        // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
+        producer_pos_ += frames_now;
+        return {};
+    }
+
+    OutputProfile profile_;
+    std::vector<BusPlan> buses_;
+    std::unique_ptr<bw64::Bw64Reader> reader_;
+    std::vector<float> staging_;
+    std::vector<InputBusContext> contexts_; // referenced by the AU's per-bus pull callbacks
+    std::vector<std::vector<float>> out_planar_;
+    std::vector<std::uint8_t> abl_storage_;
+    std::vector<std::size_t> ev_cursor_;
+    uint16_t num_out_ch_;
+    uint32_t sample_rate_;
+    uint64_t total_frames_;
+    uint64_t producer_pos_{0};
+    std::vector<float> fifo_;
+    std::size_t fifo_read_{0};
+    bool ended_{false};
+    bool silent_{false};
+    LiveOverrides live_overrides_; // live override snapshot; gain resolved per bus (worker-only)
+    // Declared LAST so it is destroyed FIRST: ~AudioUnitGuard runs AudioUnitUninitialize
+    // before staging_/contexts_ (which the AU's input pull callbacks reference) are freed.
+    AudioUnitGuard unit_;
+};
+
 class AppleRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override { return apple_capabilities(); }
@@ -602,6 +990,20 @@ class AppleRenderer final : public IRenderer {
 
     [[nodiscard]] Result<RenderMetrics>
     render_window(const IPreparedRender& prep, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override;
+
+    [[nodiscard]] Result<std::unique_ptr<IRenderStream>>
+    open_stream(const IPreparedRender& prep, const RenderPlan& plan, LogSink& logs) override {
+        const auto* prepared = dynamic_cast<const ApplePrepared*>(&prep);
+        if (prepared == nullptr) {
+            return make_error(
+                ErrorCode::internal_error, "apple: open_stream received an incompatible prepared state", {});
+        }
+        auto stream = AppleStream::create(*prepared, plan, logs);
+        if (!stream) {
+            return tl::unexpected{stream.error()};
+        }
+        return std::unique_ptr<IRenderStream>{std::move(*stream)};
+    }
 };
 
 // NOLINTNEXTLINE(readability-function-size)
@@ -707,132 +1109,33 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
         return collect_metrics(lufs_st.get(), num_out_ch);
     }
 
+    // Declare the callback backing storage BEFORE the AU so it is destroyed AFTER the AU's
+    // AudioUnitUninitialize/Dispose runs (the input pull callbacks reference staging via
+    // contexts) — matching configure_spatial_mixer_unit's lifetime contract.
+    std::vector<float> staging(static_cast<std::size_t>(num_in_ch) * k_render_block, 0.0F);
+    std::vector<InputBusContext> contexts;
+
     auto unit_res = create_spatial_mixer_unit();
     if (!unit_res) {
         return tl::unexpected{unit_res.error()};
     }
     AudioUnit unit = unit_res->get();
 
-    if (plan.apple_spatial_preset != AppleSpatialPreset::off) {
-        if (!profile.binaural) {
-            return make_error(ErrorCode::invalid_argument,
-                              "apple factory spatial presets require binaural output",
-                              "layout=" + plan.output_layout);
-        }
-        if (auto r = set_present_preset(unit, plan.apple_spatial_preset); !r) {
-            return tl::unexpected{r.error()};
-        }
-        logs.log(LogLevel::info,
-                 "apple",
-                 fmt::format("applied AUSpatialMixer factory preset: {}",
-                             apple_spatial_preset_display_name(plan.apple_spatial_preset)));
-    }
-
-    if (profile.binaural) {
-        if (auto r = set_uint32_property(unit,
-                                         kAudioUnitProperty_SpatialMixerOutputType,
-                                         kAudioUnitScope_Global,
-                                         0,
-                                         kSpatialMixerOutputType_Headphones,
-                                         "output type");
-            !r) {
-            return tl::unexpected{r.error()};
-        }
-    }
-    if (auto r = set_uint32_property(unit,
-                                     kAudioUnitProperty_ElementCount,
-                                     kAudioUnitScope_Input,
-                                     0,
-                                     static_cast<UInt32>(buses.size()),
-                                     "input element count");
+    if (auto r = configure_spatial_mixer_unit(unit,
+                                              profile,
+                                              buses,
+                                              num_in_ch,
+                                              num_out_ch,
+                                              static_cast<double>(sample_rate),
+                                              spatialization_algorithm,
+                                              plan.apple_spatial_preset,
+                                              plan.listener_orientation,
+                                              plan.output_layout,
+                                              staging.data(),
+                                              contexts,
+                                              logs);
         !r) {
         return tl::unexpected{r.error()};
-    }
-    if (auto r = set_uint32_property(unit,
-                                     kAudioUnitProperty_MaximumFramesPerSlice,
-                                     kAudioUnitScope_Global,
-                                     0,
-                                     k_render_block,
-                                     "maximum frames per slice");
-        !r) {
-        return tl::unexpected{r.error()};
-    }
-    if (auto r = set_stream_format(
-            unit, kAudioUnitScope_Output, 0, num_out_ch, static_cast<double>(sample_rate), "output stream format");
-        !r) {
-        return tl::unexpected{r.error()};
-    }
-    // Speaker output: a standard CoreAudio layout tag gives VBAP the speaker geometry and
-    // fixes the output channel order to match the container writers (caf_io.cpp mapping).
-    if (!profile.binaural) {
-        if (auto r = set_output_layout_tag(unit, profile.layout_tag); !r) {
-            return tl::unexpected{r.error()};
-        }
-    }
-
-    std::vector<float> staging(static_cast<std::size_t>(num_in_ch) * k_render_block, 0.0F);
-    std::vector<InputBusContext> contexts(buses.size());
-
-    for (std::size_t i = 0; i < buses.size(); ++i) {
-        const auto& bus = buses[i];
-        const auto element = static_cast<AudioUnitElement>(i);
-        if (auto r = set_stream_format(
-                unit, kAudioUnitScope_Input, element, 1, static_cast<double>(sample_rate), "input stream format");
-            !r) {
-            return tl::unexpected{r.error()};
-        }
-        if (auto r = set_uint32_property(unit,
-                                         kAudioUnitProperty_SpatializationAlgorithm,
-                                         kAudioUnitScope_Input,
-                                         element,
-                                         spatialization_algorithm,
-                                         "spatialization algorithm");
-            !r) {
-            return tl::unexpected{r.error()};
-        }
-        if (auto r = set_uint32_property(unit,
-                                         kAudioUnitProperty_SpatialMixerSourceMode,
-                                         kAudioUnitScope_Input,
-                                         element,
-                                         bus.source_mode,
-                                         "source mode");
-            !r) {
-            return tl::unexpected{r.error()};
-        }
-        if (bus.is_lfe) {
-            if (auto r = set_lfe_input_layout(unit, element); !r) {
-                return tl::unexpected{r.error()};
-            }
-        }
-        contexts[i] = InputBusContext{staging.data(), bus.source_channel, num_in_ch};
-        AURenderCallbackStruct callback{};
-        callback.inputProc = &input_render_callback;
-        callback.inputProcRefCon = &contexts[i];
-        const OSStatus status = AudioUnitSetProperty(
-            unit, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, element, &callback, sizeof(callback));
-        if (status != noErr) {
-            return tl::unexpected{apple_status_error("failed to set input render callback", status)};
-        }
-    }
-
-    const OSStatus init_status = AudioUnitInitialize(unit);
-    if (init_status != noErr) {
-        return tl::unexpected{apple_status_error("failed to initialize AUSpatialMixer", init_status)};
-    }
-
-    // Listener head orientation (binaural only). A factory preset resets unit/bus
-    // parameters, so this must come after both the preset and AudioUnitInitialize.
-    if (profile.binaural && !plan.listener_orientation.is_identity()) {
-        const OSStatus head_status = set_listener_orientation(unit, plan.listener_orientation);
-        if (head_status != noErr) {
-            return tl::unexpected{apple_status_error("failed to set listener orientation", head_status)};
-        }
-        logs.log(LogLevel::info,
-                 "apple",
-                 fmt::format("listener orientation: yaw={:.1f} pitch={:.1f} roll={:.1f} deg",
-                             static_cast<double>(plan.listener_orientation.yaw_deg),
-                             static_cast<double>(plan.listener_orientation.pitch_deg),
-                             static_cast<double>(plan.listener_orientation.roll_deg)));
     }
 
     logs.log(LogLevel::info,

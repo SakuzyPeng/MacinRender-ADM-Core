@@ -25,11 +25,49 @@ public partial class MainWindow : Window
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
         AddHandler(DragDrop.DropEvent, OnDrop);
+        // 隧道阶段抢在子控件前看键:监听中用 ←/→ 快退/快进 5 秒(文本框内不拦,留给编辑光标)。
+        AddHandler(KeyDownEvent, OnGlobalKeyDown, RoutingStrategies.Tunnel);
+    }
+
+    private const double SeekStepSeconds = 5.0;
+
+    private void OnGlobalKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Left or Key.Right))
+        {
+            return;
+        }
+
+        // 文本框内方向键留给编辑(移动光标),不抢。
+        if (FocusManager?.GetFocusedElement() is TextBox)
+        {
+            return;
+        }
+
+        if (DataContext is not MainWindowViewModel { SemanticEditor: { IsMonitoring: true } se })
+        {
+            return;
+        }
+
+        se.SeekRelative(e.Key == Key.Left ? -SeekStepSeconds : SeekStepSeconds);
+        e.Handled = true;
+    }
+
+    // 关窗时停掉实时监听,确保音频设备 + worker 干净收尾(否则等 SafeHandle 终结器不可靠)。
+    protected override void OnClosed(EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.SemanticEditor.StopMonitor();
+        }
+
+        base.OnClosed(e);
     }
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {
-        bool ok = e.DataTransfer.Contains(DataFormat.File) && DataContext is MainWindowViewModel { IsRendering: false };
+        bool ok = e.DataTransfer.Contains(DataFormat.File) &&
+            DataContext is MainWindowViewModel { IsRendering: false, SemanticEditor.IsLoading: false };
         e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
         DropHighlight.Opacity = ok ? 1 : 0;
     }
@@ -55,8 +93,30 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 大文件夹递归可能耗时,放后台线程,避免卡 UI。展开后由 VM 再做 probe 内容级判定。
+        // 纯 SOFA 拖入:加入共享 MRU 并选中(按当前模式路由到对应 HRIR 选择器)。混入 ADM 时仍按 ADM 处理。
+        if (roots.All(IsSofaFile))
+        {
+            var selector = vm.IsSemanticMode ? vm.SemanticEditor.MonitorSofa : vm.Sofa;
+            foreach (var sofa in roots)
+            {
+                selector.Pick(sofa); // 末个生效选中,其余进 MRU
+            }
+
+            return;
+        }
+
+        // 大文件夹递归可能耗时,放后台线程,避免卡 UI。批渲染交给 VM 再做 probe 内容级判定;
+        // 语义编辑只载入第一个 ADM 候选。
         var paths = await Task.Run(() => ExpandAdmFiles(roots));
+        if (vm.IsSemanticMode)
+        {
+            if (paths.Count > 0)
+            {
+                await vm.SemanticEditor.LoadFileAsync(paths[0]);
+            }
+            return;
+        }
+
         await vm.AddFilesAsync(paths);
     }
 
@@ -101,6 +161,48 @@ public partial class MainWindow : Window
 
     private static bool IsAdmFile(string path) =>
         AdmExtensions.Contains(Path.GetExtension(path).ToLowerInvariant());
+
+    private static bool IsSofaFile(string path) =>
+        string.Equals(Path.GetExtension(path), ".sofa", StringComparison.OrdinalIgnoreCase);
+
+    // 选自定义 HRIR(SOFA)文件 → 交 VM(BuildSettings 在 SAF 双耳后端时带上)。
+    private async void OnPickSofa(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var path = await PickSofaAsync(this);
+        if (!string.IsNullOrEmpty(path))
+        {
+            vm.Sofa.Pick(path); // 加入共享 MRU 并选中(下次监听/批渲染下拉里都在)
+            FlashIcon(FlashSofaPick);
+        }
+    }
+
+    // 共用的 SOFA 选择器:返回本地路径或 null。
+    internal static async Task<string?> PickSofaAsync(Control owner)
+    {
+        var top = TopLevel.GetTopLevel(owner);
+        if (top is null)
+        {
+            return null;
+        }
+
+        var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Localizer.Instance["SemSofaPick"],
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("SOFA HRIR") { Patterns = new[] { "*.sofa" } },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+    }
 
     private void OnTitleBarPressed(object? sender, PointerPressedEventArgs e)
     {

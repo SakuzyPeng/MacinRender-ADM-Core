@@ -17,11 +17,30 @@
 #include <thread>
 #include <vector>
 
+#include "adm/live_override.h"
 #include "adm/logging.h"
 #include "adm/render.h"
 #include "adm/scene.h"
 
 namespace mradm::render_common {
+
+// Alphanumeric-only speaker-label key (uppercased; '+', '-' and separators dropped). Used for
+// LFE keyword detection where the sign / position digits do not matter (LFE / LFE1 / SUB …).
+[[nodiscard]] std::string normalise_speaker_label_key(std::string_view raw);
+
+// Canonical speaker-label key for per-channel matching: keep alphanumerics AND '+' / '-',
+// uppercased. Unlike normalise_speaker_label_key this PRESERVES the sign, so "M+030" and "M-030"
+// (left vs right) stay distinct while "m+030" / "M+030" / "M_+030" compare equal. Used for the
+// per-channel live-gain match (channel key + override speaker_label canonicalised the same way).
+[[nodiscard]] std::string canonicalise_speaker_label(std::string_view raw);
+
+// Resolve the live linear gain multiplier for one input channel given its owning object id and
+// its canonicalised DirectSpeakers speaker label (empty for Objects / HOA channels). A channel-
+// specific override (non-empty speaker_label matching channel_label_key) wins over a whole-object
+// override (empty speaker_label); returns nullopt when no override applies to this channel.
+[[nodiscard]] std::optional<float> resolve_live_channel_gain(const LiveOverrides& overrides,
+                                                             std::string_view object_id,
+                                                             std::string_view channel_label_key);
 
 // ADM producers are inconsistent: some LFE DirectSpeakers channels carry
 // channelFrequency lowPass, while others only encode the role in labels like

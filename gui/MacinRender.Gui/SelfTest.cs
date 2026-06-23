@@ -1,12 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using MacinRender.Gui.Interop;
 using MacinRender.Gui.Models;
 using MacinRender.Gui.Services;
+using MacinRender.Gui.ViewModels;
 
 namespace MacinRender.Gui;
 
@@ -101,9 +104,38 @@ internal static class SelfTest
         Chain("ear");
         Chain("saf-binaural");
 
+        // 监听入口可解析性(即使没给 wav 也跑):bogus 路径应得到干净错误码,而非
+        // EntryPointNotFound / 崩溃 —— 验证 v1.15–v1.17 的 adm_monitor_* 符号确实在 dylib 里。
+        try
+        {
+            using var probeOpts = NativeMethods.adm_create_render_options();
+            var probeRc = NativeMethods.adm_create_monitor_ex(ctx, "/nonexistent.wav", probeOpts, null, out var probeMon);
+            probeMon.Dispose();
+            Console.WriteLine($"adm_monitor_* 入口可解析(create_monitor_ex bogus → {probeRc})");
+
+            // v1.21 输出设备枚举(独立 context;返回 JSON 数组,可能为空)。
+            var devices = MonitorService.ListOutputDevices();
+            string defName = "?";
+            foreach (var d in devices)
+            {
+                if (d.IsDefault)
+                {
+                    defName = d.Name;
+                    break;
+                }
+            }
+
+            Console.WriteLine($"输出设备枚举:{devices.Count} 个" + (devices.Count > 0 ? $"(默认:{defName})" : ""));
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            Console.Error.WriteLine($"[失败] libmradm_capi 缺少 adm_monitor_* 入口(dylib 落后于 v1.21?): {ex.Message}");
+            return 10;
+        }
+
         if (string.IsNullOrEmpty(inputWav))
         {
-            Console.WriteLine("(未给 wav,跳过真实渲染。加载/查询链路 OK。)");
+            Console.WriteLine("(未给 wav,跳过真实渲染。加载/查询/监听入口链路 OK。)");
             return 0;
         }
 
@@ -111,6 +143,119 @@ internal static class SelfTest
         {
             Console.Error.WriteLine($"[失败] 输入不存在: {inputWav}");
             return 5;
+        }
+
+        // 语义编辑路径(#13):inspect → 对象 + 听感维度当前值;策略模板可达性(#14 当前值权威源)。
+        var inspectDoc = SemanticInspect.Parse(AdmQueries.FetchInspectJson(ctx, inputWav));
+        if (inspectDoc is null)
+        {
+            Console.Error.WriteLine("[失败] adm_inspect_file_json / 解析失败");
+            return 8;
+        }
+
+        Console.WriteLine($"语义 inspect: {inspectDoc.Objects.Count} 个对象");
+        // 主前缀剥离(B):检测多数对象共享的前缀,展示名剥掉它(全名进 tooltip)。
+        var allNames = inspectDoc.Objects.Where(o => !string.IsNullOrEmpty(o.Name)).Select(o => o.Name).ToList();
+        var commonPrefix = ObjectNaming.DetectCommonPrefix(allNames);
+        Console.WriteLine($"主前缀: \"{commonPrefix}\"");
+        foreach (var o in inspectDoc.Objects.Take(4))
+        {
+            var item = SemanticObjectItem.From(o, commonPrefix);
+            Console.WriteLine($"  展示名 \"{item.DisplayName}\"  (全名 \"{o.Name}\")");
+        }
+
+        var tmpl = AdmQueries.FetchPolicyTemplateJson(ctx, inputWav);
+        Console.WriteLine($"policy_template_json: {(tmpl is null ? "null" : tmpl.Length + " 字符")}");
+
+        // 语义编辑器(#14):构造覆盖 → 拼 policy JSON → 喂核心校验可解析(相对变换:× scale / dB)。
+        if (inspectDoc.Objects.Count > 0)
+        {
+            var editItems = new List<SemanticObjectItem>();
+            foreach (var o in inspectDoc.Objects)
+            {
+                editItems.Add(SemanticObjectItem.From(o, commonPrefix));
+            }
+
+            var rows = SemanticRow.BuildRows(editItems);
+            Console.WriteLine($"分组: {editItems.Count} 对象 → {rows.Count} 行(L/R 配对)");
+            // 取第一个 L/R 对(没有则取第一行),设覆盖,看行覆盖按成员展开成几条规则。
+            var editRow = rows.FirstOrDefault(r => r.Members.Count == 2) ?? rows[0];
+            editRow.DiffuseScale.Enabled = true;
+            editRow.DiffuseScale.Value = 0.5;
+            editRow.GainDb.Enabled = true;
+            editRow.GainDb.Value = -3.0;
+            var ruleNodes = new List<JsonNode?>();
+            foreach (var r in editRow.BuildRules())
+            {
+                ruleNodes.Add(r);
+            }
+
+            var policy = new JsonObject
+            {
+                ["schema"] = "mradm.semantic-policy.v1",
+                ["objects"] = new JsonArray(ruleNodes.ToArray()),
+            }.ToJsonString();
+            Console.WriteLine($"编辑行 \"{editRow.DisplayName}\" ({editRow.Members.Count} 成员) → policy: {policy}");
+
+            using var policyOpts = NativeMethods.adm_create_render_options();
+            NativeMethods.adm_render_options_set_renderer(policyOpts, AdmRenderer.Binaural);
+            NativeMethods.adm_render_options_set_output_layout(policyOpts, "binaural");
+            // setter 只保存字符串(malformed JSON 不在此诊断,见 c_api.h);Ok 仅证明 P/Invoke 可调。
+            var setRc = NativeMethods.adm_render_options_set_semantic_policy_json(policyOpts, policy);
+            Console.WriteLine($"set_semantic_policy_json(仅保存字符串): {setRc}");
+
+            // 真验解析:create_preview_session 在创建时 import + apply 该 policy,JSON 解析/校验错误在此暴露。
+            var psRc = NativeMethods.adm_create_preview_session(ctx, inputWav, policyOpts, out var session);
+            using (session)
+            {
+                Console.WriteLine($"create_preview_session(应用 policy,真验解析): {psRc}");
+                if (psRc != AdmErrorCode.Ok)
+                {
+                    Console.Error.WriteLine("[失败] 编辑器拼出的 policy JSON 在 preview session 创建时被核心拒绝");
+                    return 9;
+                }
+            }
+        }
+
+        // 实时监听桥接(v1.15–v1.17):create → 轮询 status/levels/logs → 覆盖 → 热切换 → stop。
+        // headless/CI 无音频设备时 create 会失败,容忍跳过(契约同 c_api 监听测试)。
+        Console.WriteLine("实时监听桥接:");
+        using (var monitor = new MonitorService())
+        {
+            var startRc = monitor.Start(inputWav,
+                new RenderSettings { Renderer = AdmRenderer.SafBinaural, Layout = "binaural" });
+            if (startRc != AdmErrorCode.Ok)
+            {
+                Console.WriteLine($"  create_monitor={startRc}(可能无音频设备,跳过监听断言)");
+            }
+            else
+            {
+                monitor.Play();
+                Thread.Sleep(120);
+                var st = monitor.GetStatus();
+                Console.WriteLine($"  status: state={st?.State} playhead={st?.PlayheadFrames} " +
+                                  $"ringFill={st?.RingFill:P0} ended={st?.Ended} failed={st?.Failed}");
+                var lv = monitor.GetLevels(8);
+                var peak0 = lv is { Peak.Count: > 0 } ? lv.Peak[0].ToString("F4") : "—";
+                Console.WriteLine($"  levels: {lv?.Peak.Count ?? 0} 声道  peak[0]={peak0}");
+
+                if (inspectDoc.Objects.Count > 0 && !string.IsNullOrEmpty(inspectDoc.Objects[0].Id))
+                {
+                    var oid = inspectDoc.Objects[0].Id;
+                    var ovRc = monitor.SetOverrides([new MonitorOverride(oid, GainDb: -6.0f)], revision: 1);
+                    Console.WriteLine($"  set_overrides({oid} -6 dB)={ovRc}");
+                }
+
+                // 热切换到 Apple binaural(同声道数);Apple 不可用时返回 unsupported,容忍。
+                var swRc = monitor.SwitchBackend(
+                    new RenderSettings { Renderer = AdmRenderer.Apple, Layout = "binaural" });
+                Console.WriteLine($"  switch_backend(apple/binaural)={swRc}");
+
+                monitor.Pause();
+                var monLogs = new List<RenderLogEntry>();
+                monitor.ReadLogs(0, monLogs);
+                Console.WriteLine($"  日志: {monLogs.Count} 条");
+            }
         }
 
         string outPath = Path.Combine(Path.GetTempPath(), "mradm_selftest.flac");

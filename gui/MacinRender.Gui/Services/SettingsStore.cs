@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -15,6 +16,11 @@ public sealed class AppSettings
     public decimal? Bitrate { get; set; }
     public bool IsDark { get; set; } = true;
     public bool IsEnglish { get; set; }
+    public string? SofaPath { get; set; } // 批渲染自定义 HRIR(SOFA)路径(当前选择)
+    public string? MonitorSofaPath { get; set; } // 语义监听自定义 HRIR(SOFA)路径(当前选择)
+    public List<string>? RecentSofaPaths { get; set; } // 最近用过的 SOFA(MRU,最近在前;批渲染 + 监听共享)
+    public string? MonitorDeviceId { get; set; } // 监听输出设备 token(空 = 系统默认)
+    public string? SkinPath { get; set; } // 空间视图角色皮肤 PNG(上次拖入,启动恢复)
 }
 
 // source generator:AOT/trim 安全,无运行时反射序列化。
@@ -64,5 +70,12 @@ public static class SettingsStore
         {
             // 持久化失败不影响功能。
         }
+    }
+
+    public static void Update(Action<AppSettings> update)
+    {
+        var settings = Load() ?? new AppSettings();
+        update(settings);
+        Save(settings);
     }
 }

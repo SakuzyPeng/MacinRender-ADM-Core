@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -16,6 +17,7 @@
 #include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
+#include "adm/io.h"
 #include "adm/render.h"
 #include "adm/render_hoa.h"
 
@@ -997,6 +999,150 @@ bool verify_ds_off_axis_position() {
     return ok;
 }
 
+// HoaStream (realtime) reproduces the offline render_window encode and is independent of
+// the caller's pull chunk size (canonical block + FIFO). Uses the two-block diffuse fixture
+// + noise so the cross-block decorrelation delay line is exercised; > k_block_size frames
+// give multiple blocks. Drives the renderer directly (no RenderService post-processing).
+bool verify_hoa_stream_matches_window() {
+    auto [doc, uid] = make_two_block_diffuse_doc();
+    const auto noise = make_noise_samples(4096);
+    const auto in_path = write_fixture_samples(doc, uid, "stream_in", noise);
+    FileGuard in_guard{in_path};
+
+    auto scene = mradm::io::import_scene(in_path.string());
+    if (!check(scene.has_value(), "hoa stream: import scene")) {
+        return false;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = in_path.string();
+    plan.output_layout = "hoa3";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_hoa_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "hoa stream: prepare")) {
+        return false;
+    }
+
+    const auto ref_path = std::filesystem::temp_directory_path() / "mr_hoa_stream_ref.wav";
+    FileGuard ref_guard{ref_path};
+    mradm::RenderPlan window_plan = plan;
+    window_plan.output_path = ref_path.string();
+    if (!check(renderer->render_window(**prepared, window_plan, progress, logs).has_value(),
+               "hoa stream: reference render_window")) {
+        return false;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(ref_path.string());
+    if (!check(reader.has_value(), "hoa stream: reference WAV opens")) {
+        return false;
+    }
+    const auto ch = static_cast<std::size_t>(reader->channels());
+    std::vector<float> ref(ch * reader->frame_count());
+    reader->read(ref.data(), reader->frame_count());
+
+    auto pull_stream = [&](const std::vector<std::size_t>& chunk_pattern) -> std::vector<float> {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        std::vector<float> out;
+        if (!stream.has_value()) {
+            check(false, "hoa stream: open_stream");
+            return out;
+        }
+        const uint32_t oc = (*stream)->out_channels();
+        std::vector<float> buf;
+        std::size_t pi = 0;
+        while (true) {
+            const std::size_t frames = chunk_pattern[pi % chunk_pattern.size()];
+            ++pi;
+            buf.assign(frames * oc, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buf), frames);
+            if (!produced || *produced == 0) {
+                break;
+            }
+            out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * oc));
+        }
+        return out;
+    };
+
+    const auto uniform = pull_stream({1024});
+    const auto varied = pull_stream({333, 1000, 512, 7});
+
+    bool ok = check(uniform.size() == ref.size(), "hoa stream output frame count matches render_window");
+    ok &= check(uniform == varied, "hoa stream output is identical regardless of pull chunk size");
+    double max_diff = 0.0;
+    const std::size_t n = std::min(uniform.size(), ref.size());
+    for (std::size_t i = 0; i < n; ++i) {
+        max_diff = std::max(max_diff, std::fabs(static_cast<double>(uniform[i]) - static_cast<double>(ref[i])));
+    }
+    ok &= check(max_diff < 1.0e-4, "hoa stream output matches the offline render_window encode");
+    return ok;
+}
+
+// A live per-object gain override pre-scales the object's input channel, so the HOA stream
+// encode scales by the override factor.
+bool verify_hoa_stream_gain_override() {
+    auto [doc, uid] = make_two_block_diffuse_doc();
+    const auto noise = make_noise_samples(4096);
+    const auto in_path = write_fixture_samples(doc, uid, "gain_in", noise);
+    FileGuard in_guard{in_path};
+
+    auto scene = mradm::io::import_scene(in_path.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "hoa override: import scene")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+
+    mradm::RenderPlan plan;
+    plan.input_path = in_path.string();
+    plan.output_layout = "hoa3";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_hoa_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "hoa override: prepare")) {
+        return false;
+    }
+
+    auto pull_rms = [&](bool with_override) -> double {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        if (!stream.has_value()) {
+            return -1.0;
+        }
+        if (with_override) {
+            mradm::LiveOverrides ov;
+            ov.revision = 1;
+            ov.objects.push_back({object_id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""}); // 0.1 linear
+            (*stream)->set_overrides(ov);
+        }
+        const uint32_t oc = (*stream)->out_channels();
+        const std::size_t block_floats = std::size_t{1024U} * oc;
+        std::vector<float> buf;
+        double total = 0.0;
+        std::size_t n = 0;
+        while (true) {
+            buf.assign(block_floats, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buf), 1024U);
+            if (!produced || *produced == 0) {
+                break;
+            }
+            const auto used = static_cast<std::vector<float>::difference_type>(*produced * oc);
+            total += std::accumulate(buf.begin(), buf.begin() + used, 0.0, [](double acc, float s) {
+                return acc + (static_cast<double>(s) * static_cast<double>(s));
+            });
+            n += *produced * oc;
+        }
+        return n > 0 ? std::sqrt(total / static_cast<double>(n)) : 0.0;
+    };
+
+    const double base = pull_rms(false);
+    const double over = pull_rms(true);
+    bool ok = check(base > 1.0e-3, "hoa override: baseline has energy");
+    ok &= check(over < base * 0.2 && over > base * 0.05, "hoa override: -20 dB scales output by ~0.1");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1032,6 +1178,8 @@ int main() {
     ok &= verify_ds_lfe_label_no_lowpass();
     ok &= verify_ds_off_axis_position();
     ok &= verify_lfe_metrics_separation();
+    ok &= verify_hoa_stream_matches_window();
+    ok &= verify_hoa_stream_gain_override();
 
     if (ok) {
         std::cout << "hoa encode fixture test passed\n";

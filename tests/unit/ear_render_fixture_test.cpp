@@ -24,7 +24,12 @@
 
 // Our engine
 #include "adm/audio_io.h"
+#include "adm/io.h"
+#include "adm/live_override.h"
 #include "adm/render.h"
+#include "adm/render_ear.h"
+
+#include "render_common.h"
 
 namespace {
 
@@ -973,7 +978,7 @@ bool verify_position_offset(const mradm::RenderService& service,
 
 // ── M4: Diffuse bus tests ─────────────────────────────────────────────────────
 
-std::filesystem::path write_diffuse_fixture(float diffuse_value) {
+std::filesystem::path write_diffuse_fixture(float diffuse_value, uint32_t frames = 1000U) {
     auto doc = adm::Document::create();
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"DiffCF"}, adm::TypeDefinition::OBJECTS);
     {
@@ -1024,8 +1029,8 @@ std::filesystem::path write_diffuse_fixture(float diffuse_value) {
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
     auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
-    std::vector<float> samples(1000U, 0.5F);
-    writer->write(samples.data(), 1000U);
+    std::vector<float> samples(frames, 0.5F);
+    writer->write(samples.data(), frames);
     return path;
 }
 
@@ -1568,6 +1573,248 @@ bool verify_ear_multiblock_inside_render_window(const mradm::RenderService& serv
     return ok;
 }
 
+// EarStream (realtime) reproduces the offline render_window render and is independent of
+// the caller's pull chunk size (canonical block + FIFO). Uses a diffuse object > k_block_size
+// so the FIR decorrelator overlap-add + the compensation delay are carried across multiple
+// internal blocks. Drives the renderer directly (no RenderService post-processing).
+bool verify_ear_stream_matches_window() {
+    const auto in_path = write_diffuse_fixture(1.0F, 4096U);
+    FileGuard in_guard{in_path};
+
+    auto scene = mradm::io::import_scene(in_path.string());
+    if (!check(scene.has_value(), "ear stream: import scene")) {
+        return false;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = in_path.string();
+    plan.output_layout = "0+5+0";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_ear_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "ear stream: prepare")) {
+        return false;
+    }
+
+    const auto ref_path = std::filesystem::temp_directory_path() / "mr_ear_stream_ref.wav";
+    FileGuard ref_guard{ref_path};
+    mradm::RenderPlan window_plan = plan;
+    window_plan.output_path = ref_path.string();
+    if (!check(renderer->render_window(**prepared, window_plan, progress, logs).has_value(),
+               "ear stream: reference render_window")) {
+        return false;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(ref_path.string());
+    if (!check(reader.has_value(), "ear stream: reference WAV opens")) {
+        return false;
+    }
+    const auto ch = static_cast<std::size_t>(reader->channels());
+    std::vector<float> ref(ch * reader->frame_count());
+    reader->read(ref.data(), reader->frame_count());
+
+    auto pull_stream = [&](const std::vector<std::size_t>& chunk_pattern) -> std::vector<float> {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        std::vector<float> out;
+        if (!stream.has_value()) {
+            check(false, "ear stream: open_stream");
+            return out;
+        }
+        const uint32_t oc = (*stream)->out_channels();
+        std::vector<float> buf;
+        std::size_t pi = 0;
+        while (true) {
+            const std::size_t frames = chunk_pattern[pi % chunk_pattern.size()];
+            ++pi;
+            buf.assign(frames * oc, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buf), frames);
+            if (!produced || *produced == 0) {
+                break;
+            }
+            out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * oc));
+        }
+        return out;
+    };
+
+    const auto uniform = pull_stream({1024});
+    const auto varied = pull_stream({333, 1000, 512, 7});
+
+    bool ok = check(uniform.size() == ref.size(), "ear stream output frame count matches render_window");
+    ok &= check(uniform == varied, "ear stream output is identical regardless of pull chunk size");
+    double max_diff = 0.0;
+    const std::size_t n = std::min(uniform.size(), ref.size());
+    for (std::size_t i = 0; i < n; ++i) {
+        max_diff = std::max(max_diff, std::fabs(static_cast<double>(uniform[i]) - static_cast<double>(ref[i])));
+    }
+    ok &= check(max_diff < 1.0e-4, "ear stream output matches the offline render_window render");
+    return ok;
+}
+
+// A live per-object gain override pre-scales the object's input channel, so the EAR stream
+// output scales by the override factor (linear, commutes with the gain mix + decorrelation).
+bool verify_ear_stream_gain_override() {
+    const auto in_path = write_diffuse_fixture(1.0F, 4096U);
+    FileGuard in_guard{in_path};
+
+    auto scene = mradm::io::import_scene(in_path.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "ear override: import scene")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+
+    mradm::RenderPlan plan;
+    plan.input_path = in_path.string();
+    plan.output_layout = "0+5+0";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_ear_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "ear override: prepare")) {
+        return false;
+    }
+
+    auto pull_rms = [&](bool with_override) -> double {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        if (!stream.has_value()) {
+            return -1.0;
+        }
+        if (with_override) {
+            mradm::LiveOverrides ov;
+            ov.revision = 1;
+            ov.objects.push_back({object_id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""}); // 0.1 linear
+            (*stream)->set_overrides(ov);
+        }
+        const uint32_t oc = (*stream)->out_channels();
+        const std::size_t block_floats = std::size_t{1024U} * oc;
+        std::vector<float> buf;
+        double total = 0.0;
+        std::size_t n = 0;
+        while (true) {
+            buf.assign(block_floats, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buf), 1024U);
+            if (!produced || *produced == 0) {
+                break;
+            }
+            const auto used = static_cast<std::vector<float>::difference_type>(*produced * oc);
+            total += std::accumulate(buf.begin(), buf.begin() + used, 0.0, [](double acc, float s) {
+                return acc + (static_cast<double>(s) * static_cast<double>(s));
+            });
+            n += *produced * oc;
+        }
+        return n > 0 ? std::sqrt(total / static_cast<double>(n)) : 0.0;
+    };
+
+    const double base = pull_rms(false);
+    const double over = pull_rms(true);
+    bool ok = check(base > 1.0e-3, "ear override: baseline has energy");
+    ok &= check(over < base * 0.2 && over > base * 0.05, "ear override: -20 dB scales output by ~0.1");
+    return ok;
+}
+
+// The shared per-channel live-gain resolver: a per-channel override (matching speaker_label)
+// wins over a whole-object override; an empty channel label only matches the whole-object entry;
+// no match → nullopt (channel renders at unity).
+bool verify_resolve_live_channel_gain() {
+    mradm::LiveOverrides ov;
+    ov.objects.push_back({"AO_bed", 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "M+030"}); // -? per-channel
+    ov.objects.back().gain_db = -6.0206F;                                                // ≈ 0.5 linear
+    ov.objects.push_back({"AO_bed", -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""});    // whole-object 0.1
+
+    bool ok = true;
+    // M+030 channel of AO_bed → the per-channel entry wins (≈0.5), not the whole-object 0.1.
+    const auto m030 = mradm::render_common::resolve_live_channel_gain(ov, "AO_bed", "M+030");
+    ok &= check(m030.has_value() && std::fabs(*m030 - 0.5F) < 1.0e-3F, "resolver: per-channel override wins (~0.5)");
+    // M-030 channel of AO_bed → no per-channel entry (sign differs!), falls back to whole-object 0.1.
+    const auto m_030 = mradm::render_common::resolve_live_channel_gain(ov, "AO_bed", "M-030");
+    ok &= check(m_030.has_value() && std::fabs(*m_030 - 0.1F) < 1.0e-3F, "resolver: falls back to whole-object (~0.1)");
+    // The sign is significant: an "M+030" override must NOT match the "M-030" channel.
+    mradm::LiveOverrides plus_only;
+    plus_only.objects.push_back({"AO_bed", -6.0206F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "M+030"});
+    ok &= check(!mradm::render_common::resolve_live_channel_gain(plus_only, "AO_bed", "M-030").has_value(),
+                "resolver: M+030 override does not bleed onto the M-030 channel");
+    // A different object → no match.
+    ok &= check(!mradm::render_common::resolve_live_channel_gain(ov, "AO_other", "M+030").has_value(),
+                "resolver: unrelated object → no override");
+    // Canonicalization: "m_+030" / "M+030" compare equal (case + separators ignored, sign kept).
+    mradm::LiveOverrides messy;
+    messy.objects.push_back({"AO_bed", -6.0206F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "m_+030"});
+    const auto norm = mradm::render_common::resolve_live_channel_gain(messy, "AO_bed", "M+030");
+    ok &=
+        check(norm.has_value() && std::fabs(*norm - 0.5F) < 1.0e-3F, "resolver: speaker label match is canonicalized");
+    return ok;
+}
+
+// End-to-end through the EAR stream: a per-channel override on a 2-channel DirectSpeakers bed
+// (M+030 / M-030) attenuates only the targeted channel's output, leaving the other channel as
+// rendered. Proves the speaker_label filter reaches one bed channel, not the whole object.
+bool verify_ear_stream_per_channel_override() {
+    const auto in_path = write_direct_speakers_input_fixture(make_direct_speakers_doc());
+    FileGuard in_guard{in_path};
+
+    auto scene = mradm::io::import_scene(in_path.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "per-channel: import DS bed scene")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+
+    mradm::RenderPlan plan;
+    plan.input_path = in_path.string();
+    plan.output_layout = "0+5+0"; // L, R, C, Ls, Rs → M+030 drives ch0 (L), M-030 drives ch1 (R)
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_ear_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "per-channel: prepare")) {
+        return false;
+    }
+
+    auto channel_energy = [&](const mradm::LiveOverrides* ov) -> std::vector<double> {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        if (!stream.has_value()) {
+            return {};
+        }
+        if (ov != nullptr) {
+            (*stream)->set_overrides(*ov);
+        }
+        const uint32_t oc = (*stream)->out_channels();
+        std::vector<double> energy(oc, 0.0);
+        std::vector<float> buf;
+        while (true) {
+            buf.assign(std::size_t{1024U} * oc, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buf), 1024U);
+            if (!produced || *produced == 0) {
+                break;
+            }
+            for (std::size_t f = 0; f < *produced; ++f) {
+                for (uint32_t c = 0; c < oc; ++c) {
+                    const double s = buf[(f * oc) + c];
+                    energy[c] += s * s;
+                }
+            }
+        }
+        return energy;
+    };
+
+    const auto base = channel_energy(nullptr);
+    mradm::LiveOverrides ov;
+    ov.revision = 1;
+    ov.objects.push_back({object_id, -40.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "M+030"}); // ch0 only
+    const auto over = channel_energy(&ov);
+
+    bool ok = check(base.size() >= 2 && over.size() == base.size(), "per-channel: same output channel count");
+    if (!ok) {
+        return false;
+    }
+    ok &= check(base[0] > 1.0e-6 && base[1] > 1.0e-6, "per-channel: both M+030/M-030 channels have baseline energy");
+    // -40 dB ≈ 0.0001 linear → ch0 energy collapses; ch1 (M-030, untargeted) stays put.
+    ok &= check(over[0] < base[0] * 1.0e-3, "per-channel: M+030 channel (ch0) attenuated by its override");
+    ok &= check(over[1] > base[1] * 0.9, "per-channel: M-030 channel (ch1) left unchanged");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1591,6 +1838,10 @@ int main() {
     ok &= verify_ear_object_divergence(service, progress, logs);
     ok &= verify_ds_cartesian_speaker_position(service, progress, logs);
     ok &= verify_ear_multiblock_inside_render_window(service, progress, logs);
+    ok &= verify_ear_stream_matches_window();
+    ok &= verify_ear_stream_gain_override();
+    ok &= verify_resolve_live_channel_gain();
+    ok &= verify_ear_stream_per_channel_override();
 
     if (ok) {
         std::cout << "ear_render fixture test passed\n";
