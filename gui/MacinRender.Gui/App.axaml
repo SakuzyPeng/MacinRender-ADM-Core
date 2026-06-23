@@ -21,6 +21,7 @@
                     <SolidColorBrush x:Key="RowBg" Color="#3A3A3C"/>
                     <SolidColorBrush x:Key="LogBg" Color="#161618"/>
                     <SolidColorBrush x:Key="Accent" Color="#0A84FF"/>
+                    <SolidColorBrush x:Key="Warning" Color="#FFD60A"/>
                     <SolidColorBrush x:Key="WindowBg" Color="#001C1C1E"/>
                     <SolidColorBrush x:Key="InputBg" Color="#FF3A3A3C"/>
                     <SolidColorBrush x:Key="InputBgHover" Color="#FF454547"/>
@@ -40,6 +41,7 @@
                     <SolidColorBrush x:Key="RowBg" Color="#08000000"/>
                     <SolidColorBrush x:Key="LogBg" Color="#0A000000"/>
                     <SolidColorBrush x:Key="Accent" Color="#007AFF"/>
+                    <SolidColorBrush x:Key="Warning" Color="#FFB25000"/>
                     <SolidColorBrush x:Key="WindowBg" Color="#F0F0F0F2"/>
                     <SolidColorBrush x:Key="InputBg" Color="#FFFFFFFF"/>
                     <SolidColorBrush x:Key="InputBgHover" Color="#FFF2F2F4"/>

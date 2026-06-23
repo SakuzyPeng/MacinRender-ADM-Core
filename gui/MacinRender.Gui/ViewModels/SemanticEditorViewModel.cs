@@ -299,6 +299,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MonitorSofaApplicable))]
+    [NotifyPropertyChangedFor(nameof(MonitorDiffuseInaudible))]
     private MonitorBackendOption _selectedMonitorBackend;
 
     // 输出设备选择:列表 = 「系统默认」(Id 空)+ 枚举所得设备。改变时即时切换(监听中)或下次生效。
@@ -350,6 +351,10 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     public bool MonitorSofaApplicable =>
         Models.OutputModel.SofaAvailable && SelectedMonitorBackend?.Renderer == AdmRenderer.SafBinaural;
+
+    // Apple 后端无 ADM 去相关器(supports_diffuse=false):diffuse 改动监听中听不到。
+    // 仅作提示——同一份编辑仍写导出 policy,EAR/HOA/SAF 渲染时 diffuse 照常生效,故不禁用控件。
+    public bool MonitorDiffuseInaudible => SelectedMonitorBackend?.Renderer == AdmRenderer.Apple;
 
     // SOFA 路径变了:持久化;监听中且当前是 SAF 双耳 → 用同后端热切换重载新 HRIR。
     partial void OnMonitorSofaPathChanged(string? value)

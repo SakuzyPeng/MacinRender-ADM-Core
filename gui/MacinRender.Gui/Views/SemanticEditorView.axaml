@@ -414,8 +414,8 @@
                             </ItemsControl>
 
                             <!-- diffuse(× scale)。声床(bed)无此维度 → 隐藏 -->
-                            <Grid ColumnDefinitions="80,280,90"
-                                  IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
+                            <StackPanel Spacing="2" IsVisible="{Binding SelectedRow.ShowPerceptual, FallbackValue=True}">
+                            <Grid ColumnDefinitions="80,280,90">
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
                                            Cursor="Hand" DoubleTapped="OnResetDim" Tag="{Binding SelectedRow.DiffuseScale}"
                                            ToolTip.Tip="{DynamicResource SemResetHint}"
@@ -441,6 +441,12 @@
                                            Foreground="{DynamicResource Accent}"
                                            Text="{Binding SelectedRow.DiffuseScale.EffectiveText}"/>
                             </Grid>
+                                <!-- Apple 监听后端无去相关器:提示 diffuse 监听中听不到(控件仍可编辑,服务于导出 policy) -->
+                                <TextBlock Margin="80,0,0,0" FontSize="12" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Warning}"
+                                           Text="{DynamicResource SemDiffuseAppleHint}"
+                                           IsVisible="{Binding MonitorDiffuseInaudible}"/>
+                            </StackPanel>
 
                             <!-- extent → 三条常驻独立行 Width / Height / Depth。单击轴名切换该轴是否联动
                                  (联动=accent、共享值;未联动=灰、独立)。声床(bed)无此维度 → 隐藏 -->
