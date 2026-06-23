@@ -21,6 +21,7 @@
                     <SolidColorBrush x:Key="RowBg" Color="#3A3A3C"/>
                     <SolidColorBrush x:Key="LogBg" Color="#161618"/>
                     <SolidColorBrush x:Key="Accent" Color="#0A84FF"/>
+                    <SolidColorBrush x:Key="Warning" Color="#FFD60A"/>
                     <SolidColorBrush x:Key="WindowBg" Color="#001C1C1E"/>
                     <SolidColorBrush x:Key="InputBg" Color="#FF3A3A3C"/>
                     <SolidColorBrush x:Key="InputBgHover" Color="#FF454547"/>
@@ -40,6 +41,7 @@
                     <SolidColorBrush x:Key="RowBg" Color="#08000000"/>
                     <SolidColorBrush x:Key="LogBg" Color="#0A000000"/>
                     <SolidColorBrush x:Key="Accent" Color="#007AFF"/>
+                    <SolidColorBrush x:Key="Warning" Color="#FFB25000"/>
                     <SolidColorBrush x:Key="WindowBg" Color="#F0F0F0F2"/>
                     <SolidColorBrush x:Key="InputBg" Color="#FFFFFFFF"/>
                     <SolidColorBrush x:Key="InputBgHover" Color="#FFF2F2F4"/>
@@ -49,6 +51,8 @@
 
             <!-- 矢量图标(Lucide 线条,24 viewbox) -->
             <StreamGeometry x:Key="IconRender">M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2</StreamGeometry>
+            <!-- 语义编辑导航图标:sliders(横向推子 + 旋钮),区别于渲染的波形图标 -->
+            <StreamGeometry x:Key="IconSemantic">M21 4H14M10 4H3M21 12H12M8 12H3M21 20H16M12 20H3M14 2v4M8 10v4M16 18v4</StreamGeometry>
             <StreamGeometry x:Key="IconQueue">M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01</StreamGeometry>
             <StreamGeometry x:Key="IconHistory">M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20zM12 7v5l3 2</StreamGeometry>
             <StreamGeometry x:Key="IconSettings">M20 7h-9M14 17H5M17 14a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM7 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6z</StreamGeometry>
@@ -58,10 +62,14 @@
             <StreamGeometry x:Key="IconAdd">M5 12h14M12 5v14</StreamGeometry>
             <StreamGeometry x:Key="IconTrash">M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6</StreamGeometry>
             <StreamGeometry x:Key="IconPlay">M8 5v14l11-7z</StreamGeometry>
+            <StreamGeometry x:Key="IconPause">M8 5v14M16 5v14</StreamGeometry>
             <StreamGeometry x:Key="IconStop">M7 7h10v10H7z</StreamGeometry>
+            <StreamGeometry x:Key="IconToStart">M7 5v14M18 5l-9 7 9 7z</StreamGeometry>
             <StreamGeometry x:Key="IconCheck">M20 6L9 17l-5-5</StreamGeometry>
             <StreamGeometry x:Key="IconCross">M18 6L6 18M6 6l12 12</StreamGeometry>
             <StreamGeometry x:Key="IconFolder">M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z</StreamGeometry>
+            <StreamGeometry x:Key="IconDownload">M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3</StreamGeometry>
+            <StreamGeometry x:Key="IconLink">M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71</StreamGeometry>
         </ResourceDictionary>
     </Application.Resources>
 
@@ -116,6 +124,96 @@
         <Style Selector=":is(Button).accent:pointerover"><Setter Property="Opacity" Value="0.85"/></Style>
         <Style Selector=":is(Button).accent:pressed"><Setter Property="Opacity" Value="0.7"/></Style>
         <Style Selector=":is(Button).accent:disabled"><Setter Property="Opacity" Value="0.35"/></Style>
+
+        <!-- 顶栏动作按钮:固定视觉/命中尺寸,内容居中。 -->
+        <Style Selector="ctrl|SquircleButton.headericon">
+            <Setter Property="Width" Value="42"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Radius" Value="10"/>
+            <Setter Property="Background" Value="{DynamicResource RowBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.headericon /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}"/>
+            <Setter Property="CornerRadius" Value="0"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.headericon:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource InputBgHover}"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.headericon:pressed">
+            <Setter Property="Opacity" Value="0.75"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.headericon:disabled">
+            <Setter Property="Opacity" Value="0.35"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.headericon.accent">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.headericon.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        </Style>
+
+        <!-- 监听 HRIR/SOFA 两态按钮:未选中为中性底,选中后用强调色提示已载入自定义 HRIR。 -->
+        <Style Selector="ctrl|SquircleButton.sofabtn">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="Radius" Value="10"/>
+            <Setter Property="Background" Value="{DynamicResource RowBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.sofabtn /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.sofabtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource InputBgHover}"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.sofabtn.on">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.sofabtn.on:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        </Style>
+
+        <!-- extent 三轴联动开关:低调的幽灵图标按钮(透明底,无实心填充)。关=灰描边,开=accent 描边。 -->
+        <Style Selector="ctrl|SquircleButton.linktoggle">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Radius" Value="6"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.linktoggle /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="CornerRadius" Value="0"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.linktoggle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowBg}"/>
+        </Style>
+        <Style Selector="ctrl|SquircleButton.linktoggle.on">
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+        </Style>
+
+        <!-- 提示气泡:文字垂直居中 + 对称内边距(默认模板易显得偏上)。 -->
+        <Style Selector="ToolTip">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
 
         <!-- 侧栏导航项 -->
         <Style Selector=":is(Button).nav">
@@ -179,6 +277,7 @@
             <Setter Property="Width" Value="17"/>
             <Setter Property="Height" Value="17"/>
             <Setter Property="Stretch" Value="Uniform"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <!-- 纯图标工具按钮:方形紧凑 -->
@@ -194,6 +293,46 @@
             <Setter Property="Height" Value="13"/>
             <Setter Property="Stretch" Value="Uniform"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <!-- 播放器传输键图标:保留 24x24 坐标系,避免 Path 按几何边界拉伸后视觉偏心。Fill 填实闭合
+             子路径(play / rewind 三角形),Stroke 画开放子路径(pause 两根竖线 / rewind 竖条)。 -->
+        <Style Selector="Path.transporticon">
+            <Setter Property="Fill" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+            <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+            <Setter Property="StrokeThickness" Value="1.9"/>
+            <Setter Property="StrokeLineCap" Value="Round"/>
+            <Setter Property="StrokeJoin" Value="Round"/>
+            <Setter Property="Stretch" Value="None"/>
+        </Style>
+
+        <!-- 启动监听转圈:容器不旋转,只动画圆环 dash offset;几何固定在中心,不会因 transform 中心漂移甩出去。 -->
+        <Style Selector="Grid.spinnerhost">
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Ellipse.spinnericon">
+            <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+            <Setter Property="StrokeThickness" Value="2.2"/>
+            <Setter Property="StrokeLineCap" Value="Round"/>
+            <Setter Property="Fill" Value="{x:Null}"/>
+            <Setter Property="Width" Value="17"/>
+            <Setter Property="Height" Value="17"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="StrokeDashArray" Value="15,6"/>
+            <Setter Property="StrokeDashOffset" Value="0"/>
+            <Style.Animations>
+                <Animation Duration="0:0:0.85" IterationCount="INFINITE">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="StrokeDashOffset" Value="0"/>
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="StrokeDashOffset" Value="-21"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
         </Style>
 
         <!-- ComboBox 贴合 macOS 风:输入框背景 + 细边框 + 圆角 + 柔和箭头 + 圆角弹窗 -->

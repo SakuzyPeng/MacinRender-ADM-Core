@@ -138,6 +138,7 @@ if [[ ${#tidy_files[@]} -gt 0 ]]; then
         # system headers before project code is checked.
         extra_args+=(--extra-arg=-Wno-elaborated-enum-base)
         extra_args+=('--extra-arg=-DINFINITY=__builtin_huge_valf()')
+        extra_args+=('--extra-arg=-DNAN=__builtin_nanf("")')
     fi
 
     echo "[INFO] clang-tidy: ${#tidy_files[@]} changed implementation file(s)"

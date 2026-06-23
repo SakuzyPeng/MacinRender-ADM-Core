@@ -5,6 +5,7 @@
         xmlns:vm="using:MacinRender.Gui.ViewModels"
         xmlns:m="using:MacinRender.Gui.Models"
         xmlns:ctrl="using:MacinRender.Gui.Controls"
+        xmlns:views="using:MacinRender.Gui.Views"
         mc:Ignorable="d" d:DesignWidth="1120" d:DesignHeight="740"
         x:Class="MacinRender.Gui.MainWindow"
         x:DataType="vm:MainWindowViewModel"
@@ -41,11 +42,18 @@
                     </StackPanel>
 
                     <StackPanel Grid.Row="1" Margin="0,20,0,0" Spacing="2">
-                        <!-- 一期仅渲染界面;其余导航(队列/历史/设置)暂隐藏,故不保留选中态 -->
-                        <ctrl:SquircleButton Classes="nav">
+                        <ctrl:SquircleButton Classes="nav" Classes.active="{Binding IsBatchMode}"
+                                Command="{Binding ShowBatchModeCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <Path Classes="icon" Data="{StaticResource IconRender}"/>
                                 <TextBlock VerticalAlignment="Center" Text="{DynamicResource NavRender}"/>
+                            </StackPanel>
+                        </ctrl:SquircleButton>
+                        <ctrl:SquircleButton Classes="nav" Classes.active="{Binding IsSemanticMode}"
+                                Command="{Binding ShowSemanticModeCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Path Classes="icon" Data="{StaticResource IconSemantic}"/>
+                                <TextBlock VerticalAlignment="Center" Text="{DynamicResource NavSemantic}"/>
                             </StackPanel>
                         </ctrl:SquircleButton>
                     </StackPanel>
@@ -92,8 +100,15 @@
                 </Grid>
             </ctrl:SquircleBorder>
 
-            <!-- 主区:不滚动,卡片自适应窗口 -->
-            <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="8,0,16,16">
+            <!-- 语义编辑模式:与批渲染主区共用 Col 1,按模式切换可见性 -->
+            <!-- 外层 Panel 持 IsVisible(继承 MainWindowViewModel),内层 view 再切到子 VM -->
+            <Panel Grid.Column="1" IsVisible="{Binding IsSemanticMode}">
+                <views:SemanticEditorView DataContext="{Binding SemanticEditor}"/>
+            </Panel>
+
+            <!-- 主区:不滚动,卡片自适应窗口(批渲染) -->
+            <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="8,0,16,16"
+                  IsVisible="{Binding IsBatchMode}">
                 <StackPanel Grid.Row="0" Margin="2,6,0,12" Spacing="2">
                     <TextBlock Classes="h1" FontSize="20" Text="{DynamicResource NavRender}"/>
                     <TextBlock Classes="muted"
@@ -121,18 +136,49 @@
                                         </ComboBox.ItemTemplate>
                                     </ComboBox>
                                 </StackPanel>
-                                <StackPanel Grid.Column="1" Spacing="5">
-                                    <TextBlock Classes="muted" Text="{DynamicResource Layout}"/>
-                                    <ComboBox HorizontalAlignment="Stretch"
-                                              ItemsSource="{Binding Layouts}"
-                                              SelectedItem="{Binding SelectedLayout}">
-                                        <ComboBox.ItemTemplate>
-                                            <DataTemplate x:DataType="m:LayoutDef">
-                                                <TextBlock Text="{Binding Name}"/>
-                                            </DataTemplate>
-                                        </ComboBox.ItemTemplate>
-                                    </ComboBox>
-                                </StackPanel>
+                                <!-- 半列:非双耳显示「布局」;SAF 双耳时布局固定(Binaural),改让 SOFA 选择瓜分此半列
+                                     (借鉴码率瓜分编码器半列的做法)。 -->
+                                <Grid Grid.Column="1">
+                                    <StackPanel Spacing="5" IsVisible="{Binding !SofaApplicable}">
+                                        <TextBlock Classes="muted" Text="{DynamicResource Layout}"/>
+                                        <ComboBox HorizontalAlignment="Stretch"
+                                                  ItemsSource="{Binding Layouts}"
+                                                  SelectedItem="{Binding SelectedLayout}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="m:LayoutDef">
+                                                    <TextBlock Text="{Binding Name}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Spacing="5" IsVisible="{Binding SofaApplicable}">
+                                        <TextBlock Classes="muted" Text="{DynamicResource SemSofaLabel}"/>
+                                        <!-- HRIR 下拉(默认 + 最近 MRU)+ 浏览;清除=选回默认项 -->
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                            <ComboBox Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                                      ItemsSource="{Binding Sofa.Options}"
+                                                      SelectedItem="{Binding Sofa.Selected}">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:SofaOption">
+                                                        <TextBlock Text="{Binding Label}" ToolTip.Tip="{Binding Tooltip}"/>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                            <ctrl:SquircleButton Grid.Column="1" Classes="headericon" Click="OnPickSofa"
+                                                    ToolTip.Tip="{DynamicResource SemSofaPick}">
+                                                <Grid Width="24" Height="24" IsHitTestVisible="False">
+                                                    <Path Classes="icon" Data="{StaticResource IconAdd}"/>
+                                                    <Path x:Name="FlashSofaPick" Classes="icon" Data="{StaticResource IconAdd}"
+                                                          Stroke="#30D158" Opacity="0">
+                                                        <Path.Transitions>
+                                                            <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.2"/></Transitions>
+                                                        </Path.Transitions>
+                                                    </Path>
+                                                </Grid>
+                                            </ctrl:SquircleButton>
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
                             </Grid>
 
                             <!-- 封装:[编码器(有损让半列给码率)] | 容器 -->

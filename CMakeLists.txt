@@ -68,7 +68,9 @@ target_sources(
         FILES
             include/adm/capability.h
             include/adm/errors.h
+            include/adm/live_override.h
             include/adm/logging.h
+            include/adm/monitor.h
             include/adm/options.h
             include/adm/progress.h
             include/adm/render.h
@@ -382,6 +384,26 @@ target_include_directories(mr_adm_loudness SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR
 mr_adm_core_apply_warnings(mr_adm_loudness)
 mr_adm_core_apply_static_analysis(mr_adm_loudness)
 
+# ── adm_renderer_factory ──────────────────────────────────────────────────────
+# Internal backend-resolution helper shared by ADMEngine (offline RenderService) and
+# ADMRealtime (realtime MonitorEngine), so the two never diverge on backend selection.
+# Knows every backend (create_*_renderer); kept OUT of ADMCore / public headers so the
+# core domain layer is not a backend registry (ADR 0003). Private internal library.
+
+add_library(mr_adm_renderer_factory)
+add_library(MacinRender::ADMRendererFactory ALIAS mr_adm_renderer_factory)
+target_sources(mr_adm_renderer_factory PRIVATE src/adm_renderer_factory/renderer_factory.cpp)
+target_include_directories(mr_adm_renderer_factory PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_renderer_factory)
+target_link_libraries(mr_adm_renderer_factory
+    PUBLIC MacinRender::ADMCore
+    PRIVATE MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural
+)
+if(APPLE)
+    target_link_libraries(mr_adm_renderer_factory PRIVATE MacinRender::ADMRenderApple)
+endif()
+mr_adm_core_apply_warnings(mr_adm_renderer_factory)
+mr_adm_core_apply_static_analysis(mr_adm_renderer_factory)
+
 # ── adm_engine ────────────────────────────────────────────────────────────────
 # Orchestration layer: implements RenderService, selects backends.
 
@@ -392,6 +414,7 @@ target_sources(
     mr_adm_engine
     PRIVATE
         src/adm_engine/render_service.cpp
+        src/adm_engine/monitor_session.cpp
         src/adm_engine/scene_json.cpp
         src/adm_engine/capability_json.cpp
         src/adm_engine/layout_table.cpp
@@ -401,7 +424,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio
 )
 if(APPLE)
     target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)
@@ -417,6 +440,25 @@ target_include_directories(mr_adm_engine SYSTEM PRIVATE
 target_include_directories(mr_adm_engine PRIVATE src/adm_audio)
 mr_adm_core_apply_warnings(mr_adm_engine)
 mr_adm_core_apply_static_analysis(mr_adm_engine)
+
+# ── adm_realtime ──────────────────────────────────────────────────────────────
+# Realtime monitor engine: streaming render session (IRenderStream) pulled by a worker
+# into an SPSC ring, drained by an injected audio device. Sits beside ADMEngine. Deps grow
+# in later slices (ADMRendererFactory for the real stream factory, miniaudio for the device).
+add_library(mr_adm_realtime)
+add_library(MacinRender::ADMRealtime ALIAS mr_adm_realtime)
+target_sources(mr_adm_realtime PRIVATE
+    src/adm_realtime/monitor_engine.cpp
+    src/adm_realtime/miniaudio_device.cpp
+)
+target_include_directories(mr_adm_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
+# miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
+# ebur128 is PRIVATE too: the realtime LUFS meter lives inside monitor_engine.cpp only.
+target_link_libraries(mr_adm_realtime PUBLIC MacinRender::ADMCore PRIVATE Threads::Threads miniaudio ebur128)
+# libebur128 uses legacy include_directories() that does not propagate via the target.
+target_include_directories(mr_adm_realtime SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
+mr_adm_core_apply_warnings(mr_adm_realtime)
+mr_adm_core_apply_static_analysis(mr_adm_realtime)
 
 # ── adm_c_api ─────────────────────────────────────────────────────────────────
 # C ABI wrapper. Links to ADMEngine to get RenderService::render() symbol.
@@ -564,11 +606,20 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_scene_export_tests)
     add_test(NAME mr_adm_scene_export_tests COMMAND mr_adm_scene_export_tests)
 
+    # Realtime engine scaffolding: SPSC ring + IRenderStream/device/factory abstractions,
+    # exercised with a deterministic PatternStream (no real backend). Cross-platform.
+    add_executable(mr_adm_realtime_tests tests/unit/realtime_stream_fixture_test.cpp)
+    target_link_libraries(mr_adm_realtime_tests PRIVATE MacinRender::ADMRealtime Threads::Threads)
+    mr_adm_core_apply_warnings(mr_adm_realtime_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_realtime_tests)
+    add_test(NAME mr_adm_realtime_tests COMMAND mr_adm_realtime_tests)
+
     add_executable(mr_adm_vbap_smoke_tests tests/unit/vbap_smoke_test.cpp)
     target_link_libraries(mr_adm_vbap_smoke_tests
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMRenderVBAP
+            MacinRender::ADMIo
             MacinRender::ADMAudio
             libbw64
             adm
@@ -589,6 +640,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_ear_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
+            MacinRender::ADMRenderEar
+            MacinRender::ADMRenderCommon
+            MacinRender::ADMIo
             MacinRender::ADMAudio
             libbw64
             adm
@@ -617,6 +671,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_hoa_encode_fixture_tests
         PRIVATE
             MacinRender::ADMEngine
+            MacinRender::ADMRenderHOA
+            MacinRender::ADMIo
             MacinRender::ADMAudio
             libbw64
             adm
@@ -648,6 +704,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMRenderBinaural
+            MacinRender::ADMIo
             MacinRender::ADMAudio
             libbw64
             adm
@@ -738,6 +795,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         target_link_libraries(mr_adm_apple_smoke_tests
             PRIVATE
                 MacinRender::ADMEngine
+                MacinRender::ADMIo
                 MacinRender::ADMRenderApple
                 MacinRender::ADMRenderCommon
                 MacinRender::ADMAudio

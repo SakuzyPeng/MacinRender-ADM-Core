@@ -128,10 +128,19 @@ internal sealed class SmEntryDto
     public bool Supported { get; set; }
 }
 
+// ── adm_monitor_output_devices_json(v1.21):顶层数组 [{id,name,default}] ──
+internal sealed class OutputDeviceDto
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public bool Default { get; set; }
+}
+
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(OutputFormatsDoc))]
 [JsonSerializable(typeof(CapabilitiesDoc))]
 [JsonSerializable(typeof(SupportMatrixDoc))]
+[JsonSerializable(typeof(List<OutputDeviceDto>))]
 internal partial class AdmJsonContext : JsonSerializerContext
 {
 }
@@ -149,6 +158,37 @@ internal static class AdmQueries
 
     public static SupportMatrixDoc? LoadSupportMatrix(AdmContextHandle ctx) =>
         Load(ctx, NativeMethods.adm_render_support_matrix_json, AdmJsonContext.Default.SupportMatrixDoc);
+
+    public static List<OutputDeviceDto>? LoadOutputDevices(AdmContextHandle ctx) =>
+        Load(ctx, NativeMethods.adm_monitor_output_devices_json, AdmJsonContext.Default.ListOutputDeviceDto);
+
+    // 文件级 JSON 查询(adm_inspect_file_json / adm_policy_template_json):
+    // 返回原始 JSON 字符串(强类型 DTO 在消费方各任务定义);失败返回 null。
+    public static string? FetchInspectJson(AdmContextHandle ctx, string inputPath) =>
+        FetchFileJson(NativeMethods.adm_inspect_file_json, ctx, inputPath);
+
+    public static string? FetchPolicyTemplateJson(AdmContextHandle ctx, string inputPath) =>
+        FetchFileJson(NativeMethods.adm_policy_template_json, ctx, inputPath);
+
+    private delegate AdmErrorCode FileJsonQuery(AdmContextHandle ctx, string inputPath, out IntPtr outJson);
+
+    private static string? FetchFileJson(FileJsonQuery query, AdmContextHandle ctx, string inputPath)
+    {
+        if (string.IsNullOrEmpty(inputPath) || query(ctx, inputPath, out var p) != AdmErrorCode.Ok ||
+            p == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Marshal.PtrToStringUTF8(p);
+        }
+        finally
+        {
+            NativeMethods.adm_free_string(p);
+        }
+    }
 
     private static T? Load<T>(AdmContextHandle ctx, JsonQuery query, JsonTypeInfo<T> typeInfo)
         where T : class
