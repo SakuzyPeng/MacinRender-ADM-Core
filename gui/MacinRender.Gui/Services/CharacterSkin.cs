@@ -14,7 +14,7 @@ public sealed class CharacterSkin
     public const int Tex = 64;
     private readonly uint[] _px; // ARGB8888,长度 Tex*Tex
 
-    public CharacterSkin(uint[] pixels)
+    public CharacterSkin(uint[] pixels, bool slim = false)
     {
         if (pixels.Length != Tex * Tex)
         {
@@ -22,6 +22,27 @@ public sealed class CharacterSkin
         }
 
         _px = pixels;
+        IsSlim = slim;
+    }
+
+    // true = Alex(纤细,手臂 3 宽);false = Steve(经典,4 宽)。
+    public bool IsSlim { get; }
+
+    // 启发判定 Alex:经典右臂在皮肤上占 x40..55,Alex 只占 40..53 → x54/55(y20..31)经典不透明、Alex 透明。
+    private static bool IsSlimSkin(uint[] px)
+    {
+        for (int y = 20; y < 32; y++)
+        {
+            for (int x = 54; x <= 55; x++)
+            {
+                if ((px[(y * Tex) + x] >> 24) != 0)
+                {
+                    return false; // 这两列有内容 → 经典(4 宽臂)
+                }
+            }
+        }
+
+        return true;
     }
 
     // 取像素 ARGB;越界或全透明返回 0(alpha=0,绘制层跳过)。
@@ -70,7 +91,7 @@ public sealed class CharacterSkin
                 }
             }
 
-            return new CharacterSkin(px);
+            return new CharacterSkin(px, IsSlimSkin(px));
         }
         catch (Exception ex) when (ex is IOException or ArgumentException or InvalidOperationException)
         {

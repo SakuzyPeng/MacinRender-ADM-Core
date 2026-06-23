@@ -444,22 +444,25 @@ internal sealed class SpatialSceneControl : Control
     {
         _charCache.Clear();
 
-        // 可见面(背面剔除)按面心深度排序(画家算法,跨部位)。
+        // 经典 / Alex 两套部位按当前皮肤选择。
+        var parts = ActiveSkin.IsSlim ? s_partsSlim : s_partsClassic;
+
+        // 可见面(背面剔除)按面心深度排序(画家算法,跨部位 + base/overlay)。
         _faceOrder.Clear();
-        for (int i = 0; i < s_parts.Length; i++)
+        for (int i = 0; i < parts.Length; i++)
         {
-            if (RotateCamera(RotateHead(s_parts[i].Normal)).Y >= 0)
+            if (RotateCamera(RotateHead(parts[i].Normal)).Y >= 0)
             {
                 continue;
             }
 
-            _faceOrder.Add((i, RotateCamera(RotateHead(s_parts[i].Uv(0.5, 0.5))).Y));
+            _faceOrder.Add((i, RotateCamera(RotateHead(parts[i].Uv(0.5, 0.5))).Y));
         }
 
         _faceOrder.Sort((a, b) => b.Depth.CompareTo(a.Depth)); // 远 → 近
         foreach (var (idx, _) in _faceOrder)
         {
-            CollectSkinFace(s_parts[idx]);
+            CollectSkinFace(parts[idx]);
         }
     }
 
@@ -885,46 +888,87 @@ internal sealed class SpatialSceneControl : Control
     private static Vec3 M(double mx, double my, double mz) =>
         new(mx * CharScale, mz * CharScale, (my - 28) * CharScale);
 
-    // 角色全部部位的可见面(几何 + 法线 + 皮肤 UV 矩形),静态一次构建。
-    private static readonly SkinFace[] s_parts = BuildParts();
+    // 第二层 overlay(帽子/外套/袖子/裤腿)向外膨胀像素数,叠在基础层外、避免 z-fighting。
+    private const double OverlayInflate = 0.4;
 
-    private static SkinFace[] BuildParts()
+    // 角色部位面:经典(Steve 4 宽臂)与 Alex(纤细 3 宽臂)两套,各含基础层 + overlay 第二层。
+    private static readonly SkinFace[] s_partsClassic = BuildParts(false);
+    private static readonly SkinFace[] s_partsSlim = BuildParts(true);
+
+    private static SkinFace[] BuildParts(bool slim)
     {
-        var list = new List<SkinFace>(36);
-        //      mc 包围盒          front  back   right  left   top    bottom (各面 UV 左上像素)
-        AddBox(list, -4, 24, -4, 4, 32, 4, 8, 8, 24, 8, 0, 8, 16, 8, 8, 0, 16, 0);   // 头 8×8×8
-        AddBox(list, -4, 12, -2, 4, 24, 2, 20, 20, 32, 20, 16, 20, 28, 20, 20, 16, 28, 16); // 身 8×12×4
-        AddBox(list, -8, 12, -2, -4, 24, 2, 44, 20, 52, 20, 40, 20, 48, 20, 44, 16, 48, 16); // 右臂 4×12×4
-        AddBox(list, 4, 12, -2, 8, 24, 2, 36, 52, 44, 52, 32, 52, 40, 52, 36, 48, 40, 48); // 左臂
-        AddBox(list, -4, 0, -2, 0, 12, 2, 4, 20, 12, 20, 0, 20, 8, 20, 4, 16, 8, 16);   // 右腿 4×12×4
-        AddBox(list, 0, 0, -2, 4, 12, 2, 20, 52, 28, 52, 16, 52, 24, 52, 20, 48, 24, 48); // 左腿
+        var list = new List<SkinFace>(72);
+
+        // 头 8x8x8 + 帽层(UV +32 x)
+        AddBox(list, -4, 24, -4, 4, 32, 4, 8, 8, 24, 8, 0, 8, 16, 8, 8, 0, 16, 0);
+        AddBox(list, -4, 24, -4, 4, 32, 4, OverlayInflate, 40, 8, 56, 8, 32, 8, 48, 8, 40, 0, 48, 0);
+
+        // 身 8x12x4 + 外套(UV +16 y)
+        AddBox(list, -4, 12, -2, 4, 24, 2, 20, 20, 32, 20, 16, 20, 28, 20, 20, 16, 28, 16);
+        AddBox(list, -4, 12, -2, 4, 24, 2, OverlayInflate, 20, 36, 32, 36, 16, 36, 28, 36, 20, 32, 28, 32);
+
+        // 手臂宽:经典 4 / Alex 3。front 变窄 -> back/left/bottom 列左移 1。
+        int aw = slim ? 3 : 4;
+        int rb = slim ? 51 : 52;
+        int rl = slim ? 47 : 48;
+        int rbo = slim ? 47 : 48;
+        AddBox(list, -4 - aw, 12, -2, -4, 24, 2, 44, 20, rb, 20, 40, 20, rl, 20, 44, 16, rbo, 16);
+        AddBox(list, -4 - aw, 12, -2, -4, 24, 2, OverlayInflate, 44, 36, rb, 36, 40, 36, rl, 36, 44, 32, rbo, 32);
+
+        int lb = slim ? 43 : 44;
+        int ll = slim ? 39 : 40;
+        int lbo = slim ? 39 : 40;
+        AddBox(list, 4, 12, -2, 4 + aw, 24, 2, 36, 52, lb, 52, 32, 52, ll, 52, 36, 48, lbo, 48);
+        int lb2 = slim ? 59 : 60;
+        int ll2 = slim ? 55 : 56;
+        int lbo2 = slim ? 55 : 56;
+        AddBox(list, 4, 12, -2, 4 + aw, 24, 2, OverlayInflate, 52, 52, lb2, 52, 48, 52, ll2, 52, 52, 48, lbo2, 48);
+
+        // 右腿 4x12x4 + 裤层(UV +16 y)
+        AddBox(list, -4, 0, -2, 0, 12, 2, 4, 20, 12, 20, 0, 20, 8, 20, 4, 16, 8, 16);
+        AddBox(list, -4, 0, -2, 0, 12, 2, OverlayInflate, 4, 36, 12, 36, 0, 36, 8, 36, 4, 32, 8, 32);
+
+        // 左腿 + 裤层
+        AddBox(list, 0, 0, -2, 4, 12, 2, 20, 52, 28, 52, 16, 52, 24, 52, 20, 48, 24, 48);
+        AddBox(list, 0, 0, -2, 4, 12, 2, OverlayInflate, 4, 52, 12, 52, 0, 52, 8, 52, 4, 48, 8, 48);
+
         return list.ToArray();
     }
 
-    // 由 mc 包围盒 + 6 面 UV 左上像素生成 6 个 SkinFace(面像素尺寸由盒子维度决定)。
-    private static void AddBox(List<SkinFace> list, int x0, int y0, int z0, int x1, int y1, int z1,
-        int fx, int fy, int bx, int by, int rx, int ry, int lx, int ly, int tx, int ty, int box, int boy)
+    private static void AddBox(List<SkinFace> list, double x0, double y0, double z0, double x1, double y1, double z1,
+        int fx, int fy, int bx, int by, int rx, int ry, int lx, int ly, int tx, int ty, int box, int boy) =>
+        AddBox(list, x0, y0, z0, x1, y1, z1, 0.0, fx, fy, bx, by, rx, ry, lx, ly, tx, ty, box, boy);
+
+    // inf = 向外膨胀(overlay 用);UV 像素尺寸取原始盒子维度(不含膨胀)。
+    private static void AddBox(List<SkinFace> list, double x0, double y0, double z0, double x1, double y1, double z1,
+        double inf, int fx, int fy, int bx, int by, int rx, int ry, int lx, int ly, int tx, int ty, int box, int boy)
     {
-        int w = x1 - x0;
-        int h = y1 - y0;
-        int d = z1 - z0;
-        // front +z(脸):u→+x,v→-y(顶);像素 w×h
-        list.Add(new SkinFace(M(x0, y1, z1), M(x1, y1, z1), M(x1, y0, z1), M(x0, y0, z1),
+        int w = (int)(x1 - x0);
+        int h = (int)(y1 - y0);
+        int d = (int)(z1 - z0);
+        double ax0 = x0 - inf;
+        double ay0 = y0 - inf;
+        double az0 = z0 - inf;
+        double ax1 = x1 + inf;
+        double ay1 = y1 + inf;
+        double az1 = z1 + inf;
+        // front +z(脸):u->+x,v->-y(顶);像素 w x h
+        list.Add(new SkinFace(M(ax0, ay1, az1), M(ax1, ay1, az1), M(ax1, ay0, az1), M(ax0, ay0, az1),
             new Vec3(0, 1, 0), fx, fy, w, h));
         // back -z
-        list.Add(new SkinFace(M(x1, y1, z0), M(x0, y1, z0), M(x0, y0, z0), M(x1, y0, z0),
+        list.Add(new SkinFace(M(ax1, ay1, az0), M(ax0, ay1, az0), M(ax0, ay0, az0), M(ax1, ay0, az0),
             new Vec3(0, -1, 0), bx, by, w, h));
-        // right +x:u→-z(前→后);像素 d×h
-        list.Add(new SkinFace(M(x1, y1, z1), M(x1, y1, z0), M(x1, y0, z0), M(x1, y0, z1),
+        // right +x:u->-z;像素 d x h
+        list.Add(new SkinFace(M(ax1, ay1, az1), M(ax1, ay1, az0), M(ax1, ay0, az0), M(ax1, ay0, az1),
             new Vec3(1, 0, 0), rx, ry, d, h));
-        // left -x:u→+z
-        list.Add(new SkinFace(M(x0, y1, z0), M(x0, y1, z1), M(x0, y0, z1), M(x0, y0, z0),
+        // left -x:u->+z
+        list.Add(new SkinFace(M(ax0, ay1, az0), M(ax0, ay1, az1), M(ax0, ay0, az1), M(ax0, ay0, az0),
             new Vec3(-1, 0, 0), lx, ly, d, h));
-        // top +y:u→+x,v→+z;像素 w×d
-        list.Add(new SkinFace(M(x0, y1, z0), M(x1, y1, z0), M(x1, y1, z1), M(x0, y1, z1),
+        // top +y:u->+x,v->+z;像素 w x d
+        list.Add(new SkinFace(M(ax0, ay1, az0), M(ax1, ay1, az0), M(ax1, ay1, az1), M(ax0, ay1, az1),
             new Vec3(0, 0, 1), tx, ty, w, d));
         // bottom -y
-        list.Add(new SkinFace(M(x0, y0, z1), M(x1, y0, z1), M(x1, y0, z0), M(x0, y0, z0),
+        list.Add(new SkinFace(M(ax0, ay0, az1), M(ax1, ay0, az1), M(ax1, ay0, az0), M(ax0, ay0, az0),
             new Vec3(0, 0, -1), box, boy, w, d));
     }
 
