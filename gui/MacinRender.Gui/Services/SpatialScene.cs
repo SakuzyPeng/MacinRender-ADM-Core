@@ -117,6 +117,44 @@ public sealed class SpatialScene
     internal static Vec3 FromPosition(InspectPosition p) =>
         p.Cartesian ? new Vec3(p.X, p.Y, p.Z) : FromPolar(p.Azimuth, p.Elevation, p.Distance);
 
+    // LFE 无方向性,ADM 占位坐标常在角落 → 按监听惯例重定位,且按"实际 LFE 数量"而非名字决定布局:
+    // 单 LFE 放中置正下方前地面;多 LFE(如 22.2 的 LFE1/LFE2)沿前边底均匀分左→右。
+    private static bool IsLfe(string label) => label.ToUpperInvariant().Contains("LFE", StringComparison.Ordinal);
+
+    private static Vec3 LfePosition(int index, int total)
+    {
+        if (total <= 1)
+        {
+            return new Vec3(0.0, 1.0, -1.0); // 前边底中点(中置正下方,贴前墙)
+        }
+
+        double x = -0.5 + (index * (1.0 / (total - 1))); // total=2 → -0.5 / +0.5
+        return new Vec3(x, 1.0, -1.0); // 前边底,左→右
+    }
+
+    private static int CountLfe(InspectDoc doc)
+    {
+        int n = 0;
+        foreach (var obj in doc.Objects)
+        {
+            if (HasObjectBlocks(obj))
+            {
+                continue; // 仅声床
+            }
+
+            foreach (var t in obj.Tracks)
+            {
+                if (t.DsBlocks.Count > 0 && t.DsBlocks[0].HasPosition &&
+                    t.DsBlocks[0].SpeakerLabels.Count > 0 && IsLfe(t.DsBlocks[0].SpeakerLabels[0]))
+                {
+                    n++;
+                }
+            }
+        }
+
+        return n;
+    }
+
     internal static SpatialScene Build(InspectDoc? doc)
     {
         if (doc is null)
@@ -129,6 +167,8 @@ public sealed class SpatialScene
 
         var objects = new List<SpatialObject>();
         int color = 0;
+        int lfeTotal = CountLfe(doc);
+        int lfeSeen = 0;
         foreach (var obj in doc.Objects)
         {
             bool isBed = !HasObjectBlocks(obj);
@@ -146,7 +186,10 @@ public sealed class SpatialScene
                     if (ds.HasPosition)
                     {
                         var label = ds.SpeakerLabels.Count > 0 ? ds.SpeakerLabels[0] : "";
-                        points.Add(new BedPoint(FromPolar(ds.Azimuth, ds.Elevation, ds.Distance), label));
+                        Vec3 pos = IsLfe(label)
+                            ? LfePosition(lfeSeen++, lfeTotal)
+                            : FromPolar(ds.Azimuth, ds.Elevation, ds.Distance);
+                        points.Add(new BedPoint(pos, label));
                     }
                 }
 

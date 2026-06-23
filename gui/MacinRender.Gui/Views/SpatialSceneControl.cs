@@ -234,20 +234,47 @@ internal sealed class SpatialSceneControl : Control
             _lastScene = Scene;
         }
 
-        context.FillRectangle(s_background, new Rect(0, 0, b.Width, b.Height));
+        context.FillRectangle(s_sky, new Rect(0, 0, b.Width, b.Height));
 
         _cx = b.Width / 2.0;
         _cy = b.Height / 2.0;
         _scale = Math.Min(b.Width, b.Height) / 2.0 * 0.78 * _zoom;
         UpdateRotationCache();
 
+        DrawGround(context);
         DrawCube(context);
         DrawHeadAndObjects(context);
     }
 
+    // 草地铺立方体底面(z=-1)+ 方块网格 + 前方(+Y)锚点高亮格。承担"地板 + 前后左右参照"。
+    private void DrawGround(DrawingContext context)
+    {
+        context.DrawGeometry(s_ground, null, Quad(
+            Project(RotateCamera(new Vec3(-1, -1, -1))),
+            Project(RotateCamera(new Vec3(1, -1, -1))),
+            Project(RotateCamera(new Vec3(1, 1, -1))),
+            Project(RotateCamera(new Vec3(-1, 1, -1)))));
+
+        for (int i = 1; i < 4; i++)
+        {
+            double t = -1.0 + (i * 0.5);
+            context.DrawLine(s_groundGrid, Project(RotateCamera(new Vec3(t, -1, -1))),
+                Project(RotateCamera(new Vec3(t, 1, -1))));
+            context.DrawLine(s_groundGrid, Project(RotateCamera(new Vec3(-1, t, -1))),
+                Project(RotateCamera(new Vec3(1, t, -1))));
+        }
+
+        // 前方(+Y)锚点:前边缘中央一格高亮,建立"听者正前方"的方位感。
+        context.DrawGeometry(s_front, null, Quad(
+            Project(RotateCamera(new Vec3(-0.18, 1, -1))),
+            Project(RotateCamera(new Vec3(0.18, 1, -1))),
+            Project(RotateCamera(new Vec3(0.18, 0.72, -1))),
+            Project(RotateCamera(new Vec3(-0.18, 0.72, -1)))));
+    }
+
     private void DrawCube(DrawingContext context)
     {
-        // 8 角点 (±1,±1,±1) 的 12 条棱。
+        // 8 角点 (±1,±1,±1) 的 12 条棱,做成 Minecraft F3+G 区块边界风:亮黄线框,竖直边(立柱)更醒目。
         var c = new Vec3[8];
         int idx = 0;
         for (int sx = -1; sx <= 1; sx += 2)
@@ -261,7 +288,7 @@ internal sealed class SpatialSceneControl : Control
             }
         }
 
-        // 角点按 (x,y,z) 位序:bit2=x,bit1=y,bit0=z。相邻仅一位不同 = 一条棱。
+        // 角点按 (x,y,z) 位序:bit2=x,bit1=y,bit0=z。相邻仅一位不同 = 一条棱;bit==1 即沿 Z 的竖直边。
         for (int i = 0; i < 8; i++)
         {
             for (int bit = 1; bit <= 4; bit <<= 1)
@@ -269,9 +296,19 @@ internal sealed class SpatialSceneControl : Control
                 int j = i ^ bit;
                 if (j > i)
                 {
-                    context.DrawLine(s_cubePen, Project(c[i]), Project(c[j]));
+                    context.DrawLine(bit == 1 ? s_chunkV : s_chunkH, Project(c[i]), Project(c[j]));
                 }
             }
+        }
+
+        // F3+G 蓝色"区块内分层":在 z=0(听者耳平面)画一层淡青网格,作高度中线参照。
+        for (int i = 0; i <= 4; i++)
+        {
+            double t = -1.0 + (i * 0.5);
+            context.DrawLine(s_chunkLayer, Project(RotateCamera(new Vec3(-1, t, 0))),
+                Project(RotateCamera(new Vec3(1, t, 0))));
+            context.DrawLine(s_chunkLayer, Project(RotateCamera(new Vec3(t, -1, 0))),
+                Project(RotateCamera(new Vec3(t, 1, 0))));
         }
     }
 
@@ -779,14 +816,43 @@ internal sealed class SpatialSceneControl : Control
             {
                 Point p = Project(RotateCamera(bp.Position));
                 context.FillRectangle(brush, new Rect(p.X - 3, p.Y - 3, 6, 6));
+                if (ShowLabels && !string.IsNullOrEmpty(bp.Label))
+                {
+                    context.DrawText(Label(bp.Label), new Point(p.X + 6, p.Y - 7));
+                }
             }
         }
     }
 
     // ── 配色 / 工具 ──
-    private static readonly IBrush s_background = new ImmutableSolidColorBrush(Color.FromRgb(0x16, 0x18, 0x1C));
-    private static readonly IPen s_cubePen =
-        new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(0x55, 0xAE, 0xAE, 0xB2)), 1.0);
+    // 暮色天空渐变(偏暗,衬托轨迹/对象发光点;近末地味但更柔和)。
+    private static readonly IBrush s_sky = new LinearGradientBrush
+    {
+        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+        EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+        GradientStops =
+        {
+            new GradientStop(Color.FromRgb(0x14, 0x1A, 0x2E), 0.0),
+            new GradientStop(Color.FromRgb(0x33, 0x32, 0x4E), 1.0),
+        },
+    };
+
+    // 立方体底面末地石平台(淡黄白,半透明保漂浮感)+ 方块网格线 + 前方锚点高亮。
+    private static readonly IBrush s_ground = new ImmutableSolidColorBrush(Color.FromArgb(0xCC, 0xCE, 0xCB, 0x96));
+    private static readonly IPen s_groundGrid =
+        new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(0x66, 0x8C, 0x88, 0x5E)), 1.0);
+    // 前方(+Y)锚点:黑曜石(深邃紫黑,玩家抵达末地的平台方块),在淡黄末地石上对比醒目。
+    private static readonly IBrush s_front = new ImmutableSolidColorBrush(Color.FromArgb(0xFF, 0x0B, 0x09, 0x16));
+
+    // ADM 立方体边界 = Minecraft F3+G 区块边界风:竖直边(立柱)亮黄更粗,水平边稍淡。
+    private static readonly IPen s_chunkV =
+        new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(0xDC, 0xF2, 0xF2, 0x55)), 1.5);
+    private static readonly IPen s_chunkH =
+        new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(0x99, 0xDC, 0xDC, 0x46)), 1.0);
+
+    // F3+G 区块内分层网格(青蓝,淡):听者耳平面 z=0。
+    private static readonly IPen s_chunkLayer =
+        new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(0x55, 0x4F, 0xB0, 0xE0)), 1.0);
 
     // 当前皮肤(默认程序化原创;阶段 2 可由导入的 64×64 PNG 替换)。
     private static readonly CharacterSkin s_charSkin = CharacterSkin.Default;
