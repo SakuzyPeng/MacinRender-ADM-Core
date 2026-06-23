@@ -11,14 +11,15 @@
         Width="640" Height="560" MinWidth="420" MinHeight="380"
         Background="#16181C">
 
-    <Grid RowDefinitions="*,Auto" Background="#16181C">
+    <Grid RowDefinitions="*,Auto" Background="#16181C" DragDrop.AllowDrop="True">
 
-        <!-- 伪 3D 视口 -->
+        <!-- 伪 3D 视口(拖入 64×64 PNG 皮肤即换装) -->
         <views:SpatialSceneControl Grid.Row="0"
                                    Scene="{Binding SpatialModel}"
                                    CurrentTime="{Binding PlayheadSeconds}"
                                    ShowLabels="{Binding ShowObjectLabels}"
-                                   PersistTrail="{Binding PersistTrail}"/>
+                                   PersistTrail="{Binding PersistTrail}"
+                                   Skin="{Binding CharacterSkin}"/>
 
         <!-- 操作提示(角标) -->
         <TextBlock Grid.Row="0" Margin="12,10,0,0" FontSize="11"

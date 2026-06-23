@@ -86,6 +86,23 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [ObservableProperty]
     private bool _persistTrail;
 
+    // 空间视图:角色皮肤(拖入 PNG 设置;null = 内置程序化默认)。记忆上次,启动恢复。
+    [ObservableProperty]
+    private CharacterSkin? _characterSkin;
+
+    // 拖入皮肤 PNG:加载成功即生效并记忆;失败静默忽略(保持当前皮肤)。
+    public void LoadSkin(string path)
+    {
+        var skin = CharacterSkin.LoadFromPng(path);
+        if (skin is null)
+        {
+            return;
+        }
+
+        CharacterSkin = skin;
+        SettingsStore.Update(s => s.SkinPath = path);
+    }
+
     public bool HasFile => !string.IsNullOrEmpty(LoadedPath);
     public string LoadedFileName => HasFile ? Path.GetFileName(LoadedPath!) : "";
     public bool HasCommonPrefix => CommonPrefix.Length > 0;
@@ -123,6 +140,12 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
         _pendingDeviceId = saved?.MonitorDeviceId ?? "";
         RefreshDevices();
+
+        // 恢复上次拖入的角色皮肤。
+        if (saved?.SkinPath is { } skinPath && File.Exists(skinPath))
+        {
+            CharacterSkin = CharacterSkin.LoadFromPng(skinPath);
+        }
 
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) }; // ~30 Hz
         _pollTimer.Tick += (_, _) => PollMonitor();

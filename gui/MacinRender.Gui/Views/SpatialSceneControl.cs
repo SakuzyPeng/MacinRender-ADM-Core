@@ -30,6 +30,10 @@ internal sealed class SpatialSceneControl : Control
     public static readonly StyledProperty<bool> PersistTrailProperty =
         AvaloniaProperty.Register<SpatialSceneControl, bool>(nameof(PersistTrail));
 
+    // 角色皮肤(null = 内置程序化默认);拖入 PNG 时由 VM 设置。
+    public static readonly StyledProperty<CharacterSkin?> SkinProperty =
+        AvaloniaProperty.Register<SpatialSceneControl, CharacterSkin?>(nameof(Skin));
+
     public SpatialScene? Scene
     {
         get => GetValue(SceneProperty);
@@ -52,6 +56,26 @@ internal sealed class SpatialSceneControl : Control
     {
         get => GetValue(PersistTrailProperty);
         set => SetValue(PersistTrailProperty, value);
+    }
+
+    public CharacterSkin? Skin
+    {
+        get => GetValue(SkinProperty);
+        set => SetValue(SkinProperty, value);
+    }
+
+    private CharacterSkin ActiveSkin => Skin ?? CharacterSkin.Default;
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == SkinProperty)
+        {
+            // 换皮肤 → 角色缓存失效重建(颜色/像素全变)。
+            _charBuilt = false;
+            _charBrushes.Clear();
+            InvalidateVisual();
+        }
     }
 
     // 相机轨道角(弧度):默认 3/4 俯视。
@@ -449,7 +473,7 @@ internal sealed class SpatialSceneControl : Control
             double v1 = (py + 1) / (double)f.Th;
             for (int px = 0; px < f.Tw; px++)
             {
-                uint argb = s_charSkin.At(f.Tx + px, f.Ty + py);
+                uint argb = ActiveSkin.At(f.Tx + px, f.Ty + py);
                 if ((argb >> 24) == 0)
                 {
                     continue; // 透明像素跳过
@@ -853,9 +877,6 @@ internal sealed class SpatialSceneControl : Control
     // F3+G 区块内分层网格(青蓝,淡):听者耳平面 z=0。
     private static readonly IPen s_chunkLayer =
         new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(0x55, 0x4F, 0xB0, 0xE0)), 1.0);
-
-    // 当前皮肤(默认程序化原创;阶段 2 可由导入的 64×64 PNG 替换)。
-    private static readonly CharacterSkin s_charSkin = CharacterSkin.Default;
 
     // 角色总高 32 像素(脚 my=0,头中心 my=28);缩放使头中心落在原点 z=0、脚落在立方体底 z=-1。
     private const double CharScale = 1.0 / 28.0;

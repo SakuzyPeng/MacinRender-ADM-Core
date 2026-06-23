@@ -1,4 +1,9 @@
 using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using Avalonia;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 
 namespace MacinRender.Gui.Services;
 
@@ -23,6 +28,55 @@ public sealed class CharacterSkin
     public uint At(int x, int y) => (uint)x >= Tex || (uint)y >= Tex ? 0u : _px[(y * Tex) + x];
 
     public static CharacterSkin Default { get; } = BuildDefault();
+
+    // 从标准 64×64 PNG 皮肤加载(取左上 64×64;BGRA→ARGB)。失败返回 null(静默,不阻断)。
+    public static CharacterSkin? LoadFromPng(string path)
+    {
+        try
+        {
+            using var bmp = new Bitmap(path);
+            int w = bmp.PixelSize.Width;
+            int h = bmp.PixelSize.Height;
+            if (w < Tex || h < Tex)
+            {
+                return null; // 至少 64×64(老版 64×32 暂不支持)
+            }
+
+            int stride = w * 4;
+            var buf = new byte[h * stride];
+            var handle = GCHandle.Alloc(buf, GCHandleType.Pinned);
+            try
+            {
+                bmp.CopyPixels(new PixelRect(0, 0, w, h), handle.AddrOfPinnedObject(), buf.Length, stride);
+            }
+            finally
+            {
+                handle.Free();
+            }
+
+            // 字节顺序按解码格式判定:macOS Skia 解码为 Rgba8888,其它平台可能 Bgra8888。
+            bool bgra = bmp.Format == PixelFormats.Bgra8888;
+            var px = new uint[Tex * Tex];
+            for (int y = 0; y < Tex; y++)
+            {
+                for (int x = 0; x < Tex; x++)
+                {
+                    int o = (y * stride) + (x * 4);
+                    byte a = buf[o + 3];
+                    byte g = buf[o + 1];
+                    byte r = bgra ? buf[o + 2] : buf[o];
+                    byte b = bgra ? buf[o] : buf[o + 2];
+                    px[(y * Tex) + x] = ((uint)a << 24) | ((uint)r << 16) | ((uint)g << 8) | b;
+                }
+            }
+
+            return new CharacterSkin(px);
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
 
     // 程序化默认皮肤(原创配色,Minecraft 像素风):各部位面填底色,头正面补五官。
     private static CharacterSkin BuildDefault()

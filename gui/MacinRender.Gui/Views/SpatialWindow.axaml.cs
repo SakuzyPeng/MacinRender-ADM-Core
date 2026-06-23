@@ -1,8 +1,11 @@
 using System;
 using System.ComponentModel;
+using System.IO;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Platform.Storage;
 using MacinRender.Gui.I18n;
 using MacinRender.Gui.ViewModels;
 
@@ -24,6 +27,37 @@ public partial class SpatialWindow : Window
         {
             seek.AddHandler(Thumb.DragStartedEvent, OnSeekDragStarted);
             seek.AddHandler(Thumb.DragCompletedEvent, OnSeekDragCompleted);
+        }
+
+        // 拖入 64×64 PNG 皮肤即换装(类 SOFA:直接拖、记忆上次)。
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DropEvent, OnDrop);
+    }
+
+    private static bool IsPng(string path) =>
+        string.Equals(Path.GetExtension(path), ".png", StringComparison.OrdinalIgnoreCase);
+
+    private void OnDragOver(object? sender, DragEventArgs e)
+    {
+        bool ok = e.DataTransfer.Contains(DataFormat.File) &&
+            (e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath())
+                .Any(p => !string.IsNullOrEmpty(p) && IsPng(p!)) ?? false);
+        e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
+    }
+
+    private void OnDrop(object? sender, DragEventArgs e)
+    {
+        if (DataContext is not SemanticEditorViewModel vm)
+        {
+            return;
+        }
+
+        var png = e.DataTransfer.TryGetFiles()?
+            .Select(f => f.TryGetLocalPath())
+            .FirstOrDefault(p => !string.IsNullOrEmpty(p) && IsPng(p!));
+        if (!string.IsNullOrEmpty(png))
+        {
+            vm.LoadSkin(png!);
         }
     }
 
