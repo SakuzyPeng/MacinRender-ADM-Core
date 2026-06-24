@@ -25,13 +25,25 @@ static CMHeadphoneMotionManager *mr_manager(void) {
     return g_manager;
 }
 
-// 硬件 + 框架是否支持头部姿态(AirPods 在位)。与「权限是否已授予」无关。
+// 应用是否声明了 NSMotionUsageDescription。缺失时访问运动数据会被 TCC 直接杀进程(不是静默失败),
+// 故没有它就一律视为「不可用」,绝不去碰 startDeviceMotionUpdates —— 这是裸 exe(未打包)下的护栏。
+static int mr_has_usage_description(void) {
+    return [[NSBundle mainBundle] objectForInfoDictionaryKey:@"NSMotionUsageDescription"] != nil ? 1 : 0;
+}
+
+// 是否可用:必须既有硬件支持(AirPods 在位),又有 NSMotionUsageDescription(否则一访问就崩)。
 int mr_headtrack_available(void) {
+    if (!mr_has_usage_description()) {
+        return 0;
+    }
     return mr_manager().isDeviceMotionAvailable ? 1 : 0;
 }
 
 // 开始推送姿态;cb 在后台队列被反复调用,传姿态四元数(w,x,y,z)。返回 1 成功、0 不可用。
 int mr_headtrack_start(mr_headtrack_cb cb) {
+    if (!mr_has_usage_description()) {
+        return 0; // 防 TCC 崩溃:无 usage description 绝不启动运动更新
+    }
     CMHeadphoneMotionManager *m = mr_manager();
     if (!m.isDeviceMotionAvailable) {
         return 0;
