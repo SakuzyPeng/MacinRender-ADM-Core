@@ -135,6 +135,11 @@ internal static class SelfTest
             return 10;
         }
 
+        // 头部追踪 shim(libmr_headtrack / CoreMotion):入口可解析 + 可用性探测(dylib 缺失 → 不可用,
+        // 不报错,手操转头不依赖它)。真正取数据还需 .app bundle + NSMotionUsageDescription + 授权。
+        bool airpods = Services.HeadTracking.AirPodsMotionSource.IsAvailable();
+        Console.WriteLine($"头部追踪 shim:AirPods {(airpods ? "可用(硬件在位)" : "不可用(无硬件 / 未打包 / shim 未构建)")}");
+
         if (string.IsNullOrEmpty(inputWav))
         {
             Console.WriteLine("(未给 wav,跳过真实渲染。加载/查询/监听入口链路 OK。)");

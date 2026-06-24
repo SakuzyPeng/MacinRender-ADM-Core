@@ -151,6 +151,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) }; // ~30 Hz
         _pollTimer.Tick += (_, _) => PollMonitor();
         _headTracking.OrientationResolved += ApplyHeadOrientation;
+        AirPodsAvailable = AirPodsMotionSource.IsAvailable(); // 硬件 + shim 探测(dylib 缺失 → false)
     }
 
     public async Task<bool> LoadFileAsync(string path)
@@ -342,13 +343,24 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private const double Deg2Rad = Math.PI / 180.0;
     private readonly HeadTrackingManager _headTracking = new();
     private readonly ManualFreeLookSource _manualHead = new();
+    private readonly AirPodsMotionSource _airPods = new();
 
     // 解析出的头朝向(度)→ 视图把它(转弧度)灌进 SpatialSceneControl.SetHeadOrientation。
     public event Action<float, float, float>? HeadOrientationResolved;
 
-    // 头视角模式开关(绑定到 SpatialSceneControl.HeadLookMode)。开:拖拽/键盘转头实时改声场。
+    // 手动转头模式开关(绑定到 SpatialSceneControl.HeadLookMode)。开 = 手操独占:拖拽/键盘转头
+    // 实时改声场、屏蔽其它来源(传感器);关 = 释放手操(由 AirPods 等传感器接管,鼠标转回相机)。
     [ObservableProperty]
-    private bool _headTrackingEnabled;
+    private bool _manualHeadEnabled;
+
+    // AirPods 头追踪开关(传感器来源,与手操平级、互斥;手操优先)。关时鼠标仍可转相机视角。
+    [ObservableProperty]
+    private bool _airPodsTrackingEnabled;
+
+    // AirPods 头追踪是否可用(硬件在位 + shim 已构建)。构造时探测;不可用时 UI 禁用该开关。
+    // 注:真正取数据还需 .app bundle + NSMotionUsageDescription + 授权(单独打包步骤)。
+    [ObservableProperty]
+    private bool _airPodsAvailable;
 
     public ObservableCollection<MonitorBackendOption> MonitorBackends { get; } = new();
 
@@ -641,10 +653,10 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         UpdatePollTimer(); // 头追踪仍开则保留定时器(供视觉自由视角),否则停
     }
 
-    // 定时器在「监听中」或「头视角开」任一成立时运行(Start/Stop 幂等)。
+    // 定时器在「监听中」或任一头追踪来源开启时运行(Start/Stop 幂等)。
     private void UpdatePollTimer()
     {
-        if (IsMonitoring || HeadTrackingEnabled)
+        if (IsMonitoring || ManualHeadEnabled || AirPodsTrackingEnabled)
         {
             _pollTimer.Start();
         }
@@ -654,19 +666,28 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         }
     }
 
-    partial void OnHeadTrackingEnabledChanged(bool value)
+    // 来源仲裁(手操独占):手操开 → 用手操;否则 AirPods 开 → 用 AirPods;都没有 → 不挂(头冻结,
+    // 不归正,要回正按 R)。manager 一次只挂一个来源,独占由此天然成立。
+    private void UpdateActiveSource()
     {
-        if (value)
+        if (ManualHeadEnabled)
         {
-            _headTracking.AttachSource(_manualHead); // 挂手操来源并启动
+            _headTracking.AttachSource(_manualHead);
+        }
+        else if (AirPodsTrackingEnabled)
+        {
+            _headTracking.AttachSource(_airPods);
         }
         else
         {
             _headTracking.DetachSource();
-            ApplyHeadOrientation(0f, 0f, 0f); // 回正:视觉 + 音频都归零
         }
         UpdatePollTimer();
     }
+
+    partial void OnManualHeadEnabledChanged(bool value) => UpdateActiveSource();
+
+    partial void OnAirPodsTrackingEnabledChanged(bool value) => UpdateActiveSource();
 
     // manager 解析出的头朝向(度)→ 音频(SetListenerOrientation)+ 视觉(经事件转弧度灌控件)。
     private void ApplyHeadOrientation(float yawDeg, float pitchDeg, float rollDeg)
