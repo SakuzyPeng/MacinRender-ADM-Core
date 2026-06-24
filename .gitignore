@@ -38,3 +38,6 @@ experiments/
 
 # GUI 本地拷入的自包含 C ABI 原生库(构建产物,由 gui/copy-native.sh 生成)
 gui/MacinRender.Gui/runtimes/
+
+# GUI macOS .app 打包产物
+gui/dist/
