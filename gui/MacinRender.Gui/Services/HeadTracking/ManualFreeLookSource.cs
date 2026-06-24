@@ -25,9 +25,21 @@ internal sealed class ManualFreeLookSource : IHeadTrackingSource
 
     public bool IsActive { get; private set; }
 
-    public void Start() => IsActive = true;
+    public void Start()
+    {
+        IsActive = true;
+        Emit(); // 发出当前(可能被 Seed 成上次姿态)朝向,使启用时从当前头朝向接续,而非复位到正前
+    }
 
     public void Stop() => IsActive = false;
+
+    /// <summary>把内部累积姿态设为给定角度(度),用于启用时从当前头朝向接续(不复位)。不触发事件。</summary>
+    public void Seed(double yawDeg, double pitchDeg, double rollDeg)
+    {
+        _yawDeg = yawDeg;
+        _pitchDeg = Math.Clamp(pitchDeg, -PitchLimitDeg, PitchLimitDeg);
+        _rollDeg = rollDeg;
+    }
 
     /// <summary>累积一次「环顾」增量(度):dYaw 水平转头(+左),dPitch 俯仰(+上)。pitch 被夹住。</summary>
     public void ApplyLookDelta(double dYawDeg, double dPitchDeg)

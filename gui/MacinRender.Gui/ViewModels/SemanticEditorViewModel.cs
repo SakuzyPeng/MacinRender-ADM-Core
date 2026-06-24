@@ -351,11 +351,16 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     // 手动转头模式开关(绑定到 SpatialSceneControl.HeadLookMode)。开 = 手操独占:拖拽/键盘转头
     // 实时改声场、屏蔽其它来源(传感器);关 = 释放手操(由 AirPods 等传感器接管,鼠标转回相机)。
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HeadTrackingActive))]
     private bool _manualHeadEnabled;
 
     // AirPods 头追踪开关(传感器来源,与手操平级、互斥;手操优先)。关时鼠标仍可转相机视角。
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HeadTrackingActive))]
     private bool _airPodsTrackingEnabled;
+
+    // 任一头追踪来源激活(手动或 AirPods)。recenter 在此期间常驻可用(头追踪 recenter 用途大)。
+    public bool HeadTrackingActive => ManualHeadEnabled || AirPodsTrackingEnabled;
 
     // AirPods 头追踪是否可用(硬件在位 + shim 已构建)。构造时探测;不可用时 UI 禁用该开关。
     // 注:真正取数据还需 .app bundle + NSMotionUsageDescription + 授权(单独打包步骤)。
@@ -632,6 +637,8 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         DurationSeconds = dur;
         IsMonitoring = true;
         PushOverrides();          // 把当前编辑立即应用到新监听
+        // 常驻朝向:新监听从正前开始,把上次设定的头朝向重新应用一次(视觉+音频同步),跨监听重启保留。
+        ApplyHeadOrientation(_lastHeadYaw, _lastHeadPitch, _lastHeadRoll);
         _monitor.Play();
         MonitorState = AdmMonitorState.Playing;
         UpdatePollTimer();
@@ -672,6 +679,8 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     {
         if (ManualHeadEnabled)
         {
+            // 从当前头朝向接续,启用手动不复位到正前。
+            _manualHead.Seed(_lastHeadYaw, _lastHeadPitch, _lastHeadRoll);
             _headTracking.AttachSource(_manualHead);
         }
         else if (AirPodsTrackingEnabled)
@@ -690,8 +699,16 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     partial void OnAirPodsTrackingEnabledChanged(bool value) => UpdateActiveSource();
 
     // manager 解析出的头朝向(度)→ 音频(SetListenerOrientation)+ 视觉(经事件转弧度灌控件)。
+    // 记下最近姿态,供启用手动时 Seed 接续(不复位)。
+    private float _lastHeadYaw;
+    private float _lastHeadPitch;
+    private float _lastHeadRoll;
+
     private void ApplyHeadOrientation(float yawDeg, float pitchDeg, float rollDeg)
     {
+        _lastHeadYaw = yawDeg;
+        _lastHeadPitch = pitchDeg;
+        _lastHeadRoll = rollDeg;
         _monitor.SetListenerOrientation(yawDeg, pitchDeg, rollDeg);
         HeadOrientationResolved?.Invoke(yawDeg, pitchDeg, rollDeg);
     }
@@ -709,12 +726,15 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         }
     }
 
-    // recenter:把当前姿态设为正前(键盘 R / 双击 / UI 按钮)。
+    // recenter:把当前姿态设为正前(键盘 R / 双击 / UI 按钮)。对手动与 AirPods 头追踪都生效:
+    // manager.Recenter 把当前(手操/传感器)姿态设为偏置原点;再即时归正一次(视觉+音频),
+    // 无活动来源时也能清掉常驻朝向。
     [RelayCommand]
     private void RecenterHead()
     {
         _manualHead.Reset();
         _headTracking.Recenter();
+        ApplyHeadOrientation(0f, 0f, 0f);
     }
 
     partial void OnSelectedMonitorBackendChanged(MonitorBackendOption value)

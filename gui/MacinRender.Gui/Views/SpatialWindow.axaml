@@ -45,8 +45,9 @@
             <CheckBox FontSize="11" Foreground="#B0FFFFFF"
                       IsChecked="{Binding ManualHeadEnabled}"
                       Content="{DynamicResource SemHeadTrack}"/>
+            <!-- recenter:任一头追踪(手动 / AirPods)激活时常驻可用 -->
             <Button FontSize="11" Padding="6,1" HorizontalAlignment="Right"
-                    IsVisible="{Binding ManualHeadEnabled}"
+                    IsVisible="{Binding HeadTrackingActive}"
                     Command="{Binding RecenterHeadCommand}"
                     Content="{DynamicResource SemHeadRecenter}"/>
         </StackPanel>
