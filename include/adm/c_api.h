@@ -112,12 +112,17 @@
  *   yaw/pitch/roll（度）即时设置监听听者朝向。仅 Apple 双耳监听后端实装（HeadYaw/Pitch/Roll
  *   全局 AU 参数，廉价、无 re-prepare）；其它后端忽略。朝向在下个 worker 块边界生效，且跨
  *   后端热切换 / 输出设备切换保留。yaw +左（与 ADM 方位一致），pitch +上,roll 跟随单元符号。
+ *
+ * v1.23 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_override_t 追加 head_locked 字段（int32）。0=world-locked（跟头转,现状）;非 0=
+ *   head-locked（锁在头上,头追踪不移动它,如旁白/音乐）。按声道解析（整对象 vs speaker_label）,
+ *   仅 Apple 监听后端实装（per-bus 头朝向补偿）,其它后端忽略。struct_size 守护:旧调用方按 0 处理。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 22
+#define ADM_API_VERSION_MINOR 23
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -913,6 +918,12 @@ typedef struct adm_monitor_override_t {
        so one bed (one audioObject, many channels) can be gained per channel. NULL/"" = the whole
        object (default). Mirrors the export semantic-policy DirectSpeakers speaker_label filter. */
     const char* speaker_label;
+    /* v1.23: head-tracking participation. 0 (default) = world-locked (fixed in the world, counter-
+       rotates as the listener turns their head — current behavior). Non-zero = head-locked (stays
+       fixed relative to the head; head tracking does NOT move it, e.g. narration / music). Resolved
+       per channel like gain (whole-object vs speaker_label). Only the Apple monitor backend honors
+       it (per-bus head-orientation compensation); others ignore it. struct_size guards legacy. */
+    int32_t head_locked;
 } adm_monitor_override_t;
 
 /*

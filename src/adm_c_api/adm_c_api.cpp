@@ -1171,6 +1171,9 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
             if (!has_field(offsetof(adm_monitor_override_t, speaker_label), sizeof(const char*))) {
                 src.speaker_label = nullptr; // legacy caller: whole-object override
             }
+            if (!has_field(offsetof(adm_monitor_override_t, head_locked), sizeof(int32_t))) {
+                src.head_locked = 0; // legacy caller: world-locked (participate in head tracking)
+            }
             // Reject non-finite gain / scales: a NaN would otherwise poison the bus gain or
             // the topology rebuild downstream.
             if (!std::isfinite(src.gain_db) || !std::isfinite(src.diffuse_scale) || !std::isfinite(src.extent_scale) ||
@@ -1188,6 +1191,7 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
             ov.extent_width_scale = src.extent_width_scale;
             ov.extent_height_scale = src.extent_height_scale;
             ov.extent_depth_scale = src.extent_depth_scale;
+            ov.head_locked = src.head_locked != 0;
             live.objects.push_back(std::move(ov));
         }
         monitor->session->set_overrides(live);
