@@ -55,6 +55,9 @@ class DownmixStream final : public IRenderStream {
 
     [[nodiscard]] Result<void> seek(uint64_t frame) override { return inner_->seek(frame); }
     void set_overrides(const LiveOverrides& overrides) override { inner_->set_overrides(overrides); }
+    void set_listener_orientation(const ListenerOrientation& orientation) override {
+        inner_->set_listener_orientation(orientation);
+    }
 
     [[nodiscard]] uint32_t out_channels() const override { return monitor_channels_; }
     [[nodiscard]] uint32_t sample_rate() const override { return inner_->sample_rate(); }

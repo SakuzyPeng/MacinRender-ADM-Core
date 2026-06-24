@@ -459,7 +459,7 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
 // domain convention is yaw +left (matching ADM azimuth); SpatialMixer's own azimuth is
 // +right, so yaw is mirrored like sm_azimuth(). pitch (+up) and roll follow the unit's own
 // sign. Only meaningful for binaural (headphone) output. Short-circuits on first failure.
-[[nodiscard]] OSStatus set_listener_orientation(AudioUnit unit, const ListenerOrientation& o) {
+[[nodiscard]] OSStatus apply_head_orientation(AudioUnit unit, const ListenerOrientation& o) {
     OSStatus status = AudioUnitSetParameter(unit, kSpatialMixerParam_HeadYaw, kAudioUnitScope_Global, 0, -o.yaw_deg, 0);
     if (status == noErr) {
         status = AudioUnitSetParameter(unit, kSpatialMixerParam_HeadPitch, kAudioUnitScope_Global, 0, o.pitch_deg, 0);
@@ -682,7 +682,7 @@ using EburPtr = std::unique_ptr<ebur128_state, EburDeleter>;
     // Applied here in the shared setup so both render_window and the realtime stream
     // pick it up.
     if (profile.binaural && !listener_orientation.is_identity()) {
-        const OSStatus head_status = set_listener_orientation(unit, listener_orientation);
+        const OSStatus head_status = apply_head_orientation(unit, listener_orientation);
         if (head_status != noErr) {
             return tl::unexpected{apple_status_error("failed to set listener orientation", head_status)};
         }
@@ -822,6 +822,14 @@ class AppleStream final : public IRenderStream {
         live_overrides_ = overrides;
     }
 
+    // Worker-thread only (same thread as process()): stash the latest listener head orientation.
+    // render_slice() applies it to the AU's global HeadYaw/Pitch/Roll params on the next slice.
+    // No-op effect on non-binaural / silent units (those params are ignored by the AU).
+    void set_listener_orientation(const ListenerOrientation& orientation) override {
+        live_orientation_ = orientation;
+        orientation_dirty_ = true;
+    }
+
     [[nodiscard]] uint32_t out_channels() const override { return num_out_ch_; }
     [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
     [[nodiscard]] std::string_view output_layout() const override { return profile_.writer_layout; }
@@ -863,6 +871,17 @@ class AppleStream final : public IRenderStream {
         if (silent_) {
             producer_pos_ += frames_now;
             return {};
+        }
+
+        // Apply a pending live head orientation before rendering this slice (binaural HeadYaw/
+        // Pitch/Roll global params; the AU ignores them on non-binaural output). Worker-thread
+        // only, so the direct AudioUnitSetParameter is safe.
+        if (orientation_dirty_) {
+            const OSStatus head_status = apply_head_orientation(unit_.get(), live_orientation_);
+            if (head_status != noErr) {
+                return tl::unexpected{apple_status_error("failed to set listener orientation", head_status)};
+            }
+            orientation_dirty_ = false;
         }
 
         reader_->read(staging_.data(), frames_now);
@@ -928,7 +947,9 @@ class AppleStream final : public IRenderStream {
     std::size_t fifo_read_{0};
     bool ended_{false};
     bool silent_{false};
-    LiveOverrides live_overrides_; // live override snapshot; gain resolved per bus (worker-only)
+    LiveOverrides live_overrides_;         // live override snapshot; gain resolved per bus (worker-only)
+    ListenerOrientation live_orientation_; // live head orientation; applied in render_slice when dirty (worker-only)
+    bool orientation_dirty_{false};        // set by set_listener_orientation; cleared once applied to the AU
     // Declared LAST so it is destroyed FIRST: ~AudioUnitGuard runs AudioUnitUninitialize
     // before staging_/contexts_ (which the AU's input pull callbacks reference) are freed.
     AudioUnitGuard unit_;

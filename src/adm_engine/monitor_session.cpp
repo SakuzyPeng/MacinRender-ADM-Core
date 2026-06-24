@@ -167,6 +167,7 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         plan.speaker_spread_mode = options.speaker_spread_mode;
         plan.binaural_spread_mode = options.binaural_spread_mode;
         plan.apple_spatial_preset = options.apple_spatial_preset;
+        plan.listener_orientation = options.listener_orientation;
 
         auto prepared = renderer->prepare(plan, logs);
         if (!prepared) {
@@ -213,7 +214,8 @@ struct MonitorSession::Impl {
     AdmScene scene;                  // policy-applied scene, reused when hot-switching the backend
     RenderOptions current_options;   // last-used options (create / switch_backend), to rebuild on device switch
     LiveOverrides current_overrides; // last-applied overrides, re-applied after a device switch
-    std::string device_id;           // current output device token ("" = default)
+    ListenerOrientation current_orientation{}; // last-applied head orientation, re-applied after a device switch
+    std::string device_id;                     // current output device token ("" = default)
     uint32_t sample_rate{48000};
     uint64_t total_frames{0};
 };
@@ -282,6 +284,11 @@ void MonitorSession::set_loop_seconds(double start_seconds, double end_seconds) 
 void MonitorSession::set_overrides(const LiveOverrides& overrides) {
     impl_->current_overrides = overrides; // kept so a device switch can re-apply the user's edits
     impl_->engine->set_overrides(overrides);
+}
+
+void MonitorSession::set_listener_orientation(const ListenerOrientation& orientation) {
+    impl_->current_orientation = orientation; // kept so a device switch can re-apply the head pose
+    impl_->engine->set_listener_orientation(orientation);
 }
 
 Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
@@ -366,6 +373,7 @@ Result<void> MonitorSession::set_output_device(const std::string& device_id) {
     // Restore playhead + edits + play state on the freshly rebuilt engine.
     impl_->engine->seek(playhead);
     impl_->engine->set_overrides(impl_->current_overrides);
+    impl_->engine->set_listener_orientation(impl_->current_orientation);
     if (was_playing) {
         impl_->engine->play();
     }

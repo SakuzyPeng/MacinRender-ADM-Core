@@ -2095,7 +2095,12 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
-    bool ok = check(adm_api_version_minor() == 21, "C ABI minor version is 21");
+    bool ok = check(adm_api_version_minor() == 22, "C ABI minor version is 22");
+
+    // v1.22 listener orientation argument validation (no device needed).
+    ok = check(adm_monitor_set_listener_orientation(nullptr, 0.0F, 0.0F, 0.0F) == ADM_ERROR_INVALID_ARGUMENT,
+               "set_listener_orientation(nullptr) rejected") &&
+         ok;
 
     // v1.21 device enumeration (no device needed; headless returns an empty JSON array).
     char* dev_json = nullptr;
@@ -2196,6 +2201,16 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     pre_label.struct_size = static_cast<uint32_t>(offsetof(adm_monitor_override_t, speaker_label));
     ok = check(adm_monitor_set_overrides(monitor, &pre_label, 1, 8) == ADM_ERROR_OK,
                "monitor set_overrides accepts legacy struct_size without speaker_label field") &&
+         ok;
+
+    // v1.22 listener orientation: a finite yaw/pitch/roll is accepted on the live monitor (the
+    // SAF binaural backend ignores it, but the call must still succeed); NaN is rejected.
+    ok = check(adm_monitor_set_listener_orientation(monitor, 30.0F, -10.0F, 0.0F) == ADM_ERROR_OK,
+               "monitor set_listener_orientation accepts finite angles") &&
+         ok;
+    ok = check(adm_monitor_set_listener_orientation(monitor, std::numeric_limits<float>::quiet_NaN(), 0.0F, 0.0F) ==
+                   ADM_ERROR_INVALID_ARGUMENT,
+               "monitor set_listener_orientation rejects NaN yaw") &&
          ok;
 
     // Non-finite gain / scale is rejected; struct_size below the minimum is rejected.

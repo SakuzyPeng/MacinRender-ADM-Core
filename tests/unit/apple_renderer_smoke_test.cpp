@@ -1204,6 +1204,63 @@ bool verify_apple_stream_matches_window() {
     return ok;
 }
 
+// AppleStream must honor a live listener orientation pushed through set_listener_orientation()
+// (the realtime head-tracking / free-look path): turning the head left moves a front source
+// toward the right ear, exactly like the offline render_window orientation (verify above).
+bool verify_apple_stream_listener_orientation() {
+    const auto in = write_fixture(0.0F, 8192U, 1.0F, 0.0F, false); // front source
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value(), "stream-orient: import scene")) {
+        return false;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "stream-orient: apple prepare")) {
+        return false;
+    }
+
+    // Reference: stream rendered at identity orientation.
+    const auto forward = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024});
+
+    // Turned: open a fresh stream, push yaw=+90° (head turned left) live BEFORE the first
+    // process(), then render. The first slice applies the pending orientation to the AU.
+    auto turned_stream = renderer->open_stream(**prepared, plan, logs);
+    if (!forward || !check(turned_stream.has_value(), "stream-orient: open turned stream")) {
+        return false;
+    }
+    mradm::ListenerOrientation yaw_left{};
+    yaw_left.yaw_deg = 90.0F;
+    (*turned_stream)->set_listener_orientation(yaw_left);
+    const uint32_t ch = (*turned_stream)->out_channels();
+    std::vector<float> turned;
+    std::vector<float> buf;
+    while (true) {
+        buf.assign(static_cast<std::size_t>(1024) * ch, 0.0F);
+        auto produced = (*turned_stream)->process(std::span<float>(buf), 1024);
+        if (!check(produced.has_value(), "stream-orient: turned process succeeds")) {
+            return false;
+        }
+        if (*produced == 0) {
+            break;
+        }
+        turned.insert(turned.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * ch));
+    }
+
+    bool ok = true;
+    ok &= check(rms_difference(*forward, turned) > 1.0e-4, "stream live yaw changes the binaural output");
+    ok &= check(channel_energy(turned, 2U, 1U) > channel_energy(turned, 2U, 0U),
+                "stream yaw=+90 (head turned left) moves a front source toward the right ear");
+    return ok;
+}
+
 // A scene with no renderable buses (here: a muted object) must open a silent stream — not
 // fail trying to drive a 0-input AUSpatialMixer — and produce full-length silence.
 bool verify_apple_stream_silent() {
@@ -1339,6 +1396,7 @@ int main() {
     ok &= verify_channel_lock_snaps();
     ok &= verify_bed_and_lfe_routing();
     ok &= verify_apple_stream_matches_window();
+    ok &= verify_apple_stream_listener_orientation();
     ok &= verify_apple_stream_silent();
     ok &= verify_apple_stream_gain_override();
     ok &= verify_spatial_mixer_hrtf_modes_probe();
