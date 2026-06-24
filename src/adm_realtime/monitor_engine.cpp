@@ -136,6 +136,15 @@ void MonitorEngine::set_overrides(const LiveOverrides& overrides) {
     wake_.notify_all();
 }
 
+void MonitorEngine::set_listener_orientation(const ListenerOrientation& orientation) {
+    {
+        const std::lock_guard<std::mutex> lock(control_mutex_);
+        pending_orientation_ = orientation;
+        orientation_pending_ = true;
+    }
+    wake_.notify_all();
+}
+
 void MonitorEngine::switch_stream(std::unique_ptr<IRenderStream> next) {
     {
         const std::lock_guard<std::mutex> lock(control_mutex_);
@@ -189,6 +198,18 @@ void MonitorEngine::worker_loop() {
                 applied_override_revision_.store(pending_overrides_.revision, std::memory_order_relaxed);
                 overrides_pending_ = false;
             }
+            if (orientation_pending_) {
+                // Hand the latest head orientation to the stream(s). Cheap (a global AU param on
+                // the Apple binaural backend; ignored elsewhere). Apply even while paused so the
+                // pose is right on resume; during a crossfade both streams are audible. Remember
+                // it so a later hot-switch re-applies it to the incoming stream.
+                stream_->set_listener_orientation(pending_orientation_);
+                if (xfade_active_) {
+                    xfade_stream_->set_listener_orientation(pending_orientation_);
+                }
+                current_orientation_ = pending_orientation_;
+                orientation_pending_ = false;
+            }
             if (switch_pending_) {
                 // Begin a crossfade to the incoming backend. Settle any in-flight fade
                 // first, then seek the incoming stream to the current playhead so it renders
@@ -197,6 +218,7 @@ void MonitorEngine::worker_loop() {
                 finalize_crossfade();
                 if (auto r = pending_stream_->seek(producer_pos_); r) {
                     pending_stream_->set_overrides(current_overrides_);
+                    pending_stream_->set_listener_orientation(current_orientation_);
                     xfade_stream_ = std::move(pending_stream_);
                     xfade_active_ = true;
                     xfade_pos_ = 0;
@@ -217,7 +239,7 @@ void MonitorEngine::worker_loop() {
                 wake_.wait(lock, [this] {
                     const bool done = ended_.load(std::memory_order_relaxed) || failed_.load(std::memory_order_relaxed);
                     return quit_.load(std::memory_order_acquire) || seek_pending_ || overrides_pending_ ||
-                           switch_pending_ ||
+                           orientation_pending_ || switch_pending_ ||
                            (state_.load(std::memory_order_seq_cst) == MonitorState::playing && !done);
                 });
                 continue;

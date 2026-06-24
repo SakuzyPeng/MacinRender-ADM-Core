@@ -1197,6 +1197,24 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
     }
 }
 
+adm_error_code_t
+adm_monitor_set_listener_orientation(adm_monitor_t* monitor, float yaw_deg, float pitch_deg, float roll_deg) noexcept {
+    if (monitor == nullptr || !monitor->session || !std::isfinite(yaw_deg) || !std::isfinite(pitch_deg) ||
+        !std::isfinite(roll_deg)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        mradm::ListenerOrientation orientation;
+        orientation.yaw_deg = yaw_deg;
+        orientation.pitch_deg = pitch_deg;
+        orientation.roll_deg = roll_deg;
+        monitor->session->set_listener_orientation(orientation);
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
 adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_render_options_t* opts) noexcept {
     if (monitor == nullptr || !monitor->session) {
         return ADM_ERROR_INVALID_ARGUMENT;

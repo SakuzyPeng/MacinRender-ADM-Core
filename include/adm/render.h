@@ -162,6 +162,14 @@ class IRenderStream {
     // incrementally; the default ignores overrides (gain stays at the prepared value).
     virtual void set_overrides(const LiveOverrides& overrides) { (void) overrides; }
 
+    // Apply a live listener head orientation (yaw/pitch/roll). Called on the worker thread at
+    // block boundaries (never the audio callback), e.g. driven by a head-tracking sensor or a
+    // manual free-look control. Only the Apple AUSpatialMixer binaural backend implements it
+    // (HeadYaw/Pitch/Roll are live AudioUnit params, no re-prepare); other backends ignore it.
+    // NOT pure virtual so backends adopt it incrementally; the default keeps the prepared
+    // (identity) orientation.
+    virtual void set_listener_orientation(const ListenerOrientation& orientation) { (void) orientation; }
+
     [[nodiscard]] virtual uint32_t out_channels() const = 0;
     [[nodiscard]] virtual uint32_t sample_rate() const = 0;
     [[nodiscard]] virtual std::string_view output_layout() const = 0;

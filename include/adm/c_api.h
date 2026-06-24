@@ -106,12 +106,18 @@
  *   在 adm_create_monitor 基础上增加 device_id 形参（NULL/"" = 默认设备）。
  *   adm_monitor_set_output_device 在播放中即时切换输出设备（保留播放头 / 播放态 / 后端 / 覆盖，
  *   设备重开有短暂间隙、无交叉淡化）。旧 adm_create_monitor 等价于 device_id=NULL。
+ *
+ * v1.22 新增（additive，SOVERSION 不变）：
+ *   实时听者头部朝向（头追踪 / 手动自由视角）。adm_monitor_set_listener_orientation 以
+ *   yaw/pitch/roll（度）即时设置监听听者朝向。仅 Apple 双耳监听后端实装（HeadYaw/Pitch/Roll
+ *   全局 AU 参数，廉价、无 re-prepare）；其它后端忽略。朝向在下个 worker 块边界生效，且跨
+ *   后端热切换 / 输出设备切换保留。yaw +左（与 ADM 方位一致），pitch +上,roll 跟随单元符号。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 21
+#define ADM_API_VERSION_MINOR 22
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -922,6 +928,18 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
                                            const adm_monitor_override_t* overrides,
                                            uint32_t count,
                                            uint64_t revision) ADM_API_NOEXCEPT;
+
+/*
+ * v1.22: set the live listener head orientation (head tracking / manual free-look) in degrees.
+ * yaw is +left (matching ADM azimuth), pitch +up, roll follows the unit's sign. Only the Apple
+ * binaural monitor backend applies it (HeadYaw/Pitch/Roll global AU params, no re-prepare);
+ * other backends accept but ignore it. Takes effect at the next worker block boundary and
+ * survives a backend / output-device switch. Non-finite values return ADM_ERROR_INVALID_ARGUMENT.
+ */
+adm_error_code_t adm_monitor_set_listener_orientation(adm_monitor_t* monitor,
+                                                      float yaw_deg,
+                                                      float pitch_deg,
+                                                      float roll_deg) ADM_API_NOEXCEPT;
 
 /*
  * v1.17: hot-switch the rendering backend / layout live, reusing the already-imported +
