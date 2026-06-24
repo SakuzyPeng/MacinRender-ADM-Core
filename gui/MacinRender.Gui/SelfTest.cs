@@ -110,8 +110,10 @@ internal static class SelfTest
         {
             using var probeOpts = NativeMethods.adm_create_render_options();
             var probeRc = NativeMethods.adm_create_monitor_ex(ctx, "/nonexistent.wav", probeOpts, null, out var probeMon);
+            // v1.22:听者朝向入口可解析性(probeMon 无效 → 句柄按 null 编入,C 端返回干净错误码)。
+            var orientRc = NativeMethods.adm_monitor_set_listener_orientation(probeMon, 0.0f, 0.0f, 0.0f);
             probeMon.Dispose();
-            Console.WriteLine($"adm_monitor_* 入口可解析(create_monitor_ex bogus → {probeRc})");
+            Console.WriteLine($"adm_monitor_* 入口可解析(create_monitor_ex bogus → {probeRc}, set_listener_orientation → {orientRc})");
 
             // v1.21 输出设备枚举(独立 context;返回 JSON 数组,可能为空)。
             var devices = MonitorService.ListOutputDevices();

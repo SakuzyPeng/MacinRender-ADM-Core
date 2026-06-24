@@ -14,12 +14,13 @@
     <Grid RowDefinitions="*,Auto" Background="#16181C" DragDrop.AllowDrop="True">
 
         <!-- 伪 3D 视口(拖入 64×64 PNG 皮肤即换装) -->
-        <views:SpatialSceneControl Grid.Row="0"
+        <views:SpatialSceneControl x:Name="Viewport" Grid.Row="0"
                                    Scene="{Binding SpatialModel}"
                                    CurrentTime="{Binding PlayheadSeconds}"
                                    ShowLabels="{Binding ShowObjectLabels}"
                                    PersistTrail="{Binding PersistTrail}"
-                                   Skin="{Binding CharacterSkin}"/>
+                                   Skin="{Binding CharacterSkin}"
+                                   HeadLookMode="{Binding HeadTrackingEnabled}"/>
 
         <!-- 操作提示(角标) -->
         <TextBlock Grid.Row="0" Margin="12,10,0,0" FontSize="11"
@@ -35,6 +36,14 @@
             <CheckBox FontSize="11" Foreground="#B0FFFFFF"
                       IsChecked="{Binding PersistTrail}"
                       Content="{DynamicResource SemSpatialKeep}"/>
+            <!-- 头视角(第一人称手操头追踪):开 → 拖拽/双指/方向键转头实时改声场;R 或下方按钮复位 -->
+            <CheckBox FontSize="11" Foreground="#B0FFFFFF"
+                      IsChecked="{Binding HeadTrackingEnabled}"
+                      Content="{DynamicResource SemHeadTrack}"/>
+            <Button FontSize="11" Padding="6,1" HorizontalAlignment="Right"
+                    IsVisible="{Binding HeadTrackingEnabled}"
+                    Command="{Binding RecenterHeadCommand}"
+                    Content="{DynamicResource SemHeadRecenter}"/>
         </StackPanel>
 
         <!-- 传输条:播放/暂停 + 时间 + scrub(与监听同步;无监听时拖动只预览动画) -->

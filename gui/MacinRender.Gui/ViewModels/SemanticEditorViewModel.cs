@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using MacinRender.Gui.I18n;
 using MacinRender.Gui.Interop;
 using MacinRender.Gui.Services;
+using MacinRender.Gui.Services.HeadTracking;
 
 namespace MacinRender.Gui.ViewModels;
 
@@ -149,6 +150,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) }; // ~30 Hz
         _pollTimer.Tick += (_, _) => PollMonitor();
+        _headTracking.OrientationResolved += ApplyHeadOrientation;
     }
 
     public async Task<bool> LoadFileAsync(string path)
@@ -334,6 +336,19 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private bool _overridesDirty; // 行覆盖变更标记,轮询时去抖推送
     private ulong _overrideRevision;
     private uint _sampleRate;
+
+    // ── 头部追踪(Phase 1.5 手操自由视角):manual 来源 → manager(四元数管线)→ 末端 Euler
+    // 扇出视觉(SpatialSceneControl)+ 音频(MonitorService.SetListenerOrientation)。Tick 复用轮询定时器。──
+    private const double Deg2Rad = Math.PI / 180.0;
+    private readonly HeadTrackingManager _headTracking = new();
+    private readonly ManualFreeLookSource _manualHead = new();
+
+    // 解析出的头朝向(度)→ 视图把它(转弧度)灌进 SpatialSceneControl.SetHeadOrientation。
+    public event Action<float, float, float>? HeadOrientationResolved;
+
+    // 头视角模式开关(绑定到 SpatialSceneControl.HeadLookMode)。开:拖拽/键盘转头实时改声场。
+    [ObservableProperty]
+    private bool _headTrackingEnabled;
 
     public ObservableCollection<MonitorBackendOption> MonitorBackends { get; } = new();
 
@@ -607,12 +622,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         PushOverrides();          // 把当前编辑立即应用到新监听
         _monitor.Play();
         MonitorState = AdmMonitorState.Playing;
-        _pollTimer.Start();
+        UpdatePollTimer();
     }
 
     public void StopMonitor()
     {
-        _pollTimer.Stop();
         _monitor.Stop();
         _scrubbing = false;
         IsMonitoring = false;
@@ -624,6 +638,62 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         ShorttermLufs = float.NegativeInfinity;
         IntegratedLufs = float.NegativeInfinity;
         MonitorStatus = "";
+        UpdatePollTimer(); // 头追踪仍开则保留定时器(供视觉自由视角),否则停
+    }
+
+    // 定时器在「监听中」或「头视角开」任一成立时运行(Start/Stop 幂等)。
+    private void UpdatePollTimer()
+    {
+        if (IsMonitoring || HeadTrackingEnabled)
+        {
+            _pollTimer.Start();
+        }
+        else
+        {
+            _pollTimer.Stop();
+        }
+    }
+
+    partial void OnHeadTrackingEnabledChanged(bool value)
+    {
+        if (value)
+        {
+            _headTracking.AttachSource(_manualHead); // 挂手操来源并启动
+        }
+        else
+        {
+            _headTracking.DetachSource();
+            ApplyHeadOrientation(0f, 0f, 0f); // 回正:视觉 + 音频都归零
+        }
+        UpdatePollTimer();
+    }
+
+    // manager 解析出的头朝向(度)→ 音频(SetListenerOrientation)+ 视觉(经事件转弧度灌控件)。
+    private void ApplyHeadOrientation(float yawDeg, float pitchDeg, float rollDeg)
+    {
+        _monitor.SetListenerOrientation(yawDeg, pitchDeg, rollDeg);
+        HeadOrientationResolved?.Invoke(yawDeg, pitchDeg, rollDeg);
+    }
+
+    // 由 SpatialWindow 代码后置在控件 HeadLookDelta 时调用:把手势增量喂给手操来源。
+    public void OnHeadLookDelta(double dYawDeg, double dPitchDeg, double dRollDeg)
+    {
+        if (dYawDeg != 0.0 || dPitchDeg != 0.0)
+        {
+            _manualHead.ApplyLookDelta(dYawDeg, dPitchDeg);
+        }
+        if (dRollDeg != 0.0)
+        {
+            _manualHead.ApplyRollDelta(dRollDeg);
+        }
+    }
+
+    // recenter:把当前姿态设为正前(键盘 R / 双击 / UI 按钮)。
+    [RelayCommand]
+    private void RecenterHead()
+    {
+        _manualHead.Reset();
+        _headTracking.Recenter();
     }
 
     partial void OnSelectedMonitorBackendChanged(MonitorBackendOption value)
@@ -679,6 +749,8 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     private void PollMonitor()
     {
+        _headTracking.Tick(); // 头追踪平滑 + 发射(无激活来源时空操作);先于监听守卫,故仅头视角(未监听)也刷新
+
         if (!IsMonitoring)
         {
             return;

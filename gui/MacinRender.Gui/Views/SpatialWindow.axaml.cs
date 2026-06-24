@@ -15,6 +15,10 @@ namespace MacinRender.Gui.Views;
 // 于是播放头(PlayheadSeconds)、空间模型(SpatialModel)、传输控制全部白送、实时联动。
 public partial class SpatialWindow : Window
 {
+    private const double Deg2Rad = Math.PI / 180.0;
+    private readonly SpatialSceneControl? _viewport;
+    private SemanticEditorViewModel? _wiredVm;
+
     public SpatialWindow()
     {
         InitializeComponent();
@@ -29,10 +33,42 @@ public partial class SpatialWindow : Window
             seek.AddHandler(Thumb.DragCompletedEvent, OnSeekDragCompleted);
         }
 
+        // 头追踪:视口外抛手势增量 / recenter → VM;VM 解析出的头朝向(度)→ 转弧度灌回视口(视觉)。
+        _viewport = this.FindControl<SpatialSceneControl>("Viewport");
+        if (_viewport is not null)
+        {
+            _viewport.HeadLookDelta += OnHeadLookDelta;
+            _viewport.RecenterRequested += OnRecenterRequested;
+        }
+        DataContextChanged += OnDataContextChanged;
+
         // 拖入 64×64 PNG 皮肤即换装(类 SOFA:直接拖、记忆上次)。
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);
     }
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        if (_wiredVm is not null)
+        {
+            _wiredVm.HeadOrientationResolved -= OnHeadOrientationResolved;
+        }
+        _wiredVm = DataContext as SemanticEditorViewModel;
+        if (_wiredVm is not null)
+        {
+            _wiredVm.HeadOrientationResolved += OnHeadOrientationResolved;
+        }
+    }
+
+    private void OnHeadLookDelta(double dYawDeg, double dPitchDeg, double dRollDeg) =>
+        (DataContext as SemanticEditorViewModel)?.OnHeadLookDelta(dYawDeg, dPitchDeg, dRollDeg);
+
+    private void OnRecenterRequested() =>
+        (DataContext as SemanticEditorViewModel)?.RecenterHeadCommand.Execute(null);
+
+    // VM 朝向(度)→ 视口 SetHeadOrientation(弧度);第一人称相机随之反摆,角色隐藏。
+    private void OnHeadOrientationResolved(float yawDeg, float pitchDeg, float rollDeg) =>
+        _viewport?.SetHeadOrientation(yawDeg * Deg2Rad, pitchDeg * Deg2Rad, rollDeg * Deg2Rad);
 
     private static bool IsPng(string path) =>
         string.Equals(Path.GetExtension(path), ".png", StringComparison.OrdinalIgnoreCase);
@@ -85,5 +121,15 @@ public partial class SpatialWindow : Window
     {
         base.OnClosed(e);
         Localizer.Instance.PropertyChanged -= OnLocalizerChanged;
+        if (_viewport is not null)
+        {
+            _viewport.HeadLookDelta -= OnHeadLookDelta;
+            _viewport.RecenterRequested -= OnRecenterRequested;
+        }
+        if (_wiredVm is not null)
+        {
+            _wiredVm.HeadOrientationResolved -= OnHeadOrientationResolved;
+            _wiredVm = null;
+        }
     }
 }
