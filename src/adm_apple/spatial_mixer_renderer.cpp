@@ -475,8 +475,7 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
 // 推导(见 Phase 1 smoke):AU 感知 az = world_az + yaw(工程 yaw +左),故令 world_az = az - yaw
 // 即抵消;一般化为对方向向量做与头同向的 3D 旋转。坐标:x=右、y=前、z=上。yaw 已真机印证,
 // pitch/roll 符号待真机微调(反了就给对应分量取负)。
-[[nodiscard]] std::pair<float, float> head_lock_compensate(float az_deg, float el_deg,
-                                                           const ListenerOrientation& o) {
+[[nodiscard]] std::pair<float, float> head_lock_compensate(float az_deg, float el_deg, const ListenerOrientation& o) {
     constexpr double d2r = 0.017453292519943295;
     constexpr double r2d = 57.29577951308232;
     const double a = az_deg * d2r;
@@ -789,6 +788,7 @@ class AppleStream final : public IRenderStream {
             !r) {
             return tl::unexpected{r.error()};
         }
+        stream->live_orientation_ = plan.listener_orientation;
 
         stream->reader_ = bw64::readFile(plan.input_path);
         if (!stream->reader_) {

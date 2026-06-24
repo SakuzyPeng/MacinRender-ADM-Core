@@ -1261,6 +1261,74 @@ bool verify_apple_stream_listener_orientation() {
     return ok;
 }
 
+// If the stream is created with an initial non-identity listener orientation, head-locked live
+// overrides must use that same initial pose for per-bus compensation before the first process().
+bool verify_apple_stream_initial_head_locked_orientation() {
+    const auto in = write_fixture(0.0F, 8192U, 1.0F, 0.0F, false); // front source
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "stream-headlock: import scene with an object")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+    plan.listener_orientation.yaw_deg = 90.0F;
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "stream-headlock: apple prepare")) {
+        return false;
+    }
+
+    const auto world_locked = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024});
+    if (!world_locked) {
+        return false;
+    }
+
+    auto stream = renderer->open_stream(**prepared, plan, logs);
+    if (!check(stream.has_value(), "stream-headlock: open stream")) {
+        return false;
+    }
+    mradm::LiveOverrides ov;
+    ov.revision = 1;
+    ov.objects.push_back({object_id, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", true});
+    (*stream)->set_overrides(ov);
+
+    const uint32_t ch = (*stream)->out_channels();
+    std::vector<float> head_locked;
+    std::vector<float> buf;
+    while (true) {
+        buf.assign(static_cast<std::size_t>(1024) * ch, 0.0F);
+        auto produced = (*stream)->process(std::span<float>(buf), 1024);
+        if (!check(produced.has_value(), "stream-headlock: process succeeds")) {
+            return false;
+        }
+        if (*produced == 0) {
+            break;
+        }
+        head_locked.insert(head_locked.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * ch));
+    }
+
+    const double world_l = channel_energy(*world_locked, 2U, 0U);
+    const double world_r = channel_energy(*world_locked, 2U, 1U);
+    const double locked_l = channel_energy(head_locked, 2U, 0U);
+    const double locked_r = channel_energy(head_locked, 2U, 1U);
+    const double world_imbalance = std::abs(world_r - world_l);
+    const double locked_imbalance = std::abs(locked_r - locked_l);
+
+    bool ok = true;
+    ok &= check(world_r > world_l, "stream-headlock: initial yaw moves world-locked front source right");
+    ok &= check(locked_imbalance < world_imbalance * 0.5,
+                "stream-headlock: head-locked override compensates the initial listener yaw");
+    return ok;
+}
+
 // A scene with no renderable buses (here: a muted object) must open a silent stream — not
 // fail trying to drive a 0-input AUSpatialMixer — and produce full-length silence.
 bool verify_apple_stream_silent() {
@@ -1397,6 +1465,7 @@ int main() {
     ok &= verify_bed_and_lfe_routing();
     ok &= verify_apple_stream_matches_window();
     ok &= verify_apple_stream_listener_orientation();
+    ok &= verify_apple_stream_initial_head_locked_orientation();
     ok &= verify_apple_stream_silent();
     ok &= verify_apple_stream_gain_override();
     ok &= verify_spatial_mixer_hrtf_modes_probe();
