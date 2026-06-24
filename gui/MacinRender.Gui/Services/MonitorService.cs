@@ -94,6 +94,13 @@ public sealed class MonitorService : IDisposable
             ? NativeMethods.adm_monitor_set_loop(m, startSeconds, endSeconds)
             : AdmErrorCode.InvalidArgument;
 
+    /// <summary>实时设置听者头部朝向(yaw/pitch/roll 度;yaw +左)。仅 Apple 双耳监听后端实装,其它后端忽略。
+    /// 契约:monitor 非线程安全,须在 UI 线程调用。</summary>
+    public AdmErrorCode SetListenerOrientation(float yawDeg, float pitchDeg, float rollDeg) =>
+        _monitor is { IsInvalid: false } m
+            ? NativeMethods.adm_monitor_set_listener_orientation(m, yawDeg, pitchDeg, rollDeg)
+            : AdmErrorCode.InvalidArgument;
+
     /// <summary>播放中即时切换输出设备(deviceId 为 null/"" = 默认设备)。保留播放头/状态/后端/覆盖。</summary>
     public AdmErrorCode SetOutputDevice(string? deviceId) =>
         _monitor is { IsInvalid: false } m

@@ -34,6 +34,11 @@ internal sealed class SpatialSceneControl : Control
     public static readonly StyledProperty<CharacterSkin?> SkinProperty =
         AvaloniaProperty.Register<SpatialSceneControl, CharacterSkin?>(nameof(Skin));
 
+    // 头视角模式:纯改「拖拽/触控板/键盘」控制谁 —— true = 只转头(增量经 HeadLookDelta 外抛,
+    // 相机不动,看 avatar 转头);false = 只转轨道相机(原行为)。两模式都保持第三人称视图,不切第一人称。
+    public static readonly StyledProperty<bool> HeadLookModeProperty =
+        AvaloniaProperty.Register<SpatialSceneControl, bool>(nameof(HeadLookMode));
+
     public SpatialScene? Scene
     {
         get => GetValue(SceneProperty);
@@ -64,7 +69,33 @@ internal sealed class SpatialSceneControl : Control
         set => SetValue(SkinProperty, value);
     }
 
+    public bool HeadLookMode
+    {
+        get => GetValue(HeadLookModeProperty);
+        set => SetValue(HeadLookModeProperty, value);
+    }
+
     private CharacterSkin ActiveSkin => Skin ?? CharacterSkin.Default;
+
+    // 头视角增量(度):dYaw 水平转头(+左),dPitch 俯仰(+上),dRoll 歪头(+顺时针)。控件只外抛
+    // 增量,不本地改 _head*;权威头朝向由 VM→HeadTrackingManager 平滑后经 SetHeadOrientation 回灌。
+    public event Action<double, double, double>? HeadLookDelta;
+
+    // 请求 recenter(键盘 R / 头视角下双击)。VM 据此把当前姿态设为正前。
+    public event Action? RecenterRequested;
+
+    // 灵敏度:鼠标拖拽 °/px、触控板双指 °/单位、键盘每次按键 °。
+    private const double DragLookSensitivity = 0.3;
+    private const double WheelLookSensitivity = 2.0;
+    private const double KeyLookStepDeg = 3.0;
+
+    public SpatialSceneControl()
+    {
+        Focusable = true; // 头视角模式下接收方向键 / WASD / Q-E / R
+    }
+
+    private void RaiseLook(double dYawDeg, double dPitchDeg, double dRollDeg) =>
+        HeadLookDelta?.Invoke(dYawDeg, dPitchDeg, dRollDeg);
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -136,7 +167,7 @@ internal sealed class SpatialSceneControl : Control
     static SpatialSceneControl()
     {
         AffectsRender<SpatialSceneControl>(SceneProperty, CurrentTimeProperty, ShowLabelsProperty,
-            PersistTrailProperty);
+            PersistTrailProperty, HeadLookModeProperty);
     }
 
     public void SetHeadOrientation(double yaw, double pitch, double roll)
@@ -155,13 +186,24 @@ internal sealed class SpatialSceneControl : Control
         InvalidateVisual();
     }
 
-    // ── 交互:拖拽轨道旋转、滚轮缩放、双击复位 ──
+    // ── 交互:轨道模式=拖拽轨道旋转/滚轮缩放/双击复位;头视角模式=拖拽/双指转头、双击 recenter ──
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+        if (HeadLookMode)
+        {
+            Focus(); // 取得键盘焦点,接收方向键 / WASD / Q-E / R
+        }
         if (e.ClickCount == 2)
         {
-            ResetView();
+            if (HeadLookMode)
+            {
+                RecenterRequested?.Invoke();
+            }
+            else
+            {
+                ResetView();
+            }
             return;
         }
 
@@ -179,10 +221,20 @@ internal sealed class SpatialSceneControl : Control
         }
 
         var p = e.GetPosition(this);
-        _yaw += (p.X - _lastPointer.X) * 0.01;
-        _pitch += (p.Y - _lastPointer.Y) * 0.01;
-        _pitch = Math.Clamp(_pitch, -1.45, 1.45);
+        double dx = p.X - _lastPointer.X;
+        double dy = p.Y - _lastPointer.Y;
         _lastPointer = p;
+
+        if (HeadLookMode)
+        {
+            // 拖拽 = 转头:水平 → yaw(+左,故取 -dx),垂直上移 → 抬头(+pitch,故取 -dy)。
+            RaiseLook(-dx * DragLookSensitivity, -dy * DragLookSensitivity, 0.0);
+            return;
+        }
+
+        _yaw += dx * 0.01;
+        _pitch += dy * 0.01;
+        _pitch = Math.Clamp(_pitch, -1.45, 1.45);
         InvalidateVisual();
     }
 
@@ -196,8 +248,55 @@ internal sealed class SpatialSceneControl : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
+        if (HeadLookMode)
+        {
+            // 头视角下触控板双指滑动 = 转头(不缩放)。Delta.X → yaw(+左),Delta.Y → 抬头。
+            RaiseLook(e.Delta.X * WheelLookSensitivity, e.Delta.Y * WheelLookSensitivity, 0.0);
+            return;
+        }
         _zoom = Math.Clamp(_zoom * (1.0 + (e.Delta.Y * 0.1)), 0.4, 3.0);
         InvalidateVisual();
+    }
+
+    // 键盘头追踪(仅头视角模式):方向键 / WASD 微调 yaw·pitch,Q/E 歪头 roll,R 复位。
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (!HeadLookMode)
+        {
+            return;
+        }
+        switch (e.Key)
+        {
+            case Key.Left:
+            case Key.A:
+                RaiseLook(KeyLookStepDeg, 0.0, 0.0);
+                break;
+            case Key.Right:
+            case Key.D:
+                RaiseLook(-KeyLookStepDeg, 0.0, 0.0);
+                break;
+            case Key.Up:
+            case Key.W:
+                RaiseLook(0.0, KeyLookStepDeg, 0.0);
+                break;
+            case Key.Down:
+            case Key.S:
+                RaiseLook(0.0, -KeyLookStepDeg, 0.0);
+                break;
+            case Key.Q:
+                RaiseLook(0.0, 0.0, -KeyLookStepDeg);
+                break;
+            case Key.E:
+                RaiseLook(0.0, 0.0, KeyLookStepDeg);
+                break;
+            case Key.R:
+                RecenterRequested?.Invoke();
+                break;
+            default:
+                return; // 其它键不拦截
+        }
+        e.Handled = true;
     }
 
     // ── 投影 ──
@@ -208,6 +307,8 @@ internal sealed class SpatialSceneControl : Control
 
     private void UpdateRotationCache()
     {
+        // 相机始终用自身轨道角(第三人称)。头视角模式不改相机,只让角色模型(RotateHead)转头 —
+        // 在正交立方体视图里「相机=头」的第一人称会退化成 2D,故弃用;转头看 avatar 朝向 + 听声场转。
         _cosYaw = Math.Cos(_yaw);
         _sinYaw = Math.Sin(_yaw);
         _cosPitch = Math.Cos(_pitch);
@@ -228,6 +329,12 @@ internal sealed class SpatialSceneControl : Control
         double z2 = (y1 * _sinPitch) + (p.Z * _cosPitch);
         return new Vec3(x1, y2, z2);
     }
+
+    // 只有头随听者朝向转(头盒中心 = 模型原点,故 RotateHead 即绕头心原地转);身体/四肢保持朝前 →
+    // 「转头」而非「整人绕头心转」。前 12 面 = 头基础层 + 帽层(2 个 box × 6 面),见 BuildParts 顺序。
+    private const int HeadFaceCount = 12;
+
+    private Vec3 RotatePart(Vec3 p, bool isHead) => isHead ? RotateHead(p) : p;
 
     private Vec3 RotateHead(Vec3 p)
     {
@@ -402,7 +509,7 @@ internal sealed class SpatialSceneControl : Control
 
         DrawTrajectories(context, scene);
         DrawBeds(context, scene);
-        DrawCharacter(context);
+        DrawCharacter(context); // 始终画角色:头视角模式下它随头朝向转,作为「我面朝哪」的视觉反馈
 
         // 近批(深度 <= 0,在角色前)后画。
         foreach (var item in _samples)
@@ -451,25 +558,26 @@ internal sealed class SpatialSceneControl : Control
         _faceOrder.Clear();
         for (int i = 0; i < parts.Length; i++)
         {
-            if (RotateCamera(RotateHead(parts[i].Normal)).Y >= 0)
+            bool isHead = i < HeadFaceCount;
+            if (RotateCamera(RotatePart(parts[i].Normal, isHead)).Y >= 0)
             {
                 continue;
             }
 
-            _faceOrder.Add((i, RotateCamera(RotateHead(parts[i].Uv(0.5, 0.5))).Y));
+            _faceOrder.Add((i, RotateCamera(RotatePart(parts[i].Uv(0.5, 0.5), isHead)).Y));
         }
 
         _faceOrder.Sort((a, b) => b.Depth.CompareTo(a.Depth)); // 远 → 近
         foreach (var (idx, _) in _faceOrder)
         {
-            CollectSkinFace(parts[idx]);
+            CollectSkinFace(parts[idx], idx < HeadFaceCount);
         }
     }
 
     // 逐像素采样面的皮肤矩形,每个不透明像素 → 一个投影四边形几何 + 共享画刷,按深度序存入缓存。
-    private void CollectSkinFace(in SkinFace f)
+    private void CollectSkinFace(in SkinFace f, bool isHead)
     {
-        double shade = FaceShade(f.Normal);
+        double shade = FaceShade(f.Normal, isHead);
         for (int py = 0; py < f.Th; py++)
         {
             double v0 = py / (double)f.Th;
@@ -493,10 +601,10 @@ internal sealed class SpatialSceneControl : Control
                 double u0 = px / (double)f.Tw;
                 double u1 = (px + 1) / (double)f.Tw;
                 _charCache.Add((Quad(
-                    Project(RotateCamera(RotateHead(f.Uv(u0, v0)))),
-                    Project(RotateCamera(RotateHead(f.Uv(u1, v0)))),
-                    Project(RotateCamera(RotateHead(f.Uv(u1, v1)))),
-                    Project(RotateCamera(RotateHead(f.Uv(u0, v1))))), brush));
+                    Project(RotateCamera(RotatePart(f.Uv(u0, v0), isHead))),
+                    Project(RotateCamera(RotatePart(f.Uv(u1, v0), isHead))),
+                    Project(RotateCamera(RotatePart(f.Uv(u1, v1), isHead))),
+                    Project(RotateCamera(RotatePart(f.Uv(u0, v1), isHead)))), brush));
             }
         }
     }
@@ -513,9 +621,9 @@ internal sealed class SpatialSceneControl : Control
         return geo;
     }
 
-    private double FaceShade(Vec3 normalLocal)
+    private double FaceShade(Vec3 normalLocal, bool isHead)
     {
-        var n = RotateCamera(RotateHead(normalLocal));
+        var n = RotateCamera(RotatePart(normalLocal, isHead));
         // 光源:左上前方。归一化法线后取 n·L,映射到 [0.55, 1.0]。
         double len = Math.Sqrt((n.X * n.X) + (n.Y * n.Y) + (n.Z * n.Z));
         if (len < 1e-9)
