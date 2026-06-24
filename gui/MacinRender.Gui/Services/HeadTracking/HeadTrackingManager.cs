@@ -51,6 +51,9 @@ internal sealed class HeadTrackingManager : IDisposable
         _source = source;
         source.OrientationChanged += OnSourceOrientation;
         source.Start();
+        // 从来源「当前」姿态起步(手操来源 Start 会同步发出已 Seed 的姿态),避免从 identity 滑回正前
+        // ——即启用时不复位。传感器来源 Start 不同步出数据,_rawLatest 仍为 identity,无影响。
+        _smoothed = _rawLatest;
     }
 
     /// <summary>卸下当前来源并复位内部状态。</summary>
