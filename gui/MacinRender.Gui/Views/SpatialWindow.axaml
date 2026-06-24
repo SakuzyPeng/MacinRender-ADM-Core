@@ -20,7 +20,7 @@
                                    ShowLabels="{Binding ShowObjectLabels}"
                                    PersistTrail="{Binding PersistTrail}"
                                    Skin="{Binding CharacterSkin}"
-                                   HeadLookMode="{Binding HeadTrackingEnabled}"/>
+                                   HeadLookMode="{Binding ManualHeadEnabled}"/>
 
         <!-- 操作提示(角标) -->
         <TextBlock Grid.Row="0" Margin="12,10,0,0" FontSize="11"
@@ -36,12 +36,17 @@
             <CheckBox FontSize="11" Foreground="#B0FFFFFF"
                       IsChecked="{Binding PersistTrail}"
                       Content="{DynamicResource SemSpatialKeep}"/>
-            <!-- 头视角(第一人称手操头追踪):开 → 拖拽/双指/方向键转头实时改声场;R 或下方按钮复位 -->
+            <!-- AirPods 头追踪(传感器来源,与手操互斥;手操优先)。不可用时禁用(需硬件 + 打包授权) -->
             <CheckBox FontSize="11" Foreground="#B0FFFFFF"
-                      IsChecked="{Binding HeadTrackingEnabled}"
+                      IsChecked="{Binding AirPodsTrackingEnabled}"
+                      IsEnabled="{Binding AirPodsAvailable}"
+                      Content="{DynamicResource SemHeadAirPods}"/>
+            <!-- 手动转头模式:开 = 手操独占,拖拽/双指/方向键只转头、实时改声场;R 或下方按钮复位 -->
+            <CheckBox FontSize="11" Foreground="#B0FFFFFF"
+                      IsChecked="{Binding ManualHeadEnabled}"
                       Content="{DynamicResource SemHeadTrack}"/>
             <Button FontSize="11" Padding="6,1" HorizontalAlignment="Right"
-                    IsVisible="{Binding HeadTrackingEnabled}"
+                    IsVisible="{Binding ManualHeadEnabled}"
                     Command="{Binding RecenterHeadCommand}"
                     Content="{DynamicResource SemHeadRecenter}"/>
         </StackPanel>

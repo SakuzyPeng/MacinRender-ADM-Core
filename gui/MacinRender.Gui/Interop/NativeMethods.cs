@@ -297,4 +297,20 @@ internal static partial class NativeMethods
     [LibraryImport(Lib)]
     internal static partial int adm_monitor_log_entry(AdmMonitorHandle monitor, uint index, out AdmLogLevel level,
         out IntPtr module, out IntPtr message);
+
+    // ── 头部追踪 shim(libmr_headtrack,CoreMotion / AirPods,macOS-only;build-headtrack.sh 构建)──
+    private const string HeadtrackLib = "mr_headtrack";
+
+    // 硬件 + 框架是否支持头部姿态(AirPods 在位)。
+    [LibraryImport(HeadtrackLib)]
+    internal static partial int mr_headtrack_available();
+
+    // 开始推送姿态四元数(w,x,y,z);cb 在 CoreMotion 后台队列被调用。返回 1 成功。
+    // cb 为 NativeAOT 的 [UnmanagedCallersOnly] 静态方法指针。
+    [LibraryImport(HeadtrackLib)]
+    internal static unsafe partial int mr_headtrack_start(
+        delegate* unmanaged[Cdecl]<double, double, double, double, void> cb);
+
+    [LibraryImport(HeadtrackLib)]
+    internal static partial void mr_headtrack_stop();
 }

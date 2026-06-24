@@ -27,6 +27,13 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+  <!-- 头部追踪 shim(CoreMotion / AirPods,macOS-only;由 build-headtrack.sh 编入 runtimes)。
+       供 [LibraryImport("mr_headtrack")] 解析;缺失则跳过(手操转头不依赖它)。 -->
+  <ItemGroup Condition="Exists('runtimes/osx-arm64/native/libmr_headtrack.dylib')">
+    <None Include="runtimes/osx-arm64/native/libmr_headtrack.dylib" Link="libmr_headtrack.dylib">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
   <ItemGroup>
     <AvaloniaResource Include="Assets/**" />
