@@ -87,7 +87,12 @@ internal sealed class AirPodsMotionSource : IHeadTrackingSource
             return;
         }
         // System.Numerics.Quaternion 构造为 (x, y, z, w);CMQuaternion 给的是 (w, x, y, z)。
-        var q = new Quaternion((float)x, (float)y, (float)z, (float)w);
+        //
+        // 轴重映射(CoreMotion 设备帧 → 项目约定):实测左右转头(应为 yaw)出现在 roll 上 ——
+        // CoreMotion 把头部 yaw 编在其 Z 轴,而下游 HeadTrackingManager 的 YXZ 提取把 Z 轴当 roll。
+        // 交换 y/z 分量,让 yaw 落到我们的 Y 轴(pitch 仍在 X,roll 落到 Z)。方向/符号待真机微调:
+        // 若某轴转向相反,对该分量取负即可。
+        var q = new Quaternion((float)x, (float)z, (float)y, (float)w);
         Dispatcher.UIThread.Post(() => src.OrientationChanged?.Invoke(q));
     }
 
