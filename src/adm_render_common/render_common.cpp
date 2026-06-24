@@ -76,6 +76,25 @@ std::optional<float> resolve_live_channel_gain(const LiveOverrides& overrides,
     return std::pow(10.0F, pick->gain_db / 20.0F);
 }
 
+bool resolve_live_head_locked(const LiveOverrides& overrides,
+                              std::string_view object_id,
+                              std::string_view channel_label_key) {
+    const LiveObjectOverride* whole = nullptr;
+    const LiveObjectOverride* specific = nullptr;
+    for (const auto& ov : overrides.objects) {
+        if (ov.object_id != object_id) {
+            continue;
+        }
+        if (ov.speaker_label.empty()) {
+            whole = &ov;
+        } else if (!channel_label_key.empty() && canonicalise_speaker_label(ov.speaker_label) == channel_label_key) {
+            specific = &ov;
+        }
+    }
+    const LiveObjectOverride* pick = (specific != nullptr) ? specific : whole;
+    return pick != nullptr && pick->head_locked;
+}
+
 bool is_lfe_label(std::string_view raw) noexcept {
     const std::string key = normalise_speaker_label_key(raw);
     return key == "LF" || key.find("LFE") != std::string::npos || key.find("SUB") != std::string::npos ||

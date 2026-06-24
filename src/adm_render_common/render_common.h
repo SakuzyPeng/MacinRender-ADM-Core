@@ -42,6 +42,13 @@ namespace mradm::render_common {
                                                              std::string_view object_id,
                                                              std::string_view channel_label_key);
 
+// Resolve whether one input channel is head-locked (excluded from head tracking) given its owning
+// object id + canonicalised speaker label. Same whole-object vs per-channel precedence as gain;
+// returns false (world-locked, the default) when no override applies.
+[[nodiscard]] bool resolve_live_head_locked(const LiveOverrides& overrides,
+                                            std::string_view object_id,
+                                            std::string_view channel_label_key);
+
 // ADM producers are inconsistent: some LFE DirectSpeakers channels carry
 // channelFrequency lowPass, while others only encode the role in labels like
 // RC_LFE/RCLFE/LFE1. Use this helper before positional fallback/spatialization.

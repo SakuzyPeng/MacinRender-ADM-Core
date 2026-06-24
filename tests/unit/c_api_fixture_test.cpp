@@ -2095,7 +2095,7 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
-    bool ok = check(adm_api_version_minor() == 22, "C ABI minor version is 22");
+    bool ok = check(adm_api_version_minor() == 23, "C ABI minor version is 23");
 
     // v1.22 listener orientation argument validation (no device needed).
     ok = check(adm_monitor_set_listener_orientation(nullptr, 0.0F, 0.0F, 0.0F) == ADM_ERROR_INVALID_ARGUMENT,
@@ -2186,6 +2186,7 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     ov.extent_height_scale = 1.0F;
     ov.extent_depth_scale = 1.0F;
     ov.speaker_label = "M+030"; // v1.20: per-channel DirectSpeakers filter (whole-object when NULL)
+    ov.head_locked = 1;         // v1.23: head-locked (excluded from head tracking)
     ok = check(adm_monitor_set_overrides(monitor, &ov, 1, 7) == ADM_ERROR_OK, "monitor set overrides") && ok;
     adm_monitor_override_t legacy = ov;
     legacy.struct_size = static_cast<uint32_t>(offsetof(adm_monitor_override_t, extent_width_scale));

@@ -28,6 +28,12 @@ struct LiveObjectOverride {
     // Mirrors the export-path DirectSpeakersPolicy.speaker_label so live and export stay in sync.
     // Trails the numeric fields so existing positional initializers keep compiling.
     std::string speaker_label;
+    // Head-tracking participation. false (default) = world-locked: the object/channel is fixed in
+    // the world, so it counter-rotates as the listener turns their head (current behavior). true =
+    // head-locked: stays fixed relative to the head (e.g. narration / music), so head tracking does
+    // NOT move it. Resolved per channel like gain (whole-object vs per-channel speaker_label). Only
+    // the Apple monitor backend honors it (per-bus head-orientation compensation); others ignore it.
+    bool head_locked{false};
 };
 
 // The full live-override snapshot handed to a stream. `revision` increments on every
