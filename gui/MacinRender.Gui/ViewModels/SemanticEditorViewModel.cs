@@ -1165,11 +1165,27 @@ public readonly record struct BedChannelData(
 
 /// <summary>声床的一个编辑单元:单声道或一对 L/R(同步编辑,共享一个 gain)。SpeakerLabels 含 1~2 个
 /// 标签,导出 / 实时各自按标签展开成同值规则。DisplayLabel 为剥掉公共前缀后的显示名。</summary>
-public sealed class BedChannelGroup
+public sealed class BedChannelGroup : ObservableObject
 {
     public IReadOnlyList<string> SpeakerLabels { get; }
     public string DisplayLabel { get; }
     public ScalarOverride Gain { get; }
+
+    // 该声道是否参与头追踪(true=world-locked,默认/现状;false=head-locked,锁在头上不跟头转)。
+    private bool _headTrackParticipate = true;
+    public bool HeadTrackParticipate
+    {
+        get => _headTrackParticipate;
+        set
+        {
+            if (SetProperty(ref _headTrackParticipate, value))
+            {
+                Changed?.Invoke();
+            }
+        }
+    }
+
+    public event Action? Changed;
 
     public BedChannelGroup(IReadOnlyList<string> speakerLabels, string displayLabel, double currentGainLinear)
     {
@@ -1306,14 +1322,15 @@ public sealed class SemanticRow : ObservableObject
     {
         get
         {
-            if (GainDb.Enabled || DiffuseScale.Enabled || DivergenceScale.Enabled || Extent.AnyEnabled)
+            if (GainDb.Enabled || DiffuseScale.Enabled || DivergenceScale.Enabled || Extent.AnyEnabled ||
+                !HeadTrackParticipate)
             {
                 return true;
             }
 
             foreach (var bc in BedChannels)
             {
-                if (bc.Gain.Enabled)
+                if (bc.Gain.Enabled || !bc.HeadTrackParticipate)
                 {
                     return true;
                 }
@@ -1335,6 +1352,22 @@ public sealed class SemanticRow : ObservableObject
     public ExtentOverride Extent { get; }
     public ScalarOverride DivergenceScale { get; }
 
+    // 整对象是否参与头追踪(true=world-locked,默认/现状;false=head-locked)。Objects 行用;
+    // 声床整体也可用它(bed 整体),per-channel 另由 BedChannelGroup.HeadTrackParticipate 细调。
+    private bool _headTrackParticipate = true;
+    public bool HeadTrackParticipate
+    {
+        get => _headTrackParticipate;
+        set
+        {
+            if (SetProperty(ref _headTrackParticipate, value))
+            {
+                OnPropertyChanged(nameof(HasOverride));
+                Changed?.Invoke();
+            }
+        }
+    }
+
     public event Action? Changed;
 
     private SemanticRow(IReadOnlyList<SemanticObjectItem> members, string displayName, string channelTag)
@@ -1348,6 +1381,7 @@ public sealed class SemanticRow : ObservableObject
         foreach (var bc in bedChannels)
         {
             bc.Gain.Changed += OnChildChanged;
+            bc.Changed += OnChildChanged; // 声道级头追踪参与切换
         }
 
         BedChannels = bedChannels;
@@ -1479,26 +1513,29 @@ public sealed class SemanticRow : ObservableObject
     /// 与 BuildRules 同源:gain=dB 偏移(未启用 0),其余=× 倍(未启用 1.0)。</summary>
     public IEnumerable<MonitorOverride> BuildLiveOverrides()
     {
-        // 声床:每个启用的声道一条 override,带 speaker_label 命中该声道(实时按声道生效)。
+        // 声床:每个启用 gain 或 head-locked 的声道一条 override,带 speaker_label 命中该声道。
         if (IsBed)
         {
             foreach (var bc in BedChannels)
             {
-                if (!bc.Gain.Enabled)
+                var bcHeadLocked = !bc.HeadTrackParticipate;
+                if (!bc.Gain.Enabled && !bcHeadLocked)
                 {
                     continue;
                 }
 
+                var bcGain = (float)(bc.Gain.Enabled ? bc.Gain.Value : 0.0);
                 foreach (var label in bc.SpeakerLabels) // 配对组:每声道一条带 speaker_label 的覆盖
                 {
-                    yield return new MonitorOverride(Members[0].Id, (float)bc.Gain.Value, SpeakerLabel: label);
+                    yield return new MonitorOverride(Members[0].Id, bcGain, SpeakerLabel: label, HeadLocked: bcHeadLocked);
                 }
             }
 
             yield break;
         }
 
-        if (!GainDb.Enabled && !DiffuseScale.Enabled && !Extent.AnyEnabled && !DivergenceScale.Enabled)
+        var headLocked = !HeadTrackParticipate;
+        if (!GainDb.Enabled && !DiffuseScale.Enabled && !Extent.AnyEnabled && !DivergenceScale.Enabled && !headLocked)
         {
             yield break;
         }
@@ -1511,7 +1548,8 @@ public sealed class SemanticRow : ObservableObject
         var divergence = (float)(DivergenceScale.Enabled ? DivergenceScale.Value : 1.0);
         foreach (var m in Members)
         {
-            yield return new MonitorOverride(m.Id, gainDb, diffuse, 1.0f, divergence, extentWidth, extentHeight, extentDepth);
+            yield return new MonitorOverride(m.Id, gainDb, diffuse, 1.0f, divergence, extentWidth, extentHeight,
+                extentDepth, HeadLocked: headLocked);
         }
     }
 

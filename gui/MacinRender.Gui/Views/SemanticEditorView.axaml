@@ -386,6 +386,18 @@
                                            Text="{Binding SelectedRow.GainDb.EffectiveText}"/>
                             </Grid>
 
+                            <!-- 参与头追踪(整对象):勾=world-locked 跟头转(默认);取消=head-locked 锁在头上。
+                                 仅 Objects 行显示;声床按声道在下方列表里各自设。 -->
+                            <Grid ColumnDefinitions="80,280,90" Margin="0,2,0,0"
+                                  IsVisible="{Binding SelectedRow.ShowObjectGain, FallbackValue=True}">
+                                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}"
+                                           Text="{DynamicResource SemHeadTrackCol}"/>
+                                <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                          IsChecked="{Binding SelectedRow.HeadTrackParticipate}"
+                                          Content="{DynamicResource SemHeadParticipate}"/>
+                            </Grid>
+
                             <!-- 声床:按声道 gain(每行一个 speaker label,独立 dB 偏移)。仅声床行显示 -->
                             <ItemsControl ItemsSource="{Binding SelectedRow.BedChannels}"
                                           IsVisible="{Binding SelectedRow.IsBed, FallbackValue=False}">
@@ -413,6 +425,11 @@
                                                     <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
                                                                FontSize="12" Classes="muted" Text="{Binding Gain.UnitSuffix}"/>
                                                 </Grid>
+                                                <!-- 声道级:参与头追踪(勾=跟头转,默认)。紧凑勾选框 + tooltip -->
+                                                <CheckBox VerticalAlignment="Center" FontSize="11"
+                                                          IsChecked="{Binding HeadTrackParticipate}"
+                                                          ToolTip.Tip="{DynamicResource SemHeadParticipate}"
+                                                          Content="{DynamicResource SemHeadParticipateShort}"/>
                                             </StackPanel>
                                             <TextBlock Grid.Column="2" VerticalAlignment="Center"
                                                        Foreground="{DynamicResource Accent}"

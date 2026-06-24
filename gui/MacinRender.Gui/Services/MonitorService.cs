@@ -163,6 +163,7 @@ public sealed class MonitorService : IDisposable
                     ExtentHeightScale = overrides[i].ExtentHeightScale,
                     ExtentDepthScale = overrides[i].ExtentDepthScale,
                     SpeakerLabel = labelPtrs[i],
+                    HeadLocked = overrides[i].HeadLocked ? 1 : 0,
                 };
                 Marshal.StructureToPtr(native, arr + (i * stride), false);
             }

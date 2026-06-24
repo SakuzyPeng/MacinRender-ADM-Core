@@ -56,4 +56,8 @@ public struct AdmMonitorOverride
     // v1.20: optional DirectSpeakers channel filter (UTF-8 char*, caller-owned for the call).
     // Non-NULL restricts the override to one bed channel; IntPtr.Zero = whole object.
     public IntPtr SpeakerLabel;
+
+    // v1.23: head-tracking participation. 0 = world-locked(跟头转,默认);非 0 = head-locked
+    // (锁在头上,头追踪不移动它)。仅 Apple 监听后端实装。
+    public int HeadLocked;
 }
