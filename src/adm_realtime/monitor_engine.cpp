@@ -15,6 +15,12 @@ namespace {
 // stores channels × frames floats.
 constexpr uint64_t k_chunk_frames = 1024U;
 constexpr std::size_t k_ring_frames = 8192U;
+// Push devices (e.g. AVSampleBufferAudioRenderer for system spatial) don't pull on a realtime
+// audio callback — they drain into the system media queue and tolerate latency (the system
+// spatializer already adds >150 ms). Give the worker a much deeper lead there so an occasional
+// DSP/scheduling spike can't drain the ring before the worker recovers. ~512 ms at 48 kHz.
+// The low-latency realtime devices keep the shallow ring above.
+constexpr std::size_t k_ring_frames_push = 24576U;
 constexpr auto k_idle_nap = std::chrono::milliseconds(1);
 // Linear crossfade length for a backend hot-switch (~43 ms at 48 kHz): long enough to mask
 // the discontinuity between two renderers, short enough to feel immediate.
@@ -24,7 +30,8 @@ constexpr uint64_t k_crossfade_frames = 2048U;
 MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device, LogSink& logs)
     : stream_(std::move(stream)), device_(device), logs_(logs),
       pull_is_realtime_playback_(device.pull_is_realtime_playback()), channels_(stream_->out_channels()),
-      sample_rate_(stream_->sample_rate()), ring_(k_ring_frames * channels_),
+      sample_rate_(stream_->sample_rate()),
+      ring_((device.pull_is_realtime_playback() ? k_ring_frames : k_ring_frames_push) * channels_),
       scratch_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F),
       scratch_b_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F) {
     rebuild_meter();
