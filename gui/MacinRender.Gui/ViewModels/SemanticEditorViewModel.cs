@@ -124,15 +124,15 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             RefreshDevices(); // 「系统默认」项标签随语言切换
         };
 
-        // 监听后端 A/B(默认双耳:拓扑维度需 binaural re-prepare 才听得到)。下拉项为中性专名(后端名在前),
-        // 不进 i18n 字典 → 语言无关、不随切换变化(与其它专名下拉一致)。
+        // 监听后端:下拉选后端;系统空间音频的布局(7.1.4/22.2)走右侧次级下拉 —— 与 SAF 的 SOFA 同款
+        // 上下文范式(二者互斥显示),避免 N*M 扁平选项。专名中性,不进 i18n 字典。
         MonitorBackends.Add(new MonitorBackendOption("SAF · Binaural", AdmRenderer.SafBinaural, "binaural"));
         MonitorBackends.Add(new MonitorBackendOption("Apple · Binaural", AdmRenderer.Apple, "binaural"));
         if (OperatingSystem.IsMacOS())
         {
-            // 系统空间音频:多声道(不下混)交 macOS 做 HRTF + 头追踪。换 device + 声道数 → 切换走重启监听。
-            MonitorBackends.Add(new MonitorBackendOption("Apple · 系统空间音频 7.1.4", AdmRenderer.Apple, "7.1.4", SystemSpatial: true));
-            MonitorBackends.Add(new MonitorBackendOption("Apple · 系统空间音频 22.2", AdmRenderer.Apple, "22.2", SystemSpatial: true));
+            // 系统空间音频:多声道(不下混)交 macOS 做 HRTF + 头追踪。布局走 MonitorSpatialLayouts 次级下拉;
+            // Layout 字段填默认 7.1.4 作占位,实际生效布局取 EffectiveMonitorLayout。
+            MonitorBackends.Add(new MonitorBackendOption("Apple · 系统空间音频", AdmRenderer.Apple, "7.1.4", SystemSpatial: true));
         }
         _selectedMonitorBackend = MonitorBackends[0];
         var saved = SettingsStore.Load();
@@ -378,7 +378,21 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MonitorSofaApplicable))]
     [NotifyPropertyChangedFor(nameof(MonitorDiffuseInaudible))]
+    [NotifyPropertyChangedFor(nameof(MonitorLayoutSelectorVisible))]
     private MonitorBackendOption _selectedMonitorBackend;
+
+    // 系统空间音频的布局次级下拉(与 SAF 的 SOFA 同款上下文范式,二者互斥显示)。
+    public ObservableCollection<string> MonitorSpatialLayouts { get; } = new() { "7.1.4", "22.2" };
+
+    [ObservableProperty] private string _selectedSpatialLayout = "7.1.4";
+
+    // 布局次级下拉仅在系统空间音频后端显示(binaural 无布局;SAF 那一格显示的是 SOFA 下拉)。
+    public bool MonitorLayoutSelectorVisible => SelectedMonitorBackend?.SystemSpatial ?? false;
+
+    // 实际送渲染的监听布局:系统空间音频取布局下拉,否则取后端固定 layout(binaural)。
+    private string EffectiveMonitorLayout =>
+        (SelectedMonitorBackend?.SystemSpatial ?? false) ? SelectedSpatialLayout
+                                                         : (SelectedMonitorBackend?.Layout ?? "binaural");
 
     // 输出设备选择:列表 = 「系统默认」(Id 空)+ 枚举所得设备。改变时即时切换(监听中)或下次生效。
     public ObservableCollection<MonitorDevice> MonitorDevices { get; } = new();
@@ -644,6 +658,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         DurationSeconds = dur;
         IsMonitoring = true;
         _activeMonitorBackend = backend;
+        _activeLayout = EffectiveMonitorLayout; // 记录生效布局(系统空间音频含次级),供后续热切/重启判定
         OnPropertyChanged(nameof(HeadTrackControlsEnabled)); // backend 决定头追踪开关是否可用
         PushOverrides();          // 把当前编辑立即应用到新监听
         // 常驻朝向:新监听从正前开始,把上次设定的头朝向重新应用一次(视觉+音频同步),跨监听重启保留。
@@ -748,19 +763,32 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     // 当前监听实际使用的后端:判断切换是热切(同布局换 renderer)还是重启(布局 / device 变,含 ↔ 系统空间音频)。
     private MonitorBackendOption? _activeMonitorBackend;
+    private string _activeLayout = ""; // 当前监听实际生效的布局(含系统空间音频次级),用于判热切 vs 重启
 
     // 系统空间化监听时,头追踪由 macOS 系统(ASBR)接管;per-object/声道的"参与头追踪"(head-lock
     // 补偿)只对自家 AUSpatialMixer binaural 监听有效,此时无效 → 用它禁用相关开关(灰掉)。
     public bool HeadTrackControlsEnabled => !(IsMonitoring && (_activeMonitorBackend?.SystemSpatial ?? false));
 
-    partial void OnSelectedMonitorBackendChanged(MonitorBackendOption value)
+    partial void OnSelectedMonitorBackendChanged(MonitorBackendOption value) => ReevaluateMonitorConfig(value);
+
+    partial void OnSelectedSpatialLayoutChanged(string value)
+    {
+        // 系统空间音频布局切换(7.1.4 ↔ 22.2)= 声道数 / device 变 → 走重启。
+        if (SelectedMonitorBackend?.SystemSpatial ?? false)
+        {
+            ReevaluateMonitorConfig(SelectedMonitorBackend);
+        }
+    }
+
+    // 后端或布局变化后重评:同拓扑(后端类型、生效布局、device 不变)→ 热切换;否则重启监听。
+    private void ReevaluateMonitorConfig(MonitorBackendOption? value)
     {
         if (value is null || !IsMonitoring)
         {
             return;
         }
-        // 同布局(声道数不变)→ 热切换 renderer;布局 / device 变(含 ↔ 系统空间音频)→ 重启监听。
-        if (_activeMonitorBackend is { } active && active.Layout == value.Layout &&
+        var newLayout = EffectiveMonitorLayout;
+        if (_activeMonitorBackend is { } active && _activeLayout == newLayout &&
             active.SystemSpatial == value.SystemSpatial)
         {
             ApplyMonitorBackend(value);
@@ -776,7 +804,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private RenderSettings MonitorRenderSettings(MonitorBackendOption backend) => new()
     {
         Renderer = backend.Renderer,
-        Layout = backend.Layout,
+        Layout = backend.SystemSpatial ? SelectedSpatialLayout : backend.Layout, // 系统空间音频取布局次级下拉
         MonitorSystemSpatial = backend.SystemSpatial,
         SofaPath = Models.OutputModel.SofaAvailable && backend.Renderer == AdmRenderer.SafBinaural
             ? MonitorSofaPath
