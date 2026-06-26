@@ -117,12 +117,18 @@
  *   adm_monitor_override_t 追加 head_locked 字段（int32）。0=world-locked（跟头转,现状）;非 0=
  *   head-locked（锁在头上,头追踪不移动它,如旁白/音乐）。按声道解析（整对象 vs speaker_label）,
  *   仅 Apple 监听后端实装（per-bus 头朝向补偿）,其它后端忽略。struct_size 守护:旧调用方按 0 处理。
+ *
+ * v1.24 新增（additive，SOVERSION 不变）：
+ *   adm_render_options_set_monitor_system_spatial：实时监听走 macOS 系统空间音频
+ *   （AVSampleBufferAudioRenderer）—— 把多声道监听输出交给系统做 HRTF + 动态头追踪，
+ *   而非在原始输出设备上做立体声下混。需受支持的多声道扬声器 output_layout（5.1…22.2）；
+ *   非 macOS / 离线渲染忽略。enabled：1=系统空间化，0=立体声下混（默认）。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 23
+#define ADM_API_VERSION_MINOR 24
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -375,6 +381,12 @@ adm_error_code_t adm_render_options_set_apac_bitrate_kbps(adm_render_options_t* 
 
 /* enabled: 1 = Music DRC profile (default), 0 = None. */
 void adm_render_options_set_apac_drc_music(adm_render_options_t* opts, int enabled) ADM_API_NOEXCEPT;
+
+/* v1.24: monitor-only. Route the multichannel monitor output through the macOS system Spatial
+ * Audio stack (AVSampleBufferAudioRenderer) for system HRTF + dynamic head tracking, instead of
+ * a stereo downmix on a raw device. enabled: 1 = system-spatial, 0 = stereo downmix (default).
+ * Requires a supported multichannel speaker output_layout; ignored off-macOS / for offline render. */
+void adm_render_options_set_monitor_system_spatial(adm_render_options_t* opts, int enabled) ADM_API_NOEXCEPT;
 
 /* APAC output container. MPEG4 writes .m4a/.mp4 (default); CAF writes APAC-in-CAF
  * and requires an output path with .caf extension at render time. v1.9 */

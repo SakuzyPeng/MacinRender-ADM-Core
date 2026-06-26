@@ -117,6 +117,7 @@ class MonitorEngine {
     std::unique_ptr<IRenderStream> stream_;
     IAudioOutputDevice& device_;
     LogSink& logs_; // runtime diagnostics (worker render/seek errors); must outlive the engine
+    bool pull_is_realtime_playback_{true};
     uint32_t channels_{0};
     uint32_t sample_rate_{0};
 

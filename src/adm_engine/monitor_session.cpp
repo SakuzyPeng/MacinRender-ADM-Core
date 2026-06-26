@@ -201,6 +201,21 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
     std::vector<BackendKeepAlive> keepalive_;
 };
 
+[[nodiscard]] std::unique_ptr<realtime::IAudioOutputDevice> make_monitor_device(const RenderOptions& options,
+                                                                                const std::string& device_id) {
+#ifdef __APPLE__
+    // System-spatial monitor follows the system media route (AirPods / current output), not a
+    // selectable raw hardware token. Keep create() and set_output_device() on the same path so a
+    // device refresh cannot silently fall back to miniaudio and lose system head tracking.
+    if (options.monitor_system_spatial) {
+        return realtime::make_avsamplebuffer_device(normalize_output_layout(options.output_layout));
+    }
+#else
+    (void) options;
+#endif
+    return realtime::make_miniaudio_device(/*use_null_backend=*/false, device_id);
+}
+
 } // namespace
 
 // Declaration order matters for teardown: the engine (which stops the device + joins the
@@ -252,7 +267,7 @@ MonitorSession::create(const std::string& input_path, const RenderOptions& optio
     impl.device_id = device_id;
 
     impl.factory = std::make_unique<RealtimeStreamFactory>(input_path);
-    impl.device = realtime::make_miniaudio_device(/*use_null_backend=*/false, device_id);
+    impl.device = make_monitor_device(options, device_id);
 
     auto engine = realtime::MonitorEngine::create(*impl.factory, *impl.device, impl.scene, options, impl.log_sink);
     if (!engine) {
@@ -347,7 +362,7 @@ Result<void> MonitorSession::set_output_device(const std::string& device_id) {
     impl_->device.reset();
 
     auto open_on = [&](const std::string& id) -> Result<void> {
-        impl_->device = realtime::make_miniaudio_device(/*use_null_backend=*/false, id);
+        impl_->device = make_monitor_device(impl_->current_options, id);
         auto engine = realtime::MonitorEngine::create(
             *impl_->factory, *impl_->device, impl_->scene, impl_->current_options, impl_->log_sink);
         if (!engine) {

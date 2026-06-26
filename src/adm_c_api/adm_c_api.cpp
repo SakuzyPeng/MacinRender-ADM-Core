@@ -498,6 +498,13 @@ void adm_render_options_set_peak_limit(adm_render_options_t* opts, int enabled) 
     opts->opts.peak_limit = (enabled != 0);
 }
 
+void adm_render_options_set_monitor_system_spatial(adm_render_options_t* opts, int enabled) noexcept {
+    if (opts == nullptr) {
+        return;
+    }
+    opts->opts.monitor_system_spatial = (enabled != 0);
+}
+
 adm_error_code_t adm_render_options_set_peak_limit_dbtp(adm_render_options_t* opts, double dbtp) noexcept {
     if (opts == nullptr) {
         return ADM_ERROR_OK;

@@ -20,6 +20,7 @@
 #include "adm/render_apple.h"
 #include "adm/scene.h"
 
+#include "apple_layouts.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
 
@@ -216,46 +217,8 @@ class AudioUnitGuard {
     return {};
 }
 
-// CoreAudio output channel-layout tags, matching caf_io.cpp's canonical project-layout
-// -> AudioChannelLayoutTag mapping so the AU's output channel order is identical to the
-// container writers' expected order (verified: VBAP pans ADM-left -> output channel 0).
-constexpr AudioChannelLayoutTag k_tag_mpeg_5_1_a = (121U << 16) | 6U;
-constexpr AudioChannelLayoutTag k_tag_wave_7_1 = (189U << 16) | 8U;
-constexpr AudioChannelLayoutTag k_tag_atmos_5_1_2 = (194U << 16) | 8U;
-constexpr AudioChannelLayoutTag k_tag_atmos_5_1_4 = (195U << 16) | 10U;
-constexpr AudioChannelLayoutTag k_tag_atmos_7_1_4 = (192U << 16) | 12U;
-constexpr AudioChannelLayoutTag k_tag_atmos_9_1_6 = (193U << 16) | 16U;
-constexpr AudioChannelLayoutTag k_tag_cicp_13 = (204U << 16) | 24U;
-
-struct AppleSpeakerLayout {
-    std::string_view id;
-    std::string_view display_name;
-    uint16_t channels;
-    uint16_t lfe_count;
-    bool is_3d;
-    AudioChannelLayoutTag layout_tag;
-};
-
-// clang-format off
-constexpr std::array<AppleSpeakerLayout, 7> k_apple_speaker_layouts{{
-    {"0+5+0",  "5.1",   6,  1, false, k_tag_mpeg_5_1_a},
-    {"wav71",  "7.1",   8,  1, false, k_tag_wave_7_1},
-    {"2+5+0",  "5.1.2", 8,  1, true,  k_tag_atmos_5_1_2},
-    {"4+5+0",  "5.1.4", 10, 1, true,  k_tag_atmos_5_1_4},
-    {"4+7+0",  "7.1.4", 12, 1, true,  k_tag_atmos_7_1_4},
-    {"9.1.6",  "9.1.6", 16, 1, true,  k_tag_atmos_9_1_6},
-    {"9+10+3", "22.2",  24, 2, true,  k_tag_cicp_13},
-}};
-// clang-format on
-
-[[nodiscard]] const AppleSpeakerLayout* find_apple_speaker_layout(std::string_view layout_id) {
-    const auto it = std::ranges::find_if(
-        k_apple_speaker_layouts, [layout_id](const AppleSpeakerLayout& layout) { return layout.id == layout_id; });
-    if (it == k_apple_speaker_layouts.end()) {
-        return nullptr;
-    }
-    return std::addressof(*it);
-}
+// Apple speaker-layout id -> AudioChannelLayoutTag table now lives in apple_layouts.h,
+// shared with the AVSampleBufferAudioRenderer monitor sink so both resolve identically.
 
 // Resolved output target for one render. binaural -> 2ch HRTF (Headphones output type,
 // no speaker layout); speaker -> Nch VBAP into a standard CoreAudio layout tag.
@@ -273,7 +236,7 @@ struct OutputProfile {
     if (layout_id == "binaural" || layout_id == "0+2+0") {
         return OutputProfile{.channels = 2, .binaural = true, .layout_tag = 0, .writer_layout = "binaural"};
     }
-    if (const auto* layout = find_apple_speaker_layout(layout_id); layout != nullptr) {
+    if (const auto* layout = apple_layouts::find_apple_speaker_layout(layout_id); layout != nullptr) {
         return OutputProfile{
             .channels = layout->channels,
             .binaural = false,
@@ -1365,7 +1328,7 @@ CapabilityReport apple_capabilities() {
     r.supported_layouts = {
         {"binaural", "Apple AUSpatialMixer binaural", 2, false, 0, true, true},
     };
-    for (const auto& layout : k_apple_speaker_layouts) {
+    for (const auto& layout : apple_layouts::k_apple_speaker_layouts) {
         r.supported_layouts.push_back({std::string{layout.id},
                                        std::string{layout.display_name},
                                        layout.channels,

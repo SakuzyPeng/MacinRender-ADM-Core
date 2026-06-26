@@ -323,21 +323,34 @@ if(APPLE)
     add_library(mr_adm_apple)
     add_library(MacinRender::ADMRenderApple ALIAS mr_adm_apple)
 
+    find_library(MR_ADM_AVFOUNDATION_FW AVFoundation REQUIRED)
+    find_library(MR_ADM_COREMEDIA_FW CoreMedia REQUIRED)
+    find_library(MR_ADM_FOUNDATION_FW Foundation REQUIRED)
+
     target_sources(
         mr_adm_apple
         PRIVATE
             src/adm_apple/spatial_mixer_renderer.cpp
+            src/adm_apple/avsamplebuffer_device.mm
         PUBLIC
             FILE_SET HEADERS
             BASE_DIRS include
             FILES
                 include/adm/render_apple.h
     )
+    # ARC for the Objective-C++ AVSampleBufferAudioRenderer sink (manages the ObjC lifetimes).
+    set_source_files_properties(src/adm_apple/avsamplebuffer_device.mm
+        PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 
     target_link_libraries(mr_adm_apple
         PUBLIC MacinRender::ADMCore
-        PRIVATE libbw64 ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon ${MR_ADM_AUDIOTOOLBOX_FW}
+        PRIVATE libbw64 ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+                ${MR_ADM_AUDIOTOOLBOX_FW} ${MR_ADM_AVFOUNDATION_FW} ${MR_ADM_COREMEDIA_FW} ${MR_ADM_FOUNDATION_FW}
     )
+    # adm_apple consumes the realtime IAudioOutputDevice interface (third-party-free header) to
+    # provide the AVSampleBufferAudioRenderer monitor sink. Include-only, no link dependency —
+    # the device implements the pure interface; this keeps Apple frameworks confined here.
+    target_include_directories(mr_adm_apple PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
     target_include_directories(mr_adm_apple SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
     mr_adm_core_apply_warnings(mr_adm_apple)
     mr_adm_core_apply_static_analysis(mr_adm_apple)
@@ -802,6 +815,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_apac_smoke_tests COMMAND mr_adm_apac_smoke_tests)
 
     if(APPLE)
+        # Manual real-device check for the system-spatial monitor (AVSampleBufferAudioRenderer):
+        # drives a live monitor with monitor_system_spatial=on. NOT a ctest — needs AirPods + a
+        # human turning their head. Run by hand: mr_monitor_spatial_check <input> [layout] [secs].
+        add_executable(mr_monitor_spatial_check tests/manual/system_spatial_monitor_check.cpp)
+        target_link_libraries(mr_monitor_spatial_check PRIVATE MacinRender::ADMCAPI)
+        mr_adm_core_apply_warnings(mr_monitor_spatial_check)
+
         add_executable(mr_adm_apple_smoke_tests tests/unit/apple_renderer_smoke_test.cpp)
         target_link_libraries(mr_adm_apple_smoke_tests
             PRIVATE
