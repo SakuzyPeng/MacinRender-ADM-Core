@@ -85,13 +85,18 @@ void MonitorEngine::rebuild_meter() {
     // (Re)create the libebur128 state for the current monitor format. Called at construction
     // and on every seek (so integrated loudness restarts from the new position). MODE_S
     // implies MODE_M, MODE_I implies MODE_M — so momentary / short-term / integrated are all
-    // available. Guarded against the UI-thread query in levels().
-    const std::lock_guard<std::mutex> lock(meter_mutex_);
+    // available. Worker-only (construction runs before the worker starts) — no mutex.
     if (meter_ != nullptr) {
         auto* old = static_cast<ebur128_state*>(meter_);
         ebur128_destroy(&old);
         meter_ = nullptr;
     }
+    // Reset the loudness snapshots: a new integration window starts here.
+    constexpr float k_silence = -std::numeric_limits<float>::infinity();
+    momentary_lufs_.store(k_silence, std::memory_order_relaxed);
+    shortterm_lufs_.store(k_silence, std::memory_order_relaxed);
+    integrated_lufs_.store(k_silence, std::memory_order_relaxed);
+    lufs_meter_counter_ = 0;
     if (channels_ == 0 || sample_rate_ == 0) {
         return;
     }
@@ -100,6 +105,35 @@ void MonitorEngine::rebuild_meter() {
     if (st != nullptr && channels_ == 2) {
         ebur128_set_channel(st, 0, EBUR128_LEFT);
         ebur128_set_channel(st, 1, EBUR128_RIGHT);
+    }
+}
+
+void MonitorEngine::feed_meter(std::size_t frames) {
+    // Worker-only: add the just-produced chunk (scratch_ holds the post-crossfade monitored signal
+    // for these `frames`) to the meter, and at ~10 Hz refresh the lock-free LUFS snapshots that
+    // levels() reads — integrated loudness walks history, so don't recompute it every chunk.
+    if (meter_ == nullptr) {
+        return;
+    }
+    auto* st = static_cast<ebur128_state*>(meter_);
+    ebur128_add_frames_float(st, scratch_.data(), frames);
+    lufs_meter_counter_ += frames;
+    if (lufs_meter_counter_ < sample_rate_ / 10) {
+        return;
+    }
+    lufs_meter_counter_ = 0;
+    const auto to_lufs = [](double v) {
+        return std::isfinite(v) ? static_cast<float>(v) : -std::numeric_limits<float>::infinity();
+    };
+    double v = 0.0;
+    if (ebur128_loudness_momentary(st, &v) == EBUR128_SUCCESS) {
+        momentary_lufs_.store(to_lufs(v), std::memory_order_relaxed);
+    }
+    if (ebur128_loudness_shortterm(st, &v) == EBUR128_SUCCESS) {
+        shortterm_lufs_.store(to_lufs(v), std::memory_order_relaxed);
+    }
+    if (ebur128_loudness_global(st, &v) == EBUR128_SUCCESS) {
+        integrated_lufs_.store(to_lufs(v), std::memory_order_relaxed);
     }
 }
 
@@ -311,15 +345,7 @@ bool MonitorEngine::top_up_ring() {
             ended_.store(true, std::memory_order_relaxed); // end of material (non-looping)
             return produced;
         }
-        // Feed the final (post-crossfade) monitored signal into the loudness meter. Producer
-        // side — not the hard-realtime audio callback — so a brief mutex is fine; this leads
-        // playback by at most the ring depth, acceptable for a meter.
-        {
-            const std::lock_guard<std::mutex> lock(meter_mutex_);
-            if (meter_ != nullptr) {
-                ebur128_add_frames_float(static_cast<ebur128_state*>(meter_), scratch_.data(), got);
-            }
-        }
+        feed_meter(got); // add the produced chunk to the LUFS meter + refresh snapshots (worker-only)
         ring_.push(scratch_.data(), got * channels_); // available_write checked: full push
         producer_pos_ += got;
         produced = true;
@@ -447,27 +473,11 @@ MonitorLevels MonitorEngine::levels() const {
         l.peak.at(c) = peak_.at(c).load(std::memory_order_relaxed);
         l.rms.at(c) = rms_.at(c).load(std::memory_order_relaxed);
     }
-    // Query program loudness. ebur128 returns -HUGE_VAL (→ -inf) below the gate; non-finite
-    // values are normalised to -inf so the UI can render a single "silence" sentinel.
-    const auto to_lufs = [](double v) {
-        return std::isfinite(v) ? static_cast<float>(v) : -std::numeric_limits<float>::infinity();
-    };
-    {
-        const std::lock_guard<std::mutex> lock(meter_mutex_);
-        if (meter_ != nullptr) {
-            auto* st = static_cast<ebur128_state*>(meter_);
-            double v = 0.0;
-            if (ebur128_loudness_momentary(st, &v) == EBUR128_SUCCESS) {
-                l.momentary_lufs = to_lufs(v);
-            }
-            if (ebur128_loudness_shortterm(st, &v) == EBUR128_SUCCESS) {
-                l.shortterm_lufs = to_lufs(v);
-            }
-            if (ebur128_loudness_global(st, &v) == EBUR128_SUCCESS) {
-                l.integrated_lufs = to_lufs(v);
-            }
-        }
-    }
+    // Program loudness: read the worker's lock-free snapshots (the meter itself is worker-only),
+    // so this 30 Hz UI poll never blocks the realtime worker on a shared meter lock.
+    l.momentary_lufs = momentary_lufs_.load(std::memory_order_relaxed);
+    l.shortterm_lufs = shortterm_lufs_.load(std::memory_order_relaxed);
+    l.integrated_lufs = integrated_lufs_.load(std::memory_order_relaxed);
     return l;
 }
 

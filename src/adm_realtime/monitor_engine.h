@@ -113,6 +113,7 @@ class MonitorEngine {
     void apply_seek_locked(uint64_t frame);                     // worker/control side, under control_mutex_
     void finalize_crossfade();                                  // worker side: snap to the incoming stream
     void rebuild_meter();                                       // (re)create the LUFS meter for the current format
+    void feed_meter(std::size_t frames);                        // worker side: add to meter + refresh LUFS snapshots
 
     std::unique_ptr<IRenderStream> stream_;
     IAudioOutputDevice& device_;
@@ -178,12 +179,19 @@ class MonitorEngine {
     std::array<std::atomic<float>, k_max_level_channels> peak_{};
     std::array<std::atomic<float>, k_max_level_channels> rms_{};
 
+    // Program loudness snapshots: computed on the worker (top_up_ring) and read lock-free by
+    // levels() on the UI poll thread. Decoupling the read this way keeps a 30 Hz UI poll from ever
+    // blocking the realtime worker on a shared meter lock (which could starve the feed → underrun).
+    std::atomic<float> momentary_lufs_{-std::numeric_limits<float>::infinity()};
+    std::atomic<float> shortterm_lufs_{-std::numeric_limits<float>::infinity()};
+    std::atomic<float> integrated_lufs_{-std::numeric_limits<float>::infinity()};
+    std::uint64_t lufs_meter_counter_{0}; // worker-only: frames since the last LUFS snapshot
+
     // Realtime LUFS meter (libebur128) over the produced monitor signal. Held as void* so
     // ebur128.h stays out of this header (ADR 0003: third-party types confined to the .cpp).
-    // Fed by the worker (top_up_ring), reset by the worker (apply_seek), queried by the UI
-    // poll thread (levels()) — all serialised by meter_mutex_.
+    // Worker-only: created at construction, fed + queried + rebuilt only on the worker thread,
+    // destroyed after the worker joins — no mutex (levels() reads the atomics above).
     void* meter_{nullptr};
-    mutable std::mutex meter_mutex_;
 };
 
 } // namespace mradm::realtime
