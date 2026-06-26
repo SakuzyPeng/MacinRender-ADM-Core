@@ -97,6 +97,7 @@ void MonitorEngine::rebuild_meter() {
     shortterm_lufs_.store(k_silence, std::memory_order_relaxed);
     integrated_lufs_.store(k_silence, std::memory_order_relaxed);
     lufs_meter_counter_ = 0;
+    integrated_throttle_ = 0;
     if (channels_ == 0 || sample_rate_ == 0) {
         return;
     }
@@ -126,14 +127,20 @@ void MonitorEngine::feed_meter(std::size_t frames) {
         return std::isfinite(v) ? static_cast<float>(v) : -std::numeric_limits<float>::infinity();
     };
     double v = 0.0;
+    // momentary (400 ms) / short-term (3 s) are cheap — refresh at ~10 Hz.
     if (ebur128_loudness_momentary(st, &v) == EBUR128_SUCCESS) {
         momentary_lufs_.store(to_lufs(v), std::memory_order_relaxed);
     }
     if (ebur128_loudness_shortterm(st, &v) == EBUR128_SUCCESS) {
         shortterm_lufs_.store(to_lufs(v), std::memory_order_relaxed);
     }
-    if (ebur128_loudness_global(st, &v) == EBUR128_SUCCESS) {
-        integrated_lufs_.store(to_lufs(v), std::memory_order_relaxed);
+    // integrated (gated, walks the whole history) is the heavy one — refresh at ~1 Hz to keep the
+    // worker light during long playback (1 Hz is plenty for the UI integrated-loudness readout).
+    if (++integrated_throttle_ >= 10) {
+        integrated_throttle_ = 0;
+        if (ebur128_loudness_global(st, &v) == EBUR128_SUCCESS) {
+            integrated_lufs_.store(to_lufs(v), std::memory_order_relaxed);
+        }
     }
 }
 
