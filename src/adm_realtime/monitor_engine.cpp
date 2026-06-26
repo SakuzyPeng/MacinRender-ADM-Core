@@ -109,6 +109,7 @@ void MonitorEngine::play() {
         state_.store(MonitorState::playing, std::memory_order_seq_cst);
     }
     wake_.notify_all();
+    device_.resume(); // resume a buffered sink's clock (no-op before prefill / for miniaudio)
 }
 
 void MonitorEngine::pause() {
@@ -117,6 +118,7 @@ void MonitorEngine::pause() {
         state_.store(MonitorState::paused, std::memory_order_seq_cst);
     }
     wake_.notify_all();
+    device_.pause(); // halt a buffered sink's clock so it can't run away during a long pause
 }
 
 void MonitorEngine::seek(uint64_t frame) {

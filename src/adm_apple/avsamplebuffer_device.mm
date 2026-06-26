@@ -151,6 +151,30 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         });
     }
 
+    void pause() override {
+        if (queue_ == nil) {
+            return;
+        }
+        dispatch_sync(queue_, ^{
+          if (synchronizer_ != nil) {
+              [synchronizer_ setRate:0.0F]; // freeze the clock (keep position) so it can't run away
+          }
+        });
+    }
+
+    void resume() override {
+        if (queue_ == nil) {
+            return;
+        }
+        dispatch_sync(queue_, ^{
+          // Only resume the clock once prefill has actually started it; before that the prefill
+          // gate in feed_queue owns setRate.
+          if (playing_started_ && synchronizer_ != nil) {
+              [synchronizer_ setRate:1.0F];
+          }
+        });
+    }
+
   private:
     [[nodiscard]] bool build_format(AudioChannelLayoutTag tag) {
         AudioStreamBasicDescription asbd{};

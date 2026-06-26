@@ -49,6 +49,13 @@ class IAudioOutputDevice {
     // it to clear its staging and flush the system queue.
     virtual void flush() {}
 
+    // Halt / resume the device's own playback clock on monitor pause / resume. Default no-op:
+    // realtime callback sinks stop pulling when the engine pauses (the pull returns silence), so
+    // their clock is the hardware's. A buffered media sink has an independent clock that would
+    // otherwise run away during a long pause — it overrides these to setRate 0 / 1.
+    virtual void pause() {}
+    virtual void resume() {}
+
   protected:
     IAudioOutputDevice() = default;
 };
