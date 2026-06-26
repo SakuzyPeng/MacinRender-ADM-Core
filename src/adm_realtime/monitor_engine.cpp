@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <ebur128.h>
 #include <limits>
 
@@ -227,7 +228,26 @@ void MonitorEngine::set_loop(uint64_t start_frame, uint64_t end_frame) {
 }
 
 void MonitorEngine::worker_loop() {
+    auto last_diag = std::chrono::steady_clock::now();
     while (!quit_.load(std::memory_order_acquire)) {
+        // TEMP diagnostic (~1 Hz, stderr): correlate the engine's ring/playhead view with the
+        // device's ASBR view to tell a transient DSP spike apart from a sustained worker deficit.
+        // Remove once the system-spatial underflow behaviour is settled.
+        if (const auto now = std::chrono::steady_clock::now(); now - last_diag >= std::chrono::seconds(1)) {
+            last_diag = now;
+            const std::size_t cap = ring_.capacity();
+            const std::size_t buffered = ring_.available_read();
+            const float fill = cap > 0 ? static_cast<float>(buffered) / static_cast<float>(cap) : 0.0F;
+            std::fprintf(stderr,
+                         "[MON] state=%d ring_fill=%.2f buffered=%llu playhead=%llu under=%llu ended=%d failed=%d\n",
+                         static_cast<int>(state_.load(std::memory_order_relaxed)),
+                         static_cast<double>(fill),
+                         static_cast<unsigned long long>(buffered / (channels_ != 0 ? channels_ : 1)),
+                         static_cast<unsigned long long>(frames_played_.load(std::memory_order_relaxed)),
+                         static_cast<unsigned long long>(underruns_.load(std::memory_order_relaxed)),
+                         static_cast<int>(ended_.load(std::memory_order_relaxed)),
+                         static_cast<int>(failed_.load(std::memory_order_relaxed)));
+        }
         {
             std::unique_lock<std::mutex> lock(control_mutex_);
             if (seek_pending_) {
