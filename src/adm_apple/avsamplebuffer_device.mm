@@ -223,6 +223,19 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
             return;
         }
 
+        // ASBR underflow 自恢复:时钟追上 enqueued ⇒ 队列被喂空,ASBR 可能停在 stall 态(喂空后即便
+        // 重新 enqueue 也不自动续播,要 setRate 切换才醒 —— 即手动 pause/resume 的效果)。这里重置
+        // 时钟 + 回到 prefill 态,下方 prefill gate 重新 setRate 唤醒,顺带补深缓冲防立即再空。
+        if (playing_started_ && clock_frames() >= pts_frames_) {
+            [renderer_ flush];
+            staged_frames_ = 0;
+            pts_frames_ = 0;
+            playing_started_ = false;
+            if (synchronizer_ != nil) {
+                [synchronizer_ setRate:0.0F time:kCMTimeZero];
+            }
+        }
+
         while ([renderer_ isReadyForMoreMediaData] && queued_frames() < k_target_queue_frames) {
             CMSampleBufferRef sb = next_buffer();
             if (sb == nullptr) {
