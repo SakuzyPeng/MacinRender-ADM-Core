@@ -13,9 +13,7 @@
 
 #include <algorithm>
 #include <atomic>
-#include <chrono>
 #include <cstddef>
-#include <cstdio>
 #include <cmath>
 #include <memory>
 #include <span>
@@ -34,13 +32,17 @@ namespace {
 // Frames per enqueued CMSampleBuffer (~21 ms @ 48 kHz). Small enough for responsive
 // monitoring, large enough to keep enqueue overhead negligible.
 constexpr std::size_t k_chunk_frames = 1024;
-// Keep the system media queue moderately ahead while leaving room in MonitorEngine's local
-// ring. This avoids the feed callback draining the local ring to 0 just because ASBR is ready
-// for more media. ~128 ms at 48 kHz.
-constexpr std::size_t k_target_queue_frames = 6144;
-// Frames the system buffer must hold before the clock starts (prefill), so playback rides out
-// worker jitter without starting from an empty queue. ~85 ms at 48 kHz.
-constexpr std::size_t k_prefill_frames = 4096;
+// How deep to keep ASBR's *own* internal queue. ASBR is a file-style push renderer whose
+// underflow recovery dynamically raises the minimum lead it requires before it will resume —
+// a shallow cap (the old 6144 = 128 ms) can land below that "render deadline" so ASBR silently
+// drops the buffers we feed (no error, clock keeps running, output goes quiet until a flush).
+// Apple's own isReady threshold sits around 0.5–2 s, so we feed ~1 s and otherwise trust
+// isReadyForMoreMediaData. This is independent of MonitorEngine's ring (a separate copy lives
+// in ASBR); the worker keeps the ring full and the device drains it into this deeper queue.
+constexpr std::size_t k_target_queue_frames = 48000; // ~1 s
+// Frames ASBR must hold before the clock starts (prefill), comfortably above ASBR's restart
+// deadline so the first frames aren't dropped as "too late". ~200 ms at 48 kHz.
+constexpr std::size_t k_prefill_frames = 9600;
 // Underflow hysteresis (after playback has started). When the system queue falls below the low
 // mark we freeze the clock (setRate:0) BEFORE it can overrun the queue and play stale/glitch
 // audio, and resume (setRate:1) once the worker has refilled past the high mark. Non-destructive:
@@ -49,7 +51,7 @@ constexpr std::size_t k_prefill_frames = 4096;
 // replaces the old flush+re-prefill recovery, which threw away buffered audio and could sawtooth
 // into permanent silence whenever the worker ran marginally behind.
 constexpr std::size_t k_stall_low_frames = 1024;  // ~21 ms
-constexpr std::size_t k_stall_high_frames = 4096; // ~85 ms
+constexpr std::size_t k_stall_high_frames = 9600; // ~200 ms (= prefill depth)
 constexpr uint64_t k_feed_interval_ns = 10U * 1000U * 1000U;
 constexpr uint64_t k_feed_leeway_ns = 2U * 1000U * 1000U;
 
@@ -304,29 +306,6 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
             stalled_ = false;
             apply_desired_rate(); // → resume (if the user still wants playback)
         }
-
-        maybe_log_stats();
-    }
-
-    // TEMP diagnostic (~1 Hz, stderr): the ASBR-side view (queue depth / stall / renderer status),
-    // to correlate with the engine's [MON] line. Remove once underflow behaviour is settled.
-    void maybe_log_stats() {
-        const auto now = std::chrono::steady_clock::now();
-        if (now - last_log_ < std::chrono::seconds(1)) {
-            return;
-        }
-        last_log_ = now;
-        const long status = renderer_ != nil ? static_cast<long>(renderer_.status) : -1;
-        NSError* err = renderer_ != nil ? renderer_.error : nil;
-        const long ready = (renderer_ != nil && [renderer_ isReadyForMoreMediaData]) ? 1 : 0;
-        std::fprintf(stderr,
-                     "[ASBR] queued=%zu stalled=%d playing=%d ready=%ld status=%ld err=%s\n",
-                     queued_frames(),
-                     stalled_ ? 1 : 0,
-                     playing_started_ ? 1 : 0,
-                     ready,
-                     status,
-                     err != nil ? err.localizedDescription.UTF8String : "-");
     }
 
     // Fill the staging block to exactly k_chunk_frames from the ring, then wrap it as a ready,
@@ -403,7 +382,6 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
     CMAudioFormatDescriptionRef format_{nullptr};
     std::atomic<bool> media_request_armed_{false};
     std::atomic<bool> stopping_{false};
-    std::chrono::steady_clock::time_point last_log_{}; // TEMP diagnostic throttle (queue_ thread)
 };
 
 } // namespace
