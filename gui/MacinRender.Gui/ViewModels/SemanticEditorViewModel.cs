@@ -509,6 +509,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(PeakRightFillWidth))]
     private float _peakRight;
 
+    // 多声道(系统空间音频)电平表:每声道一根竖条。双耳监听时 IsMultichannelMeter=false,沿用上面的 L/R 横条。
+    public ObservableCollection<ChannelMeter> ChannelMeters { get; } = new();
+
+    [ObservableProperty] private bool _isMultichannelMeter;
+
     [ObservableProperty] private string _monitorStatus = "";
 
     // LUFS(ITU-R BS.1770)三窗读数;UI 一次显示一个,点击在 M / S / I 间循环。
@@ -568,16 +573,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private static string DbfsText(float lin) =>
         lin <= 1.0e-6F ? "-∞" : (20.0 * Math.Log10(lin)).ToString("0.0", CultureInfo.InvariantCulture);
 
-    private static double DbfsNorm(float lin)
-    {
-        if (lin <= 1.0e-6F)
-        {
-            return 0.0;
-        }
-
-        var db = 20.0 * Math.Log10(lin);
-        return Math.Clamp((db + 60.0) / 60.0, 0.0, 1.0);
-    }
+    private static double DbfsNorm(float lin) => MeterScale.Norm(lin);
 
     // 像常见播放器:主播放键在未监听时自动开监听并播放,之后在播放 / 暂停间切换——永不出现死键。
     [RelayCommand]
@@ -661,6 +657,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         IsMonitoring = true;
         _activeMonitorBackend = backend;
         _activeLayout = EffectiveMonitorLayout; // 记录生效布局(系统空间音频含次级),供后续热切/重启判定
+        SetupChannelMeters(backend);            // 系统空间音频 → 多声道竖条阵列;双耳 → L/R 横条
         OnPropertyChanged(nameof(HeadTrackControlsEnabled)); // backend 决定头追踪开关是否可用
         PushOverrides();          // 把当前编辑立即应用到新监听
         // 常驻朝向:新监听从正前开始,把上次设定的头朝向重新应用一次(视觉+音频同步),跨监听重启保留。
@@ -668,6 +665,22 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         _monitor.Play();
         MonitorState = AdmMonitorState.Playing;
         UpdatePollTimer();
+    }
+
+    // 按生效后端布置电平表:系统空间音频取该布局的逐声道标签(adm_layouts_json 权威源)铺竖条;
+    // 拿不到标签(理论上不会)则退化到 L/R 横条,避免空表。双耳后端用 L/R 横条。
+    private void SetupChannelMeters(MonitorBackendOption? backend)
+    {
+        ChannelMeters.Clear();
+        var labels = (backend?.SystemSpatial ?? false)
+            ? Models.OutputModel.ChannelLabelsFor(EffectiveMonitorLayout)
+            : System.Array.Empty<string>();
+        foreach (var label in labels)
+        {
+            ChannelMeters.Add(new ChannelMeter(label));
+        }
+
+        IsMultichannelMeter = ChannelMeters.Count > 0;
     }
 
     public void StopMonitor()
@@ -679,6 +692,8 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         PlayheadSeconds = 0;
         PeakLeft = 0;
         PeakRight = 0;
+        IsMultichannelMeter = false;
+        ChannelMeters.Clear();
         MomentaryLufs = float.NegativeInfinity;
         ShorttermLufs = float.NegativeInfinity;
         IntegratedLufs = float.NegativeInfinity;
@@ -876,12 +891,26 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             MonitorStatus = st.Ended ? L["SemMonEnded"] : st.Failed ? L["SemMonFailed"] : "";
         }
 
-        var lv = _monitor.GetLevels(2);
+        // 多声道(系统空间音频)按声道数取电平铺满竖条;双耳只取前两声道画 L/R 横条。
+        var capacity = IsMultichannelMeter ? ChannelMeters.Count : 2;
+        var lv = _monitor.GetLevels(capacity);
         if (lv is { Peak.Count: >= 1 })
         {
             // 弹道:瞬时块峰值逐块剧烈起伏,直接画会抽搐 → 快起跳(取新峰)、慢回落(按系数衰减)。
-            PeakLeft = SmoothPeak(PeakLeft, lv.Peak[0]);
-            PeakRight = SmoothPeak(PeakRight, lv.Peak.Count > 1 ? lv.Peak[1] : lv.Peak[0]);
+            if (IsMultichannelMeter)
+            {
+                for (int i = 0; i < ChannelMeters.Count; i++)
+                {
+                    var raw = i < lv.Peak.Count ? lv.Peak[i] : 0F;
+                    ChannelMeters[i].Peak = SmoothPeak(ChannelMeters[i].Peak, raw);
+                }
+            }
+            else
+            {
+                PeakLeft = SmoothPeak(PeakLeft, lv.Peak[0]);
+                PeakRight = SmoothPeak(PeakRight, lv.Peak.Count > 1 ? lv.Peak[1] : lv.Peak[0]);
+            }
+
             MomentaryLufs = lv.MomentaryLufs;
             ShorttermLufs = lv.ShorttermLufs;
             IntegratedLufs = lv.IntegratedLufs;
@@ -1234,6 +1263,38 @@ public sealed partial class ExtentOverride : ObservableObject, IResettableOverri
     }
 
     private static bool NearlyEqual(double a, double b) => Math.Abs(a - b) <= 1.0e-6;
+}
+
+/// <summary>电平表线性峰值 → 归一(-60..0 dBFS → 0..1)。L/R 横条与多声道竖条共用一套刻度。</summary>
+internal static class MeterScale
+{
+    public static double Norm(float lin)
+    {
+        if (lin <= 1.0e-6F)
+        {
+            return 0.0;
+        }
+
+        var db = 20.0 * Math.Log10(lin);
+        return Math.Clamp((db + 60.0) / 60.0, 0.0, 1.0);
+    }
+}
+
+/// <summary>多声道(系统空间音频)电平表的一根竖条:声道标签 + 峰值;FillHeight 给 XAX 自底向上填充。</summary>
+public sealed partial class ChannelMeter : ObservableObject
+{
+    // 竖条满高(像素),与 XAML 里 Panel 的 Height 一致。
+    public const double BarHeightPx = 38.0;
+
+    public ChannelMeter(string label) => Label = label;
+
+    public string Label { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FillHeight))]
+    private float _peak;
+
+    public double FillHeight => MeterScale.Norm(Peak) * BarHeightPx;
 }
 
 /// <summary>声床一个声道的纯数据:speaker label(命中键)+ 当前 gain(线性,= ds.gain × object.gain)

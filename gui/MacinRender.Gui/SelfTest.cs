@@ -94,6 +94,14 @@ internal static class SelfTest
         OutputModel.InitializeAppleSpatial(AdmQueries.LoadCapabilities(ctx));
         Console.WriteLine($"系统空间音频布局({OutputModel.AppleSpatialLayouts.Count}): [{string.Join(", ", OutputModel.AppleSpatialLayouts)}]");
 
+        // 多声道电平表的逐声道标签 = adm_layouts_json 的 CoreAudio 顺序(监听实际输出顺序)。
+        OutputModel.InitializeLayoutOrders(AdmQueries.LoadLayouts(ctx));
+        foreach (var layout in OutputModel.AppleSpatialLayouts)
+        {
+            var labels = OutputModel.ChannelLabelsFor(layout);
+            Console.WriteLine($"  声道标签 {layout}({labels.Count}): [{string.Join(" ", labels)}]");
+        }
+
         Console.WriteLine("联动链抽查 (后端 → 编码器 → 该编码器支持的布局):");
         void Chain(string backendId)
         {

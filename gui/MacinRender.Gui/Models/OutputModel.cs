@@ -71,6 +71,44 @@ public static class OutputModel
             : apple.Layouts.Where(l => !l.IsBinaural).Select(l => l.DisplayName).ToArray();
     }
 
+    // 系统空间音频各布局的逐声道标签(display 名 → 顺序标签数组)。来自 adm_layouts_json,
+    // 优先取 CoreAudio 顺序(apac/caf 行)—— 即 ASBR 监听喂给系统空间化器的实际声道顺序;
+    // 5.1.2 等无 apac/caf 行的回退 wav 行(前 6 声道位置一致,仅顶置标签用 ADM 命名)。
+    private static Dictionary<string, string[]> _appleChannelOrder = new();
+
+    /// <summary>用 adm_layouts_json 构建系统空间音频布局的逐声道标签表。须在 InitializeAppleSpatial 之后调。</summary>
+    internal static void InitializeLayoutOrders(LayoutsDoc? doc)
+    {
+        var map = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+        if (doc is not null)
+        {
+            // 监听走 caf_io 的 CoreAudio 规范顺序(apple_layouts 注释明示对齐 caf):caf 优先。
+            // apac 行为 AudioUnit 编码重排过(如 7.1 把 Ls/Rs 前置),不可用作监听顺序,仅作兜底。
+            // 5.1.2 无 caf/apac 行 → 回退 wav(前 6 声道位置一致,仅顶置标签用 ADM 命名)。
+            string[] formatPref = { "caf", "apac", "wav" };
+            foreach (var layout in AppleSpatialLayouts)
+            {
+                foreach (var fmt in formatPref)
+                {
+                    var row = doc.Layouts.FirstOrDefault(l => l.Layout == layout && l.Format == fmt);
+                    var labels = row?.Order.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    // 仅当 token 数与声道数严格相等才采用(排除 "ACN 0..15, SN3D" 这类描述性 order)。
+                    if (labels is { Length: > 0 } && labels.Length == row!.Channels)
+                    {
+                        map[layout] = labels;
+                        break;
+                    }
+                }
+            }
+        }
+
+        _appleChannelOrder = map;
+    }
+
+    /// <summary>某系统空间音频布局的逐声道标签;未知布局返回空数组(调用方退化为 L/R 双声道表)。</summary>
+    public static IReadOnlyList<string> ChannelLabelsFor(string layout) =>
+        _appleChannelOrder.TryGetValue(layout, out var labels) ? labels : Array.Empty<string>();
+
     // (renderer, layout, target) → 受支持。"automatic" 为所有真实后端的并集。
     private static HashSet<(string Renderer, string Layout, string Target)> _supported = new();
     // codec(encoding) → 该编码的 target id(有序);不含 iamf。

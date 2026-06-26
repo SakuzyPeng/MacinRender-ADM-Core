@@ -15,6 +15,14 @@
             <GradientStop Offset="0.92" Color="#FF9F0A"/>
             <GradientStop Offset="1.0" Color="#FF453A"/>
         </LinearGradientBrush>
+        <!-- 同一刻度色的竖向版:底绿 → 顶红(多声道竖条自底向上揭示)。 -->
+        <LinearGradientBrush x:Key="MeterBrushVertical" StartPoint="0%,100%" EndPoint="0%,0%">
+            <GradientStop Offset="0.0" Color="#34C759"/>
+            <GradientStop Offset="0.62" Color="#5BD66B"/>
+            <GradientStop Offset="0.80" Color="#E3CC3F"/>
+            <GradientStop Offset="0.92" Color="#FF9F0A"/>
+            <GradientStop Offset="1.0" Color="#FF453A"/>
+        </LinearGradientBrush>
     </UserControl.Resources>
 
     <UserControl.Styles>
@@ -40,6 +48,14 @@
             <Setter Property="Transitions">
                 <Transitions>
                     <DoubleTransition Property="Width" Duration="0:0:0.06" Easing="LinearEasing"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <!-- 多声道竖条填充:Height 过渡,使两次轮询间高度变化滑动而非跳变。 -->
+        <Style Selector="Border.meterfillv">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Height" Duration="0:0:0.06" Easing="LinearEasing"/>
                 </Transitions>
             </Setter>
         </Style>
@@ -237,30 +253,61 @@
                     <!-- 电平表:L/R 峰值(dBFS,色随电平 低绿近 0 红)+ LUFS 读数(点击在 M/S/I 间切换)。
                          ProgressBar 默认 MinWidth=200,显式 MinWidth=0 压回,否则溢出盖住相邻列。 -->
                     <StackPanel Grid.Column="4" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="2">
-                        <Grid ColumnDefinitions="12,150,44" ColumnSpacing="6">
-                            <TextBlock Grid.Column="0" Classes="muted" FontSize="10" VerticalAlignment="Center" Text="L"/>
-                            <Panel Grid.Column="1" Height="6">
-                                <Border CornerRadius="3" Background="{DynamicResource RowBg}"/>
-                                <Border Classes="meterfill" HorizontalAlignment="Left" CornerRadius="3" ClipToBounds="True"
-                                        Width="{Binding PeakLeftFillWidth}">
-                                    <Border Width="150" HorizontalAlignment="Left" Background="{StaticResource MeterBrush}"/>
-                                </Border>
-                            </Panel>
-                            <TextBlock Grid.Column="2" FontSize="10" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource TextPrimary}" Text="{Binding PeakLeftText}"/>
-                        </Grid>
-                        <Grid ColumnDefinitions="12,150,44" ColumnSpacing="6">
-                            <TextBlock Grid.Column="0" Classes="muted" FontSize="10" VerticalAlignment="Center" Text="R"/>
-                            <Panel Grid.Column="1" Height="6">
-                                <Border CornerRadius="3" Background="{DynamicResource RowBg}"/>
-                                <Border Classes="meterfill" HorizontalAlignment="Left" CornerRadius="3" ClipToBounds="True"
-                                        Width="{Binding PeakRightFillWidth}">
-                                    <Border Width="150" HorizontalAlignment="Left" Background="{StaticResource MeterBrush}"/>
-                                </Border>
-                            </Panel>
-                            <TextBlock Grid.Column="2" FontSize="10" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource TextPrimary}" Text="{Binding PeakRightText}"/>
-                        </Grid>
+                        <!-- 双耳:L/R 两条水平 bar(IsMultichannelMeter=false 时显示) -->
+                        <StackPanel Spacing="2" IsVisible="{Binding !IsMultichannelMeter}">
+                            <Grid ColumnDefinitions="12,150,44" ColumnSpacing="6">
+                                <TextBlock Grid.Column="0" Classes="muted" FontSize="10" VerticalAlignment="Center" Text="L"/>
+                                <Panel Grid.Column="1" Height="6">
+                                    <Border CornerRadius="3" Background="{DynamicResource RowBg}"/>
+                                    <Border Classes="meterfill" HorizontalAlignment="Left" CornerRadius="3" ClipToBounds="True"
+                                            Width="{Binding PeakLeftFillWidth}">
+                                        <Border Width="150" HorizontalAlignment="Left" Background="{StaticResource MeterBrush}"/>
+                                    </Border>
+                                </Panel>
+                                <TextBlock Grid.Column="2" FontSize="10" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextPrimary}" Text="{Binding PeakLeftText}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="12,150,44" ColumnSpacing="6">
+                                <TextBlock Grid.Column="0" Classes="muted" FontSize="10" VerticalAlignment="Center" Text="R"/>
+                                <Panel Grid.Column="1" Height="6">
+                                    <Border CornerRadius="3" Background="{DynamicResource RowBg}"/>
+                                    <Border Classes="meterfill" HorizontalAlignment="Left" CornerRadius="3" ClipToBounds="True"
+                                            Width="{Binding PeakRightFillWidth}">
+                                        <Border Width="150" HorizontalAlignment="Left" Background="{StaticResource MeterBrush}"/>
+                                    </Border>
+                                </Panel>
+                                <TextBlock Grid.Column="2" FontSize="10" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextPrimary}" Text="{Binding PeakRightText}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- 多声道(系统空间音频):每声道一根竖条 + 声道名;声道多时(22.2)横向滚动不挤垮进度条 -->
+                        <ScrollViewer IsVisible="{Binding IsMultichannelMeter}" MaxWidth="300"
+                                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding ChannelMeters}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="2"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ChannelMeter">
+                                        <StackPanel Width="18" Spacing="2">
+                                            <Panel Height="38" Width="10" HorizontalAlignment="Center">
+                                                <Border CornerRadius="2" Background="{DynamicResource RowBg}"/>
+                                                <Border Classes="meterfillv" VerticalAlignment="Bottom" CornerRadius="2"
+                                                        ClipToBounds="True" Width="10" Height="{Binding FillHeight}">
+                                                    <Border VerticalAlignment="Bottom" Width="10" Height="38"
+                                                            Background="{StaticResource MeterBrushVertical}"/>
+                                                </Border>
+                                            </Panel>
+                                            <TextBlock Classes="muted" FontSize="8" HorizontalAlignment="Center"
+                                                       TextAlignment="Center" Text="{Binding Label}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
                         <!-- 点击切换 LUFS 窗(M 瞬时 / S 短期 / I 累计) -->
                         <Button Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand"
                                 Command="{Binding CycleLufsModeCommand}"
