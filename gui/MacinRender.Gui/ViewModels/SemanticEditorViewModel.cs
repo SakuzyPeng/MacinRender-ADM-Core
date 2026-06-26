@@ -446,6 +446,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSeek))]
+    [NotifyPropertyChangedFor(nameof(HeadTrackControlsEnabled))]
     private bool _isMonitoring;
 
     [ObservableProperty]
@@ -643,6 +644,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         DurationSeconds = dur;
         IsMonitoring = true;
         _activeMonitorBackend = backend;
+        OnPropertyChanged(nameof(HeadTrackControlsEnabled)); // backend 决定头追踪开关是否可用
         PushOverrides();          // 把当前编辑立即应用到新监听
         // 常驻朝向:新监听从正前开始,把上次设定的头朝向重新应用一次(视觉+音频同步),跨监听重启保留。
         ApplyHeadOrientation(_lastHeadYaw, _lastHeadPitch, _lastHeadRoll);
@@ -746,6 +748,10 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     // 当前监听实际使用的后端:判断切换是热切(同布局换 renderer)还是重启(布局 / device 变,含 ↔ 系统空间音频)。
     private MonitorBackendOption? _activeMonitorBackend;
+
+    // 系统空间化监听时,头追踪由 macOS 系统(ASBR)接管;per-object/声道的"参与头追踪"(head-lock
+    // 补偿)只对自家 AUSpatialMixer binaural 监听有效,此时无效 → 用它禁用相关开关(灰掉)。
+    public bool HeadTrackControlsEnabled => !(IsMonitoring && (_activeMonitorBackend?.SystemSpatial ?? false));
 
     partial void OnSelectedMonitorBackendChanged(MonitorBackendOption value)
     {
