@@ -470,36 +470,60 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
     return status;
 }
 
-// Head-lock 补偿:把一个总线的方向(SpatialMixer 约定:az +右、el +上)按听者头朝向旋转,使
-// 全局 HeadYaw/Pitch/Roll 对其恰好抵消 → 该源锁在头上(head-locked),不随转头移动。
-// 推导(见 Phase 1 smoke):AU 感知 az = world_az + yaw(工程 yaw +左),故令 world_az = az - yaw
-// 即抵消;一般化为对方向向量做与头同向的 3D 旋转。坐标:x=右、y=前、z=上。yaw 已真机印证,
-// pitch/roll 符号待真机微调(反了就给对应分量取负)。
+struct HeadVec {
+    double x{};
+    double y{};
+    double z{};
+};
+
+struct HeadQuat {
+    double w{1.0};
+    double x{};
+    double y{};
+    double z{};
+};
+
+[[nodiscard]] HeadQuat quat_mul(const HeadQuat& a, const HeadQuat& b) {
+    return {
+        (a.w * b.w) - (a.x * b.x) - (a.y * b.y) - (a.z * b.z),
+        (a.w * b.x) + (a.x * b.w) + (a.y * b.z) - (a.z * b.y),
+        (a.w * b.y) - (a.x * b.z) + (a.y * b.w) + (a.z * b.x),
+        (a.w * b.z) + (a.x * b.y) - (a.y * b.x) + (a.z * b.w),
+    };
+}
+
+[[nodiscard]] HeadQuat axis_angle(const HeadVec& axis, double radians) {
+    const double half = radians * 0.5;
+    const double s = std::sin(half);
+    return {std::cos(half), axis.x * s, axis.y * s, axis.z * s};
+}
+
+[[nodiscard]] HeadVec rotate_by_quat(HeadVec v, const HeadQuat& q) {
+    const HeadQuat p{0.0, v.x, v.y, v.z};
+    const HeadQuat qc{q.w, -q.x, -q.y, -q.z};
+    const HeadQuat r = quat_mul(quat_mul(q, p), qc);
+    return {r.x, r.y, r.z};
+}
+
+// Head-lock 补偿:把一个总线的方向(SpatialMixer 约定:az +右、el +上)按听者头朝向预旋转,
+// 使全局 HeadYaw/Pitch/Roll 对其恰好抵消 → 该源锁在头上(head-locked),不随转头移动。
+// 坐标:x=右、y=前、z=上。组合顺序与 GUI 头部姿态反馈保持一致:roll(绕前轴 y) →
+// pitch(绕右轴 x) → yaw(绕上轴 z)。yaw 已由 smoke/真机方向锁定;pitch/roll 仍建议真机标定。
 [[nodiscard]] std::pair<float, float> head_lock_compensate(float az_deg, float el_deg, const ListenerOrientation& o) {
     constexpr double d2r = 0.017453292519943295;
     constexpr double r2d = 57.29577951308232;
     const double a = az_deg * d2r;
     const double e = el_deg * d2r;
-    double x = std::sin(a) * std::cos(e); // 右
-    double y = std::cos(a) * std::cos(e); // 前
-    double z = std::sin(e);               // 上
+    const HeadVec v{std::sin(a) * std::cos(e), std::cos(a) * std::cos(e), std::sin(e)};
 
-    const double yaw = o.yaw_deg * d2r;   // 绕上轴(z):令 az -= yaw
-    const double pit = o.pitch_deg * d2r; // 绕右轴(x)
-    const double rol = o.roll_deg * d2r;  // 绕前轴(y)
+    const HeadQuat q_roll = axis_angle({0.0, 1.0, 0.0}, o.roll_deg * d2r);
+    const HeadQuat q_pitch = axis_angle({1.0, 0.0, 0.0}, o.pitch_deg * d2r);
+    const HeadQuat q_yaw = axis_angle({0.0, 0.0, 1.0}, o.yaw_deg * d2r);
+    const HeadQuat head_to_world = quat_mul(q_yaw, quat_mul(q_pitch, q_roll));
+    const HeadVec rotated = rotate_by_quat(v, head_to_world);
 
-    // Rz(yaw):绕上轴
-    double x1 = (x * std::cos(yaw)) - (y * std::sin(yaw));
-    double y1 = (x * std::sin(yaw)) + (y * std::cos(yaw));
-    // Rx(pit):绕右轴
-    double y2 = (y1 * std::cos(pit)) - (z * std::sin(pit));
-    double z2 = (y1 * std::sin(pit)) + (z * std::cos(pit));
-    // Ry(rol):绕前轴
-    double x3 = (x1 * std::cos(rol)) + (z2 * std::sin(rol));
-    double z3 = (-x1 * std::sin(rol)) + (z2 * std::cos(rol));
-
-    const auto az = static_cast<float>(std::atan2(x3, y2) * r2d);
-    const auto el = static_cast<float>(std::asin(std::clamp(z3, -1.0, 1.0)) * r2d);
+    const auto az = static_cast<float>(std::atan2(rotated.x, rotated.y) * r2d);
+    const auto el = static_cast<float>(std::asin(std::clamp(rotated.z, -1.0, 1.0)) * r2d);
     return {az, el};
 }
 
