@@ -95,7 +95,8 @@
 
                     <!-- 监听引擎:后端 A/B + 自定义 HRIR(SOFA,仅「双耳·SAF」时显示;下拉=默认+最近 MRU + 浏览) -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <ComboBox Width="154" VerticalAlignment="Center"
+                        <!-- 监听后端下拉;系统空间音频的布局走右侧次级下拉(与 SOFA 同款上下文范式,互斥显示) -->
+                        <ComboBox Width="176" VerticalAlignment="Center"
                                   ItemsSource="{Binding MonitorBackends}"
                                   SelectedItem="{Binding SelectedMonitorBackend}">
                             <ComboBox.ItemTemplate>
@@ -104,6 +105,11 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
+                        <!-- 系统空间音频布局次级下拉(7.1.4 / 22.2);仅系统空间音频后端可见 -->
+                        <ComboBox Width="86" VerticalAlignment="Center"
+                                  IsVisible="{Binding MonitorLayoutSelectorVisible}"
+                                  ItemsSource="{Binding MonitorSpatialLayouts}"
+                                  SelectedItem="{Binding SelectedSpatialLayout}"/>
                         <!-- 输出设备(系统默认 + 枚举所得);改变时即时切换(监听中)或下次生效 -->
                         <ComboBox Width="160" VerticalAlignment="Center"
                                   ItemsSource="{Binding MonitorDevices}"
