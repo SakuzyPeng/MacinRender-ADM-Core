@@ -43,6 +43,12 @@ class IAudioOutputDevice {
     // Buffered media sinks can return false because they pull ahead of playback time.
     [[nodiscard]] virtual bool pull_is_realtime_playback() const { return true; }
 
+    // Drop any buffered-but-unplayed output (called on seek), so post-seek audio doesn't splice
+    // onto stale pre-seek samples. Default no-op: realtime callback sinks hold no internal buffer
+    // and pull fresh each block. The buffered media sink (AVSampleBufferAudioRenderer) overrides
+    // it to clear its staging and flush the system queue.
+    virtual void flush() {}
+
   protected:
     IAudioOutputDevice() = default;
 };

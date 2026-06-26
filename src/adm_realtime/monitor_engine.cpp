@@ -414,6 +414,9 @@ void MonitorEngine::apply_seek_locked(uint64_t frame) {
         logs_.log(LogLevel::error, "monitor", seek_res.error().message);
         failed_.store(true, std::memory_order_relaxed);
     }
+    // Drop the output device's stale pre-seek buffer (the buffered sink's staging + system queue)
+    // so the new position doesn't splice onto old-position audio. No-op for the miniaudio sink.
+    device_.flush();
     // The playhead jumped: restart loudness integration from the new position (momentary /
     // short-term windows would otherwise span the discontinuity).
     rebuild_meter();
