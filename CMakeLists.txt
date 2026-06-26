@@ -24,6 +24,17 @@ set(MR_ADM_OPUS_PROVIDER "AUTO" CACHE STRING "libopus provider: AUTO, SYSTEM, or
 set_property(CACHE MR_ADM_OPUS_PROVIDER PROPERTY STRINGS AUTO SYSTEM VENDORED)
 option(MR_ADM_USE_SYSTEM_OPUS "Shortcut for MR_ADM_OPUS_PROVIDER=SYSTEM" OFF)
 
+# 编译缓存：探测到 ccache/sccache 就接为编译启动器（找不到则优雅降级，不影响无缓存环境/CI）。
+# 显著加速全量与切分支重编；不改变编译产物。
+if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
+    find_program(MR_ADM_COMPILER_CACHE NAMES ccache sccache)
+    if(MR_ADM_COMPILER_CACHE)
+        set(CMAKE_C_COMPILER_LAUNCHER "${MR_ADM_COMPILER_CACHE}")
+        set(CMAKE_CXX_COMPILER_LAUNCHER "${MR_ADM_COMPILER_CACHE}")
+        message(STATUS "Compiler cache enabled: ${MR_ADM_COMPILER_CACHE}")
+    endif()
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
