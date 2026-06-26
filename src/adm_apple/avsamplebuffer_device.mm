@@ -12,6 +12,7 @@
 #import <CoreMedia/CoreMedia.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cmath>
 #include <memory>
@@ -38,6 +39,15 @@ constexpr std::size_t k_target_queue_frames = 6144;
 // Frames the system buffer must hold before the clock starts (prefill), so playback rides out
 // worker jitter without starting from an empty queue. ~85 ms at 48 kHz.
 constexpr std::size_t k_prefill_frames = 4096;
+// Underflow hysteresis (after playback has started). When the system queue falls below the low
+// mark we freeze the clock (setRate:0) BEFORE it can overrun the queue and play stale/glitch
+// audio, and resume (setRate:1) once the worker has refilled past the high mark. Non-destructive:
+// no flush, no PTS reset — enqueued audio is preserved and resumes seamlessly. The low mark sits
+// well above frames-per-feed-tick (~480) so the freeze always lands before an overrun. This
+// replaces the old flush+re-prefill recovery, which threw away buffered audio and could sawtooth
+// into permanent silence whenever the worker ran marginally behind.
+constexpr std::size_t k_stall_low_frames = 1024;  // ~21 ms
+constexpr std::size_t k_stall_high_frames = 4096; // ~85 ms
 constexpr uint64_t k_feed_interval_ns = 10U * 1000U * 1000U;
 constexpr uint64_t k_feed_leeway_ns = 2U * 1000U * 1000U;
 
@@ -62,6 +72,9 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         pull_ = std::move(pull);
         pts_frames_ = 0;
         playing_started_ = false;
+        stalled_ = false;
+        user_paused_ = false;
+        stopping_.store(false, std::memory_order_release);
         staging_.assign(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F);
         staged_frames_ = 0;
 
@@ -89,17 +102,13 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         });
         dispatch_resume(feed_timer_);
 
-        [renderer_ requestMediaDataWhenReadyOnQueue:queue_
-                                         usingBlock:^{
-                                           self->feed_queue();
-                                         }];
+        arm_media_request();
         return {};
     }
 
     void stop() override {
-        if (renderer_ != nil) {
-            [renderer_ stopRequestingMediaData];
-        }
+        stopping_.store(true, std::memory_order_release);
+        stop_media_request();
         dispatch_source_t timer = feed_timer_;
         feed_timer_ = nil;
         if (timer != nil) {
@@ -139,15 +148,8 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         // has already parked the ring pull, so the in-flight feed block here just no-ops.
         dispatch_sync(queue_, ^{
           staged_frames_ = 0; // drop the stale pre-seek partial so it can't splice onto new audio
-          if (renderer_ != nil) {
-              [renderer_ flush]; // drop ASBR's enqueued-but-unplayed buffers
-          }
           // Re-prefill from the new position so PTS realigns to a fresh clock.
-          playing_started_ = false;
-          pts_frames_ = 0;
-          if (synchronizer_ != nil) {
-              [synchronizer_ setRate:0.0F time:kCMTimeZero];
-          }
+          reset_renderer_for_prefill();
         });
     }
 
@@ -156,9 +158,8 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
             return;
         }
         dispatch_sync(queue_, ^{
-          if (synchronizer_ != nil) {
-              [synchronizer_ setRate:0.0F]; // freeze the clock (keep position) so it can't run away
-          }
+          user_paused_ = true;
+          apply_desired_rate(); // freeze the clock (keep position) so it can't run away
         });
     }
 
@@ -167,15 +168,62 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
             return;
         }
         dispatch_sync(queue_, ^{
-          // Only resume the clock once prefill has actually started it; before that the prefill
-          // gate in feed_queue owns setRate.
-          if (playing_started_ && synchronizer_ != nil) {
-              [synchronizer_ setRate:1.0F];
-          }
+          user_paused_ = false;
+          // Hand the clock back to the desired-rate policy: it runs only if prefill has started
+          // and we're not mid-stall (an empty queue would otherwise overrun on resume).
+          apply_desired_rate();
         });
     }
 
   private:
+    void arm_media_request() {
+        if (renderer_ == nil || queue_ == nil || stopping_.load(std::memory_order_acquire) ||
+            media_request_armed_.exchange(true, std::memory_order_acq_rel)) {
+            return;
+        }
+        AVSampleBufferDevice* self = this; // raw; stop() drains queue_ before teardown
+        [renderer_ requestMediaDataWhenReadyOnQueue:queue_
+                                         usingBlock:^{
+                                           self->feed_queue();
+                                         }];
+    }
+
+    void stop_media_request() {
+        if (renderer_ != nil) {
+            [renderer_ stopRequestingMediaData];
+        }
+        media_request_armed_.store(false, std::memory_order_release);
+    }
+
+    // Destructive re-prefill: drop ASBR's enqueued buffers and realign PTS to a fresh clock. Only
+    // for seek (flush()), where we genuinely want to discard buffered audio and restart at the new
+    // position. Underflow no longer comes through here — it freezes/resumes the clock instead.
+    void reset_renderer_for_prefill() {
+        if (synchronizer_ != nil) {
+            [synchronizer_ setRate:0.0F time:kCMTimeZero];
+        }
+        stop_media_request();
+        if (renderer_ != nil) {
+            [renderer_ flush];
+        }
+        staged_frames_ = 0;
+        pts_frames_ = 0;
+        playing_started_ = false;
+        stalled_ = false;
+        arm_media_request();
+    }
+
+    // The clock should run iff playback has started, the user hasn't paused, and we're not riding
+    // out an underflow stall. Plain setRate (no time arg) so the timeline origin set at prefill is
+    // never disturbed. Runs on queue_ only.
+    void apply_desired_rate() {
+        if (synchronizer_ == nil || !playing_started_) {
+            return;
+        }
+        const float rate = (!user_paused_ && !stalled_) ? 1.0F : 0.0F;
+        [synchronizer_ setRate:rate];
+    }
+
     [[nodiscard]] bool build_format(AudioChannelLayoutTag tag) {
         AudioStreamBasicDescription asbd{};
         asbd.mSampleRate = static_cast<Float64>(sample_rate_);
@@ -219,24 +267,11 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
     }
 
     void feed_queue() {
-        if (renderer_ == nil) {
+        if (renderer_ == nil || stopping_.load(std::memory_order_acquire)) {
             return;
         }
 
-        // ASBR underflow 自恢复 —— 提前触发版:不等队列彻底喂空(那时 ASBR 已在播重复/glitch 的坏声音),
-        // 而是在队列**快空**(剩不到一个 chunk)时就立即介入 —— `flush` 当场丢掉即将坏的缓冲 + setRate:0
-        // 静音,回到 prefill 态由下方 gate 重新攒够再唤醒。等于用一段可控的短暂静音替代喂空后的异响,且
-        // 赶在坏声音发出之前。worker 严重落后期间会反复落到这里 → 保持静音,直到它真正追上(queued 回升)。
-        if (playing_started_ && queued_frames() < k_chunk_frames) {
-            [renderer_ flush];
-            staged_frames_ = 0;
-            pts_frames_ = 0;
-            playing_started_ = false;
-            if (synchronizer_ != nil) {
-                [synchronizer_ setRate:0.0F time:kCMTimeZero];
-            }
-        }
-
+        // Top up the system queue from the ring (bounded by isReadyForMoreMediaData + target depth).
         while ([renderer_ isReadyForMoreMediaData] && queued_frames() < k_target_queue_frames) {
             CMSampleBufferRef sb = next_buffer();
             if (sb == nullptr) {
@@ -246,9 +281,26 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
             CFRelease(sb);
         }
 
-        if (!playing_started_ && queued_frames() >= k_prefill_frames) {
-            [synchronizer_ setRate:1.0F time:kCMTimeZero];
-            playing_started_ = true;
+        if (!playing_started_) {
+            // Initial prefill gate: start the clock (and set its origin) once enough is buffered.
+            if (queued_frames() >= k_prefill_frames) {
+                playing_started_ = true;
+                stalled_ = false;
+                [synchronizer_ setRate:(user_paused_ ? 0.0F : 1.0F) time:kCMTimeZero];
+            }
+            return;
+        }
+
+        // ASBR underflow 处理 —— 非破坏式冻结/续播:队列**快空**(低于 low 水位,但 ASBR 还没把时钟跑过
+        // 队尾发出坏声音)时,只 setRate:0 冻住时钟,**不 flush、不动 PTS**,已入队的好音频原样保留;worker
+        // 把 ring 补回来、队列回到 high 水位后再 setRate:1 无缝续播。带迟滞,避免在低水位附近抖动反复切换;
+        // worker 长时间落后就一直冻着(可控静音),不会像旧的 flush 重灌那样丢音频锯齿成永久静音。
+        if (!stalled_ && queued_frames() < k_stall_low_frames) {
+            stalled_ = true;
+            apply_desired_rate(); // → freeze
+        } else if (stalled_ && queued_frames() >= k_stall_high_frames) {
+            stalled_ = false;
+            apply_desired_rate(); // → resume (if the user still wants playback)
         }
     }
 
@@ -316,12 +368,16 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
     std::vector<float> staging_;
     std::size_t staged_frames_{0};
     bool playing_started_{false}; // prefill gate: setRate fires once queued_frames() ≥ k_prefill_frames
+    bool stalled_{false};         // underflow freeze active: clock held at 0 until the queue refills
+    bool user_paused_{false};     // user-requested pause (play/pause button), distinct from a stall
 
     AVSampleBufferAudioRenderer* renderer_{nil};
     AVSampleBufferRenderSynchronizer* synchronizer_{nil};
     dispatch_queue_t queue_{nil};
     dispatch_source_t feed_timer_{nil};
     CMAudioFormatDescriptionRef format_{nullptr};
+    std::atomic<bool> media_request_armed_{false};
+    std::atomic<bool> stopping_{false};
 };
 
 } // namespace
