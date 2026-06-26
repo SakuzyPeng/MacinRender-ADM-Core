@@ -128,6 +128,21 @@ internal sealed class SmEntryDto
     public bool Supported { get; set; }
 }
 
+// ── mradm.layouts v1(adm_layouts_json):每 (format, layout) 一行,order = 最终声道顺序(空格分隔)──
+// 系统空间音频电平表用它取逐声道标签:CoreAudio 顺序(caf/apac 行)即 ASBR 监听实际输出顺序。
+internal sealed class LayoutsDoc
+{
+    public List<LayoutOrderDto> Layouts { get; set; } = new();
+}
+
+internal sealed class LayoutOrderDto
+{
+    public string Format { get; set; } = "";
+    public string Layout { get; set; } = "";
+    public int Channels { get; set; }
+    public string Order { get; set; } = "";
+}
+
 // ── adm_monitor_output_devices_json(v1.21):顶层数组 [{id,name,default}] ──
 internal sealed class OutputDeviceDto
 {
@@ -140,6 +155,7 @@ internal sealed class OutputDeviceDto
 [JsonSerializable(typeof(OutputFormatsDoc))]
 [JsonSerializable(typeof(CapabilitiesDoc))]
 [JsonSerializable(typeof(SupportMatrixDoc))]
+[JsonSerializable(typeof(LayoutsDoc))]
 [JsonSerializable(typeof(List<OutputDeviceDto>))]
 internal partial class AdmJsonContext : JsonSerializerContext
 {
@@ -158,6 +174,9 @@ internal static class AdmQueries
 
     public static SupportMatrixDoc? LoadSupportMatrix(AdmContextHandle ctx) =>
         Load(ctx, NativeMethods.adm_render_support_matrix_json, AdmJsonContext.Default.SupportMatrixDoc);
+
+    public static LayoutsDoc? LoadLayouts(AdmContextHandle ctx) =>
+        Load(ctx, NativeMethods.adm_layouts_json, AdmJsonContext.Default.LayoutsDoc);
 
     public static List<OutputDeviceDto>? LoadOutputDevices(AdmContextHandle ctx) =>
         Load(ctx, NativeMethods.adm_monitor_output_devices_json, AdmJsonContext.Default.ListOutputDeviceDto);
