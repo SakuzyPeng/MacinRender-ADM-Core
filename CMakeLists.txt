@@ -35,6 +35,39 @@ if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
     endif()
 endif()
 
+function(mr_adm_core_enable_fast_debug_flags)
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+        return()
+    endif()
+
+    foreach(lang IN ITEMS C CXX)
+        set(flags_var "CMAKE_${lang}_FLAGS_DEBUG")
+        set(flags "${${flags_var}}")
+
+        if(MSVC)
+            foreach(pattern IN ITEMS
+                    "(^| )[/-]Od( |$)"
+                    "(^| )[/-]RTC[^ ]*( |$)"
+                    "(^| )[/-]O[0-2dx]( |$)"
+                    "(^| )[/-]Ob[0-2]( |$)"
+                    "(^| )[/-]Z[7iI]( |$)"
+                    "(^| )-g( |$)"
+                    "(^| )-Og( |$)")
+                string(REGEX REPLACE "${pattern}" " " flags "${flags}")
+            endforeach()
+            string(APPEND flags " /Zi /O1 /Ob1")
+        elseif("${CMAKE_${lang}_COMPILER_ID}" MATCHES "Clang|GNU")
+            string(REGEX REPLACE "(^| )-Og( |$)" " " flags "${flags}")
+            string(APPEND flags " -Og")
+        endif()
+
+        string(REGEX REPLACE " +" " " flags "${flags}")
+        string(STRIP "${flags}" flags)
+        set(${flags_var} "${flags}" CACHE STRING "Flags used by the ${lang} compiler during Debug builds." FORCE)
+    endforeach()
+endfunction()
+mr_adm_core_enable_fast_debug_flags()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
