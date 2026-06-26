@@ -22,7 +22,8 @@ constexpr uint64_t k_crossfade_frames = 2048U;
 } // namespace
 
 MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device, LogSink& logs)
-    : stream_(std::move(stream)), device_(device), logs_(logs), channels_(stream_->out_channels()),
+    : stream_(std::move(stream)), device_(device), logs_(logs),
+      pull_is_realtime_playback_(device.pull_is_realtime_playback()), channels_(stream_->out_channels()),
       sample_rate_(stream_->sample_rate()), ring_(k_ring_frames * channels_),
       scratch_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F),
       scratch_b_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F) {
@@ -290,7 +291,7 @@ bool MonitorEngine::top_up_ring() {
             }
             got = std::min(got, *in_res);
             for (std::size_t f = 0; f < got; ++f) {
-                const double p = static_cast<double>(xfade_pos_ + f);
+                const auto p = static_cast<double>(xfade_pos_ + f);
                 const float t = static_cast<float>(std::min(1.0, p / static_cast<double>(k_crossfade_frames)));
                 for (uint32_t c = 0; c < channels_; ++c) {
                     const std::size_t i = (f * channels_) + c;
@@ -344,6 +345,12 @@ std::size_t MonitorEngine::pull(std::span<float> out, std::size_t frames) {
 
     const bool active =
         state_.load(std::memory_order_seq_cst) == MonitorState::playing && !flushing_.load(std::memory_order_seq_cst);
+    // PullFn contract: return the number of frames actually produced from the ring (not the
+    // requested count). A short read lets a non-realtime "feed" sink (the AVSampleBufferAudio-
+    // Renderer monitor) avoid enqueuing the silence-padded tail and stalling the system buffer;
+    // a realtime callback sink (miniaudio) ignores it since pull already padded. paused /
+    // flushing produces nothing, so the feed sink lets its buffer drain until playback resumes.
+    std::size_t produced_frames = 0;
     if (!active) {
         std::fill_n(out.data(), floats, 0.0F);
     } else {
@@ -354,11 +361,12 @@ std::size_t MonitorEngine::pull(std::span<float> out, std::size_t frames) {
             // us; once the stream has ended/failed, an empty ring is the expected silence.
             const bool producer_done =
                 ended_.load(std::memory_order_relaxed) || failed_.load(std::memory_order_relaxed);
-            if (!producer_done) {
+            if (!producer_done && pull_is_realtime_playback_) {
                 underruns_.fetch_add(1, std::memory_order_relaxed);
             }
         }
         frames_played_.fetch_add(got / channels_, std::memory_order_relaxed);
+        produced_frames = got / channels_;
     }
 
     // Per-channel peak / RMS over the block (silence included), for the UI meters.
@@ -377,7 +385,7 @@ std::size_t MonitorEngine::pull(std::span<float> out, std::size_t frames) {
     }
 
     in_pop_.store(false, std::memory_order_seq_cst);
-    return frames;
+    return produced_frames;
 }
 
 void MonitorEngine::apply_seek_locked(uint64_t frame) {

@@ -39,6 +39,10 @@ class IAudioOutputDevice {
 
     [[nodiscard]] virtual uint32_t actual_sample_rate() const = 0;
 
+    // True for realtime hardware callbacks: a short pull means the user heard padding.
+    // Buffered media sinks can return false because they pull ahead of playback time.
+    [[nodiscard]] virtual bool pull_is_realtime_playback() const { return true; }
+
   protected:
     IAudioOutputDevice() = default;
 };
@@ -63,5 +67,16 @@ struct AudioDeviceInfo {
 // — no miniaudio type crosses this boundary (ADR 0003).
 [[nodiscard]] std::unique_ptr<IAudioOutputDevice> make_miniaudio_device(bool use_null_backend = false,
                                                                         const std::string& device_id = {});
+
+#if defined(__APPLE__)
+// macOS-only output device that enqueues the monitor's *multichannel* PCM into the system
+// media playback stack (AVSampleBufferAudioRenderer) so macOS spatializes it to the headphone
+// route with dynamic head tracking — instead of playing raw channels on hardware. `layout_id`
+// is the project speaker layout (e.g. "4+7+0" for 7.1.4); the device resolves it to the
+// CoreAudio AudioChannelLayoutTag that makes the system treat the stream as spatial content.
+// Implemented in adm_apple/avsamplebuffer_device.mm — no Apple framework type crosses this
+// boundary (ADR 0003). The start() channel count must match the layout's channel count.
+[[nodiscard]] std::unique_ptr<IAudioOutputDevice> make_avsamplebuffer_device(std::string layout_id);
+#endif
 
 } // namespace mradm::realtime
