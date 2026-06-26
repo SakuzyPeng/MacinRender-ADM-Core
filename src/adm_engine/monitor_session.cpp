@@ -167,7 +167,9 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         plan.speaker_spread_mode = options.speaker_spread_mode;
         plan.binaural_spread_mode = options.binaural_spread_mode;
         plan.apple_spatial_preset = options.apple_spatial_preset;
-        plan.listener_orientation = options.listener_orientation;
+        // System-spatial monitoring hands head tracking to the system; the rendered bed must stay
+        // orientation-neutral so it isn't rotated twice (see MonitorSession::set_listener_orientation).
+        plan.listener_orientation = options.monitor_system_spatial ? ListenerOrientation{} : options.listener_orientation;
 
         auto prepared = renderer->prepare(plan, logs);
         if (!prepared) {
@@ -233,6 +235,14 @@ struct MonitorSession::Impl {
     std::string device_id;                     // current output device token ("" = default)
     uint32_t sample_rate{48000};
     uint64_t total_frames{0};
+
+    // The orientation actually fed to the render stream. Under system-spatial monitoring the
+    // system owns head tracking, so a local orientation must NOT reach AppleStream (it would
+    // rotate the 7.1.4 bed at the source → double rotation). Forced neutral there; the user's
+    // real pose is still kept in current_orientation (and drives the GUI spatial view separately).
+    [[nodiscard]] ListenerOrientation effective_orientation() const {
+        return current_options.monitor_system_spatial ? ListenerOrientation{} : current_orientation;
+    }
 };
 
 MonitorSession::MonitorSession() : impl_(std::make_unique<Impl>()) {}
@@ -303,7 +313,10 @@ void MonitorSession::set_overrides(const LiveOverrides& overrides) {
 
 void MonitorSession::set_listener_orientation(const ListenerOrientation& orientation) {
     impl_->current_orientation = orientation; // kept so a device switch can re-apply the head pose
-    impl_->engine->set_listener_orientation(orientation);
+    // 系统空间化监听:头追由系统(AirPods)在它自己的输出级接管。若把本地朝向喂给 AppleStream
+    // (AUSpatialMixer),它会在源头先把 7.1.4 声场转一道,再被系统头追转第二道 = 双重旋转。
+    // 故在系统空间化下强制中立朝向(GUI 的 spatial view 视觉监视走另一条路,不受影响)。
+    impl_->engine->set_listener_orientation(impl_->effective_orientation());
 }
 
 Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
@@ -388,7 +401,7 @@ Result<void> MonitorSession::set_output_device(const std::string& device_id) {
     // Restore playhead + edits + play state on the freshly rebuilt engine.
     impl_->engine->seek(playhead);
     impl_->engine->set_overrides(impl_->current_overrides);
-    impl_->engine->set_listener_orientation(impl_->current_orientation);
+    impl_->engine->set_listener_orientation(impl_->effective_orientation()); // 系统空间化→中立(见 setter)
     if (was_playing) {
         impl_->engine->play();
     }
