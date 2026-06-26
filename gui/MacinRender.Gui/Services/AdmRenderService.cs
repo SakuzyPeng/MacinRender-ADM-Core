@@ -178,6 +178,7 @@ public sealed class AdmRenderService
     {
         NativeMethods.adm_render_options_set_renderer(opts, s.Renderer);
         NativeMethods.adm_render_options_set_output_layout(opts, s.Layout);
+        NativeMethods.adm_render_options_set_monitor_system_spatial(opts, s.MonitorSystemSpatial ? 1 : 0);
 
         if (s.BitDepth is { } depth)
         {
