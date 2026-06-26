@@ -62,6 +62,8 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         pull_ = std::move(pull);
         pts_frames_ = 0;
         playing_started_ = false;
+        staging_.assign(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F);
+        staged_frames_ = 0;
 
         if (!build_format(layout->layout_tag)) {
             return make_error(ErrorCode::render_failed, "创建 CMAudioFormatDescription 失败", "layout=" + layout_id_);
@@ -128,6 +130,27 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
     [[nodiscard]] uint32_t actual_sample_rate() const override { return sample_rate_; }
     [[nodiscard]] bool pull_is_realtime_playback() const override { return false; }
 
+    void flush() override {
+        if (queue_ == nil) {
+            return;
+        }
+        // Called on the worker (seek) thread. Hop to queue_ so staging_/pts_/the renderer are
+        // touched only on the serial queue the feed block uses (no data race). The seek handshake
+        // has already parked the ring pull, so the in-flight feed block here just no-ops.
+        dispatch_sync(queue_, ^{
+          staged_frames_ = 0; // drop the stale pre-seek partial so it can't splice onto new audio
+          if (renderer_ != nil) {
+              [renderer_ flush]; // drop ASBR's enqueued-but-unplayed buffers
+          }
+          // Re-prefill from the new position so PTS realigns to a fresh clock.
+          playing_started_ = false;
+          pts_frames_ = 0;
+          if (synchronizer_ != nil) {
+              [synchronizer_ setRate:0.0F time:kCMTimeZero];
+          }
+        });
+    }
+
   private:
     [[nodiscard]] bool build_format(AudioChannelLayoutTag tag) {
         AudioStreamBasicDescription asbd{};
@@ -147,22 +170,28 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         return st == noErr && format_ != nullptr;
     }
 
-    [[nodiscard]] std::size_t queued_frames() const {
-        const auto enqueued = static_cast<std::size_t>(std::max<int64_t>(pts_frames_, 0));
+    // Frames the synchronizer's clock has advanced (currentTime · sample_rate). 0 before playback
+    // starts or before the clock is numeric — nothing has "played" yet in those cases.
+    [[nodiscard]] int64_t clock_frames() const {
         if (!playing_started_ || synchronizer_ == nil || sample_rate_ == 0) {
-            return enqueued;
+            return 0;
         }
-
         const CMTime now = [synchronizer_ currentTime];
         if (!CMTIME_IS_NUMERIC(now)) {
-            return enqueued;
+            return 0;
         }
         const double seconds = CMTimeGetSeconds(now);
         if (!std::isfinite(seconds) || seconds <= 0.0) {
-            return enqueued;
+            return 0;
         }
-        const auto played = static_cast<std::size_t>(seconds * static_cast<double>(sample_rate_));
-        return enqueued > played ? enqueued - played : 0;
+        return static_cast<int64_t>(seconds * static_cast<double>(sample_rate_));
+    }
+
+    // Frames enqueued but not yet played (system queue depth). Drives feed throttling. Before
+    // playback starts clock_frames() is 0, so this is the full enqueued count (the prefill gate).
+    [[nodiscard]] std::size_t queued_frames() const {
+        const int64_t q = pts_frames_ - clock_frames();
+        return q > 0 ? static_cast<std::size_t>(q) : 0;
     }
 
     void feed_queue() {
@@ -171,10 +200,9 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         }
 
         while ([renderer_ isReadyForMoreMediaData] && queued_frames() < k_target_queue_frames) {
-            std::size_t produced = 0;
-            CMSampleBufferRef sb = next_buffer(produced);
+            CMSampleBufferRef sb = next_buffer();
             if (sb == nullptr) {
-                break;
+                break; // ring didn't yield a full chunk: leave the partial staged, refill next tick
             }
             [renderer_ enqueueSampleBuffer:sb];
             CFRelease(sb);
@@ -186,44 +214,56 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         }
     }
 
-    // Pull up to k_chunk_frames *real* frames from the ring and wrap exactly that many as a ready
-    // CMSampleBuffer — no silence padding (feeding silence past the ring bloats the system buffer
-    // and stutters). `out_produced` is the real frame count this call; a nullptr return means the
-    // ring produced nothing. Returns a +1-retained buffer the caller must CFRelease. Runs on
-    // queue_ (the enqueue block), the only thread touching scratch_/pts_.
-    [[nodiscard]] CMSampleBufferRef next_buffer(std::size_t& out_produced) {
-        out_produced = 0;
-        const std::size_t request = k_chunk_frames;
-        scratch_.assign(request * channels_, 0.0F);
-        const std::size_t produced =
-            pull_ ? pull_(std::span<float>(scratch_.data(), request * channels_), request) : 0;
-        if (produced == 0) {
-            return nullptr; // ring empty: enqueue nothing rather than silence
+    // Fill the staging block to exactly k_chunk_frames from the ring, then wrap it as a ready,
+    // fixed-size CMSampleBuffer with contiguous PTS. Returns nullptr — leaving any partial staged
+    // for the next call — when the ring can't complete a full block, so ASBR never sees a variable-
+    // size buffer or a silence-padded tail. +1-retained; caller CFReleases. Runs on queue_, the
+    // only thread touching staging_/staged_frames_/pts_.
+    [[nodiscard]] CMSampleBufferRef next_buffer() {
+        while (staged_frames_ < k_chunk_frames) {
+            const std::size_t need = k_chunk_frames - staged_frames_;
+            const std::size_t produced =
+                pull_ ? pull_(std::span<float>(staging_.data() + (staged_frames_ * channels_), need * channels_), need)
+                      : 0;
+            staged_frames_ += produced;
+            if (produced < need) {
+                break; // ring drained mid-fill — keep what we have, finish the block next time
+            }
+        }
+        if (staged_frames_ < k_chunk_frames) {
+            return nullptr; // not a full block yet
         }
 
-        const std::size_t byte_count = produced * channels_ * sizeof(float);
+        const std::size_t byte_count = static_cast<std::size_t>(k_chunk_frames) * channels_ * sizeof(float);
         CMBlockBufferRef block = nullptr;
         OSStatus st = CMBlockBufferCreateWithMemoryBlock(
             kCFAllocatorDefault, nullptr, byte_count, kCFAllocatorDefault, nullptr, 0, byte_count, 0, &block);
         if (st != kCMBlockBufferNoErr || block == nullptr) {
             return nullptr;
         }
-        st = CMBlockBufferReplaceDataBytes(scratch_.data(), block, 0, byte_count);
+        st = CMBlockBufferReplaceDataBytes(staging_.data(), block, 0, byte_count);
         if (st != kCMBlockBufferNoErr) {
             CFRelease(block);
             return nullptr;
         }
 
+        // Rebase PTS after a real underflow: if the clock has advanced past everything enqueued,
+        // start this buffer at the clock — not at the stale pts_frames_, which would land in the
+        // clock's past and be dropped / garbled by ASBR.
+        const int64_t clock = clock_frames();
+        if (clock > pts_frames_) {
+            pts_frames_ = clock;
+        }
         CMSampleBufferRef sample = nullptr;
         const CMTime pts = CMTimeMake(pts_frames_, static_cast<int32_t>(sample_rate_));
         st = CMAudioSampleBufferCreateReadyWithPacketDescriptions(
-            kCFAllocatorDefault, block, format_, static_cast<CMItemCount>(produced), pts, nullptr, &sample);
+            kCFAllocatorDefault, block, format_, static_cast<CMItemCount>(k_chunk_frames), pts, nullptr, &sample);
         CFRelease(block);
         if (st != noErr || sample == nullptr) {
             return nullptr;
         }
-        pts_frames_ += static_cast<int64_t>(produced);
-        out_produced = produced;
+        pts_frames_ += static_cast<int64_t>(k_chunk_frames);
+        staged_frames_ = 0;
         return sample;
     }
 
@@ -232,7 +272,11 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
     uint32_t sample_rate_{0};
     PullFn pull_;
     int64_t pts_frames_{0};
-    std::vector<float> scratch_;
+    // Accumulate into fixed-size k_chunk_frames blocks before enqueuing. Feeding ASBR variable-
+    // size buffers (the raw per-pull `produced`) caused intermittent artifacts / blowups over a
+    // long stream; every enqueued buffer is now exactly k_chunk_frames with contiguous PTS.
+    std::vector<float> staging_;
+    std::size_t staged_frames_{0};
     bool playing_started_{false}; // prefill gate: setRate fires once queued_frames() ≥ k_prefill_frames
 
     AVSampleBufferAudioRenderer* renderer_{nil};
