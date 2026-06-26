@@ -82,6 +82,8 @@ public partial class App : Application
             var matrix = AdmQueries.LoadSupportMatrix(ctx)
                 ?? throw new InvalidOperationException("adm_render_support_matrix_json returned no data.");
             OutputModel.Initialize(matrix);
+            // 系统空间音频可选布局来自 apple 后端 capabilities(权威源,非硬编码);非 macOS 时为空。
+            OutputModel.InitializeAppleSpatial(AdmQueries.LoadCapabilities(ctx));
         }
         catch (DllNotFoundException ex)
         {

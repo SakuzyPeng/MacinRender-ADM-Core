@@ -381,12 +381,10 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(MonitorLayoutSelectorVisible))]
     private MonitorBackendOption _selectedMonitorBackend;
 
-    // 系统空间音频的布局次级下拉(与 SAF 的 SOFA 同款上下文范式,二者互斥显示)。
-    // 列表 = Apple 后端权威表 apple_layouts.h::k_apple_speaker_layouts 的全部 7 个(声道升序);
-    // 这些 display name 经 normalize_output_layout 映射到 device id,渲染(resolve_output_profile)
-    // 与 ASBR sink(find_apple_speaker_layout)共用同一张表。注:9.1.4 不在 Apple 表,故不列。
-    public ObservableCollection<string> MonitorSpatialLayouts { get; } =
-        new() { "5.1", "7.1", "5.1.2", "5.1.4", "7.1.4", "9.1.6", "22.2" };
+    // 系统空间音频的布局次级下拉(与 SAF 的 SOFA 同款上下文范式,二者互斥显示)。来源 =
+    // OutputModel.AppleSpatialLayouts(adm_capabilities_json 的 apple 后端非-binaural 布局,
+    // 权威源 core 的 apple_layouts 表),不再硬编码白名单 —— 表变了 GUI 自动同步。
+    public ObservableCollection<string> MonitorSpatialLayouts { get; } = new(Models.OutputModel.AppleSpatialLayouts);
 
     [ObservableProperty] private string _selectedSpatialLayout = "7.1.4";
 

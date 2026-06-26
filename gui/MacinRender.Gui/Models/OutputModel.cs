@@ -57,6 +57,20 @@ public static class OutputModel
     public static Dictionary<string, ContainerDef> ContainerById { get; private set; } = new();
     public static CodecDef[] Codecs { get; private set; } = Array.Empty<CodecDef>();
 
+    /// <summary>系统空间音频(Apple ASBR)可用的扬声器布局 display 名,来自 adm_capabilities_json 的
+    /// apple 后端(排除 binaural)。权威源是 core 的 apple_layouts 表 —— GUI 不再硬编码白名单。
+    /// macOS-only;非 macOS 或无 apple 后端时为空(系统空间音频后端本就 macOS-gated)。</summary>
+    public static IReadOnlyList<string> AppleSpatialLayouts { get; private set; } = Array.Empty<string>();
+
+    /// <summary>从 capabilities JSON 提取 apple 后端的非-binaural 布局(系统空间音频的布局候选)。</summary>
+    internal static void InitializeAppleSpatial(CapabilitiesDoc? caps)
+    {
+        var apple = caps?.Backends.FirstOrDefault(b => b.Renderer == "apple");
+        AppleSpatialLayouts = apple is null
+            ? Array.Empty<string>()
+            : apple.Layouts.Where(l => !l.IsBinaural).Select(l => l.DisplayName).ToArray();
+    }
+
     // (renderer, layout, target) → 受支持。"automatic" 为所有真实后端的并集。
     private static HashSet<(string Renderer, string Layout, string Target)> _supported = new();
     // codec(encoding) → 该编码的 target id(有序);不含 iamf。

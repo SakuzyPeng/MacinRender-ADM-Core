@@ -90,6 +90,10 @@ internal static class SelfTest
         Console.WriteLine($"codecs: {string.Join(", ", OutputModel.Codecs.Select(c => $"{c.Id}={(c.Available ? "on" : "off")}"))}");
         Console.WriteLine($"features: apac={OutputModel.ApacAvailable} iamf={OutputModel.IamfAvailable} sofa={OutputModel.SofaAvailable}");
 
+        // 系统空间音频布局 = apple 后端 capabilities 的非-binaural 布局(GUI 监听布局下拉的权威来源)。
+        OutputModel.InitializeAppleSpatial(AdmQueries.LoadCapabilities(ctx));
+        Console.WriteLine($"系统空间音频布局({OutputModel.AppleSpatialLayouts.Count}): [{string.Join(", ", OutputModel.AppleSpatialLayouts)}]");
+
         Console.WriteLine("联动链抽查 (后端 → 编码器 → 该编码器支持的布局):");
         void Chain(string backendId)
         {
