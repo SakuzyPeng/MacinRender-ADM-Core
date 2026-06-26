@@ -15,6 +15,10 @@ public sealed record RenderSettings
     public double? LoudnessTargetLufs { get; init; }
     public string? SofaPath { get; init; }
     public string? SemanticPolicyJson { get; init; }
+
+    /// <summary>仅监听:多声道输出走 macOS 系统空间音频(AVSampleBufferAudioRenderer,系统 HRTF + 头追踪),
+    /// 不下混。需受支持的多声道扬声器 Layout;非 macOS / 离线渲染忽略。</summary>
+    public bool MonitorSystemSpatial { get; init; }
 }
 
 /// <summary>结构化进度事件(adm_progress_event_v2_t 的托管投影,Message 已 marshal 成托管串)。</summary>

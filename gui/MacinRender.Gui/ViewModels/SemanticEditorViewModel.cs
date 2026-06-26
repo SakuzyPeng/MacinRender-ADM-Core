@@ -128,6 +128,12 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         // 不进 i18n 字典 → 语言无关、不随切换变化(与其它专名下拉一致)。
         MonitorBackends.Add(new MonitorBackendOption("SAF · Binaural", AdmRenderer.SafBinaural, "binaural"));
         MonitorBackends.Add(new MonitorBackendOption("Apple · Binaural", AdmRenderer.Apple, "binaural"));
+        if (OperatingSystem.IsMacOS())
+        {
+            // 系统空间音频:多声道(不下混)交 macOS 做 HRTF + 头追踪。换 device + 声道数 → 切换走重启监听。
+            MonitorBackends.Add(new MonitorBackendOption("Apple · 系统空间音频 7.1.4", AdmRenderer.Apple, "7.1.4", SystemSpatial: true));
+            MonitorBackends.Add(new MonitorBackendOption("Apple · 系统空间音频 22.2", AdmRenderer.Apple, "22.2", SystemSpatial: true));
+        }
         _selectedMonitorBackend = MonitorBackends[0];
         var saved = SettingsStore.Load();
         MonitorSofaPath = saved?.MonitorSofaPath;
@@ -636,6 +642,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         _sampleRate = sr;
         DurationSeconds = dur;
         IsMonitoring = true;
+        _activeMonitorBackend = backend;
         PushOverrides();          // 把当前编辑立即应用到新监听
         // 常驻朝向:新监听从正前开始,把上次设定的头朝向重新应用一次(视觉+音频同步),跨监听重启保留。
         ApplyHeadOrientation(_lastHeadYaw, _lastHeadPitch, _lastHeadRoll);
@@ -737,11 +744,25 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         ApplyHeadOrientation(0f, 0f, 0f);
     }
 
+    // 当前监听实际使用的后端:判断切换是热切(同布局换 renderer)还是重启(布局 / device 变,含 ↔ 系统空间音频)。
+    private MonitorBackendOption? _activeMonitorBackend;
+
     partial void OnSelectedMonitorBackendChanged(MonitorBackendOption value)
     {
-        if (value is not null && IsMonitoring)
+        if (value is null || !IsMonitoring)
+        {
+            return;
+        }
+        // 同布局(声道数不变)→ 热切换 renderer;布局 / device 变(含 ↔ 系统空间音频)→ 重启监听。
+        if (_activeMonitorBackend is { } active && active.Layout == value.Layout &&
+            active.SystemSpatial == value.SystemSpatial)
         {
             ApplyMonitorBackend(value);
+        }
+        else
+        {
+            StopMonitor();
+            _ = StartMonitorAsync();
         }
     }
 
@@ -750,6 +771,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     {
         Renderer = backend.Renderer,
         Layout = backend.Layout,
+        MonitorSystemSpatial = backend.SystemSpatial,
         SofaPath = Models.OutputModel.SofaAvailable && backend.Renderer == AdmRenderer.SafBinaural
             ? MonitorSofaPath
             : null,

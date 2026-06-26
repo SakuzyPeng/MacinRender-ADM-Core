@@ -58,6 +58,9 @@ internal static partial class NativeMethods
     internal static partial void adm_render_options_set_peak_limit(AdmRenderOptionsHandle opts, int enabled);
 
     [LibraryImport(Lib)]
+    internal static partial void adm_render_options_set_monitor_system_spatial(AdmRenderOptionsHandle opts, int enabled);
+
+    [LibraryImport(Lib)]
     internal static partial AdmErrorCode adm_render_options_set_peak_limit_dbtp(AdmRenderOptionsHandle opts,
         double dbtp);
 

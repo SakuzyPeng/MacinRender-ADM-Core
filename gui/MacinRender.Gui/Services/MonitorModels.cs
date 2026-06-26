@@ -37,8 +37,9 @@ public sealed record MonitorOverride(
     string? SpeakerLabel = null,
     bool HeadLocked = false);
 
-/// <summary>监听后端 A/B 选项:展示名 + 渲染器 + 监听布局。立体声监听下可跨布局(经下混)。</summary>
-public sealed record MonitorBackendOption(string Label, AdmRenderer Renderer, string Layout);
+/// <summary>监听后端 A/B 选项:展示名 + 渲染器 + 监听布局。立体声监听下可跨布局(经下混)。
+/// SystemSpatial=true 时为 macOS 系统空间音频监听(多声道不下混,换 device + 声道数 → 切换走重启)。</summary>
+public sealed record MonitorBackendOption(string Label, AdmRenderer Renderer, string Layout, bool SystemSpatial = false);
 
 /// <summary>一个可选输出设备(adm_monitor_output_devices_json 的托管投影)。Id 为不透明 token
 /// (空 = 系统默认设备);Name 为展示名;IsDefault 标记系统默认设备。</summary>
