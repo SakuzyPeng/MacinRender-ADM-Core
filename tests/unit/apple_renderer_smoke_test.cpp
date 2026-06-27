@@ -1162,6 +1162,121 @@ std::optional<std::vector<float>> render_apple_stream_full(mradm::IRenderer& ren
     return out;
 }
 
+// Output-stage rendering (方案 B): produce_intermediate (worker, reads source PCM) + render_output
+// (audio callback, applies the orientation + runs the AU) with a STATIC identity orientation must be
+// bit-identical to the single-stage process() path — same AU, same per-block params, just split into
+// two calls so the head pose can enter at playout. This is the core correctness gate for the split.
+bool verify_apple_output_stage_matches_process() {
+    const auto in = write_fixture(45.0F, 8192U, 1.0F, 0.0F, false);
+    FileGuard in_guard(in);
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value(), "output-stage: import scene")) {
+        return false;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "output-stage: apple prepare")) {
+        return false;
+    }
+
+    // Reference: single-stage process() in fixed 512-frame chunks.
+    const auto reference = render_apple_stream_full(*renderer, **prepared, plan, logs, {512});
+    if (!reference) {
+        return false;
+    }
+
+    // Output-stage: a fresh stream, driven via produce_intermediate + render_output(identity).
+    auto stream = renderer->open_stream(**prepared, plan, logs);
+    if (!check(stream.has_value(), "output-stage: open stream")) {
+        return false;
+    }
+    if (!check((*stream)->renders_orientation_at_output(), "output-stage: binaural opts into output-stage")) {
+        return false;
+    }
+    const uint32_t in_ch = (*stream)->intermediate_channels();
+    const uint32_t out_ch = (*stream)->out_channels();
+    const mradm::ListenerOrientation identity{};
+    std::vector<float> out;
+    std::vector<float> interm;
+    std::vector<float> buf;
+    constexpr std::size_t k = 512;
+    while (true) {
+        interm.assign(k * in_ch, 0.0F);
+        auto got = (*stream)->produce_intermediate(std::span<float>(interm), k);
+        if (!check(got.has_value(), "output-stage: produce_intermediate succeeds")) {
+            return false;
+        }
+        if (*got == 0) {
+            break;
+        }
+        buf.assign(*got * out_ch, 0.0F);
+        const std::size_t rendered = (*stream)->render_output(
+            std::span<const float>(interm.data(), *got * in_ch), std::span<float>(buf), *got, identity);
+        out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(rendered * out_ch));
+    }
+
+    bool ok = check(out.size() == reference->size(), "output-stage: same total samples as process()");
+    if (ok) {
+        for (std::size_t i = 0; i < out.size(); ++i) {
+            if (out[i] != (*reference)[i]) {
+                ok = check(false, "output-stage: bit-identical to single-stage process()");
+                break;
+            }
+        }
+    }
+    return ok;
+}
+
+// Output-stage loop (方案 B): the Stage A primitive reposition_source() must re-read the source from
+// the wrap point and must NOT disturb the render cursors (the consumer wraps separately). Here we
+// verify the source reposition: produce two distinct blocks, reposition to 0, and confirm the next
+// block re-reads the first block's source exactly.
+bool verify_apple_reposition_source() {
+    const auto in = write_fixture(30.0F, 8192U, 1.0F, 0.0F, false);
+    FileGuard in_guard(in);
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value(), "reposition-source: import scene")) {
+        return false;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "reposition-source: apple prepare")) {
+        return false;
+    }
+    auto stream = renderer->open_stream(**prepared, plan, logs);
+    if (!check(stream.has_value(), "reposition-source: open stream")) {
+        return false;
+    }
+    const uint32_t in_ch = (*stream)->intermediate_channels();
+    constexpr std::size_t k = 1024;
+    std::vector<float> block_a(k * in_ch, 0.0F);
+    std::vector<float> block_b(k * in_ch, 0.0F);
+    std::vector<float> block_a2(k * in_ch, 0.0F);
+
+    auto got_a = (*stream)->produce_intermediate(std::span<float>(block_a), k);   // source [0, k)
+    auto got_b = (*stream)->produce_intermediate(std::span<float>(block_b), k);   // source [k, 2k)
+    auto rep = (*stream)->reposition_source(0);                                   // Stage A wrap → 0
+    auto got_a2 = (*stream)->produce_intermediate(std::span<float>(block_a2), k); // source [0, k) again
+    bool ok = check(got_a.has_value() && got_b.has_value() && rep.has_value() && got_a2.has_value() && *got_a == k &&
+                        *got_b == k && *got_a2 == k,
+                    "reposition-source: produce + reposition succeed");
+    ok &= check(block_a2 == block_a, "reposition-source: re-reads the source from the wrap point");
+    ok &= check(block_a != block_b, "reposition-source: distinct source blocks (sanity)");
+    return ok;
+}
+
 // AppleStream (realtime) must reproduce the offline render_window render, and its output
 // must be independent of the caller's pull chunk size (FIFO + canonical k_render_block).
 bool verify_apple_stream_matches_window() {
@@ -1483,6 +1598,8 @@ int main() {
     ok &= verify_bed_and_lfe_routing();
     ok &= verify_22_2_lfe_routing();
     ok &= verify_apple_stream_matches_window();
+    ok &= verify_apple_output_stage_matches_process();
+    ok &= verify_apple_reposition_source();
     ok &= verify_apple_stream_listener_orientation();
     ok &= verify_apple_stream_initial_head_locked_orientation();
     ok &= verify_apple_stream_silent();

@@ -993,6 +993,144 @@ bool test_monitor_lufs() {
     return ok;
 }
 
+// Output-stage fake stream for the two-stage loop timing test. produce_intermediate (Stage A,
+// worker) writes its source frame index into the intermediate; render_output (Stage B, callback)
+// emits the CONSUMER's source position iff it matches the intermediate it is reading (lockstep),
+// else -1 (a desync). So the captured output must be exactly i % loop_len: any premature wrap (the
+// original bug, where the producer's wrap reset the consumer's cursors early) breaks the sequence.
+class LoopProbeStream final : public mradm::IRenderStream {
+  public:
+    explicit LoopProbeStream(uint32_t channels) : channels_(channels) {}
+
+    [[nodiscard]] bool renders_orientation_at_output() const override { return true; }
+    [[nodiscard]] uint32_t intermediate_channels() const override { return 1U; }
+
+    mradm::Result<std::size_t> produce_intermediate(std::span<float> out, std::size_t frames) override {
+        for (std::size_t f = 0; f < frames; ++f) {
+            out[f] = static_cast<float>(producer_pos_ + f); // source frame index
+        }
+        producer_pos_ += frames;
+        return frames; // infinite source
+    }
+
+    std::size_t render_output(std::span<const float> intermediate,
+                              std::span<float> out,
+                              std::size_t frames,
+                              const mradm::ListenerOrientation& /*o*/) override {
+        for (std::size_t f = 0; f < frames; ++f) {
+            const float expected = static_cast<float>(consumer_pos_ + f); // where the consumer thinks it is
+            const float v = (intermediate[f] == expected) ? expected : -1.0F;
+            for (uint32_t c = 0; c < channels_; ++c) {
+                out[(f * channels_) + c] = v;
+            }
+        }
+        consumer_pos_ += frames;
+        return frames;
+    }
+
+    mradm::Result<void> reposition_source(uint64_t frame) override {
+        producer_pos_ = frame; // Stage A wrap: source only, never the consumer cursor
+        reposition_calls_.fetch_add(1, std::memory_order_relaxed);
+        last_reposition_.store(frame, std::memory_order_relaxed);
+        return {};
+    }
+    void loop_render_reset(uint64_t frame) override {
+        consumer_pos_ = frame; // Stage B wrap: at the actual playout boundary
+        loop_reset_calls_.fetch_add(1, std::memory_order_relaxed);
+        last_loop_reset_.store(frame, std::memory_order_relaxed);
+    }
+
+    mradm::Result<std::size_t> process(std::span<float> /*out*/, std::size_t /*frames*/) override {
+        return std::size_t{0}; // unused (output-stage drives produce_intermediate/render_output)
+    }
+    mradm::Result<void> seek(uint64_t frame) override {
+        producer_pos_ = frame;
+        consumer_pos_ = frame;
+        return {};
+    }
+    [[nodiscard]] uint32_t out_channels() const override { return channels_; }
+    [[nodiscard]] uint32_t sample_rate() const override { return 48000U; }
+    [[nodiscard]] std::string_view output_layout() const override { return "binaural"; }
+
+    [[nodiscard]] int reposition_calls() const { return reposition_calls_.load(std::memory_order_relaxed); }
+    [[nodiscard]] int loop_reset_calls() const { return loop_reset_calls_.load(std::memory_order_relaxed); }
+    [[nodiscard]] uint64_t last_reposition() const { return last_reposition_.load(std::memory_order_relaxed); }
+    [[nodiscard]] uint64_t last_loop_reset() const { return last_loop_reset_.load(std::memory_order_relaxed); }
+
+  private:
+    uint32_t channels_;
+    uint64_t producer_pos_{0}; // worker only (produce_intermediate / reposition_source)
+    uint64_t consumer_pos_{0}; // callback only (render_output / loop_render_reset)
+    std::atomic<int> reposition_calls_{0};
+    std::atomic<int> loop_reset_calls_{0};
+    std::atomic<uint64_t> last_reposition_{0};
+    std::atomic<uint64_t> last_loop_reset_{0};
+};
+
+class LoopProbeStreamFactory final : public mradm::realtime::IRenderStreamFactory {
+  public:
+    mradm::Result<std::unique_ptr<mradm::IRenderStream>>
+    open(const mradm::AdmScene& /*scene*/, const mradm::RenderOptions& /*opts*/, mradm::LogSink& /*logs*/) override {
+        auto stream = std::make_unique<LoopProbeStream>(2U);
+        last_ = stream.get(); // borrowed for probe inspection while the engine (owner) is alive
+        return stream;
+    }
+    [[nodiscard]] LoopProbeStream* last() const { return last_; }
+
+  private:
+    LoopProbeStream* last_{nullptr};
+};
+
+// End-to-end output-stage loop: lock the timing of the Stage A producer wrap (reposition_source)
+// and the Stage B callback wrap (loop_render_reset). The captured playout must follow i % loop_len
+// exactly — the consumer wraps at the real playout boundary, never early when the (read-ahead)
+// producer wraps.
+bool test_monitor_output_stage_loop() {
+    bool ok = true;
+    LoopProbeStreamFactory factory;
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+    ok &= check(engine.has_value(), "output-stage loop: engine create");
+    if (!ok) {
+        return false;
+    }
+    constexpr uint64_t k_loop = 1000;
+    constexpr std::size_t k_total = 3500; // ~3.5 loop iterations
+    (*engine)->set_loop(0, k_loop);
+    (*engine)->play();
+    ok &= check(drain_exact(**engine, sink, k_total), "output-stage loop: drained without underrun");
+
+    const auto& cap = sink.captured();
+    const uint32_t ch = sink.channels();
+    ok &= check(cap.size() >= k_total * ch, "output-stage loop: captured enough frames");
+    if (ok) {
+        bool sequence_ok = true;
+        for (std::size_t i = 0; i < k_total; ++i) {
+            if (cap[i * ch] != static_cast<float>(i % k_loop)) {
+                sequence_ok = false; // -1 (desync) or a wrong wrap point
+                break;
+            }
+        }
+        ok &= check(sequence_ok, "output-stage loop: playout follows i%%loop (no premature consumer wrap)");
+    }
+
+    LoopProbeStream* s = factory.last();
+    ok &= check(s != nullptr, "output-stage loop: stream probe available");
+    if (s != nullptr) {
+        ok &= check(s->reposition_calls() >= 3,
+                    "output-stage loop: producer wrapped source each loop (reposition_source)");
+        ok &= check(s->loop_reset_calls() >= 3,
+                    "output-stage loop: consumer wrapped at playout each loop (loop_render_reset)");
+        ok &= check(s->last_reposition() == 0 && s->last_loop_reset() == 0,
+                    "output-stage loop: both wraps target loop_start");
+    }
+    return ok;
+}
+
 int main() {
     bool ok = true;
     ok &= test_ring_basic();
@@ -1003,6 +1141,7 @@ int main() {
     ok &= test_stream_factory();
     ok &= test_monitor_playback();
     ok &= test_monitor_loop();
+    ok &= test_monitor_output_stage_loop();
     ok &= test_monitor_pause();
     ok &= test_monitor_seek();
     ok &= test_monitor_eof();
