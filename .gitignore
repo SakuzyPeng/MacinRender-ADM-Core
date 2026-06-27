@@ -7,6 +7,10 @@ obj/
 lib/
 dist/
 
+# Python（scripts/licenses 等工具的字节码缓存）
+__pycache__/
+*.pyc
+
 # CMake
 CMakeCache.txt
 CMakeFiles/

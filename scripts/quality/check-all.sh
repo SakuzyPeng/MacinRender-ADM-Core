@@ -7,3 +7,4 @@ build_dir="${1:-$repo_root/build/debug}"
 "$repo_root/scripts/quality/format.sh" --check
 "$repo_root/scripts/quality/clang-tidy.sh" "$build_dir"
 "$repo_root/scripts/quality/cppcheck.sh" "$build_dir"
+"$repo_root/scripts/quality/check-licenses.sh" --build-dir "$build_dir"

@@ -1,0 +1,398 @@
+{
+  "schema": "mradm.third-party-manifest.v1",
+  "_comment": "第三方依赖单一事实源。新增/升级依赖只改这里。fetchcontent 组件的 version 必须与 cmake/MRDependencies.cmake 的 GIT_TAG 完全一致（由 scripts/quality/check-licenses.sh 强制）。license 原文 bundle 在 third_party/licenses/<name>/，由 scripts/licenses/sync_license_texts.py 从构建目录的 _deps 同步。SBOM 与 docs 依赖表由 scripts/licenses/generate.py 派生。",
+  "components": [
+    {
+      "name": "CLI11",
+      "version": "v2.5.0",
+      "cmake_key": "CLI11",
+      "purl": "pkg:github/CLIUtils/CLI11@v2.5.0",
+      "license": "BSD-3-Clause",
+      "purpose": "CLI 参数解析",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "cli11-src",
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "nlohmann_json",
+      "version": "v3.12.0",
+      "cmake_key": "nlohmann_json",
+      "purl": "pkg:github/nlohmann/json@v3.12.0",
+      "license": "MIT",
+      "purpose": "JSON 解析/序列化（语义策略、SBOM 内部）",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "nlohmann_json-src",
+        "parent": null,
+        "license_files": [
+          "LICENSE.MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "fmt",
+      "version": "11.2.0",
+      "cmake_key": "fmt",
+      "purl": "pkg:github/fmtlib/fmt@11.2.0",
+      "license": "MIT",
+      "purpose": "格式化与日志辅助",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "fmt-src",
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "若动态链接系统库，仍需记录版本与许可证"
+    },
+    {
+      "name": "spdlog",
+      "version": "v1.15.3",
+      "cmake_key": "spdlog",
+      "purl": "pkg:github/gabime/spdlog@v1.15.3",
+      "license": "MIT",
+      "purpose": "日志库",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "spdlog-src",
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "使用 external fmt"
+    },
+    {
+      "name": "tl-expected",
+      "version": "v1.1.0",
+      "cmake_key": "tl-expected",
+      "purl": "pkg:github/TartanLlama/expected@v1.1.0",
+      "license": "CC0-1.0",
+      "purpose": "Result<T> 基础类型",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "expected-src",
+        "parent": null,
+        "license_files": [
+          "COPYING"
+        ]
+      },
+      "notes": "header-only；FetchContent 目标目录名为 expected-src"
+    },
+    {
+      "name": "libebur128",
+      "version": "v1.2.6",
+      "cmake_key": "libebur128",
+      "purl": "pkg:github/jiixyj/libebur128@v1.2.6",
+      "license": "MIT",
+      "purpose": "LUFS/True Peak 测量",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "libebur128-src",
+        "parent": null,
+        "license_files": [
+          "COPYING"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "dr_libs",
+      "version": "47a4f08e777faddf59a8955c4ea84f69f41020d5",
+      "cmake_key": "dr_libs",
+      "purl": "pkg:github/mackron/dr_libs@47a4f08e777faddf59a8955c4ea84f69f41020d5",
+      "license": "Unlicense OR MIT-0",
+      "purpose": "WAV/FLAC 轻量读写（dr_wav / dr_flac）",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "dr_libs-src",
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "header-only；本项目按 MIT-0/Unlicense 宽松使用"
+    },
+    {
+      "name": "miniaudio",
+      "version": "0.11.21",
+      "cmake_key": "miniaudio",
+      "purl": "pkg:github/mackron/miniaudio@0.11.21",
+      "license": "Unlicense OR MIT-0",
+      "purpose": "实时音频设备输出（监听引擎）",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "miniaudio-src",
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "header-only；实现仅在 src/adm_realtime/miniaudio_device.cpp；Linux dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox"
+    },
+    {
+      "name": "libFLAC",
+      "version": "1.5.0",
+      "cmake_key": "FLAC",
+      "purl": "pkg:github/xiph/flac@1.5.0",
+      "license": "BSD-3-Clause",
+      "purpose": "FLAC 编码与 metadata",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "flac-src",
+        "parent": null,
+        "license_files": [
+          "COPYING.Xiph"
+        ]
+      },
+      "notes": "默认仅链接 libFLAC（Xiph BSD-like）；源码包内 COPYING.GPL/LGPL/FDL 覆盖未链接的 C++ libs/programs/docs，默认发行不涉及"
+    },
+    {
+      "name": "libbw64",
+      "version": "0.10.0",
+      "cmake_key": "libbw64",
+      "purl": "pkg:github/ebu/libbw64@0.10.0",
+      "license": "Apache-2.0",
+      "purpose": "BW64/ADM BWF 读写",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "libbw64-src",
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "libadm",
+      "version": "0.14.0",
+      "cmake_key": "libadm",
+      "purl": "pkg:github/ebu/libadm@0.14.0",
+      "license": "Apache-2.0",
+      "purpose": "ADM XML 建模/解析",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "libadm-src",
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "内含 RapidXML（Boost Software License 或 MIT）"
+    },
+    {
+      "name": "libear",
+      "version": "2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15",
+      "cmake_key": "libear",
+      "purl": "pkg:github/ebu/libear@2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15",
+      "license": "Apache-2.0",
+      "purpose": "BS.2127/EAR 增益计算",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "libear-src",
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "内嵌 vendored Eigen/xsimd/kissfft，单列于下"
+    },
+    {
+      "name": "Spatial_Audio_Framework",
+      "version": "v1.3.4",
+      "cmake_key": "Spatial_Audio_Framework",
+      "purl": "pkg:github/leomccormack/Spatial_Audio_Framework@v1.3.4",
+      "license": "ISC",
+      "purpose": "VBAP/MDAP/HRTF/FFT 等 DSP",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "spatial_audio_framework-src",
+        "parent": null,
+        "license_files": [
+          "LICENSE.md"
+        ]
+      },
+      "notes": "仅在禁用 GPL 模块（tracker/HADES/FFTW/NETCDF/IPP）的配置下；内嵌 libmysofa/zlib（SOFA reader）单列于下"
+    },
+    {
+      "name": "libopus",
+      "version": "v1.5.2",
+      "cmake_key": "Opus",
+      "purl": "pkg:github/xiph/opus@v1.5.2",
+      "license": "BSD-3-Clause",
+      "purpose": "Opus MKA 编码",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "opus-src",
+        "parent": null,
+        "license_files": [
+          "COPYING",
+          "LICENSE_PLEASE_READ.txt"
+        ]
+      },
+      "notes": "发行文档需保留专利 IPR 链接说明（LICENSE_PLEASE_READ.txt）"
+    },
+    {
+      "name": "Eigen",
+      "version": "bundled-in-libear@2db69f8f",
+      "cmake_key": null,
+      "purl": "pkg:generic/eigen",
+      "license": "MPL-2.0",
+      "purpose": "线性代数（libear 内嵌子模块）",
+      "distribution": "available",
+      "source": {
+        "type": "nested",
+        "deps_dir": "libear-src",
+        "parent": "libear",
+        "license_files": [
+          "submodules/eigen/COPYING.MPL2"
+        ]
+      },
+      "notes": "libear 以 EIGEN_MPL2_ONLY 编译，避免 LGPL-only 模块；源码树含 COPYING.GPL/LGPL/BSD 等其他文件不代表默认使用"
+    },
+    {
+      "name": "xsimd",
+      "version": "bundled-in-libear@2db69f8f",
+      "cmake_key": null,
+      "purl": "pkg:generic/xsimd",
+      "license": "BSD-3-Clause",
+      "purpose": "SIMD 抽象（libear 内嵌子模块）",
+      "distribution": "available",
+      "source": {
+        "type": "nested",
+        "deps_dir": "libear-src",
+        "parent": "libear",
+        "license_files": [
+          "submodules/xsimd/LICENSE"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "kissfft",
+      "version": "bundled-in-libear@2db69f8f",
+      "cmake_key": null,
+      "purl": "pkg:generic/kissfft",
+      "license": "BSD-3-Clause",
+      "purpose": "FFT（libear/SAF 内嵌子模块）",
+      "distribution": "available",
+      "source": {
+        "type": "nested",
+        "deps_dir": "libear-src",
+        "parent": "libear",
+        "license_files": [
+          "submodules/kissfft/COPYING"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "libmysofa",
+      "version": "bundled-in-SAF@v1.3.4",
+      "cmake_key": null,
+      "purl": "pkg:generic/libmysofa",
+      "license": "BSD-3-Clause",
+      "purpose": "SOFA 解析（SAF saf_sofa_reader 内嵌）",
+      "distribution": "available",
+      "source": {
+        "type": "nested",
+        "deps_dir": "spatial_audio_framework-src",
+        "parent": "Spatial_Audio_Framework",
+        "license_files": [
+          "framework/modules/saf_sofa_reader/libmysofa/LICENSE"
+        ]
+      },
+      "notes": "仅当 MR_ADM_ENABLE_SOFA=ON（默认）随包"
+    },
+    {
+      "name": "zlib",
+      "version": "bundled-in-SAF@v1.3.4",
+      "cmake_key": null,
+      "purl": "pkg:generic/zlib",
+      "license": "Zlib",
+      "purpose": "压缩支持（SAF SOFA reader 内嵌）",
+      "distribution": "available",
+      "source": {
+        "type": "nested",
+        "deps_dir": "spatial_audio_framework-src",
+        "parent": "Spatial_Audio_Framework",
+        "license_files": [
+          "framework/resources/zlib/zlib.h"
+        ]
+      },
+      "notes": "zlib 许可证文本在 zlib.h 头部注释；仅当 SOFA 启用随包"
+    },
+    {
+      "name": "spreader_mr",
+      "version": "fork-of-SAF-examples@v1.3.4",
+      "cmake_key": null,
+      "purl": "pkg:generic/spreader_mr",
+      "license": "ISC",
+      "purpose": "saf_spreader 双耳扩散渲染（实验性 fork）",
+      "distribution": "available",
+      "source": {
+        "type": "vendored",
+        "repo_path": "src/adm_render_binaural/spreader_mr.h",
+        "license_files": [
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "fork 自 SAF examples spreader（版权 2021 Leo McCormack）；最小改动：spreader_init_from_hrtf_grid() + 修复 SOFA Q 未赋值。bundle NOTICE.txt 为手写声明"
+    },
+    {
+      "name": "aom-iamf-tools-bridge",
+      "version": "external-sdk",
+      "cmake_key": null,
+      "purl": "pkg:generic/aom-iamf-tools",
+      "license": "BSD-3-Clause-Clear AND AOM-PL-1.0",
+      "purpose": "IAMF raw OBU 编码（opt-in，MR_ADM_ENABLE_IAMF）",
+      "distribution": "opt-in",
+      "source": {
+        "type": "system",
+        "license_files": [
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "预构建 SDK 形式接入；启用时发行包须随实际 SDK 记录其内部依赖许可证。bundle NOTICE.txt 为手写声明，实际包须补全文本"
+    },
+    {
+      "name": "apple-system-frameworks",
+      "version": "platform-sdk",
+      "cmake_key": null,
+      "purl": "pkg:generic/apple-frameworks",
+      "license": "LicenseRef-Apple-SDK",
+      "purpose": "APAC/CAF layout/Accelerate（AudioToolbox/CoreFoundation/Accelerate）",
+      "distribution": "system",
+      "source": {
+        "type": "system",
+        "license_files": [
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "macOS-only；Apple 平台 framework 不随本项目二进制再分发。bundle NOTICE.txt 为手写声明"
+    }
+  ]
+}

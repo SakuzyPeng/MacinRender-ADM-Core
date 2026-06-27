@@ -63,6 +63,7 @@ jobs:
         run: >
           cmake --preset release
           -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
+          -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF
           -DCMAKE_DISABLE_FIND_PACKAGE_fmt=TRUE
           -DCMAKE_DISABLE_FIND_PACKAGE_spdlog=TRUE
           -DCMAKE_DISABLE_FIND_PACKAGE_CLI11=TRUE
@@ -74,6 +75,9 @@ jobs:
 
       - name: Build
         run: cmake --build --preset release --target mradm_exe
+
+      - name: License full-coverage check
+        run: scripts/quality/check-licenses.sh --build-dir "$FC_CACHE_DIR" --require-full
 
       - name: Smoke
         run: |
@@ -147,6 +151,7 @@ jobs:
         run: >
           cmake --preset release
           -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
+          -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF
           -DCMAKE_DISABLE_FIND_PACKAGE_fmt=TRUE
           -DCMAKE_DISABLE_FIND_PACKAGE_spdlog=TRUE
           -DCMAKE_DISABLE_FIND_PACKAGE_CLI11=TRUE
@@ -158,6 +163,9 @@ jobs:
 
       - name: Build
         run: cmake --build --preset release --target mradm_exe
+
+      - name: License full-coverage check
+        run: scripts/quality/check-licenses.sh --build-dir "$FC_CACHE_DIR" --require-full
 
       - name: Smoke
         run: |

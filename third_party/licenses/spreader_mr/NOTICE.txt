@@ -1,0 +1,24 @@
+spreader_mr — saf_spreader 双耳扩散渲染（实验性 fork）
+
+来源：fork 自 Spatial Audio Framework 的 examples/spreader（版权 2021 Leo McCormack）。
+位置：src/adm_render_binaural/spreader_mr.{c,h,_internal.h}
+改动：新增 spreader_init_from_hrtf_grid() 注入预加载 HRTF；修复 SOFA Q 未赋值 bug。
+许可证：ISC（与上游 SAF 一致）。
+
+----------------------------------------------------------------------
+
+ISC License
+
+Copyright (c) 2021 Leo McCormack
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.

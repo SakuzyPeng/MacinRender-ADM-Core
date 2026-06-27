@@ -1,0 +1,543 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "MacinRender ADM Core",
+      "description": "跨平台 ADM 空间音频渲染核心（mradm CLI + 稳定 C ABI 库）",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "CLI11",
+      "version": "v2.5.0",
+      "description": "CLI 参数解析",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:github/CLIUtils/CLI11@v2.5.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "nlohmann_json",
+      "version": "v3.12.0",
+      "description": "JSON 解析/序列化（语义策略、SBOM 内部）",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/nlohmann/json@v3.12.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "fmt",
+      "version": "11.2.0",
+      "description": "格式化与日志辅助",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/fmtlib/fmt@11.2.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "spdlog",
+      "version": "v1.15.3",
+      "description": "日志库",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/gabime/spdlog@v1.15.3",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "tl-expected",
+      "version": "v1.1.0",
+      "description": "Result<T> 基础类型",
+      "licenses": [
+        {
+          "license": {
+            "id": "CC0-1.0"
+          }
+        }
+      ],
+      "purl": "pkg:github/TartanLlama/expected@v1.1.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libebur128",
+      "version": "v1.2.6",
+      "description": "LUFS/True Peak 测量",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/jiixyj/libebur128@v1.2.6",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "dr_libs",
+      "version": "47a4f08e777faddf59a8955c4ea84f69f41020d5",
+      "description": "WAV/FLAC 轻量读写（dr_wav / dr_flac）",
+      "licenses": [
+        {
+          "expression": "Unlicense OR MIT-0"
+        }
+      ],
+      "purl": "pkg:github/mackron/dr_libs@47a4f08e777faddf59a8955c4ea84f69f41020d5",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "miniaudio",
+      "version": "0.11.21",
+      "description": "实时音频设备输出（监听引擎）",
+      "licenses": [
+        {
+          "expression": "Unlicense OR MIT-0"
+        }
+      ],
+      "purl": "pkg:github/mackron/miniaudio@0.11.21",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libFLAC",
+      "version": "1.5.0",
+      "description": "FLAC 编码与 metadata",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:github/xiph/flac@1.5.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libbw64",
+      "version": "0.10.0",
+      "description": "BW64/ADM BWF 读写",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:github/ebu/libbw64@0.10.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libadm",
+      "version": "0.14.0",
+      "description": "ADM XML 建模/解析",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:github/ebu/libadm@0.14.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libear",
+      "version": "2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15",
+      "description": "BS.2127/EAR 增益计算",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:github/ebu/libear@2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "Spatial_Audio_Framework",
+      "version": "v1.3.4",
+      "description": "VBAP/MDAP/HRTF/FFT 等 DSP",
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
+          }
+        }
+      ],
+      "purl": "pkg:github/leomccormack/Spatial_Audio_Framework@v1.3.4",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libopus",
+      "version": "v1.5.2",
+      "description": "Opus MKA 编码",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:github/xiph/opus@v1.5.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "Eigen",
+      "version": "bundled-in-libear@2db69f8f",
+      "description": "线性代数（libear 内嵌子模块）",
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:generic/eigen",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "nested"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "xsimd",
+      "version": "bundled-in-libear@2db69f8f",
+      "description": "SIMD 抽象（libear 内嵌子模块）",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:generic/xsimd",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "nested"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "kissfft",
+      "version": "bundled-in-libear@2db69f8f",
+      "description": "FFT（libear/SAF 内嵌子模块）",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:generic/kissfft",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "nested"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libmysofa",
+      "version": "bundled-in-SAF@v1.3.4",
+      "description": "SOFA 解析（SAF saf_sofa_reader 内嵌）",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:generic/libmysofa",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "nested"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "zlib",
+      "version": "bundled-in-SAF@v1.3.4",
+      "description": "压缩支持（SAF SOFA reader 内嵌）",
+      "licenses": [
+        {
+          "license": {
+            "id": "Zlib"
+          }
+        }
+      ],
+      "purl": "pkg:generic/zlib",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "nested"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "spreader_mr",
+      "version": "fork-of-SAF-examples@v1.3.4",
+      "description": "saf_spreader 双耳扩散渲染（实验性 fork）",
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
+          }
+        }
+      ],
+      "purl": "pkg:generic/spreader_mr",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "vendored"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "aom-iamf-tools-bridge",
+      "version": "external-sdk",
+      "description": "IAMF raw OBU 编码（opt-in，MR_ADM_ENABLE_IAMF）",
+      "licenses": [
+        {
+          "expression": "BSD-3-Clause-Clear AND AOM-PL-1.0"
+        }
+      ],
+      "purl": "pkg:generic/aom-iamf-tools",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "opt-in"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "system"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "apple-system-frameworks",
+      "version": "platform-sdk",
+      "description": "APAC/CAF layout/Accelerate（AudioToolbox/CoreFoundation/Accelerate）",
+      "licenses": [
+        {
+          "license": {
+            "name": "LicenseRef-Apple-SDK"
+          }
+        }
+      ],
+      "purl": "pkg:generic/apple-frameworks",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "system"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "system"
+        }
+      ]
+    }
+  ]
+}
