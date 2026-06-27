@@ -21,6 +21,23 @@ constexpr std::size_t k_ring_frames = 8192U;
 // DSP/scheduling spike can't drain the ring before the worker recovers. ~512 ms at 48 kHz.
 // The low-latency realtime devices keep the shallow ring above.
 constexpr std::size_t k_ring_frames_push = 24576U;
+// While head tracking is actively driving the listener orientation, cap the realtime worker's lead
+// to this shallow depth (~43 ms) instead of filling the whole ring. The head pose only affects
+// newly-rendered slices, so the lead time IS the head-tracking latency: a deep lead means already-
+// rendered (stale-orientation) audio has to drain before a turn is heard. Shrinking it while tracking
+// trades a little underrun cushion for a ~4× more responsive turn; non-tracked monitoring keeps the
+// deep lead. Only the low-latency realtime (callback) path honours this — the push / system-spatial
+// path tracks at the output stage and is unaffected.
+constexpr std::size_t k_tracking_lookahead_frames = 2048U;
+// While head tracking, render in smaller chunks so the worker re-reads the pending orientation (and
+// the stream re-applies it) at a finer cadence — the listener pose only updates between process()
+// calls, so the chunk size is the orientation's output granularity. 512 frames ≈ 10.7 ms (vs the
+// 21 ms default). Cheap for the binaural AU; non-tracked monitoring keeps the larger chunk.
+constexpr uint64_t k_tracking_chunk_frames = 512U;
+// Treat head tracking as active for this long after the last orientation update, so the shallow lead
+// persists across the gaps between updates (~30 Hz) yet reverts to the deep lead shortly after
+// tracking stops.
+constexpr auto k_tracking_active_window = std::chrono::milliseconds(750);
 constexpr auto k_idle_nap = std::chrono::milliseconds(1);
 // Linear crossfade length for a backend hot-switch (~43 ms at 48 kHz): long enough to mask
 // the discontinuity between two renderers, short enough to feel immediate.
@@ -188,12 +205,22 @@ void MonitorEngine::set_overrides(const LiveOverrides& overrides) {
 }
 
 void MonitorEngine::set_listener_orientation(const ListenerOrientation& orientation) {
+    // Mark head tracking active so the worker switches to the shallow lead (low head-tracking
+    // latency). Reverts to the deep lead k_tracking_active_window after updates stop.
+    last_orientation_update_ns_.store(std::chrono::steady_clock::now().time_since_epoch().count(),
+                                      std::memory_order_relaxed);
     {
         const std::lock_guard<std::mutex> lock(control_mutex_);
         pending_orientation_ = orientation;
         orientation_pending_ = true;
     }
     wake_.notify_all();
+}
+
+bool MonitorEngine::head_tracking_recent() const {
+    const std::chrono::steady_clock::time_point last{
+        std::chrono::steady_clock::duration{last_orientation_update_ns_.load(std::memory_order_relaxed)}};
+    return (std::chrono::steady_clock::now() - last) < k_tracking_active_window;
 }
 
 void MonitorEngine::switch_stream(std::unique_ptr<IRenderStream> next) {
@@ -311,9 +338,18 @@ bool MonitorEngine::top_up_ring() {
     // fast as we produce keeps available_write above a chunk indefinitely, so this loop never
     // exits and the worker never returns to apply queued commands — starving mid-play edits
     // exactly when production is near the consume rate.
+    // Lead target: while head tracking, only render a shallow amount ahead so a head turn is heard
+    // promptly (the lead is the head-tracking latency). Otherwise fill the whole ring for maximum
+    // underrun cushion — there `available_read < capacity` never gates before `available_write`, so
+    // this is behaviourally identical to filling unconditionally.
+    const bool tracking = pull_is_realtime_playback_ && head_tracking_recent();
+    const std::size_t lead_target_floats =
+        tracking ? static_cast<std::size_t>(k_tracking_lookahead_frames) * channels_ : ring_.capacity();
     std::size_t budget = (ring_.capacity() / scratch_.size()) + 1;
-    while (ring_.available_write() >= scratch_.size() && budget-- > 0) {
-        uint64_t frames = k_chunk_frames;
+    while (ring_.available_write() >= scratch_.size() && ring_.available_read() < lead_target_floats && budget-- > 0) {
+        // Finer render granularity while head tracking so the orientation applies sooner (see
+        // k_tracking_chunk_frames); the larger chunk otherwise keeps per-chunk overhead low.
+        uint64_t frames = tracking ? k_tracking_chunk_frames : k_chunk_frames;
         const uint64_t loop_end = loop_end_.load(std::memory_order_relaxed);
         const uint64_t loop_start = loop_start_.load(std::memory_order_relaxed);
         // Loop-region clamping is suspended during a crossfade (both streams must stay in

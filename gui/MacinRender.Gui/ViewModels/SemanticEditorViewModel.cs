@@ -154,7 +154,10 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             CharacterSkin = CharacterSkin.LoadFromPng(skinPath);
         }
 
-        _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) }; // ~30 Hz
+        // ~60 Hz: halves the head-tracking input-sampling latency (this timer also drives the
+        // HeadTrackingManager.Tick that samples + pushes the listener orientation). Status / level
+        // polling at 60 Hz is negligible cost.
+        _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) }; // ~60 Hz
         _pollTimer.Tick += (_, _) => PollMonitor();
         _headTracking.OrientationResolved += ApplyHeadOrientation;
         AirPodsAvailable = AirPodsMotionSource.IsAvailable(); // 硬件 + shim 探测(dylib 缺失 → false)
@@ -745,6 +748,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private float _lastHeadPitch;
     private float _lastHeadRoll;
 
+    // 头追 keepalive 节流:每 ~250 ms 重推一次当前朝向给监听音频路(远小于 engine 的 750 ms 浅 lead
+    // 窗口),让浅 lead 在姿态静止时也维持。仅在头追源激活 + 监听中触发(见 PollMonitor)。
+    private int _headKeepaliveTicks;
+    private const int HeadKeepaliveEvery = 15; // ~250 ms @ 60 Hz 轮询
+
     private void ApplyHeadOrientation(float yawDeg, float pitchDeg, float rollDeg)
     {
         _lastHeadYaw = yawDeg;
@@ -864,6 +872,15 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private void PollMonitor()
     {
         _headTracking.Tick(); // 头追踪平滑 + 发射(无激活来源时空操作);先于监听守卫,故仅头视角(未监听)也刷新
+
+        // Keepalive:头追源激活时,即便姿态静止(manager 因 deadzone 停发),也周期性把当前朝向重推给
+        // 监听音频路。这样 engine 的浅 lead(低头追延迟)绑定到"源 active",而非"最近姿态有变化"——
+        // 否则静止 >750ms 后 ring 回填深缓存,"静止后第一次转头"又会有旧延迟。只推音频路、不触视觉(免重绘)。
+        if (IsMonitoring && _headTracking.IsActive && ++_headKeepaliveTicks >= HeadKeepaliveEvery)
+        {
+            _headKeepaliveTicks = 0;
+            _monitor.SetListenerOrientation(_lastHeadYaw, _lastHeadPitch, _lastHeadRoll);
+        }
 
         if (!IsMonitoring)
         {
