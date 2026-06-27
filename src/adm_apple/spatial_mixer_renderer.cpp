@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -861,6 +862,7 @@ class AppleStream final : public IRenderStream {
             fifo_.clear();
             fifo_read_ = 0;
             producer_pos_ = frame;
+            consumer_pos_ = frame;
             ended_ = false;
             return {};
         }
@@ -875,8 +877,34 @@ class AppleStream final : public IRenderStream {
         fifo_.clear();
         fifo_read_ = 0;
         producer_pos_ = frame;
+        consumer_pos_ = frame;
         ended_ = false;
         return {};
+    }
+
+    // Stage A (worker): reposition ONLY the source read for an output-stage loop wrap. Leaves the AU
+    // state, the per-bus event cursors, and consumer_pos_ alone — the consumer is still rendering
+    // earlier frames and wraps its own state later, at the actual playout boundary (loop_render_reset).
+    [[nodiscard]] Result<void> reposition_source(uint64_t frame) override {
+        if (silent_) {
+            producer_pos_ = frame;
+            ended_ = false;
+            return {};
+        }
+        render_common::seek_reader_abs(*reader_, frame);
+        producer_pos_ = frame;
+        ended_ = false;
+        return {};
+    }
+
+    // Stage B (audio callback): wrap the render cursors when playout reaches an output-stage loop
+    // boundary. Realtime-safe — only the forward-only event cursors + the playout cursor are reset
+    // (no AudioUnitReset / alloc / lock). The AU's HRTF tail is intentionally NOT cleared (a sub-
+    // perceptual decorrelation tail may bleed across the loop seam; clearing it would need an AU op
+    // that is not callback-safe).
+    void loop_render_reset(uint64_t frame) override {
+        std::ranges::fill(ev_cursor_, std::size_t{0});
+        consumer_pos_ = frame;
     }
 
     // Worker-thread only (same thread as process()): rebuild the per-object live gain
@@ -884,10 +912,20 @@ class AppleStream final : public IRenderStream {
     // render_slice picks the new values up; already-FIFO'd / ring-buffered audio is not
     // re-rendered, so the change is heard after the current buffer drains.
     void set_overrides(const LiveOverrides& overrides) override {
-        // Store the snapshot; the per-bus gain is resolved at render time by object_id + the bus's
-        // DirectSpeakers speaker label, so a single bed can be gained per channel (empty label →
-        // whole object). The next render_slice picks the new values up.
-        live_overrides_ = overrides;
+        // Resolve per-bus gain + head-lock on the WORKER and store each into its own atomic. The audio
+        // callback (render_au_block) loads each atomic — race-free, no shared_ptr / refcount / lock on
+        // the realtime path. The worker is the sole writer; the callback the sole reader.
+        for (std::size_t i = 0; i < buses_.size(); ++i) {
+            const float gain =
+                render_common::resolve_live_channel_gain(overrides, buses_[i].object_id, buses_[i].speaker_label_key)
+                    .value_or(1.0F);
+            const auto locked = static_cast<std::uint8_t>(
+                render_common::resolve_live_head_locked(overrides, buses_[i].object_id, buses_[i].speaker_label_key)
+                    ? 1
+                    : 0);
+            bus_gain_[i].store(gain, std::memory_order_relaxed);
+            bus_head_locked_[i].store(locked, std::memory_order_relaxed);
+        }
     }
 
     // Worker-thread only (same thread as process()): stash the latest listener head orientation.
@@ -898,23 +936,75 @@ class AppleStream final : public IRenderStream {
         orientation_dirty_ = true;
     }
 
+    // ── Output-stage orientation (two-stage rendering); see IRenderStream ────────────────────
+    // Binaural opts in: render_output() runs the AU on the audio callback with the live head pose,
+    // so head tracking is heard at playout (no ring-drain delay). Speaker output keeps the single-
+    // stage worker path (no head tracking there). A silent stream still reports binaural so the
+    // engine drives the two-stage path uniformly; produce/render then just emit silence.
+    [[nodiscard]] bool renders_orientation_at_output() const override { return profile_.binaural; }
+    [[nodiscard]] uint32_t intermediate_channels() const override { return num_in_ch_; }
+
+    // Stage A (worker): read the next `frames` of interleaved source PCM into `out` — orientation-
+    // independent. Advances the producer (file-read) cursor; returns frames produced (0 at EOF).
+    [[nodiscard]] Result<std::size_t> produce_intermediate(std::span<float> out, std::size_t frames) override {
+        if (producer_pos_ >= total_frames_) {
+            return std::size_t{0};
+        }
+        const auto n = static_cast<std::size_t>(std::min<uint64_t>(frames, total_frames_ - producer_pos_));
+        if (silent_) {
+            std::fill_n(out.data(), n * num_in_ch_, 0.0F);
+        } else {
+            reader_->read(out.data(), static_cast<UInt32>(n));
+        }
+        producer_pos_ += n;
+        return n;
+    }
+
+    // Stage B (audio callback): render `frames` of binaural output from the buffered interleaved
+    // source `intermediate`, applying the CURRENT orientation `o`. One head pose per callback block
+    // (set once); per-bus positions advance per k_render_block sub-block. No alloc/lock — each
+    // sub-block is copied into the preallocated staging_ that the AU's input pull callbacks read.
+    [[nodiscard]] std::size_t render_output(std::span<const float> intermediate,
+                                            std::span<float> out,
+                                            std::size_t frames,
+                                            const ListenerOrientation& o) override {
+        if (silent_) {
+            std::fill_n(out.data(), frames * num_out_ch_, 0.0F);
+            consumer_pos_ += frames;
+            return frames;
+        }
+        // One global HeadYaw/Pitch/Roll for this callback block. On failure emit silence (never stale
+        // / undefined output) and flag it for the engine, but keep advancing the playhead.
+        if (apply_head_orientation(unit_.get(), o) != noErr) {
+            std::fill_n(out.data(), frames * num_out_ch_, 0.0F);
+            render_failed_.store(true, std::memory_order_relaxed);
+            consumer_pos_ += frames;
+            return frames;
+        }
+        std::size_t done = 0;
+        while (done < frames) {
+            const auto n = static_cast<UInt32>(std::min<std::size_t>(k_render_block, frames - done));
+            std::copy_n(
+                intermediate.data() + (done * num_in_ch_), static_cast<std::size_t>(n) * num_in_ch_, staging_.data());
+            if (render_au_block(consumer_pos_, o, out.data() + (done * num_out_ch_), n) != noErr) {
+                std::fill_n(out.data() + (done * num_out_ch_), static_cast<std::size_t>(n) * num_out_ch_, 0.0F);
+                render_failed_.store(true, std::memory_order_relaxed);
+            }
+            consumer_pos_ += n;
+            done += n;
+        }
+        return frames;
+    }
+
+    // True once render_output hit an AudioUnit error on the callback (the affected block was silenced
+    // rather than emitting garbage). The engine polls this to surface / stop the monitor.
+    [[nodiscard]] bool render_failed() const override { return render_failed_.load(std::memory_order_relaxed); }
+
     [[nodiscard]] uint32_t out_channels() const override { return num_out_ch_; }
     [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
     [[nodiscard]] std::string_view output_layout() const override { return profile_.writer_layout; }
 
   private:
-    // Live gain multiplier (linear) for one bus, resolved by its owning object id + DirectSpeakers
-    // speaker label (per-channel override wins over whole-object); 1.0 when no override applies.
-    [[nodiscard]] float live_gain_for(const BusPlan& bus) const {
-        return render_common::resolve_live_channel_gain(live_overrides_, bus.object_id, bus.speaker_label_key)
-            .value_or(1.0F);
-    }
-
-    // 该总线是否 head-locked(锁在头上、排除头追踪),按对象 + 声道解析(同 gain)。
-    [[nodiscard]] bool live_head_locked_for(const BusPlan& bus) const {
-        return render_common::resolve_live_head_locked(live_overrides_, bus.object_id, bus.speaker_label_key);
-    }
-
     AppleStream(AudioUnitGuard unit,
                 OutputProfile profile,
                 std::vector<BusPlan> buses,
@@ -927,8 +1017,75 @@ class AppleStream final : public IRenderStream {
           staging_(static_cast<std::size_t>(num_in_ch) * k_render_block, 0.0F),
           out_planar_(num_out_ch, std::vector<float>(k_render_block, 0.0F)),
           abl_storage_(sizeof(AudioBufferList) + (sizeof(AudioBuffer) * (static_cast<std::size_t>(num_out_ch) - 1))),
-          ev_cursor_(buses_.size(), 0), num_out_ch_(num_out_ch), sample_rate_(sample_rate), total_frames_(total_frames),
-          silent_(silent), unit_(std::move(unit)) {}
+          ev_cursor_(buses_.size(), 0), num_in_ch_(num_in_ch), num_out_ch_(num_out_ch), sample_rate_(sample_rate),
+          total_frames_(total_frames), silent_(silent), bus_gain_(buses_.size()), bus_head_locked_(buses_.size()),
+          unit_(std::move(unit)) {
+        // Per-bus override params start neutral: unity gain (head-lock value-initialises to 0). Sized
+        // to the bus count so the realtime callback only ever indexes preallocated atomics.
+        for (auto& g : bus_gain_) {
+            g.store(1.0F, std::memory_order_relaxed);
+        }
+    }
+
+    // Render one <= k_render_block slice from staging_ (which the caller has already filled with this
+    // block's interleaved source PCM). Sets per-bus params at `position` (+ head-lock compensation by
+    // `orient`), runs the AU, and interleaves frames_now output frames into `dst`. Shared by the
+    // worker process() path (render_slice) and the realtime output-stage render_output(); it does not
+    // allocate, so it is safe on the audio callback. The global HeadYaw/Pitch/Roll is set by the caller.
+    [[nodiscard]] OSStatus
+    render_au_block(uint64_t position, const ListenerOrientation& orient, float* dst, UInt32 frames_now) {
+        for (std::size_t i = 0; i < buses_.size(); ++i) {
+            const BusEvent* ev = active_event(buses_[i], position, ev_cursor_[i]);
+            float azimuth = ev != nullptr ? ev->azimuth : 0.0F;
+            float elevation = ev != nullptr ? ev->elevation : 0.0F;
+            const float distance = ev != nullptr ? ev->distance : 1.0F;
+            const float base_gain = ev != nullptr ? ev->gain : 0.0F;
+            // Per-bus live override params (atomic loads; published by set_overrides on the worker).
+            const float live_gain = bus_gain_[i].load(std::memory_order_relaxed);
+            const bool head_locked = bus_head_locked_[i].load(std::memory_order_relaxed) != 0;
+            // head-locked 总线:把方向按头朝向补偿,使全局 AU 头旋转对其抵消(锁在头上)。
+            // 头朝向恒等时补偿是 no-op,故未开头追踪 / world-locked 时零影响。
+            if (!orient.is_identity() && head_locked) {
+                const auto [caz, cel] = head_lock_compensate(azimuth, elevation, orient);
+                azimuth = caz;
+                elevation = cel;
+            }
+            const float gain_db = linear_gain_to_db(base_gain * live_gain);
+            const OSStatus s = set_bus_parameters(
+                unit_.get(), static_cast<AudioUnitElement>(i), azimuth, elevation, distance, gain_db);
+            if (s != noErr) {
+                return s;
+            }
+        }
+
+        auto* abl = reinterpret_cast<AudioBufferList*>(abl_storage_.data());
+        abl->mNumberBuffers = num_out_ch_;
+        // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
+        for (uint16_t ch = 0; ch < num_out_ch_; ++ch) {
+            abl->mBuffers[ch].mNumberChannels = 1;
+            abl->mBuffers[ch].mDataByteSize = frames_now * sizeof(float);
+            abl->mBuffers[ch].mData = out_planar_[ch].data();
+        }
+        // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
+        AudioTimeStamp time_stamp{};
+        time_stamp.mFlags = kAudioTimeStampSampleTimeValid;
+        time_stamp.mSampleTime = static_cast<Float64>(position);
+        AudioUnitRenderActionFlags flags = 0;
+        const OSStatus render_status = AudioUnitRender(unit_.get(), &flags, &time_stamp, 0, frames_now, abl);
+        if (render_status != noErr) {
+            return render_status;
+        }
+        // Interleave the planar AU output into dst (frames_now * num_out_ch_ floats).
+        // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
+        for (uint16_t ch = 0; ch < num_out_ch_; ++ch) {
+            const float* src = out_planar_[ch].data();
+            for (UInt32 f = 0; f < frames_now; ++f) {
+                dst[(static_cast<std::size_t>(f) * num_out_ch_) + ch] = src[f];
+            }
+        }
+        // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
+        return noErr;
+    }
 
     [[nodiscard]] Result<void> render_slice() {
         if (producer_pos_ >= total_frames_) {
@@ -959,54 +1116,11 @@ class AppleStream final : public IRenderStream {
 
         reader_->read(staging_.data(), frames_now);
 
-        for (std::size_t i = 0; i < buses_.size(); ++i) {
-            const BusEvent* ev = active_event(buses_[i], producer_pos_, ev_cursor_[i]);
-            float azimuth = ev != nullptr ? ev->azimuth : 0.0F;
-            float elevation = ev != nullptr ? ev->elevation : 0.0F;
-            const float distance = ev != nullptr ? ev->distance : 1.0F;
-            const float base_gain = ev != nullptr ? ev->gain : 0.0F;
-            // head-locked 总线:把方向按头朝向补偿,使全局 AU 头旋转对其抵消(锁在头上)。
-            // 头朝向恒等时补偿是 no-op,故未开头追踪 / world-locked 时零影响。
-            if (!live_orientation_.is_identity() && live_head_locked_for(buses_[i])) {
-                const auto [caz, cel] = head_lock_compensate(azimuth, elevation, live_orientation_);
-                azimuth = caz;
-                elevation = cel;
-            }
-            const float gain_db = linear_gain_to_db(base_gain * live_gain_for(buses_[i]));
-            const OSStatus s = set_bus_parameters(
-                unit_.get(), static_cast<AudioUnitElement>(i), azimuth, elevation, distance, gain_db);
-            if (s != noErr) {
-                return tl::unexpected{apple_status_error("failed to set SpatialMixer input parameter", s)};
-            }
+        // fifo_ was sized + zeroed at the top of this slice; the shared core interleaves into it.
+        if (const OSStatus s = render_au_block(producer_pos_, live_orientation_, fifo_.data(), frames_now);
+            s != noErr) {
+            return tl::unexpected{apple_status_error("AudioUnitRender failed", s)};
         }
-
-        auto* abl = reinterpret_cast<AudioBufferList*>(abl_storage_.data());
-        abl->mNumberBuffers = num_out_ch_;
-        // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
-        for (uint16_t ch = 0; ch < num_out_ch_; ++ch) {
-            abl->mBuffers[ch].mNumberChannels = 1;
-            abl->mBuffers[ch].mDataByteSize = frames_now * sizeof(float);
-            abl->mBuffers[ch].mData = out_planar_[ch].data();
-        }
-        // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
-        AudioTimeStamp time_stamp{};
-        time_stamp.mFlags = kAudioTimeStampSampleTimeValid;
-        time_stamp.mSampleTime = static_cast<Float64>(producer_pos_);
-        AudioUnitRenderActionFlags flags = 0;
-        const OSStatus render_status = AudioUnitRender(unit_.get(), &flags, &time_stamp, 0, frames_now, abl);
-        if (render_status != noErr) {
-            return tl::unexpected{apple_status_error("AudioUnitRender failed", render_status)};
-        }
-
-        // fifo_ was sized + zeroed at the top of this slice; interleave the AU output into it.
-        // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
-        for (uint16_t ch = 0; ch < num_out_ch_; ++ch) {
-            const float* src = out_planar_[ch].data();
-            for (UInt32 f = 0; f < frames_now; ++f) {
-                fifo_[(static_cast<std::size_t>(f) * num_out_ch_) + ch] = src[f];
-            }
-        }
-        // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
         producer_pos_ += frames_now;
         return {};
     }
@@ -1019,17 +1133,26 @@ class AppleStream final : public IRenderStream {
     std::vector<std::vector<float>> out_planar_;
     std::vector<std::uint8_t> abl_storage_;
     std::vector<std::size_t> ev_cursor_;
+    uint16_t num_in_ch_;
     uint16_t num_out_ch_;
     uint32_t sample_rate_;
     uint64_t total_frames_;
-    uint64_t producer_pos_{0};
+    uint64_t producer_pos_{0}; // Stage A file-read cursor (worker)
+    uint64_t consumer_pos_{0}; // Stage B playout cursor (audio callback, output-stage mode)
     std::vector<float> fifo_;
     std::size_t fifo_read_{0};
     bool ended_{false};
     bool silent_{false};
-    LiveOverrides live_overrides_;         // live override snapshot; gain resolved per bus (worker-only)
-    ListenerOrientation live_orientation_; // live head orientation; applied in render_slice when dirty (worker-only)
-    bool orientation_dirty_{false};        // set by set_listener_orientation; cleared once applied to the AU
+    // Per-bus live override params (gain multiplier + head-lock flag), each an independent atomic:
+    // set_overrides (worker) stores each element, render_au_block (audio callback) loads each. Per-
+    // element atomics are race-free with no shared_ptr / lock; an override mid-block may reach some
+    // buses a block earlier than others, which is inaudible and not a correctness issue. Sized to
+    // buses_ and initialised neutral (unity gain, not head-locked) in the constructor.
+    std::vector<std::atomic<float>> bus_gain_;
+    std::vector<std::atomic<std::uint8_t>> bus_head_locked_;
+    std::atomic<bool> render_failed_{false}; // set by render_output on a callback AU error (output-stage)
+    ListenerOrientation live_orientation_;   // live head orientation; applied in render_slice when dirty (worker-only)
+    bool orientation_dirty_{false};          // set by set_listener_orientation; cleared once applied to the AU
     // Declared LAST so it is destroyed FIRST: ~AudioUnitGuard runs AudioUnitUninitialize
     // before staging_/contexts_ (which the AU's input pull callbacks reference) are freed.
     AudioUnitGuard unit_;

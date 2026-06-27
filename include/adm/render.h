@@ -170,6 +170,67 @@ class IRenderStream {
     // (identity) orientation.
     virtual void set_listener_orientation(const ListenerOrientation& orientation) { (void) orientation; }
 
+    // ── Output-stage orientation (two-stage rendering) ──────────────────────────────────────
+    // Opt-in contract for streams that can apply the listener head orientation at the audio
+    // OUTPUT (device callback) stage instead of baking it into the worker's render-ahead. When a
+    // stream's render is decoupled from the head pose, the pose only enters at the very last step,
+    // so head tracking is heard at playout with near-zero latency (no ring-drain delay) — matching
+    // the system spatializer. Rendering is split in two:
+    //
+    //   Stage A  produce_intermediate()  — worker thread, orientation-INDEPENDENT, buffered ahead.
+    //   Stage B  render_output()         — device audio callback, applies the CURRENT orientation.
+    //
+    // The monitor engine buffers Stage A output (intermediate_channels() wide) in its ring and runs
+    // Stage B in the pull callback with the latest orientation. Default: not supported — the engine
+    // uses the single-stage process() path (orientation applied at render-ahead time). Only the
+    // Apple AUSpatialMixer binaural backend opts in; the contract is backend-agnostic so other
+    // backends (e.g. a future HOA→binaural that rotates the soundfield at output) can adopt it.
+    [[nodiscard]] virtual bool renders_orientation_at_output() const { return false; }
+
+    // Width (channel count) of the intermediate representation produce_intermediate() emits and
+    // render_output() consumes. Apple: the source PCM channel count. 0 when not supported.
+    [[nodiscard]] virtual uint32_t intermediate_channels() const { return 0; }
+
+    // Stage A: produce `frames` of the orientation-INDEPENDENT intermediate representation into
+    // `out` (>= frames * intermediate_channels() floats). Returns frames produced (fewer at
+    // end-of-material). Worker thread, like process() — may allocate / read files / use a pool.
+    [[nodiscard]] virtual Result<std::size_t> produce_intermediate(std::span<float> out, std::size_t frames) {
+        (void) out;
+        (void) frames;
+        return std::size_t{0};
+    }
+
+    // Stage B: render `frames` of final interleaved output (>= frames * out_channels()) from
+    // `intermediate` (frames * intermediate_channels()), applying listener orientation `o`. Returns
+    // frames produced. Runs on the HARD-REALTIME audio callback: it MUST NOT allocate, lock, block,
+    // or do I/O — preallocate all scratch and read the orientation from the passed value.
+    [[nodiscard]] virtual std::size_t render_output(std::span<const float> intermediate,
+                                                    std::span<float> out,
+                                                    std::size_t frames,
+                                                    const ListenerOrientation& o) {
+        (void) intermediate;
+        (void) out;
+        (void) frames;
+        (void) o;
+        return 0;
+    }
+
+    // Output-stage only: true once render_output() hit a fatal error on the audio callback (it
+    // silenced the affected block rather than emitting garbage). The engine polls this off the
+    // callback to stop / report the monitor. Default false (single-stage backends report render
+    // errors through process()'s Result instead).
+    [[nodiscard]] virtual bool render_failed() const { return false; }
+
+    // Output-stage loop support. Producer (Stage A) and consumer (Stage B) wrap independently:
+    //  - reposition_source(): worker thread — reposition ONLY the source-read position for a loop
+    //    wrap, leaving the render cursors / AU state untouched (the consumer is still playing earlier
+    //    frames). Default forwards to seek() — fine for single-stage where the producer IS the render.
+    //  - loop_render_reset(): audio callback — wrap the render cursors (metadata/event cursors) to
+    //    `frame` when playout reaches the loop boundary. Realtime-safe (no AU reset / alloc / lock).
+    //    Default no-op.
+    [[nodiscard]] virtual Result<void> reposition_source(uint64_t frame) { return seek(frame); }
+    virtual void loop_render_reset(uint64_t frame) { (void) frame; }
+
     [[nodiscard]] virtual uint32_t out_channels() const = 0;
     [[nodiscard]] virtual uint32_t sample_rate() const = 0;
     [[nodiscard]] virtual std::string_view output_layout() const = 0;
