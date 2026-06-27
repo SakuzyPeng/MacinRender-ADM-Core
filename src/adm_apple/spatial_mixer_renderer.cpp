@@ -247,7 +247,54 @@ struct OutputProfile {
     return std::nullopt;
 }
 
+[[nodiscard]] bool is_lfe_label(AudioChannelLabel label) {
+    return label == kAudioChannelLabel_LFEScreen || label == kAudioChannelLabel_LFE2 ||
+           label == kAudioChannelLabel_LFE3;
+}
+
 [[nodiscard]] Result<void> set_output_layout_tag(AudioUnit unit, AudioChannelLayoutTag tag) {
+    // AUSpatialMixer's bypass LFE routing only ever targets a channel labeled LFEScreen. Layouts
+    // whose LFE channels are LFE2/LFE3 instead (22.2 = CICP_13 has no LFEScreen) would therefore
+    // drop the bypassed LFE input — worse, the mixer folds it into channel 0 at unity gain (verified:
+    // the whole LFE leaked into the Lw speaker). Detect that case by expanding the tag, and if it has
+    // no LFEScreen but does have an LFE, set the output layout via explicit channel descriptions with
+    // the FIRST LFE channel relabeled LFEScreen. Channel order and the non-LFE labels are untouched
+    // (VBAP geometry + container channel order unchanged); only the mixer's LFE routing target moves.
+    //
+    // Single-LFE only: relabelling just the first LFE gives the mixer one LFEScreen target, so one
+    // source LFE routes. That covers every Atmos / ADM master (beds carry a single `.1`). A true
+    // dual-LFE 22.2 source (LFE1+LFE2, an NHK-style native 22.2 broadcast — not Atmos) would pile
+    // both onto this one channel and leave LFE3 silent; routing both would need to bypass the mixer
+    // and sum each LFE straight into its output channel. Deferred until such content actually shows up.
+    UInt32 size = 0;
+    if (AudioFormatGetPropertyInfo(kAudioFormatProperty_ChannelLayoutForTag, sizeof(tag), &tag, &size) == noErr) {
+        std::vector<std::byte> buffer(size);
+        if (AudioFormatGetProperty(kAudioFormatProperty_ChannelLayoutForTag, sizeof(tag), &tag, &size, buffer.data()) ==
+            noErr) {
+            auto* expanded = reinterpret_cast<AudioChannelLayout*>(buffer.data());
+            bool has_lfe_screen = false;
+            int first_lfe = -1;
+            for (UInt32 i = 0; i < expanded->mNumberChannelDescriptions; ++i) {
+                const auto label = expanded->mChannelDescriptions[i].mChannelLabel;
+                has_lfe_screen = has_lfe_screen || label == kAudioChannelLabel_LFEScreen;
+                if (first_lfe < 0 && is_lfe_label(label)) {
+                    first_lfe = static_cast<int>(i);
+                }
+            }
+            if (!has_lfe_screen && first_lfe >= 0) {
+                expanded->mChannelLayoutTag = kAudioChannelLayoutTag_UseChannelDescriptions;
+                expanded->mChannelDescriptions[first_lfe].mChannelLabel = kAudioChannelLabel_LFEScreen;
+                const OSStatus relabelled = AudioUnitSetProperty(
+                    unit, kAudioUnitProperty_AudioChannelLayout, kAudioUnitScope_Output, 0, expanded, size);
+                if (relabelled != noErr) {
+                    return tl::unexpected{
+                        apple_status_error("failed to set relabelled output channel layout", relabelled)};
+                }
+                return {};
+            }
+        }
+    }
+
     AudioChannelLayout layout{};
     layout.mChannelLayoutTag = tag;
     const OSStatus status = AudioUnitSetProperty(
