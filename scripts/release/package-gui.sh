@@ -140,6 +140,8 @@ cp -a "$publish_dir"/. "$macos_dir/"
 cp "$repo_root/gui/MacinRender.Gui/Assets/AppIcon.icns" "$resources_dir/AppIcon.icns"
 cp "$repo_root/LICENSE" "$package_root/LICENSE"
 cp "$repo_root/docs/THIRD_PARTY_LICENSES.md" "$package_root/THIRD_PARTY_NOTICES.md"
+cp -R "$repo_root/third_party/licenses" "$package_root/licenses"
+cp "$repo_root/third_party/sbom.cyclonedx.json" "$package_root/sbom.cyclonedx.json"
 
 cat > "$contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>

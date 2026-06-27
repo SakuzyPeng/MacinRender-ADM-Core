@@ -33,7 +33,7 @@ try {
     }
     $packageRoot = $roots[0].FullName
 
-    foreach ($required in @("bin\mradm.exe", "LICENSE", "THIRD_PARTY_NOTICES.md", "BUILD_INFO.txt", "DEPENDENCIES.txt")) {
+    foreach ($required in @("bin\mradm.exe", "LICENSE", "THIRD_PARTY_NOTICES.md", "BUILD_INFO.txt", "DEPENDENCIES.txt", "licenses\INDEX.md", "sbom.cyclonedx.json")) {
         $path = Join-Path $packageRoot $required
         if (!(Test-Path $path)) {
             throw "package is missing $required"

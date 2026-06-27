@@ -49,7 +49,8 @@ if [[ -z "$package_root" ]]; then
     exit 1
 fi
 
-for required in bin/mradm LICENSE THIRD_PARTY_NOTICES.md BUILD_INFO.txt DEPENDENCIES.txt; do
+for required in bin/mradm LICENSE THIRD_PARTY_NOTICES.md BUILD_INFO.txt DEPENDENCIES.txt \
+    licenses/INDEX.md sbom.cyclonedx.json; do
     if [[ ! -e "$package_root/$required" ]]; then
         echo "package is missing $required" >&2
         exit 1

@@ -1,0 +1,10 @@
+Apple 系统 Framework — AudioToolbox / CoreFoundation / Accelerate
+
+适用范围：macOS-only 功能（APAC 编码、CAF channel layout、Accelerate 加速、
+AUSpatialMixer 后端）。在非 Apple 平台不链接、不编译。
+
+许可证：Apple 平台 SDK / framework，受 Apple SDK 协议约束。
+
+注意：这些 framework 由 macOS 系统提供，**不随本项目二进制再分发**。本声明仅
+用于发行包记录「该功能依赖 Apple 系统组件、仅在 macOS 可用」，不需要、也不应
+把 Apple framework 文件打进发行物。

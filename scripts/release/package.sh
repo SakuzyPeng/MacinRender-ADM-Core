@@ -88,6 +88,8 @@ mkdir -p "$package_root/bin"
 cp "$binary_path" "$package_root/bin/mradm"
 cp "$repo_root/LICENSE" "$package_root/LICENSE"
 cp "$repo_root/docs/THIRD_PARTY_LICENSES.md" "$package_root/THIRD_PARTY_NOTICES.md"
+cp -R "$repo_root/third_party/licenses" "$package_root/licenses"
+cp "$repo_root/third_party/sbom.cyclonedx.json" "$package_root/sbom.cyclonedx.json"
 
 deps_file="$package_root/DEPENDENCIES.txt"
 otool -L "$package_root/bin/mradm" > "$deps_file"

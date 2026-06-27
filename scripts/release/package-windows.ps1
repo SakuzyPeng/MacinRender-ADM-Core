@@ -223,6 +223,8 @@ New-Item -ItemType Directory -Force -Path $binDir | Out-Null
 Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $binDir "mradm.exe") -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE") -Destination (Join-Path $packageRoot "LICENSE") -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "docs\THIRD_PARTY_LICENSES.md") -Destination (Join-Path $packageRoot "THIRD_PARTY_NOTICES.md") -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "third_party\licenses") -Destination (Join-Path $packageRoot "licenses") -Recurse -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "third_party\sbom.cyclonedx.json") -Destination (Join-Path $packageRoot "sbom.cyclonedx.json") -Force
 
 $dllSearchDirs = @()
 if (Test-ExistingPath $OpenBlasRoot) {
