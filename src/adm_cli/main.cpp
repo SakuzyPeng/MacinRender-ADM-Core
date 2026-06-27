@@ -20,20 +20,20 @@ int main(int argc, char** argv) {
     render_cmd->add_flag("-v,--verbose", verbose, "Enable verbose logs");
 
     InspectCliOptions inspect_opts;
-    auto* inspect_cmd = add_inspect_command(app, inspect_opts);
+    const auto* inspect_cmd = add_inspect_command(app, inspect_opts);
 
-    auto* backends_cmd = add_backends_command(app);
+    const auto* backends_cmd = add_backends_command(app);
 
     LayoutCliOptions layouts_opts;
-    auto* layouts_cmd = add_layouts_command(app, layouts_opts);
+    const auto* layouts_cmd = add_layouts_command(app, layouts_opts);
 
-    auto* formats_cmd = add_formats_command(app);
+    const auto* formats_cmd = add_formats_command(app);
 
     ExportCliOptions export_opts;
-    auto* export_cmd = add_export_command(app, export_opts);
+    const auto* export_cmd = add_export_command(app, export_opts);
 
     ApacEncodeCliOptions apac_encode_opts;
-    auto* apac_encode_cmd = add_apac_encode_command(app, apac_encode_opts);
+    const auto* apac_encode_cmd = add_apac_encode_command(app, apac_encode_opts);
 
     app.require_subcommand(1);
 

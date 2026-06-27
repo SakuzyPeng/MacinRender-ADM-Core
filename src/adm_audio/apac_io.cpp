@@ -87,9 +87,9 @@ Result<void> convert_to_apac_inproc(const std::string& src_path,
         return make_error(ErrorCode::cancelled, "render cancelled", "path=" + apac_path);
     }
     struct ApacLayout {
-        AudioChannelLayoutTag tag;
-        bool wav71_swap;
-        uint32_t expected_channels; // 0 = any channel count accepted
+        AudioChannelLayoutTag tag{0};
+        bool wav71_swap{false};
+        uint32_t expected_channels{0}; // 0 = any channel count accepted
     };
     std::optional<ApacLayout> al;
     if (layout_id == "binaural") {
@@ -456,6 +456,7 @@ SubprocessOutcome run_apac_subprocess(const std::string& helper,
     argv.reserve(args.size() + 2U);
     argv.push_back(helper.c_str());
     for (const auto& a : args) {
+        // cppcheck-suppress useStlAlgorithm  // raw loop keeps the pre-fork path async-signal-safe and obvious
         argv.push_back(a.c_str());
     }
     argv.push_back(nullptr);

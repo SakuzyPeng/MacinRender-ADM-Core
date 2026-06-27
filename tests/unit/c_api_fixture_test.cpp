@@ -148,7 +148,7 @@ void progress_cb(double fraction, const char* stage, const char* /*message*/, vo
 
 struct FullProgressState {
     struct Event {
-        double fraction;
+        double fraction{0.0};
         std::string stage;
         bool message_non_null{false};
     };
@@ -296,11 +296,10 @@ bool verify_options_null_setters() {
 }
 
 bool verify_options_invalid_values(adm_render_options_t* opts) {
-    bool ok = true;
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
-    ok = check(adm_render_options_set_renderer(opts, static_cast<adm_renderer_t>(99)) == ADM_ERROR_INVALID_ARGUMENT,
-               "out-of-range renderer should return INVALID_ARGUMENT") &&
-         ok;
+    bool ok =
+        check(adm_render_options_set_renderer(opts, static_cast<adm_renderer_t>(99)) == ADM_ERROR_INVALID_ARGUMENT,
+              "out-of-range renderer should return INVALID_ARGUMENT");
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     ok = check(adm_render_options_set_output_bit_depth(opts, static_cast<adm_output_bit_depth_t>(99)) ==
                    ADM_ERROR_INVALID_ARGUMENT,

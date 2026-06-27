@@ -92,6 +92,7 @@ constexpr UInt32 k_render_block = 512;
     if (linear <= 1.0e-6F) {
         return k_min_db;
     }
+    // cppcheck-suppress invalidFunctionArg  // guarded above: linear > 1e-6F here, never 0
     return std::clamp(20.0F * std::log10(linear), k_min_db, k_max_db);
 }
 

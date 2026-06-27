@@ -1118,7 +1118,7 @@ bool test_monitor_output_stage_loop() {
         ok &= check(sequence_ok, "output-stage loop: playout follows i%%loop (no premature consumer wrap)");
     }
 
-    LoopProbeStream* s = factory.last();
+    const LoopProbeStream* s = factory.last();
     ok &= check(s != nullptr, "output-stage loop: stream probe available");
     if (s != nullptr) {
         ok &= check(s->reposition_calls() >= 3,

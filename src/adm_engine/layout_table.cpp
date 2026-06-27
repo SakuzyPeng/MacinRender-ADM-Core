@@ -32,7 +32,7 @@ using nlohmann::json;
 struct LayoutInfo {
     std::string_view format;
     std::string_view layout;
-    uint32_t channels;
+    uint32_t channels{0};
     std::string_view container;
     std::string_view order;
     std::string_view note;
