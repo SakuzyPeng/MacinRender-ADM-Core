@@ -127,7 +127,7 @@ class BufferingLogSink final : public LogSink {
 
   private:
     struct Entry {
-        LogLevel level;
+        LogLevel level{};
         std::string module;
         std::string message;
     };
@@ -198,6 +198,8 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
   private:
     struct BackendKeepAlive {
         std::unique_ptr<IRenderer> renderer;
+        // Held purely to keep the prepared render alive for the session's lifetime.
+        // cppcheck-suppress unusedStructMember
         std::shared_ptr<IPreparedRender> prepared;
     };
     std::string input_path_;

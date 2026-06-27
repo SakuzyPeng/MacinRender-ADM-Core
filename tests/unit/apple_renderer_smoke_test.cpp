@@ -181,8 +181,8 @@ OSStatus probe_input_render_callback(void* ref_con,
 }
 
 struct HrtfProbeCase {
-    const char* name;
-    UInt32 algorithm;
+    const char* name{""};
+    UInt32 algorithm{0};
     std::optional<UInt32> personalized_mode;
 };
 

@@ -338,7 +338,7 @@ Result<HrtfDataset> load_sofa_dataset(const std::filesystem::path& path, uint32_
 
     class SofaGuard {
       public:
-        explicit SofaGuard(saf_sofa_container* sofa) : sofa_(sofa) {}
+        explicit SofaGuard(saf_sofa_container* container) : sofa_(container) {}
         SofaGuard(const SofaGuard&) = delete;
         SofaGuard& operator=(const SofaGuard&) = delete;
         SofaGuard(SofaGuard&&) = delete;

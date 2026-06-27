@@ -74,9 +74,9 @@ namespace {
 struct IamfLayerInfo {
     std::string_view id;
     std::string_view display;
-    int bed_channels;
-    int lfe_channels;
-    int height_channels;
+    int bed_channels{0};
+    int lfe_channels{0};
+    int height_channels{0};
 };
 
 [[nodiscard]] const IamfLayerInfo* iamf_layer_info(std::string_view layout_id) {

@@ -29,10 +29,10 @@ inline constexpr AudioChannelLayoutTag k_tag_cicp_13 = (204U << 16) | 24U;
 struct AppleSpeakerLayout {
     std::string_view id;
     std::string_view display_name;
-    uint16_t channels;
-    uint16_t lfe_count;
-    bool is_3d;
-    AudioChannelLayoutTag layout_tag;
+    uint16_t channels{0};
+    uint16_t lfe_count{0};
+    bool is_3d{false};
+    AudioChannelLayoutTag layout_tag{0};
 };
 
 // clang-format off
