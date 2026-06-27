@@ -104,17 +104,26 @@ class MonitorEngine {
     [[nodiscard]] uint32_t out_channels() const { return channels_; }
     [[nodiscard]] uint32_t sample_rate() const { return sample_rate_; }
 
+    // True when the stream renders the listener orientation at the audio output (callback) stage:
+    // the engine buffers the orientation-independent intermediate and applies the head pose in
+    // pull() for near-zero head-tracking latency. Lets the session detect a mode change on a switch.
+    [[nodiscard]] bool output_stage() const { return output_stage_; }
+
   private:
     MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device, LogSink& logs);
 
     void worker_loop();
     [[nodiscard]] bool head_tracking_recent() const; // true within k_tracking_active_window of last orientation update
     bool top_up_ring();                              // producer side; returns true if it produced
-    std::size_t pull(std::span<float> out, std::size_t frames); // consumer side (audio thread)
-    void apply_seek_locked(uint64_t frame);                     // worker/control side, under control_mutex_
-    void finalize_crossfade();                                  // worker side: snap to the incoming stream
-    void rebuild_meter();                                       // (re)create the LUFS meter for the current format
-    void feed_meter(std::size_t frames);                        // worker side: add to meter + refresh LUFS snapshots
+    bool top_up_ring_output_stage();                 // producer side, output-stage: buffer intermediate
+    std::size_t pull(std::span<float> out, std::size_t frames);              // consumer side (audio thread)
+    std::size_t pull_output_stage(std::span<float> out, std::size_t frames); // consumer side, render at output
+    void drain_meter_ring(); // worker side: feed the LUFS meter from the callback tap
+    [[nodiscard]] ListenerOrientation orientation_snapshot() const; // lock-free read of the live head pose
+    void apply_seek_locked(uint64_t frame);                         // worker/control side, under control_mutex_
+    void finalize_crossfade();                                      // worker side: snap to the incoming stream
+    void rebuild_meter();                                           // (re)create the LUFS meter for the current format
+    void feed_meter(const float* data, std::size_t frames); // worker side: add to meter + refresh LUFS snapshots
 
     std::unique_ptr<IRenderStream> stream_;
     IAudioOutputDevice& device_;
@@ -122,10 +131,27 @@ class MonitorEngine {
     bool pull_is_realtime_playback_{true};
     uint32_t channels_{0};
     uint32_t sample_rate_{0};
+    // Output-stage mode: the stream applies orientation at the audio callback (Apple binaural), so
+    // the ring holds INTERMEDIATE PCM (ring_channels_ wide, = stream intermediate_channels()) that
+    // the worker fills via produce_intermediate, and pull() runs render_output with the live pose.
+    // Off → single-stage (ring holds output PCM; orientation baked in at render-ahead time).
+    bool output_stage_{false};
+    uint32_t ring_channels_{0}; // ring element width: intermediate_channels() in output-stage, else channels_
 
     FloatRingBuffer ring_;
-    std::vector<float> scratch_;   // worker production scratch (one canonical chunk)
+    std::vector<float> scratch_;   // worker production scratch (one canonical chunk; intermediate in output-stage)
     std::vector<float> scratch_b_; // second chunk, for the incoming stream during a crossfade
+
+    // Output-stage only: the callback taps its rendered output (channels_ wide) into meter_ring_;
+    // the worker drains it into meter_scratch_ to feed the LUFS meter (which can't run on the
+    // callback). pull_scratch_ holds the intermediate popped from the main ring before render_output.
+    // Lock-free listener-orientation snapshot, written by set_listener_orientation, read by pull().
+    FloatRingBuffer meter_ring_;
+    std::vector<float> pull_scratch_;
+    std::vector<float> meter_scratch_;
+    std::atomic<float> snap_yaw_{0.0F};
+    std::atomic<float> snap_pitch_{0.0F};
+    std::atomic<float> snap_roll_{0.0F};
 
     std::thread worker_;
     std::mutex control_mutex_; // serialises play/pause/seek/set_loop + worker command apply
@@ -146,6 +172,10 @@ class MonitorEngine {
     std::atomic<uint64_t> loop_end_{0};
     // Producer-only (worker thread): current stream output position.
     uint64_t producer_pos_{0};
+    // Output-stage only: the consumer's source position (audio callback), tracked separately from the
+    // producer so Stage A and Stage B wrap a loop independently. Written by pull_output_stage (callback)
+    // and by apply_seek_locked / the hot-switch (both under the consumer-park handshake).
+    uint64_t consumer_src_pos_{0};
 
     // Pending user seek, applied by the worker. Guarded by control_mutex_.
     bool seek_pending_{false};
