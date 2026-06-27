@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -26,6 +27,9 @@ public partial class SemanticEditorView : UserControl
             seek.AddHandler(Thumb.DragStartedEvent, OnSeekDragStarted);
             seek.AddHandler(Thumb.DragCompletedEvent, OnSeekDragCompleted);
         }
+
+        // 多声道电平表窗口随 VM 的 IsMultichannelMeter 自动开/关(DataContext 由父级注入)。
+        DataContextChanged += (_, _) => HookMeterAutoToggle();
 
         // 长按计时器(手动实现长按:鼠标按下达阈值即切换该轴联动,见 OnAxisPointerPressed)。
         _holdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
@@ -121,6 +125,70 @@ public partial class SemanticEditorView : UserControl
         else
         {
             _spatialWindow.Show();
+        }
+    }
+
+    // 多声道电平表:独立窗口(单例)。进入系统空间音频监听时自动弹出,离开 / 停止监听时自动关闭;
+    // 用户手动关掉后可点内联「电平表」按钮重新唤出。DataContext 共享同一 VM → 各声道电平实时联动。
+    private ChannelMeterWindow? _meterWindow;
+    private SemanticEditorViewModel? _meterWiredVm;
+
+    // DataContext 就绪后订阅 VM 的多声道开关,驱动窗口自动开/关。
+    private void HookMeterAutoToggle()
+    {
+        if (_meterWiredVm is not null)
+        {
+            _meterWiredVm.PropertyChanged -= OnMeterVmPropertyChanged;
+        }
+
+        _meterWiredVm = DataContext as SemanticEditorViewModel;
+        if (_meterWiredVm is not null)
+        {
+            _meterWiredVm.PropertyChanged += OnMeterVmPropertyChanged;
+        }
+    }
+
+    private void OnMeterVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(SemanticEditorViewModel.IsMultichannelMeter))
+        {
+            return;
+        }
+
+        if (_meterWiredVm?.IsMultichannelMeter == true)
+        {
+            ShowChannelMeterWindow();
+        }
+        else
+        {
+            _meterWindow?.Close();
+        }
+    }
+
+    private void OnOpenChannelMeter(object? sender, RoutedEventArgs e) => ShowChannelMeterWindow();
+
+    private void ShowChannelMeterWindow()
+    {
+        if (DataContext is not SemanticEditorViewModel { IsMultichannelMeter: true })
+        {
+            return;
+        }
+
+        if (_meterWindow is not null)
+        {
+            _meterWindow.Activate();
+            return;
+        }
+
+        _meterWindow = new ChannelMeterWindow { DataContext = DataContext };
+        _meterWindow.Closed += (_, _) => _meterWindow = null;
+        if (TopLevel.GetTopLevel(this) is Window owner)
+        {
+            _meterWindow.Show(owner);
+        }
+        else
+        {
+            _meterWindow.Show();
         }
     }
 

@@ -15,14 +15,6 @@
             <GradientStop Offset="0.92" Color="#FF9F0A"/>
             <GradientStop Offset="1.0" Color="#FF453A"/>
         </LinearGradientBrush>
-        <!-- 同一刻度色的竖向版:底绿 → 顶红(多声道竖条自底向上揭示)。 -->
-        <LinearGradientBrush x:Key="MeterBrushVertical" StartPoint="0%,100%" EndPoint="0%,0%">
-            <GradientStop Offset="0.0" Color="#34C759"/>
-            <GradientStop Offset="0.62" Color="#5BD66B"/>
-            <GradientStop Offset="0.80" Color="#E3CC3F"/>
-            <GradientStop Offset="0.92" Color="#FF9F0A"/>
-            <GradientStop Offset="1.0" Color="#FF453A"/>
-        </LinearGradientBrush>
     </UserControl.Resources>
 
     <UserControl.Styles>
@@ -48,14 +40,6 @@
             <Setter Property="Transitions">
                 <Transitions>
                     <DoubleTransition Property="Width" Duration="0:0:0.06" Easing="LinearEasing"/>
-                </Transitions>
-            </Setter>
-        </Style>
-        <!-- 多声道竖条填充:Height 过渡,使两次轮询间高度变化滑动而非跳变。 -->
-        <Style Selector="Border.meterfillv">
-            <Setter Property="Transitions">
-                <Transitions>
-                    <DoubleTransition Property="Height" Duration="0:0:0.06" Easing="LinearEasing"/>
                 </Transitions>
             </Setter>
         </Style>
@@ -281,33 +265,13 @@
                             </Grid>
                         </StackPanel>
 
-                        <!-- 多声道(系统空间音频):每声道一根竖条 + 声道名;声道多时(22.2)横向滚动不挤垮进度条 -->
-                        <ScrollViewer IsVisible="{Binding IsMultichannelMeter}" MaxWidth="300"
-                                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                            <ItemsControl ItemsSource="{Binding ChannelMeters}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="2"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:ChannelMeter">
-                                        <StackPanel Width="18" Spacing="2">
-                                            <Panel Height="38" Width="10" HorizontalAlignment="Center">
-                                                <Border CornerRadius="2" Background="{DynamicResource RowBg}"/>
-                                                <Border Classes="meterfillv" VerticalAlignment="Bottom" CornerRadius="2"
-                                                        ClipToBounds="True" Width="10" Height="{Binding FillHeight}">
-                                                    <Border VerticalAlignment="Bottom" Width="10" Height="38"
-                                                            Background="{StaticResource MeterBrushVertical}"/>
-                                                </Border>
-                                            </Panel>
-                                            <TextBlock Classes="muted" FontSize="8" HorizontalAlignment="Center"
-                                                       TextAlignment="Center" Text="{Binding Label}"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                        <!-- 多声道(系统空间音频):内联只放一个紧凑按钮,完整逐声道电平表在独立窗口显示
+                             (传统竖条),避免把传输行撑高/各布局高低不一。 -->
+                        <Button IsVisible="{Binding IsMultichannelMeter}" Padding="8,3" FontSize="11"
+                                VerticalAlignment="Center" Cursor="Hand" Click="OnOpenChannelMeter"
+                                Foreground="{DynamicResource Accent}" Background="Transparent"
+                                Content="{DynamicResource SemMonChannelMeter}"
+                                ToolTip.Tip="{DynamicResource SemMonChannelMeterTip}"/>
                         <!-- 点击切换 LUFS 窗(M 瞬时 / S 短期 / I 累计) -->
                         <Button Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand"
                                 Command="{Binding CycleLufsModeCommand}"

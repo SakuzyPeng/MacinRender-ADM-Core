@@ -1,0 +1,87 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:MacinRender.Gui.ViewModels"
+        xmlns:conv="using:MacinRender.Gui.Converters"
+        mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="280"
+        x:Class="MacinRender.Gui.Views.ChannelMeterWindow"
+        x:DataType="vm:SemanticEditorViewModel"
+        SizeToContent="WidthAndHeight" CanResize="True"
+        MinWidth="200" MinHeight="200" MaxWidth="1100"
+        Background="#16181C">
+
+    <Window.Resources>
+        <!-- 传统电平表竖向渐变:底绿 → 顶红(竖条自底向上揭示)。 -->
+        <LinearGradientBrush x:Key="MeterBrushVertical" StartPoint="0%,100%" EndPoint="0%,0%">
+            <GradientStop Offset="0.0" Color="#34C759"/>
+            <GradientStop Offset="0.62" Color="#5BD66B"/>
+            <GradientStop Offset="0.80" Color="#E3CC3F"/>
+            <GradientStop Offset="0.92" Color="#FF9F0A"/>
+            <GradientStop Offset="1.0" Color="#FF453A"/>
+        </LinearGradientBrush>
+        <conv:MeterFillHeightConverter x:Key="MeterFillHeight"/>
+    </Window.Resources>
+
+    <Window.Styles>
+        <!-- 竖条填充:Height 过渡,使两次轮询(~33ms)间高度变化滑动而非跳变(恢复顺滑弹道)。 -->
+        <Style Selector="Border.meterfillv">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Height" Duration="0:0:0.08" Easing="LinearEasing"/>
+                </Transitions>
+            </Setter>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="*,Auto" Margin="14">
+        <!-- 逐声道竖条:横向铺开、水平居中;竖条按比例填满 track,track 随窗口高度生长(拉大窗口 → 表变大)。
+             声道多 / 窗口窄时横向滚动。 -->
+        <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding ChannelMeters}" HorizontalAlignment="Center">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="6"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ChannelMeter">
+                        <Grid Width="34" RowDefinitions="Auto,*,Auto" VerticalAlignment="Stretch">
+                            <TextBlock Grid.Row="0" FontSize="10" HorizontalAlignment="Center" TextAlignment="Center"
+                                       Margin="0,0,0,3" Foreground="#9A9A9F" Text="{Binding PeakText}"/>
+                            <!-- track:可伸缩(填满 * 行);填充竖条高度 = Norm×track 高度,随窗口拉高等比变大 -->
+                            <Panel Grid.Row="1" x:Name="Track" Width="18" MinHeight="120" HorizontalAlignment="Center">
+                                <Border CornerRadius="3" Background="#22262C"/>
+                                <!-- 填充裁剪一条「满 track 高」的渐变条 → 露出底部对应比例(低=纯绿,高=触红) -->
+                                <Border Classes="meterfillv" VerticalAlignment="Bottom" ClipToBounds="True"
+                                        CornerRadius="3" Width="18">
+                                    <Border.Height>
+                                        <MultiBinding Converter="{StaticResource MeterFillHeight}">
+                                            <Binding Path="Peak"/>
+                                            <Binding Path="#Track.Bounds.Height"/>
+                                        </MultiBinding>
+                                    </Border.Height>
+                                    <Border VerticalAlignment="Bottom" Width="18"
+                                            Height="{Binding #Track.Bounds.Height}"
+                                            Background="{StaticResource MeterBrushVertical}"/>
+                                </Border>
+                            </Panel>
+                            <TextBlock Grid.Row="2" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                       TextAlignment="Center" Margin="0,3,0,0" Foreground="#F5F5F7" Text="{Binding Label}"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- 整体节目响度(LUFS,点击切 M/S/I);与主视图同一 VM,实时联动 -->
+        <Button Grid.Row="1" Margin="0,10,0,0" Padding="0" HorizontalAlignment="Center"
+                Background="Transparent" BorderThickness="0" Cursor="Hand"
+                Command="{Binding CycleLufsModeCommand}"
+                ToolTip.Tip="LUFS: M=momentary S=short-term I=integrated">
+            <TextBlock FontSize="12" Foreground="#5BB8FF">
+                <Run Text="{Binding LufsModeLabel}"/><Run Text=" "/><Run Text="{Binding LufsValueText}"/>
+            </TextBlock>
+        </Button>
+    </Grid>
+</Window>
