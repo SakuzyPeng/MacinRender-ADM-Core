@@ -1,0 +1,9 @@
+AOM iamf-tools bridge — IAMF raw OBU 编码
+
+适用范围：仅当以 MR_ADM_ENABLE_IAMF=ON 构建时链接（默认 OFF）。
+接入方式：预构建的官方 AOM iamf-tools bridge SDK（MR_ADM_IAMF_AOM_ROOT 指向之）。
+许可证：BSD-3-Clause-Clear AND AOM Patent License 1.0。
+
+注意：本文件为占位声明。启用 IAMF 的发行包必须随实际 SDK 附带其完整的
+BSD-3-Clause-Clear 许可证文本、AOM Patent License 1.0 文本，以及 bridge
+内部传递依赖的逐项许可证。打包流程在启用 IAMF 时须把这些文本补入本目录。

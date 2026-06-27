@@ -135,6 +135,8 @@ cp "$icon_file" "$appimage_icon"
 
 cp "$repo_root/LICENSE" "$appdir/usr/share/doc/macinrender-adm-core/LICENSE"
 cp "$repo_root/docs/THIRD_PARTY_LICENSES.md" "$appdir/usr/share/doc/macinrender-adm-core/THIRD_PARTY_NOTICES.md"
+cp -R "$repo_root/third_party/licenses" "$appdir/usr/share/doc/macinrender-adm-core/licenses"
+cp "$repo_root/third_party/sbom.cyclonedx.json" "$appdir/usr/share/doc/macinrender-adm-core/sbom.cyclonedx.json"
 
 export APPIMAGE_EXTRACT_AND_RUN=1
 "$linuxdeploy" \

@@ -283,6 +283,8 @@ if ($LASTEXITCODE -ne 0) {
 Copy-Item (Join-Path $publishDir "*") -Destination $appDir -Recurse -Force
 Copy-Item (Join-Path $repoRoot "LICENSE") -Destination (Join-Path $packageRoot "LICENSE") -Force
 Copy-Item (Join-Path $repoRoot "docs\THIRD_PARTY_LICENSES.md") -Destination (Join-Path $packageRoot "THIRD_PARTY_NOTICES.md") -Force
+Copy-Item (Join-Path $repoRoot "third_party\licenses") -Destination (Join-Path $packageRoot "licenses") -Recurse -Force
+Copy-Item (Join-Path $repoRoot "third_party\sbom.cyclonedx.json") -Destination (Join-Path $packageRoot "sbom.cyclonedx.json") -Force
 
 $exe = Join-Path $appDir "MacinRender.Gui.exe"
 if (!(Test-ExistingPath $exe)) {

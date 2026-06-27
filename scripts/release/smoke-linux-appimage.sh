@@ -49,7 +49,9 @@ extracted="$work_dir/squashfs-root"
 for required in usr/bin/mradm usr/share/doc/macinrender-adm-core/LICENSE \
     usr/share/doc/macinrender-adm-core/THIRD_PARTY_NOTICES.md \
     usr/share/doc/macinrender-adm-core/BUILD_INFO.txt \
-    usr/share/doc/macinrender-adm-core/DEPENDENCIES.txt; do
+    usr/share/doc/macinrender-adm-core/DEPENDENCIES.txt \
+    usr/share/doc/macinrender-adm-core/licenses/INDEX.md \
+    usr/share/doc/macinrender-adm-core/sbom.cyclonedx.json; do
     if [[ ! -e "$extracted/$required" ]]; then
         echo "AppImage is missing $required" >&2
         exit 1
