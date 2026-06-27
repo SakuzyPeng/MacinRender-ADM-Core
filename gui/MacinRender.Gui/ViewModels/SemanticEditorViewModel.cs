@@ -1265,7 +1265,7 @@ public sealed partial class ExtentOverride : ObservableObject, IResettableOverri
     private static bool NearlyEqual(double a, double b) => Math.Abs(a - b) <= 1.0e-6;
 }
 
-/// <summary>电平表线性峰值 → 归一(-60..0 dBFS → 0..1)。L/R 横条与多声道竖条共用一套刻度。</summary>
+/// <summary>电平表刻度:线性峰值 → 归一(-60..0 dBFS → 0..1)。L/R 横条与多声道竖条共用。</summary>
 internal static class MeterScale
 {
     public static double Norm(float lin)
@@ -1280,11 +1280,12 @@ internal static class MeterScale
     }
 }
 
-/// <summary>多声道(系统空间音频)电平表的一根竖条:声道标签 + 峰值;FillHeight 给 XAX 自底向上填充。</summary>
+/// <summary>多声道(系统空间音频)电平表独立窗口里的一根传统竖条:声道名 + 峰值;
+/// FillHeight 自底向上填充,PeakText 显示 dBFS。</summary>
 public sealed partial class ChannelMeter : ObservableObject
 {
-    // 竖条满高(像素),与 XAML 里 Panel 的 Height 一致。
-    public const double BarHeightPx = 38.0;
+    // 竖条满高(像素),与窗口 XAML 里 Panel 的 Height 一致。
+    public const double BarHeightPx = 120.0;
 
     public ChannelMeter(string label) => Label = label;
 
@@ -1292,9 +1293,13 @@ public sealed partial class ChannelMeter : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FillHeight))]
+    [NotifyPropertyChangedFor(nameof(PeakText))]
     private float _peak;
 
     public double FillHeight => MeterScale.Norm(Peak) * BarHeightPx;
+
+    public string PeakText =>
+        Peak <= 1.0e-6F ? "-∞" : (20.0 * Math.Log10(Peak)).ToString("0.0", CultureInfo.InvariantCulture);
 }
 
 /// <summary>声床一个声道的纯数据:speaker label(命中键)+ 当前 gain(线性,= ds.gain × object.gain)
