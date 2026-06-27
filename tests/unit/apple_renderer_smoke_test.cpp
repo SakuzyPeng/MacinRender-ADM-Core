@@ -1008,6 +1008,24 @@ bool verify_bed_and_lfe_routing() {
     return ok;
 }
 
+// 22.2 (CICP_13) labels its two LFE channels LFE2/LFE3, not LFEScreen. AUSpatialMixer's bypass LFE
+// path only ever targets a channel labeled LFEScreen, so without the output-layout relabel in
+// set_output_layout_tag the bed LFE is dropped — and the mixer folds it into ch0 (Lw) at unity gain.
+// This guards both: the LFE lands on the LFE channel (ch3), and does NOT leak into ch0.
+bool verify_22_2_lfe_routing() {
+    const auto lfe = render_ds(45.0F, -30.0F, "RC_LFE", "9+10+3", 24U, "mr_apple_lfe_222");
+    if (!lfe) {
+        return false;
+    }
+    bool ok = true;
+    ok &= check(loudest_channel(*lfe, 24U) == 3U, "22.2 LFE bed routes to CICP_13 LFE channel (ch3)");
+    const double lfe_energy = channel_energy(*lfe, 24U, 3U);
+    const double lw_energy = channel_energy(*lfe, 24U, 0U);
+    ok &= check(lfe_energy > 1.0e-6, "22.2 LFE channel (ch3) is not silent");
+    ok &= check(lw_energy < lfe_energy * 1.0e-3, "22.2 LFE does not leak into ch0 (Lw)");
+    return ok;
+}
+
 bool verify_spatial_mixer_hrtf_modes_probe() {
     if (!hrtf_probe_enabled()) {
         return true;
@@ -1463,6 +1481,7 @@ int main() {
     ok &= verify_spread_mode_none_disables_extent();
     ok &= verify_channel_lock_snaps();
     ok &= verify_bed_and_lfe_routing();
+    ok &= verify_22_2_lfe_routing();
     ok &= verify_apple_stream_matches_window();
     ok &= verify_apple_stream_listener_orientation();
     ok &= verify_apple_stream_initial_head_locked_orientation();
