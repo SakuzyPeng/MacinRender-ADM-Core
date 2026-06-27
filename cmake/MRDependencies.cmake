@@ -305,6 +305,19 @@ function(mr_adm_core_find_or_fetch package_name target_name)
     elseif(package_name STREQUAL "Spatial_Audio_Framework")
         # SAF exposes target 'saf'. Keep GPL modules off; SOFA uses libmysofa/zlib
         # when MR_ADM_ENABLE_SOFA is ON, and NetCDF stays disabled.
+        #
+        # 发行许可硬约束：以下 SAF 模块/后端引入 GPL 或专有再分发义务，禁止进入默认构建。
+        # 这里显式 FATAL 而非靠后面的 set(... OFF FORCE) 静默覆盖——避免有人 -D...=ON 后
+        # 误以为已启用。详见 docs/THIRD_PARTY_LICENSES.md『禁止或需单独审批的选项』。
+        foreach(_mr_saf_forbidden
+                SAF_ENABLE_TRACKER_MODULE SAF_ENABLE_HADES_MODULE
+                SAF_USE_FFTW SAF_ENABLE_NETCDF SAF_USE_INTEL_IPP)
+            if(${_mr_saf_forbidden})
+                message(FATAL_ERROR
+                    "${_mr_saf_forbidden}=ON 被禁止：该 SAF 模块/后端引入 GPL 或专有再分发义务，"
+                    "违反默认发行策略（见 docs/THIRD_PARTY_LICENSES.md）。如确需启用，须先走 ADR/许可评审。")
+            endif()
+        endforeach()
         set(_mr_adm_core_restore_build_shared_libs TRUE)
         if(DEFINED BUILD_SHARED_LIBS)
             set(_mr_adm_core_had_build_shared_libs TRUE)
@@ -439,6 +452,26 @@ function(mr_adm_core_find_or_fetch package_name target_name)
     endif()
     if(package_name STREQUAL "Spatial_Audio_Framework" AND TARGET saf)
         target_compile_options(saf PRIVATE $<$<COMPILE_LANG_AND_ID:C,AppleClang,Clang>:-Wno-deprecated-declarations>)
+    endif()
+    if(package_name STREQUAL "libear" AND TARGET ear)
+        # 许可硬约束：强制 libear 内部 Eigen 只走 MPL-2.0 代码路径，把误用 LGPL-only
+        # Eigen 模块变成编译期错误（见 docs/THIRD_PARTY_LICENSES.md）。
+        # libear 会按架构拆出 ear / ear_default_arch / ear_<simd> 等多个 OBJECT 目标，
+        # 逐个覆盖（只加在 'ear' 上会漏掉 per-arch SIMD 目标的 Eigen TU）。
+        set(_mr_ear_targets "")
+        if(DEFINED libear_SOURCE_DIR)
+            get_property(_mr_ear_targets DIRECTORY "${libear_SOURCE_DIR}/src"
+                PROPERTY BUILDSYSTEM_TARGETS)
+        endif()
+        if(NOT _mr_ear_targets)
+            set(_mr_ear_targets ear)
+        endif()
+        foreach(_mr_ear_tgt IN LISTS _mr_ear_targets)
+            get_target_property(_mr_ear_type ${_mr_ear_tgt} TYPE)
+            if(NOT _mr_ear_type STREQUAL "INTERFACE_LIBRARY" AND NOT _mr_ear_type STREQUAL "UTILITY")
+                target_compile_definitions(${_mr_ear_tgt} PRIVATE EIGEN_MPL2_ONLY)
+            endif()
+        endforeach()
     endif()
 endfunction()
 
