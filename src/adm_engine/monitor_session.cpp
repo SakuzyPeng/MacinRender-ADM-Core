@@ -169,7 +169,8 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         plan.apple_spatial_preset = options.apple_spatial_preset;
         // System-spatial monitoring hands head tracking to the system; the rendered bed must stay
         // orientation-neutral so it isn't rotated twice (see MonitorSession::set_listener_orientation).
-        plan.listener_orientation = options.monitor_system_spatial ? ListenerOrientation{} : options.listener_orientation;
+        plan.listener_orientation =
+            options.monitor_system_spatial ? ListenerOrientation{} : options.listener_orientation;
 
         auto prepared = renderer->prepare(plan, logs);
         if (!prepared) {
@@ -288,31 +289,49 @@ MonitorSession::create(const std::string& input_path, const RenderOptions& optio
 }
 
 void MonitorSession::play() {
+    if (impl_->engine == nullptr) {
+        return; // session invalidated (a backend rebuild failed); stay inert rather than crash
+    }
     impl_->engine->play();
 }
 
 void MonitorSession::pause() {
+    if (impl_->engine == nullptr) {
+        return;
+    }
     impl_->engine->pause();
 }
 
 Result<void> MonitorSession::seek_seconds(double seconds) {
+    if (impl_->engine == nullptr) {
+        return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
+    }
     // negative clamps to 0, past the end clamps to total_frames.
     impl_->engine->seek(clamp_frame(seconds, impl_->sample_rate, impl_->total_frames));
     return {};
 }
 
 void MonitorSession::set_loop_seconds(double start_seconds, double end_seconds) {
+    if (impl_->engine == nullptr) {
+        return;
+    }
     impl_->engine->set_loop(clamp_frame(start_seconds, impl_->sample_rate, impl_->total_frames),
                             clamp_frame(end_seconds, impl_->sample_rate, impl_->total_frames));
 }
 
 void MonitorSession::set_overrides(const LiveOverrides& overrides) {
     impl_->current_overrides = overrides; // kept so a device switch can re-apply the user's edits
+    if (impl_->engine == nullptr) {
+        return;
+    }
     impl_->engine->set_overrides(overrides);
 }
 
 void MonitorSession::set_listener_orientation(const ListenerOrientation& orientation) {
     impl_->current_orientation = orientation; // kept so a device switch can re-apply the head pose
+    if (impl_->engine == nullptr) {
+        return;
+    }
     // 系统空间化监听:头追由系统(AirPods)在它自己的输出级接管。若把本地朝向喂给 AppleStream
     // (AUSpatialMixer),它会在源头先把 7.1.4 声场转一道,再被系统头追转第二道 = 双重旋转。
     // 故在系统空间化下强制中立朝向(GUI 的 spatial view 视觉监视走另一条路,不受影响)。
@@ -320,6 +339,9 @@ void MonitorSession::set_listener_orientation(const ListenerOrientation& orienta
 }
 
 Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
+    if (impl_->engine == nullptr) {
+        return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
+    }
     // Prepare the new backend off the audio thread (resolve + prepare + open_stream),
     // reusing the policy-applied scene. The factory retains its prepared state.
     auto stream = impl_->factory->open(impl_->scene, options, impl_->log_sink);
@@ -335,6 +357,62 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
         stream->reset();
         impl_->factory->forget_last_backend();
         return make_error(ErrorCode::unsupported, "monitor backend switch requires the same sample rate");
+    }
+    // The engine's ring layout (intermediate vs output PCM) is fixed at create from the stream's
+    // output-stage mode. A switch that flips that mode (e.g. Apple binaural output-stage ↔ a
+    // downmixed speaker stream) can't be hot-swapped — rebuild the engine on the same device,
+    // preserving the playhead / edits / play state (mirrors set_output_device).
+    const bool channels_match = (*stream)->out_channels() == monitor_channels;
+    const bool new_output_stage = channels_match && (*stream)->renders_orientation_at_output();
+    if (new_output_stage != impl_->engine->output_stage()) {
+        stream->reset(); // the factory re-opens the new backend inside MonitorEngine::create below
+        const realtime::MonitorStatus snap = impl_->engine->status();
+        const uint64_t playhead = snap.playhead_frames;
+        const bool was_playing = snap.state == realtime::MonitorState::playing;
+        const RenderOptions prev_options = impl_->current_options; // to restore the working backend on failure
+        impl_->engine.reset();                                     // stops the device (engine borrows it by reference)
+        impl_->device.reset();
+
+        // Build a fresh device + engine for `opts` on the same device id. Leaves engine/device null
+        // on failure (the caller decides whether to retry the previous backend).
+        auto rebuild_with = [&](const RenderOptions& opts) -> Result<void> {
+            impl_->factory->forget_last_backend();
+            impl_->current_options = opts;
+            impl_->device = make_monitor_device(opts, impl_->device_id);
+            auto rebuilt =
+                realtime::MonitorEngine::create(*impl_->factory, *impl_->device, impl_->scene, opts, impl_->log_sink);
+            if (!rebuilt) {
+                impl_->engine.reset();
+                impl_->device.reset();
+                return tl::unexpected{rebuilt.error()};
+            }
+            impl_->engine = std::move(*rebuilt);
+            return {};
+        };
+
+        std::optional<Error> switch_error;
+        if (auto built = rebuild_with(options); !built) {
+            // Restore the previous (working) backend so monitoring survives a failed flip rather than
+            // leaving the session torn down. If that also fails the session is left invalid (null
+            // engine) — the entry points are null-safe.
+            switch_error = built.error();
+            impl_->log_sink.log(LogLevel::warning, "monitor", "切换后端失败,回退到原后端:" + built.error().message);
+            if (auto restored = rebuild_with(prev_options); !restored) {
+                return tl::unexpected{built.error()};
+            }
+        }
+        impl_->engine->seek(playhead);
+        impl_->engine->set_overrides(impl_->current_overrides);
+        impl_->engine->set_listener_orientation(impl_->effective_orientation());
+        if (was_playing) {
+            impl_->engine->play();
+        }
+        // Reverted to the old backend: surface the original failure so the UI shows the switch failed
+        // (the session is still live on the previous backend, not the requested one).
+        if (switch_error.has_value()) {
+            return tl::unexpected{*switch_error};
+        }
+        return {};
     }
     // Same channel count → hand the stream straight to the engine. Otherwise wrap it in a
     // DownmixStream that folds the new layout into the fixed monitor channel count (e.g.
@@ -359,6 +437,9 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
 }
 
 Result<void> MonitorSession::set_output_device(const std::string& device_id) {
+    if (impl_->engine == nullptr) {
+        return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
+    }
     if (device_id == impl_->device_id) {
         return {}; // already on this device
     }
@@ -409,6 +490,12 @@ Result<void> MonitorSession::set_output_device(const std::string& device_id) {
 }
 
 MonitorStatusSnapshot MonitorSession::status() const {
+    if (impl_->engine == nullptr) {
+        MonitorStatusSnapshot out; // invalid session → report a stopped/failed snapshot
+        out.state = MonitorPlaybackState::stopped;
+        out.failed = true;
+        return out;
+    }
     const realtime::MonitorStatus s = impl_->engine->status();
     MonitorStatusSnapshot out;
     out.state = static_cast<MonitorPlaybackState>(static_cast<std::uint8_t>(s.state));
@@ -423,6 +510,9 @@ MonitorStatusSnapshot MonitorSession::status() const {
 }
 
 MonitorLevelsSnapshot MonitorSession::levels() const {
+    if (impl_->engine == nullptr) {
+        return MonitorLevelsSnapshot{}; // invalid session → silent levels
+    }
     const realtime::MonitorLevels l = impl_->engine->levels();
     MonitorLevelsSnapshot out;
     out.channels = l.channels;
