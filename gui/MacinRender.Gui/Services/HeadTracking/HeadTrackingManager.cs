@@ -19,7 +19,7 @@ namespace MacinRender.Gui.Services.HeadTracking;
 internal sealed class HeadTrackingManager : IDisposable
 {
     // 每个 Tick 朝目标 slerp 的比例(0..1)。偏大=跟手、偏小=抗抖。手操要跟手 → 0.5;
-    // 将来 AirPods 抖动大可调小。VM 轮询约 33 Hz,够喂满 worker 块边界(~47 Hz 上限内)。
+    // 将来 AirPods 抖动大可调小。VM 轮询约 60 Hz(16 ms);worker 头追时按 512 帧块更新(~94 Hz),喂得满。
     private const float SmoothingFactor = 0.5f;
 
     // 死区(度):resolved 三轴相对上次发射变化都小于此值时不重发,避免把同一姿态刷爆 ABI。

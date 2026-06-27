@@ -108,7 +108,8 @@ class MonitorEngine {
     MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device, LogSink& logs);
 
     void worker_loop();
-    bool top_up_ring();                                         // producer side; returns true if it produced
+    [[nodiscard]] bool head_tracking_recent() const; // true within k_tracking_active_window of last orientation update
+    bool top_up_ring();                              // producer side; returns true if it produced
     std::size_t pull(std::span<float> out, std::size_t frames); // consumer side (audio thread)
     void apply_seek_locked(uint64_t frame);                     // worker/control side, under control_mutex_
     void finalize_crossfade();                                  // worker side: snap to the incoming stream
@@ -165,6 +166,9 @@ class MonitorEngine {
     bool orientation_pending_{false};
     ListenerOrientation pending_orientation_;
     ListenerOrientation current_orientation_;
+    // steady_clock nanos of the last set_listener_orientation (0 = never). Read by the worker to
+    // decide the lead depth (shallow while head tracking is active → low head-tracking latency).
+    std::atomic<int64_t> last_orientation_update_ns_{0};
 
     // Pending backend hot-switch (control thread → worker), guarded by control_mutex_.
     bool switch_pending_{false};
