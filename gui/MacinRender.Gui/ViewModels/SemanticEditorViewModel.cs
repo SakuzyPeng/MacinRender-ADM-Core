@@ -127,7 +127,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         // 监听后端:下拉选后端;系统空间音频的布局(7.1.4/22.2)走右侧次级下拉 —— 与 SAF 的 SOFA 同款
         // 上下文范式(二者互斥显示),避免 N*M 扁平选项。专名中性,不进 i18n 字典。
         MonitorBackends.Add(new MonitorBackendOption("SAF · Binaural", AdmRenderer.SafBinaural, "binaural"));
-        MonitorBackends.Add(new MonitorBackendOption("Apple · Binaural", AdmRenderer.Apple, "binaural"));
+        if (OperatingSystem.IsMacOS())
+        {
+            // Apple 双耳后端(AUSpatialMixer / 自家 HRTF)仅 macOS;Windows / Linux 无此渲染器,不能列。
+            MonitorBackends.Add(new MonitorBackendOption("Apple · Binaural", AdmRenderer.Apple, "binaural"));
+        }
         if (OperatingSystem.IsMacOS() || OperatingSystem.IsWindows())
         {
             // 系统空间音频:多声道(不下混)交系统做 HRTF。macOS 经 AVSampleBufferAudioRenderer(含动态头追踪);
