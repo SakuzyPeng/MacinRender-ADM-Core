@@ -12,7 +12,6 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -26,7 +25,22 @@
 #include "adm/render.h"
 #include "adm/render_vbap.h"
 
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace {
+
+// getpid() 在 POSIX 来自 <unistd.h>，Windows 用 <process.h> 的 _getpid()。
+[[nodiscard]] int current_process_id() {
+#ifdef _WIN32
+    return _getpid();
+#else
+    return ::getpid();
+#endif
+}
 
 class FileGuard {
   public:
@@ -346,7 +360,7 @@ std::filesystem::path write_input_fixture(const std::shared_ptr<adm::Document>& 
                                           uint16_t sample_rate = 48000U,
                                           uint32_t frames = 1000U) {
     static std::atomic<int> s_seq{0};
-    const auto name = "mr_vbap_in_" + std::to_string(static_cast<int>(::getpid())) + "_" +
+    const auto name = "mr_vbap_in_" + std::to_string(current_process_id()) + "_" +
                       std::to_string(s_seq.fetch_add(1)) + ".wav";
     auto path = std::filesystem::temp_directory_path() / name;
 
