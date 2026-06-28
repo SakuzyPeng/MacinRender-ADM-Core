@@ -280,7 +280,7 @@ internal static partial class NativeMethods
     internal static partial AdmErrorCode adm_monitor_set_overrides(AdmMonitorHandle monitor, IntPtr overrides,
         uint count, ulong revision);
 
-    // v1.22:实时听者头部朝向(yaw/pitch/roll 度;yaw +左)。仅 Apple 双耳监听后端实装,其它后端忽略。
+    // v1.22:实时听者头部朝向(yaw/pitch/roll 度;yaw +左)。Apple 与 SAF 双耳监听后端实装,其它后端忽略。
     [LibraryImport(Lib)]
     internal static partial AdmErrorCode adm_monitor_set_listener_orientation(AdmMonitorHandle monitor,
         float yawDeg, float pitchDeg, float rollDeg);
