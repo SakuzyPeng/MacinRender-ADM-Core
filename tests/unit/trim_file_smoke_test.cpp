@@ -7,13 +7,27 @@
 #include <stop_token>
 #include <string>
 #include <string_view>
-#include <unistd.h>
 #include <vector>
 
 #include "adm/audio_io.h"
 #include "adm/errors.h"
 
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace {
+
+// getpid() 在 POSIX 来自 <unistd.h>，Windows 用 <process.h> 的 _getpid()。
+[[nodiscard]] int current_process_id() {
+#ifdef _WIN32
+    return _getpid();
+#else
+    return ::getpid();
+#endif
+}
 
 class FileGuard {
   public:
@@ -37,7 +51,7 @@ bool check(bool condition, const char* msg) {
 
 std::filesystem::path temp_path(std::string_view stem) {
     static std::atomic<int> s_seq{0};
-    const auto name = std::string(stem) + "_" + std::to_string(static_cast<int>(::getpid())) + "_" +
+    const auto name = std::string(stem) + "_" + std::to_string(current_process_id()) + "_" +
                       std::to_string(s_seq.fetch_add(1)) + ".wav";
     return std::filesystem::temp_directory_path() / name;
 }
