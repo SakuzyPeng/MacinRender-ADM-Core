@@ -54,10 +54,10 @@ PR changed / main full 的分层策略。
 | `release-gui-macos` | tag `v*`、手动触发 | 构建 GUI C ABI bundle、打包并上传 `MacinRender-Gui-<version>-macos-arm64.tar.gz` 与 `.sha256` |
 | `release-gui-windows` | tag `v*`、手动触发 | 构建 GUI C ABI bundle、打包并上传 `MacinRender-Gui-<version>-windows-x64.zip` 与 `.sha256` |
 
-release workflow 使用 `scripts/release/package.sh` 生成 macOS 包，使用
-`scripts/release/package-linux-appimage.sh` 生成 Linux AppImage，使用
-`scripts/release/package-windows.ps1` 生成 Windows CLI 包，并使用
-`scripts/release/package-gui.sh` / `scripts/release/package-gui-windows.ps1` 生成 GUI 包。
+release workflow 使用 `scripts/release/package-macos-cli-release.sh` 生成 macOS CLI 包，使用
+`scripts/release/package-linux-cli-appimage-release.sh` 生成 Linux CLI AppImage，使用
+`scripts/release/package-windows-cli-release.ps1` 生成 Windows CLI 包，并使用
+`scripts/release/package-macos-gui-release.sh` / `scripts/release/package-windows-gui-release.ps1` 生成 GUI 包。
 CLI 包内包含 `bin/mradm` 或 `bin/mradm.exe`，GUI 包内包含 `.app` 或 `app/MacinRender.Gui.exe`；
 所有包都包含 `LICENSE`、`THIRD_PARTY_NOTICES.md`、`BUILD_INFO.txt` 和依赖清单。macOS 包会拒绝
 `/opt/homebrew` 与 `/usr/local` 动态库，并只允许 Apple 系统库/framework；Linux CLI 包采用

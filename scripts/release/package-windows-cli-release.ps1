@@ -14,7 +14,7 @@ $ErrorActionPreference = "Stop"
 
 trap {
     if ($_.Exception.Message) {
-        Write-Host "package-windows failure: $($_.Exception.Message)"
+        Write-Host "package-windows-cli-release failure: $($_.Exception.Message)"
     }
     if ($_.InvocationInfo.PositionMessage) {
         Write-Host $_.InvocationInfo.PositionMessage

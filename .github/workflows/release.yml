@@ -95,7 +95,7 @@ jobs:
       - name: Package smoke
         run: |
           archive="$(ls dist/mradm-*-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz)"
-          scripts/release/smoke-package.sh "$archive"
+          scripts/release/smoke-macos-cli-release.sh "$archive"
 
       - name: Upload release package
         uses: actions/upload-artifact@v7
@@ -174,14 +174,14 @@ jobs:
 
       - name: Package AppImage
         run: >
-          scripts/release/package-linux-appimage.sh
+          scripts/release/package-linux-cli-appimage-release.sh
           --binary build/release/mradm
           --arch x86_64
 
       - name: AppImage smoke
         run: |
           appimage="$(ls dist/mradm-*-linux-x86_64.AppImage)"
-          scripts/release/smoke-linux-appimage.sh "$appimage"
+          scripts/release/smoke-linux-cli-appimage-release.sh "$appimage"
 
       - name: Upload AppImage release package
         uses: actions/upload-artifact@v7
@@ -323,7 +323,7 @@ jobs:
       - name: Package
         shell: pwsh
         run: >
-          .\scripts\release\package-windows.ps1
+          .\scripts\release\package-windows-cli-release.ps1
           -Binary ".\build\windows\mradm.exe"
           -Arch "x64"
           -OpenBlasRoot "$env:OPENBLAS_ROOT"
@@ -335,7 +335,7 @@ jobs:
         run: |
           $archive = Get-ChildItem -Path dist -Filter "mradm-*-windows-x64.zip" | Select-Object -First 1
           if ($null -eq $archive) { throw "Windows release package was not produced" }
-          .\scripts\release\smoke-package-windows.ps1 -Archive $archive.FullName
+          .\scripts\release\smoke-windows-cli-release.ps1 -Archive $archive.FullName
 
       - name: Upload release package
         uses: actions/upload-artifact@v7
@@ -377,12 +377,12 @@ jobs:
             fc-${{ runner.os }}-
 
       - name: Package GUI
-        run: scripts/release/package-gui.sh --rid osx-arm64
+        run: scripts/release/package-macos-gui-release.sh --rid osx-arm64
 
       - name: Package smoke
         run: |
           archive="$(ls dist/MacinRender-Gui-*-macos-arm64.tar.gz)"
-          scripts/release/smoke-gui-package.sh "$archive"
+          scripts/release/smoke-macos-gui-release.sh "$archive"
 
       - name: Upload GUI release package
         uses: actions/upload-artifact@v7
@@ -496,7 +496,7 @@ jobs:
       - name: Package GUI
         shell: pwsh
         run: >
-          .\scripts\release\package-gui-windows.ps1
+          .\scripts\release\package-windows-gui-release.ps1
           -Rid "win-x64"
           -OpenBlasRoot "$env:OPENBLAS_ROOT"
           -VcpkgRoot "$env:VCPKG_INSTALLATION_ROOT"
@@ -507,7 +507,7 @@ jobs:
         run: |
           $archive = Get-ChildItem -Path dist -Filter "MacinRender-Gui-*-windows-x64.zip" | Select-Object -First 1
           if ($null -eq $archive) { throw "Windows GUI release package was not produced" }
-          .\scripts\release\smoke-gui-package-windows.ps1 -Archive $archive.FullName
+          .\scripts\release\smoke-windows-gui-release.ps1 -Archive $archive.FullName
 
       - name: Upload GUI release package
         uses: actions/upload-artifact@v7
