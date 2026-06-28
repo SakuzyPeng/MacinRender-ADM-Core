@@ -62,12 +62,17 @@ public static class OutputModel
     /// GUI 不再硬编码白名单。不支持平台(如 Linux)为空。</summary>
     public static IReadOnlyList<string> SystemSpatialLayouts { get; private set; } = Array.Empty<string>();
 
+    /// <summary>此 macOS 的 AUSpatialMixer 是否把 LFE 正确路由到 LFE 声道(core 运行时自检)。
+    /// false 时 Apple 渲染的系统空间床会丢 LFE(macOS ≤26.3)→ 提示改用 EAR/VBAP 床。缺失默认 true。</summary>
+    public static bool AppleSystemSpatialLfeRoutingOk { get; private set; } = true;
+
     /// <summary>从 capabilities JSON 的 system_spatial_layouts 提取系统空间音频的布局候选。</summary>
     internal static void InitializeSystemSpatial(CapabilitiesDoc? caps)
     {
         SystemSpatialLayouts = caps is null
             ? Array.Empty<string>()
             : caps.SystemSpatialLayouts.Select(l => l.DisplayName).ToArray();
+        AppleSystemSpatialLfeRoutingOk = caps?.AppleSystemSpatialLfeRoutingOk ?? true;
     }
 
     // 系统空间音频各布局的逐声道标签(display 名 → 顺序标签数组)。来自 adm_layouts_json,

@@ -57,6 +57,11 @@ internal sealed class CapabilitiesDoc
     // 平台系统空间音频 sink 接受的扬声器布局(macOS=ASBR / Windows=ISpatialAudioClient;不支持平台为空)。
     // 系统空间音频监听后端的布局候选以此为权威源,跨平台,GUI 不再硬编码白名单。
     public List<LayoutDto> SystemSpatialLayouts { get; set; } = new();
+
+    // macOS 运行时自检:此 OS 的 AUSpatialMixer 是否把 LFE 正确路由到输出 LFE 声道。macOS ≤26.3 会误路由到
+    // 中置 → Apple 渲染的系统空间床丢 LFE。字段仅 macOS core 输出;缺失(非 mac / 旧 core)默认 true 不告警。
+    [JsonPropertyName("apple_system_spatial_lfe_routing_ok")]
+    public bool AppleSystemSpatialLfeRoutingOk { get; set; } = true;
 }
 
 internal sealed class BackendDto
