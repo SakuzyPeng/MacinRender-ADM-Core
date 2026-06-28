@@ -71,18 +71,20 @@ Result<std::optional<double>> measure_lufs(const std::string& path) {
 // Pass 2: rewrite path with all samples scaled by gain (float32 → float32).
 [[nodiscard]] Result<void> apply_gain(const std::string& path, float gain) {
     try {
-        auto reader_res = audio::FloatWavReader::open(path);
-        if (!reader_res) {
-            return tl::unexpected{reader_res.error()};
-        }
-        auto& reader = *reader_res;
-
-        const auto num_ch = reader.channels();
-        const auto num_frames = reader.frame_count();
-        const auto sample_rate = reader.sample_rate();
-
         const auto tmp_path = path + ".lufs_tmp";
         {
+            // reader 与 writer 都置于此块内，块结束即关闭句柄；之后才能在 Windows 上
+            // rename 顶替原文件（POSIX 可 rename 顶替正打开的文件，Windows 会 Access denied）。
+            auto reader_res = audio::FloatWavReader::open(path);
+            if (!reader_res) {
+                return tl::unexpected{reader_res.error()};
+            }
+            auto& reader = *reader_res;
+
+            const auto num_ch = reader.channels();
+            const auto num_frames = reader.frame_count();
+            const auto sample_rate = reader.sample_rate();
+
             auto writer_res = audio::FloatWavWriter::open(tmp_path, num_ch, sample_rate);
             if (!writer_res) {
                 return tl::unexpected{writer_res.error()};
