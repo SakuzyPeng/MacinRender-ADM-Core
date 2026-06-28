@@ -168,6 +168,7 @@ mradm_exe (CLI)     PRIVATE: ADMEngine + 所有 renderer + CLI11 + spdlog
 - SAF 类型只允许出现在 `src/adm_render_vbap/`、`src/adm_render_hoa/`（仅必要时）、`src/adm_render_binaural/` 内部
 - CLI 不直接调用任何 renderer 或 IO 库；只构造 `RenderRequest`，调用 `RenderService`
 - Apple 框架（AudioToolbox、CoreAudio、CoreFoundation）只允许出现在 `src/adm_audio/` 与 `src/adm_apple/`（macOS-only AUSpatialMixer 后端，`if(APPLE)` 门控）
+- Windows COM / SpatialAudio（`spatialaudioclient.h`、`mmdeviceapi.h`、WRL）只允许出现在 `src/adm_windows/`（Windows-only 系统空间监听 sink，`if(WIN32)` 门控）；工厂返回第三方无关的 `IAudioOutputDevice`
 
 输入路径：`libbw64/libadm` → `adm_io` 适配 → `adm::AdmScene` → `RenderPlan` → `IRenderer` 后端。`RenderPlan::scene` 由 `RenderService` 填好；**后端不得自行重新解析 ADM**。
 
@@ -195,6 +196,7 @@ GUI 新接入进度条优先使用 `adm_render_file_ex2` / `adm_preview_render_w
 - HOA 输出的响度归一化可用；测量先解码到 7.1.4 AllRAD 参考播放域，LFE 不计入 LUFS 但单独计入 True Peak
 - binaural 默认使用 SAF 内置 KEMAR HRTF；`--sofa <path>` 支持 SimpleFreeFieldHRIR / GeneralFIR、2 receivers、48 kHz、**不重采样**
 - `--renderer apple`：**macOS-only** AUSpatialMixer 后端（`src/adm_apple/`），能力见 `apple_capabilities()`，在 Linux 不编译；`mr_adm_apple_smoke_tests` 在非 macOS 跳过
+- 系统空间音频监听（`monitor_system_spatial`，仅实时监听非离线）：把多声道床交 OS 做 HRTF。**macOS** 经 `AVSampleBufferAudioRenderer`（`src/adm_apple/avsamplebuffer_device.mm`，含动态头追踪）；**Windows** 经 `ISpatialAudioClient`（`src/adm_windows/spatialaudioclient_device.cpp`，Windows Sonic / Dolby Atmos / DTS 头戴，**静态空间化无 OS 头追**，需声音设置启用某空间格式否则返回 `unsupported`）。布局白名单各自由 `apple_layouts` / `windows_layouts` 定义，经 capabilities JSON 的 `system_spatial_layouts` 字段统一暴露给 GUI（**唯一权威源，勿在 GUI 硬编码**）。sink 选择在 `monitor_session.cpp::make_monitor_device`
 - WAV `wav_io.cpp` 中定义 `DR_WAV_IMPLEMENTATION`；FLAC 解码 `dr_flac.cpp` 中定义 `DR_FLAC_IMPLEMENTATION`；编码用 `libFLAC`
 
 ## 代码风格

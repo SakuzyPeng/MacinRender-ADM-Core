@@ -57,18 +57,17 @@ public static class OutputModel
     public static Dictionary<string, ContainerDef> ContainerById { get; private set; } = new();
     public static CodecDef[] Codecs { get; private set; } = Array.Empty<CodecDef>();
 
-    /// <summary>系统空间音频(Apple ASBR)可用的扬声器布局 display 名,来自 adm_capabilities_json 的
-    /// apple 后端(排除 binaural)。权威源是 core 的 apple_layouts 表 —— GUI 不再硬编码白名单。
-    /// macOS-only;非 macOS 或无 apple 后端时为空(系统空间音频后端本就 macOS-gated)。</summary>
-    public static IReadOnlyList<string> AppleSpatialLayouts { get; private set; } = Array.Empty<string>();
+    /// <summary>系统空间音频 sink 可用的扬声器布局 display 名,来自 adm_capabilities_json 的
+    /// system_spatial_layouts 字段。权威源是 core(macOS=apple_layouts / Windows=windows_layouts)——
+    /// GUI 不再硬编码白名单。不支持平台(如 Linux)为空。</summary>
+    public static IReadOnlyList<string> SystemSpatialLayouts { get; private set; } = Array.Empty<string>();
 
-    /// <summary>从 capabilities JSON 提取 apple 后端的非-binaural 布局(系统空间音频的布局候选)。</summary>
-    internal static void InitializeAppleSpatial(CapabilitiesDoc? caps)
+    /// <summary>从 capabilities JSON 的 system_spatial_layouts 提取系统空间音频的布局候选。</summary>
+    internal static void InitializeSystemSpatial(CapabilitiesDoc? caps)
     {
-        var apple = caps?.Backends.FirstOrDefault(b => b.Renderer == "apple");
-        AppleSpatialLayouts = apple is null
+        SystemSpatialLayouts = caps is null
             ? Array.Empty<string>()
-            : apple.Layouts.Where(l => !l.IsBinaural).Select(l => l.DisplayName).ToArray();
+            : caps.SystemSpatialLayouts.Select(l => l.DisplayName).ToArray();
     }
 
     // 系统空间音频各布局的逐声道标签(display 名 → 顺序标签数组)。来自 adm_layouts_json,
@@ -76,7 +75,7 @@ public static class OutputModel
     // 5.1.2 等无 apac/caf 行的回退 wav 行(前 6 声道位置一致,仅顶置标签用 ADM 命名)。
     private static Dictionary<string, string[]> _appleChannelOrder = new();
 
-    /// <summary>用 adm_layouts_json 构建系统空间音频布局的逐声道标签表。须在 InitializeAppleSpatial 之后调。</summary>
+    /// <summary>用 adm_layouts_json 构建系统空间音频布局的逐声道标签表。须在 InitializeSystemSpatial 之后调。</summary>
     internal static void InitializeLayoutOrders(LayoutsDoc? doc)
     {
         var map = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
@@ -86,7 +85,7 @@ public static class OutputModel
             // apac 行为 AudioUnit 编码重排过(如 7.1 把 Ls/Rs 前置),不可用作监听顺序,仅作兜底。
             // 5.1.2 无 caf/apac 行 → 回退 wav(前 6 声道位置一致,仅顶置标签用 ADM 命名)。
             string[] formatPref = { "caf", "apac", "wav" };
-            foreach (var layout in AppleSpatialLayouts)
+            foreach (var layout in SystemSpatialLayouts)
             {
                 foreach (var fmt in formatPref)
                 {
