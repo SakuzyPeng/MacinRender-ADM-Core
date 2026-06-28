@@ -6,6 +6,8 @@
 #include "adm/render.h"
 #include "adm/render_ear.h"
 
+#include "test_portable.h"
+
 int main() {
     const auto caps = mradm::ear_capabilities();
     const auto wav71 = std::ranges::find_if(caps.supported_layouts, [](const auto& layout) {
@@ -35,8 +37,8 @@ int main() {
     }
 
     mradm::RenderRequest request;
-    request.input_path = "/tmp/nonexistent_mr_ear_test_xyz.wav";
-    request.output_path = "/tmp/mr_ear_test_out_xyz.wav";
+    request.input_path = mr_test::temp_prefix() + "nonexistent_mr_ear_test_xyz.wav";
+    request.output_path = mr_test::temp_prefix() + "mr_ear_test_out_xyz.wav";
 
     mradm::RenderService service;
     mradm::NullProgressSink progress;

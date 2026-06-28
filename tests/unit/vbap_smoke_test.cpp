@@ -32,6 +32,8 @@
 #include <unistd.h>
 #endif
 
+#include "test_portable.h"
+
 namespace {
 
 // getpid() 在 POSIX 来自 <unistd.h>，Windows 用 <process.h> 的 _getpid()。
@@ -2009,8 +2011,8 @@ int main() {
     // Nonexistent file → io_error at scene import; proves the backend is
     // recognised by RenderService (no "renderer not available" short-circuit).
     mradm::RenderRequest request;
-    request.input_path = "/tmp/nonexistent_mr_vbap_test_xyz.wav";
-    request.output_path = "/tmp/mr_vbap_test_out_xyz.wav";
+    request.input_path = mr_test::temp_prefix() + "nonexistent_mr_vbap_test_xyz.wav";
+    request.output_path = mr_test::temp_prefix() + "mr_vbap_test_out_xyz.wav";
     request.options.renderer = mradm::RendererSelection::saf;
 
     mradm::RenderService service;

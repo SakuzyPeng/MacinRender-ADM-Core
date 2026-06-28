@@ -13,7 +13,9 @@
 #include <adm/utilities/id_assignment.hpp>
 #include <adm/write.hpp>
 #include <bw64/bw64.hpp>
+#ifndef _WIN32
 #include <sys/wait.h>
+#endif
 
 #ifndef MRADM_EXE_PATH
 #define MRADM_EXE_PATH ""
@@ -40,8 +42,15 @@ struct RunResult {
 };
 
 RunResult run_cmd(const std::string& cmd) {
+    // POSIX 用 popen/pclose（pclose 返回 wait 编码状态）；Windows 用 _popen/_pclose
+    // （_pclose 直接返回子进程退出码，无 WIFEXITED/WEXITSTATUS）。
+#ifdef _WIN32
+    // NOLINTNEXTLINE(cert-env33-c)
+    FILE* pipe = _popen((cmd + " 2>&1").c_str(), "r");
+#else
     // NOLINTNEXTLINE(cert-env33-c)
     FILE* pipe = popen((cmd + " 2>&1").c_str(), "r");
+#endif
     if (pipe == nullptr) {
         return {};
     }
@@ -50,8 +59,13 @@ RunResult run_cmd(const std::string& cmd) {
     while (fgets(buf.data(), static_cast<int>(buf.size()), pipe) != nullptr) {
         out += buf.data();
     }
+#ifdef _WIN32
+    const int status = _pclose(pipe);
+    return {status, std::move(out)};
+#else
     const int status = pclose(pipe);
     return {WIFEXITED(status) ? WEXITSTATUS(status) : -1, std::move(out)};
+#endif
 }
 
 bool check(bool condition, const char* msg) {
@@ -62,6 +76,10 @@ bool check(bool condition, const char* msg) {
 }
 
 std::string shell_quote(const std::string& value) {
+#ifdef _WIN32
+    // cmd.exe 用双引号分组（测试路径不含双引号）；反斜杠在双引号内按字面处理。
+    return "\"" + value + "\"";
+#else
     std::string quoted{"'"};
     for (const char ch : value) {
         if (ch == '\'') {
@@ -72,6 +90,7 @@ std::string shell_quote(const std::string& value) {
     }
     quoted += "'";
     return quoted;
+#endif
 }
 
 // Minimal Objects BW64 fixture: 1 channel, az=0 el=0, no audio samples.
