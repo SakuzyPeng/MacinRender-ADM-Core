@@ -62,8 +62,21 @@ done < <(
     } | sort -u
 )
 
-source_files=()
-tidy_files=()
+# Platform-only sources that can't be compiled on the quality host (macOS): clang-tidy and cppcheck
+# parse them as TUs and would fail on missing platform SDK headers. clang-format is platform-agnostic
+# (no compilation), so those files are still format-checked. The Windows-only sink (src/adm_windows,
+# needs windows.h / spatialaudioclient.h) is verified by the windows-debug CI build instead. Mirrors
+# how the macOS-only Apple paths are skipped on non-macOS hosts.
+is_platform_excluded() {
+    case "$1" in
+        src/adm_windows/*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+source_files=()    # clang-format (all, platform-agnostic)
+analysis_files=()  # clang-tidy + cppcheck source/header inputs, minus platform-excluded sources
+tidy_files=()      # clang-tidy implementation units only
 for file in "${changed_files[@]}"; do
     [[ -f "$file" ]] || continue
     case "$file" in
@@ -73,11 +86,18 @@ for file in "${changed_files[@]}"; do
                     source_files+=("$repo_root/$file")
                     ;;
             esac
-            case "$file" in
-                *.cc|*.cpp|*.cxx)
-                    tidy_files+=("$repo_root/$file")
-                    ;;
-            esac
+            if ! is_platform_excluded "$file"; then
+                case "$file" in
+                    *.h|*.hpp|*.c|*.cc|*.cpp|*.cxx)
+                        analysis_files+=("$repo_root/$file")
+                        ;;
+                esac
+                case "$file" in
+                    *.cc|*.cpp|*.cxx)
+                        tidy_files+=("$repo_root/$file")
+                        ;;
+                esac
+            fi
             ;;
     esac
 done
@@ -154,7 +174,12 @@ if ! command -v cppcheck >/dev/null 2>&1; then
     exit 127
 fi
 
-echo "[INFO] cppcheck: ${#source_files[@]} changed file(s)"
+if [[ ${#analysis_files[@]} -eq 0 ]]; then
+    echo "[INFO] cppcheck: no changed file(s) (after platform exclusions)"
+    exit 0
+fi
+
+echo "[INFO] cppcheck: ${#analysis_files[@]} changed file(s)"
 cppcheck \
     --enable=warning,style,performance,portability \
     --language=c++ \
@@ -163,4 +188,4 @@ cppcheck \
     --error-exitcode=2 \
     --suppressions-list="$repo_root/CppcheckSuppressions.txt" \
     -I "$repo_root/include" \
-    "${source_files[@]}"
+    "${analysis_files[@]}"
