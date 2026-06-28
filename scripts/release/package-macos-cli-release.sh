@@ -3,10 +3,10 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: scripts/release/package.sh --binary <path> --platform macos --arch <arch> [--cmake-options <text>]
+Usage: scripts/release/package-macos-cli-release.sh --binary <path> --platform macos --arch <arch> [--cmake-options <text>]
 
 Creates dist/mradm-<version>-macos-<arch>.tar.gz and a matching .sha256 file.
-Use scripts/release/package-linux-appimage.sh for Linux release packages.
+Use scripts/release/package-linux-cli-appimage-release.sh for Linux release packages.
 EOF
 }
 
@@ -52,7 +52,7 @@ if [[ -z "$binary" || -z "$platform" || -z "$arch" ]]; then
 fi
 
 if [[ "$platform" != "macos" ]]; then
-    echo "unsupported platform '$platform'; expected macos. Use package-linux-appimage.sh for Linux." >&2
+    echo "unsupported platform '$platform'; expected macos. Use package-linux-cli-appimage-release.sh for Linux." >&2
     exit 2
 fi
 
@@ -104,7 +104,7 @@ while IFS= read -r dep; do
     case "$dep_path" in
         /usr/lib/libSystem.B.dylib|/usr/lib/libc++.1.dylib) ;;
         # 任何 Apple 系统 framework 都不随发行物再分发（macOS 平台提供），一律放行；
-        # 与 package-gui.sh 的白名单口径一致，避免每次新增系统 framework 依赖就打地鼠。
+        # 与 package-macos-gui-release.sh 的白名单口径一致，避免每次新增系统 framework 依赖就打地鼠。
         # 真正的再分发风险（Homebrew / /usr/local）已由上方独立检查拦截。
         /System/Library/Frameworks/*) ;;
         *)

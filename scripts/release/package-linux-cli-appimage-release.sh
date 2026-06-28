@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: scripts/release/package-linux-appimage.sh --binary <path> --arch x86_64 [--linuxdeploy <path>]
+Usage: scripts/release/package-linux-cli-appimage-release.sh --binary <path> --arch x86_64 [--linuxdeploy <path>]
 
 Creates dist/mradm-<version>-linux-<arch>.AppImage and a matching .sha256 file.
 

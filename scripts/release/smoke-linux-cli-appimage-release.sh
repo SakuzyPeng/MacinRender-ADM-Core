@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: scripts/release/smoke-linux-appimage.sh <dist/mradm-...-linux-x86_64.AppImage>
+Usage: scripts/release/smoke-linux-cli-appimage-release.sh <dist/mradm-...-linux-x86_64.AppImage>
 
 Verifies the AppImage checksum, extracts metadata, and runs basic CLI smoke checks.
 EOF

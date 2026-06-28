@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: scripts/release/smoke-package.sh <dist/mradm-...-macos-....tar.gz>
+Usage: scripts/release/smoke-macos-cli-release.sh <dist/mradm-...-macos-....tar.gz>
 
 Verifies the macOS CLI package checksum, extracts it to a temporary directory, and runs basic CLI smoke checks.
 EOF

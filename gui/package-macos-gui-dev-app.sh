@@ -7,7 +7,7 @@
 # 前置:native dylib 已就位 —
 #   cmake --preset release -DMR_ADM_BUILD_CAPI_BUNDLE=ON && cmake --build --preset release --target mradm_capi_bundle
 #   gui/copy-native.sh && gui/build-headtrack.sh
-# 用法:gui/package-macos.sh   产物:gui/dist/MacinRender.app(不入 git)
+# 用法:gui/package-macos-gui-dev-app.sh   产物:gui/dist/MacinRender.app(不入 git)
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

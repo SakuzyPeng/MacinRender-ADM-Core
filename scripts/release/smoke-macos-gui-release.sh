@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: scripts/release/smoke-gui-package.sh <dist/MacinRender-Gui-...tar.gz>
+Usage: scripts/release/smoke-macos-gui-release.sh <dist/MacinRender-Gui-...tar.gz>
 
 Verifies the GUI package checksum, extracts it, checks macOS signing and
 dependency policy, then runs the app's headless --selftest entry point.

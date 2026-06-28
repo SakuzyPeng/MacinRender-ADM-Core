@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: scripts/release/package-gui.sh [--rid osx-arm64] [--skip-native]
+Usage: scripts/release/package-macos-gui-release.sh [--rid osx-arm64] [--skip-native]
 
 Builds and packages the Avalonia GUI as a standalone macOS .app tarball.
 
@@ -168,6 +168,10 @@ cat > "$contents/Info.plist" <<EOF
   <string>13.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.music</string>
+  <key>NSMotionUsageDescription</key>
+  <string>MacinRender 读取 AirPods 头部姿态,用于实时旋转空间音频监听的声场(头部追踪)。</string>
 </dict>
 </plist>
 EOF
