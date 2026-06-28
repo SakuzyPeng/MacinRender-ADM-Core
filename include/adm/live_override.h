@@ -31,8 +31,9 @@ struct LiveObjectOverride {
     // Head-tracking participation. false (default) = world-locked: the object/channel is fixed in
     // the world, so it counter-rotates as the listener turns their head (current behavior). true =
     // head-locked: stays fixed relative to the head (e.g. narration / music), so head tracking does
-    // NOT move it. Resolved per channel like gain (whole-object vs per-channel speaker_label). Only
-    // the Apple monitor backend honors it (per-bus head-orientation compensation); others ignore it.
+    // NOT move it. Resolved per channel like gain (whole-object vs per-channel speaker_label). The
+    // Apple monitor backend (per-bus head-orientation compensation) and the SAF binaural renderer
+    // (per-source direction rotation) honor it; other backends ignore it.
     bool head_locked{false};
 };
 
