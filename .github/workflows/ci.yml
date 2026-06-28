@@ -89,10 +89,14 @@ jobs:
       VCPKG_FEATURE_FLAGS: binarycaching
       OPENBLAS_VERSION: 0.3.33
       OPENBLAS_ROOT: ${{ github.workspace }}\.openblas
+      SCCACHE_GHA_ENABLED: "true"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Restore FetchContent cache
         uses: actions/cache@v5
@@ -178,6 +182,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug ^
             -DCMAKE_C_COMPILER=cl ^
             -DCMAKE_CXX_COMPILER=cl ^
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache ^
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ^
             -DCMAKE_TOOLCHAIN_FILE="%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
             -DFETCHCONTENT_BASE_DIR="%FC_CACHE_DIR%" ^
             -DMR_ADM_CORE_BUILD_TESTS=ON ^
@@ -204,3 +210,8 @@ jobs:
         run: |
           call "%VCVARS64%"
           ctest --test-dir build/windows --output-on-failure -j %NUMBER_OF_PROCESSORS%
+
+      - name: sccache stats
+        if: always()
+        shell: pwsh
+        run: sccache --show-stats
