@@ -948,6 +948,13 @@ if(APPLE)
     )
 endif()
 
+if(WIN32)
+    # mr_adm_engine links mr_adm_windows (make_spatialaudioclient_device / system_spatial_layouts)
+    # on Windows, so the static lib must ship or downstream manual linking misses those symbols.
+    # No FILE_SET HEADERS: adm_windows exposes no public headers (windows_layouts.h is internal).
+    install(TARGETS mr_adm_windows)
+endif()
+
 install(
     EXPORT MacinRenderADMCoreTargets
     NAMESPACE MacinRender::
