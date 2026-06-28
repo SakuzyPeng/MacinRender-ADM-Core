@@ -131,10 +131,17 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         if (OperatingSystem.IsMacOS())
         {
             // 系统空间音频:多声道(不下混)交 macOS 做 HRTF + 头追踪。布局走 MonitorSpatialLayouts 次级下拉;
-            // Layout 字段填默认 7.1.4 作占位,实际生效布局取 EffectiveMonitorLayout。
-            MonitorBackends.Add(new MonitorBackendOption("Apple · 系统空间音频", AdmRenderer.Apple, "7.1.4", SystemSpatial: true));
+            // 渲染床的后端走 MonitorSpatialRenderers 次级下拉(Apple/EAR/VBAP)。Renderer 字段填占位,
+            // 实际生效渲染器取 EffectiveMonitorRenderer。Layout 字段填默认 7.1.4 占位,生效布局取 EffectiveMonitorLayout。
+            MonitorBackends.Add(new MonitorBackendOption("系统空间音频", AdmRenderer.Apple, "7.1.4", SystemSpatial: true));
         }
         _selectedMonitorBackend = MonitorBackends[0];
+        // 系统空间音频的「渲染床后端」次级下拉:用哪个扬声器渲染器产出多声道床交系统空间化。
+        // 9.1.4 等无系统空间 tag 的布局已被 MonitorSpatialLayouts(apple_layouts 白名单)排除,与此处无关。
+        MonitorSpatialRenderers.Add(new MonitorSpatialRenderer("Apple (AUSpatialMixer)", AdmRenderer.Apple));
+        MonitorSpatialRenderers.Add(new MonitorSpatialRenderer("EAR (BS.2127)", AdmRenderer.Ear));
+        MonitorSpatialRenderers.Add(new MonitorSpatialRenderer("VBAP (SAF)", AdmRenderer.Saf));
+        _selectedSpatialRenderer = MonitorSpatialRenderers[0];
         var saved = SettingsStore.Load();
         MonitorSofaPath = saved?.MonitorSofaPath;
         MonitorSofa = new SofaSelector(MonitorSofaPath);
@@ -382,6 +389,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(MonitorSofaApplicable))]
     [NotifyPropertyChangedFor(nameof(MonitorDiffuseInaudible))]
     [NotifyPropertyChangedFor(nameof(MonitorLayoutSelectorVisible))]
+    [NotifyPropertyChangedFor(nameof(MonitorSpatialRendererSelectorVisible))]
     private MonitorBackendOption _selectedMonitorBackend;
 
     // 系统空间音频的布局次级下拉(与 SAF 的 SOFA 同款上下文范式,二者互斥显示)。来源 =
@@ -391,13 +399,27 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     [ObservableProperty] private string _selectedSpatialLayout = "7.1.4";
 
-    // 布局次级下拉仅在系统空间音频后端显示(binaural 无布局;SAF 那一格显示的是 SOFA 下拉)。
+    // 系统空间音频的「渲染床后端」次级下拉(Apple/EAR/VBAP):决定用哪个扬声器渲染器产出多声道床,
+    // 再交 macOS 系统空间化(头追)。系统空间化器不变,只换上游渲染器。
+    public ObservableCollection<MonitorSpatialRenderer> MonitorSpatialRenderers { get; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MonitorDiffuseInaudible))]
+    private MonitorSpatialRenderer _selectedSpatialRenderer;
+
+    // 布局 / 渲染后端次级下拉都仅在系统空间音频后端显示(binaural 无布局;SAF 那一格显示的是 SOFA 下拉)。
     public bool MonitorLayoutSelectorVisible => SelectedMonitorBackend?.SystemSpatial ?? false;
+    public bool MonitorSpatialRendererSelectorVisible => SelectedMonitorBackend?.SystemSpatial ?? false;
 
     // 实际送渲染的监听布局:系统空间音频取布局下拉,否则取后端固定 layout(binaural)。
     private string EffectiveMonitorLayout =>
         (SelectedMonitorBackend?.SystemSpatial ?? false) ? SelectedSpatialLayout
                                                          : (SelectedMonitorBackend?.Layout ?? "binaural");
+
+    // 实际送渲染的监听后端:系统空间音频取「渲染床后端」次级下拉,否则取后端选项自带的 Renderer。
+    private AdmRenderer EffectiveMonitorRenderer =>
+        (SelectedMonitorBackend?.SystemSpatial ?? false) ? (SelectedSpatialRenderer?.Renderer ?? AdmRenderer.Apple)
+                                                         : (SelectedMonitorBackend?.Renderer ?? AdmRenderer.SafBinaural);
 
     // 输出设备选择:列表 = 「系统默认」(Id 空)+ 枚举所得设备。改变时即时切换(监听中)或下次生效。
     public ObservableCollection<MonitorDevice> MonitorDevices { get; } = new();
@@ -449,9 +471,10 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     public bool MonitorSofaApplicable =>
         Models.OutputModel.SofaAvailable && SelectedMonitorBackend?.Renderer == AdmRenderer.SafBinaural;
 
-    // Apple 后端无 ADM 去相关器(supports_diffuse=false):diffuse 改动监听中听不到。
-    // 仅作提示——同一份编辑仍写导出 policy,EAR/HOA/SAF 渲染时 diffuse 照常生效,故不禁用控件。
-    public bool MonitorDiffuseInaudible => SelectedMonitorBackend?.Renderer == AdmRenderer.Apple;
+    // Apple AUSpatialMixer 与 VBAP 无 ADM 去相关器(supports_diffuse=false):diffuse 改动监听中听不到。
+    // 取生效渲染器(系统空间音频含「渲染床后端」次级下拉)。仅作提示——同一份编辑仍写导出 policy,
+    // EAR/HOA/SAF-binaural 渲染时 diffuse 照常生效,故不禁用控件。
+    public bool MonitorDiffuseInaudible => EffectiveMonitorRenderer is AdmRenderer.Apple or AdmRenderer.Saf;
 
     // SOFA 路径变了:持久化;监听中且当前是 SAF 双耳 → 用同后端热切换重载新 HRIR。
     partial void OnMonitorSofaPathChanged(string? value)
@@ -806,6 +829,16 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         }
     }
 
+    partial void OnSelectedSpatialRendererChanged(MonitorSpatialRenderer value)
+    {
+        // 渲染床后端切换(Apple ↔ EAR ↔ VBAP):布局/声道数/device 不变 → ReevaluateMonitorConfig
+        // 走热切换(同布局同 SystemSpatial),无缝换上游渲染器,系统空间化 sink 不动。
+        if (SelectedMonitorBackend?.SystemSpatial ?? false)
+        {
+            ReevaluateMonitorConfig(SelectedMonitorBackend);
+        }
+    }
+
     // 后端或布局变化后重评:同拓扑(后端类型、生效布局、device 不变)→ 热切换;否则重启监听。
     private void ReevaluateMonitorConfig(MonitorBackendOption? value)
     {
@@ -829,8 +862,9 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     // 监听用 RenderSettings:SOFA 仅在 SAF 双耳后端带上(Apple 用自家 HRTF)。
     private RenderSettings MonitorRenderSettings(MonitorBackendOption backend) => new()
     {
-        Renderer = backend.Renderer,
-        Layout = backend.SystemSpatial ? SelectedSpatialLayout : backend.Layout, // 系统空间音频取布局次级下拉
+        // 系统空间音频:渲染器取「渲染床后端」次级下拉(Apple/EAR/VBAP),布局取布局次级下拉;否则取后端选项自带值。
+        Renderer = backend.SystemSpatial ? (SelectedSpatialRenderer?.Renderer ?? AdmRenderer.Apple) : backend.Renderer,
+        Layout = backend.SystemSpatial ? SelectedSpatialLayout : backend.Layout,
         MonitorSystemSpatial = backend.SystemSpatial,
         SofaPath = Models.OutputModel.SofaAvailable && backend.Renderer == AdmRenderer.SafBinaural
             ? MonitorSofaPath
