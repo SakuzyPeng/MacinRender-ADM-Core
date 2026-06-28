@@ -227,6 +227,8 @@ GUI 新接入进度条优先使用 `adm_render_file_ex2` / `adm_preview_render_w
 
 - `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md` — 平台化重构方向、模块边界
 - `docs/architecture/ADM_FEATURE_COVERAGE.md` — ADM 特性覆盖审计
+- `docs/architecture/ADM_APPLE_BACKEND.md` — macOS AUSpatialMixer 后端 + ASBR 系统空间监听 sink
+- `docs/architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md` — Windows ISpatialAudioClient 系统空间监听 sink（静态床/能力实测/切换恢复）
 - `docs/adr/0001` C++20 标准 | `0002` C++-first，Rust-later | `0003` 自有领域模型与后端边界 | `0004` 第三方依赖管理 | `0005` 错误处理模型 | `0006` CLI11 选择 | `0007` C ABI 稳定性
 - `docs/guides/QUALITY.md` — 质量工具与策略
 - `docs/guides/CI.md` — CI 设计与边界
