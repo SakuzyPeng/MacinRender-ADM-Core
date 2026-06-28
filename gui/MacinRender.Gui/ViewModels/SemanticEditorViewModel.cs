@@ -790,8 +790,9 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private MonitorBackendOption? _activeMonitorBackend;
     private string _activeLayout = ""; // 当前监听实际生效的布局(含系统空间音频次级),用于判热切 vs 重启
 
-    // 系统空间化监听时,头追踪由 macOS 系统(ASBR)接管;per-object/声道的"参与头追踪"(head-lock
-    // 补偿)只对自家 AUSpatialMixer binaural 监听有效,此时无效 → 用它禁用相关开关(灰掉)。
+    // 系统空间化监听时,头追踪由 macOS 系统(ASBR)接管;头追 + per-object/声道的"参与头追踪"
+    // (head-lock)在自家 binaural 监听(Apple AUSpatialMixer 与 SAF)上生效,仅系统空间音频时无效
+    // → 用它禁用相关开关(灰掉)。
     public bool HeadTrackControlsEnabled => !(IsMonitoring && (_activeMonitorBackend?.SystemSpatial ?? false));
 
     partial void OnSelectedMonitorBackendChanged(MonitorBackendOption value) => ReevaluateMonitorConfig(value);
