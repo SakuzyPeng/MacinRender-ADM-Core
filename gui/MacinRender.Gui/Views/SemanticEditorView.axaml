@@ -122,6 +122,10 @@
                                   IsVisible="{Binding MonitorLayoutSelectorVisible}"
                                   ItemsSource="{Binding MonitorSpatialLayouts}"
                                   SelectedItem="{Binding SelectedSpatialLayout}"/>
+                        <!-- 此 macOS 的 AUSpatialMixer 会错置 LFE(≤26.3):Apple 床丢低频 → 提示改 EAR/VBAP 床 -->
+                        <TextBlock Text="⚠" FontSize="15" VerticalAlignment="Center" Foreground="#FF9F0A"
+                                   IsVisible="{Binding SystemSpatialLfeWarning}"
+                                   ToolTip.Tip="{DynamicResource SemMonLfeMisroute}"/>
                         <!-- 输出设备(系统默认 + 枚举所得);改变时即时切换(监听中)或下次生效 -->
                         <ComboBox Width="160" VerticalAlignment="Center"
                                   ItemsSource="{Binding MonitorDevices}"

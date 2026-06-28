@@ -400,6 +400,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(MonitorDiffuseInaudible))]
     [NotifyPropertyChangedFor(nameof(MonitorLayoutSelectorVisible))]
     [NotifyPropertyChangedFor(nameof(MonitorSpatialRendererSelectorVisible))]
+    [NotifyPropertyChangedFor(nameof(SystemSpatialLfeWarning))]
     private MonitorBackendOption _selectedMonitorBackend;
 
     // 系统空间音频的布局次级下拉(与 SAF 的 SOFA 同款上下文范式,二者互斥显示)。来源 =
@@ -415,6 +416,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MonitorDiffuseInaudible))]
+    [NotifyPropertyChangedFor(nameof(SystemSpatialLfeWarning))]
     private MonitorSpatialRenderer _selectedSpatialRenderer;
 
     // 布局 / 渲染后端次级下拉都仅在系统空间音频后端显示(binaural 无布局;SAF 那一格显示的是 SOFA 下拉)。
@@ -485,6 +487,12 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     // 取生效渲染器(系统空间音频含「渲染床后端」次级下拉)。仅作提示——同一份编辑仍写导出 policy,
     // EAR/HOA/SAF-binaural 渲染时 diffuse 照常生效,故不禁用控件。
     public bool MonitorDiffuseInaudible => EffectiveMonitorRenderer is AdmRenderer.Apple or AdmRenderer.Saf;
+
+    // 系统空间音频 + Apple 渲染床,且此 macOS 的 AUSpatialMixer 会错置 LFE(core 运行时自检 ≤26.3)→
+    // 提示改用 EAR/VBAP 床。所有系统空间布局都含 LFE,故无需按布局再门控。
+    public bool SystemSpatialLfeWarning => (SelectedMonitorBackend?.SystemSpatial ?? false) &&
+                                           EffectiveMonitorRenderer == AdmRenderer.Apple &&
+                                           !Models.OutputModel.AppleSystemSpatialLfeRoutingOk;
 
     // SOFA 路径变了:持久化;监听中且当前是 SAF 双耳 → 用同后端热切换重载新 HRIR。
     partial void OnMonitorSofaPathChanged(string? value)
