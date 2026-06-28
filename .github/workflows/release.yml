@@ -86,7 +86,7 @@ jobs:
 
       - name: Package
         run: >
-          scripts/release/package.sh
+          scripts/release/package-macos-cli-release.sh
           --binary "${{ matrix.binary }}"
           --platform "${{ matrix.platform }}"
           --arch "${{ matrix.arch }}"
