@@ -25,8 +25,8 @@ int main() {
     }
     // 显式写出类型而非 std::array CTAD：MSVC 无法从不同长度的字符串字面量推导 std::array
     // 模板参数 (C2641)；显式 <const char*, N> 全平台通用。
-    const std::array<const char*, 9> expected_layouts = {"0+2+0", "0+5+0", "2+5+0", "4+5+0", "wav71",
-                                                         "4+7+0", "4+5+4", "9.1.6", "9+10+3"};
+    const std::array<const char*, 9> expected_layouts = {
+        "0+2+0", "0+5+0", "2+5+0", "4+5+0", "wav71", "4+7+0", "4+5+4", "9.1.6", "9+10+3"};
     for (const auto* expected : expected_layouts) {
         const auto it = std::ranges::find_if(caps.supported_layouts,
                                              [expected](const auto& layout) { return layout.id == expected; });
