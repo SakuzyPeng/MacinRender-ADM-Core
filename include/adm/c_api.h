@@ -119,10 +119,12 @@
  *   Apple 监听后端（per-bus 头朝向补偿）与 SAF binaural 后端实装,其它后端忽略。struct_size 守护:旧调用方按 0 处理。
  *
  * v1.24 新增（additive，SOVERSION 不变）：
- *   adm_render_options_set_monitor_system_spatial：实时监听走 macOS 系统空间音频
- *   （AVSampleBufferAudioRenderer）—— 把多声道监听输出交给系统做 HRTF + 动态头追踪，
- *   而非在原始输出设备上做立体声下混。需受支持的多声道扬声器 output_layout（5.1…22.2）；
- *   非 macOS / 离线渲染忽略。enabled：1=系统空间化，0=立体声下混（默认）。
+ *   adm_render_options_set_monitor_system_spatial：实时监听走系统空间音频 —— 把多声道监听输出
+ *   交给操作系统做 HRTF，而非在原始输出设备上做立体声下混。需受支持的多声道扬声器 output_layout。
+ *   macOS 经 AVSampleBufferAudioRenderer（5.1…22.2，含动态头追踪）；Windows 经 ISpatialAudioClient
+ *   （Windows Sonic / Dolby Atmos / DTS 头戴；7.1.4 / 5.1.4 / 5.1；静态空间化，无 OS 头追，需在
+ *   声音设置启用某空间音频格式，否则监听返回 unsupported）；其它平台 / 离线渲染忽略。
+ *   enabled：1=系统空间化，0=立体声下混（默认）。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
@@ -382,10 +384,12 @@ adm_error_code_t adm_render_options_set_apac_bitrate_kbps(adm_render_options_t* 
 /* enabled: 1 = Music DRC profile (default), 0 = None. */
 void adm_render_options_set_apac_drc_music(adm_render_options_t* opts, int enabled) ADM_API_NOEXCEPT;
 
-/* v1.24: monitor-only. Route the multichannel monitor output through the macOS system Spatial
- * Audio stack (AVSampleBufferAudioRenderer) for system HRTF + dynamic head tracking, instead of
- * a stereo downmix on a raw device. enabled: 1 = system-spatial, 0 = stereo downmix (default).
- * Requires a supported multichannel speaker output_layout; ignored off-macOS / for offline render. */
+/* v1.24: monitor-only. Route the multichannel monitor output through the OS spatial-audio stack for
+ * system HRTF, instead of a stereo downmix on a raw device. macOS: AVSampleBufferAudioRenderer (with
+ * dynamic head tracking). Windows: ISpatialAudioClient (Windows Sonic / Dolby Atmos / DTS for
+ * headphones; static, no OS head tracking; requires a spatial format enabled in Sound settings or
+ * monitoring returns unsupported). enabled: 1 = system-spatial, 0 = stereo downmix (default).
+ * Requires a supported multichannel speaker output_layout; ignored on other platforms / offline. */
 void adm_render_options_set_monitor_system_spatial(adm_render_options_t* opts, int enabled) ADM_API_NOEXCEPT;
 
 /* APAC output container. MPEG4 writes .m4a/.mp4 (default); CAF writes APAC-in-CAF

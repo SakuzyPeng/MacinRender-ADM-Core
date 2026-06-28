@@ -90,13 +90,13 @@ internal static class SelfTest
         Console.WriteLine($"codecs: {string.Join(", ", OutputModel.Codecs.Select(c => $"{c.Id}={(c.Available ? "on" : "off")}"))}");
         Console.WriteLine($"features: apac={OutputModel.ApacAvailable} iamf={OutputModel.IamfAvailable} sofa={OutputModel.SofaAvailable}");
 
-        // 系统空间音频布局 = apple 后端 capabilities 的非-binaural 布局(GUI 监听布局下拉的权威来源)。
-        OutputModel.InitializeAppleSpatial(AdmQueries.LoadCapabilities(ctx));
-        Console.WriteLine($"系统空间音频布局({OutputModel.AppleSpatialLayouts.Count}): [{string.Join(", ", OutputModel.AppleSpatialLayouts)}]");
+        // 系统空间音频布局 = capabilities 的 system_spatial_layouts(GUI 监听布局下拉的跨平台权威来源)。
+        OutputModel.InitializeSystemSpatial(AdmQueries.LoadCapabilities(ctx));
+        Console.WriteLine($"系统空间音频布局({OutputModel.SystemSpatialLayouts.Count}): [{string.Join(", ", OutputModel.SystemSpatialLayouts)}]");
 
         // 多声道电平表的逐声道标签 = adm_layouts_json 的 CoreAudio 顺序(监听实际输出顺序)。
         OutputModel.InitializeLayoutOrders(AdmQueries.LoadLayouts(ctx));
-        foreach (var layout in OutputModel.AppleSpatialLayouts)
+        foreach (var layout in OutputModel.SystemSpatialLayouts)
         {
             var labels = OutputModel.ChannelLabelsFor(layout);
             Console.WriteLine($"  声道标签 {layout}({labels.Count}): [{string.Join(" ", labels)}]");

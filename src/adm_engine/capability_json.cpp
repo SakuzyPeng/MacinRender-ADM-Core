@@ -4,12 +4,16 @@
 #include <iterator>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
 #include "adm/capability.h"
 #ifdef __APPLE__
 #include "adm/render_apple.h"
+#endif
+#ifdef _WIN32
+#include "audio_output_device.h"
 #endif
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
@@ -71,6 +75,37 @@ std::string capabilities_to_json() {
     backends.push_back(backend_to_json("apple", apple_capabilities()));
 #endif
     root["backends"] = std::move(backends);
+
+    // Speaker layouts the platform's system-spatial monitor sink accepts (empty where unsupported).
+    // The GUI uses this — not a renderer backend's layouts — as the authoritative list for the
+    // "system spatial audio" monitor option, so it works cross-platform without a hardcoded
+    // whitelist. macOS: AVSampleBufferAudioRenderer == apple_capabilities()'s non-binaural layouts.
+    // Windows: ISpatialAudioClient == adm_windows' windows_layouts table.
+    json system_spatial = json::array();
+#if defined(__APPLE__)
+    // Bind the report to a named local first: range-for over apple_capabilities().supported_layouts
+    // directly would dangle (the CapabilityReport temporary dies before the loop body in C++20).
+    const CapabilityReport apple_caps = apple_capabilities();
+    for (const auto& layout : apple_caps.supported_layouts) {
+        if (!layout.is_binaural) {
+            json j = json::object();
+            j["id"] = layout.id;
+            j["display_name"] = layout.display_name;
+            j["channel_count"] = layout.channel_count;
+            system_spatial.push_back(std::move(j));
+        }
+    }
+#elif defined(_WIN32)
+    const std::vector<realtime::SystemSpatialLayoutInfo> win_spatial = realtime::system_spatial_layouts();
+    for (const auto& layout : win_spatial) {
+        json j = json::object();
+        j["id"] = layout.id;
+        j["display_name"] = layout.display_name;
+        j["channel_count"] = layout.channel_count;
+        system_spatial.push_back(std::move(j));
+    }
+#endif
+    root["system_spatial_layouts"] = std::move(system_spatial);
 
     return root.dump(2);
 }

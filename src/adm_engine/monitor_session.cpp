@@ -208,12 +208,20 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
 
 [[nodiscard]] std::unique_ptr<realtime::IAudioOutputDevice> make_monitor_device(const RenderOptions& options,
                                                                                 const std::string& device_id) {
-#ifdef __APPLE__
+#if defined(__APPLE__)
     // System-spatial monitor follows the system media route (AirPods / current output), not a
     // selectable raw hardware token. Keep create() and set_output_device() on the same path so a
     // device refresh cannot silently fall back to miniaudio and lose system head tracking.
     if (options.monitor_system_spatial) {
         return realtime::make_avsamplebuffer_device(normalize_output_layout(options.output_layout));
+    }
+#elif defined(_WIN32)
+    // Windows system-spatial: hand the bed to ISpatialAudioClient so the active spatializer (Windows
+    // Sonic / Dolby Atmos / DTS for headphones) renders it. No OS head tracking (static), so unlike
+    // macOS there is no per-route reason to pin this — but keep it on the same selection path so a
+    // device refresh can't silently drop to miniaudio and lose spatialization.
+    if (options.monitor_system_spatial) {
+        return realtime::make_spatialaudioclient_device(normalize_output_layout(options.output_layout));
     }
 #else
     (void) options;

@@ -53,6 +53,10 @@ internal sealed class BitrateDto
 internal sealed class CapabilitiesDoc
 {
     public List<BackendDto> Backends { get; set; } = new();
+
+    // 平台系统空间音频 sink 接受的扬声器布局(macOS=ASBR / Windows=ISpatialAudioClient;不支持平台为空)。
+    // 系统空间音频监听后端的布局候选以此为权威源,跨平台,GUI 不再硬编码白名单。
+    public List<LayoutDto> SystemSpatialLayouts { get; set; } = new();
 }
 
 internal sealed class BackendDto
