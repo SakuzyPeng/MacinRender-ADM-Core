@@ -190,7 +190,12 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
 
         hr = spatial_client_->IsAudioObjectFormatSupported(&object_format_);
         if (FAILED(hr)) {
-            return hr_error(ErrorCode::unsupported, "系统空间音频不支持该对象格式(48 kHz float)", "system-spatial", hr);
+            // The active spatializer only accepts 48 kHz float mono objects; report the actual rate
+            // so a non-48 kHz monitor rate isn't hidden behind a hardcoded "48 kHz" message.
+            return hr_error(ErrorCode::unsupported,
+                            "系统空间音频不支持该对象格式(float mono)",
+                            "system-spatial sample_rate=" + std::to_string(sample_rate_) + "Hz",
+                            hr);
         }
 
         ResetEvent(buffer_event_); // clear any stale signal from a prior (invalidated) stream
@@ -269,19 +274,24 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
 
             // Deinterleave into each static object's mono buffer. Static objects persist for the
             // stream's lifetime, so activate each once (lazily) and reuse the ComPtr thereafter.
+            // A failure here means the stream is no longer usable (it can also be invalidated *after*
+            // Begin succeeded — e.g. a spatializer switch landing mid-cycle). Treat it as invalidation
+            // and rebuild rather than silently dropping the channel while monitoring looks healthy.
+            // Our bed types are always a subset of the native 8.1.4.4 mask, so activation never fails
+            // for a genuine config reason — only a dead stream does.
             for (std::size_t ch = 0; ch < objects_.size(); ++ch) {
                 if (objects_[ch] == nullptr) {
                     hr = render_stream_->ActivateSpatialAudioObject(layout_->object_types[ch], &objects_[ch]);
                     if (FAILED(hr) || objects_[ch] == nullptr) {
                         objects_[ch] = nullptr;
-                        continue;
+                        return PumpResult::Invalidated;
                     }
                 }
                 BYTE* buffer = nullptr;
                 UINT32 buffer_bytes = 0;
                 hr = objects_[ch]->GetBuffer(&buffer, &buffer_bytes);
                 if (FAILED(hr) || buffer == nullptr) {
-                    continue;
+                    return PumpResult::Invalidated;
                 }
                 const UINT32 want_bytes = frame_count * static_cast<UINT32>(sizeof(float));
                 const UINT32 copy_frames =
