@@ -117,6 +117,7 @@ namespace {
 
     std::ifstream in(path, std::ios::binary);
     std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
+    in.close();
     const auto bext = find_riff_chunk(bytes, "bext");
     if (bext == std::string::npos) {
         std::cerr << "WAV bext chunk missing\n";
@@ -172,6 +173,7 @@ namespace {
 
     std::ifstream in(path, std::ios::binary);
     std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
+    in.close();
     const auto ambi = find_riff_chunk(bytes, "ambi");
     if (ambi == std::string::npos || read_le32(bytes, ambi + 4U) != 16U) {
         std::cerr << "HOA3 WAV ambi chunk missing or wrong size\n";
@@ -209,6 +211,7 @@ namespace {
 
     std::ifstream in(path, std::ios::binary);
     std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
+    in.close();
     const auto chan = find_caf_chunk(bytes, "chan");
     constexpr uint32_t k_wave_71_tag = (189U << 16U) | 8U;
     if (chan == std::string::npos || read_be32(bytes, chan + 12U) != k_wave_71_tag) {
@@ -248,6 +251,7 @@ namespace {
 
     std::ifstream in(path, std::ios::binary);
     std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
+    in.close();
     const auto chan = find_caf_chunk(bytes, "chan");
     constexpr uint32_t k_binaural_tag = (106U << 16U) | 2U;
     if (chan == std::string::npos || read_be32(bytes, chan + 12U) != k_binaural_tag) {
@@ -280,6 +284,7 @@ namespace {
 
     std::ifstream in(path, std::ios::binary);
     std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
+    in.close();
     const auto chan = find_caf_chunk(bytes, "chan");
     constexpr uint32_t k_hoa3_tag = (190U << 16U) | 16U;
     if (chan == std::string::npos || read_be32(bytes, chan + 12U) != k_hoa3_tag) {
@@ -301,6 +306,7 @@ namespace {
 
     std::ifstream in(path, std::ios::binary);
     std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
+    in.close();
     const auto info = find_caf_chunk(bytes, "info");
     if (info == std::string::npos) {
         std::cerr << "CAF info chunk missing\n";
@@ -469,6 +475,13 @@ namespace {
 } // namespace
 
 int main() {
+    const auto run_check = [](const char* name, auto&& fn) {
+        std::cerr << "RUN: " << name << "\n";
+        const bool ok = fn();
+        std::cerr << (ok ? "PASS: " : "FAIL: ") << name << "\n";
+        return ok;
+    };
+
     if (mradm::version().empty()) {
         std::cerr << "version should not be empty\n";
         return EXIT_FAILURE;
@@ -485,22 +498,22 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    if (!verify_caf_writer()) {
+    if (!run_check("verify_caf_writer", verify_caf_writer)) {
         return EXIT_FAILURE;
     }
-    if (!verify_wav_metadata_write()) {
+    if (!run_check("verify_wav_metadata_write", verify_wav_metadata_write)) {
         return EXIT_FAILURE;
     }
-    if (!verify_wav_hoa3_ambi_metadata()) {
+    if (!run_check("verify_wav_hoa3_ambi_metadata", verify_wav_hoa3_ambi_metadata)) {
         return EXIT_FAILURE;
     }
-    if (!verify_caf_wav71_layout_tag()) {
+    if (!run_check("verify_caf_wav71_layout_tag", verify_caf_wav71_layout_tag)) {
         return EXIT_FAILURE;
     }
-    if (!verify_caf_binaural_layout_tag()) {
+    if (!run_check("verify_caf_binaural_layout_tag", verify_caf_binaural_layout_tag)) {
         return EXIT_FAILURE;
     }
-    if (!verify_caf_hoa3_layout_tag()) {
+    if (!run_check("verify_caf_hoa3_layout_tag", verify_caf_hoa3_layout_tag)) {
         return EXIT_FAILURE;
     }
 
