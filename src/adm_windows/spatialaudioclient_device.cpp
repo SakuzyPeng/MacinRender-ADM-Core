@@ -231,6 +231,13 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
     }
 
     PumpResult pump() {
+        // Pairs every successful BeginUpdatingAudioObjects with EndUpdatingAudioObjects on any scope
+        // exit (normal completion, fc==0 continue, or an Invalidated return mid-cycle), per the API's
+        // Begin/End contract — even when we're about to tear the stream down.
+        struct EndGuard {
+            ISpatialAudioObjectRenderStream* stream;
+            ~EndGuard() { stream->EndUpdatingAudioObjects(); }
+        };
         while (!stop_.load(std::memory_order_acquire)) {
             // The event throttles the loop (it fires ~every 10 ms when the system wants data); the
             // 100 ms timeout is a safety net so we still probe the stream if the event stops firing
@@ -252,10 +259,11 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
             // rebuilds and self-heals). Calling Begin even on the 100 ms timeout is what lets us
             // notice once the event has stopped firing.
             if (FAILED(hr)) {
-                return PumpResult::Invalidated;
+                return PumpResult::Invalidated; // Begin failed → no End to pair
             }
+            // Begin succeeded: from here every exit path must End the cycle.
+            const EndGuard end_guard{render_stream_.Get()};
             if (frame_count == 0) {
-                render_stream_->EndUpdatingAudioObjects(); // pair every successful Begin with an End
                 continue;
             }
 
@@ -301,8 +309,7 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
                     dst[f] = scratch_[static_cast<std::size_t>(f) * channels_ + ch];
                 }
             }
-
-            render_stream_->EndUpdatingAudioObjects();
+            // end_guard ends the cycle on scope exit.
         }
         return PumpResult::Stopped;
     }
