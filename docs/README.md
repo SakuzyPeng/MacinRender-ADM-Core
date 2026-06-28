@@ -4,6 +4,10 @@
 
 - [C++ ADM 渲染平台化重构规划](architecture/CPP_ADM_PLATFORM_REWRITE.md)
 - [ADM 特性覆盖审计](architecture/ADM_FEATURE_COVERAGE.md)
+- [adm_apple 后端实现说明（AUSpatialMixer）](architecture/ADM_APPLE_BACKEND.md)
+- [adm_windows：系统空间音频监听 sink（ISpatialAudioClient）](architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md)
+- [实时监听引擎](architecture/REALTIME_MONITORING.md)
+- [语义编辑器 GUI](architecture/SEMANTIC_EDITOR_GUI.md)
 
 ## 架构决策记录
 
