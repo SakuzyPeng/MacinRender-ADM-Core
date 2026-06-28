@@ -961,7 +961,8 @@ bool verify_binaural_lateral_head_shadow() {
 // stereo float PCM, or nullopt on error.
 std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::path& input,
                                                          const std::vector<std::size_t>& chunk_pattern,
-                                                         const mradm::LiveOverrides* overrides) {
+                                                         const mradm::LiveOverrides* overrides,
+                                                         const mradm::ListenerOrientation* orient = nullptr) {
     auto scene = mradm::io::import_scene(input.string());
     if (!check(scene.has_value(), "stream: import scene")) {
         return std::nullopt;
@@ -983,6 +984,9 @@ std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::
     }
     if (overrides != nullptr) {
         (*stream)->set_overrides(*overrides);
+    }
+    if (orient != nullptr) {
+        (*stream)->set_listener_orientation(*orient);
     }
 
     std::vector<float> out;
@@ -1181,6 +1185,120 @@ bool verify_binaural_stream_topology_reprepare() {
     return ok;
 }
 
+// A live listener head orientation rotates world-locked sources into the head frame before the
+// HRTF lookup: turning the head left (yaw +90°) swings a front source onto the right ear. A
+// head-locked object (per-object override) is exempt and stays put — same balance as at rest.
+bool verify_binaural_head_tracking() {
+    const auto in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{120}, 8192U);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "headtrack: import scene with an object")) {
+        return false;
+    }
+    const std::string object_id = scene->objects.front().id;
+
+    const auto lr = [](const std::vector<float>& s) {
+        return std::pair<double, double>{channel_energy(s, 2U, 0U, 0U, s.size() / 2U),
+                                         channel_energy(s, 2U, 1U, 0U, s.size() / 2U)};
+    };
+
+    const auto baseline = render_binaural_stream(in, {1024}, nullptr); // identity pose
+    const mradm::ListenerOrientation yaw_left{90.0F, 0.0F, 0.0F};
+    const auto turned = render_binaural_stream(in, {1024}, nullptr, &yaw_left);
+    if (!baseline || !turned) {
+        return false;
+    }
+
+    bool ok = true;
+    const auto [b_l, b_r] = lr(*baseline);
+    const auto [t_l, t_r] = lr(*turned);
+    // A front (az=0) source is ~symmetric at rest; turning the head left swings it to the listener's
+    // right, so the right ear must clearly dominate once tracking is applied.
+    ok &= check(b_l > 1.0e-3 && std::fabs(b_l - b_r) < b_l * 0.5, "headtrack: front source ~balanced at rest");
+    ok &= check(t_r > t_l * 2.0, "headtrack: yaw-left moves a front source onto the right ear");
+
+    // A head-locked object ignores the orientation: glued to the head → balanced like at rest.
+    mradm::LiveOverrides locked;
+    locked.revision = 1;
+    locked.objects.push_back({object_id, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", true}); // head_locked
+    const auto locked_turned = render_binaural_stream(in, {1024}, &locked, &yaw_left);
+    if (!locked_turned) {
+        return false;
+    }
+    const auto [k_l, k_r] = lr(*locked_turned);
+    ok &= check(std::fabs(k_l - k_r) < k_l * 0.5, "headtrack: head-locked object is exempt from tracking");
+    return ok;
+}
+
+// Sweeping the listener head while monitoring (orientation changed every pull) must track
+// continuously without blowing up: a front source's balance migrates from centred to the right ear
+// as yaw turns left, and the kernel-crossfade keeps the output finite and bounded (no zipper spike).
+bool verify_binaural_head_tracking_dynamic() {
+    const auto in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{400}, 19200U);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "headtrack-dyn: import scene")) {
+        return false;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_binaural_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    auto stream = prepared.has_value() ? renderer->open_stream(**prepared, plan, logs)
+                                       : decltype(renderer->open_stream(**prepared, plan, logs)){};
+    if (!check(prepared.has_value() && stream.has_value(), "headtrack-dyn: prepare + open_stream")) {
+        return false;
+    }
+
+    constexpr std::size_t chunk = 512U;
+    constexpr float total = 19200.0F;
+    std::vector<float> out;
+    std::vector<float> buf;
+    std::uint64_t produced_total = 0;
+    while (true) {
+        // Yaw sweeps 0 → +90° (turning the head left) across the stream, updated every pull.
+        const float yaw = std::min(90.0F, 90.0F * (static_cast<float>(produced_total) / total));
+        const mradm::ListenerOrientation o{yaw, 0.0F, 0.0F};
+        (*stream)->set_listener_orientation(o);
+        buf.assign(chunk * 2U, 0.0F);
+        auto produced = (*stream)->process(std::span<float>(buf), chunk);
+        if (!check(produced.has_value(), "headtrack-dyn: process")) {
+            return false;
+        }
+        if (*produced == 0) {
+            break;
+        }
+        out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * 2U));
+        produced_total += *produced;
+    }
+
+    bool ok = check(!out.empty(), "headtrack-dyn: produced output");
+    float peak = 0.0F;
+    bool finite = true;
+    for (const float s : out) {
+        finite = finite && std::isfinite(s);
+        peak = std::max(peak, std::fabs(s));
+    }
+    ok &= check(finite, "headtrack-dyn: output stays finite while sweeping");
+    ok &= check(peak < 8.0F, "headtrack-dyn: output stays bounded (no zipper blow-up)");
+
+    const std::size_t frames = out.size() / 2U;
+    const auto win = frames / 5U; // first/last 20%
+    const double early_l = channel_energy(out, 2U, 0U, 0U, win);
+    const double early_r = channel_energy(out, 2U, 1U, 0U, win);
+    const double late_l = channel_energy(out, 2U, 0U, frames - win, frames);
+    const double late_r = channel_energy(out, 2U, 1U, frames - win, frames);
+    ok &= check(std::fabs(early_l - early_r) < early_l * 0.6, "headtrack-dyn: starts ~centred (yaw≈0)");
+    ok &= check(late_r > late_l * 1.5, "headtrack-dyn: ends biased to the right ear (yaw→left)");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1203,5 +1321,7 @@ int main() {
     ok &= verify_binaural_stream_matches_window();
     ok &= verify_binaural_stream_gain_override();
     ok &= verify_binaural_stream_topology_reprepare();
+    ok &= verify_binaural_head_tracking();
+    ok &= verify_binaural_head_tracking_dynamic();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

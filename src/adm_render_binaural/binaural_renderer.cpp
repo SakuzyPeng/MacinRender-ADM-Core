@@ -273,6 +273,73 @@ int vbap_grid_idx(float az_deg, float el_deg) {
     return {static_cast<float>(az), static_cast<float>(el)};
 }
 
+// ── Listener head rotation (head tracking / free-look) ──────────────────────────
+// SAF binaural has no global field-rotation param like the Apple AUSpatialMixer; instead we
+// rotate each (world-locked) source's direction into the head frame *before* the HRTF lookup.
+// As the head turns, world-fixed sources move oppositely in head space → they stay put in the
+// world. Head-locked sources skip this and keep their raw direction (glued to the head).
+//
+// Coordinate frame matches Vec3 (x=right, y=front, z=up) and the Apple backend's HeadVec, so the
+// yaw/pitch/roll convention and composition order are identical to head_lock_compensate() — yaw
+// (+left) about +z, pitch (+up) about +x, roll about +y, composed q_yaw·q_pitch·q_roll as
+// head→world. We apply the inverse (world→head) so a source that is "front in the world" lands to
+// the listener's right when they turn their head left.
+struct QuatD {
+    double w{1.0};
+    double x{};
+    double y{};
+    double z{};
+};
+
+[[nodiscard]] QuatD quat_mul(const QuatD& a, const QuatD& b) noexcept {
+    return {
+        (a.w * b.w) - (a.x * b.x) - (a.y * b.y) - (a.z * b.z),
+        (a.w * b.x) + (a.x * b.w) + (a.y * b.z) - (a.z * b.y),
+        (a.w * b.y) - (a.x * b.z) + (a.y * b.w) + (a.z * b.x),
+        (a.w * b.z) + (a.x * b.y) - (a.y * b.x) + (a.z * b.w),
+    };
+}
+
+[[nodiscard]] QuatD quat_axis_angle(double ax, double ay, double az, double radians) noexcept {
+    const double half = radians * 0.5;
+    const double s = std::sin(half);
+    return {std::cos(half), ax * s, ay * s, az * s};
+}
+
+// Precomputed world→head rotation for a fixed head pose; apply() rotates a unit direction.
+struct HeadRotation {
+    QuatD world_to_head;
+
+    explicit HeadRotation(const ListenerOrientation& o) noexcept {
+        constexpr double d2r = std::numbers::pi_v<double> / 180.0;
+        const QuatD q_roll = quat_axis_angle(0.0, 1.0, 0.0, static_cast<double>(o.roll_deg) * d2r);
+        const QuatD q_pitch = quat_axis_angle(1.0, 0.0, 0.0, static_cast<double>(o.pitch_deg) * d2r);
+        const QuatD q_yaw = quat_axis_angle(0.0, 0.0, 1.0, static_cast<double>(o.yaw_deg) * d2r);
+        const QuatD head_to_world = quat_mul(q_yaw, quat_mul(q_pitch, q_roll));
+        world_to_head = {head_to_world.w, -head_to_world.x, -head_to_world.y, -head_to_world.z}; // conjugate
+    }
+
+    [[nodiscard]] Vec3 apply(Vec3 v) const noexcept {
+        const QuatD p{0.0, static_cast<double>(v.x), static_cast<double>(v.y), static_cast<double>(v.z)};
+        const QuatD& q = world_to_head;
+        const QuatD qc{q.w, -q.x, -q.y, -q.z};
+        const QuatD r = quat_mul(quat_mul(q, p), qc);
+        return {static_cast<float>(r.x), static_cast<float>(r.y), static_cast<float>(r.z)};
+    }
+
+    // Rotate an (az,el) direction in degrees (ADM convention: +az left, +el up) through the head pose.
+    [[nodiscard]] std::pair<float, float> rotate_az_el(float az_deg, float el_deg) const noexcept {
+        constexpr double d2r = std::numbers::pi_v<double> / 180.0;
+        const double a = static_cast<double>(az_deg) * d2r;
+        const double e = static_cast<double>(el_deg) * d2r;
+        const double ce = std::cos(e);
+        const Vec3 world{static_cast<float>(-std::sin(a) * ce),
+                         static_cast<float>(std::cos(a) * ce),
+                         static_cast<float>(std::sin(e))};
+        return polar_from_direction(apply(world));
+    }
+};
+
 #ifdef SAF_ENABLE_SOFA_READER_MODULE
 // SOFA Cartesian (front=+X, left=+Y, up=+Z) → polar az/el in degrees.
 std::pair<float, float> sofa_cart_to_polar(float x, float y, float z) {
@@ -623,6 +690,15 @@ struct HrtfCache {
     float cached_az{std::numeric_limits<float>::quiet_NaN()};
     float cached_el{std::numeric_limits<float>::quiet_NaN()};
     std::vector<float_complex> hrtf;
+};
+
+// Per-source memory of the last head-rotated direction, so a moving listener head crossfades the
+// HRTF kernel block-to-block instead of switching it abruptly (which clicks). Invalidated whenever
+// head tracking is inactive so re-activation re-seeds without morphing from a stale direction.
+struct HeadSmoothState {
+    float az{0.0F};
+    float el{0.0F};
+    bool valid{false};
 };
 
 const std::vector<float_complex>& get_cached_hrtf(const BinauralState& bs, float az, float el, HrtfCache& cache) {
@@ -1244,6 +1320,18 @@ const BinauralSource::Block* last_overlapping_block(const BinauralSource& src, u
     return it == blocks_reversed.end() ? nullptr : std::addressof(*it);
 }
 
+// A single ADM block that fully covers [start, end) with no transition or silence gap (the common
+// case for beds and static objects). Returns nullptr when the chunk spans a block boundary or has
+// leading/trailing silence, in which case the caller falls back to the per-segment path.
+const BinauralSource::Block* steady_block_over(const BinauralSource& src, uint64_t start, uint64_t end) {
+    const auto* first = first_overlapping_block(src, start, end);
+    const auto* last = last_overlapping_block(src, start, end);
+    if (first != nullptr && first == last && first->start_sample <= start && first->end_sample >= end) {
+        return first;
+    }
+    return nullptr;
+}
+
 void copy_windowed_object_input(const BinauralSource& src,
                                 const float* input,
                                 uint16_t num_in_ch,
@@ -1322,7 +1410,9 @@ void render_source_ola_block(const BinauralSource& src,
                              uint16_t num_in_ch,
                              uint64_t chunk_start,
                              uint64_t frames_now,
-                             uint32_t object_smoothing_frames) {
+                             uint32_t object_smoothing_frames,
+                             const HeadRotation* head = nullptr,
+                             HeadSmoothState* head_prev = nullptr) {
     if (src.blocks.empty()) {
         return;
     }
@@ -1334,6 +1424,46 @@ void render_source_ola_block(const BinauralSource& src,
     std::fill_n(src_r, fn, 0.0F);
 
     const uint64_t chunk_end = chunk_start + frames_now;
+
+    // Head tracking: rotate a block's world direction into the head frame before the HRTF lookup.
+    // `head` is non-null only for world-locked sources under a non-identity listener pose; head-
+    // locked sources (and the static-pose default) keep their raw direction. The HrtfCache keys on
+    // the post-rotation az/el, so a moving head simply misses + recomputes per block.
+    const auto hrtf_dir = [head](float az, float el) -> std::pair<float, float> {
+        return head != nullptr ? head->rotate_az_el(az, el) : std::pair<float, float>{az, el};
+    };
+
+    // Head-rotation smoothing for the steady single-block case (beds, static objects, diffuse): as
+    // the listener turns, the rotated direction shifts every block; switching the HRTF kernel abruptly
+    // clicks (zipper noise). When the direction actually changed since the last block, crossfade the
+    // kernel old→new across the block (object-motion smoothing below already morphs moving objects).
+    if (head != nullptr && head_prev != nullptr && !src.bypass_lfe) {
+        if (const auto* steady = steady_block_over(src, chunk_start, chunk_end); steady != nullptr) {
+            const auto [cur_az, cur_el] = head->rotate_az_el(steady->az, steady->el);
+            copy_windowed_object_input(src, in_block, num_in_ch, chunk_start, frames_now, cs.ch_in.data());
+            const float* conv_in = cs.ch_in.data();
+            if (src.diffuse_bus) {
+                decorrelate_diffuse_mono(diffuse, cs.ch_in.data(), frames_now, cs.diffuse_in.data());
+                conv_in = cs.diffuse_in.data();
+            }
+            const float gain = src.gain * steady->block_gain;
+            if (head_prev->valid && (cur_az != head_prev->az || cur_el != head_prev->el)) {
+                const auto& start_hrtf = get_cached_hrtf(bs, head_prev->az, head_prev->el, hrtf_cache);
+                const auto end_hrtf = hrtf_for_dir(bs, cur_az, cur_el);
+                convolve_crossfaded_object_block(
+                    cs.hfft, bs, conv_in, frames_now, gain, gain, start_hrtf, end_hrtf, ola, src_l, src_r, cs.scratch);
+            } else {
+                const auto& hrtf = get_cached_hrtf(bs, cur_az, cur_el, hrtf_cache);
+                convolve_and_accumulate(cs.hfft, bs, conv_in, frames_now, gain, hrtf, ola, src_l, src_r, cs.scratch);
+            }
+            head_prev->az = cur_az;
+            head_prev->el = cur_el;
+            head_prev->valid = true;
+            return;
+        }
+    } else if (head_prev != nullptr) {
+        head_prev->valid = false; // tracking inactive / non-steady: re-seed cleanly when it resumes
+    }
 
     if (object_smoothing_frames > 0 && src.smoothable_object && !src.bypass_lfe) {
         const auto* start_block = first_overlapping_block(src, chunk_start, chunk_end);
@@ -1347,8 +1477,10 @@ void render_source_ola_block(const BinauralSource& src,
                     decorrelate_diffuse_mono(diffuse, cs.ch_in.data(), frames_now, cs.diffuse_in.data());
                     conv_in = cs.diffuse_in.data();
                 }
-                const auto& start_hrtf = get_cached_hrtf(bs, start_block->az, start_block->el, hrtf_cache);
-                const auto end_hrtf = hrtf_for_dir(bs, end_block->az, end_block->el);
+                const auto [s_az, s_el] = hrtf_dir(start_block->az, start_block->el);
+                const auto [e_az, e_el] = hrtf_dir(end_block->az, end_block->el);
+                const auto& start_hrtf = get_cached_hrtf(bs, s_az, s_el, hrtf_cache);
+                const auto end_hrtf = hrtf_for_dir(bs, e_az, e_el);
                 convolve_crossfaded_object_block(cs.hfft,
                                                  bs,
                                                  conv_in,
@@ -1417,7 +1549,8 @@ void render_source_ola_block(const BinauralSource& src,
                 decorrelate_diffuse_mono(diffuse, cs.ch_in.data(), seg_frames, cs.diffuse_in.data());
                 conv_in = cs.diffuse_in.data();
             }
-            const auto& hrtf = get_cached_hrtf(bs, blk.az, blk.el, hrtf_cache);
+            const auto [h_az, h_el] = hrtf_dir(blk.az, blk.el);
+            const auto& hrtf = get_cached_hrtf(bs, h_az, h_el, hrtf_cache);
             convolve_and_accumulate(
                 cs.hfft, bs, conv_in, seg_frames, gain, hrtf, ola, src_l + off, src_r + off, cs.scratch);
         }
@@ -1552,6 +1685,15 @@ class BinauralStream final : public IRenderStream {
         }
     }
 
+    // Live listener head orientation (head tracking / free-look). Applied at the worker render
+    // stage: world-locked sources are rotated into the head frame before the HRTF lookup (cheap —
+    // it only changes the per-source HRTF direction; no re-prepare). Head-locked sources ignore it.
+    // The MonitorEngine's shallow render-ahead while tracking keeps the latency low (the SAF OLA
+    // convolution is too heavy/stateful for the audio callback, so there is no output-stage path).
+    void set_listener_orientation(const ListenerOrientation& orientation) override {
+        listener_orientation_ = orientation;
+    }
+
     [[nodiscard]] uint32_t out_channels() const override { return 2U; }
     [[nodiscard]] uint32_t sample_rate() const override { return sample_rate_; }
     [[nodiscard]] std::string_view output_layout() const override { return "binaural"; }
@@ -1609,6 +1751,7 @@ class BinauralStream final : public IRenderStream {
         }
         diffuse_delay_.assign(n, DiffuseDelayState{});
         hrtf_cache_.assign(n, HrtfCache{});
+        head_smooth_.assign(n, HeadSmoothState{});
     }
 
     // Cheap re-prepare: rebuild sources_ from a copy of the scene with each overridden
@@ -1657,7 +1800,15 @@ class BinauralStream final : public IRenderStream {
         reader_->read(in_block_.data(), frames_now);
 
         const auto& sources = sources_;
+        // Live head tracking: rotate world-locked sources into the head frame at render time (worker
+        // stage). Built once per block; head-locked sources (per-object override) keep their raw
+        // direction. Identity pose ⇒ no rotation object, output stays bit-identical to no-tracking.
+        const bool head_active = !listener_orientation_.is_identity();
+        const HeadRotation head_rot{listener_orientation_};
         ola_pool_.parallel_for(sources.size(), [&](std::size_t si) {
+            const bool locked = render_common::resolve_live_head_locked(
+                live_overrides_, sources[si].object_id, sources[si].speaker_label_key);
+            const HeadRotation* head = (head_active && !locked) ? &head_rot : nullptr;
             render_source_ola_block(sources[si],
                                     *prepared_.bs,
                                     src_cs_[si],
@@ -1668,7 +1819,9 @@ class BinauralStream final : public IRenderStream {
                                     num_in_ch_,
                                     frames_done_,
                                     frames_now,
-                                    object_smoothing_frames_);
+                                    object_smoothing_frames_,
+                                    head,
+                                    &head_smooth_[si]);
         });
 
         // Reduce per-source L/R into the interleaved FIFO, applying the live per-object
@@ -1702,10 +1855,12 @@ class BinauralStream final : public IRenderStream {
     std::vector<OLAState> ola_;
     std::vector<DiffuseDelayState> diffuse_delay_;
     std::vector<HrtfCache> hrtf_cache_;
+    std::vector<HeadSmoothState> head_smooth_; // per-source last head-rotated dir (head-tracking zipper guard)
     std::vector<PerSourceConvState> src_cs_;
     TrackWorkerPool ola_pool_;
     std::vector<float> in_block_;
-    LiveOverrides live_overrides_; // live override snapshot; gain resolved per source (worker-only)
+    LiveOverrides live_overrides_;               // live override snapshot; gain resolved per source (worker-only)
+    ListenerOrientation listener_orientation_{}; // live head pose (worker-only; identity = no tracking)
     // object_id → non-unity topology scales; only non-unity entries.
     // The last applied topology, so set_overrides rebuilds only when it actually changes.
     std::unordered_map<std::string, LiveTopologyScales> applied_topology_;
@@ -1866,6 +2021,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
     }
     std::vector<DiffuseDelayState> diffuse_delay(sources.size());
     std::vector<HrtfCache> hrtf_cache(sources.size());
+    std::vector<HeadSmoothState> head_smooth(sources.size());
 
     // Per-source FFT handles, scratch, and output buffers for parallel OLA processing.
     std::vector<PerSourceConvState> src_cs(sources.size());
@@ -1996,6 +2152,10 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
 
     progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.2, 0.0, 0, 0, "rendering"});
 
+    // Static listener orientation (offline head pose): rotates every source into the head frame.
+    const bool head_pose_active = !plan.listener_orientation.is_identity();
+    const HeadRotation offline_head_rot{plan.listener_orientation};
+
     while (frames_done < num_frames && out_abs < win_end) {
         if (plan.cancel_token.stop_requested()) {
             return make_error(ErrorCode::cancelled, "render cancelled", "output=" + plan.output_path);
@@ -2024,7 +2184,10 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
             ola_r_dst = ola_r.data();
         }
 
-        // Process each OLA source independently; parallelise across sources.
+        // Process each OLA source independently; parallelise across sources. A non-identity static
+        // listener orientation (plan.listener_orientation) rotates every source into the head frame,
+        // matching the Apple offline path; offline has no live overrides, so nothing is head-locked.
+        const HeadRotation* offline_head = head_pose_active ? &offline_head_rot : nullptr;
         ola_pool.parallel_for(sources.size(), [&](std::size_t si) {
             render_source_ola_block(sources[si],
                                     *bs,
@@ -2036,7 +2199,9 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
                                     num_in_ch,
                                     frames_done,
                                     frames_now,
-                                    plan.object_smoothing_frames);
+                                    plan.object_smoothing_frames,
+                                    offline_head,
+                                    &head_smooth[si]);
         });
 
         // Reduce per-source outputs into the shared OLA destination.
