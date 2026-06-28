@@ -31,7 +31,7 @@ struct RenderCliOptions {
     std::string speaker_spread_mode_str{"auto"};
     std::string binaural_spread_mode_str{"auto"};
     std::string apple_spatial_preset_str{"off"};
-    // Listener head orientation in degrees (Apple binaural only). NaN = unset → 0.
+    // Listener head orientation in degrees (binaural backends — Apple & SAF). NaN = unset → 0.
     double listener_yaw{std::numeric_limits<double>::quiet_NaN()};
     double listener_pitch{std::numeric_limits<double>::quiet_NaN()};
     double listener_roll{std::numeric_limits<double>::quiet_NaN()};
