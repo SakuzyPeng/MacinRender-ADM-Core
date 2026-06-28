@@ -77,3 +77,130 @@ jobs:
       - name: ccache stats
         if: always()
         run: ccache --show-stats || true
+
+  windows-debug:
+    name: Windows debug
+    runs-on: windows-2025-vs2026
+
+    env:
+      FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-bincache
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\.vcpkg-bincache,readwrite
+      VCPKG_FEATURE_FLAGS: binarycaching
+      OPENBLAS_VERSION: 0.3.33
+      OPENBLAS_ROOT: ${{ github.workspace }}\.openblas
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Restore FetchContent cache
+        uses: actions/cache@v5
+        with:
+          path: .fc-cache
+          key: fc-windows-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            fc-windows-
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v5
+        with:
+          path: .vcpkg-bincache
+          key: vcpkg-ci-windows-boost-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: |
+            vcpkg-ci-windows-boost-
+            vcpkg-windows-boost-
+
+      - name: Restore OpenBLAS cache
+        uses: actions/cache@v5
+        with:
+          path: .openblas
+          key: openblas-windows-x64-${{ env.OPENBLAS_VERSION }}
+
+      - name: Install native dependencies
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
+          vcpkg install `
+            boost-format `
+            boost-functional `
+            boost-algorithm `
+            boost-integer `
+            boost-iterator `
+            boost-math `
+            boost-optional `
+            boost-range `
+            boost-rational `
+            boost-smart-ptr `
+            boost-variant `
+            --triplet x64-windows
+
+      - name: Install prebuilt OpenBLAS
+        shell: pwsh
+        run: |
+          $lib = Join-Path $env:OPENBLAS_ROOT "lib\libopenblas.lib"
+          if (!(Test-Path $lib)) {
+            New-Item -ItemType Directory -Force -Path "$env:OPENBLAS_ROOT" | Out-Null
+            $zip = Join-Path $env:RUNNER_TEMP "OpenBLAS-$env:OPENBLAS_VERSION-x64.zip"
+            $url = "https://github.com/OpenMathLib/OpenBLAS/releases/download/v$env:OPENBLAS_VERSION/OpenBLAS-$env:OPENBLAS_VERSION-x64.zip"
+            Invoke-WebRequest -Uri $url -OutFile $zip
+            Expand-Archive -Path $zip -DestinationPath "$env:OPENBLAS_ROOT" -Force
+          }
+          "OPENBLAS_LIBRARY=$lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "LAPACKE_LIBRARY=$lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "OPENBLAS_HEADER_PATH=$(Join-Path $env:OPENBLAS_ROOT 'include')" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "LAPACKE_HEADER_PATH=$(Join-Path $env:OPENBLAS_ROOT 'include')" | Out-File -FilePath $env:GITHUB_ENV -Append
+          # OpenBLAS DLL must be on PATH so SAF-linked test executables load it at runtime.
+          "$(Join-Path $env:OPENBLAS_ROOT 'bin')" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Locate MSVC environment
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ([string]::IsNullOrWhiteSpace($installPath)) {
+            throw "Visual Studio with VC tools was not found"
+          }
+          $vcvars = Join-Path $installPath "VC\Auxiliary\Build\vcvars64.bat"
+          if (!(Test-Path $vcvars)) {
+            throw "vcvars64.bat not found at $vcvars"
+          }
+          "VCVARS64=$vcvars" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # Boost 经 vcpkg toolchain；OpenBLAS/LAPACKE 经 SAF 的 OPENBLAS_HEADER_PATH/
+      # LAPACKE_HEADER_PATH 变量（SAF 借此在 MSVC 下自配复数宏）。SOFA 关闭以匹配
+      # 已验证的全量 ctest 配置；SOFA-on-Windows 的编译由 release.yml 覆盖。
+      - name: Configure
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          cmake -S . -B build/windows -G Ninja ^
+            -DCMAKE_BUILD_TYPE=Debug ^
+            -DCMAKE_C_COMPILER=cl ^
+            -DCMAKE_CXX_COMPILER=cl ^
+            -DCMAKE_TOOLCHAIN_FILE="%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
+            -DFETCHCONTENT_BASE_DIR="%FC_CACHE_DIR%" ^
+            -DMR_ADM_CORE_BUILD_TESTS=ON ^
+            -DMR_ADM_FLAC_PROVIDER=VENDORED ^
+            -DMR_ADM_OPUS_PROVIDER=VENDORED ^
+            -DMR_ADM_ENABLE_IAMF=OFF ^
+            -DMR_ADM_ENABLE_SOFA=OFF ^
+            -DSAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE ^
+            -DOPENBLAS_LIBRARY="%OPENBLAS_LIBRARY%" ^
+            -DLAPACKE_LIBRARY="%LAPACKE_LIBRARY%" ^
+            -DOPENBLAS_HEADER_PATH="%OPENBLAS_HEADER_PATH%" ^
+            -DLAPACKE_HEADER_PATH="%LAPACKE_HEADER_PATH%"
+
+      - name: Build
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          cmake --build build/windows
+
+      # ctest 在 vcvars 环境内运行：Debug 测试可执行文件依赖 VS 的调试版 CRT DLL
+      # （vcruntime140d/ucrtbased 等），这些只在 dev 环境的 PATH 上。
+      - name: Test
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          ctest --test-dir build/windows --output-on-failure -j %NUMBER_OF_PROCESSORS%
