@@ -87,9 +87,13 @@ struct IamfLayerInfo {
         {"wav71", "7.1", 7, 1, 0},
         {"4+7+0", "7.1.4", 7, 1, 4},
     }};
-    const auto* const it =
+    // 不用 `auto*`：libstdc++/libc++ 下 std::array 迭代器是裸指针，但 MSVC 是类
+    // (_Array_const_iterator)，`const auto* const` 会推导失败 (C3535)。保持 auto 迭代器，
+    // 末尾用 &*it 取地址，全平台通用。
+    // NOLINTNEXTLINE(readability-qualified-auto)
+    const auto it =
         std::ranges::find_if(k_layers, [layout_id](const IamfLayerInfo& layer) { return layer.id == layout_id; });
-    return it == std::end(k_layers) ? nullptr : it;
+    return it == std::end(k_layers) ? nullptr : &*it;
 }
 
 [[nodiscard]] std::string supported_iamf_layers_message() {
