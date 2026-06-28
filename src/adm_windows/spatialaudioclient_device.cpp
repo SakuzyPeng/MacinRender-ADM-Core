@@ -42,8 +42,10 @@ namespace {
 
 using Microsoft::WRL::ComPtr;
 
-// Build an Error carrying the failing HRESULT in hex for diagnosis.
-[[nodiscard]] Error hr_error(ErrorCode code, std::string message, const std::string& where, HRESULT hr) {
+// Build an error (carrying the failing HRESULT in hex) ready to return into a Result<>. Mirrors
+// make_error's tl::unexpected<Error> return so callers can `return hr_error(...)` directly.
+[[nodiscard]] tl::unexpected<Error>
+hr_error(ErrorCode code, std::string message, const std::string& where, HRESULT hr) {
     char buf[32];
     std::snprintf(buf, sizeof(buf), "0x%08lX", static_cast<unsigned long>(hr));
     return make_error(code, std::move(message), where + " hr=" + buf);
@@ -93,6 +95,12 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
         }
         if (render_thread_.joinable()) {
             render_thread_.join();
+        }
+        // Close the event only here, after the render thread is joined — the render thread never
+        // touches it during teardown, so stop()'s SetEvent above can't race a concurrent close.
+        if (buffer_event_ != nullptr) {
+            CloseHandle(buffer_event_);
+            buffer_event_ = nullptr;
         }
         pull_ = nullptr;
     }
@@ -254,6 +262,10 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
         }
     }
 
+    // Releases the COM stream/objects (runs on the render thread). Deliberately does NOT close
+    // buffer_event_ — stop() owns the handle's lifetime and closes it after joining this thread, so
+    // stop()'s SetEvent can never race a close here. On the setup-failure path the destructor's
+    // stop() closes it after the (already-finished) thread is joined.
     void teardown() {
         if (render_stream_ != nullptr) {
             render_stream_->Stop();
@@ -262,10 +274,6 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
         objects_.clear();
         render_stream_.Reset();
         spatial_client_.Reset();
-        if (buffer_event_ != nullptr) {
-            CloseHandle(buffer_event_);
-            buffer_event_ = nullptr;
-        }
     }
 
     std::string layout_id_;

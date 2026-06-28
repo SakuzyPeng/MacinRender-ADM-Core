@@ -43,11 +43,14 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     extra_args+=('--extra-arg=-DNAN=__builtin_nanf("")')
 fi
 
+# Skip src/adm_windows: Windows-only sink (windows.h / spatialaudioclient.h) that can't be compiled
+# as a TU on the macOS quality host; the windows-debug CI build verifies it instead.
 files=()
 while IFS= read -r -d '' file; do
     files+=("$file")
 done < <(
     find "$repo_root/src" "$repo_root/tests" \
+        -type d -path '*/adm_windows' -prune -o \
         -type f \( -name '*.cc' -o -name '*.cpp' -o -name '*.cxx' \) \
         -print0
 )
