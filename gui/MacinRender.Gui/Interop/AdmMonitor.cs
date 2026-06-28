@@ -58,6 +58,6 @@ public struct AdmMonitorOverride
     public IntPtr SpeakerLabel;
 
     // v1.23: head-tracking participation. 0 = world-locked(跟头转,默认);非 0 = head-locked
-    // (锁在头上,头追踪不移动它)。仅 Apple 监听后端实装。
+    // (锁在头上,头追踪不移动它)。Apple 与 SAF binaural 监听后端实装。
     public int HeadLocked;
 }
