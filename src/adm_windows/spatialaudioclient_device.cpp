@@ -72,6 +72,16 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
         layout_ = layout;
         stop_.store(false, std::memory_order_release);
 
+        // The buffer-completion event lives for the device's whole lifetime (closed in stop() after
+        // join). The render thread reuses it across stream rebuilds — when the user switches the
+        // system spatializer the stream is invalidated and re-created, but the event persists — so it
+        // is not tied to any single ISpatialAudioObjectRenderStream.
+        buffer_event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        if (buffer_event_ == nullptr) {
+            pull_ = nullptr;
+            return make_error(ErrorCode::render_failed, "创建空间音频缓冲事件失败", "system-spatial");
+        }
+
         // All COM work (activation + the render pump) lives on render_thread_ so the apartment is
         // consistent. start() blocks on a promise the thread fulfils once setup either succeeds or
         // fails, so activation errors (e.g. no spatial format enabled) surface synchronously here.
@@ -109,8 +119,12 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
     [[nodiscard]] bool pull_is_realtime_playback() const override { return true; }
 
   private:
-    // Owns COM init + the spatial stream for its whole lifetime; reports setup result through
-    // `ready`, then pumps until stop_.
+    enum class PumpResult { Stopped, Invalidated };
+
+    // Owns COM init + the spatial stream for its whole lifetime; reports the first setup result
+    // through `ready`, then pumps until stop_. If the stream is invalidated mid-session (the user
+    // switches the system spatializer — Dolby/Sonic/DTS — or the endpoint reconfigures), rebuilds it
+    // transparently and resumes, so monitoring survives a spatializer change without a manual restart.
     void render_loop(std::promise<Result<void>> ready) {
         const HRESULT co = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         const bool co_owned = SUCCEEDED(co);
@@ -126,7 +140,15 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
         }
         ready.set_value({});
 
-        pump();
+        while (pump() == PumpResult::Invalidated && !stop_.load(std::memory_order_acquire)) {
+            teardown();
+            // The spatializer can be momentarily unavailable mid-switch; retry the rebuild (grabbing
+            // the now-current default endpoint + spatializer) until it succeeds or the user stops.
+            while (!stop_.load(std::memory_order_acquire) && !setup_stream()) {
+                teardown();
+                Sleep(150);
+            }
+        }
 
         teardown();
         if (co_owned) {
@@ -168,10 +190,7 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
             return hr_error(ErrorCode::unsupported, "系统空间音频不支持该对象格式(48 kHz float)", "system-spatial", hr);
         }
 
-        buffer_event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-        if (buffer_event_ == nullptr) {
-            return make_error(ErrorCode::render_failed, "创建空间音频缓冲事件失败", "system-spatial");
-        }
+        ResetEvent(buffer_event_); // clear any stale signal from a prior (invalidated) stream
 
         SpatialAudioObjectRenderStreamActivationParams params{};
         params.ObjectFormat = &object_format_;
@@ -203,20 +222,30 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
         return {};
     }
 
-    void pump() {
+    PumpResult pump() {
         while (!stop_.load(std::memory_order_acquire)) {
-            const DWORD wait = WaitForSingleObject(buffer_event_, 100);
+            // The event throttles the loop (it fires ~every 10 ms when the system wants data); the
+            // 100 ms timeout is a safety net so we still probe the stream if the event stops firing
+            // (which it does once the spatializer changes and the stream is invalidated).
+            WaitForSingleObject(buffer_event_, 100);
             if (stop_.load(std::memory_order_acquire)) {
-                break;
-            }
-            if (wait != WAIT_OBJECT_0) {
-                continue; // timeout: re-check stop_ and keep waiting
+                return PumpResult::Stopped;
             }
 
             UINT32 available_dynamic = 0;
             UINT32 frame_count = 0;
             HRESULT hr = render_stream_->BeginUpdatingAudioObjects(&available_dynamic, &frame_count);
-            if (FAILED(hr) || frame_count == 0) {
+            if (hr == SPTLAUDCLNT_E_RESOURCES_INVALIDATED) {
+                // The system spatializer / endpoint changed; this stream is dead. Ask the render loop
+                // to rebuild it (calling Begin even on a timeout is what lets us detect this once the
+                // buffer event has gone quiet).
+                return PumpResult::Invalidated;
+            }
+            if (FAILED(hr)) {
+                continue; // e.g. SPTLAUDCLNT_E_OUT_OF_ORDER from a probe before the event fired
+            }
+            if (frame_count == 0) {
+                render_stream_->EndUpdatingAudioObjects(); // pair every successful Begin with an End
                 continue;
             }
 
@@ -260,6 +289,7 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
 
             render_stream_->EndUpdatingAudioObjects();
         }
+        return PumpResult::Stopped;
     }
 
     // Releases the COM stream/objects (runs on the render thread). Deliberately does NOT close
