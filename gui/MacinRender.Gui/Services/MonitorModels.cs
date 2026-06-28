@@ -41,6 +41,11 @@ public sealed record MonitorOverride(
 /// SystemSpatial=true 时为 macOS 系统空间音频监听(多声道不下混,换 device + 声道数 → 切换走重启)。</summary>
 public sealed record MonitorBackendOption(string Label, AdmRenderer Renderer, string Layout, bool SystemSpatial = false);
 
+/// <summary>系统空间音频监听的「渲染床后端」次级选项:用哪个扬声器渲染器产出多声道床,再交 macOS
+/// 系统空间化(头追)。床布局走 MonitorSpatialLayouts;此处只决定渲染器(Apple AUSpatialMixer /
+/// EAR / VBAP)。专名中性,不进 i18n 字典。</summary>
+public sealed record MonitorSpatialRenderer(string Label, AdmRenderer Renderer);
+
 /// <summary>一个可选输出设备(adm_monitor_output_devices_json 的托管投影)。Id 为不透明 token
 /// (空 = 系统默认设备);Name 为展示名;IsDefault 标记系统默认设备。</summary>
 public sealed record MonitorDevice(string Id, string Name, bool IsDefault);
