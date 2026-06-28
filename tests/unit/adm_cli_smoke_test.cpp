@@ -45,8 +45,11 @@ RunResult run_cmd(const std::string& cmd) {
     // POSIX 用 popen/pclose（pclose 返回 wait 编码状态）；Windows 用 _popen/_pclose
     // （_pclose 直接返回子进程退出码，无 WIFEXITED/WEXITSTATUS）。
 #ifdef _WIN32
+    // cmd.exe 引号规则：当命令以 " 开头且含多个引号对时，会剥掉整行的首尾引号，
+    // 使 exe 路径与参数路径的引号错位（mradm 收到坏路径而失败）。给整条命令再包一层
+    // 外层引号，cmd /c 恰好剥这一层、保留内部引号。见 `cmd /?` 的引号处理说明。
     // NOLINTNEXTLINE(cert-env33-c)
-    FILE* pipe = _popen((cmd + " 2>&1").c_str(), "r");
+    FILE* pipe = _popen(("\"" + cmd + " 2>&1\"").c_str(), "r");
 #else
     // NOLINTNEXTLINE(cert-env33-c)
     FILE* pipe = popen((cmd + " 2>&1").c_str(), "r");
