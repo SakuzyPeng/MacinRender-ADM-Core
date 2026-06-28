@@ -107,6 +107,13 @@ std::string capabilities_to_json() {
 #endif
     root["system_spatial_layouts"] = std::move(system_spatial);
 
+#ifdef __APPLE__
+    // Runtime self-test: macOS ≤26.3's AUSpatialMixer misroutes a bypass-LFE source to Center, so an
+    // Apple-rendered system-spatial bed loses its LFE. The GUI uses this to steer such systems to an
+    // EAR/VBAP bed. Absent on non-macOS → callers treat absence as "ok" (no warning).
+    root["apple_system_spatial_lfe_routing_ok"] = apple_system_spatial_lfe_routing_ok();
+#endif
+
     return root.dump(2);
 }
 

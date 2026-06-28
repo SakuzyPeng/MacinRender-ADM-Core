@@ -8,6 +8,7 @@
 #include <future>
 #include <iterator>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -1482,7 +1483,151 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     return collect_metrics(lufs_st.get(), num_out_ch);
 }
 
+// Render callback for the LFE-routing self-test: an 80 Hz sine on the (single) mono LFE bus.
+OSStatus probe_lfe_input_callback(void* ref,
+                                  AudioUnitRenderActionFlags* /*flags*/,
+                                  const AudioTimeStamp* /*ts*/,
+                                  UInt32 /*bus*/,
+                                  UInt32 frames,
+                                  AudioBufferList* io) {
+    auto* phase = static_cast<double*>(ref);
+    constexpr double k_w = 2.0 * std::numbers::pi_v<double> * 80.0 / 48000.0;
+    for (UInt32 b = 0; b < io->mNumberBuffers; ++b) {
+        auto* dst = static_cast<float*>(io->mBuffers[b].mData);
+        double ph = *phase;
+        for (UInt32 f = 0; f < frames; ++f) {
+            dst[f] = static_cast<float>(0.5 * std::sin(ph));
+            ph += k_w;
+        }
+    }
+    *phase += k_w * frames;
+    return noErr;
+}
+
+// One-shot probe: build an AUSpatialMixer exactly like the speaker path (output 7.1.4 with the LFE
+// channel labelled LFEScreen + a single Bypass/LFEScreen input bus), render an LFE tone, and check
+// the energy lands on the output LFE channel (index 3). macOS ≤26.3 misroutes it to Center.
+// Returns true on any setup failure so the UI never warns when it can't actually determine the bug.
+bool probe_apple_lfe_routing() {
+    constexpr UInt32 k_ch = 12;    // 7.1.4
+    constexpr UInt32 k_lfe_ch = 3; // L R C [LFE] ...
+    constexpr UInt32 k_frames = 512;
+    constexpr double k_sr = 48000.0;
+
+    AudioComponentDescription desc{
+        kAudioUnitType_Mixer, kAudioUnitSubType_SpatialMixer, kAudioUnitManufacturer_Apple, 0, 0};
+    AudioComponent comp = AudioComponentFindNext(nullptr, &desc);
+    if (comp == nullptr) {
+        return true;
+    }
+    struct UnitGuard {
+        AudioUnit unit{nullptr};
+        bool initialized{false};
+        UnitGuard() = default;
+        UnitGuard(const UnitGuard&) = delete;
+        UnitGuard& operator=(const UnitGuard&) = delete;
+        UnitGuard(UnitGuard&&) = delete;
+        UnitGuard& operator=(UnitGuard&&) = delete;
+        ~UnitGuard() {
+            if (unit != nullptr) {
+                if (initialized) {
+                    AudioUnitUninitialize(unit);
+                }
+                AudioComponentInstanceDispose(unit);
+            }
+        }
+    } guard;
+    if (AudioComponentInstanceNew(comp, &guard.unit) != noErr || guard.unit == nullptr) {
+        return true;
+    }
+    AudioUnit unit = guard.unit;
+
+    UInt32 max_frames = k_frames;
+    if (AudioUnitSetProperty(unit,
+                             kAudioUnitProperty_MaximumFramesPerSlice,
+                             kAudioUnitScope_Global,
+                             0,
+                             &max_frames,
+                             sizeof(max_frames)) != noErr) {
+        return true;
+    }
+    if (!set_stream_format(unit, kAudioUnitScope_Output, 0, k_ch, k_sr, "probe output format") ||
+        !set_output_layout_tag(unit, apple_layouts::k_tag_atmos_7_1_4) ||
+        !set_stream_format(unit, kAudioUnitScope_Input, 0, 1, k_sr, "probe input format") ||
+        !set_uint32_property(unit,
+                             kAudioUnitProperty_SpatializationAlgorithm,
+                             kAudioUnitScope_Input,
+                             0,
+                             kSpatializationAlgorithm_VectorBasedPanning,
+                             "probe algorithm") ||
+        !set_uint32_property(unit,
+                             kAudioUnitProperty_SpatialMixerSourceMode,
+                             kAudioUnitScope_Input,
+                             0,
+                             kSpatialMixerSourceMode_Bypass,
+                             "probe source mode") ||
+        !set_lfe_input_layout(unit, 0)) {
+        return true;
+    }
+    double phase = 0.0;
+    AURenderCallbackStruct cb{probe_lfe_input_callback, &phase};
+    if (AudioUnitSetProperty(unit, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0, &cb, sizeof(cb)) !=
+        noErr) {
+        return true;
+    }
+    if (AudioUnitInitialize(unit) != noErr) {
+        return true;
+    }
+    // cppcheck-suppress unreadVariable  // read by UnitGuard's destructor (cross-function, cppcheck misses it)
+    guard.initialized = true;
+
+    std::vector<float> samples(static_cast<std::size_t>(k_ch) * k_frames, 0.0F);
+    std::vector<std::byte> abl_storage(sizeof(AudioBufferList) + ((k_ch - 1) * sizeof(AudioBuffer)));
+    auto* abl = reinterpret_cast<AudioBufferList*>(abl_storage.data());
+    abl->mNumberBuffers = k_ch;
+    std::array<double, k_ch> peak{};
+    AudioTimeStamp ts{};
+    ts.mFlags = kAudioTimeStampSampleTimeValid;
+    for (int blk = 0; blk < 8; ++blk) { // a few blocks past any AU warm-up; measure the last
+        for (UInt32 c = 0; c < k_ch; ++c) {
+            abl->mBuffers[c].mNumberChannels = 1;
+            abl->mBuffers[c].mDataByteSize = k_frames * sizeof(float);
+            abl->mBuffers[c].mData = samples.data() + (static_cast<std::size_t>(c) * k_frames);
+        }
+        std::ranges::fill(samples, 0.0F);
+        ts.mSampleTime = static_cast<Float64>(blk * static_cast<int>(k_frames));
+        AudioUnitRenderActionFlags flags = 0;
+        if (AudioUnitRender(unit, &flags, &ts, 0, k_frames, abl) != noErr) {
+            return true;
+        }
+        if (blk == 7) {
+            for (UInt32 c = 0; c < k_ch; ++c) {
+                double pk = 0.0;
+                const float* ch = samples.data() + (static_cast<std::size_t>(c) * k_frames);
+                for (UInt32 f = 0; f < k_frames; ++f) {
+                    pk = std::max(pk, std::fabs(static_cast<double>(ch[f])));
+                }
+                peak.at(c) = pk;
+            }
+        }
+    }
+
+    double other_max = 0.0;
+    for (UInt32 c = 0; c < k_ch; ++c) {
+        if (c != k_lfe_ch) {
+            other_max = std::max(other_max, peak.at(c));
+        }
+    }
+    // Routing is correct iff the LFE channel carries the tone and dominates the others.
+    return peak.at(k_lfe_ch) > 0.1 && peak.at(k_lfe_ch) >= other_max;
+}
+
 } // namespace
+
+bool apple_system_spatial_lfe_routing_ok() {
+    static const bool ok = probe_apple_lfe_routing(); // probe once; magic-static is thread-safe
+    return ok;
+}
 
 CapabilityReport apple_capabilities() {
     CapabilityReport r;
