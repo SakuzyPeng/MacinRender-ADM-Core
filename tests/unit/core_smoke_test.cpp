@@ -357,6 +357,7 @@ namespace {
 
     std::ifstream in(path, std::ios::binary);
     std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), {});
+    in.close(); // 关闭后才能让下方 apply_gain_to_file 在 Windows 上 rename 顶替 path（Windows 不能替换打开的文件）
 
     if (bytes.size() < 92U) {
         std::cerr << "CAF file too small\n";
