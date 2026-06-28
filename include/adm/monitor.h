@@ -89,9 +89,10 @@ class MonitorSession {
     // gain only). The applied revision is reported via status().override_revision.
     void set_overrides(const LiveOverrides& overrides);
 
-    // Set the live listener head orientation (head tracking / manual free-look). Only the Apple
-    // binaural monitor backend applies it (HeadYaw/Pitch/Roll); other backends ignore it. Cheap
-    // — takes effect at the next worker block boundary; survives a backend / output-device switch.
+    // Set the live listener head orientation (head tracking / manual free-look). The Apple binaural
+    // backend (HeadYaw/Pitch/Roll) and the SAF binaural backend (per-source HRTF direction rotation)
+    // apply it; other backends ignore it. Cheap — takes effect at the next worker block boundary;
+    // survives a backend / output-device switch.
     void set_listener_orientation(const ListenerOrientation& orientation);
 
     // Hot-switch the rendering backend / layout live (e.g. EAR↔VBAP↔Apple at the same

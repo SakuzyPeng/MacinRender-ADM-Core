@@ -1461,8 +1461,12 @@ void render_source_ola_block(const BinauralSource& src,
             head_prev->valid = true;
             return;
         }
+        // Tracking active but this chunk spans a block boundary / silence gap (non-steady) → the
+        // segmented path below renders it. Invalidate so the next steady chunk re-seeds at its own
+        // direction instead of crossfading in from a now-stale earlier pose (positional jump).
+        head_prev->valid = false;
     } else if (head_prev != nullptr) {
-        head_prev->valid = false; // tracking inactive / non-steady: re-seed cleanly when it resumes
+        head_prev->valid = false; // tracking inactive: re-seed cleanly when it resumes
     }
 
     if (object_smoothing_frames > 0 && src.smoothable_object && !src.bypass_lfe) {
@@ -2278,8 +2282,14 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
                         if (active != nullptr && lane.source_index < active->sources.size()) {
                             const auto& st = spreader_tracks[group.track_indices[lane.track_slot]];
                             const auto& ss = active->sources[lane.source_index];
+                            // Rotate the spreader cone's centre direction by the static listener pose too,
+                            // so the extent cloud tracks the head consistently with the point-source path
+                            // above (the cone half-angle spread_deg is orientation-independent).
+                            const auto [sp_az, sp_el] = offline_head != nullptr
+                                                            ? offline_head->rotate_az_el(ss.az, ss.el)
+                                                            : std::pair<float, float>{ss.az, ss.el};
                             adapter.set_source(
-                                static_cast<int>(li), ss.az, ss.el, ss.spread_deg, st.object_gain * ss.gain);
+                                static_cast<int>(li), sp_az, sp_el, ss.spread_deg, st.object_gain * ss.gain);
                             lane_ptrs[li] = track_ch.data() + (lane.track_slot * fn);
                         } else {
                             lane_ptrs[li] = zeros_full.data();

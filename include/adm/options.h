@@ -118,7 +118,8 @@ struct RenderOptions {
     // Apple AUSpatialMixer binaural only. PresentPreset resets several unit/bus
     // parameters, so the Apple backend applies it before restoring ADM-driven setup.
     AppleSpatialPreset apple_spatial_preset{AppleSpatialPreset::off};
-    // 听者头部朝向。目前仅 Apple binaural 后端实装（HeadYaw/Pitch/Roll）；其它后端忽略。
+    // 听者头部朝向。Apple binaural 后端（HeadYaw/Pitch/Roll）与 SAF binaural 后端（逐源 HRTF 方向旋转）
+    // 实装；其它后端忽略。
     ListenerOrientation listener_orientation{};
     // Output time-range trim, in seconds, on the rendered timeline (which equals
     // the input timeline). render_start_sec clips the head; render_end_sec is an

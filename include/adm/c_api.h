@@ -954,10 +954,11 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
 
 /*
  * v1.22: set the live listener head orientation (head tracking / manual free-look) in degrees.
- * yaw is +left (matching ADM azimuth), pitch +up, roll follows the unit's sign. Only the Apple
- * binaural monitor backend applies it (HeadYaw/Pitch/Roll global AU params, no re-prepare);
- * other backends accept but ignore it. Takes effect at the next worker block boundary and
- * survives a backend / output-device switch. Non-finite values return ADM_ERROR_INVALID_ARGUMENT.
+ * yaw is +left (matching ADM azimuth), pitch +up, roll follows the unit's sign. The Apple
+ * binaural backend (HeadYaw/Pitch/Roll global AU params) and the SAF binaural backend (per-source
+ * HRTF direction rotation) apply it; other backends accept but ignore it. Takes effect at the next
+ * worker block boundary and survives a backend / output-device switch. Non-finite values return
+ * ADM_ERROR_INVALID_ARGUMENT.
  */
 adm_error_code_t adm_monitor_set_listener_orientation(adm_monitor_t* monitor,
                                                       float yaw_deg,
