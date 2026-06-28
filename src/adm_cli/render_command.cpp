@@ -298,16 +298,17 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
     render_cmd
         ->add_option("--listener-yaw",
                      opts.listener_yaw,
-                     "Listener head yaw in degrees, +left (Apple binaural backend only, macOS)")
+                     "Listener head yaw in degrees, +left (binaural backends: Apple macOS / SAF)")
         ->check(CLI::Range(-180.0, 180.0));
     render_cmd
         ->add_option("--listener-pitch",
                      opts.listener_pitch,
-                     "Listener head pitch in degrees, +up (Apple binaural backend only, macOS)")
+                     "Listener head pitch in degrees, +up (binaural backends: Apple macOS / SAF)")
         ->check(CLI::Range(-90.0, 90.0));
     render_cmd
-        ->add_option(
-            "--listener-roll", opts.listener_roll, "Listener head roll in degrees (Apple binaural backend only, macOS)")
+        ->add_option("--listener-roll",
+                     opts.listener_roll,
+                     "Listener head roll in degrees (binaural backends: Apple macOS / SAF)")
         ->check(CLI::Range(-180.0, 180.0));
     render_cmd
         ->add_option("--iamf-container",

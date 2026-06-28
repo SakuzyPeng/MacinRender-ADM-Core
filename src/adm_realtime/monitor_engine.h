@@ -86,9 +86,10 @@ class MonitorEngine {
     void set_overrides(const LiveOverrides& overrides);
 
     // Queue a live listener head orientation (head tracking / free-look); the worker hands it
-    // to the stream at the next block boundary. Cheap (a global param on the Apple binaural
-    // backend, no re-prepare); other backends ignore it. Re-applied to an incoming stream on a
-    // hot-switch so a switched backend keeps the current orientation.
+    // to the stream at the next block boundary. Cheap (Apple binaural: a live global AU param;
+    // SAF binaural: per-source HRTF direction rotation; neither re-prepares); other backends
+    // ignore it. Re-applied to an incoming stream on a hot-switch so a switched backend keeps
+    // the current orientation.
     void set_listener_orientation(const ListenerOrientation& orientation);
 
     // Hot-swap the rendering stream (e.g. a different backend / same layout) with a short
