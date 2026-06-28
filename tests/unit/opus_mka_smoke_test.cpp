@@ -13,6 +13,8 @@
 
 #include "adm/audio_io.h"
 
+#include "test_portable.h"
+
 namespace {
 
 class FileGuard {
@@ -86,7 +88,7 @@ bool verify_mka_stereo() {
     constexpr uint32_t k_sr = 48000U;
     constexpr uint32_t k_frames = 4800U; // 100ms
 
-    const std::string path = "/tmp/mr_opus_stereo_test.mka";
+    const std::string path = mr_test::temp_prefix() + "mr_opus_stereo_test.mka";
     FileGuard guard(path);
 
     std::vector<float> samples(static_cast<std::size_t>(k_ch) * k_frames);
@@ -124,7 +126,7 @@ bool verify_mka_multichannel_24() {
     constexpr uint32_t k_sr = 48000U;
     constexpr uint32_t k_frames = 4800U;
 
-    const std::string path = "/tmp/mr_opus_24ch_test.mka";
+    const std::string path = mr_test::temp_prefix() + "mr_opus_24ch_test.mka";
     FileGuard guard(path);
 
     std::vector<float> samples(static_cast<std::size_t>(k_ch) * k_frames, 0.3F);
@@ -156,7 +158,7 @@ bool verify_mka_wav71_uses_vorbis_mapping() {
     constexpr uint32_t k_sr = 48000U;
     constexpr uint32_t k_frames = 4800U;
 
-    const std::string path = "/tmp/mr_opus_wav71_mapping_test.mka";
+    const std::string path = mr_test::temp_prefix() + "mr_opus_wav71_mapping_test.mka";
     FileGuard guard(path);
 
     std::vector<float> samples(static_cast<std::size_t>(k_ch) * k_frames, 0.1F);
@@ -201,7 +203,7 @@ bool verify_mka_hoa3_uses_ambisonics_mapping() {
     constexpr uint32_t k_sr = 48000U;
     constexpr uint32_t k_frames = 4800U;
 
-    const std::string path = "/tmp/mr_opus_hoa3_mapping_test.mka";
+    const std::string path = mr_test::temp_prefix() + "mr_opus_hoa3_mapping_test.mka";
     FileGuard guard(path);
 
     std::vector<float> samples(static_cast<std::size_t>(k_ch) * k_frames, 0.1F);
@@ -248,7 +250,7 @@ bool verify_mka_metadata_appended() {
     constexpr uint32_t k_sr = 48000U;
     constexpr uint32_t k_frames = 1920U;
 
-    const std::string path = "/tmp/mr_opus_meta_test.mka";
+    const std::string path = mr_test::temp_prefix() + "mr_opus_meta_test.mka";
     FileGuard guard(path);
 
     {
@@ -310,7 +312,7 @@ bool verify_mka_metadata_appended() {
 }
 
 bool verify_mka_wrong_sample_rate_rejected() {
-    auto res = mradm::audio::FloatOpusMkaWriter::open("/tmp/mr_opus_reject.mka", 2U, 44100U);
+    auto res = mradm::audio::FloatOpusMkaWriter::open(mr_test::temp_prefix() + "mr_opus_reject.mka", 2U, 44100U);
     return check(!res.has_value(), "44100 Hz should be rejected by Opus MKA writer");
 }
 

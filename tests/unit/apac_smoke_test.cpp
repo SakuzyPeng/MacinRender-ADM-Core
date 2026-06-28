@@ -18,6 +18,8 @@
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 
+#include "test_portable.h"
+
 namespace {
 
 class FileGuard {
@@ -231,8 +233,8 @@ bool file_contains_bytes(const std::string& path, std::string_view needle) {
 // If the swap were omitted the inequalities would be reversed.
 bool verify_apac_wav71_swap() {
     constexpr uint32_t k_ch = 8U;
-    const std::string wav = "/tmp/mr_apac_wav71_src.wav";
-    const std::string m4a = "/tmp/mr_apac_wav71.m4a";
+    const std::string wav = mr_test::temp_prefix() + "mr_apac_wav71_src.wav";
+    const std::string m4a = mr_test::temp_prefix() + "mr_apac_wav71.m4a";
     FileGuard gw(wav);
     FileGuard gm(m4a);
 
@@ -281,8 +283,8 @@ bool verify_apac_wav71_swap() {
 }
 
 bool verify_apac_atmos514() {
-    const std::string wav = "/tmp/mr_apac_atmos514_src.wav";
-    const std::string m4a = "/tmp/mr_apac_atmos514.m4a";
+    const std::string wav = mr_test::temp_prefix() + "mr_apac_atmos514_src.wav";
+    const std::string m4a = mr_test::temp_prefix() + "mr_apac_atmos514.m4a";
     FileGuard gw(wav);
     FileGuard gm(m4a);
     if (!write_test_wav(wav, 10, 48000, 48000)) {
@@ -299,8 +301,8 @@ bool verify_apac_atmos514() {
 }
 
 bool verify_apac_atmos714() {
-    const std::string wav = "/tmp/mr_apac_atmos714_src.wav";
-    const std::string m4a = "/tmp/mr_apac_atmos714.m4a";
+    const std::string wav = mr_test::temp_prefix() + "mr_apac_atmos714_src.wav";
+    const std::string m4a = mr_test::temp_prefix() + "mr_apac_atmos714.m4a";
     FileGuard gw(wav);
     FileGuard gm(m4a);
     if (!write_test_wav(wav, 12, 48000, 48000)) {
@@ -317,8 +319,8 @@ bool verify_apac_atmos714() {
 }
 
 bool verify_apac_atmos916() {
-    const std::string wav = "/tmp/mr_apac_atmos916_src.wav";
-    const std::string m4a = "/tmp/mr_apac_atmos916.m4a";
+    const std::string wav = mr_test::temp_prefix() + "mr_apac_atmos916_src.wav";
+    const std::string m4a = mr_test::temp_prefix() + "mr_apac_atmos916.m4a";
     FileGuard gw(wav);
     FileGuard gm(m4a);
     if (!write_test_wav(wav, 16, 48000, 48000)) {
@@ -335,8 +337,8 @@ bool verify_apac_atmos916() {
 }
 
 bool verify_apac_222() {
-    const std::string wav = "/tmp/mr_apac_222_src.wav";
-    const std::string m4a = "/tmp/mr_apac_222.m4a";
+    const std::string wav = mr_test::temp_prefix() + "mr_apac_222_src.wav";
+    const std::string m4a = mr_test::temp_prefix() + "mr_apac_222.m4a";
     FileGuard gw(wav);
     FileGuard gm(m4a);
     if (!write_test_wav(wav, 24, 48000, 48000)) {
@@ -353,8 +355,8 @@ bool verify_apac_222() {
 }
 
 bool verify_apac_hoa3() {
-    const std::string wav = "/tmp/mr_apac_hoa3_src.wav";
-    const std::string m4a = "/tmp/mr_apac_hoa3.m4a";
+    const std::string wav = mr_test::temp_prefix() + "mr_apac_hoa3_src.wav";
+    const std::string m4a = mr_test::temp_prefix() + "mr_apac_hoa3.m4a";
     FileGuard gw(wav);
     FileGuard gm(m4a);
 
@@ -380,8 +382,8 @@ bool verify_apac_hoa3() {
 }
 
 bool verify_apac_binaural() {
-    const std::string wav = "/tmp/mr_apac_binaural_src.wav";
-    const std::string m4a = "/tmp/mr_apac_binaural.m4a";
+    const std::string wav = mr_test::temp_prefix() + "mr_apac_binaural_src.wav";
+    const std::string m4a = mr_test::temp_prefix() + "mr_apac_binaural.m4a";
     FileGuard gw(wav);
     FileGuard gm(m4a);
     if (!write_test_wav(wav, 2, 48000, 48000)) {
@@ -426,8 +428,8 @@ bool verify_apac_binaural() {
 }
 
 bool verify_apac_caf_container() {
-    const std::string wav = "/tmp/mr_apac_caf_src.wav";
-    const std::string caf = "/tmp/mr_apac_caf.caf";
+    const std::string wav = mr_test::temp_prefix() + "mr_apac_caf_src.wav";
+    const std::string caf = mr_test::temp_prefix() + "mr_apac_caf.caf";
     FileGuard gw(wav);
     FileGuard gc(caf);
     if (!write_test_wav(wav, 10, 48000, 48000)) {
@@ -467,20 +469,20 @@ bool verify_apac_caf_container() {
 // child and surface a clear error in well under the real 15 s budget — never hang.
 // Requires the subprocess path (helper set via MRADM_APAC_HELPER by the caller).
 bool verify_apac_stall_watchdog() {
-    const std::string wav = "/tmp/mr_apac_stall_src.wav";
-    const std::string m4a = "/tmp/mr_apac_stall.m4a";
+    const std::string wav = mr_test::temp_prefix() + "mr_apac_stall_src.wav";
+    const std::string m4a = mr_test::temp_prefix() + "mr_apac_stall.m4a";
     FileGuard gw(wav);
     FileGuard gm(m4a);
     if (!write_test_wav(wav, 10, 48000, 48000)) { // 5.1.4, 1 s
         return false;
     }
-    ::setenv("MRADM_APAC_TEST_FORCE_STALL", "1", 1);
-    ::setenv("MRADM_APAC_FLUSH_BUDGET_MS", "1500", 1);
+    mr_test::set_env("MRADM_APAC_TEST_FORCE_STALL", "1");
+    mr_test::set_env("MRADM_APAC_FLUSH_BUDGET_MS", "1500");
     const auto t0 = std::chrono::steady_clock::now();
     auto res = mradm::audio::convert_to_apac(wav, m4a, "5.1.4");
     const auto elapsed = std::chrono::steady_clock::now() - t0;
-    ::unsetenv("MRADM_APAC_TEST_FORCE_STALL");
-    ::unsetenv("MRADM_APAC_FLUSH_BUDGET_MS");
+    mr_test::unset_env("MRADM_APAC_TEST_FORCE_STALL");
+    mr_test::unset_env("MRADM_APAC_FLUSH_BUDGET_MS");
 
     bool ok = check(!res.has_value(), "forced flush stall must surface as an error, not a hang");
     if (res.has_value()) {
@@ -495,14 +497,14 @@ bool verify_apac_stall_watchdog() {
 }
 
 bool verify_apac_wrong_layout_rejected() {
-    auto res = mradm::audio::convert_to_apac("/tmp/nope.wav", "/tmp/nope.m4a", "bogus-layout");
+    auto res = mradm::audio::convert_to_apac(mr_test::temp_prefix() + "nope.wav", mr_test::temp_prefix() + "nope.m4a", "bogus-layout");
     return check(!res.has_value() && res.error().code == mradm::ErrorCode::unsupported,
                  "unsupported layout should be rejected");
 }
 
 bool verify_apac_wrong_samplerate_rejected() {
-    const std::string wav = "/tmp/mr_apac_44k_src.wav";
-    const std::string m4a = "/tmp/mr_apac_44k.m4a";
+    const std::string wav = mr_test::temp_prefix() + "mr_apac_44k_src.wav";
+    const std::string m4a = mr_test::temp_prefix() + "mr_apac_44k.m4a";
     FileGuard gw(wav);
     FileGuard gm(m4a);
     if (!write_test_wav(wav, 2, 44100, 44100)) {
@@ -514,8 +516,8 @@ bool verify_apac_wrong_samplerate_rejected() {
 }
 
 bool verify_apac_wrong_channelcount_rejected() {
-    const std::string wav = "/tmp/mr_apac_2ch_wav71.wav";
-    const std::string m4a = "/tmp/mr_apac_2ch_wav71.m4a";
+    const std::string wav = mr_test::temp_prefix() + "mr_apac_2ch_wav71.wav";
+    const std::string m4a = mr_test::temp_prefix() + "mr_apac_2ch_wav71.m4a";
     FileGuard gw(wav);
     FileGuard gm(m4a);
     if (!write_test_wav(wav, 2, 48000, 480)) {
@@ -541,7 +543,7 @@ int main() {
 #else
     // Pin the subprocess helper to the freshly built mradm so the tests are
     // hermetic (and the force-stall hook reachable) regardless of discovery.
-    ::setenv("MRADM_APAC_HELPER", MRADM_EXE_PATH, 1);
+    mr_test::set_env("MRADM_APAC_HELPER", MRADM_EXE_PATH);
     bool ok = true;
     ok &= verify_apac_wav71_swap();
     ok &= verify_apac_atmos514();
