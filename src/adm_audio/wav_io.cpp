@@ -155,29 +155,33 @@ Result<void> downconvert_to_int(const std::string& path,
                               "path=" + path);
         }
 
-        auto reader_res = FloatWavReader::open(path);
-        if (!reader_res) {
-            return tl::unexpected{reader_res.error()};
-        }
-        auto& reader = *reader_res;
-
-        const uint32_t channels = reader.channels();
-        const uint32_t sample_rate = reader.sample_rate();
-        const uint64_t total_frames = reader.frame_count();
-        emit_wav_progress(progress, operation, 0.0, 0, total_frames, "converting bit depth");
-
-        // libbw64 0.10.0 writeFile takes uint16_t sampleRate.
-        if (sample_rate > std::numeric_limits<uint16_t>::max()) {
-            return make_error(
-                ErrorCode::unsupported,
-                fmt::format("sample rate {} Hz exceeds integer PCM writer limit (65535 Hz); use --output-bit-depth f32",
-                            sample_rate),
-                "path=" + path);
-        }
-
         const auto tmp_path = path + ".bitdepth_tmp";
         TempPathGuard tmp_guard{tmp_path};
+        uint64_t total_frames = 0;
         {
+            // reader 与 writer 都置于此块内，块结束即关闭句柄；之后才能在 Windows 上
+            // rename 顶替原文件（POSIX 可 rename 顶替正打开的文件，Windows 会 Access denied）。
+            auto reader_res = FloatWavReader::open(path);
+            if (!reader_res) {
+                return tl::unexpected{reader_res.error()};
+            }
+            auto& reader = *reader_res;
+
+            const uint32_t channels = reader.channels();
+            const uint32_t sample_rate = reader.sample_rate();
+            total_frames = reader.frame_count();
+            emit_wav_progress(progress, operation, 0.0, 0, total_frames, "converting bit depth");
+
+            // libbw64 0.10.0 writeFile takes uint16_t sampleRate.
+            if (sample_rate > std::numeric_limits<uint16_t>::max()) {
+                return make_error(
+                    ErrorCode::unsupported,
+                    fmt::format(
+                        "sample rate {} Hz exceeds integer PCM writer limit (65535 Hz); use --output-bit-depth f32",
+                        sample_rate),
+                    "path=" + path);
+            }
+
             auto writer = bw64::writeFile(
                 tmp_path, static_cast<uint16_t>(channels), static_cast<uint16_t>(sample_rate), bit_depth);
 
