@@ -142,6 +142,9 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
 
         while (pump() == PumpResult::Invalidated && !stop_.load(std::memory_order_acquire)) {
             teardown();
+            // Let the spatializer switch settle before rebuilding; also bounds the rate if a freshly
+            // rebuilt stream gets invalidated again while the switch is still in progress.
+            Sleep(100);
             // The spatializer can be momentarily unavailable mid-switch; retry the rebuild (grabbing
             // the now-current default endpoint + spatializer) until it succeeds or the user stops.
             while (!stop_.load(std::memory_order_acquire) && !setup_stream()) {
@@ -235,14 +238,16 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
             UINT32 available_dynamic = 0;
             UINT32 frame_count = 0;
             HRESULT hr = render_stream_->BeginUpdatingAudioObjects(&available_dynamic, &frame_count);
-            if (hr == SPTLAUDCLNT_E_RESOURCES_INVALIDATED) {
-                // The system spatializer / endpoint changed; this stream is dead. Ask the render loop
-                // to rebuild it (calling Begin even on a timeout is what lets us detect this once the
-                // buffer event has gone quiet).
-                return PumpResult::Invalidated;
-            }
+            // Any failure means the stream is no longer usable — ask the render loop to rebuild it.
+            // Switching the system spatializer (Dolby/Sonic/DTS) makes the buffer event go quiet and
+            // Begin return a stream-lost error (observed 0x88890100, also RESOURCES_INVALIDATED /
+            // STREAM_NOT_AVAILABLE); the exact code varies, so trigger on any FAILED. In the healthy
+            // state the event fires ~every 10 ms and Begin (called right after) always succeeds, so a
+            // failure here only happens when the stream is genuinely gone (a rare false trigger just
+            // rebuilds and self-heals). Calling Begin even on the 100 ms timeout is what lets us
+            // notice once the event has stopped firing.
             if (FAILED(hr)) {
-                continue; // e.g. SPTLAUDCLNT_E_OUT_OF_ORDER from a probe before the event fired
+                return PumpResult::Invalidated;
             }
             if (frame_count == 0) {
                 render_stream_->EndUpdatingAudioObjects(); // pair every successful Begin with an End
