@@ -90,8 +90,9 @@ struct RenderPlan {
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
     AppleSpatialPreset apple_spatial_preset{AppleSpatialPreset::off};
-    // Listener head orientation. Only the Apple AUSpatialMixer binaural backend
-    // implements it (HeadYaw/Pitch/Roll global params); other backends ignore it.
+    // Listener head orientation. The Apple AUSpatialMixer binaural backend (HeadYaw/Pitch/Roll
+    // global params) and the SAF binaural backend (per-source HRTF direction rotation) implement
+    // it; other backends ignore it.
     ListenerOrientation listener_orientation{};
     // When set, restrict loudness / True-Peak measurement to this output frame
     // window (matches the output trim); nullopt measures the whole render.
