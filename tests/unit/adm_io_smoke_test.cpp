@@ -3,9 +3,11 @@
 
 #include "adm/io.h"
 
+#include "test_portable.h"
+
 int main() {
     // Non-existent file must return io_error (not throw)
-    auto result = mradm::io::import_scene("/tmp/nonexistent_adm_mr_test_xyz.wav");
+    auto result = mradm::io::import_scene(mr_test::temp_prefix() + "nonexistent_adm_mr_test_xyz.wav");
 
     if (result.has_value()) {
         std::cerr << "expected error for nonexistent file, got success\n";
