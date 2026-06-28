@@ -182,8 +182,9 @@ jobs:
           "VCVARS64=$vcvars" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       # Boost 经 vcpkg toolchain；OpenBLAS/LAPACKE 经 SAF 的 OPENBLAS_HEADER_PATH/
-      # LAPACKE_HEADER_PATH 变量（SAF 借此在 MSVC 下自配复数宏）。SOFA 关闭以匹配
-      # 已验证的全量 ctest 配置；SOFA-on-Windows 的编译由 release.yml 覆盖。
+      # LAPACKE_HEADER_PATH 变量（SAF 借此在 MSVC 下自配复数宏）。SOFA 打开以匹配 mac/linux
+      # debug（默认 ON）与发行 GUI（默认 ON）—— SAF saf_sofa_reader + libmysofa 在 Windows 编译通过，
+      # 否则 SOFA-on-Windows 只在罕跑的 release.yml 验证，易静默回归。
       - name: Configure
         shell: cmd
         run: |
@@ -200,7 +201,7 @@ jobs:
             -DMR_ADM_FLAC_PROVIDER=VENDORED ^
             -DMR_ADM_OPUS_PROVIDER=VENDORED ^
             -DMR_ADM_ENABLE_IAMF=OFF ^
-            -DMR_ADM_ENABLE_SOFA=OFF ^
+            -DMR_ADM_ENABLE_SOFA=ON ^
             -DSAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE ^
             -DOPENBLAS_LIBRARY="%OPENBLAS_LIBRARY%" ^
             -DLAPACKE_LIBRARY="%LAPACKE_LIBRARY%" ^
