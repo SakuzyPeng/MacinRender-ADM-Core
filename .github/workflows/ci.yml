@@ -89,7 +89,7 @@ jobs:
       VCPKG_FEATURE_FLAGS: binarycaching
       OPENBLAS_VERSION: 0.3.33
       OPENBLAS_ROOT: ${{ github.workspace }}\.openblas
-      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_DIR: ${{ github.workspace }}\.sccache
 
     steps:
       - name: Checkout
@@ -120,6 +120,16 @@ jobs:
         with:
           path: .openblas
           key: openblas-windows-x64-${{ env.OPENBLAS_VERSION }}
+
+      # sccache 用本地目录缓存（经 actions/cache 持久化），避开 GHA 缓存后端的
+      # 版本兼容问题，与 mac/Linux 的 ccache 方案一致。
+      - name: Restore sccache cache
+        uses: actions/cache@v5
+        with:
+          path: .sccache
+          key: sccache-windows-${{ github.sha }}
+          restore-keys: |
+            sccache-windows-
 
       - name: Install native dependencies
         shell: pwsh
