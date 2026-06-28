@@ -363,8 +363,8 @@ std::filesystem::path write_input_fixture(const std::shared_ptr<adm::Document>& 
                                           uint16_t sample_rate = 48000U,
                                           uint32_t frames = 1000U) {
     static std::atomic<int> s_seq{0};
-    const auto name = "mr_vbap_in_" + std::to_string(current_process_id()) + "_" +
-                      std::to_string(s_seq.fetch_add(1)) + ".wav";
+    const auto name =
+        "mr_vbap_in_" + std::to_string(current_process_id()) + "_" + std::to_string(s_seq.fetch_add(1)) + ".wav";
     auto path = std::filesystem::temp_directory_path() / name;
 
     std::ostringstream xml_buf;

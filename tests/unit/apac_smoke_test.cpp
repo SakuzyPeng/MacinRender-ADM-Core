@@ -497,7 +497,8 @@ bool verify_apac_stall_watchdog() {
 }
 
 bool verify_apac_wrong_layout_rejected() {
-    auto res = mradm::audio::convert_to_apac(mr_test::temp_prefix() + "nope.wav", mr_test::temp_prefix() + "nope.m4a", "bogus-layout");
+    auto res = mradm::audio::convert_to_apac(
+        mr_test::temp_prefix() + "nope.wav", mr_test::temp_prefix() + "nope.m4a", "bogus-layout");
     return check(!res.has_value() && res.error().code == mradm::ErrorCode::unsupported,
                  "unsupported layout should be rejected");
 }
