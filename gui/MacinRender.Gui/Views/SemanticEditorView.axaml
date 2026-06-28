@@ -90,7 +90,8 @@
                         </StackPanel>
                         <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                    TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
-                                   IsVisible="{Binding HasFile}" Text="{Binding LoadedFileName}"/>
+                                   IsVisible="{Binding HasFile}" Text="{Binding LoadedFileName}"
+                                   ToolTip.Tip="{Binding LoadedFileName}"/>
                     </StackPanel>
 
                     <!-- 监听引擎:后端 A/B + 自定义 HRIR(SOFA,仅「双耳·SAF」时显示;下拉=默认+最近 MRU + 浏览) -->
@@ -101,6 +102,17 @@
                                   SelectedItem="{Binding SelectedMonitorBackend}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="svc:MonitorBackendOption">
+                                    <TextBlock Text="{Binding Label}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <!-- 系统空间音频「渲染床后端」次级下拉(Apple/EAR/VBAP);仅系统空间音频后端可见 -->
+                        <ComboBox Width="168" VerticalAlignment="Center"
+                                  IsVisible="{Binding MonitorSpatialRendererSelectorVisible}"
+                                  ItemsSource="{Binding MonitorSpatialRenderers}"
+                                  SelectedItem="{Binding SelectedSpatialRenderer}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="svc:MonitorSpatialRenderer">
                                     <TextBlock Text="{Binding Label}"/>
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
