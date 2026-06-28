@@ -128,17 +128,23 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         // 上下文范式(二者互斥显示),避免 N*M 扁平选项。专名中性,不进 i18n 字典。
         MonitorBackends.Add(new MonitorBackendOption("SAF · Binaural", AdmRenderer.SafBinaural, "binaural"));
         MonitorBackends.Add(new MonitorBackendOption("Apple · Binaural", AdmRenderer.Apple, "binaural"));
-        if (OperatingSystem.IsMacOS())
+        if (OperatingSystem.IsMacOS() || OperatingSystem.IsWindows())
         {
-            // 系统空间音频:多声道(不下混)交 macOS 做 HRTF + 头追踪。布局走 MonitorSpatialLayouts 次级下拉;
-            // 渲染床的后端走 MonitorSpatialRenderers 次级下拉(Apple/EAR/VBAP)。Renderer 字段填占位,
-            // 实际生效渲染器取 EffectiveMonitorRenderer。Layout 字段填默认 7.1.4 占位,生效布局取 EffectiveMonitorLayout。
-            MonitorBackends.Add(new MonitorBackendOption("系统空间音频", AdmRenderer.Apple, "7.1.4", SystemSpatial: true));
+            // 系统空间音频:多声道(不下混)交系统做 HRTF。macOS 经 AVSampleBufferAudioRenderer(含动态头追踪);
+            // Windows 经 ISpatialAudioClient(Windows Sonic / Dolby Atmos / DTS,静态空间化无 OS 头追)。布局走
+            // MonitorSpatialLayouts 次级下拉;渲染床的后端走 MonitorSpatialRenderers 次级下拉。Renderer/Layout 字段
+            // 填占位,实际生效取 EffectiveMonitorRenderer / EffectiveMonitorLayout。
+            var bedRenderer = OperatingSystem.IsMacOS() ? AdmRenderer.Apple : AdmRenderer.Ear;
+            MonitorBackends.Add(new MonitorBackendOption("系统空间音频", bedRenderer, "7.1.4", SystemSpatial: true));
         }
         _selectedMonitorBackend = MonitorBackends[0];
-        // 系统空间音频的「渲染床后端」次级下拉:用哪个扬声器渲染器产出多声道床交系统空间化。
-        // 9.1.4 等无系统空间 tag 的布局已被 MonitorSpatialLayouts(apple_layouts 白名单)排除,与此处无关。
-        MonitorSpatialRenderers.Add(new MonitorSpatialRenderer("Apple (AUSpatialMixer)", AdmRenderer.Apple));
+        // 系统空间音频的「渲染床后端」次级下拉:用哪个扬声器渲染器产出多声道床交系统空间化。Apple(AUSpatialMixer)
+        // 仅 macOS;Windows 无 Apple 后端,只放 EAR(默认)/VBAP。
+        // 9.1.4 等无系统空间 tag 的布局已被 MonitorSpatialLayouts(白名单)排除,与此处无关。
+        if (OperatingSystem.IsMacOS())
+        {
+            MonitorSpatialRenderers.Add(new MonitorSpatialRenderer("Apple (AUSpatialMixer)", AdmRenderer.Apple));
+        }
         MonitorSpatialRenderers.Add(new MonitorSpatialRenderer("EAR (BS.2127)", AdmRenderer.Ear));
         MonitorSpatialRenderers.Add(new MonitorSpatialRenderer("VBAP (SAF)", AdmRenderer.Saf));
         _selectedSpatialRenderer = MonitorSpatialRenderers[0];
@@ -393,9 +399,9 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private MonitorBackendOption _selectedMonitorBackend;
 
     // 系统空间音频的布局次级下拉(与 SAF 的 SOFA 同款上下文范式,二者互斥显示)。来源 =
-    // OutputModel.AppleSpatialLayouts(adm_capabilities_json 的 apple 后端非-binaural 布局,
-    // 权威源 core 的 apple_layouts 表),不再硬编码白名单 —— 表变了 GUI 自动同步。
-    public ObservableCollection<string> MonitorSpatialLayouts { get; } = new(Models.OutputModel.AppleSpatialLayouts);
+    // OutputModel.SystemSpatialLayouts(adm_capabilities_json 的 system_spatial_layouts,权威源 core
+    // 的 apple_layouts / windows_layouts 表,跨平台),不再硬编码白名单 —— 表变了 GUI 自动同步。
+    public ObservableCollection<string> MonitorSpatialLayouts { get; } = new(Models.OutputModel.SystemSpatialLayouts);
 
     [ObservableProperty] private string _selectedSpatialLayout = "7.1.4";
 

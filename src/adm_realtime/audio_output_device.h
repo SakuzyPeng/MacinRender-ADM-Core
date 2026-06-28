@@ -92,4 +92,27 @@ struct AudioDeviceInfo {
 [[nodiscard]] std::unique_ptr<IAudioOutputDevice> make_avsamplebuffer_device(std::string layout_id);
 #endif
 
+#if defined(_WIN32)
+// Windows-only output device that submits the monitor's *multichannel* bed to ISpatialAudioClient as
+// static spatial-audio objects, so the active system spatializer (Windows Sonic for Headphones /
+// Dolby Atmos for Headphones / DTS Headphone:X) HRTF-renders it to the headphone route — instead of
+// playing raw channels on hardware. `layout_id` is the project speaker layout (e.g. "4+7+0" for
+// 7.1.4); the device maps each bed channel to its AudioObjectType (windows_layouts). Unlike macOS
+// there is no OS-level head tracking; the bed is spatialized statically. Implemented in
+// adm_windows/spatialaudioclient_device.cpp — no Windows COM type crosses this boundary (ADR 0003).
+// The start() channel count must match the layout's channel count. Returns an unsupported error from
+// start() when no spatial audio format is enabled on the output endpoint.
+[[nodiscard]] std::unique_ptr<IAudioOutputDevice> make_spatialaudioclient_device(std::string layout_id);
+
+// Speaker layouts the Windows system-spatial sink accepts, as plain data (no COM types) so
+// adm_engine / the capabilities query can report them across the module boundary (ADR 0003). The
+// macOS analog is apple_capabilities()'s non-binaural layouts. Implemented in adm_windows.
+struct SystemSpatialLayoutInfo {
+    std::string id;
+    std::string display_name;
+    uint32_t channel_count{0};
+};
+[[nodiscard]] std::vector<SystemSpatialLayoutInfo> system_spatial_layouts();
+#endif
+
 } // namespace mradm::realtime

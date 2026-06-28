@@ -395,6 +395,29 @@ if(APPLE)
     mr_adm_core_apply_static_analysis(mr_adm_apple)
 endif()
 
+# ── adm_windows ───────────────────────────────────────────────────────────────
+# Windows-only system-spatial monitor sink (ISpatialAudioClient). Windows COM / SpatialAudio
+# types are confined here; the factory returns the third-party-free IAudioOutputDevice.
+
+if(WIN32)
+    add_library(mr_adm_windows)
+    add_library(MacinRender::ADMRenderWindows ALIAS mr_adm_windows)
+
+    target_sources(mr_adm_windows PRIVATE
+        src/adm_windows/spatialaudioclient_device.cpp
+    )
+    target_link_libraries(mr_adm_windows
+        PUBLIC MacinRender::ADMCore
+        PRIVATE Ole32
+    )
+    # adm_windows consumes the realtime IAudioOutputDevice interface (third-party-free header) to
+    # provide the ISpatialAudioClient monitor sink. Include-only, no link dependency — the device
+    # implements the pure interface; this keeps Windows COM headers confined here.
+    target_include_directories(mr_adm_windows PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
+    mr_adm_core_apply_warnings(mr_adm_windows)
+    mr_adm_core_apply_static_analysis(mr_adm_windows)
+endif()
+
 # ── adm_peak ──────────────────────────────────────────────────────────────────
 # True Peak measurement (ITU-R BS.1770-4) via libebur128 + global gain rewrite.
 
@@ -491,6 +514,11 @@ target_link_libraries(mr_adm_engine
 )
 if(APPLE)
     target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)
+endif()
+if(WIN32)
+    # monitor_session selects the ISpatialAudioClient sink (make_spatialaudioclient_device) for
+    # Windows system-spatial monitoring; the symbol lives in mr_adm_windows.
+    target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderWindows)
 endif()
 # nlohmann/json is header-only and used solely inside scene_json.cpp; keep it PRIVATE
 # so no third-party type leaks across the module boundary (ADR 0003 / 0004).
