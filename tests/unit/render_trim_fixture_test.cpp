@@ -15,6 +15,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <adm/adm.hpp>
@@ -27,6 +28,8 @@
 
 #ifdef _WIN32
 #include <process.h>
+#include <windows.h>
+#include <winioctl.h>
 #else
 #include <unistd.h>
 #endif
@@ -321,6 +324,36 @@ bool copy_seed_chunks_before_sparse_data(std::ofstream& out,
     return static_cast<bool>(out);
 }
 
+#ifdef _WIN32
+bool mark_file_sparse(const std::filesystem::path& path) {
+    HANDLE file = CreateFileW(path.wstring().c_str(),
+                              GENERIC_WRITE,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              nullptr,
+                              OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL,
+                              nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+    DWORD bytes_returned = 0;
+    const BOOL ok = DeviceIoControl(file, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &bytes_returned, nullptr);
+    CloseHandle(file);
+    return ok != FALSE;
+}
+#endif
+
+bool resize_sparse_file(const std::filesystem::path& path, uint64_t size) {
+#ifdef _WIN32
+    if (!mark_file_sparse(path)) {
+        return false;
+    }
+#endif
+    std::error_code ec;
+    std::filesystem::resize_file(path, size, ec);
+    return !ec;
+}
+
 bool rewrite_seed_as_sparse_bw64(const std::filesystem::path& path, const SparseBw64Layout& layout) {
     auto src_opt = read_file_bytes(path);
     if (!src_opt) {
@@ -372,7 +405,10 @@ bool rewrite_seed_as_sparse_bw64(const std::filesystem::path& path, const Sparse
     }
 
     const uint64_t sparse_size = data_payload_offset + layout.data_bytes;
-    std::filesystem::resize_file(path, sparse_size);
+    if (!check(resize_sparse_file(path, sparse_size), "resize sparse BW64 fixture")) {
+        std::filesystem::remove(path);
+        return false;
+    }
 
     std::fstream patch(path, std::ios::binary | std::ios::in | std::ios::out);
     patch.seekp(ds64_payload_offset);
