@@ -6,7 +6,13 @@
 #include <fstream>
 #include <iostream>
 #include <string_view>
+#include <system_error>
 #include <vector>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <winioctl.h>
+#endif
 
 #include "adm/audio_io.h"
 #include "adm/render.h"
@@ -91,6 +97,38 @@ void write_le64_stream(std::ostream& out, uint64_t value) {
                                              static_cast<unsigned char>(value >> 48U),
                                              static_cast<unsigned char>(value >> 56U)};
     out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+}
+
+#ifdef _WIN32
+bool mark_file_sparse(const std::filesystem::path& path) {
+    HANDLE file = CreateFileW(path.wstring().c_str(),
+                              GENERIC_WRITE,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              nullptr,
+                              OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL,
+                              nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+    DWORD bytes_returned = 0;
+    const BOOL ok = DeviceIoControl(file, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &bytes_returned, nullptr);
+    CloseHandle(file);
+    return ok != FALSE;
+}
+#endif
+
+// NTFS does not make resize_file sparse automatically (APFS/ext4 do); mark the file sparse
+// first on Windows so a multi-GB resize stays a hole instead of physically allocating.
+bool resize_sparse_file(const std::filesystem::path& path, uint64_t size) {
+#ifdef _WIN32
+    if (!mark_file_sparse(path)) {
+        return false;
+    }
+#endif
+    std::error_code ec;
+    std::filesystem::resize_file(path, size, ec);
+    return !ec;
 }
 
 [[nodiscard]] bool verify_wav_container_size(const std::vector<unsigned char>& bytes,
@@ -308,7 +346,13 @@ void write_le64_stream(std::ostream& out, uint64_t value) {
     constexpr uint64_t k_big_data_bytes = (uint64_t{1} << 32U) + 4096U;
     const uint64_t data_payload_offset = static_cast<uint64_t>(data) + 8U;
     const uint64_t sparse_size = data_payload_offset + k_big_data_bytes;
-    std::filesystem::resize_file(path, sparse_size);
+    // NTFS does not make resize_file sparse automatically (APFS/ext4 do); without the
+    // FSCTL_SET_SPARSE marker a multi-GB resize physically allocates on Windows and stalls CI.
+    if (!resize_sparse_file(path, sparse_size)) {
+        std::cerr << "RF64 sparse resize failed\n";
+        std::filesystem::remove(path);
+        return false;
+    }
 
     {
         std::fstream out(path, std::ios::binary | std::ios::in | std::ios::out);
