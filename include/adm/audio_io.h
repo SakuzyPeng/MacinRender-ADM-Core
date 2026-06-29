@@ -360,8 +360,8 @@ struct MetadataFields {
 };
 
 // Write rendering metadata into an existing output file.
-//   WAV  — appends a BWF v2 bext chunk (EBU Tech 3285) and updates the RIFF
-//           size.  Fields: Originator, OriginationDate/Time, LoudnessValue,
+//   WAV  — appends a BWF v2 bext chunk (EBU Tech 3285) and updates RIFF/RF64/BW64
+//           container sizes. Fields: Originator, OriginationDate/Time, LoudnessValue,
 //           MaxTruePeakLevel (0x7FFF = not-indicated when value is absent).
 //   CAF  — appends an info chunk with encodingapplication / date / comments
 //           keys.  Comments encodes renderer, layout, loudness, peak.

@@ -198,6 +198,7 @@ GUI 新接入进度条优先使用 `adm_render_file_ex2` / `adm_preview_render_w
 - `--renderer apple`：**macOS-only** AUSpatialMixer 后端（`src/adm_apple/`），能力见 `apple_capabilities()`，在 Linux 不编译；`mr_adm_apple_smoke_tests` 在非 macOS 跳过
 - 系统空间音频监听（`monitor_system_spatial`，仅实时监听非离线）：把多声道床交 OS 做 HRTF。**macOS** 经 `AVSampleBufferAudioRenderer`（`src/adm_apple/avsamplebuffer_device.mm`，含动态头追踪）；**Windows** 经 `ISpatialAudioClient`（`src/adm_windows/spatialaudioclient_device.cpp`，Windows Sonic / Dolby Atmos / DTS 头戴，**静态空间化无 OS 头追**，需声音设置启用某空间格式否则返回 `unsupported`）。布局白名单各自由 `apple_layouts` / `windows_layouts` 定义，经 capabilities JSON 的 `system_spatial_layouts` 字段统一暴露给 GUI（**唯一权威源，勿在 GUI 硬编码**）。sink 选择在 `monitor_session.cpp::make_monitor_device`
 - WAV `wav_io.cpp` 中定义 `DR_WAV_IMPLEMENTATION`；FLAC 解码 `dr_flac.cpp` 中定义 `DR_FLAC_IMPLEMENTATION`；编码用 `libFLAC`
+- WAV / BW64 IO 是 64-bit clean（支持 >4GB 母版与输出，修复「输出几百KB 即截断」的 4GB size 字段回绕）：**f32 WAV 固定写 RF64**（dr_wav 流式写无法预知总大小，统一 RF64 用 `ds64` 承载真实大小，小文件也是 RF64）；**整数 WAV 经 `bw64::writeFile`**，≤4GB 写 RIFF、>4GB 自动升级 BW64。`write_wav_metadata`（bext/ambi 追加）用 `_fseeki64`/`fseeko` + uint64 全程 64-bit，按 RIFF/RF64/BW64 分别更新顶层 size 或 `ds64.bw64Size`。输入读取经 libbw64，但 libbw64 的 `seek(int32_t)` 有 2^31 帧上限——所有后端定位 trim 起点统一走 `render_common::seek_reader_abs`（拆成多段 `INT32_MAX` cur-相对 seek 累加到完整 64-bit 偏移）；回归守卫用稀疏文件造 >4GB / 跨 2^31 帧 fixture（`core_smoke_test` / `render_trim_fixture_test`，不真烧盘）
 
 ## 代码风格
 
