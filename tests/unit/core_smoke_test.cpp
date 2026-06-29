@@ -315,6 +315,15 @@ bool resize_sparse_file(const std::filesystem::path& path, uint64_t size) {
 }
 
 [[nodiscard]] bool verify_rf64_sparse_metadata_write() {
+#ifdef _WIN32
+    // ~4 GB sparse fixture: NTFS handles the hole, but a multi-GB logical file makes the Windows
+    // CI Test step pathologically slow. The 64-bit metadata-write logic (_fseeki64) is compiled on
+    // Windows and exercised on macOS/Linux CI; opt in here for manual runs on real Windows hardware.
+    if (std::getenv("MR_ADM_RUN_LARGE_FILE_TESTS") == nullptr) {
+        std::cout << "SKIP: verify_rf64_sparse_metadata_write (Windows; set MR_ADM_RUN_LARGE_FILE_TESTS=1 to run)\n";
+        return true;
+    }
+#endif
     const auto path = std::filesystem::temp_directory_path() / "mr_core_rf64_sparse_metadata_test.wav";
     std::filesystem::remove(path);
 
