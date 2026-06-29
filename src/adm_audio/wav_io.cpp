@@ -8,6 +8,8 @@
 #include <cstring>
 #include <dr_wav.h>
 #include <filesystem>
+#include <limits>
+#include <optional>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -15,6 +17,10 @@
 
 #include <bw64/bw64.hpp>
 #include <fmt/format.h>
+
+#ifndef _WIN32
+#include <sys/types.h>
+#endif
 
 #include "adm/audio_io.h"
 #include "adm/errors.h"
@@ -71,7 +77,7 @@ Result<FloatWavWriter> FloatWavWriter::open(const std::string& path, uint32_t ch
     w.impl_ = std::make_unique<Impl>();
 
     drwav_data_format fmt{};
-    fmt.container = drwav_container_riff;
+    fmt.container = drwav_container_rf64;
     fmt.format = DR_WAVE_FORMAT_IEEE_FLOAT;
     fmt.channels = channels;
     fmt.sampleRate = sample_rate;
@@ -233,23 +239,154 @@ namespace {
            (static_cast<uint32_t>(b[3]) << 24U);
 }
 
-[[nodiscard]] long find_riff_chunk(std::FILE* f, std::string_view id) {
-    std::fseek(f, 0, SEEK_END);
-    const long file_size = std::ftell(f);
-    long offset = 12;
-    while (offset + 8 <= file_size) {
-        std::array<char, 8> hdr{};
-        std::fseek(f, offset, SEEK_SET);
-        if (std::fread(hdr.data(), 1, hdr.size(), f) != hdr.size()) {
-            return -1;
-        }
-        const uint32_t size = read_le32(hdr.data() + 4);
-        if (std::string_view(hdr.data(), 4) == id) {
-            return offset;
-        }
-        offset += 8 + static_cast<long>(size) + static_cast<long>(size & 1U);
+[[nodiscard]] uint64_t read_le64(const char* p) {
+    return static_cast<uint64_t>(read_le32(p)) | (static_cast<uint64_t>(read_le32(p + 4)) << 32U);
+}
+
+[[nodiscard]] bool file_seek_abs(std::FILE* f, uint64_t offset) {
+#ifdef _WIN32
+    return _fseeki64(f, static_cast<__int64>(offset), SEEK_SET) == 0;
+#else
+    return fseeko(f, static_cast<off_t>(offset), SEEK_SET) == 0;
+#endif
+}
+
+[[nodiscard]] bool file_seek_end(std::FILE* f) {
+#ifdef _WIN32
+    return _fseeki64(f, 0, SEEK_END) == 0;
+#else
+    return fseeko(f, 0, SEEK_END) == 0;
+#endif
+}
+
+[[nodiscard]] bool file_tell(std::FILE* f, uint64_t& offset) {
+#ifdef _WIN32
+    const __int64 pos = _ftelli64(f);
+    if (pos < 0) {
+        return false;
     }
-    return -1;
+    offset = static_cast<uint64_t>(pos);
+    return true;
+#else
+    const off_t pos = ftello(f);
+    if (pos < 0) {
+        return false;
+    }
+    offset = static_cast<uint64_t>(pos);
+    return true;
+#endif
+}
+
+[[nodiscard]] bool file_size(std::FILE* f, uint64_t& size) {
+    return file_seek_end(f) && file_tell(f, size);
+}
+
+[[nodiscard]] bool read_exact(std::FILE* f, void* data, std::size_t size) {
+    return std::fread(data, 1, size, f) == size;
+}
+
+[[nodiscard]] bool fourcc_eq(const std::array<char, 4>& id, std::string_view tag) {
+    return tag.size() == 4U && id[0] == tag[0] && id[1] == tag[1] && id[2] == tag[2] && id[3] == tag[3];
+}
+
+enum class RiffContainer : uint8_t { riff, rf64, bw64 };
+
+struct RiffInfo {
+    RiffContainer container{RiffContainer::riff};
+    uint64_t file_size{0};
+    bool have_ds64{false};
+    uint64_t ds64_payload_offset{0};
+    uint64_t ds64_data_size{0};
+};
+
+struct RiffChunk {
+    std::array<char, 4> id{};
+    uint64_t header_offset{0};
+    uint64_t payload_offset{0};
+    uint64_t payload_size{0};
+    uint32_t size32{0};
+};
+
+[[nodiscard]] bool uses_ds64(const RiffInfo& info) {
+    return info.container == RiffContainer::rf64 || info.container == RiffContainer::bw64;
+}
+
+[[nodiscard]] Result<std::optional<RiffChunk>>
+find_riff_chunk(std::FILE* f, const std::string& path, std::string_view target_id, RiffInfo* out_info = nullptr) {
+    RiffInfo info;
+    if (!file_size(f, info.file_size) || info.file_size < 12U || !file_seek_abs(f, 0)) {
+        return make_error(ErrorCode::io_error, "cannot inspect WAV file size", "path=" + path);
+    }
+
+    std::array<char, 12> riff_hdr{};
+    if (!read_exact(f, riff_hdr.data(), riff_hdr.size()) || std::string_view(riff_hdr.data() + 8, 4) != "WAVE") {
+        return make_error(ErrorCode::io_error, "not a RIFF/RF64/BW64 WAVE file", "path=" + path);
+    }
+    const std::string_view riff_tag{riff_hdr.data(), 4};
+    if (riff_tag == "RIFF") {
+        info.container = RiffContainer::riff;
+    } else if (riff_tag == "RF64") {
+        info.container = RiffContainer::rf64;
+    } else if (riff_tag == "BW64") {
+        info.container = RiffContainer::bw64;
+    } else {
+        return make_error(ErrorCode::io_error, "not a RIFF/RF64/BW64 WAVE file", "path=" + path);
+    }
+
+    std::optional<RiffChunk> found;
+    uint64_t pos = 12U;
+    while (pos + 8U <= info.file_size) {
+        std::array<char, 8> hdr{};
+        if (!file_seek_abs(f, pos) || !read_exact(f, hdr.data(), hdr.size())) {
+            return make_error(ErrorCode::io_error, "failed to read WAV chunk header", "path=" + path);
+        }
+        RiffChunk chunk;
+        chunk.id = {hdr[0], hdr[1], hdr[2], hdr[3]};
+        chunk.header_offset = pos;
+        chunk.payload_offset = pos + 8U;
+        chunk.size32 = read_le32(hdr.data() + 4);
+        chunk.payload_size = chunk.size32;
+
+        if (fourcc_eq(chunk.id, "ds64")) {
+            if (chunk.payload_size < 28U) {
+                return make_error(ErrorCode::io_error, "invalid WAV ds64 chunk", "path=" + path);
+            }
+            std::array<char, 28> ds64{};
+            if (!read_exact(f, ds64.data(), ds64.size())) {
+                return make_error(ErrorCode::io_error, "failed to read WAV ds64 chunk", "path=" + path);
+            }
+            info.have_ds64 = true;
+            info.ds64_payload_offset = chunk.payload_offset;
+            info.ds64_data_size = read_le64(ds64.data() + 8);
+        } else if (uses_ds64(info) && fourcc_eq(chunk.id, "data") && chunk.size32 == 0xFFFFFFFFU) {
+            if (!info.have_ds64) {
+                return make_error(ErrorCode::io_error, "RF64/BW64 WAV data chunk appears before ds64", "path=" + path);
+            }
+            chunk.payload_size = info.ds64_data_size;
+        }
+
+        if (!found.has_value() && target_id.size() == 4U && fourcc_eq(chunk.id, target_id)) {
+            found = chunk;
+        }
+
+        const uint64_t padding = chunk.payload_size & 1ULL;
+        if (chunk.payload_offset > std::numeric_limits<uint64_t>::max() - chunk.payload_size - padding) {
+            return make_error(ErrorCode::io_error, "WAV chunk table overflow", "path=" + path);
+        }
+        const uint64_t next = chunk.payload_offset + chunk.payload_size + padding;
+        if (next <= pos) {
+            return make_error(ErrorCode::io_error, "invalid WAV chunk table", "path=" + path);
+        }
+        pos = next;
+    }
+
+    if (uses_ds64(info) && !info.have_ds64) {
+        return make_error(ErrorCode::io_error, "RF64/BW64 WAV file missing ds64 chunk", "path=" + path);
+    }
+    if (out_info != nullptr) {
+        *out_info = info;
+    }
+    return found;
 }
 
 void write_le16_file(std::FILE* f, int16_t v) {
@@ -266,6 +403,42 @@ void write_le32_file(std::FILE* f, uint32_t v) {
     std::fwrite(bytes.data(), 1, bytes.size(), f);
 }
 
+void write_le64_file(std::FILE* f, uint64_t v) {
+    const std::array<uint8_t, 8> bytes{static_cast<uint8_t>(v),
+                                       static_cast<uint8_t>(v >> 8U),
+                                       static_cast<uint8_t>(v >> 16U),
+                                       static_cast<uint8_t>(v >> 24U),
+                                       static_cast<uint8_t>(v >> 32U),
+                                       static_cast<uint8_t>(v >> 40U),
+                                       static_cast<uint8_t>(v >> 48U),
+                                       static_cast<uint8_t>(v >> 56U)};
+    std::fwrite(bytes.data(), 1, bytes.size(), f);
+}
+
+Result<void> update_riff_sizes(std::FILE* f, const std::string& path, const RiffInfo& info) {
+    uint64_t final_file_size = 0;
+    if (!file_size(f, final_file_size) || final_file_size < 8U) {
+        return make_error(ErrorCode::io_error, "cannot inspect final WAV file size", "path=" + path);
+    }
+    const uint64_t riff_size = final_file_size - 8U;
+    if (uses_ds64(info)) {
+        if (!info.have_ds64 || !file_seek_abs(f, info.ds64_payload_offset)) {
+            return make_error(ErrorCode::io_error, "cannot update WAV ds64 chunk", "path=" + path);
+        }
+        write_le64_file(f, riff_size);
+        return {};
+    }
+    if (riff_size > std::numeric_limits<uint32_t>::max()) {
+        return make_error(
+            ErrorCode::unsupported, "RIFF WAV metadata would exceed 4GB; use RF64/BW64 output", "path=" + path);
+    }
+    if (!file_seek_abs(f, 4U)) {
+        return make_error(ErrorCode::io_error, "cannot update WAV RIFF size", "path=" + path);
+    }
+    write_le32_file(f, static_cast<uint32_t>(riff_size));
+    return {};
+}
+
 Result<void> write_hoa3_ambi_chunk(std::FILE* f, const std::string& path) {
     // Source-compatible AmbiX marker for HOA WAV:
     // ambisonic_type=B-format(1), ordering=ACN(2), normalisation=SN3D(2),
@@ -274,17 +447,24 @@ Result<void> write_hoa3_ambi_chunk(std::FILE* f, const std::string& path) {
     constexpr uint32_t k_ambi_payload = 16;
     constexpr std::array<uint32_t, 4> k_hoa3_ambi{1U, 2U, 2U, 16U};
 
-    const long existing_ambi = find_riff_chunk(f, "ambi");
-    if (existing_ambi >= 0) {
+    const auto existing_ambi_res = find_riff_chunk(f, path, "ambi");
+    if (!existing_ambi_res) {
+        return tl::unexpected{existing_ambi_res.error()};
+    }
+    const auto& existing_ambi = *existing_ambi_res;
+    if (existing_ambi.has_value()) {
         std::array<char, 8> ambi_hdr{};
-        std::fseek(f, existing_ambi, SEEK_SET);
-        if (std::fread(ambi_hdr.data(), 1, ambi_hdr.size(), f) != ambi_hdr.size() ||
+        if (!file_seek_abs(f, existing_ambi->header_offset) || !read_exact(f, ambi_hdr.data(), ambi_hdr.size()) ||
             read_le32(ambi_hdr.data() + 4) != k_ambi_payload) {
             return make_error(ErrorCode::io_error, "invalid existing WAV ambi chunk", "path=" + path);
         }
-        std::fseek(f, existing_ambi + 8, SEEK_SET);
+        if (!file_seek_abs(f, existing_ambi->payload_offset)) {
+            return make_error(ErrorCode::io_error, "cannot seek WAV ambi chunk", "path=" + path);
+        }
     } else {
-        std::fseek(f, 0, SEEK_END);
+        if (!file_seek_end(f)) {
+            return make_error(ErrorCode::io_error, "cannot append WAV ambi chunk", "path=" + path);
+        }
         std::fwrite("ambi", 1, 4, f);
         write_le32_file(f, k_ambi_payload);
     }
@@ -294,28 +474,44 @@ Result<void> write_hoa3_ambi_chunk(std::FILE* f, const std::string& path) {
     return {};
 }
 
+Result<RiffInfo> inspect_wav_metadata_target(std::FILE* f, const std::string& path, std::string_view output_layout) {
+    RiffInfo riff_info;
+    auto ambi_lookup = find_riff_chunk(f, path, "ambi", &riff_info);
+    if (!ambi_lookup) {
+        return tl::unexpected{ambi_lookup.error()};
+    }
+
+    constexpr uint32_t k_bext_total = 8 + 602; // FourCC(4) + size(4) + payload
+    constexpr uint32_t k_ambi_total = 8 + 16;  // FourCC(4) + size(4) + payload
+    const bool appending_ambi = output_layout == "hoa3" && !ambi_lookup->has_value();
+    const uint64_t appended_bytes = k_bext_total + (appending_ambi ? k_ambi_total : 0U);
+    if (!uses_ds64(riff_info) && (riff_info.file_size < 8U ||
+                                  riff_info.file_size - 8U > std::numeric_limits<uint32_t>::max() - appended_bytes)) {
+        return make_error(
+            ErrorCode::unsupported, "RIFF WAV metadata would exceed 4GB; use RF64/BW64 output", "path=" + path);
+    }
+    return riff_info;
+}
+
 } // namespace
 
-// Append a BWF v2 bext chunk to an existing RIFF/WAVE file and update the RIFF
-// size.  EBU Tech 3285 supplement 5 field layout (602-byte fixed payload).
+// Append a BWF v2 bext chunk to an existing RIFF/RF64/BW64 WAVE file and update
+// the container size. EBU Tech 3285 supplement 5 field layout (602-byte fixed payload).
 Result<void> write_wav_metadata(const std::string& path, const MetadataFields& meta) {
     std::FILE* f = std::fopen(path.c_str(), "r+b");
     if (f == nullptr) {
         return make_error(ErrorCode::io_error, "cannot open WAV for metadata write", "path=" + path);
     }
 
-    // Verify RIFF/WAVE magic.
-    std::array<char, 12> hdr{};
-    if (std::fread(hdr.data(), 1, hdr.size(), f) != hdr.size() || std::string_view(hdr.data(), 4) != "RIFF" ||
-        std::string_view(hdr.data() + 8, 4) != "WAVE") {
+    auto riff_info_res = inspect_wav_metadata_target(f, path, meta.output_layout);
+    if (!riff_info_res) {
         std::fclose(f);
-        return make_error(ErrorCode::io_error, "not a RIFF/WAVE file", "path=" + path);
+        return tl::unexpected{riff_info_res.error()};
     }
-    const uint32_t riff_size = read_le32(hdr.data() + 4);
+    const RiffInfo riff_info = *riff_info_res;
 
     // Fixed bext payload size (no coding history).
     constexpr uint32_t k_payload = 602;
-    constexpr uint32_t k_chunk_total = 8 + k_payload; // FourCC(4) + size(4) + payload
 
     // Null-padded fixed-width string helper.
     const auto write_str_field = [&](const std::string& s, std::size_t width) {
@@ -325,7 +521,10 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
     };
 
     // Write bext chunk at EOF.
-    std::fseek(f, 0, SEEK_END);
+    if (!file_seek_end(f)) {
+        std::fclose(f);
+        return make_error(ErrorCode::io_error, "cannot append WAV metadata", "path=" + path);
+    }
 
     // Chunk header (LE chunk size).
     std::fwrite("bext", 1, 4, f);
@@ -395,12 +594,11 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
         }
     }
 
-    // Update RIFF size (bytes 4-7, LE).
-    std::fseek(f, 0, SEEK_END);
-    const long file_size = std::ftell(f);
-    const uint32_t new_riff_size = file_size >= 8 ? static_cast<uint32_t>(file_size - 8) : riff_size + k_chunk_total;
-    std::fseek(f, 4, SEEK_SET);
-    write_le32_file(f, new_riff_size);
+    auto size_res = update_riff_sizes(f, path, riff_info);
+    if (!size_res) {
+        std::fclose(f);
+        return tl::unexpected{size_res.error()};
+    }
 
     std::fclose(f);
     return {};
