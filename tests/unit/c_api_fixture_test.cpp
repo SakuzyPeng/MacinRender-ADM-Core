@@ -549,29 +549,9 @@ bool verify_render_file_ex_compat(adm_context_t* ctx, const std::filesystem::pat
     return ok;
 }
 
-// Read the channel count from a WAV header (bytes 22-23, uint16 LE) without
-// using bw64, which may reject WAVE_FORMAT_EXTENSIBLE (multi-channel output).
+// Read the channel count from the WAV fmt chunk without using bw64, which may
+// reject WAVE_FORMAT_EXTENSIBLE (multi-channel output).
 [[nodiscard]] uint32_t wav_channel_count(const std::filesystem::path& path) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) {
-        return 0U;
-    }
-    std::array<char, 24> buf{};
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-    if (!f.read(buf.data(), static_cast<std::streamsize>(buf.size()))) {
-        return 0U;
-    }
-    // WAV: RIFF[4] size[4] WAVE[4] "fmt "[4] chunk_size[4] fmt_type[2] channels[2]
-    if (std::string_view{buf.data(), 4} != "RIFF" || std::string_view{buf.data() + 8, 4} != "WAVE") {
-        return 0U;
-    }
-    return static_cast<uint32_t>(static_cast<uint8_t>(buf[22])) |
-           (static_cast<uint32_t>(static_cast<uint8_t>(buf[23])) << 8U);
-}
-
-// Count sample frames in a WAV by walking its chunks (channels + bits from fmt,
-// payload size from data). Avoids bw64, which may reject multi-channel EXTENSIBLE.
-[[nodiscard]] uint64_t wav_frame_count(const std::filesystem::path& path) {
     std::ifstream f(path, std::ios::binary);
     if (!f) {
         return 0U;
@@ -588,19 +568,77 @@ bool verify_render_file_ex_compat(adm_context_t* ctx, const std::filesystem::pat
     if (!f.read(reinterpret_cast<char*>(riff.data()), static_cast<std::streamsize>(riff.size()))) {
         return 0U;
     }
-    if (std::string_view{reinterpret_cast<const char*>(riff.data()), 4} != "RIFF" ||
+    const std::string_view container{reinterpret_cast<const char*>(riff.data()), 4};
+    if ((container != "RIFF" && container != "RF64" && container != "BW64") ||
         std::string_view{reinterpret_cast<const char*>(riff.data()) + 8, 4} != "WAVE") {
         return 0U;
     }
-    uint32_t channels = 0U;
-    uint32_t bits = 0U;
-    uint32_t data_size = 0U;
     std::array<unsigned char, 8> hdr{};
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     while (f.read(reinterpret_cast<char*>(hdr.data()), static_cast<std::streamsize>(hdr.size()))) {
         const std::string_view id{reinterpret_cast<const char*>(hdr.data()), 4};
         const uint32_t sz = rd_u32(hdr.data() + 4);
         if (id == "fmt ") {
+            std::vector<unsigned char> fmt(sz);
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+            if (sz < 4U || !f.read(reinterpret_cast<char*>(fmt.data()), static_cast<std::streamsize>(sz))) {
+                return 0U;
+            }
+            return rd_u16(fmt.data() + 2); // nChannels
+        }
+        f.seekg(static_cast<std::streamoff>(sz) + (sz & 1U), std::ios::cur);
+    }
+    return 0U;
+}
+
+// Count sample frames in a WAV by walking its chunks (channels + bits from fmt,
+// payload size from data). Avoids bw64, which may reject multi-channel EXTENSIBLE.
+[[nodiscard]] uint64_t wav_frame_count(const std::filesystem::path& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) {
+        return 0U;
+    }
+    const auto rd_u16 = [](const unsigned char* p) {
+        return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8U);
+    };
+    const auto rd_u32 = [](const unsigned char* p) {
+        return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8U) |
+               (static_cast<uint32_t>(p[2]) << 16U) | (static_cast<uint32_t>(p[3]) << 24U);
+    };
+    const auto rd_u64 = [&](const unsigned char* p) {
+        return static_cast<uint64_t>(rd_u32(p)) | (static_cast<uint64_t>(rd_u32(p + 4)) << 32U);
+    };
+    std::array<unsigned char, 12> riff{};
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    if (!f.read(reinterpret_cast<char*>(riff.data()), static_cast<std::streamsize>(riff.size()))) {
+        return 0U;
+    }
+    const std::string_view container{reinterpret_cast<const char*>(riff.data()), 4};
+    const bool uses_ds64 = container == "RF64" || container == "BW64";
+    if ((container != "RIFF" && !uses_ds64) ||
+        std::string_view{reinterpret_cast<const char*>(riff.data()) + 8, 4} != "WAVE") {
+        return 0U;
+    }
+    uint32_t channels = 0U;
+    uint32_t bits = 0U;
+    uint64_t data_size = 0U;
+    uint64_t ds64_data_size = 0U;
+    bool have_ds64 = false;
+    std::array<unsigned char, 8> hdr{};
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    while (f.read(reinterpret_cast<char*>(hdr.data()), static_cast<std::streamsize>(hdr.size()))) {
+        const std::string_view id{reinterpret_cast<const char*>(hdr.data()), 4};
+        const uint32_t sz = rd_u32(hdr.data() + 4);
+        if (id == "ds64") {
+            std::vector<unsigned char> ds64(sz);
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+            if (sz < 28U || !f.read(reinterpret_cast<char*>(ds64.data()), static_cast<std::streamsize>(sz))) {
+                return 0U;
+            }
+            ds64_data_size = rd_u64(ds64.data() + 8);
+            have_ds64 = true;
+            f.seekg(sz & 1U, std::ios::cur);
+        } else if (id == "fmt ") {
             std::vector<unsigned char> fmt(sz);
             // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
             if (!f.read(reinterpret_cast<char*>(fmt.data()), static_cast<std::streamsize>(sz))) {
@@ -610,7 +648,14 @@ bool verify_render_file_ex_compat(adm_context_t* ctx, const std::filesystem::pat
             bits = rd_u16(fmt.data() + 14);    // wBitsPerSample
             f.seekg(sz & 1U, std::ios::cur);   // skip RIFF pad byte
         } else if (id == "data") {
-            data_size = sz;
+            if (uses_ds64 && sz == 0xFFFFFFFFU) {
+                if (!have_ds64) {
+                    return 0U;
+                }
+                data_size = ds64_data_size;
+            } else {
+                data_size = sz;
+            }
             break;
         } else {
             f.seekg(static_cast<std::streamoff>(sz) + (sz & 1U), std::ios::cur);
@@ -619,7 +664,7 @@ bool verify_render_file_ex_compat(adm_context_t* ctx, const std::filesystem::pat
     if (channels == 0U || bits == 0U) {
         return 0U;
     }
-    return static_cast<uint64_t>(data_size) / (static_cast<uint64_t>(channels) * (bits / 8U));
+    return data_size / (static_cast<uint64_t>(channels) * (bits / 8U));
 }
 
 // Larger fixture for loudness tests: 1 second of signal to satisfy EBU R128

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -28,21 +29,103 @@ namespace {
            (static_cast<uint32_t>(bytes[offset + 2U]) << 16U) | (static_cast<uint32_t>(bytes[offset + 3U]) << 24U);
 }
 
+[[nodiscard]] uint64_t read_le64(const std::vector<unsigned char>& bytes, std::size_t offset) {
+    return static_cast<uint64_t>(read_le32(bytes, offset)) |
+           (static_cast<uint64_t>(read_le32(bytes, offset + 4U)) << 32U);
+}
+
 [[nodiscard]] uint64_t read_be64(const std::vector<unsigned char>& bytes, std::size_t offset) {
     return (static_cast<uint64_t>(read_be32(bytes, offset)) << 32U) | read_be32(bytes, offset + 4U);
 }
 
 [[nodiscard]] std::size_t find_riff_chunk(const std::vector<unsigned char>& bytes, std::string_view id) {
+    if (bytes.size() < 12U) {
+        return std::string::npos;
+    }
+    const auto riff_id = std::string_view{reinterpret_cast<const char*>(bytes.data()), 4U};
+    const bool uses_ds64 = riff_id == "RF64" || riff_id == "BW64";
+    bool have_ds64 = false;
+    uint64_t ds64_data_size = 0;
     std::size_t offset = 12U;
     while (offset + 8U <= bytes.size()) {
         const auto chunk_id = std::string_view{reinterpret_cast<const char*>(bytes.data() + offset), 4U};
         const uint32_t size = read_le32(bytes, offset + 4U);
+        uint64_t payload_size = size;
+        if (uses_ds64 && chunk_id == "ds64" && size >= 28U && offset + 36U <= bytes.size()) {
+            have_ds64 = true;
+            ds64_data_size = read_le64(bytes, offset + 16U);
+        } else if (uses_ds64 && chunk_id == "data" && size == 0xFFFFFFFFU) {
+            if (!have_ds64) {
+                return std::string::npos;
+            }
+            payload_size = ds64_data_size;
+        }
         if (chunk_id == id) {
             return offset;
         }
-        offset += 8U + size + (size & 1U);
+        const uint64_t next = static_cast<uint64_t>(offset) + 8U + payload_size + (payload_size & 1U);
+        if (next <= offset || next > bytes.size()) {
+            break;
+        }
+        offset = static_cast<std::size_t>(next);
     }
     return std::string::npos;
+}
+
+[[nodiscard]] uint64_t read_le64_at(const std::filesystem::path& path, uint64_t offset) {
+    std::ifstream in(path, std::ios::binary);
+    std::array<unsigned char, 8> bytes{};
+    in.seekg(static_cast<std::streamoff>(offset));
+    in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    std::vector<unsigned char> v(bytes.begin(), bytes.end());
+    return read_le64(v, 0U);
+}
+
+void write_le64_stream(std::ostream& out, uint64_t value) {
+    const std::array<unsigned char, 8> bytes{static_cast<unsigned char>(value),
+                                             static_cast<unsigned char>(value >> 8U),
+                                             static_cast<unsigned char>(value >> 16U),
+                                             static_cast<unsigned char>(value >> 24U),
+                                             static_cast<unsigned char>(value >> 32U),
+                                             static_cast<unsigned char>(value >> 40U),
+                                             static_cast<unsigned char>(value >> 48U),
+                                             static_cast<unsigned char>(value >> 56U)};
+    out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+}
+
+[[nodiscard]] bool verify_wav_container_size(const std::vector<unsigned char>& bytes,
+                                             uint64_t expected_data_bytes,
+                                             std::string_view label) {
+    if (bytes.size() < 12U) {
+        std::cerr << label << ": WAV file too small\n";
+        return false;
+    }
+    const auto riff_id = std::string_view{reinterpret_cast<const char*>(bytes.data()), 4U};
+    if (riff_id == "RIFF") {
+        if (read_le32(bytes, 4U) != bytes.size() - 8U) {
+            std::cerr << label << ": RIFF size mismatch\n";
+            return false;
+        }
+        return true;
+    }
+    if (riff_id != "RF64" && riff_id != "BW64") {
+        std::cerr << label << ": WAV container tag mismatch\n";
+        return false;
+    }
+    const auto ds64 = find_riff_chunk(bytes, "ds64");
+    if (ds64 == std::string::npos || read_le32(bytes, ds64 + 4U) < 28U) {
+        std::cerr << label << ": ds64 chunk missing\n";
+        return false;
+    }
+    if (riff_id == "RF64" && read_le32(bytes, 4U) != 0xFFFFFFFFU) {
+        std::cerr << label << ": RF64 size sentinel mismatch\n";
+        return false;
+    }
+    if (read_le64(bytes, ds64 + 8U) != bytes.size() - 8U || read_le64(bytes, ds64 + 16U) != expected_data_bytes) {
+        std::cerr << label << ": ds64 size mismatch\n";
+        return false;
+    }
+    return true;
 }
 
 [[nodiscard]] std::size_t find_caf_chunk(const std::vector<unsigned char>& bytes, std::string_view id) {
@@ -124,8 +207,9 @@ namespace {
         std::filesystem::remove(path);
         return false;
     }
-    if (read_le32(bytes, 4U) != bytes.size() - 8U || read_le32(bytes, bext + 4U) != 602U) {
-        std::cerr << "WAV bext or RIFF size mismatch\n";
+    if (!verify_wav_container_size(bytes, uint64_t{2} * sizeof(float), "WAV metadata") ||
+        read_le32(bytes, bext + 4U) != 602U) {
+        std::cerr << "WAV bext or container size mismatch\n";
         std::filesystem::remove(path);
         return false;
     }
@@ -181,8 +265,94 @@ namespace {
         return false;
     }
     if (read_le32(bytes, ambi + 8U) != 1U || read_le32(bytes, ambi + 12U) != 2U || read_le32(bytes, ambi + 16U) != 2U ||
-        read_le32(bytes, ambi + 20U) != 16U || read_le32(bytes, 4U) != bytes.size() - 8U) {
+        read_le32(bytes, ambi + 20U) != 16U ||
+        !verify_wav_container_size(bytes, uint64_t{16} * sizeof(float), "HOA3 WAV metadata")) {
         std::cerr << "HOA3 WAV ambi payload mismatch\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+
+    std::filesystem::remove(path);
+    return true;
+}
+
+[[nodiscard]] bool verify_rf64_sparse_metadata_write() {
+    const auto path = std::filesystem::temp_directory_path() / "mr_core_rf64_sparse_metadata_test.wav";
+    std::filesystem::remove(path);
+
+    {
+        auto writer_res = mradm::audio::WriterHandle::open(path.string(), 1U, 48000U, "0+2+0");
+        if (!writer_res) {
+            std::cerr << "RF64 sparse writer open failed: " << writer_res.error().message << "\n";
+            return false;
+        }
+        float sample = 0.0F;
+        if (writer_res->write(&sample, 1U) != 1U) {
+            std::cerr << "RF64 sparse writer short write\n";
+            std::filesystem::remove(path);
+            return false;
+        }
+    }
+
+    std::ifstream small_in(path, std::ios::binary);
+    std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(small_in)), {});
+    small_in.close();
+    const auto ds64 = find_riff_chunk(bytes, "ds64");
+    const auto data = find_riff_chunk(bytes, "data");
+    if (ds64 == std::string::npos || data == std::string::npos) {
+        std::cerr << "RF64 sparse seed missing ds64/data chunk\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+
+    constexpr uint64_t k_big_data_bytes = (uint64_t{1} << 32U) + 4096U;
+    const uint64_t data_payload_offset = static_cast<uint64_t>(data) + 8U;
+    const uint64_t sparse_size = data_payload_offset + k_big_data_bytes;
+    std::filesystem::resize_file(path, sparse_size);
+
+    {
+        std::fstream out(path, std::ios::binary | std::ios::in | std::ios::out);
+        out.seekp(static_cast<std::streamoff>(ds64 + 8U));
+        write_le64_stream(out, sparse_size - 8U);
+        write_le64_stream(out, k_big_data_bytes);
+        write_le64_stream(out, k_big_data_bytes / sizeof(float));
+        if (!out) {
+            std::cerr << "RF64 sparse ds64 patch failed\n";
+            std::filesystem::remove(path);
+            return false;
+        }
+    }
+
+    const auto meta_res = mradm::audio::write_file_metadata(path.string(), test_metadata());
+    if (!meta_res) {
+        std::cerr << "RF64 sparse metadata write failed: " << meta_res.error().message << "\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+
+    const uint64_t final_size = std::filesystem::file_size(path);
+    constexpr uint64_t k_bext_total = 8U + 602U;
+    if (final_size != sparse_size + k_bext_total) {
+        std::cerr << "RF64 sparse final file size mismatch\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+    if (read_le64_at(path, ds64 + 8U) != final_size - 8U || read_le64_at(path, ds64 + 16U) != k_big_data_bytes) {
+        std::cerr << "RF64 sparse ds64 values mismatch after metadata\n";
+        std::filesystem::remove(path);
+        return false;
+    }
+
+    std::ifstream tail(path, std::ios::binary);
+    std::array<char, 8> bext_hdr{};
+    tail.seekg(static_cast<std::streamoff>(sparse_size));
+    tail.read(bext_hdr.data(), static_cast<std::streamsize>(bext_hdr.size()));
+    const auto bext_size = static_cast<uint32_t>(static_cast<unsigned char>(bext_hdr[4])) |
+                           (static_cast<uint32_t>(static_cast<unsigned char>(bext_hdr[5])) << 8U) |
+                           (static_cast<uint32_t>(static_cast<unsigned char>(bext_hdr[6])) << 16U) |
+                           (static_cast<uint32_t>(static_cast<unsigned char>(bext_hdr[7])) << 24U);
+    if (!tail || std::string_view{bext_hdr.data(), 4U} != "bext" || bext_size != 602U) {
+        std::cerr << "RF64 sparse bext not appended after data payload\n";
         std::filesystem::remove(path);
         return false;
     }
@@ -505,6 +675,9 @@ int main() {
         return EXIT_FAILURE;
     }
     if (!run_check("verify_wav_hoa3_ambi_metadata", verify_wav_hoa3_ambi_metadata)) {
+        return EXIT_FAILURE;
+    }
+    if (!run_check("verify_rf64_sparse_metadata_write", verify_rf64_sparse_metadata_write)) {
         return EXIT_FAILURE;
     }
     if (!run_check("verify_caf_wav71_layout_tag", verify_caf_wav71_layout_tag)) {
