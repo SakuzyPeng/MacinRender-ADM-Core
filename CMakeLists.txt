@@ -620,6 +620,7 @@ if(MR_ADM_CORE_BUILD_CLI)
             MacinRender::ADMRenderVBAP
             MacinRender::ADMRenderHOA
             MacinRender::ADMRenderBinaural
+            MacinRender::ADMAudio
             CLI11::CLI11
             spdlog::spdlog
     )
