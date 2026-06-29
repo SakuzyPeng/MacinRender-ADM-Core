@@ -81,6 +81,16 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(WIN32)
     add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 endif()
+if(APPLE)
+    # Xcode 15+ ld64 warns "ignoring duplicate libraries" when a static lib appears both
+    # explicitly (a target links it for its headers) and transitively in the same link closure.
+    # It is benign — ld de-duplicates and links correctly — so suppress it where supported.
+    include(CheckLinkerFlag)
+    check_linker_flag(CXX "LINKER:-no_warn_duplicate_libraries" MR_ADM_LD_NO_WARN_DUPLICATE_LIBRARIES)
+    if(MR_ADM_LD_NO_WARN_DUPLICATE_LIBRARIES)
+        add_link_options("LINKER:-no_warn_duplicate_libraries")
+    endif()
+endif()
 if(NOT DEFINED MR_ADM_FLAC_AUTO_BUILD_TYPE)
     set(MR_ADM_FLAC_AUTO_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE INTERNAL "Initial build type for FLAC AUTO provider")
 endif()
