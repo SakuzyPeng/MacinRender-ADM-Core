@@ -207,12 +207,13 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
 
         ResetEvent(buffer_event_); // clear any stale signal from a prior (invalidated) stream
 
-        // Static bed slots come for free via StaticObjectTypeMask; layouts above the 8.1.4.4 static
-        // ceiling additionally request dynamic objects. Min == Max
+        // Static bed slots come for free via StaticObjectTypeMask; layouts that need extra speaker
+        // positions additionally request dynamic objects. Min == Max
         // == the needed count so activation fails up front if the spatializer can't provide them
         // (returned as unsupported below) rather than the pump discovering it mid-stream and spinning
         // on rebuilds. All three spatializers report ample dynamic capacity (Dolby 16 / DTS 32 /
-        // Sonic 111), so the 4 objects 9.1.6 needs and 8 objects 22.2 needs never gate in practice.
+        // Sonic 111), so the 4 objects 9.1.6 needs and the 11 objects 22.2 needs fit the tested
+        // consumer headphone spatializers.
         const uint32_t dynamic_count = windows_layouts::dynamic_object_count(*layout_);
 
         SpatialAudioObjectRenderStreamActivationParams params{};

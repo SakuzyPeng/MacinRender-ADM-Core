@@ -146,11 +146,14 @@ inline constexpr std::array<ChannelRoute, 16> k_routes_9_1_6{{
     bed(AudioObjectType_TopBackRight),  // Rtr U-150
 }};
 
-// 22.2 uses the project/libear BS.2051 order. Windows exposes one non-spatialized static LFE slot,
-// so LFE1 and LFE2 intentionally share object slot 3; the device mixes them into that one
-// AudioObjectType_LowFrequency object instead of creating a directional dynamic object for LFE2.
-// The remaining positions use static names where Windows has a clear slot and dynamic objects where
-// it does not (front-wide, top-center/top-side/top-back-center, and bottom-center).
+// 22.2 uses the project/libear BS.2051 order. It is submitted as a 7.1.4 static bed plus dynamic
+// objects for every remaining 22.2 speaker position. Keeping the static mask to 7.1.4 avoids asking
+// consumer spatializers to accept the larger 8.1.4.4 static set for this NHK-style layout, while the
+// dynamic objects preserve the extra 22.2 positions instead of folding them into the bed.
+//
+// Windows exposes one non-spatialized static LFE slot, so LFE1 and LFE2 intentionally share object
+// slot 3; the device mixes them into that one AudioObjectType_LowFrequency object instead of
+// creating a directional dynamic object for LFE2.
 inline constexpr std::array<ChannelRoute, 24> k_routes_22_2{{
     obj(-0.86603F, 0.0F, -0.50000F, 0),        // M+060 (dynamic: no static "wide" name)
     obj(0.86603F, 0.0F, -0.50000F, 1),         // M-060
@@ -160,7 +163,7 @@ inline constexpr std::array<ChannelRoute, 24> k_routes_22_2{{
     bed(AudioObjectType_BackRight, 5),         // M-135
     bed(AudioObjectType_FrontLeft, 6),         // M+030
     bed(AudioObjectType_FrontRight, 7),        // M-030
-    bed(AudioObjectType_BackCenter, 8),        // M+180
+    obj(0.0F, 0.0F, 1.0F, 8),                  // M+180 (dynamic: keep static bed to 7.1.4)
     bed(AudioObjectType_LowFrequency, 3),      // LFE2 (fold into the one Windows LFE slot)
     bed(AudioObjectType_SideLeft, 9),          // M+090
     bed(AudioObjectType_SideRight, 10),        // M-090
@@ -174,8 +177,8 @@ inline constexpr std::array<ChannelRoute, 24> k_routes_22_2{{
     obj(0.86603F, 0.50000F, 0.0F, 18),         // U-090
     obj(0.0F, 0.50000F, 0.86603F, 19),         // U+180
     obj(0.0F, -0.50000F, -0.86603F, 20),       // B+000
-    bed(AudioObjectType_BottomFrontLeft, 21),  // B+045
-    bed(AudioObjectType_BottomFrontRight, 22), // B-045
+    obj(-0.61237F, -0.50000F, -0.61237F, 21),  // B+045 (dynamic: keep static bed to 7.1.4)
+    obj(0.61237F, -0.50000F, -0.61237F, 22),   // B-045
 }};
 
 struct WindowsSpeakerLayout {
@@ -185,18 +188,16 @@ struct WindowsSpeakerLayout {
     std::span<const ChannelRoute> routes;
 };
 
-// 22.2 is deliberately not advertised here. The native 22.2 route table above needs 23 distinct
-// Windows spatial objects (24 input channels minus the shared LFE object). Microsoft Spatial Sound
-// documents 8.1.4.4 static beds plus format-specific dynamic-object budgets, not native 22.2 beds;
-// the consumer spatializers tested so far crash inside CompPkgSup.dll when this exact 22.2 object
-// set starts playback. Folding 22.2 into a smaller object budget would no longer be native 22.2, so
-// callers should see "unsupported" instead of getting an approximated bed.
+// 22.2 is advertised as a 7.1.4 static bed plus 11 dynamic objects. This is still a 24-channel 22.2
+// monitor submission: the extra speakers stay as positioned spatial objects, and only the two LFE
+// inputs share the one Windows LFE object.
 // clang-format off
-inline constexpr std::array<WindowsSpeakerLayout, 4> k_windows_speaker_layouts{{
+inline constexpr std::array<WindowsSpeakerLayout, 5> k_windows_speaker_layouts{{
     {"4+7+0", "7.1.4", 12, k_routes_7_1_4},
     {"4+5+0", "5.1.4", 10, k_routes_5_1_4},
     {"0+5+0", "5.1",   6,  k_routes_5_1},
     {"9.1.6", "9.1.6", 16, k_routes_9_1_6},
+    {"9+10+3", "22.2", 24, k_routes_22_2},
 }};
 // clang-format on
 
