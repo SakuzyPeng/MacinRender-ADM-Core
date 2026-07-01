@@ -186,10 +186,11 @@ struct WindowsSpeakerLayout {
 };
 
 // 22.2 is deliberately not advertised here. The native 22.2 route table above needs 23 distinct
-// Windows spatial objects (24 input channels minus the shared LFE object), and the consumer
-// spatializers tested so far crash inside CompPkgSup.dll when playback starts. Folding 22.2 into a
-// smaller object budget would no longer be native 22.2, so callers should see "unsupported" instead
-// of getting an approximated bed.
+// Windows spatial objects (24 input channels minus the shared LFE object). Microsoft Spatial Sound
+// documents 8.1.4.4 static beds plus format-specific dynamic-object budgets, not native 22.2 beds;
+// the consumer spatializers tested so far crash inside CompPkgSup.dll when this exact 22.2 object
+// set starts playback. Folding 22.2 into a smaller object budget would no longer be native 22.2, so
+// callers should see "unsupported" instead of getting an approximated bed.
 // clang-format off
 inline constexpr std::array<WindowsSpeakerLayout, 4> k_windows_speaker_layouts{{
     {"4+7+0", "7.1.4", 12, k_routes_7_1_4},
