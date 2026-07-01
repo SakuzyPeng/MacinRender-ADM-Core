@@ -155,30 +155,30 @@ inline constexpr std::array<ChannelRoute, 16> k_routes_9_1_6{{
 // slot 3; the device mixes them into that one AudioObjectType_LowFrequency object instead of
 // creating a directional dynamic object for LFE2.
 inline constexpr std::array<ChannelRoute, 24> k_routes_22_2{{
-    obj(-0.86603F, 0.0F, -0.50000F, 0),        // M+060 (dynamic: no static "wide" name)
-    obj(0.86603F, 0.0F, -0.50000F, 1),         // M-060
-    bed(AudioObjectType_FrontCenter, 2),       // M+000
-    bed(AudioObjectType_LowFrequency, 3),      // LFE1
-    bed(AudioObjectType_BackLeft, 4),          // M+135
-    bed(AudioObjectType_BackRight, 5),         // M-135
-    bed(AudioObjectType_FrontLeft, 6),         // M+030
-    bed(AudioObjectType_FrontRight, 7),        // M-030
-    obj(0.0F, 0.0F, 1.0F, 8),                  // M+180 (dynamic: keep static bed to 7.1.4)
-    bed(AudioObjectType_LowFrequency, 3),      // LFE2 (fold into the one Windows LFE slot)
-    bed(AudioObjectType_SideLeft, 9),          // M+090
-    bed(AudioObjectType_SideRight, 10),        // M-090
-    bed(AudioObjectType_TopFrontLeft, 11),     // U+045
-    bed(AudioObjectType_TopFrontRight, 12),    // U-045
-    obj(0.0F, 0.50000F, -0.86603F, 13),        // U+000
-    obj(0.0F, 1.00000F, 0.0F, 14),             // T+000
-    bed(AudioObjectType_TopBackLeft, 15),      // U+135
-    bed(AudioObjectType_TopBackRight, 16),     // U-135
-    obj(-0.86603F, 0.50000F, 0.0F, 17),        // U+090
-    obj(0.86603F, 0.50000F, 0.0F, 18),         // U-090
-    obj(0.0F, 0.50000F, 0.86603F, 19),         // U+180
-    obj(0.0F, -0.50000F, -0.86603F, 20),       // B+000
-    obj(-0.61237F, -0.50000F, -0.61237F, 21),  // B+045 (dynamic: keep static bed to 7.1.4)
-    obj(0.61237F, -0.50000F, -0.61237F, 22),   // B-045
+    obj(-0.86603F, 0.0F, -0.50000F, 0),       // M+060 (dynamic: no static "wide" name)
+    obj(0.86603F, 0.0F, -0.50000F, 1),        // M-060
+    bed(AudioObjectType_FrontCenter, 2),      // M+000
+    bed(AudioObjectType_LowFrequency, 3),     // LFE1
+    bed(AudioObjectType_BackLeft, 4),         // M+135
+    bed(AudioObjectType_BackRight, 5),        // M-135
+    bed(AudioObjectType_FrontLeft, 6),        // M+030
+    bed(AudioObjectType_FrontRight, 7),       // M-030
+    obj(0.0F, 0.0F, 1.0F, 8),                 // M+180 (dynamic: keep static bed to 7.1.4)
+    bed(AudioObjectType_LowFrequency, 3),     // LFE2 (fold into the one Windows LFE slot)
+    bed(AudioObjectType_SideLeft, 9),         // M+090
+    bed(AudioObjectType_SideRight, 10),       // M-090
+    bed(AudioObjectType_TopFrontLeft, 11),    // U+045
+    bed(AudioObjectType_TopFrontRight, 12),   // U-045
+    obj(0.0F, 0.50000F, -0.86603F, 13),       // U+000
+    obj(0.0F, 1.00000F, 0.0F, 14),            // T+000
+    bed(AudioObjectType_TopBackLeft, 15),     // U+135
+    bed(AudioObjectType_TopBackRight, 16),    // U-135
+    obj(-0.86603F, 0.50000F, 0.0F, 17),       // U+090
+    obj(0.86603F, 0.50000F, 0.0F, 18),        // U-090
+    obj(0.0F, 0.50000F, 0.86603F, 19),        // U+180
+    obj(0.0F, -0.50000F, -0.86603F, 20),      // B+000
+    obj(-0.61237F, -0.50000F, -0.61237F, 21), // B+045 (dynamic: keep static bed to 7.1.4)
+    obj(0.61237F, -0.50000F, -0.61237F, 22),  // B-045
 }};
 
 struct WindowsSpeakerLayout {
