@@ -18,6 +18,20 @@ Use Debug builds for correctness checks, fixture tests, and local quality gates.
 runtime, and RSS comparisons; Debug timing or memory data is only directional and should not be reported as final
 benchmark evidence.
 
+### Windows `windows-testbox` Build Notes
+
+On `windows-testbox`, use the existing canonical MSVC/Ninja build path under `[REDACTED]\MacinRender-ADM-Core`.
+For a clean Windows full build, delete only `build\win-canon`, then run `[REDACTED]\canonrun.cmd`; this
+configures and builds `build\win-canon` with the known-good options (`cl`, vendored FLAC/Opus,
+IAMF/SOFA off, OpenBLAS headers/libraries, and the existing FetchContent cache). Check
+`[REDACTED]\canon.flag` for `cfg=0` and `build=0`, with details in `canon-configure.log` and
+`canon-build.log`.
+
+Do not use `winconf.cmd` / `winbuild.cmd` or `msvcrun.cmd` as the default validation path for this
+repo: those target alternate `win-debug` / `win-msvc` trees and can hit unrelated SAF/OpenBLAS or
+MSVC complex-header issues. For tests after a successful canonical build, use `ctestonly.cmd` or
+`fullctest.cmd` as appropriate.
+
 ## Coding Style & Naming Conventions
 
 Follow `.clang-format`: LLVM base style, 4-space indentation, no tabs, C++20, 120-column limit, sorted includes. `.editorconfig` requires LF endings, UTF-8, final newlines, and trimmed trailing whitespace. Naming follows `.clang-tidy`: namespaces, functions, variables, and enum constants use `lower_case`; classes and structs use `CamelCase`. Keep public headers free of backend-specific third-party types unless that header belongs to the backend boundary.
