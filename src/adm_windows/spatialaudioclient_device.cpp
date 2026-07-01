@@ -1,10 +1,13 @@
 // spatialaudioclient_device.cpp
 //
 // Windows-only IAudioOutputDevice backed by ISpatialAudioClient. Instead of opening a raw
-// multichannel hardware device (the miniaudio path), it submits the monitor's multichannel bed as a
-// set of *static* spatial-audio objects (one per channel), and the active Windows spatializer
-// (Windows Sonic for Headphones / Dolby Atmos for Headphones / DTS Headphone:X) HRTF-renders the
-// bed to the headphone route. This is the Windows analog of adm_apple/avsamplebuffer_device.mm.
+// multichannel hardware device (the miniaudio path), it submits the monitor's multichannel bed as
+// spatial-audio objects (one per channel) and the active Windows spatializer (Windows Sonic for
+// Headphones / Dolby Atmos for Headphones / DTS Headphone:X) HRTF-renders them to the headphone
+// route. Most channels map to named *static* bed slots; layouts above the 8.1.4.4 static ceiling
+// route extra speaker positions as *dynamic* objects pinned in space with SetPosition
+// (see windows_layouts.h). This is the Windows analog of
+// adm_apple/avsamplebuffer_device.mm.
 //
 // Unlike AVSampleBufferAudioRenderer (a buffered push renderer needing prefill/stall machinery),
 // ISpatialAudioClient is an event-driven *pull*: a dedicated render thread waits on the stream's
@@ -15,6 +18,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -41,6 +45,9 @@ namespace mradm::realtime {
 namespace {
 
 using Microsoft::WRL::ComPtr;
+
+constexpr float k_lfe_pair_gain = 0.70710678F;
+constexpr float k_lfe_active_epsilon = 1.0e-12F;
 
 // Build an error (carrying the failing HRESULT in hex) ready to return into a Result<>. Mirrors
 // make_error's tl::unexpected<Error> return so callers can `return hr_error(...)` directly.
@@ -181,7 +188,7 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
 
         object_format_ = WAVEFORMATEX{};
         object_format_.wFormatTag = WAVE_FORMAT_IEEE_FLOAT;
-        object_format_.nChannels = 1; // each static object is a mono bed channel
+        object_format_.nChannels = 1; // each static/dynamic spatial object is mono
         object_format_.nSamplesPerSec = sample_rate_;
         object_format_.wBitsPerSample = 32;
         object_format_.nBlockAlign = static_cast<WORD>(object_format_.nChannels * object_format_.wBitsPerSample / 8);
@@ -200,11 +207,19 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
 
         ResetEvent(buffer_event_); // clear any stale signal from a prior (invalidated) stream
 
+        // Static bed slots come for free via StaticObjectTypeMask; layouts above the 8.1.4.4 static
+        // ceiling additionally request dynamic objects. Min == Max
+        // == the needed count so activation fails up front if the spatializer can't provide them
+        // (returned as unsupported below) rather than the pump discovering it mid-stream and spinning
+        // on rebuilds. All three spatializers report ample dynamic capacity (Dolby 16 / DTS 32 /
+        // Sonic 111), so the 4 objects 9.1.6 needs and 8 objects 22.2 needs never gate in practice.
+        const uint32_t dynamic_count = windows_layouts::dynamic_object_count(*layout_);
+
         SpatialAudioObjectRenderStreamActivationParams params{};
         params.ObjectFormat = &object_format_;
         params.StaticObjectTypeMask = windows_layouts::static_object_mask(*layout_);
-        params.MinDynamicObjectCount = 0;
-        params.MaxDynamicObjectCount = 0;
+        params.MinDynamicObjectCount = dynamic_count;
+        params.MaxDynamicObjectCount = dynamic_count;
         params.Category = AudioCategory_Media;
         params.EventHandle = buffer_event_;
         params.NotifyObject = nullptr;
@@ -220,7 +235,18 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
             return hr_error(ErrorCode::unsupported, "激活空间音频流失败(可能未启用空间音频格式)", "system-spatial", hr);
         }
 
-        objects_.assign(layout_->object_types.size(), nullptr);
+        const std::size_t object_count = windows_layouts::object_count(*layout_);
+        objects_.assign(object_count, nullptr);
+        object_routes_.assign(object_count, {});
+        object_sources_.assign(object_count, {});
+        for (std::size_t ch = 0; ch < layout_->routes.size(); ++ch) {
+            const windows_layouts::ChannelRoute& route = layout_->routes[ch];
+            const std::size_t slot = windows_layouts::object_slot(route, ch);
+            if (object_routes_[slot].type == AudioObjectType_None) {
+                object_routes_[slot] = route;
+            }
+            object_sources_[slot].push_back(ch);
+        }
         scratch_.assign(0, 0.0F);
 
         hr = render_stream_->Start();
@@ -280,24 +306,37 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
                           0.0F);
             }
 
-            // Deinterleave into each static object's mono buffer. Static objects persist for the
-            // stream's lifetime, so activate each once (lazily) and reuse the ComPtr thereafter.
-            // A failure here means the stream is no longer usable (it can also be invalidated *after*
-            // Begin succeeded — e.g. a spatializer switch landing mid-cycle). Treat it as invalidation
-            // and rebuild rather than silently dropping the channel while monitoring looks healthy.
-            // Our bed types are always a subset of the native 8.1.4.4 mask, so activation never fails
-            // for a genuine config reason — only a dead stream does.
-            for (std::size_t ch = 0; ch < objects_.size(); ++ch) {
-                if (objects_[ch] == nullptr) {
-                    hr = render_stream_->ActivateSpatialAudioObject(layout_->object_types[ch], &objects_[ch]);
-                    if (FAILED(hr) || objects_[ch] == nullptr) {
-                        objects_[ch] = nullptr;
+            // Deinterleave/mix into each object's mono buffer. Objects (static bed slots and dynamic
+            // virtual speakers alike) persist for the stream's lifetime, so activate each once
+            // (lazily) and reuse the ComPtr thereafter — keeping GetBuffer fed every pass is what
+            // keeps them alive. A failure here means the stream is no longer usable (it can also be
+            // invalidated *after* Begin succeeded — e.g. a spatializer switch landing mid-cycle).
+            // Treat it as invalidation and rebuild rather than silently dropping the channel while
+            // monitoring looks healthy. Static types are always a subset of the native 8.1.4.4 mask
+            // and the dynamic count was reserved at activation, so activation never fails for a
+            // genuine config reason — only a dead stream does.
+            for (std::size_t object_index = 0; object_index < objects_.size(); ++object_index) {
+                const windows_layouts::ChannelRoute& route = object_routes_[object_index];
+                if (objects_[object_index] == nullptr) {
+                    hr = render_stream_->ActivateSpatialAudioObject(route.type, &objects_[object_index]);
+                    if (FAILED(hr) || objects_[object_index] == nullptr) {
+                        objects_[object_index] = nullptr;
                         return PumpResult::Invalidated;
+                    }
+                    // A dynamic object is a fixed virtual speaker, so set its position once right
+                    // after activation; it persists "until changed" (we never move it). Static bed
+                    // slots ignore position (the spatializer owns their geometry).
+                    if (route.is_dynamic) {
+                        hr = objects_[object_index]->SetPosition(route.x, route.y, route.z);
+                        if (FAILED(hr)) {
+                            objects_[object_index] = nullptr;
+                            return PumpResult::Invalidated;
+                        }
                     }
                 }
                 BYTE* buffer = nullptr;
                 UINT32 buffer_bytes = 0;
-                hr = objects_[ch]->GetBuffer(&buffer, &buffer_bytes);
+                hr = objects_[object_index]->GetBuffer(&buffer, &buffer_bytes);
                 if (FAILED(hr) || buffer == nullptr) {
                     return PumpResult::Invalidated;
                 }
@@ -305,8 +344,40 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
                 const UINT32 copy_frames =
                     (buffer_bytes < want_bytes ? buffer_bytes : want_bytes) / static_cast<UINT32>(sizeof(float));
                 auto* dst = reinterpret_cast<float*>(buffer);
-                for (UINT32 f = 0; f < copy_frames; ++f) {
-                    dst[f] = scratch_[static_cast<std::size_t>(f) * channels_ + ch];
+                const std::vector<std::size_t>& sources = object_sources_[object_index];
+                if (route.type == AudioObjectType_LowFrequency && sources.size() == 2U) {
+                    // 22.2 folds LFE1/LFE2 into the one Windows LFE object; attenuate only when
+                    // both source channels are active in this render block.
+                    const auto source_has_energy = [&](std::size_t ch) {
+                        for (UINT32 f = 0; f < copy_frames; ++f) {
+                            if (std::abs(scratch_[static_cast<std::size_t>(f) * channels_ + ch]) >
+                                k_lfe_active_epsilon) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    };
+                    const bool attenuate_sum = source_has_energy(sources[0]) && source_has_energy(sources[1]);
+                    for (UINT32 f = 0; f < copy_frames; ++f) {
+                        const std::size_t frame_offset = static_cast<std::size_t>(f) * channels_;
+                        const float a = scratch_[frame_offset + sources[0]];
+                        const float b = scratch_[frame_offset + sources[1]];
+                        dst[f] = attenuate_sum ? (a + b) * k_lfe_pair_gain : (a + b);
+                    }
+                } else if (sources.size() == 1U) {
+                    const std::size_t ch = sources.front();
+                    for (UINT32 f = 0; f < copy_frames; ++f) {
+                        dst[f] = scratch_[static_cast<std::size_t>(f) * channels_ + ch];
+                    }
+                } else {
+                    for (UINT32 f = 0; f < copy_frames; ++f) {
+                        const std::size_t frame_offset = static_cast<std::size_t>(f) * channels_;
+                        float sample = 0.0F;
+                        for (const std::size_t ch : sources) {
+                            sample += scratch_[frame_offset + ch];
+                        }
+                        dst[f] = sample;
+                    }
                 }
             }
             // end_guard ends the cycle on scope exit.
@@ -324,6 +395,8 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
             render_stream_->Reset();
         }
         objects_.clear();
+        object_routes_.clear();
+        object_sources_.clear();
         render_stream_.Reset();
         spatial_client_.Reset();
     }
@@ -341,6 +414,8 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
     ComPtr<ISpatialAudioClient> spatial_client_;
     ComPtr<ISpatialAudioObjectRenderStream> render_stream_;
     std::vector<ComPtr<ISpatialAudioObject>> objects_;
+    std::vector<windows_layouts::ChannelRoute> object_routes_;
+    std::vector<std::vector<std::size_t>> object_sources_;
     std::vector<float> scratch_; // interleaved pull staging, channels_ wide
 };
 
