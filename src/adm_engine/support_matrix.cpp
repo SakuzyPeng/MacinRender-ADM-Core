@@ -9,7 +9,6 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
 #include "adm/capability.h"
@@ -122,6 +121,36 @@ has_layout_row(const std::vector<OutputLayoutRow>& rows, std::string_view format
     return &*it;
 }
 
+[[nodiscard]] std::string quoted_reason(std::string_view prefix, std::string_view value, std::string_view suffix) {
+    std::string out;
+    out.reserve(prefix.size() + value.size() + suffix.size() + 2U);
+    out.append(prefix);
+    out.push_back('\'');
+    out.append(value);
+    out.push_back('\'');
+    out.append(suffix);
+    return out;
+}
+
+[[nodiscard]] std::string quoted_pair_reason(std::string_view prefix,
+                                             std::string_view first,
+                                             std::string_view infix,
+                                             std::string_view second,
+                                             std::string_view suffix = {}) {
+    std::string out;
+    out.reserve(prefix.size() + first.size() + infix.size() + second.size() + suffix.size() + 4U);
+    out.append(prefix);
+    out.push_back('\'');
+    out.append(first);
+    out.push_back('\'');
+    out.append(infix);
+    out.push_back('\'');
+    out.append(second);
+    out.push_back('\'');
+    out.append(suffix);
+    return out;
+}
+
 [[nodiscard]] std::vector<LayoutSummary> build_layouts(const std::vector<OutputLayoutRow>& rows) {
     std::vector<LayoutSummary> layouts;
     for (const auto& row : rows) {
@@ -195,24 +224,36 @@ has_layout_row(const std::vector<OutputLayoutRow>& rows, std::string_view format
                                          const OutputFormatInfo& format,
                                          const std::vector<OutputLayoutRow>& layout_rows) {
     if (!find_backend_layout(backend.capabilities, layout.layout).has_value()) {
-        return fmt::format("renderer '{}' does not support layout '{}'", backend.renderer, layout.layout);
+        return quoted_pair_reason("renderer ", backend.renderer, " does not support layout ", layout.layout);
     }
     if (!format.available) {
-        return format.available_reason.empty() ? fmt::format("format '{}' is unavailable", target.format)
+        return format.available_reason.empty() ? quoted_reason("format ", target.format, " is unavailable")
                                                : format.available_reason;
     }
     if (!target.layout_format.empty() && !has_layout_row(layout_rows, target.layout_format, layout.layout)) {
-        return fmt::format("target '{}' does not define layout '{}'", target.target, layout.layout);
+        return quoted_pair_reason("target ", target.target, " does not define layout ", layout.layout);
     }
     if (format.max_channels > 0U && layout.channels > format.max_channels) {
-        return fmt::format("target '{}' supports at most {} channels; layout '{}' has {} channels",
-                           target.target,
-                           format.max_channels,
-                           layout.layout,
-                           layout.channels);
+        std::string out;
+        out.reserve(target.target.size() + layout.layout.size() + 80U);
+        out.append("target '");
+        out.append(target.target);
+        out.append("' supports at most ");
+        out.append(std::to_string(format.max_channels));
+        out.append(" channels; layout '");
+        out.append(layout.layout);
+        out.append("' has ");
+        out.append(std::to_string(layout.channels));
+        out.append(" channels");
+        return out;
     }
     if (!format.supports_height && layout.is_3d) {
-        return fmt::format("target '{}' does not support height/3D layouts", target.target);
+        std::string out;
+        out.reserve(target.target.size() + 45U);
+        out.append("target '");
+        out.append(target.target);
+        out.append("' does not support height/3D layouts");
+        return out;
     }
     return {};
 }
