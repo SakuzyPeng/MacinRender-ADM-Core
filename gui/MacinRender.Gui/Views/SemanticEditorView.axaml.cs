@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -242,6 +243,7 @@ public partial class SemanticEditorView : UserControl
             return;
         }
 
+        string? path = null;
         try
         {
             var suggested = string.IsNullOrEmpty(vm.LoadedPath)
@@ -258,24 +260,56 @@ public partial class SemanticEditorView : UserControl
                 },
             });
 
-            var path = file?.TryGetLocalPath();
-            if (!string.IsNullOrEmpty(path) && await vm.ExportToAsync(path))
+            path = file?.TryGetLocalPath();
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            if (await vm.ExportToAsync(path))
             {
                 FlashIcon(FlashExport);
+                return;
             }
+
+            await ShowExportFailureDialogAsync(vm);
         }
         catch (OperationCanceledException)
         {
         }
         catch (Exception ex)
         {
-            vm.ReportExportException(ex);
+            vm.ReportExportException(ex, path);
+            await ShowExportFailureDialogAsync(vm);
+        }
+    }
+
+    private async Task ShowExportFailureDialogAsync(SemanticEditorViewModel vm)
+    {
+        if (string.IsNullOrWhiteSpace(vm.LastExportFailureDetails))
+        {
+            return;
+        }
+
+        var dialog = new ExportErrorWindow(vm.LastExportFailureDetails);
+        if (TopLevel.GetTopLevel(this) is Window owner)
+        {
+            await dialog.ShowDialog(owner);
+        }
+        else
+        {
+            dialog.Show();
         }
     }
 
     // 成功微反馈:叠在原图标上的绿色副本短暂泛起再淡灭(Opacity transition 在 XAML)。与批渲染同一套。
-    private static void FlashIcon(Control icon)
+    private static void FlashIcon(Control? icon)
     {
+        if (icon is null)
+        {
+            return;
+        }
+
         icon.Opacity = 1;
         DispatcherTimer.RunOnce(() => icon.Opacity = 0, TimeSpan.FromSeconds(0.55));
     }
