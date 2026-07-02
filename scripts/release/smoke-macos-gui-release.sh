@@ -52,7 +52,11 @@ deps="$package_root/DEPENDENCIES.txt"
 
 for required in "$app_root" "$exe" "$app_root/Contents/Info.plist" "$app_root/Contents/Resources/AppIcon.icns" \
     "$deps" "$package_root/LICENSE" "$package_root/THIRD_PARTY_NOTICES.md" "$package_root/BUILD_INFO.txt" \
-    "$package_root/licenses/INDEX.md" "$package_root/sbom.cyclonedx.json"; do
+    "$package_root/licenses/INDEX.md" "$package_root/sbom.cyclonedx.json" \
+    "$app_root/Contents/Resources/Legal/LICENSE" \
+    "$app_root/Contents/Resources/Legal/THIRD_PARTY_NOTICES.md" \
+    "$app_root/Contents/Resources/Legal/licenses/INDEX.md" \
+    "$app_root/Contents/Resources/Legal/sbom.cyclonedx.json"; do
     if [[ ! -e "$required" ]]; then
         echo "package is missing ${required#$package_root/}" >&2
         exit 1

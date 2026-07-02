@@ -79,6 +79,9 @@ MacinRender ADM Core 的项目源码采用 **MIT License**，以仓库根目录 
 5. `BUILD_INFO.txt`：构建配置摘要（version/commit/平台/cmake_options）。
 6. `DEPENDENCIES.txt`：运行时动态库清单（`otool -L` / `ldd` / `dumpbin`）。
 
+macOS GUI 发行包还会把 `LICENSE`、`THIRD_PARTY_NOTICES.md`、`licenses/` 与 SBOM 再复制一份到
+`.app/Contents/Resources/Legal/`，避免用户只移动 `.app` 时丢失许可文本。
+
 若包含示例 SOFA/HRTF/ADM 音频素材，素材许可证必须与代码许可证分开声明。
 
 > 维护方式：依赖清单的唯一事实源是 `third_party/manifest.json`。新增/升级依赖后运行

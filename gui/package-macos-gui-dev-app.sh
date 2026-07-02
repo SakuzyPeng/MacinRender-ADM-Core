@@ -29,11 +29,17 @@ app="$here/dist/$app_name.app"
 rm -rf "$app"
 macos="$app/Contents/MacOS"
 res="$app/Contents/Resources"
-mkdir -p "$macos" "$res"
+legal="$res/Legal"
+repo="$(cd "$here/.." && pwd)"
+mkdir -p "$macos" "$res" "$legal"
 
 cp "$publish/MacinRender.Gui" "$macos/$app_name"          # 主二进制(AOT)
 cp "$publish/"*.dylib "$macos/"                            # 全部 native 依赖(含 capi / headtrack)
 [[ -f "$proj/Assets/AppIcon.icns" ]] && cp "$proj/Assets/AppIcon.icns" "$res/AppIcon.icns"
+cp "$repo/LICENSE" "$legal/LICENSE"
+cp "$repo/docs/THIRD_PARTY_LICENSES.md" "$legal/THIRD_PARTY_NOTICES.md"
+cp -R "$repo/third_party/licenses" "$legal/licenses"
+cp "$repo/third_party/sbom.cyclonedx.json" "$legal/sbom.cyclonedx.json"
 
 # 3. Info.plist(含 NSMotionUsageDescription —— AirPods 头追踪的硬前提)
 cat > "$app/Contents/Info.plist" <<PLIST

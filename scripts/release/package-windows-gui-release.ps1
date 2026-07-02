@@ -294,6 +294,12 @@ if (!(Test-ExistingPath (Join-Path $appDir "mradm_capi.dll"))) {
     throw "published GUI native bundle is missing: $(Join-Path $appDir 'mradm_capi.dll')"
 }
 
+$launcher = Join-Path $packageRoot "MacinRender ADM.cmd"
+@(
+    "@echo off",
+    "start """" ""%~dp0app\MacinRender.Gui.exe"" %*"
+) | Set-Content -Path $launcher -Encoding ASCII
+
 $dllSearchDirs = @()
 if (Test-ExistingPath $OpenBlasRoot) {
     $dllSearchDirs += Join-Path $OpenBlasRoot "bin"
@@ -373,6 +379,7 @@ foreach ($entry in $packagedDlls.GetEnumerator() | Sort-Object Name) {
 $buildInfo = @(
     "name: MacinRender ADM GUI",
     "binary: app\MacinRender.Gui.exe",
+    "launcher: MacinRender ADM.cmd",
     "version: $version",
     "commit: $commitSha",
     "rid: $Rid",
