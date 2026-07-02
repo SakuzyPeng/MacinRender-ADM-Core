@@ -19,6 +19,8 @@ public sealed class MonitorService : IDisposable
     private AdmMonitorHandle? _monitor;
 
     public bool IsActive => _monitor is { IsInvalid: false };
+    public string? LastStartFailureDetails { get; private set; }
+    public string? LastOperationFailureDetails { get; private set; }
 
     /// <summary>枚举系统输出设备(adm_monitor_output_devices_json)。失败 / 无设备返回空列表。
     /// 不需要活动会话:内部开一个临时 context 查询。</summary>
@@ -52,6 +54,8 @@ public sealed class MonitorService : IDisposable
         ArgumentException.ThrowIfNullOrEmpty(inputPath);
         ArgumentNullException.ThrowIfNull(settings);
         Stop();
+        LastStartFailureDetails = null;
+        LastOperationFailureDetails = null;
 
         var ctx = NativeMethods.adm_create_context();
         if (ctx.IsInvalid)
@@ -72,6 +76,7 @@ public sealed class MonitorService : IDisposable
             var rc = NativeMethods.adm_create_monitor_ex(ctx, inputPath, opts, deviceId, out var monitor);
             if (rc != AdmErrorCode.Ok || monitor.IsInvalid)
             {
+                LastStartFailureDetails = ReadLastError(ctx);
                 monitor.Dispose();
                 ctx.Dispose();
                 return rc == AdmErrorCode.Ok ? AdmErrorCode.Internal : rc;
@@ -83,29 +88,82 @@ public sealed class MonitorService : IDisposable
         }
     }
 
+    private static string? ReadLastError(AdmContextHandle ctx)
+    {
+        var ptr = NativeMethods.adm_context_last_error_message(ctx);
+        var text = ptr == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(ptr);
+        return string.IsNullOrWhiteSpace(text) ? null : text;
+    }
+
     public AdmErrorCode Play() => Call(NativeMethods.adm_monitor_play);
     public AdmErrorCode Pause() => Call(NativeMethods.adm_monitor_pause);
 
-    public AdmErrorCode Seek(double seconds) =>
-        _monitor is { IsInvalid: false } m ? NativeMethods.adm_monitor_seek(m, seconds) : AdmErrorCode.InvalidArgument;
+    public AdmErrorCode Seek(double seconds)
+    {
+        LastOperationFailureDetails = null;
+        if (_monitor is not { IsInvalid: false } m)
+        {
+            return AdmErrorCode.InvalidArgument;
+        }
 
-    public AdmErrorCode SetLoop(double startSeconds, double endSeconds) =>
-        _monitor is { IsInvalid: false } m
-            ? NativeMethods.adm_monitor_set_loop(m, startSeconds, endSeconds)
-            : AdmErrorCode.InvalidArgument;
+        var rc = NativeMethods.adm_monitor_seek(m, seconds);
+        if (rc != AdmErrorCode.Ok)
+        {
+            LastOperationFailureDetails = ReadLastError(m);
+        }
+        return rc;
+    }
+
+    public AdmErrorCode SetLoop(double startSeconds, double endSeconds)
+    {
+        LastOperationFailureDetails = null;
+        if (_monitor is not { IsInvalid: false } m)
+        {
+            return AdmErrorCode.InvalidArgument;
+        }
+
+        var rc = NativeMethods.adm_monitor_set_loop(m, startSeconds, endSeconds);
+        if (rc != AdmErrorCode.Ok)
+        {
+            LastOperationFailureDetails = ReadLastError(m);
+        }
+        return rc;
+    }
 
     /// <summary>实时设置听者头部朝向(yaw/pitch/roll 度;yaw +左)。Apple 与 SAF 双耳监听后端实装,其它后端忽略。
     /// 契约:monitor 非线程安全,须在 UI 线程调用。</summary>
-    public AdmErrorCode SetListenerOrientation(float yawDeg, float pitchDeg, float rollDeg) =>
-        _monitor is { IsInvalid: false } m
-            ? NativeMethods.adm_monitor_set_listener_orientation(m, yawDeg, pitchDeg, rollDeg)
-            : AdmErrorCode.InvalidArgument;
+    public AdmErrorCode SetListenerOrientation(float yawDeg, float pitchDeg, float rollDeg)
+    {
+        LastOperationFailureDetails = null;
+        if (_monitor is not { IsInvalid: false } m)
+        {
+            return AdmErrorCode.InvalidArgument;
+        }
+
+        var rc = NativeMethods.adm_monitor_set_listener_orientation(m, yawDeg, pitchDeg, rollDeg);
+        if (rc != AdmErrorCode.Ok)
+        {
+            LastOperationFailureDetails = ReadLastError(m);
+        }
+        return rc;
+    }
 
     /// <summary>播放中即时切换输出设备(deviceId 为 null/"" = 默认设备)。保留播放头/状态/后端/覆盖。</summary>
-    public AdmErrorCode SetOutputDevice(string? deviceId) =>
-        _monitor is { IsInvalid: false } m
-            ? NativeMethods.adm_monitor_set_output_device(m, deviceId)
-            : AdmErrorCode.InvalidArgument;
+    public AdmErrorCode SetOutputDevice(string? deviceId)
+    {
+        LastOperationFailureDetails = null;
+        if (_monitor is not { IsInvalid: false } m)
+        {
+            return AdmErrorCode.InvalidArgument;
+        }
+
+        var rc = NativeMethods.adm_monitor_set_output_device(m, deviceId);
+        if (rc != AdmErrorCode.Ok)
+        {
+            LastOperationFailureDetails = ReadLastError(m);
+        }
+        return rc;
+    }
 
     /// <summary>热切换后端 / 布局(立体声监听下可跨布局,经下混)。</summary>
     public AdmErrorCode SwitchBackend(RenderSettings settings)
@@ -123,7 +181,13 @@ public sealed class MonitorService : IDisposable
         }
 
         AdmRenderService.ApplySettings(opts, settings);
-        return NativeMethods.adm_monitor_switch_backend(m, opts);
+        LastOperationFailureDetails = null;
+        var rc = NativeMethods.adm_monitor_switch_backend(m, opts);
+        if (rc != AdmErrorCode.Ok)
+        {
+            LastOperationFailureDetails = ReadLastError(m);
+        }
+        return rc;
     }
 
     /// <summary>替换全部按对象覆盖(列表为空表示清空)。revision 经 status.OverrideRevision 回显。</summary>
@@ -272,6 +336,26 @@ public sealed class MonitorService : IDisposable
 
     public void Dispose() => Stop();
 
-    private AdmErrorCode Call(Func<AdmMonitorHandle, AdmErrorCode> fn) =>
-        _monitor is { IsInvalid: false } m ? fn(m) : AdmErrorCode.InvalidArgument;
+    private AdmErrorCode Call(Func<AdmMonitorHandle, AdmErrorCode> fn)
+    {
+        LastOperationFailureDetails = null;
+        if (_monitor is not { IsInvalid: false } m)
+        {
+            return AdmErrorCode.InvalidArgument;
+        }
+
+        var rc = fn(m);
+        if (rc != AdmErrorCode.Ok)
+        {
+            LastOperationFailureDetails = ReadLastError(m);
+        }
+        return rc;
+    }
+
+    private static string? ReadLastError(AdmMonitorHandle monitor)
+    {
+        var ptr = NativeMethods.adm_monitor_last_error_message(monitor);
+        var text = ptr == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(ptr);
+        return string.IsNullOrWhiteSpace(text) ? null : text;
+    }
 }

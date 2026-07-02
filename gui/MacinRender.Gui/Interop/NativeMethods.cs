@@ -30,6 +30,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib)]
     internal static partial void adm_destroy_context(IntPtr context);
 
+    [LibraryImport(Lib)]
+    internal static partial IntPtr adm_context_last_error_message(AdmContextHandle context);
+
     // ── options:生命周期 ──
     [LibraryImport(Lib)]
     internal static partial AdmRenderOptionsHandle adm_create_render_options();
@@ -261,6 +264,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib)]
     internal static partial void adm_destroy_monitor(IntPtr monitor);
+
+    [LibraryImport(Lib)]
+    internal static partial IntPtr adm_monitor_last_error_message(AdmMonitorHandle monitor);
 
     [LibraryImport(Lib)]
     internal static partial AdmErrorCode adm_monitor_play(AdmMonitorHandle monitor);

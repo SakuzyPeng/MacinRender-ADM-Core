@@ -74,7 +74,7 @@
 
             <Slider x:Name="SeekSlider" Grid.Column="2" VerticalAlignment="Center" Minimum="0"
                     Maximum="{Binding DurationSeconds}" Value="{Binding PlayheadSeconds}"
-                    IsEnabled="{Binding HasFile}"/>
+                    IsEnabled="{Binding CanSeek}"/>
 
             <TextBlock Grid.Column="3" VerticalAlignment="Center" MinWidth="40" FontSize="12"
                        Foreground="#9A9A9F" Text="{Binding DurationText}"/>

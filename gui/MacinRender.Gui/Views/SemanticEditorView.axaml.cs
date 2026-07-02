@@ -243,8 +243,6 @@ public partial class SemanticEditorView : UserControl
             return;
         }
 
-        vm.PauseMonitorForExport();
-
         string? path = null;
         try
         {
@@ -293,7 +291,27 @@ public partial class SemanticEditorView : UserControl
             return;
         }
 
-        var dialog = new ExportErrorWindow(vm.LastExportFailureDetails);
+        await ShowDetailsDialogAsync(vm.LastExportFailureDetails);
+    }
+
+    private async void OnMonitorStatusPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not SemanticEditorViewModel vm || string.IsNullOrWhiteSpace(vm.MonitorStatusDetails))
+        {
+            return;
+        }
+
+        var details = string.IsNullOrWhiteSpace(vm.MonitorStatus)
+            ? vm.MonitorStatusDetails
+            : vm.MonitorStatus + Environment.NewLine + vm.MonitorStatusDetails;
+        await ShowDetailsDialogAsync(details, Localizer.Instance["SemMonDetailsTitle"],
+            Localizer.Instance["SemMonDetailsSubtitle"]);
+        e.Handled = true;
+    }
+
+    private async Task ShowDetailsDialogAsync(string details, string? title = null, string? subtitle = null)
+    {
+        var dialog = new ExportErrorWindow(details, title, subtitle);
         if (TopLevel.GetTopLevel(this) is Window owner)
         {
             await dialog.ShowDialog(owner);

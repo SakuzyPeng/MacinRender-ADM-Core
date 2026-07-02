@@ -299,6 +299,7 @@ class CollectingLogSink final : public mradm::LogSink {
 
 struct adm_context_t {
     mradm::RenderService service;
+    std::string last_error_message;
 };
 
 struct adm_cancel_token_t {
@@ -330,13 +331,50 @@ struct adm_preview_session_t {
     mradm::PreviewSession session;
 };
 
+static void clear_last_error(adm_context_t* context) {
+    if (context != nullptr) {
+        context->last_error_message.clear();
+    }
+}
+
+static void store_last_error(adm_context_t* context, const mradm::Error& error) {
+    if (context == nullptr) {
+        return;
+    }
+
+    context->last_error_message = error.message;
+    if (!error.context.empty()) {
+        context->last_error_message += ": ";
+        context->last_error_message += error.context;
+    }
+}
+
 struct adm_monitor_t {
     std::unique_ptr<mradm::MonitorSession> session;
+    std::string last_error_message;
     // Scratch storage backing the const char* returned by adm_monitor_log_entry; valid
     // until the next adm_monitor_* call (as the header documents).
     std::string log_module;
     std::string log_message;
 };
+
+static void clear_last_error(adm_monitor_t* monitor) {
+    if (monitor != nullptr) {
+        monitor->last_error_message.clear();
+    }
+}
+
+static void store_last_error(adm_monitor_t* monitor, const mradm::Error& error) {
+    if (monitor == nullptr) {
+        return;
+    }
+
+    monitor->last_error_message = error.message;
+    if (!error.context.empty()) {
+        monitor->last_error_message += ": ";
+        monitor->last_error_message += error.context;
+    }
+}
 
 // Build an owned C result handle from a finished render. Shared by adm_render_file_ex
 // and adm_preview_render_window. Returns nullptr on allocation failure.
@@ -425,6 +463,10 @@ adm_context_t* adm_create_context(void) noexcept {
 
 void adm_destroy_context(adm_context_t* context) noexcept {
     delete context;
+}
+
+const char* adm_context_last_error_message(const adm_context_t* context) noexcept {
+    return context != nullptr ? context->last_error_message.c_str() : "";
 }
 
 /* ── Options builder ─────────────────────────────────────────────────────── */
@@ -880,6 +922,7 @@ adm_error_code_t adm_create_preview_session(adm_context_t* context,
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
+        clear_last_error(context);
         mradm::RenderOptions options;
         if (opts != nullptr) {
             options = opts->opts;
@@ -890,16 +933,21 @@ adm_error_code_t adm_create_preview_session(adm_context_t* context,
         mradm::NullLogSink null_sink;
         auto created = mradm::PreviewSession::create(input_path, std::move(options), null_sink);
         if (!created) {
+            store_last_error(context, created.error());
             return map_error(created.error().code);
         }
         // cppcheck-suppress unreadVariable -- session is used (*out = session)
         auto* session = new (std::nothrow) adm_preview_session_t{std::move(*created)};
         if (session == nullptr) {
+            context->last_error_message = "failed to allocate preview session handle";
             return ADM_ERROR_INTERNAL;
         }
         *out = session;
         return ADM_ERROR_OK;
     } catch (...) {
+        if (context != nullptr) {
+            context->last_error_message = "unexpected exception while creating preview session";
+        }
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -992,6 +1040,7 @@ adm_error_code_t adm_create_monitor_ex(adm_context_t* context,
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
+        clear_last_error(context);
         mradm::RenderOptions options;
         if (opts != nullptr) {
             options = opts->opts;
@@ -1002,16 +1051,21 @@ adm_error_code_t adm_create_monitor_ex(adm_context_t* context,
         const std::string device = device_id != nullptr ? std::string{device_id} : std::string{};
         auto created = mradm::MonitorSession::create(input_path, options, device);
         if (!created) {
+            store_last_error(context, created.error());
             return map_error(created.error().code);
         }
         // cppcheck-suppress unreadVariable -- monitor is used (*out = monitor)
-        auto* monitor = new (std::nothrow) adm_monitor_t{std::move(*created), {}, {}};
+        auto* monitor = new (std::nothrow) adm_monitor_t{std::move(*created), {}, {}, {}};
         if (monitor == nullptr) {
+            context->last_error_message = "failed to allocate realtime monitor handle";
             return ADM_ERROR_INTERNAL;
         }
         *out = monitor;
         return ADM_ERROR_OK;
     } catch (...) {
+        if (context != nullptr) {
+            context->last_error_message = "unexpected exception while creating realtime monitor";
+        }
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1089,14 +1143,20 @@ void adm_destroy_monitor(adm_monitor_t* monitor) noexcept {
     delete monitor;
 }
 
+const char* adm_monitor_last_error_message(const adm_monitor_t* monitor) noexcept {
+    return monitor != nullptr ? monitor->last_error_message.c_str() : "";
+}
+
 adm_error_code_t adm_monitor_play(adm_monitor_t* monitor) noexcept {
     if (monitor == nullptr || !monitor->session) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
+        clear_last_error(monitor);
         monitor->session->play();
         return ADM_ERROR_OK;
     } catch (...) {
+        monitor->last_error_message = "unexpected exception while starting realtime monitor playback";
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1106,9 +1166,11 @@ adm_error_code_t adm_monitor_pause(adm_monitor_t* monitor) noexcept {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
+        clear_last_error(monitor);
         monitor->session->pause();
         return ADM_ERROR_OK;
     } catch (...) {
+        monitor->last_error_message = "unexpected exception while pausing realtime monitor playback";
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1118,9 +1180,15 @@ adm_error_code_t adm_monitor_seek(adm_monitor_t* monitor, double seconds) noexce
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
+        clear_last_error(monitor);
         auto result = monitor->session->seek_seconds(seconds);
-        return result ? ADM_ERROR_OK : map_error(result.error().code);
+        if (!result) {
+            store_last_error(monitor, result.error());
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
     } catch (...) {
+        monitor->last_error_message = "unexpected exception while seeking realtime monitor";
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1130,9 +1198,11 @@ adm_error_code_t adm_monitor_set_loop(adm_monitor_t* monitor, double start_secon
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
+        clear_last_error(monitor);
         monitor->session->set_loop_seconds(start_seconds, end_seconds);
         return ADM_ERROR_OK;
     } catch (...) {
+        monitor->last_error_message = "unexpected exception while setting realtime monitor loop";
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1146,6 +1216,7 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
+        clear_last_error(monitor);
         mradm::LiveOverrides live;
         live.revision = revision;
         // The first element's struct_size is the array stride (all elements share it); it
@@ -1204,6 +1275,7 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
         monitor->session->set_overrides(live);
         return ADM_ERROR_OK;
     } catch (...) {
+        monitor->last_error_message = "unexpected exception while applying realtime monitor overrides";
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1215,6 +1287,7 @@ adm_monitor_set_listener_orientation(adm_monitor_t* monitor, float yaw_deg, floa
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
+        clear_last_error(monitor);
         mradm::ListenerOrientation orientation;
         orientation.yaw_deg = yaw_deg;
         orientation.pitch_deg = pitch_deg;
@@ -1222,6 +1295,7 @@ adm_monitor_set_listener_orientation(adm_monitor_t* monitor, float yaw_deg, floa
         monitor->session->set_listener_orientation(orientation);
         return ADM_ERROR_OK;
     } catch (...) {
+        monitor->last_error_message = "unexpected exception while setting realtime monitor listener orientation";
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1231,13 +1305,19 @@ adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_re
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
+        clear_last_error(monitor);
         mradm::RenderOptions options;
         if (opts != nullptr) {
             options = opts->opts;
         }
         auto result = monitor->session->switch_backend(options);
-        return result ? ADM_ERROR_OK : map_error(result.error().code);
+        if (!result) {
+            store_last_error(monitor, result.error());
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
     } catch (...) {
+        monitor->last_error_message = "unexpected exception while switching realtime monitor backend";
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1247,10 +1327,16 @@ adm_error_code_t adm_monitor_set_output_device(adm_monitor_t* monitor, const cha
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
+        clear_last_error(monitor);
         const std::string device = device_id != nullptr ? std::string{device_id} : std::string{};
         auto result = monitor->session->set_output_device(device);
-        return result ? ADM_ERROR_OK : map_error(result.error().code);
+        if (!result) {
+            store_last_error(monitor, result.error());
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
     } catch (...) {
+        monitor->last_error_message = "unexpected exception while switching realtime monitor output device";
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1444,8 +1530,10 @@ adm_error_code_t adm_probe_file(adm_context_t* context, const char* input_path, 
     }
 
     try {
+        clear_last_error(context);
         auto probe_result = context->service.probe(input_path);
         if (!probe_result) {
+            store_last_error(context, probe_result.error());
             return map_error(probe_result.error().code);
         }
 
@@ -1456,6 +1544,7 @@ adm_error_code_t adm_probe_file(adm_context_t* context, const char* input_path, 
         // cppcheck-suppress unreadVariable -- info is read via *out = info below
         auto* info = new (std::nothrow) adm_scene_info_t{};
         if (info == nullptr) {
+            context->last_error_message = "failed to allocate scene info handle";
             return ADM_ERROR_INTERNAL;
         }
         info->sample_rate = probe_result->sample_rate;
@@ -1466,6 +1555,9 @@ adm_error_code_t adm_probe_file(adm_context_t* context, const char* input_path, 
         *out = info;
         return ADM_ERROR_OK;
     } catch (...) {
+        if (context != nullptr) {
+            context->last_error_message = "unexpected exception while probing ADM file";
+        }
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1512,8 +1604,10 @@ adm_error_code_t adm_inspect_file_json(adm_context_t* context, const char* input
     }
 
     try {
+        clear_last_error(context);
         auto json_result = context->service.inspect_json(input_path);
         if (!json_result) {
+            store_last_error(context, json_result.error());
             return map_error(json_result.error().code);
         }
         if (out_json == nullptr) {
@@ -1522,12 +1616,16 @@ adm_error_code_t adm_inspect_file_json(adm_context_t* context, const char* input
         const std::string& json = *json_result;
         auto* buffer = new (std::nothrow) char[json.size() + 1];
         if (buffer == nullptr) {
+            context->last_error_message = "failed to allocate ADM inspect JSON";
             return ADM_ERROR_INTERNAL;
         }
         std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
+        if (context != nullptr) {
+            context->last_error_message = "unexpected exception while inspecting ADM file";
+        }
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1541,8 +1639,10 @@ adm_error_code_t adm_inspect_file_xml(adm_context_t* context, const char* input_
     }
 
     try {
+        clear_last_error(context);
         auto xml_result = context->service.axml(input_path);
         if (!xml_result) {
+            store_last_error(context, xml_result.error());
             return map_error(xml_result.error().code);
         }
         if (out_xml == nullptr) {
@@ -1551,12 +1651,16 @@ adm_error_code_t adm_inspect_file_xml(adm_context_t* context, const char* input_
         const std::string& xml = *xml_result;
         auto* buffer = new (std::nothrow) char[xml.size() + 1];
         if (buffer == nullptr) {
+            context->last_error_message = "failed to allocate ADM XML";
             return ADM_ERROR_INTERNAL;
         }
         std::char_traits<char>::copy(buffer, xml.c_str(), xml.size() + 1);
         *out_xml = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
+        if (context != nullptr) {
+            context->last_error_message = "unexpected exception while reading ADM XML";
+        }
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1570,8 +1674,10 @@ adm_error_code_t adm_policy_template_json(adm_context_t* context, const char* in
     }
 
     try {
+        clear_last_error(context);
         auto tmpl_result = context->service.policy_template_json(input_path);
         if (!tmpl_result) {
+            store_last_error(context, tmpl_result.error());
             return map_error(tmpl_result.error().code);
         }
         if (out_json == nullptr) {
@@ -1580,12 +1686,16 @@ adm_error_code_t adm_policy_template_json(adm_context_t* context, const char* in
         const std::string& tmpl = *tmpl_result;
         auto* buffer = new (std::nothrow) char[tmpl.size() + 1];
         if (buffer == nullptr) {
+            context->last_error_message = "failed to allocate semantic-policy template JSON";
             return ADM_ERROR_INTERNAL;
         }
         std::char_traits<char>::copy(buffer, tmpl.c_str(), tmpl.size() + 1);
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
+        if (context != nullptr) {
+            context->last_error_message = "unexpected exception while building semantic-policy template";
+        }
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1600,15 +1710,20 @@ adm_error_code_t adm_export_file(adm_context_t* context,
     }
 
     try {
+        clear_last_error(context);
         mradm::NullLogSink logs;
         const mradm::RenderOptions default_options;
         const mradm::RenderOptions& options = (opts != nullptr) ? opts->opts : default_options;
         auto result = context->service.export_file(input_path, output_path, options, logs);
         if (!result) {
+            store_last_error(context, result.error());
             return map_error(result.error().code);
         }
         return ADM_ERROR_OK;
     } catch (...) {
+        if (context != nullptr) {
+            context->last_error_message = "unexpected exception while exporting ADM file";
+        }
         return ADM_ERROR_INTERNAL;
     }
 }

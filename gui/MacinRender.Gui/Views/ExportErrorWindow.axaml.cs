@@ -13,17 +13,25 @@ public partial class ExportErrorWindow : Window
 {
     private readonly TextBlock? _copyHint;
     private readonly TextBox? _detailsBox;
+    private readonly TextBlock? _subtitleBlock;
+    private readonly string? _subtitleOverride;
+    private readonly TextBlock? _titleBlock;
+    private readonly string? _titleOverride;
 
     public ExportErrorWindow()
         : this("")
     {
     }
 
-    public ExportErrorWindow(string details)
+    public ExportErrorWindow(string details, string? title = null, string? subtitle = null)
     {
+        _titleOverride = title;
+        _subtitleOverride = subtitle;
         InitializeComponent();
         _detailsBox = this.FindControl<TextBox>("DetailsBox");
         _copyHint = this.FindControl<TextBlock>("CopyHint");
+        _titleBlock = this.FindControl<TextBlock>("TitleBlock");
+        _subtitleBlock = this.FindControl<TextBlock>("SubtitleBlock");
         if (_detailsBox is not null)
         {
             _detailsBox.Text = details;
@@ -37,7 +45,22 @@ public partial class ExportErrorWindow : Window
 
     private void OnLocalizerChanged(object? sender, PropertyChangedEventArgs e) => UpdateTitle();
 
-    private void UpdateTitle() => Title = Localizer.Instance["SemExportErrorTitle"];
+    private void UpdateTitle()
+    {
+        var title = string.IsNullOrWhiteSpace(_titleOverride) ? Localizer.Instance["SemExportErrorTitle"] : _titleOverride;
+        var subtitle = string.IsNullOrWhiteSpace(_subtitleOverride)
+            ? Localizer.Instance["SemExportErrorSubtitle"]
+            : _subtitleOverride;
+        Title = title;
+        if (_titleBlock is not null)
+        {
+            _titleBlock.Text = title;
+        }
+        if (_subtitleBlock is not null)
+        {
+            _subtitleBlock.Text = subtitle;
+        }
+    }
 
     private async void OnCopy(object? sender, RoutedEventArgs e)
     {

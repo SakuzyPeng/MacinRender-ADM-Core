@@ -125,12 +125,20 @@
  *   （Windows Sonic / Dolby Atmos / DTS 头戴；7.1.4 / 5.1.4 / 5.1；静态空间化，无 OS 头追，需在
  *   声音设置启用某空间音频格式，否则监听返回 unsupported）；其它平台 / 离线渲染忽略。
  *   enabled：1=系统空间化，0=立体声下混（默认）。
+ *
+ * v1.25 新增（additive，SOVERSION 不变）：
+ *   adm_context_last_error_message. 返回最近一次 context 级失败的详细错误信息,供 GUI 在
+ *   adm_create_monitor_ex 等只返回错误码的入口失败后显示诊断。
+ *
+ * v1.26 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_last_error_message. 返回最近一次 monitor 级失败的详细错误信息,供 GUI 在
+ *   adm_monitor_switch_backend / adm_monitor_set_output_device / seek 等只返回错误码的入口失败后显示诊断。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 24
+#define ADM_API_VERSION_MINOR 26
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -333,6 +341,13 @@ int adm_api_version_patch(void) ADM_API_NOEXCEPT;
  */
 adm_context_t* adm_create_context(void) ADM_API_NOEXCEPT;
 void adm_destroy_context(adm_context_t* context) ADM_API_NOEXCEPT;
+/*
+ * Returns the latest diagnostic error message stored on this context, or an
+ * empty string when none is available. The returned pointer is owned by the
+ * context and remains valid until the next C API call that mutates the same
+ * context, or until adm_destroy_context.
+ */
+const char* adm_context_last_error_message(const adm_context_t* context) ADM_API_NOEXCEPT;
 
 /* ── v1.1 Options builder ────────────────────────────────────────────────── */
 /*
@@ -900,6 +915,13 @@ adm_error_code_t adm_create_monitor_ex(adm_context_t* context,
                                        const char* device_id,
                                        adm_monitor_t** out) ADM_API_NOEXCEPT;
 void adm_destroy_monitor(adm_monitor_t* monitor) ADM_API_NOEXCEPT;
+/*
+ * v1.26: Returns the latest diagnostic error message stored on this monitor,
+ * or an empty string when none is available. The returned pointer is owned by
+ * the monitor and remains valid until the next adm_monitor_* call that mutates
+ * the same monitor, or until adm_destroy_monitor.
+ */
+const char* adm_monitor_last_error_message(const adm_monitor_t* monitor) ADM_API_NOEXCEPT;
 
 adm_error_code_t adm_monitor_play(adm_monitor_t* monitor) ADM_API_NOEXCEPT;
 adm_error_code_t adm_monitor_pause(adm_monitor_t* monitor) ADM_API_NOEXCEPT;

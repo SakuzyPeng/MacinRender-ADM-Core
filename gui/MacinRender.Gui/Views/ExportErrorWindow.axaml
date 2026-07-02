@@ -10,8 +10,8 @@
 
     <Grid Margin="18" RowDefinitions="Auto,*,Auto" RowSpacing="12">
         <StackPanel Grid.Row="0" Spacing="4">
-            <TextBlock Classes="h1" Text="{DynamicResource SemExportErrorTitle}"/>
-            <TextBlock Classes="muted" TextWrapping="Wrap" Text="{DynamicResource SemExportErrorSubtitle}"/>
+            <TextBlock x:Name="TitleBlock" Classes="h1"/>
+            <TextBlock x:Name="SubtitleBlock" Classes="muted" TextWrapping="Wrap"/>
         </StackPanel>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">

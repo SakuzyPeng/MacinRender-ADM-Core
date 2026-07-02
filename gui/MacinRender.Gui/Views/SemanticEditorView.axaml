@@ -244,7 +244,7 @@
                     <!-- seek(拖动中只刷新画面,松手才真正 seek 一次:见 code-behind 监听 Thumb 拖动) -->
                     <Slider x:Name="SeekSlider" Grid.Column="2" VerticalAlignment="Center" Minimum="0"
                             Maximum="{Binding DurationSeconds}" Value="{Binding PlayheadSeconds}"
-                            IsEnabled="{Binding IsMonitoring}"/>
+                            IsEnabled="{Binding CanSeek}"/>
 
                     <!-- 总时长 -->
                     <TextBlock Grid.Column="3" VerticalAlignment="Center" MinWidth="40" FontSize="12"
@@ -300,7 +300,9 @@
 
                     <!-- 状态(错误 / 到尾):仅有内容时占位,空时不占死宽度 -->
                     <TextBlock Grid.Column="5" VerticalAlignment="Center" FontSize="11"
-                               Classes="muted" TextWrapping="Wrap" MaxWidth="96" Text="{Binding MonitorStatus}"/>
+                               Classes="muted" TextWrapping="Wrap" MaxWidth="96" Cursor="Hand"
+                               PointerPressed="OnMonitorStatusPressed" Text="{Binding MonitorStatus}"
+                               ToolTip.Tip="{Binding MonitorStatusDetails}"/>
                 </Grid>
             </ctrl:SquircleBorder>
 

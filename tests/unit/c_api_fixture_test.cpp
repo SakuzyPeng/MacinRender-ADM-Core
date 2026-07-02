@@ -2139,7 +2139,7 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
-    bool ok = check(adm_api_version_minor() == 24, "C ABI minor version is 24");
+    bool ok = check(adm_api_version_minor() == 26, "C ABI minor version is 26");
 
     // v1.22 listener orientation argument validation (no device needed).
     ok = check(adm_monitor_set_listener_orientation(nullptr, 0.0F, 0.0F, 0.0F) == ADM_ERROR_INVALID_ARGUMENT,
@@ -2156,6 +2156,10 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
          ok;
     ok = check(adm_monitor_set_output_device(nullptr, "") == ADM_ERROR_INVALID_ARGUMENT,
                "set_output_device(nullptr) rejected") &&
+         ok;
+    ok = check(adm_monitor_last_error_message(nullptr) != nullptr &&
+                   std::strlen(adm_monitor_last_error_message(nullptr)) == 0,
+               "monitor_last_error_message(nullptr) returns empty string") &&
          ok;
 
     // Argument validation (no device needed).
@@ -2174,6 +2178,15 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
          ok;
     ok = check(adm_create_monitor(ctx, input.string().c_str(), nullptr, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
                "create_monitor null out rejected") &&
+         ok;
+    adm_monitor_t* missing_monitor = nullptr;
+    const auto missing_input = unique_temp_wav_path("mr_c_api_monitor_missing");
+    const adm_error_code_t missing_code = adm_create_monitor(ctx, missing_input.string().c_str(), nullptr, &missing_monitor);
+    ok = check(missing_code != ADM_ERROR_OK, "create_monitor missing input should fail") && ok;
+    ok = check(missing_monitor == nullptr, "create_monitor missing input leaves out null") && ok;
+    const char* last_error = adm_context_last_error_message(ctx);
+    ok = check(last_error != nullptr && std::strlen(last_error) > 0,
+               "create_monitor missing input stores context last-error") &&
          ok;
     ok = check(adm_monitor_play(nullptr) == ADM_ERROR_INVALID_ARGUMENT, "play(nullptr) rejected") && ok;
     ok = check(adm_monitor_log_count(nullptr) == 0U, "log_count(nullptr) is 0") && ok;

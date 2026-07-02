@@ -319,6 +319,8 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanExport))]
+    [NotifyPropertyChangedFor(nameof(CanPlay))]
+    [NotifyPropertyChangedFor(nameof(CanSeek))]
     private bool _isExporting;
 
     public bool CanExport => HasFile && !IsExporting && !IsMonitorBusy;
@@ -337,21 +339,22 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             return false;
         }
 
-        PauseMonitorForExport();
         IsExporting = true;
         LastExportFailureDetails = null;
         SetStatus("SemExporting");
         try
         {
-            var rc = await _renderSvc.ExportAsync(LoadedPath!, outputPath, string.IsNullOrEmpty(PolicyJson) ? null : PolicyJson);
-            bool ok = rc == AdmErrorCode.Ok;
+            await PausePlaybackForExportAsync();
+            var outcome = await _renderSvc.ExportAsync(LoadedPath!, outputPath,
+                string.IsNullOrEmpty(PolicyJson) ? null : PolicyJson);
+            bool ok = outcome.Success;
             if (ok)
             {
-                SetStatus("SemExported", Path.GetFileName(outputPath));
+                SetStatus("SemExported");
             }
             else
             {
-                ReportExportFailure(rc.ToString(), BuildExportDetails($"Error code: {rc}", outputPath));
+                ReportExportFailure(BuildExportDetails(FormatOutcomeDetails(outcome), outputPath));
             }
 
             return ok;
@@ -374,14 +377,14 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     public void ReportExportException(Exception ex, string? outputPath)
     {
-        ReportExportFailure(DescribeException(ex), BuildExportDetails(DescribeException(ex) + Environment.NewLine +
-            Environment.NewLine + ex, outputPath));
+        ReportExportFailure(BuildExportDetails(DescribeException(ex) + Environment.NewLine + Environment.NewLine + ex,
+            outputPath));
     }
 
-    private void ReportExportFailure(string summary, string? details = null)
+    private void ReportExportFailure(string details)
     {
-        LastExportFailureDetails = string.IsNullOrWhiteSpace(details) ? summary : details;
-        SetStatus("SemExportFailed", summary);
+        LastExportFailureDetails = string.IsNullOrWhiteSpace(details) ? L["SemExportFailed"] : details;
+        SetStatus("SemExportFailed");
     }
 
     private static string DescribeException(Exception ex)
@@ -393,6 +396,24 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     {
         return details + Environment.NewLine + Environment.NewLine + "Input: " + (LoadedPath ?? "") +
             Environment.NewLine + "Output: " + (outputPath ?? "");
+    }
+
+    private static string FormatOutcomeDetails(RenderOutcome outcome)
+    {
+        var message = string.IsNullOrWhiteSpace(outcome.Message) ? "" : outcome.Message + Environment.NewLine;
+        return message + "Error code: " + outcome.ErrorCode;
+    }
+
+    private void ReportMonitorFailure(string statusKey, AdmErrorCode code, string? details)
+    {
+        MonitorStatus = L[statusKey];
+        MonitorStatusDetails = BuildMonitorDetails(code, details);
+    }
+
+    private static string BuildMonitorDetails(AdmErrorCode code, string? details)
+    {
+        var message = string.IsNullOrWhiteSpace(details) ? "" : details + Environment.NewLine + Environment.NewLine;
+        return message + "Error code: " + code;
     }
 
     // ── 实时监听(同一份行编辑既驱动 policy,也实时 SetOverrides;契约:monitor 非线程安全 → 全 UI 线程) ──
@@ -510,7 +531,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             var rc = _monitor.SetOutputDevice(value.Id);
             if (rc != AdmErrorCode.Ok)
             {
-                MonitorStatus = L.Format("SemMonSwitchFailed", rc.ToString());
+                ReportMonitorFailure("SemMonSwitchFailed", rc, _monitor.LastOperationFailureDetails);
             }
         }
     }
@@ -560,8 +581,8 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     // 播放器按钮可用态:播放键有文件即可用(启动中点击被 TogglePlayAsync 忽略,但保持启用以显示转圈);
     // 回到开头 / seek 需正在监听。
-    public bool CanPlay => HasFile;
-    public bool CanSeek => IsMonitoring && !IsMonitorBusy;
+    public bool CanPlay => HasFile && !IsExporting;
+    public bool CanSeek => IsMonitoring && !IsMonitorBusy && !IsExporting;
 
     // 播放键三态图标:启动中 = 转圈;否则 播放 / 暂停 二选一。
     public bool ShowSpinner => IsMonitorBusy;
@@ -601,6 +622,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [ObservableProperty] private bool _isMultichannelMeter;
 
     [ObservableProperty] private string _monitorStatus = "";
+    [ObservableProperty] private string _monitorStatusDetails = "";
 
     // LUFS(ITU-R BS.1770)三窗读数;UI 一次显示一个,点击在 M / S / I 间循环。
     [ObservableProperty]
@@ -665,7 +687,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [RelayCommand]
     private async Task TogglePlayAsync()
     {
-        if (IsMonitorBusy)
+        if (IsMonitorBusy || IsExporting)
         {
             return;
         }
@@ -688,14 +710,18 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         }
     }
 
-    public void PauseMonitorForExport()
+    private async Task PausePlaybackForExportAsync()
     {
-        if (IsMonitoring && MonitorState == AdmMonitorState.Playing)
+        if (!IsMonitoring || MonitorState != AdmMonitorState.Playing)
         {
-            if (_monitor.Pause() == AdmErrorCode.Ok)
-            {
-                MonitorState = AdmMonitorState.Paused;
-            }
+            return;
+        }
+
+        MonitorState = AdmMonitorState.Paused;
+        var rc = await Task.Run(() => _monitor.Pause());
+        if (rc != AdmErrorCode.Ok)
+        {
+            ReportMonitorFailure("SemMonPauseFailed", rc, _monitor.LastOperationFailureDetails);
         }
     }
 
@@ -706,7 +732,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     // 相对 seek(秒):方向键 ±5s 用。NegativeInfinity = 回到开头。钳到 [0, 时长]。
     public void SeekRelative(double deltaSeconds)
     {
-        if (!IsMonitoring)
+        if (!CanSeek)
         {
             return;
         }
@@ -729,6 +755,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         var backend = SelectedMonitorBackend;
         IsMonitorBusy = true;
         MonitorStatus = ""; // 启动状态由播放键转圈体现,不占状态栏文字(避免挤压电平表)
+        MonitorStatusDetails = "";
 
         RefreshDevices(); // 设备可能已插拔 → 开始前刷新列表(保持当前选择)
         var deviceId = SelectedMonitorDevice?.Id ?? "";
@@ -745,13 +772,14 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         IsMonitorBusy = false;
         if (rc != AdmErrorCode.Ok)
         {
-            MonitorStatus = L.Format("SemMonStartFailed", rc.ToString());
+            ReportMonitorFailure("SemMonStartFailed", rc, _monitor.LastStartFailureDetails);
             return;
         }
 
         _sampleRate = sr;
         DurationSeconds = dur;
         IsMonitoring = true;
+        MonitorStatusDetails = "";
         _activeMonitorBackend = backend;
         _activeLayout = EffectiveMonitorLayout; // 记录生效布局(系统空间音频含次级),供后续热切/重启判定
         SetupChannelMeters(backend);            // 系统空间音频 → 多声道竖条阵列;双耳 → L/R 横条
@@ -795,6 +823,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         ShorttermLufs = float.NegativeInfinity;
         IntegratedLufs = float.NegativeInfinity;
         MonitorStatus = "";
+        MonitorStatusDetails = "";
         UpdatePollTimer(); // 头追踪仍开则保留定时器(供视觉自由视角),否则停
     }
 
@@ -951,13 +980,13 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         var rc = _monitor.SwitchBackend(MonitorRenderSettings(backend));
         if (rc != AdmErrorCode.Ok)
         {
-            MonitorStatus = L.Format("SemMonSwitchFailed", rc.ToString());
+            ReportMonitorFailure("SemMonSwitchFailed", rc, _monitor.LastOperationFailureDetails);
         }
     }
 
     partial void OnPlayheadSecondsChanged(double value)
     {
-        if (_applyingPoll || _scrubbing || !IsMonitoring)
+        if (_applyingPoll || _scrubbing || !CanSeek)
         {
             return; // 轮询回写 / 拖动中(只刷新画面,松手才 seek),非即时 seek
         }
@@ -972,7 +1001,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     public void EndScrub()
     {
         _scrubbing = false;
-        if (IsMonitoring)
+        if (CanSeek)
         {
             _monitor.Seek(PlayheadSeconds);
         }
@@ -1020,6 +1049,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
             MonitorState = st.State;                                  // 引擎为准
             MonitorStatus = st.Ended ? L["SemMonEnded"] : st.Failed ? L["SemMonFailed"] : "";
+            MonitorStatusDetails = MonitorStatus;
         }
 
         // 多声道(系统空间音频)按声道数取电平铺满竖条;双耳只取前两声道画 L/R 横条。

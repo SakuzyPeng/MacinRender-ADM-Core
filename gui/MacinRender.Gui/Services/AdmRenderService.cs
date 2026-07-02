@@ -32,7 +32,7 @@ public sealed class AdmRenderService
     /// 把语义策略应用到源 ADM 并写回成新的 ADM BWF(adm_export_file,v1.13)。复用源 PCM/chna
     /// (bit-exact),只重写 axml 元数据。semanticPolicyJson 为空 = 纯 round-trip 导出。
     /// </summary>
-    public Task<AdmErrorCode> ExportAsync(string inputPath, string outputPath, string? semanticPolicyJson)
+    public Task<RenderOutcome> ExportAsync(string inputPath, string outputPath, string? semanticPolicyJson)
     {
         ArgumentException.ThrowIfNullOrEmpty(inputPath);
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
@@ -41,13 +41,13 @@ public sealed class AdmRenderService
             using var ctx = NativeMethods.adm_create_context();
             if (ctx.IsInvalid)
             {
-                return AdmErrorCode.Internal;
+                return Fail(AdmErrorCode.Internal, "无法创建 ADM context");
             }
 
             using var opts = NativeMethods.adm_create_render_options();
             if (opts.IsInvalid)
             {
-                return AdmErrorCode.Internal;
+                return Fail(AdmErrorCode.Internal, "无法创建 render options");
             }
 
             if (!string.IsNullOrEmpty(semanticPolicyJson))
@@ -55,7 +55,10 @@ public sealed class AdmRenderService
                 NativeMethods.adm_render_options_set_semantic_policy_json(opts, semanticPolicyJson);
             }
 
-            return NativeMethods.adm_export_file(ctx, inputPath, outputPath, opts);
+            var rc = NativeMethods.adm_export_file(ctx, inputPath, outputPath, opts);
+            var message = rc == AdmErrorCode.Ok ? string.Empty : ReadLastContextError(ctx) ?? $"导出失败:{rc}";
+            return new RenderOutcome(rc == AdmErrorCode.Ok, rc, message, outputPath, null, null,
+                Array.Empty<RenderLogEntry>());
         });
     }
 
@@ -259,6 +262,13 @@ public sealed class AdmRenderService
 
     private static RenderOutcome Fail(AdmErrorCode code, string message) =>
         new(false, code, message, null, null, null, Array.Empty<RenderLogEntry>());
+
+    private static string? ReadLastContextError(AdmContextHandle ctx)
+    {
+        var ptr = NativeMethods.adm_context_last_error_message(ctx);
+        var text = ptr == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(ptr);
+        return string.IsNullOrWhiteSpace(text) ? null : text;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static string? PtrToString(IntPtr p) => p == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(p);
