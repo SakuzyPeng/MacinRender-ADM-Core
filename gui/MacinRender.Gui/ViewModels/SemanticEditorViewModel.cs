@@ -347,11 +347,26 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
             return ok;
         }
+        catch (Exception ex)
+        {
+            ReportExportException(ex);
+            return false;
+        }
         finally
         {
             IsExporting = false;
             OnPropertyChanged(nameof(CanExport));
         }
+    }
+
+    public void ReportExportException(Exception ex)
+    {
+        SetStatus("SemExportFailed", DescribeException(ex));
+    }
+
+    private static string DescribeException(Exception ex)
+    {
+        return string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : $"{ex.GetType().Name}: {ex.Message}";
     }
 
     // ── 实时监听(同一份行编辑既驱动 policy,也实时 SetOverrides;契约:monitor 非线程安全 → 全 UI 线程) ──
