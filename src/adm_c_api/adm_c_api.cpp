@@ -1623,9 +1623,7 @@ adm_error_code_t adm_inspect_file_json(adm_context_t* context, const char* input
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
-        if (context != nullptr) {
-            context->last_error_message = "unexpected exception while inspecting ADM file";
-        }
+        context->last_error_message = "unexpected exception while inspecting ADM file";
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1658,9 +1656,7 @@ adm_error_code_t adm_inspect_file_xml(adm_context_t* context, const char* input_
         *out_xml = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
-        if (context != nullptr) {
-            context->last_error_message = "unexpected exception while reading ADM XML";
-        }
+        context->last_error_message = "unexpected exception while reading ADM XML";
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1693,9 +1689,7 @@ adm_error_code_t adm_policy_template_json(adm_context_t* context, const char* in
         *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
-        if (context != nullptr) {
-            context->last_error_message = "unexpected exception while building semantic-policy template";
-        }
+        context->last_error_message = "unexpected exception while building semantic-policy template";
         return ADM_ERROR_INTERNAL;
     }
 }
@@ -1721,9 +1715,7 @@ adm_error_code_t adm_export_file(adm_context_t* context,
         }
         return ADM_ERROR_OK;
     } catch (...) {
-        if (context != nullptr) {
-            context->last_error_message = "unexpected exception while exporting ADM file";
-        }
+        context->last_error_message = "unexpected exception while exporting ADM file";
         return ADM_ERROR_INTERNAL;
     }
 }
