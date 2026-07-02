@@ -1,0 +1,32 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="660" d:DesignHeight="430"
+        x:Class="MacinRender.Gui.Views.ExportErrorWindow"
+        Width="660" Height="430" MinWidth="460" MinHeight="300"
+        WindowStartupLocation="CenterOwner" CanResize="True"
+        Background="{DynamicResource MainBg}">
+
+    <Grid Margin="18" RowDefinitions="Auto,*,Auto" RowSpacing="12">
+        <StackPanel Grid.Row="0" Spacing="4">
+            <TextBlock Classes="h1" Text="{DynamicResource SemExportErrorTitle}"/>
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="{DynamicResource SemExportErrorSubtitle}"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <TextBox x:Name="DetailsBox" AcceptsReturn="True" IsReadOnly="True" TextWrapping="Wrap"
+                     Background="{DynamicResource LogBg}" BorderBrush="{DynamicResource CardBorder}"
+                     Foreground="{DynamicResource TextPrimary}" FontSize="12" Padding="10"/>
+        </ScrollViewer>
+
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+            <TextBlock x:Name="CopyHint" Grid.Column="0" Classes="muted" Opacity="0"
+                       VerticalAlignment="Center" Text="{DynamicResource Copied}"/>
+            <Button Grid.Column="1" MinWidth="86" Padding="14,7"
+                    Content="{DynamicResource SemExportErrorCopy}" Click="OnCopy"/>
+            <Button Grid.Column="2" Classes="accent" MinWidth="86" Padding="14,7"
+                    Content="{DynamicResource SemExportErrorClose}" Click="OnClose"/>
+        </Grid>
+    </Grid>
+</Window>

@@ -320,6 +320,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [ObservableProperty] private bool _isExporting;
 
     public bool CanExport => HasFile && !IsExporting;
+    public string? LastExportFailureDetails { get; private set; }
 
     /// <summary>把当前 policy 应用到源 ADM,写回到 outputPath。由 View 选好保存路径后调用。返回是否成功。</summary>
     public async Task<bool> ExportToAsync(string outputPath)
@@ -330,6 +331,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         }
 
         IsExporting = true;
+        LastExportFailureDetails = null;
         OnPropertyChanged(nameof(CanExport));
         SetStatus("SemExporting");
         try
@@ -342,14 +344,14 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             }
             else
             {
-                SetStatus("SemExportFailed", rc.ToString());
+                ReportExportFailure(rc.ToString(), BuildExportDetails($"Error code: {rc}", outputPath));
             }
 
             return ok;
         }
         catch (Exception ex)
         {
-            ReportExportException(ex);
+            ReportExportException(ex, outputPath);
             return false;
         }
         finally
@@ -361,12 +363,30 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     public void ReportExportException(Exception ex)
     {
-        SetStatus("SemExportFailed", DescribeException(ex));
+        ReportExportException(ex, null);
+    }
+
+    public void ReportExportException(Exception ex, string? outputPath)
+    {
+        ReportExportFailure(DescribeException(ex), BuildExportDetails(DescribeException(ex) + Environment.NewLine +
+            Environment.NewLine + ex, outputPath));
+    }
+
+    private void ReportExportFailure(string summary, string? details = null)
+    {
+        LastExportFailureDetails = string.IsNullOrWhiteSpace(details) ? summary : details;
+        SetStatus("SemExportFailed", summary);
     }
 
     private static string DescribeException(Exception ex)
     {
         return string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : $"{ex.GetType().Name}: {ex.Message}";
+    }
+
+    private string BuildExportDetails(string details, string? outputPath)
+    {
+        return details + Environment.NewLine + Environment.NewLine + "Input: " + (LoadedPath ?? "") +
+            Environment.NewLine + "Output: " + (outputPath ?? "");
     }
 
     // ── 实时监听(同一份行编辑既驱动 policy,也实时 SetOverrides;契约:monitor 非线程安全 → 全 UI 线程) ──
