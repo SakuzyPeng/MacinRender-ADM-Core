@@ -317,9 +317,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     private readonly AdmRenderService _renderSvc = new();
 
-    [ObservableProperty] private bool _isExporting;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanExport))]
+    private bool _isExporting;
 
-    public bool CanExport => HasFile && !IsExporting;
+    public bool CanExport => HasFile && !IsExporting && !IsMonitorBusy;
     public string? LastExportFailureDetails { get; private set; }
 
     /// <summary>把当前 policy 应用到源 ADM,写回到 outputPath。由 View 选好保存路径后调用。返回是否成功。</summary>
@@ -330,9 +332,14 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             return false;
         }
 
+        if (IsMonitorBusy)
+        {
+            return false;
+        }
+
+        PauseMonitorForExport();
         IsExporting = true;
         LastExportFailureDetails = null;
-        OnPropertyChanged(nameof(CanExport));
         SetStatus("SemExporting");
         try
         {
@@ -357,7 +364,6 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         finally
         {
             IsExporting = false;
-            OnPropertyChanged(nameof(CanExport));
         }
     }
 
@@ -546,6 +552,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSeek))]
+    [NotifyPropertyChangedFor(nameof(CanExport))]
     [NotifyPropertyChangedFor(nameof(ShowSpinner))]
     [NotifyPropertyChangedFor(nameof(ShowPlayIcon))]
     [NotifyPropertyChangedFor(nameof(ShowPauseIcon))]
@@ -678,6 +685,17 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         {
             _monitor.Play();
             MonitorState = AdmMonitorState.Playing;
+        }
+    }
+
+    public void PauseMonitorForExport()
+    {
+        if (IsMonitoring && MonitorState == AdmMonitorState.Playing)
+        {
+            if (_monitor.Pause() == AdmErrorCode.Ok)
+            {
+                MonitorState = AdmMonitorState.Paused;
+            }
         }
     }
 
@@ -834,7 +852,10 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         _lastHeadYaw = yawDeg;
         _lastHeadPitch = pitchDeg;
         _lastHeadRoll = rollDeg;
-        _monitor.SetListenerOrientation(yawDeg, pitchDeg, rollDeg);
+        if (IsMonitoring && !IsExporting)
+        {
+            _monitor.SetListenerOrientation(yawDeg, pitchDeg, rollDeg);
+        }
         HeadOrientationResolved?.Invoke(yawDeg, pitchDeg, rollDeg);
     }
 
@@ -960,6 +981,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private void PollMonitor()
     {
         _headTracking.Tick(); // 头追踪平滑 + 发射(无激活来源时空操作);先于监听守卫,故仅头视角(未监听)也刷新
+
+        if (IsExporting)
+        {
+            return;
+        }
 
         // Keepalive:头追源激活时,即便姿态静止(manager 因 deadzone 停发),也周期性把当前朝向重推给
         // 监听音频路。这样 engine 的浅 lead(低头追延迟)绑定到"源 active",而非"最近姿态有变化"——

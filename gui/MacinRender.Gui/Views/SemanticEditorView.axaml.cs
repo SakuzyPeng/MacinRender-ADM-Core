@@ -243,6 +243,8 @@ public partial class SemanticEditorView : UserControl
             return;
         }
 
+        vm.PauseMonitorForExport();
+
         string? path = null;
         try
         {
