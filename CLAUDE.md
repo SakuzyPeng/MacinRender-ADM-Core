@@ -35,9 +35,9 @@ ctest --test-dir build/debug -R mr_adm_ear_fixture_tests --output-on-failure
 
 CLI 二进制名固定为 `mradm`（`mradm_exe` 是 CMake target；二进制输出名是 `mradm`）。**不要**为兼容旧名再生成 `adm` 入口。
 
-### Windows（windows-testbox）规范构建
+### Windows 规范构建
 
-Windows 验证走 `windows-testbox` 上 `[REDACTED]\MacinRender-ADM-Core` 的规范路径：清理只删 `build\win-canon`，然后跑 `[REDACTED]\canonrun.cmd`（cl + vendored FLAC/Opus + OpenBLAS，IAMF/SOFA off）；结果看 `[REDACTED]\canon.flag`（`cfg=0`/`build=0`）与 `canon-*.log`。**不要**用 `winconf.cmd`/`winbuild.cmd`/`msvcrun.cmd` 作为默认验证路径（它们指向另外的构建树，会踩无关的 SAF/OpenBLAS 问题）。测试用 `ctestonly.cmd` / `fullctest.cmd`。详见 `AGENTS.md`。
+Windows 验证在维护者的 Windows 测试机上走规范 MSVC/Ninja 配方（机器相关的脚本路径见本机 `local/` 私有笔记，不入库）：规范构建树是 `build\win-canon`（cl + vendored FLAC/Opus + OpenBLAS，IAMF/SOFA off），干净构建只删 `build\win-canon` 后重跑配方。**不要**用 `win-debug` / `win-msvc` 备用构建树作为默认验证路径（会踩无关的 SAF/OpenBLAS 问题）。详见 `AGENTS.md`。
 
 ## 常用 CLI 渲染示例
 

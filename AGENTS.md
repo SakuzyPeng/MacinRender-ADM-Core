@@ -18,19 +18,16 @@ Use Debug builds for correctness checks, fixture tests, and local quality gates.
 runtime, and RSS comparisons; Debug timing or memory data is only directional and should not be reported as final
 benchmark evidence.
 
-### Windows `windows-testbox` Build Notes
+### Windows Build Notes
 
-On `windows-testbox`, use the existing canonical MSVC/Ninja build path under `[REDACTED]\MacinRender-ADM-Core`.
-For a clean Windows full build, delete only `build\win-canon`, then run `[REDACTED]\canonrun.cmd`; this
-configures and builds `build\win-canon` with the known-good options (`cl`, vendored FLAC/Opus,
-IAMF/SOFA off, OpenBLAS headers/libraries, and the existing FetchContent cache). Check
-`[REDACTED]\canon.flag` for `cfg=0` and `build=0`, with details in `canon-configure.log` and
-`canon-build.log`.
+Windows validation runs on the maintainer's Windows test box via a canonical MSVC/Ninja recipe;
+the machine-specific script paths live in private local notes (`local/`, not tracked). The
+canonical build tree is `build\win-canon`, configured with `cl`, vendored FLAC/Opus, IAMF/SOFA
+off, and prebuilt OpenBLAS headers/libraries plus the existing FetchContent cache. For a clean
+Windows full build, delete only `build\win-canon` and re-run the canonical recipe.
 
-Do not use `winconf.cmd` / `winbuild.cmd` or `msvcrun.cmd` as the default validation path for this
-repo: those target alternate `win-debug` / `win-msvc` trees and can hit unrelated SAF/OpenBLAS or
-MSVC complex-header issues. For tests after a successful canonical build, use `ctestonly.cmd` or
-`fullctest.cmd` as appropriate.
+Do not use the alternate `win-debug` / `win-msvc` build trees as the default validation path for
+this repo: they can hit unrelated SAF/OpenBLAS or MSVC complex-header issues.
 
 ## Coding Style & Naming Conventions
 
