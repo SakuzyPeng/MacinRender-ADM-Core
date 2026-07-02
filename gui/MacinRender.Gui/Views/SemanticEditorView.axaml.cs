@@ -242,24 +242,34 @@ public partial class SemanticEditorView : UserControl
             return;
         }
 
-        var suggested = string.IsNullOrEmpty(vm.LoadedPath)
-            ? "effective.wav"
-            : Path.GetFileNameWithoutExtension(vm.LoadedPath) + ".effective.wav";
-        var file = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        try
         {
-            Title = Localizer.Instance["SemExport"],
-            SuggestedFileName = suggested,
-            DefaultExtension = "wav",
-            FileTypeChoices = new List<FilePickerFileType>
+            var suggested = string.IsNullOrEmpty(vm.LoadedPath)
+                ? "effective.wav"
+                : Path.GetFileNameWithoutExtension(vm.LoadedPath) + ".effective.wav";
+            var file = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
-                new("ADM BWF") { Patterns = new[] { "*.wav" } },
-            },
-        });
+                Title = Localizer.Instance["SemExport"],
+                SuggestedFileName = suggested,
+                DefaultExtension = "wav",
+                FileTypeChoices = new List<FilePickerFileType>
+                {
+                    new("ADM BWF") { Patterns = new[] { "*.wav" } },
+                },
+            });
 
-        var path = file?.TryGetLocalPath();
-        if (!string.IsNullOrEmpty(path) && await vm.ExportToAsync(path))
+            var path = file?.TryGetLocalPath();
+            if (!string.IsNullOrEmpty(path) && await vm.ExportToAsync(path))
+            {
+                FlashIcon(FlashExport);
+            }
+        }
+        catch (OperationCanceledException)
         {
-            FlashIcon(FlashExport);
+        }
+        catch (Exception ex)
+        {
+            vm.ReportExportException(ex);
         }
     }
 
