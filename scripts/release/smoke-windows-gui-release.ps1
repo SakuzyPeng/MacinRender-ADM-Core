@@ -33,11 +33,16 @@ try {
     }
     $packageRoot = $roots[0].FullName
 
-    foreach ($required in @("app\MacinRender.Gui.exe", "app\mradm_capi.dll", "LICENSE", "THIRD_PARTY_NOTICES.md", "BUILD_INFO.txt", "DEPENDENCIES.txt", "licenses\INDEX.md", "sbom.cyclonedx.json")) {
+    foreach ($required in @("app\MacinRender.Gui.exe", "app\mradm_capi.dll", "MacinRender ADM.cmd", "LICENSE", "THIRD_PARTY_NOTICES.md", "BUILD_INFO.txt", "DEPENDENCIES.txt", "licenses\INDEX.md", "sbom.cyclonedx.json")) {
         $path = Join-Path $packageRoot $required
         if (!(Test-Path $path)) {
             throw "package is missing $required"
         }
+    }
+
+    $launcher = Join-Path $packageRoot "MacinRender ADM.cmd"
+    if ((Get-Content $launcher -Raw) -notmatch [regex]::Escape("app\MacinRender.Gui.exe")) {
+        throw "package launcher does not point to app\MacinRender.Gui.exe"
     }
 
     $deps = Join-Path $packageRoot "DEPENDENCIES.txt"

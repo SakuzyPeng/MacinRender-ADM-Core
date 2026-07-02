@@ -123,11 +123,12 @@ app_root="$package_root/$app_name"
 contents="$app_root/Contents"
 macos_dir="$contents/MacOS"
 resources_dir="$contents/Resources"
+legal_dir="$resources_dir/Legal"
 archive="$dist_dir/$package_name.tar.gz"
 checksum="$archive.sha256"
 
 rm -rf "$publish_dir" "$package_root" "$archive" "$checksum"
-mkdir -p "$publish_dir" "$macos_dir" "$resources_dir"
+mkdir -p "$publish_dir" "$macos_dir" "$resources_dir" "$legal_dir"
 
 dotnet publish "$repo_root/gui/MacinRender.Gui/MacinRender.Gui.csproj" \
     -c Release \
@@ -142,6 +143,10 @@ cp "$repo_root/LICENSE" "$package_root/LICENSE"
 cp "$repo_root/docs/THIRD_PARTY_LICENSES.md" "$package_root/THIRD_PARTY_NOTICES.md"
 cp -R "$repo_root/third_party/licenses" "$package_root/licenses"
 cp "$repo_root/third_party/sbom.cyclonedx.json" "$package_root/sbom.cyclonedx.json"
+cp "$repo_root/LICENSE" "$legal_dir/LICENSE"
+cp "$repo_root/docs/THIRD_PARTY_LICENSES.md" "$legal_dir/THIRD_PARTY_NOTICES.md"
+cp -R "$repo_root/third_party/licenses" "$legal_dir/licenses"
+cp "$repo_root/third_party/sbom.cyclonedx.json" "$legal_dir/sbom.cyclonedx.json"
 
 cat > "$contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>

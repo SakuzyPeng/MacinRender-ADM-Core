@@ -59,6 +59,8 @@ release workflow 使用 `scripts/release/package-macos-cli-release.sh` 生成 ma
 `scripts/release/package-windows-cli-release.ps1` 生成 Windows CLI 包，并使用
 `scripts/release/package-macos-gui-release.sh` / `scripts/release/package-windows-gui-release.ps1` 生成 GUI 包。
 CLI 包内包含 `bin/mradm` 或 `bin/mradm.exe`，GUI 包内包含 `.app` 或 `app/MacinRender.Gui.exe`；
+Windows GUI 包根目录额外包含 `MacinRender ADM.cmd` 启动器，macOS GUI 的 `.app` 内部额外包含
+`Contents/Resources/Legal/` 许可副本。
 所有包都包含 `LICENSE`、`THIRD_PARTY_NOTICES.md`、`BUILD_INFO.txt` 和依赖清单。macOS 包会拒绝
 `/opt/homebrew` 与 `/usr/local` 动态库，并只允许 Apple 系统库/framework；Linux CLI 包采用
 AppImage/standalone 形式，非核心运行时库打包进 AppImage，并拒绝缺失库、构建目录依赖和
