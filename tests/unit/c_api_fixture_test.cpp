@@ -2181,7 +2181,8 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
          ok;
     adm_monitor_t* missing_monitor = nullptr;
     const auto missing_input = unique_temp_wav_path("mr_c_api_monitor_missing");
-    const adm_error_code_t missing_code = adm_create_monitor(ctx, missing_input.string().c_str(), nullptr, &missing_monitor);
+    const adm_error_code_t missing_code =
+        adm_create_monitor(ctx, missing_input.string().c_str(), nullptr, &missing_monitor);
     ok = check(missing_code != ADM_ERROR_OK, "create_monitor missing input should fail") && ok;
     ok = check(missing_monitor == nullptr, "create_monitor missing input leaves out null") && ok;
     const char* last_error = adm_context_last_error_message(ctx);
