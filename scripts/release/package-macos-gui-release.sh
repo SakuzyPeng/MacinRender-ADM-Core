@@ -58,17 +58,17 @@ case "$rid" in
         ;;
 esac
 
+case "$rid" in
+    osx-arm64) osx_arch="arm64" ;;
+    osx-x64) osx_arch="x86_64" ;;
+esac
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
     echo "macOS GUI packaging must run on macOS" >&2
     exit 2
 fi
 
 if [[ "$skip_native" -eq 0 ]]; then
-    case "$rid" in
-        osx-arm64) osx_arch="arm64" ;;
-        osx-x64) osx_arch="x86_64" ;;
-    esac
-
     native_build_dir="$repo_root/build/gui-native-package/$rid"
     cmake_args=(
         -S "$repo_root"
@@ -141,6 +141,21 @@ dotnet publish "$repo_root/gui/MacinRender.Gui/MacinRender.Gui.csproj" \
 
 find "$publish_dir" -name '*.dSYM' -type d -prune -exec rm -rf {} +
 find "$publish_dir" -name '*.pdb' -type f -delete
+
+while IFS= read -r dylib; do
+    archs="$(lipo -archs "$dylib" 2>/dev/null || true)"
+    if [[ " $archs " == *" $osx_arch "* && "$(wc -w <<<"$archs")" -gt 1 ]]; then
+        thin_dylib="$dylib.thin"
+        lipo "$dylib" -thin "$osx_arch" -output "$thin_dylib"
+        mv "$thin_dylib" "$dylib"
+    fi
+done < <(find "$publish_dir" -maxdepth 1 -name '*.dylib' -type f -print)
+
+while IFS= read -r binary; do
+    if file "$binary" | grep -q 'Mach-O'; then
+        strip -Sx "$binary"
+    fi
+done < <(find "$publish_dir" -maxdepth 1 -type f \( -perm -111 -o -name '*.dylib' \) -print)
 
 cp -a "$publish_dir"/. "$macos_dir/"
 cp "$repo_root/gui/MacinRender.Gui/Assets/AppIcon.icns" "$resources_dir/AppIcon.icns"
