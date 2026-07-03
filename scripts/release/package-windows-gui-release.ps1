@@ -275,10 +275,12 @@ $checksum = "$archive.sha256"
 Remove-Item -Recurse -Force $publishDir, $packageRoot, $archive, $checksum -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $publishDir, $appDir | Out-Null
 
-& dotnet publish $project -c Release -r $Rid --self-contained true -p:PublishAot=true -o $publishDir
+& dotnet publish $project -c Release -r $Rid --self-contained true -p:PublishAot=true -p:DebugType=none -p:DebugSymbols=false -o $publishDir
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE"
 }
+
+Get-ChildItem -Path $publishDir -Recurse -Include "*.pdb" -File | Remove-Item -Force
 
 Copy-Item (Join-Path $publishDir "*") -Destination $appDir -Recurse -Force
 Copy-Item (Join-Path $repoRoot "LICENSE") -Destination (Join-Path $packageRoot "LICENSE") -Force

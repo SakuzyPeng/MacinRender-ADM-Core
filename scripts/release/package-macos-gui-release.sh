@@ -134,8 +134,13 @@ dotnet publish "$repo_root/gui/MacinRender.Gui/MacinRender.Gui.csproj" \
     -c Release \
     -r "$rid" \
     --self-contained true \
+    -p:DebugType=none \
+    -p:DebugSymbols=false \
     -p:PublishAot=true \
     -o "$publish_dir"
+
+find "$publish_dir" -name '*.dSYM' -type d -prune -exec rm -rf {} +
+find "$publish_dir" -name '*.pdb' -type f -delete
 
 cp -a "$publish_dir"/. "$macos_dir/"
 cp "$repo_root/gui/MacinRender.Gui/Assets/AppIcon.icns" "$resources_dir/AppIcon.icns"
