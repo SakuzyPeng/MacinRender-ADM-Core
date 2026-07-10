@@ -640,6 +640,7 @@ using EburPtr = std::unique_ptr<ebur128_state, EburDeleter>;
                                                         double sample_rate,
                                                         UInt32 spatialization_algorithm,
                                                         AppleSpatialPreset preset,
+                                                        bool speaker_rendering_flags,
                                                         const ListenerOrientation& listener_orientation,
                                                         const std::string& output_layout,
                                                         const float* staging_data,
@@ -698,6 +699,11 @@ using EburPtr = std::unique_ptr<ebur128_state, EburDeleter>;
         if (auto r = set_output_layout_tag(unit, profile.layout_tag); !r) {
             return tl::unexpected{r.error()};
         }
+        logs.log(LogLevel::info,
+                 "apple",
+                 fmt::format("speaker rendering flags: {}",
+                             speaker_rendering_flags ? "Apple native (InterAuralDelay + DistanceAttenuation)"
+                                                     : "ADM-compatible (disabled)"));
     }
 
     contexts.assign(buses.size(), InputBusContext{});
@@ -728,6 +734,23 @@ using EburPtr = std::unique_ptr<ebur128_state, EburDeleter>;
         }
         if (bus.is_lfe) {
             if (auto r = set_lfe_input_layout(unit, element); !r) {
+                return tl::unexpected{r.error()};
+            }
+        }
+        // Apply this after source mode and the optional LFE layout so neither can
+        // reset the selected compatibility mode.
+        if (!profile.binaural) {
+            const UInt32 rendering_flags =
+                speaker_rendering_flags
+                    ? (kSpatialMixerRenderingFlags_InterAuralDelay | kSpatialMixerRenderingFlags_DistanceAttenuation)
+                    : 0U;
+            if (auto r = set_uint32_property(unit,
+                                             kAudioUnitProperty_SpatialMixerRenderingFlags,
+                                             kAudioUnitScope_Input,
+                                             element,
+                                             rendering_flags,
+                                             "speaker rendering flags");
+                !r) {
                 return tl::unexpected{r.error()};
             }
         }
@@ -817,6 +840,7 @@ class AppleStream final : public IRenderStream {
                                                   static_cast<double>(info.sample_rate),
                                                   algo,
                                                   plan.apple_spatial_preset,
+                                                  plan.apple_speaker_rendering_flags,
                                                   plan.listener_orientation,
                                                   plan.output_layout,
                                                   stream->staging_.data(),
@@ -1355,6 +1379,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                                               static_cast<double>(sample_rate),
                                               spatialization_algorithm,
                                               plan.apple_spatial_preset,
+                                              plan.apple_speaker_rendering_flags,
                                               plan.listener_orientation,
                                               plan.output_layout,
                                               staging.data(),

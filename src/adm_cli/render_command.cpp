@@ -295,6 +295,10 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                      opts.apple_spatial_preset_str,
                      "Apple binaural AUSpatialMixer factory preset: off, headphone-default, headphone-movie")
         ->check(CLI::IsMember({"off", "headphone-default", "headphone-movie"}));
+    render_cmd->add_flag("--apple-speaker-rendering-flags",
+                         opts.apple_speaker_rendering_flags,
+                         "Enable Apple speaker InterAuralDelay and DistanceAttenuation rendering flags "
+                         "(legacy behavior; default: disabled for ADM/SAF-style gains)");
     render_cmd
         ->add_option("--listener-yaw",
                      opts.listener_yaw,
@@ -361,6 +365,7 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     request.options.speaker_spread_mode = parse_speaker_spread_mode(opts.speaker_spread_mode_str);
     request.options.binaural_spread_mode = parse_binaural_spread_mode(opts.binaural_spread_mode_str);
     request.options.apple_spatial_preset = parse_apple_spatial_preset(opts.apple_spatial_preset_str);
+    request.options.apple_speaker_rendering_flags = opts.apple_speaker_rendering_flags;
     if (!std::isnan(opts.listener_yaw)) {
         request.options.listener_orientation.yaw_deg = static_cast<float>(opts.listener_yaw);
     }

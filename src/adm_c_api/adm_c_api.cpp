@@ -594,6 +594,13 @@ void adm_render_options_set_apac_drc_music(adm_render_options_t* opts, int enabl
     opts->opts.apac_drc_music = (enabled != 0);
 }
 
+void adm_render_options_set_apple_speaker_rendering_flags(adm_render_options_t* opts, int enabled) noexcept {
+    if (opts == nullptr) {
+        return;
+    }
+    opts->opts.apple_speaker_rendering_flags = (enabled != 0);
+}
+
 adm_error_code_t adm_render_options_set_apac_container(adm_render_options_t* opts,
                                                        adm_apac_container_t container) noexcept {
     if (opts == nullptr) {

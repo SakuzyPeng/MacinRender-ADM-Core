@@ -214,6 +214,8 @@ int main() {
         ok &= check(r.out.find("saf-binaural") != std::string::npos, "render --help: saf-binaural renderer listed");
         ok &= check(r.out.find("--apple-spatial-preset") != std::string::npos,
                     "render --help: apple-spatial-preset option listed");
+        ok &= check(r.out.find("--apple-speaker-rendering-flags") != std::string::npos,
+                    "render --help: apple speaker rendering flags option listed");
         ok &= check(r.out.find("--listener-yaw") != std::string::npos, "render --help: listener-yaw option listed");
         ok &= check(r.out.find("--listener-pitch") != std::string::npos, "render --help: listener-pitch option listed");
         ok &= check(r.out.find("--listener-roll") != std::string::npos, "render --help: listener-roll option listed");

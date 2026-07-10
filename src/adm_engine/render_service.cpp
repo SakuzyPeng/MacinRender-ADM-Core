@@ -596,6 +596,18 @@ RenderResult RenderService::render(const RenderRequest& request,
         }
     }
 
+    if (request.options.apple_speaker_rendering_flags) {
+        if (sel != RendererSelection::apple) {
+            return fail_with_report(
+                {ErrorCode::invalid_argument, "--apple-speaker-rendering-flags requires --renderer apple", {}});
+        }
+        if (output_layout == "0+2+0" || output_layout == "binaural") {
+            return fail_with_report({ErrorCode::invalid_argument,
+                                     "--apple-speaker-rendering-flags requires Apple speaker output",
+                                     "layout=" + output_layout});
+        }
+    }
+
     if (needs_semantic_report) {
         const SemanticPolicyReportOptions report_options{
             .renderer = renderer_name(sel),
@@ -737,6 +749,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     plan.speaker_spread_mode = request.options.speaker_spread_mode;
     plan.binaural_spread_mode = request.options.binaural_spread_mode;
     plan.apple_spatial_preset = request.options.apple_spatial_preset;
+    plan.apple_speaker_rendering_flags = request.options.apple_speaker_rendering_flags;
     plan.listener_orientation = request.options.listener_orientation;
     // Output time-range trim: prefer on-demand window rendering when the backend
     // supports it (seek + pre-roll → writes only the window, bit-identical to a full

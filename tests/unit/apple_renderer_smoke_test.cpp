@@ -500,7 +500,8 @@ render_apple(float azimuth,
              float width = 0.0F,
              bool channel_lock = false,
              mradm::AppleSpatialPreset apple_spatial_preset = mradm::AppleSpatialPreset::off,
-             const mradm::ListenerOrientation& listener = {}) {
+             const mradm::ListenerOrientation& listener = {},
+             bool apple_speaker_rendering_flags = false) {
     const auto in = write_fixture(azimuth, 8192U, gain, width, channel_lock);
     FileGuard in_guard(in);
     const auto out = temp_path(stem, ".wav");
@@ -514,6 +515,7 @@ render_apple(float azimuth,
     req.options.peak_limit = false;
     req.options.measure_loudness = false;
     req.options.apple_spatial_preset = apple_spatial_preset;
+    req.options.apple_speaker_rendering_flags = apple_speaker_rendering_flags;
     req.options.listener_orientation = listener;
 
     mradm::RenderService service;
@@ -687,6 +689,14 @@ bool verify_speaker_panning() {
     ok &= check(loudest_channel(*left, 12U) == 0U, "ADM azimuth +30 pans to 7.1.4 front-left (ch0)");
     ok &= check(loudest_channel(*right, 12U) == 1U, "ADM azimuth -30 pans to 7.1.4 front-right (ch1)");
     return ok;
+}
+
+// The public compatibility switch must reach AUSpatialMixer and configure every
+// speaker bus without producing an unsupported-property error.
+bool verify_speaker_rendering_flags_switch() {
+    const auto apple_native = render_apple(
+        45.0F, "mr_apple_flags_on", "4+7+0", 12U, 1.0F, 0.0F, false, mradm::AppleSpatialPreset::off, {}, true);
+    return check(apple_native.has_value(), "Apple speaker rendering flags mode renders successfully");
 }
 
 bool verify_speaker_layouts_render() {
@@ -1588,6 +1598,7 @@ int main() {
     ok &= verify_directional_sign();
     ok &= verify_zero_gain_is_silent();
     ok &= verify_speaker_panning();
+    ok &= verify_speaker_rendering_flags_switch();
     ok &= verify_speaker_layouts_render();
     ok &= verify_binaural_container_tag();
     ok &= verify_render_window_frame_count();

@@ -17,6 +17,9 @@
 - **Apple binaural factory preset**：`--apple-spatial-preset headphone-default|headphone-movie` 映射到
   `kAudioUnitProperty_PresentPreset` 的 headphone media playback factory preset #1/#2。默认关闭，只对 Apple
   binaural 生效。
+- **扬声器 rendering flags**：默认对每个输入 bus 写入
+  `kAudioUnitProperty_SpatialMixerRenderingFlags=0`，避免 InterAuralDelay / DistanceAttenuation 额外改变
+  ADM 对象的低中频和增益。`--apple-speaker-rendering-flags` 显式开启两个 Apple flags，用于兼容旧渲染。
 
 不支持或暂不等价：
 

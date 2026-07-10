@@ -90,6 +90,9 @@ struct RenderPlan {
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
     AppleSpatialPreset apple_spatial_preset{AppleSpatialPreset::off};
+    // Apple speaker output only. false writes SpatialMixerRenderingFlags=0;
+    // true enables Apple's InterAuralDelay and DistanceAttenuation flags.
+    bool apple_speaker_rendering_flags{false};
     // Listener head orientation. The Apple AUSpatialMixer binaural backend (HeadYaw/Pitch/Roll
     // global params) and the SAF binaural backend (per-source HRTF direction rotation) implement
     // it; other backends ignore it.
