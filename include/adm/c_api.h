@@ -133,12 +133,16 @@
  * v1.26 新增（additive，SOVERSION 不变）：
  *   adm_monitor_last_error_message. 返回最近一次 monitor 级失败的详细错误信息,供 GUI 在
  *   adm_monitor_switch_backend / adm_monitor_set_output_device / seek 等只返回错误码的入口失败后显示诊断。
+ *
+ * v1.27 新增（additive，SOVERSION 不变）：
+ *   adm_render_options_set_apple_speaker_rendering_flags. 可选恢复 Apple AUSpatialMixer 扬声器
+ *   InterAuralDelay + DistanceAttenuation flags（旧行为）；默认关闭以匹配 ADM/SAF 增益语义。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 26
+#define ADM_API_VERSION_MINOR 27
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -398,6 +402,11 @@ adm_error_code_t adm_render_options_set_apac_bitrate_kbps(adm_render_options_t* 
 
 /* enabled: 1 = Music DRC profile (default), 0 = None. */
 void adm_render_options_set_apac_drc_music(adm_render_options_t* opts, int enabled) ADM_API_NOEXCEPT;
+
+/* v1.27, Apple speaker output only. enabled: non-zero enables AUSpatialMixer's
+ * InterAuralDelay + DistanceAttenuation rendering flags (legacy behavior); 0
+ * clears both flags for ADM/SAF-style gain semantics (default). */
+void adm_render_options_set_apple_speaker_rendering_flags(adm_render_options_t* opts, int enabled) ADM_API_NOEXCEPT;
 
 /* v1.24: monitor-only. Route the multichannel monitor output through the OS spatial-audio stack for
  * system HRTF, instead of a stereo downmix on a raw device. macOS: AVSampleBufferAudioRenderer (with

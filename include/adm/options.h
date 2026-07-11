@@ -118,6 +118,10 @@ struct RenderOptions {
     // Apple AUSpatialMixer binaural only. PresentPreset resets several unit/bus
     // parameters, so the Apple backend applies it before restoring ADM-driven setup.
     AppleSpatialPreset apple_spatial_preset{AppleSpatialPreset::off};
+    // Apple AUSpatialMixer speaker output only. false clears InterAuralDelay and
+    // DistanceAttenuation so ADM gains match SAF/Logic-style speaker rendering;
+    // true restores Apple's native rendering flags (legacy MacinRender behavior).
+    bool apple_speaker_rendering_flags{false};
     // 听者头部朝向。Apple binaural 后端（HeadYaw/Pitch/Roll）与 SAF binaural 后端（逐源 HRTF 方向旋转）
     // 实装；其它后端忽略。
     ListenerOrientation listener_orientation{};

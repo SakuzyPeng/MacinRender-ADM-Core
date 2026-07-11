@@ -279,6 +279,7 @@ bool verify_options_null_setters() {
     adm_render_options_set_peak_limit(nullptr, 1);
     adm_render_options_set_peak_normalize_to_limit(nullptr, 1);
     adm_render_options_set_apac_drc_music(nullptr, 1);
+    adm_render_options_set_apple_speaker_rendering_flags(nullptr, 1);
     // string setters: null opts → ADM_ERROR_OK (no-op)
     ok = check(adm_render_options_set_sofa_path(nullptr, "/any/path.sofa") == ADM_ERROR_OK,
                "NULL opts set_sofa_path should return OK") &&
@@ -433,6 +434,8 @@ bool verify_options_boundary_values(adm_render_options_t* opts) {
     adm_render_options_set_peak_normalize_to_limit(opts, 0);
     adm_render_options_set_apac_drc_music(opts, 1);
     adm_render_options_set_apac_drc_music(opts, 0);
+    adm_render_options_set_apple_speaker_rendering_flags(opts, 1);
+    adm_render_options_set_apple_speaker_rendering_flags(opts, 0);
     // sofa_path: nullptr/"" → built-in KEMAR (clears field); valid path → stored.
     ok = check(adm_render_options_set_sofa_path(opts, nullptr) == ADM_ERROR_OK,
                "sofa_path nullptr (built-in KEMAR) should return OK") &&
@@ -2139,7 +2142,7 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
-    bool ok = check(adm_api_version_minor() == 26, "C ABI minor version is 26");
+    bool ok = check(adm_api_version_minor() == ADM_API_VERSION_MINOR, "C ABI minor version matches header");
 
     // v1.22 listener orientation argument validation (no device needed).
     ok = check(adm_monitor_set_listener_orientation(nullptr, 0.0F, 0.0F, 0.0F) == ADM_ERROR_INVALID_ARGUMENT,

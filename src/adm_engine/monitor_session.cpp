@@ -167,6 +167,7 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         plan.speaker_spread_mode = options.speaker_spread_mode;
         plan.binaural_spread_mode = options.binaural_spread_mode;
         plan.apple_spatial_preset = options.apple_spatial_preset;
+        plan.apple_speaker_rendering_flags = options.apple_speaker_rendering_flags;
         // System-spatial monitoring hands head tracking to the system; the rendered bed must stay
         // orientation-neutral so it isn't rotated twice (see MonitorSession::set_listener_orientation).
         plan.listener_orientation =
