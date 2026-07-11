@@ -18,6 +18,13 @@ Use Debug builds for correctness checks, fixture tests, and local quality gates.
 runtime, and RSS comparisons; Debug timing or memory data is only directional and should not be reported as final
 benchmark evidence.
 
+Important: never use Debug builds to create rendered audio for listening, A/B comparison, loudness/band analysis,
+or codec/container output validation. This applies to full-program renders and short excerpts alike, including APAC,
+CAF, WAV, FLAC, and any `mradm render` output handed to a user for audition or comparison. Use `build/release/mradm`
+for all such renders, rebuilding Release after any temporary source change used to compare legacy/fixed behavior.
+Reserve Debug `mradm` only for correctness smoke checks and narrow code-path validation whose output will not be used
+as listening or runtime evidence.
+
 ### Windows Build Notes
 
 Windows validation runs on the maintainer's Windows test box via a canonical MSVC/Ninja recipe;
