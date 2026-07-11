@@ -47,4 +47,33 @@
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
   </ItemGroup>
+
+  <!-- macOS single-file 发布会在 GenerateSingleFileBundle 阶段把 dylib 嵌入主程序。
+       这里先复制将要嵌入的 dylib 并归一化 install name,避免 NuGet 原生库的
+       /usr/local/... install ID 被带进 release 包。 -->
+  <Target Name="NormalizeMacOSSingleFileDylibInstallNames"
+          AfterTargets="PrepareForBundle"
+          BeforeTargets="_GenerateSingleFileBundleInputCache"
+          Condition="'$(PublishSingleFile)' == 'true' and '$(PublishAot)' != 'true' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">
+    <ItemGroup>
+      <_MacOSDylibsToNormalize Include="@(FilesToBundle)" Condition="'%(Extension)' == '.dylib'" />
+      <_NormalizedMacOSDylibs Include="@(_MacOSDylibsToNormalize->'$(IntermediateOutputPath)singlefile-normalized/%(Filename)%(Extension)')">
+        <TargetPath>%(Filename)%(Extension)</TargetPath>
+        <RelativePath>%(Filename)%(Extension)</RelativePath>
+      </_NormalizedMacOSDylibs>
+    </ItemGroup>
+
+    <MakeDir Directories="$(IntermediateOutputPath)singlefile-normalized" Condition="'@(_MacOSDylibsToNormalize)' != ''" />
+    <Copy SourceFiles="@(_MacOSDylibsToNormalize)"
+          DestinationFiles="@(_NormalizedMacOSDylibs)"
+          SkipUnchangedFiles="false"
+          Condition="'@(_MacOSDylibsToNormalize)' != ''" />
+    <Exec Command="install_name_tool -id &quot;@rpath/%(_NormalizedMacOSDylibs.Filename)%(_NormalizedMacOSDylibs.Extension)&quot; &quot;%(_NormalizedMacOSDylibs.Identity)&quot;"
+          Condition="'@(_NormalizedMacOSDylibs)' != ''" />
+
+    <ItemGroup>
+      <FilesToBundle Remove="@(_MacOSDylibsToNormalize)" />
+      <FilesToBundle Include="@(_NormalizedMacOSDylibs)" />
+    </ItemGroup>
+  </Target>
 </Project>

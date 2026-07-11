@@ -6,7 +6,8 @@ usage() {
 Usage: scripts/release/smoke-macos-gui-release.sh <dist/MacinRender-Gui-...tar.gz>
 
 Verifies the GUI package checksum, extracts it, checks macOS signing and
-dependency policy, then runs the app's headless --selftest entry point.
+dependency policy, then runs the app's headless --selftest entry point. For
+.NET single-file packages, self-extracted native libraries are also scanned.
 EOF
 }
 
@@ -89,4 +90,37 @@ while IFS= read -r dep; do
 done < "$deps"
 
 codesign --verify --deep --strict "$app_root"
-"$exe" --selftest
+
+extract_dir="$work_dir/dotnet-bundle-extract"
+mkdir -p "$extract_dir"
+DOTNET_BUNDLE_EXTRACT_BASE_DIR="$extract_dir" "$exe" --selftest
+
+extracted_deps="$work_dir/EXTRACTED_DEPENDENCIES.txt"
+: > "$extracted_deps"
+while IFS= read -r binary; do
+    rel_binary="dotnet-bundle-extract/${binary#$extract_dir/}"
+    echo "== $rel_binary" >> "$extracted_deps"
+    otool -L "$binary" | sed "s|^$binary|$rel_binary|" >> "$extracted_deps"
+done < <(find "$extract_dir" -type f -name '*.dylib' -print | sort)
+
+if [[ -s "$extracted_deps" ]]; then
+    if grep -E '^[[:space:]]+(/opt/homebrew|/usr/local|/Users/)' "$extracted_deps" >/dev/null; then
+        echo "GUI single-file extraction dependency manifest contains user/Homebrew/local libraries:" >&2
+        grep -E '^[[:space:]]+(/opt/homebrew|/usr/local|/Users/)' "$extracted_deps" >&2
+        exit 1
+    fi
+
+    while IFS= read -r dep; do
+        [[ "$dep" =~ ^[[:space:]] ]] || continue
+        dep_path="$(awk '{print $1}' <<<"$dep")"
+        case "$dep_path" in
+            @rpath/*|@executable_path/*) ;;
+            /usr/lib/*) ;;
+            /System/Library/Frameworks/*) ;;
+            *)
+                echo "GUI single-file extraction links unexpected dependency: $dep_path" >&2
+                exit 1
+                ;;
+        esac
+    done < "$extracted_deps"
+fi
