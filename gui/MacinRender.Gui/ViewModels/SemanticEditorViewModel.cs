@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -36,6 +37,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     [ObservableProperty] private SemanticRow? _selectedRow;
     [ObservableProperty] private string _statusText = "";
+    [ObservableProperty] private string? _statusDetails;
     [ObservableProperty] private bool _isLoading;
 
     // 状态文案当前 key + 参数:存 key 而非已求值字符串,切语言时按此重译(与批渲染一致)。
@@ -46,6 +48,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     {
         _statusKey = key;
         _statusArgs = args;
+        StatusDetails = null;
         StatusText = L.Format(key, args);
     }
 
@@ -192,26 +195,30 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         SetStatus("SemLoading", Path.GetFileName(path));
         try
         {
-            var doc = await Task.Run(() =>
+            var load = await Task.Run<(InspectDoc? Document, string? FailureDetails)>(() =>
             {
                 using var ctx = NativeMethods.adm_create_context();
-                return ctx.IsInvalid ? null : SemanticInspect.Parse(AdmQueries.FetchInspectJson(ctx, path));
+                if (ctx.IsInvalid)
+                {
+                    return (null, L["SemLoadContextFailed"]);
+                }
+
+                var json = AdmQueries.FetchInspectJson(ctx, path);
+                if (json is null)
+                {
+                    return (null, ReadLastContextError(ctx));
+                }
+
+                var parsed = SemanticInspect.Parse(json);
+                return parsed is null ? (null, L["SemLoadInspectParseFailed"]) : (parsed, null);
             });
+            var doc = load.Document;
 
-            foreach (var existing in Rows)
-            {
-                existing.Changed -= OnRowChanged;
-            }
-
-            Rows.Clear();
-            SelectedRow = null;
+            ClearLoadedDocument();
             if (doc is null)
             {
-                LoadedPath = null;
-                CommonPrefix = "";
-                ObjectCount = 0;
-                SpatialModel = null;
                 SetStatus("SemLoadFailed");
+                StatusDetails = BuildLoadFailureDetails(load.FailureDetails, path);
                 RebuildPolicy();
                 return false;
             }
@@ -250,10 +257,46 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             RebuildPolicy();
             return true;
         }
+        catch (Exception ex)
+        {
+            ClearLoadedDocument();
+            SetStatus("SemLoadFailed");
+            StatusDetails = BuildLoadFailureDetails(ex.ToString(), path);
+            RebuildPolicy();
+            return false;
+        }
         finally
         {
             IsLoading = false;
         }
+    }
+
+    private void ClearLoadedDocument()
+    {
+        foreach (var existing in Rows)
+        {
+            existing.Changed -= OnRowChanged;
+        }
+
+        Rows.Clear();
+        SelectedRow = null;
+        LoadedPath = null;
+        CommonPrefix = "";
+        ObjectCount = 0;
+        SpatialModel = null;
+    }
+
+    private static string? ReadLastContextError(AdmContextHandle ctx)
+    {
+        var ptr = NativeMethods.adm_context_last_error_message(ctx);
+        var text = ptr == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(ptr);
+        return string.IsNullOrWhiteSpace(text) ? null : text;
+    }
+
+    private static string BuildLoadFailureDetails(string? details, string inputPath)
+    {
+        var message = string.IsNullOrWhiteSpace(details) ? L["SemLoadFailed"] : details.Trim();
+        return message + Environment.NewLine + Environment.NewLine + "Input: " + inputPath;
     }
 
     // typeDefinition=Objects 判别:含至少一个带 object_blocks 的 track。声床(DirectSpeakers)

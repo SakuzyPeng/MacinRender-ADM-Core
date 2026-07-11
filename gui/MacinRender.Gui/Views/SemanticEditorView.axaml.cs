@@ -294,6 +294,18 @@ public partial class SemanticEditorView : UserControl
         await ShowDetailsDialogAsync(vm.LastExportFailureDetails);
     }
 
+    private async void OnFileStatusPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not SemanticEditorViewModel vm || string.IsNullOrWhiteSpace(vm.StatusDetails))
+        {
+            return;
+        }
+
+        var title = string.IsNullOrWhiteSpace(vm.StatusText) ? Localizer.Instance["SemLoadFailed"] : vm.StatusText;
+        await ShowDetailsDialogAsync(vm.StatusDetails, title, Localizer.Instance["SemExportErrorSubtitle"]);
+        e.Handled = true;
+    }
+
     private async void OnMonitorStatusPressed(object? sender, PointerPressedEventArgs e)
     {
         if (DataContext is not SemanticEditorViewModel vm || string.IsNullOrWhiteSpace(vm.MonitorStatusDetails))
