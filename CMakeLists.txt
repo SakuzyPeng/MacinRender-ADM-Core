@@ -7,6 +7,9 @@ project(
     LANGUAGES C CXX
 )
 
+set(MR_ADM_GENERATED_VERSION_CPP "${CMAKE_CURRENT_BINARY_DIR}/generated/version.cpp")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/adm_core/version.cpp.in" "${MR_ADM_GENERATED_VERSION_CPP}" @ONLY)
+
 option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
 option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
@@ -121,7 +124,7 @@ target_sources(
     mr_adm_core
     PRIVATE
         src/adm_core/semantic_policy.cpp
-        src/adm_core/version.cpp
+        "${MR_ADM_GENERATED_VERSION_CPP}"
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS include

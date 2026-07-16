@@ -45,6 +45,13 @@ try {
         throw "package launcher does not point to app\MacinRender.Gui.exe"
     }
 
+    $buildInfo = Get-Content (Join-Path $packageRoot "BUILD_INFO.txt") -Raw
+    foreach ($field in @("version", "product_version", "c_api_version", "commit")) {
+        if ($buildInfo -notmatch "(?m)^$field: ") {
+            throw "GUI package build info is missing $field"
+        }
+    }
+
     $deps = Join-Path $packageRoot "DEPENDENCIES.txt"
     if (Select-String -Path $deps -Pattern "\[missing\]" -Quiet) {
         throw "package dependency manifest contains missing DLLs"

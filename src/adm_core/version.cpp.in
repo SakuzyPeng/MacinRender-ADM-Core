@@ -3,7 +3,7 @@
 namespace mradm {
 
 std::string_view version() noexcept {
-    return "1.0.0";
+    return "@PROJECT_VERSION@";
 }
 
 std::string_view build_profile() noexcept {

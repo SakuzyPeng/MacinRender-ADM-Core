@@ -192,22 +192,21 @@ function Find-Dll {
     return $null
 }
 
+function Get-VersionMetadata {
+    param([Parameter(Mandatory = $true)][string]$Field)
+
+    $versionTool = Join-Path $repoRoot "scripts\release\version_metadata.py"
+    if (Get-Command py -ErrorAction SilentlyContinue) {
+        return (& py -3 $versionTool --repo-root $repoRoot --field $Field).Trim()
+    }
+    return (& python $versionTool --repo-root $repoRoot --field $Field).Trim()
+}
+
 $shortSha = (& git -C $repoRoot rev-parse --short=12 HEAD).Trim()
 $commitSha = (& git -C $repoRoot rev-parse HEAD).Trim()
-if ($env:MRADM_VERSION) {
-    $version = $env:MRADM_VERSION
-} elseif ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME) {
-    $version = $env:GITHUB_REF_NAME
-} else {
-    try {
-        $version = (& git -C $repoRoot describe --tags --exact-match 2>$null).Trim()
-        if ([string]::IsNullOrWhiteSpace($version)) {
-            $version = "0.0.0-dev.$shortSha"
-        }
-    } catch {
-        $version = "0.0.0-dev.$shortSha"
-    }
-}
+$productVersion = Get-VersionMetadata "product-version"
+$cApiVersion = Get-VersionMetadata "c-api-version"
+$version = Get-VersionMetadata "package-version"
 
 $distDir = Join-Path $repoRoot "dist"
 $packageName = "mradm-$version-windows-$Arch"
@@ -310,6 +309,8 @@ $buildInfo = @(
     "name: MacinRender ADM Core",
     "binary: mradm.exe",
     "version: $version",
+    "product_version: $productVersion",
+    "c_api_version: $cApiVersion",
     "commit: $commitSha",
     "platform: windows",
     "arch: $Arch",

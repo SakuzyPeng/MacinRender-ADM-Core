@@ -64,6 +64,13 @@ for required in "$app_root" "$exe" "$app_root/Contents/Info.plist" "$app_root/Co
     fi
 done
 
+for field in version product_version c_api_version commit; do
+    if ! grep -q "^${field}: " "$package_root/BUILD_INFO.txt"; then
+        echo "GUI package build info is missing ${field}" >&2
+        exit 1
+    fi
+done
+
 if [[ ! -x "$exe" ]]; then
     echo "package app executable is not executable: $exe" >&2
     exit 1

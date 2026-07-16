@@ -67,15 +67,10 @@ fi
 
 short_sha="$(git -C "$repo_root" rev-parse --short=12 HEAD)"
 commit_sha="$(git -C "$repo_root" rev-parse HEAD)"
-if [[ -n "${MRADM_VERSION:-}" ]]; then
-    version="$MRADM_VERSION"
-elif [[ "${GITHUB_REF_TYPE:-}" == "tag" && -n "${GITHUB_REF_NAME:-}" ]]; then
-    version="$GITHUB_REF_NAME"
-elif git -C "$repo_root" describe --tags --exact-match >/dev/null 2>&1; then
-    version="$(git -C "$repo_root" describe --tags --exact-match)"
-else
-    version="0.0.0-dev.$short_sha"
-fi
+version_tool="$repo_root/scripts/release/version_metadata.py"
+product_version="$(python3 "$version_tool" --repo-root "$repo_root" --field product-version)"
+c_api_version="$(python3 "$version_tool" --repo-root "$repo_root" --field c-api-version)"
+version="$(python3 "$version_tool" --repo-root "$repo_root" --field package-version)"
 
 dist_dir="$repo_root/dist"
 package_name="mradm-${version}-${platform}-${arch}"
@@ -118,6 +113,8 @@ cat > "$package_root/BUILD_INFO.txt" <<EOF
 name: MacinRender ADM Core
 binary: mradm
 version: $version
+product_version: $product_version
+c_api_version: $c_api_version
 commit: $commit_sha
 platform: $platform
 arch: $arch

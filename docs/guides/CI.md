@@ -70,6 +70,16 @@ CLI smoke 或 GUI `--selftest`。Linux AppImage 构建基线为 Ubuntu 24.04 x86
 Windows CLI/GUI 支持基线为 Windows Server 2025 + MSVC。签名、notarization 和完整 license bundle
 留到后续阶段；tag `v*` 会自动创建或更新 GitHub Release。
 
+### 版本门禁
+
+- 产品版本以 `CMakeLists.txt` 的 `project(... VERSION ...)` 为唯一来源，CLI、GUI、包名、应用元数据和
+  `BUILD_INFO.txt` 都由 `scripts/release/version_metadata.py` 派生。
+- C ABI 版本以 `include/adm/c_api.h` 的 `ADM_API_VERSION_*` 宏为唯一来源，独立于产品版本迭代。
+- 发布 tag 必须为 `v<产品版本>`；不匹配时打包脚本会失败。开发构建使用
+  `<产品版本>-dev.<12 位提交 SHA>`。
+- 本地可运行 `python3 scripts/release/version_metadata.py --check` 检查元数据；CI 的
+  `version-metadata` job 对每个 PR 和 `main` push 执行相同检查。
+
 ### IAMF bridge 预构建
 
 IAMF 编码依赖官方 AOM `iamf-tools` bridge，但普通 CI、质量 CI 和默认 release 都显式关闭

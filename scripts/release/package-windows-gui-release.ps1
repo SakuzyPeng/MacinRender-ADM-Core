@@ -247,22 +247,21 @@ if (!$SkipNative) {
     Write-Host "copied native bundle: $(Join-Path $runtimeNativeDir 'mradm_capi.dll')"
 }
 
+function Get-VersionMetadata {
+    param([Parameter(Mandatory = $true)][string]$Field)
+
+    $versionTool = Join-Path $repoRoot "scripts\release\version_metadata.py"
+    if (Get-Command py -ErrorAction SilentlyContinue) {
+        return (& py -3 $versionTool --repo-root $repoRoot --field $Field).Trim()
+    }
+    return (& python $versionTool --repo-root $repoRoot --field $Field).Trim()
+}
+
 $shortSha = (& git -C $repoRoot rev-parse --short=12 HEAD).Trim()
 $commitSha = (& git -C $repoRoot rev-parse HEAD).Trim()
-if ($env:MRADM_VERSION) {
-    $version = $env:MRADM_VERSION
-} elseif ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME) {
-    $version = $env:GITHUB_REF_NAME
-} else {
-    try {
-        $version = (& git -C $repoRoot describe --tags --exact-match 2>$null).Trim()
-        if ([string]::IsNullOrWhiteSpace($version)) {
-            $version = "0.0.0-dev.$shortSha"
-        }
-    } catch {
-        $version = "0.0.0-dev.$shortSha"
-    }
-}
+$productVersion = Get-VersionMetadata "product-version"
+$cApiVersion = Get-VersionMetadata "c-api-version"
+$version = Get-VersionMetadata "package-version"
 
 $distDir = Join-Path $repoRoot "dist"
 $publishDir = Join-Path $repoRoot "build\gui-publish\$Rid"
@@ -275,7 +274,8 @@ $checksum = "$archive.sha256"
 Remove-Item -Recurse -Force $publishDir, $packageRoot, $archive, $checksum -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $publishDir, $appDir | Out-Null
 
-& dotnet publish $project -c Release -r $Rid --self-contained true -p:PublishAot=true -p:DebugType=none -p:DebugSymbols=false -o $publishDir
+& dotnet publish $project -c Release -r $Rid --self-contained true -p:PublishAot=true -p:DebugType=none -p:DebugSymbols=false `
+    -p:Version=$productVersion -p:FileVersion=$productVersion -p:InformationalVersion="$version+$shortSha" -o $publishDir
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE"
 }
@@ -383,6 +383,8 @@ $buildInfo = @(
     "binary: app\MacinRender.Gui.exe",
     "launcher: MacinRender ADM.cmd",
     "version: $version",
+    "product_version: $productVersion",
+    "c_api_version: $cApiVersion",
     "commit: $commitSha",
     "rid: $Rid",
     "built_at_utc: $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))",

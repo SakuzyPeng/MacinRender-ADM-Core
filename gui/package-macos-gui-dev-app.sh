@@ -11,14 +11,18 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo="$(cd "$here/.." && pwd)"
 proj="$here/MacinRender.Gui"
 rid="osx-arm64"
 app_name="MacinRender"
 bundle_id="com.macinrender.gui"
-version="1.0.0"
+version_tool="$repo/scripts/release/version_metadata.py"
+version="$(python3 "$version_tool" --repo-root "$repo" --field product-version)"
+short_sha="$(git -C "$repo" rev-parse --short=12 HEAD)"
 
 # 1. AOT 自包含发布
-dotnet publish -c Release -r "$rid" "$proj/MacinRender.Gui.csproj"
+dotnet publish -c Release -r "$rid" "$proj/MacinRender.Gui.csproj" \
+    -p:Version="$version" -p:FileVersion="$version" -p:InformationalVersion="$version-dev.$short_sha"
 publish="$proj/bin/Release/net10.0/$rid/publish"
 if [[ ! -x "$publish/MacinRender.Gui" ]]; then
     echo "找不到发布产物 $publish/MacinRender.Gui"; exit 1
@@ -30,7 +34,6 @@ rm -rf "$app"
 macos="$app/Contents/MacOS"
 res="$app/Contents/Resources"
 legal="$res/Legal"
-repo="$(cd "$here/.." && pwd)"
 mkdir -p "$macos" "$res" "$legal"
 
 cp "$publish/MacinRender.Gui" "$macos/$app_name"          # 主二进制(AOT)

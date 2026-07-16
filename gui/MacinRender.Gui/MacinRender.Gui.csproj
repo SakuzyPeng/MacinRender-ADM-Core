@@ -12,7 +12,21 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- P/Invoke 桥接层:[UnmanagedCallersOnly] 进度蹦床需要函数指针/unsafe。 -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <MacinRenderVersionScript>$(MSBuildProjectDirectory)/../../scripts/release/version_metadata.py</MacinRenderVersionScript>
+    <MacinRenderPython Condition="'$(OS)' == 'Windows_NT'">py -3</MacinRenderPython>
+    <MacinRenderPython Condition="'$(OS)' != 'Windows_NT'">python3</MacinRenderPython>
   </PropertyGroup>
+
+  <Target Name="GenerateMacinRenderBuildInfo" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <MacinRenderBuildInfoFile>$(IntermediateOutputPath)generated/BuildInfo.g.cs</MacinRenderBuildInfoFile>
+    </PropertyGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)generated" />
+    <Exec Command="$(MacinRenderPython) &quot;$(MacinRenderVersionScript)&quot; --write-gui-build-info &quot;$(MacinRenderBuildInfoFile)&quot;" />
+    <ItemGroup>
+      <Compile Include="$(MacinRenderBuildInfoFile)" Visible="false" />
+    </ItemGroup>
+  </Target>
 
   <!-- 自包含 C ABI native bundle(由 release/copy-native 流程拷入 runtimes/)。
        复制到输出目录根,供 [LibraryImport("mradm_capi")] 运行时解析。
