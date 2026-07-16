@@ -1,0 +1,80 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctrl="using:MacinRender.Gui.Controls"
+        xmlns:views="using:MacinRender.Gui.Views"
+        x:Class="MacinRender.Gui.Views.AboutWindow"
+        x:DataType="views:AboutWindow"
+        Title="{DynamicResource AboutTitle}"
+        Icon="/Assets/AppIcon.ico"
+        Width="460" Height="276"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        TransparencyLevelHint="AcrylicBlur,Mica,Blur"
+        Background="Transparent"
+        ExtendClientAreaToDecorationsHint="True">
+    <Panel>
+        <ExperimentalAcrylicBorder IsHitTestVisible="False">
+            <ExperimentalAcrylicBorder.Material>
+                <ExperimentalAcrylicMaterial
+                    BackgroundSource="Digger"
+                    TintColor="{DynamicResource WindowTint}"
+                    TintOpacity="1"
+                    MaterialOpacity="0.78"/>
+            </ExperimentalAcrylicBorder.Material>
+        </ExperimentalAcrylicBorder>
+
+        <Grid RowDefinitions="20,*" Background="{DynamicResource MainBg}">
+            <Border Grid.Row="0" Background="Transparent" PointerPressed="OnTitleBarPressed"/>
+
+            <Grid Grid.Row="1" Margin="20,8,20,18" RowDefinitions="Auto,Auto,Auto" RowSpacing="14">
+                <Grid Grid.Row="0" ColumnDefinitions="56,*" ColumnSpacing="14">
+                    <Image Grid.Column="0" Width="56" Height="56"
+                           Source="/Assets/AppIcon.crossplatform.png"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                        <TextBlock Classes="h1" FontSize="18" Text="MacinRender ADM"/>
+                        <TextBlock Classes="muted" FontSize="12" Text="{DynamicResource AppSubtitle}"/>
+                    </StackPanel>
+                </Grid>
+
+                <ctrl:SquircleBorder Grid.Row="1" Classes="card" CornerRadius="14" Padding="14,12">
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="22" RowSpacing="9">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="h2" VerticalAlignment="Center"
+                                   Text="{DynamicResource AboutProductVersion}"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" FontSize="13" FontWeight="Medium"
+                                   Foreground="{DynamicResource TextPrimary}" Text="{Binding ProductVersion}"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="h2" VerticalAlignment="Center"
+                                   Text="{DynamicResource AboutCApiVersion}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" FontSize="13"
+                                   Foreground="{DynamicResource TextPrimary}" Text="{Binding CApiVersion}"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Classes="h2" VerticalAlignment="Center"
+                                   Text="{DynamicResource AboutCommit}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" FontFamily="Menlo,Consolas" FontSize="11.5"
+                                   Foreground="{DynamicResource TextSecondary}" Text="{Binding ShortCommit}"
+                                   ToolTip.Tip="{Binding Commit}"/>
+                    </Grid>
+                </ctrl:SquircleBorder>
+
+                <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <ctrl:SquircleButton Grid.Column="0" Classes="nav" Radius="9"
+                                         HorizontalAlignment="Left" Click="OnProjectPressed">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Path Classes="icon" Width="15" Height="15" Data="{StaticResource IconLink}"/>
+                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource AboutProject}"/>
+                        </StackPanel>
+                    </ctrl:SquircleButton>
+
+                    <ctrl:SquircleButton Grid.Column="1" Classes="accent" Radius="9"
+                                         Width="82" Height="34" Padding="0"
+                                         HorizontalContentAlignment="Center"
+                                         VerticalContentAlignment="Center"
+                                         Click="OnClosePressed">
+                        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   TextAlignment="Center" Text="{DynamicResource AboutClose}"/>
+                    </ctrl:SquircleButton>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Panel>
+</Window>

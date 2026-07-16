@@ -8,6 +8,7 @@ using MacinRender.Gui.Interop;
 using MacinRender.Gui.Models;
 using MacinRender.Gui.Services;
 using MacinRender.Gui.ViewModels;
+using MacinRender.Gui.Views;
 
 namespace MacinRender.Gui;
 
@@ -66,6 +67,15 @@ public partial class App : Application
         foreach (var key in Localizer.Instance.Keys)
         {
             Resources[key] = Localizer.Instance[key];
+        }
+
+    }
+
+    private async void OnAboutMenuClick(object? sender, EventArgs e)
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: { } mainWindow })
+        {
+            await new AboutWindow().ShowDialog(mainWindow);
         }
     }
 
