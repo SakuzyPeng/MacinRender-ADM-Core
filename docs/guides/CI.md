@@ -80,6 +80,13 @@ Windows CLI/GUI 支持基线为 Windows Server 2025 + MSVC。签名、notarizati
 - 本地可运行 `python3 scripts/release/version_metadata.py --check` 检查元数据；CI 的
   `version-metadata` job 对每个 PR 和 `main` push 执行相同检查。
 
+### GUI 国际化门禁
+
+- 中英文词典必须拥有相同 key，格式化参数编号也必须一致。
+- XAML 中面向用户的标题、正文、按钮和提示必须使用 `DynamicResource`；产品名、声道缩写和
+  ADM 维度名等语言中立文本列入明确白名单。
+- 本地运行 `python3 scripts/quality/check_gui_i18n.py`；CI 的 `version-metadata` job 会执行同一检查。
+
 ### IAMF bridge 预构建
 
 IAMF 编码依赖官方 AOM `iamf-tools` bridge，但普通 CI、质量 CI 和默认 release 都显式关闭
