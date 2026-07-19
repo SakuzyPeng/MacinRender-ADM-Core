@@ -17,6 +17,11 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+
+        // 原生菜单会在 OnFrameworkInitializationCompleted 之前读取 Application.Name,
+        // 因此必须先恢复语言并灌入名称资源。
+        ApplyPersistedThemeAndLanguage();
+        ApplyLanguageResources();
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -24,12 +29,8 @@ public partial class App : Application
         // 用真实 C ABI 查询填充输出模型(backends/layouts/formats);失败即中止启动。
         LoadOutputModel();
 
-        // 建窗前先应用持久化的主题/语言,避免首帧深色→浅色 / 中→英闪烁(VM 只恢复输出设置)。
-        ApplyPersistedThemeAndLanguage();
-
         // i18n:把当前语言字典灌入 App 资源(供 XAML {DynamicResource});切语言时刷新。
         Localizer.Instance.PropertyChanged += (_, _) => ApplyLanguageResources();
-        ApplyLanguageResources();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -69,6 +70,7 @@ public partial class App : Application
             Resources[key] = Localizer.Instance[key];
         }
 
+        Name = Localizer.Instance["AppFullName"];
     }
 
     private async void OnAboutMenuClick(object? sender, EventArgs e)

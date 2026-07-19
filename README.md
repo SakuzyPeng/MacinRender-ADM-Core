@@ -1,10 +1,14 @@
-# MacinRender ADM Core
+# 麦渲峰 ADM Core
 
 [English](README.en.md) | 中文
 
-MacinRender ADM Core 是一个跨平台 ADM（Audio Definition Model，ITU-R BS.2076）空间音频渲染核心，使用 C++20 实现，提供命令行工具和 C ABI 库。
+麦渲峰 ADM Core（英文名：MacinRender ADM Core）是一个跨平台 ADM（Audio Definition Model，ITU-R
+BS.2076）空间音频渲染核心，使用 C++20 实现，提供命令行工具和 C ABI 库。
 
 它面向 ADM BWF / BW64 输入，可渲染到多声道扬声器、HOA 编码、HRTF 双耳，以及 WAV / CAF / FLAC / Opus MKA / IAMF / APAC 等交付格式。
+
+> **名称约定：**「麦渲峰」是 MacinRender 的正式中文名。英文品牌名以及仓库、包名、CMake 目标、
+> 命名空间、可执行文件等技术标识继续使用 `MacinRender`。
 
 ## 功能概览
 

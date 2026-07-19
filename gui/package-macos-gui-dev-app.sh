@@ -34,7 +34,8 @@ rm -rf "$app"
 macos="$app/Contents/MacOS"
 res="$app/Contents/Resources"
 legal="$res/Legal"
-mkdir -p "$macos" "$res" "$legal"
+zh_hans="$res/zh-Hans.lproj"
+mkdir -p "$macos" "$res" "$legal" "$zh_hans"
 
 cp "$publish/MacinRender.Gui" "$macos/$app_name"          # 主二进制(AOT)
 cp "$publish/"*.dylib "$macos/"                            # 全部 native 依赖(含 capi / headtrack)
@@ -52,8 +53,9 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <dict>
     <key>CFBundleExecutable</key><string>$app_name</string>
     <key>CFBundleIdentifier</key><string>$bundle_id</string>
-    <key>CFBundleName</key><string>$app_name</string>
-    <key>CFBundleDisplayName</key><string>$app_name</string>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleName</key><string>MacinRender ADM</string>
+    <key>CFBundleDisplayName</key><string>MacinRender ADM</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
     <key>CFBundleShortVersionString</key><string>$version</string>
@@ -62,10 +64,16 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>LSApplicationCategoryType</key><string>public.app-category.music</string>
-    <key>NSMotionUsageDescription</key><string>MacinRender 读取 AirPods 头部姿态,用于实时旋转空间音频监听的声场(头部追踪)。</string>
+    <key>NSMotionUsageDescription</key><string>MacinRender uses AirPods head orientation to rotate the monitored spatial-audio scene in real time (head tracking).</string>
 </dict>
 </plist>
 PLIST
+
+cat > "$zh_hans/InfoPlist.strings" <<'STRINGS'
+"CFBundleDisplayName" = "麦渲峰 ADM";
+"CFBundleName" = "麦渲峰 ADM";
+"NSMotionUsageDescription" = "麦渲峰读取 AirPods 头部姿态，用于实时旋转空间音频监听的声场（头部追踪）。";
+STRINGS
 
 # 4. ad-hoc 签名(本地测试足够触发 TCC 授权提示;分发需 Developer ID)。先签内部 dylib 再签 bundle。
 codesign --force --sign - "$macos/"*.dylib

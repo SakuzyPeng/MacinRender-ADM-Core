@@ -1,6 +1,6 @@
 # ADM 特性覆盖审计
 
-本文档记录 MacinRender ADM Core 对 BS.2076 / BS.2127 特性的当前覆盖状态，
+本文档记录麦渲峰 ADM Core 对 BS.2076 / BS.2127 特性的当前覆盖状态，
 以及与 libadm / libear 能力边界之间的差距。
 
 最后更新：2026-05-25

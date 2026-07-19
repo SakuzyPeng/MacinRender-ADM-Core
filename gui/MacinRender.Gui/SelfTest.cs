@@ -22,7 +22,7 @@ internal static class SelfTest
 {
     public static async Task<int> Run(string? inputWav)
     {
-        Console.WriteLine("== MacinRender 桥接层自检 ==");
+        Console.WriteLine("== 麦渲峰桥接层自检 ==");
 
         try
         {

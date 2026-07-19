@@ -41,11 +41,9 @@ KEY_PREFIXES = (
     "Tip",
 )
 
-# Domain labels, channel abbreviations, symbols, and product names are intentionally language-neutral.
+# Domain labels, channel abbreviations, and symbols are intentionally language-neutral.
 ALLOWED_LITERAL_UI = {
     "",
-    "MacinRender",
-    "MacinRender ADM",
     "Depth",
     "Height",
     "L",

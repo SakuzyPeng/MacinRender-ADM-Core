@@ -1,4 +1,6 @@
-# MacinRender ADM Core 文档
+# 麦渲峰 ADM Core 文档
+
+「麦渲峰」是 MacinRender 的正式中文名；技术标识继续使用 `MacinRender`。
 
 ## 架构文档
 

@@ -6,7 +6,7 @@
 
 ## 背景
 
-MacinRender ADM Core 计划接入 `libbw64`、`libadm`、`libear`、Spatial Audio Framework（空间音频框架，简称 SAF）以及未来 Apple SpatialMixer/AVAudioEngine 等后端。`libadm` 和 `libear` 都对 ADM（Audio Definition Model，音频定义模型）有自己的类型系统和建模方式。初期开发时，很容易为了快速跑通而直接把 `libadm::AudioObject`、`libadm` document 节点或 `libear` 的渲染输入类型当作项目内部领域对象传递。
+麦渲峰 ADM Core 计划接入 `libbw64`、`libadm`、`libear`、Spatial Audio Framework（空间音频框架，简称 SAF）以及未来 Apple SpatialMixer/AVAudioEngine 等后端。`libadm` 和 `libear` 都对 ADM（Audio Definition Model，音频定义模型）有自己的类型系统和建模方式。初期开发时，很容易为了快速跑通而直接把 `libadm::AudioObject`、`libadm` document 节点或 `libear` 的渲染输入类型当作项目内部领域对象传递。
 
 这条捷径会破坏长期架构目标：
 

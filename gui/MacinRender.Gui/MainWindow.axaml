@@ -9,7 +9,7 @@
         mc:Ignorable="d" d:DesignWidth="1120" d:DesignHeight="740"
         x:Class="MacinRender.Gui.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="MacinRender ADM"
+        Title="{DynamicResource AppFullName}"
         Icon="/Assets/AppIcon.ico"
         Width="1120" Height="740" MinWidth="940" MinHeight="600"
         TransparencyLevelHint="AcrylicBlur,Mica,Blur"
@@ -37,7 +37,7 @@
                     Margin="16,8,8,16" CornerRadius="14">
                 <Grid RowDefinitions="Auto,*,Auto" Margin="12,0">
                     <StackPanel Grid.Row="0" Margin="4,16,0,0" Spacing="0">
-                        <TextBlock Classes="h1" Text="MacinRender"/>
+                        <TextBlock Classes="h1" Text="{DynamicResource AppName}"/>
                         <TextBlock Classes="muted" Margin="0,1,0,0" Text="{DynamicResource AppSubtitle}"/>
                     </StackPanel>
 

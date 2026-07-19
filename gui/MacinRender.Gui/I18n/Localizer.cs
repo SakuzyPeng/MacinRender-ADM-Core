@@ -54,6 +54,8 @@ public sealed class Localizer : INotifyPropertyChanged
     private static readonly Dictionary<string, string> Zh = new()
     {
         // ── 静态 UI ──
+        ["AppName"] = "麦渲峰",
+        ["AppFullName"] = "麦渲峰 ADM",
         ["AppSubtitle"] = "ADM 空间音频渲染",
         ["NavRender"] = "渲染",
         ["NavSemantic"] = "语义编辑",
@@ -142,8 +144,8 @@ public sealed class Localizer : INotifyPropertyChanged
         ["TipClearQueue"] = "清空队列",
         ["TipClearLog"] = "清空日志",
         ["CopyAll"] = "复制全部",
-        ["AboutMenu"] = "关于 MacinRender ADM",
-        ["AboutTitle"] = "关于 MacinRender ADM",
+        ["AboutMenu"] = "关于麦渲峰 ADM",
+        ["AboutTitle"] = "关于麦渲峰 ADM",
         ["AboutProductVersion"] = "产品版本",
         ["AboutCApiVersion"] = "C ABI 版本",
         ["AboutCommit"] = "构建提交",
@@ -206,6 +208,8 @@ public sealed class Localizer : INotifyPropertyChanged
 
     private static readonly Dictionary<string, string> En = new()
     {
+        ["AppName"] = "MacinRender",
+        ["AppFullName"] = "MacinRender ADM",
         ["AppSubtitle"] = "ADM Spatial Audio Rendering",
         ["NavRender"] = "Render",
         ["NavSemantic"] = "Semantics",

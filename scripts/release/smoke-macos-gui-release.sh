@@ -50,8 +50,10 @@ fi
 app_root="$package_root/MacinRender ADM.app"
 exe="$app_root/Contents/MacOS/MacinRender.Gui"
 deps="$package_root/DEPENDENCIES.txt"
+zh_hans_info="$app_root/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
 
 for required in "$app_root" "$exe" "$app_root/Contents/Info.plist" "$app_root/Contents/Resources/AppIcon.icns" \
+    "$zh_hans_info" \
     "$deps" "$package_root/LICENSE" "$package_root/THIRD_PARTY_NOTICES.md" "$package_root/BUILD_INFO.txt" \
     "$package_root/licenses/INDEX.md" "$package_root/sbom.cyclonedx.json" \
     "$app_root/Contents/Resources/Legal/LICENSE" \
@@ -60,6 +62,14 @@ for required in "$app_root" "$exe" "$app_root/Contents/Info.plist" "$app_root/Co
     "$app_root/Contents/Resources/Legal/sbom.cyclonedx.json"; do
     if [[ ! -e "$required" ]]; then
         echo "package is missing ${required#$package_root/}" >&2
+        exit 1
+    fi
+done
+
+plutil -lint "$app_root/Contents/Info.plist" "$zh_hans_info"
+for field in CFBundleName CFBundleDisplayName; do
+    if [[ "$(plutil -extract "$field" raw "$zh_hans_info")" != "麦渲峰 ADM" ]]; then
+        echo "GUI package has an unexpected zh-Hans $field" >&2
         exit 1
     fi
 done

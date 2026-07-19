@@ -31,7 +31,7 @@
                     <Image Grid.Column="0" Width="56" Height="56"
                            Source="/Assets/AppIcon.crossplatform.png"/>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
-                        <TextBlock Classes="h1" FontSize="18" Text="MacinRender ADM"/>
+                        <TextBlock Classes="h1" FontSize="18" Text="{DynamicResource AppFullName}"/>
                         <TextBlock Classes="muted" FontSize="12" Text="{DynamicResource AppSubtitle}"/>
                     </StackPanel>
                 </Grid>

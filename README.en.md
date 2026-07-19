@@ -6,6 +6,9 @@ MacinRender ADM Core is a cross-platform ADM (Audio Definition Model, ITU-R BS.2
 
 It reads ADM BWF / BW64 input and renders to loudspeaker layouts, HOA encoding, HRTF binaural output, and delivery formats including WAV, CAF, FLAC, Opus MKA, IAMF, and APAC.
 
+> **Naming:** 麦渲峰 is the official Chinese name of MacinRender. The English brand name and technical identifiers,
+> including repository, package, CMake target, namespace, and executable names, remain `MacinRender`.
+
 ## Feature Overview
 
 - ADM scene import: reads BW64 ADM metadata through libbw64 / libadm and converts it into the project's own domain model.

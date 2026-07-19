@@ -133,11 +133,12 @@ contents="$app_root/Contents"
 macos_dir="$contents/MacOS"
 resources_dir="$contents/Resources"
 legal_dir="$resources_dir/Legal"
+zh_hans_dir="$resources_dir/zh-Hans.lproj"
 archive="$dist_dir/$package_name.tar.gz"
 checksum="$archive.sha256"
 
 rm -rf "$publish_dir" "$package_root" "$archive" "$checksum"
-mkdir -p "$publish_dir" "$macos_dir" "$resources_dir" "$legal_dir"
+mkdir -p "$publish_dir" "$macos_dir" "$resources_dir" "$legal_dir" "$zh_hans_dir"
 
 publish_args=(
     -c Release
@@ -212,6 +213,8 @@ cat > "$contents/Info.plist" <<EOF
   <string>AppIcon</string>
   <key>CFBundleIdentifier</key>
   <string>com.macinrender.adm.gui</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
   <key>CFBundleName</key>
   <string>MacinRender ADM</string>
   <key>CFBundleDisplayName</key>
@@ -229,9 +232,15 @@ cat > "$contents/Info.plist" <<EOF
   <key>LSApplicationCategoryType</key>
   <string>public.app-category.music</string>
   <key>NSMotionUsageDescription</key>
-  <string>MacinRender 读取 AirPods 头部姿态,用于实时旋转空间音频监听的声场(头部追踪)。</string>
+  <string>MacinRender uses AirPods head orientation to rotate the monitored spatial-audio scene in real time (head tracking).</string>
 </dict>
 </plist>
+EOF
+
+cat > "$zh_hans_dir/InfoPlist.strings" <<'EOF'
+"CFBundleDisplayName" = "麦渲峰 ADM";
+"CFBundleName" = "麦渲峰 ADM";
+"NSMotionUsageDescription" = "麦渲峰读取 AirPods 头部姿态，用于实时旋转空间音频监听的声场（头部追踪）。";
 EOF
 
 if [[ ! -x "$macos_dir/MacinRender.Gui" ]]; then

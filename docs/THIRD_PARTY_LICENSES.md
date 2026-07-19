@@ -6,7 +6,7 @@
 
 ## 本项目许可证
 
-MacinRender ADM Core 的项目源码采用 **MIT License**，以仓库根目录 `LICENSE` 为准。
+麦渲峰 ADM Core（MacinRender ADM Core）的项目源码采用 **MIT License**，以仓库根目录 `LICENSE` 为准。
 
 该选择与当前默认构建依赖兼容。项目源码继续保持 MIT；二进制发行包需要附带本项目 MIT 许可证以及下表第三方 notice / license 文本。
 

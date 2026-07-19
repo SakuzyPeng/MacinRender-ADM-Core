@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概要
 
-MacinRender ADM Core 是一个跨平台 ADM（ITU-R BS.2076 Audio Definition Model）空间音频渲染核心，使用 C++20 实现，提供 `mradm` 命令行工具、稳定 C ABI 库，以及基于该 C ABI 的 Avalonia GUI（`gui/`）。输入是 ADM BWF/BW64 文件，输出包括多声道扬声器、HOA、双耳，以及 WAV / CAF / FLAC / Opus MKA / IAMF / APAC 容器；离线渲染之外还有实时监听（monitor）链路。详见 `README.md`。
+麦渲峰 ADM Core（英文名：MacinRender ADM Core）是一个跨平台 ADM（ITU-R BS.2076 Audio Definition Model）空间音频渲染核心，使用 C++20 实现，提供 `mradm` 命令行工具、稳定 C ABI 库，以及基于该 C ABI 的 Avalonia GUI（`gui/`）。输入是 ADM BWF/BW64 文件，输出包括多声道扬声器、HOA、双耳，以及 WAV / CAF / FLAC / Opus MKA / IAMF / APAC 容器；离线渲染之外还有实时监听（monitor）链路。详见 `README.md`。
 
 项目长期方向是平台化重构（不是简单的 CLI 重写）：见 `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md`。
 

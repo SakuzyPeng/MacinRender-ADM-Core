@@ -1,6 +1,6 @@
 # CI 设计
 
-本文档记录 MacinRender ADM Core 的 GitHub Actions CI 设计与当前落地状态。目标是先建立稳定的
+本文档记录麦渲峰 ADM Core 的 GitHub Actions CI 设计与当前落地状态。目标是先建立稳定的
 跨平台构建与测试基线，再逐步完善发布打包、许可证 bundle 和更重的静态分析。
 
 ## 目标
