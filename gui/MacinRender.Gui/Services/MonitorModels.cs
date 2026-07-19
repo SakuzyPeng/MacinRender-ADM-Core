@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.ComponentModel;
+using MacinRender.Gui.I18n;
 using MacinRender.Gui.Interop;
 
 namespace MacinRender.Gui.Services;
@@ -39,7 +41,20 @@ public sealed record MonitorOverride(
 
 /// <summary>监听后端 A/B 选项:展示名 + 渲染器 + 监听布局。立体声监听下可跨布局(经下混)。
 /// SystemSpatial=true 时为 macOS 系统空间音频监听(多声道不下混,换 device + 声道数 → 切换走重启)。</summary>
-public sealed record MonitorBackendOption(string Label, AdmRenderer Renderer, string Layout, bool SystemSpatial = false);
+public sealed record MonitorBackendOption(
+    string Label,
+    AdmRenderer Renderer,
+    string Layout,
+    bool SystemSpatial = false,
+    string? LabelKey = null) : INotifyPropertyChanged
+{
+    public string DisplayLabel => LabelKey is null ? Label : Localizer.Instance[LabelKey];
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public void RefreshLanguage() =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayLabel)));
+}
 
 /// <summary>系统空间音频监听的「渲染床后端」次级选项:用哪个扬声器渲染器产出多声道床,再交 macOS
 /// 系统空间化(头追)。床布局走 MonitorSpatialLayouts;此处只决定渲染器(Apple AUSpatialMixer /

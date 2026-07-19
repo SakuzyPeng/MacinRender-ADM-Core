@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using MacinRender.Gui.I18n;
 using MacinRender.Gui.Interop;
 
 namespace MacinRender.Gui.Services;
@@ -41,13 +42,13 @@ public sealed class AdmRenderService
             using var ctx = NativeMethods.adm_create_context();
             if (ctx.IsInvalid)
             {
-                return Fail(AdmErrorCode.Internal, "无法创建 ADM context");
+                return Fail(AdmErrorCode.Internal, Localizer.Instance["ErrorCreateContext"]);
             }
 
             using var opts = NativeMethods.adm_create_render_options();
             if (opts.IsInvalid)
             {
-                return Fail(AdmErrorCode.Internal, "无法创建 render options");
+                return Fail(AdmErrorCode.Internal, Localizer.Instance["ErrorCreateRenderOptions"]);
             }
 
             if (!string.IsNullOrEmpty(semanticPolicyJson))
@@ -56,7 +57,9 @@ public sealed class AdmRenderService
             }
 
             var rc = NativeMethods.adm_export_file(ctx, inputPath, outputPath, opts);
-            var message = rc == AdmErrorCode.Ok ? string.Empty : ReadLastContextError(ctx) ?? $"导出失败:{rc}";
+            var message = rc == AdmErrorCode.Ok
+                ? string.Empty
+                : ReadLastContextError(ctx) ?? Localizer.Instance.Format("ErrorExportFailed", rc);
             return new RenderOutcome(rc == AdmErrorCode.Ok, rc, message, outputPath, null, null,
                 Array.Empty<RenderLogEntry>());
         });
@@ -107,13 +110,13 @@ public sealed class AdmRenderService
         using var ctx = NativeMethods.adm_create_context();
         if (ctx.IsInvalid)
         {
-            return Fail(AdmErrorCode.Internal, "无法创建 ADM context");
+            return Fail(AdmErrorCode.Internal, Localizer.Instance["ErrorCreateContext"]);
         }
 
         using var opts = NativeMethods.adm_create_render_options();
         if (opts.IsInvalid)
         {
-            return Fail(AdmErrorCode.Internal, "无法创建 render options");
+            return Fail(AdmErrorCode.Internal, Localizer.Instance["ErrorCreateRenderOptions"]);
         }
 
         ApplySettings(opts, s);
@@ -223,7 +226,9 @@ public sealed class AdmRenderService
     {
         if (result.IsInvalid)
         {
-            return Fail(rc, rc == AdmErrorCode.Ok ? "渲染完成(无结果句柄)" : $"渲染失败:{rc}");
+            return Fail(rc, rc == AdmErrorCode.Ok
+                ? Localizer.Instance["ErrorRenderNoResult"]
+                : Localizer.Instance.Format("ErrorRenderFailed", rc));
         }
 
         var errorCode = NativeMethods.adm_render_result_error_code(result);

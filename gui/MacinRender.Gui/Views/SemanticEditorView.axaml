@@ -103,7 +103,7 @@
                                   SelectedItem="{Binding SelectedMonitorBackend}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="svc:MonitorBackendOption">
-                                    <TextBlock Text="{Binding Label}"/>
+                                    <TextBlock Text="{Binding DisplayLabel}"/>
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
@@ -292,7 +292,7 @@
                         <!-- 点击切换 LUFS 窗(M 瞬时 / S 短期 / I 累计) -->
                         <Button Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand"
                                 Command="{Binding CycleLufsModeCommand}"
-                                ToolTip.Tip="LUFS: M=momentary S=short-term I=integrated">
+                                ToolTip.Tip="{DynamicResource SemLufsHint}">
                             <TextBlock FontSize="10" Foreground="{DynamicResource Accent}">
                                 <Run Text="{Binding LufsModeLabel}"/><Run Text=" "/><Run Text="{Binding LufsValueText}"/>
                             </TextBlock>
@@ -521,7 +521,7 @@
                                                Classes="axislink" Classes.unlinked="{Binding !SelectedRow.Extent.WidthLinked}"
                                                Tag="W" DoubleTapped="OnResetExtent"
                                                PointerPressed="OnAxisPointerPressed" PointerReleased="OnAxisPointerReleased"
-                                               ToolTip.Tip="长按切换 Width 联动 · 双击重置 extent" Text="Width"/>
+                                               ToolTip.Tip="{DynamicResource SemExtentWidthHint}" Text="Width"/>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                         <CheckBox IsChecked="{Binding SelectedRow.Extent.Width.Enabled}"/>
                                         <Slider Width="86" VerticalAlignment="Center"
@@ -544,7 +544,7 @@
                                                Classes="axislink" Classes.unlinked="{Binding !SelectedRow.Extent.HeightLinked}"
                                                Tag="H" DoubleTapped="OnResetExtent"
                                                PointerPressed="OnAxisPointerPressed" PointerReleased="OnAxisPointerReleased"
-                                               ToolTip.Tip="长按切换 Height 联动 · 双击重置 extent" Text="Height"/>
+                                               ToolTip.Tip="{DynamicResource SemExtentHeightHint}" Text="Height"/>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                         <CheckBox IsChecked="{Binding SelectedRow.Extent.Height.Enabled}"/>
                                         <Slider Width="86" VerticalAlignment="Center"
@@ -567,7 +567,7 @@
                                                Classes="axislink" Classes.unlinked="{Binding !SelectedRow.Extent.DepthLinked}"
                                                Tag="D" DoubleTapped="OnResetExtent"
                                                PointerPressed="OnAxisPointerPressed" PointerReleased="OnAxisPointerReleased"
-                                               ToolTip.Tip="长按切换 Depth 联动 · 双击重置 extent" Text="Depth"/>
+                                               ToolTip.Tip="{DynamicResource SemExtentDepthHint}" Text="Depth"/>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                         <CheckBox IsChecked="{Binding SelectedRow.Extent.Depth.Enabled}"/>
                                         <Slider Width="86" VerticalAlignment="Center"

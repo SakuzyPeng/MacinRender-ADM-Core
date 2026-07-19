@@ -124,6 +124,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             OnPropertyChanged(nameof(OverrideSummary));
             OnPropertyChanged(nameof(CommonPrefixLabel));
             OnPropertyChanged(nameof(ObjectCountText));
+            foreach (var backend in MonitorBackends)
+            {
+                backend.RefreshLanguage();
+            }
+            RefreshMonitorStatusLanguage();
             RefreshDevices(); // 「系统默认」项标签随语言切换
         };
 
@@ -142,7 +147,8 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             // MonitorSpatialLayouts 次级下拉;渲染床的后端走 MonitorSpatialRenderers 次级下拉。Renderer/Layout 字段
             // 填占位,实际生效取 EffectiveMonitorRenderer / EffectiveMonitorLayout。
             var bedRenderer = OperatingSystem.IsMacOS() ? AdmRenderer.Apple : AdmRenderer.Ear;
-            MonitorBackends.Add(new MonitorBackendOption("系统空间音频", bedRenderer, "7.1.4", SystemSpatial: true));
+            MonitorBackends.Add(new MonitorBackendOption("", bedRenderer, "7.1.4",
+                SystemSpatial: true, LabelKey: "SemSystemSpatial"));
         }
         _selectedMonitorBackend = MonitorBackends[0];
         // 系统空间音频的「渲染床后端」次级下拉:用哪个扬声器渲染器产出多声道床交系统空间化。Apple(AUSpatialMixer)
@@ -296,7 +302,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     private static string BuildLoadFailureDetails(string? details, string inputPath)
     {
         var message = string.IsNullOrWhiteSpace(details) ? L["SemLoadFailed"] : details.Trim();
-        return message + Environment.NewLine + Environment.NewLine + "Input: " + inputPath;
+        return message + Environment.NewLine + Environment.NewLine + L.Format("DetailInput", inputPath);
     }
 
     // typeDefinition=Objects 判别:含至少一个带 object_blocks 的 track。声床(DirectSpeakers)
@@ -437,26 +443,46 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     private string BuildExportDetails(string details, string? outputPath)
     {
-        return details + Environment.NewLine + Environment.NewLine + "Input: " + (LoadedPath ?? "") +
-            Environment.NewLine + "Output: " + (outputPath ?? "");
+        return details + Environment.NewLine + Environment.NewLine + L.Format("DetailInput", LoadedPath ?? "") +
+            Environment.NewLine + L.Format("DetailOutput", outputPath ?? "");
     }
 
     private static string FormatOutcomeDetails(RenderOutcome outcome)
     {
         var message = string.IsNullOrWhiteSpace(outcome.Message) ? "" : outcome.Message + Environment.NewLine;
-        return message + "Error code: " + outcome.ErrorCode;
+        return message + L.Format("DetailErrorCode", outcome.ErrorCode);
     }
 
     private void ReportMonitorFailure(string statusKey, AdmErrorCode code, string? details)
     {
-        MonitorStatus = L[statusKey];
-        MonitorStatusDetails = BuildMonitorDetails(code, details);
+        _monitorStatusKey = statusKey;
+        _monitorStatusErrorCode = code;
+        _monitorStatusRawDetails = details;
+        RefreshMonitorStatusLanguage();
     }
 
     private static string BuildMonitorDetails(AdmErrorCode code, string? details)
     {
         var message = string.IsNullOrWhiteSpace(details) ? "" : details + Environment.NewLine + Environment.NewLine;
-        return message + "Error code: " + code;
+        return message + L.Format("DetailErrorCode", code);
+    }
+
+    private void SetMonitorStatus(string statusKey)
+    {
+        _monitorStatusKey = statusKey;
+        _monitorStatusErrorCode = null;
+        _monitorStatusRawDetails = null;
+        RefreshMonitorStatusLanguage();
+    }
+
+    private void ClearMonitorStatus() => SetMonitorStatus("");
+
+    private void RefreshMonitorStatusLanguage()
+    {
+        MonitorStatus = string.IsNullOrEmpty(_monitorStatusKey) ? "" : L[_monitorStatusKey];
+        MonitorStatusDetails = _monitorStatusErrorCode is { } code
+            ? BuildMonitorDetails(code, _monitorStatusRawDetails)
+            : MonitorStatus;
     }
 
     // ── 实时监听(同一份行编辑既驱动 policy,也实时 SetOverrides;契约:monitor 非线程安全 → 全 UI 线程) ──
@@ -666,6 +692,9 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     [ObservableProperty] private string _monitorStatus = "";
     [ObservableProperty] private string _monitorStatusDetails = "";
+    private string _monitorStatusKey = "";
+    private AdmErrorCode? _monitorStatusErrorCode;
+    private string? _monitorStatusRawDetails;
 
     // LUFS(ITU-R BS.1770)三窗读数;UI 一次显示一个,点击在 M / S / I 间循环。
     [ObservableProperty]
@@ -797,8 +826,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         var path = LoadedPath!;
         var backend = SelectedMonitorBackend;
         IsMonitorBusy = true;
-        MonitorStatus = ""; // 启动状态由播放键转圈体现,不占状态栏文字(避免挤压电平表)
-        MonitorStatusDetails = "";
+        ClearMonitorStatus(); // 启动状态由播放键转圈体现,不占状态栏文字(避免挤压电平表)
 
         RefreshDevices(); // 设备可能已插拔 → 开始前刷新列表(保持当前选择)
         var deviceId = SelectedMonitorDevice?.Id ?? "";
@@ -822,7 +850,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         _sampleRate = sr;
         DurationSeconds = dur;
         IsMonitoring = true;
-        MonitorStatusDetails = "";
+        ClearMonitorStatus();
         _activeMonitorBackend = backend;
         _activeLayout = EffectiveMonitorLayout; // 记录生效布局(系统空间音频含次级),供后续热切/重启判定
         SetupChannelMeters(backend);            // 系统空间音频 → 多声道竖条阵列;双耳 → L/R 横条
@@ -865,8 +893,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         MomentaryLufs = float.NegativeInfinity;
         ShorttermLufs = float.NegativeInfinity;
         IntegratedLufs = float.NegativeInfinity;
-        MonitorStatus = "";
-        MonitorStatusDetails = "";
+        ClearMonitorStatus();
         UpdatePollTimer(); // 头追踪仍开则保留定时器(供视觉自由视角),否则停
     }
 
@@ -1091,8 +1118,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             }
 
             MonitorState = st.State;                                  // 引擎为准
-            MonitorStatus = st.Ended ? L["SemMonEnded"] : st.Failed ? L["SemMonFailed"] : "";
-            MonitorStatusDetails = MonitorStatus;
+            SetMonitorStatus(st.Ended ? "SemMonEnded" : st.Failed ? "SemMonFailed" : "");
         }
 
         // 多声道(系统空间音频)按声道数取电平铺满竖条;双耳只取前两声道画 L/R 横条。

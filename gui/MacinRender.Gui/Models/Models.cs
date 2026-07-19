@@ -51,8 +51,12 @@ public partial class RenderFileItem : ObservableObject
     /// <summary>阶段短词:据 StageKey 本地化;语言切换时由 RefreshLanguage 刷新。</summary>
     public string StageText => string.IsNullOrEmpty(StageKey) ? "" : Localizer.Instance[StageKey];
 
-    /// <summary>语言切换时刷新阶段文本(StageKey 不变,但本地化结果变)。</summary>
-    public void RefreshLanguage() => OnPropertyChanged(nameof(StageText));
+    /// <summary>语言切换时刷新阶段和状态文本(枚举 / StageKey 不变,只重算本地化结果)。</summary>
+    public void RefreshLanguage()
+    {
+        OnPropertyChanged(nameof(StageText));
+        OnPropertyChanged(nameof(StatusText));
+    }
 
     public bool IsPending => Status == FileStatus.Pending;
     public bool IsRenderingState => Status == FileStatus.Rendering;
@@ -61,10 +65,10 @@ public partial class RenderFileItem : ObservableObject
 
     public string StatusText => Status switch
     {
-        FileStatus.Pending => "待渲染",
-        FileStatus.Rendering => "渲染中",
-        FileStatus.Done => "完成",
-        FileStatus.Failed => "失败",
+        FileStatus.Pending => Localizer.Instance["QueueStatusPending"],
+        FileStatus.Rendering => Localizer.Instance["QueueStatusRendering"],
+        FileStatus.Done => Localizer.Instance["QueueStatusDone"],
+        FileStatus.Failed => Localizer.Instance["QueueStatusFailed"],
         _ => ""
     };
 

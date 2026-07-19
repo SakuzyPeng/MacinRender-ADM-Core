@@ -80,7 +80,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private decimal _bitrateMax = 320;
 
     [ObservableProperty] private double _overallProgress;
-    [ObservableProperty] private string _statusText = "就绪";
+    [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private bool _isDark = true; // 默认深色,驱动切换主题按钮的月亮/太阳图标
 
     [ObservableProperty]
