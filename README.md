@@ -3,7 +3,7 @@
 [English](README.en.md) | 中文
 
 麦渲峰 ADM Core（英文名：MacinRender ADM Core）是一个跨平台 ADM（Audio Definition Model，ITU-R
-BS.2076）空间音频渲染核心，使用 C++20 实现，提供命令行工具和 C ABI 库。
+BS.2076）空间音频渲染核心，使用 C++20 实现，提供桌面 GUI、命令行工具和稳定 C ABI 库。
 
 它面向 ADM BWF / BW64 输入，可渲染到多声道扬声器、HOA 编码、HRTF 双耳，以及 WAV / CAF / FLAC / Opus MKA / IAMF / APAC 等交付格式。
 
@@ -13,12 +13,38 @@ BS.2076）空间音频渲染核心，使用 C++20 实现，提供命令行工具
 ## 功能概览
 
 - ADM scene import：基于 libbw64 / libadm 读取 BW64 ADM 元数据，并转换为项目自有领域模型。
+- 桌面工作台：基于 Avalonia 的批量渲染、逐对象语义编辑与实时空间监听 GUI。
 - 多后端渲染：libear、SAF VBAP、HOA encoder、HRTF binaural、Apple AUSpatialMixer（macOS-only）。
 - Objects / DirectSpeakers：支持对象和直达扬声器内容，含时间块、增益、插值、扩散、channelLock 和 objectDivergence 等语义。
 - 输出后处理：响度归一化、True Peak 限制、位深转换、CAF/FLAC/Opus/APAC metadata。HOA 输出通过 7.1.4 AllRAD 参考解码测量，LFE 不计入 LUFS 但计入 True Peak。
 - 平台边界：核心功能面向 macOS / Linux / Windows；APAC 编码与 Apple AUSpatialMixer 后端为 macOS-only。
 
-## 快速开始
+## 图形界面
+
+麦渲峰 GUI 是基于 Avalonia 的桌面工作台，通过稳定 C ABI 调用与 CLI 相同的渲染核心；后端、布局、
+格式和平台能力均由 core 查询提供，不在界面中维护另一套规则。当前发行包覆盖 macOS arm64 和
+Windows x64，并以 NativeAOT 自包含应用交付。
+
+| 工作流 | 当前能力 |
+|---|---|
+| 批量渲染 | 添加文件或文件夹，选择后端、布局、编码与容器，查看结构化进度、日志并取消任务 |
+| 语义编辑 | 载入单个 ADM，逐对象编辑 gain、diffuse、extent、divergence 和头追踪参与状态 |
+| 实时监听 | 边播放边比较语义覆盖，可切换后端、布局与输出设备并使用自定义 SOFA HRIR；Apple / SAF 双耳监听支持以鼠标、触控板或键盘手动控制 yaw、pitch、roll 并复位朝向，无需头追硬件 |
+| 空间可视化 | 对象位置、轨迹与逐声道电平表；空间角色支持拖入标准 64×64 PNG 自定义皮肤，自动适配经典 / 纤细模型并记忆选择 |
+| 检查与导出 | 导出生效 ADM，保留源音频并写回支持的语义修改 |
+
+界面支持中文 / English、深色 / 浅色主题，并会在平台支持时开放系统空间音频。macOS 额外提供
+Apple AUSpatialMixer、APAC 与 AirPods 头部追踪；具体可用项仍以当前平台和构建返回的能力为准。
+GUI 当前定位是 ADM 渲染与语义工作台，不是带时间线的完整 DAW 或通用 ADM authoring suite。
+
+发行包解压后，macOS 打开 `MacinRender ADM.app`，Windows 运行 `MacinRender ADM.cmd` 或
+`app/MacinRender.Gui.exe`。首发包当前不包含 macOS Developer ID / notarization 或 Windows
+Authenticode 签名；Linux 暂只发行 CLI AppImage，不提供 GUI 包。
+
+技术设计见[语义编辑器 GUI](docs/architecture/SEMANTIC_EDITOR_GUI.md)和
+[实时监听引擎](docs/architecture/REALTIME_MONITORING.md)。
+
+## CLI 快速开始
 
 ```bash
 cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release

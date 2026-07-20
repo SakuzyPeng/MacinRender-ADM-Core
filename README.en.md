@@ -2,7 +2,8 @@
 
 English | [中文](README.md)
 
-MacinRender ADM Core is a cross-platform ADM (Audio Definition Model, ITU-R BS.2076) spatial-audio rendering core written in C++20. It provides the `mradm` command-line tool and a stable C ABI library.
+MacinRender ADM Core is a cross-platform ADM (Audio Definition Model, ITU-R BS.2076) spatial-audio rendering core
+written in C++20. It provides a desktop GUI, the `mradm` command-line tool, and a stable C ABI library.
 
 It reads ADM BWF / BW64 input and renders to loudspeaker layouts, HOA encoding, HRTF binaural output, and delivery formats including WAV, CAF, FLAC, Opus MKA, IAMF, and APAC.
 
@@ -12,12 +13,38 @@ It reads ADM BWF / BW64 input and renders to loudspeaker layouts, HOA encoding, 
 ## Feature Overview
 
 - ADM scene import: reads BW64 ADM metadata through libbw64 / libadm and converts it into the project's own domain model.
+- Desktop workbench: an Avalonia GUI for batch rendering, per-object semantic editing, and realtime spatial monitoring.
 - Render backends: libear, SAF VBAP, HOA encoder, HRTF binaural, and Apple AUSpatialMixer (macOS-only).
 - Objects / DirectSpeakers: supports timed blocks, gain, interpolation, diffuse, channelLock, objectDivergence, and related ADM semantics.
 - Post-processing: loudness normalization, True Peak limiting, bit-depth conversion, and CAF / FLAC / Opus / APAC metadata. HOA output is measured through a 7.1.4 AllRAD reference decode; LFE is excluded from LUFS but included in True Peak.
 - Platform boundary: core functionality targets macOS, Linux, and Windows; APAC encoding and the Apple AUSpatialMixer backend are macOS-only.
 
-## Quick Start
+## Desktop GUI
+
+The MacinRender GUI is an Avalonia desktop workbench backed by the same rendering core as the CLI through the stable
+C ABI. Renderer, layout, format, and platform capabilities are queried from the core instead of being duplicated in
+the interface. Current releases provide self-contained NativeAOT applications for macOS arm64 and Windows x64.
+
+| Workflow | Current capabilities |
+|---|---|
+| Batch rendering | Add files or folders, select renderer, layout, codec, and container, inspect structured progress and logs, and cancel jobs |
+| Semantic editing | Load one ADM file and edit per-object gain, diffuse, extent, divergence, and head-tracking participation |
+| Realtime monitoring | Compare semantic overrides during playback, switch renderer, layout, and output device, and use custom SOFA HRIRs; Apple / SAF binaural monitoring supports hardware-free manual yaw, pitch, roll, and recentering through a mouse, trackpad, or keyboard |
+| Spatial visualization | Object positions, trails, and per-channel meters; drag in a standard 64x64 PNG character skin, with automatic classic / slim model selection and persistence |
+| Inspection and export | Export an effective ADM while preserving source audio and writing supported semantic changes |
+
+The interface supports Chinese / English and dark / light themes, and exposes system spatial audio when supported by
+the platform. macOS additionally provides Apple AUSpatialMixer, APAC, and AirPods head tracking. The GUI is an ADM
+rendering and semantic workbench, not a timeline-based DAW or a general-purpose ADM authoring suite.
+
+After extracting a release package, open `MacinRender ADM.app` on macOS. On Windows, run `MacinRender ADM.cmd` or
+`app/MacinRender.Gui.exe`. Initial releases do not include macOS Developer ID / notarization or Windows Authenticode
+signing. Linux currently ships the CLI AppImage only, with no GUI package.
+
+For implementation details, see the [semantic editor design](docs/architecture/SEMANTIC_EDITOR_GUI.md) and
+[realtime monitoring design](docs/architecture/REALTIME_MONITORING.md).
+
+## CLI Quick Start
 
 ```bash
 cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
@@ -36,7 +63,7 @@ Inspect an ADM scene and query available backends / layouts:
 Render examples:
 
 ```bash
-./build/release/mradm render -i input.wav -o out_binaural.wav --renderer binaural
+./build/release/mradm render -i input.wav -o out_binaural.wav --renderer saf-binaural
 ./build/release/mradm render -i input.wav -o out_714.flac --renderer ear --output-layout 7.1.4
 ./build/release/mradm render -i input.wav -o out_222.wav --renderer apple --output-layout 22.2
 ./build/release/mradm render -i input.wav -o out_trim.wav --start 12.5 --end 45.0
@@ -49,10 +76,12 @@ The GitHub Actions release workflow produces auditable packages for tags matchin
 | Platform | Artifact | Baseline | Self-contained boundary |
 |---|---|---|---|
 | macOS arm64 | `mradm-<version>-macos-arm64.tar.gz` | Built on macOS 26 runner | No Homebrew / `/usr/local` dynamic-library dependency; Apple system libraries and frameworks are allowed |
-| Linux x86_64 | `mradm-<version>-linux-x86_64.tar.gz` | Ubuntu 24.04 x86_64 | Includes an `ldd` manifest; rejects missing libraries, build-directory paths, and `/usr/local` dependencies |
+| Linux x86_64 | `mradm-<version>-linux-x86_64.AppImage` | Ubuntu 24.04 x86_64 | Standalone AppImage; bundles non-core runtime libraries and rejects missing, build-tree, and `/usr/local` dependencies |
 | Windows x64 | `mradm-<version>-windows-x64.zip` | Windows Server 2025 + MSVC | Includes `mradm.exe` and required DLLs, plus a `dumpbin /dependents` manifest |
+| macOS GUI arm64 | `MacinRender-Gui-<version>-macos-arm64.tar.gz` | Built on macOS 26 runner | Self-contained `.app`; only Apple system libraries and frameworks may remain external |
+| Windows GUI x64 | `MacinRender-Gui-<version>-windows-x64.zip` | Windows Server 2025 + MSVC | Includes the NativeAOT GUI, `mradm_capi.dll`, required DLLs, and a `dumpbin /dependents` manifest |
 
-Each package contains:
+CLI packages contain:
 
 - `bin/mradm`
 - `LICENSE`
@@ -60,7 +89,10 @@ Each package contains:
 - `BUILD_INFO.txt`
 - `DEPENDENCIES.txt`
 
-macOS / Linux packages use `.tar.gz`; Windows packages use `.zip`. A `.sha256` file is generated next to each package. macOS universal2, codesign, and notarization are not provided yet.
+macOS CLI / GUI packages use `.tar.gz`, the Linux CLI uses `.AppImage`, and Windows CLI / GUI packages use `.zip`.
+Each artifact has a matching `.sha256` file. GUI packages contain a macOS `.app` or
+`app/MacinRender.Gui.exe`, together with license, build-information, checksum, and dependency files. macOS universal2,
+Developer ID signing / notarization, and Windows Authenticode signing are not provided yet.
 
 ## Render Backends
 
@@ -69,10 +101,10 @@ macOS / Linux packages use `.tar.gz`; Windows packages use `.zip`. A `.sha256` f
 | libear | `--renderer auto` / `ear` | Objects / DirectSpeakers / HOA | Multichannel loudspeakers |
 | SAF VBAP | `--renderer saf` | Objects / DirectSpeakers | Multichannel loudspeakers |
 | HOA encoder | `--renderer hoa` | Objects / DirectSpeakers | HOA3 16ch (ACN/SN3D) |
-| HRTF binaural | `--renderer binaural` | Objects / DirectSpeakers | 2ch binaural |
+| SAF HRTF binaural | `--renderer saf-binaural` | Objects / DirectSpeakers | 2ch binaural |
 | Apple AUSpatialMixer | `--renderer apple` | Objects / DirectSpeakers | 2ch binaural / multichannel loudspeakers (macOS-only) |
 
-The `binaural` backend uses SAF's built-in Genelec KEMAR HRTF by default. A user FIR SOFA HRIR file can be loaded with `--sofa <path>`. Current SOFA support is limited to SimpleFreeFieldHRIR / GeneralFIR, 2 receivers, 48 kHz, with no resampling.
+The `saf-binaural` backend uses SAF's built-in Genelec KEMAR HRTF by default. A user FIR SOFA HRIR file can be loaded with `--sofa <path>`. Current SOFA support is limited to SimpleFreeFieldHRIR / GeneralFIR, 2 receivers, 48 kHz, with no resampling.
 
 The recommended general-purpose external HRTF is the D1 KU100 SOFA from the [SADIE II Database](https://www.york.ac.uk/sadie-project/database.html), for example `D1_48K_24bit_256tap_FIR_SOFA.sofa` (also available from the [SOFA database SADIE index](https://sofacoustics.org/data/database/sadie/)). It is a 48 kHz, 256-tap SimpleFreeFieldHRIR dataset with dense direction sampling and low-frequency extension / diffuse-field EQ, making it a more balanced `--sofa` recommendation than the built-in KEMAR for many headphone checks. The SADIE II data is published by the University of York under the Apache License 2.0; when distributing data or using it academically, follow the dataset page and cite [DOI:10.3390/app8112029](https://doi.org/10.3390/app8112029).
 
@@ -176,7 +208,7 @@ Semantic policy does not modify the source AXML. It only affects the current ren
 
 ```bash
 ./build/release/mradm inspect in.wav --write-semantic-policy-template policy.json
-./build/release/mradm render -i in.wav -o out.flac --renderer binaural --semantic-policy policy.json
+./build/release/mradm render -i in.wav -o out.flac --renderer saf-binaural --semantic-policy policy.json
 ```
 
 `global` applies to all content. `objects[]` contains rule-based overrides. Match dimensions are OR-combined: `id`, `name`, `name_glob`, `track_uid`, `all`, `importance_min/max`, `dialogue_id`, `content`, `programme`, plus HOA-only `pack_format`.
