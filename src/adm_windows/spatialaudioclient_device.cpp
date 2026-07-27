@@ -324,15 +324,17 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
                         objects_[object_index] = nullptr;
                         return PumpResult::Invalidated;
                     }
-                    // A dynamic object is a fixed virtual speaker, so set its position once right
-                    // after activation; it persists "until changed" (we never move it). Static bed
-                    // slots ignore position (the spatializer owns their geometry).
-                    if (route.is_dynamic) {
-                        hr = objects_[object_index]->SetPosition(route.x, route.y, route.z);
-                        if (FAILED(hr)) {
-                            objects_[object_index] = nullptr;
-                            return PumpResult::Invalidated;
-                        }
+                }
+                // Dynamic objects are fixed virtual speakers, but some spatial-audio endpoints lose
+                // a position supplied only in the activation cycle and render the object at the
+                // listener origin even though SetPosition returned S_OK. Reassert the same fixed
+                // coordinate in every Begin/End update cycle. Static bed slots do not accept a
+                // position; the spatializer owns their geometry.
+                if (route.is_dynamic) {
+                    hr = objects_[object_index]->SetPosition(route.x, route.y, route.z);
+                    if (FAILED(hr)) {
+                        objects_[object_index] = nullptr;
+                        return PumpResult::Invalidated;
                     }
                 }
                 BYTE* buffer = nullptr;

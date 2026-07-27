@@ -35,7 +35,7 @@ ISpatialAudioClient 是**对象制**而非声道制:不存在「把 24 声道塞
 对象分两类：
 
 - **静态对象**：Windows `AudioObjectType_*` 已命名的位置走 `StaticObjectTypeMask`。当前发布布局最多使用 7.1.4 静态床（Front/Side/Back、LFE、TopFront/TopBack）。
-- **动态对象**：Windows 静态枚举没有的位置（9.1.6 的 wide/top-middle，以及 22.2 超出 7.1.4 床的其余位置）走 `AudioObjectType_Dynamic`，激活后用 `SetPosition(x,y,z)` 固定在对应 BS.2051 方位。
+- **动态对象**：Windows 静态枚举没有的位置（9.1.6 的 wide/top-middle，以及 22.2 超出 7.1.4 床的其余位置）走 `AudioObjectType_Dynamic`，并在每个 `BeginUpdatingAudioObjects` / `EndUpdatingAudioObjects` 周期用 `SetPosition(x,y,z)` 重申对应 BS.2051 固定方位。位置本身不移动；逐周期重申是因为部分实测端点会丢失只在激活周期设置的坐标并把对象渲染到监听者原点，即使首次 `SetPosition` 返回 `S_OK`。
 
 22.2 有两个 LFE 输入声道，但 Windows 只有一个非空间化 `AudioObjectType_LowFrequency` 槽位。实现上不把第二个 LFE 当动态对象，而是让 `LFE1` / `LFE2` 两个输入声道共享同一个 LFE 对象：当前 render block 只有一路有能量时 unity 通过，两路都有能量时对合成值做约 -3 dB（`0.70710678`）补偿，避免双 LFE 监听低频抬升。
 
@@ -51,7 +51,7 @@ ISpatialAudioClient 是**对象制**而非声道制:不存在「把 24 声道塞
 1. `WaitForSingleObject(buffer_event_, 100)`：事件每 ~10ms 触发一次（系统要数据）；100ms 超时是安全网，使事件停发后仍能探测。
 2. `BeginUpdatingAudioObjects(&dyn, &frame_count)`。
 3. 从引擎 ring 调 `pull_()` 拉一个交织块（短读补静音）。
-4. **去交织 / 合并**写进每个对象的单声道 buffer（对象首轮惰性激活、之后复用 ComPtr；22.2 双 LFE 合并到同一个 LFE 对象）。
+4. 对象首轮惰性激活、之后复用 ComPtr；每轮先为动态固定坐标对象重申 `SetPosition`，再**去交织 / 合并**写进每个对象的单声道 buffer（22.2 双 LFE 合并到同一个 LFE 对象）。
 5. `EndUpdatingAudioObjects()`。
 
 引擎暂停时 pull 返回静音、sink 照常喂静音，所以无需 sink 侧 pause/flush 逻辑。
