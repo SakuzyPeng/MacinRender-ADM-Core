@@ -47,7 +47,7 @@ try {
 
     $buildInfo = Get-Content (Join-Path $packageRoot "BUILD_INFO.txt") -Raw
     foreach ($field in @("version", "product_version", "c_api_version", "commit")) {
-        if ($buildInfo -notmatch "(?m)^$field: ") {
+        if ($buildInfo -notmatch "(?m)^${field}: ") {
             throw "GUI package build info is missing $field"
         }
     }
