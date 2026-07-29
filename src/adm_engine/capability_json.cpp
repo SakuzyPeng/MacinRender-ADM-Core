@@ -1,7 +1,5 @@
 #include "capability_json.h"
 
-#include <algorithm>
-#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
@@ -52,8 +50,16 @@ json backend_to_json(const char* renderer, const CapabilityReport& caps) {
     j["supports_object_divergence"] = caps.supports_object_divergence;
     j["supports_screen_ref"] = caps.supports_screen_ref;
     j["supports_diffuse"] = caps.supports_diffuse;
+    j["hrtf_sources"] = caps.hrtf_sources;
     json layouts = json::array();
-    std::ranges::transform(caps.supported_layouts, std::back_inserter(layouts), layout_to_json);
+    for (const auto& layout : caps.supported_layouts) {
+        // The 0+2+0 renderer path exists only for diagnostics and tests. Public
+        // capability discovery exposes two-channel output solely as binaural.
+        if (!layout.is_binaural && layout.channel_count == 2U) {
+            continue;
+        }
+        layouts.push_back(layout_to_json(layout));
+    }
     j["layouts"] = std::move(layouts);
     return j;
 }
@@ -82,7 +88,7 @@ std::string capabilities_to_json() {
     // whitelist. macOS: AVSampleBufferAudioRenderer == apple_capabilities()'s non-binaural layouts.
     // Windows: ISpatialAudioClient == adm_windows' windows_layouts table.
     json system_spatial = json::array();
-#if defined(__APPLE__)
+#ifdef __APPLE__
     // Bind the report to a named local first: range-for over apple_capabilities().supported_layouts
     // directly would dangle (the CapabilityReport temporary dies before the loop body in C++20).
     const CapabilityReport apple_caps = apple_capabilities();

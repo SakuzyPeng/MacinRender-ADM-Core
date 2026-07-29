@@ -1606,14 +1606,14 @@ class BinauralStream final : public IRenderStream {
                               fmt::format("binaural renderer requires 48000 Hz input, got {}", info.sample_rate),
                               "input=" + plan.input_path);
         }
-        auto reader = bw64::readFile(plan.input_path);
+        auto reader = audio::RenderInputReader::open(plan.input_path,
+                                                     plan.scene.info.source_kind == SceneSourceKind::channel_bed);
         if (!reader) {
-            return make_error(
-                ErrorCode::io_error, "failed to open input for realtime binaural stream", "input=" + plan.input_path);
+            return tl::unexpected{reader.error()};
         }
         (void) logs;
         return std::unique_ptr<BinauralStream>{new BinauralStream(prepared,
-                                                                  std::move(reader),
+                                                                  std::move(*reader),
                                                                   plan.scene,
                                                                   plan.binaural_spread_mode,
                                                                   info.num_channels,
@@ -1704,7 +1704,7 @@ class BinauralStream final : public IRenderStream {
 
   private:
     BinauralStream(const BinauralPrepared& prepared,
-                   std::unique_ptr<bw64::Bw64Reader> reader,
+                   std::unique_ptr<audio::RenderInputReader> reader,
                    AdmScene scene,
                    BinauralSpreadMode spread_mode,
                    uint16_t num_in_ch,
@@ -1846,7 +1846,7 @@ class BinauralStream final : public IRenderStream {
     }
 
     const BinauralPrepared& prepared_; // borrowed; owner (factory) outlives the stream
-    std::unique_ptr<bw64::Bw64Reader> reader_;
+    std::unique_ptr<audio::RenderInputReader> reader_;
     AdmScene scene_;                      // policy-applied scene, for topology re-prepare (scaled copy → build_sources)
     BinauralSpreadMode spread_mode_;      // spread mode the prepared sources were built with
     std::vector<BinauralSource> sources_; // own (rebuildable) source list; starts == prepared_.sources
@@ -2002,7 +2002,12 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
     }
 
     // Open I/O.
-    auto reader = bw64::readFile(plan.input_path);
+    auto reader_res =
+        audio::RenderInputReader::open(plan.input_path, plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+    if (!reader_res) {
+        return tl::unexpected{reader_res.error()};
+    }
+    auto reader = std::move(*reader_res);
     auto writer_res = audio::WriterHandle::open(plan.output_path, 2U, info.sample_rate, "binaural");
     if (!writer_res) {
         return tl::unexpected{writer_res.error()};
@@ -2407,12 +2412,16 @@ CapabilityReport binaural_capabilities() {
     r.supports_channel_lock = true;
     r.supports_object_divergence = true;
     r.supports_diffuse = true;
+    r.hrtf_sources = {"built-in"};
+#ifdef SAF_ENABLE_SOFA_READER_MODULE
+    r.hrtf_sources.emplace_back("user-sofa");
+#endif
     // Default (cloud/none) path windows via seek + aligned pre-roll; the experimental
     // saf_spreader path keeps full STFT warm-up and only trims output.
     r.supports_render_window = true;
     r.supported_layouts = {
         // clang-format off
-        {"0+2+0", "SAF HRTF binaural (KEMAR or user SOFA HRIR)", 2, false, 0, true, true},
+        {"binaural", "SAF HRTF binaural (KEMAR or user SOFA HRIR)", 2, false, 0, true, true},
         // clang-format on
     };
     return r;

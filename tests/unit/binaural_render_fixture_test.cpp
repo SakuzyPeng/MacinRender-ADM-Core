@@ -434,7 +434,7 @@ mradm::RenderRequest make_request(const std::filesystem::path& input, const std:
     mradm::RenderRequest req;
     req.input_path = input;
     req.output_path = output;
-    req.options.renderer = mradm::RendererSelection::binaural;
+    req.options.renderer = mradm::RendererSelection::saf_binaural;
     req.options.peak_limit = false;
     req.options.measure_loudness = false;
     return req;
@@ -474,7 +474,7 @@ mradm::RenderResult render_result_for(const std::filesystem::path& input,
     return service.render(req, progress, logs);
 }
 
-bool verify_binaural_render_is_stereo_and_directional() {
+bool verify_binaural_render_is_two_channel_and_directional() {
     const auto in = write_fixture(90.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U);
     const auto out = temp_path("mr_binaural_directional", ".wav");
     FileGuard in_guard(in);
@@ -490,7 +490,7 @@ bool verify_binaural_render_is_stereo_and_directional() {
         return false;
     }
     bool ok = true;
-    ok &= check(reader->channels() == 2U, "binaural output is stereo");
+    ok &= check(reader->channels() == 2U, "binaural output has two channels");
 
     std::vector<float> samples(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
     reader->read(samples.data(), reader->frame_count());
@@ -548,7 +548,7 @@ bool verify_binaural_lfe_bypasses_hrtf() {
     reader->read(samples.data(), reader->frame_count());
 
     bool ok = true;
-    ok &= check(reader->channels() == 2U, "LFE bypass output is stereo");
+    ok &= check(reader->channels() == 2U, "LFE bypass output has two channels");
     const double l_energy = channel_energy(samples, reader->channels(), 0U, 0U, reader->frame_count());
     const double r_energy = channel_energy(samples, reader->channels(), 1U, 0U, reader->frame_count());
     ok &= check(l_energy > 1e-5, "LFE bypass left output is not silent");
@@ -556,14 +556,15 @@ bool verify_binaural_lfe_bypasses_hrtf() {
     return ok;
 }
 
-bool verify_binaural_caf_ignores_requested_layout() {
+bool verify_binaural_caf_layout_is_strict() {
     const auto in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{80}, 4096U);
     const auto out = temp_path("mr_binaural_layout", ".caf");
+    const auto invalid_out = temp_path("mr_binaural_invalid_layout", ".caf");
     FileGuard in_guard(in);
     FileGuard out_guard(out);
+    FileGuard invalid_out_guard(invalid_out);
 
     auto options = make_request(in, out).options;
-    options.output_layout = "wav71";
     if (!render_to_path(in, out, options)) {
         return false;
     }
@@ -573,9 +574,16 @@ bool verify_binaural_caf_ignores_requested_layout() {
         return false;
     }
     bool ok = true;
-    ok &= check(reader->channels() == 2U, "binaural CAF output is stereo despite requested wav71");
+    ok &= check(reader->channels() == 2U, "binaural CAF output has two channels");
     ok &= check(reader->sample_rate() == 48000U, "binaural CAF sample rate is preserved");
     ok &= check(read_caf_layout_tag(out) == ((106U << 16U) | 2U), "binaural CAF uses CoreAudio Binaural tag");
+
+    options.output_layout = "wav71";
+    const auto invalid = render_result_for(in, invalid_out, options);
+    ok &= check(!invalid.success() && invalid.error.code == mradm::ErrorCode::unsupported,
+                "binaural backend rejects a multichannel output layout");
+    ok &= check(invalid.error.message.find("does not support output layout") != std::string::npos,
+                "binaural layout mismatch reports a clear error");
     return ok;
 }
 
@@ -1320,10 +1328,10 @@ int main() {
     ok &= verify_binaural_grid_point_identity();
     ok &= verify_binaural_offgrid_convex_magnitude();
     ok &= verify_binaural_lateral_head_shadow();
-    ok &= verify_binaural_render_is_stereo_and_directional();
+    ok &= verify_binaural_render_is_two_channel_and_directional();
     ok &= verify_binaural_time_gate_respects_block_start();
     ok &= verify_binaural_lfe_bypasses_hrtf();
-    ok &= verify_binaural_caf_ignores_requested_layout();
+    ok &= verify_binaural_caf_layout_is_strict();
     ok &= verify_binaural_missing_sofa_fails_cleanly();
     ok &= verify_binaural_channel_lock_changes_direction();
     ok &= verify_binaural_object_divergence_changes_output();

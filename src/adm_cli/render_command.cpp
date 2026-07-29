@@ -142,10 +142,36 @@ std::vector<std::string> parse_csv_list(const std::string& csv) {
     return out;
 }
 
+std::vector<std::string> parse_input_channel_csv(const std::string& csv) {
+    if (csv.empty()) {
+        return {};
+    }
+
+    std::vector<std::string> out;
+    std::size_t pos = 0;
+    while (pos <= csv.size()) {
+        const std::size_t comma = csv.find(',', pos);
+        const std::size_t end = comma == std::string::npos ? csv.size() : comma;
+        const std::string_view item{csv.data() + pos, end - pos};
+        const auto first = item.find_first_not_of(" \t\r\n");
+        if (first == std::string_view::npos) {
+            out.emplace_back();
+        } else {
+            const auto last = item.find_last_not_of(" \t\r\n");
+            out.emplace_back(item.substr(first, last - first + 1));
+        }
+        if (comma == std::string::npos) {
+            break;
+        }
+        pos = comma + 1;
+    }
+    return out;
+}
+
 CLI::Validator renderer_validator() {
     return CLI::Validator{[](const std::string& value) {
                               if (value == "auto" || value == "ear" || value == "saf" || value == "hoa" ||
-                                  value == "saf-binaural" || value == "apple" || value == "binaural") {
+                                  value == "saf-binaural" || value == "apple") {
                                   return std::string{};
                               }
                               return std::string{"expected one of: auto, ear, saf, hoa, saf-binaural, apple"};
@@ -204,16 +230,38 @@ mradm::RenderOptions::ApacContainer parse_apac_container(const std::string& valu
     return mradm::RenderOptions::ApacContainer::mpeg4;
 }
 
-CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
-    auto* render_cmd = app.add_subcommand("render", "Render an ADM BWF file");
-    render_cmd->add_option("-i,--input", opts.input, "Input ADM BWF/WAV path")->required();
-    render_cmd->add_option("-o,--output", opts.output, "Output audio path");
-    render_cmd->add_option("--output-layout",
-                           opts.layout,
-                           "Output layout for non-binaural renderers; use 'mradm layouts --format <fmt>' for final "
-                           "container channel order");
-    render_cmd->add_option("--renderer", opts.renderer, "Renderer backend: auto, ear, saf, hoa, saf-binaural, apple")
+void add_input_mapping_options(CLI::App& render_cmd, RenderCliOptions& opts) {
+    auto* input_layout =
+        render_cmd
+            .add_option("--input-layout",
+                        opts.input_layout,
+                        "Ordinary input layout: auto, 5.1, 5.1.2, 7.1, 5.1.4, 7.1.4, 9.1.4, 9.1.6, 22.2")
+            ->check(CLI::IsMember({"auto", "5.1", "5.1.2", "7.1", "5.1.4", "7.1.4", "9.1.4", "9.1.6", "22.2"}));
+    auto* input_channels = render_cmd.add_option(
+        "--input-channels",
+        opts.input_channels_csv,
+        "Custom labels in file order: L/FL=+30deg left, R/FR=-30deg right, C/FC=0deg front, LFE=LFE1; "
+        "azimuth is +left/-right; see mradm input-layouts");
+    input_layout->excludes(input_channels);
+    input_channels->excludes(input_layout);
+}
+
+void add_output_selection_options(CLI::App& render_cmd, RenderCliOptions& opts) {
+    render_cmd.add_option("--output-layout",
+                          opts.layout,
+                          "Output semantic/layout: binaural (default) or a multichannel/HOA layout; spatial WAV "
+                          "writes a WAVE mask or ADM AXML/CHNA; use 'mradm layouts --format <fmt>' for final "
+                          "container channel order");
+    render_cmd.add_option("--renderer", opts.renderer, "Renderer backend: auto, ear, saf, hoa, saf-binaural, apple")
         ->check(renderer_validator());
+}
+
+CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
+    auto* render_cmd = app.add_subcommand("render", "Render an ADM BWF or ordinary channel-based WAVE file");
+    render_cmd->add_option("-i,--input", opts.input, "Input ADM BWF or channel-based WAV/RF64/BW64 path")->required();
+    render_cmd->add_option("-o,--output", opts.output, "Output audio path");
+    add_input_mapping_options(*render_cmd, opts);
+    add_output_selection_options(*render_cmd, opts);
     render_cmd->add_flag("--no-peak-limit", opts.no_peak_limit, "Disable True Peak limiting");
     render_cmd->add_option("--peak-limit-dbtp", opts.peak_limit_dbtp, "True Peak target in dBTP")
         ->check(CLI::Range(-60.0F, 0.0F));
@@ -224,7 +272,10 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                            opts.final_gain_db,
                            "Unconstrained final gain in dB, applied after loudness/peak staging; bypasses peak "
                            "limiting and may exceed 0 dBFS (default: 0)");
-    render_cmd->add_option("--output-bit-depth", opts.output_bit_depth_str, "Output bit depth: f32, i24, i16")
+    render_cmd
+        ->add_option("--output-bit-depth",
+                     opts.output_bit_depth_str,
+                     "Output bit depth: f32, i24, i16; use i24 for PCM BW64 ADM delivery")
         ->check(CLI::IsMember({"f32", "i24", "i16"}));
     render_cmd
         ->add_option("--loudness-target",
@@ -258,7 +309,7 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
         ->add_option("--opus-bitrate-per-ch",
                      opts.opus_bitrate_per_ch,
                      "Opus MKA VBR target bitrate per channel in kbps (6-320); "
-                     "omit for auto: 64 kbps/ch, 128 kbps floor for mono/stereo")
+                     "omit for auto: 64 kbps/ch, 128 kbps floor for one- or two-channel output")
         ->check(CLI::Range(6U, 320U));
     render_cmd
         ->add_option("--apac-bitrate",
@@ -333,6 +384,10 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
         request.output_path = opts.output;
     }
     request.options.output_layout = opts.layout;
+    if (opts.input_layout != "auto") {
+        request.options.input_layout = opts.input_layout;
+    }
+    request.options.input_channel_labels = parse_input_channel_csv(opts.input_channels_csv);
     request.options.renderer = parse_renderer(opts.renderer);
     request.options.peak_limit = !opts.no_peak_limit;
     request.options.peak_limit_dbtp = opts.peak_limit_dbtp;

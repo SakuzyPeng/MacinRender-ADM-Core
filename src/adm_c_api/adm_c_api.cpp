@@ -18,7 +18,7 @@
 
 namespace {
 
-std::vector<std::string> split_csv_list(std::string_view csv) {
+std::vector<std::string> split_csv_list(std::string_view csv, bool preserve_empty = false) {
     std::vector<std::string> out;
     std::size_t pos = 0;
     while (pos <= csv.size()) {
@@ -29,6 +29,8 @@ std::vector<std::string> split_csv_list(std::string_view csv) {
         if (first != std::string_view::npos) {
             const auto last = item.find_last_not_of(" \t\r\n");
             out.emplace_back(item.substr(first, last - first + 1));
+        } else if (preserve_empty) {
+            out.emplace_back();
         }
         if (comma == std::string_view::npos) {
             break;
@@ -503,6 +505,39 @@ adm_error_code_t adm_render_options_set_output_layout(adm_render_options_t* opts
     }
     try {
         opts->opts.output_layout = layout;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_render_options_set_input_layout(adm_render_options_t* opts, const char* layout) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    try {
+        if (layout == nullptr || layout[0] == '\0' || std::string_view{layout} == "auto") {
+            opts->opts.input_layout = std::nullopt;
+        } else {
+            opts->opts.input_layout = std::string{layout};
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_render_options_set_input_channel_labels(adm_render_options_t* opts,
+                                                             const char* labels_csv) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    try {
+        if (labels_csv == nullptr || labels_csv[0] == '\0') {
+            opts->opts.input_channel_labels.clear();
+        } else {
+            opts->opts.input_channel_labels = split_csv_list(labels_csv, true);
+        }
         return ADM_ERROR_OK;
     } catch (...) {
         return ADM_ERROR_INTERNAL;
@@ -1769,6 +1804,28 @@ adm_error_code_t adm_layouts_json(adm_context_t* context, char** out_json) noexc
 
     try {
         const std::string json = context->service.layouts_json();
+        auto* buffer = new (std::nothrow) char[json.size() + 1];
+        if (buffer == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        std::char_traits<char>::copy(buffer, json.c_str(), json.size() + 1);
+        *out_json = buffer;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_input_layouts_json(adm_context_t* context, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (context == nullptr || out_json == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        const std::string json = context->service.input_layouts_json();
         auto* buffer = new (std::nothrow) char[json.size() + 1];
         if (buffer == nullptr) {
             return ADM_ERROR_INTERNAL;

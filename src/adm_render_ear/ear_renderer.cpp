@@ -798,14 +798,14 @@ class EarStream final : public IRenderStream {
   public:
     [[nodiscard]] static Result<std::unique_ptr<EarStream>>
     create(const EarPrepared& prepared, const RenderPlan& plan, LogSink& logs) {
-        auto reader = bw64::readFile(plan.input_path);
+        auto reader = audio::RenderInputReader::open(plan.input_path,
+                                                     plan.scene.info.source_kind == SceneSourceKind::channel_bed);
         if (!reader) {
-            return make_error(
-                ErrorCode::io_error, "failed to open input for realtime ear stream", "input=" + plan.input_path);
+            return tl::unexpected{reader.error()};
         }
         (void) logs;
         try {
-            return std::unique_ptr<EarStream>{new EarStream(prepared, std::move(reader), plan)};
+            return std::unique_ptr<EarStream>{new EarStream(prepared, std::move(*reader), plan)};
         } catch (const std::exception& e) {
             return make_error(ErrorCode::render_failed, std::string("ear stream setup failed: ") + e.what(), {});
         }
@@ -870,7 +870,7 @@ class EarStream final : public IRenderStream {
     [[nodiscard]] std::string_view output_layout() const override { return output_layout_; }
 
   private:
-    EarStream(const EarPrepared& prepared, std::unique_ptr<bw64::Bw64Reader> reader, const RenderPlan& plan)
+    EarStream(const EarPrepared& prepared, std::unique_ptr<audio::RenderInputReader> reader, const RenderPlan& plan)
         : prepared_(prepared), reader_(std::move(reader)), num_in_ch_(plan.scene.info.num_channels),
           num_out_ch_(static_cast<uint16_t>(prepared.layout.channels().size())),
           sample_rate_(plan.scene.info.sample_rate), total_frames_(plan.scene.info.num_frames),
@@ -928,7 +928,7 @@ class EarStream final : public IRenderStream {
     }
 
     const EarPrepared& prepared_; // borrowed; owner (factory) outlives the stream
-    std::unique_ptr<bw64::Bw64Reader> reader_;
+    std::unique_ptr<audio::RenderInputReader> reader_;
     uint16_t num_in_ch_;
     uint16_t num_out_ch_;
     uint32_t sample_rate_;
@@ -1042,7 +1042,12 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
         init_decorr_state(decorr, layout, num_out_ch, k_block_size);
 
         // Open file for audio only — ADM metadata comes from plan.scene.
-        auto reader = bw64::readFile(plan.input_path);
+        auto reader_res = audio::RenderInputReader::open(plan.input_path,
+                                                         plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+        if (!reader_res) {
+            return tl::unexpected{reader_res.error()};
+        }
+        auto reader = std::move(*reader_res);
         auto writer_res = audio::WriterHandle::open(
             plan.output_path, num_out_ch, static_cast<uint32_t>(sample_rate), plan.output_layout);
         if (!writer_res) {

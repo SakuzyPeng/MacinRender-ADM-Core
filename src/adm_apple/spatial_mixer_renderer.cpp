@@ -226,8 +226,8 @@ class AudioUnitGuard {
 // Resolved output target for one render. binaural -> 2ch HRTF (Headphones output type,
 // no speaker layout); speaker -> Nch VBAP into a standard CoreAudio layout tag.
 // writer_layout is the container layout id passed to the writer: the binaural path
-// normalizes the default "0+2+0" alias to "binaural" so CAF/APAC tag the output with
-// kAudioChannelLayoutTag_Binaural rather than plain Stereo (it is a binaural signal).
+// normalizes the legacy "0+2+0" alias to "binaural" so CAF/APAC tag the output with
+// kAudioChannelLayoutTag_Binaural rather than a generic two-channel tag.
 struct OutputProfile {
     uint16_t channels{2};
     bool binaural{true};
@@ -851,11 +851,12 @@ class AppleStream final : public IRenderStream {
         }
         stream->live_orientation_ = plan.listener_orientation;
 
-        stream->reader_ = bw64::readFile(plan.input_path);
-        if (!stream->reader_) {
-            return make_error(
-                ErrorCode::io_error, "failed to open input for realtime apple stream", "input=" + plan.input_path);
+        auto reader = audio::RenderInputReader::open(plan.input_path,
+                                                     plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+        if (!reader) {
+            return tl::unexpected{reader.error()};
         }
+        stream->reader_ = std::move(*reader);
         return stream;
     }
 
@@ -1153,7 +1154,7 @@ class AppleStream final : public IRenderStream {
 
     OutputProfile profile_;
     std::vector<BusPlan> buses_;
-    std::unique_ptr<bw64::Bw64Reader> reader_;
+    std::unique_ptr<audio::RenderInputReader> reader_;
     std::vector<float> staging_;
     std::vector<InputBusContext> contexts_; // referenced by the AU's per-bus pull callbacks
     std::vector<std::vector<float>> out_planar_;
@@ -1399,7 +1400,12 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                          frames_to_write));
     progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "rendering audio"});
 
-    auto reader = bw64::readFile(plan.input_path);
+    auto reader_res =
+        audio::RenderInputReader::open(plan.input_path, plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+    if (!reader_res) {
+        return tl::unexpected{reader_res.error()};
+    }
+    auto reader = std::move(*reader_res);
     if (start_pos > 0) {
         render_common::seek_reader_abs(*reader, start_pos);
     }
@@ -1666,6 +1672,7 @@ CapabilityReport apple_capabilities() {
     r.supports_screen_ref = false;
     r.supports_diffuse = false;      // SpatialMixer has no ADM decorrelator
     r.supports_render_window = true; // seek + one-block pre-roll for SpatialMixer state
+    r.hrtf_sources = {"system"};
     r.supported_layouts = {
         {"binaural", "Apple AUSpatialMixer binaural", 2, false, 0, true, true},
     };

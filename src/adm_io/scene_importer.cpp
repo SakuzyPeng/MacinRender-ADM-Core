@@ -21,21 +21,13 @@
 #include <adm/adm.hpp>
 #include <adm/parse.hpp>
 #include <adm/write.hpp>
-#include <bw64/bw64.hpp>
 
+#include "adm/audio_io.h"
 #include "adm/io.h"
 
 namespace mradm::io {
 
 namespace {
-
-// AxmlChunk stores data as vector<char> with no string accessor; write() is
-// the only public output path.
-std::string axml_to_string(const bw64::AxmlChunk& chunk) {
-    std::ostringstream buf;
-    chunk.write(buf);
-    return buf.str();
-}
 
 // AudioId::uid() returns a 12-byte fixed-width string padded with spaces (and
 // possibly NUL bytes).  libadm may format hex digits A-F as lower-case while
@@ -48,20 +40,135 @@ std::string normalize_uid(std::string raw) {
     return raw;
 }
 
-// Build UID string → 0-based channel index from the CHNA chunk.
-std::map<std::string, uint16_t> make_uid_map(const std::shared_ptr<bw64::ChnaChunk>& chna) {
-    std::map<std::string, uint16_t> result;
-    if (!chna) {
-        return result;
+[[nodiscard]] uint16_t adm_chunk_read_u16(const char* data) {
+    const auto* bytes = reinterpret_cast<const uint8_t*>(data);
+    return static_cast<uint16_t>(bytes[0]) | static_cast<uint16_t>(static_cast<uint16_t>(bytes[1]) << 8U);
+}
+
+[[nodiscard]] uint32_t adm_chunk_read_u32(const char* data) {
+    const auto* bytes = reinterpret_cast<const uint8_t*>(data);
+    return static_cast<uint32_t>(bytes[0]) | (static_cast<uint32_t>(bytes[1]) << 8U) |
+           (static_cast<uint32_t>(bytes[2]) << 16U) | (static_cast<uint32_t>(bytes[3]) << 24U);
+}
+
+[[nodiscard]] uint64_t adm_chunk_read_u64(const char* data) {
+    return static_cast<uint64_t>(adm_chunk_read_u32(data)) |
+           (static_cast<uint64_t>(adm_chunk_read_u32(data + 4)) << 32U);
+}
+
+struct WaveAdmMetadata {
+    std::string axml;
+    std::map<std::string, uint16_t> uid_to_channel;
+};
+
+// NOLINTNEXTLINE(readability-function-size): bounded RIFF scanning and both ADM chunks share one cursor/state machine.
+[[nodiscard]] Result<WaveAdmMetadata> read_wave_adm_metadata(const std::string& path) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        return make_error(ErrorCode::io_error, "无法打开 WAVE 文件", "input=" + path);
     }
-    for (const auto& entry : chna->audioIds()) {
-        std::string uid = normalize_uid(entry.uid());
-        if (!uid.empty()) {
-            // trackIndex is 1-based in BW64; convert to 0-based
-            result[std::move(uid)] = static_cast<uint16_t>(entry.trackIndex() - 1);
+    std::array<char, 12> header{};
+    input.read(header.data(), static_cast<std::streamsize>(header.size()));
+    const std::string_view container{header.data(), 4U};
+    if (!input || std::string_view{header.data() + 8, 4U} != "WAVE" ||
+        (container != "RIFF" && container != "RF64" && container != "BW64")) {
+        return make_error(ErrorCode::io_error, "不是有效的 RIFF/RF64/BW64 WAVE 文件", "input=" + path);
+    }
+
+    input.seekg(0, std::ios::end);
+    const auto end_position = input.tellg();
+    if (end_position < 0) {
+        return make_error(ErrorCode::io_error, "无法读取 WAVE 文件大小", "input=" + path);
+    }
+    const auto file_size = static_cast<uint64_t>(end_position);
+    uint64_t data_size64 = 0U;
+    WaveAdmMetadata metadata;
+    uint64_t position = 12U;
+    while (position + 8U <= file_size) {
+        std::array<char, 8> chunk_header{};
+        input.seekg(static_cast<std::streamoff>(position), std::ios::beg);
+        input.read(chunk_header.data(), static_cast<std::streamsize>(chunk_header.size()));
+        if (!input) {
+            return make_error(ErrorCode::io_error, "读取 WAVE chunk 头失败", "input=" + path);
         }
+        const std::string_view id{chunk_header.data(), 4U};
+        const uint32_t size32 = adm_chunk_read_u32(chunk_header.data() + 4);
+        const uint64_t payload_offset = position + 8U;
+        uint64_t payload_size = size32;
+        if (id == "ds64") {
+            if (size32 < 28U || payload_offset + 28U > file_size) {
+                return make_error(ErrorCode::io_error, "无效的 ds64 chunk", "input=" + path);
+            }
+            std::array<char, 28> ds64{};
+            input.read(ds64.data(), static_cast<std::streamsize>(ds64.size()));
+            if (!input) {
+                return make_error(ErrorCode::io_error, "读取 ds64 chunk 失败", "input=" + path);
+            }
+            data_size64 = adm_chunk_read_u64(ds64.data() + 8);
+        } else if (id == "data" && size32 == std::numeric_limits<uint32_t>::max()) {
+            if (data_size64 == 0U) {
+                return make_error(ErrorCode::io_error, "RF64/BW64 data chunk 缺少 ds64 大小", "input=" + path);
+            }
+            payload_size = data_size64;
+        }
+        if (payload_offset > file_size || payload_size > file_size - payload_offset) {
+            return make_error(ErrorCode::io_error, "WAVE chunk 超出文件边界", "input=" + path);
+        }
+
+        if (id == "axml") {
+            const auto max_axml_size =
+                std::min<uint64_t>(metadata.axml.max_size(), std::numeric_limits<std::streamsize>::max());
+            if (payload_size > max_axml_size) {
+                return make_error(ErrorCode::unsupported, "AXML chunk 过大", "input=" + path);
+            }
+            metadata.axml.resize(static_cast<std::size_t>(payload_size));
+            input.seekg(static_cast<std::streamoff>(payload_offset), std::ios::beg);
+            input.read(metadata.axml.data(), static_cast<std::streamsize>(payload_size));
+            if (!input) {
+                return make_error(ErrorCode::io_error, "读取 AXML chunk 失败", "input=" + path);
+            }
+        } else if (id == "chna") {
+            const std::vector<char> empty_payload;
+            const auto max_chna_size =
+                std::min<uint64_t>(empty_payload.max_size(), std::numeric_limits<std::streamsize>::max());
+            if (payload_size < 4U || payload_size > max_chna_size) {
+                return make_error(ErrorCode::io_error, "无效的 CHNA chunk", "input=" + path);
+            }
+            std::vector<char> payload(static_cast<std::size_t>(payload_size));
+            input.seekg(static_cast<std::streamoff>(payload_offset), std::ios::beg);
+            input.read(payload.data(), static_cast<std::streamsize>(payload_size));
+            if (!input) {
+                return make_error(ErrorCode::io_error, "读取 CHNA chunk 失败", "input=" + path);
+            }
+            const uint16_t uid_count = adm_chunk_read_u16(payload.data() + 2);
+            const uint64_t expected_size = 4U + (static_cast<uint64_t>(uid_count) * 40U);
+            if (payload_size < expected_size) {
+                return make_error(ErrorCode::io_error, "CHNA UID 表被截断", "input=" + path);
+            }
+            for (uint16_t index = 0U; index < uid_count; ++index) {
+                const std::size_t offset = 4U + (static_cast<std::size_t>(index) * 40U);
+                const uint16_t track_index = adm_chunk_read_u16(payload.data() + offset);
+                if (track_index == 0U) {
+                    return make_error(ErrorCode::io_error, "CHNA trackIndex 必须从 1 开始", "input=" + path);
+                }
+                auto uid = normalize_uid(std::string{payload.data() + offset + 2U, 12U});
+                if (!uid.empty()) {
+                    metadata.uid_to_channel[std::move(uid)] = static_cast<uint16_t>(track_index - 1U);
+                }
+            }
+        }
+
+        const uint64_t padded_size = payload_size + (payload_size & 1U);
+        if (payload_offset > std::numeric_limits<uint64_t>::max() - padded_size) {
+            return make_error(ErrorCode::io_error, "WAVE chunk 表溢出", "input=" + path);
+        }
+        const uint64_t next = payload_offset + padded_size;
+        if (next <= position) {
+            return make_error(ErrorCode::io_error, "无效的 WAVE chunk 表", "input=" + path);
+        }
+        position = next;
     }
-    return result;
+    return metadata;
 }
 
 // Convert an adm::Time to the nearest sample offset.  ADM authored by DAWs often
@@ -780,32 +887,40 @@ std::vector<SceneHOATracks> extract_hoa_packs(const std::shared_ptr<adm::Documen
 
 Result<AdmScene> import_scene(const std::string& path) {
     try {
-        auto reader = bw64::readFile(path);
+        auto reader_res = audio::FloatWavReader::open(path);
+        if (!reader_res) {
+            return tl::unexpected{reader_res.error()};
+        }
+        const auto& reader = *reader_res;
+        if (reader.channels() > std::numeric_limits<uint16_t>::max()) {
+            return make_error(ErrorCode::unsupported, "ADM WAVE 声道数超过 65535", "input=" + path);
+        }
+        auto metadata_res = read_wave_adm_metadata(path);
+        if (!metadata_res) {
+            return tl::unexpected{metadata_res.error()};
+        }
+        auto& metadata = *metadata_res;
 
         SceneInfo info;
         info.file_path = path;
-        info.sample_rate = reader->sampleRate();
-        info.num_channels = reader->channels();
-        info.num_frames = reader->numberOfFrames();
+        info.sample_rate = reader.sample_rate();
+        info.num_channels = static_cast<uint16_t>(reader.channels());
+        info.num_frames = reader.frame_count();
 
-        const auto axml = reader->axmlChunk();
-        if (!axml || axml->size() == 0) {
+        if (metadata.axml.empty()) {
             return make_error(ErrorCode::io_error, "axml chunk 缺失或为空", "input=" + path);
         }
 
-        std::string xml_str = axml_to_string(*axml);
-        std::istringstream xml_stream{xml_str};
+        std::istringstream xml_stream{metadata.axml};
         auto document = adm::parseXml(xml_stream);
-
-        auto uid_map = make_uid_map(reader->chnaChunk());
 
         AdmScene scene;
         scene.info = std::move(info);
-        scene.programmes = extract_programmes(document, reader->sampleRate());
+        scene.programmes = extract_programmes(document, reader.sample_rate());
         scene.contents = extract_contents(document);
         std::set<std::string> skipped_type_defs;
-        scene.objects = extract_objects(document, uid_map, reader->sampleRate(), skipped_type_defs);
-        scene.hoa_tracks = extract_hoa_packs(document, uid_map, reader->sampleRate());
+        scene.objects = extract_objects(document, metadata.uid_to_channel, reader.sample_rate(), skipped_type_defs);
+        scene.hoa_tracks = extract_hoa_packs(document, metadata.uid_to_channel, reader.sample_rate());
         for (const auto& type_name : skipped_type_defs) {
             scene.import_warnings.push_back("typeDefinition=" + type_name +
                                             " is not supported — tracks of this type are silently skipped");
@@ -822,12 +937,14 @@ Result<AdmScene> import_scene(const std::string& path) {
 
 Result<std::string> get_axml(const std::string& path) {
     try {
-        auto reader = bw64::readFile(path);
-        const auto axml = reader->axmlChunk();
-        if (!axml || axml->size() == 0) {
+        auto metadata = read_wave_adm_metadata(path);
+        if (!metadata) {
+            return tl::unexpected{metadata.error()};
+        }
+        if (metadata->axml.empty()) {
             return make_error(ErrorCode::io_error, "axml chunk 缺失或为空", "input=" + path);
         }
-        return axml_to_string(*axml);
+        return std::move(metadata->axml);
     } catch (const std::exception& e) {
         return make_error(ErrorCode::io_error, std::string("读取 AXML 失败：") + e.what(), "input=" + path);
     }
@@ -1178,15 +1295,11 @@ Result<void> write_scene(const std::string& src_path,
                          const AdmScene& effective,
                          const std::string& dst_path) {
     try {
-        std::string xml_str;
-        {
-            auto reader = bw64::readFile(src_path);
-            const auto axml = reader->axmlChunk();
-            if (!axml || axml->size() == 0) {
-                return make_error(ErrorCode::io_error, "axml chunk 缺失或为空", "input=" + src_path);
-            }
-            xml_str = axml_to_string(*axml);
-        } // reader 关闭：rewrite 阶段以独立的二进制流重新打开源文件
+        auto xml_res = get_axml(src_path);
+        if (!xml_res) {
+            return tl::unexpected{xml_res.error()};
+        }
+        std::string xml_str = std::move(*xml_res);
 
         std::istringstream xml_stream{xml_str};
         auto document = adm::parseXml(xml_stream);

@@ -1907,6 +1907,12 @@ bool verify_capabilities_json(adm_context_t* ctx) {
         ok = check(has("\"supports_hoa\"") && has("\"layouts\"") && has("\"channel_count\""),
                    "capabilities_json: should contain capability flags and layouts") &&
              ok;
+        ok = check(has(R"("hrtf_sources")") && has(R"("built-in")"),
+                   "capabilities_json: should report binaural HRTF sources") &&
+             ok;
+        ok =
+            check(!has(R"("id": "0+2+0")"), "capabilities_json: should not advertise two-channel loudspeaker output") &&
+            ok;
     }
     adm_free_string(json);
 
@@ -1937,7 +1943,7 @@ bool verify_layouts_json(adm_context_t* ctx) {
              ok;
         ok = check(has("\"layouts\""), "layouts_json: should contain the layouts array") && ok;
         // A known row: wav 7.1.4 with its channel order and count.
-        ok = check(has("L R C LFE Ls Rs Rls Rrs U+045 U-045 U+135 U-135") && has(R"("channels": 12)"),
+        ok = check(has("L R C LFE Rls Rrs Ls Rs U+045 U-045 U+135 U-135") && has(R"("channels": 12)"),
                    "layouts_json: should contain the wav 7.1.4 channel order") &&
              ok;
         ok = check(has("\"supported_by\""), "layouts_json: should contain supported_by per row") && ok;
@@ -1954,6 +1960,52 @@ bool verify_layouts_json(adm_context_t* ctx) {
                "layouts_json: NULL out_json should be INVALID_ARGUMENT") &&
          ok;
     ok = check(bad == nullptr, "layouts_json: out_json should stay NULL on failure") && ok;
+    return ok;
+}
+
+bool verify_channel_bed_input_api(adm_context_t* ctx) {
+    bool ok = check(adm_api_version_minor() >= 28, "v1.28: minor version should be >= 28");
+    ok = check(adm_render_options_set_input_layout(nullptr, "5.1") == ADM_ERROR_OK,
+               "input layout setter: NULL opts is a no-op") &&
+         ok;
+    ok = check(adm_render_options_set_input_channel_labels(nullptr, "L,R") == ADM_ERROR_OK,
+               "input labels setter: NULL opts is a no-op") &&
+         ok;
+
+    adm_render_options_t* opts = adm_create_render_options();
+    ok = check(opts != nullptr, "input options: create") && ok;
+    if (opts != nullptr) {
+        ok = check(adm_render_options_set_input_layout(opts, "7.1.4") == ADM_ERROR_OK, "input layout setter: preset") &&
+             ok;
+        ok = check(adm_render_options_set_input_layout(opts, "auto") == ADM_ERROR_OK,
+                   "input layout setter: auto clears") &&
+             ok;
+        ok = check(adm_render_options_set_input_channel_labels(opts, "L,R,C,LFE") == ADM_ERROR_OK,
+                   "input labels setter: csv") &&
+             ok;
+        ok = check(adm_render_options_set_input_channel_labels(opts, nullptr) == ADM_ERROR_OK,
+                   "input labels setter: NULL clears") &&
+             ok;
+    }
+    adm_destroy_render_options(opts);
+
+    char* json = nullptr;
+    ok = check(adm_input_layouts_json(ctx, &json) == ADM_ERROR_OK && json != nullptr, "input_layouts_json: succeeds") &&
+         ok;
+    if (json != nullptr) {
+        const std::string text{json};
+        ok = check(text.find(R"("schema": "mradm.input-layouts")") != std::string::npos &&
+                       text.find(R"("M+030")") != std::string::npos && text.find(R"("U+110@45")") != std::string::npos,
+                   "input_layouts_json: schema, L geometry, and qualified height token") &&
+             ok;
+    }
+    adm_free_string(json);
+    char* bad = nullptr;
+    ok = check(adm_input_layouts_json(nullptr, &bad) == ADM_ERROR_INVALID_ARGUMENT && bad == nullptr,
+               "input_layouts_json: NULL context") &&
+         ok;
+    ok =
+        check(adm_input_layouts_json(ctx, nullptr) == ADM_ERROR_INVALID_ARGUMENT, "input_layouts_json: NULL out") && ok;
     return ok;
 }
 
@@ -2416,6 +2468,7 @@ int main() {
     ok = verify_policy_template_json(ctx, fixture.path()) && ok;
     ok = verify_capabilities_json(ctx) && ok;
     ok = verify_layouts_json(ctx) && ok;
+    ok = verify_channel_bed_input_api(ctx) && ok;
     // v1.6 tests
     ok = verify_version_16() && ok;
     ok = verify_output_formats_json(ctx) && ok;

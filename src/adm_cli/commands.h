@@ -9,7 +9,9 @@
 struct RenderCliOptions {
     std::string input;
     std::string output;
-    std::string layout{"0+2+0"};
+    std::string layout{"binaural"};
+    std::string input_layout{"auto"};
+    std::string input_channels_csv;
     std::string renderer{"auto"};
     bool no_peak_limit{false};
     float peak_limit_dbtp{-1.0F};
@@ -52,6 +54,11 @@ struct LayoutCliOptions {
     std::string renderer;
 };
 
+struct InputLayoutCliOptions {
+    std::string format{"text"};
+    std::string layout;
+};
+
 struct ExportCliOptions {
     std::string input;
     std::string output;
@@ -69,6 +76,9 @@ void run_backends();
 
 CLI::App* add_layouts_command(CLI::App& app, LayoutCliOptions& opts);
 int run_layouts(const LayoutCliOptions& opts);
+
+CLI::App* add_input_layouts_command(CLI::App& app, InputLayoutCliOptions& opts);
+int run_input_layouts(const InputLayoutCliOptions& opts);
 
 CLI::App* add_formats_command(CLI::App& app);
 void run_formats();

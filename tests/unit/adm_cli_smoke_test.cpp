@@ -96,7 +96,7 @@ std::string shell_quote(const std::string& value) {
 #endif
 }
 
-// Minimal Objects BW64 fixture: 1 channel, az=0 el=0, no audio samples.
+// Minimal Objects BW64 fixture: 1 channel, az=0 el=0, short silent payload.
 std::filesystem::path write_fixture() {
     auto doc = adm::Document::create();
 
@@ -147,7 +147,8 @@ std::filesystem::path write_fixture() {
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
     auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
-    (void) writer;
+    std::vector<float> silence(16U, 0.0F);
+    writer->write(silence.data(), silence.size());
 
     return path;
 }
@@ -177,6 +178,8 @@ int main() {
         ok &= check(r.out.find("Divergence:     yes") != std::string::npos, "backends: divergence flag listed");
         ok &= check(r.out.find("ScreenRef:      no") != std::string::npos, "backends: screenRef unsupported listed");
         ok &= check(r.out.find("Diffuse:        yes") != std::string::npos, "backends: diffuse flag listed");
+        ok &= check(r.out.find("HRTF sources:   built-in") != std::string::npos,
+                    "backends: SAF HRTF source capability listed");
         ok &= check(r.out.find("0+7+0") == std::string::npos, "backends: old 0+7+0 layout not listed");
         ok &= check(r.out.find("4+7+0") == std::string::npos, "backends: old 4+7+0 layout not listed");
     }
@@ -220,6 +223,17 @@ int main() {
         ok &= check(r.out.find("--listener-pitch") != std::string::npos, "render --help: listener-pitch option listed");
         ok &= check(r.out.find("--listener-roll") != std::string::npos, "render --help: listener-roll option listed");
         ok &= check(r.out.find("--iamf-layers") != std::string::npos, "render --help: iamf-layers option listed");
+        ok &= check(r.out.find("--input-layout") != std::string::npos,
+                    "render --help: ordinary input layout option listed");
+        ok &= check(r.out.find("--input-channels") != std::string::npos,
+                    "render --help: custom input channels option listed");
+        ok &= check(r.out.find("L/FL=+30deg left") != std::string::npos, "render --help: L input geometry documented");
+        ok &= check(r.out.find("binaural (default)") != std::string::npos,
+                    "render --help: binaural output default documented");
+        ok &= check(r.out.find("WAVE mask or ADM AXML/CHNA") != std::string::npos,
+                    "render --help: machine-readable spatial WAV semantics documented");
+        ok &= check(r.out.find("PCM BW64 ADM") != std::string::npos,
+                    "render --help: PCM BW64 delivery bit depth documented");
     }
 
     // ── render option parse: valid values accepted, invalid rejected ──────────
@@ -310,7 +324,7 @@ int main() {
         ok &= check(r.code == 0, "render --binaural-spread-mode none: exit 0");
     }
 
-    // ── legacy --renderer binaural remains accepted but warns ────────────────
+    // ── output semantics and backend selection are separate ─────────────────
     {
         const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_legacy_binaural.flac";
         const FileGuard out_guard{out};
@@ -318,9 +332,9 @@ int main() {
                          " render --renderer binaural --binaural-spread-mode none "
                          "-o " +
                          shell_quote(out.string()) + " -i " + fix);
-        ok &= check(r.code == 0, "render --renderer binaural legacy alias: exit 0");
-        ok &= check(r.out.find("legacy alias for --renderer saf-binaural") != std::string::npos,
-                    "render --renderer binaural legacy alias: warning emitted");
+        ok &= check(r.code != 0, "render --renderer binaural is not a public backend name");
+        ok &= check(r.out.find("expected one of") != std::string::npos,
+                    "render --renderer binaural reports the backend choices");
     }
 
     // ── mradm inspect can write an editable semantic policy template ─────────
@@ -377,6 +391,48 @@ int main() {
         auto r = run_cmd(mradm_exe + " layouts --format apac --renderer saf --layout 5.1.2");
         ok &= check(r.code != 0, "layouts apac+saf unsupported layout: non-zero exit");
         ok &= check(r.out.find("not supported") != std::string::npos, "layouts apac+saf unsupported layout: message");
+    }
+
+    // ── ordinary-input semantics are queryable and exact ────────────────────
+    {
+        auto r = run_cmd(mradm_exe + " input-layouts");
+        ok &= check(r.code == 0, "input-layouts: exit 0");
+        ok &= check(r.out.find("azimuth +left / -right") != std::string::npos,
+                    "input-layouts: coordinate convention listed");
+        ok &= check(r.out.find("L/FL=M+030 (+30") != std::string::npos, "input-layouts: L alias geometry listed");
+        ok &= check(r.out.find("U+110/U-110 require @30 or @45") != std::string::npos,
+                    "input-layouts: ambiguous height labels documented");
+        ok &= check(r.out.find("file order: M+030 M-030 M+000 LFE1 M+135 M-135 M+090 M-090") != std::string::npos,
+                    "input-layouts: exact 7.1.4 WAVE file order documented");
+        ok &= check(r.out.find("22.2 (24 channels") != std::string::npos, "input-layouts: 22.2 preset listed");
+    }
+    {
+        auto r = run_cmd(mradm_exe + " input-layouts --format json");
+        ok &= check(r.code == 0, "input-layouts json: exit 0");
+        ok &= check(r.out.find(R"("schema": "mradm.input-layouts")") != std::string::npos,
+                    "input-layouts json: schema listed");
+        ok &= check(r.out.find(R"("U+110@45")") != std::string::npos,
+                    "input-layouts json: qualified height token listed");
+        ok &= check(r.out.find(R"("wave_mask_channel_order")") != std::string::npos,
+                    "input-layouts json: WAVE mask order listed");
+    }
+    {
+        auto r = run_cmd(mradm_exe + " input-layouts --layout unknown_xyz");
+        ok &= check(r.code != 0, "input-layouts unknown preset: non-zero exit");
+    }
+
+    // The CSV parser must preserve an empty item so validation can reject it.
+    {
+        const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_empty_input_label.wav";
+        const FileGuard out_guard{out};
+        auto r = run_cmd(mradm_exe + " render --input-channels L,,R --no-peak-limit -o " + shell_quote(out.string()) +
+                         " -i " + fix);
+        ok &= check(r.code != 0, "render empty input label: non-zero exit");
+        if (r.out.find("empty label") == std::string::npos) {
+            std::cerr << "empty-label command output:\n" << r.out;
+        }
+        ok &= check(r.out.find("empty label") != std::string::npos,
+                    "render empty input label: strict validation message");
     }
 
     // ── mradm inspect <fixture> ───────────────────────────────────────────────

@@ -217,6 +217,11 @@ std::string scene_to_json(const AdmScene& scene) {
     // Bump on any breaking change to the field set; additive fields keep v1.
     root["schema"] = "mradm.scene-inspect";
     root["schema_version"] = 1;
+    root["source_kind"] = scene.info.source_kind == SceneSourceKind::channel_bed ? "channel_bed" : "adm";
+    if (scene.info.source_kind == SceneSourceKind::channel_bed) {
+        root["input_layout"] = scene.info.input_layout;
+        root["input_channel_labels"] = scene.info.input_channel_labels;
+    }
 
     json file = json::object();
     file["path"] = scene.info.file_path;

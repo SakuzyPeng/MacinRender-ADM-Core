@@ -272,6 +272,7 @@ json backend_to_json(const BackendInfo& backend) {
     j["renderer"] = backend.renderer;
     j["backend_name"] = backend.capabilities.backend_name;
     j["backend_version"] = backend.capabilities.backend_version;
+    j["hrtf_sources"] = backend.capabilities.hrtf_sources;
     return j;
 }
 

@@ -25,10 +25,12 @@
 
 #include "capability_json.h"
 #include "format_table.h"
+#include "input_layout_json.h"
 #include "layout_table.h"
 #include "renderer_factory.h"
 #include "scene_json.h"
 #include "support_matrix.h"
+#include "wav_output.h"
 
 namespace mradm {
 
@@ -426,8 +428,10 @@ RenderResult RenderService::render(const RenderRequest& request,
                   0.06,
                   0.0,
                   preimported_scene != nullptr ? "using cached scene" : "importing scene");
-    Result<AdmScene> scene_result = (preimported_scene != nullptr) ? Result<AdmScene>{*preimported_scene}
-                                                                   : io::import_scene(request.input_path.string());
+    const io::SceneImportOptions import_options{request.options.input_layout, request.options.input_channel_labels};
+    Result<AdmScene> scene_result = (preimported_scene != nullptr)
+                                        ? Result<AdmScene>{*preimported_scene}
+                                        : io::import_scene(request.input_path.string(), import_options);
     if (!scene_result) {
         return {scene_result.error(), std::nullopt, std::nullopt, {{LogLevel::error, scene_result.error().message}}};
     }
@@ -536,6 +540,20 @@ RenderResult RenderService::render(const RenderRequest& request,
     logs.log(LogLevel::info, "engine", fmt::format("backend: {} {}", caps.backend_name, caps.backend_version));
     for (const auto& [level, message] : resolved->diagnostics) {
         logs.log(level, "engine", message);
+    }
+
+    if (request.options.sofa_path.has_value()) {
+        if (output_layout != "binaural") {
+            const std::string msg{"--sofa is valid only for binaural output"};
+            return {{ErrorCode::invalid_argument, msg, "layout=" + output_layout},
+                    std::nullopt,
+                    std::nullopt,
+                    {{LogLevel::error, msg}}};
+        }
+        if (std::ranges::find(caps.hrtf_sources, "user-sofa") == caps.hrtf_sources.end()) {
+            const auto msg = fmt::format("renderer '{}' does not support user SOFA HRTFs", renderer_name(sel));
+            return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
+        }
     }
 
     std::optional<SemanticPolicy> semantic_policy;
@@ -1080,6 +1098,30 @@ RenderResult RenderService::render(const RenderRequest& request,
         output_temp_guard->dismiss();
     }
 
+    if (final_ext == ".wav") {
+        const bool uses_adm_layout_metadata = output_layout == "binaural" || output_layout == "4+5+4" ||
+                                              output_layout == "9.1.6" || output_layout == "9+10+3" ||
+                                              output_layout == "hoa3";
+        if (uses_adm_layout_metadata && request.options.output_bit_depth == OutputBitDepth::f32) {
+            logs.log(LogLevel::warning,
+                     "engine",
+                     "float32 spatial WAV stores exact ADM AXML/CHNA semantics in RF64; use --output-bit-depth i24 "
+                     "for normative PCM BW64 interoperability");
+        }
+        logs.log(LogLevel::info, "engine", "finalizing machine-readable WAV channel layout");
+        ProgressRangeSink wav_layout_progress(progress,
+                                              RenderStage::post_processing,
+                                              RenderOperation::write_metadata,
+                                              0.98,
+                                              0.99,
+                                              "finalizing WAV channel layout");
+        auto layout_res =
+            engine::finalize_rendered_wav(output_path, output_layout, plan.cancel_token, &wav_layout_progress);
+        if (!layout_res) {
+            return fail_with_report(layout_res.error());
+        }
+    }
+
     // Write format-specific metadata (non-fatal on failure).
     {
         emit_progress(
@@ -1128,9 +1170,19 @@ RenderResult RenderService::render(const RenderRequest& request,
 }
 
 Result<SceneProbe> RenderService::probe(const std::string& input_path) const {
-    auto scene_result = io::import_scene(input_path);
+    auto scene_result = io::import_scene(input_path, {});
     if (!scene_result) {
-        return tl::unexpected(scene_result.error());
+        // Probe remains useful before the caller has chosen an explicit mapping:
+        // return raw WAVE audio facts even when its channel mask is unknown.
+        auto wave = audio::FloatWavReader::open(input_path);
+        if (!wave || wave->channels() == 0U || wave->channels() > std::numeric_limits<uint16_t>::max()) {
+            return tl::unexpected(scene_result.error());
+        }
+        SceneProbe raw;
+        raw.sample_rate = wave->sample_rate();
+        raw.num_channels = static_cast<uint16_t>(wave->channels());
+        raw.num_frames = wave->frame_count();
+        return raw;
     }
     const auto& scene = *scene_result;
     SceneProbe probe;
@@ -1143,7 +1195,7 @@ Result<SceneProbe> RenderService::probe(const std::string& input_path) const {
 }
 
 Result<std::string> RenderService::inspect_json(const std::string& input_path) const {
-    auto scene_result = io::import_scene(input_path);
+    auto scene_result = io::import_scene(input_path, {});
     if (!scene_result) {
         return tl::unexpected(scene_result.error());
     }
@@ -1160,6 +1212,10 @@ std::vector<OutputLayoutRow> RenderService::output_layouts() const {
 
 std::string RenderService::layouts_json() const {
     return engine::layouts_to_json();
+}
+
+std::string RenderService::input_layouts_json() const {
+    return engine::input_layouts_to_json();
 }
 
 OutputFormats RenderService::output_formats() const {
@@ -1209,7 +1265,8 @@ Result<void> RenderService::export_file(const std::string& input_path,
 Result<AdmScene> RenderService::prepare_preview_scene(const std::filesystem::path& input_path,
                                                       const RenderOptions& options,
                                                       LogSink& logs) const {
-    auto scene = io::import_scene(input_path.string());
+    const io::SceneImportOptions import_options{options.input_layout, options.input_channel_labels};
+    auto scene = io::import_scene(input_path.string(), import_options);
     if (!scene) {
         return tl::unexpected(scene.error());
     }

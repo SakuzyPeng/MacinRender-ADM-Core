@@ -56,7 +56,14 @@ struct ListenerOrientation {
 
 struct RenderOptions {
     RendererSelection renderer{RendererSelection::automatic};
-    std::string output_layout{"0+2+0"};
+    // Public two-channel output is always binaural. Speaker layouts remain
+    // multichannel-only; the internal 0+2+0 path is reserved for diagnostics/tests.
+    std::string output_layout{"binaural"};
+    // Ordinary channel-based WAVE input. nullopt means automatic detection:
+    // ADM when AXML is present, otherwise a recognised WAVE channel mask.
+    // A non-"auto" layout or a non-empty label list explicitly selects channel-bed input.
+    std::optional<std::string> input_layout;
+    std::vector<std::string> input_channel_labels;
     // Monitor-only: route the multichannel monitor output through the macOS system Spatial
     // Audio stack (AVSampleBufferAudioRenderer) for system HRTF + dynamic head tracking,
     // instead of folding to a stereo downmix on a raw device. Requires a supported multichannel

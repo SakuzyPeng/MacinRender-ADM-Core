@@ -20,7 +20,10 @@ std::string normalize_output_layout(const std::string& layout) {
     std::ranges::transform(
         key, key.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
 
-    if (key.empty() || key == "stereo" || key == "2.0" || key == "0+2+0") {
+    if (key.empty()) {
+        return "binaural";
+    }
+    if (key == "stereo" || key == "2.0" || key == "0+2+0") {
         return "0+2+0";
     }
     if (key == "5.1" || key == "0+5+0") {
@@ -57,7 +60,7 @@ Result<ResolvedRenderer>
 resolve_renderer(RendererSelection requested, std::string requested_layout, bool internal_allow_speaker_stereo) {
     const bool requests_speaker_stereo = (requested_layout == "0+2+0");
 
-    // Speaker stereo rendering is intentionally not exposed: the current 2ch speaker
+    // Two-channel loudspeaker rendering is intentionally not exposed: the current 2ch speaker
     // projection is not a downmix and can be badly misleading for ADM content.
     // Automatic 2ch output therefore means binaural.
     auto sel = requested;
@@ -67,7 +70,7 @@ resolve_renderer(RendererSelection requested, std::string requested_layout, bool
     if ((sel == RendererSelection::ear || sel == RendererSelection::saf) && requests_speaker_stereo &&
         !internal_allow_speaker_stereo) {
         return make_error(ErrorCode::unsupported,
-                          "speaker stereo rendering is disabled; use --renderer saf-binaural for 2ch ADM output");
+                          "two-channel loudspeaker rendering is unavailable; use binaural output instead");
     }
 
     std::unique_ptr<IRenderer> renderer;
@@ -99,10 +102,9 @@ resolve_renderer(RendererSelection requested, std::string requested_layout, bool
     }
     if (sel == RendererSelection::binaural || sel == RendererSelection::saf_binaural) {
         if (requested_layout != "0+2+0" && requested_layout != "binaural") {
-            resolved.diagnostics.emplace_back(
-                LogLevel::warning,
-                fmt::format("SAF binaural renderer always writes 2ch HRTF output; ignoring requested layout '{}'",
-                            requested_layout));
+            return make_error(ErrorCode::unsupported,
+                              fmt::format("SAF binaural backend does not support output layout '{}'", requested_layout),
+                              "layout=" + requested_layout);
         }
         resolved.effective_output_layout = "binaural";
     }

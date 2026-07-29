@@ -2,6 +2,7 @@
 #include <string>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #ifdef __APPLE__
 #include "adm/render_apple.h"
@@ -17,9 +18,6 @@ namespace {
 
 void print_capabilities(const mradm::CapabilityReport& caps) {
     auto layout_label = [](const std::string& id) {
-        if (id == "0+2+0") {
-            return std::string{"stereo"};
-        }
         if (id == "0+5+0") {
             return std::string{"5.1"};
         }
@@ -52,6 +50,9 @@ void print_capabilities(const mradm::CapabilityReport& caps) {
     fmt::print("  Divergence:     {}\n", caps.supports_object_divergence ? "yes" : "no");
     fmt::print("  ScreenRef:      {}\n", caps.supports_screen_ref ? "yes" : "no");
     fmt::print("  Diffuse:        {}\n", caps.supports_diffuse ? "yes" : "no");
+    if (!caps.hrtf_sources.empty()) {
+        fmt::print("  HRTF sources:   {}\n", fmt::join(caps.hrtf_sources, ", "));
+    }
     const auto visible_layouts = std::ranges::count_if(
         caps.supported_layouts, [](const auto& layout) { return layout.is_binaural || layout.channel_count != 2U; });
     fmt::print("  Layouts ({}):\n", visible_layouts);

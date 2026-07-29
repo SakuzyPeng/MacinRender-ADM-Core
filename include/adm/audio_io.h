@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <ios>
 #include <memory>
 #include <optional>
 #include <stop_token>
@@ -46,10 +47,35 @@ class FloatWavReader {
     uint32_t channels() const;
     uint32_t sample_rate() const;
     uint64_t frame_count() const;
+    uint32_t channel_mask() const;
+    uint16_t bits_per_sample() const;
+    bool is_linear_pcm() const;
+    bool is_ieee_float() const;
     uint64_t read(float* out, uint64_t frames);
+    bool seek(uint64_t frame);
 
   private:
     FloatWavReader() = default;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+// Render-time input reader. Integer ADM retains the established libbw64 sample
+// path; float32 ADM and ordinary channel-bed WAVE use FloatWavReader.
+class RenderInputReader {
+  public:
+    static Result<std::unique_ptr<RenderInputReader>> open(const std::string& path, bool channel_bed);
+    ~RenderInputReader();
+    RenderInputReader(RenderInputReader&&) noexcept;
+    RenderInputReader& operator=(RenderInputReader&&) noexcept;
+    RenderInputReader(const RenderInputReader&) = delete;
+    RenderInputReader& operator=(const RenderInputReader&) = delete;
+
+    uint64_t read(float* out, uint64_t frames);
+    void seek(int32_t offset, std::ios_base::seekdir way = std::ios::beg);
+
+  private:
+    RenderInputReader();
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

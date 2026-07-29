@@ -26,6 +26,8 @@ int main(int argc, char** argv) {
 
     LayoutCliOptions layouts_opts;
     const auto* layouts_cmd = add_layouts_command(app, layouts_opts);
+    InputLayoutCliOptions input_layouts_opts;
+    const auto* input_layouts_cmd = add_input_layouts_command(app, input_layouts_opts);
 
     const auto* formats_cmd = add_formats_command(app);
 
@@ -58,6 +60,9 @@ int main(int argc, char** argv) {
     }
     if (*layouts_cmd) {
         return run_layouts(layouts_opts);
+    }
+    if (*input_layouts_cmd) {
+        return run_input_layouts(input_layouts_opts);
     }
     if (*formats_cmd) {
         run_formats();

@@ -579,13 +579,13 @@ class VbapStream final : public IRenderStream {
   public:
     [[nodiscard]] static Result<std::unique_ptr<VbapStream>>
     create(const VbapPrepared& prepared, const RenderPlan& plan, LogSink& logs) {
-        auto reader = bw64::readFile(plan.input_path);
+        auto reader = audio::RenderInputReader::open(plan.input_path,
+                                                     plan.scene.info.source_kind == SceneSourceKind::channel_bed);
         if (!reader) {
-            return make_error(
-                ErrorCode::io_error, "failed to open input for realtime vbap stream", "input=" + plan.input_path);
+            return tl::unexpected{reader.error()};
         }
         (void) logs;
-        return std::unique_ptr<VbapStream>{new VbapStream(prepared, std::move(reader), plan)};
+        return std::unique_ptr<VbapStream>{new VbapStream(prepared, std::move(*reader), plan)};
     }
 
     [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
@@ -641,7 +641,7 @@ class VbapStream final : public IRenderStream {
     [[nodiscard]] std::string_view output_layout() const override { return output_layout_; }
 
   private:
-    VbapStream(const VbapPrepared& prepared, std::unique_ptr<bw64::Bw64Reader> reader, const RenderPlan& plan)
+    VbapStream(const VbapPrepared& prepared, std::unique_ptr<audio::RenderInputReader> reader, const RenderPlan& plan)
         : prepared_(prepared), reader_(std::move(reader)), num_in_ch_(plan.scene.info.num_channels),
           num_out_ch_(static_cast<uint16_t>(prepared.layout.speakers.size())),
           sample_rate_(plan.scene.info.sample_rate), total_frames_(plan.scene.info.num_frames),
@@ -679,7 +679,7 @@ class VbapStream final : public IRenderStream {
     }
 
     const VbapPrepared& prepared_; // borrowed; owner (factory) outlives the stream
-    std::unique_ptr<bw64::Bw64Reader> reader_;
+    std::unique_ptr<audio::RenderInputReader> reader_;
     uint16_t num_in_ch_;
     uint16_t num_out_ch_;
     uint32_t sample_rate_;
@@ -787,7 +787,12 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& prep,
         progress.on_progress(
             {RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "rendering audio"});
 
-        auto reader = bw64::readFile(plan.input_path);
+        auto reader_res = audio::RenderInputReader::open(plan.input_path,
+                                                         plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+        if (!reader_res) {
+            return tl::unexpected{reader_res.error()};
+        }
+        auto reader = std::move(*reader_res);
         auto writer_res = audio::WriterHandle::open(
             plan.output_path, num_out_ch, static_cast<uint32_t>(sample_rate), plan.output_layout);
         if (!writer_res) {

@@ -137,12 +137,16 @@
  * v1.27 新增（additive，SOVERSION 不变）：
  *   adm_render_options_set_apple_speaker_rendering_flags. 可选恢复 Apple AUSpatialMixer 扬声器
  *   InterAuralDelay + DistanceAttenuation flags（旧行为）；默认关闭以匹配 ADM/SAF 增益语义。
+ *
+ * v1.28 新增（additive，SOVERSION 不变）：
+ *   普通多声道 WAVE 输入：adm_render_options_set_input_layout、
+ *   adm_render_options_set_input_channel_labels、adm_input_layouts_json。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 27
+#define ADM_API_VERSION_MINOR 28
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -371,9 +375,21 @@ void adm_destroy_render_options(adm_render_options_t* opts) ADM_API_NOEXCEPT;
 /* Returns ADM_ERROR_INVALID_ARGUMENT for unrecognised enum values. */
 adm_error_code_t adm_render_options_set_renderer(adm_render_options_t* opts, adm_renderer_t renderer) ADM_API_NOEXCEPT;
 
-/* output_layout: "5.1", "7.1.4", "hoa3", "binaural", etc. Copied internally.
+/* output_layout: "binaural" (default), "5.1", "7.1.4", "hoa3", etc. Public
+ * two-channel rendering always has binaural semantics. Copied internally.
  * Returns ADM_ERROR_INVALID_ARGUMENT if layout is NULL; may return ADM_ERROR_INTERNAL on OOM. */
 adm_error_code_t adm_render_options_set_output_layout(adm_render_options_t* opts, const char* layout) ADM_API_NOEXCEPT;
+
+/* v1.28 ordinary channel-bed input. layout is "auto"/NULL/"" to auto-detect,
+ * or a preset such as "5.1", "7.1.4", "22.2". Copied internally. */
+adm_error_code_t adm_render_options_set_input_layout(adm_render_options_t* opts, const char* layout) ADM_API_NOEXCEPT;
+
+/* v1.28 custom ordinary-input labels in file-channel order, comma-separated.
+ * The render validates 1-64 labels, exact file-channel count, no empty/unknown/
+ * duplicate labels, and the controlled catalog returned by adm_input_layouts_json.
+ * NULL/"" clears the list. Mutually exclusive with an explicit input layout. */
+adm_error_code_t adm_render_options_set_input_channel_labels(adm_render_options_t* opts,
+                                                             const char* labels_csv) ADM_API_NOEXCEPT;
 
 /* Returns ADM_ERROR_INVALID_ARGUMENT for unrecognised enum values. */
 adm_error_code_t adm_render_options_set_output_bit_depth(adm_render_options_t* opts,
@@ -766,6 +782,10 @@ adm_error_code_t adm_capabilities_json(adm_context_t* context, char** out_json) 
  * as is context.
  */
 adm_error_code_t adm_layouts_json(adm_context_t* context, char** out_json) ADM_API_NOEXCEPT;
+
+/* v1.28: ordinary input presets, custom label catalog, aliases, WAVE masks,
+ * and nominal geometry. Schema: "mradm.input-layouts", version 1. */
+adm_error_code_t adm_input_layouts_json(adm_context_t* context, char** out_json) ADM_API_NOEXCEPT;
 
 /* ── v1.6 Output formats (JSON) ──────────────────────────────────────────── */
 /*

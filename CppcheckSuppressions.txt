@@ -10,6 +10,7 @@ functionStatic:*/src/adm_engine/render_service.cpp
 # Public API structs are consumed across translation units; cppcheck sees the
 # header alone and reports false positives for metadata fields.
 unusedStructMember:*/include/adm/audio_io.h
+unusedStructMember:*/include/adm/io.h
 unusedStructMember:*/include/adm/options.h
 unusedStructMember:*/include/adm/capability.h
 unusedStructMember:*/include/adm/render.h
@@ -21,6 +22,7 @@ unusedStructMember:*/include/adm/c_api.h
 # Shared renderer internals return aggregate structs across translation units.
 unusedStructMember:*/src/adm_render_common/render_common.h
 unusedStructMember:*/src/adm_cli/commands.h
+unusedStructMember:*src/adm_audio/audio_io_internal.h
 unusedStructMember:*/src/adm_render_binaural/binaural_spreader.h
 # ResolvedRenderer is built in renderer_factory.cpp and read in render_service.cpp.
 unusedStructMember:*/src/adm_renderer_factory/renderer_factory.h

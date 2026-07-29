@@ -11,11 +11,21 @@
 
 namespace mradm {
 
+enum class SceneSourceKind {
+    adm,
+    channel_bed,
+};
+
 struct SceneInfo {
     uint32_t sample_rate{0};
     uint16_t num_channels{0};
     uint64_t num_frames{0};
     std::string file_path;
+    SceneSourceKind source_kind{SceneSourceKind::adm};
+    // Populated for a synthetic channel-bed scene. input_layout is the public
+    // preset id (for example "5.1") or "custom"; labels are in file-channel order.
+    std::string input_layout;
+    std::vector<std::string> input_channel_labels;
 };
 
 // Spatial position from one AudioBlockFormatObjects (polar or Cartesian).

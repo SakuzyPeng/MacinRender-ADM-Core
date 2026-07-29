@@ -13,7 +13,7 @@ CapabilityReport binaural_capabilities();
 // Creates a binaural IRenderer using SAF's built-in KEMAR HRTF dataset or a
 // user-supplied FIR SOFA HRIR file. Objects and DirectSpeakers content is
 // rendered via VBAP-interpolated HRTF convolution. HOA tracks are skipped.
-// Output is always 2-channel (L/R binaural); output_layout is ignored.
+// Output is always 2-channel (L/R binaural); other output layouts are rejected.
 std::unique_ptr<IRenderer> create_binaural_renderer();
 
 // Whether this build can load user SOFA HRIR files (MR_ADM_ENABLE_SOFA=ON, which

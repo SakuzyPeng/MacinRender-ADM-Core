@@ -394,6 +394,10 @@ class RenderService {
     // The same table serialized to a JSON string (UTF-8) for the C ABI.
     [[nodiscard]] std::string layouts_json() const;
 
+    // Ordinary channel-bed input presets, custom label catalog, aliases, and
+    // nominal geometry (schema mradm.input-layouts v1).
+    [[nodiscard]] std::string input_layouts_json() const;
+
     // The output container-format reference (mirrors `mradm formats`): per-build
     // feature flags + the container list with availability and constraints. Single
     // source of truth shared with output_formats_json(). See output_formats_json()

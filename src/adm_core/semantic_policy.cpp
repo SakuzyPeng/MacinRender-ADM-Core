@@ -1071,6 +1071,7 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     out["supports_channel_lock"] = caps.supports_channel_lock;
     out["supports_object_divergence"] = caps.supports_object_divergence;
     out["supports_diffuse"] = caps.supports_diffuse;
+    out["hrtf_sources"] = caps.hrtf_sources;
     return out;
 }
 

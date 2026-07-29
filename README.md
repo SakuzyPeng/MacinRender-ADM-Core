@@ -5,7 +5,7 @@
 麦渲峰 ADM Core（英文名：MacinRender ADM Core）是一个跨平台 ADM（Audio Definition Model，ITU-R
 BS.2076）空间音频渲染核心，使用 C++20 实现，提供桌面 GUI、命令行工具和稳定 C ABI 库。
 
-它面向 ADM BWF / BW64 输入，可渲染到多声道扬声器、HOA 编码、HRTF 双耳，以及 WAV / CAF / FLAC / Opus MKA / IAMF / APAC 等交付格式。
+它支持 ADM BWF / BW64 与普通多声道 WAVE / RF64 / BW64 输入，可渲染到多声道扬声器、HOA 编码、HRTF 双耳，以及 WAV / CAF / FLAC / Opus MKA / IAMF / APAC 等交付格式。
 
 > **名称约定：**「麦渲峰」是 MacinRender 的正式中文名。英文品牌名以及仓库、包名、CMake 目标、
 > 命名空间、可执行文件等技术标识继续使用 `MacinRender`。
@@ -13,6 +13,7 @@ BS.2076）空间音频渲染核心，使用 C++20 实现，提供桌面 GUI、�
 ## 功能概览
 
 - ADM scene import：基于 libbw64 / libadm 读取 BW64 ADM 元数据，并转换为项目自有领域模型。
+- 普通多声道输入：支持预设 WAVE channel mask 与受控自定义声道标签，合成为精确几何的 DirectSpeakers 场景。
 - 桌面工作台：基于 Avalonia 的批量渲染、逐对象语义编辑与实时空间监听 GUI。
 - 多后端渲染：libear、SAF VBAP、HOA encoder、HRTF binaural、Apple AUSpatialMixer（macOS-only）。
 - Objects / DirectSpeakers：支持对象和直达扬声器内容，含时间块、增益、插值、扩散、channelLock 和 objectDivergence 等语义。
@@ -56,6 +57,7 @@ cmake --build build/release
 ```bash
 ./build/release/mradm inspect input.wav
 ./build/release/mradm backends
+./build/release/mradm input-layouts
 ./build/release/mradm layouts --format wav
 ./build/release/mradm layouts --format flac --renderer saf
 ./build/release/mradm formats
@@ -68,7 +70,28 @@ cmake --build build/release
 ./build/release/mradm render -i input.wav -o out_714.flac --renderer ear --output-layout 7.1.4
 ./build/release/mradm render -i input.wav -o out_222.wav --renderer apple --output-layout 22.2
 ./build/release/mradm render -i input.wav -o out_trim.wav --start 12.5 --end 45.0
+./build/release/mradm render -i bed.wav -o bed_714.wav --input-layout 5.1 --renderer ear --output-layout 7.1.4
+./build/release/mradm render -i custom.wav -o custom_binaural.wav --input-channels L,R,C,LFE,M+090,M-090 --renderer saf-binaural --sofa listener.sofa
 ```
+
+## 普通多声道输入
+
+普通输入支持 PCM 16/24/32-bit 与 IEEE float32 WAVE / RF64 / BW64，限制为 1–64 声道。
+默认 `--input-layout auto`：有 `axml` 时严格按 ADM 导入；没有 `axml` 时按已识别的
+WAVEFORMATEXTENSIBLE channel mask 导入。无效 ADM 不会静默降级。也可显式选择
+`5.1`、`5.1.2`、`7.1`、`5.1.4`、`7.1.4`、`9.1.4`、`9.1.6`、`22.2`，或用
+`--input-channels` 按文件顺序给出受控标签。
+
+坐标约定为方位角 `+` 向左、`-` 向右、`0°` 正前，仰角 `+` 向上。别名具有固定语义：
+`L/FL=M+030`（`+30°`, `0°`）、`R/FR=M-030`（`-30°`, `0°`）、
+`C/FC=M+000`（`0°`, `0°`）、`LFE=LFE1`（无几何位置）。自定义标签数量必须与文件
+声道数完全一致，空项、未知项和重复项均报错；`U±110` 必须以 `@30` 或 `@45` 指定仰角。
+完整预设顺序、几何、mask 和约束见[普通多声道输入语义](docs/guides/CHANNEL_BED_INPUT.md)，也可运行
+`mradm input-layouts` 或 `mradm input-layouts --format json` 查询。
+
+公开的两声道输出只有 `binaural`，且为默认输出语义。后端与 HRTF 来源分别选择：
+`saf-binaural` 提供内置 KEMAR，并在构建支持时接受 `--sofa`；`apple` 使用系统 HRTF，
+不接受用户 SOFA。当前首批入口覆盖 CLI、C++ API 与 C ABI v1.28，GUI 入口暂缓。
 
 ## C ABI 与 GUI 集成
 
@@ -113,7 +136,7 @@ GUI 发行包包含 macOS `.app` 或 Windows `app/MacinRender.Gui.exe`，同样�
 | SAF HRTF 双耳 | `--renderer saf-binaural` | Objects / DirectSpeakers | 2ch 双耳 |
 | Apple AUSpatialMixer | `--renderer apple` | Objects / DirectSpeakers | 2ch 双耳 / 多声道扬声器（macOS-only） |
 
-`saf-binaural` 默认使用 SAF 内置 Genelec KEMAR HRTF，也可通过 `--sofa <path>` 加载用户 FIR SOFA HRIR 文件。当前 SOFA 限制为 SimpleFreeFieldHRIR / GeneralFIR、2 receivers、48 kHz、不重采样。
+`saf-binaural` 默认使用 SAF 内置 Genelec KEMAR HRTF，也可通过 `--sofa <path>` 加载用户 FIR SOFA HRIR 文件。当前 SOFA 限制为 SimpleFreeFieldHRIR / GeneralFIR、2 receivers、48 kHz、不重采样。`apple` 使用 Apple 系统 HRTF，不接受 `--sofa`；可运行 `mradm backends` 查看每个双耳后端的 `HRTF sources`。
 
 推荐的通用外部 HRTF 是 [SADIE II Database](https://www.york.ac.uk/sadie-project/database.html) 的 D1 KU100 SOFA，例如 `D1_48K_24bit_256tap_FIR_SOFA.sofa`（也可从 [SOFA database SADIE 索引](https://sofacoustics.org/data/database/sadie/) 下载）。它是 48 kHz、256-tap、SimpleFreeFieldHRIR，方向采样密度高，并带 low-frequency extension / diffuse-field EQ，适合作为比内置 KEMAR 更均衡的 `--sofa` 默认推荐。SADIE II 数据集由 University of York 以 Apache License 2.0 发布；若分发素材或学术使用，请按其页面说明引用论文 [DOI:10.3390/app8112029](https://doi.org/10.3390/app8112029)。
 
@@ -137,7 +160,9 @@ GUI 发行包包含 macOS `.app` 或 Windows `app/MacinRender.Gui.exe`，同样�
 
 ### 未压缩 / 无损输出
 
-WAV 可写 float32 / 24-bit / 16-bit PCM；`--output-bit-depth` 只影响 WAV。WAV 输出与母版输入都支持超过 4GB：float32 WAV 固定写 RF64 容器（小文件也是 RF64——流式写入无法预知总大小，统一用 RF64 的 64-bit `ds64` 承载真实数据大小），整数（24/16-bit）WAV 在 ≤4GB 时写普通 RIFF、超过 4GB 自动升级为 BW64；读取端支持 RIFF / RF64 / BW64 三种容器，并能跨 2^31 帧随机定位（绕开 libbw64 的 32-bit 帧 seek 限制）。CAF 当前固定写 float32 PCM，适合作为 CoreAudio 生态下携带空间布局标签的未压缩容器。FLAC 当前固定写 24-bit lossless，最多 8 声道，并且只开放 `binaural`、`5.1` 和 `7.1` 等无高度布局；`5.1.2` 虽然是 8 声道，但没有可靠的通用高度声道语义，项目会拒绝写出。
+WAV 可写 float32 / 24-bit / 16-bit PCM；`--output-bit-depth` 只影响 WAV。最终 WAV 不再是无布局的裸声道数组：`5.1`、`5.1.2`、`7.1`、`5.1.4`、`7.1.4` 写 WAVEFORMATEXTENSIBLE mask，并严格采用升序 mask 位序；`7.1.4` 因而写成 `L R C LFE Rls Rrs Ls Rs ...`。`9.1.4`、`9.1.6`、`22.2` 写 ADM DirectSpeakers AXML/CHNA；`binaural` 写 ADM Binaural `leftEar/rightEar` 且不写扬声器 mask；`hoa3` 写 ADM HOA ACN/SN3D AXML/CHNA 与 `ambi` chunk。
+
+WAV 输出与母版输入都支持超过 4GB。float32 固定使用 RF64；带 ADM 语义的 float32 是携带 AXML/CHNA 的 RF64 扩展，整数 `i24` / `i16` 则写规范 PCM BW64。使用 WAVE mask 的整数文件在小于 4GB 时写 RIFF，超过 4GB 时写 RF64，以保留 WAVEFORMATEXTENSIBLE 语义。读取端支持 RIFF / RF64 / BW64，并可读回本项目的 float32 ADM RF64。交付链明确要求 PCM BW64 时，使用 `--output-bit-depth i24`。CAF 当前固定写 float32 PCM，适合作为 CoreAudio 生态下携带空间布局标签的未压缩容器。FLAC 当前固定写 24-bit lossless，最多 8 声道，并且只开放 `binaural`、`5.1` 和 `7.1` 等无高度布局；`5.1.2` 虽然是 8 声道，但没有可靠的通用高度声道语义，项目会拒绝写出。
 
 带高度或超过 8 声道的无损 / 未压缩交付优先使用 WAV 或 CAF。若需要更强播放器兼容性，需要结合目标播放器实际验证，而不是只看声道数。
 
@@ -187,10 +212,13 @@ EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4
 | 格式 | Layout | 最终容器 / 映射 | 最终声道顺序 |
 |---|---|---|---|
 | WAV / FLAC | `7.1` | WAVE_7_1 / `wav71` | L R C LFE Rls Rrs Ls Rs |
+| WAV | `7.1.4` | WAVEFORMATEXTENSIBLE `0x2D63F` | L R C LFE Rls Rrs Ls Rs U+045 U-045 U+135 U-135 |
+| WAV | `9.1.4` / `9.1.6` / `22.2` | ADM DirectSpeakers AXML/CHNA | `mradm layouts --format wav` 所列的精确 ADM 顺序 |
+| WAV | `binaural` | ADM Binaural AXML/CHNA，无扬声器 mask | leftEar rightEar |
 | APAC / M4A | `7.1` | CoreAudio `AudioUnit_7_1` | L R C LFE Ls Rs Rls Rrs |
 | APAC / CAF | `9.1.6` | CoreAudio `Atmos_9_1_6` | L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr |
 | APAC / CAF | `22.2` | CoreAudio `CICP_13` | Lw Rw C LFE2 Rls Rrs L R Cs LFE3 Lss Rss Vhl Vhr Vhc Ts Ltr Rtr Ltm Rtm Ctr Cb Lb Rb |
-| WAV | `hoa3` | AmbiX `ambi` chunk | ACN/SN3D 16ch |
+| WAV | `hoa3` | ADM HOA AXML/CHNA + AmbiX `ambi` chunk | ACN/SN3D 16ch |
 | CAF / APAC | `hoa3` | CoreAudio `HOA_ACN_SN3D` | ACN/SN3D 16ch |
 
 ## 常用 CLI 选项
@@ -198,7 +226,9 @@ EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4
 | 选项 | 说明 | 默认值 |
 |---|---|---|
 | `--renderer auto\|ear\|saf\|hoa\|saf-binaural\|apple` | 选择渲染后端 | `auto` |
-| `--output-layout <layout>` | 输出布局，如 `7.1.4` / `9.1.6` / `22.2` | 后端默认 |
+| `--input-layout auto\|5.1\|5.1.2\|7.1\|5.1.4\|7.1.4\|9.1.4\|9.1.6\|22.2` | 普通 WAVE 输入布局；`auto` 优先 ADM，其次识别 channel mask | `auto` |
+| `--input-channels <csv>` | 自定义普通输入标签，严格按文件声道顺序；与显式 `--input-layout` 互斥 | 关闭 |
+| `--output-layout <layout>` | 输出语义或布局：`binaural`、多声道布局或 `hoa3` | `binaural` |
 | `--output-bit-depth f32\|i24\|i16` | WAV 输出位深（CAF 固定 float32；FLAC 固定 24-bit / 最多 8 声道） | `f32` |
 | `--loudness-target <LUFS>` | 响度归一化目标；HOA 通过 7.1.4 AllRAD 参考解码测量，LFE 排除于 LUFS | 关闭 |
 | `--peak-limit-dbtp <dBTP>` | True Peak 限制目标 | `-1.0` |
@@ -215,7 +245,7 @@ EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4
 | `--opus-bitrate-per-ch <kbps>` | Opus VBR 目标比特率 / 声道 | 自动 |
 | `--apac-bitrate <kbps>` | APAC 总目标比特率提示；未设置时空间布局 / HOA 按 7.1.4=2048 kbps 基准缩放 | 见输出格式说明 |
 | `--apac-container mpeg4\|caf` | APAC 容器；`caf` 要求输出路径为 `.caf`，普通 `.caf` 默认仍为 PCM | `mpeg4` |
-| `--sofa <path>` | `saf-binaural` 用户 SOFA HRIR 文件 | 内置 KEMAR |
+| `--sofa <path>` | 为支持 `user-sofa` 的双耳后端选择用户 SOFA HRIR；当前为 `saf-binaural` | SAF 内置 KEMAR |
 | `--semantic-policy <path>` | 渲染时应用 ADM 语义控制 JSON（覆盖 Objects / DirectSpeakers / HOA 的 gain·mute·position 及 diffuse / extent / divergence / channelLock / 插值等） | 关闭 |
 | `--write-semantic-report <path>` | 写出 policy 应用后的 effective semantic JSON，便于确认对象 / DS / HOA 规则命中与 original→effective 变化 | 关闭 |
 

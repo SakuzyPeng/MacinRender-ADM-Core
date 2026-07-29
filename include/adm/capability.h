@@ -27,6 +27,9 @@ struct CapabilityReport {
     bool supports_object_divergence{false};
     bool supports_screen_ref{false};
     bool supports_diffuse{false};
+    // Binaural HRTF sources supported by this backend. Stable values are
+    // "built-in", "user-sofa", and "system". Empty for non-binaural backends.
+    std::vector<std::string> hrtf_sources;
     // Internal optimization hint (not surfaced in capabilities JSON): the backend
     // honors RenderPlan::render_window — it can render only the requested output
     // sub-window using an internal warm-up pre-roll, bit-identical to a full render

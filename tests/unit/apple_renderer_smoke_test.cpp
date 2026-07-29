@@ -711,9 +711,8 @@ bool verify_speaker_layouts_render() {
     return ok;
 }
 
-// A binaural HRTF render requested via the default "0+2+0" alias must tag the CAF
-// container as Binaural (106), not plain Stereo (101) — the output is a binaural signal
-// and must not be mistaken for a stereo mix (which players may re-virtualize).
+// A binaural HRTF render requested via the legacy "0+2+0" alias must tag the CAF
+// container as Binaural (106), not a generic two-channel layout (101).
 bool verify_binaural_container_tag() {
     const auto in = write_fixture(0.0F, 4096U, 1.0F, 0.0F, false);
     FileGuard in_guard(in);
@@ -724,7 +723,7 @@ bool verify_binaural_container_tag() {
     req.input_path = in;
     req.output_path = out;
     req.options.renderer = mradm::RendererSelection::apple;
-    req.options.output_layout = "0+2+0"; // default alias → must normalize to binaural tag
+    req.options.output_layout = "0+2+0"; // legacy alias -> must normalize to binaural tag
     req.options.peak_limit = false;
     req.options.measure_loudness = false;
 

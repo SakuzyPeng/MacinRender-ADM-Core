@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 
 project(
     MacinRenderADMCore
-    VERSION 1.8.0
+    VERSION 1.9.0
     DESCRIPTION "Cross-platform ADM rendering core for MacinRender"
     LANGUAGES C CXX
 )
@@ -163,6 +163,7 @@ add_library(MacinRender::ADMIo ALIAS mr_adm_io)
 target_sources(
     mr_adm_io
     PRIVATE
+        src/adm_io/channel_bed_importer.cpp
         src/adm_io/scene_importer.cpp
     PUBLIC
         FILE_SET HEADERS
@@ -174,7 +175,7 @@ target_sources(
 
 target_link_libraries(mr_adm_io
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 adm
+    PRIVATE libbw64 adm MacinRender::ADMAudio MacinRender::ADMRenderCommon
 )
 mr_adm_core_apply_warnings(mr_adm_io)
 mr_adm_core_apply_static_analysis(mr_adm_io)
@@ -516,14 +517,16 @@ target_sources(
         src/adm_engine/monitor_session.cpp
         src/adm_engine/scene_json.cpp
         src/adm_engine/capability_json.cpp
+        src/adm_engine/input_layout_json.cpp
         src/adm_engine/layout_table.cpp
         src/adm_engine/format_table.cpp
         src/adm_engine/support_matrix.cpp
+        src/adm_engine/wav_output.cpp
 )
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio adm
 )
 if(APPLE)
     target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)
@@ -620,6 +623,7 @@ if(MR_ADM_CORE_BUILD_CLI)
             src/adm_cli/export_command.cpp
             src/adm_cli/formats_command.cpp
             src/adm_cli/inspect_command.cpp
+            src/adm_cli/input_layouts_command.cpp
             src/adm_cli/layouts_command.cpp
             src/adm_cli/main.cpp
             src/adm_cli/render_command.cpp
@@ -658,7 +662,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
 
     add_executable(mr_adm_io_smoke_tests tests/unit/adm_io_smoke_test.cpp)
-    target_link_libraries(mr_adm_io_smoke_tests PRIVATE MacinRender::ADMIo)
+    target_link_libraries(mr_adm_io_smoke_tests PRIVATE MacinRender::ADMIo MacinRender::ADMAudio)
     mr_adm_core_apply_warnings(mr_adm_io_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_io_smoke_tests)
     add_test(NAME mr_adm_io_smoke_tests COMMAND mr_adm_io_smoke_tests)
@@ -739,6 +743,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_ear_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_ear_smoke_tests)
     add_test(NAME mr_adm_ear_smoke_tests COMMAND mr_adm_ear_smoke_tests)
+
+    add_executable(mr_adm_channel_bed_render_tests tests/unit/channel_bed_render_test.cpp)
+    target_link_libraries(mr_adm_channel_bed_render_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio)
+    mr_adm_core_apply_warnings(mr_adm_channel_bed_render_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_channel_bed_render_tests)
+    add_test(NAME mr_adm_channel_bed_render_tests COMMAND mr_adm_channel_bed_render_tests)
 
     # Fixture test: build a real BW64/ADM Objects file, render it, verify output.
     add_executable(mr_adm_ear_fixture_tests tests/unit/ear_render_fixture_test.cpp)

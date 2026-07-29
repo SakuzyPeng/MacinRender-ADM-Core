@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 
+#include <bw64/bw64.hpp>
 #include <fmt/format.h>
 
 #include "adm/audio_io.h"
@@ -71,6 +72,83 @@ void emit_audio_progress(ProgressSink* progress,
 }
 
 } // namespace
+
+// ── RenderInputReader ────────────────────────────────────────────────────────
+
+struct RenderInputReader::Impl {
+    std::unique_ptr<bw64::Bw64Reader> adm_reader;
+    std::optional<FloatWavReader> wave_reader;
+    uint64_t current_frame{0};
+};
+
+RenderInputReader::RenderInputReader() = default;
+RenderInputReader::~RenderInputReader() = default;
+RenderInputReader::RenderInputReader(RenderInputReader&&) noexcept = default;
+RenderInputReader& RenderInputReader::operator=(RenderInputReader&&) noexcept = default;
+
+Result<std::unique_ptr<RenderInputReader>> RenderInputReader::open(const std::string& path, bool channel_bed) {
+    try {
+        auto out = std::unique_ptr<RenderInputReader>{new RenderInputReader{}};
+        out->impl_ = std::make_unique<Impl>();
+        if (channel_bed) {
+            auto reader = FloatWavReader::open(path);
+            if (!reader) {
+                return tl::unexpected{reader.error()};
+            }
+            out->impl_->wave_reader.emplace(std::move(*reader));
+        } else {
+            // libbw64's established sample path is retained for integer ADM,
+            // but it does not decode IEEE-float ADM/RF64. Probe with dr_wav and
+            // select the float-capable reader only for that format.
+            auto wave_probe = FloatWavReader::open(path);
+            if (wave_probe && wave_probe->is_ieee_float()) {
+                out->impl_->wave_reader.emplace(std::move(*wave_probe));
+            } else {
+                out->impl_->adm_reader = bw64::readFile(path);
+            }
+        }
+        return out;
+    } catch (const std::exception& e) {
+        return make_error(ErrorCode::io_error, std::string{"failed to open render input: "} + e.what(), "path=" + path);
+    } catch (...) {
+        return make_error(ErrorCode::internal_error, "failed to open render input", "path=" + path);
+    }
+}
+
+uint64_t RenderInputReader::read(float* out, uint64_t frames) {
+    uint64_t got = 0;
+    if (impl_->wave_reader.has_value()) {
+        got = impl_->wave_reader->read(out, frames);
+    } else {
+        got = impl_->adm_reader->read(out, frames);
+    }
+    impl_->current_frame += got;
+    return got;
+}
+
+void RenderInputReader::seek(int32_t offset, std::ios_base::seekdir way) {
+    if (impl_->adm_reader) {
+        impl_->adm_reader->seek(offset, way);
+        return;
+    }
+    if (!impl_->wave_reader.has_value()) {
+        return;
+    }
+
+    auto& wave_reader = *impl_->wave_reader;
+    const uint64_t total = wave_reader.frame_count();
+    int64_t base = 0;
+    if (way == std::ios::cur) {
+        base = static_cast<int64_t>(std::min(impl_->current_frame, static_cast<uint64_t>(INT64_MAX)));
+    } else if (way == std::ios::end) {
+        base = static_cast<int64_t>(std::min(total, static_cast<uint64_t>(INT64_MAX)));
+    }
+    const int64_t signed_target = base + static_cast<int64_t>(offset);
+    const uint64_t target = signed_target <= 0 ? 0U : std::min<uint64_t>(static_cast<uint64_t>(signed_target), total);
+    if (wave_reader.seek(target)) {
+        impl_->current_frame = target;
+    }
+}
 
 // ── ReaderHandle ──────────────────────────────────────────────────────────────
 

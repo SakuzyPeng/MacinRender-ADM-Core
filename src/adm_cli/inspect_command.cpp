@@ -122,6 +122,15 @@ void print_scene(const std::string& path, const mradm::AdmScene& scene) {
     fmt::print("File: {}\n", path);
     fmt::print(
         "  Sample rate: {} Hz  Channels: {}  Frames: {}\n", info.sample_rate, info.num_channels, info.num_frames);
+    fmt::print("  Source:      {}\n", info.source_kind == mradm::SceneSourceKind::channel_bed ? "channel bed" : "ADM");
+    if (info.source_kind == mradm::SceneSourceKind::channel_bed) {
+        fmt::print("  Input layout: {}\n", info.input_layout);
+        fmt::print("  Input order:");
+        for (const auto& label : info.input_channel_labels) {
+            fmt::print(" {}", label);
+        }
+        fmt::print("\n");
+    }
     if (info.sample_rate > 0 && info.num_frames > 0) {
         fmt::print("  Duration:    {:.2f} s\n", static_cast<double>(info.num_frames) / info.sample_rate);
     }
@@ -207,8 +216,8 @@ void print_scene(const std::string& path, const mradm::AdmScene& scene) {
 } // namespace
 
 CLI::App* add_inspect_command(CLI::App& app, InspectCliOptions& opts) {
-    auto* inspect_cmd = app.add_subcommand("inspect", "Print ADM scene metadata from a BWF file");
-    inspect_cmd->add_option("file", opts.input, "ADM BWF/WAV input path")->required();
+    auto* inspect_cmd = app.add_subcommand("inspect", "Print ADM or auto-detected channel-bed scene metadata");
+    inspect_cmd->add_option("file", opts.input, "ADM BWF or channel-based WAVE input path")->required();
     inspect_cmd->add_flag("--xml", opts.xml, "Dump raw AXML chunk instead of parsed summary");
     inspect_cmd->add_option("--write-semantic-policy-template",
                             opts.semantic_policy_template_path,
@@ -229,7 +238,7 @@ int run_inspect(const InspectCliOptions& opts) {
         }
         fmt::print("{}", result.value());
     } else if (!opts.semantic_policy_template_path.empty()) {
-        auto result = mradm::io::import_scene(opts.input);
+        auto result = mradm::io::import_scene(opts.input, {});
         if (!result.has_value()) {
             spdlog::error("{}", result.error().message);
             return EXIT_FAILURE;
@@ -242,7 +251,7 @@ int run_inspect(const InspectCliOptions& opts) {
         }
         spdlog::info("wrote {}", opts.semantic_policy_template_path);
     } else {
-        auto result = mradm::io::import_scene(opts.input);
+        auto result = mradm::io::import_scene(opts.input, {});
         if (!result.has_value()) {
             spdlog::error("{}", result.error().message);
             return EXIT_FAILURE;

@@ -5,7 +5,7 @@ English | [中文](README.md)
 MacinRender ADM Core is a cross-platform ADM (Audio Definition Model, ITU-R BS.2076) spatial-audio rendering core
 written in C++20. It provides a desktop GUI, the `mradm` command-line tool, and a stable C ABI library.
 
-It reads ADM BWF / BW64 input and renders to loudspeaker layouts, HOA encoding, HRTF binaural output, and delivery formats including WAV, CAF, FLAC, Opus MKA, IAMF, and APAC.
+It reads ADM BWF / BW64 and ordinary channel-based WAVE / RF64 / BW64 input, then renders to loudspeaker layouts, HOA encoding, HRTF binaural output, and delivery formats including WAV, CAF, FLAC, Opus MKA, IAMF, and APAC.
 
 > **Naming:** 麦渲峰 is the official Chinese name of MacinRender. The English brand name and technical identifiers,
 > including repository, package, CMake target, namespace, and executable names, remain `MacinRender`.
@@ -13,6 +13,7 @@ It reads ADM BWF / BW64 input and renders to loudspeaker layouts, HOA encoding, 
 ## Feature Overview
 
 - ADM scene import: reads BW64 ADM metadata through libbw64 / libadm and converts it into the project's own domain model.
+- Channel-bed input: maps known WAVE channel masks or constrained custom labels into a DirectSpeakers scene with explicit geometry.
 - Desktop workbench: an Avalonia GUI for batch rendering, per-object semantic editing, and realtime spatial monitoring.
 - Render backends: libear, SAF VBAP, HOA encoder, HRTF binaural, and Apple AUSpatialMixer (macOS-only).
 - Objects / DirectSpeakers: supports timed blocks, gain, interpolation, diffuse, channelLock, objectDivergence, and related ADM semantics.
@@ -56,6 +57,7 @@ Inspect an ADM scene and query available backends / layouts:
 ```bash
 ./build/release/mradm inspect input.wav
 ./build/release/mradm backends
+./build/release/mradm input-layouts
 ./build/release/mradm layouts --format wav
 ./build/release/mradm layouts --format flac --renderer saf
 ```
@@ -67,7 +69,28 @@ Render examples:
 ./build/release/mradm render -i input.wav -o out_714.flac --renderer ear --output-layout 7.1.4
 ./build/release/mradm render -i input.wav -o out_222.wav --renderer apple --output-layout 22.2
 ./build/release/mradm render -i input.wav -o out_trim.wav --start 12.5 --end 45.0
+./build/release/mradm render -i bed.wav -o bed_714.wav --input-layout 5.1 --renderer ear --output-layout 7.1.4
+./build/release/mradm render -i custom.wav -o custom_binaural.wav --input-channels L,R,C,LFE,M+090,M-090 --renderer saf-binaural --sofa listener.sofa
 ```
+
+## Ordinary Channel-Bed Input
+
+Ordinary input accepts PCM 16/24/32-bit and IEEE float32 WAVE / RF64 / BW64 with 1–64 channels.
+The default `--input-layout auto` imports ADM whenever an `axml` chunk is present; without `axml`, it uses a
+recognised WAVEFORMATEXTENSIBLE channel mask. Invalid ADM never silently falls back. Presets are `5.1`, `5.1.2`,
+`7.1`, `5.1.4`, `7.1.4`, `9.1.4`, `9.1.6`, and `22.2`; `--input-channels` provides a constrained custom order.
+
+Azimuth is positive left, negative right, and `0°` front; elevation is positive up. Aliases have exact semantics:
+`L/FL=M+030` (`+30°`, `0°`), `R/FR=M-030` (`-30°`, `0°`), `C/FC=M+000` (`0°`, `0°`), and
+`LFE=LFE1` (no geometric position). Label count must exactly match the file; empty, unknown, and duplicate labels
+are rejected. Custom `U±110` labels require `@30` or `@45` to select elevation. See the
+[complete channel-bed input semantics](docs/guides/CHANNEL_BED_INPUT.en.md), or query `mradm input-layouts` and
+`mradm input-layouts --format json`.
+
+The only public two-channel output is `binaural`, which is also the default output semantic. Backend and HRTF source
+are separate choices: `saf-binaural` offers built-in KEMAR and, when enabled at build time, `--sofa`; `apple` uses
+the system HRTF and rejects user SOFA. The first implementation exposes this workflow through the CLI, C++ API, and
+C ABI v1.28; the GUI entry point is deferred.
 
 ## Release Packages
 
@@ -104,7 +127,7 @@ Developer ID signing / notarization, and Windows Authenticode signing are not pr
 | SAF HRTF binaural | `--renderer saf-binaural` | Objects / DirectSpeakers | 2ch binaural |
 | Apple AUSpatialMixer | `--renderer apple` | Objects / DirectSpeakers | 2ch binaural / multichannel loudspeakers (macOS-only) |
 
-The `saf-binaural` backend uses SAF's built-in Genelec KEMAR HRTF by default. A user FIR SOFA HRIR file can be loaded with `--sofa <path>`. Current SOFA support is limited to SimpleFreeFieldHRIR / GeneralFIR, 2 receivers, 48 kHz, with no resampling.
+The `saf-binaural` backend uses SAF's built-in Genelec KEMAR HRTF by default. A user FIR SOFA HRIR file can be loaded with `--sofa <path>`. Current SOFA support is limited to SimpleFreeFieldHRIR / GeneralFIR, 2 receivers, 48 kHz, with no resampling. The `apple` backend uses Apple's system HRTF and rejects `--sofa`; `mradm backends` reports each binaural backend's `HRTF sources`.
 
 The recommended general-purpose external HRTF is the D1 KU100 SOFA from the [SADIE II Database](https://www.york.ac.uk/sadie-project/database.html), for example `D1_48K_24bit_256tap_FIR_SOFA.sofa` (also available from the [SOFA database SADIE index](https://sofacoustics.org/data/database/sadie/)). It is a 48 kHz, 256-tap SimpleFreeFieldHRIR dataset with dense direction sampling and low-frequency extension / diffuse-field EQ, making it a more balanced `--sofa` recommendation than the built-in KEMAR for many headphone checks. The SADIE II data is published by the University of York under the Apache License 2.0; when distributing data or using it academically, follow the dataset page and cite [DOI:10.3390/app8112029](https://doi.org/10.3390/app8112029).
 
@@ -128,7 +151,9 @@ The status column only describes what this project can currently write. It does 
 
 ### Uncompressed / Lossless Output
 
-WAV can be written as float32, 24-bit, or 16-bit PCM. `--output-bit-depth` affects WAV only. CAF currently writes float32 PCM and is useful in the CoreAudio ecosystem because it carries spatial layout tags. FLAC currently writes fixed 24-bit lossless audio, supports up to 8 channels, and is exposed only for `binaural`, `5.1`, and `7.1`-style non-height layouts.
+WAV can be written as float32, 24-bit, or 16-bit PCM. `--output-bit-depth` affects WAV only. Final WAV output is layout-labelled rather than a bare channel array: `5.1`, `5.1.2`, `7.1`, `5.1.4`, and `7.1.4` carry WAVEFORMATEXTENSIBLE masks in ascending mask-bit order, so `7.1.4` is written as `L R C LFE Rls Rrs Ls Rs ...`. `9.1.4`, `9.1.6`, and `22.2` carry ADM DirectSpeakers AXML/CHNA; `binaural` carries ADM Binaural `leftEar/rightEar` without a loudspeaker mask; and `hoa3` carries ADM HOA ACN/SN3D AXML/CHNA plus the `ambi` chunk.
+
+Float32 WAV uses RF64. For ADM-labelled layouts this is an RF64 extension carrying AXML/CHNA; integer `i24` / `i16` uses normative PCM BW64. Mask-labelled integer output uses RIFF below 4 GB and RF64 above 4 GB so WAVEFORMATEXTENSIBLE semantics are retained. The reader accepts RIFF, RF64, BW64, and this project's float32 ADM RF64 output. Choose `--output-bit-depth i24` when a delivery chain explicitly requires PCM BW64. CAF currently writes float32 PCM and is useful in the CoreAudio ecosystem because it carries spatial layout tags. FLAC currently writes fixed 24-bit lossless audio, supports up to 8 channels, and is exposed only for `binaural`, `5.1`, and `7.1`-style non-height layouts.
 
 For lossless or uncompressed output with height channels or more than 8 channels, prefer WAV or CAF. Playback compatibility must still be validated against the target player.
 
@@ -149,6 +174,14 @@ APAC output writes MPEG-4 Audio (`.m4a` / `.mp4`) on macOS via AudioToolbox by d
 ### Containers, Layouts, and Playback
 
 Channel order and spatial layout semantics are determined by the combination of codec, container, and layout tag / mapping. Use `mradm layouts --format <fmt>` to query the implemented channel order for a given output format.
+
+| Format | Layout | Final container / mapping | Final channel order |
+|---|---|---|---|
+| WAV / FLAC | `7.1` | WAVE_7_1 / `wav71` | L R C LFE Rls Rrs Ls Rs |
+| WAV | `7.1.4` | WAVEFORMATEXTENSIBLE `0x2D63F` | L R C LFE Rls Rrs Ls Rs U+045 U-045 U+135 U-135 |
+| WAV | `9.1.4` / `9.1.6` / `22.2` | ADM DirectSpeakers AXML/CHNA | Exact ADM order reported by `mradm layouts --format wav` |
+| WAV | `binaural` | ADM Binaural AXML/CHNA, no loudspeaker mask | leftEar rightEar |
+| WAV | `hoa3` | ADM HOA AXML/CHNA + AmbiX `ambi` chunk | ACN/SN3D 16ch |
 
 HOA output needs special care. CAF PCM, APAC MPEG-4, and APAC CAF are currently the most reliable direct HOA playback paths on macOS. WAV HOA3 writes an AmbiX `ambi` chunk and is better suited for AmbiX-aware tools. Opus MKA writes an ambisonics mapping but is not a general-purpose direct-monitoring format.
 
@@ -181,8 +214,10 @@ Query full channel-order tables with:
 
 | Option | Description | Default |
 |---|---|---|
-| `--renderer auto\|ear\|saf\|hoa\|binaural\|apple` | Select the render backend | `auto` |
-| `--output-layout <layout>` | Output layout, for example `7.1.4` / `9.1.6` / `22.2` | Backend default |
+| `--renderer auto\|ear\|saf\|hoa\|saf-binaural\|apple` | Select the render backend | `auto` |
+| `--input-layout auto\|5.1\|5.1.2\|7.1\|5.1.4\|7.1.4\|9.1.4\|9.1.6\|22.2` | Ordinary WAVE input layout; `auto` prefers ADM, then a recognised channel mask | `auto` |
+| `--input-channels <csv>` | Custom ordinary-input labels in exact file-channel order; mutually exclusive with explicit `--input-layout` | Off |
+| `--output-layout <layout>` | Output semantic/layout: `binaural`, a multichannel layout, or `hoa3` | `binaural` |
 | `--output-bit-depth f32\|i24\|i16` | WAV output bit depth; CAF is fixed float32, FLAC is fixed 24-bit / up to 8 channels | `f32` |
 | `--loudness-target <LUFS>` | Normalize integrated loudness; HOA is measured through a 7.1.4 AllRAD reference decode, with LFE excluded from LUFS | Off |
 | `--peak-limit-dbtp <dBTP>` | True Peak limit target | `-1.0` |
@@ -196,7 +231,7 @@ Query full channel-order tables with:
 | `--opus-bitrate-per-ch <kbps>` | Opus VBR target bitrate per channel | Auto |
 | `--apac-bitrate <kbps>` | APAC total bitrate hint; when unset, spatial layouts / HOA scale from the 7.1.4=2048 kbps baseline | See output-format notes |
 | `--apac-container mpeg4\|caf` | APAC container; `caf` requires a `.caf` output path, while plain `.caf` remains PCM by default | `mpeg4` |
-| `--sofa <path>` | User SOFA HRIR file for binaural rendering | Built-in KEMAR |
+| `--sofa <path>` | Select a user SOFA HRIR for a backend reporting `user-sofa`; currently `saf-binaural` | SAF built-in KEMAR |
 | `--semantic-policy <path>` | Apply ADM semantic-control JSON during rendering | Off |
 | `--write-semantic-report <path>` | Write the effective semantic JSON after policy application | Off |
 

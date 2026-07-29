@@ -558,13 +558,13 @@ class HoaStream final : public IRenderStream {
   public:
     [[nodiscard]] static Result<std::unique_ptr<HoaStream>>
     create(const HoaPrepared& prepared, const RenderPlan& plan, LogSink& logs) {
-        auto reader = bw64::readFile(plan.input_path);
+        auto reader = audio::RenderInputReader::open(plan.input_path,
+                                                     plan.scene.info.source_kind == SceneSourceKind::channel_bed);
         if (!reader) {
-            return make_error(
-                ErrorCode::io_error, "failed to open input for realtime hoa stream", "input=" + plan.input_path);
+            return tl::unexpected{reader.error()};
         }
         (void) logs;
-        return std::unique_ptr<HoaStream>{new HoaStream(prepared, std::move(reader), plan)};
+        return std::unique_ptr<HoaStream>{new HoaStream(prepared, std::move(*reader), plan)};
     }
 
     [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
@@ -627,7 +627,7 @@ class HoaStream final : public IRenderStream {
     [[nodiscard]] std::string_view output_layout() const override { return "hoa3"; }
 
   private:
-    HoaStream(const HoaPrepared& prepared, std::unique_ptr<bw64::Bw64Reader> reader, const RenderPlan& plan)
+    HoaStream(const HoaPrepared& prepared, std::unique_ptr<audio::RenderInputReader> reader, const RenderPlan& plan)
         : prepared_(prepared), reader_(std::move(reader)), num_in_ch_(plan.scene.info.num_channels),
           sample_rate_(plan.scene.info.sample_rate), total_frames_(plan.scene.info.num_frames),
           object_smoothing_frames_(plan.object_smoothing_frames),
@@ -669,7 +669,7 @@ class HoaStream final : public IRenderStream {
     }
 
     const HoaPrepared& prepared_; // borrowed; owner (factory) outlives the stream
-    std::unique_ptr<bw64::Bw64Reader> reader_;
+    std::unique_ptr<audio::RenderInputReader> reader_;
     uint16_t num_in_ch_;
     uint32_t sample_rate_;
     uint64_t total_frames_;
@@ -815,7 +815,12 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
                              num_frames));
         progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "encoding HOA"});
 
-        auto reader = bw64::readFile(plan.input_path);
+        auto reader_res = audio::RenderInputReader::open(plan.input_path,
+                                                         plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+        if (!reader_res) {
+            return tl::unexpected{reader_res.error()};
+        }
+        auto reader = std::move(*reader_res);
         auto writer_res = audio::WriterHandle::open(
             plan.output_path, k_num_out, static_cast<uint32_t>(sample_rate), plan.output_layout);
         if (!writer_res) {
