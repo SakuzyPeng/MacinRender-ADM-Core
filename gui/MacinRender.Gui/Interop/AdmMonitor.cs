@@ -60,4 +60,10 @@ public struct AdmMonitorOverride
     // v1.23: head-tracking participation. 0 = world-locked(跟头转,默认);非 0 = head-locked
     // (锁在头上,头追踪不移动它)。Apple 与 SAF binaural 监听后端实装。
     public int HeadLocked;
+
+    // v1.29: keeps Mute beyond the old native struct size on 64-bit ABIs. Always zero.
+    public uint ReservedV129;
+
+    // v1.29: non-zero forces the object/channel to silence; GainDb is ignored.
+    public int Mute;
 }

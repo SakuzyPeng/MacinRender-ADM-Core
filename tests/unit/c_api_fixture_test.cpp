@@ -2195,6 +2195,9 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 // create may fail with a device error, in which case the playback assertions are skipped.
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
     bool ok = check(adm_api_version_minor() == ADM_API_VERSION_MINOR, "C ABI minor version matches header");
+    ok = check(adm_api_version_minor() >= 29, "v1.29: monitor mute override is available") && ok;
+    static_assert(offsetof(adm_monitor_override_t, mute) >=
+                  offsetof(adm_monitor_override_t, head_locked) + sizeof(int32_t) + sizeof(uint32_t));
 
     // v1.22 listener orientation argument validation (no device needed).
     ok = check(adm_monitor_set_listener_orientation(nullptr, 0.0F, 0.0F, 0.0F) == ADM_ERROR_INVALID_ARGUMENT,
@@ -2300,6 +2303,8 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     ov.extent_depth_scale = 1.0F;
     ov.speaker_label = "M+030"; // v1.20: per-channel DirectSpeakers filter (whole-object when NULL)
     ov.head_locked = 1;         // v1.23: head-locked (excluded from head tracking)
+    ov.reserved_v1_29 = 0;
+    ov.mute = 1; // v1.29: exact per-channel mute; gain_db is ignored
     ok = check(adm_monitor_set_overrides(monitor, &ov, 1, 7) == ADM_ERROR_OK, "monitor set overrides") && ok;
     adm_monitor_override_t legacy = ov;
     legacy.struct_size = static_cast<uint32_t>(offsetof(adm_monitor_override_t, extent_width_scale));
@@ -2315,6 +2320,13 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     pre_label.struct_size = static_cast<uint32_t>(offsetof(adm_monitor_override_t, speaker_label));
     ok = check(adm_monitor_set_overrides(monitor, &pre_label, 1, 8) == ADM_ERROR_OK,
                "monitor set_overrides accepts legacy struct_size without speaker_label field") &&
+         ok;
+    // A v1.23-v1.28 caller stops before the v1.29 mute field. The intervening size guard keeps
+    // mute beyond the old 64-bit sizeof even though head_locked previously had tail padding.
+    adm_monitor_override_t pre_mute = ov;
+    pre_mute.struct_size = static_cast<uint32_t>(offsetof(adm_monitor_override_t, mute));
+    ok = check(adm_monitor_set_overrides(monitor, &pre_mute, 1, 8) == ADM_ERROR_OK,
+               "monitor set_overrides accepts legacy struct_size without mute field") &&
          ok;
 
     // v1.22 listener orientation: a finite yaw/pitch/roll is accepted on the live monitor (the

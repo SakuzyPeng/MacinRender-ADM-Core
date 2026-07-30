@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -1236,6 +1237,9 @@ public interface IResettableOverride
 /// </summary>
 public sealed partial class ScalarOverride : ObservableObject, IResettableOverride
 {
+    private const double GainMuteDetentWidth = 1.0;
+    private const string MutedGainEntry = "-inf";
+
     public enum Mode
     {
         ScaleLinear,
@@ -1249,6 +1253,8 @@ public sealed partial class ScalarOverride : ObservableObject, IResettableOverri
     private readonly double _clampLo;
     private readonly double _clampHi;
     private readonly double _defaultValue;
+    private readonly double _finiteSliderMin;
+    private readonly bool _sourceMuted;
 
     public string Label { get; }
     public double SliderMin { get; }
@@ -1256,17 +1262,20 @@ public sealed partial class ScalarOverride : ObservableObject, IResettableOverri
     public event Action? Changed;
 
     public ScalarOverride(string label, Mode mode, IReadOnlyList<Axis> axes, double defaultValue,
-        double sliderMin, double sliderMax, double clampLo = 0.0, double clampHi = double.MaxValue)
+        double sliderMin, double sliderMax, double clampLo = 0.0, double clampHi = double.MaxValue,
+        bool sourceMuted = false)
     {
         Label = label;
         _mode = mode;
         _axes = axes;
         _value = defaultValue;
         _defaultValue = defaultValue;
-        SliderMin = sliderMin;
+        _finiteSliderMin = sliderMin;
+        SliderMin = mode == Mode.GainDb ? sliderMin - GainMuteDetentWidth : sliderMin;
         SliderMax = sliderMax;
         _clampLo = clampLo;
         _clampHi = clampHi;
+        _sourceMuted = sourceMuted;
     }
 
     [ObservableProperty]
@@ -1277,10 +1286,23 @@ public sealed partial class ScalarOverride : ObservableObject, IResettableOverri
     [NotifyPropertyChangedFor(nameof(EffectiveText))]
     [NotifyPropertyChangedFor(nameof(ValueText))]
     [NotifyPropertyChangedFor(nameof(ValueEntry))]
+    [NotifyPropertyChangedFor(nameof(IsMuted))]
     private double _value;
 
     partial void OnEnabledChanged(bool value) => Changed?.Invoke();
-    partial void OnValueChanged(double value) => Changed?.Invoke();
+
+    partial void OnValueChanged(double value)
+    {
+        // The one-dB strip below the finite floor is a discrete mute detent. Snap every slider
+        // value in that strip to the endpoint so the model never retains an ambiguous sub-floor dB.
+        if (_mode == Mode.GainDb && value < _finiteSliderMin && value != SliderMin)
+        {
+            Value = SliderMin;
+            return;
+        }
+
+        Changed?.Invoke();
+    }
 
     /// <summary>清掉本维度覆盖:取消勾选 + 值回到中性默认(gain 0 dB / scale ×1)。</summary>
     public void Reset()
@@ -1292,27 +1314,41 @@ public sealed partial class ScalarOverride : ObservableObject, IResettableOverri
     // 单位装饰(贴在可输入框两侧):scale 用前缀 ×,gain 用后缀 dB。
     public string UnitPrefix => _mode == Mode.ScaleLinear ? "×" : "";
     public string UnitSuffix => _mode == Mode.GainDb ? "dB" : "";
+    public bool IsMuted => _mode == Mode.GainDb && Value < _finiteSliderMin;
 
-    /// <summary>覆盖值的可编辑文本(只含数字,不含单位)。提交时解析 + 钳到滑块范围,并自动勾选
-    /// 启用——直接键入数值即视为要应用该覆盖(与拖滑块同效,但免去先勾选)。</summary>
+    /// <summary>覆盖值的可编辑文本(不含单位)。gain 接受 -inf / mute；有限数字钳到常规范围。
+    /// 提交时自动勾选启用——直接键入即视为要应用该覆盖。</summary>
     public string ValueEntry
     {
-        get => _mode == Mode.GainDb
+        get => IsMuted
+            ? MutedGainEntry
+            : _mode == Mode.GainDb
             ? Value.ToString("0.0", CultureInfo.InvariantCulture)
             : Value.ToString("0.00", CultureInfo.InvariantCulture);
         set
         {
-            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
+            var entry = value.Trim();
+            if (_mode == Mode.GainDb &&
+                (entry.Equals(MutedGainEntry, StringComparison.OrdinalIgnoreCase) ||
+                 entry.Equals("mute", StringComparison.OrdinalIgnoreCase)))
             {
                 Enabled = true;
-                Value = Math.Clamp(v, SliderMin, SliderMax);
+                Value = SliderMin;
+            }
+            else if (double.TryParse(entry, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) &&
+                     double.IsFinite(v))
+            {
+                Enabled = true;
+                Value = Math.Clamp(v, _finiteSliderMin, SliderMax);
             }
 
             OnPropertyChanged(); // 回写规范化后的文本(拒绝非法输入 / 反映钳制结果)
         }
     }
 
-    public string ValueText => _mode == Mode.GainDb
+    public string ValueText => IsMuted
+        ? MutedGainEntry + " dB"
+        : _mode == Mode.GainDb
         ? Value.ToString("+0.0;-0.0;0", CultureInfo.InvariantCulture) + " dB"
         : "×" + Value.ToString("0.00", CultureInfo.InvariantCulture);
 
@@ -1323,6 +1359,10 @@ public sealed partial class ScalarOverride : ObservableObject, IResettableOverri
     {
         if (_mode == Mode.GainDb)
         {
+            if ((scaled && IsMuted) || (!scaled && _sourceMuted))
+            {
+                return MutedGainEntry + " dB";
+            }
             double db = LinToDb(_axes[0].Range.Min) + (scaled ? Value : 0.0);
             return db.ToString("+0.0;-0.0;0", CultureInfo.InvariantCulture) + " dB";
         }
@@ -1352,7 +1392,9 @@ public sealed partial class ScalarOverride : ObservableObject, IResettableOverri
         }
 
         return _mode == Mode.GainDb
-            ? new JsonObject { ["gain_db"] = Value }
+            ? IsMuted
+                ? new JsonObject { ["mute"] = true }
+                : new JsonObject { ["gain_db"] = Value }
             : new JsonObject { ["scale"] = Value };
     }
 
@@ -1566,7 +1608,7 @@ public sealed class BedChannelGroup : ObservableObject
         SpeakerLabels = speakerLabels;
         DisplayLabel = displayLabel;
         Gain = new ScalarOverride(displayLabel, ScalarOverride.Mode.GainDb,
-            new[] { new ScalarOverride.Axis("", new DimRange(currentGainLinear, currentGainLinear)) }, 0.0, -24.0, 12.0);
+            new[] { new ScalarOverride.Axis("", new DimRange(currentGainLinear, currentGainLinear)) }, 0.0, -60.0, 12.0);
     }
 }
 
@@ -1772,7 +1814,8 @@ public sealed class SemanticRow : ObservableObject
         }
 
         GainDb = new ScalarOverride("gain", ScalarOverride.Mode.GainDb,
-            new[] { new ScalarOverride.Axis("", Union(m => m.GainRange)) }, 0.0, -24.0, 12.0);
+            new[] { new ScalarOverride.Axis("", Union(m => m.GainRange)) }, 0.0, -60.0, 12.0,
+            sourceMuted: members.All(m => m.Mute));
         DiffuseScale = new ScalarOverride("diffuse", ScalarOverride.Mode.ScaleLinear,
             new[] { new ScalarOverride.Axis("", Union(m => m.DiffuseRange)) }, 1.0, 0.0, 4.0, 0.0, 1.0);
         Extent = new ExtentOverride(Union(m => m.WidthRange), Union(m => m.HeightRange), Union(m => m.DepthRange));
@@ -1861,7 +1904,13 @@ public sealed class SemanticRow : ObservableObject
         foreach (var m in Members)
         {
             var rule = new JsonObject();
-            AddIf(rule, "gain", GainDb.ToPolicyFragment());
+            var gain = GainDb.ToPolicyFragment();
+            if (gain is not null && !GainDb.IsMuted && m.Mute)
+            {
+                // A finite edit on an ADM object that started muted explicitly restores audibility.
+                gain["mute"] = false;
+            }
+            AddIf(rule, "gain", gain);
             AddIf(rule, "diffuse", DiffuseScale.ToPolicyFragment());
             AddIf(rule, "extent", Extent.ToPolicyFragment());
             AddIf(rule, "divergence", DivergenceScale.ToPolicyFragment());
@@ -1898,10 +1947,12 @@ public sealed class SemanticRow : ObservableObject
                     continue;
                 }
 
-                var bcGain = (float)(bc.Gain.Enabled ? bc.Gain.Value : 0.0);
+                var bcMuted = bc.Gain.Enabled && bc.Gain.IsMuted;
+                var bcGain = (float)(bc.Gain.Enabled && !bcMuted ? bc.Gain.Value : 0.0);
                 foreach (var label in bc.SpeakerLabels) // 配对组:每声道一条带 speaker_label 的覆盖
                 {
-                    yield return new MonitorOverride(Members[0].Id, bcGain, SpeakerLabel: label, HeadLocked: bcHeadLocked);
+                    yield return new MonitorOverride(
+                        Members[0].Id, bcGain, SpeakerLabel: label, HeadLocked: bcHeadLocked, Mute: bcMuted);
                 }
             }
 
@@ -1914,7 +1965,8 @@ public sealed class SemanticRow : ObservableObject
             yield break;
         }
 
-        var gainDb = (float)(GainDb.Enabled ? GainDb.Value : 0.0);
+        var muted = GainDb.Enabled && GainDb.IsMuted;
+        var gainDb = (float)(GainDb.Enabled && !muted ? GainDb.Value : 0.0);
         var diffuse = (float)(DiffuseScale.Enabled ? DiffuseScale.Value : 1.0);
         var extentWidth = (float)(Extent.Width.Enabled ? Extent.Width.Value : 1.0);
         var extentHeight = (float)(Extent.Height.Enabled ? Extent.Height.Value : 1.0);
@@ -1923,7 +1975,7 @@ public sealed class SemanticRow : ObservableObject
         foreach (var m in Members)
         {
             yield return new MonitorOverride(m.Id, gainDb, diffuse, 1.0f, divergence, extentWidth, extentHeight,
-                extentDepth, HeadLocked: headLocked);
+                extentDepth, HeadLocked: headLocked, Mute: muted);
         }
     }
 

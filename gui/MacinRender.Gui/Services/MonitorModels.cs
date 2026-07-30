@@ -37,7 +37,8 @@ public sealed record MonitorOverride(
     float ExtentHeightScale = 1.0f,
     float ExtentDepthScale = 1.0f,
     string? SpeakerLabel = null,
-    bool HeadLocked = false);
+    bool HeadLocked = false,
+    bool Mute = false);
 
 /// <summary>监听后端 A/B 选项:展示名 + 渲染器 + 监听布局。立体声监听下可跨布局(经下混)。
 /// SystemSpatial=true 时为 macOS 系统空间音频监听(多声道不下混,换 device + 声道数 → 切换走重启)。</summary>

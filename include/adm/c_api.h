@@ -141,12 +141,17 @@
  * v1.28 新增（additive，SOVERSION 不变）：
  *   普通多声道 WAVE 输入：adm_render_options_set_input_layout、
  *   adm_render_options_set_input_channel_labels、adm_input_layouts_json。
+ *
+ * v1.29 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_override_t 追加 mute 字段。非 0 将对象或 DirectSpeakers 声道设为静音，
+ *   gain_db 在该状态下忽略。reserved_v1_29 把 mute 放到旧结构 sizeof 之后，避免旧调用方
+ *   末尾对齐填充中的未定义字节被读取。struct_size 未覆盖 mute 时按 0 处理。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 28
+#define ADM_API_VERSION_MINOR 29
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -992,6 +997,12 @@ typedef struct adm_monitor_override_t {
        head-orientation compensation) and the SAF binaural backend honor it; others ignore it.
        struct_size guards legacy. */
     int32_t head_locked;
+    /* v1.29: size guard occupying the old 64-bit ABI's tail padding. Set to 0. This keeps the
+       following mute field beyond sizeof(adm_monitor_override_t) as seen by v1.23-v1.28 callers. */
+    uint32_t reserved_v1_29;
+    /* v1.29: non-zero = exact mute for this object/channel. gain_db is ignored while muted.
+       Missing from an older caller's struct_size = 0 (unmuted). */
+    int32_t mute;
 } adm_monitor_override_t;
 
 /*

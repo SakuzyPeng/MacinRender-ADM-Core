@@ -152,6 +152,27 @@ internal static class SelfTest
         bool airpods = Services.HeadTracking.AirPodsMotionSource.IsAvailable();
         Console.WriteLine($"头部追踪 shim:AirPods {(airpods ? "可用(硬件在位)" : "不可用(无硬件 / 未打包 / shim 未构建)")}");
 
+        // -inf 静音档不依赖输入文件：验证 UI 文本解析、policy 投影和 live override 三条路径。
+        var muteProbeItem = new SemanticObjectItem
+        {
+            Id = "AO_MUTE_PROBE",
+            Name = "Mute Probe",
+            DisplayName = "Mute Probe",
+            GainRange = new DimRange(1.0, 1.0),
+        };
+        var muteProbeRow = SemanticRow.BuildRows([muteProbeItem])[0];
+        muteProbeRow.GainDb.ValueEntry = "-inf";
+        var muteProbeRule = muteProbeRow.BuildRules().Single();
+        var muteProbeGain = muteProbeRule["gain"] as JsonObject;
+        var muteProbeLive = muteProbeRow.BuildLiveOverrides().Single();
+        if (!muteProbeRow.GainDb.IsMuted || muteProbeRow.GainDb.ValueEntry != "-inf" ||
+            muteProbeGain?["mute"]?.GetValue<bool>() != true || !muteProbeLive.Mute)
+        {
+            Console.Error.WriteLine("[失败] -inf 未投影为 policy/live mute");
+            return 11;
+        }
+        Console.WriteLine("语义 gain -inf:policy/live mute OK");
+
         if (string.IsNullOrEmpty(inputWav))
         {
             Console.WriteLine("(未给 wav,跳过真实渲染。加载/查询/监听入口链路 OK。)");

@@ -1105,7 +1105,7 @@ bool verify_hoa_stream_gain_override() {
         return false;
     }
 
-    auto pull_rms = [&](bool with_override) -> double {
+    auto pull_rms = [&](bool with_override, bool mute = false) -> double {
         auto stream = renderer->open_stream(**prepared, plan, logs);
         if (!stream.has_value()) {
             return -1.0;
@@ -1114,6 +1114,7 @@ bool verify_hoa_stream_gain_override() {
             mradm::LiveOverrides ov;
             ov.revision = 1;
             ov.objects.push_back({object_id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""}); // 0.1 linear
+            ov.objects.back().mute = mute;
             (*stream)->set_overrides(ov);
         }
         const uint32_t oc = (*stream)->out_channels();
@@ -1138,8 +1139,10 @@ bool verify_hoa_stream_gain_override() {
 
     const double base = pull_rms(false);
     const double over = pull_rms(true);
+    const double muted = pull_rms(true, true);
     bool ok = check(base > 1.0e-3, "hoa override: baseline has energy");
     ok &= check(over < base * 0.2 && over > base * 0.05, "hoa override: -20 dB scales output by ~0.1");
+    ok &= check(muted == 0.0, "hoa override: mute produces exact silence");
     return ok;
 }
 

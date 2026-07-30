@@ -407,12 +407,14 @@
                                             Minimum="{Binding SelectedRow.GainDb.SliderMin}"
                                             Maximum="{Binding SelectedRow.GainDb.SliderMax}"
                                             Value="{Binding SelectedRow.GainDb.Value}"
+                                            ToolTip.Tip="{DynamicResource SemGainMuteHint}"
                                             IsEnabled="{Binding SelectedRow.GainDb.Enabled}"/>
                                     <Grid ColumnDefinitions="12,44,Auto" VerticalAlignment="Center">
                                         <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
                                                    FontSize="12" Classes="muted" Text="{Binding SelectedRow.GainDb.UnitPrefix}"/>
                                         <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
-                                                 Text="{Binding SelectedRow.GainDb.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                                 Text="{Binding SelectedRow.GainDb.ValueEntry}" KeyDown="OnValueEntryKeyDown"
+                                                 ToolTip.Tip="{DynamicResource SemGainMuteHint}"/>
                                         <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
                                                    FontSize="12" Classes="muted" Text="{Binding SelectedRow.GainDb.UnitSuffix}"/>
                                     </Grid>
@@ -453,12 +455,14 @@
                                                         Minimum="{Binding Gain.SliderMin}"
                                                         Maximum="{Binding Gain.SliderMax}"
                                                         Value="{Binding Gain.Value}"
+                                                        ToolTip.Tip="{DynamicResource SemGainMuteHint}"
                                                         IsEnabled="{Binding Gain.Enabled}"/>
                                                 <Grid ColumnDefinitions="12,44,Auto" VerticalAlignment="Center">
                                                     <TextBlock Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Center"
                                                                FontSize="12" Classes="muted" Text="{Binding Gain.UnitPrefix}"/>
                                                     <TextBox Grid.Column="1" Classes="numeric" VerticalAlignment="Center"
-                                                             Text="{Binding Gain.ValueEntry}" KeyDown="OnValueEntryKeyDown"/>
+                                                             Text="{Binding Gain.ValueEntry}" KeyDown="OnValueEntryKeyDown"
+                                                             ToolTip.Tip="{DynamicResource SemGainMuteHint}"/>
                                                     <TextBlock Grid.Column="2" Margin="3,0,0,0" VerticalAlignment="Center"
                                                                FontSize="12" Classes="muted" Text="{Binding Gain.UnitSuffix}"/>
                                                 </Grid>

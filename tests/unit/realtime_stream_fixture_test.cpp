@@ -683,7 +683,7 @@ class GainStream final : public mradm::IRenderStream {
         gain_ = 1.0F;
         for (const auto& ov : overrides.objects) {
             if (ov.object_id == "obj0") {
-                gain_ = std::pow(10.0F, ov.gain_db / 20.0F);
+                gain_ = ov.mute ? 0.0F : std::pow(10.0F, ov.gain_db / 20.0F);
             }
         }
     }
@@ -705,10 +705,10 @@ class GainStreamFactory final : public mradm::realtime::IRenderStreamFactory {
     }
 };
 
-mradm::LiveOverrides gain_override(const std::string& object_id, float gain_db, uint64_t revision) {
+mradm::LiveOverrides gain_override(const std::string& object_id, float gain_db, uint64_t revision, bool mute = false) {
     mradm::LiveOverrides ov;
     ov.revision = revision;
-    ov.objects.push_back({object_id, gain_db, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""});
+    ov.objects.push_back({object_id, gain_db, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", false, mute});
     return ov;
 }
 
@@ -768,6 +768,22 @@ bool test_monitor_live_overrides() {
         std::this_thread::sleep_for(std::chrono::microseconds(20));
     }
     ok &= check(rev == 2U, "overrides: status reports applied revision 2");
+
+    // Mute is carried as an explicit state and produces exact zeros after buffered audio drains.
+    (*engine)->set_overrides(gain_override("obj0", 12.0F, 3, true));
+    constexpr std::size_t k_phase_c = 30000;
+    ok &= check(drain_exact(**engine, sink, k_phase_c), "overrides: mute phase drains past the ring");
+    const auto& cap_c = sink.captured();
+    ok &= check(cap_c.back() == 0.0F, "overrides: mute reaches the output as exact silence");
+
+    for (int i = 0; i < 100000; ++i) {
+        rev = (*engine)->status().override_revision;
+        if (rev == 3U) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(20));
+    }
+    ok &= check(rev == 3U, "overrides: status reports applied mute revision 3");
     return ok;
 }
 

@@ -73,6 +73,9 @@ std::optional<float> resolve_live_channel_gain(const LiveOverrides& overrides,
     if (pick == nullptr) {
         return std::nullopt;
     }
+    if (pick->mute) {
+        return 0.0F;
+    }
     return std::pow(10.0F, pick->gain_db / 20.0F);
 }
 

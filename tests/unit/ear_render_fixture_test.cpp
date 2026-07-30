@@ -1743,6 +1743,14 @@ bool verify_resolve_live_channel_gain() {
     const auto norm = mradm::render_common::resolve_live_channel_gain(messy, "AO_bed", "M+030");
     ok &=
         check(norm.has_value() && std::fabs(*norm - 0.5F) < 1.0e-3F, "resolver: speaker label match is canonicalized");
+    // Mute is a semantic state, not a very small dB approximation: it resolves to exact zero
+    // and keeps the same per-channel-over-whole-object precedence.
+    mradm::LiveOverrides muted;
+    muted.objects.push_back({"AO_bed", 12.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "M+030", false, true});
+    const auto muted_plus = mradm::render_common::resolve_live_channel_gain(muted, "AO_bed", "M+030");
+    ok &= check(muted_plus.has_value() && *muted_plus == 0.0F, "resolver: mute produces an exact zero multiplier");
+    ok &= check(!mradm::render_common::resolve_live_channel_gain(muted, "AO_bed", "M-030").has_value(),
+                "resolver: per-channel mute does not affect the opposite channel");
     return ok;
 }
 

@@ -352,6 +352,18 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - **约束**：仅对 IAMF raw / IAMF MP4 输出生效；最后一层必须匹配最终输出布局，层级需单调增加，当前开放 `5.1`、`5.1.2`、`5.1.4`、`7.1`、`7.1.4`。
 - **兼容性**：旧调用方不设置该字段时行为不变；高度输出中包含平面层只记录 warning，不阻断用户显式请求。
 
+### v1.29.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+为语义编辑器的实时静音补齐明确状态，与离线 semantic policy 的 `gain.mute` 保持一致。
+
+- **实时静音**：`adm_monitor_override_t` 尾部追加 `mute`；非 0 时将匹配的 AudioObject 或
+  DirectSpeakers `speaker_label` 声道设为静音，`gain_db` 在静音状态下忽略。
+- **旧结构保护**：64 位 ABI 中，v1.23–v1.28 结构在 `head_locked` 后带 4 字节尾部对齐填充。
+  v1.29 先追加 `reserved_v1_29` 占据该填充，再把 `mute` 放到旧 `sizeof` 之后；旧调用方的
+  `struct_size` 因而不会覆盖 `mute`。解析端对缺失字段使用 `mute=0`。
+- **后端语义**：EAR、SAF VBAP、HOA 与 SAF binaural 使用零增益；Apple AUSpatialMixer 将零线性增益
+  映射到其输入增益下限 −120 dB。字段仍按现有 worker block 边界生效，并跨后端热切换保留。
+
 ## opaque 指针与 callback 生命周期
 
 `adm_context_t`、`adm_render_result_t` 是 opaque pointer，调用方不应直接 dereference 或假设大小。生命周期约定：

@@ -35,6 +35,7 @@ struct LiveObjectOverride {
     // Apple monitor backend (per-bus head-orientation compensation) and the SAF binaural renderer
     // (per-source direction rotation) honor it; other backends ignore it.
     bool head_locked{false};
+    bool mute{false}; // true forces this object/channel to exact silence; gain_db is ignored
 };
 
 // The full live-override snapshot handed to a stream. `revision` increments on every

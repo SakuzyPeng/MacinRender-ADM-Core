@@ -606,7 +606,7 @@ class HoaStream final : public IRenderStream {
     void set_overrides(const LiveOverrides& overrides) override {
         std::unordered_map<std::string, float> live;
         for (const auto& ov : overrides.objects) {
-            live[ov.object_id] = std::pow(10.0F, ov.gain_db / 20.0F);
+            live[ov.object_id] = ov.mute ? 0.0F : std::pow(10.0F, ov.gain_db / 20.0F);
         }
         std::ranges::fill(channel_gain_, 1.0F);
         any_live_gain_ = false;

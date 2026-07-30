@@ -57,6 +57,10 @@ JSON + CLI(`--semantic-policy` / `--write-semantic-report`)使用,交互门槛�
 - **gain** —— 纯线性乘(`ev.gain = source.gain × obj.gain`),无机制切换。唯一拐点:`mute` 或
   Apple 上 linear≤0 → −120 dB(静音)。无需阈值提示,只需说明 mute。
 
+  GUI 的有限增益范围为 −60…+12 dB，滑块最左端是独立的 `-inf` 静音档。数值框接受
+  ASCII `-inf`（以及 `mute` 别名），导出时写 `gain.mute=true`，实时监听通过 live override 的
+  `mute` 字段应用同一语义。离开最左端恢复有限增益。
+
 - **diffuse** —— `>0` 接入去相关(声音从"定位清晰"变"弥散包围")。
   EAR=BS.2127(direct + diffuse 总线,FIR 去相关,补偿延迟 255;diffuse=1 → 全去相关无直达);
   HOA=32 向去相关场(延迟 1024);Binaural=单声道延迟去相关(延迟 32)。
