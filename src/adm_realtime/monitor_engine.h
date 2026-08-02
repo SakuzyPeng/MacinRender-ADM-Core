@@ -76,8 +76,9 @@ class MonitorEngine {
 
     void play();
     void pause();
-    // Jump the playhead to `frame`: flushes buffered audio so the new position is heard
-    // promptly (bounded handshake with the audio thread; see seek() impl).
+    // Jump the playhead to `frame`: clears the engine ring immediately. A paused device queue is
+    // kept frozen and flushed immediately before the next play, avoiding an audible device-side
+    // flush transient while paused (bounded handshake with the audio thread; see seek() impl).
     void seek(uint64_t frame);
     // Loop output frames [start_frame, end_frame). end_frame <= start_frame disables looping.
     void set_loop(uint64_t start_frame, uint64_t end_frame);
@@ -119,8 +120,13 @@ class MonitorEngine {
     bool top_up_ring_output_stage();                 // producer side, output-stage: buffer intermediate
     std::size_t pull(std::span<float> out, std::size_t frames);              // consumer side (audio thread)
     std::size_t pull_output_stage(std::span<float> out, std::size_t frames); // consumer side, render at output
-    void drain_meter_ring(); // worker side: feed the LUFS meter from the callback tap
+    void apply_seek_transition(std::span<float> out,
+                               std::size_t frames,
+                               std::size_t produced_frames,
+                               bool active); // callback side: smooth the old→new timeline boundary
+    void drain_meter_ring();                 // worker side: feed the LUFS meter from the callback tap
     [[nodiscard]] ListenerOrientation orientation_snapshot() const; // lock-free read of the live head pose
+    void apply_pending_seek_locked();                               // worker side, under control_mutex_
     void apply_seek_locked(uint64_t frame);                         // worker/control side, under control_mutex_
     void finalize_crossfade();                                      // worker side: snap to the incoming stream
     void rebuild_meter();                                           // (re)create the LUFS meter for the current format
@@ -150,6 +156,15 @@ class MonitorEngine {
     FloatRingBuffer meter_ring_;
     std::vector<float> pull_scratch_;
     std::vector<float> meter_scratch_;
+    // Seek de-click state. seek_generation_ is published by the worker after a successful seek;
+    // every other field is owned exclusively by the device callback. Realtime sinks bridge from
+    // the last emitted sample, while buffered push sinks fade the fresh queue in from silence.
+    std::atomic<uint64_t> seek_generation_{0};
+    uint64_t observed_seek_generation_{0};
+    std::vector<float> last_output_frame_;
+    std::vector<float> seek_transition_anchor_;
+    std::size_t seek_transition_total_frames_{0};
+    std::size_t seek_transition_remaining_frames_{0};
     std::atomic<float> snap_yaw_{0.0F};
     std::atomic<float> snap_pitch_{0.0F};
     std::atomic<float> snap_roll_{0.0F};
@@ -181,6 +196,13 @@ class MonitorEngine {
     // Pending user seek, applied by the worker. Guarded by control_mutex_.
     bool seek_pending_{false};
     uint64_t seek_target_{0};
+    // play() arriving before the worker has consumed a paused seek is held here. The worker first
+    // applies the seek + deferred flush, then publishes playing and resumes the device.
+    bool play_pending_after_seek_{false};
+    // A paused seek must not touch the audible device queue. The worker records the deferred flush;
+    // play() consumes it while the engine is still paused, before either production or the device
+    // clock resumes. Guarded by control_mutex_.
+    bool device_flush_pending_{false};
 
     // Pending live overrides, applied by the worker via stream_->set_overrides(). Guarded
     // by control_mutex_. applied_override_revision_ is published for status() polling.

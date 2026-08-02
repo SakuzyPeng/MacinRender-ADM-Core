@@ -42,6 +42,10 @@ constexpr auto k_idle_nap = std::chrono::milliseconds(1);
 // Linear crossfade length for a backend hot-switch (~43 ms at 48 kHz): long enough to mask
 // the discontinuity between two renderers, short enough to feel immediate.
 constexpr uint64_t k_crossfade_frames = 2048U;
+// A timeline jump can connect two unrelated sample values. Smooth that boundary over 10 ms: short
+// enough that seeking still feels immediate, long enough to move the discontinuity below the
+// click/pop band. This is monitor-output conditioning only; offline renders remain untouched.
+constexpr uint64_t k_seek_transition_ms = 10U;
 } // namespace
 
 MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device, LogSink& logs)
@@ -53,7 +57,10 @@ MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutput
       ring_((device.pull_is_realtime_playback() ? k_ring_frames : k_ring_frames_push) * ring_channels_),
       scratch_(static_cast<std::size_t>(k_chunk_frames) * ring_channels_, 0.0F),
       scratch_b_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F),
-      meter_ring_(output_stage_ ? static_cast<std::size_t>(k_ring_frames) * channels_ : 0U) {
+      meter_ring_(output_stage_ ? static_cast<std::size_t>(k_ring_frames) * channels_ : 0U),
+      last_output_frame_(channels_, 0.0F), seek_transition_anchor_(channels_, 0.0F),
+      seek_transition_total_frames_(
+          std::max<std::size_t>(1U, (static_cast<std::size_t>(sample_rate_) * k_seek_transition_ms) / 1000U)) {
     if (output_stage_) {
         // pull_scratch_ holds one callback's worth of intermediate before render_output; sized for a
         // generous max block (the callback loops if it ever asks for more). meter_scratch_ is the
@@ -180,6 +187,27 @@ void MonitorEngine::feed_meter(const float* data, std::size_t frames) {
 }
 
 void MonitorEngine::play() {
+    bool flush_before_play = false;
+    {
+        const std::lock_guard<std::mutex> lock(control_mutex_);
+        if (state_.load(std::memory_order_seq_cst) != MonitorState::playing && seek_pending_) {
+            // Keep the engine/device paused until the worker has actually landed the queued seek.
+            // Otherwise a rapid seek→play can briefly resume the stale device queue before the
+            // worker gets to apply (and flush) the new position.
+            play_pending_after_seek_ = true;
+            wake_.notify_all();
+            return;
+        }
+        flush_before_play = device_flush_pending_;
+        device_flush_pending_ = false;
+    }
+    // Keep the engine paused while a deferred device queue is discarded. In particular,
+    // AVSampleBufferAudioRenderer must not flush its system queue at seek time while paused: that
+    // operation can itself reach the output as a click/pop. Once this returns, neither the worker
+    // nor the device has resumed yet, so no old-position audio can escape.
+    if (flush_before_play) {
+        device_.flush();
+    }
     {
         const std::lock_guard<std::mutex> lock(control_mutex_);
         state_.store(MonitorState::playing, std::memory_order_seq_cst);
@@ -191,6 +219,7 @@ void MonitorEngine::play() {
 void MonitorEngine::pause() {
     {
         const std::lock_guard<std::mutex> lock(control_mutex_);
+        play_pending_after_seek_ = false;
         state_.store(MonitorState::paused, std::memory_order_seq_cst);
     }
     wake_.notify_all();
@@ -278,14 +307,34 @@ void MonitorEngine::set_loop(uint64_t start_frame, uint64_t end_frame) {
     loop_end_.store(end_frame, std::memory_order_relaxed);
 }
 
+void MonitorEngine::apply_pending_seek_locked() {
+    if (!seek_pending_) {
+        return;
+    }
+    apply_seek_locked(seek_target_);
+    seek_pending_ = false;
+    if (!play_pending_after_seek_) {
+        return;
+    }
+
+    // apply_seek_locked deliberately deferred the device flush because state_ is still paused.
+    // Consume it before publishing playing, then resume the device in the same control order.
+    if (device_flush_pending_) {
+        device_.flush();
+        device_flush_pending_ = false;
+    }
+    state_.store(MonitorState::playing, std::memory_order_seq_cst);
+    play_pending_after_seek_ = false;
+    // Keep this ordered with pause(): once playing is published, resume the device before releasing
+    // control_mutex_, so a following pause cannot be overtaken by a late worker-side resume.
+    device_.resume();
+}
+
 void MonitorEngine::worker_loop() {
     while (!quit_.load(std::memory_order_acquire)) {
         {
             std::unique_lock<std::mutex> lock(control_mutex_);
-            if (seek_pending_) {
-                apply_seek_locked(seek_target_);
-                seek_pending_ = false;
-            }
+            apply_pending_seek_locked();
             if (overrides_pending_) {
                 // Hand the snapshot to the stream (gain takes effect on the next block).
                 // Cheap; safe to do under the lock since it only updates the stream's
@@ -554,6 +603,8 @@ std::size_t MonitorEngine::pull(std::span<float> out, std::size_t frames) {
         produced_frames = got / channels_;
     }
 
+    apply_seek_transition(out, frames, produced_frames, active);
+
     // Per-channel peak / RMS over the block (silence included), for the UI meters.
     const std::size_t meter_ch = std::min<std::size_t>(channels_, k_max_level_channels);
     for (std::size_t c = 0; c < meter_ch; ++c) {
@@ -571,6 +622,62 @@ std::size_t MonitorEngine::pull(std::span<float> out, std::size_t frames) {
 
     in_pop_.store(false, std::memory_order_seq_cst);
     return produced_frames;
+}
+
+void MonitorEngine::apply_seek_transition(std::span<float> out,
+                                          std::size_t frames,
+                                          std::size_t produced_frames,
+                                          bool active) {
+    if (frames == 0 || channels_ == 0) {
+        return;
+    }
+
+    const std::size_t real_frames = std::min(frames, produced_frames);
+    if (!active) {
+        // Paused/flushing callback output is exact silence. Keep the generation unobserved so the
+        // first real post-seek samples still receive a fade-in when playback resumes.
+        std::ranges::fill(last_output_frame_, 0.0F);
+        seek_transition_remaining_frames_ = 0;
+        return;
+    }
+
+    const uint64_t generation = seek_generation_.load(std::memory_order_acquire);
+    if (real_frames > 0 && generation != observed_seek_generation_) {
+        observed_seek_generation_ = generation;
+        seek_transition_remaining_frames_ = seek_transition_total_frames_;
+        if (pull_is_realtime_playback_) {
+            seek_transition_anchor_ = last_output_frame_;
+        } else {
+            // A push sink discards/mutes its old system queue on seek, so its new queue starts from
+            // silence rather than from the last frame that happened to be enqueued far ahead.
+            std::ranges::fill(seek_transition_anchor_, 0.0F);
+        }
+    }
+
+    for (std::size_t frame = 0; frame < real_frames && seek_transition_remaining_frames_ > 0; ++frame) {
+        const std::size_t elapsed = seek_transition_total_frames_ - seek_transition_remaining_frames_;
+        const float mix = seek_transition_total_frames_ <= 1
+                              ? 1.0F
+                              : static_cast<float>(elapsed) / static_cast<float>(seek_transition_total_frames_ - 1U);
+        for (std::size_t channel = 0; channel < channels_; ++channel) {
+            const std::size_t index = (frame * channels_) + channel;
+            out[index] = (seek_transition_anchor_[channel] * (1.0F - mix)) + (out[index] * mix);
+        }
+        --seek_transition_remaining_frames_;
+    }
+
+    // Realtime devices play the silence-padded tail of a short read; push devices enqueue only the
+    // produced portion. Remember the last sample that actually reaches each kind of sink.
+    const std::size_t emitted_frames = pull_is_realtime_playback_ ? frames : real_frames;
+    if (emitted_frames > 0) {
+        const std::size_t last = (emitted_frames - 1U) * channels_;
+        std::copy_n(out.data() + last, channels_, last_output_frame_.data());
+    }
+    if (pull_is_realtime_playback_ && real_frames < frames) {
+        // The device emitted a zero-padded underrun tail, so a partially completed bridge can no
+        // longer continue from its old anchor without creating a second discontinuity.
+        seek_transition_remaining_frames_ = 0;
+    }
 }
 
 std::size_t MonitorEngine::pull_output_stage(std::span<float> out, std::size_t frames) {
@@ -662,15 +769,24 @@ void MonitorEngine::apply_seek_locked(uint64_t frame) {
         // Seeking re-arms production: a position before EOF has more to render.
         ended_.store(false, std::memory_order_relaxed);
         failed_.store(false, std::memory_order_relaxed);
+        seek_generation_.fetch_add(1U, std::memory_order_release);
     } else {
         // Don't fake a repositioned playhead: the stream is still wherever it was. Surface
         // the failure instead of silently claiming the seek landed.
         logs_.log(LogLevel::error, "monitor", seek_res.error().message);
         failed_.store(true, std::memory_order_relaxed);
     }
-    // Drop the output device's stale pre-seek buffer (the buffered sink's staging + system queue)
-    // so the new position doesn't splice onto old-position audio. No-op for the miniaudio sink.
-    device_.flush();
+    // A running device must drop stale pre-seek output now. While paused, keep its frozen queue
+    // untouched: a destructive system-queue flush can be audible even with the playback clock at
+    // zero. play() discards that queue before it changes state or resumes the clock, so stale audio
+    // still cannot splice onto the new position. Realtime callback sinks implement flush() as a
+    // no-op, but follow the same state contract.
+    if (state_.load(std::memory_order_seq_cst) == MonitorState::playing) {
+        device_.flush();
+        device_flush_pending_ = false;
+    } else {
+        device_flush_pending_ = true;
+    }
     // The playhead jumped: restart loudness integration from the new position (momentary /
     // short-term windows would otherwise span the discontinuity).
     rebuild_meter();

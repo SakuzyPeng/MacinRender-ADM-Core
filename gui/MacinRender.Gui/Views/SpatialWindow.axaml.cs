@@ -3,8 +3,8 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using MacinRender.Gui.I18n;
 using MacinRender.Gui.ViewModels;
@@ -18,6 +18,7 @@ public partial class SpatialWindow : Window
     private const double Deg2Rad = Math.PI / 180.0;
     private readonly SpatialSceneControl? _viewport;
     private SemanticEditorViewModel? _wiredVm;
+    private bool _seekPointerActive;
 
     public SpatialWindow()
     {
@@ -25,12 +26,16 @@ public partial class SpatialWindow : Window
         UpdateTitle();
         Localizer.Instance.PropertyChanged += OnLocalizerChanged;
 
-        // scrub:与主视图一致,Thumb 拖动起止 → BeginScrub/EndScrub(拖动中只刷新画面,松手才 seek)。
+        // scrub:与主视图一致，覆盖 Thumb 与轨道拖动两条 Slider 指针路径；一次手势只在结束时 seek。
         var seek = this.FindControl<Slider>("SeekSlider");
         if (seek is not null)
         {
-            seek.AddHandler(Thumb.DragStartedEvent, OnSeekDragStarted);
-            seek.AddHandler(Thumb.DragCompletedEvent, OnSeekDragCompleted);
+            seek.AddHandler(InputElement.PointerPressedEvent, OnSeekPointerPressed,
+                RoutingStrategies.Tunnel, handledEventsToo: true);
+            seek.AddHandler(InputElement.PointerReleasedEvent, OnSeekPointerReleased,
+                RoutingStrategies.Tunnel, handledEventsToo: true);
+            seek.AddHandler(InputElement.PointerCaptureLostEvent, OnSeekPointerCaptureLost,
+                RoutingStrategies.Bubble, handledEventsToo: true);
         }
 
         // 头追踪:视口外抛手势增量 / recenter → VM;VM 解析出的头朝向(度)→ 转弧度灌回视口(视觉)。
@@ -101,16 +106,27 @@ public partial class SpatialWindow : Window
 
     private void UpdateTitle() => Title = Localizer.Instance["SemSpatialTitle"];
 
-    private void OnSeekDragStarted(object? sender, VectorEventArgs e)
+    private void OnSeekPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (DataContext is SemanticEditorViewModel vm)
+        if (sender is InputElement seek && e.GetCurrentPoint(seek).Properties.IsLeftButtonPressed &&
+            DataContext is SemanticEditorViewModel vm)
         {
+            _seekPointerActive = true;
             vm.BeginScrub();
         }
     }
 
-    private void OnSeekDragCompleted(object? sender, VectorEventArgs e)
+    private void OnSeekPointerReleased(object? sender, PointerReleasedEventArgs e) => CompleteSeekPointerGesture();
+
+    private void OnSeekPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e) => CompleteSeekPointerGesture();
+
+    private void CompleteSeekPointerGesture()
     {
+        if (!_seekPointerActive)
+        {
+            return;
+        }
+        _seekPointerActive = false;
         if (DataContext is SemanticEditorViewModel vm)
         {
             vm.EndScrub();

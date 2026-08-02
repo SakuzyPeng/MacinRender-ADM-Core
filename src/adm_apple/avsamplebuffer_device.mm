@@ -87,6 +87,7 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         }
 
         renderer_ = [[AVSampleBufferAudioRenderer alloc] init];
+        renderer_.muted = NO;
         // Declare multichannel content as spatializable so the system spatializes (and head-
         // tracks) it rather than just down-mixing. (Default already includes multichannel, but
         // setting it explicitly is the documented, future-proof contract.)
@@ -208,6 +209,9 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         }
         stop_media_request();
         if (renderer_ != nil) {
+            // Queue destruction can otherwise leak a short device transient even while the media
+            // clock is stopped. Keep the renderer muted until a complete post-seek prefill is ready.
+            renderer_.muted = YES;
             [renderer_ flush];
         }
         staged_frames_ = 0;
@@ -290,6 +294,9 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
             if (queued_frames() >= k_prefill_frames) {
                 playing_started_ = true;
                 stalled_ = false;
+                // The renderer has a full, contiguous post-seek queue. Unmute before starting its
+                // clock so the first audible frame comes from the new timeline, never from flush.
+                renderer_.muted = NO;
                 [synchronizer_ setRate:(user_paused_ ? 0.0F : 1.0F) time:kCMTimeZero];
             }
             return;

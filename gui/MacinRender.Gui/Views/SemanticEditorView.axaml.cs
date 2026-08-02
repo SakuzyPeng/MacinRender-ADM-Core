@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -20,13 +19,18 @@ public partial class SemanticEditorView : UserControl
     public SemanticEditorView()
     {
         InitializeComponent();
-        // 进度条 Thumb 拖动起止:Thumb 的 DragStarted/DragCompleted 路由事件冒泡到 Slider 上接住。
-        // 本视图用手写 InitializeComponent(AvaloniaXamlLoader.Load),命名字段不自动赋值 → 用 FindControl 取。
+        // 统一拦截 Slider 的指针按下/松开，而不是只监听 Thumb.Drag*。点击轨道后拖动由 Slider
+        // 自己的 Track 路径处理，不会发 Thumb 事件；若漏掉它，ValueChanged 会在每次移动时触发 native seek。
+        // handledEventsToo=true 用于接住 Thumb/Track 已标记 handled 的指针事件。
         var seek = this.FindControl<Slider>("SeekSlider");
         if (seek is not null)
         {
-            seek.AddHandler(Thumb.DragStartedEvent, OnSeekDragStarted);
-            seek.AddHandler(Thumb.DragCompletedEvent, OnSeekDragCompleted);
+            seek.AddHandler(InputElement.PointerPressedEvent, OnSeekPointerPressed,
+                RoutingStrategies.Tunnel, handledEventsToo: true);
+            seek.AddHandler(InputElement.PointerReleasedEvent, OnSeekPointerReleased,
+                RoutingStrategies.Tunnel, handledEventsToo: true);
+            seek.AddHandler(InputElement.PointerCaptureLostEvent, OnSeekPointerCaptureLost,
+                RoutingStrategies.Bubble, handledEventsToo: true);
         }
 
         // 多声道电平表窗口随 VM 的 IsMultichannelMeter 自动开/关(DataContext 由父级注入)。
@@ -47,6 +51,7 @@ public partial class SemanticEditorView : UserControl
     // 计时器被取消 → 不会误触联动切换;只有真正按住不放达阈值才切换。
     private readonly DispatcherTimer _holdTimer;
     private string? _holdAxis;
+    private bool _seekPointerActive;
 
     private void OnAxisPointerPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -88,18 +93,28 @@ public partial class SemanticEditorView : UserControl
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
-    // 开始拖动 thumb:进入 scrub(引擎照旧从原位置播,不被刷屏 seek 打断)。
-    private void OnSeekDragStarted(object? sender, VectorEventArgs e)
+    // 任意进度条左键手势都进入 scrub：拖动期间只更新画面，native seek 留到结束时执行一次。
+    private void OnSeekPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (DataContext is SemanticEditorViewModel vm)
+        if (sender is InputElement seek && e.GetCurrentPoint(seek).Properties.IsLeftButtonPressed &&
+            DataContext is SemanticEditorViewModel vm)
         {
+            _seekPointerActive = true;
             vm.BeginScrub();
         }
     }
 
-    // 松开 thumb:退出 scrub 并做一次干净 seek 跳到目标位置。
-    private void OnSeekDragCompleted(object? sender, VectorEventArgs e)
+    private void OnSeekPointerReleased(object? sender, PointerReleasedEventArgs e) => CompleteSeekPointerGesture();
+
+    private void OnSeekPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e) => CompleteSeekPointerGesture();
+
+    private void CompleteSeekPointerGesture()
     {
+        if (!_seekPointerActive)
+        {
+            return;
+        }
+        _seekPointerActive = false;
         if (DataContext is SemanticEditorViewModel vm)
         {
             vm.EndScrub();

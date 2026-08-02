@@ -1065,12 +1065,17 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         _monitor.Seek(value); // 单击轨道跳转:一次性 ValueChanged → 一次干净 seek
     }
 
-    // 进度条拖动起止(由 View 监听 Thumb 拖动事件驱动):拖动中引擎照旧从原位置播放、不被刷屏式
-    // seek 打断(避免碎片拼接的嘈杂);松手时只做一次干净 seek 跳到目标。
+    // 进度条指针手势由 View 统一驱动：拖动中引擎照旧从原位置播放、不被刷屏式 seek 打断；
+    // 松手时只做一次干净 seek 跳到目标。
     public void BeginScrub() => _scrubbing = true;
 
     public void EndScrub()
     {
+        if (!_scrubbing)
+        {
+            return;
+        }
+
         _scrubbing = false;
         if (CanSeek)
         {

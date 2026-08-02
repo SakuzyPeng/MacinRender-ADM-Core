@@ -335,6 +335,8 @@ bool test_stream_factory() {
 // MonitorEngine's async worker → ring → pull path can be driven deterministically.
 class ManualSink final : public mradm::realtime::IAudioOutputDevice {
   public:
+    explicit ManualSink(bool realtime_playback = true) : realtime_playback_(realtime_playback) {}
+
     mradm::Result<void> start(uint32_t channels, uint32_t sample_rate, PullFn pull) override {
         channels_ = channels;
         rate_ = sample_rate;
@@ -343,6 +345,9 @@ class ManualSink final : public mradm::realtime::IAudioOutputDevice {
     }
     void stop() override { pull_ = nullptr; }
     [[nodiscard]] uint32_t actual_sample_rate() const override { return rate_; }
+    [[nodiscard]] bool pull_is_realtime_playback() const override { return realtime_playback_; }
+    void flush() override { flushes_.fetch_add(1, std::memory_order_relaxed); }
+    void resume() override { resumes_.fetch_add(1, std::memory_order_relaxed); }
 
     void pump(std::size_t frames) {
         std::vector<float> buf(frames * channels_, 0.0F);
@@ -352,12 +357,17 @@ class ManualSink final : public mradm::realtime::IAudioOutputDevice {
 
     [[nodiscard]] uint32_t channels() const { return channels_; }
     [[nodiscard]] const std::vector<float>& captured() const { return captured_; }
+    [[nodiscard]] int flushes() const { return flushes_.load(std::memory_order_relaxed); }
+    [[nodiscard]] int resumes() const { return resumes_.load(std::memory_order_relaxed); }
 
   private:
+    bool realtime_playback_{true};
     PullFn pull_;
     uint32_t channels_{0};
     uint32_t rate_{0};
     std::vector<float> captured_;
+    std::atomic<int> flushes_{0};
+    std::atomic<int> resumes_{0};
 };
 
 // Pull exactly `total` frames without out-running the producer: wait until the worker has
@@ -503,18 +513,113 @@ bool test_monitor_seek() {
     }
     ok &= check(applied, "seek applied (playhead reset to target)");
 
+    constexpr std::size_t k_transition_frames = 480; // 10 ms @ 48 kHz
+    constexpr std::size_t k_post_frames = k_transition_frames + 20U;
     const std::size_t before = sink.captured().size();
-    ok &= check(drain_exact(**engine, sink, 10), "seek: drained post-seek frames");
+    const float old_left = sink.captured()[before - 2U];
+    const float old_right = sink.captured()[before - 1U];
+    ok &= check(drain_exact(**engine, sink, k_post_frames), "seek: drained post-seek transition");
     const auto& cap = sink.captured();
-    bool repositioned = true;
-    for (std::size_t f = 0; f < 10 && repositioned; ++f) {
+    ok &= check(near(cap[before], old_left) && near(cap[before + 1U], old_right),
+                "seek: first post-seek frame is continuous with the emitted pre-seek frame");
+
+    float max_step = 0.0F;
+    for (std::size_t f = 0; f < k_post_frames; ++f) {
         const std::size_t idx = before + (f * 2U);
-        if (!near(cap[idx + 0U], PatternStream::sample(k_target + f, 0U)) ||
-            !near(cap[idx + 1U], PatternStream::sample(k_target + f, 1U))) {
-            repositioned = false;
-        }
+        const std::size_t prev = f == 0 ? before - 2U : idx - 2U;
+        max_step = std::max(max_step, std::fabs(cap[idx] - cap[prev]));
+        max_step = std::max(max_step, std::fabs(cap[idx + 1U] - cap[prev + 1U]));
     }
-    ok &= check(repositioned, "post-seek output starts at the sought position (ring flushed)");
+    ok &= check(max_step < 0.05F, "seek: output bridge removes the multi-unit sample discontinuity");
+
+    bool settled = true;
+    for (std::size_t f = k_transition_frames; f < k_post_frames && settled; ++f) {
+        const std::size_t idx = before + (f * 2U);
+        settled = near(cap[idx], PatternStream::sample(k_target + f, 0U)) &&
+                  near(cap[idx + 1U], PatternStream::sample(k_target + f, 1U));
+    }
+    ok &= check(settled, "seek: transition settles on the exact sought timeline");
+    return ok;
+}
+
+// A paused seek must be silent all the way down to the device boundary. In particular, buffered
+// sinks can make a destructive queue flush audible even with their playback clock stopped, so the
+// engine defers that operation until immediately before the next play/resume.
+bool test_monitor_paused_seek_defers_device_flush() {
+    bool ok = true;
+    PatternStreamFactory factory;
+    ManualSink sink{false}; // buffered push sink, matching the macOS system-spatial device contract
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+    if (!check(engine.has_value(), "paused seek: engine creates")) {
+        return false;
+    }
+    (*engine)->play();
+    ok &= check(drain_exact(**engine, sink, 300), "paused seek: drained pre-pause frames");
+    (*engine)->pause();
+
+    constexpr uint64_t k_target = 7000;
+    (*engine)->seek(k_target);
+    bool applied = false;
+    for (int spin = 0; spin < 200000; ++spin) {
+        if ((*engine)->status().playhead_frames == k_target) {
+            applied = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(20));
+    }
+    ok &= check(applied, "paused seek: worker lands at target");
+    ok &= check(sink.flushes() == 0, "paused seek: device queue is not flushed while paused");
+
+    const std::size_t silence_start = sink.captured().size();
+    sink.pump(64);
+    const auto& paused_capture = sink.captured();
+    const bool silent = std::all_of(paused_capture.begin() + static_cast<std::ptrdiff_t>(silence_start),
+                                    paused_capture.end(),
+                                    [](float sample) { return sample == 0.0F; });
+    ok &= check(silent, "paused seek: device pull remains exact silence");
+    ok &= check((*engine)->status().playhead_frames == k_target, "paused seek: silent pulls do not advance playhead");
+
+    const int resumes_before = sink.resumes();
+    const std::size_t resumed_at = sink.captured().size();
+    (*engine)->play();
+    ok &= check(sink.flushes() == 1, "paused seek: deferred device flush runs before play");
+    ok &= check(sink.resumes() == resumes_before + 1, "paused seek: device resumes after deferred flush");
+    constexpr std::size_t k_transition_frames = 480; // 10 ms @ 48 kHz
+    ok &= check(drain_exact(**engine, sink, k_transition_frames + 20U), "paused seek: post-resume transition drains");
+    const auto& resumed_capture = sink.captured();
+    ok &= check(resumed_capture[resumed_at] == 0.0F && resumed_capture[resumed_at + 1U] == 0.0F,
+                "paused seek: resumed output fades in from exact silence");
+    const std::size_t settled_index = resumed_at + (k_transition_frames * 2U);
+    ok &=
+        check(near(resumed_capture[settled_index], PatternStream::sample(k_target + k_transition_frames, 0U)) &&
+                  near(resumed_capture[settled_index + 1U], PatternStream::sample(k_target + k_transition_frames, 1U)),
+              "paused seek: fade-in settles on the exact sought timeline");
+
+    // A quick seek→play gesture may arrive before the worker consumes the seek. Playback must stay
+    // gated until the target is applied and the deferred queue flush has completed.
+    (*engine)->pause();
+    constexpr uint64_t k_quick_target = 9000;
+    const int quick_flushes_before = sink.flushes();
+    const int quick_resumes_before = sink.resumes();
+    (*engine)->seek(k_quick_target);
+    (*engine)->play();
+    bool quick_applied_and_playing = false;
+    for (int spin = 0; spin < 200000; ++spin) {
+        const auto status = (*engine)->status();
+        if (status.playhead_frames == k_quick_target && status.state == mradm::realtime::MonitorState::playing) {
+            quick_applied_and_playing = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(20));
+    }
+    ok &= check(quick_applied_and_playing, "paused seek: rapid seek-to-play waits for the target");
+    ok &= check(sink.flushes() == quick_flushes_before + 1,
+                "paused seek: rapid seek-to-play flushes the stale queue once");
+    ok &= check(sink.resumes() == quick_resumes_before + 1, "paused seek: rapid seek-to-play resumes the device once");
     return ok;
 }
 
@@ -1160,6 +1265,7 @@ int main() {
     ok &= test_monitor_output_stage_loop();
     ok &= test_monitor_pause();
     ok &= test_monitor_seek();
+    ok &= test_monitor_paused_seek_defers_device_flush();
     ok &= test_monitor_eof();
     ok &= test_monitor_malformed_stream();
     ok &= test_monitor_worker_logs_errors();
