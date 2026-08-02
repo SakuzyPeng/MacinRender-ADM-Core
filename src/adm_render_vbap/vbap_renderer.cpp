@@ -619,21 +619,20 @@ class VbapStream final : public IRenderStream {
     }
 
     void set_overrides(const LiveOverrides& overrides) override {
-        std::ranges::fill(channel_gain_, 1.0F);
-        any_live_gain_ = false;
+        std::ranges::fill(live_gain_targets_, 1.0F);
         // The override is projected object → input channel (each channel scaled by its owning
         // object's gain). A per-channel override (DirectSpeakers speaker_label) targets one bed
         // channel; an empty-label override scales every channel of the object (whole-object).
         for (const auto& cg : prepared_.gain_matrix) {
-            if (cg.input_channel >= channel_gain_.size()) {
+            if (cg.input_channel >= live_gain_targets_.size()) {
                 continue;
             }
             if (const auto g =
                     render_common::resolve_live_channel_gain(overrides, cg.object_id, cg.speaker_label_key)) {
-                channel_gain_[cg.input_channel] = *g;
-                any_live_gain_ = true;
+                live_gain_targets_[cg.input_channel] = *g;
             }
         }
+        live_gain_smoother_.set_targets(live_gain_targets_);
     }
 
     [[nodiscard]] uint32_t out_channels() const override { return num_out_ch_; }
@@ -650,20 +649,13 @@ class VbapStream final : public IRenderStream {
           default_interp_(static_cast<uint64_t>(plan.scene.info.sample_rate) * plan.default_interp_ms / 1000U),
           blk_idx_(prepared.gain_matrix.size(), 0), in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) *
                                                               std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
-          channel_gain_(plan.scene.info.num_channels, 1.0F) {}
+          live_gain_targets_(plan.scene.info.num_channels, 1.0F),
+          live_gain_smoother_(plan.scene.info.num_channels, plan.scene.info.sample_rate) {}
 
     // Pre-scale the matching input channels by their object's live gain (linear, so this
     // equals scaling the object gain; the VBAP mix downstream is linear).
     void apply_live_gain(uint64_t frames_now) {
-        if (!any_live_gain_) {
-            return;
-        }
-        for (std::size_t f = 0; f < frames_now; ++f) {
-            float* frame = in_block_.data() + (f * num_in_ch_);
-            for (uint16_t c = 0; c < num_in_ch_; ++c) {
-                frame[c] *= channel_gain_[c];
-            }
-        }
+        live_gain_smoother_.apply(in_block_.data(), static_cast<std::size_t>(frames_now));
     }
 
     void render_block() {
@@ -690,8 +682,8 @@ class VbapStream final : public IRenderStream {
     uint64_t default_interp_;
     std::vector<std::size_t> blk_idx_; // per-channel monotonic block cursor
     std::vector<float> in_block_;
-    std::vector<float> channel_gain_; // per-input-channel live gain multiplier (1.0 = none)
-    bool any_live_gain_{false};
+    std::vector<float> live_gain_targets_; // per-input-channel target multiplier (1.0 = neutral)
+    render_common::InterleavedLiveGainSmoother live_gain_smoother_;
     std::vector<float> fifo_;
     std::size_t fifo_read_{0};
     uint64_t frames_done_{0};

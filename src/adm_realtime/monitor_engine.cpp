@@ -336,10 +336,9 @@ void MonitorEngine::worker_loop() {
             std::unique_lock<std::mutex> lock(control_mutex_);
             apply_pending_seek_locked();
             if (overrides_pending_) {
-                // Hand the snapshot to the stream (gain takes effect on the next block).
-                // Cheap; safe to do under the lock since it only updates the stream's
-                // override table, not its DSP. Apply even while paused so the revision
-                // reflects reality and a subsequent resume already has the right gains.
+                // Hand the newest target snapshot to the stream. Streams publish gain targets and
+                // queue topology work here, then perform sample ramps / state crossfades in their
+                // render path. Apply while paused so resume already carries the current targets.
                 // During a crossfade both streams are audible, so apply to both. Remember
                 // the snapshot so a later hot-switch can re-apply it to the incoming stream.
                 stream_->set_overrides(pending_overrides_);

@@ -608,18 +608,18 @@ class HoaStream final : public IRenderStream {
         for (const auto& ov : overrides.objects) {
             live[ov.object_id] = ov.mute ? 0.0F : std::pow(10.0F, ov.gain_db / 20.0F);
         }
-        std::ranges::fill(channel_gain_, 1.0F);
-        any_live_gain_ = false;
+        std::ranges::fill(live_gain_targets_, 1.0F);
         // Semantic boundary: the override is projected object → input channel (each channel
         // scaled by its owning object's gain). ADM's gain matrix is one object per input
         // channel, so this is exact today; if independently-overridable objects ever shared
         // one input channel they would scale together (last writer wins) — revisit then.
         for (const auto& cg : prepared_.gain_matrix) {
-            if (const auto it = live.find(cg.object_id); it != live.end() && cg.input_channel < channel_gain_.size()) {
-                channel_gain_[cg.input_channel] = it->second;
-                any_live_gain_ = true;
+            if (const auto it = live.find(cg.object_id);
+                it != live.end() && cg.input_channel < live_gain_targets_.size()) {
+                live_gain_targets_[cg.input_channel] = it->second;
             }
         }
+        live_gain_smoother_.set_targets(live_gain_targets_);
     }
 
     [[nodiscard]] uint32_t out_channels() const override { return k_hoa3_channels_u16; }
@@ -636,18 +636,11 @@ class HoaStream final : public IRenderStream {
           diffuse_states_(prepared.gain_matrix.size()),
           in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) *
                     std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
-          channel_gain_(plan.scene.info.num_channels, 1.0F) {}
+          live_gain_targets_(plan.scene.info.num_channels, 1.0F),
+          live_gain_smoother_(plan.scene.info.num_channels, plan.scene.info.sample_rate) {}
 
     void apply_live_gain(uint64_t frames_now) {
-        if (!any_live_gain_) {
-            return;
-        }
-        for (std::size_t f = 0; f < frames_now; ++f) {
-            float* frame = in_block_.data() + (f * num_in_ch_);
-            for (uint16_t c = 0; c < num_in_ch_; ++c) {
-                frame[c] *= channel_gain_[c];
-            }
-        }
+        live_gain_smoother_.apply(in_block_.data(), static_cast<std::size_t>(frames_now));
     }
 
     void render_block() {
@@ -678,8 +671,8 @@ class HoaStream final : public IRenderStream {
     uint64_t default_interp_;
     std::vector<std::array<DiffuseState, k_diffuse_slots>> diffuse_states_;
     std::vector<float> in_block_;
-    std::vector<float> channel_gain_; // per-input-channel live gain multiplier (1.0 = none)
-    bool any_live_gain_{false};
+    std::vector<float> live_gain_targets_; // per-input-channel target multiplier (1.0 = neutral)
+    render_common::InterleavedLiveGainSmoother live_gain_smoother_;
     std::vector<float> fifo_;
     std::size_t fifo_read_{0};
     uint64_t frames_done_{0};

@@ -83,10 +83,9 @@ class MonitorSession {
     [[nodiscard]] Result<void> seek_seconds(double seconds);
     // Loop [start, end). end <= start disables looping.
     void set_loop_seconds(double start_seconds, double end_seconds);
-    // Apply live per-object overrides. gain is immediate (next block); the
-    // diffuse/extent/divergence scales take effect on the binaural backend via a cheap
-    // re-prepare, and are accepted-but-ignored by backends not yet wired up (e.g. Apple,
-    // gain only). The applied revision is reported via status().override_revision.
+    // Apply live per-object overrides. Gain targets use a short sample-domain ramp. SAF binaural
+    // coalesces diffuse/extent/divergence targets and crossfades rebuilt source-graph state. The
+    // applied revision is reported via status().override_revision.
     void set_overrides(const LiveOverrides& overrides);
 
     // Set the live listener head orientation (head tracking / manual free-look). The Apple binaural

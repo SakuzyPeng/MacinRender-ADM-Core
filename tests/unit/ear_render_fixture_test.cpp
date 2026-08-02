@@ -1823,6 +1823,29 @@ bool verify_ear_stream_per_channel_override() {
     return ok;
 }
 
+bool verify_live_gain_ramp_is_continuous_and_retargetable() {
+    // 1 kHz × 4 ms gives four samples: old, 1/3, 2/3, target. An override published before
+    // rendering starts is intentionally immediate; later edits ramp from the next sample value.
+    mradm::render_common::LiveGainRamp ramp(1000U, 4U);
+    ramp.set_target(0.5F);
+    bool ok = check(std::fabs(ramp.next() - 0.5F) < 1.0e-6F, "gain-ramp: initial override is immediate");
+
+    ramp.set_target(1.0F);
+    const std::array<float, 4> rising{ramp.next(), ramp.next(), ramp.next(), ramp.next()};
+    ok &= check(std::fabs(rising[0] - 0.5F) < 1.0e-6F, "gain-ramp: edit starts at the old value");
+    ok &= check(std::fabs(rising[1] - (2.0F / 3.0F)) < 1.0e-6F, "gain-ramp: first interpolation sample");
+    ok &= check(std::fabs(rising[2] - (5.0F / 6.0F)) < 1.0e-6F, "gain-ramp: second interpolation sample");
+    ok &= check(std::fabs(rising[3] - 1.0F) < 1.0e-6F, "gain-ramp: reaches the target exactly");
+
+    ramp.set_target(0.0F);
+    (void) ramp.next(); // 1.0
+    (void) ramp.next(); // 2/3; current for the next sample is 1/3
+    ramp.set_target(0.5F);
+    ok &= check(std::fabs(ramp.next() - (1.0F / 3.0F)) < 1.0e-6F,
+                "gain-ramp: retarget keeps the in-flight value continuous");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1850,6 +1873,7 @@ int main() {
     ok &= verify_ear_stream_gain_override();
     ok &= verify_resolve_live_channel_gain();
     ok &= verify_ear_stream_per_channel_override();
+    ok &= verify_live_gain_ramp_is_continuous_and_retargetable();
 
     if (ok) {
         std::cout << "ear_render fixture test passed\n";

@@ -97,19 +97,17 @@ AUSpatialMixer 本就是**实时 AudioUnit**，参数本就该活改。Apple 后
 
 输入 PCM 也走 worker：`bw64` reader 在 worker 线程按 `seek` + `read` 供数据；长素材可流式读，无需整轨入内存（循环 region 命中的范围可缓存）。
 
-## 5. 设计岔路：四个维度不是同一种「实时」
+## 5. 四个维度的实时更新路径
 
 这是动手前必须共识的一点：
 
-- **gain（对象级 + 块级）**：binaural 里就是 `src.gain` / `block_gain` 一个标量乘（卷积时乘），Apple 里是 `kSpatialMixerParam_Gain` 每 bus 一个参数。**拖滑块下一块即生效，是真·实时**，改动小。前提是新的 prepared/stream 描述要保留 `object_id → source/bus` 映射；当前离线 prepared 只保留渲染所需源/总线，不够 GUI 覆盖层按对象寻址。
+- **gain（对象级 + 块级）**：prepared/stream 保留 `object_id → source/bus` 映射。worker 在块边界发布目标值，渲染后端从当前值生成 20 ms 采样级线性斜坡。连续拖动会从斜坡的当前值重新定向，因此增益轨迹保持连续。Apple 在每条 AU 输入总线上生成采样包络；SAF binaural 在语义源聚合前使用共享包络；EAR / VBAP / HOA 在空间混合前按输入声道应用包络。
 - **diffuse / extent / divergence**：这三个在 `prepare()` / `build_sources` 阶段**改变了源的拓扑**——
   - diffuse 把一个源拆成 direct + diffuse 两条，`sqrt(1-d)` / `sqrt(d)` 缩放（`binaural_renderer.cpp:1087-1089`）；
   - extent 展成 17 点 disk cloud（`expand_binaural_extent`，`:994`）；
   - divergence 展成 3 槽（`k_binaural_divergence_slots`）。
 
-  改它们 ≠ 改一个运行时标量，而是要重跑源列表构建。现实的「实时」是：**编辑时做一次廉价 re-prepare**——HRTF / VBAP 表保留不动，只重建源列表（`build_sources`），再 `seek` 回当前播放头——**接近实时、松手即更新、瞬间一个小接缝**。这不是直接重跑今天的整个 `prepare()`；需要把 prepared 内部继续拆成「重型 cache」与「可重建 source/bus plan」两层。
-
-**一期接受这个区别**：gain 给 DAW 般即时手感；diffuse / extent / divergence 是「松手即更新」。要做到后三者拖动也连续，得把拓扑按最大 extent 预建、权重活调，那是另一个量级，**不在一期**。
+  SAF binaural 对这些目标执行 source graph 更新：复用 prepared HRTF / VBAP 表，合并 GUI 60 Hz 拖动快照，并把图更新限制在最多 10 Hz。更新块先用旧图及完整 OLA / diffuse 状态渲染同一输入，再构建新图及新状态渲染同一输入，最后在整块内从旧输出线性过渡到新输出。第一帧延续旧 DSP 状态，块末进入已预热一块的新状态。
 
 ## 6. 接口草案
 
@@ -159,20 +157,20 @@ class IRenderer {
 // 每对象的相对覆盖（policy 的实时归一化子集，面向逐块求值）。
 struct LiveOverride {
     std::string object_id;
-    float gain_db{0.0F};      // 即时：下一块生效
-    float diffuse_scale{1.0F}; // 触发 stream 重建（廉价 re-prepare + reseek）
-    float extent_scale{1.0F};  // 同上
+    float gain_db{0.0F};       // 下一块开始 20 ms 采样斜坡
+    float diffuse_scale{1.0F}; // SAF binaural source graph 目标
+    float extent_scale{1.0F};  // SAF binaural source graph 目标
     float divergence_scale{1.0F};
 };
 struct LiveOverrides {
     std::vector<LiveOverride> objects;
-    uint64_t revision{0};      // 递增；worker 比对 revision 决定是否 re-prepare
+    uint64_t revision{0};      // 递增；worker 发布最新目标快照
 };
 ```
 
 引擎侧（建议新模块 `ADMRealtime`，PRIVATE 依赖各 renderer + 设备层；CLI/GUI 经 C ABI 接入）：
 
-- **MonitorEngine**：持有当前 `IRenderStream`、ring buffer、播放时钟、loop region、`LiveOverrides` 的原子快照；worker 线程 `process()` 填 ring，比对 `revision` 决定 gain 即时 / 重建 stream。
+- **MonitorEngine**：持有当前 `IRenderStream`、ring buffer、播放时钟、loop region、`LiveOverrides` 的最新快照；worker 线程 `process()` 填 ring，并把目标快照交给 stream。各 stream 管理增益斜坡和拓扑状态过渡。
 - **设备层**：音频输出回调抽 ring。后端默认 **miniaudio**（跨平台单头、MIT-0 / public-domain 双授权；经 `mr_adm_core_find_or_fetch` 接入，ADR 0004）。**但设备层必须有自有抽象接口**（`IAudioOutputDevice` / `AudioDeviceSink`）——miniaudio 类型不出模块边界（ADR 0003 风格）。逃生口：日后若 Linux 低延迟 / JACK 多声道路由需要更强能力，再加 RtAudio backend，不伤核心。设备层还负责 §8 的下混 / 双耳化与 §11 的输出边界重采样。
 - **热切换**：见 §7。
 
@@ -201,9 +199,9 @@ C ABI（ADR 0007，additive，新 minor）：`adm_monitor_t` opaque + `adm_creat
 | 切片 | 内容 | 量级 | 依赖 |
 |---|---|---|---|
 | 1 | **实时引擎骨架**（ring + worker-ahead + 最小设备输出或测试 PCM sink + 时钟 + loop region）；**Apple stream**（循环已 slice 化，最快出声） | 中 + 小 | — |
-| 2 | **活覆盖层 + gain 即时**（无锁快照，gain 逐块乘走通） | 小-中 | 切片 1 |
+| 2 | **活覆盖层 + gain 采样斜坡**（目标快照、连续重定向） | 小-中 | 切片 1 |
 | 3 | **binaural stream**（OLA / spreader / diffuse / reader / cursor 提升为会话；算法不变） | 中-大 | 切片 1 |
-| 4 | **diffuse / extent / divergence = 廉价 re-prepare + reseek** | 中 | 切片 2、3 |
+| 4 | **diffuse / extent / divergence 图更新 + 同块状态交叉淡化** | 中 | 切片 2、3 |
 | 5 | **EAR / VBAP / HOA stream**（套切片 3 同一模式） | 各中 | 切片 3 |
 | 6 | **热切换 + 交叉淡化 + 监听 / 下混层**（按 §8：物理设备 + 下混 / 双耳化） | 中 | 切片 5 |
 
@@ -213,7 +211,7 @@ C ABI（ADR 0007，additive，新 minor）：`adm_monitor_t` opaque + `adm_creat
 
 - **binaural 精巧度**：1933 行，OLA 残差搬运（`:758`）、spreader 的 `prime()` 延迟补偿、diffuse 去相关——提升为会话时必须保证逐块输出与一次性 `render_window` **逐样本一致**。`process()` 外部请求帧数可能来自设备回调，不应改变 DSP 分块；stream 内部要固定 canonical block + FIFO（回归基线：与离线 binaural 渲染 bit 级对比一段定长窗口）。
 - **引擎 plumbing**：欠载（underrun）处理、时钟漂移、设备采样率（binaural 固定 48 kHz；其他后端跟随素材/设备约束；跨边界不匹配需重采样或暂拒绝）、loop region 边界回卷的 DSP 状态处理。
-- **re-prepare 成本**：diffuse/extent/divergence 编辑重建源列表，必须实测其耗时落在「松手即更新」可接受范围；HRTF/VBAP 表务必复用不重算。
+- **source graph 更新成本**：diffuse/extent/divergence 复用 HRTF/VBAP 表；拖动快照合并与 10 Hz 上限控制重建频率。状态过渡块会同时渲染新旧图，Release 性能测试需覆盖复杂对象场景及 underrun 计数。
 - **ADR 0003 / 0007**：`IRenderStream` 接口零第三方类型；C ABI 仅 additive、新 minor、`SOVERSION 1` 不变。
 - **Apple-only**：Apple stream `if(APPLE)` 门控，跨平台 ctest 跳过，与现有 `mr_adm_apple_smoke_tests` 一致。
 - **平台覆盖**：实时引擎与设备层须跨平台（macOS + Linux）；设备后端选型（miniaudio vs 原生）影响 §8 与依赖管理（ADR 0004，走 `mr_adm_core_find_or_fetch`）。

@@ -73,9 +73,9 @@
  *   (实时监听引擎；状态/电平/日志均轮询，无回调)。
  *
  * v1.16 新增（additive，SOVERSION 不变）：
- *   adm_monitor_override_t + adm_monitor_set_overrides（实时按对象覆盖，gain 即时生效；
- *   diffuse/extent/divergence 缩放在 binaural 后端经廉价 re-prepare 生效，未接入的后端
- *   接受但忽略）。adm_monitor_status_t 追加 override_revision 字段（struct_size 向后兼容）。
+ *   adm_monitor_override_t + adm_monitor_set_overrides（实时按对象覆盖；gain 经短采样斜坡生效；
+ *   SAF binaural 合并 diffuse/extent/divergence 目标并交叉淡化新旧 DSP 状态）。
+ *   adm_monitor_status_t 追加 override_revision 字段（struct_size 向后兼容）。
  *
  * v1.17 新增（additive，SOVERSION 不变）：
  *   adm_monitor_switch_backend（实时热切换渲染后端 / 布局，带短交叉淡化。立体声监听下
@@ -966,12 +966,11 @@ adm_monitor_set_loop(adm_monitor_t* monitor, double start_seconds, double end_se
 
 /*
  * v1.16: a single object's live monitoring override. gain_db is additive on top of the
- * object's baked gain and takes effect on the next rendered block (true realtime). The
- * *_scale fields are the realtime subset of the semantic policy's topology controls
- * (multiplicative, 1.0 = no change): on the binaural backend they take effect via a cheap
- * stream re-prepare; backends that have not yet wired them up (e.g. Apple, which honors
- * only gain) accept the values but ignore them. object_id matches the scene's ADM
- * audioObject id. Set struct_size = sizeof(adm_monitor_override_t) on every element; the
+ * object's baked gain; monitoring renderers move to each target with a short sample-domain
+ * ramp. The *_scale fields are the realtime subset of the semantic policy's topology controls
+ * (multiplicative, 1.0 = no change). SAF binaural coalesces their targets, rebuilds the source
+ * graph with its prepared HRTF data, and crossfades the outgoing/incoming DSP states. object_id
+ * matches the scene's ADM audioObject id. Set struct_size = sizeof(adm_monitor_override_t) on every element; the
  * library reads array elements using that as the stride, so fields may be appended in a
  * later minor version without breaking callers built against this header.
  */

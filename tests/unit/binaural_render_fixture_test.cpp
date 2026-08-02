@@ -1030,6 +1030,50 @@ std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::
     return out;
 }
 
+std::optional<std::vector<float>> render_binaural_stream_with_mid_override(const std::filesystem::path& input,
+                                                                           std::size_t boundary_frames,
+                                                                           const mradm::LiveOverrides& overrides) {
+    auto scene = mradm::io::import_scene(input.string());
+    if (!check(scene.has_value(), "mid-override: import scene")) {
+        return std::nullopt;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = input.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_binaural_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    auto stream = prepared.has_value() ? renderer->open_stream(**prepared, plan, logs)
+                                       : decltype(renderer->open_stream(**prepared, plan, logs)){};
+    if (!check(prepared.has_value() && stream.has_value(), "mid-override: prepare + open_stream")) {
+        return std::nullopt;
+    }
+
+    std::vector<float> out;
+    std::vector<float> buf(boundary_frames * 2U, 0.0F);
+    auto first = (*stream)->process(std::span<float>(buf), boundary_frames);
+    if (!check(first.has_value() && *first == boundary_frames, "mid-override: render pre-edit prefix")) {
+        return std::nullopt;
+    }
+    out.insert(out.end(), buf.begin(), buf.end());
+    (*stream)->set_overrides(overrides);
+
+    while (true) {
+        buf.assign(std::size_t{1024U} * 2U, 0.0F);
+        auto produced = (*stream)->process(std::span<float>(buf), 1024U);
+        if (!check(produced.has_value(), "mid-override: process succeeds")) {
+            return std::nullopt;
+        }
+        if (*produced == 0U) {
+            break;
+        }
+        out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(*produced * 2U));
+    }
+    return out;
+}
+
 // BinauralStream (realtime) reproduces the offline render_window render and is independent
 // of the caller's pull chunk size (canonical block + FIFO).
 bool verify_binaural_stream_matches_window() {
@@ -1124,6 +1168,88 @@ bool verify_binaural_stream_gain_override() {
     ok &= check(b > 1.0e-3, "override: baseline has signal energy");
     // Pure linear gain: ratio is exactly the scalar (0.25). Tight bounds either side.
     ok &= check(a < b * 0.30 && a > b * 0.20, "override: -12 dB override scales output by ~0.25");
+    return ok;
+}
+
+bool verify_binaural_stream_live_gain_ramp() {
+    constexpr std::size_t k_boundary = 1024U;
+    constexpr std::size_t k_ramp_frames = 960U; // LiveGainRamp default: 20 ms at 48 kHz
+    const auto in = write_fixture(ObjectFixtureOptions{.duration = std::chrono::milliseconds{400}}, 16384U);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "gain-ramp: import scene")) {
+        return false;
+    }
+    const auto baseline = render_binaural_stream(in, {1024}, nullptr);
+    mradm::LiveOverrides ov;
+    ov.revision = 1;
+    ov.objects.push_back({scene->objects.front().id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""});
+    const auto changed = render_binaural_stream_with_mid_override(in, k_boundary, ov);
+    if (!baseline || !changed || !check(changed->size() == baseline->size(), "gain-ramp: frame count unchanged")) {
+        return false;
+    }
+
+    bool ok = true;
+    double ramp_error = 0.0;
+    constexpr float k_target = 0.1F;
+    for (std::size_t offset = 0; offset < k_ramp_frames; ++offset) {
+        const float mix = static_cast<float>(offset) / static_cast<float>(k_ramp_frames - 1U);
+        const float gain = 1.0F + ((k_target - 1.0F) * mix);
+        for (std::size_t channel = 0; channel < 2U; ++channel) {
+            const std::size_t index = ((k_boundary + offset) * 2U) + channel;
+            ramp_error = std::max(
+                ramp_error,
+                std::fabs(static_cast<double>((*changed)[index]) - (static_cast<double>((*baseline)[index]) * gain)));
+        }
+    }
+    ok &= check(ramp_error < 2.0e-5, "gain-ramp: live gain follows a sample-continuous 20 ms ramp");
+
+    double settled_error = 0.0;
+    for (std::size_t frame = k_boundary + k_ramp_frames; frame < k_boundary + k_ramp_frames + 1024U; ++frame) {
+        for (std::size_t channel = 0; channel < 2U; ++channel) {
+            const std::size_t index = (frame * 2U) + channel;
+            settled_error = std::max(settled_error,
+                                     std::fabs(static_cast<double>((*changed)[index]) -
+                                               (static_cast<double>((*baseline)[index]) * k_target)));
+        }
+    }
+    ok &= check(settled_error < 2.0e-5, "gain-ramp: reaches the exact target after the ramp");
+    return ok;
+}
+
+bool verify_binaural_stream_topology_crossfade() {
+    constexpr std::size_t k_boundary = 1024U;
+    const auto in =
+        write_fixture(ObjectFixtureOptions{.duration = std::chrono::milliseconds{400}, .width = 1.0F}, 16384U);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "topology-xfade: import scene")) {
+        return false;
+    }
+    const auto baseline = render_binaural_stream(in, {1024}, nullptr);
+    mradm::LiveOverrides ov;
+    ov.revision = 1;
+    ov.objects.push_back({scene->objects.front().id, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""});
+    const auto changed = render_binaural_stream_with_mid_override(in, k_boundary, ov);
+    if (!baseline || !changed || !check(changed->size() == baseline->size(), "topology-xfade: frame count unchanged")) {
+        return false;
+    }
+
+    bool ok = true;
+    for (std::size_t channel = 0; channel < 2U; ++channel) {
+        const std::size_t index = (k_boundary * 2U) + channel;
+        ok &= check(std::fabs((*changed)[index] - (*baseline)[index]) < 1.0e-6F,
+                    "topology-xfade: transition begins on the intact old DSP state");
+    }
+    const std::size_t tail_begin = (k_boundary + 2048U) * 2U;
+    double changed_energy = 0.0;
+    for (std::size_t index = tail_begin; index < changed->size(); ++index) {
+        const double delta = static_cast<double>((*changed)[index]) - static_cast<double>((*baseline)[index]);
+        changed_energy += delta * delta;
+    }
+    ok &= check(changed_energy > 1.0e-5, "topology-xfade: extent target takes effect after the crossfade");
     return ok;
 }
 
@@ -1342,6 +1468,8 @@ int main() {
     ok &= verify_external_sofa_when_available();
     ok &= verify_binaural_stream_matches_window();
     ok &= verify_binaural_stream_gain_override();
+    ok &= verify_binaural_stream_live_gain_ramp();
+    ok &= verify_binaural_stream_topology_crossfade();
     ok &= verify_binaural_stream_topology_reprepare();
     ok &= verify_binaural_head_tracking();
     ok &= verify_binaural_head_tracking_dynamic();

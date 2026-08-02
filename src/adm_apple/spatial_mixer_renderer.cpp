@@ -576,6 +576,7 @@ struct HeadQuat {
 // staging block that render_window fills before each AudioUnitRender call.
 struct InputBusContext {
     const float* staging{nullptr};
+    const float* live_gain{nullptr}; // optional per-sample realtime envelope; null for offline renders
     uint16_t source_channel{0};
     uint16_t num_input_channels{1};
 };
@@ -592,7 +593,8 @@ OSStatus input_render_callback(void* ref_con,
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
         auto* out = static_cast<float*>(io_data->mBuffers[b].mData);
         for (UInt32 f = 0; f < frames; ++f) {
-            out[f] = ctx->staging[(static_cast<std::size_t>(f) * ctx->num_input_channels) + ctx->source_channel];
+            const float gain = ctx->live_gain != nullptr ? ctx->live_gain[f] : 1.0F;
+            out[f] = ctx->staging[(static_cast<std::size_t>(f) * ctx->num_input_channels) + ctx->source_channel] * gain;
         }
     }
     return noErr;
@@ -754,7 +756,7 @@ using EburPtr = std::unique_ptr<ebur128_state, EburDeleter>;
                 return tl::unexpected{r.error()};
             }
         }
-        contexts[i] = InputBusContext{staging_data, bus.source_channel, num_in_ch};
+        contexts[i] = InputBusContext{staging_data, nullptr, bus.source_channel, num_in_ch};
         AURenderCallbackStruct callback{};
         callback.inputProc = &input_render_callback;
         callback.inputProcRefCon = &contexts[i];
@@ -850,6 +852,9 @@ class AppleStream final : public IRenderStream {
             return tl::unexpected{r.error()};
         }
         stream->live_orientation_ = plan.listener_orientation;
+        for (std::size_t i = 0; i < stream->contexts_.size(); ++i) {
+            stream->contexts_[i].live_gain = stream->bus_gain_envelopes_.data() + (i * k_render_block);
+        }
 
         auto reader = audio::RenderInputReader::open(plan.input_path,
                                                      plan.scene.info.source_kind == SceneSourceKind::channel_bed);
@@ -934,10 +939,9 @@ class AppleStream final : public IRenderStream {
         consumer_pos_ = frame;
     }
 
-    // Worker-thread only (same thread as process()): rebuild the per-object live gain
-    // multiplier table. Absent objects render at unity (the prepared gain). The next
-    // render_slice picks the new values up; already-FIFO'd / ring-buffered audio is not
-    // re-rendered, so the change is heard after the current buffer drains.
+    // Publish per-bus live gain targets + head-lock flags. render_au_block turns each gain target
+    // into a sample-domain input envelope; buffered output keeps its prepared value and the new
+    // ramp begins at the first subsequently rendered frame.
     void set_overrides(const LiveOverrides& overrides) override {
         // Resolve per-bus gain + head-lock on the WORKER and store each into its own atomic. The audio
         // callback (render_au_block) loads each atomic — race-free, no shared_ptr / refcount / lock on
@@ -950,7 +954,7 @@ class AppleStream final : public IRenderStream {
                 render_common::resolve_live_head_locked(overrides, buses_[i].object_id, buses_[i].speaker_label_key)
                     ? 1
                     : 0);
-            bus_gain_[i].store(gain, std::memory_order_relaxed);
+            bus_gain_target_[i].store(gain, std::memory_order_relaxed);
             bus_head_locked_[i].store(locked, std::memory_order_relaxed);
         }
     }
@@ -1045,12 +1049,17 @@ class AppleStream final : public IRenderStream {
           out_planar_(num_out_ch, std::vector<float>(k_render_block, 0.0F)),
           abl_storage_(sizeof(AudioBufferList) + (sizeof(AudioBuffer) * (static_cast<std::size_t>(num_out_ch) - 1))),
           ev_cursor_(buses_.size(), 0), num_in_ch_(num_in_ch), num_out_ch_(num_out_ch), sample_rate_(sample_rate),
-          total_frames_(total_frames), silent_(silent), bus_gain_(buses_.size()), bus_head_locked_(buses_.size()),
+          total_frames_(total_frames), silent_(silent), bus_gain_target_(buses_.size()),
+          bus_gain_envelopes_(buses_.size() * k_render_block, 1.0F), bus_head_locked_(buses_.size()),
           unit_(std::move(unit)) {
         // Per-bus override params start neutral: unity gain (head-lock value-initialises to 0). Sized
         // to the bus count so the realtime callback only ever indexes preallocated atomics.
-        for (auto& g : bus_gain_) {
+        for (auto& g : bus_gain_target_) {
             g.store(1.0F, std::memory_order_relaxed);
+        }
+        bus_gain_ramps_.reserve(buses_.size());
+        for (std::size_t i = 0; i < buses_.size(); ++i) {
+            bus_gain_ramps_.emplace_back(sample_rate_);
         }
     }
 
@@ -1062,13 +1071,17 @@ class AppleStream final : public IRenderStream {
     [[nodiscard]] OSStatus
     render_au_block(uint64_t position, const ListenerOrientation& orient, float* dst, UInt32 frames_now) {
         for (std::size_t i = 0; i < buses_.size(); ++i) {
+            auto& gain_ramp = bus_gain_ramps_[i];
+            gain_ramp.set_target(bus_gain_target_[i].load(std::memory_order_relaxed));
+            float* gain_envelope = bus_gain_envelopes_.data() + (i * k_render_block);
+            for (UInt32 frame = 0; frame < frames_now; ++frame) {
+                gain_envelope[frame] = gain_ramp.next();
+            }
             const BusEvent* ev = active_event(buses_[i], position, ev_cursor_[i]);
             float azimuth = ev != nullptr ? ev->azimuth : 0.0F;
             float elevation = ev != nullptr ? ev->elevation : 0.0F;
             const float distance = ev != nullptr ? ev->distance : 1.0F;
             const float base_gain = ev != nullptr ? ev->gain : 0.0F;
-            // Per-bus live override params (atomic loads; published by set_overrides on the worker).
-            const float live_gain = bus_gain_[i].load(std::memory_order_relaxed);
             const bool head_locked = bus_head_locked_[i].load(std::memory_order_relaxed) != 0;
             // head-locked 总线:把方向按头朝向补偿,使全局 AU 头旋转对其抵消(锁在头上)。
             // 头朝向恒等时补偿是 no-op,故未开头追踪 / world-locked 时零影响。
@@ -1077,7 +1090,9 @@ class AppleStream final : public IRenderStream {
                 azimuth = caz;
                 elevation = cel;
             }
-            const float gain_db = linear_gain_to_db(base_gain * live_gain);
+            // The live multiplier is a sample-domain envelope in the input callback above. Keep the
+            // AU parameter at the prepared ADM gain so live edits do not become block steps here.
+            const float gain_db = linear_gain_to_db(base_gain);
             const OSStatus s = set_bus_parameters(
                 unit_.get(), static_cast<AudioUnitElement>(i), azimuth, elevation, distance, gain_db);
             if (s != noErr) {
@@ -1175,7 +1190,9 @@ class AppleStream final : public IRenderStream {
     // element atomics are race-free with no shared_ptr / lock; an override mid-block may reach some
     // buses a block earlier than others, which is inaudible and not a correctness issue. Sized to
     // buses_ and initialised neutral (unity gain, not head-locked) in the constructor.
-    std::vector<std::atomic<float>> bus_gain_;
+    std::vector<std::atomic<float>> bus_gain_target_;
+    std::vector<render_common::LiveGainRamp> bus_gain_ramps_; // render-thread/callback-owned
+    std::vector<float> bus_gain_envelopes_;                   // buses × k_render_block, callback-owned
     std::vector<std::atomic<std::uint8_t>> bus_head_locked_;
     std::atomic<bool> render_failed_{false}; // set by render_output on a callback AU error (output-stage)
     ListenerOrientation live_orientation_;   // live head orientation; applied in render_slice when dirty (worker-only)

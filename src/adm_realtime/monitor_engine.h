@@ -82,8 +82,8 @@ class MonitorEngine {
     void seek(uint64_t frame);
     // Loop output frames [start_frame, end_frame). end_frame <= start_frame disables looping.
     void set_loop(uint64_t start_frame, uint64_t end_frame);
-    // Queue live per-object overrides; the worker hands them to the stream at the next
-    // block boundary (gain immediate). The applied revision shows up in status().
+    // Queue live per-object targets; the worker publishes the newest snapshot at a stream boundary.
+    // Streams own their sample ramps / topology transitions. The applied revision appears in status().
     void set_overrides(const LiveOverrides& overrides);
 
     // Queue a live listener head orientation (head tracking / free-look); the worker hands it

@@ -159,11 +159,9 @@ class IRenderStream {
     // equivalent to the offline window render at the same position.
     [[nodiscard]] virtual Result<void> seek(uint64_t frame) = 0;
 
-    // Apply live per-object overrides. Called on the worker thread at block boundaries
-    // (never the audio callback). Gain takes effect on the next process() block; the
-    // topology-changing scales (diffuse/extent/divergence) require a stream re-prepare
-    // handled above this layer (slice 4). NOT pure virtual so backends adopt it
-    // incrementally; the default ignores overrides (gain stays at the prepared value).
+    // Apply live per-object targets. Called on the worker thread at block boundaries. Implemented
+    // streams de-zipper gain in the sample domain; SAF binaural coalesces topology targets and
+    // crossfades the outgoing/incoming source graphs. The default keeps the prepared values.
     virtual void set_overrides(const LiveOverrides& overrides) { (void) overrides; }
 
     // Apply a live listener head orientation (yaw/pitch/roll). Called on the worker thread at

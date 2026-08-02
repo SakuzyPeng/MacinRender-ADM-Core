@@ -98,6 +98,74 @@ bool resolve_live_head_locked(const LiveOverrides& overrides,
     return pick != nullptr && pick->head_locked;
 }
 
+LiveGainRamp::LiveGainRamp(uint32_t sample_rate, uint32_t ramp_ms) noexcept
+    : ramp_frames_(std::max<std::size_t>(
+          1U, (static_cast<std::size_t>(sample_rate) * static_cast<std::size_t>(ramp_ms)) / 1000U)) {}
+
+void LiveGainRamp::set_target(float target) noexcept {
+    if (target == target_) {
+        return;
+    }
+    target_ = target;
+    if (!started_) {
+        return;
+    }
+    if (ramp_frames_ <= 1U || current_ == target_) {
+        current_ = target_;
+        remaining_frames_ = 0U;
+        step_ = 0.0F;
+        return;
+    }
+    remaining_frames_ = ramp_frames_;
+    step_ = (target_ - current_) / static_cast<float>(ramp_frames_ - 1U);
+}
+
+float LiveGainRamp::next() noexcept {
+    if (!started_) {
+        started_ = true;
+        current_ = target_;
+        remaining_frames_ = 0U;
+        return current_;
+    }
+
+    const float value = current_;
+    if (remaining_frames_ > 1U) {
+        current_ += step_;
+        --remaining_frames_;
+    } else if (remaining_frames_ == 1U) {
+        current_ = target_;
+        remaining_frames_ = 0U;
+        step_ = 0.0F;
+    }
+    return value;
+}
+
+InterleavedLiveGainSmoother::InterleavedLiveGainSmoother(std::size_t channels, uint32_t sample_rate) {
+    ramps_.reserve(channels);
+    for (std::size_t channel = 0; channel < channels; ++channel) {
+        ramps_.emplace_back(sample_rate);
+    }
+}
+
+void InterleavedLiveGainSmoother::set_targets(std::span<const float> targets) noexcept {
+    const std::size_t count = std::min(ramps_.size(), targets.size());
+    for (std::size_t channel = 0; channel < count; ++channel) {
+        ramps_[channel].set_target(targets[channel]);
+    }
+    for (std::size_t channel = count; channel < ramps_.size(); ++channel) {
+        ramps_[channel].set_target(1.0F);
+    }
+}
+
+void InterleavedLiveGainSmoother::apply(float* interleaved, std::size_t frames) noexcept {
+    const std::size_t channels = ramps_.size();
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        for (std::size_t channel = 0; channel < channels; ++channel) {
+            interleaved[(frame * channels) + channel] *= ramps_[channel].next();
+        }
+    }
+}
+
 bool is_lfe_label(std::string_view raw) noexcept {
     const std::string key = normalise_speaker_label_key(raw);
     return key == "LF" || key.find("LFE") != std::string::npos || key.find("SUB") != std::string::npos ||

@@ -1588,6 +1588,94 @@ bool verify_apple_stream_gain_override() {
     return ok;
 }
 
+// GUI binaural monitoring drives AppleStream through its output-stage path. A mid-play gain edit
+// must therefore enter the AU as a sample-domain envelope: the first edited frame keeps the intact
+// old convolution state, then the input reaches the target over 20 ms.
+bool verify_apple_output_stage_live_gain_ramp() {
+    constexpr std::size_t k_boundary = 1024U;
+    const auto in = write_fixture(45.0F, 16384U, 1.0F, 0.0F, false);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "output-gain-ramp: import scene")) {
+        return false;
+    }
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "output-gain-ramp: prepare")) {
+        return false;
+    }
+    const auto baseline = render_apple_stream_full(*renderer, **prepared, plan, logs, {512});
+    auto stream = renderer->open_stream(**prepared, plan, logs);
+    if (!baseline || !check(stream.has_value() && (*stream)->renders_orientation_at_output(),
+                            "output-gain-ramp: open output-stage stream")) {
+        return false;
+    }
+
+    const uint32_t in_ch = (*stream)->intermediate_channels();
+    const uint32_t out_ch = (*stream)->out_channels();
+    const mradm::ListenerOrientation identity{};
+    std::vector<float> changed;
+    std::vector<float> intermediate;
+    std::vector<float> rendered;
+    std::size_t total = 0U;
+    while (true) {
+        constexpr std::size_t k_chunk = 512U;
+        intermediate.assign(k_chunk * in_ch, 0.0F);
+        auto produced = (*stream)->produce_intermediate(std::span<float>(intermediate), k_chunk);
+        if (!check(produced.has_value(), "output-gain-ramp: produce intermediate")) {
+            return false;
+        }
+        if (*produced == 0U) {
+            break;
+        }
+        if (total == k_boundary) {
+            mradm::LiveOverrides ov;
+            ov.revision = 1;
+            ov.objects.push_back({scene->objects.front().id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""});
+            (*stream)->set_overrides(ov);
+        }
+        rendered.assign(*produced * out_ch, 0.0F);
+        const std::size_t got = (*stream)->render_output(std::span<const float>(intermediate.data(), *produced * in_ch),
+                                                         std::span<float>(rendered),
+                                                         *produced,
+                                                         identity);
+        changed.insert(changed.end(), rendered.begin(), rendered.begin() + static_cast<std::ptrdiff_t>(got * out_ch));
+        total += got;
+    }
+
+    if (!check(changed.size() == baseline->size(), "output-gain-ramp: frame count unchanged")) {
+        return false;
+    }
+    bool ok = true;
+    for (uint32_t channel = 0; channel < out_ch; ++channel) {
+        const std::size_t index = (k_boundary * out_ch) + channel;
+        ok &= check(std::fabs(changed[index] - (*baseline)[index]) < 2.0e-4F,
+                    "output-gain-ramp: first edited frame preserves the old AU state");
+    }
+
+    const std::size_t settled_begin = k_boundary + 2048U;
+    const std::size_t settled_end = std::min<std::size_t>(settled_begin + 4096U, total);
+    double baseline_energy = 0.0;
+    double changed_energy = 0.0;
+    for (std::size_t frame = settled_begin; frame < settled_end; ++frame) {
+        for (uint32_t channel = 0; channel < out_ch; ++channel) {
+            const std::size_t index = (frame * out_ch) + channel;
+            baseline_energy += static_cast<double>((*baseline)[index]) * (*baseline)[index];
+            changed_energy += static_cast<double>(changed[index]) * changed[index];
+        }
+    }
+    ok &= check(changed_energy < baseline_energy * 0.03 && changed_energy > baseline_energy * 0.003,
+                "output-gain-ramp: settles near the -20 dB target");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1614,6 +1702,7 @@ int main() {
     ok &= verify_apple_stream_initial_head_locked_orientation();
     ok &= verify_apple_stream_silent();
     ok &= verify_apple_stream_gain_override();
+    ok &= verify_apple_output_stage_live_gain_ramp();
     ok &= verify_spatial_mixer_hrtf_modes_probe();
     ok &= verify_listener_orientation();
     return ok ? 0 : 1;

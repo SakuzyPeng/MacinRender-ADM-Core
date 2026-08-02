@@ -12,6 +12,7 @@
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <span>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -49,6 +50,40 @@ namespace mradm::render_common {
 [[nodiscard]] bool resolve_live_head_locked(const LiveOverrides& overrides,
                                             std::string_view object_id,
                                             std::string_view channel_label_key);
+
+// Sample-domain live-gain de-zipper. A target supplied before the first sample takes effect
+// immediately (important when a monitor starts with existing edits); later targets traverse a
+// short linear ramp and can be retargeted mid-ramp without a value discontinuity.
+class LiveGainRamp {
+  public:
+    static constexpr uint32_t k_default_ramp_ms = 20U;
+
+    explicit LiveGainRamp(uint32_t sample_rate, uint32_t ramp_ms = k_default_ramp_ms) noexcept;
+
+    void set_target(float target) noexcept;
+    [[nodiscard]] float next() noexcept;
+
+  private:
+    std::size_t ramp_frames_{1U};
+    std::size_t remaining_frames_{0U};
+    float current_{1.0F};
+    float target_{1.0F};
+    float step_{0.0F};
+    bool started_{false};
+};
+
+// Applies one LiveGainRamp per channel to interleaved PCM. Render streams use this before their
+// linear spatial mix, so gain automation is smooth without altering unrelated objects/channels.
+class InterleavedLiveGainSmoother {
+  public:
+    InterleavedLiveGainSmoother(std::size_t channels, uint32_t sample_rate);
+
+    void set_targets(std::span<const float> targets) noexcept;
+    void apply(float* interleaved, std::size_t frames) noexcept;
+
+  private:
+    std::vector<LiveGainRamp> ramps_;
+};
 
 // ADM producers are inconsistent: some LFE DirectSpeakers channels carry
 // channelFrequency lowPass, while others only encode the role in labels like

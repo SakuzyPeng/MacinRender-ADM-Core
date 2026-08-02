@@ -74,6 +74,7 @@ constexpr std::size_t k_topology_width = 1U;
 constexpr std::size_t k_topology_height = 2U;
 constexpr std::size_t k_topology_depth = 3U;
 constexpr std::size_t k_topology_divergence = 4U;
+constexpr uint64_t k_live_topology_min_interval_ms = 100U;
 using LiveTopologyScales = std::array<float, 5>;
 
 class TrackWorkerPool {
@@ -1587,10 +1588,9 @@ struct BinauralPrepared final : IPreparedRender {
 // to the offline render (the smoke test asserts this). saf_spreader mode (STFT latency
 // compensation) is not yet streamable and is rejected at open. seek() resets the per-source
 // OLA / diffuse / HRTF-cache state (a small discontinuity, acceptable for monitoring) and
-// repositions the reader. set_overrides applies a live per-object gain by scaling each
-// source's output (linear gain commutes with the HRTF convolution, so this equals scaling
-// the input). The expensive prepared state is borrowed by reference; the owning factory
-// keeps it alive for the stream's lifetime.
+// repositions the reader. set_overrides drives per-source sample gain ramps and coalesced
+// topology state crossfades. The expensive prepared state is borrowed by reference; the owning
+// factory keeps it alive for the stream's lifetime.
 class BinauralStream final : public IRenderStream {
   public:
     [[nodiscard]] static Result<std::unique_ptr<BinauralStream>>
@@ -1659,15 +1659,16 @@ class BinauralStream final : public IRenderStream {
     }
 
     void set_overrides(const LiveOverrides& overrides) override {
-        // Gain: immediate (next block), applied as a per-source output scalar. The snapshot is
-        // resolved per source at mix time (object_id + DirectSpeakers speaker_label) so a single
-        // bed can be gained per channel; an empty-label override scales the whole object.
+        // Gain targets are resolved per semantic source key. The render block builds one shared
+        // sample-domain envelope per key, so every spatial component of an object follows the same
+        // de-zippered trajectory (including per-channel DirectSpeakers overrides).
         live_overrides_ = overrides;
-        // Topology (diffuse / extent / divergence): only objects whose scales differ from
-        // unity matter. A change triggers a cheap re-prepare — rebuild the source list from
-        // a scaled copy of the scene (HRTF / VBAP tables in prepared_ are reused) and
-        // re-init the per-source DSP state. Unchanged ⇒ no rebuild (so plain gain edits and
-        // bit-exact reverts stay cheap).
+        update_live_gain_targets();
+
+        // Topology changes need a new source graph and fresh convolution state. Queue the newest
+        // graph while dragging; render_block applies at most one every 100 ms and crossfades old
+        // and new states over the same source block. This preserves the old OLA/diffuse tail at the
+        // boundary and prevents a 60 Hz UI gesture from repeatedly destroying the DSP state.
         std::unordered_map<std::string, LiveTopologyScales> topo;
         for (const auto& ov : overrides.objects) {
             const LiveTopologyScales scales{
@@ -1683,10 +1684,8 @@ class BinauralStream final : public IRenderStream {
                 topo[ov.object_id] = scales;
             }
         }
-        if (topo != applied_topology_) {
-            applied_topology_ = topo;
-            rebuild_sources(topo);
-        }
+        pending_topology_ = std::move(topo);
+        topology_pending_ = pending_topology_ != applied_topology_;
     }
 
     // Live listener head orientation (head tracking / free-look). Applied at the worker render
@@ -1715,7 +1714,9 @@ class BinauralStream final : public IRenderStream {
           sources_(prepared.sources), num_in_ch_(num_in_ch), total_frames_(total_frames), sample_rate_(sample_rate),
           object_smoothing_frames_(object_smoothing_frames), render_block_size_(prepared.render_block_size),
           ola_pool_(ola_worker_count(prepared.sources.size())),
-          in_block_(static_cast<std::size_t>(num_in_ch) * prepared.render_block_size, 0.0F) {
+          in_block_(static_cast<std::size_t>(num_in_ch) * prepared.render_block_size, 0.0F),
+          topology_update_interval_frames_(
+              std::max<uint64_t>(1U, (static_cast<uint64_t>(sample_rate) * k_live_topology_min_interval_ms) / 1000U)) {
         // sources_ starts as a copy of the prepared list (== build_sources(scene_)); a
         // topology override rebuilds it from a scaled scene_. bs (HRTF/VBAP) is never rebuilt.
         init_per_source_state();
@@ -1723,7 +1724,71 @@ class BinauralStream final : public IRenderStream {
 
     [[nodiscard]] static std::size_t ola_worker_count(std::size_t num_sources) {
         const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
-        return (num_sources > 1U && hw_threads > 1U) ? std::min(num_sources, hw_threads) : 0U;
+        // A point source can expand into many extent/divergence sources after a live topology edit.
+        // Keep workers ready for that graph instead of sizing the pool only to the initial point graph.
+        return (num_sources > 0U && hw_threads > 1U) ? hw_threads : 0U;
+    }
+
+    class LiveGainSlot {
+      public:
+        LiveGainSlot(std::string object, std::string speaker_label, uint32_t sample_rate, std::size_t block_frames)
+            : object_id(std::move(object)), speaker_label_key(std::move(speaker_label)), ramp(sample_rate),
+              envelope(block_frames, 1.0F) {}
+
+        [[nodiscard]] const std::string& object() const noexcept { return object_id; }
+        [[nodiscard]] const std::string& speaker_label() const noexcept { return speaker_label_key; }
+        [[nodiscard]] render_common::LiveGainRamp& gain_ramp() noexcept { return ramp; }
+        [[nodiscard]] std::vector<float>& gain_envelope() noexcept { return envelope; }
+        [[nodiscard]] const std::vector<float>& gain_envelope() const noexcept { return envelope; }
+
+      private:
+        std::string object_id;
+        std::string speaker_label_key;
+        render_common::LiveGainRamp ramp;
+        std::vector<float> envelope;
+    };
+
+    [[nodiscard]] static std::string live_gain_key(const BinauralSource& source) {
+        std::string key = source.object_id;
+        key.push_back('\0');
+        key += source.speaker_label_key;
+        return key;
+    }
+
+    void assign_live_gain_slots() {
+        source_gain_slots_.clear();
+        source_gain_slots_.reserve(sources_.size());
+        for (const auto& source : sources_) {
+            const std::string key = live_gain_key(source);
+            const auto found = gain_slot_by_key_.find(key);
+            if (found != gain_slot_by_key_.end()) {
+                source_gain_slots_.push_back(found->second);
+                continue;
+            }
+            const std::size_t slot = live_gain_slots_.size();
+            gain_slot_by_key_.emplace(key, slot);
+            live_gain_slots_.emplace_back(
+                source.object_id, source.speaker_label_key, sample_rate_, static_cast<std::size_t>(render_block_size_));
+            source_gain_slots_.push_back(slot);
+        }
+        update_live_gain_targets();
+    }
+
+    void update_live_gain_targets() {
+        for (auto& slot : live_gain_slots_) {
+            const float target =
+                render_common::resolve_live_channel_gain(live_overrides_, slot.object(), slot.speaker_label())
+                    .value_or(1.0F);
+            slot.gain_ramp().set_target(target);
+        }
+    }
+
+    void prepare_live_gain_envelopes(std::size_t frames) {
+        for (auto& slot : live_gain_slots_) {
+            for (std::size_t frame = 0; frame < frames; ++frame) {
+                slot.gain_envelope()[frame] = slot.gain_ramp().next();
+            }
+        }
     }
 
     // (Re)create the per-source FFT plans + scratch sized to sources_, then reset the
@@ -1742,6 +1807,7 @@ class BinauralStream final : public IRenderStream {
             cs.diffuse_in.resize(static_cast<std::size_t>(render_block_size_));
         }
         reset_dsp_state();
+        assign_live_gain_slots();
     }
 
     // Re-initialise the cross-call DSP state (the FFT plans in src_cs_ are stateless and
@@ -1793,16 +1859,8 @@ class BinauralStream final : public IRenderStream {
         }
     }
 
-    [[nodiscard]] float live_gain_for(const BinauralSource& src) const {
-        return render_common::resolve_live_channel_gain(live_overrides_, src.object_id, src.speaker_label_key)
-            .value_or(1.0F);
-    }
-
-    void render_block() {
-        const uint64_t frames_now = std::min<uint64_t>(render_block_size_, total_frames_ - frames_done_);
+    void render_current_sources(std::vector<float>& output, uint64_t frames_now) {
         const auto fn = static_cast<std::size_t>(frames_now);
-        reader_->read(in_block_.data(), frames_now);
-
         const auto& sources = sources_;
         // Live head tracking: rotate world-locked sources into the head frame at render time (worker
         // stage). Built once per block; head-locked sources (per-object override) keep their raw
@@ -1831,17 +1889,50 @@ class BinauralStream final : public IRenderStream {
         // Reduce per-source L/R into the interleaved FIFO, applying the live per-object
         // gain. With no overrides every gain is 1.0 and the summation order matches
         // render_window's reduce, so the output is bit-identical to the offline render.
-        fifo_.assign(fn * 2U, 0.0F);
-        fifo_read_ = 0;
+        output.assign(fn * 2U, 0.0F);
         for (std::size_t si = 0; si < sources.size(); ++si) {
-            const float g = live_gain_for(sources[si]);
+            const auto& gain = live_gain_slots_[source_gain_slots_[si]].gain_envelope();
             const float* sl = src_cs_[si].l_out.data();
             const float* sr = src_cs_[si].r_out.data();
             for (std::size_t f = 0; f < fn; ++f) {
-                fifo_[(f * 2U) + 0U] += sl[f] * g;
-                fifo_[(f * 2U) + 1U] += sr[f] * g;
+                output[(f * 2U) + 0U] += sl[f] * gain[f];
+                output[(f * 2U) + 1U] += sr[f] * gain[f];
             }
         }
+    }
+
+    void render_block() {
+        const uint64_t frames_now = std::min<uint64_t>(render_block_size_, total_frames_ - frames_done_);
+        const auto fn = static_cast<std::size_t>(frames_now);
+        reader_->read(in_block_.data(), frames_now);
+        // Before the first sample there is no outgoing state to preserve. Apply the coalesced initial
+        // topology directly, then begin gain envelopes on the final source graph.
+        if (frames_done_ == 0U && topology_pending_) {
+            rebuild_sources(pending_topology_);
+            applied_topology_ = pending_topology_;
+            topology_pending_ = false;
+        }
+        prepare_live_gain_envelopes(fn);
+
+        const bool apply_topology = topology_pending_ && frames_done_ >= next_topology_update_frame_;
+        if (apply_topology) {
+            render_current_sources(old_fifo_, frames_now);
+            rebuild_sources(pending_topology_);
+            render_current_sources(fifo_, frames_now);
+            for (std::size_t frame = 0; frame < fn; ++frame) {
+                const float mix = fn <= 1U ? 1.0F : static_cast<float>(frame) / static_cast<float>(fn - 1U);
+                for (std::size_t channel = 0; channel < 2U; ++channel) {
+                    const std::size_t index = (frame * 2U) + channel;
+                    fifo_[index] = (old_fifo_[index] * (1.0F - mix)) + (fifo_[index] * mix);
+                }
+            }
+            applied_topology_ = pending_topology_;
+            topology_pending_ = false;
+            next_topology_update_frame_ = frames_done_ + topology_update_interval_frames_;
+        } else {
+            render_current_sources(fifo_, frames_now);
+        }
+        fifo_read_ = 0;
         frames_done_ += frames_now;
     }
 
@@ -1863,13 +1954,21 @@ class BinauralStream final : public IRenderStream {
     std::vector<PerSourceConvState> src_cs_;
     TrackWorkerPool ola_pool_;
     std::vector<float> in_block_;
-    LiveOverrides live_overrides_;               // live override snapshot; gain resolved per source (worker-only)
+    LiveOverrides live_overrides_; // latest snapshot; gain targets are projected into live_gain_slots_
+    std::unordered_map<std::string, std::size_t> gain_slot_by_key_;
+    std::vector<LiveGainSlot> live_gain_slots_;
+    std::vector<std::size_t> source_gain_slots_; // sources_ index → live_gain_slots_ index
     ListenerOrientation listener_orientation_{}; // live head pose (worker-only; identity = no tracking)
     // object_id → non-unity topology scales; only non-unity entries.
     // The last applied topology, so set_overrides rebuilds only when it actually changes.
     std::unordered_map<std::string, LiveTopologyScales> applied_topology_;
+    std::unordered_map<std::string, LiveTopologyScales> pending_topology_;
+    bool topology_pending_{false};
+    uint64_t topology_update_interval_frames_{1U};
+    uint64_t next_topology_update_frame_{0U};
 
-    std::vector<float> fifo_; // interleaved L/R produced, not yet served
+    std::vector<float> fifo_;     // interleaved L/R produced, not yet served
+    std::vector<float> old_fifo_; // one block of the outgoing topology during a state crossfade
     std::size_t fifo_read_{0};
     uint64_t frames_done_{0};
 };

@@ -25,8 +25,8 @@ public sealed record MonitorLevelsSnapshot(
     float ShorttermLufs,
     float IntegratedLufs);
 
-/// <summary>一条按对象的实时覆盖。gain 即时;*_scale 为拓扑(binaural 经廉价 re-prepare,
-/// 其它后端接受但忽略),默认 1.0 表示不变。SpeakerLabel 非空时只作用于该声床声道(否则整对象)。</summary>
+/// <summary>一条按对象的实时覆盖。gain 使用短采样斜坡;*_scale 驱动 SAF 双耳拓扑状态交叉淡化,
+/// 默认 1.0 表示原值。SpeakerLabel 非空时作用于对应声床声道。</summary>
 public sealed record MonitorOverride(
     string ObjectId,
     float GainDb = 0.0f,
