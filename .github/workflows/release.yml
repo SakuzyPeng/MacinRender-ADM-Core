@@ -113,6 +113,7 @@ jobs:
   release-linux-appimage:
     name: Linux AppImage release
     runs-on: ubuntu-24.04
+    if: github.event_name == 'workflow_dispatch'
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -523,7 +524,6 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - release
-      - release-linux-appimage
       - release-windows
       - release-gui-macos
       - release-gui-windows

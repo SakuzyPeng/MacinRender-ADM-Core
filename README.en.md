@@ -40,7 +40,7 @@ ADM batch rendering, semantic editing, realtime monitoring, spatial visualizatio
 
 After extracting a release package, open `MacinRender ADM.app` on macOS. On Windows, run `MacinRender ADM.cmd` or
 `app/MacinRender.Gui.exe`. Initial packages use local developer distribution: macOS follows the Gatekeeper confirmation
-flow and Windows follows the SmartScreen confirmation flow. The initial Linux artifact is the CLI AppImage.
+flow and Windows follows the SmartScreen confirmation flow. Initial packages target macOS arm64 and Windows x64.
 
 For implementation details, see the [semantic editor design](docs/architecture/SEMANTIC_EDITOR_GUI.md) and
 [realtime monitoring design](docs/architecture/REALTIME_MONITORING.md).
@@ -98,7 +98,6 @@ The GitHub Actions release workflow produces auditable packages for tags matchin
 | Platform | Artifact | Baseline | Self-contained boundary |
 |---|---|---|---|
 | macOS arm64 | `mradm-<version>-macos-arm64.tar.gz` | Built on macOS 26 runner | Third-party libraries ship statically; external dependencies are Apple system libraries and frameworks |
-| Linux x86_64 | `mradm-<version>-linux-x86_64.AppImage` | Ubuntu 24.04 x86_64 | Standalone AppImage with bundled runtime libraries and dependency audits for missing, build-tree, and `/usr/local` paths |
 | Windows x64 | `mradm-<version>-windows-x64.zip` | Windows Server 2025 + MSVC | Includes `mradm.exe` and required DLLs, plus a `dumpbin /dependents` manifest |
 | macOS GUI arm64 | `MacinRender-Gui-<version>-macos-arm64.tar.gz` | Built on macOS 26 runner | Self-contained `.app`; external dependencies are Apple system libraries and frameworks |
 | Windows GUI x64 | `MacinRender-Gui-<version>-windows-x64.zip` | Windows Server 2025 + MSVC | Includes the NativeAOT GUI, `mradm_capi.dll`, required DLLs, and a `dumpbin /dependents` manifest |
@@ -111,10 +110,10 @@ CLI packages contain:
 - `BUILD_INFO.txt`
 - `DEPENDENCIES.txt`
 
-macOS CLI / GUI packages use `.tar.gz`, the Linux CLI uses `.AppImage`, and Windows CLI / GUI packages use `.zip`.
-Each artifact has a matching `.sha256` file. GUI packages contain a macOS `.app` or
-`app/MacinRender.Gui.exe`, together with license, build-information, checksum, and dependency files. The initial
-platform set is macOS arm64, Linux x86_64, and Windows x64, delivered through local developer distribution.
+macOS CLI / GUI packages use `.tar.gz`, and Windows CLI / GUI packages use `.zip`. Each artifact has a matching
+`.sha256` file. GUI packages contain a macOS `.app` or `app/MacinRender.Gui.exe`, together with license,
+build-information, checksum, and dependency files. The initial platform set is macOS arm64 and Windows x64,
+delivered through local developer distribution.
 
 ## Render Backends
 

@@ -49,7 +49,7 @@ PR changed / main full 的分层策略。
 | Job | 触发 | 内容 |
 |---|---|---|
 | `release` | tag `v*`、手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-macos-arm64.tar.gz` 与 `.sha256` |
-| `release-linux-appimage` | tag `v*`、手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-linux-x86_64.AppImage` 与 `.sha256` |
+| `release-linux-appimage` | 手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-linux-x86_64.AppImage` 与 `.sha256` |
 | `release-windows` | tag `v*`、手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-windows-x64.zip` 与 `.sha256` |
 | `release-gui-macos` | tag `v*`、手动触发 | 构建 GUI C ABI bundle、打包并上传 `MacinRender-Gui-<version>-macos-arm64.tar.gz` 与 `.sha256` |
 | `release-gui-windows` | tag `v*`、手动触发 | 构建 GUI C ABI bundle、打包并上传 `MacinRender-Gui-<version>-windows-x64.zip` 与 `.sha256` |

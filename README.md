@@ -40,7 +40,7 @@ GUI 当前定位为 ADM 渲染与语义工作台，核心工作流是批量渲�
 
 发行包解压后，macOS 打开 `MacinRender ADM.app`，Windows 运行 `MacinRender ADM.cmd` 或
 `app/MacinRender.Gui.exe`。首发包采用本地开发分发流程；macOS 启动时按 Gatekeeper 流程确认，
-Windows 启动时按 SmartScreen 流程确认。Linux 首发交付物为 CLI AppImage。
+Windows 启动时按 SmartScreen 流程确认。首发包提供 macOS arm64 和 Windows x64。
 
 技术设计见[语义编辑器 GUI](docs/architecture/SEMANTIC_EDITOR_GUI.md)和
 [实时监听引擎](docs/architecture/REALTIME_MONITORING.md)。
@@ -108,7 +108,6 @@ GitHub Actions 的 release workflow 会在 tag `v*` 或手动触发时生成首�
 | 平台 | artifact | 支持基线 | 自包含边界 |
 |---|---|---|---|
 | macOS arm64 | `mradm-<version>-macos-arm64.tar.gz` | macOS 26 runner 构建 | 第三方库随包静态交付；外部依赖为 Apple 系统库与 framework |
-| Linux x86_64 | `mradm-<version>-linux-x86_64.AppImage` | Ubuntu 24.04 x86_64 | AppImage/standalone；运行时库随包交付；依赖审计覆盖缺失库、构建目录与 `/usr/local` 路径 |
 | Windows x64 | `mradm-<version>-windows-x64.zip` | Windows Server 2025 + MSVC | 包含 `mradm.exe` 与所需 DLL；附带 `dumpbin /dependents` 清单 |
 | macOS GUI arm64 | `MacinRender-Gui-<version>-macos-arm64.tar.gz` | macOS 26 runner 构建 | 自包含 `.app`；外部依赖为 Apple 系统库与 framework |
 | Windows GUI x64 | `MacinRender-Gui-<version>-windows-x64.zip` | Windows Server 2025 + MSVC | 包含 GUI NativeAOT 可执行文件、`mradm_capi.dll` 与所需 DLL；附带 `dumpbin /dependents` 清单 |
@@ -121,10 +120,8 @@ CLI 发行包内容：
 - `BUILD_INFO.txt`
 - `DEPENDENCIES.txt`
 
-macOS CLI/GUI 使用 `.tar.gz`，Linux CLI 使用 `.AppImage`，Windows CLI/GUI 使用 `.zip`；
-每个包旁边都会生成对应 `.sha256`。首发平台架构为 macOS arm64、Linux x86_64 与 Windows x64，
-并采用本地开发分发流程。
-Linux AppImage 仍以 Ubuntu 24.04 的 glibc baseline 为构建基线，宿主内核、动态加载器、glibc 基线和其他核心平台设施由系统提供。
+macOS CLI/GUI 使用 `.tar.gz`，Windows CLI/GUI 使用 `.zip`；每个包旁边都会生成对应 `.sha256`。
+首发平台架构为 macOS arm64 与 Windows x64，并采用本地开发分发流程。
 GUI 发行包包含 macOS `.app` 或 Windows `app/MacinRender.Gui.exe`，同样带有 license、build info、checksum 和依赖清单。
 
 ## 渲染后端
