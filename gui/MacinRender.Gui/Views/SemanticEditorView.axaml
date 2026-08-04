@@ -509,10 +509,10 @@
                                            Foreground="{DynamicResource Accent}"
                                            Text="{Binding SelectedRow.DiffuseScale.EffectiveText}"/>
                             </Grid>
-                                <!-- Apple 监听后端无去相关器:提示 diffuse 监听中听不到(控件仍可编辑,服务于导出 policy) -->
+                                <!-- 当前监听后端不支持 diffuse 时提示；控件仍可编辑，以写入导出的 ADM。 -->
                                 <TextBlock Margin="80,0,0,0" FontSize="12" TextWrapping="Wrap"
                                            Foreground="{DynamicResource Warning}"
-                                           Text="{DynamicResource SemDiffuseAppleHint}"
+                                           Text="{Binding MonitorDiffuseWarning}"
                                            IsVisible="{Binding MonitorDiffuseInaudible}"/>
                             </StackPanel>
 

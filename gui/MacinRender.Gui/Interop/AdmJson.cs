@@ -68,6 +68,7 @@ internal sealed class BackendDto
 {
     public string Renderer { get; set; } = "";
     public string BackendName { get; set; } = "";
+    public bool? SupportsDiffuse { get; set; }
     public List<LayoutDto> Layouts { get; set; } = new();
 }
 

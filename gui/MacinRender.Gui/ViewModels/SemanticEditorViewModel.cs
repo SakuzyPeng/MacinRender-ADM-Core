@@ -125,6 +125,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             OnPropertyChanged(nameof(OverrideSummary));
             OnPropertyChanged(nameof(CommonPrefixLabel));
             OnPropertyChanged(nameof(ObjectCountText));
+            OnPropertyChanged(nameof(MonitorDiffuseWarning));
             foreach (var backend in MonitorBackends)
             {
                 backend.RefreshLanguage();
@@ -530,6 +531,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MonitorSofaApplicable))]
     [NotifyPropertyChangedFor(nameof(MonitorDiffuseInaudible))]
+    [NotifyPropertyChangedFor(nameof(MonitorDiffuseWarning))]
     [NotifyPropertyChangedFor(nameof(MonitorLayoutSelectorVisible))]
     [NotifyPropertyChangedFor(nameof(MonitorSpatialRendererSelectorVisible))]
     [NotifyPropertyChangedFor(nameof(SystemSpatialLfeWarning))]
@@ -548,6 +550,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MonitorDiffuseInaudible))]
+    [NotifyPropertyChangedFor(nameof(MonitorDiffuseWarning))]
     [NotifyPropertyChangedFor(nameof(SystemSpatialLfeWarning))]
     private MonitorSpatialRenderer _selectedSpatialRenderer;
 
@@ -615,10 +618,12 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     public bool MonitorSofaApplicable =>
         Models.OutputModel.SofaAvailable && SelectedMonitorBackend?.Renderer == AdmRenderer.SafBinaural;
 
-    // Apple AUSpatialMixer 与 VBAP 无 ADM 去相关器(supports_diffuse=false):diffuse 改动监听中听不到。
-    // 取生效渲染器(系统空间音频含「渲染床后端」次级下拉)。仅作提示——同一份编辑仍写导出 policy,
-    // EAR/HOA/SAF-binaural 渲染时 diffuse 照常生效,故不禁用控件。
-    public bool MonitorDiffuseInaudible => EffectiveMonitorRenderer is AdmRenderer.Apple or AdmRenderer.Saf;
+    // 取 core capabilities 声明的生效渲染器能力(系统空间音频含「渲染床后端」次级下拉)。仅作提示——
+    // 同一份编辑仍写入导出的 ADM，之后交给支持 diffuse 的渲染器时会生效，故不禁用控件。
+    public bool MonitorDiffuseInaudible => !Models.OutputModel.SupportsDiffuse(EffectiveMonitorRenderer);
+
+    public string MonitorDiffuseWarning => L.Format("SemDiffuseUnsupportedHint",
+        Models.OutputModel.RendererDisplayName(EffectiveMonitorRenderer));
 
     // 系统空间音频 + Apple 渲染床,且此 macOS 的 AUSpatialMixer 会错置 LFE(core 运行时自检 ≤26.3)→
     // 提示改用 EAR/VBAP 床。所有系统空间布局都含 LFE,故无需按布局再门控。

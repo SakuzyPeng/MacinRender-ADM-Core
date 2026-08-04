@@ -90,9 +90,24 @@ internal static class SelfTest
         Console.WriteLine($"codecs: {string.Join(", ", OutputModel.Codecs.Select(c => $"{c.Id}={(c.Available ? "on" : "off")}"))}");
         Console.WriteLine($"features: apac={OutputModel.ApacAvailable} iamf={OutputModel.IamfAvailable} sofa={OutputModel.SofaAvailable}");
 
-        // 系统空间音频布局 = capabilities 的 system_spatial_layouts(GUI 监听布局下拉的跨平台权威来源)。
-        OutputModel.InitializeSystemSpatial(AdmQueries.LoadCapabilities(ctx));
+        // capabilities 同时驱动语义能力提示与系统空间音频布局下拉。
+        var capabilities = AdmQueries.LoadCapabilities(ctx);
+        OutputModel.InitializeCapabilities(capabilities);
         Console.WriteLine($"系统空间音频布局({OutputModel.SystemSpatialLayouts.Count}): [{string.Join(", ", OutputModel.SystemSpatialLayouts)}]");
+
+        bool diffuseCapabilitiesOk = OutputModel.SupportsDiffuse(AdmRenderer.Ear) &&
+                                     !OutputModel.SupportsDiffuse(AdmRenderer.Saf) &&
+                                     OutputModel.SupportsDiffuse(AdmRenderer.Hoa) &&
+                                     OutputModel.SupportsDiffuse(AdmRenderer.SafBinaural);
+        if (capabilities?.Backends.Any(b => b.Renderer == "apple") == true)
+        {
+            diffuseCapabilitiesOk &= !OutputModel.SupportsDiffuse(AdmRenderer.Apple);
+        }
+        if (!diffuseCapabilitiesOk)
+        {
+            Console.Error.WriteLine("[失败] capabilities diffuse 支持映射与 core 声明不一致");
+            return 1;
+        }
 
         // 多声道电平表的逐声道标签 = adm_layouts_json 的 CoreAudio 顺序(监听实际输出顺序)。
         OutputModel.InitializeLayoutOrders(AdmQueries.LoadLayouts(ctx));

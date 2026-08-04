@@ -94,9 +94,8 @@ public partial class App : Application
             var matrix = AdmQueries.LoadSupportMatrix(ctx)
                 ?? throw new InvalidOperationException("adm_render_support_matrix_json returned no data.");
             OutputModel.Initialize(matrix);
-            // 系统空间音频可选布局来自 capabilities 的 system_spatial_layouts(权威源,跨平台,非硬编码);
-            // 不支持平台(如 Linux)为空。
-            OutputModel.InitializeSystemSpatial(AdmQueries.LoadCapabilities(ctx));
+            // 后端语义能力与系统空间音频布局均来自 capabilities；后者不支持平台(如 Linux)时为空。
+            OutputModel.InitializeCapabilities(AdmQueries.LoadCapabilities(ctx));
             // 各布局逐声道标签来自 adm_layouts_json(CoreAudio 顺序),供多声道电平表标注。须在上一行之后。
             OutputModel.InitializeLayoutOrders(AdmQueries.LoadLayouts(ctx));
         }

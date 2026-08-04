@@ -66,13 +66,36 @@ public static class OutputModel
     /// false 时 Apple 渲染的系统空间床会丢 LFE(macOS ≤26.3)→ 提示改用 EAR/VBAP 床。缺失默认 true。</summary>
     public static bool AppleSystemSpatialLfeRoutingOk { get; private set; } = true;
 
-    /// <summary>从 capabilities JSON 的 system_spatial_layouts 提取系统空间音频的布局候选。</summary>
-    internal static void InitializeSystemSpatial(CapabilitiesDoc? caps)
+    // 后端级 ADM diffuse 能力,来自 adm_capabilities_json。未知后端不显示“不支持”警告，
+    // 避免旧 core / 缺失能力数据时给用户制造错误结论。
+    private static Dictionary<AdmRenderer, bool> _diffuseSupport = new();
+
+    /// <summary>载入后端语义能力与系统空间音频布局；两者均以 capabilities JSON 为权威源。</summary>
+    internal static void InitializeCapabilities(CapabilitiesDoc? caps)
     {
         SystemSpatialLayouts = caps is null
             ? Array.Empty<string>()
             : caps.SystemSpatialLayouts.Select(l => l.DisplayName).ToArray();
         AppleSystemSpatialLfeRoutingOk = caps?.AppleSystemSpatialLfeRoutingOk ?? true;
+        _diffuseSupport = caps?.Backends
+            .Select(b => (Renderer: MapRenderer(b.Renderer), b.SupportsDiffuse))
+            .Where(x => x.Renderer != AdmRenderer.Automatic && x.SupportsDiffuse.HasValue)
+            .ToDictionary(x => x.Renderer, x => x.SupportsDiffuse!.Value)
+            ?? new Dictionary<AdmRenderer, bool>();
+    }
+
+    /// <summary>所选渲染器是否支持 ADM diffuse；能力未知时返回 true（不作无依据的告警）。</summary>
+    public static bool SupportsDiffuse(AdmRenderer renderer)
+    {
+        renderer = NormalizeRendererAlias(renderer);
+        return !_diffuseSupport.TryGetValue(renderer, out var supported) || supported;
+    }
+
+    /// <summary>渲染器的 GUI 展示名，与输出设置中的后端名称保持一致。</summary>
+    public static string RendererDisplayName(AdmRenderer renderer)
+    {
+        renderer = NormalizeRendererAlias(renderer);
+        return Backends.FirstOrDefault(b => b.Renderer == renderer)?.Name ?? renderer.ToString();
     }
 
     // 系统空间音频各布局的逐声道标签(display 名 → 顺序标签数组)。来自 adm_layouts_json,
@@ -80,7 +103,7 @@ public static class OutputModel
     // 5.1.2 等无 apac/caf 行的回退 wav 行(前 6 声道位置一致,仅顶置标签用 ADM 命名)。
     private static Dictionary<string, string[]> _appleChannelOrder = new();
 
-    /// <summary>用 adm_layouts_json 构建系统空间音频布局的逐声道标签表。须在 InitializeSystemSpatial 之后调。</summary>
+    /// <summary>用 adm_layouts_json 构建系统空间音频布局的逐声道标签表。须在 InitializeCapabilities 之后调。</summary>
     internal static void InitializeLayoutOrders(LayoutsDoc? doc)
     {
         var map = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
@@ -297,5 +320,8 @@ public static class OutputModel
         "apple" => AdmRenderer.Apple,
         _ => AdmRenderer.Automatic,
     };
+
+    private static AdmRenderer NormalizeRendererAlias(AdmRenderer renderer) =>
+        renderer == AdmRenderer.Binaural ? AdmRenderer.SafBinaural : renderer;
 
 }
