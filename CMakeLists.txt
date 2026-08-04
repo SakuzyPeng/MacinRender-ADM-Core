@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 
 project(
     MacinRenderADMCore
-    VERSION 1.9.0
+    VERSION 1.9.1
     DESCRIPTION "Cross-platform ADM rendering core for MacinRender"
     LANGUAGES C CXX
 )
