@@ -707,6 +707,10 @@ CapabilityReport HoaRenderer::capabilities() const {
 }
 
 Result<std::shared_ptr<IPreparedRender>> HoaRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
+    auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "hoa-encode");
+    if (!lfe_routing) {
+        return tl::unexpected{lfe_routing.error()};
+    }
     if (plan.output_layout != "hoa3") {
         return make_error(ErrorCode::unsupported,
                           fmt::format("unsupported HOA output layout '{}'; supported: hoa3", plan.output_layout),

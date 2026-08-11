@@ -166,6 +166,9 @@ static_assert(static_cast<int>(mradm::BinauralSpreadMode::none) == ADM_BINAURAL_
 static_assert(static_cast<int>(mradm::BinauralSpreadMode::cloud) == ADM_BINAURAL_SPREAD_CLOUD);
 static_assert(static_cast<int>(mradm::BinauralSpreadMode::saf_spreader) == ADM_BINAURAL_SPREAD_SAF_SPREADER);
 
+static_assert(static_cast<int>(mradm::LfeRoutingMode::direct) == ADM_LFE_ROUTING_DIRECT);
+static_assert(static_cast<int>(mradm::LfeRoutingMode::split_power) == ADM_LFE_ROUTING_SPLIT_POWER);
+
 static_assert(static_cast<int>(mradm::RenderOptions::IamfContainer::obu) == ADM_IAMF_CONTAINER_OBU);
 static_assert(static_cast<int>(mradm::RenderOptions::IamfContainer::mp4) == ADM_IAMF_CONTAINER_MP4);
 static_assert(static_cast<int>(mradm::RenderOptions::ApacContainer::mpeg4) == ADM_APAC_CONTAINER_MPEG4);
@@ -763,6 +766,18 @@ adm_error_code_t adm_render_options_set_binaural_spread_mode(adm_render_options_
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     opts->opts.binaural_spread_mode = static_cast<mradm::BinauralSpreadMode>(mode);
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_lfe_routing_mode(adm_render_options_t* opts,
+                                                         adm_lfe_routing_mode_t mode) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (static_cast<int>(mode) < ADM_LFE_ROUTING_DIRECT || static_cast<int>(mode) > ADM_LFE_ROUTING_SPLIT_POWER) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.lfe_routing_mode = static_cast<mradm::LfeRoutingMode>(mode);
     return ADM_ERROR_OK;
 }
 

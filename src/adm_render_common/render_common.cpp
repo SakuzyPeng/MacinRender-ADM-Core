@@ -177,7 +177,82 @@ bool any_label_is_lfe(const std::vector<std::string>& labels) noexcept {
 }
 
 bool direct_speakers_block_is_lfe(const SceneDirectSpeakersBlock& block) noexcept {
-    return block.low_pass_hz.has_value() || any_label_is_lfe(block.speaker_labels);
+    return direct_speakers_lfe_target(block) != LfeTarget::none;
+}
+
+LfeTarget direct_speakers_lfe_target(const SceneDirectSpeakersBlock& block) noexcept {
+    // Prefer an explicit second-LFE alias even if the metadata also carries a
+    // generic LFE label from another naming layer.
+    for (const auto& label : block.speaker_labels) {
+        const std::string key = normalise_speaker_label_key(label);
+        if (key == "LFE2" || key == "LFER") {
+            return LfeTarget::lfe2;
+        }
+    }
+    if (any_label_is_lfe(block.speaker_labels)) {
+        return LfeTarget::lfe1;
+    }
+    return block.low_pass_hz.has_value() ? LfeTarget::lfe1 : LfeTarget::none;
+}
+
+float LfeRoutingPlan::gain(LfeTarget input, LfeTarget output) const noexcept {
+    if (!applies_to_22_2 || input == LfeTarget::none || output == LfeTarget::none) {
+        return 0.0F;
+    }
+    if (mode == LfeRoutingMode::split_power) {
+        return k_lfe_split_power_gain;
+    }
+    return input == output ? 1.0F : 0.0F;
+}
+
+Result<LfeRoutingPlan> resolve_lfe_routing(const RenderPlan& plan, LogSink& logs, std::string_view log_module) {
+    LfeRoutingPlan routing;
+    routing.mode = plan.lfe_routing_mode;
+    routing.applies_to_22_2 = plan.output_layout == "9+10+3";
+
+    if (!routing.applies_to_22_2) {
+        if (routing.mode == LfeRoutingMode::split_power) {
+            logs.log(LogLevel::warning,
+                     log_module,
+                     "LFE routing mode 'split-power' only applies to 22.2 ('9+10+3'); using existing LFE routing");
+        }
+        return routing;
+    }
+
+    for (const auto& object : plan.scene.objects) {
+        for (const auto& track : object.tracks) {
+            for (const auto& block : track.ds_blocks) {
+                switch (direct_speakers_lfe_target(block)) {
+                case LfeTarget::lfe1:
+                    routing.has_lfe1 = true;
+                    break;
+                case LfeTarget::lfe2:
+                    routing.has_lfe2 = true;
+                    break;
+                case LfeTarget::none:
+                    break;
+                }
+            }
+        }
+    }
+
+    const std::string_view mode_name =
+        routing.mode == LfeRoutingMode::direct ? std::string_view{"direct"} : std::string_view{"split-power"};
+    logs.log(LogLevel::info, log_module, std::string{"22.2 LFE routing mode: "} + std::string{mode_name});
+
+    if (routing.mode == LfeRoutingMode::split_power) {
+        if (routing.has_lfe1 && routing.has_lfe2) {
+            return make_error(ErrorCode::invalid_argument,
+                              "22.2 split-power requires a single semantic LFE channel; scene contains both LFE1 "
+                              "and LFE2");
+        }
+        if (!routing.has_lfe1 && !routing.has_lfe2) {
+            logs.log(LogLevel::warning,
+                     log_module,
+                     "22.2 split-power requested but no semantic LFE channel was found; LFE outputs remain silent");
+        }
+    }
+    return routing;
 }
 
 SerialWorker::SerialWorker() {

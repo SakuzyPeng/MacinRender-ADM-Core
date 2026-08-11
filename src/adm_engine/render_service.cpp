@@ -766,6 +766,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     plan.object_smoothing_frames = request.options.object_smoothing_frames;
     plan.speaker_spread_mode = request.options.speaker_spread_mode;
     plan.binaural_spread_mode = request.options.binaural_spread_mode;
+    plan.lfe_routing_mode = request.options.lfe_routing_mode;
     plan.apple_spatial_preset = request.options.apple_spatial_preset;
     plan.apple_speaker_rendering_flags = request.options.apple_speaker_rendering_flags;
     plan.listener_orientation = request.options.listener_orientation;

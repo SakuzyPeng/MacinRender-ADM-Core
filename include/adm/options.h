@@ -37,6 +37,13 @@ enum class BinauralSpreadMode {
     saf_spreader, // experimental: SAF spreader OM mode (covariance-matching STFT domain)
 };
 
+// Routing for semantic LFE DirectSpeakers channels when rendering the built-in
+// 22.2 (9+10+3) layout. Other layouts retain their existing backend routing.
+enum class LfeRoutingMode {
+    direct,      // LFE1 -> ch3, LFE2/LFER -> ch9, unity gain
+    split_power, // one semantic LFE -> ch3 + ch9 at sqrt(0.5) each
+};
+
 enum class AppleSpatialPreset {
     off,
     headphone_default, // AUSpatialMixer factory preset #1: Headphone Media Playback Default
@@ -122,6 +129,7 @@ struct RenderOptions {
     uint32_t object_smoothing_frames{0};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
+    LfeRoutingMode lfe_routing_mode{LfeRoutingMode::direct};
     // Apple AUSpatialMixer binaural only. PresentPreset resets several unit/bus
     // parameters, so the Apple backend applies it before restoring ADM-driven setup.
     AppleSpatialPreset apple_spatial_preset{AppleSpatialPreset::off};

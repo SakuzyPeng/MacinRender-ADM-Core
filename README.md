@@ -91,7 +91,7 @@ WAVEFORMATEXTENSIBLE channel mask；无效 ADM 直接报错。也可显式选择
 
 公开两声道输出采用 `binaural` 语义，并作为默认输出。后端与 HRTF 来源分别选择：
 `saf-binaural` 提供内置 KEMAR 与构建支持时的 `--sofa` 用户 HRIR；`apple` 使用 Apple 系统 HRTF。
-当前入口覆盖 CLI、C++ API 与 C ABI v1.29。
+当前入口覆盖 CLI、C++ API 与 C ABI v1.30。
 
 ## C ABI 与 GUI 集成
 

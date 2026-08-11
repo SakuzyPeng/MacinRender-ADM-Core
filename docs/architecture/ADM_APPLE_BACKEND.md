@@ -12,7 +12,7 @@
 
 - **双耳**：Headphones HRTF → 2ch（输出布局 `binaural`，CoreAudio 容器使用 `kAudioChannelLayoutTag_Binaural`）。
 - **多声道扬声器**：VBAP → `5.1`、`7.1`、`5.1.2`、`5.1.4`、`7.1.4`、`9.1.6`、`22.2`。
-- **输入内容**：Objects 与 DirectSpeakers；Objects 支持 position / gain / interpolation / objectDivergence；DirectSpeakers 支持静态方位与 LFE 旁路。
+- **输入内容**：Objects 与 DirectSpeakers；Objects 支持 position / gain / interpolation / objectDivergence；DirectSpeakers 支持静态方位。普通布局的 LFE 保留 SpatialMixer 旁路，22.2 使用独立双 LFE side bus。
 - **按需窗口渲染**：支持 `RenderPlan::render_window`，CLI `--start` / `--end` 不再需要先渲染完整时间线再裁切。
 - **Apple binaural factory preset**：`--apple-spatial-preset headphone-default|headphone-movie` 映射到
   `kAudioUnitProperty_PresentPreset` 的 headphone media playback factory preset #1/#2。默认关闭，只对 Apple
@@ -77,11 +77,13 @@ struct BusPlan {
 
 struct ApplePrepared final : IPreparedRender {
     OutputProfile profile;
-    std::vector<BusPlan> buses;
+    std::vector<BusPlan> buses;     // SpatialMixer inputs
+    std::vector<BusPlan> lfe_buses; // 22.2 side buses
+    LfeRoutingPlan lfe_routing;
 };
 ```
 
-`prepare()` 只解析输出布局、分配 bus、展开对象语义并生成事件表。`render_window()` 创建 SpatialMixer，设置输出布局、输入 bus、source mode、spatialization algorithm、LFE layout 与 render callback，然后拉取输出并写入目标文件。
+`prepare()` 解析输出布局、分配 bus、展开对象语义并生成事件表。22.2 的 LFE bus 在此从空间 bus 中拆出，并完成单/双语义 LFE 校验。`render_window()` 仅在存在空间 bus 时创建 SpatialMixer；AU 使用标准 CICP 13 输出布局，随后在写出和计量前把 side bus 混入 ch3/ch9。纯 LFE 场景只创建 reader，不创建 AU。
 
 ## 4. 渲染管线
 
@@ -124,14 +126,15 @@ Apple 后端和其他主要后端一样在渲染过程中内联测量响度 / Tr
   `kAudioUnitProperty_PresentPreset`。这是刻意顺序：PresentPreset 会重置若干 SpatialMixer 参数，后端随后重新写入
   ADM 驱动配置，避免预设把床层或对象声像重置到中心。preset 模式不等同于 `ReverbRoomType`，也不对扬声器布局开放。
 - DirectSpeakers → `AmbienceBed` 远场床层（VBAP 下落到对应输出扬声器，已验证）。
-- LFE → `Bypass`，并把 mono input bus 标为 `kAudioChannelLabel_LFEScreen`，不参与空间化（落到输出 LFE 通道，已验证）。
+- 非 22.2 LFE → `Bypass`，mono input bus 标为 `kAudioChannelLabel_LFEScreen`，保持既有行为。
+- 22.2 LFE → AU 外 side bus：`direct` 将 LFE1/LFE2 严格独立送入 ch3/ch9；`split-power` 将单一语义 LFE 以 `sqrt(0.5)` 同时送入两路。事件 gain、对象 gain 与实时 override 采样斜坡均在 side bus 混音中生效。
 
 ### 5.2 项目层预处理
 
 - Cartesian position → `scene_position_to_polar()`。
 - objectDivergence → 共享语义路径展开为并行点源 bus。
 - screenRef warning / unsupported 降级 → 共享 `prepare_object_block()` 路径处理。
-- LFE 识别 → 共享 `render_common::direct_speakers_block_is_lfe()`，同时识别 `channelFrequency.lowPass` 和 `RC_LFE` / `R-LFE` / `LFE1` / `Subwoofer` 等 LFE 标签。
+- LFE 识别 → 共享 `render_common::direct_speakers_lfe_target()`：`LFE2` / `LFER` 为第二路，其他 LFE alias 与仅 lowPass 块为第一路；拓扑判定只读元数据，不依赖样本能量、gain 或 mute。
 
 ### 5.3 不支持或降级
 
@@ -206,7 +209,8 @@ Apple smoke tests 覆盖：
 - gain dB floor：线性 0 / 极低增益不会变成 unity。
 - 7.1.4 / 22.2 等布局声道数与写出。
 - binaural 输出的 CoreAudio tag 归一化。
-- LFE 标签识别与 LFE bus 旁路配置。
+- LFE 标签识别、普通布局旁路，以及 22.2 direct/split-power side-bus 路由。
+- 22.2 纯 LFE 无 AU、ch0 无泄漏、stream/offline 一致与实时 override gain ramp。
 - render window 输出帧数。
 
 不做 bit-exact golden。若后续增加 golden，应按 macOS / SDK 版本钉住容差。
@@ -214,6 +218,6 @@ Apple smoke tests 覆盖：
 ## 10. 后续事项
 
 - extent dedup：✅ 已完成（部分）。binaural / HOA / apple 共用 `render_common::k_extent_disk_samples` 采样表 + `extent_disk_radii` 半角映射（逐字节相同的部分）；几何环（normalize / direction / 输出）因 binaural 与 HOA 的实现真不同（双精度 vs 单精度、polar vs cartesian 分支、az/el vs SH 编码）无法合并，各保留本地。bit-exact 经 binaural / hoa / render_trim fixture 验证。
-- bed / LFE 扬声器路由：✅ 已验证。AmbienceBed 床层落到对应扬声器、LFE Bypass + LFEScreen 落到输出 LFE 通道，经 verify_bed_and_lfe_routing 在 7.1.4 下确认（M+030→ch0、M+000→ch2、LFE→ch3）。
+- bed / LFE 扬声器路由：✅ 已验证。7.1.4 继续使用 AmbienceBed + LFE Bypass；22.2 使用标准 CICP 13 与独立 side bus，覆盖 LFE1→ch3、LFE2→ch9、单 LFE 等功率复制、原生双 LFE 拒绝 split 及无全频声道泄漏。
 - diffuse：如要做近似，必须先定义可解释的能量 / 去相关策略，不能简单使用 SpatialMixer reverb 代替。
 - realtime preview：复用 prepared 配方与 AU 参数映射，另建实时驱动循环；head tracking / transaural 仅适合该方向。

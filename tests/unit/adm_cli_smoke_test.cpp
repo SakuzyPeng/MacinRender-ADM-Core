@@ -214,6 +214,7 @@ int main() {
                     "render --help: speaker-spread-mode option listed");
         ok &= check(r.out.find("--binaural-spread-mode") != std::string::npos,
                     "render --help: binaural-spread-mode option listed");
+        ok &= check(r.out.find("--lfe-routing") != std::string::npos, "render --help: 22.2 LFE routing option listed");
         ok &= check(r.out.find("saf-binaural") != std::string::npos, "render --help: saf-binaural renderer listed");
         ok &= check(r.out.find("--apple-spatial-preset") != std::string::npos,
                     "render --help: apple-spatial-preset option listed");
@@ -259,6 +260,15 @@ int main() {
         {
             auto r = run_cmd(mradm_exe + " render --binaural-spread-mode invalid_xyz");
             ok &= check(r.code != 0, "render --binaural-spread-mode invalid: non-zero exit");
+        }
+        for (const auto* val : {"direct", "split-power"}) {
+            auto r = run_cmd(mradm_exe + " render --help --lfe-routing " + val);
+            const std::string msg = std::string("render --lfe-routing ") + val + ": exit 0";
+            ok &= check(r.code == 0, msg.c_str());
+        }
+        {
+            auto r = run_cmd(mradm_exe + " render --lfe-routing invalid_xyz");
+            ok &= check(r.code != 0, "render --lfe-routing invalid: non-zero exit");
         }
         // --apple-spatial-preset: valid values
         for (const auto* val : {"off", "headphone-default", "headphone-movie"}) {

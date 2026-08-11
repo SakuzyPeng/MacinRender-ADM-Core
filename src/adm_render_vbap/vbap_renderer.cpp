@@ -348,7 +348,8 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
                                                                      const LayoutSpec& layout,
                                                                      std::string_view layout_id,
                                                                      LogSink& logs,
-                                                                     mradm::SpeakerSpreadMode spread_mode) {
+                                                                     mradm::SpeakerSpreadMode spread_mode,
+                                                                     const render_common::LfeRoutingPlan& lfe_routing) {
     // Warn once if 2D output will silently discard height information.
     if (is_2d_layout(layout) && scene_has_elevated_sources(scene)) {
         logs.log(LogLevel::warning,
@@ -417,7 +418,17 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
             for (const auto& ds : track.ds_blocks) {
                 std::vector<float> gains(num_out, 0.0F);
 
-                const bool matched = route_direct_speaker_label(layout, ds.speaker_labels, ds.gain, gains);
+                const auto lfe_target = render_common::direct_speakers_lfe_target(ds);
+                bool matched = false;
+                if (lfe_routing.applies_to_22_2 && lfe_target != render_common::LfeTarget::none) {
+                    gains[render_common::k_22_2_lfe1_index] =
+                        ds.gain * lfe_routing.gain(lfe_target, render_common::LfeTarget::lfe1);
+                    gains[render_common::k_22_2_lfe2_index] =
+                        ds.gain * lfe_routing.gain(lfe_target, render_common::LfeTarget::lfe2);
+                    matched = true;
+                } else {
+                    matched = route_direct_speaker_label(layout, ds.speaker_labels, ds.gain, gains);
+                }
 
                 if (!matched) {
                     if (ds.low_pass_hz) {
@@ -724,7 +735,11 @@ Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan&
         return make_error(ErrorCode::unsupported, fmt::format("unsupported VBAP output layout '{}'", layout_id), {});
     }
 
-    auto gain_matrix = build_gain_matrix(plan.scene, *layout, layout_id, logs, plan.speaker_spread_mode);
+    auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "saf-vbap");
+    if (!lfe_routing) {
+        return tl::unexpected{lfe_routing.error()};
+    }
+    auto gain_matrix = build_gain_matrix(plan.scene, *layout, layout_id, logs, plan.speaker_spread_mode, *lfe_routing);
     if (!gain_matrix) {
         return make_error(gain_matrix.error().code, gain_matrix.error().message, gain_matrix.error().context);
     }

@@ -89,6 +89,7 @@ struct RenderPlan {
     uint32_t object_smoothing_frames{0};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
+    LfeRoutingMode lfe_routing_mode{LfeRoutingMode::direct};
     AppleSpatialPreset apple_spatial_preset{AppleSpatialPreset::off};
     // Apple speaker output only. false writes SpatialMixerRenderingFlags=0;
     // true enables Apple's InterAuralDelay and DistanceAttenuation flags.

@@ -89,6 +89,20 @@ separate choices:
 `mradm backends` reports the current platform/build truth under `HRTF sources`. Passing `--sofa` to a backend that
 does not report `user-sofa` is an error; the engine does not switch backend or ignore the file.
 
+### 22.2 dual-LFE routing
+
+`--lfe-routing` applies only to the built-in `22.2` (`9+10+3`) output:
+
+- `direct` (default): semantic LFE1 goes to ch3 at unity; LFE2/LFER goes to ch9 at unity, with strict separation.
+- `split-power`: the scene must contain only one semantic LFE. Whether it is LFE1 or LFE2, it is sent to both
+  ch3 and ch9 at `sqrt(0.5)` (−3.0103 dB) per output.
+
+`LFE`, `LFE1`, `LFEL`, RC_LFE-family aliases, and low-pass-only blocks identify the first LFE; `LFE2` and `LFER`
+identify the second. Repeated metadata for the same side is still one semantic LFE. If both sides occur,
+`split-power` returns `invalid_argument` during backend preparation and creates no output file. Other layouts retain
+their existing routing and log a warning. This option performs no crossover, bass management, decorrelation, or
+room calibration.
+
 WAV output does not rely on a text comment to declare its layout:
 
 - `5.1`, `5.1.2`, `7.1`, `5.1.4`, and `7.1.4` carry a WAVEFORMATEXTENSIBLE channel mask and samples are written in
@@ -123,6 +137,10 @@ mradm render -i custom.wav --input-channels L,R,C,LFE,M+090,M-090 \
 # Apple system HRTF; do not pass --sofa.
 mradm render -i bed.wav --input-layout 5.1 \
   --renderer apple --output-layout binaural -o apple_binaural.wav
+
+# Split one LFE equally by power across both 22.2 LFE outputs.
+mradm render -i mono_lfe.wav --input-channels LFE1 \
+  --renderer ear --output-layout 22.2 --lfe-routing split-power -o lfe_222.wav
 ```
 
 ## Synthesized scene
@@ -132,6 +150,7 @@ maps to one DirectSpeakers track spanning the entire file. Non-LFE tracks use th
 tracks carry low-frequency semantics without a spatial position. `inspect` and scene JSON report
 `source_kind=channel_bed`, the resolved input layout, and file-channel order.
 
-C++ callers use `RenderOptions::input_layout` or `input_channel_labels`. C ABI v1.28 provides
+C++ callers use `RenderOptions::input_layout` or `input_channel_labels`, and select 22.2 LFE routing with
+`RenderOptions::lfe_routing_mode`. C ABI v1.28 provides
 `adm_render_options_set_input_layout`, `adm_render_options_set_input_channel_labels`, and `adm_input_layouts_json`;
-the JSON schema is `mradm.input-layouts` v1.
+v1.30 adds `adm_render_options_set_lfe_routing_mode`. The JSON schema is `mradm.input-layouts` v1.

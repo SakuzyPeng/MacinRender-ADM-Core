@@ -88,6 +88,19 @@ mradm input-layouts --format json
 `mradm backends` 的 `HRTF sources` 字段是当前平台与构建的能力真值。向不支持
 `user-sofa` 的后端传 `--sofa` 会直接报错，不会换后端或忽略文件。
 
+### 22.2 双 LFE 路由
+
+`--lfe-routing` 只对内置 `22.2`（`9+10+3`）输出生效：
+
+- `direct`（默认）：语义 LFE1 以 unity 写入 ch3，LFE2 / LFER 以 unity 写入 ch9，两路严格独立。
+- `split-power`：素材必须只有一路语义 LFE；无论它是 LFE1 还是 LFE2，都以
+  `sqrt(0.5)`（−3.0103 dB）分别写入 ch3/ch9。
+
+`LFE`、`LFE1`、`LFEL`、`RC_LFE` 类别以及只有 `channelFrequency.lowPass` 的块归为第一路，
+`LFE2` / `LFER` 归为第二路。重复的同一路元数据仍算单一语义 LFE；同时出现两类时，
+`split-power` 在后端 prepare 阶段返回参数错误且不创建输出文件。其它布局保持原路由并记录 warning。
+该功能不做分频、低频管理、去相关或房间校准。
+
 WAV 输出不会只靠文字注释声明布局：
 
 - `5.1`、`5.1.2`、`7.1`、`5.1.4`、`7.1.4` 写
@@ -123,6 +136,10 @@ mradm render -i custom.wav --input-channels L,R,C,LFE,M+090,M-090 \
 # Apple 系统 HRTF；不传 --sofa
 mradm render -i bed.wav --input-layout 5.1 \
   --renderer apple --output-layout binaural -o apple_binaural.wav
+
+# 单 LFE 等功率送入 22.2 的两路 LFE
+mradm render -i mono_lfe.wav --input-channels LFE1 \
+  --renderer ear --output-layout 22.2 --lfe-routing split-power -o lfe_222.wav
 ```
 
 ## 合成场景
@@ -132,6 +149,8 @@ mradm render -i bed.wav --input-layout 5.1 \
 精确方位与仰角；LFE track 标记低频语义且不设置空间位置。`inspect` 和 scene JSON 会报告
 `source_kind=channel_bed`、解析后的输入布局及文件声道顺序。
 
-C++ 调用方使用 `RenderOptions::input_layout` 或 `input_channel_labels`。C ABI v1.28 提供
+C++ 调用方使用 `RenderOptions::input_layout` 或 `input_channel_labels`，并可通过
+`RenderOptions::lfe_routing_mode` 选择 22.2 LFE 路由。C ABI v1.28 提供
 `adm_render_options_set_input_layout`、`adm_render_options_set_input_channel_labels` 与
-`adm_input_layouts_json`；JSON schema 为 `mradm.input-layouts` v1。
+`adm_input_layouts_json`；v1.30 增加 `adm_render_options_set_lfe_routing_mode`。JSON schema 为
+`mradm.input-layouts` v1。

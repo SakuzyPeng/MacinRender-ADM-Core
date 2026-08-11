@@ -113,7 +113,7 @@ libear `CartesianSpeakerPosition` 路径不再触发。
 | **CartesianSpeakerPosition** | ✅ | 🚫 运行时抛出 | ✅ 转换为 polar | ✅ 见注④ |
 | gain | ✅ DefaultParam | 手动应用 | ✅ | ✅ |
 | **rtime / duration**（时域块） | ✅ Default/Opt | — | ✅ | ✅ |
-| **channelFrequency**（在 AudioChannelFormat） | ✅ | ✅ | ✅ `low_pass_hz` | ✅ LFE 识别，EAR 透传，VBAP fallback 抑制 |
+| **channelFrequency**（在 AudioChannelFormat） | ✅ | ✅ | ✅ `low_pass_hz` | ✅ LFE 识别；22.2 EAR/VBAP/Apple 共用语义分路，其他布局保留既有路径 |
 | importance / headLocked | ✅ DefaultParam | — | ❌ | ❌ |
 
 ### DS 时域块（M3.2 已修复）
@@ -254,6 +254,7 @@ LUFS / 空间 True Peak 测量缓冲中剥离，并由独立 mono True Peak trac
 | **VBAP 2D / 3D 配置** | ✅ 自动按布局高度判断；能力报告和 render 日志显示 2D/3D，2D 布局遇到高度源会 warning | 后续可增加显式 override 开关 |
 | **VBAP 插值策略配置** | ✅ `RenderOptions.default_interp_ms`（默认 5ms，0=瞬时切换，CLI `--interp-ms`）；EAR / HOA 渲染器同步生效 | — |
 | **Objects 动态元数据去拉链** | ✅ `RenderOptions.object_smoothing_frames`（默认 0，CLI `--object-smoothing-frames`）；VBAP / EAR / HOA encode / binaural 均接入，DirectSpeakers 不平滑 | 用于高密度 jumpPosition 压力素材的工程平滑；默认逐样本跟随 ADM 块，问题素材可显式调大 |
+| **22.2 双 LFE 路由** | ✅ `RenderOptions::lfe_routing_mode` / CLI `--lfe-routing` / C ABI v1.30；EAR、SAF VBAP、Apple 统一支持 `direct` 与单 LFE `split-power` | 仅内置 `9+10+3`；不包含 bass management、分频或去相关 |
 
 ### HRTF / SOFA binauraliser
 
@@ -344,7 +345,7 @@ ADM 块插值和 MDAP extent spread。EAR 与 SAF VBAP 的扬声器布局能力�
 | `9.1.6` | 9.1.6 (Dolby Atmos) | 16 | LFE1@ch3 |
 | `9+10+3` | 22.2 | 24 | LFE1@ch3，LFE2@ch9 |
 
-`0+2+0` 用于内部测试和普通两声道文件写入，不在 CLI `backends` 的 speaker layouts 中对外显示；用户 2ch 渲染入口仍走 `saf-binaural`。`wav71` 使用 CoreAudio `kAudioChannelLayoutTag_WAVE_7_1` / Microsoft WAVE 7.1 槽位；`9.1.4` 与 `9.1.6` 使用项目侧 Atmos-style 声道顺序，其中 libear 后端通过自定义 `ear::Layout` 构造。LFE 声道参与输出但不参与 VBAP panning；DS LFE 轨按标签（"LFE1"/"LFE2"）直接路由。
+`0+2+0` 用于内部测试和普通两声道文件写入，不在 CLI `backends` 的 speaker layouts 中对外显示；用户 2ch 渲染入口仍走 `saf-binaural`。`wav71` 使用 CoreAudio `kAudioChannelLayoutTag_WAVE_7_1` / Microsoft WAVE 7.1 槽位；`9.1.4` 与 `9.1.6` 使用项目侧 Atmos-style 声道顺序，其中 libear 后端通过自定义 `ear::Layout` 构造。LFE 声道参与输出但不参与 VBAP panning。22.2 默认将 LFE1 严格送入 ch3、LFE2/LFER 严格送入 ch9；`split-power` 仅接受单一语义 LFE，并以 `sqrt(0.5)` 同时送入两路。
 
 **仍待改善：**
 

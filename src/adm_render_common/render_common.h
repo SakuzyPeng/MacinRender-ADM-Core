@@ -92,6 +92,36 @@ class InterleavedLiveGainSmoother {
 [[nodiscard]] bool any_label_is_lfe(const std::vector<std::string>& labels) noexcept;
 [[nodiscard]] bool direct_speakers_block_is_lfe(const SceneDirectSpeakersBlock& block) noexcept;
 
+// Semantic destination encoded by one DirectSpeakers LFE block. LFE2/LFER are
+// the second 22.2 LFE; all other recognised LFE aliases (including lowPass-only
+// blocks) are the first. This classification is metadata-only.
+enum class LfeTarget {
+    none,
+    lfe1,
+    lfe2,
+};
+
+[[nodiscard]] LfeTarget direct_speakers_lfe_target(const SceneDirectSpeakersBlock& block) noexcept;
+
+inline constexpr std::size_t k_22_2_lfe1_index = 3U;
+inline constexpr std::size_t k_22_2_lfe2_index = 9U;
+inline constexpr float k_lfe_split_power_gain = 0.70710678118654752440F;
+
+// Shared, immutable 22.2 routing decision used by every speaker backend. The
+// resolver scans scene metadata before any output writer is opened, so an invalid
+// dual-LFE split request fails consistently in prepare().
+struct LfeRoutingPlan {
+    bool applies_to_22_2{false};
+    LfeRoutingMode mode{LfeRoutingMode::direct};
+    bool has_lfe1{false};
+    bool has_lfe2{false};
+
+    [[nodiscard]] float gain(LfeTarget input, LfeTarget output) const noexcept;
+};
+
+[[nodiscard]] Result<LfeRoutingPlan>
+resolve_lfe_routing(const RenderPlan& plan, LogSink& logs, std::string_view log_module);
+
 // Seek a frame-addressable reader (e.g. libbw64's Bw64Reader) to an absolute frame,
 // overflow-safe for long programs. Such readers take an int32 frame offset, so a
 // single cast overflows past ~2^31 frames (~12 h at 48 kHz); this issues segmented

@@ -364,6 +364,19 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - **后端语义**：EAR、SAF VBAP、HOA 与 SAF binaural 使用零增益；Apple AUSpatialMixer 将零线性增益
   映射到其输入增益下限 −120 dB。字段仍按现有 worker block 边界生效，并跨后端热切换保留。
 
+### v1.30.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+为内置 22.2（`9+10+3`）输出增加显式双 LFE 路由策略。
+
+- **新增 enum**：`adm_lfe_routing_mode_t`，冻结值为 `ADM_LFE_ROUTING_DIRECT=0`、
+  `ADM_LFE_ROUTING_SPLIT_POWER=1`。
+- **新增 setter**：`adm_render_options_set_lfe_routing_mode()`；未知枚举返回
+  `ADM_ERROR_INVALID_ARGUMENT`，`opts=NULL` 保持安全 no-op 并返回 `ADM_ERROR_OK`。
+- **兼容性**：默认 `direct`，旧调用方行为不变；只追加 symbol 与 enum，不改变 opaque struct、现有
+  signature 或枚举值，动态库 `SOVERSION` 继续为 1。
+- **行为边界**：`split-power` 只适用于单一语义 LFE 的 22.2 输出；原生 LFE1+LFE2 素材在后端
+  prepare 阶段返回 `ADM_ERROR_INVALID_ARGUMENT`。其它布局保持既有路由并记录 warning。
+
 ## opaque 指针与 callback 生命周期
 
 `adm_context_t`、`adm_render_result_t` 是 opaque pointer，调用方不应直接 dereference 或假设大小。生命周期约定：

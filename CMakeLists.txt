@@ -750,6 +750,21 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_channel_bed_render_tests)
     add_test(NAME mr_adm_channel_bed_render_tests COMMAND mr_adm_channel_bed_render_tests)
 
+    add_executable(mr_adm_lfe_routing_tests tests/unit/lfe_routing_test.cpp)
+    target_link_libraries(mr_adm_lfe_routing_tests
+        PRIVATE
+            MacinRender::ADMEngine
+            MacinRender::ADMRenderCommon
+            MacinRender::ADMIo
+            MacinRender::ADMAudio
+    )
+    if(APPLE)
+        target_link_libraries(mr_adm_lfe_routing_tests PRIVATE MacinRender::ADMRenderApple)
+    endif()
+    mr_adm_core_apply_warnings(mr_adm_lfe_routing_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_lfe_routing_tests)
+    add_test(NAME mr_adm_lfe_routing_tests COMMAND mr_adm_lfe_routing_tests)
+
     # Fixture test: build a real BW64/ADM Objects file, render it, verify output.
     add_executable(mr_adm_ear_fixture_tests tests/unit/ear_render_fixture_test.cpp)
     target_link_libraries(mr_adm_ear_fixture_tests

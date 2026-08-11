@@ -269,6 +269,9 @@ bool verify_options_null_setters() {
     ok = check(adm_render_options_set_binaural_spread_mode(nullptr, ADM_BINAURAL_SPREAD_CLOUD) == ADM_ERROR_OK,
                "NULL opts set_binaural_spread_mode should return OK") &&
          ok;
+    ok = check(adm_render_options_set_lfe_routing_mode(nullptr, ADM_LFE_ROUTING_SPLIT_POWER) == ADM_ERROR_OK,
+               "NULL opts set_lfe_routing_mode should return OK") &&
+         ok;
     ok = check(adm_render_options_set_apac_container(nullptr, ADM_APAC_CONTAINER_CAF) == ADM_ERROR_OK,
                "NULL opts set_apac_container should return OK") &&
          ok;
@@ -315,6 +318,20 @@ bool verify_options_invalid_values(adm_render_options_t* opts) {
     ok = check(adm_render_options_set_binaural_spread_mode(opts, static_cast<adm_binaural_spread_mode_t>(99)) ==
                    ADM_ERROR_INVALID_ARGUMENT,
                "out-of-range binaural_spread should return INVALID_ARGUMENT") &&
+         ok;
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    ok = check(adm_render_options_set_lfe_routing_mode(opts, static_cast<adm_lfe_routing_mode_t>(99)) ==
+                   ADM_ERROR_INVALID_ARGUMENT,
+               "out-of-range LFE routing mode should return INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_render_options_set_lfe_routing_mode(opts, ADM_LFE_ROUTING_DIRECT) == ADM_ERROR_OK,
+               "direct LFE routing mode accepted") &&
+         ok;
+    ok = check(adm_render_options_set_lfe_routing_mode(opts, ADM_LFE_ROUTING_SPLIT_POWER) == ADM_ERROR_OK,
+               "split-power LFE routing mode accepted") &&
+         ok;
+    ok = check(adm_render_options_set_lfe_routing_mode(opts, ADM_LFE_ROUTING_DIRECT) == ADM_ERROR_OK,
+               "LFE routing mode restored to direct after validation") &&
          ok;
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     ok = check(adm_render_options_set_iamf_container(opts, static_cast<adm_iamf_container_t>(99)) ==
@@ -2196,6 +2213,7 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
     bool ok = check(adm_api_version_minor() == ADM_API_VERSION_MINOR, "C ABI minor version matches header");
     ok = check(adm_api_version_minor() >= 29, "v1.29: monitor mute override is available") && ok;
+    ok = check(adm_api_version_minor() >= 30, "v1.30: 22.2 LFE routing mode is available") && ok;
     static_assert(offsetof(adm_monitor_override_t, mute) >=
                   offsetof(adm_monitor_override_t, head_locked) + sizeof(int32_t) + sizeof(uint32_t));
 

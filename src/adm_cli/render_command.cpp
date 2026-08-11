@@ -203,6 +203,10 @@ mradm::BinauralSpreadMode parse_binaural_spread_mode(const std::string& value) {
     return mradm::BinauralSpreadMode::automatic;
 }
 
+mradm::LfeRoutingMode parse_lfe_routing_mode(const std::string& value) {
+    return value == "split-power" ? mradm::LfeRoutingMode::split_power : mradm::LfeRoutingMode::direct;
+}
+
 mradm::AppleSpatialPreset parse_apple_spatial_preset(const std::string& value) {
     if (value == "headphone-default") {
         return mradm::AppleSpatialPreset::headphone_default;
@@ -342,6 +346,12 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                      "saf-spreader [experimental: SAF covariance-matching STFT-domain spreader]")
         ->check(CLI::IsMember({"auto", "none", "cloud", "saf-spreader"}));
     render_cmd
+        ->add_option("--lfe-routing",
+                     opts.lfe_routing_mode_str,
+                     "22.2 LFE routing: direct (LFE1->ch3, LFE2->ch9) or split-power "
+                     "(one LFE to both at -3.0103 dB; native dual LFE is rejected)")
+        ->check(CLI::IsMember({"direct", "split-power"}));
+    render_cmd
         ->add_option("--apple-spatial-preset",
                      opts.apple_spatial_preset_str,
                      "Apple binaural AUSpatialMixer factory preset: off, headphone-default, headphone-movie")
@@ -419,6 +429,7 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     }
     request.options.speaker_spread_mode = parse_speaker_spread_mode(opts.speaker_spread_mode_str);
     request.options.binaural_spread_mode = parse_binaural_spread_mode(opts.binaural_spread_mode_str);
+    request.options.lfe_routing_mode = parse_lfe_routing_mode(opts.lfe_routing_mode_str);
     request.options.apple_spatial_preset = parse_apple_spatial_preset(opts.apple_spatial_preset_str);
     request.options.apple_speaker_rendering_flags = opts.apple_speaker_rendering_flags;
     if (!std::isnan(opts.listener_yaw)) {

@@ -146,12 +146,16 @@
  *   adm_monitor_override_t 追加 mute 字段。非 0 将对象或 DirectSpeakers 声道设为静音，
  *   gain_db 在该状态下忽略。reserved_v1_29 把 mute 放到旧结构 sizeof 之后，避免旧调用方
  *   末尾对齐填充中的未定义字节被读取。struct_size 未覆盖 mute 时按 0 处理。
+ *
+ * v1.30 新增（additive，SOVERSION 不变）：
+ *   adm_lfe_routing_mode_t + adm_render_options_set_lfe_routing_mode。仅 22.2（9+10+3）
+ *   支持 direct 双 LFE 独立直通与单语义 LFE 的 split-power 等功率双路复制。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 29
+#define ADM_API_VERSION_MINOR 30
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -245,6 +249,12 @@ typedef enum adm_iamf_container_t { ADM_IAMF_CONTAINER_OBU = 0, ADM_IAMF_CONTAIN
 
 typedef enum adm_apac_container_t { ADM_APAC_CONTAINER_MPEG4 = 0, ADM_APAC_CONTAINER_CAF = 1 } adm_apac_container_t;
 
+/* 22.2 dual-LFE routing. v1.30 */
+typedef enum adm_lfe_routing_mode_t {
+    ADM_LFE_ROUTING_DIRECT = 0,
+    ADM_LFE_ROUTING_SPLIT_POWER = 1
+} adm_lfe_routing_mode_t;
+
 /* Severity of a captured diagnostic log entry (see adm_render_result_log_entry). */
 typedef enum adm_log_level_t {
     ADM_LOG_DEBUG = 0,
@@ -297,6 +307,7 @@ static_assert(sizeof(adm_speaker_spread_mode_t) == sizeof(int));
 static_assert(sizeof(adm_binaural_spread_mode_t) == sizeof(int));
 static_assert(sizeof(adm_iamf_container_t) == sizeof(int));
 static_assert(sizeof(adm_apac_container_t) == sizeof(int));
+static_assert(sizeof(adm_lfe_routing_mode_t) == sizeof(int));
 static_assert(sizeof(adm_log_level_t) == sizeof(int));
 static_assert(sizeof(adm_render_stage_t) == sizeof(int));
 static_assert(sizeof(adm_progress_operation_t) == sizeof(int));
@@ -484,6 +495,9 @@ adm_error_code_t adm_render_options_set_speaker_spread_mode(adm_render_options_t
                                                             adm_speaker_spread_mode_t mode) ADM_API_NOEXCEPT;
 adm_error_code_t adm_render_options_set_binaural_spread_mode(adm_render_options_t* opts,
                                                              adm_binaural_spread_mode_t mode) ADM_API_NOEXCEPT;
+/* v1.30. NULL opts is a safe no-op returning ADM_ERROR_OK. */
+adm_error_code_t adm_render_options_set_lfe_routing_mode(adm_render_options_t* opts,
+                                                         adm_lfe_routing_mode_t mode) ADM_API_NOEXCEPT;
 adm_error_code_t adm_render_options_set_iamf_container(adm_render_options_t* opts,
                                                        adm_iamf_container_t container) ADM_API_NOEXCEPT;
 /* iamf_layers_csv: optional IAMF scalable channel layers, comma-separated

@@ -2002,6 +2002,10 @@ CapabilityReport BinauralRenderer::capabilities() const {
 }
 
 Result<std::shared_ptr<IPreparedRender>> BinauralRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
+    auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "binaural");
+    if (!lfe_routing) {
+        return tl::unexpected{lfe_routing.error()};
+    }
     const auto& info = plan.scene.info;
 
     if (info.sample_rate != 48000U) {

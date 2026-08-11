@@ -250,54 +250,9 @@ struct OutputProfile {
     return std::nullopt;
 }
 
-[[nodiscard]] bool is_lfe_label(AudioChannelLabel label) {
-    return label == kAudioChannelLabel_LFEScreen || label == kAudioChannelLabel_LFE2 ||
-           label == kAudioChannelLabel_LFE3;
-}
-
 [[nodiscard]] Result<void> set_output_layout_tag(AudioUnit unit, AudioChannelLayoutTag tag) {
-    // AUSpatialMixer's bypass LFE routing only ever targets a channel labeled LFEScreen. Layouts
-    // whose LFE channels are LFE2/LFE3 instead (22.2 = CICP_13 has no LFEScreen) would therefore
-    // drop the bypassed LFE input — worse, the mixer folds it into channel 0 at unity gain (verified:
-    // the whole LFE leaked into the Lw speaker). Detect that case by expanding the tag, and if it has
-    // no LFEScreen but does have an LFE, set the output layout via explicit channel descriptions with
-    // the FIRST LFE channel relabeled LFEScreen. Channel order and the non-LFE labels are untouched
-    // (VBAP geometry + container channel order unchanged); only the mixer's LFE routing target moves.
-    //
-    // Single-LFE only: relabelling just the first LFE gives the mixer one LFEScreen target, so one
-    // source LFE routes. That covers every Atmos / ADM master (beds carry a single `.1`). A true
-    // dual-LFE 22.2 source (LFE1+LFE2, an NHK-style native 22.2 broadcast — not Atmos) would pile
-    // both onto this one channel and leave LFE3 silent; routing both would need to bypass the mixer
-    // and sum each LFE straight into its output channel. Deferred until such content actually shows up.
-    UInt32 size = 0;
-    if (AudioFormatGetPropertyInfo(kAudioFormatProperty_ChannelLayoutForTag, sizeof(tag), &tag, &size) == noErr) {
-        std::vector<std::byte> buffer(size);
-        if (AudioFormatGetProperty(kAudioFormatProperty_ChannelLayoutForTag, sizeof(tag), &tag, &size, buffer.data()) ==
-            noErr) {
-            auto* expanded = reinterpret_cast<AudioChannelLayout*>(buffer.data());
-            bool has_lfe_screen = false;
-            int first_lfe = -1;
-            for (UInt32 i = 0; i < expanded->mNumberChannelDescriptions; ++i) {
-                const auto label = expanded->mChannelDescriptions[i].mChannelLabel;
-                has_lfe_screen = has_lfe_screen || label == kAudioChannelLabel_LFEScreen;
-                if (first_lfe < 0 && is_lfe_label(label)) {
-                    first_lfe = static_cast<int>(i);
-                }
-            }
-            if (!has_lfe_screen && first_lfe >= 0) {
-                expanded->mChannelLayoutTag = kAudioChannelLayoutTag_UseChannelDescriptions;
-                expanded->mChannelDescriptions[first_lfe].mChannelLabel = kAudioChannelLabel_LFEScreen;
-                const OSStatus relabelled = AudioUnitSetProperty(
-                    unit, kAudioUnitProperty_AudioChannelLayout, kAudioUnitScope_Output, 0, expanded, size);
-                if (relabelled != noErr) {
-                    return tl::unexpected{
-                        apple_status_error("failed to set relabelled output channel layout", relabelled)};
-                }
-                return {};
-            }
-        }
-    }
-
+    // 22.2 LFE buses are mixed outside AUSpatialMixer, so CICP 13 can now stay
+    // canonical instead of relabelling its first LFE slot as LFEScreen.
     AudioChannelLayout layout{};
     layout.mChannelLayoutTag = tag;
     const OSStatus status = AudioUnitSetProperty(
@@ -316,6 +271,7 @@ struct BusEvent {
     float elevation{0.0F}; // degrees, +ve up
     float distance{1.0F};  // metres
     float gain{0.0F};      // linear
+    render_common::LfeTarget lfe_target{render_common::LfeTarget::none};
 };
 
 struct BusPlan {
@@ -332,7 +288,9 @@ struct BusPlan {
 // so this stays shareable across PreviewSession windows.
 struct ApplePrepared final : IPreparedRender {
     OutputProfile profile;
-    std::vector<BusPlan> buses;
+    std::vector<BusPlan> buses;     // AUSpatialMixer inputs
+    std::vector<BusPlan> lfe_buses; // 22.2 side-bus inputs
+    render_common::LfeRoutingPlan lfe_routing;
 };
 
 // Flatten one prepared object block into per-bus events. When apply_extent is true each
@@ -435,17 +393,24 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
             }
 
             if (!track.ds_blocks.empty()) {
-                BusPlan bp;
-                bp.source_channel = ch;
-                bp.object_id = obj.id;
-                // Per-channel live-gain key: this DS track's normalized speaker label (empty → whole-object).
-                if (!track.ds_blocks.front().speaker_labels.empty()) {
-                    bp.speaker_label_key =
-                        render_common::canonicalise_speaker_label(track.ds_blocks.front().speaker_labels.front());
-                }
-                bp.is_lfe = std::ranges::any_of(track.ds_blocks, render_common::direct_speakers_block_is_lfe);
-                bp.source_mode = bp.is_lfe ? kSpatialMixerSourceMode_Bypass : kSpatialMixerSourceMode_AmbienceBed;
+                // A DirectSpeakers channel can change semantic target across blocks. Keep at most
+                // one spatial bus and one LFE bus for the source channel so 22.2 can peel off only
+                // the LFE intervals without dropping non-LFE intervals on the same track.
+                BusPlan spatial_bus;
+                spatial_bus.source_channel = ch;
+                spatial_bus.source_mode = kSpatialMixerSourceMode_AmbienceBed;
+                spatial_bus.object_id = obj.id;
+                BusPlan lfe_bus;
+                lfe_bus.source_channel = ch;
+                lfe_bus.source_mode = kSpatialMixerSourceMode_Bypass;
+                lfe_bus.is_lfe = true;
+                lfe_bus.object_id = obj.id;
                 for (const auto& ds : track.ds_blocks) {
+                    const auto lfe_target = render_common::direct_speakers_lfe_target(ds);
+                    BusPlan& bus = lfe_target == render_common::LfeTarget::none ? spatial_bus : lfe_bus;
+                    if (bus.speaker_label_key.empty() && !ds.speaker_labels.empty()) {
+                        bus.speaker_label_key = render_common::canonicalise_speaker_label(ds.speaker_labels.front());
+                    }
                     BusEvent ev;
                     ev.start_sample = ds.start_sample;
                     ev.end_sample = std::min(ds.end_sample, obj.end_sample);
@@ -455,9 +420,15 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
                         ev.distance = std::max(ds.distance, 1.0e-3F);
                     }
                     ev.gain = ds.gain * obj.gain;
-                    bp.events.push_back(ev);
+                    ev.lfe_target = lfe_target;
+                    bus.events.push_back(ev);
                 }
-                buses.push_back(std::move(bp));
+                if (!spatial_bus.events.empty()) {
+                    buses.push_back(std::move(spatial_bus));
+                }
+                if (!lfe_bus.events.empty()) {
+                    buses.push_back(std::move(lfe_bus));
+                }
             }
         }
     }
@@ -570,6 +541,41 @@ struct HeadQuat {
         }
     }
     return nullptr;
+}
+
+// Mix 22.2 semantic LFE inputs directly into the canonical CICP 13 LFE slots.
+// Events are resolved per sample (rather than once per AU slice), so block start/end
+// times and realtime gain envelopes remain sample-accurate.
+void mix_lfe_side_buses(const std::vector<BusPlan>& buses,
+                        const render_common::LfeRoutingPlan& routing,
+                        const float* staging,
+                        uint16_t num_in_ch,
+                        float* output,
+                        uint16_t num_out_ch,
+                        uint64_t position,
+                        UInt32 frames,
+                        std::vector<std::size_t>& cursors,
+                        const float* live_gain_envelopes = nullptr) {
+    if (!routing.applies_to_22_2 || num_out_ch <= render_common::k_22_2_lfe2_index) {
+        return;
+    }
+    for (std::size_t bus_index = 0; bus_index < buses.size(); ++bus_index) {
+        const auto& bus = buses[bus_index];
+        for (UInt32 frame = 0; frame < frames; ++frame) {
+            const BusEvent* event = active_event(bus, position + frame, cursors[bus_index]);
+            if (event == nullptr || event->lfe_target == render_common::LfeTarget::none) {
+                continue;
+            }
+            const float live_gain =
+                live_gain_envelopes != nullptr ? live_gain_envelopes[(bus_index * k_render_block) + frame] : 1.0F;
+            const float sample =
+                staging[(static_cast<std::size_t>(frame) * num_in_ch) + bus.source_channel] * event->gain * live_gain;
+            output[(static_cast<std::size_t>(frame) * num_out_ch) + render_common::k_22_2_lfe1_index] +=
+                sample * routing.gain(event->lfe_target, render_common::LfeTarget::lfe1);
+            output[(static_cast<std::size_t>(frame) * num_out_ch) + render_common::k_22_2_lfe2_index] +=
+                sample * routing.gain(event->lfe_target, render_common::LfeTarget::lfe2);
+        }
+    }
 }
 
 // Per-input-bus pull callback: copies one source channel out of the shared interleaved
@@ -808,12 +814,12 @@ class AppleStream final : public IRenderStream {
         const UInt32 algo =
             profile.binaural ? kSpatializationAlgorithm_HRTFHQ : kSpatializationAlgorithm_VectorBasedPanning;
 
-        // No renderable buses → silent stream: skip AU + reader entirely (mirrors the
-        // offline render_window empty-bus fast path); process() emits silence.
-        const bool silent = prepared.buses.empty();
+        // A pure 22.2 LFE scene needs the reader but no SpatialMixer instance.
+        const bool silent = prepared.buses.empty() && prepared.lfe_buses.empty();
+        const bool has_spatial_buses = !prepared.buses.empty();
 
         AudioUnitGuard guard{nullptr};
-        if (!silent) {
+        if (has_spatial_buses) {
             auto unit_res = create_spatial_mixer_unit();
             if (!unit_res) {
                 return tl::unexpected{unit_res.error()};
@@ -824,6 +830,8 @@ class AppleStream final : public IRenderStream {
         std::unique_ptr<AppleStream> stream{new AppleStream(std::move(guard),
                                                             prepared.profile,
                                                             prepared.buses,
+                                                            prepared.lfe_buses,
+                                                            prepared.lfe_routing,
                                                             num_in_ch,
                                                             num_out_ch,
                                                             info.sample_rate,
@@ -834,22 +842,24 @@ class AppleStream final : public IRenderStream {
             return stream;
         }
 
-        if (auto r = configure_spatial_mixer_unit(stream->unit_.get(),
-                                                  stream->profile_,
-                                                  stream->buses_,
-                                                  num_in_ch,
-                                                  num_out_ch,
-                                                  static_cast<double>(info.sample_rate),
-                                                  algo,
-                                                  plan.apple_spatial_preset,
-                                                  plan.apple_speaker_rendering_flags,
-                                                  plan.listener_orientation,
-                                                  plan.output_layout,
-                                                  stream->staging_.data(),
-                                                  stream->contexts_,
-                                                  logs);
-            !r) {
-            return tl::unexpected{r.error()};
+        if (has_spatial_buses) {
+            if (auto r = configure_spatial_mixer_unit(stream->unit_.get(),
+                                                      stream->profile_,
+                                                      stream->buses_,
+                                                      num_in_ch,
+                                                      num_out_ch,
+                                                      static_cast<double>(info.sample_rate),
+                                                      algo,
+                                                      plan.apple_spatial_preset,
+                                                      plan.apple_speaker_rendering_flags,
+                                                      plan.listener_orientation,
+                                                      plan.output_layout,
+                                                      stream->staging_.data(),
+                                                      stream->contexts_,
+                                                      logs);
+                !r) {
+                return tl::unexpected{r.error()};
+            }
         }
         stream->live_orientation_ = plan.listener_orientation;
         for (std::size_t i = 0; i < stream->contexts_.size(); ++i) {
@@ -898,14 +908,17 @@ class AppleStream final : public IRenderStream {
             ended_ = false;
             return {};
         }
-        // Reset the black-box AU state, reposition the reader, rewind the per-bus event
-        // cursors (active_event only advances forward), and drop the FIFO.
-        const OSStatus status = AudioUnitReset(unit_.get(), kAudioUnitScope_Global, 0);
-        if (status != noErr) {
-            return tl::unexpected{apple_status_error("failed to reset AUSpatialMixer on seek", status)};
+        // Reset the black-box AU state when present, then rewind both spatial and
+        // LFE event cursors and reposition the shared source reader.
+        if (unit_.get() != nullptr) {
+            const OSStatus status = AudioUnitReset(unit_.get(), kAudioUnitScope_Global, 0);
+            if (status != noErr) {
+                return tl::unexpected{apple_status_error("failed to reset AUSpatialMixer on seek", status)};
+            }
         }
         render_common::seek_reader_abs(*reader_, frame);
         std::ranges::fill(ev_cursor_, std::size_t{0});
+        std::ranges::fill(lfe_ev_cursor_, std::size_t{0});
         fifo_.clear();
         fifo_read_ = 0;
         producer_pos_ = frame;
@@ -936,6 +949,7 @@ class AppleStream final : public IRenderStream {
     // that is not callback-safe).
     void loop_render_reset(uint64_t frame) override {
         std::ranges::fill(ev_cursor_, std::size_t{0});
+        std::ranges::fill(lfe_ev_cursor_, std::size_t{0});
         consumer_pos_ = frame;
     }
 
@@ -956,6 +970,12 @@ class AppleStream final : public IRenderStream {
                     : 0);
             bus_gain_target_[i].store(gain, std::memory_order_relaxed);
             bus_head_locked_[i].store(locked, std::memory_order_relaxed);
+        }
+        for (std::size_t i = 0; i < lfe_buses_.size(); ++i) {
+            const float gain = render_common::resolve_live_channel_gain(
+                                   overrides, lfe_buses_[i].object_id, lfe_buses_[i].speaker_label_key)
+                                   .value_or(1.0F);
+            lfe_gain_target_[i].store(gain, std::memory_order_relaxed);
         }
     }
 
@@ -1039,19 +1059,22 @@ class AppleStream final : public IRenderStream {
     AppleStream(AudioUnitGuard unit,
                 OutputProfile profile,
                 std::vector<BusPlan> buses,
+                std::vector<BusPlan> lfe_buses,
+                render_common::LfeRoutingPlan lfe_routing,
                 uint16_t num_in_ch,
                 uint16_t num_out_ch,
                 uint32_t sample_rate,
                 uint64_t total_frames,
                 bool silent)
-        : profile_(profile), buses_(std::move(buses)),
+        : profile_(profile), buses_(std::move(buses)), lfe_buses_(std::move(lfe_buses)), lfe_routing_(lfe_routing),
           staging_(static_cast<std::size_t>(num_in_ch) * k_render_block, 0.0F),
           out_planar_(num_out_ch, std::vector<float>(k_render_block, 0.0F)),
           abl_storage_(sizeof(AudioBufferList) + (sizeof(AudioBuffer) * (static_cast<std::size_t>(num_out_ch) - 1))),
-          ev_cursor_(buses_.size(), 0), num_in_ch_(num_in_ch), num_out_ch_(num_out_ch), sample_rate_(sample_rate),
-          total_frames_(total_frames), silent_(silent), bus_gain_target_(buses_.size()),
-          bus_gain_envelopes_(buses_.size() * k_render_block, 1.0F), bus_head_locked_(buses_.size()),
-          unit_(std::move(unit)) {
+          ev_cursor_(buses_.size(), 0), lfe_ev_cursor_(lfe_buses_.size(), 0), num_in_ch_(num_in_ch),
+          num_out_ch_(num_out_ch), sample_rate_(sample_rate), total_frames_(total_frames), silent_(silent),
+          bus_gain_target_(buses_.size()), bus_gain_envelopes_(buses_.size() * k_render_block, 1.0F),
+          bus_head_locked_(buses_.size()), lfe_gain_target_(lfe_buses_.size()),
+          lfe_gain_envelopes_(lfe_buses_.size() * k_render_block, 1.0F), unit_(std::move(unit)) {
         // Per-bus override params start neutral: unity gain (head-lock value-initialises to 0). Sized
         // to the bus count so the realtime callback only ever indexes preallocated atomics.
         for (auto& g : bus_gain_target_) {
@@ -1061,13 +1084,18 @@ class AppleStream final : public IRenderStream {
         for (std::size_t i = 0; i < buses_.size(); ++i) {
             bus_gain_ramps_.emplace_back(sample_rate_);
         }
+        for (auto& gain : lfe_gain_target_) {
+            gain.store(1.0F, std::memory_order_relaxed);
+        }
+        lfe_gain_ramps_.reserve(lfe_buses_.size());
+        for (std::size_t i = 0; i < lfe_buses_.size(); ++i) {
+            lfe_gain_ramps_.emplace_back(sample_rate_);
+        }
     }
 
-    // Render one <= k_render_block slice from staging_ (which the caller has already filled with this
-    // block's interleaved source PCM). Sets per-bus params at `position` (+ head-lock compensation by
-    // `orient`), runs the AU, and interleaves frames_now output frames into `dst`. Shared by the
-    // worker process() path (render_slice) and the realtime output-stage render_output(); it does not
-    // allocate, so it is safe on the audio callback. The global HeadYaw/Pitch/Roll is set by the caller.
+    // Render one <= k_render_block slice from staging_. Spatial buses run through the AU when present;
+    // 22.2 LFE side buses are then added to ch3/ch9. The function allocates nothing, so the binaural
+    // output-stage path remains callback-safe (binaural never has 22.2 side buses).
     [[nodiscard]] OSStatus
     render_au_block(uint64_t position, const ListenerOrientation& orient, float* dst, UInt32 frames_now) {
         for (std::size_t i = 0; i < buses_.size(); ++i) {
@@ -1100,32 +1128,55 @@ class AppleStream final : public IRenderStream {
             }
         }
 
-        auto* abl = reinterpret_cast<AudioBufferList*>(abl_storage_.data());
-        abl->mNumberBuffers = num_out_ch_;
-        // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
-        for (uint16_t ch = 0; ch < num_out_ch_; ++ch) {
-            abl->mBuffers[ch].mNumberChannels = 1;
-            abl->mBuffers[ch].mDataByteSize = frames_now * sizeof(float);
-            abl->mBuffers[ch].mData = out_planar_[ch].data();
+        if (!buses_.empty()) {
+            auto* abl = reinterpret_cast<AudioBufferList*>(abl_storage_.data());
+            abl->mNumberBuffers = num_out_ch_;
+            // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
+            for (uint16_t ch = 0; ch < num_out_ch_; ++ch) {
+                abl->mBuffers[ch].mNumberChannels = 1;
+                abl->mBuffers[ch].mDataByteSize = frames_now * sizeof(float);
+                abl->mBuffers[ch].mData = out_planar_[ch].data();
+            }
+            // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
+            AudioTimeStamp time_stamp{};
+            time_stamp.mFlags = kAudioTimeStampSampleTimeValid;
+            time_stamp.mSampleTime = static_cast<Float64>(position);
+            AudioUnitRenderActionFlags flags = 0;
+            const OSStatus render_status = AudioUnitRender(unit_.get(), &flags, &time_stamp, 0, frames_now, abl);
+            if (render_status != noErr) {
+                return render_status;
+            }
+            // Interleave the planar AU output into dst (frames_now * num_out_ch_ floats).
+            // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
+            for (uint16_t ch = 0; ch < num_out_ch_; ++ch) {
+                const float* src = out_planar_[ch].data();
+                for (UInt32 frame = 0; frame < frames_now; ++frame) {
+                    dst[(static_cast<std::size_t>(frame) * num_out_ch_) + ch] = src[frame];
+                }
+            }
+            // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
+        } else {
+            std::fill_n(dst, static_cast<std::size_t>(frames_now) * num_out_ch_, 0.0F);
         }
-        // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
-        AudioTimeStamp time_stamp{};
-        time_stamp.mFlags = kAudioTimeStampSampleTimeValid;
-        time_stamp.mSampleTime = static_cast<Float64>(position);
-        AudioUnitRenderActionFlags flags = 0;
-        const OSStatus render_status = AudioUnitRender(unit_.get(), &flags, &time_stamp, 0, frames_now, abl);
-        if (render_status != noErr) {
-            return render_status;
-        }
-        // Interleave the planar AU output into dst (frames_now * num_out_ch_ floats).
-        // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
-        for (uint16_t ch = 0; ch < num_out_ch_; ++ch) {
-            const float* src = out_planar_[ch].data();
-            for (UInt32 f = 0; f < frames_now; ++f) {
-                dst[(static_cast<std::size_t>(f) * num_out_ch_) + ch] = src[f];
+
+        for (std::size_t i = 0; i < lfe_buses_.size(); ++i) {
+            auto& gain_ramp = lfe_gain_ramps_[i];
+            gain_ramp.set_target(lfe_gain_target_[i].load(std::memory_order_relaxed));
+            float* gain_envelope = lfe_gain_envelopes_.data() + (i * k_render_block);
+            for (UInt32 frame = 0; frame < frames_now; ++frame) {
+                gain_envelope[frame] = gain_ramp.next();
             }
         }
-        // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
+        mix_lfe_side_buses(lfe_buses_,
+                           lfe_routing_,
+                           staging_.data(),
+                           num_in_ch_,
+                           dst,
+                           num_out_ch_,
+                           position,
+                           frames_now,
+                           lfe_ev_cursor_,
+                           lfe_gain_envelopes_.data());
         return noErr;
     }
 
@@ -1148,13 +1199,13 @@ class AppleStream final : public IRenderStream {
         // Apply a pending live head orientation before rendering this slice (binaural HeadYaw/
         // Pitch/Roll global params; the AU ignores them on non-binaural output). Worker-thread
         // only, so the direct AudioUnitSetParameter is safe.
-        if (orientation_dirty_) {
+        if (orientation_dirty_ && unit_.get() != nullptr) {
             const OSStatus head_status = apply_head_orientation(unit_.get(), live_orientation_);
             if (head_status != noErr) {
                 return tl::unexpected{apple_status_error("failed to set listener orientation", head_status)};
             }
-            orientation_dirty_ = false;
         }
+        orientation_dirty_ = false;
 
         reader_->read(staging_.data(), frames_now);
 
@@ -1169,12 +1220,15 @@ class AppleStream final : public IRenderStream {
 
     OutputProfile profile_;
     std::vector<BusPlan> buses_;
+    std::vector<BusPlan> lfe_buses_;
+    render_common::LfeRoutingPlan lfe_routing_;
     std::unique_ptr<audio::RenderInputReader> reader_;
     std::vector<float> staging_;
     std::vector<InputBusContext> contexts_; // referenced by the AU's per-bus pull callbacks
     std::vector<std::vector<float>> out_planar_;
     std::vector<std::uint8_t> abl_storage_;
     std::vector<std::size_t> ev_cursor_;
+    std::vector<std::size_t> lfe_ev_cursor_;
     uint16_t num_in_ch_;
     uint16_t num_out_ch_;
     uint32_t sample_rate_;
@@ -1194,6 +1248,9 @@ class AppleStream final : public IRenderStream {
     std::vector<render_common::LiveGainRamp> bus_gain_ramps_; // render-thread/callback-owned
     std::vector<float> bus_gain_envelopes_;                   // buses × k_render_block, callback-owned
     std::vector<std::atomic<std::uint8_t>> bus_head_locked_;
+    std::vector<std::atomic<float>> lfe_gain_target_;
+    std::vector<render_common::LiveGainRamp> lfe_gain_ramps_;
+    std::vector<float> lfe_gain_envelopes_;
     std::atomic<bool> render_failed_{false}; // set by render_output on a callback AU error (output-stage)
     ListenerOrientation live_orientation_;   // live head orientation; applied in render_slice when dirty (worker-only)
     bool orientation_dirty_{false};          // set by set_listener_orientation; cleared once applied to the AU
@@ -1212,6 +1269,11 @@ class AppleRenderer final : public IRenderer {
             return make_error(ErrorCode::unsupported,
                               fmt::format("apple backend does not support output layout '{}'", plan.output_layout),
                               "layout=" + plan.output_layout);
+        }
+
+        auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "apple");
+        if (!lfe_routing) {
+            return tl::unexpected{lfe_routing.error()};
         }
 
         // Honor the spread-mode capability controls: binaural none/saf_spreader and
@@ -1246,13 +1308,33 @@ class AppleRenderer final : public IRenderer {
                                           num_in_ch),
                               "input=" + plan.input_path);
         }
-        if (buses.empty()) {
+        std::vector<BusPlan> spatial_buses;
+        std::vector<BusPlan> lfe_buses;
+        spatial_buses.reserve(buses.size());
+        lfe_buses.reserve(buses.size());
+        for (auto& bus : buses) {
+            if (lfe_routing->applies_to_22_2 && bus.is_lfe) {
+                lfe_buses.push_back(std::move(bus));
+            } else {
+                spatial_buses.push_back(std::move(bus));
+            }
+        }
+        if (spatial_buses.empty() && lfe_buses.empty()) {
             logs.log(LogLevel::warning, "apple", "no renderable tracks found (all muted?), writing silence");
+        }
+        if (lfe_routing->applies_to_22_2) {
+            logs.log(LogLevel::info,
+                     "apple",
+                     fmt::format("22.2 routing {} spatial buses and {} LFE side buses",
+                                 spatial_buses.size(),
+                                 lfe_buses.size()));
         }
 
         auto prepared = std::make_shared<ApplePrepared>();
         prepared->profile = *profile;
-        prepared->buses = std::move(buses);
+        prepared->buses = std::move(spatial_buses);
+        prepared->lfe_buses = std::move(lfe_buses);
+        prepared->lfe_routing = *lfe_routing;
         return std::static_pointer_cast<IPreparedRender>(prepared);
     }
 
@@ -1294,6 +1376,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     const UInt32 spatialization_algorithm =
         profile.binaural ? kSpatializationAlgorithm_HRTFHQ : kSpatializationAlgorithm_VectorBasedPanning;
     const auto& buses = prepared->buses;
+    const auto& lfe_buses = prepared->lfe_buses;
 
     // On-demand output window (RenderPlan::render_window). AUSpatialMixer is a
     // black-box stateful AudioUnit, especially in HRTF mode, so windowed rendering
@@ -1340,7 +1423,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     std::size_t buf_idx = 0;
 
     // No renderable buses: write silence (still a valid, correctly-sized output).
-    if (buses.empty()) {
+    if (buses.empty() && lfe_buses.empty()) {
         uint64_t frames_done = start_pos;
         while (frames_done < win_end) {
             if (plan.cancel_token.stop_requested()) {
@@ -1381,36 +1464,43 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     // AudioUnitUninitialize/Dispose runs (the input pull callbacks reference staging via
     // contexts) — matching configure_spatial_mixer_unit's lifetime contract.
     std::vector<float> staging(static_cast<std::size_t>(num_in_ch) * k_render_block, 0.0F);
+    // cppcheck-suppress variableScope; callback backing storage must outlive AudioUnitGuard.
     std::vector<InputBusContext> contexts;
 
-    auto unit_res = create_spatial_mixer_unit();
-    if (!unit_res) {
-        return tl::unexpected{unit_res.error()};
-    }
-    AudioUnit unit = unit_res->get();
+    AudioUnitGuard unit_guard{nullptr};
+    AudioUnit unit = nullptr;
+    if (!buses.empty()) {
+        auto unit_res = create_spatial_mixer_unit();
+        if (!unit_res) {
+            return tl::unexpected{unit_res.error()};
+        }
+        unit_guard = std::move(*unit_res);
+        unit = unit_guard.get();
 
-    if (auto r = configure_spatial_mixer_unit(unit,
-                                              profile,
-                                              buses,
-                                              num_in_ch,
-                                              num_out_ch,
-                                              static_cast<double>(sample_rate),
-                                              spatialization_algorithm,
-                                              plan.apple_spatial_preset,
-                                              plan.apple_speaker_rendering_flags,
-                                              plan.listener_orientation,
-                                              plan.output_layout,
-                                              staging.data(),
-                                              contexts,
-                                              logs);
-        !r) {
-        return tl::unexpected{r.error()};
+        if (auto r = configure_spatial_mixer_unit(unit,
+                                                  profile,
+                                                  buses,
+                                                  num_in_ch,
+                                                  num_out_ch,
+                                                  static_cast<double>(sample_rate),
+                                                  spatialization_algorithm,
+                                                  plan.apple_spatial_preset,
+                                                  plan.apple_speaker_rendering_flags,
+                                                  plan.listener_orientation,
+                                                  plan.output_layout,
+                                                  staging.data(),
+                                                  contexts,
+                                                  logs);
+            !r) {
+            return tl::unexpected{r.error()};
+        }
     }
 
     logs.log(LogLevel::info,
              "apple",
-             fmt::format("AUSpatialMixer rendering {} buses → {} ({}ch, {}), {} frames",
+             fmt::format("rendering {} spatial buses + {} LFE side buses → {} ({}ch, {}), {} frames",
                          buses.size(),
+                         lfe_buses.size(),
                          plan.output_layout,
                          num_out_ch,
                          profile.binaural ? "HRTF binaural" : "VBAP speakers",
@@ -1435,6 +1525,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     abl->mNumberBuffers = num_out_ch;
 
     std::vector<std::size_t> ev_cursor(buses.size(), 0);
+    std::vector<std::size_t> lfe_ev_cursor(lfe_buses.size(), 0);
 
     AudioTimeStamp time_stamp{};
     time_stamp.mFlags = kAudioTimeStampSampleTimeValid;
@@ -1452,42 +1543,56 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
         }
         auto& out_interleaved = out_buffers.at(buf_idx);
         const auto frames_now = static_cast<UInt32>(std::min<uint64_t>(k_render_block, num_frames - frames_done));
+        std::fill_n(out_interleaved.data(), static_cast<std::size_t>(frames_now) * num_out_ch, 0.0F);
 
         reader->read(staging.data(), frames_now);
 
-        for (std::size_t i = 0; i < buses.size(); ++i) {
-            const BusEvent* ev = active_event(buses[i], frames_done, ev_cursor[i]);
-            const float azimuth = ev != nullptr ? ev->azimuth : 0.0F;
-            const float elevation = ev != nullptr ? ev->elevation : 0.0F;
-            const float distance = ev != nullptr ? ev->distance : 1.0F;
-            const float gain_db = linear_gain_to_db(ev != nullptr ? ev->gain : 0.0F);
-            const auto element = static_cast<AudioUnitElement>(i);
-            const OSStatus param_status = set_bus_parameters(unit, element, azimuth, elevation, distance, gain_db);
-            if (param_status != noErr) {
-                return tl::unexpected{apple_status_error("failed to set SpatialMixer input parameter", param_status)};
+        if (!buses.empty()) {
+            for (std::size_t i = 0; i < buses.size(); ++i) {
+                const BusEvent* ev = active_event(buses[i], frames_done, ev_cursor[i]);
+                const float azimuth = ev != nullptr ? ev->azimuth : 0.0F;
+                const float elevation = ev != nullptr ? ev->elevation : 0.0F;
+                const float distance = ev != nullptr ? ev->distance : 1.0F;
+                const float gain_db = linear_gain_to_db(ev != nullptr ? ev->gain : 0.0F);
+                const auto element = static_cast<AudioUnitElement>(i);
+                const OSStatus param_status = set_bus_parameters(unit, element, azimuth, elevation, distance, gain_db);
+                if (param_status != noErr) {
+                    return tl::unexpected{
+                        apple_status_error("failed to set SpatialMixer input parameter", param_status)};
+                }
+            }
+
+            time_stamp.mSampleTime = static_cast<Float64>(frames_done);
+            // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
+            for (uint16_t ch = 0; ch < num_out_ch; ++ch) {
+                abl->mBuffers[ch].mNumberChannels = 1;
+                abl->mBuffers[ch].mDataByteSize = frames_now * sizeof(float);
+                abl->mBuffers[ch].mData = out_planar[ch].data();
+            }
+            // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
+            AudioUnitRenderActionFlags flags = 0;
+            const OSStatus render_status = AudioUnitRender(unit, &flags, &time_stamp, 0, frames_now, abl);
+            if (render_status != noErr) {
+                return tl::unexpected{apple_status_error("AudioUnitRender failed", render_status)};
+            }
+
+            for (uint16_t ch = 0; ch < num_out_ch; ++ch) {
+                const float* src = out_planar[ch].data();
+                for (UInt32 frame = 0; frame < frames_now; ++frame) {
+                    out_interleaved[(static_cast<std::size_t>(frame) * num_out_ch) + ch] = src[frame];
+                }
             }
         }
 
-        time_stamp.mSampleTime = static_cast<Float64>(frames_done);
-        // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index) — CoreAudio flexible array.
-        for (uint16_t ch = 0; ch < num_out_ch; ++ch) {
-            abl->mBuffers[ch].mNumberChannels = 1;
-            abl->mBuffers[ch].mDataByteSize = frames_now * sizeof(float);
-            abl->mBuffers[ch].mData = out_planar[ch].data();
-        }
-        // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index)
-        AudioUnitRenderActionFlags flags = 0;
-        const OSStatus render_status = AudioUnitRender(unit, &flags, &time_stamp, 0, frames_now, abl);
-        if (render_status != noErr) {
-            return tl::unexpected{apple_status_error("AudioUnitRender failed", render_status)};
-        }
-
-        for (uint16_t ch = 0; ch < num_out_ch; ++ch) {
-            const float* src = out_planar[ch].data();
-            for (UInt32 f = 0; f < frames_now; ++f) {
-                out_interleaved[(static_cast<std::size_t>(f) * num_out_ch) + ch] = src[f];
-            }
-        }
+        mix_lfe_side_buses(lfe_buses,
+                           prepared->lfe_routing,
+                           staging.data(),
+                           num_in_ch,
+                           out_interleaved.data(),
+                           num_out_ch,
+                           frames_done,
+                           frames_now,
+                           lfe_ev_cursor);
 
         const uint64_t w_lo = std::max(frames_done, win_start);
         const uint64_t w_hi = std::min(frames_done + frames_now, win_end);

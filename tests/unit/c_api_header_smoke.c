@@ -4,7 +4,7 @@
 #error "unexpected C ABI major version"
 #endif
 
-#if ADM_API_VERSION_MINOR != 29
+#if ADM_API_VERSION_MINOR != 30
 #error "unexpected C ABI minor version"
 #endif
 
@@ -13,6 +13,10 @@
 #endif
 
 int main(void) {
-    /* cppcheck-suppress knownConditionTrueFalse -- intentional compile-time ABI value guard */
-    return (ADM_ERROR_OK == 0 && ADM_ERROR_INTERNAL == 6) ? 0 : 1;
+    // cppcheck-suppress knownConditionTrueFalse; intentional compile-time ABI value guard.
+    return (ADM_ERROR_OK == 0 && ADM_ERROR_INTERNAL == 6 && ADM_LFE_ROUTING_DIRECT == 0 &&
+            // cppcheck-suppress knownConditionTrueFalse; intentional compile-time ABI value guard.
+            ADM_LFE_ROUTING_SPLIT_POWER == 1)
+               ? 0
+               : 1;
 }

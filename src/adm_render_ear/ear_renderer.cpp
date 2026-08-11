@@ -279,16 +279,23 @@ void append_direct_speakers_blocks(const SceneTrackRef& track,
                                    const SceneObject& obj,
                                    ChannelGainInfo& cg,
                                    ear::GainCalculatorDirectSpeakers& direct_speakers_calc,
-                                   std::size_t num_out) {
+                                   std::size_t num_out,
+                                   const render_common::LfeRoutingPlan& lfe_routing) {
     for (const auto& ds : track.ds_blocks) {
-        auto meta = direct_speakers_metadata_from_block(ds);
         BlockGains bg;
         bg.gains.resize(num_out, 0.0);
         bg.diffuse_gains.resize(num_out, 0.0); // DS has no diffuse bus
         bg.start_sample = ds.start_sample;
         bg.end_sample = std::min(ds.end_sample, obj.end_sample);
         bg.jump_position = true;
-        direct_speakers_calc.calculate(meta, bg.gains);
+        const auto lfe_target = render_common::direct_speakers_lfe_target(ds);
+        if (lfe_routing.applies_to_22_2 && lfe_target != render_common::LfeTarget::none) {
+            bg.gains[render_common::k_22_2_lfe1_index] = lfe_routing.gain(lfe_target, render_common::LfeTarget::lfe1);
+            bg.gains[render_common::k_22_2_lfe2_index] = lfe_routing.gain(lfe_target, render_common::LfeTarget::lfe2);
+        } else {
+            auto meta = direct_speakers_metadata_from_block(ds);
+            direct_speakers_calc.calculate(meta, bg.gains);
+        }
         const auto ds_gain = static_cast<double>(ds.gain) * static_cast<double>(obj.gain);
         std::ranges::transform(bg.gains, bg.gains.begin(), [ds_gain](double g) { return g * ds_gain; });
         cg.blocks.push_back(std::move(bg));
@@ -348,7 +355,10 @@ void append_hoa_blocks(const SceneHOATracks& pack,
     }
 }
 
-std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear::Layout& layout, LogSink& logs) {
+std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene,
+                                               const ear::Layout& layout,
+                                               LogSink& logs,
+                                               const render_common::LfeRoutingPlan& lfe_routing) {
     std::map<uint16_t, ChannelGainInfo> by_channel;
     ear::GainCalculatorObjects objects_calc{layout};
     ear::GainCalculatorDirectSpeakers direct_speakers_calc{layout};
@@ -376,7 +386,7 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, const ear:
                     render_common::canonicalise_speaker_label(track.ds_blocks.front().speaker_labels.front());
             }
             append_object_blocks(track, obj, cg, objects_calc, speakers, num_out, logs, screen_ref_warned);
-            append_direct_speakers_blocks(track, obj, cg, direct_speakers_calc, num_out);
+            append_direct_speakers_blocks(track, obj, cg, direct_speakers_calc, num_out, lfe_routing);
         }
     }
 
@@ -974,8 +984,12 @@ CapabilityReport EarRenderer::capabilities() const {
 }
 
 Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
+    auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "ear");
+    if (!lfe_routing) {
+        return tl::unexpected{lfe_routing.error()};
+    }
     ear::Layout layout = make_ear_layout(plan.output_layout);
-    auto gain_matrix = build_gain_matrix(plan.scene, layout, logs);
+    auto gain_matrix = build_gain_matrix(plan.scene, layout, logs, *lfe_routing);
 
     if (gain_matrix.empty()) {
         logs.log(LogLevel::warning, "ear", "no renderable tracks found (all muted?), writing silence");

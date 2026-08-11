@@ -32,6 +32,7 @@ struct RenderCliOptions {
     std::string semantic_report_path;
     std::string speaker_spread_mode_str{"auto"};
     std::string binaural_spread_mode_str{"auto"};
+    std::string lfe_routing_mode_str{"direct"};
     std::string apple_spatial_preset_str{"off"};
     bool apple_speaker_rendering_flags{false};
     // Listener head orientation in degrees (binaural backends — Apple & SAF). NaN = unset → 0.

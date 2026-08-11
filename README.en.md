@@ -89,7 +89,7 @@ labels produce errors. Custom `U±110` labels require `@30` or `@45` to select e
 
 Public two-channel output uses the `binaural` semantic, which is also the default. Backend and HRTF source are separate
 choices: `saf-binaural` offers built-in KEMAR and build-enabled `--sofa` user HRIRs; `apple` uses the Apple system HRTF.
-Current entry points are the CLI, C++ API, and C ABI v1.29.
+Current entry points are the CLI, C++ API, and C ABI v1.30.
 
 ## Release Packages
 
