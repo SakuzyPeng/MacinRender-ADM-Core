@@ -121,7 +121,8 @@ std::optional<std::size_t> direct_speaker_index_for_labels(std::span<const Direc
 
     for (const auto& label : labels) {
         const std::string key = canonicalise_speaker_label(label);
-        const auto* const alias =
+        // libc++ exposes this iterator as a pointer, while MSVC uses a wrapper type.
+        const auto alias = // NOLINT(readability-qualified-auto)
             std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
         if (alias == k_ds_aliases.end()) {
             continue;
@@ -138,7 +139,8 @@ std::optional<std::size_t> direct_speaker_index_for_labels(std::span<const Direc
 std::optional<DirectSpeakerPosition> direct_speaker_position_for_labels(const std::vector<std::string>& labels) {
     for (const auto& label : labels) {
         const std::string key = canonicalise_speaker_label(label);
-        const auto* const alias =
+        // libc++ exposes this iterator as a pointer, while MSVC uses a wrapper type.
+        const auto alias = // NOLINT(readability-qualified-auto)
             std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
         const std::string_view bs2051 = alias != k_ds_aliases.end() ? alias->bs2051 : std::string_view{key};
         if (const auto position = bs2051_label_position(bs2051)) {
