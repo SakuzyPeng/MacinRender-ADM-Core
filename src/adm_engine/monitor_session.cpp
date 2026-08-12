@@ -154,6 +154,11 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         if (!resolved) {
             return tl::unexpected{resolved.error()};
         }
+        auto routing_validation = validate_direct_speakers_routing(
+            resolved->selected, resolved->effective_output_layout, options.direct_speakers_routing_mode);
+        if (!routing_validation) {
+            return tl::unexpected{routing_validation.error()};
+        }
         for (const auto& [level, message] : resolved->diagnostics) {
             logs.log(level, "monitor", message);
         }
@@ -167,6 +172,7 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         plan.default_interp_ms = options.default_interp_ms;
         plan.object_smoothing_frames = options.object_smoothing_frames;
         plan.speaker_geometry = options.speaker_geometry;
+        plan.direct_speakers_routing_mode = options.direct_speakers_routing_mode;
         plan.speaker_spread_mode = options.speaker_spread_mode;
         plan.binaural_spread_mode = options.binaural_spread_mode;
         plan.lfe_routing_mode = options.lfe_routing_mode;

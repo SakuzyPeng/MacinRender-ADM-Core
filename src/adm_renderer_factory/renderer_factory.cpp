@@ -113,4 +113,22 @@ resolve_renderer(RendererSelection requested, std::string requested_layout, bool
     return resolved;
 }
 
+Result<void> validate_direct_speakers_routing(RendererSelection selected,
+                                              std::string_view effective_output_layout,
+                                              DirectSpeakersRoutingMode mode) {
+    if (mode == DirectSpeakersRoutingMode::automatic || selected == RendererSelection::saf) {
+        return {};
+    }
+    if (selected == RendererSelection::apple) {
+        const bool binaural = effective_output_layout == "0+2+0" || effective_output_layout == "binaural";
+        if (binaural && mode == DirectSpeakersRoutingMode::label) {
+            return make_error(ErrorCode::unsupported,
+                              "Apple binaural output does not support DirectSpeakers label routing; use position");
+        }
+        return {};
+    }
+    return make_error(ErrorCode::unsupported,
+                      "explicit DirectSpeakers routing is supported only by SAF and Apple renderers");
+}
+
 } // namespace mradm

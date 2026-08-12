@@ -6,6 +6,7 @@
 
 #include "adm/options.h"
 
+#include "render_common.h"
 #include "speaker_layouts.h"
 
 namespace {
@@ -16,8 +17,8 @@ using mradm::render_layouts::SpeakerSpec;
 struct ExpectedOverride {
     std::string_view layout_id;
     std::string_view speaker_label;
-    float azimuth;
-    float elevation;
+    float azimuth{0.0F};
+    float elevation{0.0F};
 };
 
 constexpr std::array<ExpectedOverride, 38> k_expected_overrides{{
@@ -157,11 +158,39 @@ bool verify_expected_coordinates() {
     return ok;
 }
 
+bool verify_shared_direct_speakers_routing() {
+    using mradm::render_common::DirectSpeakerRoutingTarget;
+    constexpr std::array<DirectSpeakerRoutingTarget, 4> targets{{
+        {"L", -10.0F, 0.0F, false},
+        {"M+030", 30.0F, 0.0F, false},
+        {"M+180", 180.0F, 0.0F, false},
+        {"LFE1", 0.0F, -30.0F, true},
+    }};
+
+    bool ok = true;
+    const auto exact = mradm::render_common::direct_speaker_index_for_labels(targets, {"L"});
+    ok &= check(exact.has_value() && *exact == 0U, "exact output label wins before the L alias");
+    const auto alias = mradm::render_common::direct_speaker_index_for_labels(
+        std::span<const DirectSpeakerRoutingTarget>{targets}.subspan(1), {"L"});
+    ok &= check(alias.has_value() && *alias == 0U, "shared L alias resolves to M+030");
+    const auto lfe_alias = mradm::render_common::direct_speaker_index_for_labels(targets, {"RC_LFE"});
+    ok &= check(lfe_alias.has_value() && *lfe_alias == 3U, "shared RC_LFE alias resolves to LFE1");
+    const auto rear = mradm::render_common::direct_speaker_position_for_labels({"LRS"});
+    ok &= check(rear.has_value() && rear->azimuth == 135.0F && rear->elevation == 0.0F,
+                "shared rear alias recovers the M+135 nominal direction");
+    const auto upper = mradm::render_common::direct_speaker_position_for_labels({"U-135"});
+    ok &= check(upper.has_value() && upper->azimuth == -135.0F && upper->elevation == 30.0F,
+                "shared BS.2051 upper label recovers its nominal direction");
+    ok &= check(!mradm::render_common::direct_speaker_position_for_labels({"UNKNOWN"}).has_value(),
+                "unknown labels do not invent a nominal direction");
+    return ok;
+}
+
 } // namespace
 
 int main() {
-    const bool ok =
-        verify_profile_inventory() && verify_profile_structure_and_ranges() && verify_expected_coordinates();
+    const bool ok = verify_profile_inventory() && verify_profile_structure_and_ranges() &&
+                    verify_expected_coordinates() && verify_shared_direct_speakers_routing();
     if (ok) {
         std::cout << "speaker layouts test passed\n";
         return EXIT_SUCCESS;

@@ -45,6 +45,13 @@ public enum AdmSpeakerGeometry
     Apple = 1,
 }
 
+public enum AdmDirectSpeakersRoutingMode
+{
+    Automatic = 0,
+    Label = 1,
+    Position = 2,
+}
+
 public enum AdmBinauralSpreadMode
 {
     Automatic = 0,

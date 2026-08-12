@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
@@ -135,111 +134,14 @@ struct SafFree {
     return result;
 }
 
-// Find the speaker index closest to (azimuth, elevation) by squared Euclidean
-// distance in az/el space.  Azimuth is circular: -180 and +180 are adjacent.
-// Good enough for speaker-routing fallback; not used for panning, so full
-// great-circle accuracy is unnecessary.
-[[nodiscard]] std::size_t nearest_speaker_index(const LayoutSpec& layout, float azimuth, float elevation) {
-    std::size_t best = 0;
-    float best_sq = std::numeric_limits<float>::max();
-    for (std::size_t i = 0; i < layout.speakers.size(); ++i) {
-        if (layout.speakers[i].is_lfe) {
-            continue; // Non-LFE sources must never land on an LFE channel
-        }
-        const float daz = std::remainder(azimuth - layout.speakers[i].azimuth, 360.0F);
-        const float del = elevation - layout.speakers[i].elevation;
-        const float sq = (daz * daz) + (del * del);
-        if (sq < best_sq) {
-            best_sq = sq;
-            best = i;
-        }
-    }
-    return best;
-}
-
-struct DsLabelAlias {
-    const char* canonical;
-    const char* bs2051;
-};
-
-// Non-standard RoomCentric and DAW shorthand labels found in ADM BWF exports.
-// The renderer's built-in layouts use BS.2051-style labels; label routing must
-// happen before position fallback so LFE channels and bed channels land in the
-// intended output slots.
-// clang-format off
-constexpr std::array<DsLabelAlias, 34> k_ds_aliases = {{
-    {"RCL",   "M+030"}, {"RCR",   "M-030"}, {"RCC",   "M+000"},
-    {"RCLFE", "LFE1"},  {"RCLSS", "M+090"}, {"RCRSS", "M-090"},
-    {"RCLRS", "M+135"}, {"RCRRS", "M-135"},
-    {"RCLTS", "U+090"}, {"RCRTS", "U-090"},
-    {"L",     "M+030"}, {"R",     "M-030"}, {"C",     "M+000"},
-    {"LFE",   "LFE1"},  {"LFEL",  "LFE1"},  {"LFER",  "LFE2"},
-    {"LS",    "M+090"}, {"RS",    "M-090"},
-    {"LSS",   "M+090"}, {"RSS",   "M-090"},
-    {"LRS",   "M+135"}, {"RRS",   "M-135"},
-    {"LB",    "M+135"}, {"RB",    "M-135"},
-    {"LW",    "M+060"}, {"RW",    "M-060"},
-    {"CS",    "M+180"},
-    {"VHL",   "U+045"}, {"VHR",   "U-045"}, {"VHC",   "U+000"},
-    {"TSL",   "U+090"}, {"TSR",   "U-090"},
-    {"LTM",   "U+090"}, {"RTM",   "U-090"},
-}};
-// clang-format on
-
-[[nodiscard]] std::string canonicalize_ds_label(std::string_view label) {
-    std::string out;
-    out.reserve(label.size());
-    for (const char c : label) {
-        if (std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '+' || c == '-') {
-            out.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
-        }
-    }
-    return out;
-}
-
-[[nodiscard]] std::optional<std::string_view> resolve_ds_alias(std::string_view label) {
-    const auto key = canonicalize_ds_label(label);
-    const auto* const it =
-        std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
-    if (it != k_ds_aliases.end()) {
-        return it->bs2051;
-    }
-    return std::nullopt;
-}
-
-[[nodiscard]] std::optional<std::size_t> speaker_index_for_label(const LayoutSpec& layout, std::string_view label) {
-    const auto it = std::ranges::find_if(layout.speakers, [label](const VbapSpeakerSpec& speaker) {
-        return !speaker.label.empty() && speaker.label == label;
+[[nodiscard]] std::vector<render_common::DirectSpeakerRoutingTarget> direct_speaker_targets(const LayoutSpec& layout) {
+    std::vector<render_common::DirectSpeakerRoutingTarget> targets;
+    targets.reserve(layout.speakers.size());
+    std::ranges::transform(layout.speakers, std::back_inserter(targets), [](const VbapSpeakerSpec& speaker) {
+        return render_common::DirectSpeakerRoutingTarget{
+            speaker.label, speaker.azimuth, speaker.elevation, speaker.is_lfe};
     });
-    if (it == layout.speakers.end()) {
-        return std::nullopt;
-    }
-    return static_cast<std::size_t>(std::distance(layout.speakers.begin(), it));
-}
-
-bool route_one_direct_speaker_label(const LayoutSpec& layout,
-                                    std::string_view label,
-                                    float gain,
-                                    std::vector<float>& gains) {
-    if (const auto index = speaker_index_for_label(layout, label)) {
-        gains[*index] = gain;
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] bool route_direct_speaker_label(const LayoutSpec& layout,
-                                              const std::vector<std::string>& labels,
-                                              float gain,
-                                              std::vector<float>& gains) {
-    if (std::ranges::any_of(
-            labels, [&](const auto& label) { return route_one_direct_speaker_label(layout, label, gain, gains); })) {
-        return true;
-    }
-    return std::ranges::any_of(labels, [&](const auto& label) {
-        const auto resolved = resolve_ds_alias(label);
-        return resolved && route_one_direct_speaker_label(layout, *resolved, gain, gains);
-    });
+    return targets;
 }
 
 [[nodiscard]] SpeakerDirection source_direction(const SceneBlockPosition& pos) {
@@ -262,27 +164,13 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
     return std::min(180.0F, std::hypot(w_with_divergence, h, d));
 }
 
-[[nodiscard]] Result<std::vector<float>> calculate_one_vbap_gains(const SceneObjectBlock& block,
-                                                                  const LayoutSpec& layout,
-                                                                  mradm::SpeakerSpreadMode spread_mode) {
+[[nodiscard]] Result<std::vector<float>>
+calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spread_deg, const LayoutSpec& layout) {
     auto speakers = flatten_layout(layout); // non-LFE only
-    const auto src = source_direction(block.position);
-    std::vector<float> source{src.azimuth, src.elevation};
+    std::vector<float> source{azimuth, elevation};
 
     const auto num_non_lfe = static_cast<int>(speakers.size() / 2U);
     const bool use_3d = !is_2d_layout(layout);
-    float spread_deg = 0.0F;
-    if (use_3d) {
-        switch (spread_mode) {
-        case mradm::SpeakerSpreadMode::none:
-            spread_deg = 0.0F;
-            break;
-        case mradm::SpeakerSpreadMode::automatic:
-        case mradm::SpeakerSpreadMode::mdap:
-            spread_deg = mdap_spread_degrees(block);
-            break;
-        }
-    }
     int table_size = 0;
     int simplex_count = 0;
     float* raw_table = nullptr;
@@ -316,10 +204,21 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
     std::size_t vbap_idx = 0;
     for (std::size_t i = 0; i < layout.speakers.size(); ++i) {
         if (!layout.speakers[i].is_lfe) {
-            gains[i] = table.get()[vbap_idx++] * block.gain;
+            gains[i] = table.get()[vbap_idx++] * gain;
         }
     }
     return gains;
+}
+
+[[nodiscard]] Result<std::vector<float>> calculate_one_vbap_gains(const SceneObjectBlock& block,
+                                                                  const LayoutSpec& layout,
+                                                                  mradm::SpeakerSpreadMode spread_mode) {
+    const auto src = source_direction(block.position);
+    float spread_deg = 0.0F;
+    if (!is_2d_layout(layout) && spread_mode != mradm::SpeakerSpreadMode::none) {
+        spread_deg = mdap_spread_degrees(block);
+    }
+    return calculate_point_vbap_gains(src.azimuth, src.elevation, block.gain, spread_deg, layout);
 }
 
 // Returns true if any non-muted Objects block has non-negligible elevation.
@@ -349,6 +248,7 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
                                                                      std::string_view layout_id,
                                                                      LogSink& logs,
                                                                      mradm::SpeakerSpreadMode spread_mode,
+                                                                     DirectSpeakersRoutingMode routing_mode,
                                                                      const render_common::LfeRoutingPlan& lfe_routing) {
     // Warn once if 2D output will silently discard height information.
     if (is_2d_layout(layout) && scene_has_elevated_sources(scene)) {
@@ -363,6 +263,7 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
     std::map<uint16_t, ChannelGainInfo> by_channel;
     const auto num_out = layout.speakers.size();
     const auto object_speakers = output_speakers(layout);
+    const auto routing_targets = direct_speaker_targets(layout);
     bool screen_ref_warned{false};
 
     for (const auto& obj : scene.objects) {
@@ -411,45 +312,66 @@ bool route_one_direct_speaker_label(const LayoutSpec& layout,
                                      prepared.interp_length_samples});
             }
 
-            // DirectSpeakers blocks → label match, then nearest-speaker fallback.
-            // LFE-identified channels (channelFrequency.lowPass) skip the fallback:
-            // routing bass content to a full-range speaker would be incorrect.
+            // DirectSpeakers blocks use the selected label or position path. LFE
+            // identification always takes precedence and retains dedicated routing.
             // DS channels are treated as jump_position=true (no interpolation).
             for (const auto& ds : track.ds_blocks) {
                 std::vector<float> gains(num_out, 0.0F);
 
                 const auto lfe_target = render_common::direct_speakers_lfe_target(ds);
-                bool matched = false;
                 if (lfe_routing.applies_to_22_2 && lfe_target != render_common::LfeTarget::none) {
                     gains[render_common::k_22_2_lfe1_index] =
                         ds.gain * lfe_routing.gain(lfe_target, render_common::LfeTarget::lfe1);
                     gains[render_common::k_22_2_lfe2_index] =
                         ds.gain * lfe_routing.gain(lfe_target, render_common::LfeTarget::lfe2);
-                    matched = true;
-                } else {
-                    matched = route_direct_speaker_label(layout, ds.speaker_labels, ds.gain, gains);
-                }
-
-                if (!matched) {
-                    if (ds.low_pass_hz) {
-                        // LFE channel with no matching LFE output: drop rather than misroute.
+                } else if (lfe_target != render_common::LfeTarget::none) {
+                    const auto target =
+                        render_common::direct_speaker_index_for_labels(routing_targets, ds.speaker_labels);
+                    if (target && routing_targets[*target].is_lfe) {
+                        gains[*target] = ds.gain;
+                    } else {
                         logs.log(LogLevel::warning,
                                  "saf-vbap",
-                                 fmt::format("LFE channel (lowPass={:.0f}Hz) has no matching LFE output "
-                                             "in layout '{}' — channel dropped",
-                                             *ds.low_pass_hz,
+                                 fmt::format("DirectSpeakers LFE channel has no matching LFE output in layout '{}' "
+                                             "— channel dropped",
                                              std::string{layout_id}));
+                    }
+                } else if (routing_mode == DirectSpeakersRoutingMode::position) {
+                    const auto position = render_common::direct_speaker_position_or_front(ds, logs, "saf-vbap");
+                    auto position_gains =
+                        calculate_point_vbap_gains(position.azimuth, position.elevation, ds.gain, 0.0F, layout);
+                    if (!position_gains) {
+                        return make_error(position_gains.error().code,
+                                          position_gains.error().message,
+                                          fmt::format("track_uid={}", track.track_uid));
+                    }
+                    gains = std::move(*position_gains);
+                } else {
+                    const auto target =
+                        render_common::direct_speaker_index_for_labels(routing_targets, ds.speaker_labels);
+                    if (target && !routing_targets[*target].is_lfe) {
+                        gains[*target] = ds.gain;
                     } else {
-                        const float az = ds.has_position ? ds.azimuth : 0.0F;
-                        const float el = ds.has_position ? ds.elevation : 0.0F;
-                        if (!ds.speaker_labels.empty()) {
-                            logs.log(LogLevel::warning,
-                                     "saf-vbap",
-                                     fmt::format("DirectSpeakers label '{}' not in output layout — "
-                                                 "routing to nearest speaker",
-                                                 ds.speaker_labels.front()));
+                        const auto label_position =
+                            render_common::direct_speaker_position_for_labels(ds.speaker_labels);
+                        const auto position =
+                            label_position ? *label_position
+                                           : render_common::direct_speaker_position_or_front(ds, logs, "saf-vbap");
+                        const std::string label =
+                            ds.speaker_labels.empty() ? std::string{"<missing>"} : ds.speaker_labels.front();
+                        logs.log(LogLevel::warning,
+                                 "saf-vbap",
+                                 fmt::format("DirectSpeakers label '{}' not in output layout — spatializing from {}",
+                                             label,
+                                             label_position ? "label direction" : "nominal position"));
+                        auto fallback_gains =
+                            calculate_point_vbap_gains(position.azimuth, position.elevation, ds.gain, 0.0F, layout);
+                        if (!fallback_gains) {
+                            return make_error(fallback_gains.error().code,
+                                              fallback_gains.error().message,
+                                              fmt::format("track_uid={}", track.track_uid));
                         }
-                        gains[nearest_speaker_index(layout, az, el)] = ds.gain;
+                        gains = std::move(*fallback_gains);
                     }
                 }
 
@@ -743,11 +665,20 @@ Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan&
         "saf-vbap",
         fmt::format("speaker geometry: {}", plan.speaker_geometry == SpeakerGeometry::apple ? "apple" : "standard"));
 
+    const auto routing_mode = plan.direct_speakers_routing_mode == DirectSpeakersRoutingMode::automatic
+                                  ? DirectSpeakersRoutingMode::label
+                                  : plan.direct_speakers_routing_mode;
+    logs.log(LogLevel::info,
+             "saf-vbap",
+             fmt::format("DirectSpeakers routing: {}",
+                         routing_mode == DirectSpeakersRoutingMode::label ? "label" : "position"));
+
     auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "saf-vbap");
     if (!lfe_routing) {
         return tl::unexpected{lfe_routing.error()};
     }
-    auto gain_matrix = build_gain_matrix(plan.scene, *layout, layout_id, logs, plan.speaker_spread_mode, *lfe_routing);
+    auto gain_matrix =
+        build_gain_matrix(plan.scene, *layout, layout_id, logs, plan.speaker_spread_mode, routing_mode, *lfe_routing);
     if (!gain_matrix) {
         return make_error(gain_matrix.error().code, gain_matrix.error().message, gain_matrix.error().context);
     }

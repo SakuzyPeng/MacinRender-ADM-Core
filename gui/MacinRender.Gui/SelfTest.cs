@@ -176,6 +176,29 @@ internal static class SelfTest
             return 13;
         }
 
+        // v1.32:DirectSpeakers label/position 路由的托管枚举与 P/Invoke setter。
+        try
+        {
+            using var routingOpts = NativeMethods.adm_create_render_options();
+            var automaticRc = NativeMethods.adm_render_options_set_direct_speakers_routing_mode(
+                routingOpts, AdmDirectSpeakersRoutingMode.Automatic);
+            var labelRc = NativeMethods.adm_render_options_set_direct_speakers_routing_mode(
+                routingOpts, AdmDirectSpeakersRoutingMode.Label);
+            var positionRc = NativeMethods.adm_render_options_set_direct_speakers_routing_mode(
+                routingOpts, AdmDirectSpeakersRoutingMode.Position);
+            if (automaticRc != AdmErrorCode.Ok || labelRc != AdmErrorCode.Ok || positionRc != AdmErrorCode.Ok)
+            {
+                Console.Error.WriteLine("[失败] DirectSpeakers GUI 路由映射与 C ABI v1.32 契约不一致");
+                return 14;
+            }
+            Console.WriteLine("DirectSpeakers 路由:auto/label/position P/Invoke OK");
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            Console.Error.WriteLine($"[失败] libmradm_capi 缺少 v1.32 DirectSpeakers 路由入口: {ex.Message}");
+            return 14;
+        }
+
         // 监听入口可解析性(即使没给 wav 也跑):bogus 路径应得到干净错误码,而非
         // EntryPointNotFound / 崩溃 —— 验证 v1.15–v1.17 的 adm_monitor_* 符号确实在 dylib 里。
         try

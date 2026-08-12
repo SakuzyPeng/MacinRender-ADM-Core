@@ -1024,6 +1024,10 @@ CapabilityReport EarRenderer::capabilities() const {
 }
 
 Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
+    if (plan.direct_speakers_routing_mode != DirectSpeakersRoutingMode::automatic) {
+        return make_error(
+            ErrorCode::unsupported, "EAR renderer does not support explicit DirectSpeakers routing; use automatic", {});
+    }
     try {
         auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "ear");
         if (!lfe_routing) {

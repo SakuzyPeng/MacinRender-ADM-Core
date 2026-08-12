@@ -194,6 +194,16 @@ mradm::SpeakerGeometry parse_speaker_geometry(const std::string& value) {
     return value == "apple" ? mradm::SpeakerGeometry::apple : mradm::SpeakerGeometry::standard;
 }
 
+mradm::DirectSpeakersRoutingMode parse_direct_speakers_routing_mode(const std::string& value) {
+    if (value == "label") {
+        return mradm::DirectSpeakersRoutingMode::label;
+    }
+    if (value == "position") {
+        return mradm::DirectSpeakersRoutingMode::position;
+    }
+    return mradm::DirectSpeakersRoutingMode::automatic;
+}
+
 mradm::BinauralSpreadMode parse_binaural_spread_mode(const std::string& value) {
     if (value == "none") {
         return mradm::BinauralSpreadMode::none;
@@ -346,6 +356,13 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                      "apple (CoreAudio fixed geometry); Apple renderer always uses apple")
         ->check(CLI::IsMember({"standard", "apple"}));
     render_cmd
+        ->add_option("--direct-speakers-routing",
+                     opts.direct_speakers_routing_str,
+                     "DirectSpeakers routing: auto (label for SAF/Apple speakers, position for Apple binaural), "
+                     "label (one-hot on match, otherwise spatialize label/nominal direction), or position "
+                     "(spatialize nominal coordinates)")
+        ->check(CLI::IsMember({"auto", "label", "position"}));
+    render_cmd
         ->add_option("--speaker-spread-mode",
                      opts.speaker_spread_mode_str,
                      "Speaker Objects extent spread algorithm: auto (mdap for 3D, none for 2D), none, mdap")
@@ -439,6 +456,7 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
         request.options.render_end_sec = opts.render_end;
     }
     request.options.speaker_geometry = parse_speaker_geometry(opts.speaker_geometry_str);
+    request.options.direct_speakers_routing_mode = parse_direct_speakers_routing_mode(opts.direct_speakers_routing_str);
     request.options.speaker_spread_mode = parse_speaker_spread_mode(opts.speaker_spread_mode_str);
     request.options.binaural_spread_mode = parse_binaural_spread_mode(opts.binaural_spread_mode_str);
     request.options.lfe_routing_mode = parse_lfe_routing_mode(opts.lfe_routing_mode_str);

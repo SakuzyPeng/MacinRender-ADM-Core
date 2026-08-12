@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace MacinRender.Gui.Interop;
 
 /// <summary>
-/// P/Invoke 绑定:每个声明逐一对应 include/adm/c_api.h(stable v1.31)的导出函数。
+/// P/Invoke 绑定:每个声明逐一对应 include/adm/c_api.h(stable v1.32)的导出函数。
 /// 用 LibraryImport 源生成器(NativeAOT 友好,无运行时反射 marshalling stub)。
 /// 字符串统一 UTF-8;owned char* 返回值用 IntPtr,调用方决定是否 adm_free_string。
 /// 进度回调/userData 用 IntPtr(函数指针 + GCHandle),具体类型在服务层处理。
@@ -109,6 +109,10 @@ internal static partial class NativeMethods
     [LibraryImport(Lib)]
     internal static partial AdmErrorCode adm_render_options_set_speaker_geometry(AdmRenderOptionsHandle opts,
         AdmSpeakerGeometry geometry);
+
+    [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_render_options_set_direct_speakers_routing_mode(
+        AdmRenderOptionsHandle opts, AdmDirectSpeakersRoutingMode mode);
 
     [LibraryImport(Lib)]
     internal static partial AdmErrorCode adm_render_options_set_binaural_spread_mode(AdmRenderOptionsHandle opts,

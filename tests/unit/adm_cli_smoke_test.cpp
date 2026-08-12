@@ -214,6 +214,10 @@ int main() {
                     "render --help: speaker-spread-mode option listed");
         ok &= check(r.out.find("--speaker-geometry") != std::string::npos,
                     "render --help: speaker-geometry option listed");
+        ok &= check(r.out.find("--direct-speakers-routing") != std::string::npos,
+                    "render --help: DirectSpeakers routing option listed");
+        ok &= check(r.out.find("spatialize label/nominal direction") != std::string::npos,
+                    "render --help: label miss spatialization is documented");
         ok &= check(r.out.find("--binaural-spread-mode") != std::string::npos,
                     "render --help: binaural-spread-mode option listed");
         ok &= check(r.out.find("--lfe-routing") != std::string::npos, "render --help: 22.2 LFE routing option listed");
@@ -260,6 +264,15 @@ int main() {
         {
             auto r = run_cmd(mradm_exe + " render --speaker-geometry invalid_xyz");
             ok &= check(r.code != 0, "render --speaker-geometry invalid: non-zero exit");
+        }
+        for (const auto* val : {"auto", "label", "position"}) {
+            auto r = run_cmd(mradm_exe + " render --help --direct-speakers-routing " + val);
+            const std::string msg = std::string("render --direct-speakers-routing ") + val + ": exit 0";
+            ok &= check(r.code == 0, msg.c_str());
+        }
+        {
+            auto r = run_cmd(mradm_exe + " render --direct-speakers-routing invalid_xyz");
+            ok &= check(r.code != 0, "render --direct-speakers-routing invalid: non-zero exit");
         }
         // --binaural-spread-mode: valid values
         for (const auto* val : {"auto", "none", "cloud", "saf-spreader"}) {

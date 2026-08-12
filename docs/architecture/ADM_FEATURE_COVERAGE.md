@@ -121,6 +121,7 @@ libear `CartesianSpeakerPosition` 路径不再触发。
 `AudioBlockFormatDirectSpeakers` 的 `rtime`（DefaultParam）和 `duration`（OptParam）
 现已读取：`SceneDirectSpeakersBlock` 新增 `start_sample` / `end_sample`，
 importer 从 rtime/duration 推算样本偏移后写入，EAR 和 VBAP 渲染器均已接入时域门控。
+Apple 的 position/AmbienceBed 与 label/主机直达路径也按同一块边界切换；label 直达总线逐样本解析事件。
 
 ---
 
@@ -251,6 +252,7 @@ LUFS / 空间 True Peak 测量缓冲中剥离，并由独立 mono True Peak trac
 | **reverb / room simulation** | ❌ 未实现 | 可作为可选后处理，不应默认改变 ADM 合规渲染结果 |
 | **扬声器布局统一** | ✅ EAR / SAF VBAP 共用项目布局 registry；对外均显示 8 个 speaker layouts（内部另保留 `0+2+0`） | 后续可增加配置文件或插件式布局源 |
 | **输出扬声器几何 profile** | ✅ `standard` / `apple` 两套内置坐标；EAR / SAF 可切换，Apple 后端固定 CoreAudio；CLI `--speaker-geometry`、C ABI v1.31 | profile 只改变非 LFE 有效输出坐标，不改变 ADM 输入语义或声道顺序 |
+| **DirectSpeakers 双路由** | ✅ `RenderOptions::direct_speakers_routing_mode` / CLI `--direct-speakers-routing` / C ABI v1.32；SAF 与 Apple 扬声器支持 `label` / `position` | `auto`：SAF/Apple 扬声器=`label`、Apple binaural=`position`；EAR/SAF binaural/HOA 保持原生且拒绝显式模式；LFE 始终优先走专用路径 |
 | **VBAP 布局扩展** | ✅ 通道顺序和 LFE 位置已校对；SAF 补齐 `5.1.2` / `9.1.4` / `9.1.6`，并保留 `register_vbap_layout()` 运行时注册入口 | — |
 | **VBAP 2D / 3D 配置** | ✅ 自动按布局高度判断；能力报告和 render 日志显示 2D/3D，2D 布局遇到高度源会 warning | 后续可增加显式 override 开关 |
 | **VBAP 插值策略配置** | ✅ `RenderOptions.default_interp_ms`（默认 5ms，0=瞬时切换，CLI `--interp-ms`）；EAR / HOA 渲染器同步生效 | — |
@@ -329,7 +331,7 @@ EAR diffuse bus 已在 M4 中实现（见注②）：`designDecorrelators()` FIR
 ### VBAP 完整度
 
 当前 SAF VBAP 后端已经覆盖 Objects / DirectSpeakers、2D / 3D gain table、
-ADM 块插值和 MDAP extent spread。EAR 与 SAF VBAP 的扬声器布局能力由
+DirectSpeakers 标签直达与零扩散位置 VBAP、ADM 块插值和 MDAP extent spread。EAR 与 SAF VBAP 的扬声器布局能力由
 `adm_render_common` 中的共享 registry 驱动。
 
 **已内置扬声器布局（`speaker_layouts.cpp`）：**
@@ -372,8 +374,10 @@ macOS 27.0（26A5406e）上通过 `AudioFormatGetProperty(kAudioFormatProperty_C
 
 `0+5+0` 的非 LFE 坐标在两套 profile 中相同。LFE 坐标是非 panning 占位信息，不属于此次切换。
 EAR 保留 libear 的 ADM nominal topology，只把 real/effective position 换成所选 profile，以免
-输出几何反向改写 ADM 三角剖分语义。带精确 speakerLabel 的 DirectSpeakers 始终按标签直达，
-profile 主要影响 Objects、channelLock 与位置回退。
+输出几何反向改写 ADM 三角剖分语义。DirectSpeakers 在 `label` 模式命中精确 speakerLabel/别名时
+按标签直达，此时 profile 不影响结果；未命中时先恢复已知标签方向，否则使用 ADM 标称坐标，再使用所选
+profile 的几何执行零扩散 SAF VBAP。`position` 模式也使用所选 profile 的几何执行零扩散 SAF
+VBAP。Objects 与 channelLock 也使用所选几何。LFE 不参与两种模式的空间化。
 
 **仍待改善：**
 

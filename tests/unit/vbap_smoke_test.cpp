@@ -311,14 +311,17 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_nested_start_objects
 }
 
 std::pair<std::shared_ptr<adm::Document>, std::string>
-make_direct_speakers_doc(const char* label, float azimuth, float elevation = 0.0F) {
+make_direct_speakers_doc(const char* label, float azimuth, float elevation = 0.0F, bool has_position = true) {
     auto doc = adm::Document::create();
 
     auto cf =
         adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"VbapDsCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
     {
-        adm::AudioBlockFormatDirectSpeakers block{
-            adm::SphericalSpeakerPosition{adm::Azimuth{azimuth}, adm::Elevation{elevation}, adm::Distance{1.0F}}};
+        adm::AudioBlockFormatDirectSpeakers block{};
+        if (has_position) {
+            block.set(
+                adm::SphericalSpeakerPosition{adm::Azimuth{azimuth}, adm::Elevation{elevation}, adm::Distance{1.0F}});
+        }
         block.add(adm::SpeakerLabel{label});
         cf->add(block);
     }
@@ -756,6 +759,225 @@ bool verify_direct_speakers_label_routing() {
     return ok;
 }
 
+bool verify_direct_speakers_routing_modes() {
+    constexpr std::size_t k_lfe1 = 3U;
+    constexpr std::size_t k_lfe2 = 9U;
+    bool ok = true;
+    ok &= check(mradm::RenderOptions{}.direct_speakers_routing_mode == mradm::DirectSpeakersRoutingMode::automatic,
+                "RenderOptions DirectSpeakers routing defaults to automatic");
+    ok &= check(mradm::RenderPlan{}.direct_speakers_routing_mode == mradm::DirectSpeakersRoutingMode::automatic,
+                "RenderPlan DirectSpeakers routing defaults to automatic");
+
+    auto render = [](const std::shared_ptr<adm::Document>& doc,
+                     const std::string& uid,
+                     mradm::DirectSpeakersRoutingMode mode,
+                     std::string_view stem,
+                     CapturingLogSink* captured_logs = nullptr) -> std::optional<std::vector<double>> {
+        const auto input = write_input_fixture(doc, uid);
+        FileGuard input_guard{input};
+        const auto output = std::filesystem::temp_directory_path() / (std::string{stem} + ".wav");
+        FileGuard output_guard{output};
+
+        mradm::RenderRequest request;
+        request.input_path = input;
+        request.output_path = output;
+        request.options.output_layout = "9+10+3";
+        request.options.renderer = mradm::RendererSelection::saf;
+        request.options.speaker_geometry = mradm::SpeakerGeometry::apple;
+        request.options.direct_speakers_routing_mode = mode;
+        request.options.peak_limit = false;
+
+        mradm::RenderService service;
+        mradm::NullProgressSink progress;
+        mradm::NullLogSink null_logs;
+        mradm::LogSink& logs = captured_logs != nullptr ? static_cast<mradm::LogSink&>(*captured_logs)
+                                                        : static_cast<mradm::LogSink&>(null_logs);
+        const auto result = service.render(request, progress, logs);
+        if (!result.success()) {
+            std::cerr << "FAIL: DirectSpeakers routing-mode render failed: " << result.error.message << "\n";
+            return std::nullopt;
+        }
+        return read_channel_sums(output, 24U);
+    };
+
+    // The label names U+045 (ch12), while its nominal position lies between
+    // speakers. Label routing must remain one-hot; position routing must invoke
+    // zero-spread SAF VBAP and distribute the source without touching LFE.
+    auto [doc, uid] = make_direct_speakers_doc("U+045", 45.0F, 15.0F);
+    const auto automatic = render(doc, uid, mradm::DirectSpeakersRoutingMode::automatic, "mr_vbap_ds_auto");
+    const auto label = render(doc, uid, mradm::DirectSpeakersRoutingMode::label, "mr_vbap_ds_label_explicit");
+    const auto position = render(doc, uid, mradm::DirectSpeakersRoutingMode::position, "mr_vbap_ds_position");
+    if (!automatic || !label || !position) {
+        return false;
+    }
+    ok &= check((*automatic)[12U] > 0.0, "SAF automatic DirectSpeakers routing resolves to label");
+    ok &= check((*label)[12U] > 0.0, "SAF explicit label routes U+045 one-hot to ch12");
+    for (std::size_t channel = 0; channel < label->size(); ++channel) {
+        if (channel != 12U) {
+            ok &= check((*label)[channel] < 1.0e-6, "SAF label routing does not leak outside its output slot");
+        }
+    }
+    int position_active = 0;
+    for (std::size_t channel = 0; channel < position->size(); ++channel) {
+        if (channel != k_lfe1 && channel != k_lfe2 && (*position)[channel] > 1.0e-5) {
+            ++position_active;
+        }
+    }
+    ok &= check(position_active >= 2, "SAF position routing uses multichannel zero-spread VBAP");
+    ok &= check((*position)[k_lfe1] < 1.0e-9 && (*position)[k_lfe2] < 1.0e-9,
+                "SAF position-routed non-LFE source never enters either LFE output");
+
+    auto [unknown_doc, unknown_uid] = make_direct_speakers_doc("UNKNOWN", 45.0F, 15.0F);
+    CapturingLogSink unknown_logs;
+    const auto unknown = render(unknown_doc,
+                                unknown_uid,
+                                mradm::DirectSpeakersRoutingMode::label,
+                                "mr_vbap_ds_unknown_position_fallback",
+                                &unknown_logs);
+    if (!unknown) {
+        return false;
+    }
+    int unknown_active = 0;
+    for (std::size_t channel = 0; channel < unknown->size(); ++channel) {
+        if (channel != k_lfe1 && channel != k_lfe2 && (*unknown)[channel] > 1.0e-5) {
+            ++unknown_active;
+        }
+    }
+    ok &= check(unknown_active >= 2, "SAF unmatched label falls back to zero-spread VBAP, not nearest one-hot");
+    ok &= check(unknown_logs.has_warning_containing("spatializing from nominal position"),
+                "SAF unmatched label reports nominal-position spatial fallback");
+
+    auto [alias_doc, alias_uid] = make_direct_speakers_doc("L", 0.0F);
+    const auto alias = render(alias_doc, alias_uid, mradm::DirectSpeakersRoutingMode::label, "mr_vbap_ds_alias_l");
+    if (!alias) {
+        return false;
+    }
+    ok &= check((*alias)[6U] > 0.0, "SAF alias L routes to 22.2 M+030 (ch6)");
+
+    {
+        auto [missing_doc, missing_uid] = make_direct_speakers_doc("NOT_A_BS2051_LABEL", 0.0F);
+        const auto input = write_input_fixture(missing_doc, missing_uid);
+        FileGuard input_guard{input};
+        auto scene = mradm::io::import_scene(input.string());
+        if (!scene || scene->objects.empty() || scene->objects.front().tracks.empty() ||
+            scene->objects.front().tracks.front().ds_blocks.empty()) {
+            return check(false, "SAF missing-position fixture imports");
+        }
+        scene->objects.front().tracks.front().ds_blocks.front().has_position = false;
+
+        const auto output = std::filesystem::temp_directory_path() / "mr_vbap_ds_missing_position.wav";
+        FileGuard output_guard{output};
+        mradm::RenderPlan plan;
+        plan.input_path = input.string();
+        plan.output_path = output.string();
+        plan.output_layout = "9+10+3";
+        plan.scene = *scene;
+        plan.speaker_geometry = mradm::SpeakerGeometry::apple;
+        plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
+        auto renderer = mradm::create_vbap_renderer();
+        CapturingLogSink missing_logs;
+        mradm::NullProgressSink progress;
+        auto prepared = renderer->prepare(plan, missing_logs);
+        if (!prepared || !renderer->render_window(**prepared, plan, progress, missing_logs)) {
+            return check(false, "SAF missing-position render succeeds");
+        }
+        const auto missing = read_channel_sums(output, 24U);
+        ok &= check(missing.size() == 24U && missing[2U] > 0.0,
+                    "SAF missing position falls back to front-centre M+000 (ch2)");
+        ok &= check(missing_logs.has_warning_containing("no nominal position"),
+                    "SAF missing DirectSpeakers position emits warning");
+        ok &= check(missing_logs.has_warning_containing("not in output layout"),
+                    "SAF missing DirectSpeakers label emits fallback warning");
+    }
+
+    {
+        auto [rear_doc, rear_uid] = make_direct_speakers_doc("M+135", 0.0F);
+        const auto input = write_input_fixture(rear_doc, rear_uid);
+        FileGuard input_guard{input};
+        auto scene = mradm::io::import_scene(input.string());
+        if (!scene || scene->objects.empty() || scene->objects.front().tracks.empty() ||
+            scene->objects.front().tracks.front().ds_blocks.empty()) {
+            return check(false, "SAF rear-label fixture imports");
+        }
+        scene->objects.front().tracks.front().ds_blocks.front().has_position = false;
+
+        const auto output = std::filesystem::temp_directory_path() / "mr_vbap_ds_rear_label_fallback.wav";
+        FileGuard output_guard{output};
+        mradm::RenderPlan plan;
+        plan.input_path = input.string();
+        plan.output_path = output.string();
+        plan.output_layout = "0+5+0";
+        plan.scene = *scene;
+        plan.speaker_geometry = mradm::SpeakerGeometry::apple;
+        plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
+        auto renderer = mradm::create_vbap_renderer();
+        CapturingLogSink rear_logs;
+        mradm::NullProgressSink progress;
+        auto prepared = renderer->prepare(plan, rear_logs);
+        if (!prepared || !renderer->render_window(**prepared, plan, progress, rear_logs)) {
+            return check(false, "SAF rear-label fallback render succeeds");
+        }
+        const auto rear = read_channel_sums(output, 6U);
+        ok &= check(rear.size() == 6U && rear[4U] > rear[0U] + rear[1U] + rear[2U],
+                    "SAF M+135 without coordinates stays behind when rendered to 5.1");
+        ok &= check(rear_logs.has_warning_containing("spatializing from label direction"),
+                    "SAF absent output slot reports label-direction fallback");
+        ok &= check(!rear_logs.has_warning_containing("no nominal position"),
+                    "SAF known rear label does not fall back to front-centre");
+    }
+
+    auto [lfe_doc, lfe_uid] = make_direct_speakers_doc("LFE", 0.0F);
+    const auto lfe_position =
+        render(lfe_doc, lfe_uid, mradm::DirectSpeakersRoutingMode::position, "mr_vbap_ds_position_lfe");
+    if (!lfe_position) {
+        return false;
+    }
+    ok &= check((*lfe_position)[k_lfe1] > 0.0, "SAF position mode preserves dedicated LFE routing");
+    ok &= check((*lfe_position)[k_lfe2] < 1.0e-9, "SAF direct LFE1 does not leak to LFE2");
+    return ok;
+}
+
+bool verify_direct_speakers_explicit_mode_backend_rejection() {
+    auto [doc, uid] = make_direct_speakers_doc("M+000", 0.0F);
+    const auto input = write_input_fixture(doc, uid);
+    FileGuard input_guard{input};
+
+    struct Case {
+        mradm::RendererSelection renderer;
+        const char* layout;
+    };
+    constexpr std::array<Case, 3> cases{{
+        {mradm::RendererSelection::ear, "0+5+0"},
+        {mradm::RendererSelection::saf_binaural, "binaural"},
+        {mradm::RendererSelection::hoa, "hoa3"},
+    }};
+
+    bool ok = true;
+    for (const auto& test : cases) {
+        for (const auto mode : {mradm::DirectSpeakersRoutingMode::label, mradm::DirectSpeakersRoutingMode::position}) {
+            const auto output =
+                std::filesystem::temp_directory_path() /
+                (std::string{"mr_ds_mode_rejection_"} + std::to_string(static_cast<int>(test.renderer)) + "_" +
+                 std::to_string(static_cast<int>(mode)) + ".wav");
+            FileGuard output_guard{output};
+            mradm::RenderRequest request;
+            request.input_path = input;
+            request.output_path = output;
+            request.options.renderer = test.renderer;
+            request.options.output_layout = test.layout;
+            request.options.direct_speakers_routing_mode = mode;
+
+            mradm::RenderService service;
+            mradm::NullProgressSink progress;
+            mradm::NullLogSink logs;
+            const auto result = service.render(request, progress, logs);
+            ok &= check(!result.success() && result.error.code == mradm::ErrorCode::unsupported,
+                        "explicit DirectSpeakers routing is rejected by unsupported backend");
+        }
+    }
+    return ok;
+}
+
 bool verify_wav71_rear_side_order() {
     auto render_ds = [](const char* label, float azimuth, const char* suffix) {
         auto [doc, uid_str] = make_direct_speakers_doc(label, azimuth);
@@ -871,12 +1093,21 @@ bool verify_direct_speakers_position_fallback_wrap() {
     ok &= check(sums.size() == 24U, "DirectSpeakers fallback output has 24 channels");
     if (ok) {
         ok &= check(sums[k_rear_channel] > 0.0, "DirectSpeakers fallback wraps -179° to rear M+180");
+        double other_non_lfe = 0.0;
+        double strongest_other = 0.0;
         for (std::size_t ch = 0; ch < sums.size(); ++ch) {
             if (ch == k_rear_channel || ch == k_lfe1_channel || ch == k_lfe2_channel) {
                 continue;
             }
-            ok &= check(sums[ch] < 1.0e-6, "DirectSpeakers fallback does not leak to non-nearest channels");
+            other_non_lfe += sums[ch];
+            strongest_other = std::max(strongest_other, sums[ch]);
         }
+        ok &= check(other_non_lfe > 1.0e-6,
+                    "DirectSpeakers non-exact rear position uses continuous VBAP instead of nearest one-hot");
+        ok &= check(sums[k_rear_channel] > strongest_other,
+                    "DirectSpeakers -179° fallback remains dominated by rear M+180");
+        ok &= check(sums[k_lfe1_channel] < 1.0e-9 && sums[k_lfe2_channel] < 1.0e-9,
+                    "DirectSpeakers rear fallback remains strictly outside both LFE channels");
     }
     ok &= check(logs.has_warnings(), "DirectSpeakers fallback emits warning on label miss");
     return ok;
@@ -971,8 +1202,8 @@ bool verify_916_output_is_16ch() {
 }
 
 // Verify 9.1.6 top-side channel routing: a DS source with label "U+110" (Ltm)
-// must land on channel 12, and a position-fallback at az=110/el=45 must also
-// resolve to the same channel (nearest non-LFE speaker).
+// must land on channel 12, and a position fallback exactly at az=110/el=45 must
+// produce the same one-hot result through zero-spread VBAP.
 bool verify_916_top_side_routing() {
     // 9.1.6 channel index map (non-LFE only here):
     //  0  L    1  R    2  C    3  LFE  4  Ls   5  Rs
@@ -1022,7 +1253,7 @@ bool verify_916_top_side_routing() {
         }
     }
 
-    // ── Sub-test B: position fallback az=110/el=45 → nearest = U+110 (ch12) ─
+    // ── Sub-test B: position fallback exactly at U+110 (ch12) ───────────────
     {
         auto [doc, uid_str] = make_direct_speakers_doc("NOT_A_BS2051_LABEL", 110.0F, 45.0F);
         const auto in_path = write_input_fixture(doc, uid_str);
@@ -2079,6 +2310,8 @@ int main() {
     ok &= verify_overlong_interpolation_is_clamped();
     ok &= verify_nested_audio_object_start_offsets();
     ok &= verify_direct_speakers_label_routing();
+    ok &= verify_direct_speakers_routing_modes();
+    ok &= verify_direct_speakers_explicit_mode_backend_rejection();
     ok &= verify_wav71_rear_side_order();
     ok &= verify_direct_speakers_alias_routing();
     ok &= verify_direct_speakers_position_fallback_wrap();

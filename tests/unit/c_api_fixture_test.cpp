@@ -269,6 +269,10 @@ bool verify_options_null_setters() {
     ok = check(adm_render_options_set_speaker_geometry(nullptr, ADM_SPEAKER_GEOMETRY_APPLE) == ADM_ERROR_OK,
                "NULL opts set_speaker_geometry should return OK") &&
          ok;
+    ok = check(adm_render_options_set_direct_speakers_routing_mode(nullptr, ADM_DIRECT_SPEAKERS_ROUTING_LABEL) ==
+                   ADM_ERROR_OK,
+               "NULL opts set_direct_speakers_routing_mode should return OK") &&
+         ok;
     ok = check(adm_render_options_set_binaural_spread_mode(nullptr, ADM_BINAURAL_SPREAD_CLOUD) == ADM_ERROR_OK,
                "NULL opts set_binaural_spread_mode should return OK") &&
          ok;
@@ -303,10 +307,11 @@ bool verify_options_null_setters() {
 }
 
 bool verify_options_invalid_values(adm_render_options_t* opts) {
+    // These deliberately-invalid enum values exercise the C ABI's range validation.
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
-    bool ok =
-        check(adm_render_options_set_renderer(opts, static_cast<adm_renderer_t>(99)) == ADM_ERROR_INVALID_ARGUMENT,
-              "out-of-range renderer should return INVALID_ARGUMENT");
+    const auto invalid_renderer = static_cast<adm_renderer_t>(99);
+    bool ok = check(adm_render_options_set_renderer(opts, invalid_renderer) == ADM_ERROR_INVALID_ARGUMENT,
+                    "out-of-range renderer should return INVALID_ARGUMENT");
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     ok = check(adm_render_options_set_output_bit_depth(opts, static_cast<adm_output_bit_depth_t>(99)) ==
                    ADM_ERROR_INVALID_ARGUMENT,
@@ -327,6 +332,24 @@ bool verify_options_invalid_values(adm_render_options_t* opts) {
          ok;
     ok = check(adm_render_options_set_speaker_geometry(opts, ADM_SPEAKER_GEOMETRY_STANDARD) == ADM_ERROR_OK,
                "speaker geometry restored to standard after validation") &&
+         ok;
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    const auto invalid_direct_speakers_routing = static_cast<adm_direct_speakers_routing_mode_t>(99);
+    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, invalid_direct_speakers_routing) ==
+                   ADM_ERROR_INVALID_ARGUMENT,
+               "out-of-range DirectSpeakers routing mode should return INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, ADM_DIRECT_SPEAKERS_ROUTING_LABEL) ==
+                   ADM_ERROR_OK,
+               "label DirectSpeakers routing mode accepted") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, ADM_DIRECT_SPEAKERS_ROUTING_POSITION) ==
+                   ADM_ERROR_OK,
+               "position DirectSpeakers routing mode accepted") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, ADM_DIRECT_SPEAKERS_ROUTING_AUTOMATIC) ==
+                   ADM_ERROR_OK,
+               "DirectSpeakers routing mode restored to automatic after validation") &&
          ok;
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     ok = check(adm_render_options_set_binaural_spread_mode(opts, static_cast<adm_binaural_spread_mode_t>(99)) ==
@@ -2229,6 +2252,7 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     ok = check(adm_api_version_minor() >= 29, "v1.29: monitor mute override is available") && ok;
     ok = check(adm_api_version_minor() >= 30, "v1.30: 22.2 LFE routing mode is available") && ok;
     ok = check(adm_api_version_minor() >= 31, "v1.31: selectable speaker geometry is available") && ok;
+    ok = check(adm_api_version_minor() >= 32, "v1.32: DirectSpeakers routing mode is available") && ok;
     static_assert(offsetof(adm_monitor_override_t, mute) >=
                   offsetof(adm_monitor_override_t, head_locked) + sizeof(int32_t) + sizeof(uint32_t));
 

@@ -89,7 +89,7 @@ labels produce errors. Custom `U±110` labels require `@30` or `@45` to select e
 
 Public two-channel output uses the `binaural` semantic, which is also the default. Backend and HRTF source are separate
 choices: `saf-binaural` offers built-in KEMAR and build-enabled `--sofa` user HRIRs; `apple` uses the Apple system HRTF.
-Current entry points are the CLI, C++ API, and C ABI v1.31.
+Current entry points are the CLI, C++ API, and C ABI v1.32.
 
 ## Release Packages
 
@@ -204,8 +204,17 @@ preserves the existing project / ADM nominal coordinates. `apple` uses CoreAudio
 `5.1.2`, `5.1.4`, `7.1.4`, `9.1.6`, and `22.2` (`5.1` is coordinate-identical). CoreAudio has no matching fixed
 profile for project `9.1.4` or internal speaker stereo, so those combinations return unsupported instead of silently
 falling back. The Apple renderer always uses CoreAudio geometry and ignores this option. LFE does not participate in
-the geometry switch. Precisely labelled DirectSpeakers still route directly by label; the profile primarily affects
-Objects, channelLock, and position fallback.
+the geometry switch.
+
+SAF and Apple loudspeaker DirectSpeakers routing is selectable with
+`--direct-speakers-routing auto|label|position`. The default `auto` resolves to `label` for both speaker backends:
+an exact output-label match is attempted first, followed by the shared alias table (for example `L` → `M+030`), and
+a match is routed one-hot to that output slot. A miss is spatialized from the known BS.2051/alias label direction when
+available, otherwise from the ADM nominal coordinates. `position` ignores non-LFE labels and performs zero-spread,
+non-interpolated spatialization; SAF uses the selected speaker geometry and Apple uses its AmbienceBed path. When a
+coordinate fallback is needed but coordinates are missing, front centre `(0°,0°)` is used with a warning.
+Apple binaural `auto` remains `position` and rejects explicit `label`; EAR, SAF binaural, and HOA retain native
+behaviour under `auto` and reject explicit routing modes. LFE always takes the existing dedicated route first.
 The desktop app exposes the same Speaker Geometry selector for EAR / SAF loudspeaker rendering and remembers the last
 selection.
 
@@ -232,6 +241,7 @@ Query full channel-order tables with:
 | `--input-channels <csv>` | Custom ordinary-input labels in exact file-channel order; choose this or an explicit `--input-layout` | Off |
 | `--output-layout <layout>` | Output semantic/layout: `binaural`, a multichannel layout, or `hoa3` | `binaural` |
 | `--speaker-geometry standard\|apple` | EAR / SAF output-speaker coordinates; the Apple backend always uses CoreAudio geometry | `standard` |
+| `--direct-speakers-routing auto\|label\|position` | SAF / Apple DirectSpeakers label-direct or position-spatialized routing | `auto` |
 | `--output-bit-depth f32\|i24\|i16` | WAV output bit depth; CAF is fixed float32, FLAC is fixed 24-bit / up to 8 channels | `f32` |
 | `--loudness-target <LUFS>` | Normalize integrated loudness; HOA uses a 7.1.4 AllRAD reference decode and full-range channels for LUFS | Off |
 | `--peak-limit-dbtp <dBTP>` | True Peak limit target | `-1.0` |

@@ -53,6 +53,23 @@ bool check(bool condition, const char* msg) {
     return condition;
 }
 
+class CapturingLogSink final : public mradm::LogSink {
+  public:
+    void log(mradm::LogLevel level, std::string_view /*module*/, std::string_view message) override {
+        if (level == mradm::LogLevel::warning) {
+            warnings_.emplace_back(message);
+        }
+    }
+
+    [[nodiscard]] bool has_warning(std::string_view needle) const {
+        return std::ranges::any_of(warnings_,
+                                   [needle](const auto& warning) { return warning.find(needle) != std::string::npos; });
+    }
+
+  private:
+    std::vector<std::string> warnings_;
+};
+
 std::filesystem::path temp_path(std::string_view stem, std::string_view ext) {
     static std::atomic<int> s_seq{0};
     const auto name = std::string(stem) + "_" + std::to_string(static_cast<int>(::getpid())) + "_" +
@@ -949,31 +966,36 @@ make_ds_doc(float azimuth, float elevation, const std::string& label) {
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
-// Render a single DirectSpeakers bed channel through the apple backend to `layout`.
-std::optional<std::vector<float>> render_ds(float azimuth,
-                                            float elevation,
-                                            const std::string& label,
-                                            const std::string& layout,
-                                            uint16_t channels,
-                                            std::string_view stem) {
+std::filesystem::path
+write_ds_fixture(float azimuth, float elevation, const std::string& label, uint32_t frames = 8192U) {
     constexpr uint32_t k_sr = 48000U;
-    constexpr uint32_t k_frames = 8192U;
     const auto [doc, uid_str] = make_ds_doc(azimuth, elevation, label);
     const auto in = temp_path("mr_apple_ds_input", ".wav");
-    FileGuard in_guard(in);
-    {
-        std::ostringstream xml_buf;
-        adm::writeXml(xml_buf, doc);
-        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
-        auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
-        auto writer = bw64::writeFile(in.string(), 1U, k_sr, 24U, chna, axml);
-        std::vector<float> samples(k_frames);
-        for (uint32_t i = 0; i < k_frames; ++i) {
-            samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
-                                          static_cast<float>(k_sr));
-        }
-        writer->write(samples.data(), k_frames);
+    std::ostringstream xml_buf;
+    adm::writeXml(xml_buf, doc);
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+    auto writer = bw64::writeFile(in.string(), 1U, k_sr, 24U, chna, axml);
+    std::vector<float> samples(frames);
+    for (uint32_t i = 0; i < frames; ++i) {
+        samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
+                                      static_cast<float>(k_sr));
     }
+    writer->write(samples.data(), frames);
+    return in;
+}
+
+// Render a single DirectSpeakers bed channel through the apple backend to `layout`.
+std::optional<std::vector<float>>
+render_ds(float azimuth,
+          float elevation,
+          const std::string& label,
+          const std::string& layout,
+          uint16_t channels,
+          std::string_view stem,
+          mradm::DirectSpeakersRoutingMode routing_mode = mradm::DirectSpeakersRoutingMode::automatic) {
+    const auto in = write_ds_fixture(azimuth, elevation, label);
+    FileGuard in_guard(in);
     const auto out = temp_path(stem, ".wav");
     FileGuard out_guard(out);
 
@@ -982,6 +1004,7 @@ std::optional<std::vector<float>> render_ds(float azimuth,
     req.output_path = out;
     req.options.renderer = mradm::RendererSelection::apple;
     req.options.output_layout = layout;
+    req.options.direct_speakers_routing_mode = routing_mode;
     req.options.peak_limit = false;
     req.options.measure_loudness = false;
 
@@ -1032,6 +1055,216 @@ bool verify_22_2_lfe_routing() {
     const double lw_energy = channel_energy(*lfe, 24U, 0U);
     ok &= check(lfe_energy > 1.0e-6, "22.2 LFE channel (ch3) is not silent");
     ok &= check(lw_energy < lfe_energy * 1.0e-3, "22.2 LFE does not leak into ch0 (Lw)");
+    return ok;
+}
+
+bool verify_direct_speakers_routing_modes() {
+    const auto automatic = render_ds(
+        45.0F, 15.0F, "U+045", "9+10+3", 24U, "mr_apple_ds_auto", mradm::DirectSpeakersRoutingMode::automatic);
+    const auto label =
+        render_ds(45.0F, 15.0F, "U+045", "9+10+3", 24U, "mr_apple_ds_label", mradm::DirectSpeakersRoutingMode::label);
+    const auto position = render_ds(
+        45.0F, 15.0F, "U+045", "9+10+3", 24U, "mr_apple_ds_position", mradm::DirectSpeakersRoutingMode::position);
+    if (!automatic || !label || !position) {
+        return false;
+    }
+
+    bool ok = true;
+    ok &= check(*automatic == *label, "Apple speaker automatic DirectSpeakers routing resolves to label");
+    ok &= check(loudest_channel(*label, 24U) == 12U, "Apple label routing sends U+045 directly to ch12");
+    for (uint16_t channel = 0; channel < 24U; ++channel) {
+        if (channel != 12U) {
+            ok &= check(channel_energy(*label, 24U, channel) < 1.0e-12,
+                        "Apple label routing is one-hot with no output-slot leakage");
+        }
+    }
+    ok &= check(active_channels(*position, 24U, 0.01) >= 2,
+                "Apple position routing preserves the AmbienceBed spatialization path");
+    ok &= check(channel_energy(*position, 24U, 3U) < 1.0e-12 && channel_energy(*position, 24U, 9U) < 1.0e-12,
+                "Apple position-routed non-LFE source never enters either LFE output");
+
+    const auto unknown = render_ds(45.0F,
+                                   15.0F,
+                                   "UNKNOWN",
+                                   "9+10+3",
+                                   24U,
+                                   "mr_apple_ds_unknown_position_fallback",
+                                   mradm::DirectSpeakersRoutingMode::label);
+    if (!unknown) {
+        return false;
+    }
+    ok &= check(active_channels(*unknown, 24U, 0.01) >= 2,
+                "Apple unmatched label falls back to AmbienceBed spatialization, not nearest one-hot");
+    ok &= check(channel_energy(*unknown, 24U, 3U) < 1.0e-12 && channel_energy(*unknown, 24U, 9U) < 1.0e-12,
+                "Apple unmatched non-LFE label fallback never enters either LFE output");
+
+    const auto alias =
+        render_ds(0.0F, 0.0F, "L", "9+10+3", 24U, "mr_apple_ds_alias_l", mradm::DirectSpeakersRoutingMode::label);
+    if (!alias) {
+        return false;
+    }
+    ok &= check(loudest_channel(*alias, 24U) == 6U, "Apple alias L routes to 22.2 M+030 (ch6)");
+
+    const auto position_lfe = render_ds(
+        0.0F, 0.0F, "LFE", "9+10+3", 24U, "mr_apple_ds_position_lfe", mradm::DirectSpeakersRoutingMode::position);
+    if (!position_lfe) {
+        return false;
+    }
+    ok &= check(loudest_channel(*position_lfe, 24U) == 3U, "Apple position mode preserves dedicated LFE1 routing");
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    mradm::RenderPlan plan;
+    plan.output_layout = "binaural";
+    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::automatic;
+    ok &= check(renderer->prepare(plan, logs).has_value(), "Apple binaural automatic DirectSpeakers routing prepares");
+    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::position;
+    ok &= check(renderer->prepare(plan, logs).has_value(), "Apple binaural explicit position routing prepares");
+    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
+    const auto rejected = renderer->prepare(plan, logs);
+    ok &= check(!rejected && rejected.error().code == mradm::ErrorCode::unsupported,
+                "Apple binaural explicit label routing is unsupported");
+    return ok;
+}
+
+bool verify_direct_speakers_missing_position_fallback() {
+    constexpr uint16_t k_channels = 24U;
+    const auto input = write_ds_fixture(30.0F, 0.0F, "UNKNOWN");
+    FileGuard input_guard{input};
+    auto scene = mradm::io::import_scene(input.string());
+    if (!check(scene.has_value() && !scene->objects.empty() && !scene->objects.front().tracks.empty() &&
+                   !scene->objects.front().tracks.front().ds_blocks.empty(),
+               "Apple missing-position fixture imports")) {
+        return false;
+    }
+    auto& block = scene->objects.front().tracks.front().ds_blocks.front();
+    block.speaker_labels = {"UNKNOWN"};
+    block.has_position = false;
+
+    const auto output = temp_path("mr_apple_ds_missing_position", ".wav");
+    FileGuard output_guard{output};
+    mradm::RenderPlan plan;
+    plan.input_path = input.string();
+    plan.output_path = output.string();
+    plan.output_layout = "9+10+3";
+    plan.scene = *scene;
+    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
+
+    auto renderer = mradm::create_apple_renderer();
+    CapturingLogSink logs;
+    mradm::NullProgressSink progress;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value() && renderer->render_window(**prepared, plan, progress, logs).has_value(),
+               "Apple missing-position label fallback renders")) {
+        return false;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(output.string());
+    if (!check(reader.has_value() && reader->channels() == k_channels,
+               "Apple missing-position fallback output opens")) {
+        return false;
+    }
+    std::vector<float> samples(static_cast<std::size_t>(reader->frame_count()) * k_channels);
+    reader->read(samples.data(), reader->frame_count());
+
+    bool ok = true;
+    ok &= check(loudest_channel(samples, k_channels) == 2U,
+                "Apple missing position falls back to front-centre M+000 (ch2)");
+    ok &= check(logs.has_warning("no nominal position"), "Apple missing position emits a warning");
+    ok &= check(logs.has_warning("not in output layout"), "Apple unmatched label emits a fallback warning");
+
+    block.speaker_labels = {"M+135"};
+    const auto rear_output = temp_path("mr_apple_ds_rear_label_fallback", ".wav");
+    FileGuard rear_output_guard{rear_output};
+    plan.output_path = rear_output.string();
+    plan.output_layout = "0+5+0";
+    plan.scene = *scene;
+    CapturingLogSink rear_logs;
+    auto rear_prepared = renderer->prepare(plan, rear_logs);
+    if (!check(rear_prepared.has_value() &&
+                   renderer->render_window(**rear_prepared, plan, progress, rear_logs).has_value(),
+               "Apple rear-label fallback render succeeds")) {
+        return false;
+    }
+    auto rear_reader = mradm::audio::FloatWavReader::open(rear_output.string());
+    if (!check(rear_reader.has_value() && rear_reader->channels() == 6U, "Apple rear-label fallback output opens")) {
+        return false;
+    }
+    std::vector<float> rear_samples(static_cast<std::size_t>(rear_reader->frame_count()) * 6U);
+    rear_reader->read(rear_samples.data(), rear_reader->frame_count());
+    const double rear_left = channel_energy(rear_samples, 6U, 4U);
+    const double front = channel_energy(rear_samples, 6U, 0U) + channel_energy(rear_samples, 6U, 1U) +
+                         channel_energy(rear_samples, 6U, 2U);
+    ok &= check(rear_left > front, "Apple M+135 without coordinates stays behind when rendered to 5.1");
+    ok &= check(rear_logs.has_warning("spatializing from label direction"),
+                "Apple absent output slot reports label-direction fallback");
+    ok &= check(!rear_logs.has_warning("no nominal position"),
+                "Apple known rear label does not fall back to front-centre");
+    return ok;
+}
+
+bool verify_mixed_object_direct_and_lfe_paths() {
+    constexpr uint16_t k_channels = 24U;
+    const auto input = write_fixture(-90.0F, 8192U, 1.0F, 0.0F, false);
+    FileGuard input_guard{input};
+    auto scene = mradm::io::import_scene(input.string());
+    if (!check(scene.has_value() && !scene->objects.empty(), "Apple mixed-path fixture imports")) {
+        return false;
+    }
+
+    const auto make_direct_track = [&](std::string label, float azimuth, float elevation) {
+        mradm::SceneTrackRef track;
+        track.channel_index = 0U;
+        track.track_uid = std::move(label);
+        mradm::SceneDirectSpeakersBlock block;
+        block.speaker_labels = {track.track_uid};
+        block.azimuth = azimuth;
+        block.elevation = elevation;
+        block.has_position = true;
+        block.start_sample = 0U;
+        block.end_sample = scene->info.num_frames;
+        track.ds_blocks.push_back(std::move(block));
+        return track;
+    };
+    scene->objects.front().tracks.push_back(make_direct_track("M+030", 30.0F, 0.0F));
+    scene->objects.front().tracks.push_back(make_direct_track("LFE1", 0.0F, 0.0F));
+
+    const auto output = temp_path("mr_apple_mixed_paths", ".wav");
+    FileGuard output_guard{output};
+    mradm::RenderPlan plan;
+    plan.input_path = input.string();
+    plan.output_path = output.string();
+    plan.output_layout = "9+10+3";
+    plan.scene = *scene;
+    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value() && renderer->render_window(**prepared, plan, progress, logs).has_value(),
+               "Apple mixed Objects/DirectSpeakers/LFE render succeeds")) {
+        return false;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(output.string());
+    if (!check(reader.has_value() && reader->channels() == k_channels, "Apple mixed-path output opens")) {
+        return false;
+    }
+    std::vector<float> samples(static_cast<std::size_t>(reader->frame_count()) * k_channels);
+    reader->read(samples.data(), reader->frame_count());
+
+    double spatial_energy = 0.0;
+    for (uint16_t channel = 0; channel < k_channels; ++channel) {
+        if (channel != 3U && channel != 6U && channel != 9U) {
+            spatial_energy += channel_energy(samples, k_channels, channel);
+        }
+    }
+    bool ok = true;
+    ok &= check(spatial_energy > 1.0e-6, "Apple mixed render keeps the Objects spatial path active");
+    ok &= check(channel_energy(samples, k_channels, 6U) > 1.0e-6,
+                "Apple mixed render keeps the label-direct M+030 path active");
+    ok &= check(channel_energy(samples, k_channels, 3U) > 1.0e-6, "Apple mixed render keeps the LFE1 side path active");
+    ok &= check(channel_energy(samples, k_channels, 9U) == 0.0,
+                "Apple mixed render does not leak LFE1 into the LFE2 slot");
     return ok;
 }
 
@@ -1169,6 +1402,157 @@ std::optional<std::vector<float>> render_apple_stream_full(mradm::IRenderer& ren
         out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(got * ch));
     }
     return out;
+}
+
+bool verify_apple_direct_stream_and_dynamic_blocks() {
+    constexpr uint16_t k_channels = 12U;
+    // Deliberately not aligned to k_render_block: direct-bus target changes must
+    // occur on the metadata sample, not at the next AUSpatialMixer slice.
+    constexpr uint64_t k_boundary = 4099U;
+    const auto input = write_ds_fixture(30.0F, 0.0F, "M+030");
+    FileGuard input_guard{input};
+    auto scene = mradm::io::import_scene(input.string());
+    if (!check(scene.has_value() && !scene->objects.empty() && !scene->objects.front().tracks.empty(),
+               "direct stream: import DirectSpeakers scene")) {
+        return false;
+    }
+
+    auto& blocks = scene->objects.front().tracks.front().ds_blocks;
+    if (!check(!blocks.empty(), "direct stream: imported DirectSpeakers block")) {
+        return false;
+    }
+    mradm::SceneDirectSpeakersBlock left = blocks.front();
+    left.speaker_labels = {"M+030"};
+    left.start_sample = 0;
+    left.end_sample = k_boundary;
+    mradm::SceneDirectSpeakersBlock right = left;
+    right.speaker_labels = {"M-030"};
+    right.start_sample = k_boundary;
+    right.end_sample = scene->info.num_frames;
+    blocks = {left, right};
+
+    mradm::RenderPlan plan;
+    plan.input_path = input.string();
+    plan.output_layout = "4+7+0";
+    plan.scene = *scene;
+    plan.direct_speakers_routing_mode = mradm::DirectSpeakersRoutingMode::label;
+    const auto output = temp_path("mr_apple_direct_stream_ref", ".wav");
+    FileGuard output_guard{output};
+    plan.output_path = output.string();
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "direct stream: Apple label prepare")) {
+        return false;
+    }
+    if (!check(renderer->render_window(**prepared, plan, progress, logs).has_value(),
+               "direct stream: offline direct render")) {
+        return false;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(output.string());
+    if (!check(reader.has_value() && reader->channels() == k_channels, "direct stream: offline reference opens")) {
+        return false;
+    }
+    std::vector<float> reference(static_cast<std::size_t>(reader->frame_count()) * k_channels);
+    reader->read(reference.data(), reader->frame_count());
+
+    const auto range_energy = [&](uint64_t begin, uint64_t end, uint16_t channel) {
+        double energy = 0.0;
+        for (uint64_t frame = begin; frame < end; ++frame) {
+            const double sample = reference[(static_cast<std::size_t>(frame) * k_channels) + channel];
+            energy += sample * sample;
+        }
+        return energy;
+    };
+    bool ok = true;
+    ok &= check(range_energy(0, k_boundary, 0U) > 1.0e-6 && range_energy(0, k_boundary, 1U) == 0.0,
+                "Apple direct bus sends the first block to M+030 only");
+    ok &= check(range_energy(k_boundary, scene->info.num_frames, 1U) > 1.0e-6 &&
+                    range_energy(k_boundary, scene->info.num_frames, 0U) == 0.0,
+                "Apple direct bus switches target exactly at the second block boundary");
+
+    const auto streamed = render_apple_stream_full(*renderer, **prepared, plan, logs, {333U, 1000U, 7U, 512U});
+    if (!streamed) {
+        return false;
+    }
+    ok &= check(*streamed == reference, "Apple direct bus streaming is bit-identical to offline rendering");
+
+    auto seek_stream = renderer->open_stream(**prepared, plan, logs);
+    if (!check(seek_stream.has_value() && (*seek_stream)->seek(k_boundary).has_value(),
+               "Apple direct bus seek succeeds")) {
+        return false;
+    }
+    std::vector<float> seek_block(std::size_t{512U} * k_channels, 0.0F);
+    auto seek_frames = (*seek_stream)->process(std::span<float>(seek_block), 512U);
+    ok &= check(seek_frames.has_value() && *seek_frames == 512U, "Apple direct bus renders after seek");
+    if (seek_frames && *seek_frames == 512U) {
+        ok &= check(std::equal(seek_block.begin(),
+                               seek_block.end(),
+                               reference.begin() + static_cast<std::ptrdiff_t>(k_boundary * k_channels)),
+                    "Apple direct bus seek restores event target and source position");
+    }
+
+    auto loop_stream = renderer->open_stream(**prepared, plan, logs);
+    if (!check(loop_stream.has_value(), "Apple direct bus loop stream opens")) {
+        return false;
+    }
+    std::vector<float> loop_block(std::size_t{512U} * k_channels, 0.0F);
+    auto initial = (*loop_stream)->process(std::span<float>(loop_block), 512U);
+    auto reposition = (*loop_stream)->reposition_source(0);
+    (*loop_stream)->loop_render_reset(0);
+    std::ranges::fill(loop_block, 0.0F);
+    auto looped = (*loop_stream)->process(std::span<float>(loop_block), 512U);
+    ok &= check(initial.has_value() && reposition.has_value() && looped.has_value() && *looped == 512U,
+                "Apple direct bus loop reset succeeds");
+    if (looped && *looped == 512U) {
+        ok &= check(std::equal(loop_block.begin(), loop_block.end(), reference.begin()),
+                    "Apple direct bus loop reset restores the first event target");
+    }
+
+    auto render_with_override = [&](bool mute) -> std::optional<std::vector<float>> {
+        auto stream = renderer->open_stream(**prepared, plan, logs);
+        if (!stream) {
+            return std::nullopt;
+        }
+        mradm::LiveObjectOverride edit;
+        edit.object_id = scene->objects.front().id;
+        edit.gain_db = -12.0412F;
+        edit.mute = mute;
+        mradm::LiveOverrides overrides;
+        overrides.revision = 1;
+        overrides.objects.push_back(std::move(edit));
+        (*stream)->set_overrides(overrides);
+
+        std::vector<float> output_samples;
+        std::vector<float> buffer(std::size_t{512U} * k_channels, 0.0F);
+        while (true) {
+            std::ranges::fill(buffer, 0.0F);
+            auto produced = (*stream)->process(std::span<float>(buffer), 512U);
+            if (!produced) {
+                return std::nullopt;
+            }
+            if (*produced == 0U) {
+                break;
+            }
+            const auto used = static_cast<std::vector<float>::difference_type>(*produced * k_channels);
+            output_samples.insert(output_samples.end(), buffer.begin(), buffer.begin() + used);
+        }
+        return output_samples;
+    };
+    const auto gained = render_with_override(false);
+    const auto muted = render_with_override(true);
+    if (!gained || !muted) {
+        return false;
+    }
+    const double reference_energy = total_energy(reference, k_channels);
+    const double gained_energy = total_energy(*gained, k_channels);
+    ok &= check(gained_energy > reference_energy * 0.05 && gained_energy < reference_energy * 0.08,
+                "Apple direct bus live gain override applies the expected scalar");
+    ok &= check(std::ranges::all_of(*muted, [](float sample) { return sample == 0.0F; }),
+                "Apple direct bus live mute produces exact silence");
+    return ok;
 }
 
 // Output-stage rendering (方案 B): produce_intermediate (worker, reads source PCM) + render_output
@@ -1695,6 +2079,10 @@ int main() {
     ok &= verify_channel_lock_snaps();
     ok &= verify_bed_and_lfe_routing();
     ok &= verify_22_2_lfe_routing();
+    ok &= verify_direct_speakers_routing_modes();
+    ok &= verify_direct_speakers_missing_position_fallback();
+    ok &= verify_mixed_object_direct_and_lfe_paths();
+    ok &= verify_apple_direct_stream_and_dynamic_blocks();
     ok &= verify_apple_stream_matches_window();
     ok &= verify_apple_output_stage_matches_process();
     ok &= verify_apple_reposition_source();

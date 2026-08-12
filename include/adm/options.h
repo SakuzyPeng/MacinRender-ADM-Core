@@ -39,6 +39,16 @@ enum class SpeakerGeometry {
     apple,
 };
 
+// Routing policy for ADM DirectSpeakers content. `automatic` is resolved by the
+// selected backend: SAF and Apple loudspeaker output use label routing, while
+// Apple binaural output uses position routing. Other backends retain their
+// native DirectSpeakers behaviour and reject an explicit mode.
+enum class DirectSpeakersRoutingMode {
+    automatic,
+    label,
+    position,
+};
+
 enum class BinauralSpreadMode {
     automatic,    // cloud
     none,         // point source; extent parameters ignored
@@ -137,6 +147,7 @@ struct RenderOptions {
     // option and relies on SpatialMixer's internal parameter smoothing.
     uint32_t object_smoothing_frames{0};
     SpeakerGeometry speaker_geometry{SpeakerGeometry::standard};
+    DirectSpeakersRoutingMode direct_speakers_routing_mode{DirectSpeakersRoutingMode::automatic};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
     LfeRoutingMode lfe_routing_mode{LfeRoutingMode::direct};
