@@ -123,7 +123,7 @@
                             <TextBlock Classes="h2" Text="{DynamicResource OutputSettings}"/>
 
                             <!-- 渲染 -->
-                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                            <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="12">
                                 <StackPanel Grid.Column="0" Spacing="5">
                                     <TextBlock Classes="muted" Text="{DynamicResource Backend}"/>
                                     <ComboBox HorizontalAlignment="Stretch"
@@ -174,6 +174,19 @@
                                         </Grid>
                                     </StackPanel>
                                 </Grid>
+                                <StackPanel Grid.Column="2" Width="200" Spacing="5"
+                                            IsVisible="{Binding SpeakerGeometryApplicable}">
+                                    <TextBlock Classes="muted" Text="{DynamicResource SpeakerGeometry}"/>
+                                    <ComboBox HorizontalAlignment="Stretch"
+                                              ItemsSource="{Binding SpeakerGeometries}"
+                                              SelectedItem="{Binding SelectedSpeakerGeometry}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="m:SpeakerGeometryOption">
+                                                <TextBlock Text="{Binding Label}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
                             </Grid>
 
                             <!-- 封装:[编码器(有损让半列给码率)] | 容器 -->

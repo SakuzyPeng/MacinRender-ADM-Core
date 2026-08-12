@@ -12,7 +12,9 @@
 
 - **双耳**：Headphones HRTF → 2ch（输出布局 `binaural`，CoreAudio 容器使用 `kAudioChannelLayoutTag_Binaural`）。
 - **多声道扬声器**：VBAP → `5.1`、`7.1`、`5.1.2`、`5.1.4`、`7.1.4`、`9.1.6`、`22.2`。
-- **输入内容**：Objects 与 DirectSpeakers；Objects 支持 position / gain / interpolation / objectDivergence；DirectSpeakers 支持静态方位。普通布局的 LFE 保留 SpatialMixer 旁路，22.2 使用独立双 LFE side bus。
+- **输入内容**：Objects 与 DirectSpeakers；Objects 支持 position / gain / interpolation / objectDivergence；
+  DirectSpeakers 支持 `label` 主机侧直达与 `position` AmbienceBed 空间化，并支持动态块目标。普通布局的
+  LFE 保留 SpatialMixer 旁路，22.2 使用独立双 LFE side bus。
 - **按需窗口渲染**：支持 `RenderPlan::render_window`，CLI `--start` / `--end` 不再需要先渲染完整时间线再裁切。
 - **Apple binaural factory preset**：`--apple-spatial-preset headphone-default|headphone-movie` 映射到
   `kAudioUnitProperty_PresentPreset` 的 headphone media playback factory preset #1/#2。默认关闭，只对 Apple
@@ -20,6 +22,9 @@
 - **扬声器 rendering flags**：默认对每个输入 bus 写入
   `kAudioUnitProperty_SpatialMixerRenderingFlags=0`，避免 InterAuralDelay / DistanceAttenuation 额外改变
   ADM 对象的低中频和增益。`--apple-speaker-rendering-flags` 显式开启两个 Apple flags，用于兼容旧渲染。
+- **DirectSpeakers 路由**：`--direct-speakers-routing auto|label|position`。Apple 扬声器的 `auto`
+  解析为 `label`（这是相对旧版 AmbienceBed 默认的有意调整）；Apple binaural 的 `auto` 仍解析为
+  `position`，显式 `label` 返回 unsupported。
 
 不支持或暂不等价：
 
@@ -66,30 +71,40 @@ struct BusEvent {
     float elevation;
     float distance;
     float gain;      // linear
+    std::optional<std::size_t> direct_output_channel;
 };
 
 struct BusPlan {
     uint16_t source_channel;
     UInt32 source_mode; // PointSource / AmbienceBed / Bypass
     bool is_lfe;
+    bool is_direct;
     std::vector<BusEvent> events;
 };
 
 struct ApplePrepared final : IPreparedRender {
     OutputProfile profile;
-    std::vector<BusPlan> buses;     // SpatialMixer inputs
-    std::vector<BusPlan> lfe_buses; // 22.2 side buses
+    std::vector<BusPlan> buses;        // SpatialMixer inputs
+    std::vector<BusPlan> direct_buses; // label one-hot side buses
+    std::vector<BusPlan> lfe_buses;    // 22.2 side buses
     LfeRoutingPlan lfe_routing;
 };
 ```
 
-`prepare()` 解析输出布局、分配 bus、展开对象语义并生成事件表。22.2 的 LFE bus 在此从空间 bus 中拆出，并完成单/双语义 LFE 校验。`render_window()` 仅在存在空间 bus 时创建 SpatialMixer；AU 使用标准 CICP 13 输出布局，随后在写出和计量前把 side bus 混入 ch3/ch9。纯 LFE 场景只创建 reader，不创建 AU。
+`prepare()` 解析输出布局、路由模式、分配 bus、展开对象语义并生成事件表。label DirectSpeakers 从
+空间 bus 拆为 direct side bus；22.2 LFE 也拆为专用 side bus 并完成单/双语义 LFE 校验。
+`render_window()` 仅在存在空间 bus 时创建 SpatialMixer；AU 输出后、写出和计量前，主机逐样本混入
+direct bus 与 LFE bus。纯 label bed 或纯 22.2 LFE 场景只创建 reader，不创建 AU。
 
 ## 4. 渲染管线
 
 ### 4.1 拉模型桥接
 
-AUSpatialMixer 通过 input render callback 拉取每条 input bus 的 PCM。项目渲染路径先按 block 从 BW64 读入 interleaved staging buffer；每条 bus 的 callback 从 staging buffer 拷贝自己绑定的源通道。输出端由 `AudioUnitRender` 驱动，写入项目统一的 `audio::WriterHandle`。
+AUSpatialMixer 通过 input render callback 拉取每条空间 bus 的 PCM。项目渲染路径先按 block 从 BW64
+读入 interleaved staging buffer；每条空间 bus 的 callback 从 staging buffer 拷贝自己绑定的源通道。
+输出端由 `AudioUnitRender` 驱动；随后 direct/LFE side bus 从同一 staging buffer 按逐样本事件与实时
+gain envelope 混入，最后写入项目统一的 `audio::WriterHandle`。所有 side-bus 游标、斜坡和 envelope
+均在 prepare/stream 构造阶段预分配，实时回调不分配内存。
 
 ### 4.2 按需窗口
 
@@ -120,12 +135,18 @@ Apple 后端和其他主要后端一样在渲染过程中内联测量响度 / Tr
 ### 5.1 原生直映
 
 - Object position → SpatialMixer Azimuth / Elevation / Distance。
-- Object / DirectSpeakers gain → `kSpatialMixerParam_Gain`（linear → dB，静音落到 -120 dB）。
+- Object 与 position DirectSpeakers gain → `kSpatialMixerParam_Gain`（linear → dB，静音落到 -120 dB）；
+  label DirectSpeakers gain 在主机 direct side bus 以线性标量逐样本应用。
 - Object 插值 / 平滑 → 按事件块更新参数；SpatialMixer 自身会对控制变化做平滑。项目级 `--object-smoothing-frames` / `RenderOptions::object_smoothing_frames` 当前不影响 Apple 后端；该参数只由 EAR / VBAP / HOA / binaural 等自有控制率路径消费。
 - Apple binaural factory preset → 在 AudioUnit 创建后、输出格式 / bus 算法 / source mode / ADM 参数写入前应用
   `kAudioUnitProperty_PresentPreset`。这是刻意顺序：PresentPreset 会重置若干 SpatialMixer 参数，后端随后重新写入
   ADM 驱动配置，避免预设把床层或对象声像重置到中心。preset 模式不等同于 `ReverbRoomType`，也不对扬声器布局开放。
-- DirectSpeakers → `AmbienceBed` 远场床层（VBAP 下落到对应输出扬声器，已验证）。
+- DirectSpeakers `position` → `AmbienceBed` 远场床层，保留旧版路径；忽略非 LFE 标签，使用标称坐标、
+  零扩散、无插值。缺坐标使用 `(0°,0°)` 并 warning。
+- DirectSpeakers `label` → 共享路由器先精确匹配输出标签，再尝试 RoomCentric/DAW 别名（如
+  `L` → `M+030`）；命中后绕过 AU one-hot 写入目标槽位。未命中时进入 AmbienceBed 空间化并
+  warning：已知 BS.2051 / 别名标签使用标签方向，否则使用 ADM 标称坐标；需要坐标回退但缺坐标时
+  使用 `(0°,0°)`。
 - 非 22.2 LFE → `Bypass`，mono input bus 标为 `kAudioChannelLabel_LFEScreen`，保持既有行为。
 - 22.2 LFE → AU 外 side bus：`direct` 将 LFE1/LFE2 严格独立送入 ch3/ch9；`split-power` 将单一语义 LFE 以 `sqrt(0.5)` 同时送入两路。事件 gain、对象 gain 与实时 override 采样斜坡均在 side bus 混音中生效。
 
@@ -135,6 +156,9 @@ Apple 后端和其他主要后端一样在渲染过程中内联测量响度 / Tr
 - objectDivergence → 共享语义路径展开为并行点源 bus。
 - screenRef warning / unsupported 降级 → 共享 `prepare_object_block()` 路径处理。
 - LFE 识别 → 共享 `render_common::direct_speakers_lfe_target()`：`LFE2` / `LFER` 为第二路，其他 LFE alias 与仅 lowPass 块为第一路；拓扑判定只读元数据，不依赖样本能量、gain 或 mute。
+- DirectSpeakers 标签/方向回退 → 共享
+  `direct_speaker_index_for_labels()` / `direct_speaker_position_for_labels()`，与 SAF 使用同一别名及
+  fallback 规则。
 
 ### 5.3 不支持或降级
 
@@ -211,6 +235,10 @@ Apple smoke tests 覆盖：
 - binaural 输出的 CoreAudio tag 归一化。
 - LFE 标签识别、普通布局旁路，以及 22.2 direct/split-power side-bus 路由。
 - 22.2 纯 LFE 无 AU、ch0 无泄漏、stream/offline 一致与实时 override gain ramp。
+- DirectSpeakers `auto/label/position`、`L` → 22.2 ch6、非 LFE 的双 LFE 零泄漏，以及 Apple binaural
+  `auto/position` 接受、显式 `label` 拒绝。
+- 纯 label bed 无空间 bus；direct side bus 动态块目标、seek、loop reset、实时 gain/mute 与
+  offline/stream bit-identical。
 - render window 输出帧数。
 
 不做 bit-exact golden。若后续增加 golden，应按 macOS / SDK 版本钉住容差。
@@ -218,6 +246,8 @@ Apple smoke tests 覆盖：
 ## 10. 后续事项
 
 - extent dedup：✅ 已完成（部分）。binaural / HOA / apple 共用 `render_common::k_extent_disk_samples` 采样表 + `extent_disk_radii` 半角映射（逐字节相同的部分）；几何环（normalize / direction / 输出）因 binaural 与 HOA 的实现真不同（双精度 vs 单精度、polar vs cartesian 分支、az/el vs SH 编码）无法合并，各保留本地。bit-exact 经 binaural / hoa / render_trim fixture 验证。
-- bed / LFE 扬声器路由：✅ 已验证。7.1.4 继续使用 AmbienceBed + LFE Bypass；22.2 使用标准 CICP 13 与独立 side bus，覆盖 LFE1→ch3、LFE2→ch9、单 LFE 等功率复制、原生双 LFE 拒绝 split 及无全频声道泄漏。
+- bed / LFE 扬声器路由：✅ 已验证。7.1.4/22.2 的默认非 LFE bed 使用 label direct side bus；显式
+  `position` 继续使用 AmbienceBed。普通布局 LFE 继续 Bypass；22.2 使用标准 CICP 13 与独立 side bus，
+  覆盖 LFE1→ch3、LFE2→ch9、单 LFE 等功率复制、原生双 LFE 拒绝 split 及无全频声道泄漏。
 - diffuse：如要做近似，必须先定义可解释的能量 / 去相关策略，不能简单使用 SpatialMixer reverb 代替。
 - realtime preview：复用 prepared 配方与 AU 参数映射，另建实时驱动循环；head tracking / transaural 仅适合该方向。

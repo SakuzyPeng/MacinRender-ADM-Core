@@ -150,12 +150,21 @@
  * v1.30 新增（additive，SOVERSION 不变）：
  *   adm_lfe_routing_mode_t + adm_render_options_set_lfe_routing_mode。仅 22.2（9+10+3）
  *   支持 direct 双 LFE 独立直通与单语义 LFE 的 split-power 等功率双路复制。
+ *
+ * v1.31 新增（additive，SOVERSION 不变）：
+ *   adm_speaker_geometry_t + adm_render_options_set_speaker_geometry。EAR / SAF 扬声器输出可在
+ *   standard（既有项目/ADM 标称坐标）与 apple（CoreAudio 固定坐标）之间切换。
+ *
+ * v1.32 新增（additive，SOVERSION 不变）：
+ *   adm_direct_speakers_routing_mode_t +
+ *   adm_render_options_set_direct_speakers_routing_mode。SAF / Apple DirectSpeakers 可在
+ *   label（标签直达）与 position（按标称坐标空间化）之间切换。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 30
+#define ADM_API_VERSION_MINOR 32
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -255,6 +264,19 @@ typedef enum adm_lfe_routing_mode_t {
     ADM_LFE_ROUTING_SPLIT_POWER = 1
 } adm_lfe_routing_mode_t;
 
+/* Effective output-speaker coordinates for software speaker renderers. v1.31 */
+typedef enum adm_speaker_geometry_t {
+    ADM_SPEAKER_GEOMETRY_STANDARD = 0,
+    ADM_SPEAKER_GEOMETRY_APPLE = 1
+} adm_speaker_geometry_t;
+
+/* DirectSpeakers routing for SAF / Apple renderers. v1.32 */
+typedef enum adm_direct_speakers_routing_mode_t {
+    ADM_DIRECT_SPEAKERS_ROUTING_AUTOMATIC = 0,
+    ADM_DIRECT_SPEAKERS_ROUTING_LABEL = 1,
+    ADM_DIRECT_SPEAKERS_ROUTING_POSITION = 2
+} adm_direct_speakers_routing_mode_t;
+
 /* Severity of a captured diagnostic log entry (see adm_render_result_log_entry). */
 typedef enum adm_log_level_t {
     ADM_LOG_DEBUG = 0,
@@ -308,6 +330,8 @@ static_assert(sizeof(adm_binaural_spread_mode_t) == sizeof(int));
 static_assert(sizeof(adm_iamf_container_t) == sizeof(int));
 static_assert(sizeof(adm_apac_container_t) == sizeof(int));
 static_assert(sizeof(adm_lfe_routing_mode_t) == sizeof(int));
+static_assert(sizeof(adm_speaker_geometry_t) == sizeof(int));
+static_assert(sizeof(adm_direct_speakers_routing_mode_t) == sizeof(int));
 static_assert(sizeof(adm_log_level_t) == sizeof(int));
 static_assert(sizeof(adm_render_stage_t) == sizeof(int));
 static_assert(sizeof(adm_progress_operation_t) == sizeof(int));
@@ -495,6 +519,16 @@ adm_error_code_t adm_render_options_set_speaker_spread_mode(adm_render_options_t
                                                             adm_speaker_spread_mode_t mode) ADM_API_NOEXCEPT;
 adm_error_code_t adm_render_options_set_binaural_spread_mode(adm_render_options_t* opts,
                                                              adm_binaural_spread_mode_t mode) ADM_API_NOEXCEPT;
+/* v1.31. Select effective EAR / SAF output-speaker coordinates. The Apple renderer
+ * always uses its CoreAudio layout geometry. NULL opts is a safe no-op returning OK. */
+adm_error_code_t adm_render_options_set_speaker_geometry(adm_render_options_t* opts,
+                                                         adm_speaker_geometry_t geometry) ADM_API_NOEXCEPT;
+/* v1.32. Select DirectSpeakers label or position routing. Automatic resolves to
+ * label for SAF / Apple speakers and position for Apple binaural. Explicit modes
+ * on unsupported backends fail when rendering. NULL opts is a safe no-op. */
+adm_error_code_t
+adm_render_options_set_direct_speakers_routing_mode(adm_render_options_t* opts,
+                                                    adm_direct_speakers_routing_mode_t mode) ADM_API_NOEXCEPT;
 /* v1.30. NULL opts is a safe no-op returning ADM_ERROR_OK. */
 adm_error_code_t adm_render_options_set_lfe_routing_mode(adm_render_options_t* opts,
                                                          adm_lfe_routing_mode_t mode) ADM_API_NOEXCEPT;

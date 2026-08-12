@@ -91,7 +91,7 @@ WAVEFORMATEXTENSIBLE channel mask；无效 ADM 直接报错。也可显式选择
 
 公开两声道输出采用 `binaural` 语义，并作为默认输出。后端与 HRTF 来源分别选择：
 `saf-binaural` 提供内置 KEMAR 与构建支持时的 `--sofa` 用户 HRIR；`apple` 使用 Apple 系统 HRTF。
-当前入口覆盖 CLI、C++ API 与 C ABI v1.30。
+当前入口覆盖 CLI、C++ API 与 C ABI v1.32。
 
 ## C ABI 与 GUI 集成
 
@@ -196,6 +196,27 @@ HOA 直接回放在 macOS 上使用 CAF PCM、APAC MPEG-4 与 APAC CAF。WAV HOA
 
 EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4` / `9.1.6` 在 libear 后端由项目侧自定义 `ear::Layout` 实现。
 
+EAR / SAF 的输出扬声器几何可用 `--speaker-geometry standard|apple` 切换。默认 `standard`
+保持既有项目 / ADM 标称坐标；`apple` 使用 CoreAudio 固定坐标，覆盖 `5.1`、`7.1`、
+`5.1.2`、`5.1.4`、`7.1.4`、`9.1.6` 与 `22.2`（其中 `5.1` 坐标相同）。CoreAudio
+没有本项目 `9.1.4` 和内部 speaker-stereo 的对应固定布局，因此这两种组合会明确报 unsupported。
+Apple 后端始终使用 CoreAudio 几何，不受该选项影响；LFE 不参与几何切换。
+
+SAF / Apple 扬声器 DirectSpeakers 可用
+`--direct-speakers-routing auto|label|position` 切换。默认 `auto` 在两者上都解析为 `label`：先精确
+匹配输出标签，再用共享别名（例如 `L` → `M+030`），命中后 one-hot 直达输出槽位；未命中按坐标
+空间化：已知 BS.2051 / 别名标签优先使用标签方向，否则使用 ADM 标称坐标。`position` 忽略非 LFE
+标签，以块的标称坐标做零扩散、无插值空间化；SAF 使用当前 `--speaker-geometry`，Apple
+使用 AmbienceBed。需要坐标回退但缺少坐标时使用 `(0°,0°)` 并 warning。
+Apple binaural 的 `auto` 仍为 `position`，显式 `label` 返回 unsupported；EAR、SAF binaural、HOA
+保持原有行为并拒绝显式模式。LFE 始终先走现有专用路由。
+桌面端在 EAR / SAF 扬声器渲染器下提供同一项“扬声器几何”下拉选择，并记住上次选择。
+
+```bash
+./build/release/mradm render -i input.wav -o saf_apple_222.wav \
+  --renderer saf --output-layout 22.2 --speaker-geometry apple
+```
+
 声道顺序取决于最终输出格式。完整表可用 CLI 查询：
 
 ```bash
@@ -227,6 +248,8 @@ EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4
 | `--input-layout auto\|5.1\|5.1.2\|7.1\|5.1.4\|7.1.4\|9.1.4\|9.1.6\|22.2` | 普通 WAVE 输入布局；`auto` 优先 ADM，其次识别 channel mask | `auto` |
 | `--input-channels <csv>` | 自定义普通输入标签，严格按文件声道顺序；与显式 `--input-layout` 二选一 | 关闭 |
 | `--output-layout <layout>` | 输出语义或布局：`binaural`、多声道布局或 `hoa3` | `binaural` |
+| `--speaker-geometry standard\|apple` | EAR / SAF 输出扬声器坐标；Apple 后端始终使用 CoreAudio 几何 | `standard` |
+| `--direct-speakers-routing auto\|label\|position` | SAF / Apple DirectSpeakers 标签直达或位置空间化 | `auto` |
 | `--output-bit-depth f32\|i24\|i16` | WAV 输出位深（CAF 固定 float32；FLAC 固定 24-bit / 最多 8 声道） | `f32` |
 | `--loudness-target <LUFS>` | 响度归一化目标；HOA 通过 7.1.4 AllRAD 参考解码测量，LUFS 使用全频声道 | 关闭 |
 | `--peak-limit-dbtp <dBTP>` | True Peak 限制目标 | `-1.0` |

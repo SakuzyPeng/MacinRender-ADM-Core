@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.10）
-> 日期：2026-05-17（v1.1 增量记录补充于 2026-05-30，v1.2 / v1.3 / v1.4 / v1.5 / v1.6 / v1.7 / v1.8 于 2026-06-01，v1.9 于 2026-06-04，v1.10 于 2026-06-05）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.32）
+> 日期：2026-05-17（增量记录持续更新至 2026-08-13 的 v1.32）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -376,6 +376,39 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
   signature 或枚举值，动态库 `SOVERSION` 继续为 1。
 - **行为边界**：`split-power` 只适用于单一语义 LFE 的 22.2 输出；原生 LFE1+LFE2 素材在后端
   prepare 阶段返回 `ADM_ERROR_INVALID_ARGUMENT`。其它布局保持既有路由并记录 warning。
+
+### v1.31.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+为 EAR / SAF 软件扬声器渲染增加可选择的 CoreAudio 固定输出几何；默认仍保持既有几何。
+
+- **新增 enum**：`adm_speaker_geometry_t`，冻结值为
+  `ADM_SPEAKER_GEOMETRY_STANDARD=0`、`ADM_SPEAKER_GEOMETRY_APPLE=1`。
+- **新增 setter**：`adm_render_options_set_speaker_geometry()`；未知枚举返回
+  `ADM_ERROR_INVALID_ARGUMENT`，`opts=NULL` 保持安全 no-op 并返回 `ADM_ERROR_OK`。
+- **兼容性**：默认 `standard`，旧调用方输出不变；仅追加 symbol 与 enum，不改变 opaque struct、
+  现有 signature 或枚举值，动态库 `SOVERSION` 继续为 1。
+- **行为边界**：`apple` 只选择有效输出扬声器坐标，不修改输入 ADM 标称语义或声道顺序；
+  Apple AUSpatialMixer 后端本身始终使用 CoreAudio 几何。LFE 不参与几何切换。
+
+### v1.32.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+为 SAF / Apple 的 DirectSpeakers 增加显式标签直达与位置空间化双路由。
+
+- **新增 enum**：`adm_direct_speakers_routing_mode_t`，冻结值为
+  `ADM_DIRECT_SPEAKERS_ROUTING_AUTOMATIC=0`、`ADM_DIRECT_SPEAKERS_ROUTING_LABEL=1`、
+  `ADM_DIRECT_SPEAKERS_ROUTING_POSITION=2`。
+- **新增 setter**：`adm_render_options_set_direct_speakers_routing_mode()`；未知枚举返回
+  `ADM_ERROR_INVALID_ARGUMENT`，`opts=NULL` 保持安全 no-op 并返回 `ADM_ERROR_OK`。
+- **自动策略**：SAF 扬声器与 Apple 扬声器解析为 `label`；Apple binaural 解析为 `position`；EAR、
+  SAF binaural、HOA 等后端在 `automatic` 下保持原生行为，显式 `label` / `position` 返回
+  `ADM_ERROR_UNSUPPORTED`。Apple binaural 显式 `label` 同样返回 unsupported。
+- **语义**：`label` 先精确匹配输出标签，再使用共享别名；未命中时做零扩散、无插值空间化，
+  已知 BS.2051 / 别名标签优先使用标签方向，否则使用 ADM 标称位置，并 warning。`position`
+  忽略非 LFE 标签，以零扩散、无插值位置空间化。需要位置回退但缺少位置时统一使用
+  `(0°, 0°)` 并 warning。LFE 识别和既有专用路由始终优先。
+- **兼容性说明**：ABI 仍为纯追加，旧二进制无需重编译，`SOVERSION` 继续为 1；但这是一次已明确
+  接受的默认渲染语义调整——Apple 扬声器 DirectSpeakers 从旧 AmbienceBed 位置空间化改为标签直达。
+  Apple binaural 默认仍保持位置空间化，SAF 默认保持标签路由。
 
 ## opaque 指针与 callback 生命周期
 

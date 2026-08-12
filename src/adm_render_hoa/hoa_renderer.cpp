@@ -707,6 +707,10 @@ CapabilityReport HoaRenderer::capabilities() const {
 }
 
 Result<std::shared_ptr<IPreparedRender>> HoaRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
+    if (plan.direct_speakers_routing_mode != DirectSpeakersRoutingMode::automatic) {
+        return make_error(
+            ErrorCode::unsupported, "HOA renderer does not support explicit DirectSpeakers routing; use automatic", {});
+    }
     auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "hoa-encode");
     if (!lfe_routing) {
         return tl::unexpected{lfe_routing.error()};

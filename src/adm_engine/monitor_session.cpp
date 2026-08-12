@@ -55,8 +55,10 @@ namespace {
 // supported (cross-format to a non-stereo monitor). Equal channel counts → identity.
 // Stereo monitor: speaker layouts fold by geometry (LFE → both at −6 dB), HOA3 uses a
 // first-order horizontal W/Y decode, plain stereo passes through.
-[[nodiscard]] std::optional<std::vector<float>>
-build_downmix_matrix(uint32_t src_channels, std::string_view src_layout, uint32_t monitor_channels) {
+[[nodiscard]] std::optional<std::vector<float>> build_downmix_matrix(uint32_t src_channels,
+                                                                     std::string_view src_layout,
+                                                                     uint32_t monitor_channels,
+                                                                     SpeakerGeometry geometry) {
     if (src_channels == 0 || monitor_channels == 0) {
         return std::nullopt;
     }
@@ -83,7 +85,7 @@ build_downmix_matrix(uint32_t src_channels, std::string_view src_layout, uint32_
         set_lr(1, 0.5F, -0.5F);      // Y → L positive, R negative
         return m;
     }
-    if (const auto* layout = render_layouts::find_speaker_layout(src_layout);
+    if (const auto* layout = render_layouts::find_speaker_layout(src_layout, geometry);
         layout != nullptr && layout->speakers.size() == src_channels) {
         for (uint32_t s = 0; s < src_channels; ++s) {
             const auto& spk = layout->speakers[s];
@@ -152,6 +154,11 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         if (!resolved) {
             return tl::unexpected{resolved.error()};
         }
+        auto routing_validation = validate_direct_speakers_routing(
+            resolved->selected, resolved->effective_output_layout, options.direct_speakers_routing_mode);
+        if (!routing_validation) {
+            return tl::unexpected{routing_validation.error()};
+        }
         for (const auto& [level, message] : resolved->diagnostics) {
             logs.log(level, "monitor", message);
         }
@@ -164,6 +171,8 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         plan.sofa_path = options.sofa_path;
         plan.default_interp_ms = options.default_interp_ms;
         plan.object_smoothing_frames = options.object_smoothing_frames;
+        plan.speaker_geometry = options.speaker_geometry;
+        plan.direct_speakers_routing_mode = options.direct_speakers_routing_mode;
         plan.speaker_spread_mode = options.speaker_spread_mode;
         plan.binaural_spread_mode = options.binaural_spread_mode;
         plan.lfe_routing_mode = options.lfe_routing_mode;
@@ -430,7 +439,10 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
     // DownmixStream that folds the new layout into the fixed monitor channel count (e.g.
     // 7.1.4 / HOA → stereo headphones), so the engine still sees a monitor-format stream.
     if ((*stream)->out_channels() != monitor_channels) {
-        auto matrix = build_downmix_matrix((*stream)->out_channels(), (*stream)->output_layout(), monitor_channels);
+        const auto geometry =
+            options.renderer == RendererSelection::apple ? SpeakerGeometry::apple : options.speaker_geometry;
+        auto matrix =
+            build_downmix_matrix((*stream)->out_channels(), (*stream)->output_layout(), monitor_channels, geometry);
         if (!matrix) {
             stream->reset();
             impl_->factory->forget_last_backend();

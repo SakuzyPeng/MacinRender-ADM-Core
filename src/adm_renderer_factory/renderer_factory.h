@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -46,6 +47,12 @@ struct ResolvedRenderer {
 // Returns ErrorCode::unsupported for the rejected / unavailable cases.
 [[nodiscard]] Result<ResolvedRenderer>
 resolve_renderer(RendererSelection requested, std::string requested_layout, bool internal_allow_speaker_stereo);
+
+// Validate an explicit DirectSpeakers routing request after backend/layout
+// resolution. Automatic preserves native behaviour on unsupported backends.
+[[nodiscard]] Result<void> validate_direct_speakers_routing(RendererSelection selected,
+                                                            std::string_view effective_output_layout,
+                                                            DirectSpeakersRoutingMode mode);
 
 // Map a requested output-layout string (case-insensitive aliases like "5.1" / "atmos714" /
 // "stereo") to its canonical layout id ("0+5+0" / "4+7+0" / "0+2+0" / "binaural" / "hoa3"…).

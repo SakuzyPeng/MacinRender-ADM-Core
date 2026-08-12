@@ -13,6 +13,7 @@
 #include <saf_utility_complex.h>
 #include <saf_utility_fft.h>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -151,11 +152,50 @@ to_ear_range(const std::optional<std::pair<float, float>>& range) {
     return {std::string{spec.id}, std::move(channels)};
 }
 
+[[nodiscard]] ear::Layout apply_effective_speaker_positions(ear::Layout layout,
+                                                            const render_layouts::SpeakerLayout& effective) {
+    for (auto& channel : layout.channels()) {
+        const auto speaker = std::ranges::find(effective.speakers, channel.name(), &render_layouts::SpeakerSpec::label);
+        if (speaker == effective.speakers.end()) {
+            throw std::invalid_argument(
+                fmt::format("speaker '{}' is missing from geometry profile '{}'", channel.name(), effective.id));
+        }
+        channel.polarPosition(
+            ear::PolarPosition{static_cast<double>(speaker->azimuth), static_cast<double>(speaker->elevation)});
+        channel.azimuthRange(to_ear_range(speaker->azimuth_range));
+        channel.elevationRange(to_ear_range(speaker->elevation_range));
+    }
+    return layout;
+}
+
 [[nodiscard]] bool needs_project_ear_layout(std::string_view layout_id) {
     return layout_id == "4+5+4" || layout_id == "9.1.6";
 }
 
-[[nodiscard]] ear::Layout make_ear_layout(std::string_view layout_id) {
+[[nodiscard]] ear::Layout make_ear_layout(std::string_view layout_id, SpeakerGeometry geometry) {
+    if (geometry == SpeakerGeometry::apple) {
+        if (const auto* layout = render_layouts::find_speaker_layout(layout_id, geometry); layout != nullptr) {
+            // Keep libear's ADM nominal positions and known triangulation, while
+            // replacing only the real/effective speaker coordinates. In particular,
+            // Apple's 5.1.2 top-middle pair cannot itself serve as libear's nominal
+            // topology. wav71 uses libear's 0+7+0 order and is remapped to WAVE order
+            // after rendering, exactly like the standard profile.
+            ear::Layout nominal;
+            if (layout_id == "wav71") {
+                nominal = ear::getLayout("0+7+0");
+            } else if (needs_project_ear_layout(layout_id)) {
+                const auto* standard = render_layouts::find_speaker_layout(layout_id, SpeakerGeometry::standard);
+                if (standard == nullptr) {
+                    throw std::invalid_argument(fmt::format("standard nominal layout '{}' is unavailable", layout_id));
+                }
+                nominal = make_custom_ear_layout(*standard);
+            } else {
+                nominal = ear::getLayout(std::string{layout_id});
+            }
+            return apply_effective_speaker_positions(std::move(nominal), *layout);
+        }
+        throw std::invalid_argument(fmt::format("Apple speaker geometry is unavailable for layout '{}'", layout_id));
+    }
     if (layout_id == "wav71") {
         return ear::getLayout("0+7+0");
     }
@@ -984,32 +1024,50 @@ CapabilityReport EarRenderer::capabilities() const {
 }
 
 Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
-    auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "ear");
-    if (!lfe_routing) {
-        return tl::unexpected{lfe_routing.error()};
+    if (plan.direct_speakers_routing_mode != DirectSpeakersRoutingMode::automatic) {
+        return make_error(
+            ErrorCode::unsupported, "EAR renderer does not support explicit DirectSpeakers routing; use automatic", {});
     }
-    ear::Layout layout = make_ear_layout(plan.output_layout);
-    auto gain_matrix = build_gain_matrix(plan.scene, layout, logs, *lfe_routing);
+    try {
+        auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "ear");
+        if (!lfe_routing) {
+            return tl::unexpected{lfe_routing.error()};
+        }
+        ear::Layout layout = make_ear_layout(plan.output_layout, plan.speaker_geometry);
+        logs.log(LogLevel::info,
+                 "ear",
+                 fmt::format("speaker geometry: {}",
+                             plan.speaker_geometry == SpeakerGeometry::apple ? "apple" : "standard"));
+        auto gain_matrix = build_gain_matrix(plan.scene, layout, logs, *lfe_routing);
 
-    if (gain_matrix.empty()) {
-        logs.log(LogLevel::warning, "ear", "no renderable tracks found (all muted?), writing silence");
-    }
+        if (gain_matrix.empty()) {
+            logs.log(LogLevel::warning, "ear", "no renderable tracks found (all muted?), writing silence");
+        }
 
-    const auto num_in_ch = plan.scene.info.num_channels;
-    const auto invalid_channel =
-        std::ranges::find_if(gain_matrix, [num_in_ch](const auto& cg) { return cg.input_channel >= num_in_ch; });
-    if (invalid_channel != gain_matrix.end()) {
+        const auto num_in_ch = plan.scene.info.num_channels;
+        const auto invalid_channel =
+            std::ranges::find_if(gain_matrix, [num_in_ch](const auto& cg) { return cg.input_channel >= num_in_ch; });
+        if (invalid_channel != gain_matrix.end()) {
+            return make_error(ErrorCode::render_failed,
+                              fmt::format("track channel index {} is outside input channel count {}",
+                                          invalid_channel->input_channel,
+                                          num_in_ch),
+                              "input=" + plan.input_path);
+        }
+
+        auto prepared = std::make_shared<EarPrepared>();
+        prepared->layout = std::move(layout);
+        prepared->gain_matrix = std::move(gain_matrix);
+        return std::static_pointer_cast<IPreparedRender>(prepared);
+    } catch (const std::invalid_argument& e) {
+        return make_error(ErrorCode::unsupported,
+                          fmt::format("unsupported output layout '{}': {}", plan.output_layout, e.what()),
+                          "layout=" + plan.output_layout);
+    } catch (const std::exception& e) {
         return make_error(ErrorCode::render_failed,
-                          fmt::format("track channel index {} is outside input channel count {}",
-                                      invalid_channel->input_channel,
-                                      num_in_ch),
-                          "input=" + plan.input_path);
+                          std::string{"failed to prepare EAR renderer: "} + e.what(),
+                          "layout=" + plan.output_layout);
     }
-
-    auto prepared = std::make_shared<EarPrepared>();
-    prepared->layout = std::move(layout);
-    prepared->gain_matrix = std::move(gain_matrix);
-    return std::static_pointer_cast<IPreparedRender>(prepared);
 }
 
 // NOLINTNEXTLINE(readability-function-size)

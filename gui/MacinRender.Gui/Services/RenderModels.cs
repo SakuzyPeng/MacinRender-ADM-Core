@@ -15,6 +15,7 @@ public sealed record RenderSettings
     public double? LoudnessTargetLufs { get; init; }
     public string? SofaPath { get; init; }
     public string? SemanticPolicyJson { get; init; }
+    public AdmSpeakerGeometry SpeakerGeometry { get; init; } = AdmSpeakerGeometry.Standard;
     public AdmLfeRoutingMode LfeRoutingMode { get; init; } = AdmLfeRoutingMode.Direct;
 
     /// <summary>仅监听:多声道输出走 macOS 系统空间音频(AVSampleBufferAudioRenderer,系统 HRTF + 头追踪),

@@ -88,6 +88,21 @@ mradm input-layouts --format json
 `mradm backends` 的 `HRTF sources` 字段是当前平台与构建的能力真值。向不支持
 `user-sofa` 的后端传 `--sofa` 会直接报错，不会换后端或忽略文件。
 
+### DirectSpeakers 标签 / 位置路由
+
+`--direct-speakers-routing auto|label|position` 控制 SAF 与 Apple 的 DirectSpeakers：
+
+- `auto`（默认）：SAF/Apple 扬声器使用 `label`；Apple binaural 使用 `position`。
+- `label`：先精确匹配输出 speakerLabel，再使用共享别名（如 `L` → `M+030`）；命中后 one-hot
+  写入该输出槽位。未命中时做零扩散空间化并 warning：已知 BS.2051 / 别名标签使用标签方向，
+  否则使用 ADM 标称坐标。
+- `position`：除 LFE 识别外忽略标签，以标称坐标、零扩散、无插值空间化。SAF 使用所选
+  `--speaker-geometry standard|apple`，Apple 使用原有 AmbienceBed 路径。
+
+需要坐标回退但缺少坐标时统一使用前中 `(0°,0°)` 并 warning。LFE 识别始终优先，因此 22.2 ch3/ch9 与
+`split-power` 策略不受该选项影响。Apple binaural 显式 `label`、以及 EAR / SAF binaural / HOA
+上的任意显式模式都会返回 unsupported。
+
 ### 22.2 双 LFE 路由
 
 `--lfe-routing` 只对内置 `22.2`（`9+10+3`）输出生效：

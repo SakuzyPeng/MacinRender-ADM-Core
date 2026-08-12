@@ -89,6 +89,22 @@ separate choices:
 `mradm backends` reports the current platform/build truth under `HRTF sources`. Passing `--sofa` to a backend that
 does not report `user-sofa` is an error; the engine does not switch backend or ignore the file.
 
+### DirectSpeakers label/position routing
+
+`--direct-speakers-routing auto|label|position` controls DirectSpeakers on SAF and Apple:
+
+- `auto` (default): `label` for SAF/Apple speaker output and `position` for Apple binaural.
+- `label`: match an output speaker label exactly, then try the shared alias table (for example `L` → `M+030`). A
+  match is routed one-hot to that output slot. A miss is spatialized with zero spread and logs a warning: a known
+  BS.2051/alias label uses its label direction, otherwise the ADM nominal coordinates are used.
+- `position`: ignore non-LFE labels and spatialize the nominal coordinates with zero spread and no interpolation. SAF
+  uses the selected `--speaker-geometry standard|apple`; Apple preserves its AmbienceBed path.
+
+When coordinate fallback is needed, a block without coordinates uses front centre `(0°,0°)` and logs a warning.
+LFE detection always takes priority, so
+22.2 ch3/ch9 and `split-power` are unchanged. Explicit `label` is unsupported for Apple binaural; EAR, SAF binaural,
+and HOA reject either explicit mode and retain their native behaviour under `auto`.
+
 ### 22.2 dual-LFE routing
 
 `--lfe-routing` applies only to the built-in `22.2` (`9+10+3`) output:

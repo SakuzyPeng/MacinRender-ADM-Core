@@ -35,6 +35,38 @@ namespace mradm::render_common {
 // per-channel live-gain match (channel key + override speaker_label canonicalised the same way).
 [[nodiscard]] std::string canonicalise_speaker_label(std::string_view raw);
 
+// Backend-neutral output slot used by shared DirectSpeakers label/fallback
+// routing. Backends adapt their native layout representation into this view.
+struct DirectSpeakerRoutingTarget {
+    std::string_view label;
+    float azimuth{0.0F};
+    float elevation{0.0F};
+    bool is_lfe{false};
+};
+
+// Resolve a DirectSpeakers label in two passes: first exact output-label
+// matching, then the project's established RoomCentric/DAW alias table.
+[[nodiscard]] std::optional<std::size_t>
+direct_speaker_index_for_labels(std::span<const DirectSpeakerRoutingTarget> targets,
+                                const std::vector<std::string>& labels);
+
+struct DirectSpeakerPosition {
+    float azimuth{0.0F};
+    float elevation{0.0F};
+};
+
+// Recover a nominal direction from a known BS.2051 label or one of the shared
+// RoomCentric/DAW aliases. This is used when label routing cannot find the same
+// slot in the target layout (for example M+135 rendered to a 5.1 M+110 layout).
+// Middle/upper/bottom/top layers use nominal elevations 0/+30/-30/+90 degrees.
+[[nodiscard]] std::optional<DirectSpeakerPosition>
+direct_speaker_position_for_labels(const std::vector<std::string>& labels);
+
+// Read a DirectSpeakers block's nominal coordinates. Missing coordinates use
+// front-centre (0, 0) and emit the shared warning required by both backends.
+[[nodiscard]] DirectSpeakerPosition
+direct_speaker_position_or_front(const SceneDirectSpeakersBlock& block, LogSink& logs, std::string_view log_module);
+
 // Resolve the live linear gain multiplier for one input channel given its owning object id and
 // its canonicalised DirectSpeakers speaker label (empty for Objects / HOA channels). A channel-
 // specific override (non-empty speaker_label matching channel_label_key) wins over a whole-object

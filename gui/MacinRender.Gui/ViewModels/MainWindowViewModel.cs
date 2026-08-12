@@ -22,6 +22,11 @@ namespace MacinRender.Gui.ViewModels;
 /// </summary>
 public partial class MainWindowViewModel : ObservableObject
 {
+    private static readonly SpeakerGeometryOption StandardSpeakerGeometry =
+        new("Standard / ADM", AdmSpeakerGeometry.Standard);
+    private static readonly SpeakerGeometryOption AppleSpeakerGeometry =
+        new("Apple / CoreAudio", AdmSpeakerGeometry.Apple);
+
     public ObservableCollection<RenderFileItem> Files { get; } = new();
     public ObservableCollection<LogLine> Logs { get; } = new();
 
@@ -47,13 +52,17 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<LayoutDef> Layouts { get; } = new();
     public ObservableCollection<CodecOption> Codecs { get; } = new();
     public ObservableCollection<ContainerDef> Containers { get; } = new();
+    public ObservableCollection<SpeakerGeometryOption> SpeakerGeometries { get; } =
+        new() { StandardSpeakerGeometry, AppleSpeakerGeometry };
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SofaApplicable))]
+    [NotifyPropertyChangedFor(nameof(SpeakerGeometryApplicable))]
     private BackendDef _selectedBackend = OutputModel.BackendById["ear"];
     [ObservableProperty] private LayoutDef? _selectedLayout;
     [ObservableProperty] private CodecOption? _selectedCodec;
     [ObservableProperty] private ContainerDef? _selectedContainer;
+    [ObservableProperty] private SpeakerGeometryOption _selectedSpeakerGeometry = StandardSpeakerGeometry;
     [ObservableProperty] private AdmLfeRoutingMode _lfeRoutingMode = AdmLfeRoutingMode.Direct;
 
     // 自定义 HRIR(SOFA):只对 SAF 双耳后端(binaural / saf-binaural)有效;Apple 双耳用自家 HRTF。
@@ -64,6 +73,10 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool SofaApplicable =>
         OutputModel.SofaAvailable && SelectedBackend.Renderer is AdmRenderer.Binaural or AdmRenderer.SafBinaural;
+
+    // Auto 的扬声器输出解析为 EAR；CoreAudio 后端固定 Apple 几何，双耳 / HOA 无扬声器几何。
+    public bool SpeakerGeometryApplicable =>
+        SelectedBackend.Renderer is AdmRenderer.Automatic or AdmRenderer.Ear or AdmRenderer.Saf;
 
     partial void OnSofaPathChanged(string? value) => SaveSettings();
 
@@ -176,6 +189,7 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     partial void OnSelectedContainerChanged(ContainerDef? value) => SaveSettings();
+    partial void OnSelectedSpeakerGeometryChanged(SpeakerGeometryOption value) => SaveSettings();
     partial void OnLfeRoutingModeChanged(AdmLfeRoutingMode value) => SaveSettings();
     partial void OnBitrateChanged(decimal value) => SaveSettings();
     partial void OnIsDarkChanged(bool value) => SaveSettings();
@@ -340,6 +354,12 @@ public partial class MainWindowViewModel : ObservableObject
             LfeRoutingMode = lfeRoutingMode;
         }
 
+        if (Enum.TryParse<AdmSpeakerGeometry>(s.SpeakerGeometry, ignoreCase: true, out var speakerGeometry)
+            && SpeakerGeometries.FirstOrDefault(option => option.Geometry == speakerGeometry) is { } geometryOption)
+        {
+            SelectedSpeakerGeometry = geometryOption;
+        }
+
         if (s.Container is not null && Containers.FirstOrDefault(c => c.Id == s.Container) is { } container
             && !ReferenceEquals(container, SelectedContainer))
         {
@@ -374,6 +394,7 @@ public partial class MainWindowViewModel : ObservableObject
             s.Backend = SelectedBackend.Id;
             s.Codec = SelectedCodec?.Def.Id;
             s.Layout = SelectedLayout?.Id;
+            s.SpeakerGeometry = SelectedSpeakerGeometry.Geometry.ToString();
             s.LfeRoutingMode = LfeRoutingMode.ToString();
             s.Container = SelectedContainer?.Id;
             s.Bitrate = ShowBitrate ? Bitrate : null;
@@ -628,6 +649,7 @@ public partial class MainWindowViewModel : ObservableObject
             ApacBitrateKbps = apac,
             ApacContainer = apacContainer,
             SofaPath = SofaApplicable ? SofaPath : null, // 仅 SAF 双耳后端传 SOFA
+            SpeakerGeometry = SelectedSpeakerGeometry.Geometry,
             LfeRoutingMode = LfeRoutingMode,
         };
     }
