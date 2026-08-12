@@ -1245,7 +1245,8 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_object_semantics_doc
 bool render_to_layout(const std::shared_ptr<adm::Document>& doc,
                       const std::string& uid_str,
                       const std::filesystem::path& out_path,
-                      std::string_view layout_id) {
+                      std::string_view layout_id,
+                      mradm::SpeakerGeometry speaker_geometry = mradm::SpeakerGeometry::standard) {
     const auto in_path = write_input_fixture(doc, uid_str);
     FileGuard in_guard{in_path};
 
@@ -1254,6 +1255,7 @@ bool render_to_layout(const std::shared_ptr<adm::Document>& doc,
     req.output_path = out_path;
     req.options.output_layout = std::string{layout_id};
     req.options.renderer = mradm::RendererSelection::saf;
+    req.options.speaker_geometry = speaker_geometry;
     req.options.peak_limit = false;
 
     mradm::RenderService service;
@@ -1701,13 +1703,15 @@ bool verify_register_vbap_layout() {
     return ok;
 }
 
-// Creates a minimal Objects document with a source at the given elevation.
-std::pair<std::shared_ptr<adm::Document>, std::string> make_elevated_objects_doc(float elevation_deg) {
+// Creates a minimal Objects document with a source at the given polar position.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_positioned_objects_doc(float azimuth_deg,
+                                                                                   float elevation_deg) {
     auto doc = adm::Document::create();
 
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"ElevCF"}, adm::TypeDefinition::OBJECTS);
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{elevation_deg}}};
+        adm::AudioBlockFormatObjects block{
+            adm::SphericalPosition{adm::Azimuth{azimuth_deg}, adm::Elevation{elevation_deg}}};
         block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
         cf->add(block);
     }
@@ -1745,6 +1749,43 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_elevated_objects_doc
 
     adm::reassignIds(doc);
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+std::pair<std::shared_ptr<adm::Document>, std::string> make_elevated_objects_doc(float elevation_deg) {
+    return make_positioned_objects_doc(0.0F, elevation_deg);
+}
+
+bool verify_speaker_geometry_switch_changes_vbap() {
+    // CoreAudio's 5.1.2 top-middle-left is +90/+45, while the standard profile's
+    // U+030 is +30/+30. An Object exactly at the Apple coordinate must therefore
+    // route to a different gain vector when the output geometry changes.
+    auto [doc, uid_str] = make_positioned_objects_doc(90.0F, 45.0F);
+    const auto standard_out = std::filesystem::temp_directory_path() / "mr_vbap_geometry_standard.wav";
+    const auto apple_out = std::filesystem::temp_directory_path() / "mr_vbap_geometry_apple.wav";
+    FileGuard standard_guard{standard_out};
+    FileGuard apple_guard{apple_out};
+
+    if (!render_to_layout(doc, uid_str, standard_out, "2+5+0", mradm::SpeakerGeometry::standard) ||
+        !render_to_layout(doc, uid_str, apple_out, "2+5+0", mradm::SpeakerGeometry::apple)) {
+        return false;
+    }
+
+    const auto standard = read_channel_sums(standard_out, 8U);
+    const auto apple = read_channel_sums(apple_out, 8U);
+    if (standard.size() != 8U || apple.size() != 8U) {
+        return false;
+    }
+
+    const double apple_total = std::accumulate(apple.begin(), apple.end(), 0.0);
+    double vector_difference = 0.0;
+    for (std::size_t channel = 0U; channel < apple.size(); ++channel) {
+        vector_difference += std::fabs(apple[channel] - standard[channel]);
+    }
+
+    bool ok = check(apple_total > 0.0, "Apple geometry render has output energy");
+    ok &= check(apple[6] > apple_total * 0.99, "Apple 5.1.2 +90/+45 Object routes to top-middle-left");
+    ok &= check(vector_difference > apple_total * 0.1, "standard and Apple geometry produce different gain vectors");
+    return ok;
 }
 
 // Verify the 2D-layout-with-elevated-sources warning:
@@ -2055,6 +2096,7 @@ int main() {
     ok &= verify_vbap_object_divergence_spreads_center_source();
     ok &= verify_default_interp_ms_controls_ramp();
     ok &= verify_register_vbap_layout();
+    ok &= verify_speaker_geometry_switch_changes_vbap();
     ok &= verify_2d_layout_elevated_source_warning();
     ok &= verify_vbap_stream_matches_window();
     ok &= verify_vbap_stream_gain_override();

@@ -250,6 +250,7 @@ LUFS / 空间 True Peak 测量缓冲中剥离，并由独立 mono True Peak trac
 | **decorrelator / diffuse bus** | ✅ EAR 已实现 BS.2127 去相关 FIR + 延迟补偿（M4）；HOA encode 使用 divergence-aware 逐系数 32-tap diffuse decorrelator；VBAP 忽略 ADM `diffuse` | — |
 | **reverb / room simulation** | ❌ 未实现 | 可作为可选后处理，不应默认改变 ADM 合规渲染结果 |
 | **扬声器布局统一** | ✅ EAR / SAF VBAP 共用项目布局 registry；对外均显示 8 个 speaker layouts（内部另保留 `0+2+0`） | 后续可增加配置文件或插件式布局源 |
+| **输出扬声器几何 profile** | ✅ `standard` / `apple` 两套内置坐标；EAR / SAF 可切换，Apple 后端固定 CoreAudio；CLI `--speaker-geometry`、C ABI v1.31 | profile 只改变非 LFE 有效输出坐标，不改变 ADM 输入语义或声道顺序 |
 | **VBAP 布局扩展** | ✅ 通道顺序和 LFE 位置已校对；SAF 补齐 `5.1.2` / `9.1.4` / `9.1.6`，并保留 `register_vbap_layout()` 运行时注册入口 | — |
 | **VBAP 2D / 3D 配置** | ✅ 自动按布局高度判断；能力报告和 render 日志显示 2D/3D，2D 布局遇到高度源会 warning | 后续可增加显式 override 开关 |
 | **VBAP 插值策略配置** | ✅ `RenderOptions.default_interp_ms`（默认 5ms，0=瞬时切换，CLI `--interp-ms`）；EAR / HOA 渲染器同步生效 | — |
@@ -346,6 +347,33 @@ ADM 块插值和 MDAP extent spread。EAR 与 SAF VBAP 的扬声器布局能力�
 | `9+10+3` | 22.2 | 24 | LFE1@ch3，LFE2@ch9 |
 
 `0+2+0` 用于内部测试和普通两声道文件写入，不在 CLI `backends` 的 speaker layouts 中对外显示；用户 2ch 渲染入口仍走 `saf-binaural`。`wav71` 使用 CoreAudio `kAudioChannelLayoutTag_WAVE_7_1` / Microsoft WAVE 7.1 槽位；`9.1.4` 与 `9.1.6` 使用项目侧 Atmos-style 声道顺序，其中 libear 后端通过自定义 `ear::Layout` 构造。LFE 声道参与输出但不参与 VBAP panning。22.2 默认将 LFE1 严格送入 ch3、LFE2/LFER 严格送入 ch9；`split-power` 仅接受单一语义 LFE，并以 `sqrt(0.5)` 同时送入两路。
+
+`SpeakerGeometry::standard` 是默认的项目 / ADM 标称输出坐标；`SpeakerGeometry::apple` 是在
+macOS 27.0（26A5406e）上通过 `AudioFormatGetProperty(kAudioFormatProperty_ChannelLayoutForTag)`
+从 CoreAudio 标准 layout tag 展开并固化的有效坐标。后者只提供 CoreAudio 实际存在的 7 个布局：
+`0+5+0`、`wav71`、`2+5+0`、`4+5+0`、`4+7+0`、`9.1.6`、`9+10+3`。
+`0+2+0` 与 `4+5+4` 不做隐式回退。两套 profile 保持相同的声道数、标签、顺序与 LFE 语义；
+有差异的非 LFE 坐标如下（方位角 `+` 向左，单元格为 `azimuth/elevation`，单位度）：
+
+| 布局 | 扬声器 | standard | apple |
+|---|---|---:|---:|
+| `wav71` | M±135 | ±135 / 0 | ±150 / 0 |
+| `wav71` | M±090 | ±90 / 0 | ±110 / 0 |
+| `2+5+0` | U±030 | ±30 / +30 | ±90 / +45 |
+| `4+5+0` | U±030 | ±30 / +30 | ±45 / +45 |
+| `4+5+0` | U±110 | ±110 / +30 | ±135 / +45 |
+| `4+7+0` | M±090 / M±135 | ±90 / 0、±135 / 0 | ±110 / 0、±150 / 0 |
+| `4+7+0` | U±045 / U±135 | ±45 / +30、±135 / +30 | ±45 / +45、±135 / +45 |
+| `9.1.6` | M±070 | ±70 / 0 | ±60 / 0 |
+| `9.1.6` | U±070 / U±110 / U±150 | ±70 / +45、±110 / +45、±150 / +45 | ±45 / +45、±90 / +45、±135 / +45 |
+| `9+10+3` | M±135 | ±135 / 0 | ±150 / 0 |
+| `9+10+3` | U±045 / U±090 / U±135 / U+180 | 同方位 / +30 | 同方位 / +45 |
+| `9+10+3` | B+000 / B±045 | 同方位 / −30 | 同方位 / −15 |
+
+`0+5+0` 的非 LFE 坐标在两套 profile 中相同。LFE 坐标是非 panning 占位信息，不属于此次切换。
+EAR 保留 libear 的 ADM nominal topology，只把 real/effective position 换成所选 profile，以免
+输出几何反向改写 ADM 三角剖分语义。带精确 speakerLabel 的 DirectSpeakers 始终按标签直达，
+profile 主要影响 Objects、channelLock 与位置回退。
 
 **仍待改善：**
 

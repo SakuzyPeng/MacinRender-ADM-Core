@@ -3,6 +3,7 @@ using System.ComponentModel;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MacinRender.Gui.I18n;
+using MacinRender.Gui.Interop;
 
 namespace MacinRender.Gui.Models;
 
@@ -21,6 +22,9 @@ public enum LogKind
     Warn,
     Error
 }
+
+/// <summary>批渲染扬声器几何下拉项；Label 使用标准专名，中英文界面一致。</summary>
+public sealed record SpeakerGeometryOption(string Label, AdmSpeakerGeometry Geometry);
 
 /// <summary>队列中的一个待渲染文件。</summary>
 public partial class RenderFileItem : ObservableObject

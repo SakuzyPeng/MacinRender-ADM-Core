@@ -95,8 +95,8 @@ struct SafFree {
     }
 };
 
-[[nodiscard]] std::optional<LayoutSpec> layout_spec(std::string_view layout_id) {
-    if (const auto* shared = render_layouts::find_speaker_layout(layout_id); shared != nullptr) {
+[[nodiscard]] std::optional<LayoutSpec> layout_spec(std::string_view layout_id, SpeakerGeometry geometry) {
+    if (const auto* shared = render_layouts::find_speaker_layout(layout_id, geometry); shared != nullptr) {
         return layout_spec_from_shared(*shared);
     }
     const auto& reg = custom_layout_registry();
@@ -199,7 +199,7 @@ constexpr std::array<DsLabelAlias, 34> k_ds_aliases = {{
 
 [[nodiscard]] std::optional<std::string_view> resolve_ds_alias(std::string_view label) {
     const auto key = canonicalize_ds_label(label);
-    const auto it =
+    const auto* const it =
         std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
     if (it != k_ds_aliases.end()) {
         return it->bs2051;
@@ -730,10 +730,18 @@ CapabilityReport VbapRenderer::capabilities() const {
 
 Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
     const std::string layout_id = plan.output_layout;
-    auto layout = layout_spec(layout_id);
+    auto layout = layout_spec(layout_id, plan.speaker_geometry);
     if (!layout.has_value()) {
-        return make_error(ErrorCode::unsupported, fmt::format("unsupported VBAP output layout '{}'", layout_id), {});
+        const std::string_view geometry = plan.speaker_geometry == SpeakerGeometry::apple ? "apple" : "standard";
+        return make_error(
+            ErrorCode::unsupported,
+            fmt::format("unsupported VBAP output layout '{}' for speaker geometry '{}'", layout_id, geometry),
+            {});
     }
+    logs.log(
+        LogLevel::info,
+        "saf-vbap",
+        fmt::format("speaker geometry: {}", plan.speaker_geometry == SpeakerGeometry::apple ? "apple" : "standard"));
 
     auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "saf-vbap");
     if (!lfe_routing) {

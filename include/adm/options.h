@@ -30,6 +30,15 @@ enum class SpeakerSpreadMode {
     mdap,      // always use MDAP (multi-directional amplitude panning) for 3D layouts
 };
 
+// Effective loudspeaker coordinates used by software speaker renderers. `standard`
+// preserves the existing project / ADM nominal geometry; `apple` uses the fixed
+// coordinates reported by CoreAudio for the matching standard layout tags. The
+// Apple renderer itself always uses CoreAudio's geometry regardless of this option.
+enum class SpeakerGeometry {
+    standard,
+    apple,
+};
+
 enum class BinauralSpreadMode {
     automatic,    // cloud
     none,         // point source; extent parameters ignored
@@ -127,6 +136,7 @@ struct RenderOptions {
     // Backend-dependent: the Apple AUSpatialMixer backend currently ignores this
     // option and relies on SpatialMixer's internal parameter smoothing.
     uint32_t object_smoothing_frames{0};
+    SpeakerGeometry speaker_geometry{SpeakerGeometry::standard};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
     LfeRoutingMode lfe_routing_mode{LfeRoutingMode::direct};

@@ -266,6 +266,9 @@ bool verify_options_null_setters() {
     ok = check(adm_render_options_set_speaker_spread_mode(nullptr, ADM_SPEAKER_SPREAD_MDAP) == ADM_ERROR_OK,
                "NULL opts set_speaker_spread_mode should return OK") &&
          ok;
+    ok = check(adm_render_options_set_speaker_geometry(nullptr, ADM_SPEAKER_GEOMETRY_APPLE) == ADM_ERROR_OK,
+               "NULL opts set_speaker_geometry should return OK") &&
+         ok;
     ok = check(adm_render_options_set_binaural_spread_mode(nullptr, ADM_BINAURAL_SPREAD_CLOUD) == ADM_ERROR_OK,
                "NULL opts set_binaural_spread_mode should return OK") &&
          ok;
@@ -313,6 +316,17 @@ bool verify_options_invalid_values(adm_render_options_t* opts) {
     ok = check(adm_render_options_set_speaker_spread_mode(opts, static_cast<adm_speaker_spread_mode_t>(99)) ==
                    ADM_ERROR_INVALID_ARGUMENT,
                "out-of-range speaker_spread should return INVALID_ARGUMENT") &&
+         ok;
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    ok = check(adm_render_options_set_speaker_geometry(opts, static_cast<adm_speaker_geometry_t>(99)) ==
+                   ADM_ERROR_INVALID_ARGUMENT,
+               "out-of-range speaker_geometry should return INVALID_ARGUMENT") &&
+         ok;
+    ok = check(adm_render_options_set_speaker_geometry(opts, ADM_SPEAKER_GEOMETRY_APPLE) == ADM_ERROR_OK,
+               "Apple speaker geometry accepted") &&
+         ok;
+    ok = check(adm_render_options_set_speaker_geometry(opts, ADM_SPEAKER_GEOMETRY_STANDARD) == ADM_ERROR_OK,
+               "speaker geometry restored to standard after validation") &&
          ok;
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     ok = check(adm_render_options_set_binaural_spread_mode(opts, static_cast<adm_binaural_spread_mode_t>(99)) ==
@@ -2214,6 +2228,7 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     bool ok = check(adm_api_version_minor() == ADM_API_VERSION_MINOR, "C ABI minor version matches header");
     ok = check(adm_api_version_minor() >= 29, "v1.29: monitor mute override is available") && ok;
     ok = check(adm_api_version_minor() >= 30, "v1.30: 22.2 LFE routing mode is available") && ok;
+    ok = check(adm_api_version_minor() >= 31, "v1.31: selectable speaker geometry is available") && ok;
     static_assert(offsetof(adm_monitor_override_t, mute) >=
                   offsetof(adm_monitor_override_t, head_locked) + sizeof(int32_t) + sizeof(uint32_t));
 

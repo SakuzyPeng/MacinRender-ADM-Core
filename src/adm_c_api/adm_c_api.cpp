@@ -169,6 +169,9 @@ static_assert(static_cast<int>(mradm::BinauralSpreadMode::saf_spreader) == ADM_B
 static_assert(static_cast<int>(mradm::LfeRoutingMode::direct) == ADM_LFE_ROUTING_DIRECT);
 static_assert(static_cast<int>(mradm::LfeRoutingMode::split_power) == ADM_LFE_ROUTING_SPLIT_POWER);
 
+static_assert(static_cast<int>(mradm::SpeakerGeometry::standard) == ADM_SPEAKER_GEOMETRY_STANDARD);
+static_assert(static_cast<int>(mradm::SpeakerGeometry::apple) == ADM_SPEAKER_GEOMETRY_APPLE);
+
 static_assert(static_cast<int>(mradm::RenderOptions::IamfContainer::obu) == ADM_IAMF_CONTAINER_OBU);
 static_assert(static_cast<int>(mradm::RenderOptions::IamfContainer::mp4) == ADM_IAMF_CONTAINER_MP4);
 static_assert(static_cast<int>(mradm::RenderOptions::ApacContainer::mpeg4) == ADM_APAC_CONTAINER_MPEG4);
@@ -766,6 +769,19 @@ adm_error_code_t adm_render_options_set_binaural_spread_mode(adm_render_options_
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     opts->opts.binaural_spread_mode = static_cast<mradm::BinauralSpreadMode>(mode);
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_speaker_geometry(adm_render_options_t* opts,
+                                                         adm_speaker_geometry_t geometry) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (static_cast<int>(geometry) < ADM_SPEAKER_GEOMETRY_STANDARD ||
+        static_cast<int>(geometry) > ADM_SPEAKER_GEOMETRY_APPLE) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.speaker_geometry = static_cast<mradm::SpeakerGeometry>(geometry);
     return ADM_ERROR_OK;
 }
 

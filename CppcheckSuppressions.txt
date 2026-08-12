@@ -21,6 +21,7 @@ unusedStructMember:*/include/adm/live_override.h
 unusedStructMember:*/include/adm/c_api.h
 # Shared renderer internals return aggregate structs across translation units.
 unusedStructMember:*/src/adm_render_common/render_common.h
+unusedStructMember:*/src/adm_render_common/speaker_layouts.h
 unusedStructMember:*/src/adm_cli/commands.h
 unusedStructMember:*src/adm_audio/audio_io_internal.h
 unusedStructMember:*/src/adm_render_binaural/binaural_spreader.h

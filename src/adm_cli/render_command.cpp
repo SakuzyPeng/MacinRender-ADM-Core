@@ -190,6 +190,10 @@ mradm::SpeakerSpreadMode parse_speaker_spread_mode(const std::string& value) {
     return mradm::SpeakerSpreadMode::automatic;
 }
 
+mradm::SpeakerGeometry parse_speaker_geometry(const std::string& value) {
+    return value == "apple" ? mradm::SpeakerGeometry::apple : mradm::SpeakerGeometry::standard;
+}
+
 mradm::BinauralSpreadMode parse_binaural_spread_mode(const std::string& value) {
     if (value == "none") {
         return mradm::BinauralSpreadMode::none;
@@ -260,6 +264,7 @@ void add_output_selection_options(CLI::App& render_cmd, RenderCliOptions& opts) 
         ->check(renderer_validator());
 }
 
+// NOLINTNEXTLINE(readability-function-size): declarative CLI option table.
 CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
     auto* render_cmd = app.add_subcommand("render", "Render an ADM BWF or ordinary channel-based WAVE file");
     render_cmd->add_option("-i,--input", opts.input, "Input ADM BWF or channel-based WAV/RF64/BW64 path")->required();
@@ -334,6 +339,12 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
     render_cmd->add_option("--write-semantic-report",
                            opts.semantic_report_path,
                            "Write effective ADM semantic report JSON after applying policy");
+    render_cmd
+        ->add_option("--speaker-geometry",
+                     opts.speaker_geometry_str,
+                     "Output speaker coordinates for EAR/SAF: standard (existing project/ADM geometry) or "
+                     "apple (CoreAudio fixed geometry); Apple renderer always uses apple")
+        ->check(CLI::IsMember({"standard", "apple"}));
     render_cmd
         ->add_option("--speaker-spread-mode",
                      opts.speaker_spread_mode_str,
@@ -427,6 +438,7 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
     if (!std::isnan(opts.render_end)) {
         request.options.render_end_sec = opts.render_end;
     }
+    request.options.speaker_geometry = parse_speaker_geometry(opts.speaker_geometry_str);
     request.options.speaker_spread_mode = parse_speaker_spread_mode(opts.speaker_spread_mode_str);
     request.options.binaural_spread_mode = parse_binaural_spread_mode(opts.binaural_spread_mode_str);
     request.options.lfe_routing_mode = parse_lfe_routing_mode(opts.lfe_routing_mode_str);

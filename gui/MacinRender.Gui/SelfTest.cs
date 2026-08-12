@@ -155,6 +155,27 @@ internal static class SelfTest
             return 12;
         }
 
+        // v1.31:两套输出扬声器几何的托管枚举与 P/Invoke setter。
+        try
+        {
+            using var geometryOpts = NativeMethods.adm_create_render_options();
+            var standardRc = NativeMethods.adm_render_options_set_speaker_geometry(
+                geometryOpts, AdmSpeakerGeometry.Standard);
+            var appleRc = NativeMethods.adm_render_options_set_speaker_geometry(
+                geometryOpts, AdmSpeakerGeometry.Apple);
+            if (standardRc != AdmErrorCode.Ok || appleRc != AdmErrorCode.Ok)
+            {
+                Console.Error.WriteLine("[失败] 扬声器几何 GUI 映射与 C ABI v1.31 契约不一致");
+                return 13;
+            }
+            Console.WriteLine("扬声器几何:standard/apple P/Invoke OK");
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            Console.Error.WriteLine($"[失败] libmradm_capi 缺少 v1.31 扬声器几何入口: {ex.Message}");
+            return 13;
+        }
+
         // 监听入口可解析性(即使没给 wav 也跑):bogus 路径应得到干净错误码,而非
         // EntryPointNotFound / 崩溃 —— 验证 v1.15–v1.17 的 adm_monitor_* 符号确实在 dylib 里。
         try

@@ -33,7 +33,7 @@ namespace {
 // Returns empty for binaural output (no discrete speakers) so channelLock is dropped.
 [[nodiscard]] std::vector<SceneOutputSpeaker> output_speakers(std::string_view layout_id) {
     std::vector<SceneOutputSpeaker> speakers;
-    if (const auto* layout = render_layouts::find_speaker_layout(layout_id)) {
+    if (const auto* layout = render_layouts::find_speaker_layout(layout_id, SpeakerGeometry::apple)) {
         speakers.reserve(layout->speakers.size());
         std::ranges::transform(layout->speakers, std::back_inserter(speakers), [](const auto& spk) {
             return SceneOutputSpeaker{spk.azimuth, spk.elevation, spk.is_lfe};

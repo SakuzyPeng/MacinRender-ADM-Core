@@ -89,7 +89,7 @@ labels produce errors. Custom `U±110` labels require `@30` or `@45` to select e
 
 Public two-channel output uses the `binaural` semantic, which is also the default. Backend and HRTF source are separate
 choices: `saf-binaural` offers built-in KEMAR and build-enabled `--sofa` user HRIRs; `apple` uses the Apple system HRTF.
-Current entry points are the CLI, C++ API, and C ABI v1.30.
+Current entry points are the CLI, C++ API, and C ABI v1.31.
 
 ## Release Packages
 
@@ -199,6 +199,21 @@ Direct HOA playback on macOS uses CAF PCM, APAC MPEG-4, and APAC CAF. WAV HOA3 w
 
 EAR and SAF VBAP share the same project layout registry. `9.1.4` / `9.1.6` are implemented for the libear backend through project-side custom `ear::Layout` definitions.
 
+EAR / SAF output-speaker geometry is selectable with `--speaker-geometry standard|apple`. The default `standard`
+preserves the existing project / ADM nominal coordinates. `apple` uses CoreAudio's fixed coordinates for `5.1`, `7.1`,
+`5.1.2`, `5.1.4`, `7.1.4`, `9.1.6`, and `22.2` (`5.1` is coordinate-identical). CoreAudio has no matching fixed
+profile for project `9.1.4` or internal speaker stereo, so those combinations return unsupported instead of silently
+falling back. The Apple renderer always uses CoreAudio geometry and ignores this option. LFE does not participate in
+the geometry switch. Precisely labelled DirectSpeakers still route directly by label; the profile primarily affects
+Objects, channelLock, and position fallback.
+The desktop app exposes the same Speaker Geometry selector for EAR / SAF loudspeaker rendering and remembers the last
+selection.
+
+```bash
+./build/release/mradm render -i input.wav -o saf_apple_222.wav \
+  --renderer saf --output-layout 22.2 --speaker-geometry apple
+```
+
 Query full channel-order tables with:
 
 ```bash
@@ -216,6 +231,7 @@ Query full channel-order tables with:
 | `--input-layout auto\|5.1\|5.1.2\|7.1\|5.1.4\|7.1.4\|9.1.4\|9.1.6\|22.2` | Ordinary WAVE input layout; `auto` prefers ADM, then a recognised channel mask | `auto` |
 | `--input-channels <csv>` | Custom ordinary-input labels in exact file-channel order; choose this or an explicit `--input-layout` | Off |
 | `--output-layout <layout>` | Output semantic/layout: `binaural`, a multichannel layout, or `hoa3` | `binaural` |
+| `--speaker-geometry standard\|apple` | EAR / SAF output-speaker coordinates; the Apple backend always uses CoreAudio geometry | `standard` |
 | `--output-bit-depth f32\|i24\|i16` | WAV output bit depth; CAF is fixed float32, FLAC is fixed 24-bit / up to 8 channels | `f32` |
 | `--loudness-target <LUFS>` | Normalize integrated loudness; HOA uses a 7.1.4 AllRAD reference decode and full-range channels for LUFS | Off |
 | `--peak-limit-dbtp <dBTP>` | True Peak limit target | `-1.0` |

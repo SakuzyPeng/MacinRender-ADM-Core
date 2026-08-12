@@ -5,6 +5,8 @@
 #include <utility>
 #include <vector>
 
+#include "adm/options.h"
+
 namespace mradm::render_layouts {
 
 struct SpeakerSpec {
@@ -23,6 +25,8 @@ struct SpeakerLayout {
 };
 
 const std::vector<SpeakerLayout>& speaker_layouts();
+const std::vector<SpeakerLayout>& speaker_layouts(SpeakerGeometry geometry);
 const SpeakerLayout* find_speaker_layout(std::string_view id);
+const SpeakerLayout* find_speaker_layout(std::string_view id, SpeakerGeometry geometry);
 
 } // namespace mradm::render_layouts
