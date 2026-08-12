@@ -644,6 +644,14 @@ if(MR_ADM_CORE_BUILD_CLI)
     target_include_directories(mradm_exe PRIVATE src/adm_audio)
     if(APPLE)
         target_link_libraries(mradm_exe PRIVATE MacinRender::ADMRenderApple)
+        # AudioToolbox's APAC encoder rejects ClientDataFormat on current macOS when
+        # the helper only carries the linker's transient signature. Give standalone
+        # CLI/test builds the same full ad-hoc signature used by the GUI bundle.
+        add_custom_command(TARGET mradm_exe POST_BUILD
+            COMMAND /usr/bin/codesign --force --sign - "$<TARGET_FILE:mradm_exe>"
+            COMMENT "Ad-hoc signing mradm for APAC worker execution"
+            VERBATIM
+        )
     endif()
     mr_adm_core_apply_warnings(mradm_exe)
     mr_adm_core_apply_static_analysis(mradm_exe)

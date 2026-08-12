@@ -118,11 +118,12 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
-                        <!-- 系统空间音频布局次级下拉(7.1.4 / 22.2);仅系统空间音频后端可见 -->
-                        <ComboBox Width="86" VerticalAlignment="Center"
-                                  IsVisible="{Binding MonitorLayoutSelectorVisible}"
-                                  ItemsSource="{Binding MonitorSpatialLayouts}"
-                                  SelectedItem="{Binding SelectedSpatialLayout}"/>
+                        <!-- 系统空间音频布局次级下拉;22.2 再级联 LFE 模式。收起后只用 22.2 颜色表意。 -->
+                        <ctrl:LayoutRoutingPicker Width="86" VerticalAlignment="Center"
+                                                  IsVisible="{Binding MonitorLayoutSelectorVisible}"
+                                                  ItemsSource="{Binding MonitorSpatialLayouts}"
+                                                  SelectedLayout="{Binding SelectedSpatialLayout, Mode=TwoWay}"
+                                                  LfeRoutingMode="{Binding MonitorLfeRoutingMode, Mode=TwoWay}"/>
                         <!-- 此 macOS 的 AUSpatialMixer 会错置 LFE(≤26.3):Apple 床丢低频 → 提示改 EAR/VBAP 床 -->
                         <TextBlock Text="⚠" FontSize="15" VerticalAlignment="Center" Foreground="#FF9F0A"
                                    IsVisible="{Binding SystemSpatialLfeWarning}"

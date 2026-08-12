@@ -141,15 +141,10 @@
                                 <Grid Grid.Column="1">
                                     <StackPanel Spacing="5" IsVisible="{Binding !SofaApplicable}">
                                         <TextBlock Classes="muted" Text="{DynamicResource Layout}"/>
-                                        <ComboBox HorizontalAlignment="Stretch"
-                                                  ItemsSource="{Binding Layouts}"
-                                                  SelectedItem="{Binding SelectedLayout}">
-                                            <ComboBox.ItemTemplate>
-                                                <DataTemplate x:DataType="m:LayoutDef">
-                                                    <TextBlock Text="{Binding Name}"/>
-                                                </DataTemplate>
-                                            </ComboBox.ItemTemplate>
-                                        </ComboBox>
+                                        <ctrl:LayoutRoutingPicker
+                                            ItemsSource="{Binding Layouts}"
+                                            SelectedLayout="{Binding SelectedLayout, Mode=TwoWay}"
+                                            LfeRoutingMode="{Binding LfeRoutingMode, Mode=TwoWay}"/>
                                     </StackPanel>
                                     <StackPanel Spacing="5" IsVisible="{Binding SofaApplicable}">
                                         <TextBlock Classes="muted" Text="{DynamicResource SemSofaLabel}"/>

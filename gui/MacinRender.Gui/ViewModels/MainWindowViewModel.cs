@@ -54,6 +54,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private LayoutDef? _selectedLayout;
     [ObservableProperty] private CodecOption? _selectedCodec;
     [ObservableProperty] private ContainerDef? _selectedContainer;
+    [ObservableProperty] private AdmLfeRoutingMode _lfeRoutingMode = AdmLfeRoutingMode.Direct;
 
     // 自定义 HRIR(SOFA):只对 SAF 双耳后端(binaural / saf-binaural)有效;Apple 双耳用自家 HRTF。
     // Sofa 是 MRU 下拉选择器(默认 + 最近,与监听共享 SofaLibrary),驱动 SofaPath(真实路径,下游/持久化)。
@@ -175,6 +176,7 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     partial void OnSelectedContainerChanged(ContainerDef? value) => SaveSettings();
+    partial void OnLfeRoutingModeChanged(AdmLfeRoutingMode value) => SaveSettings();
     partial void OnBitrateChanged(decimal value) => SaveSettings();
     partial void OnIsDarkChanged(bool value) => SaveSettings();
     partial void OnIsEnglishChanged(bool value) => SaveSettings();
@@ -333,6 +335,11 @@ public partial class MainWindowViewModel : ObservableObject
             SelectedLayout = layout;
         }
 
+        if (Enum.TryParse<AdmLfeRoutingMode>(s.LfeRoutingMode, ignoreCase: true, out var lfeRoutingMode))
+        {
+            LfeRoutingMode = lfeRoutingMode;
+        }
+
         if (s.Container is not null && Containers.FirstOrDefault(c => c.Id == s.Container) is { } container
             && !ReferenceEquals(container, SelectedContainer))
         {
@@ -367,6 +374,7 @@ public partial class MainWindowViewModel : ObservableObject
             s.Backend = SelectedBackend.Id;
             s.Codec = SelectedCodec?.Def.Id;
             s.Layout = SelectedLayout?.Id;
+            s.LfeRoutingMode = LfeRoutingMode.ToString();
             s.Container = SelectedContainer?.Id;
             s.Bitrate = ShowBitrate ? Bitrate : null;
             s.IsDark = IsDark;
@@ -620,6 +628,7 @@ public partial class MainWindowViewModel : ObservableObject
             ApacBitrateKbps = apac,
             ApacContainer = apacContainer,
             SofaPath = SofaApplicable ? SofaPath : null, // 仅 SAF 双耳后端传 SOFA
+            LfeRoutingMode = LfeRoutingMode,
         };
     }
 

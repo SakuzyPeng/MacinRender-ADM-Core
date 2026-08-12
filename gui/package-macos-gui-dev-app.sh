@@ -4,8 +4,9 @@
 # 为什么要打包:CMHeadphoneMotionManager(AirPods 头部追踪)要拿数据,必须有 Info.plist 的
 # NSMotionUsageDescription + 代码签名(裸 exe 下 TCC 直接杀进程)。打包后该开关才真正可用。
 #
-# 前置:native dylib 已就位 —
-#   cmake --preset release -DMR_ADM_BUILD_CAPI_BUNDLE=ON && cmake --build --preset release --target mradm_capi_bundle
+# 前置:native dylib 与 APAC helper 已就位 —
+#   cmake --preset release -DMR_ADM_BUILD_CAPI_BUNDLE=ON && \
+#     cmake --build --preset release --target mradm_capi_bundle mradm_exe
 #   gui/copy-native.sh && gui/build-headtrack.sh
 # 用法:gui/package-macos-gui-dev-app.sh   产物:gui/dist/MacinRender.app(不入 git)
 set -euo pipefail
@@ -27,6 +28,10 @@ publish="$proj/bin/Release/net10.0/$rid/publish"
 if [[ ! -x "$publish/MacinRender.Gui" ]]; then
     echo "找不到发布产物 $publish/MacinRender.Gui"; exit 1
 fi
+apac_helper="$repo/build/release/mradm"
+if [[ ! -x "$apac_helper" ]]; then
+    echo "找不到 APAC helper $apac_helper；请先构建 Release mradm_exe"; exit 1
+fi
 
 # 2. 组装 bundle 结构
 app="$here/dist/$app_name.app"
@@ -39,6 +44,10 @@ mkdir -p "$macos" "$res" "$legal" "$zh_hans"
 
 cp "$publish/MacinRender.Gui" "$macos/$app_name"          # 主二进制(AOT)
 cp "$publish/"*.dylib "$macos/"                            # 全部 native 依赖(含 capi / headtrack)
+cp "$apac_helper" "$macos/mradm"                            # APAC 隔离编码 worker(capi 按同目录发现)
+if ! "$macos/mradm" __apac-encode --help | grep -Fq 'APAC encode worker'; then
+    echo "随附的 mradm 不支持预期的 APAC worker 协议"; exit 1
+fi
 [[ -f "$proj/Assets/AppIcon.icns" ]] && cp "$proj/Assets/AppIcon.icns" "$res/AppIcon.icns"
 cp "$repo/LICENSE" "$legal/LICENSE"
 cp "$repo/docs/THIRD_PARTY_LICENSES.md" "$legal/THIRD_PARTY_NOTICES.md"
@@ -77,6 +86,7 @@ STRINGS
 
 # 4. ad-hoc 签名(本地测试足够触发 TCC 授权提示;分发需 Developer ID)。先签内部 dylib 再签 bundle。
 codesign --force --sign - "$macos/"*.dylib
+codesign --force --sign - "$macos/mradm"
 codesign --force --sign - "$macos/$app_name"
 codesign --force --sign - "$app"
 

@@ -49,10 +49,12 @@ fi
 
 app_root="$package_root/MacinRender ADM.app"
 exe="$app_root/Contents/MacOS/MacinRender.Gui"
+apac_helper="$app_root/Contents/MacOS/mradm"
 deps="$package_root/DEPENDENCIES.txt"
 zh_hans_info="$app_root/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
 
-for required in "$app_root" "$exe" "$app_root/Contents/Info.plist" "$app_root/Contents/Resources/AppIcon.icns" \
+for required in "$app_root" "$exe" "$apac_helper" "$app_root/Contents/Info.plist" \
+    "$app_root/Contents/Resources/AppIcon.icns" \
     "$zh_hans_info" \
     "$deps" "$package_root/LICENSE" "$package_root/THIRD_PARTY_NOTICES.md" "$package_root/BUILD_INFO.txt" \
     "$package_root/licenses/INDEX.md" "$package_root/sbom.cyclonedx.json" \
@@ -61,7 +63,7 @@ for required in "$app_root" "$exe" "$app_root/Contents/Info.plist" "$app_root/Co
     "$app_root/Contents/Resources/Legal/licenses/INDEX.md" \
     "$app_root/Contents/Resources/Legal/sbom.cyclonedx.json"; do
     if [[ ! -e "$required" ]]; then
-        echo "package is missing ${required#$package_root/}" >&2
+        echo "package is missing ${required#"$package_root"/}" >&2
         exit 1
     fi
 done
@@ -83,6 +85,18 @@ done
 
 if [[ ! -x "$exe" ]]; then
     echo "package app executable is not executable: $exe" >&2
+    exit 1
+fi
+if [[ ! -x "$apac_helper" ]]; then
+    echo "package APAC helper is not executable: $apac_helper" >&2
+    exit 1
+fi
+if ! "$apac_helper" __apac-encode --help | grep -Fq 'APAC encode worker'; then
+    echo "package mradm does not expose the expected APAC worker protocol" >&2
+    exit 1
+fi
+if ! grep -Fq 'Contents/MacOS/mradm' "$deps"; then
+    echo "package dependency manifest does not cover the APAC helper" >&2
     exit 1
 fi
 
@@ -115,7 +129,7 @@ DOTNET_BUNDLE_EXTRACT_BASE_DIR="$extract_dir" "$exe" --selftest
 extracted_deps="$work_dir/EXTRACTED_DEPENDENCIES.txt"
 : > "$extracted_deps"
 while IFS= read -r binary; do
-    rel_binary="dotnet-bundle-extract/${binary#$extract_dir/}"
+    rel_binary="dotnet-bundle-extract/${binary#"$extract_dir"/}"
     echo "== $rel_binary" >> "$extracted_deps"
     otool -L "$binary" | sed "s|^$binary|$rel_binary|" >> "$extracted_deps"
 done < <(find "$extract_dir" -type f -name '*.dylib' -print | sort)

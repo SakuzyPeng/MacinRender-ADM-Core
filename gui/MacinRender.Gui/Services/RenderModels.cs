@@ -15,10 +15,19 @@ public sealed record RenderSettings
     public double? LoudnessTargetLufs { get; init; }
     public string? SofaPath { get; init; }
     public string? SemanticPolicyJson { get; init; }
+    public AdmLfeRoutingMode LfeRoutingMode { get; init; } = AdmLfeRoutingMode.Direct;
 
     /// <summary>仅监听:多声道输出走 macOS 系统空间音频(AVSampleBufferAudioRenderer,系统 HRTF + 头追踪),
     /// 不下混。需受支持的多声道扬声器 Layout;非 macOS / 离线渲染忽略。</summary>
     public bool MonitorSystemSpatial { get; init; }
+
+    internal static bool Is22Point2Layout(string? layout) =>
+        string.Equals(layout, "22.2", System.StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(layout, "9+10+3", System.StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>避免 GUI 保留的 22.2 偏好在其它布局上触发无意义 warning。</summary>
+    internal AdmLfeRoutingMode EffectiveLfeRoutingMode =>
+        Is22Point2Layout(Layout) ? LfeRoutingMode : AdmLfeRoutingMode.Direct;
 }
 
 /// <summary>结构化进度事件(adm_progress_event_v2_t 的托管投影,Message 已 marshal 成托管串)。</summary>

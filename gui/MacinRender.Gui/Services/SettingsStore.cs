@@ -12,6 +12,7 @@ public sealed class AppSettings
     public string? Backend { get; set; }
     public string? Codec { get; set; }
     public string? Layout { get; set; }
+    public string? LfeRoutingMode { get; set; } // 22.2 批渲染 LFE 路由偏好
     public string? Container { get; set; }
     public decimal? Bitrate { get; set; }
     public bool IsDark { get; set; } = true;
@@ -20,6 +21,7 @@ public sealed class AppSettings
     public string? MonitorSofaPath { get; set; } // 语义监听自定义 HRIR(SOFA)路径(当前选择)
     public List<string>? RecentSofaPaths { get; set; } // 最近用过的 SOFA(MRU,最近在前;批渲染 + 监听共享)
     public string? MonitorDeviceId { get; set; } // 监听输出设备 token(空 = 系统默认)
+    public string? MonitorLfeRoutingMode { get; set; } // 22.2 系统空间监听 LFE 路由偏好
     public string? SkinPath { get; set; } // 空间视图角色皮肤 PNG(上次拖入,启动恢复)
 }
 

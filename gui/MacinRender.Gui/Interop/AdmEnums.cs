@@ -47,6 +47,12 @@ public enum AdmBinauralSpreadMode
     SafSpreader = 3,
 }
 
+public enum AdmLfeRoutingMode
+{
+    Direct = 0,
+    SplitPower = 1,
+}
+
 public enum AdmIamfContainer
 {
     Obu = 0,

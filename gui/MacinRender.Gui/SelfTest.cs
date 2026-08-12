@@ -131,6 +131,30 @@ internal static class SelfTest
         Chain("ear");
         Chain("saf-binaural");
 
+        // v1.30:GUI 托管枚举 + P/Invoke setter，以及「仅 22.2 透传」的客户端门控。
+        try
+        {
+            using var lfeOpts = NativeMethods.adm_create_render_options();
+            var directRc = NativeMethods.adm_render_options_set_lfe_routing_mode(lfeOpts, AdmLfeRoutingMode.Direct);
+            var splitRc = NativeMethods.adm_render_options_set_lfe_routing_mode(lfeOpts, AdmLfeRoutingMode.SplitPower);
+            var split22 = new RenderSettings
+                { Layout = "22.2", LfeRoutingMode = AdmLfeRoutingMode.SplitPower }.EffectiveLfeRoutingMode;
+            var split71 = new RenderSettings
+                { Layout = "7.1.4", LfeRoutingMode = AdmLfeRoutingMode.SplitPower }.EffectiveLfeRoutingMode;
+            if (directRc != AdmErrorCode.Ok || splitRc != AdmErrorCode.Ok ||
+                split22 != AdmLfeRoutingMode.SplitPower || split71 != AdmLfeRoutingMode.Direct)
+            {
+                Console.Error.WriteLine("[失败] 22.2 LFE GUI 路由映射与 C ABI v1.30 契约不一致");
+                return 12;
+            }
+            Console.WriteLine("22.2 LFE 路由:direct/split-power P/Invoke + 布局门控 OK");
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            Console.Error.WriteLine($"[失败] libmradm_capi 缺少 v1.30 LFE 路由入口: {ex.Message}");
+            return 12;
+        }
+
         // 监听入口可解析性(即使没给 wav 也跑):bogus 路径应得到干净错误码,而非
         // EntryPointNotFound / 崩溃 —— 验证 v1.15–v1.17 的 adm_monitor_* 符号确实在 dylib 里。
         try

@@ -422,6 +422,59 @@
             <Setter Property="Opacity" Value="0.45"/>
         </Style>
 
+        <!-- 布局级联选择器:视觉与 ComboBox 一致，22.2 在菜单内展开 LFE 二级项。
+             收起时不显示模式文字；非默认 split-power 仅把 22.2 本身染成强调色。 -->
+        <Style Selector="ctrl|LayoutRoutingPicker">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector=":is(ctrl|SquircleButton).layoutpicker">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Radius" Value="8"/>
+            <Setter Property="Background" Value="{DynamicResource InputBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector=":is(ctrl|SquircleButton).layoutpicker /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{TemplateBinding Background}"/>
+            <Setter Property="BorderBrush" Value="{TemplateBinding BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="{TemplateBinding BorderThickness}"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="{TemplateBinding Padding}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector=":is(ctrl|SquircleButton).layoutpicker:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource InputBgHover}"/>
+        </Style>
+        <Style Selector=":is(ctrl|SquircleButton).layoutpicker:pressed">
+            <Setter Property="Opacity" Value="0.78"/>
+        </Style>
+        <Style Selector="Path.layoutarrow">
+            <Setter Property="Stroke" Value="{DynamicResource TextMuted}"/>
+            <Setter Property="StrokeThickness" Value="1.6"/>
+            <Setter Property="StrokeLineCap" Value="Round"/>
+            <Setter Property="StrokeJoin" Value="Round"/>
+        </Style>
+        <Style Selector="ctrl|LayoutRoutingPicker TextBlock.layoutvalue">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+        </Style>
+        <Style Selector="ctrl|LayoutRoutingPicker.split-power TextBlock.layoutvalue">
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="TextBlock.lferoutingsplit">
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
         <!-- ========== 动效 ========== -->
         <!-- 注:hover 背景刻意不做 BrushTransition——叠在 DynamicResource 值上,过渡走完会被
              DynamicResource 覆盖回 base(指针未移开却熄灭),故 hover 保持硬切。 -->

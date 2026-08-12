@@ -163,7 +163,14 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         MonitorSpatialRenderers.Add(new MonitorSpatialRenderer("EAR (BS.2127)", AdmRenderer.Ear));
         MonitorSpatialRenderers.Add(new MonitorSpatialRenderer("VBAP (SAF)", AdmRenderer.Saf));
         _selectedSpatialRenderer = MonitorSpatialRenderers[0];
+        _selectedSpatialLayout = MonitorSpatialLayouts.FirstOrDefault(l => l.Id == "7.1.4") ??
+                                 MonitorSpatialLayouts.FirstOrDefault();
         var saved = SettingsStore.Load();
+        if (Enum.TryParse<AdmLfeRoutingMode>(saved?.MonitorLfeRoutingMode, ignoreCase: true,
+                out var monitorLfeRoutingMode))
+        {
+            _monitorLfeRoutingMode = monitorLfeRoutingMode;
+        }
         MonitorSofaPath = saved?.MonitorSofaPath;
         MonitorSofa = new SofaSelector(MonitorSofaPath);
         MonitorSofa.SelectionChanged += path => MonitorSofaPath = path;
@@ -540,9 +547,14 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     // 系统空间音频的布局次级下拉(与 SAF 的 SOFA 同款上下文范式,二者互斥显示)。来源 =
     // OutputModel.SystemSpatialLayouts(adm_capabilities_json 的 system_spatial_layouts,权威源 core
     // 的 apple_layouts / windows_layouts 表,跨平台),不再硬编码白名单 —— 表变了 GUI 自动同步。
-    public ObservableCollection<string> MonitorSpatialLayouts { get; } = new(Models.OutputModel.SystemSpatialLayouts);
+    public ObservableCollection<Models.LayoutDef> MonitorSpatialLayouts { get; } = new(
+        Models.OutputModel.SystemSpatialLayouts
+            .Where(Models.OutputModel.LayoutById.ContainsKey)
+            .Select(layout => Models.OutputModel.LayoutById[layout]));
 
-    [ObservableProperty] private string _selectedSpatialLayout = "7.1.4";
+    [ObservableProperty] private Models.LayoutDef? _selectedSpatialLayout;
+
+    [ObservableProperty] private AdmLfeRoutingMode _monitorLfeRoutingMode = AdmLfeRoutingMode.Direct;
 
     // 系统空间音频的「渲染床后端」次级下拉(Apple/EAR/VBAP):决定用哪个扬声器渲染器产出多声道床,
     // 再交 macOS 系统空间化(头追)。系统空间化器不变,只换上游渲染器。
@@ -560,7 +572,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     // 实际送渲染的监听布局:系统空间音频取布局下拉,否则取后端固定 layout(binaural)。
     private string EffectiveMonitorLayout =>
-        (SelectedMonitorBackend?.SystemSpatial ?? false) ? SelectedSpatialLayout
+        (SelectedMonitorBackend?.SystemSpatial ?? false) ? (SelectedSpatialLayout?.Id ?? "7.1.4")
                                                          : (SelectedMonitorBackend?.Layout ?? "binaural");
 
     // 实际送渲染的监听后端:系统空间音频取「渲染床后端」次级下拉,否则取后端选项自带的 Renderer。
@@ -999,11 +1011,22 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     partial void OnSelectedMonitorBackendChanged(MonitorBackendOption value) => ReevaluateMonitorConfig(value);
 
-    partial void OnSelectedSpatialLayoutChanged(string value)
+    partial void OnSelectedSpatialLayoutChanged(Models.LayoutDef? value)
     {
         // 系统空间音频布局切换(7.1.4 ↔ 22.2)= 声道数 / device 变 → 走重启。
         if (SelectedMonitorBackend?.SystemSpatial ?? false)
         {
+            ReevaluateMonitorConfig(SelectedMonitorBackend);
+        }
+    }
+
+    partial void OnMonitorLfeRoutingModeChanged(AdmLfeRoutingMode value)
+    {
+        SettingsStore.Update(s => s.MonitorLfeRoutingMode = value.ToString());
+        if ((SelectedMonitorBackend?.SystemSpatial ?? false) &&
+            RenderSettings.Is22Point2Layout(SelectedSpatialLayout?.Id))
+        {
+            // 声道拓扑不变，交给 monitor_switch_backend 原地重建后端。
             ReevaluateMonitorConfig(SelectedMonitorBackend);
         }
     }
@@ -1043,8 +1066,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     {
         // 系统空间音频:渲染器取「渲染床后端」次级下拉(Apple/EAR/VBAP),布局取布局次级下拉;否则取后端选项自带值。
         Renderer = backend.SystemSpatial ? (SelectedSpatialRenderer?.Renderer ?? AdmRenderer.Apple) : backend.Renderer,
-        Layout = backend.SystemSpatial ? SelectedSpatialLayout : backend.Layout,
+        Layout = backend.SystemSpatial ? (SelectedSpatialLayout?.Id ?? "7.1.4") : backend.Layout,
         MonitorSystemSpatial = backend.SystemSpatial,
+        LfeRoutingMode = backend.SystemSpatial && RenderSettings.Is22Point2Layout(SelectedSpatialLayout?.Id)
+            ? MonitorLfeRoutingMode
+            : AdmLfeRoutingMode.Direct,
         SofaPath = Models.OutputModel.SofaAvailable && backend.Renderer == AdmRenderer.SafBinaural
             ? MonitorSofaPath
             : null,

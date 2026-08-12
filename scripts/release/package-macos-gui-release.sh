@@ -76,8 +76,9 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
     exit 2
 fi
 
+native_build_dir="$repo_root/build/gui-native-package/$rid"
+native_helper="$native_build_dir/mradm"
 if [[ "$skip_native" -eq 0 ]]; then
-    native_build_dir="$repo_root/build/gui-native-package/$rid"
     cmake_args=(
         -S "$repo_root"
         -B "$native_build_dir"
@@ -86,7 +87,7 @@ if [[ "$skip_native" -eq 0 ]]; then
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
         -DCMAKE_OSX_ARCHITECTURES="$osx_arch"
         -DMR_ADM_BUILD_CAPI_BUNDLE=ON
-        -DMR_ADM_CORE_BUILD_CLI=OFF
+        -DMR_ADM_CORE_BUILD_CLI=ON
         -DMR_ADM_CORE_BUILD_TESTS=OFF
         -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF
         -DMR_ADM_FLAC_PROVIDER=VENDORED
@@ -97,7 +98,7 @@ if [[ "$skip_native" -eq 0 ]]; then
         cmake_args+=(-DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR")
     fi
     cmake "${cmake_args[@]}"
-    cmake --build "$native_build_dir" --target mradm_capi_bundle
+    cmake --build "$native_build_dir" --target mradm_capi_bundle mradm_exe
 
     native_lib="$native_build_dir/libmradm_capi.dylib"
     native_dst="$repo_root/gui/MacinRender.Gui/runtimes/$rid/native/libmradm_capi.dylib"
@@ -108,6 +109,12 @@ if [[ "$skip_native" -eq 0 ]]; then
     mkdir -p "$(dirname "$native_dst")"
     cp -Lf "$native_lib" "$native_dst"
     echo "copied native bundle: $native_dst ($(du -h "$native_dst" | cut -f1))"
+fi
+
+if [[ ! -x "$native_helper" ]]; then
+    echo "native APAC helper is missing: $native_helper" >&2
+    echo "rerun without --skip-native so mradm_exe is built beside the C ABI bundle" >&2
+    exit 1
 fi
 
 short_sha="$(git -C "$repo_root" rev-parse --short=12 HEAD)"
@@ -166,6 +173,7 @@ publish_args+=(
 )
 
 dotnet publish "$repo_root/gui/MacinRender.Gui/MacinRender.Gui.csproj" "${publish_args[@]}"
+cp "$native_helper" "$publish_dir/mradm"
 
 find "$publish_dir" -name '*.dSYM' -type d -prune -exec rm -rf {} +
 find "$publish_dir" -name '*.pdb' -type f -delete
@@ -247,11 +255,15 @@ if [[ ! -x "$macos_dir/MacinRender.Gui" ]]; then
     echo "published app executable is missing: $macos_dir/MacinRender.Gui" >&2
     exit 1
 fi
+if [[ ! -x "$macos_dir/mradm" ]]; then
+    echo "bundled APAC helper is missing: $macos_dir/mradm" >&2
+    exit 1
+fi
 if [[ "$single_file" -eq 1 ]]; then
-    extra_payload="$(find "$macos_dir" -mindepth 1 -maxdepth 1 ! -name 'MacinRender.Gui' -print -quit)"
+    extra_payload="$(find "$macos_dir" -mindepth 1 -maxdepth 1 ! -name 'MacinRender.Gui' ! -name 'mradm' -print -quit)"
     if [[ -n "$extra_payload" ]]; then
         echo "single-file publish produced extra Contents/MacOS payload files:" >&2
-        find "$macos_dir" -mindepth 1 -maxdepth 1 ! -name 'MacinRender.Gui' -print >&2
+        find "$macos_dir" -mindepth 1 -maxdepth 1 ! -name 'MacinRender.Gui' ! -name 'mradm' -print >&2
         exit 1
     fi
 fi
@@ -273,10 +285,11 @@ fi
 deps_file="$package_root/DEPENDENCIES.txt"
 : > "$deps_file"
 while IFS= read -r binary; do
-    rel_binary="${binary#$package_root/}"
+    rel_binary="${binary#"$package_root"/}"
     echo "== $rel_binary" >> "$deps_file"
     otool -L "$binary" | sed "s|^$binary|$rel_binary|" >> "$deps_file"
-done < <(find "$macos_dir" -maxdepth 1 \( -name 'MacinRender.Gui' -o -name '*.dylib' \) -type f -print | sort)
+done < <(find "$macos_dir" -maxdepth 1 \( -name 'MacinRender.Gui' -o -name 'mradm' -o -name '*.dylib' \) \
+    -type f -print | sort)
 
 if grep -E '^[[:space:]]+(/opt/homebrew|/usr/local|/Users/|'"$repo_root"')' "$deps_file" >/dev/null; then
     echo "GUI package links user, Homebrew, /usr/local, or build-tree libraries:" >&2
