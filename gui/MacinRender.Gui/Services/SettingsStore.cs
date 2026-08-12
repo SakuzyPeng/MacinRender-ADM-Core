@@ -12,6 +12,7 @@ public sealed class AppSettings
     public string? Backend { get; set; }
     public string? Codec { get; set; }
     public string? Layout { get; set; }
+    public string? SpeakerGeometry { get; set; } // EAR / SAF 批渲染扬声器几何偏好
     public string? LfeRoutingMode { get; set; } // 22.2 批渲染 LFE 路由偏好
     public string? Container { get; set; }
     public decimal? Bitrate { get; set; }

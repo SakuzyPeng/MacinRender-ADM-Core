@@ -536,6 +536,15 @@ RenderResult RenderService::render(const RenderRequest& request,
     std::unique_ptr<IRenderer> renderer = std::move(resolved->renderer);
     auto output_layout = std::move(resolved->effective_output_layout);
 
+    auto routing_validation =
+        validate_direct_speakers_routing(sel, output_layout, request.options.direct_speakers_routing_mode);
+    if (!routing_validation) {
+        return {routing_validation.error(),
+                std::nullopt,
+                std::nullopt,
+                {{LogLevel::error, routing_validation.error().message}}};
+    }
+
     const auto caps = renderer->capabilities();
     logs.log(LogLevel::info, "engine", fmt::format("backend: {} {}", caps.backend_name, caps.backend_version));
     for (const auto& [level, message] : resolved->diagnostics) {
@@ -764,6 +773,8 @@ RenderResult RenderService::render(const RenderRequest& request,
     plan.sofa_path = request.options.sofa_path;
     plan.default_interp_ms = request.options.default_interp_ms;
     plan.object_smoothing_frames = request.options.object_smoothing_frames;
+    plan.speaker_geometry = request.options.speaker_geometry;
+    plan.direct_speakers_routing_mode = request.options.direct_speakers_routing_mode;
     plan.speaker_spread_mode = request.options.speaker_spread_mode;
     plan.binaural_spread_mode = request.options.binaural_spread_mode;
     plan.lfe_routing_mode = request.options.lfe_routing_mode;

@@ -87,6 +87,9 @@ struct RenderPlan {
     // 0 disables smoothing. Backend-dependent: the Apple AUSpatialMixer backend
     // currently ignores this option and relies on SpatialMixer's internal smoothing.
     uint32_t object_smoothing_frames{0};
+    // Effective output-speaker coordinates for software speaker renderers.
+    SpeakerGeometry speaker_geometry{SpeakerGeometry::standard};
+    DirectSpeakersRoutingMode direct_speakers_routing_mode{DirectSpeakersRoutingMode::automatic};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
     LfeRoutingMode lfe_routing_mode{LfeRoutingMode::direct};

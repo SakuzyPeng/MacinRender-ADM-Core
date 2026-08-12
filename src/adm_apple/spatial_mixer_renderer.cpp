@@ -33,13 +33,26 @@ namespace {
 // Returns empty for binaural output (no discrete speakers) so channelLock is dropped.
 [[nodiscard]] std::vector<SceneOutputSpeaker> output_speakers(std::string_view layout_id) {
     std::vector<SceneOutputSpeaker> speakers;
-    if (const auto* layout = render_layouts::find_speaker_layout(layout_id)) {
+    if (const auto* layout = render_layouts::find_speaker_layout(layout_id, SpeakerGeometry::apple)) {
         speakers.reserve(layout->speakers.size());
         std::ranges::transform(layout->speakers, std::back_inserter(speakers), [](const auto& spk) {
             return SceneOutputSpeaker{spk.azimuth, spk.elevation, spk.is_lfe};
         });
     }
     return speakers;
+}
+
+[[nodiscard]] std::vector<render_common::DirectSpeakerRoutingTarget>
+direct_speaker_targets(std::string_view layout_id) {
+    std::vector<render_common::DirectSpeakerRoutingTarget> targets;
+    if (const auto* layout = render_layouts::find_speaker_layout(layout_id, SpeakerGeometry::apple)) {
+        targets.reserve(layout->speakers.size());
+        std::ranges::transform(layout->speakers, std::back_inserter(targets), [](const auto& speaker) {
+            return render_common::DirectSpeakerRoutingTarget{
+                speaker.label, speaker.azimuth, speaker.elevation, speaker.is_lfe};
+        });
+    }
+    return targets;
 }
 
 // AUSpatialMixer slice + control-rate update granularity (~10 ms at 48 kHz). The AU
@@ -272,12 +285,14 @@ struct BusEvent {
     float distance{1.0F};  // metres
     float gain{0.0F};      // linear
     render_common::LfeTarget lfe_target{render_common::LfeTarget::none};
+    std::optional<std::size_t> direct_output_channel;
 };
 
 struct BusPlan {
     uint16_t source_channel{0};
     UInt32 source_mode{kSpatialMixerSourceMode_PointSource};
     bool is_lfe{false};
+    bool is_direct{false};
     std::string object_id;         // owning SceneObject::id, for live gain overrides
     std::string speaker_label_key; // normalized DirectSpeakers label (empty for Objects); per-channel live gain key
     std::vector<BusEvent> events;  // sorted by start_sample
@@ -288,8 +303,9 @@ struct BusPlan {
 // so this stays shareable across PreviewSession windows.
 struct ApplePrepared final : IPreparedRender {
     OutputProfile profile;
-    std::vector<BusPlan> buses;     // AUSpatialMixer inputs
-    std::vector<BusPlan> lfe_buses; // 22.2 side-bus inputs
+    std::vector<BusPlan> buses;        // AUSpatialMixer inputs
+    std::vector<BusPlan> direct_buses; // host-side one-hot speaker inputs
+    std::vector<BusPlan> lfe_buses;    // 22.2 side-bus inputs
     render_common::LfeRoutingPlan lfe_routing;
 };
 
@@ -332,12 +348,16 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
 
 // Build the immutable bus recipe from the resolved scene. Objects become PointSource
 // buses (divergence expands to parallel buses, padding inactive slots with silent
-// events); DirectSpeakers become AmbienceBed buses (LFE -> Bypass). channelLock snaps to
-// `speakers` (the resolved output layout for speaker output; empty for binaural -> dropped).
-[[nodiscard]] std::vector<BusPlan> build_bus_plans(const AdmScene& scene,
-                                                   LogSink& logs,
-                                                   bool apply_extent,
-                                                   const std::vector<SceneOutputSpeaker>& speakers) {
+// events). Position-routed DirectSpeakers become AmbienceBed buses, label-routed
+// DirectSpeakers become host-side one-hot buses, and LFE stays Bypass/dedicated.
+// channelLock snaps to `speakers` (empty for binaural -> dropped).
+[[nodiscard]] std::vector<BusPlan>
+build_bus_plans(const AdmScene& scene,
+                LogSink& logs,
+                bool apply_extent,
+                const std::vector<SceneOutputSpeaker>& speakers,
+                DirectSpeakersRoutingMode routing_mode,
+                std::span<const render_common::DirectSpeakerRoutingTarget> routing_targets) {
     std::vector<BusPlan> buses;
     bool screen_ref_warned = false;
 
@@ -394,12 +414,16 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
 
             if (!track.ds_blocks.empty()) {
                 // A DirectSpeakers channel can change semantic target across blocks. Keep at most
-                // one spatial bus and one LFE bus for the source channel so 22.2 can peel off only
-                // the LFE intervals without dropping non-LFE intervals on the same track.
+                // one spatial/direct bus and one LFE bus for the source channel so LFE intervals
+                // can be peeled off without dropping non-LFE intervals on the same track.
                 BusPlan spatial_bus;
                 spatial_bus.source_channel = ch;
                 spatial_bus.source_mode = kSpatialMixerSourceMode_AmbienceBed;
                 spatial_bus.object_id = obj.id;
+                BusPlan direct_bus;
+                direct_bus.source_channel = ch;
+                direct_bus.is_direct = true;
+                direct_bus.object_id = obj.id;
                 BusPlan lfe_bus;
                 lfe_bus.source_channel = ch;
                 lfe_bus.source_mode = kSpatialMixerSourceMode_Bypass;
@@ -407,24 +431,61 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
                 lfe_bus.object_id = obj.id;
                 for (const auto& ds : track.ds_blocks) {
                     const auto lfe_target = render_common::direct_speakers_lfe_target(ds);
-                    BusPlan& bus = lfe_target == render_common::LfeTarget::none ? spatial_bus : lfe_bus;
-                    if (bus.speaker_label_key.empty() && !ds.speaker_labels.empty()) {
-                        bus.speaker_label_key = render_common::canonicalise_speaker_label(ds.speaker_labels.front());
-                    }
+                    BusPlan* bus = nullptr;
                     BusEvent ev;
                     ev.start_sample = ds.start_sample;
                     ev.end_sample = std::min(ds.end_sample, obj.end_sample);
-                    if (ds.has_position) {
-                        ev.azimuth = sm_azimuth(ds.azimuth);
-                        ev.elevation = std::clamp(ds.elevation, -90.0F, 90.0F);
-                        ev.distance = std::max(ds.distance, 1.0e-3F);
+                    if (lfe_target != render_common::LfeTarget::none) {
+                        bus = &lfe_bus;
+                        if (ds.has_position) {
+                            ev.azimuth = sm_azimuth(ds.azimuth);
+                            ev.elevation = std::clamp(ds.elevation, -90.0F, 90.0F);
+                            ev.distance = std::max(ds.distance, 1.0e-3F);
+                        }
+                    } else if (routing_mode == DirectSpeakersRoutingMode::label) {
+                        const auto target =
+                            render_common::direct_speaker_index_for_labels(routing_targets, ds.speaker_labels);
+                        if (target && !routing_targets[*target].is_lfe) {
+                            bus = &direct_bus;
+                            ev.direct_output_channel = target;
+                        } else {
+                            bus = &spatial_bus;
+                            const auto label_position =
+                                render_common::direct_speaker_position_for_labels(ds.speaker_labels);
+                            const auto position =
+                                label_position ? *label_position
+                                               : render_common::direct_speaker_position_or_front(ds, logs, "apple");
+                            ev.azimuth = sm_azimuth(position.azimuth);
+                            ev.elevation = std::clamp(position.elevation, -90.0F, 90.0F);
+                            ev.distance = ds.has_position ? std::max(ds.distance, 1.0e-3F) : 1.0F;
+                            const std::string label =
+                                ds.speaker_labels.empty() ? std::string{"<missing>"} : ds.speaker_labels.front();
+                            logs.log(
+                                LogLevel::warning,
+                                "apple",
+                                fmt::format("DirectSpeakers label '{}' not in output layout — spatializing from {}",
+                                            label,
+                                            label_position ? "label direction" : "nominal position"));
+                        }
+                    } else {
+                        bus = &spatial_bus;
+                        const auto position = render_common::direct_speaker_position_or_front(ds, logs, "apple");
+                        ev.azimuth = sm_azimuth(position.azimuth);
+                        ev.elevation = std::clamp(position.elevation, -90.0F, 90.0F);
+                        ev.distance = ds.has_position ? std::max(ds.distance, 1.0e-3F) : 1.0F;
+                    }
+                    if (bus->speaker_label_key.empty() && !ds.speaker_labels.empty()) {
+                        bus->speaker_label_key = render_common::canonicalise_speaker_label(ds.speaker_labels.front());
                     }
                     ev.gain = ds.gain * obj.gain;
                     ev.lfe_target = lfe_target;
-                    bus.events.push_back(ev);
+                    bus->events.push_back(ev);
                 }
                 if (!spatial_bus.events.empty()) {
                     buses.push_back(std::move(spatial_bus));
+                }
+                if (!direct_bus.events.empty()) {
+                    buses.push_back(std::move(direct_bus));
                 }
                 if (!lfe_bus.events.empty()) {
                     buses.push_back(std::move(lfe_bus));
@@ -574,6 +635,33 @@ void mix_lfe_side_buses(const std::vector<BusPlan>& buses,
                 sample * routing.gain(event->lfe_target, render_common::LfeTarget::lfe1);
             output[(static_cast<std::size_t>(frame) * num_out_ch) + render_common::k_22_2_lfe2_index] +=
                 sample * routing.gain(event->lfe_target, render_common::LfeTarget::lfe2);
+        }
+    }
+}
+
+// Mix label-routed DirectSpeakers directly into their resolved output slots.
+// Event lookup and live gain are sample-accurate; the routine allocates nothing.
+void mix_direct_side_buses(const std::vector<BusPlan>& buses,
+                           const float* staging,
+                           uint16_t num_in_ch,
+                           float* output,
+                           uint16_t num_out_ch,
+                           uint64_t position,
+                           UInt32 frames,
+                           std::vector<std::size_t>& cursors,
+                           const float* live_gain_envelopes = nullptr) {
+    for (std::size_t bus_index = 0; bus_index < buses.size(); ++bus_index) {
+        const auto& bus = buses[bus_index];
+        for (UInt32 frame = 0; frame < frames; ++frame) {
+            const BusEvent* event = active_event(bus, position + frame, cursors[bus_index]);
+            if (event == nullptr || !event->direct_output_channel || *event->direct_output_channel >= num_out_ch) {
+                continue;
+            }
+            const float live_gain =
+                live_gain_envelopes != nullptr ? live_gain_envelopes[(bus_index * k_render_block) + frame] : 1.0F;
+            const float sample =
+                staging[(static_cast<std::size_t>(frame) * num_in_ch) + bus.source_channel] * event->gain * live_gain;
+            output[(static_cast<std::size_t>(frame) * num_out_ch) + *event->direct_output_channel] += sample;
         }
     }
 }
@@ -814,8 +902,8 @@ class AppleStream final : public IRenderStream {
         const UInt32 algo =
             profile.binaural ? kSpatializationAlgorithm_HRTFHQ : kSpatializationAlgorithm_VectorBasedPanning;
 
-        // A pure 22.2 LFE scene needs the reader but no SpatialMixer instance.
-        const bool silent = prepared.buses.empty() && prepared.lfe_buses.empty();
+        // Pure label-routed or 22.2 LFE scenes need the reader but no SpatialMixer instance.
+        const bool silent = prepared.buses.empty() && prepared.direct_buses.empty() && prepared.lfe_buses.empty();
         const bool has_spatial_buses = !prepared.buses.empty();
 
         AudioUnitGuard guard{nullptr};
@@ -830,6 +918,7 @@ class AppleStream final : public IRenderStream {
         std::unique_ptr<AppleStream> stream{new AppleStream(std::move(guard),
                                                             prepared.profile,
                                                             prepared.buses,
+                                                            prepared.direct_buses,
                                                             prepared.lfe_buses,
                                                             prepared.lfe_routing,
                                                             num_in_ch,
@@ -908,8 +997,8 @@ class AppleStream final : public IRenderStream {
             ended_ = false;
             return {};
         }
-        // Reset the black-box AU state when present, then rewind both spatial and
-        // LFE event cursors and reposition the shared source reader.
+        // Reset the black-box AU state when present, then rewind all event cursors
+        // and reposition the shared source reader.
         if (unit_.get() != nullptr) {
             const OSStatus status = AudioUnitReset(unit_.get(), kAudioUnitScope_Global, 0);
             if (status != noErr) {
@@ -918,6 +1007,7 @@ class AppleStream final : public IRenderStream {
         }
         render_common::seek_reader_abs(*reader_, frame);
         std::ranges::fill(ev_cursor_, std::size_t{0});
+        std::ranges::fill(direct_ev_cursor_, std::size_t{0});
         std::ranges::fill(lfe_ev_cursor_, std::size_t{0});
         fifo_.clear();
         fifo_read_ = 0;
@@ -949,6 +1039,7 @@ class AppleStream final : public IRenderStream {
     // that is not callback-safe).
     void loop_render_reset(uint64_t frame) override {
         std::ranges::fill(ev_cursor_, std::size_t{0});
+        std::ranges::fill(direct_ev_cursor_, std::size_t{0});
         std::ranges::fill(lfe_ev_cursor_, std::size_t{0});
         consumer_pos_ = frame;
     }
@@ -976,6 +1067,12 @@ class AppleStream final : public IRenderStream {
                                    overrides, lfe_buses_[i].object_id, lfe_buses_[i].speaker_label_key)
                                    .value_or(1.0F);
             lfe_gain_target_[i].store(gain, std::memory_order_relaxed);
+        }
+        for (std::size_t i = 0; i < direct_buses_.size(); ++i) {
+            const float gain = render_common::resolve_live_channel_gain(
+                                   overrides, direct_buses_[i].object_id, direct_buses_[i].speaker_label_key)
+                                   .value_or(1.0F);
+            direct_gain_target_[i].store(gain, std::memory_order_relaxed);
         }
     }
 
@@ -1059,6 +1156,7 @@ class AppleStream final : public IRenderStream {
     AppleStream(AudioUnitGuard unit,
                 OutputProfile profile,
                 std::vector<BusPlan> buses,
+                std::vector<BusPlan> direct_buses,
                 std::vector<BusPlan> lfe_buses,
                 render_common::LfeRoutingPlan lfe_routing,
                 uint16_t num_in_ch,
@@ -1066,14 +1164,17 @@ class AppleStream final : public IRenderStream {
                 uint32_t sample_rate,
                 uint64_t total_frames,
                 bool silent)
-        : profile_(profile), buses_(std::move(buses)), lfe_buses_(std::move(lfe_buses)), lfe_routing_(lfe_routing),
+        : profile_(profile), buses_(std::move(buses)), direct_buses_(std::move(direct_buses)),
+          lfe_buses_(std::move(lfe_buses)), lfe_routing_(lfe_routing),
           staging_(static_cast<std::size_t>(num_in_ch) * k_render_block, 0.0F),
           out_planar_(num_out_ch, std::vector<float>(k_render_block, 0.0F)),
           abl_storage_(sizeof(AudioBufferList) + (sizeof(AudioBuffer) * (static_cast<std::size_t>(num_out_ch) - 1))),
-          ev_cursor_(buses_.size(), 0), lfe_ev_cursor_(lfe_buses_.size(), 0), num_in_ch_(num_in_ch),
-          num_out_ch_(num_out_ch), sample_rate_(sample_rate), total_frames_(total_frames), silent_(silent),
-          bus_gain_target_(buses_.size()), bus_gain_envelopes_(buses_.size() * k_render_block, 1.0F),
-          bus_head_locked_(buses_.size()), lfe_gain_target_(lfe_buses_.size()),
+          ev_cursor_(buses_.size(), 0), direct_ev_cursor_(direct_buses_.size(), 0),
+          lfe_ev_cursor_(lfe_buses_.size(), 0), num_in_ch_(num_in_ch), num_out_ch_(num_out_ch),
+          sample_rate_(sample_rate), total_frames_(total_frames), silent_(silent), bus_gain_target_(buses_.size()),
+          bus_gain_envelopes_(buses_.size() * k_render_block, 1.0F), bus_head_locked_(buses_.size()),
+          direct_gain_target_(direct_buses_.size()),
+          direct_gain_envelopes_(direct_buses_.size() * k_render_block, 1.0F), lfe_gain_target_(lfe_buses_.size()),
           lfe_gain_envelopes_(lfe_buses_.size() * k_render_block, 1.0F), unit_(std::move(unit)) {
         // Per-bus override params start neutral: unity gain (head-lock value-initialises to 0). Sized
         // to the bus count so the realtime callback only ever indexes preallocated atomics.
@@ -1091,11 +1192,17 @@ class AppleStream final : public IRenderStream {
         for (std::size_t i = 0; i < lfe_buses_.size(); ++i) {
             lfe_gain_ramps_.emplace_back(sample_rate_);
         }
+        for (auto& gain : direct_gain_target_) {
+            gain.store(1.0F, std::memory_order_relaxed);
+        }
+        direct_gain_ramps_.reserve(direct_buses_.size());
+        for (std::size_t i = 0; i < direct_buses_.size(); ++i) {
+            direct_gain_ramps_.emplace_back(sample_rate_);
+        }
     }
 
     // Render one <= k_render_block slice from staging_. Spatial buses run through the AU when present;
-    // 22.2 LFE side buses are then added to ch3/ch9. The function allocates nothing, so the binaural
-    // output-stage path remains callback-safe (binaural never has 22.2 side buses).
+    // direct and 22.2 LFE side buses are then mixed by the host. The function allocates nothing.
     [[nodiscard]] OSStatus
     render_au_block(uint64_t position, const ListenerOrientation& orient, float* dst, UInt32 frames_now) {
         for (std::size_t i = 0; i < buses_.size(); ++i) {
@@ -1159,6 +1266,24 @@ class AppleStream final : public IRenderStream {
             std::fill_n(dst, static_cast<std::size_t>(frames_now) * num_out_ch_, 0.0F);
         }
 
+        for (std::size_t i = 0; i < direct_buses_.size(); ++i) {
+            auto& gain_ramp = direct_gain_ramps_[i];
+            gain_ramp.set_target(direct_gain_target_[i].load(std::memory_order_relaxed));
+            float* gain_envelope = direct_gain_envelopes_.data() + (i * k_render_block);
+            for (UInt32 frame = 0; frame < frames_now; ++frame) {
+                gain_envelope[frame] = gain_ramp.next();
+            }
+        }
+        mix_direct_side_buses(direct_buses_,
+                              staging_.data(),
+                              num_in_ch_,
+                              dst,
+                              num_out_ch_,
+                              position,
+                              frames_now,
+                              direct_ev_cursor_,
+                              direct_gain_envelopes_.data());
+
         for (std::size_t i = 0; i < lfe_buses_.size(); ++i) {
             auto& gain_ramp = lfe_gain_ramps_[i];
             gain_ramp.set_target(lfe_gain_target_[i].load(std::memory_order_relaxed));
@@ -1220,6 +1345,7 @@ class AppleStream final : public IRenderStream {
 
     OutputProfile profile_;
     std::vector<BusPlan> buses_;
+    std::vector<BusPlan> direct_buses_;
     std::vector<BusPlan> lfe_buses_;
     render_common::LfeRoutingPlan lfe_routing_;
     std::unique_ptr<audio::RenderInputReader> reader_;
@@ -1228,6 +1354,7 @@ class AppleStream final : public IRenderStream {
     std::vector<std::vector<float>> out_planar_;
     std::vector<std::uint8_t> abl_storage_;
     std::vector<std::size_t> ev_cursor_;
+    std::vector<std::size_t> direct_ev_cursor_;
     std::vector<std::size_t> lfe_ev_cursor_;
     uint16_t num_in_ch_;
     uint16_t num_out_ch_;
@@ -1248,6 +1375,9 @@ class AppleStream final : public IRenderStream {
     std::vector<render_common::LiveGainRamp> bus_gain_ramps_; // render-thread/callback-owned
     std::vector<float> bus_gain_envelopes_;                   // buses × k_render_block, callback-owned
     std::vector<std::atomic<std::uint8_t>> bus_head_locked_;
+    std::vector<std::atomic<float>> direct_gain_target_;
+    std::vector<render_common::LiveGainRamp> direct_gain_ramps_;
+    std::vector<float> direct_gain_envelopes_;
     std::vector<std::atomic<float>> lfe_gain_target_;
     std::vector<render_common::LiveGainRamp> lfe_gain_ramps_;
     std::vector<float> lfe_gain_envelopes_;
@@ -1270,6 +1400,20 @@ class AppleRenderer final : public IRenderer {
                               fmt::format("apple backend does not support output layout '{}'", plan.output_layout),
                               "layout=" + plan.output_layout);
         }
+
+        auto routing_mode = plan.direct_speakers_routing_mode;
+        if (routing_mode == DirectSpeakersRoutingMode::automatic) {
+            routing_mode = profile->binaural ? DirectSpeakersRoutingMode::position : DirectSpeakersRoutingMode::label;
+        }
+        if (profile->binaural && routing_mode == DirectSpeakersRoutingMode::label) {
+            return make_error(ErrorCode::unsupported,
+                              "Apple binaural output does not support DirectSpeakers label routing; use position",
+                              "layout=" + plan.output_layout);
+        }
+        logs.log(LogLevel::info,
+                 "apple",
+                 fmt::format("DirectSpeakers routing: {}",
+                             routing_mode == DirectSpeakersRoutingMode::label ? "label" : "position"));
 
         auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "apple");
         if (!lfe_routing) {
@@ -1295,8 +1439,10 @@ class AppleRenderer final : public IRenderer {
         // binaural has no discrete speakers, so the set stays empty and channelLock drops.
         const std::vector<SceneOutputSpeaker> speakers =
             profile->binaural ? std::vector<SceneOutputSpeaker>{} : output_speakers(plan.output_layout);
+        const auto routing_targets = profile->binaural ? std::vector<render_common::DirectSpeakerRoutingTarget>{}
+                                                       : direct_speaker_targets(plan.output_layout);
 
-        auto buses = build_bus_plans(plan.scene, logs, apply_extent, speakers);
+        auto buses = build_bus_plans(plan.scene, logs, apply_extent, speakers, routing_mode, routing_targets);
 
         const auto num_in_ch = plan.scene.info.num_channels;
         const auto invalid =
@@ -1309,30 +1455,36 @@ class AppleRenderer final : public IRenderer {
                               "input=" + plan.input_path);
         }
         std::vector<BusPlan> spatial_buses;
+        std::vector<BusPlan> direct_buses;
         std::vector<BusPlan> lfe_buses;
         spatial_buses.reserve(buses.size());
+        direct_buses.reserve(buses.size());
         lfe_buses.reserve(buses.size());
         for (auto& bus : buses) {
-            if (lfe_routing->applies_to_22_2 && bus.is_lfe) {
+            if (bus.is_direct) {
+                direct_buses.push_back(std::move(bus));
+            } else if (lfe_routing->applies_to_22_2 && bus.is_lfe) {
                 lfe_buses.push_back(std::move(bus));
             } else {
                 spatial_buses.push_back(std::move(bus));
             }
         }
-        if (spatial_buses.empty() && lfe_buses.empty()) {
+        if (spatial_buses.empty() && direct_buses.empty() && lfe_buses.empty()) {
             logs.log(LogLevel::warning, "apple", "no renderable tracks found (all muted?), writing silence");
         }
-        if (lfe_routing->applies_to_22_2) {
+        if (!direct_buses.empty() || lfe_routing->applies_to_22_2) {
             logs.log(LogLevel::info,
                      "apple",
-                     fmt::format("22.2 routing {} spatial buses and {} LFE side buses",
+                     fmt::format("routing {} spatial buses, {} direct side buses, and {} LFE side buses",
                                  spatial_buses.size(),
+                                 direct_buses.size(),
                                  lfe_buses.size()));
         }
 
         auto prepared = std::make_shared<ApplePrepared>();
         prepared->profile = *profile;
         prepared->buses = std::move(spatial_buses);
+        prepared->direct_buses = std::move(direct_buses);
         prepared->lfe_buses = std::move(lfe_buses);
         prepared->lfe_routing = *lfe_routing;
         return std::static_pointer_cast<IPreparedRender>(prepared);
@@ -1376,6 +1528,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     const UInt32 spatialization_algorithm =
         profile.binaural ? kSpatializationAlgorithm_HRTFHQ : kSpatializationAlgorithm_VectorBasedPanning;
     const auto& buses = prepared->buses;
+    const auto& direct_buses = prepared->direct_buses;
     const auto& lfe_buses = prepared->lfe_buses;
 
     // On-demand output window (RenderPlan::render_window). AUSpatialMixer is a
@@ -1423,7 +1576,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     std::size_t buf_idx = 0;
 
     // No renderable buses: write silence (still a valid, correctly-sized output).
-    if (buses.empty() && lfe_buses.empty()) {
+    if (buses.empty() && direct_buses.empty() && lfe_buses.empty()) {
         uint64_t frames_done = start_pos;
         while (frames_done < win_end) {
             if (plan.cancel_token.stop_requested()) {
@@ -1498,8 +1651,10 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
 
     logs.log(LogLevel::info,
              "apple",
-             fmt::format("rendering {} spatial buses + {} LFE side buses → {} ({}ch, {}), {} frames",
+             fmt::format("rendering {} spatial buses + {} direct side buses + {} LFE side buses → {} ({}ch, {}), "
+                         "{} frames",
                          buses.size(),
+                         direct_buses.size(),
                          lfe_buses.size(),
                          plan.output_layout,
                          num_out_ch,
@@ -1525,6 +1680,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     abl->mNumberBuffers = num_out_ch;
 
     std::vector<std::size_t> ev_cursor(buses.size(), 0);
+    std::vector<std::size_t> direct_ev_cursor(direct_buses.size(), 0);
     std::vector<std::size_t> lfe_ev_cursor(lfe_buses.size(), 0);
 
     AudioTimeStamp time_stamp{};
@@ -1583,6 +1739,15 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                 }
             }
         }
+
+        mix_direct_side_buses(direct_buses,
+                              staging.data(),
+                              num_in_ch,
+                              out_interleaved.data(),
+                              num_out_ch,
+                              frames_done,
+                              frames_now,
+                              direct_ev_cursor);
 
         mix_lfe_side_buses(lfe_buses,
                            prepared->lfe_routing,

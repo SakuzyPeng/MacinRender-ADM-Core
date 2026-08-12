@@ -30,6 +30,8 @@ struct RenderCliOptions {
     std::string sofa_path;
     std::string semantic_policy_path;
     std::string semantic_report_path;
+    std::string speaker_geometry_str{"standard"};
+    std::string direct_speakers_routing_str{"auto"};
     std::string speaker_spread_mode_str{"auto"};
     std::string binaural_spread_mode_str{"auto"};
     std::string lfe_routing_mode_str{"direct"};

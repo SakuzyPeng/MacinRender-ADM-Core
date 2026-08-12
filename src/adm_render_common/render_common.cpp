@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
 #include <cmath>
 #include <numbers>
 #include <string>
@@ -11,6 +12,33 @@
 namespace mradm::render_common {
 
 namespace {
+
+struct DsLabelAlias {
+    std::string_view canonical;
+    std::string_view bs2051;
+};
+
+// Non-standard RoomCentric and DAW shorthand labels found in ADM BWF exports.
+// Keep this table shared so SAF and Apple make exactly the same routing decision.
+// clang-format off
+constexpr std::array<DsLabelAlias, 34> k_ds_aliases = {{
+    {"RCL",   "M+030"}, {"RCR",   "M-030"}, {"RCC",   "M+000"},
+    {"RCLFE", "LFE1"},  {"RCLSS", "M+090"}, {"RCRSS", "M-090"},
+    {"RCLRS", "M+135"}, {"RCRRS", "M-135"},
+    {"RCLTS", "U+090"}, {"RCRTS", "U-090"},
+    {"L",     "M+030"}, {"R",     "M-030"}, {"C",     "M+000"},
+    {"LFE",   "LFE1"},  {"LFEL",  "LFE1"},  {"LFER",  "LFE2"},
+    {"LS",    "M+090"}, {"RS",    "M-090"},
+    {"LSS",   "M+090"}, {"RSS",   "M-090"},
+    {"LRS",   "M+135"}, {"RRS",   "M-135"},
+    {"LB",    "M+135"}, {"RB",    "M-135"},
+    {"LW",    "M+060"}, {"RW",    "M-060"},
+    {"CS",    "M+180"},
+    {"VHL",   "U+045"}, {"VHR",   "U-045"}, {"VHC",   "U+000"},
+    {"TSL",   "U+090"}, {"TSR",   "U-090"},
+    {"LTM",   "U+090"}, {"RTM",   "U-090"},
+}};
+// clang-format on
 
 [[nodiscard]] SceneDirectionVector vec_cross(const SceneDirectionVector& a, const SceneDirectionVector& b) noexcept {
     return {(a.y * b.z) - (a.z * b.y), (a.z * b.x) - (a.x * b.z), (a.x * b.y) - (a.y * b.x)};
@@ -28,6 +56,33 @@ namespace {
     const float azimuth = std::atan2(-dir.x, dir.y) * k_rad2deg;
     const float elevation = std::atan2(dir.z, std::hypot(dir.x, dir.y)) * k_rad2deg;
     return {azimuth, elevation};
+}
+
+[[nodiscard]] std::optional<DirectSpeakerPosition> bs2051_label_position(std::string_view label) noexcept {
+    if (label.size() != 5U || (label[1] != '+' && label[1] != '-')) {
+        return std::nullopt;
+    }
+
+    int magnitude = 0;
+    const auto* const begin = label.data() + 2;
+    const auto* const end = label.data() + label.size();
+    const auto parsed = std::from_chars(begin, end, magnitude);
+    if (parsed.ec != std::errc{} || parsed.ptr != end || magnitude > 180) {
+        return std::nullopt;
+    }
+    const auto azimuth = static_cast<float>(label[1] == '+' ? magnitude : -magnitude);
+    switch (label[0]) {
+    case 'M':
+        return DirectSpeakerPosition{azimuth, 0.0F};
+    case 'U':
+        return DirectSpeakerPosition{azimuth, 30.0F};
+    case 'B':
+        return DirectSpeakerPosition{azimuth, -30.0F};
+    case 'T':
+        return magnitude == 0 ? std::optional<DirectSpeakerPosition>{{0.0F, 90.0F}} : std::nullopt;
+    default:
+        return std::nullopt;
+    }
 }
 
 } // namespace
@@ -52,6 +107,58 @@ std::string canonicalise_speaker_label(std::string_view raw) {
         }
     }
     return key;
+}
+
+std::optional<std::size_t> direct_speaker_index_for_labels(std::span<const DirectSpeakerRoutingTarget> targets,
+                                                           const std::vector<std::string>& labels) {
+    for (const auto& label : labels) {
+        const auto target = std::ranges::find_if(
+            targets, [&](const auto& speaker) { return !speaker.label.empty() && speaker.label == label; });
+        if (target != targets.end()) {
+            return static_cast<std::size_t>(std::distance(targets.begin(), target));
+        }
+    }
+
+    for (const auto& label : labels) {
+        const std::string key = canonicalise_speaker_label(label);
+        // libc++ exposes this iterator as a pointer, while MSVC uses a wrapper type.
+        const auto alias = // NOLINT(readability-qualified-auto)
+            std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
+        if (alias == k_ds_aliases.end()) {
+            continue;
+        }
+        const auto target = std::ranges::find_if(
+            targets, [&](const auto& speaker) { return !speaker.label.empty() && speaker.label == alias->bs2051; });
+        if (target != targets.end()) {
+            return static_cast<std::size_t>(std::distance(targets.begin(), target));
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<DirectSpeakerPosition> direct_speaker_position_for_labels(const std::vector<std::string>& labels) {
+    for (const auto& label : labels) {
+        const std::string key = canonicalise_speaker_label(label);
+        // libc++ exposes this iterator as a pointer, while MSVC uses a wrapper type.
+        const auto alias = // NOLINT(readability-qualified-auto)
+            std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
+        const std::string_view bs2051 = alias != k_ds_aliases.end() ? alias->bs2051 : std::string_view{key};
+        if (const auto position = bs2051_label_position(bs2051)) {
+            return position;
+        }
+    }
+    return std::nullopt;
+}
+
+DirectSpeakerPosition
+direct_speaker_position_or_front(const SceneDirectSpeakersBlock& block, LogSink& logs, std::string_view log_module) {
+    if (block.has_position) {
+        return {block.azimuth, block.elevation};
+    }
+    logs.log(LogLevel::warning,
+             log_module,
+             "DirectSpeakers block has no nominal position; using front-centre (azimuth 0, elevation 0)");
+    return {};
 }
 
 std::optional<float> resolve_live_channel_gain(const LiveOverrides& overrides,

@@ -212,6 +212,12 @@ int main() {
                     "render --help: semantic report option listed");
         ok &= check(r.out.find("--speaker-spread-mode") != std::string::npos,
                     "render --help: speaker-spread-mode option listed");
+        ok &= check(r.out.find("--speaker-geometry") != std::string::npos,
+                    "render --help: speaker-geometry option listed");
+        ok &= check(r.out.find("--direct-speakers-routing") != std::string::npos,
+                    "render --help: DirectSpeakers routing option listed");
+        ok &= check(r.out.find("spatialize label/nominal direction") != std::string::npos,
+                    "render --help: label miss spatialization is documented");
         ok &= check(r.out.find("--binaural-spread-mode") != std::string::npos,
                     "render --help: binaural-spread-mode option listed");
         ok &= check(r.out.find("--lfe-routing") != std::string::npos, "render --help: 22.2 LFE routing option listed");
@@ -249,6 +255,24 @@ int main() {
         {
             auto r = run_cmd(mradm_exe + " render --speaker-spread-mode invalid_xyz");
             ok &= check(r.code != 0, "render --speaker-spread-mode invalid: non-zero exit");
+        }
+        for (const auto* val : {"standard", "apple"}) {
+            auto r = run_cmd(mradm_exe + " render --help --speaker-geometry " + val);
+            const std::string msg = std::string("render --speaker-geometry ") + val + ": exit 0";
+            ok &= check(r.code == 0, msg.c_str());
+        }
+        {
+            auto r = run_cmd(mradm_exe + " render --speaker-geometry invalid_xyz");
+            ok &= check(r.code != 0, "render --speaker-geometry invalid: non-zero exit");
+        }
+        for (const auto* val : {"auto", "label", "position"}) {
+            auto r = run_cmd(mradm_exe + " render --help --direct-speakers-routing " + val);
+            const std::string msg = std::string("render --direct-speakers-routing ") + val + ": exit 0";
+            ok &= check(r.code == 0, msg.c_str());
+        }
+        {
+            auto r = run_cmd(mradm_exe + " render --direct-speakers-routing invalid_xyz");
+            ok &= check(r.code != 0, "render --direct-speakers-routing invalid: non-zero exit");
         }
         // --binaural-spread-mode: valid values
         for (const auto* val : {"auto", "none", "cloud", "saf-spreader"}) {
@@ -321,6 +345,48 @@ int main() {
                          "--speaker-spread-mode none -o " +
                          shell_quote(out.string()) + " -i " + fix);
         ok &= check(r.code == 0, "render --speaker-spread-mode none (5.1): exit 0");
+    }
+
+    // Both software speaker renderers accept every embedded CoreAudio geometry.
+    for (const auto* renderer : {"saf", "ear"}) {
+        for (const auto* layout : {"5.1", "7.1", "5.1.2", "5.1.4", "7.1.4", "9.1.6", "22.2"}) {
+            const auto out = std::filesystem::temp_directory_path() /
+                             (std::string{"mr_adm_cli_apple_geometry_"} + renderer + "_" + layout + ".wav");
+            const FileGuard out_guard{out};
+            std::string command = mradm_exe;
+            command += " render --renderer ";
+            command += renderer;
+            command += " --output-layout ";
+            command += layout;
+            command += " --speaker-geometry apple --no-peak-limit -o ";
+            command += shell_quote(out.string());
+            command += " -i ";
+            command += fix;
+            auto r = run_cmd(command);
+            const std::string msg = std::string{"render Apple "} + layout + " geometry with " + renderer + ": exit 0";
+            ok &= check(r.code == 0, msg.c_str());
+            ok &= check(r.out.find("speaker geometry: apple") != std::string::npos,
+                        "render log reports the Apple speaker geometry");
+        }
+    }
+
+    // CoreAudio has no fixed 9.1.4 profile; never silently fall back to standard.
+    for (const auto* renderer : {"saf", "ear"}) {
+        const auto out = std::filesystem::temp_directory_path() /
+                         (std::string{"mr_adm_cli_apple_geometry_unsupported_"} + renderer + ".wav");
+        const FileGuard out_guard{out};
+        std::string command = mradm_exe;
+        command += " render --renderer ";
+        command += renderer;
+        command += " --output-layout 9.1.4 --speaker-geometry apple --no-peak-limit -o ";
+        command += shell_quote(out.string());
+        command += " -i ";
+        command += fix;
+        auto r = run_cmd(command);
+        const std::string msg = std::string{"Apple 9.1.4 geometry with "} + renderer + ": rejected";
+        ok &= check(r.code != 0, msg.c_str());
+        ok &= check(r.out.find("unsupported") != std::string::npos || r.out.find("unavailable") != std::string::npos,
+                    "missing Apple geometry reports an explicit unsupported error");
     }
 
     // ── --binaural-spread-mode none renders SAF binaural without crashing ─────

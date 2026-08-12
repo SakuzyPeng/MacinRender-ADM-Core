@@ -745,6 +745,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_vbap_smoke_tests)
     add_test(NAME mr_adm_vbap_smoke_tests COMMAND mr_adm_vbap_smoke_tests)
 
+    add_executable(mr_adm_speaker_layouts_tests tests/unit/speaker_layouts_test.cpp)
+    target_link_libraries(mr_adm_speaker_layouts_tests PRIVATE MacinRender::ADMRenderCommon)
+    mr_adm_core_apply_warnings(mr_adm_speaker_layouts_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_speaker_layouts_tests)
+    add_test(NAME mr_adm_speaker_layouts_tests COMMAND mr_adm_speaker_layouts_tests)
+
     # Smoke test: non-existent file → io_error via full engine stack.
     add_executable(mr_adm_ear_smoke_tests tests/unit/ear_render_smoke_test.cpp)
     target_link_libraries(mr_adm_ear_smoke_tests PRIVATE MacinRender::ADMEngine)
