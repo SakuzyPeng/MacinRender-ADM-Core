@@ -219,7 +219,8 @@ adm::InterpolationLength samples_to_interpolation_length(uint64_t samples, uint3
 void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat>& cf,
                                    SceneTrackRef& ref,
                                    uint32_t sample_rate,
-                                   uint64_t obj_start_sample) {
+                                   uint64_t obj_start_sample,
+                                   bool object_head_locked) {
     const auto raw_blocks = cf->getElements<adm::AudioBlockFormatObjects>();
     for (const auto& raw : raw_blocks) {
         SceneObjectBlock block;
@@ -245,6 +246,7 @@ void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat
         if (raw.has<adm::Gain>()) {
             block.gain = static_cast<float>(raw.get<adm::Gain>().get());
         }
+        block.head_locked = raw.isDefault<adm::HeadLocked>() ? object_head_locked : raw.get<adm::HeadLocked>().get();
         if (raw.has<adm::Diffuse>()) {
             block.diffuse = static_cast<float>(raw.get<adm::Diffuse>().get());
         }
@@ -298,7 +300,8 @@ void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChann
                                            const std::shared_ptr<adm::AudioPackFormat>& pf,
                                            SceneTrackRef& ref,
                                            uint32_t sample_rate,
-                                           uint64_t obj_start_sample) {
+                                           uint64_t obj_start_sample,
+                                           bool object_head_locked) {
     // channelFrequency is a CF-level attribute shared by all blocks within this CF.
     std::optional<float> low_pass_hz;
     if (cf->has<adm::Frequency>() && adm::isLowPass(cf->get<adm::Frequency>())) {
@@ -361,6 +364,7 @@ void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChann
         if (raw.has<adm::Gain>()) {
             block.gain = static_cast<float>(raw.get<adm::Gain>().get());
         }
+        block.head_locked = raw.isDefault<adm::HeadLocked>() ? object_head_locked : raw.get<adm::HeadLocked>().get();
 
         // rtime is DefaultParameter — always present, default 0.
         const uint64_t rtime = time_to_samples(raw.get<adm::Rtime>().get(), sample_rate);
@@ -380,6 +384,7 @@ void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid,
                            SceneTrackRef& ref,
                            uint32_t sample_rate,
                            uint64_t obj_start_sample,
+                           bool object_head_locked,
                            std::set<std::string>& skipped_type_defs) {
     const auto pf = uid->getReference<adm::AudioPackFormat>();
     if (!pf) {
@@ -389,9 +394,9 @@ void populate_track_blocks(const std::shared_ptr<adm::AudioTrackUid>& uid,
     const auto append_cf = [&](const std::shared_ptr<adm::AudioChannelFormat>& cf) {
         const auto type = cf->get<adm::TypeDescriptor>();
         if (type == adm::TypeDefinition::OBJECTS) {
-            append_objects_blocks_from_cf(cf, ref, sample_rate, obj_start_sample);
+            append_objects_blocks_from_cf(cf, ref, sample_rate, obj_start_sample, object_head_locked);
         } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
-            append_direct_speakers_blocks_from_cf(cf, pf, ref, sample_rate, obj_start_sample);
+            append_direct_speakers_blocks_from_cf(cf, pf, ref, sample_rate, obj_start_sample, object_head_locked);
         } else if (type != adm::TypeDefinition::HOA) {
             // HOA is handled separately by extract_hoa_packs(); anything else is unsupported.
             skipped_type_defs.insert(adm::formatTypeDefinition(type));
@@ -472,6 +477,7 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
         if (obj->has<adm::Mute>()) {
             out.mute = obj->get<adm::Mute>().get();
         }
+        out.head_locked = obj->get<adm::HeadLocked>().get();
         if (obj->has<adm::PositionOffset>()) {
             const auto& po = obj->get<adm::PositionOffset>();
             ScenePositionOffset offset;
@@ -527,7 +533,7 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
             if (it != uid_map.end()) {
                 ref.channel_index = it->second;
             }
-            populate_track_blocks(uid, ref, sample_rate, obj_start, skipped_type_defs);
+            populate_track_blocks(uid, ref, sample_rate, obj_start, out.head_locked, skipped_type_defs);
             out.tracks.push_back(std::move(ref));
         }
         result.push_back(std::move(out));
@@ -746,7 +752,8 @@ bool populate_hoa_channel_from_cf(const std::shared_ptr<adm::AudioChannelFormat>
                                   SceneHOAChannel& ch,
                                   uint64_t pack_start,
                                   uint64_t pack_end,
-                                  uint32_t sample_rate) {
+                                  uint32_t sample_rate,
+                                  bool object_head_locked) {
     const auto hoa_blocks = cf->getElements<adm::AudioBlockFormatHoa>();
     if (hoa_blocks.empty()) {
         return false;
@@ -763,6 +770,7 @@ bool populate_hoa_channel_from_cf(const std::shared_ptr<adm::AudioChannelFormat>
     for (const auto& blk : hoa_blocks) {
         SceneHOAChannelBlock b;
         b.gain = static_cast<float>(blk.get<adm::Gain>().get());
+        b.head_locked = blk.isDefault<adm::HeadLocked>() ? object_head_locked : blk.get<adm::HeadLocked>().get();
         const uint64_t rtime = time_to_samples(blk.get<adm::Rtime>().get(), sample_rate);
         b.start_sample = saturating_add(pack_start, rtime);
         if (blk.has<adm::Duration>()) {
@@ -833,6 +841,7 @@ std::vector<SceneHOATracks> extract_hoa_packs(const std::shared_ptr<adm::Documen
             if (obj->has<adm::Mute>()) {
                 pack.mute = obj->get<adm::Mute>().get();
             }
+            pack.head_locked = obj->get<adm::HeadLocked>().get();
             pack.start_sample = obj_start;
             if (obj->has<adm::Duration>()) {
                 const uint64_t dur = time_to_samples(obj->get<adm::Duration>().get(), sample_rate);
@@ -859,8 +868,8 @@ std::vector<SceneHOATracks> extract_hoa_packs(const std::shared_ptr<adm::Documen
 
                 const auto cf = channel_format_from_uid(uid);
                 if (cf != nullptr) {
-                    const bool found =
-                        populate_hoa_channel_from_cf(cf, ch, pack.start_sample, pack.end_sample, sample_rate);
+                    const bool found = populate_hoa_channel_from_cf(
+                        cf, ch, pack.start_sample, pack.end_sample, sample_rate, pack.head_locked);
                     if (found && !got_block_metadata) {
                         apply_hoa_block_pack_metadata(cf, pack);
                         got_block_metadata = true;
@@ -965,6 +974,9 @@ void patch_objects_block(adm::AudioBlockFormatObjects& raw,
     if (eff.gain != orig.gain) {
         raw.set(adm::Gain(eff.gain));
     }
+    if (eff.head_locked != orig.head_locked) {
+        raw.set(adm::HeadLocked{eff.head_locked});
+    }
     if (eff.diffuse != orig.diffuse) {
         raw.set(adm::Diffuse(eff.diffuse));
     }
@@ -1018,6 +1030,9 @@ void patch_direct_speakers_block(adm::AudioBlockFormatDirectSpeakers& raw,
     if (eff.gain != orig.gain) {
         raw.set(adm::Gain(eff.gain));
     }
+    if (eff.head_locked != orig.head_locked) {
+        raw.set(adm::HeadLocked{eff.head_locked});
+    }
     // Position write-back is intentionally deferred for DirectSpeakers as well.
 }
 
@@ -1050,7 +1065,8 @@ void patch_track(const std::shared_ptr<adm::AudioTrackUid>& uid,
                 ++ds_block_index;
             }
         }
-        // HOA / 其它 typeDefinition：阶段 1 不写回，文档原样保留。
+        // HOA headLocked uses the separate ID-based traversal below because HOA
+        // packs live in AdmScene::hoa_tracks rather than SceneObject::tracks.
     };
 
     if (const auto cf = channel_format_from_uid(uid); cf != nullptr) {
@@ -1068,6 +1084,57 @@ void patch_audio_object(const std::shared_ptr<adm::AudioObject>& obj, const Scen
     }
     if (eff.mute != orig.mute) {
         obj->set(adm::Mute(eff.mute));
+    }
+}
+
+void patch_hoa_object(const std::shared_ptr<adm::AudioObject>& raw_object,
+                      const AdmScene& original,
+                      const AdmScene& effective) {
+    const std::string object_id = adm::formatId(raw_object->get<adm::AudioObjectId>());
+    const auto find_pack = [&](const AdmScene& scene, const std::string& pack_format_id) -> const SceneHOATracks* {
+        const auto it = std::ranges::find_if(scene.hoa_tracks, [&](const SceneHOATracks& pack) {
+            return pack.object_id == object_id && pack.pack_format_id == pack_format_id;
+        });
+        return it != scene.hoa_tracks.end() ? std::addressof(*it) : nullptr;
+    };
+
+    for (const auto& uid : raw_object->getReferences<adm::AudioTrackUid>()) {
+        const auto pf = uid->getReference<adm::AudioPackFormat>();
+        if (!pf || pf->get<adm::TypeDescriptor>() != adm::TypeDefinition::HOA) {
+            continue;
+        }
+        const std::string pack_format_id = adm::formatId(pf->get<adm::AudioPackFormatId>());
+        const SceneHOATracks* orig_pack = find_pack(original, pack_format_id);
+        const SceneHOATracks* eff_pack = find_pack(effective, pack_format_id);
+        if (orig_pack == nullptr || eff_pack == nullptr) {
+            continue;
+        }
+
+        const std::string track_uid = adm::formatId(uid->get<adm::AudioTrackUidId>());
+        const auto find_channel = [&](const SceneHOATracks& pack) -> const SceneHOAChannel* {
+            const auto it = std::ranges::find_if(
+                pack.channels, [&](const SceneHOAChannel& channel) { return channel.track_uid == track_uid; });
+            return it != pack.channels.end() ? std::addressof(*it) : nullptr;
+        };
+        const SceneHOAChannel* orig_channel = find_channel(*orig_pack);
+        const SceneHOAChannel* eff_channel = find_channel(*eff_pack);
+        const auto cf = channel_format_from_uid(uid);
+        if (orig_channel == nullptr || eff_channel == nullptr || cf == nullptr) {
+            continue;
+        }
+
+        std::size_t block_index = 0;
+        for (auto& raw : cf->getElements<adm::AudioBlockFormatHoa>()) {
+            if (block_index >= orig_channel->blocks.size() || block_index >= eff_channel->blocks.size()) {
+                break;
+            }
+            const auto& orig_block = orig_channel->blocks[block_index];
+            const auto& eff_block = eff_channel->blocks[block_index];
+            if (eff_block.head_locked != orig_block.head_locked) {
+                raw.set(adm::HeadLocked{eff_block.head_locked});
+            }
+            ++block_index;
+        }
     }
 }
 
@@ -1322,6 +1389,7 @@ Result<void> write_scene(const std::string& src_path,
                 patch_track(uid, orig_obj.tracks[track_index], eff_obj.tracks[track_index], original.info.sample_rate);
                 ++track_index;
             }
+            patch_hoa_object(obj, original, effective);
             ++object_index;
         }
 

@@ -533,11 +533,12 @@ RenderResult RenderService::render(const RenderRequest& request,
         return {resolved.error(), std::nullopt, std::nullopt, {{LogLevel::error, resolved.error().message}}};
     }
     const auto sel = resolved->selected;
+    const auto backend = resolved->backend;
     std::unique_ptr<IRenderer> renderer = std::move(resolved->renderer);
     auto output_layout = std::move(resolved->effective_output_layout);
 
     auto routing_validation =
-        validate_direct_speakers_routing(sel, output_layout, request.options.direct_speakers_routing_mode);
+        validate_direct_speakers_routing(backend, output_layout, request.options.direct_speakers_routing_mode);
     if (!routing_validation) {
         return {routing_validation.error(),
                 std::nullopt,
@@ -606,6 +607,12 @@ RenderResult RenderService::render(const RenderRequest& request,
         }
         return fail_with_report({ErrorCode::cancelled, "render cancelled", {}}, LogLevel::info);
     };
+
+    auto matrix_res = resolve_direct_speakers_matrix(request.options, *scene_result, output_layout, logs);
+    if (!matrix_res) {
+        return fail_with_report(matrix_res.error());
+    }
+    auto direct_speakers_matrix = std::move(*matrix_res);
 
     if (request.options.apple_spatial_preset != AppleSpatialPreset::off) {
         if (sel != RendererSelection::apple) {
@@ -775,6 +782,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     plan.object_smoothing_frames = request.options.object_smoothing_frames;
     plan.speaker_geometry = request.options.speaker_geometry;
     plan.direct_speakers_routing_mode = request.options.direct_speakers_routing_mode;
+    plan.direct_speakers_matrix = std::move(direct_speakers_matrix);
     plan.speaker_spread_mode = request.options.speaker_spread_mode;
     plan.binaural_spread_mode = request.options.binaural_spread_mode;
     plan.lfe_routing_mode = request.options.lfe_routing_mode;

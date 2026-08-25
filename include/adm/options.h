@@ -41,12 +41,13 @@ enum class SpeakerGeometry {
 
 // Routing policy for ADM DirectSpeakers content. `automatic` is resolved by the
 // selected backend: SAF and Apple loudspeaker output use label routing, while
-// Apple binaural output uses position routing. Other backends retain their
-// native DirectSpeakers behaviour and reject an explicit mode.
+// Apple binaural output uses position routing. `matrix` uses a user-supplied
+// sparse label-to-label gain matrix on EAR / SAF / Apple speaker outputs.
 enum class DirectSpeakersRoutingMode {
     automatic,
     label,
     position,
+    matrix,
 };
 
 enum class BinauralSpreadMode {
@@ -132,6 +133,11 @@ struct RenderOptions {
     // over semantic_policy_path, letting a GUI apply an edited policy without a temp
     // file. nullopt = no in-memory policy.
     std::optional<std::string> semantic_policy_json;
+    // Optional DirectSpeakers sparse routing matrix. Required when
+    // direct_speakers_routing_mode == matrix and rejected for every other mode.
+    // In-memory JSON takes precedence over the path when both are present.
+    std::optional<std::filesystem::path> direct_speakers_matrix_path;
+    std::optional<std::string> direct_speakers_matrix_json;
     // Optional effective semantic report JSON for debugging policy matches.
     std::optional<std::filesystem::path> semantic_report_path;
     // When true, the effective semantic report is also captured in-memory and

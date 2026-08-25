@@ -89,9 +89,9 @@ separate choices:
 `mradm backends` reports the current platform/build truth under `HRTF sources`. Passing `--sofa` to a backend that
 does not report `user-sofa` is an error; the engine does not switch backend or ignore the file.
 
-### DirectSpeakers label/position routing
+### DirectSpeakers label/position/matrix routing
 
-`--direct-speakers-routing auto|label|position` controls DirectSpeakers on SAF and Apple:
+`--direct-speakers-routing auto|label|position|matrix` controls DirectSpeakers:
 
 - `auto` (default): `label` for SAF/Apple speaker output and `position` for Apple binaural.
 - `label`: match an output speaker label exactly, then try the shared alias table (for example `L` → `M+030`). A
@@ -99,11 +99,56 @@ does not report `user-sofa` is an error; the engine does not switch backend or i
   BS.2051/alias label uses its label direction, otherwise the ADM nominal coordinates are used.
 - `position`: ignore non-LFE labels and spatialize the nominal coordinates with zero spread and no interpolation. SAF
   uses the selected `--speaker-geometry standard|apple`; Apple preserves its AmbienceBed path.
+- `matrix`: on EAR, SAF, and Apple loudspeaker output, use strict JSON from `--direct-speakers-matrix <path>` to
+  route each non-LFE input label directly to one or more output labels. Automatic loudspeaker selection resolving to
+  EAR is supported.
 
 When coordinate fallback is needed, a block without coordinates uses front centre `(0°,0°)` and logs a warning.
 LFE detection always takes priority, so
-22.2 ch3/ch9 and `split-power` are unchanged. Explicit `label` is unsupported for Apple binaural; EAR, SAF binaural,
-and HOA reject either explicit mode and retain their native behaviour under `auto`.
+22.2 ch3/ch9 and `split-power` are unchanged. Apple binaural rejects explicit `label` and `matrix`; EAR adds only
+`matrix`, with its explicit `label` / `position` boundary unchanged. SAF binaural and HOA retain native behavior under
+`auto` and reject every explicit mode.
+
+The matrix schema is fixed:
+
+```json
+{
+  "schema": "mradm.direct-speakers-matrix.v1",
+  "output_layout": "7.1.4",
+  "routes": [
+    {
+      "source_label": "M+000",
+      "targets": [
+        { "label": "M+030", "weight": 1 },
+        { "label": "M-030", "weight": 1 }
+      ]
+    },
+    {
+      "source_label": "U+000",
+      "mute": true
+    }
+  ]
+}
+```
+
+Rules:
+
+- Unknown top-level and nested fields are rejected. `schema`, `output_layout`, and non-empty `routes` are required.
+- Each route must contain exactly one of non-empty `targets` or `mute:true`. Every `weight` is finite and positive;
+  the linear coefficient is always `sqrt(weight / sum(weights))`. Different inputs feeding one target add naturally,
+  without cross-input normalization.
+- Source and target labels use the same BS.2051, RoomCentric, and DAW aliases as DirectSpeakers label routing.
+  Duplicate normalized sources, duplicate targets within a row, unknown targets, and ambiguous matches are errors.
+- `output_layout` accepts existing aliases such as `5.1` / `7.1.4`, but its normalized value must exactly match the
+  effective output layout.
+- Every non-LFE DirectSpeakers block in the effective scene must match exactly one row. Missing labels and uncovered
+  blocks fail; unused rows only warn. LFE sources/targets are forbidden in the matrix because LFE keeps its dedicated
+  routing path.
+- Matrix mode without a profile, or a profile supplied in another mode, is invalid. When C++ / C ABI callers provide
+  both path and in-memory JSON, JSON wins and emits a warning. The CLI currently accepts a path only.
+
+Offline rendering and realtime monitoring share one prepared recipe. `ds.gain`, object gain, and live overrides each
+multiply exactly once, while explicit mute remains exact zero. GUI controls, binaural, and HOA are outside this phase.
 
 ### 22.2 dual-LFE routing
 
@@ -157,6 +202,12 @@ mradm render -i bed.wav --input-layout 5.1 \
 # Split one LFE equally by power across both 22.2 LFE outputs.
 mradm render -i mono_lfe.wav --input-channels LFE1 \
   --renderer ear --output-layout 22.2 --lfe-routing split-power -o lfe_222.wav
+
+# Route C equally by power to L/R (routes.json uses the schema above).
+mradm render -i bed.wav --input-layout 5.1 \
+  --renderer ear --output-layout 7.1.4 \
+  --direct-speakers-routing matrix --direct-speakers-matrix routes.json \
+  -o bed_matrix_714.wav
 ```
 
 ## Synthesized scene
@@ -167,6 +218,8 @@ tracks carry low-frequency semantics without a spatial position. `inspect` and s
 `source_kind=channel_bed`, the resolved input layout, and file-channel order.
 
 C++ callers use `RenderOptions::input_layout` or `input_channel_labels`, and select 22.2 LFE routing with
-`RenderOptions::lfe_routing_mode`. C ABI v1.28 provides
+`RenderOptions::lfe_routing_mode`. Matrix routing uses `direct_speakers_routing_mode` and
+`direct_speakers_matrix_path` / `direct_speakers_matrix_json`. C ABI v1.28 provides
 `adm_render_options_set_input_layout`, `adm_render_options_set_input_channel_labels`, and `adm_input_layouts_json`;
-v1.30 adds `adm_render_options_set_lfe_routing_mode`. The JSON schema is `mradm.input-layouts` v1.
+v1.30 adds `adm_render_options_set_lfe_routing_mode`; v1.34 adds matrix=3 plus path and in-memory JSON setters. The
+input catalog schema is `mradm.input-layouts` v1, and the routing schema is `mradm.direct-speakers-matrix.v1`.

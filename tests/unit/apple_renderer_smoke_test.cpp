@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -429,7 +430,13 @@ double rms_difference(const std::vector<float>& lhs, const std::vector<float>& r
 // Single OBJECTS object at a fixed azimuth (ADM convention: +ve = left), linear gain,
 // optional ADM width (0..1) for extent spreading, and optional channelLock.
 std::pair<std::shared_ptr<adm::Document>, std::string>
-make_object_doc(float azimuth, float gain, float width, bool channel_lock, bool mute = false) {
+make_object_doc(float azimuth,
+                float gain,
+                float width,
+                bool channel_lock,
+                bool mute = false,
+                std::optional<bool> object_head_locked = std::nullopt,
+                std::optional<bool> block_head_locked = std::nullopt) {
     auto doc = adm::Document::create();
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"AppleCF"}, adm::TypeDefinition::OBJECTS);
     {
@@ -443,6 +450,9 @@ make_object_doc(float azimuth, float gain, float width, bool channel_lock, bool 
             adm::ChannelLock lock;
             lock.set(adm::ChannelLockFlag{true});
             block.set(lock);
+        }
+        if (block_head_locked.has_value()) {
+            block.set(adm::HeadLocked{*block_head_locked});
         }
         cf->add(block);
     }
@@ -466,6 +476,9 @@ make_object_doc(float azimuth, float gain, float width, bool channel_lock, bool 
     if (mute) {
         obj->set(adm::Mute{true});
     }
+    if (object_head_locked.has_value()) {
+        obj->set(adm::HeadLocked{*object_head_locked});
+    }
     doc->add(obj);
     auto content = adm::AudioContent::create(adm::AudioContentName{"AppleContent"});
     content->addReference(obj);
@@ -477,11 +490,69 @@ make_object_doc(float azimuth, float gain, float width, bool channel_lock, bool 
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
 
-std::filesystem::path
-write_fixture(float azimuth, uint32_t frames, float gain, float width, bool channel_lock, bool mute = false) {
+std::pair<std::shared_ptr<adm::Document>, std::string> make_head_locked_timeline_doc() {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"AppleHeadTimelineCF"},
+                                              adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
+        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{200}}});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        block.set(adm::HeadLocked{false});
+        cf->add(block);
+    }
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{200}}});
+        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{200}}});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        block.set(adm::HeadLocked{true});
+        cf->add(block);
+    }
+    doc->add(cf);
+    auto pf =
+        adm::AudioPackFormat::create(adm::AudioPackFormatName{"AppleHeadTimelinePF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf =
+        adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"AppleHeadTimelineSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf =
+        adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"AppleHeadTimelineTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"AppleHeadTimelineObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"AppleHeadTimelineContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"AppleHeadTimelineProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+std::filesystem::path write_fixture(float azimuth,
+                                    uint32_t frames,
+                                    float gain,
+                                    float width,
+                                    bool channel_lock,
+                                    bool mute = false,
+                                    std::optional<bool> object_head_locked = std::nullopt,
+                                    std::optional<bool> block_head_locked = std::nullopt) {
     constexpr uint32_t k_ch = 1U;
     constexpr uint32_t k_sr = 48000U;
-    const auto [doc, uid_str] = make_object_doc(azimuth, gain, width, channel_lock, mute);
+    const auto [doc, uid_str] =
+        make_object_doc(azimuth, gain, width, channel_lock, mute, object_head_locked, block_head_locked);
     auto path = temp_path("mr_apple_input", ".wav");
 
     std::ostringstream xml_buf;
@@ -489,6 +560,24 @@ write_fixture(float azimuth, uint32_t frames, float gain, float width, bool chan
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
     auto writer = bw64::writeFile(path.string(), k_ch, k_sr, 24U, chna, axml);
+    std::vector<float> samples(frames);
+    for (uint32_t i = 0; i < frames; ++i) {
+        samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
+                                      static_cast<float>(k_sr));
+    }
+    writer->write(samples.data(), frames);
+    return path;
+}
+
+std::filesystem::path write_head_locked_timeline_fixture(uint32_t frames) {
+    constexpr uint32_t k_sr = 48000U;
+    const auto [doc, uid] = make_head_locked_timeline_doc();
+    auto path = temp_path("mr_apple_head_timeline", ".wav");
+    std::ostringstream xml_buf;
+    adm::writeXml(xml_buf, doc);
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+    auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);
     std::vector<float> samples(frames);
     for (uint32_t i = 0; i < frames; ++i) {
         samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
@@ -508,6 +597,16 @@ double channel_energy(const std::vector<float>& samples, uint32_t channels, uint
     return e;
 }
 
+double
+channel_energy(const std::vector<float>& samples, uint32_t channels, uint32_t ch, std::size_t begin, std::size_t end) {
+    double energy = 0.0;
+    for (std::size_t frame = begin; frame < end; ++frame) {
+        const double sample = samples[(frame * channels) + ch];
+        energy += sample * sample;
+    }
+    return energy;
+}
+
 std::optional<std::vector<float>>
 render_apple(float azimuth,
              std::string_view stem,
@@ -518,8 +617,11 @@ render_apple(float azimuth,
              bool channel_lock = false,
              mradm::AppleSpatialPreset apple_spatial_preset = mradm::AppleSpatialPreset::off,
              const mradm::ListenerOrientation& listener = {},
-             bool apple_speaker_rendering_flags = false) {
-    const auto in = write_fixture(azimuth, 8192U, gain, width, channel_lock);
+             bool apple_speaker_rendering_flags = false,
+             std::optional<bool> object_head_locked = std::nullopt,
+             std::optional<bool> block_head_locked = std::nullopt) {
+    const auto in =
+        write_fixture(azimuth, 8192U, gain, width, channel_lock, false, object_head_locked, block_head_locked);
     FileGuard in_guard(in);
     const auto out = temp_path(stem, ".wav");
     FileGuard out_guard(out);
@@ -1358,7 +1460,30 @@ bool verify_listener_orientation() {
     yaw_left.yaw_deg = 90.0F;
     const auto turned = render_apple(
         0.0F, "mr_apple_yaw_left", "binaural", 2U, 1.0F, 0.0F, false, mradm::AppleSpatialPreset::off, yaw_left);
-    if (!forward || !turned) {
+    const auto adm_locked = render_apple(0.0F,
+                                         "mr_apple_yaw_adm_locked",
+                                         "binaural",
+                                         2U,
+                                         1.0F,
+                                         0.0F,
+                                         false,
+                                         mradm::AppleSpatialPreset::off,
+                                         yaw_left,
+                                         false,
+                                         true);
+    const auto block_unlocked = render_apple(0.0F,
+                                             "mr_apple_yaw_block_unlocked",
+                                             "binaural",
+                                             2U,
+                                             1.0F,
+                                             0.0F,
+                                             false,
+                                             mradm::AppleSpatialPreset::off,
+                                             yaw_left,
+                                             false,
+                                             true,
+                                             false);
+    if (!forward || !turned || !adm_locked || !block_unlocked) {
         return check(false, "listener-orientation renders succeed");
     }
     bool ok = true;
@@ -1366,9 +1491,17 @@ bool verify_listener_orientation() {
     const double id_r = channel_energy(*forward, 2U, 1U);
     const double turn_l = channel_energy(*turned, 2U, 0U);
     const double turn_r = channel_energy(*turned, 2U, 1U);
+    const double locked_l = channel_energy(*adm_locked, 2U, 0U);
+    const double locked_r = channel_energy(*adm_locked, 2U, 1U);
+    const double block_unlocked_l = channel_energy(*block_unlocked, 2U, 0U);
+    const double block_unlocked_r = channel_energy(*block_unlocked, 2U, 1U);
     ok &= check(rms_difference(*forward, *turned) > 1.0e-4, "listener yaw changes the binaural output");
     ok &= check(std::abs(id_l - id_r) < 0.25 * (id_l + id_r), "identity orientation keeps a front source L/R balanced");
     ok &= check(turn_r > turn_l, "yaw=+90 (head turned left) moves a front source toward the right ear");
+    ok &= check(std::abs(locked_l - locked_r) < std::abs(turn_l - turn_r) * 0.5,
+                "offline Apple render uses source ADM headLocked");
+    ok &= check(block_unlocked_r > block_unlocked_l,
+                "offline Apple render lets explicit block false override AudioObject true");
     return ok;
 }
 
@@ -1378,10 +1511,14 @@ std::optional<std::vector<float>> render_apple_stream_full(mradm::IRenderer& ren
                                                            const mradm::IPreparedRender& prepared,
                                                            const mradm::RenderPlan& plan,
                                                            mradm::LogSink& logs,
-                                                           const std::vector<std::size_t>& chunk_pattern) {
+                                                           const std::vector<std::size_t>& chunk_pattern,
+                                                           const mradm::LiveOverrides* overrides = nullptr) {
     auto stream = renderer.open_stream(prepared, plan, logs);
     if (!check(stream.has_value(), "apple open_stream succeeds")) {
         return std::nullopt;
+    }
+    if (overrides != nullptr) {
+        (*stream)->set_overrides(*overrides);
     }
     const uint32_t ch = (*stream)->out_channels();
     std::vector<float> out;
@@ -1823,7 +1960,10 @@ bool verify_apple_stream_initial_head_locked_orientation() {
     }
     mradm::LiveOverrides ov;
     ov.revision = 1;
-    ov.objects.push_back({object_id, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", true});
+    mradm::LiveObjectOverride locked_object;
+    locked_object.object_id = object_id;
+    locked_object.head_locked = true;
+    ov.objects.push_back(locked_object);
     (*stream)->set_overrides(ov);
 
     const uint32_t ch = (*stream)->out_channels();
@@ -1852,6 +1992,141 @@ bool verify_apple_stream_initial_head_locked_orientation() {
     ok &= check(world_r > world_l, "stream-headlock: initial yaw moves world-locked front source right");
     ok &= check(locked_imbalance < world_imbalance * 0.5,
                 "stream-headlock: head-locked override compensates the initial listener yaw");
+    return ok;
+}
+
+bool verify_apple_stream_adm_head_locked() {
+    const auto in = write_fixture(0.0F, 8192U, 1.0F, 0.0F, false, false, true);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && scene->objects.size() == 1U && scene->objects.front().tracks.size() == 1U &&
+                   scene->objects.front().tracks.front().blocks.size() == 1U,
+               "stream-adm-headlock: import scene")) {
+        return false;
+    }
+    bool ok = true;
+    ok &= check(scene->objects.front().head_locked && scene->objects.front().tracks.front().blocks.front().head_locked,
+                "stream-adm-headlock: AudioObject value is inherited by its block");
+
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+    plan.listener_orientation.yaw_deg = 90.0F;
+
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "stream-adm-headlock: Apple prepare")) {
+        return false;
+    }
+
+    mradm::LiveOverrides gain_only;
+    gain_only.revision = 1;
+    mradm::LiveObjectOverride gain_only_object;
+    gain_only_object.object_id = scene->objects.front().id;
+    gain_only_object.gain_db = -3.0F;
+    gain_only.objects.push_back(gain_only_object);
+
+    mradm::LiveOverrides force_unlocked;
+    force_unlocked.revision = 2;
+    mradm::LiveObjectOverride force_unlocked_object;
+    force_unlocked_object.object_id = scene->objects.front().id;
+    force_unlocked_object.head_locked = false;
+    force_unlocked.objects.push_back(force_unlocked_object);
+
+    const auto inherited = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024U});
+    const auto gained = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024U}, &gain_only);
+    const auto unlocked = render_apple_stream_full(*renderer, **prepared, plan, logs, {1024U}, &force_unlocked);
+    if (!inherited || !gained || !unlocked) {
+        return false;
+    }
+
+    const double inherited_l = channel_energy(*inherited, 2U, 0U);
+    const double inherited_r = channel_energy(*inherited, 2U, 1U);
+    const double gained_l = channel_energy(*gained, 2U, 0U);
+    const double gained_r = channel_energy(*gained, 2U, 1U);
+    const double unlocked_l = channel_energy(*unlocked, 2U, 0U);
+    const double unlocked_r = channel_energy(*unlocked, 2U, 1U);
+    const double unlocked_imbalance = std::abs(unlocked_r - unlocked_l);
+    ok &= check(unlocked_r > unlocked_l, "stream-adm-headlock: explicit live false follows listener rotation");
+    ok &= check(std::abs(inherited_r - inherited_l) < unlocked_imbalance * 0.5,
+                "stream-adm-headlock: no live value inherits ADM");
+    ok &= check(std::abs(gained_r - gained_l) < unlocked_imbalance * 0.5,
+                "stream-adm-headlock: gain-only override does not shadow ADM");
+    return ok;
+}
+
+bool verify_apple_head_locked_timeline() {
+    constexpr std::size_t k_frames = 19200U;
+    const auto in = write_head_locked_timeline_fixture(k_frames);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && scene->objects.size() == 1U && scene->objects.front().tracks.size() == 1U &&
+                   scene->objects.front().tracks.front().blocks.size() == 2U,
+               "apple-headtrack-timeline: import two Objects blocks")) {
+        return false;
+    }
+    const auto& blocks = scene->objects.front().tracks.front().blocks;
+    bool ok = true;
+    ok &= check(!blocks[0].head_locked && blocks[1].head_locked,
+                "apple-headtrack-timeline: imported blocks keep explicit false/true");
+
+    mradm::RenderPlan plan;
+    plan.input_path = in.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+    plan.listener_orientation.yaw_deg = 90.0F;
+    auto renderer = mradm::create_apple_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "apple-headtrack-timeline: Apple prepare")) {
+        return false;
+    }
+
+    const auto realtime = render_apple_stream_full(*renderer, **prepared, plan, logs, {333U, 1024U, 511U});
+    const auto output = temp_path("mr_apple_head_timeline_output", ".wav");
+    FileGuard output_guard(output);
+    mradm::RenderPlan offline_plan = plan;
+    offline_plan.output_path = output.string();
+    if (!check(renderer->render_window(**prepared, offline_plan, progress, logs).has_value(),
+               "apple-headtrack-timeline: offline render")) {
+        return false;
+    }
+    auto reader = mradm::audio::FloatWavReader::open(output.string());
+    if (!check(reader.has_value() && reader->channels() == 2U, "apple-headtrack-timeline: offline WAV opens")) {
+        return false;
+    }
+    std::vector<float> offline(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
+    reader->read(offline.data(), reader->frame_count());
+    if (!realtime || realtime->size() < k_frames * 2U || offline.size() < k_frames * 2U) {
+        return false;
+    }
+
+    const auto verify_windows =
+        [&](const std::vector<float>& samples, const char* unlocked_msg, const char* locked_msg) {
+            constexpr std::size_t first_begin = 3072U;
+            constexpr std::size_t first_end = 8192U;
+            constexpr std::size_t second_begin = 11264U;
+            constexpr std::size_t second_end = 17408U;
+            const double first_l = channel_energy(samples, 2U, 0U, first_begin, first_end);
+            const double first_r = channel_energy(samples, 2U, 1U, first_begin, first_end);
+            const double second_l = channel_energy(samples, 2U, 0U, second_begin, second_end);
+            const double second_r = channel_energy(samples, 2U, 1U, second_begin, second_end);
+            bool windows_ok = true;
+            windows_ok &= check(first_r > first_l, unlocked_msg);
+            windows_ok &= check(std::abs(second_r - second_l) < std::abs(first_r - first_l) * 0.5, locked_msg);
+            return windows_ok;
+        };
+    ok &= verify_windows(*realtime,
+                         "apple-headtrack-timeline: realtime false block follows listener rotation",
+                         "apple-headtrack-timeline: realtime true block stays head-relative");
+    ok &= verify_windows(offline,
+                         "apple-headtrack-timeline: offline false block follows listener rotation",
+                         "apple-headtrack-timeline: offline true block stays head-relative");
     return ok;
 }
 
@@ -1936,7 +2211,7 @@ bool verify_apple_stream_gain_override() {
     }
     mradm::LiveOverrides ov;
     ov.revision = 1;
-    ov.objects.push_back({object_id, -12.041F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""});
+    ov.objects.push_back({object_id, -12.041F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", std::nullopt, false});
     (*stream)->set_overrides(ov);
 
     const uint32_t ch = (*stream)->out_channels();
@@ -2022,7 +2297,8 @@ bool verify_apple_output_stage_live_gain_ramp() {
         if (total == k_boundary) {
             mradm::LiveOverrides ov;
             ov.revision = 1;
-            ov.objects.push_back({scene->objects.front().id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""});
+            ov.objects.push_back(
+                {scene->objects.front().id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", std::nullopt, false});
             (*stream)->set_overrides(ov);
         }
         rendered.assign(*produced * out_ch, 0.0F);
@@ -2088,6 +2364,8 @@ int main() {
     ok &= verify_apple_reposition_source();
     ok &= verify_apple_stream_listener_orientation();
     ok &= verify_apple_stream_initial_head_locked_orientation();
+    ok &= verify_apple_stream_adm_head_locked();
+    ok &= verify_apple_head_locked_timeline();
     ok &= verify_apple_stream_silent();
     ok &= verify_apple_stream_gain_override();
     ok &= verify_apple_output_stage_live_gain_ramp();

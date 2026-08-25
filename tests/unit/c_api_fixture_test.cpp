@@ -120,6 +120,56 @@ std::filesystem::path write_fixture(uint32_t sample_rate = 48000U) {
     return path;
 }
 
+std::filesystem::path write_direct_speakers_fixture() {
+    auto doc = adm::Document::create();
+
+    auto cf =
+        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"MatrixCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    adm::AudioBlockFormatDirectSpeakers block{
+        adm::SphericalSpeakerPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
+    block.add(adm::SpeakerLabel{"M+000"});
+    cf->add(block);
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"MatrixPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"MatrixSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"MatrixTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"MatrixObject"});
+    object->addReference(uid);
+    doc->add(object);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"MatrixContent"});
+    content->addReference(object);
+    doc->add(content);
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"MatrixProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    std::ostringstream xml;
+    adm::writeXml(xml, doc);
+    const std::string uid_string = adm::formatId(uid->get<adm::AudioTrackUidId>());
+
+    const auto path = unique_temp_wav_path("mr_c_api_matrix_fixture");
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_string, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml.str());
+    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+    std::vector<float> samples(4096U, 0.25F);
+    writer->write(samples.data(), samples.size());
+    return path;
+}
+
 bool has_output_sidecar(const std::filesystem::path& final_path, const char* purpose) {
     const auto parent = final_path.parent_path();
     const auto prefix = final_path.stem().string() + "." + std::string{purpose} + ".";
@@ -273,6 +323,12 @@ bool verify_options_null_setters() {
                    ADM_ERROR_OK,
                "NULL opts set_direct_speakers_routing_mode should return OK") &&
          ok;
+    ok = check(adm_render_options_set_direct_speakers_matrix_path(nullptr, "/any/matrix.json") == ADM_ERROR_OK,
+               "NULL opts set_direct_speakers_matrix_path should return OK") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_matrix_json(nullptr, "{}") == ADM_ERROR_OK,
+               "NULL opts set_direct_speakers_matrix_json should return OK") &&
+         ok;
     ok = check(adm_render_options_set_binaural_spread_mode(nullptr, ADM_BINAURAL_SPREAD_CLOUD) == ADM_ERROR_OK,
                "NULL opts set_binaural_spread_mode should return OK") &&
          ok;
@@ -306,6 +362,43 @@ bool verify_options_null_setters() {
     return ok;
 }
 
+bool verify_direct_speakers_matrix_option_setters(adm_render_options_t* opts) {
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    const auto invalid_mode = static_cast<adm_direct_speakers_routing_mode_t>(99);
+    bool ok =
+        check(adm_render_options_set_direct_speakers_routing_mode(opts, invalid_mode) == ADM_ERROR_INVALID_ARGUMENT,
+              "out-of-range DirectSpeakers routing mode should return INVALID_ARGUMENT");
+    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, ADM_DIRECT_SPEAKERS_ROUTING_LABEL) ==
+                   ADM_ERROR_OK,
+               "label DirectSpeakers routing mode accepted") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, ADM_DIRECT_SPEAKERS_ROUTING_POSITION) ==
+                   ADM_ERROR_OK,
+               "position DirectSpeakers routing mode accepted") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, ADM_DIRECT_SPEAKERS_ROUTING_MATRIX) ==
+                   ADM_ERROR_OK,
+               "matrix DirectSpeakers routing mode accepted") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_matrix_path(opts, "/tmp/matrix.json") == ADM_ERROR_OK,
+               "DirectSpeakers matrix path accepted") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_matrix_path(opts, nullptr) == ADM_ERROR_OK,
+               "NULL DirectSpeakers matrix path clears the option") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_matrix_json(opts, R"({"schema":"test"})") == ADM_ERROR_OK,
+               "DirectSpeakers matrix JSON accepted") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_matrix_json(opts, "") == ADM_ERROR_OK,
+               "empty DirectSpeakers matrix JSON clears the option") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, ADM_DIRECT_SPEAKERS_ROUTING_AUTOMATIC) ==
+                   ADM_ERROR_OK,
+               "DirectSpeakers routing mode restored to automatic after validation") &&
+         ok;
+    return ok;
+}
+
 bool verify_options_invalid_values(adm_render_options_t* opts) {
     // These deliberately-invalid enum values exercise the C ABI's range validation.
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
@@ -333,24 +426,7 @@ bool verify_options_invalid_values(adm_render_options_t* opts) {
     ok = check(adm_render_options_set_speaker_geometry(opts, ADM_SPEAKER_GEOMETRY_STANDARD) == ADM_ERROR_OK,
                "speaker geometry restored to standard after validation") &&
          ok;
-    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
-    const auto invalid_direct_speakers_routing = static_cast<adm_direct_speakers_routing_mode_t>(99);
-    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, invalid_direct_speakers_routing) ==
-                   ADM_ERROR_INVALID_ARGUMENT,
-               "out-of-range DirectSpeakers routing mode should return INVALID_ARGUMENT") &&
-         ok;
-    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, ADM_DIRECT_SPEAKERS_ROUTING_LABEL) ==
-                   ADM_ERROR_OK,
-               "label DirectSpeakers routing mode accepted") &&
-         ok;
-    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, ADM_DIRECT_SPEAKERS_ROUTING_POSITION) ==
-                   ADM_ERROR_OK,
-               "position DirectSpeakers routing mode accepted") &&
-         ok;
-    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, ADM_DIRECT_SPEAKERS_ROUTING_AUTOMATIC) ==
-                   ADM_ERROR_OK,
-               "DirectSpeakers routing mode restored to automatic after validation") &&
-         ok;
+    ok = verify_direct_speakers_matrix_option_setters(opts) && ok;
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     ok = check(adm_render_options_set_binaural_spread_mode(opts, static_cast<adm_binaural_spread_mode_t>(99)) ==
                    ADM_ERROR_INVALID_ARGUMENT,
@@ -810,6 +886,124 @@ bool verify_51_render(adm_context_t* ctx, const std::filesystem::path& input) {
 
     bool ok = check(code == ADM_ERROR_OK, "5.1 render should succeed");
     ok = check(wav_channel_count(output) == 6U, "5.1 output should have 6 channels") && ok;
+    return ok;
+}
+
+bool verify_direct_speakers_matrix_abi(adm_context_t* ctx) {
+    constexpr const char* k_matrix_json = R"json({
+      "schema":"mradm.direct-speakers-matrix.v1",
+      "output_layout":"5.1",
+      "routes":[{
+        "source_label":"C",
+        "targets":[{"label":"L","weight":1},{"label":"R","weight":1}]
+      }]
+    })json";
+
+    const FileGuard input{write_direct_speakers_fixture()};
+    const auto matrix_path = std::filesystem::path{unique_temp_wav_path("mr_c_api_matrix")}.replace_extension(".json");
+    const FileGuard matrix_guard{matrix_path};
+    {
+        std::ofstream matrix_file(matrix_path);
+        matrix_file << k_matrix_json;
+    }
+
+    adm_render_options_t* opts = adm_create_render_options();
+    bool ok = check(opts != nullptr, "v1.34 matrix options creation succeeds");
+    if (opts == nullptr) {
+        return false;
+    }
+    ok = check(adm_render_options_set_renderer(opts, ADM_RENDERER_SAF) == ADM_ERROR_OK, "v1.34 matrix selects SAF") &&
+         ok;
+    ok = check(adm_render_options_set_output_layout(opts, "5.1") == ADM_ERROR_OK, "v1.34 matrix selects 5.1") && ok;
+    ok = check(adm_render_options_set_direct_speakers_routing_mode(opts, ADM_DIRECT_SPEAKERS_ROUTING_MATRIX) ==
+                   ADM_ERROR_OK,
+               "v1.34 matrix mode setter succeeds") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_matrix_path(opts, matrix_path.string().c_str()) == ADM_ERROR_OK,
+               "v1.34 matrix path setter succeeds") &&
+         ok;
+    adm_render_options_set_peak_limit(opts, 0);
+
+    const auto path_output = unique_temp_wav_path("mr_c_api_matrix_path_out");
+    const FileGuard path_output_guard{path_output};
+    adm_render_result_t* path_result = nullptr;
+    const auto path_code = adm_render_file_ex(
+        ctx, input.path().string().c_str(), path_output.string().c_str(), opts, nullptr, nullptr, &path_result);
+    ok = check(path_code == ADM_ERROR_OK, "v1.34 matrix path render succeeds") && ok;
+    ok = check(std::filesystem::exists(path_output), "v1.34 matrix path render creates output") && ok;
+    adm_destroy_render_result(path_result);
+
+    ok = check(adm_render_options_set_direct_speakers_matrix_path(opts, "/missing/matrix-must-not-be-read.json") ==
+                   ADM_ERROR_OK,
+               "v1.34 matrix precedence path setter succeeds") &&
+         ok;
+    ok = check(adm_render_options_set_direct_speakers_matrix_json(opts, k_matrix_json) == ADM_ERROR_OK,
+               "v1.34 matrix JSON setter succeeds") &&
+         ok;
+    const auto json_output = unique_temp_wav_path("mr_c_api_matrix_json_out");
+    const FileGuard json_output_guard{json_output};
+    adm_render_result_t* json_result = nullptr;
+    const auto json_code = adm_render_file_ex(
+        ctx, input.path().string().c_str(), json_output.string().c_str(), opts, nullptr, nullptr, &json_result);
+    ok = check(json_code == ADM_ERROR_OK, "v1.34 in-memory matrix overrides an unreadable path") && ok;
+    bool saw_precedence_warning = false;
+    for (uint32_t index = 0U; index < adm_render_result_log_count(json_result); ++index) {
+        adm_log_level_t level = ADM_LOG_DEBUG;
+        const char* message = nullptr;
+        if (adm_render_result_log_entry(json_result, index, &level, nullptr, &message) == 1 &&
+            level == ADM_LOG_WARNING && message != nullptr &&
+            std::string_view{message}.find("ignoring") != std::string::npos) {
+            saw_precedence_warning = true;
+        }
+    }
+    ok = check(saw_precedence_warning, "v1.34 JSON/path precedence warning is exposed through C ABI logs") && ok;
+    adm_destroy_render_result(json_result);
+    adm_destroy_render_options(opts);
+
+    auto verify_failure =
+        [&](adm_render_options_t* invalid_opts, adm_error_code_t expected, const char* message, std::string_view stem) {
+            const auto output = unique_temp_wav_path(std::string{stem}.c_str());
+            const FileGuard output_guard{output};
+            adm_render_result_t* result = nullptr;
+            const auto code = adm_render_file_ex(
+                ctx, input.path().string().c_str(), output.string().c_str(), invalid_opts, nullptr, nullptr, &result);
+            const bool matches = check(code == expected, message);
+            adm_destroy_render_result(result);
+            adm_destroy_render_options(invalid_opts);
+            return matches;
+        };
+
+    adm_render_options_t* missing = adm_create_render_options();
+    adm_render_options_set_renderer(missing, ADM_RENDERER_SAF);
+    adm_render_options_set_output_layout(missing, "5.1");
+    adm_render_options_set_direct_speakers_routing_mode(missing, ADM_DIRECT_SPEAKERS_ROUTING_MATRIX);
+    ok = verify_failure(missing,
+                        ADM_ERROR_INVALID_ARGUMENT,
+                        "v1.34 matrix mode without profile is rejected",
+                        "mr_c_api_matrix_missing") &&
+         ok;
+
+    adm_render_options_t* stray = adm_create_render_options();
+    adm_render_options_set_renderer(stray, ADM_RENDERER_SAF);
+    adm_render_options_set_output_layout(stray, "5.1");
+    adm_render_options_set_direct_speakers_matrix_json(stray, k_matrix_json);
+    ok = verify_failure(stray,
+                        ADM_ERROR_INVALID_ARGUMENT,
+                        "v1.34 matrix profile in automatic mode is rejected",
+                        "mr_c_api_matrix_stray") &&
+         ok;
+
+    adm_render_options_t* unsupported = adm_create_render_options();
+    adm_render_options_set_renderer(unsupported, ADM_RENDERER_SAF_BINAURAL);
+    adm_render_options_set_output_layout(unsupported, "binaural");
+    adm_render_options_set_direct_speakers_routing_mode(unsupported, ADM_DIRECT_SPEAKERS_ROUTING_MATRIX);
+    adm_render_options_set_direct_speakers_matrix_json(unsupported, k_matrix_json);
+    ok = verify_failure(unsupported,
+                        ADM_ERROR_UNSUPPORTED,
+                        "v1.34 matrix is rejected by a binaural backend",
+                        "mr_c_api_matrix_unsupported") &&
+         ok;
+
     return ok;
 }
 
@@ -1828,6 +2022,8 @@ bool verify_inspect_json(adm_context_t* ctx, const std::filesystem::path& input)
              ok;
         // Fixture object block uses polar position az=30/el=10 (see write_fixture).
         ok = check(has("\"azimuth\""), "inspect_json: should contain block position fields") && ok;
+        ok = check(has("\"head_locked\": false"), "inspect_json: should expose effective object/block head_locked") &&
+             ok;
     }
     adm_free_string(json);
     adm_free_string(nullptr); // must not crash
@@ -2253,8 +2449,16 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     ok = check(adm_api_version_minor() >= 30, "v1.30: 22.2 LFE routing mode is available") && ok;
     ok = check(adm_api_version_minor() >= 31, "v1.31: selectable speaker geometry is available") && ok;
     ok = check(adm_api_version_minor() >= 32, "v1.32: DirectSpeakers routing mode is available") && ok;
+    ok = check(adm_api_version_minor() >= 33, "v1.33: optional head_locked override is available") && ok;
+    ok = check(adm_api_version_minor() >= 34, "v1.34: DirectSpeakers matrix routing is available") && ok;
     static_assert(offsetof(adm_monitor_override_t, mute) >=
                   offsetof(adm_monitor_override_t, head_locked) + sizeof(int32_t) + sizeof(uint32_t));
+    static_assert(offsetof(adm_monitor_override_t, reserved_v1_33) ==
+                  offsetof(adm_monitor_override_t, mute) + sizeof(int32_t));
+    static_assert(offsetof(adm_monitor_override_t, head_locked_valid) ==
+                  offsetof(adm_monitor_override_t, reserved_v1_33) + sizeof(uint32_t));
+    static_assert(sizeof(adm_monitor_override_t) >=
+                  offsetof(adm_monitor_override_t, head_locked_valid) + sizeof(int32_t));
 
     // v1.22 listener orientation argument validation (no device needed).
     ok = check(adm_monitor_set_listener_orientation(nullptr, 0.0F, 0.0F, 0.0F) == ADM_ERROR_INVALID_ARGUMENT,
@@ -2362,6 +2566,8 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     ov.head_locked = 1;         // v1.23: head-locked (excluded from head tracking)
     ov.reserved_v1_29 = 0;
     ov.mute = 1; // v1.29: exact per-channel mute; gain_db is ignored
+    ov.reserved_v1_33 = 0;
+    ov.head_locked_valid = 1; // v1.33: explicitly apply head_locked
     ok = check(adm_monitor_set_overrides(monitor, &ov, 1, 7) == ADM_ERROR_OK, "monitor set overrides") && ok;
     adm_monitor_override_t legacy = ov;
     legacy.struct_size = static_cast<uint32_t>(offsetof(adm_monitor_override_t, extent_width_scale));
@@ -2384,6 +2590,19 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     pre_mute.struct_size = static_cast<uint32_t>(offsetof(adm_monitor_override_t, mute));
     ok = check(adm_monitor_set_overrides(monitor, &pre_mute, 1, 8) == ADM_ERROR_OK,
                "monitor set_overrides accepts legacy struct_size without mute field") &&
+         ok;
+    // v1.29-v1.32 callers end at the old 72-byte size and therefore do not carry
+    // head_locked_valid. They retain the v1.23 always-explicit head_locked behavior.
+    adm_monitor_override_t pre_valid = ov;
+    pre_valid.struct_size = static_cast<uint32_t>(offsetof(adm_monitor_override_t, head_locked_valid));
+    ok = check(adm_monitor_set_overrides(monitor, &pre_valid, 1, 8) == ADM_ERROR_OK,
+               "monitor set_overrides accepts v1.29-v1.32 size without head_locked_valid") &&
+         ok;
+    // A full v1.33 entry with valid=0 is gain/mute-only and inherits ADM headLocked.
+    adm_monitor_override_t inherit_head = ov;
+    inherit_head.head_locked_valid = 0;
+    ok = check(adm_monitor_set_overrides(monitor, &inherit_head, 1, 8) == ADM_ERROR_OK,
+               "monitor set_overrides accepts v1.33 inherited head_locked") &&
          ok;
 
     // v1.22 listener orientation: a finite yaw/pitch/roll is accepted on the live monitor (the
@@ -2519,6 +2738,7 @@ int main() {
     ok = verify_render_file_ex_compat(ctx, fixture.path()) && ok;
     ok = verify_hoa_render(ctx, fixture.path()) && ok;
     ok = verify_51_render(ctx, fixture.path()) && ok;
+    ok = verify_direct_speakers_matrix_abi(ctx) && ok;
     {
         const FileGuard fixture_1s(write_fixture_1s());
         ok = verify_loudness_metrics(ctx, fixture_1s.path()) && ok;

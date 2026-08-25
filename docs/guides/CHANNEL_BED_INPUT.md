@@ -88,9 +88,9 @@ mradm input-layouts --format json
 `mradm backends` 的 `HRTF sources` 字段是当前平台与构建的能力真值。向不支持
 `user-sofa` 的后端传 `--sofa` 会直接报错，不会换后端或忽略文件。
 
-### DirectSpeakers 标签 / 位置路由
+### DirectSpeakers 标签 / 位置 / 矩阵路由
 
-`--direct-speakers-routing auto|label|position` 控制 SAF 与 Apple 的 DirectSpeakers：
+`--direct-speakers-routing auto|label|position|matrix` 控制 DirectSpeakers：
 
 - `auto`（默认）：SAF/Apple 扬声器使用 `label`；Apple binaural 使用 `position`。
 - `label`：先精确匹配输出 speakerLabel，再使用共享别名（如 `L` → `M+030`）；命中后 one-hot
@@ -98,10 +98,51 @@ mradm input-layouts --format json
   否则使用 ADM 标称坐标。
 - `position`：除 LFE 识别外忽略标签，以标称坐标、零扩散、无插值空间化。SAF 使用所选
   `--speaker-geometry standard|apple`，Apple 使用原有 AmbienceBed 路径。
+- `matrix`：EAR、SAF 与 Apple 扬声器输出使用 `--direct-speakers-matrix <path>` 指定的严格 JSON，
+  将每个非 LFE 输入标签直达一个或多个目标标签；自动选择到 EAR 的扬声器输出也支持。
 
 需要坐标回退但缺少坐标时统一使用前中 `(0°,0°)` 并 warning。LFE 识别始终优先，因此 22.2 ch3/ch9 与
-`split-power` 策略不受该选项影响。Apple binaural 显式 `label`、以及 EAR / SAF binaural / HOA
-上的任意显式模式都会返回 unsupported。
+`split-power` 策略不受该选项影响。Apple binaural 显式 `label` 返回 unsupported，并拒绝 `matrix`；
+EAR 只额外接受 `matrix`，原有显式 `label` / `position` 支持边界不变；SAF binaural 与 HOA 保持
+`auto` 原生行为并拒绝所有显式模式。
+
+矩阵 schema 固定为：
+
+```json
+{
+  "schema": "mradm.direct-speakers-matrix.v1",
+  "output_layout": "7.1.4",
+  "routes": [
+    {
+      "source_label": "M+000",
+      "targets": [
+        { "label": "M+030", "weight": 1 },
+        { "label": "M-030", "weight": 1 }
+      ]
+    },
+    {
+      "source_label": "U+000",
+      "mute": true
+    }
+  ]
+}
+```
+
+规则如下：
+
+- 顶层和嵌套对象都拒绝未知字段；`schema`、`output_layout` 与非空 `routes` 必填。
+- 每条 route 必须且只能使用非空 `targets` 或 `mute:true`。每个 `weight` 必须为有限正数，实际线性
+  系数固定为 `sqrt(weight / sum(weights))`；不同输入汇入同一目标时直接相加，不做跨输入归一化。
+- source/target 使用与 DirectSpeakers 标签路由相同的 BS.2051、RoomCentric 与 DAW 别名规范化。
+  规范化后的重复 source、同一行重复 target、未知目标和歧义匹配均报错。
+- `output_layout` 可使用 `5.1` / `7.1.4` 等现有别名，但规范化后必须与本次有效输出布局完全相同。
+- 有效场景中的每个非 LFE DirectSpeakers block 必须恰好命中一行；缺标签或未覆盖直接失败。
+  未被素材使用的 route 只记录 warning。矩阵中禁止 LFE source/target；LFE 继续走专用路径。
+- `matrix` 模式缺少 profile、或其它模式携带 profile，均返回参数错误。C++ / C ABI 同时设置 path 与
+  内存 JSON 时，内存 JSON 优先并记录 warning；CLI 当前只接受 path。
+
+该配置在离线渲染与实时监听中共用同一 prepared recipe。`ds.gain`、对象增益与实时覆盖各乘一次；
+显式 mute 保持精确零。第一阶段不提供 GUI 控件，也不扩展双耳或 HOA。
 
 ### 22.2 双 LFE 路由
 
@@ -155,6 +196,12 @@ mradm render -i bed.wav --input-layout 5.1 \
 # 单 LFE 等功率送入 22.2 的两路 LFE
 mradm render -i mono_lfe.wav --input-channels LFE1 \
   --renderer ear --output-layout 22.2 --lfe-routing split-power -o lfe_222.wav
+
+# 用自定义标签矩阵把 C 等功率送往 L/R（routes.json 使用上面的 schema）
+mradm render -i bed.wav --input-layout 5.1 \
+  --renderer ear --output-layout 7.1.4 \
+  --direct-speakers-routing matrix --direct-speakers-matrix routes.json \
+  -o bed_matrix_714.wav
 ```
 
 ## 合成场景
@@ -165,7 +212,9 @@ mradm render -i mono_lfe.wav --input-channels LFE1 \
 `source_kind=channel_bed`、解析后的输入布局及文件声道顺序。
 
 C++ 调用方使用 `RenderOptions::input_layout` 或 `input_channel_labels`，并可通过
-`RenderOptions::lfe_routing_mode` 选择 22.2 LFE 路由。C ABI v1.28 提供
+`RenderOptions::lfe_routing_mode` 选择 22.2 LFE 路由；矩阵由
+`direct_speakers_routing_mode`、`direct_speakers_matrix_path` / `direct_speakers_matrix_json` 设置。C ABI v1.28 提供
 `adm_render_options_set_input_layout`、`adm_render_options_set_input_channel_labels` 与
-`adm_input_layouts_json`；v1.30 增加 `adm_render_options_set_lfe_routing_mode`。JSON schema 为
-`mradm.input-layouts` v1。
+`adm_input_layouts_json`；v1.30 增加 `adm_render_options_set_lfe_routing_mode`；v1.34 增加 matrix=3 与
+path / 内存 JSON setter。输入目录 JSON schema 为 `mradm.input-layouts` v1，路由矩阵 schema 为
+`mradm.direct-speakers-matrix.v1`。

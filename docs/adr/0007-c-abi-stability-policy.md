@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.32）
-> 日期：2026-05-17（增量记录持续更新至 2026-08-13 的 v1.32）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.34）
+> 日期：2026-05-17（增量记录持续更新至 2026-08-24 的 v1.34）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -409,6 +409,47 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - **兼容性说明**：ABI 仍为纯追加，旧二进制无需重编译，`SOVERSION` 继续为 1；但这是一次已明确
   接受的默认渲染语义调整——Apple 扬声器 DirectSpeakers 从旧 AmbienceBed 位置空间化改为标签直达。
   Apple binaural 默认仍保持位置空间化，SAF 默认保持标签路由。
+
+### v1.33.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+为实时覆盖补齐 ADM `headLocked` 的“继承 / 显式 false / 显式 true”三态，避免仅调增益的覆盖条目
+意外把源 ADM 状态改成 scene-relative。
+
+- **结构尾部扩展**：`adm_monitor_override_t` 在 v1.29–v1.32 结构的 64 位尾部填充位置先追加
+  `reserved_v1_33`（调用方必须置 0），再追加 `head_locked_valid`。字段顺序、类型与旧字段均未改变；
+  完整 v1.33 结构的 `struct_size` 才覆盖 valid 字段。
+- **新调用方语义**：`head_locked_valid == 0` 表示不提供实时 head-lock 值，继承当前活动 ADM block 的
+  有效 `headLocked`；非 0 才采用既有 `head_locked`（0=scene/world-relative，非 0=head-relative）。
+- **旧调用方兼容**：v1.23、v1.29、v1.32 等旧 `struct_size` 均不含 valid 字段，解析端继续把旧
+  `head_locked` 当作始终显式的值，保持 v1.23–v1.32 行为。数组仍以首元素 `struct_size` 为 stride，
+  不读取调用方结构范围之外的字节。
+- **托管绑定**：C# `AdmMonitorOverride` 同步追加两个尾字段；GUI 只有在用户实际改动 head-lock 时才置
+  `HeadLockedValid=1`，仅 gain/mute/topology 编辑保持 0。
+- **既有 JSON 接口的加法字段**：scene inspect schema v1 在对象及 Objects/DirectSpeakers/HOA block
+  中追加有效 `head_locked`；schema 版本不变，旧消费者可忽略未知字段。
+
+### v1.34.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+为 DirectSpeakers 增加用户定义的稀疏标签路由矩阵；GUI 控件不属于本版本，调用方先通过 C++、C ABI
+或 CLI 提供配置。
+
+- **冻结 enum 追加值**：`ADM_DIRECT_SPEAKERS_ROUTING_MATRIX=3`。既有
+  `AUTOMATIC=0`、`LABEL=1`、`POSITION=2` 的数值和语义不变。
+- **新增 setter**：`adm_render_options_set_direct_speakers_matrix_path()` 与
+  `adm_render_options_set_direct_speakers_matrix_json()`。字符串在调用期间复制进 options；`NULL` 或空串
+  清除对应配置；`opts=NULL` 保持安全 no-op 并返回 `ADM_ERROR_OK`。
+- **配置优先级**：path 与内存 JSON 同时存在时，内存 JSON 优先，并通过既有 render result 日志记录
+  warning。`matrix` 模式缺配置、或非 `matrix` 模式携带任一配置，均返回
+  `ADM_ERROR_INVALID_ARGUMENT`。
+- **严格 schema 与数学**：仅接受 `mradm.direct-speakers-matrix.v1`。每条 source route 必须恰好选择
+  非空 `targets` 或 `mute:true`；有限正权重按 `sqrt(weight / sum)` 固定换算成等功率 gain。输入/输出标签
+  复用 BS.2051 与 DAW alias 规范化，规范化后的重复项、未知或歧义目标、输出布局不匹配、非 LFE block
+  未完全覆盖以及任何 LFE route 都是错误；未被素材使用的 route 只记录 warning。
+- **后端边界**：EAR、SAF 与 Apple 扬声器离线/实时路径接受矩阵；`automatic` 选择到 EAR 的扬声器路径
+  同样接受。Apple/SAF binaural 与 HOA 返回 `ADM_ERROR_UNSUPPORTED`。LFE 不进入矩阵，继续优先使用
+  既有 `direct` / `split-power` 专用路由。
+- **兼容性**：只追加 enum 值和 symbol，不改变 opaque struct、既有函数 signature 或旧 enum 数值；
+  动态库 `SOVERSION` 继续为 1。旧调用方不设置新模式与配置时行为不变。
 
 ## opaque 指针与 callback 生命周期
 

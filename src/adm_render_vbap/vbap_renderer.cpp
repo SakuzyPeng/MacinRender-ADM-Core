@@ -243,12 +243,14 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
     });
 }
 
+// NOLINTNEXTLINE(readability-function-size): linear scene-to-gain-table preparation keeps block precedence visible.
 [[nodiscard]] Result<std::vector<ChannelGainInfo>> build_gain_matrix(const AdmScene& scene,
                                                                      const LayoutSpec& layout,
                                                                      std::string_view layout_id,
                                                                      LogSink& logs,
                                                                      mradm::SpeakerSpreadMode spread_mode,
                                                                      DirectSpeakersRoutingMode routing_mode,
+                                                                     const DirectSpeakersMatrix* matrix,
                                                                      const render_common::LfeRoutingPlan& lfe_routing) {
     // Warn once if 2D output will silently discard height information.
     if (is_2d_layout(layout) && scene_has_elevated_sources(scene)) {
@@ -264,6 +266,17 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
     const auto num_out = layout.speakers.size();
     const auto object_speakers = output_speakers(layout);
     const auto routing_targets = direct_speaker_targets(layout);
+    std::optional<render_common::ResolvedDirectSpeakersMatrix> resolved_matrix;
+    if (routing_mode == DirectSpeakersRoutingMode::matrix) {
+        if (matrix == nullptr) {
+            return make_error(ErrorCode::invalid_argument, "DirectSpeakers matrix routing requires a parsed matrix");
+        }
+        auto resolved = render_common::resolve_direct_speakers_matrix_targets(*matrix, routing_targets, layout_id);
+        if (!resolved) {
+            return tl::unexpected{resolved.error()};
+        }
+        resolved_matrix = std::move(*resolved);
+    }
     bool screen_ref_warned{false};
 
     for (const auto& obj : scene.objects) {
@@ -335,6 +348,14 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
                                  fmt::format("DirectSpeakers LFE channel has no matching LFE output in layout '{}' "
                                              "— channel dropped",
                                              std::string{layout_id}));
+                    }
+                } else if (routing_mode == DirectSpeakersRoutingMode::matrix) {
+                    auto route = render_common::direct_speakers_matrix_route_for_block(*resolved_matrix, ds);
+                    if (!route) {
+                        return tl::unexpected{route.error()};
+                    }
+                    for (const auto& target : (*route)->targets) {
+                        gains[target.output_channel] = ds.gain * target.gain;
                     }
                 } else if (routing_mode == DirectSpeakersRoutingMode::position) {
                     const auto position = render_common::direct_speaker_position_or_front(ds, logs, "saf-vbap");
@@ -670,15 +691,20 @@ Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan&
                                   : plan.direct_speakers_routing_mode;
     logs.log(LogLevel::info,
              "saf-vbap",
-             fmt::format("DirectSpeakers routing: {}",
-                         routing_mode == DirectSpeakersRoutingMode::label ? "label" : "position"));
+             fmt::format("DirectSpeakers routing: {}", render_common::direct_speakers_routing_mode_name(routing_mode)));
 
     auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "saf-vbap");
     if (!lfe_routing) {
         return tl::unexpected{lfe_routing.error()};
     }
-    auto gain_matrix =
-        build_gain_matrix(plan.scene, *layout, layout_id, logs, plan.speaker_spread_mode, routing_mode, *lfe_routing);
+    auto gain_matrix = build_gain_matrix(plan.scene,
+                                         *layout,
+                                         layout_id,
+                                         logs,
+                                         plan.speaker_spread_mode,
+                                         routing_mode,
+                                         plan.direct_speakers_matrix.get(),
+                                         *lfe_routing);
     if (!gain_matrix) {
         return make_error(gain_matrix.error().code, gain_matrix.error().message, gain_matrix.error().context);
     }

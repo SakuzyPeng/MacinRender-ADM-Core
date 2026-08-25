@@ -4,7 +4,7 @@
 #error "unexpected C ABI major version"
 #endif
 
-#if ADM_API_VERSION_MINOR != 32
+#if ADM_API_VERSION_MINOR != 34
 #error "unexpected C ABI minor version"
 #endif
 
@@ -20,7 +20,9 @@ int main(void) {
             // cppcheck-suppress knownConditionTrueFalse; intentional compile-time ABI value guard.
             ADM_SPEAKER_GEOMETRY_APPLE == 1 && ADM_DIRECT_SPEAKERS_ROUTING_AUTOMATIC == 0 &&
             // cppcheck-suppress knownConditionTrueFalse; intentional compile-time ABI value guard.
-            ADM_DIRECT_SPEAKERS_ROUTING_LABEL == 1 && ADM_DIRECT_SPEAKERS_ROUTING_POSITION == 2)
+            ADM_DIRECT_SPEAKERS_ROUTING_LABEL == 1 && ADM_DIRECT_SPEAKERS_ROUTING_POSITION == 2 &&
+            // cppcheck-suppress knownConditionTrueFalse; intentional compile-time ABI value guard.
+            ADM_DIRECT_SPEAKERS_ROUTING_MATRIX == 3)
                ? 0
                : 1;
 }

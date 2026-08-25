@@ -76,11 +76,15 @@ struct InterpolationPolicy {
 struct DirectSpeakersPolicy {
     std::string speaker_label;              // filter: only blocks whose speaker_labels include this (ci); empty = all
     std::optional<bool> lfe;                // filter: true = LFE only, false = non-LFE only, absent = all
+    std::optional<bool> head_locked;        // sets effective block headLocked after the filters match
     std::optional<GainPolicy> gain;         // scale/gain_db -> ds.gain; mute -> ds.gain = 0
     std::optional<PositionPolicy> position; // re-aim the DS block (polar only); sets has_position
 };
 
 struct SemanticPolicyOverride {
+    // Block-level headLocked for every matched Objects / DirectSpeakers / HOA block.
+    // DirectSpeakersPolicy::head_locked may override it for filtered bed channels.
+    std::optional<bool> head_locked;
     std::optional<DiffusePolicy> diffuse;
     std::optional<ExtentPolicy> extent;
     std::optional<DivergencePolicy> divergence;

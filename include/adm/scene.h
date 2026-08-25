@@ -64,6 +64,10 @@ struct SceneObjectBlock {
     float divergence_azimuth_range{45.0f};
     float divergence_position_range{0.0f};
     bool screen_ref{false};
+    // Effective ADM headLocked after AudioBlockFormatObjects overrides the
+    // owning AudioObject fallback. false = scene/world-relative. Kept last so
+    // existing aggregate initializers retain their field mapping.
+    bool head_locked{false};
 };
 
 // Rendering metadata from one AudioBlockFormatDirectSpeakers.
@@ -88,6 +92,8 @@ struct SceneDirectSpeakersBlock {
     std::optional<float> low_pass_hz;
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
+    // Effective ADM headLocked after block > AudioObject precedence.
+    bool head_locked{false};
 };
 
 // Reference from a SceneObject to a specific track in the BW64 file.
@@ -286,6 +292,9 @@ struct SceneObject {
     // dialogue / dialogueId: 0=non-dialogue, 1=dialogue, 2=mixed; absent when unset.
     // Note: BS.2076-2 defines a default of 2, but libadm treats it as optional.
     std::optional<unsigned int> dialogue_id;
+    // AudioObject-level headLocked fallback (ADM default is false). Block
+    // formats may explicitly override this value, including with false.
+    bool head_locked{false};
 };
 
 // Time-window and gain from one AudioBlockFormatHoa entry.
@@ -293,6 +302,8 @@ struct SceneHOAChannelBlock {
     float gain{1.0f}; // AudioBlockFormatHoa.gain (DefaultParameter, default 1)
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
+    // Effective ADM headLocked after block > AudioObject precedence.
+    bool head_locked{false};
 };
 
 // One HOA input channel within a HOA pack (one UID/BW64 track).
@@ -321,6 +332,8 @@ struct SceneHOATracks {
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
     std::vector<SceneHOAChannel> channels;
+    // AudioObject-level headLocked fallback for this HOA pack.
+    bool head_locked{false};
 };
 
 // Loudness metadata from AudioProgramme (BS.2076 §4.1.7 / BS.2127 §5.2.2).

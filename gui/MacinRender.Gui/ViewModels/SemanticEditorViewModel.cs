@@ -250,12 +250,18 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             CommonPrefix = ObjectNaming.DetectCommonPrefix(names);
 
             // ADM 里声床(bed)也是 AudioObject,但引用 DirectSpeakers pack(track 里是 ds_blocks 而非
-            // object_blocks)。声床照样纳入编辑,但听感维度(diffuse/extent/divergence)是 Objects-only,
-            // 对声床无意义 → 只暴露 gain(对象级,实时与导出一致)。无 object_blocks 即判为声床。
+            // object_blocks)。声床照样纳入编辑；HOA / 其它未映射类型不进入当前编辑列表。
             var items = new List<SemanticObjectItem>(doc.Objects.Count);
             foreach (var obj in doc.Objects)
             {
-                items.Add(SemanticObjectItem.From(obj, CommonPrefix, isBed: !HasObjectBlocks(obj)));
+                if (HasObjectBlocks(obj))
+                {
+                    items.Add(SemanticObjectItem.From(obj, CommonPrefix));
+                }
+                else if (HasDirectSpeakersBlocks(obj))
+                {
+                    items.Add(SemanticObjectItem.From(obj, CommonPrefix, isBed: true));
+                }
             }
 
             foreach (var row in SemanticRow.BuildRows(items))
@@ -314,13 +320,25 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         return message + Environment.NewLine + Environment.NewLine + L.Format("DetailInput", inputPath);
     }
 
-    // typeDefinition=Objects 判别:含至少一个带 object_blocks 的 track。声床(DirectSpeakers)
-    // 只有 ds_blocks,HOA 走 hoa_tracks 不进 objects → 二者均返回 false,不在语义编辑器列出。
+    // typeDefinition 判别基于 inspect 中实际出现的 block 列表。HOA 暂不加入编辑列表。
     private static bool HasObjectBlocks(InspectObject obj)
     {
         foreach (var t in obj.Tracks)
         {
             if (t.ObjectBlocks.Count > 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasDirectSpeakersBlocks(InspectObject obj)
+    {
+        foreach (var t in obj.Tracks)
+        {
+            if (t.DsBlocks.Count > 0)
             {
                 return true;
             }
@@ -1613,7 +1631,8 @@ public sealed partial class ChannelMeter : ObservableObject
 /// <summary>声床一个声道的纯数据:speaker label(命中键)+ 当前 gain(线性,= ds.gain × object.gain)
 /// + 位置(用于按相反方位角做稳健的 L/R 配对,而非脆弱的标签字符串匹配)。</summary>
 public readonly record struct BedChannelData(
-    string SpeakerLabel, double GainLinear, bool HasPosition, double Azimuth, double Elevation);
+    string SpeakerLabel, double GainLinear, bool HasPosition, double Azimuth, double Elevation,
+    bool? HeadTrackParticipate);
 
 /// <summary>声床的一个编辑单元:单声道或一对 L/R(同步编辑,共享一个 gain)。SpeakerLabels 含 1~2 个
 /// 标签,导出 / 实时各自按标签展开成同值规则。DisplayLabel 为剥掉公共前缀后的显示名。</summary>
@@ -1623,13 +1642,19 @@ public sealed class BedChannelGroup : ObservableObject
     public string DisplayLabel { get; }
     public ScalarOverride Gain { get; }
 
-    // 该声道是否参与头追踪(true=world-locked,默认/现状;false=head-locked,锁在头上不跟头转)。
-    private bool _headTrackParticipate = true;
-    public bool HeadTrackParticipate
+    // true=scene-relative, false=head-locked, null=该组源 block 状态混合。
+    private readonly bool? _sourceHeadTrackParticipate;
+    private bool? _headTrackParticipate;
+    public bool? HeadTrackParticipate
     {
         get => _headTrackParticipate;
         set
         {
+            // Indeterminate is source/mixed state, not a third authored value.
+            if (value is null && _sourceHeadTrackParticipate is not null)
+            {
+                value = _sourceHeadTrackParticipate;
+            }
             if (SetProperty(ref _headTrackParticipate, value))
             {
                 Changed?.Invoke();
@@ -1637,15 +1662,22 @@ public sealed class BedChannelGroup : ObservableObject
         }
     }
 
+    public bool HasHeadTrackOverride => _headTrackParticipate != _sourceHeadTrackParticipate;
+
     public event Action? Changed;
 
-    public BedChannelGroup(IReadOnlyList<string> speakerLabels, string displayLabel, double currentGainLinear)
+    public BedChannelGroup(IReadOnlyList<string> speakerLabels, string displayLabel, double currentGainLinear,
+        bool? sourceHeadTrackParticipate)
     {
         SpeakerLabels = speakerLabels;
         DisplayLabel = displayLabel;
+        _sourceHeadTrackParticipate = sourceHeadTrackParticipate;
+        _headTrackParticipate = sourceHeadTrackParticipate;
         Gain = new ScalarOverride(displayLabel, ScalarOverride.Mode.GainDb,
             new[] { new ScalarOverride.Axis("", new DimRange(currentGainLinear, currentGainLinear)) }, 0.0, -60.0, 12.0);
     }
+
+    public void ResetHeadTracking() => HeadTrackParticipate = _sourceHeadTrackParticipate;
 }
 
 /// <summary>
@@ -1660,6 +1692,7 @@ public sealed class SemanticObjectItem
     public int? Importance { get; init; }
     public int? DialogueId { get; init; }
     public bool Mute { get; init; }
+    public bool? HeadTrackParticipate { get; init; }
 
     // typeDefinition=DirectSpeakers(声床/bed):只 gain 可编辑,听感维度不适用。
     public bool IsBed { get; init; }
@@ -1730,12 +1763,23 @@ public sealed class SemanticObjectItem
             }
 
             // Bed channels: each DirectSpeakers track is one speaker channel. Take the first ds_block's
-            // first label as the channel identity (matches the renderer's per-channel live-gain key).
+            // first label as the channel identity and aggregate headLocked over all of its time blocks.
             if (isBed && track.DsBlocks.Count > 0 && track.DsBlocks[0].SpeakerLabels.Count > 0)
             {
                 var ds = track.DsBlocks[0];
                 bedChannels.Add(new BedChannelData(
-                    ds.SpeakerLabels[0], ds.Gain * obj.Gain, ds.HasPosition, ds.Azimuth, ds.Elevation));
+                    ds.SpeakerLabels[0], ds.Gain * obj.Gain, ds.HasPosition, ds.Azimuth, ds.Elevation,
+                    AggregateHeadTrackParticipation(track.DsBlocks.ConvertAll(block => block.HeadLocked),
+                        obj.HeadLocked)));
+            }
+        }
+
+        var objectHeadLocked = new List<bool>();
+        foreach (var track in obj.Tracks)
+        {
+            foreach (var block in track.ObjectBlocks)
+            {
+                objectHeadLocked.Add(block.HeadLocked);
             }
         }
 
@@ -1749,6 +1793,7 @@ public sealed class SemanticObjectItem
             Importance = obj.Importance,
             DialogueId = obj.DialogueId,
             Mute = obj.Mute,
+            HeadTrackParticipate = AggregateHeadTrackParticipation(objectHeadLocked, obj.HeadLocked),
             GainRange = new DimRange(obj.Gain, obj.Gain),
             DiffuseRange = DimRange.Of(diffuse),
             WidthRange = DimRange.Of(width),
@@ -1756,6 +1801,25 @@ public sealed class SemanticObjectItem
             DepthRange = DimRange.Of(depth),
             DivergenceRange = DimRange.Of(divergence),
         };
+    }
+
+    private static bool? AggregateHeadTrackParticipation(IReadOnlyList<bool> headLocked, bool fallback)
+    {
+        if (headLocked.Count == 0)
+        {
+            return !fallback;
+        }
+
+        var first = headLocked[0];
+        for (var i = 1; i < headLocked.Count; i++)
+        {
+            if (headLocked[i] != first)
+            {
+                return null;
+            }
+        }
+
+        return !first;
     }
 }
 
@@ -1775,14 +1839,14 @@ public sealed class SemanticRow : ObservableObject
         get
         {
             if (GainDb.Enabled || DiffuseScale.Enabled || DivergenceScale.Enabled || Extent.AnyEnabled ||
-                !HeadTrackParticipate)
+                HasHeadTrackOverride)
             {
                 return true;
             }
 
             foreach (var bc in BedChannels)
             {
-                if (bc.Gain.Enabled || !bc.HeadTrackParticipate)
+                if (bc.Gain.Enabled || bc.HasHeadTrackOverride)
                 {
                     return true;
                 }
@@ -1804,14 +1868,18 @@ public sealed class SemanticRow : ObservableObject
     public ExtentOverride Extent { get; }
     public ScalarOverride DivergenceScale { get; }
 
-    // 整对象是否参与头追踪(true=world-locked,默认/现状;false=head-locked)。Objects 行用;
-    // 声床整体也可用它(bed 整体),per-channel 另由 BedChannelGroup.HeadTrackParticipate 细调。
-    private bool _headTrackParticipate = true;
-    public bool HeadTrackParticipate
+    // true=scene-relative, false=head-locked, null=成员或时间 block 混合。
+    private readonly bool? _sourceHeadTrackParticipate;
+    private bool? _headTrackParticipate;
+    public bool? HeadTrackParticipate
     {
         get => _headTrackParticipate;
         set
         {
+            if (value is null && _sourceHeadTrackParticipate is not null)
+            {
+                value = _sourceHeadTrackParticipate;
+            }
             if (SetProperty(ref _headTrackParticipate, value))
             {
                 OnPropertyChanged(nameof(HasOverride));
@@ -1819,6 +1887,8 @@ public sealed class SemanticRow : ObservableObject
             }
         }
     }
+
+    public bool HasHeadTrackOverride => _headTrackParticipate != _sourceHeadTrackParticipate;
 
     public event Action? Changed;
 
@@ -1828,6 +1898,8 @@ public sealed class SemanticRow : ObservableObject
         DisplayName = displayName;
         ChannelTag = channelTag;
         IsBed = members.Count > 0 && members[0].IsBed;
+        _sourceHeadTrackParticipate = AggregateParticipation(members.Select(m => m.HeadTrackParticipate));
+        _headTrackParticipate = _sourceHeadTrackParticipate;
 
         var bedChannels = IsBed ? BuildBedGroups(members[0].BedChannels) : new List<BedChannelGroup>();
         foreach (var bc in bedChannels)
@@ -1881,7 +1953,9 @@ public sealed class SemanticRow : ObservableObject
         foreach (var bc in BedChannels)
         {
             bc.Gain.Reset();
+            bc.ResetHeadTracking();
         }
+        HeadTrackParticipate = _sourceHeadTrackParticipate;
     }
 
     public string Tooltip
@@ -1917,19 +1991,27 @@ public sealed class SemanticRow : ObservableObject
                 foreach (var label in bc.SpeakerLabels)
                 {
                     var gain = bc.Gain.ToPolicyFragment(); // 每次新建实例,可安全挂到不同规则
-                    if (gain is null)
+                    bool? headLocked = bc.HasHeadTrackOverride && bc.HeadTrackParticipate.HasValue
+                        ? !bc.HeadTrackParticipate.Value
+                        : null;
+                    if (gain is null && !headLocked.HasValue)
                     {
                         continue;
                     }
 
+                    var directSpeakers = new JsonObject
+                    {
+                        ["speaker_label"] = label,
+                    };
+                    AddIf(directSpeakers, "gain", gain);
+                    if (headLocked.HasValue)
+                    {
+                        directSpeakers["head_locked"] = headLocked.Value;
+                    }
                     yield return new JsonObject
                     {
                         ["id"] = Members[0].Id,
-                        ["direct_speakers"] = new JsonObject
-                        {
-                            ["speaker_label"] = label,
-                            ["gain"] = gain,
-                        },
+                        ["direct_speakers"] = directSpeakers,
                     };
                 }
             }
@@ -1950,6 +2032,10 @@ public sealed class SemanticRow : ObservableObject
             AddIf(rule, "diffuse", DiffuseScale.ToPolicyFragment());
             AddIf(rule, "extent", Extent.ToPolicyFragment());
             AddIf(rule, "divergence", DivergenceScale.ToPolicyFragment());
+            if (HasHeadTrackOverride && HeadTrackParticipate.HasValue)
+            {
+                rule["head_locked"] = !HeadTrackParticipate.Value;
+            }
             if (rule.Count == 0)
             {
                 continue;
@@ -1977,8 +2063,10 @@ public sealed class SemanticRow : ObservableObject
         {
             foreach (var bc in BedChannels)
             {
-                var bcHeadLocked = !bc.HeadTrackParticipate;
-                if (!bc.Gain.Enabled && !bcHeadLocked)
+                bool? bcHeadLocked = bc.HasHeadTrackOverride && bc.HeadTrackParticipate.HasValue
+                    ? !bc.HeadTrackParticipate.Value
+                    : null;
+                if (!bc.Gain.Enabled && !bcHeadLocked.HasValue)
                 {
                     continue;
                 }
@@ -1995,8 +2083,11 @@ public sealed class SemanticRow : ObservableObject
             yield break;
         }
 
-        var headLocked = !HeadTrackParticipate;
-        if (!GainDb.Enabled && !DiffuseScale.Enabled && !Extent.AnyEnabled && !DivergenceScale.Enabled && !headLocked)
+        bool? headLocked = HasHeadTrackOverride && HeadTrackParticipate.HasValue
+            ? !HeadTrackParticipate.Value
+            : null;
+        if (!GainDb.Enabled && !DiffuseScale.Enabled && !Extent.AnyEnabled && !DivergenceScale.Enabled &&
+            !headLocked.HasValue)
         {
             yield break;
         }
@@ -2068,16 +2159,42 @@ public sealed class SemanticRow : ObservableObject
                 var left = ci.Azimuth >= 0 ? ci : channels[partner];
                 var right = ci.Azimuth >= 0 ? channels[partner] : ci;
                 groups.Add(new BedChannelGroup(new[] { left.SpeakerLabel, right.SpeakerLabel },
-                    $"{Display(left)} · {Display(right)}", left.GainLinear));
+                    $"{Display(left)} · {Display(right)}", left.GainLinear,
+                    AggregateParticipation(new[] { left.HeadTrackParticipate, right.HeadTrackParticipate })));
             }
             else
             {
                 used[i] = true;
-                groups.Add(new BedChannelGroup(new[] { ci.SpeakerLabel }, Display(ci), ci.GainLinear));
+                groups.Add(new BedChannelGroup(new[] { ci.SpeakerLabel }, Display(ci), ci.GainLinear,
+                    ci.HeadTrackParticipate));
             }
         }
 
         return groups;
+    }
+
+    private static bool? AggregateParticipation(IEnumerable<bool?> values)
+    {
+        bool seen = false;
+        bool? result = null;
+        foreach (var value in values)
+        {
+            if (!value.HasValue)
+            {
+                return null;
+            }
+            if (!seen)
+            {
+                result = value.Value;
+                seen = true;
+            }
+            else if (result != value.Value)
+            {
+                return null;
+            }
+        }
+
+        return seen ? result : null;
     }
 
     // 声床标签的公共前缀(切在分隔符 _ - 空格 / 边界,无最小长度限制 → 能剥掉短前缀如 "RC_";

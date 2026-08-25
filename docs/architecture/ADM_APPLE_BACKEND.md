@@ -13,8 +13,8 @@
 - **双耳**：Headphones HRTF → 2ch（输出布局 `binaural`，CoreAudio 容器使用 `kAudioChannelLayoutTag_Binaural`）。
 - **多声道扬声器**：VBAP → `5.1`、`7.1`、`5.1.2`、`5.1.4`、`7.1.4`、`9.1.6`、`22.2`。
 - **输入内容**：Objects 与 DirectSpeakers；Objects 支持 position / gain / interpolation / objectDivergence；
-  DirectSpeakers 支持 `label` 主机侧直达与 `position` AmbienceBed 空间化，并支持动态块目标。普通布局的
-  LFE 保留 SpatialMixer 旁路，22.2 使用独立双 LFE side bus。
+  DirectSpeakers 支持 `label` 主机侧直达、`position` AmbienceBed 空间化与 `matrix` 主机侧多目标路由，
+  并支持动态块目标。普通布局的 LFE 保留 SpatialMixer 旁路，22.2 使用独立双 LFE side bus。
 - **按需窗口渲染**：支持 `RenderPlan::render_window`，CLI `--start` / `--end` 不再需要先渲染完整时间线再裁切。
 - **Apple binaural factory preset**：`--apple-spatial-preset headphone-default|headphone-movie` 映射到
   `kAudioUnitProperty_PresentPreset` 的 headphone media playback factory preset #1/#2。默认关闭，只对 Apple
@@ -22,16 +22,20 @@
 - **扬声器 rendering flags**：默认对每个输入 bus 写入
   `kAudioUnitProperty_SpatialMixerRenderingFlags=0`，避免 InterAuralDelay / DistanceAttenuation 额外改变
   ADM 对象的低中频和增益。`--apple-speaker-rendering-flags` 显式开启两个 Apple flags，用于兼容旧渲染。
-- **DirectSpeakers 路由**：`--direct-speakers-routing auto|label|position`。Apple 扬声器的 `auto`
+- **DirectSpeakers 路由**：`--direct-speakers-routing auto|label|position|matrix`。Apple 扬声器的 `auto`
   解析为 `label`（这是相对旧版 AmbienceBed 默认的有意调整）；Apple binaural 的 `auto` 仍解析为
-  `position`，显式 `label` 返回 unsupported。
+  `position`，显式 `label` 或 `matrix` 返回 unsupported。矩阵由 path 或内存 JSON 提供，并在
+  `prepare()` 前完成严格解析、布局绑定与 scene 覆盖检查。
+- **ADM `headLocked`**：Objects / DirectSpeakers 的有效活动 block 状态进入 `BusEvent`。Apple binaural
+  在离线与实时路径按事件决定是否补偿全局听者朝向；实时显式 true/false 优先，缺失继承 ADM。
+  扬声器输出没有听者旋转，只保留元数据语义。
 
 不支持或暂不等价：
 
 - HOA 输出：`supports_hoa=false`。
 - diffuse：SpatialMixer 没有 ADM direct/diffuse 能量拆分与去相关器，`supports_diffuse=false`。
 - channelLock：✅ 已实现（扬声器输出）。`prepare()` 从 `render_layouts::find_speaker_layout` 构建输出 speaker set，`render_common::apply_channel_lock` 把对象吸附到最近非-LFE 扬声器，`supports_channel_lock=true`。binaural 输出无离散扬声器，speaker set 为空 → channelLock 自然 drop。
-- screen reference / screenLock / headLocked：离线路径不支持。
+- screen reference / screenLock：离线路径不支持。
 - extent：✅ 已实现。复用项目共享的 17 点 disk cloud（`render_common::extent_disk_cloud`，与 binaural / HOA 同源），把 width/height/depth 展开为多个相干点源 bus，`supports_spread=true`。**与 VBAP 的有意分歧**：cloud 是纯点源，对所有 CoreAudio layout（含 2D 的 5.1 / 7.1）都生效；VBAP 的 SAF 2D API 无 spread 参数，故其 2D 路径不 spread，而 SpatialMixer 无此限制，因此 `automatic` 在 2D 上也会 spread（横向宽对象正确铺开）。`--speaker-spread-mode` / `--binaural-spread-mode none` 强制点源。仍属 approximation（相干点云有梳状滤波，不与 libear spreadingPanner 逐测匹配）。
 - transaural / BuiltIn / External 设备串扰消除：设备绑定且更适合实时预览，不作为离线交付路径。
 
@@ -71,7 +75,7 @@ struct BusEvent {
     float elevation;
     float distance;
     float gain;      // linear
-    std::optional<std::size_t> direct_output_channel;
+    std::vector<ResolvedDirectSpeakersMatrixTarget> direct_outputs;
 };
 
 struct BusPlan {
@@ -85,16 +89,18 @@ struct BusPlan {
 struct ApplePrepared final : IPreparedRender {
     OutputProfile profile;
     std::vector<BusPlan> buses;        // SpatialMixer inputs
-    std::vector<BusPlan> direct_buses; // label one-hot side buses
+    std::vector<BusPlan> direct_buses; // host-side label/matrix speaker inputs
     std::vector<BusPlan> lfe_buses;    // 22.2 side buses
     LfeRoutingPlan lfe_routing;
 };
 ```
 
-`prepare()` 解析输出布局、路由模式、分配 bus、展开对象语义并生成事件表。label DirectSpeakers 从
-空间 bus 拆为 direct side bus；22.2 LFE 也拆为专用 side bus 并完成单/双语义 LFE 校验。
+`prepare()` 解析输出布局与路由模式、消费 RenderPlan 中不可变的矩阵、分配 bus、展开对象语义并生成
+事件表。label DirectSpeakers 从空间 bus 拆为 one-hot direct side bus；matrix DirectSpeakers 则把每个
+事件预展开成零个（显式 mute）或多个 `{output_channel, gain}` 目标。22.2 LFE 也拆为专用 side bus 并
+完成单/双语义 LFE 校验。
 `render_window()` 仅在存在空间 bus 时创建 SpatialMixer；AU 输出后、写出和计量前，主机逐样本混入
-direct bus 与 LFE bus。纯 label bed 或纯 22.2 LFE 场景只创建 reader，不创建 AU。
+direct bus 与 LFE bus。纯 label/matrix bed 或纯 22.2 LFE 场景只创建 reader，不创建 AU。
 
 ## 4. 渲染管线
 
@@ -103,8 +109,9 @@ direct bus 与 LFE bus。纯 label bed 或纯 22.2 LFE 场景只创建 reader，
 AUSpatialMixer 通过 input render callback 拉取每条空间 bus 的 PCM。项目渲染路径先按 block 从 BW64
 读入 interleaved staging buffer；每条空间 bus 的 callback 从 staging buffer 拷贝自己绑定的源通道。
 输出端由 `AudioUnitRender` 驱动；随后 direct/LFE side bus 从同一 staging buffer 按逐样本事件与实时
-gain envelope 混入，最后写入项目统一的 `audio::WriterHandle`。所有 side-bus 游标、斜坡和 envelope
-均在 prepare/stream 构造阶段预分配，实时回调不分配内存。
+gain envelope 混入，matrix 事件只循环累加预解析的目标系数，最后写入项目统一的
+`audio::WriterHandle`。所有目标数组、side-bus 游标、斜坡和 envelope 均在 prepare/stream 构造阶段
+预分配，实时音频循环不分配内存。
 
 ### 4.2 按需窗口
 
@@ -136,7 +143,7 @@ Apple 后端和其他主要后端一样在渲染过程中内联测量响度 / Tr
 
 - Object position → SpatialMixer Azimuth / Elevation / Distance。
 - Object 与 position DirectSpeakers gain → `kSpatialMixerParam_Gain`（linear → dB，静音落到 -120 dB）；
-  label DirectSpeakers gain 在主机 direct side bus 以线性标量逐样本应用。
+  label/matrix DirectSpeakers gain 在主机 direct side bus 以线性标量逐样本应用。
 - Object 插值 / 平滑 → 按事件块更新参数；SpatialMixer 自身会对控制变化做平滑。项目级 `--object-smoothing-frames` / `RenderOptions::object_smoothing_frames` 当前不影响 Apple 后端；该参数只由 EAR / VBAP / HOA / binaural 等自有控制率路径消费。
 - Apple binaural factory preset → 在 AudioUnit 创建后、输出格式 / bus 算法 / source mode / ADM 参数写入前应用
   `kAudioUnitProperty_PresentPreset`。这是刻意顺序：PresentPreset 会重置若干 SpatialMixer 参数，后端随后重新写入
@@ -147,6 +154,9 @@ Apple 后端和其他主要后端一样在渲染过程中内联测量响度 / Tr
   `L` → `M+030`）；命中后绕过 AU one-hot 写入目标槽位。未命中时进入 AmbienceBed 空间化并
   warning：已知 BS.2051 / 别名标签使用标签方向，否则使用 ADM 标称坐标；需要坐标回退但缺坐标时
   使用 `(0°,0°)`。
+- DirectSpeakers `matrix` → 共享解析器把 BS.2051/DAW alias 规范化并解析成目标槽位与
+  `sqrt(weight/sum)` gain；Apple prepared recipe 直接持有这些目标。每个非 LFE block 必须恰好匹配一条
+  route，显式 mute 使用空目标数组。矩阵不做跨输入归一化；`ds.gain`、对象 gain 与实时覆盖仍各乘一次。
 - 非 22.2 LFE → `Bypass`，mono input bus 标为 `kAudioChannelLabel_LFEScreen`，保持既有行为。
 - 22.2 LFE → AU 外 side bus：`direct` 将 LFE1/LFE2 严格独立送入 ch3/ch9；`split-power` 将单一语义 LFE 以 `sqrt(0.5)` 同时送入两路。事件 gain、对象 gain 与实时 override 采样斜坡均在 side bus 混音中生效。
 
@@ -159,13 +169,16 @@ Apple 后端和其他主要后端一样在渲染过程中内联测量响度 / Tr
 - DirectSpeakers 标签/方向回退 → 共享
   `direct_speaker_index_for_labels()` / `direct_speaker_position_for_labels()`，与 SAF 使用同一别名及
   fallback 规则。
+- headLocked → importer 已按 block > AudioObject > false 解析有效值；每个空间 bus 的活动 `BusEvent`
+  携带该值。binaural 在设置 AU 全局 HeadYaw/Pitch/Roll 的同时，对 head-relative bus 反向补偿方位，
+  使其相对听者保持固定。实时可选覆盖按 speaker label 解析，只有 gain 的覆盖不改变 ADM 状态。
 
 ### 5.3 不支持或降级
 
 - diffuse：drop；不使用 SpatialMixer reverb 伪装 ADM diffuse。
 - channelLock：✅ 扬声器输出已启用（speaker set 由 render_layouts 构建，apply_channel_lock 吸附最近扬声器）；binaural 无离散扬声器仍 drop。
 - extent：✅ 已实现为 approximation。共享 `render_common::extent_disk_cloud`（17 点 disk cloud：中心 + 内环 8 + 外环 8，权重 Σ=1）把每个 divergence 源展开为相干点源 bus；depth 已并入半角映射（depth*20）。受 `--speaker-spread-mode` / `--binaural-spread-mode` 门控；对所有 layout（含 2D）生效（见 §1，与 VBAP 2D 不 spread 的差异）。
-- screenLock / headLocked / headphoneVirtualise / importance / dialogue：不参与 Apple 离线渲染数学。
+- screenLock / headphoneVirtualise / importance / dialogue：不参与 Apple 离线渲染数学。
 
 ## 6. 坐标系
 
@@ -235,10 +248,12 @@ Apple smoke tests 覆盖：
 - binaural 输出的 CoreAudio tag 归一化。
 - LFE 标签识别、普通布局旁路，以及 22.2 direct/split-power side-bus 路由。
 - 22.2 纯 LFE 无 AU、ch0 无泄漏、stream/offline 一致与实时 override gain ramp。
-- DirectSpeakers `auto/label/position`、`L` → 22.2 ch6、非 LFE 的双 LFE 零泄漏，以及 Apple binaural
-  `auto/position` 接受、显式 `label` 拒绝。
+- DirectSpeakers `auto/label/position/matrix`、`L` → 22.2 ch6、非 LFE 的双 LFE 零泄漏，以及 Apple
+  binaural `auto/position` 接受、显式 `label` / `matrix` 拒绝。
 - 纯 label bed 无空间 bus；direct side bus 动态块目标、seek、loop reset、实时 gain/mute 与
   offline/stream bit-identical。
+- matrix 1→N 等功率实际幅度、非目标零泄漏、显式 mute、逐块目标切换、22.2 LFE 原路径以及
+  offline/stream 一致性。
 - render window 输出帧数。
 
 不做 bit-exact golden。若后续增加 golden，应按 macOS / SDK 版本钉住容差。

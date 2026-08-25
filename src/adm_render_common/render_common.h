@@ -18,6 +18,7 @@
 #include <thread>
 #include <vector>
 
+#include "adm/direct_speakers_matrix.h"
 #include "adm/live_override.h"
 #include "adm/logging.h"
 #include "adm/render.h"
@@ -35,6 +36,13 @@ namespace mradm::render_common {
 // per-channel live-gain match (channel key + override speaker_label canonicalised the same way).
 [[nodiscard]] std::string canonicalise_speaker_label(std::string_view raw);
 
+// Canonical label used by matrix source/target matching. In addition to the
+// punctuation/case normalisation above, known RoomCentric / DAW aliases are
+// converted to their BS.2051 label (for example L -> M+030).
+[[nodiscard]] std::string canonical_direct_speaker_label(std::string_view raw);
+
+[[nodiscard]] std::string_view direct_speakers_routing_mode_name(DirectSpeakersRoutingMode mode) noexcept;
+
 // Backend-neutral output slot used by shared DirectSpeakers label/fallback
 // routing. Backends adapt their native layout representation into this view.
 struct DirectSpeakerRoutingTarget {
@@ -49,6 +57,34 @@ struct DirectSpeakerRoutingTarget {
 [[nodiscard]] std::optional<std::size_t>
 direct_speaker_index_for_labels(std::span<const DirectSpeakerRoutingTarget> targets,
                                 const std::vector<std::string>& labels);
+
+struct ResolvedDirectSpeakersMatrixTarget {
+    std::size_t output_channel{0};
+    float gain{0.0F};
+};
+
+struct ResolvedDirectSpeakersMatrixRoute {
+    std::string source_label;
+    std::string source_key;
+    bool mute{false};
+    std::vector<ResolvedDirectSpeakersMatrixTarget> targets;
+};
+
+struct ResolvedDirectSpeakersMatrix {
+    std::vector<ResolvedDirectSpeakersMatrixRoute> routes;
+};
+
+// Resolve every matrix target label to a concrete output slot. Unknown labels,
+// alias-colliding duplicates, LFE rows/targets, and duplicate source rows fail.
+[[nodiscard]] Result<ResolvedDirectSpeakersMatrix>
+resolve_direct_speakers_matrix_targets(const DirectSpeakersMatrix& matrix,
+                                       std::span<const DirectSpeakerRoutingTarget> targets,
+                                       std::string_view layout_id);
+
+// Match one non-LFE ADM block to exactly one resolved source row.
+[[nodiscard]] Result<const ResolvedDirectSpeakersMatrixRoute*>
+direct_speakers_matrix_route_for_block(const ResolvedDirectSpeakersMatrix& matrix,
+                                       const SceneDirectSpeakersBlock& block);
 
 struct DirectSpeakerPosition {
     float azimuth{0.0F};
@@ -76,12 +112,13 @@ direct_speaker_position_or_front(const SceneDirectSpeakersBlock& block, LogSink&
                                                              std::string_view object_id,
                                                              std::string_view channel_label_key);
 
-// Resolve whether one input channel is head-locked (excluded from head tracking) given its owning
-// object id + canonicalised speaker label. Same whole-object vs per-channel precedence as gain;
-// returns false (world-locked, the default) when no override applies.
-[[nodiscard]] bool resolve_live_head_locked(const LiveOverrides& overrides,
-                                            std::string_view object_id,
-                                            std::string_view channel_label_key);
+// Resolve an explicitly supplied live head-lock value. Channel-specific values
+// win over whole-object values; entries whose head_locked is nullopt do not
+// participate, so a gain-only channel override cannot shadow a whole-object
+// head-lock override. nullopt means inherit the active ADM block.
+[[nodiscard]] std::optional<bool> resolve_live_head_locked(const LiveOverrides& overrides,
+                                                           std::string_view object_id,
+                                                           std::string_view channel_label_key);
 
 // Sample-domain live-gain de-zipper. A target supplied before the first sample takes effect
 // immediately (important when a monitor starts with existing edits); later targets traverse a

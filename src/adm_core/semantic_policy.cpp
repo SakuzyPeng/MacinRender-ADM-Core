@@ -28,6 +28,7 @@ constexpr std::string_view k_interpolation_key = "interpolation";
 constexpr std::string_view k_gain_key = "gain";
 constexpr std::string_view k_position_key = "position";
 constexpr std::string_view k_direct_speakers_key = "direct_speakers";
+constexpr std::string_view k_head_locked_key = "head_locked";
 
 [[nodiscard]] Error invalid_policy(const std::string& path, const std::string& message) {
     return {ErrorCode::invalid_argument, "invalid semantic policy: " + message, path};
@@ -399,7 +400,7 @@ template <typename T>
         return tl::unexpected{invalid_policy(path, "'direct_speakers' must be an object")};
     }
     std::string unknown;
-    if (has_unknown_keys(obj, {"speaker_label", "lfe", "gain", "position"}, unknown)) {
+    if (has_unknown_keys(obj, {"speaker_label", "lfe", "head_locked", "gain", "position"}, unknown)) {
         return tl::unexpected{invalid_policy(path, "unknown direct_speakers field '" + unknown + "'")};
     }
     DirectSpeakersPolicy out;
@@ -416,6 +417,13 @@ template <typename T>
             return tl::unexpected{value.error()};
         }
         out.lfe = *value;
+    }
+    if (obj.contains(std::string{k_head_locked_key})) {
+        auto value = read_bool(obj, k_head_locked_key, path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        out.head_locked = *value;
     }
     if (obj.contains("gain")) {
         auto value = parse_gain(obj.at("gain"), path);
@@ -447,7 +455,8 @@ parse_override(const Json& obj, const std::string& path, std::initializer_list<s
                                           k_interpolation_key,
                                           k_gain_key,
                                           k_position_key,
-                                          k_direct_speakers_key};
+                                          k_direct_speakers_key,
+                                          k_head_locked_key};
     allowed.insert(allowed.end(), extra_keys.begin(), extra_keys.end());
     for (const auto& [key, value] : obj.items()) {
         (void) value;
@@ -457,6 +466,13 @@ parse_override(const Json& obj, const std::string& path, std::initializer_list<s
     }
 
     SemanticPolicyOverride out;
+    if (obj.contains(std::string{k_head_locked_key})) {
+        auto value = read_bool(obj, k_head_locked_key, path);
+        if (!value) {
+            return tl::unexpected{value.error()};
+        }
+        out.head_locked = *value;
+    }
     if (obj.contains(std::string{k_diffuse_key})) {
         auto value = parse_diffuse(obj.at(std::string{k_diffuse_key}), path);
         if (!value) {
@@ -583,6 +599,7 @@ void merge_policy(InterpolationPolicy& dst, const InterpolationPolicy& src) {
 }
 
 void merge_override(SemanticPolicyOverride& dst, const SemanticPolicyOverride& src) {
+    merge_optional(dst.head_locked, src.head_locked);
     if (src.diffuse) {
         if (!dst.diffuse) {
             dst.diffuse = DiffusePolicy{};
@@ -812,7 +829,7 @@ void apply_object_override(SceneObject& object, const SemanticPolicyOverride& po
 }
 
 // HOA packs live outside scene.objects and are matched by object_id / pack_format
-// / all. Only gain/mute apply (the soundfield's per-channel gains are not touched).
+// / all. Gain/mute apply at pack level; headLocked applies to every channel block.
 [[nodiscard]] bool hoa_rule_matches(const SceneHOATracks& pack, const SemanticObjectRule& rule) {
     if (rule.all.value_or(false)) {
         return true;
@@ -829,11 +846,12 @@ void apply_object_override(SceneObject& object, const SemanticPolicyOverride& po
 [[nodiscard]] std::vector<std::string> matched_hoa_rule_names(const SceneHOATracks& pack,
                                                               const SemanticPolicy& policy) {
     std::vector<std::string> out;
-    if (policy.global && policy.global->gain) {
+    if (policy.global && (policy.global->gain || policy.global->head_locked)) {
         out.emplace_back("global");
     }
     for (std::size_t i = 0; i < policy.objects.size(); ++i) {
-        if (policy.objects.at(i).gain && hoa_rule_matches(pack, policy.objects.at(i))) {
+        if ((policy.objects.at(i).gain || policy.objects.at(i).head_locked) &&
+            hoa_rule_matches(pack, policy.objects.at(i))) {
             out.push_back(fmt::format("objects[{}]", i));
         }
     }
@@ -871,6 +889,19 @@ void apply_hoa_gain(SceneHOATracks& pack, const GainPolicy& gain) {
     if (gain.gain_db.has_value()) {
         pack.gain *= std::pow(10.0F, *gain.gain_db / 20.0F);
     }
+}
+
+[[nodiscard]] std::optional<bool> effective_hoa_head_locked(const SceneHOATracks& pack, const SemanticPolicy& policy) {
+    std::optional<bool> out;
+    if (policy.global && policy.global->head_locked.has_value()) {
+        out = policy.global->head_locked;
+    }
+    for (const auto& rule : policy.objects) {
+        if (rule.head_locked.has_value() && hoa_rule_matches(pack, rule)) {
+            out = rule.head_locked;
+        }
+    }
+    return out;
 }
 
 // True when the position policy would actually change a position: any absolute
@@ -936,6 +967,9 @@ void apply_ds_override(SceneDirectSpeakersBlock& ds, const DirectSpeakersPolicy&
     if (policy.lfe.has_value() && *policy.lfe != ds.low_pass_hz.has_value()) {
         return;
     }
+    if (policy.head_locked.has_value()) {
+        ds.head_locked = *policy.head_locked;
+    }
     if (policy.gain) {
         if (policy.gain->mute.value_or(false)) {
             ds.gain = 0.0F;
@@ -955,6 +989,9 @@ void apply_ds_override(SceneDirectSpeakersBlock& ds, const DirectSpeakersPolicy&
 }
 
 void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& policy, uint32_t sample_rate) {
+    if (policy.head_locked.has_value()) {
+        block.head_locked = *policy.head_locked;
+    }
     if (policy.diffuse) {
         if (policy.diffuse->enabled.has_value() && !*policy.diffuse->enabled) {
             block.diffuse = 0.0F;
@@ -1024,6 +1061,7 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
 [[nodiscard]] Json block_json(const SceneObjectBlock& block) {
     Json out = Json::object();
     out["diffuse"] = block.diffuse;
+    out["head_locked"] = block.head_locked;
     out["width"] = block.width;
     out["height"] = block.height;
     out["depth"] = block.depth;
@@ -1054,6 +1092,7 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     Json out = Json::object();
     out["speaker_labels"] = ds.speaker_labels;
     out["gain"] = ds.gain;
+    out["head_locked"] = ds.head_locked;
     out["has_position"] = ds.has_position;
     out["azimuth"] = ds.azimuth;
     out["elevation"] = ds.elevation;
@@ -1118,6 +1157,7 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
 // The generated template, applied unmodified, must be an identity (no scene
 // change). channel_lock is intentionally omitted: it has no neutral value —
 // `enabled` forces the lock on/off either way — so users add it explicitly.
+// head_locked is likewise omitted because both boolean values are active edits.
 [[nodiscard]] Json neutral_override_template() {
     Json out = Json::object();
     out["diffuse"] = neutral_diffuse_policy();
@@ -1163,7 +1203,16 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     return "all";
 }
 
-// HOA packs (separate from objects): report gain/mute original -> effective.
+[[nodiscard]] Json hoa_block_json(const SceneHOAChannelBlock& block) {
+    return Json{{"gain", block.gain},
+                {"head_locked", block.head_locked},
+                {"start_sample", block.start_sample},
+                {"end_sample",
+                 block.end_sample == std::numeric_limits<uint64_t>::max() ? Json{nullptr} : Json{block.end_sample}}};
+}
+
+// HOA packs (separate from objects): report pack gain/mute plus every block's
+// original/effective headLocked value.
 [[nodiscard]] Json
 hoa_tracks_report_json(const AdmScene& original, const AdmScene& effective, const SemanticPolicy* policy) {
     Json out = Json::array();
@@ -1180,6 +1229,23 @@ hoa_tracks_report_json(const AdmScene& original, const AdmScene& effective, cons
         pack["effective_gain"] = eff_pack.gain;
         pack["original_mute"] = orig_pack.mute;
         pack["effective_mute"] = eff_pack.mute;
+        pack["original_head_locked"] = orig_pack.head_locked;
+        pack["effective_head_locked"] = eff_pack.head_locked;
+        pack["blocks"] = Json::array();
+        const std::size_t channel_count = std::min(orig_pack.channels.size(), eff_pack.channels.size());
+        for (std::size_t ci = 0; ci < channel_count; ++ci) {
+            const auto& orig_channel = orig_pack.channels.at(ci);
+            const auto& eff_channel = eff_pack.channels.at(ci);
+            const std::size_t block_count = std::min(orig_channel.blocks.size(), eff_channel.blocks.size());
+            for (std::size_t bi = 0; bi < block_count; ++bi) {
+                Json block = Json::object();
+                block["track_uid"] = eff_channel.track_uid;
+                block["block_index"] = bi;
+                block["original"] = hoa_block_json(orig_channel.blocks.at(bi));
+                block["effective"] = hoa_block_json(eff_channel.blocks.at(bi));
+                pack["blocks"].push_back(std::move(block));
+            }
+        }
         out.push_back(std::move(pack));
     }
     return out;
@@ -1348,6 +1414,9 @@ Result<void> apply_semantic_policy(AdmScene& scene,
                 apply_override(block, policy_for_object, sample_rate);
             }
             for (auto& ds : track.ds_blocks) {
+                if (policy_for_object.head_locked.has_value()) {
+                    ds.head_locked = *policy_for_object.head_locked;
+                }
                 for (const auto* ds_policy : ds_policies) {
                     apply_ds_override(ds, *ds_policy);
                 }
@@ -1359,6 +1428,13 @@ Result<void> apply_semantic_policy(AdmScene& scene,
     for (auto& pack : scene.hoa_tracks) {
         if (const auto gain = effective_hoa_gain(pack, policy)) {
             apply_hoa_gain(pack, *gain);
+        }
+        if (const auto head_locked = effective_hoa_head_locked(pack, policy)) {
+            for (auto& channel : pack.channels) {
+                for (auto& block : channel.blocks) {
+                    block.head_locked = *head_locked;
+                }
+            }
         }
     }
     return {};
@@ -1396,6 +1472,8 @@ std::string build_semantic_report(const AdmScene& original,
         obj["effective_gain"] = eff_obj.gain;
         obj["original_mute"] = orig_obj.mute;
         obj["effective_mute"] = eff_obj.mute;
+        obj["original_head_locked"] = orig_obj.head_locked;
+        obj["effective_head_locked"] = eff_obj.head_locked;
         obj["blocks"] = Json::array();
 
         const std::size_t track_count = std::min(orig_obj.tracks.size(), eff_obj.tracks.size());

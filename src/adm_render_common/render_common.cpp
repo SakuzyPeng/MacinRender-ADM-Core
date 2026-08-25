@@ -9,6 +9,9 @@
 #include <string>
 #include <utility>
 
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+
 namespace mradm::render_common {
 
 namespace {
@@ -109,6 +112,27 @@ std::string canonicalise_speaker_label(std::string_view raw) {
     return key;
 }
 
+std::string canonical_direct_speaker_label(std::string_view raw) {
+    const std::string key = canonicalise_speaker_label(raw);
+    const auto alias = // NOLINT(readability-qualified-auto): pointer on libc++, wrapper iterator on MSVC.
+        std::ranges::find_if(k_ds_aliases, [&](const DsLabelAlias& entry) { return key == entry.canonical; });
+    return alias != k_ds_aliases.end() ? std::string{alias->bs2051} : key;
+}
+
+std::string_view direct_speakers_routing_mode_name(DirectSpeakersRoutingMode mode) noexcept {
+    switch (mode) {
+    case DirectSpeakersRoutingMode::automatic:
+        return "auto";
+    case DirectSpeakersRoutingMode::label:
+        return "label";
+    case DirectSpeakersRoutingMode::position:
+        return "position";
+    case DirectSpeakersRoutingMode::matrix:
+        return "matrix";
+    }
+    return "unknown";
+}
+
 std::optional<std::size_t> direct_speaker_index_for_labels(std::span<const DirectSpeakerRoutingTarget> targets,
                                                            const std::vector<std::string>& labels) {
     for (const auto& label : labels) {
@@ -134,6 +158,122 @@ std::optional<std::size_t> direct_speaker_index_for_labels(std::span<const Direc
         }
     }
     return std::nullopt;
+}
+
+Result<ResolvedDirectSpeakersMatrix>
+resolve_direct_speakers_matrix_targets(const DirectSpeakersMatrix& matrix,
+                                       std::span<const DirectSpeakerRoutingTarget> targets,
+                                       std::string_view layout_id) {
+    ResolvedDirectSpeakersMatrix resolved;
+    resolved.routes.reserve(matrix.routes.size());
+
+    for (const auto& route : matrix.routes) {
+        ResolvedDirectSpeakersMatrixRoute output_route;
+        output_route.source_label = route.source_label;
+        output_route.source_key = canonical_direct_speaker_label(route.source_label);
+        output_route.mute = route.mute;
+        if (output_route.source_key.empty()) {
+            return make_error(ErrorCode::invalid_argument,
+                              "DirectSpeakers matrix source_label resolves to an empty label",
+                              "source_label=" + route.source_label);
+        }
+        if (is_lfe_label(output_route.source_key)) {
+            return make_error(
+                ErrorCode::invalid_argument,
+                fmt::format("DirectSpeakers matrix source '{}' is LFE; LFE uses dedicated routing", route.source_label),
+                "layout=" + std::string{layout_id});
+        }
+        if (std::ranges::any_of(resolved.routes,
+                                [&](const auto& existing) { return existing.source_key == output_route.source_key; })) {
+            return make_error(
+                ErrorCode::invalid_argument,
+                fmt::format("duplicate DirectSpeakers matrix source '{}' after alias resolution", route.source_label),
+                "layout=" + std::string{layout_id});
+        }
+
+        output_route.targets.reserve(route.targets.size());
+        for (const auto& target : route.targets) {
+            const std::string target_key = canonical_direct_speaker_label(target.label);
+            if (target_key.empty()) {
+                return make_error(ErrorCode::invalid_argument,
+                                  "DirectSpeakers matrix target label resolves to an empty label",
+                                  "source_label=" + route.source_label);
+            }
+            if (is_lfe_label(target_key)) {
+                return make_error(
+                    ErrorCode::invalid_argument,
+                    fmt::format("DirectSpeakers matrix target '{}' is LFE; LFE uses dedicated routing", target.label),
+                    "source_label=" + route.source_label);
+            }
+
+            std::optional<std::size_t> output_index;
+            for (std::size_t channel = 0; channel < targets.size(); ++channel) {
+                if (targets[channel].label.empty() ||
+                    canonical_direct_speaker_label(targets[channel].label) != target_key) {
+                    continue;
+                }
+                if (output_index.has_value()) {
+                    return make_error(
+                        ErrorCode::invalid_argument,
+                        fmt::format("DirectSpeakers matrix target '{}' is ambiguous in output layout '{}'",
+                                    target.label,
+                                    layout_id),
+                        "source_label=" + route.source_label);
+                }
+                output_index = channel;
+            }
+            if (!output_index.has_value()) {
+                return make_error(ErrorCode::invalid_argument,
+                                  fmt::format("DirectSpeakers matrix target '{}' is not present in output layout '{}'",
+                                              target.label,
+                                              layout_id),
+                                  "source_label=" + route.source_label);
+            }
+            if (targets[*output_index].is_lfe) {
+                return make_error(
+                    ErrorCode::invalid_argument,
+                    fmt::format("DirectSpeakers matrix target '{}' is LFE; LFE uses dedicated routing", target.label),
+                    "source_label=" + route.source_label);
+            }
+            if (std::ranges::any_of(output_route.targets,
+                                    [&](const auto& existing) { return existing.output_channel == *output_index; })) {
+                return make_error(
+                    ErrorCode::invalid_argument,
+                    fmt::format("duplicate DirectSpeakers matrix target '{}' after alias resolution", target.label),
+                    "source_label=" + route.source_label);
+            }
+            output_route.targets.push_back({*output_index, target.gain});
+        }
+        resolved.routes.push_back(std::move(output_route));
+    }
+    return resolved;
+}
+
+Result<const ResolvedDirectSpeakersMatrixRoute*>
+direct_speakers_matrix_route_for_block(const ResolvedDirectSpeakersMatrix& matrix,
+                                       const SceneDirectSpeakersBlock& block) {
+    const ResolvedDirectSpeakersMatrixRoute* match = nullptr;
+    for (const auto& label : block.speaker_labels) {
+        const std::string key = canonical_direct_speaker_label(label);
+        const auto route = std::ranges::find(matrix.routes, key, &ResolvedDirectSpeakersMatrixRoute::source_key);
+        if (route == matrix.routes.end()) {
+            continue;
+        }
+        if (match != nullptr && match != &*route) {
+            return make_error(ErrorCode::invalid_argument,
+                              "DirectSpeakers block matches multiple matrix source rows",
+                              fmt::format("labels={}", fmt::join(block.speaker_labels, ",")));
+        }
+        match = &*route;
+    }
+    if (match == nullptr) {
+        const std::string labels = block.speaker_labels.empty()
+                                       ? std::string{"<missing>"}
+                                       : fmt::format("{}", fmt::join(block.speaker_labels, ","));
+        return make_error(ErrorCode::invalid_argument,
+                          fmt::format("DirectSpeakers block label '{}' is not covered by the routing matrix", labels));
+    }
+    return match;
 }
 
 std::optional<DirectSpeakerPosition> direct_speaker_position_for_labels(const std::vector<std::string>& labels) {
@@ -186,13 +326,16 @@ std::optional<float> resolve_live_channel_gain(const LiveOverrides& overrides,
     return std::pow(10.0F, pick->gain_db / 20.0F);
 }
 
-bool resolve_live_head_locked(const LiveOverrides& overrides,
-                              std::string_view object_id,
-                              std::string_view channel_label_key) {
+std::optional<bool> resolve_live_head_locked(const LiveOverrides& overrides,
+                                             std::string_view object_id,
+                                             std::string_view channel_label_key) {
     const LiveObjectOverride* whole = nullptr;
     const LiveObjectOverride* specific = nullptr;
     for (const auto& ov : overrides.objects) {
         if (ov.object_id != object_id) {
+            continue;
+        }
+        if (!ov.head_locked.has_value()) {
             continue;
         }
         if (ov.speaker_label.empty()) {
@@ -202,7 +345,7 @@ bool resolve_live_head_locked(const LiveOverrides& overrides,
         }
     }
     const LiveObjectOverride* pick = (specific != nullptr) ? specific : whole;
-    return pick != nullptr && pick->head_locked;
+    return pick != nullptr ? pick->head_locked : std::nullopt;
 }
 
 LiveGainRamp::LiveGainRamp(uint32_t sample_rate, uint32_t ramp_ms) noexcept

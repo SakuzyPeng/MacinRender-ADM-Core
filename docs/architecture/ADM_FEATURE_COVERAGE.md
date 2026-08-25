@@ -3,7 +3,7 @@
 本文档记录麦渲峰 ADM Core 对 BS.2076 / BS.2127 特性的当前覆盖状态，
 以及与 libadm / libear 能力边界之间的差距。
 
-最后更新：2026-05-25
+最后更新：2026-08-24
 
 ---
 
@@ -38,7 +38,7 @@
 | **zoneExclusion** | ❌ libadm 不解析此字段 | 🚫 zones 非空时抛出 | ❌ | ❌ | — 见注③ | ❌ |
 | **screenRef** | ✅ DefaultParam | 🚫 screenRef=true 时抛出 | ✅ | ✅ | ⚠️ warn+degrade | ⚠️ warn+degrade |
 | importance | ✅ DefaultParam | — 结构体无此字段 | ❌ | ❌ | — | — |
-| headLocked | ✅ DefaultParam | — | ❌ | ❌ | — | — |
+| **headLocked** | ✅ DefaultParam | — | ✅ 有效值 | ✅ block > AudioObject > false | — 元数据保留 | — 元数据保留 |
 | headphoneVirtualise | ✅ DefaultParam | — | ❌ | ❌ | — | — |
 | screenEdgeLock | ✅ Opt（在 position 内） | — | ❌ | ❌ | — | — |
 
@@ -114,7 +114,8 @@ libear `CartesianSpeakerPosition` 路径不再触发。
 | gain | ✅ DefaultParam | 手动应用 | ✅ | ✅ |
 | **rtime / duration**（时域块） | ✅ Default/Opt | — | ✅ | ✅ |
 | **channelFrequency**（在 AudioChannelFormat） | ✅ | ✅ | ✅ `low_pass_hz` | ✅ LFE 识别；22.2 EAR/VBAP/Apple 共用语义分路，其他布局保留既有路径 |
-| importance / headLocked | ✅ DefaultParam | — | ❌ | ❌ |
+| importance | ✅ DefaultParam | — | ❌ | ❌ |
+| **headLocked** | ✅ DefaultParam | — | ✅ 有效值 | ✅ block > AudioObject > false |
 
 ### DS 时域块（M3.2 已修复）
 
@@ -134,7 +135,7 @@ Apple 的 position/AmbienceBed 与 label/主机直达路径也按同一块边界
 | **duration**（对象有效时长上限） | ✅ Opt | ✅ | ✅ |
 | **gain**（对象级增益，乘到所有块） | ✅ DefaultParam | ✅ | ✅ |
 | **mute** | ✅ DefaultParam | ✅ | ✅ |
-| headLocked | ✅ DefaultParam | ❌ | ❌ |
+| **headLocked** | ✅ DefaultParam | ✅ 回退值 | ✅；缺失默认 false |
 | **positionOffset**（polar / cartesian） | ✅ Opt | ✅ | ✅ |
 | interact / disableDucking | ✅ Opt | ❌ | ❌ |
 | audioObjectInteraction | ✅ Opt | ❌ | ❌ |
@@ -144,6 +145,23 @@ Apple 的 position/AmbienceBed 与 label/主机直达路径也按同一块边界
 | audioComplementaryObjectGroupLabel | ✅ VectorParam | ❌ | ❌ |
 
 `gain`、`mute`、`duration` 已在 M3.1 中实现：`gain` 乘入所有块最终增益，`mute=true` 跳过对象渲染，`duration` 推算 `end_sample` 进行时域门控。
+
+### `headLocked` 继承、inspect 与写回
+
+Objects、DirectSpeakers 与 HOA 块统一采用“显式 block 值 > AudioObject 值 > ADM 默认 `false`”。
+importer 用 libadm `isDefault<adm::HeadLocked>()` 区分字段缺失与显式 `false`，因此对象级 `true`
+不会吞掉 block 级显式 `false`。`SceneObject` / `SceneHOATracks` 保存对象级回退值；三类 block 保存
+解析后的有效值。scene inspect schema v1 以加法字段输出对象和各 block 的 `head_locked`，HOA channel
+也输出完整 block 列表。
+
+ADM BWF 写回只在有效 block 值发生变化时写 `audioBlockFormat*.headLocked`；解锁会显式写 `0`。
+原始 AudioObject 层级不重写，未编辑字段继续由源 AXML 保留。Objects、DirectSpeakers 与 HOA 的写回
+均保持 PCM、`chna` 及其它非 AXML chunk 不变。
+
+GUI 对 Objects 成员以及 DirectSpeakers 各声道的全部时间 block 做三态聚合：选中为 scene-relative
+（参与头追踪），未选为 head-relative，中间态表示组内混合；Reset 恢复源状态。离线 policy 与实时
+override 共用“当前值是否不同于源值”的判断。实时声道级显式值优先于整对象，只有 gain/mute 的声道
+覆盖不参与 head-lock 解析；C ABI v1.33 以 `head_locked_valid=0` 表示继承 ADM。
 
 ---
 
@@ -194,7 +212,11 @@ importer 仅从这两层提取路由信息（TypeDescriptor、对 AudioChannelFo
 | Matrix | ⚠️ 丢弃，emit `import_warnings` 警告 | — |
 | Binaural | ⚠️ 丢弃，emit `import_warnings` 警告 | — |
 
-当前项目没有 ADM/BW64 写出能力；输出为普通 PCM 文件（WAV/CAF float）、FLAC 24-bit integer、Opus MKA 有损交付文件，或 macOS-only APAC `.m4a/.mp4` / APAC-in-CAF。Opus MKA 对标准 5.1/7.1 会重排到 Opus/Vorbis 声道顺序；HOA3 写入 Opus ambisonics mapping family 2；其它 9 声道及以上离散布局使用 mapping family 255，属于透明多流编码。布局语义不能只依赖播放器自动识别。
+普通渲染输出为 PCM（WAV/CAF float）、FLAC 24-bit integer、Opus MKA 有损交付文件，或 macOS-only
+APAC `.m4a/.mp4` / APAC-in-CAF。另有 ADM/BW64 元数据写回路径：复用源文件并只替换再序列化的 AXML，
+PCM、`chna` 与其它 RIFF chunk 原样复制；当前字段范围见 `include/adm/io.h`。Opus MKA 对标准 5.1/7.1
+会重排到 Opus/Vorbis 声道顺序；HOA3 写入 Opus ambisonics mapping family 2；其它 9 声道及以上离散
+布局使用 mapping family 255，属于透明多流编码。布局语义不能只依赖播放器自动识别。
 
 HOA 直接回放目前只确认 macOS 上的 CAF 与 APAC 可行。WAV HOA3 依赖 AmbiX `ambi` chunk 支持；Opus HOA3 虽可写入 ambisonics mapping，但常见播放器兼容性不足，不作为通用直接监听格式。实测 VLC 4.0 可回放 Opus HOA3；播放时需要在音频选项中将 mix node 从 `original: ambisonics` 改为 `binaural`，避免依赖声卡或系统直接承载 HOA 多声道输出。
 
@@ -252,7 +274,8 @@ LUFS / 空间 True Peak 测量缓冲中剥离，并由独立 mono True Peak trac
 | **reverb / room simulation** | ❌ 未实现 | 可作为可选后处理，不应默认改变 ADM 合规渲染结果 |
 | **扬声器布局统一** | ✅ EAR / SAF VBAP 共用项目布局 registry；对外均显示 8 个 speaker layouts（内部另保留 `0+2+0`） | 后续可增加配置文件或插件式布局源 |
 | **输出扬声器几何 profile** | ✅ `standard` / `apple` 两套内置坐标；EAR / SAF 可切换，Apple 后端固定 CoreAudio；CLI `--speaker-geometry`、C ABI v1.31 | profile 只改变非 LFE 有效输出坐标，不改变 ADM 输入语义或声道顺序 |
-| **DirectSpeakers 双路由** | ✅ `RenderOptions::direct_speakers_routing_mode` / CLI `--direct-speakers-routing` / C ABI v1.32；SAF 与 Apple 扬声器支持 `label` / `position` | `auto`：SAF/Apple 扬声器=`label`、Apple binaural=`position`；EAR/SAF binaural/HOA 保持原生且拒绝显式模式；LFE 始终优先走专用路径 |
+| **DirectSpeakers 路由与自定义标签矩阵** | ✅ `RenderOptions::direct_speakers_routing_mode` / CLI `--direct-speakers-routing`；C ABI v1.32 提供 `label` / `position`，v1.34 追加 `matrix` 与 path/JSON 配置；EAR、SAF、Apple 扬声器支持矩阵 | `matrix` 将每个非 LFE 输入标签按 `sqrt(weight/sum)` 分配到一个或多个输出标签，要求严格布局绑定与完整覆盖；LFE 始终优先走专用路径；binaural/HOA 拒绝矩阵 |
+| **ADM `headLocked` / 头追踪** | ✅ Objects、DirectSpeakers、HOA 读取/inspect/策略/写回；SAF 与 Apple binaural 离线及实时按活动 block 生效；C ABI v1.33 支持可选 live override | scene-relative=`false`、head-relative=`true`；扬声器后端不做听者旋转，仅保留元数据；系统空间音频监听不传递逐对象状态 |
 | **VBAP 布局扩展** | ✅ 通道顺序和 LFE 位置已校对；SAF 补齐 `5.1.2` / `9.1.4` / `9.1.6`，并保留 `register_vbap_layout()` 运行时注册入口 | — |
 | **VBAP 2D / 3D 配置** | ✅ 自动按布局高度判断；能力报告和 render 日志显示 2D/3D，2D 布局遇到高度源会 warning | 后续可增加显式 override 开关 |
 | **VBAP 插值策略配置** | ✅ `RenderOptions.default_interp_ms`（默认 5ms，0=瞬时切换，CLI `--interp-ms`）；EAR / HOA 渲染器同步生效 | — |
@@ -289,6 +312,7 @@ Objects 参数覆盖状态：
 | objectDivergence | ✅ 预处理为左右/中心虚拟源；每个虚拟源独立 HRTF OLA 状态 |
 | width / height / depth | ✅ 展开为 17 点 angular extent cloud；按内/外环面积权重拆成多方向 HRTF 源 |
 | diffuse | ✅ direct / diffuse 能量拆分；diffuse source 独立短延迟去相关后进入对应方向 HRTF OLA |
+| headLocked | ✅ 按活动 block 决定是否应用听者旋转；覆盖 point、extent cloud、diffuse 与离线 SAF spreader；实时显式 true/false 优先，缺失继承 ADM |
 | ADM HOA 输入 | ❌ 未实现；需先解码 HOA 到虚拟扬声器/方向阵列，再进入 HRTF 卷积 |
 
 手动验证（2026-05-23，`afinfo`）显示：PCM CAF 可读为 `Channel layout: Binaural`；
@@ -331,8 +355,10 @@ EAR diffuse bus 已在 M4 中实现（见注②）：`designDecorrelators()` FIR
 ### VBAP 完整度
 
 当前 SAF VBAP 后端已经覆盖 Objects / DirectSpeakers、2D / 3D gain table、
-DirectSpeakers 标签直达与零扩散位置 VBAP、ADM 块插值和 MDAP extent spread。EAR 与 SAF VBAP 的扬声器布局能力由
-`adm_render_common` 中的共享 registry 驱动。
+DirectSpeakers 标签直达、零扩散位置 VBAP 与自定义标签矩阵、ADM 块插值和 MDAP extent spread。
+矩阵模式在 renderer/layout 与有效 scene 确定后统一解析一次；EAR、SAF 与 Apple 直接消费预解析的不可变
+route，绕过对应非 LFE DirectSpeakers 的 libear/VBAP/SpatialMixer 声像计算。不同输入汇入同一目标时线性
+相加，不做跨输入自动归一化。EAR 与 SAF VBAP 的扬声器布局能力由 `adm_render_common` 中的共享 registry 驱动。
 
 **已内置扬声器布局（`speaker_layouts.cpp`）：**
 
@@ -377,7 +403,9 @@ EAR 保留 libear 的 ADM nominal topology，只把 real/effective position 换�
 输出几何反向改写 ADM 三角剖分语义。DirectSpeakers 在 `label` 模式命中精确 speakerLabel/别名时
 按标签直达，此时 profile 不影响结果；未命中时先恢复已知标签方向，否则使用 ADM 标称坐标，再使用所选
 profile 的几何执行零扩散 SAF VBAP。`position` 模式也使用所选 profile 的几何执行零扩散 SAF
-VBAP。Objects 与 channelLock 也使用所选几何。LFE 不参与两种模式的空间化。
+VBAP。`matrix` 模式按规范化输入标签直接查找显式 route，并把预计算的等功率系数写入指定输出槽位；
+因此它不读取输入位置，也不受输出 speaker 坐标 profile 影响，但 profile 的布局别名必须与有效输出布局
+一致。Objects 与 channelLock 仍使用所选几何。LFE 不参与三种模式的非 LFE 路由，始终先走专用路径。
 
 **仍待改善：**
 
@@ -431,7 +459,8 @@ warn+degrade 是防御性处理：libear 不抛出，但 P2 语义未完整渲�
 | ~~AudioContent language / label / loudness / dialogue~~ | ~~已实现：language、label values、首条 loudnessMetadata、dialogue_kind/content_kind 字符串~~ |
 | ~~AudioProgramme loudnessMetadata~~ | ~~已实现：读取首条内嵌响度元数据并在 CLI inspect 显示~~ |
 | ~~ADM HOA 块解码（typeDefinition=HOA）~~ | ~~已实现：GainCalculatorHOA，多 block，mute/gain，空 block 跳过~~ |
-| ADM Matrix / Binaural 块 | 复杂度高，覆盖率低 |
+| ~~ADM headLocked~~ | ~~已实现：Objects/DirectSpeakers/HOA 继承解析、inspect、策略、写回；SAF/Apple binaural 活动 block 与实时覆盖~~ |
+| ADM `typeDefinition=Matrix` / `typeDefinition=Binaural` 块 | 复杂度高，覆盖率低；与本项目的 DirectSpeakers 自定义标签路由矩阵无关 |
 | ~~HRTF binauraliser 基础后端~~ | ~~已实现：SAF KEMAR HRTF，Objects/DirectSpeakers，固定 48 kHz，PCM CAF 标记为 CoreAudio Binaural；APAC 经 `afinfo` 验证仍显示 Stereo~~ |
 | ~~SOFA binauraliser 基础路径~~ | ~~已实现：`--sofa` 加载用户 FIR SOFA HRIR，首版限制 2 receiver / 48 kHz / 不重采样；NetCDF 关闭，走 SAF 内置 libmysofa/zlib~~ |
 | ~~VBAP 插值策略配置~~ | ~~已实现：`RenderOptions.default_interp_ms`（默认 5ms，CLI `--interp-ms`），EAR/HOA 同步~~ |
@@ -443,7 +472,7 @@ warn+degrade 是防御性处理：libear 不抛出，但 P2 语义未完整渲�
 
 | 参数 | 原因 |
 |---|---|
-| headLocked / headphoneVirtualise | libear 不支持；平台渲染器（SpatialMixer）职责 |
+| headphoneVirtualise | libear 不支持；当前未进入场景模型或平台渲染器映射 |
 | importance（渲染优先级调度） | 资源调度策略，不影响增益数学；字段已读入 `SceneObject.importance` |
 | interact / audioObjectInteraction | 交互层元数据，不适用于离线渲染 |
 | disableDucking / maxDuckingDepth | 条件混音控制，超出当前范围 |
@@ -472,12 +501,13 @@ warn+degrade 是防御性处理：libear 不抛出，但 P2 语义未完整渲�
 | 内容类型 | 覆盖能力 |
 |---|---|
 | Objects（object 级） | `gain`：`scale` / `gain_db` / `mute` |
-| Objects（block 级） | `position`（绝对 az/el/dist + `offset` + `lock_azimuth/elevation`）、`diffuse`、`extent`、`divergence`、`channel_lock`（双向 `enabled` + `max_distance`）、`interpolation`（`honor_jump_position` / `max_ms`）|
-| DirectSpeakers（block 级） | `direct_speakers`：块内过滤器 `speaker_label` / `lfe`（AND）+ `gain`（`mute` 即静音该声道）+ `position` 重瞄 |
-| HOA（pack 级） | `gain`：`scale` / `gain_db` / `mute`（作用于整个 pack；不暴露逐声道块 gain 与 normalization/nfc/screen_ref）|
+| Objects（block 级） | 顶层 `head_locked`；`position`（绝对 az/el/dist + `offset` + `lock_azimuth/elevation`）、`diffuse`、`extent`、`divergence`、`channel_lock`（双向 `enabled` + `max_distance`）、`interpolation`（`honor_jump_position` / `max_ms`）|
+| DirectSpeakers（block 级） | 顶层 `head_locked`；`direct_speakers`：块内过滤器 `speaker_label` / `lfe`（AND）+ `head_locked` / `gain`（`mute` 即静音该声道）/ `position` 重瞄；过滤规则在顶层值之后覆盖 |
+| HOA | pack 级 `gain`：`scale` / `gain_db` / `mute`；顶层 `head_locked` 作用于 pack 的全部 channel block（不暴露逐声道块 gain 与 normalization/nfc/screen_ref）|
 
-`inspect --write-semantic-policy-template` 生成的中性模板原样应用是恒等（不改场景）；
-`--write-semantic-report` 输出 Objects/DS block 与 HOA pack 的 original→effective 对比及规则命中。
+`inspect --write-semantic-policy-template` 生成的中性模板原样应用是恒等（不改场景）；`head_locked`
+刻意从模板省略，因为 true/false 都是有效编辑而不存在中性布尔值。`--write-semantic-report` 输出
+Objects/DS/HOA block 的 original→effective `head_locked` 对比及规则命中。
 C ABI 经 `adm_render_options_set_semantic_policy_path`（应用）与 `adm_policy_template_json`（生成模板）暴露，
 policy schema 本身不跨 ABI（以文件/字符串传递）。
 

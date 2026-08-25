@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -6,6 +7,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -249,6 +251,76 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_direct_speakers_doc(
     doc->add(content);
 
     auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"DsProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+// Build one block of the requested type with independently optional object- and
+// block-level headLocked values. This lets the import test distinguish omitted
+// block metadata from an explicitly authored false value.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_head_locked_doc(adm::TypeDescriptor type,
+                                                                            std::optional<bool> object_head_locked,
+                                                                            std::optional<bool> block_head_locked) {
+    auto doc = adm::Document::create();
+
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"HeadLockedCF"}, type);
+    if (type == adm::TypeDefinition::OBJECTS) {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        if (block_head_locked.has_value()) {
+            block.set(adm::HeadLocked{*block_head_locked});
+        }
+        cf->add(block);
+    } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::SphericalSpeakerPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
+        block.add(adm::SpeakerLabel{"M+000"});
+        if (block_head_locked.has_value()) {
+            block.set(adm::HeadLocked{*block_head_locked});
+        }
+        cf->add(block);
+    } else {
+        adm::AudioBlockFormatHoa block{adm::Order{0}, adm::Degree{0}};
+        if (block_head_locked.has_value()) {
+            block.set(adm::HeadLocked{*block_head_locked});
+        }
+        cf->add(block);
+    }
+    doc->add(cf);
+
+    std::shared_ptr<adm::AudioPackFormat> pf;
+    if (type == adm::TypeDefinition::HOA) {
+        pf = adm::AudioPackFormatHoa::create(adm::AudioPackFormatName{"HeadLockedPF"});
+    } else {
+        pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"HeadLockedPF"}, type);
+    }
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"HeadLockedSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"HeadLockedTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"HeadLockedObject"});
+    if (object_head_locked.has_value()) {
+        object->set(adm::HeadLocked{*object_head_locked});
+    }
+    object->addReference(uid);
+    doc->add(object);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"HeadLockedContent"});
+    content->addReference(object);
+    doc->add(content);
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"HeadLockedProgramme"});
     programme->addReference(content);
     doc->add(programme);
 
@@ -562,6 +634,71 @@ bool verify_direct_speakers_blocks_fixture() {
         }
     }
 
+    return ok;
+}
+
+bool verify_head_locked_precedence() {
+    struct Case {
+        std::optional<bool> object_value{std::nullopt};
+        std::optional<bool> block_value{std::nullopt};
+        bool expected{false};
+        const char* name{""};
+    };
+    const std::array types{
+        adm::TypeDefinition::OBJECTS, adm::TypeDefinition::DIRECT_SPEAKERS, adm::TypeDefinition::HOA};
+    const std::array cases{
+        Case{std::nullopt, std::nullopt, false, "missing -> default false"},
+        Case{true, std::nullopt, true, "object true + block missing"},
+        Case{true, false, false, "block explicit false overrides object true"},
+        Case{false, true, true, "block explicit true overrides object false"},
+    };
+
+    bool ok = true;
+    for (const auto type : types) {
+        const char* type_name = "HOA";
+        if (type == adm::TypeDefinition::OBJECTS) {
+            type_name = "Objects";
+        } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
+            type_name = "DirectSpeakers";
+        }
+        for (const auto& test_case : cases) {
+            auto [doc, uid] = make_head_locked_doc(type, test_case.object_value, test_case.block_value);
+            auto path = write_fixture(uid, serialize_doc(doc));
+            const FileGuard guard{path};
+            const auto result = mradm::io::import_scene(path.string());
+            if (!result) {
+                std::cerr << "FAIL: headLocked " << type_name << " / " << test_case.name
+                          << " import failed: " << result.error().message << "\n";
+                ok = false;
+                continue;
+            }
+
+            const bool expected_object = test_case.object_value.value_or(false);
+            bool shape_ok = result->objects.size() == 1U && result->objects[0].tracks.size() == 1U;
+            bool effective = false;
+            if (shape_ok && type == adm::TypeDefinition::OBJECTS) {
+                shape_ok = result->objects[0].tracks[0].blocks.size() == 1U;
+                effective = shape_ok ? result->objects[0].tracks[0].blocks[0].head_locked : false;
+            } else if (shape_ok && type == adm::TypeDefinition::DIRECT_SPEAKERS) {
+                shape_ok = result->objects[0].tracks[0].ds_blocks.size() == 1U;
+                effective = shape_ok ? result->objects[0].tracks[0].ds_blocks[0].head_locked : false;
+            } else if (shape_ok) {
+                shape_ok = result->hoa_tracks.size() == 1U && result->hoa_tracks[0].channels.size() == 1U &&
+                           result->hoa_tracks[0].channels[0].blocks.size() == 1U;
+                effective = shape_ok ? result->hoa_tracks[0].channels[0].blocks[0].head_locked : false;
+                if (shape_ok && result->hoa_tracks[0].head_locked != expected_object) {
+                    std::cerr << "FAIL: headLocked HOA pack fallback / " << test_case.name << "\n";
+                    ok = false;
+                }
+            }
+
+            if (!shape_ok || result->objects[0].head_locked != expected_object || effective != test_case.expected) {
+                std::cerr << "FAIL: headLocked " << type_name << " / " << test_case.name
+                          << " (object=" << result->objects[0].head_locked << ", effective=" << effective << ")\n";
+                ok = false;
+            }
+        }
+    }
     return ok;
 }
 
@@ -1470,6 +1607,7 @@ int main() {
     ok &= verify_objects_blocks_fixture();
     ok &= verify_fractional_block_boundaries_are_contiguous();
     ok &= verify_direct_speakers_blocks_fixture();
+    ok &= verify_head_locked_precedence();
     ok &= verify_mixed_blocks_fixture();
     ok &= verify_direct_speakers_pack_channels_are_track_scoped();
     ok &= verify_binaural_skipped_produces_import_warning();

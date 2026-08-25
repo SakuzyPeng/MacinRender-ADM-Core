@@ -7,6 +7,7 @@
 #include <iostream>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -1113,7 +1114,8 @@ bool verify_hoa_stream_gain_override() {
         if (with_override) {
             mradm::LiveOverrides ov;
             ov.revision = 1;
-            ov.objects.push_back({object_id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""}); // 0.1 linear
+            ov.objects.push_back(
+                {object_id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", std::nullopt, false}); // 0.1
             ov.objects.back().mute = mute;
             (*stream)->set_overrides(ov);
         }

@@ -203,6 +203,7 @@ bool verify_semantic_report() {
     const auto original = make_scene();
     auto effective = original;
     effective.objects.at(0).tracks.at(0).blocks.at(0).diffuse = 0.0F;
+    effective.objects.at(0).tracks.at(0).blocks.at(0).head_locked = true;
 
     mradm::SemanticPolicy policy;
     mradm::SemanticObjectRule rule;
@@ -217,6 +218,10 @@ bool verify_semantic_report() {
     bool ok = true;
     ok &= check(result.has_value(), "semantic report writes");
     ok &= check(std::filesystem::exists(path), "semantic report file exists");
+    std::ifstream in(path);
+    const std::string text{std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
+    ok &= check(text.find("\"head_locked\"") != std::string::npos,
+                "semantic report includes original/effective head_locked values");
     return ok;
 }
 
@@ -610,6 +615,65 @@ bool verify_direct_speakers() {
     return ok;
 }
 
+bool verify_head_locked() {
+    bool ok = true;
+
+    // Top-level head_locked reaches every Objects block. Object rules are
+    // applied after global, and later object rules keep last-write-wins.
+    {
+        auto scene = make_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "global": { "head_locked": true },
+  "objects": [
+    { "id": "AO_1001", "head_locked": false },
+    { "id": "AO_1002", "head_locked": false },
+    { "id": "AO_1002", "head_locked": true }
+  ] })json",
+                           "head_locked_objects");
+        ok &= check(!scene.objects.at(0).tracks.at(0).blocks.at(0).head_locked,
+                    "object head_locked=false overrides global true");
+        ok &= check(scene.objects.at(1).tracks.at(0).blocks.at(0).head_locked, "later object head_locked rule wins");
+    }
+
+    // The filtered DirectSpeakers value is applied after the top-level value,
+    // so an explicit false can unlock one channel without changing the rest.
+    {
+        auto scene = make_ds_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "id": "AO_4001", "head_locked": true,
+    "direct_speakers": { "speaker_label": "M+000", "head_locked": false } } ] })json",
+                           "head_locked_ds_filter");
+        ok &= check(!scene.objects.at(0).tracks.at(0).ds_blocks.at(0).head_locked,
+                    "filtered DS head_locked=false overrides object-level policy");
+        ok &= check(scene.objects.at(0).tracks.at(1).ds_blocks.at(0).head_locked,
+                    "unmatched DS channel keeps top-level head_locked=true");
+    }
+
+    // HOA policy is block-scoped just like Objects and DirectSpeakers.
+    {
+        auto scene = make_hoa_scene();
+        ok &= apply_inline(scene,
+                           R"json({"schema":"mradm.semantic-policy.v1",
+  "objects": [ { "pack_format": "AP_00031001", "head_locked": true } ] })json",
+                           "head_locked_hoa");
+        ok &= check(scene.hoa_tracks.at(0).channels.at(0).blocks.at(0).head_locked,
+                    "HOA head_locked policy reaches channel blocks");
+    }
+
+    // Booleans are strict; strings such as "false" must not be accepted.
+    {
+        const auto path = write_temp_json("mr_semantic_head_locked_bad.json",
+                                          R"json({"schema":"mradm.semantic-policy.v1",
+  "global": { "head_locked": "false" } })json");
+        const FileGuard guard{path};
+        ok &= check(!mradm::load_semantic_policy_file(path).has_value(), "non-boolean head_locked is rejected");
+    }
+
+    return ok;
+}
+
 bool verify_hoa() {
     bool ok = true;
     // id (== object_id) match + gain scale.
@@ -714,6 +778,7 @@ bool verify_template_apply_is_identity() {
     block.position.x = 0.3F;
     block.position.y = 0.6F;
     block.position.z = -0.2F;
+    block.head_locked = true;
     track.blocks.push_back(block);
     obj.tracks.push_back(track);
     scene.objects.push_back(obj);
@@ -728,6 +793,7 @@ bool verify_template_apply_is_identity() {
     ds.speaker_labels = {"LFE"};
     ds.gain = 0.9F;
     ds.low_pass_hz = 120.0F;
+    ds.head_locked = true;
     bed_track.ds_blocks.push_back(ds);
     bed.tracks.push_back(bed_track);
     scene.objects.push_back(bed);
@@ -738,10 +804,19 @@ bool verify_template_apply_is_identity() {
     pack.pack_format_id = "AP_00031001";
     pack.gain = 0.8F;
     pack.mute = false;
+    mradm::SceneHOAChannel hoa_channel;
+    mradm::SceneHOAChannelBlock hoa_block;
+    hoa_block.head_locked = true;
+    hoa_channel.blocks.push_back(hoa_block);
+    pack.channels.push_back(hoa_channel);
     scene.hoa_tracks.push_back(pack);
 
     const auto write_result = mradm::write_semantic_policy_template_file(path, scene);
     bool ok = check(write_result.has_value(), "identity: template writes");
+    std::ifstream template_in(path);
+    const std::string template_text{std::istreambuf_iterator<char>{template_in}, std::istreambuf_iterator<char>{}};
+    ok &= check(template_text.find("\"head_locked\"") == std::string::npos,
+                "identity: neutral template omits head_locked");
     auto policy = mradm::load_semantic_policy_file(path);
     ok &= check(policy.has_value(), "identity: template parses");
     if (!policy) {
@@ -757,13 +832,16 @@ bool verify_template_apply_is_identity() {
     ok &= check(a.mute, "identity: muted object stays muted");
     ok &= check(near(a.gain, 0.75F), "identity: object gain unchanged");
     ok &= check(!b.channel_lock, "identity: channel_lock stays off");
+    ok &= check(b.head_locked, "identity: Objects head_locked stays on");
     ok &= check(b.position.cartesian, "identity: Cartesian position stays Cartesian");
     ok &= check(near(b.position.x, 0.3F) && near(b.position.y, 0.6F) && near(b.position.z, -0.2F),
                 "identity: Cartesian coordinates unchanged");
     const auto& ds_eff = applied.objects.at(1).tracks.at(0).ds_blocks.at(0);
     ok &= check(near(ds_eff.gain, 0.9F), "identity: DS LFE gain unchanged");
+    ok &= check(ds_eff.head_locked, "identity: DS head_locked stays on");
     const auto& hoa_eff = applied.hoa_tracks.at(0);
     ok &= check(near(hoa_eff.gain, 0.8F) && !hoa_eff.mute, "identity: HOA pack gain/mute unchanged");
+    ok &= check(hoa_eff.channels.at(0).blocks.at(0).head_locked, "identity: HOA block head_locked stays on");
     return ok;
 }
 
@@ -781,6 +859,7 @@ int main() {
     ok &= verify_match_dimensions();
     ok &= verify_channel_lock_full();
     ok &= verify_direct_speakers();
+    ok &= verify_head_locked();
     ok &= verify_hoa();
     ok &= verify_template_apply_is_identity();
     if (ok) {

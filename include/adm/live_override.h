@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,13 +28,10 @@ struct LiveObjectOverride {
     // Mirrors the export-path DirectSpeakersPolicy.speaker_label so live and export stay in sync.
     // Trails the numeric fields so existing positional initializers keep compiling.
     std::string speaker_label;
-    // Head-tracking participation. false (default) = world-locked: the object/channel is fixed in
-    // the world, so it counter-rotates as the listener turns their head (current behavior). true =
-    // head-locked: stays fixed relative to the head (e.g. narration / music), so head tracking does
-    // NOT move it. Resolved per channel like gain (whole-object vs per-channel speaker_label). The
-    // Apple monitor backend (per-bus head-orientation compensation) and the SAF binaural renderer
-    // (per-source direction rotation) honor it; other backends ignore it.
-    bool head_locked{false};
+    // Explicit live head-lock override. nullopt inherits the active ADM block;
+    // false forces scene/world-relative and true forces head-relative. Resolved
+    // per channel like gain (whole object vs speaker_label).
+    std::optional<bool> head_locked;
     bool mute{false}; // true forces this object/channel to exact silence; gain_db is ignored
 };
 

@@ -89,7 +89,7 @@ labels produce errors. Custom `U±110` labels require `@30` or `@45` to select e
 
 Public two-channel output uses the `binaural` semantic, which is also the default. Backend and HRTF source are separate
 choices: `saf-binaural` offers built-in KEMAR and build-enabled `--sofa` user HRIRs; `apple` uses the Apple system HRTF.
-Current entry points are the CLI, C++ API, and C ABI v1.32.
+Current entry points are the CLI, C++ API, and C ABI v1.34.
 
 ## Release Packages
 
@@ -206,21 +206,32 @@ profile for project `9.1.4` or internal speaker stereo, so those combinations re
 falling back. The Apple renderer always uses CoreAudio geometry and ignores this option. LFE does not participate in
 the geometry switch.
 
-SAF and Apple loudspeaker DirectSpeakers routing is selectable with
-`--direct-speakers-routing auto|label|position`. The default `auto` resolves to `label` for both speaker backends:
+DirectSpeakers routing is selectable with `--direct-speakers-routing auto|label|position|matrix`. The default `auto`
+resolves to `label` for SAF and Apple loudspeaker output:
 an exact output-label match is attempted first, followed by the shared alias table (for example `L` → `M+030`), and
 a match is routed one-hot to that output slot. A miss is spatialized from the known BS.2051/alias label direction when
 available, otherwise from the ADM nominal coordinates. `position` ignores non-LFE labels and performs zero-spread,
 non-interpolated spatialization; SAF uses the selected speaker geometry and Apple uses its AmbienceBed path. When a
 coordinate fallback is needed but coordinates are missing, front centre `(0°,0°)` is used with a warning.
-Apple binaural `auto` remains `position` and rejects explicit `label`; EAR, SAF binaural, and HOA retain native
-behaviour under `auto` and reject explicit routing modes. LFE always takes the existing dedicated route first.
+
+`matrix` uses `--direct-speakers-matrix <json>` to route every non-LFE input label to one or more target labels on
+EAR, SAF, and Apple loudspeaker outputs. Each row is normalized as `sqrt(weight/sum)`, and `mute:true` is an explicit
+silent route. The profile must bind the effective output layout and cover every non-LFE DirectSpeakers block;
+duplicate, unknown, or ambiguous labels and LFE source/target rows are errors. LFE always takes the existing dedicated
+route first. Apple binaural keeps `auto=position`, rejects explicit `label`, and rejects `matrix`; EAR adds only
+`matrix`, while its explicit `label` / `position` boundary is unchanged. SAF binaural and HOA retain native `auto`
+behaviour and reject every explicit mode. This phase exposes CLI, C++, and C ABI entry points; GUI controls are
+deferred.
 The desktop app exposes the same Speaker Geometry selector for EAR / SAF loudspeaker rendering and remembers the last
 selection.
 
 ```bash
 ./build/release/mradm render -i input.wav -o saf_apple_222.wav \
   --renderer saf --output-layout 22.2 --speaker-geometry apple
+
+./build/release/mradm render -i bed.wav -o remapped_714.wav \
+  --renderer ear --output-layout 7.1.4 \
+  --direct-speakers-routing matrix --direct-speakers-matrix routes.json
 ```
 
 Query full channel-order tables with:
@@ -241,7 +252,8 @@ Query full channel-order tables with:
 | `--input-channels <csv>` | Custom ordinary-input labels in exact file-channel order; choose this or an explicit `--input-layout` | Off |
 | `--output-layout <layout>` | Output semantic/layout: `binaural`, a multichannel layout, or `hoa3` | `binaural` |
 | `--speaker-geometry standard\|apple` | EAR / SAF output-speaker coordinates; the Apple backend always uses CoreAudio geometry | `standard` |
-| `--direct-speakers-routing auto\|label\|position` | SAF / Apple DirectSpeakers label-direct or position-spatialized routing | `auto` |
+| `--direct-speakers-routing auto\|label\|position\|matrix` | Native, label, position, or custom label-matrix DirectSpeakers routing | `auto` |
+| `--direct-speakers-matrix <path>` | Strict v1 sparse-matrix JSON required by `matrix` mode | Off |
 | `--output-bit-depth f32\|i24\|i16` | WAV output bit depth; CAF is fixed float32, FLAC is fixed 24-bit / up to 8 channels | `f32` |
 | `--loudness-target <LUFS>` | Normalize integrated loudness; HOA uses a 7.1.4 AllRAD reference decode and full-range channels for LUFS | Off |
 | `--peak-limit-dbtp <dBTP>` | True Peak limit target | `-1.0` |

@@ -175,6 +175,7 @@ static_assert(static_cast<int>(mradm::SpeakerGeometry::apple) == ADM_SPEAKER_GEO
 static_assert(static_cast<int>(mradm::DirectSpeakersRoutingMode::automatic) == ADM_DIRECT_SPEAKERS_ROUTING_AUTOMATIC);
 static_assert(static_cast<int>(mradm::DirectSpeakersRoutingMode::label) == ADM_DIRECT_SPEAKERS_ROUTING_LABEL);
 static_assert(static_cast<int>(mradm::DirectSpeakersRoutingMode::position) == ADM_DIRECT_SPEAKERS_ROUTING_POSITION);
+static_assert(static_cast<int>(mradm::DirectSpeakersRoutingMode::matrix) == ADM_DIRECT_SPEAKERS_ROUTING_MATRIX);
 
 static_assert(static_cast<int>(mradm::RenderOptions::IamfContainer::obu) == ADM_IAMF_CONTAINER_OBU);
 static_assert(static_cast<int>(mradm::RenderOptions::IamfContainer::mp4) == ADM_IAMF_CONTAINER_MP4);
@@ -795,11 +796,45 @@ adm_error_code_t adm_render_options_set_direct_speakers_routing_mode(adm_render_
         return ADM_ERROR_OK;
     }
     if (static_cast<int>(mode) < ADM_DIRECT_SPEAKERS_ROUTING_AUTOMATIC ||
-        static_cast<int>(mode) > ADM_DIRECT_SPEAKERS_ROUTING_POSITION) {
+        static_cast<int>(mode) > ADM_DIRECT_SPEAKERS_ROUTING_MATRIX) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     opts->opts.direct_speakers_routing_mode = static_cast<mradm::DirectSpeakersRoutingMode>(mode);
     return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_direct_speakers_matrix_path(adm_render_options_t* opts,
+                                                                    const char* path) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    try {
+        if (path == nullptr || path[0] == '\0') {
+            opts->opts.direct_speakers_matrix_path = std::nullopt;
+        } else {
+            opts->opts.direct_speakers_matrix_path = std::filesystem::path{path};
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_render_options_set_direct_speakers_matrix_json(adm_render_options_t* opts,
+                                                                    const char* json) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    try {
+        if (json == nullptr || json[0] == '\0') {
+            opts->opts.direct_speakers_matrix_json = std::nullopt;
+        } else {
+            opts->opts.direct_speakers_matrix_json = std::string{json};
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
 }
 
 adm_error_code_t adm_render_options_set_lfe_routing_mode(adm_render_options_t* opts,
@@ -1362,7 +1397,12 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
             ov.extent_width_scale = src.extent_width_scale;
             ov.extent_height_scale = src.extent_height_scale;
             ov.extent_depth_scale = src.extent_depth_scale;
-            ov.head_locked = src.head_locked != 0;
+            if (!has_field(offsetof(adm_monitor_override_t, head_locked_valid), sizeof(int32_t)) ||
+                src.head_locked_valid != 0) {
+                // Missing valid field is an old caller: preserve v1.23 semantics,
+                // where every override entry explicitly supplied head_locked.
+                ov.head_locked = src.head_locked != 0;
+            }
             ov.mute = src.mute != 0;
             live.objects.push_back(std::move(ov));
         }
