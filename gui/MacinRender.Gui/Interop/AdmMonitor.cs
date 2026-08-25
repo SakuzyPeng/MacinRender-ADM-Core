@@ -57,8 +57,8 @@ public struct AdmMonitorOverride
     // Non-NULL restricts the override to one bed channel; IntPtr.Zero = whole object.
     public IntPtr SpeakerLabel;
 
-    // v1.23: head-tracking participation. 0 = world-locked(跟头转,默认);非 0 = head-locked
-    // (锁在头上,头追踪不移动它)。Apple 与 SAF binaural 监听后端实装。
+    // v1.23: head-tracking participation. 0 = scene/world-relative (default); non-zero =
+    // head-locked (fixed relative to the listener). Apple and SAF binaural honor it.
     public int HeadLocked;
 
     // v1.29: keeps Mute beyond the old native struct size on 64-bit ABIs. Always zero.
@@ -66,4 +66,10 @@ public struct AdmMonitorOverride
 
     // v1.29: non-zero forces the object/channel to silence; GainDb is ignored.
     public int Mute;
+
+    // v1.33: occupies the v1.29-v1.32 native struct's 64-bit tail padding. Always zero.
+    public uint ReservedV133;
+
+    // v1.33: 0 inherits the active ADM block; non-zero applies HeadLocked explicitly.
+    public int HeadLockedValid;
 }

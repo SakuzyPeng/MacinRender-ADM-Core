@@ -123,6 +123,7 @@ add_library(MacinRender::ADMCore ALIAS mr_adm_core)
 target_sources(
     mr_adm_core
     PRIVATE
+        src/adm_core/direct_speakers_matrix.cpp
         src/adm_core/semantic_policy.cpp
         "${MR_ADM_GENERATED_VERSION_CPP}"
     PUBLIC
@@ -130,6 +131,7 @@ target_sources(
         BASE_DIRS include
         FILES
             include/adm/capability.h
+            include/adm/direct_speakers_matrix.h
             include/adm/errors.h
             include/adm/live_override.h
             include/adm/logging.h
@@ -497,6 +499,7 @@ target_include_directories(mr_adm_renderer_factory PUBLIC ${CMAKE_CURRENT_SOURCE
 target_link_libraries(mr_adm_renderer_factory
     PUBLIC MacinRender::ADMCore
     PRIVATE MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural
+            MacinRender::ADMRenderCommon
 )
 if(APPLE)
     target_link_libraries(mr_adm_renderer_factory PRIVATE MacinRender::ADMRenderApple)
@@ -750,6 +753,30 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_speaker_layouts_tests)
     mr_adm_core_apply_static_analysis(mr_adm_speaker_layouts_tests)
     add_test(NAME mr_adm_speaker_layouts_tests COMMAND mr_adm_speaker_layouts_tests)
+
+    add_executable(mr_adm_direct_speakers_matrix_tests tests/unit/direct_speakers_matrix_test.cpp)
+    target_link_libraries(mr_adm_direct_speakers_matrix_tests
+        PRIVATE
+            MacinRender::ADMRendererFactory
+            MacinRender::ADMRenderCommon
+    )
+    mr_adm_core_apply_warnings(mr_adm_direct_speakers_matrix_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_tests)
+    add_test(NAME mr_adm_direct_speakers_matrix_tests COMMAND mr_adm_direct_speakers_matrix_tests)
+
+    add_executable(mr_adm_direct_speakers_matrix_render_tests tests/unit/direct_speakers_matrix_render_test.cpp)
+    target_link_libraries(mr_adm_direct_speakers_matrix_render_tests
+        PRIVATE
+            MacinRender::ADMRenderEar
+            MacinRender::ADMRenderVBAP
+            MacinRender::ADMAudio
+    )
+    if(APPLE)
+        target_link_libraries(mr_adm_direct_speakers_matrix_render_tests PRIVATE MacinRender::ADMRenderApple)
+    endif()
+    mr_adm_core_apply_warnings(mr_adm_direct_speakers_matrix_render_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_direct_speakers_matrix_render_tests)
+    add_test(NAME mr_adm_direct_speakers_matrix_render_tests COMMAND mr_adm_direct_speakers_matrix_render_tests)
 
     # Smoke test: non-existent file → io_error via full engine stack.
     add_executable(mr_adm_ear_smoke_tests tests/unit/ear_render_smoke_test.cpp)

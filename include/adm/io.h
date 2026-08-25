@@ -69,9 +69,12 @@ Result<std::string> get_axml(const std::string& path);
 // object/track/block ordering aligns one-to-one with the source document.
 //
 // Stage 1 covers Objects (object gain/mute; block gain/diffuse/extent/
-// divergence/channelLock/jumpPosition/interpolationLength) and DirectSpeakers
-// gain. Position and HOA pack gain/mute are not written back yet; differences
-// there are ignored.
+// divergence/channelLock/jumpPosition/interpolationLength/headLocked),
+// DirectSpeakers block gain/headLocked, and HOA block headLocked. AudioObject
+// headLocked is deliberately not rewritten: an authored edit is projected to
+// blocks so explicit false can override an object-level true without ambiguity.
+// Position and HOA pack gain/mute are not written back yet; differences there
+// are ignored.
 Result<void> write_scene(const std::string& src_path,
                          const AdmScene& original,
                          const AdmScene& effective,

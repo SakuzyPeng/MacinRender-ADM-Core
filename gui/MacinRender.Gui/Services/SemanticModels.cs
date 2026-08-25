@@ -105,6 +105,7 @@ internal sealed class InspectObject
     public string Name { get; set; } = "";
     public double Gain { get; set; } = 1.0;
     public bool Mute { get; set; }
+    public bool HeadLocked { get; set; }
     public int? Importance { get; set; }
     public int? DialogueId { get; set; }
     public ulong? EndSample { get; set; } // 省略 = 活到片尾
@@ -124,6 +125,7 @@ internal sealed class InspectDsBlock
 {
     public List<string> SpeakerLabels { get; set; } = new();
     public double Gain { get; set; } = 1.0;
+    public bool HeadLocked { get; set; }
     public bool HasPosition { get; set; }
     public double Azimuth { get; set; }
     public double Elevation { get; set; }
@@ -145,6 +147,7 @@ internal sealed class InspectPosition
 internal sealed class InspectObjectBlock
 {
     public double Gain { get; set; } = 1.0;
+    public bool HeadLocked { get; set; }
     public double Diffuse { get; set; }
     public double Width { get; set; }
     public double Height { get; set; }

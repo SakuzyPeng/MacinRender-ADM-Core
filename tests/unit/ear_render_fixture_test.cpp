@@ -1683,7 +1683,8 @@ bool verify_ear_stream_gain_override() {
         if (with_override) {
             mradm::LiveOverrides ov;
             ov.revision = 1;
-            ov.objects.push_back({object_id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""}); // 0.1 linear
+            ov.objects.push_back(
+                {object_id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", std::nullopt, false}); // 0.1
             (*stream)->set_overrides(ov);
         }
         const uint32_t oc = (*stream)->out_channels();
@@ -1718,9 +1719,11 @@ bool verify_ear_stream_gain_override() {
 // no match → nullopt (channel renders at unity).
 bool verify_resolve_live_channel_gain() {
     mradm::LiveOverrides ov;
-    ov.objects.push_back({"AO_bed", 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "M+030"}); // -? per-channel
-    ov.objects.back().gain_db = -6.0206F;                                                // ≈ 0.5 linear
-    ov.objects.push_back({"AO_bed", -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""});    // whole-object 0.1
+    ov.objects.push_back(
+        {"AO_bed", 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "M+030", std::nullopt, false}); // per-channel
+    ov.objects.back().gain_db = -6.0206F;                                                    // ≈ 0.5 linear
+    ov.objects.push_back(
+        {"AO_bed", -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", std::nullopt, false}); // whole-object 0.1
 
     bool ok = true;
     // M+030 channel of AO_bed → the per-channel entry wins (≈0.5), not the whole-object 0.1.
@@ -1731,7 +1734,7 @@ bool verify_resolve_live_channel_gain() {
     ok &= check(m_030.has_value() && std::fabs(*m_030 - 0.1F) < 1.0e-3F, "resolver: falls back to whole-object (~0.1)");
     // The sign is significant: an "M+030" override must NOT match the "M-030" channel.
     mradm::LiveOverrides plus_only;
-    plus_only.objects.push_back({"AO_bed", -6.0206F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "M+030"});
+    plus_only.objects.push_back({"AO_bed", -6.0206F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "M+030", std::nullopt, false});
     ok &= check(!mradm::render_common::resolve_live_channel_gain(plus_only, "AO_bed", "M-030").has_value(),
                 "resolver: M+030 override does not bleed onto the M-030 channel");
     // A different object → no match.
@@ -1739,7 +1742,7 @@ bool verify_resolve_live_channel_gain() {
                 "resolver: unrelated object → no override");
     // Canonicalization: "m_+030" / "M+030" compare equal (case + separators ignored, sign kept).
     mradm::LiveOverrides messy;
-    messy.objects.push_back({"AO_bed", -6.0206F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "m_+030"});
+    messy.objects.push_back({"AO_bed", -6.0206F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "m_+030", std::nullopt, false});
     const auto norm = mradm::render_common::resolve_live_channel_gain(messy, "AO_bed", "M+030");
     ok &=
         check(norm.has_value() && std::fabs(*norm - 0.5F) < 1.0e-3F, "resolver: speaker label match is canonicalized");
@@ -1809,7 +1812,7 @@ bool verify_ear_stream_per_channel_override() {
     const auto base = channel_energy(nullptr);
     mradm::LiveOverrides ov;
     ov.revision = 1;
-    ov.objects.push_back({object_id, -40.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "M+030"}); // ch0 only
+    ov.objects.push_back({object_id, -40.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "M+030", std::nullopt, false}); // ch0
     const auto over = channel_energy(&ov);
 
     bool ok = check(base.size() >= 2 && over.size() == base.size(), "per-channel: same output channel count");

@@ -256,6 +256,109 @@ internal static class SelfTest
         }
         Console.WriteLine("语义 gain -inf:policy/live mute OK");
 
+        // v1.33 interop tail layout: valid follows the reserved padding guard and is
+        // included in the managed struct passed to adm_monitor_set_overrides.
+        int reservedV133Offset = Marshal.OffsetOf<AdmMonitorOverride>(nameof(AdmMonitorOverride.ReservedV133)).ToInt32();
+        int headLockedValidOffset = Marshal.OffsetOf<AdmMonitorOverride>(nameof(AdmMonitorOverride.HeadLockedValid)).ToInt32();
+        if (headLockedValidOffset != reservedV133Offset + sizeof(uint) ||
+            Marshal.SizeOf<AdmMonitorOverride>() < headLockedValidOffset + sizeof(int))
+        {
+            Console.Error.WriteLine("[失败] C# adm_monitor_override_t v1.33 尾部布局不匹配");
+            return 15;
+        }
+
+        // 三态聚合：同一对象跨时间 block 混合时为 null；仅 gain 的实时覆盖必须继续继承 ADM。
+        var mixedInspect = new InspectObject
+        {
+            Id = "AO_HEAD_MIXED",
+            Name = "Head Mixed",
+            Gain = 1.0,
+            HeadLocked = false,
+            Tracks =
+            [
+                new InspectTrack
+                {
+                    ObjectBlocks =
+                    [
+                        new InspectObjectBlock { HeadLocked = false },
+                        new InspectObjectBlock { HeadLocked = true },
+                    ],
+                },
+            ],
+        };
+        var mixedItem = SemanticObjectItem.From(mixedInspect);
+        var mixedRow = SemanticRow.BuildRows([mixedItem]).Single();
+        mixedRow.GainDb.Enabled = true;
+        var gainOnlyHead = mixedRow.BuildLiveOverrides().Single().HeadLocked;
+        mixedRow.GainDb.Reset();
+        if (mixedRow.HeadTrackParticipate is not null || gainOnlyHead is not null || mixedRow.HasOverride)
+        {
+            Console.Error.WriteLine("[失败] headLocked 时间块三态聚合或 gain-only 继承 ADM 失败");
+            return 15;
+        }
+
+        // 用户从混合态点成“场景相对”后，导出 policy 与 live override 都显式投影 false；Reset 回源混合态。
+        mixedRow.HeadTrackParticipate = true;
+        var mixedHeadRule = mixedRow.BuildRules().Single();
+        var mixedHeadLive = mixedRow.BuildLiveOverrides().Single();
+        if (!mixedRow.HasOverride || mixedHeadRule["head_locked"]?.GetValue<bool>() != false ||
+            mixedHeadLive.HeadLocked != false)
+        {
+            Console.Error.WriteLine("[失败] headLocked 三态未统一投影到 policy/live");
+            return 15;
+        }
+        mixedRow.ResetAll();
+        if (mixedRow.HeadTrackParticipate is not null || mixedRow.HasOverride || mixedRow.BuildRules().Any() ||
+            mixedRow.BuildLiveOverrides().Any())
+        {
+            Console.Error.WriteLine("[失败] headLocked Reset 未恢复源混合态");
+            return 15;
+        }
+
+        // DirectSpeakers 聚合同一声道的全部时间 block，并按 speaker_label 同时投影导出/实时规则。
+        var bedInspect = new InspectObject
+        {
+            Id = "AO_BED_HEAD_MIXED",
+            Name = "Bed Head Mixed",
+            Gain = 1.0,
+            Tracks =
+            [
+                new InspectTrack
+                {
+                    DsBlocks =
+                    [
+                        new InspectDsBlock
+                            { SpeakerLabels = ["M+000"], HasPosition = true, HeadLocked = false },
+                        new InspectDsBlock
+                            { SpeakerLabels = ["M+000"], HasPosition = true, HeadLocked = true },
+                    ],
+                },
+            ],
+        };
+        var bedRow = SemanticRow.BuildRows([SemanticObjectItem.From(bedInspect, isBed: true)]).Single();
+        var bedChannel = bedRow.BedChannels.Single();
+        if (bedChannel.HeadTrackParticipate is not null)
+        {
+            Console.Error.WriteLine("[失败] DirectSpeakers 时间块三态聚合失败");
+            return 15;
+        }
+        bedChannel.HeadTrackParticipate = false;
+        var bedRule = bedRow.BuildRules().Single()["direct_speakers"] as JsonObject;
+        var bedLive = bedRow.BuildLiveOverrides().Single();
+        if (bedRule?["head_locked"]?.GetValue<bool>() != true || bedLive.HeadLocked != true ||
+            bedLive.SpeakerLabel != "M+000")
+        {
+            Console.Error.WriteLine("[失败] DirectSpeakers headLocked policy/live 声道投影失败");
+            return 15;
+        }
+        bedRow.ResetAll();
+        if (bedChannel.HeadTrackParticipate is not null || bedRow.HasOverride)
+        {
+            Console.Error.WriteLine("[失败] DirectSpeakers headLocked Reset 未恢复源混合态");
+            return 15;
+        }
+        Console.WriteLine("ADM headLocked:三态聚合 / Reset / policy+live 投影 / C# ABI v1.33 OK");
+
         if (string.IsNullOrEmpty(inputWav))
         {
             Console.WriteLine("(未给 wav,跳过真实渲染。加载/查询/监听入口链路 OK。)");

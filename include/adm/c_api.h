@@ -114,8 +114,8 @@
  *   后端热切换 / 输出设备切换保留。yaw +左（与 ADM 方位一致），pitch +上,roll 跟随单元符号。
  *
  * v1.23 新增（additive，SOVERSION 不变）：
- *   adm_monitor_override_t 追加 head_locked 字段（int32）。0=world-locked（跟头转,现状）;非 0=
- *   head-locked（锁在头上,头追踪不移动它,如旁白/音乐）。按声道解析（整对象 vs speaker_label）,
+ *   adm_monitor_override_t 追加 head_locked 字段（int32）。0=scene/world-relative（参与头追踪）;非 0=
+ *   head-locked（相对听者固定,头追踪不移动它,如旁白/音乐）。按声道解析（整对象 vs speaker_label）,
  *   Apple 监听后端（per-bus 头朝向补偿）与 SAF binaural 后端实装,其它后端忽略。struct_size 守护:旧调用方按 0 处理。
  *
  * v1.24 新增（additive，SOVERSION 不变）：
@@ -159,12 +159,20 @@
  *   adm_direct_speakers_routing_mode_t +
  *   adm_render_options_set_direct_speakers_routing_mode。SAF / Apple DirectSpeakers 可在
  *   label（标签直达）与 position（按标称坐标空间化）之间切换。
+ *
+ * v1.33 新增（additive，SOVERSION 不变）：
+ *   adm_monitor_override_t 追加 head_locked_valid。新调用方以 0 表示继承 ADM block，
+ *   非 0 表示采用既有 head_locked；旧 struct_size 继续按 v1.23 的显式 0/非 0 语义解析。
+ *
+ * v1.34 新增（additive，SOVERSION 不变）：
+ *   DirectSpeakers routing 追加 matrix=3，并新增 path / 内存 JSON setter；EAR / SAF /
+ *   Apple 扬声器输出可按稀疏标签矩阵做一对多等功率直达。GUI 接入后置。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 32
+#define ADM_API_VERSION_MINOR 34
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -270,11 +278,12 @@ typedef enum adm_speaker_geometry_t {
     ADM_SPEAKER_GEOMETRY_APPLE = 1
 } adm_speaker_geometry_t;
 
-/* DirectSpeakers routing for SAF / Apple renderers. v1.32 */
+/* DirectSpeakers routing. matrix is available on EAR / SAF / Apple speaker outputs. v1.32/v1.34 */
 typedef enum adm_direct_speakers_routing_mode_t {
     ADM_DIRECT_SPEAKERS_ROUTING_AUTOMATIC = 0,
     ADM_DIRECT_SPEAKERS_ROUTING_LABEL = 1,
-    ADM_DIRECT_SPEAKERS_ROUTING_POSITION = 2
+    ADM_DIRECT_SPEAKERS_ROUTING_POSITION = 2,
+    ADM_DIRECT_SPEAKERS_ROUTING_MATRIX = 3
 } adm_direct_speakers_routing_mode_t;
 
 /* Severity of a captured diagnostic log entry (see adm_render_result_log_entry). */
@@ -523,12 +532,19 @@ adm_error_code_t adm_render_options_set_binaural_spread_mode(adm_render_options_
  * always uses its CoreAudio layout geometry. NULL opts is a safe no-op returning OK. */
 adm_error_code_t adm_render_options_set_speaker_geometry(adm_render_options_t* opts,
                                                          adm_speaker_geometry_t geometry) ADM_API_NOEXCEPT;
-/* v1.32. Select DirectSpeakers label or position routing. Automatic resolves to
+/* v1.32/v1.34. Select DirectSpeakers label, position, or matrix routing. Automatic resolves to
  * label for SAF / Apple speakers and position for Apple binaural. Explicit modes
  * on unsupported backends fail when rendering. NULL opts is a safe no-op. */
 adm_error_code_t
 adm_render_options_set_direct_speakers_routing_mode(adm_render_options_t* opts,
                                                     adm_direct_speakers_routing_mode_t mode) ADM_API_NOEXCEPT;
+/* v1.34. Matrix path / UTF-8 JSON. NULL or "" clears the field; JSON takes
+ * precedence when both are set. Parsing and scene/layout validation occur at
+ * render/monitor preparation time. The strings are copied internally. */
+adm_error_code_t adm_render_options_set_direct_speakers_matrix_path(adm_render_options_t* opts,
+                                                                    const char* path) ADM_API_NOEXCEPT;
+adm_error_code_t adm_render_options_set_direct_speakers_matrix_json(adm_render_options_t* opts,
+                                                                    const char* json) ADM_API_NOEXCEPT;
 /* v1.30. NULL opts is a safe no-op returning ADM_ERROR_OK. */
 adm_error_code_t adm_render_options_set_lfe_routing_mode(adm_render_options_t* opts,
                                                          adm_lfe_routing_mode_t mode) ADM_API_NOEXCEPT;
@@ -1050,6 +1066,12 @@ typedef struct adm_monitor_override_t {
     /* v1.29: non-zero = exact mute for this object/channel. gain_db is ignored while muted.
        Missing from an older caller's struct_size = 0 (unmuted). */
     int32_t mute;
+    /* v1.33: size guard occupying the v1.29-v1.32 64-bit ABI's tail padding. Set to 0. */
+    uint32_t reserved_v1_33;
+    /* v1.33: 0 = inherit the active ADM block's effective headLocked; non-zero = explicitly
+       override it with head_locked. Callers whose struct_size does not cover this field retain
+       the v1.23 behavior where head_locked is always explicit. */
+    int32_t head_locked_valid;
 } adm_monitor_override_t;
 
 /*

@@ -79,6 +79,7 @@ json object_block_to_json(const SceneObjectBlock& blk) {
     json j = json::object();
     j["position"] = position_to_json(blk.position);
     j["gain"] = blk.gain;
+    j["head_locked"] = blk.head_locked;
     j["diffuse"] = blk.diffuse;
     j["width"] = blk.width;
     j["height"] = blk.height;
@@ -113,6 +114,7 @@ json ds_block_to_json(const SceneDirectSpeakersBlock& blk) {
     add_opt(j, "distance_min", blk.distance_min);
     add_opt(j, "distance_max", blk.distance_max);
     j["gain"] = blk.gain;
+    j["head_locked"] = blk.head_locked;
     add_opt(j, "low_pass_hz", blk.low_pass_hz);
     j["start_sample"] = blk.start_sample;
     add_end_sample(j, blk.end_sample);
@@ -138,6 +140,7 @@ json object_to_json(const SceneObject& obj) {
     j["name"] = obj.name;
     j["gain"] = obj.gain;
     j["mute"] = obj.mute;
+    j["head_locked"] = obj.head_locked;
     add_end_sample(j, obj.end_sample);
     j["labels"] = obj.labels;
     add_opt(j, "importance", obj.importance);
@@ -182,12 +185,24 @@ json content_to_json(const SceneContent& c) {
     return j;
 }
 
+json hoa_block_to_json(const SceneHOAChannelBlock& block) {
+    json j = json::object();
+    j["gain"] = block.gain;
+    j["head_locked"] = block.head_locked;
+    j["start_sample"] = block.start_sample;
+    add_end_sample(j, block.end_sample);
+    return j;
+}
+
 json hoa_channel_to_json(const SceneHOAChannel& ch) {
     json j = json::object();
     add_opt(j, "channel_index", ch.channel_index);
     j["track_uid"] = ch.track_uid;
     j["order"] = ch.order;
     j["degree"] = ch.degree;
+    json blocks = json::array();
+    std::ranges::transform(ch.blocks, std::back_inserter(blocks), hoa_block_to_json);
+    j["blocks"] = std::move(blocks);
     return j;
 }
 
@@ -200,6 +215,7 @@ json hoa_tracks_to_json(const SceneHOATracks& h) {
     j["screen_ref"] = h.screen_ref;
     j["gain"] = h.gain;
     j["mute"] = h.mute;
+    j["head_locked"] = h.head_locked;
     j["start_sample"] = h.start_sample;
     add_end_sample(j, h.end_sample);
     json channels = json::array();

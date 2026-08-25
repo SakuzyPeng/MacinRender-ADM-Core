@@ -117,6 +117,8 @@ struct ObjectFixtureOptions {
     float width{0.0F};
     float height{0.0F};
     float depth{0.0F};
+    std::optional<bool> object_head_locked;
+    std::optional<bool> block_head_locked;
 };
 
 std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(const ObjectFixtureOptions& opts) {
@@ -140,6 +142,9 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(const Ob
         }
         if (opts.depth > 0.0F) {
             block.set(adm::Depth{opts.depth});
+        }
+        if (opts.block_head_locked.has_value()) {
+            block.set(adm::HeadLocked{*opts.block_head_locked});
         }
         if (opts.channel_lock) {
             adm::ChannelLock lock;
@@ -175,6 +180,9 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(const Ob
     doc->add(uid);
 
     auto obj = adm::AudioObject::create(adm::AudioObjectName{"BinauralObject"});
+    if (opts.object_head_locked.has_value()) {
+        obj->set(adm::HeadLocked{*opts.object_head_locked});
+    }
     obj->addReference(uid);
     doc->add(obj);
 
@@ -186,6 +194,57 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(const Ob
     prog->addReference(content);
     doc->add(prog);
 
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+std::pair<std::shared_ptr<adm::Document>, std::string> make_head_locked_timeline_doc() {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"BinauralHeadTimelineCF"},
+                                              adm::TypeDefinition::OBJECTS);
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
+        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{200}}});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        block.set(adm::HeadLocked{false});
+        cf->add(block);
+    }
+    {
+        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{200}}});
+        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{200}}});
+        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        block.set(adm::HeadLocked{true});
+        cf->add(block);
+    }
+    doc->add(cf);
+    auto pf =
+        adm::AudioPackFormat::create(adm::AudioPackFormatName{"BinauralHeadTimelinePF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"BinauralHeadTimelineSF"},
+                                             adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf =
+        adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"BinauralHeadTimelineTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto obj = adm::AudioObject::create(adm::AudioObjectName{"BinauralHeadTimelineObject"});
+    obj->addReference(uid);
+    doc->add(obj);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"BinauralHeadTimelineContent"});
+    content->addReference(obj);
+    doc->add(content);
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"BinauralHeadTimelineProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
     adm::reassignIds(doc);
     return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
 }
@@ -320,6 +379,24 @@ std::filesystem::path write_fixture(const ObjectFixtureOptions& opts, uint32_t f
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
 
     auto writer = bw64::writeFile(path.string(), k_ch, k_sr, 24U, chna, axml);
+    std::vector<float> samples(frames);
+    for (uint32_t i = 0; i < frames; ++i) {
+        samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
+                                      static_cast<float>(k_sr));
+    }
+    writer->write(samples.data(), frames);
+    return path;
+}
+
+std::filesystem::path write_head_locked_timeline_fixture(uint32_t frames) {
+    constexpr uint32_t k_sr = 48000U;
+    const auto [doc, uid] = make_head_locked_timeline_doc();
+    auto path = temp_path("mr_binaural_head_timeline", ".wav");
+    std::ostringstream xml_buf;
+    adm::writeXml(xml_buf, doc);
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+    auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);
     std::vector<float> samples(frames);
     for (uint32_t i = 0; i < frames; ++i) {
         samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
@@ -1030,6 +1107,46 @@ std::optional<std::vector<float>> render_binaural_stream(const std::filesystem::
     return out;
 }
 
+std::optional<std::vector<float>>
+render_binaural_window(const std::filesystem::path& input,
+                       const mradm::ListenerOrientation& orientation,
+                       mradm::BinauralSpreadMode spread_mode = mradm::BinauralSpreadMode::automatic) {
+    auto scene = mradm::io::import_scene(input.string());
+    if (!check(scene.has_value(), "headtrack-window: import scene")) {
+        return std::nullopt;
+    }
+
+    const auto output = temp_path("mr_binaural_headtrack_window", ".wav");
+    FileGuard output_guard(output);
+    mradm::RenderPlan plan;
+    plan.input_path = input.string();
+    plan.output_path = output.string();
+    plan.output_layout = "binaural";
+    plan.scene = *scene;
+    plan.listener_orientation = orientation;
+    plan.binaural_spread_mode = spread_mode;
+
+    auto renderer = mradm::create_binaural_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    auto prepared = renderer->prepare(plan, logs);
+    if (!check(prepared.has_value(), "headtrack-window: prepare")) {
+        return std::nullopt;
+    }
+    if (!check(renderer->render_window(**prepared, plan, progress, logs).has_value(),
+               "headtrack-window: render_window")) {
+        return std::nullopt;
+    }
+
+    auto reader = mradm::audio::FloatWavReader::open(output.string());
+    if (!check(reader.has_value() && reader->channels() == 2U, "headtrack-window: stereo WAV opens")) {
+        return std::nullopt;
+    }
+    std::vector<float> samples(static_cast<std::size_t>(reader->channels()) * reader->frame_count());
+    reader->read(samples.data(), reader->frame_count());
+    return samples;
+}
+
 std::optional<std::vector<float>> render_binaural_stream_with_mid_override(const std::filesystem::path& input,
                                                                            std::size_t boundary_frames,
                                                                            const mradm::LiveOverrides& overrides) {
@@ -1149,7 +1266,8 @@ bool verify_binaural_stream_gain_override() {
     const auto baseline = render_binaural_stream(in, {1024}, nullptr);
     mradm::LiveOverrides ov;
     ov.revision = 1;
-    ov.objects.push_back({object_id, -12.041F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""}); // ≈ 0.25 linear
+    ov.objects.push_back(
+        {object_id, -12.041F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", std::nullopt, false}); // ≈ 0.25 linear
     const auto attenuated = render_binaural_stream(in, {1024}, &ov);
     if (!baseline || !attenuated) {
         return false;
@@ -1184,7 +1302,8 @@ bool verify_binaural_stream_live_gain_ramp() {
     const auto baseline = render_binaural_stream(in, {1024}, nullptr);
     mradm::LiveOverrides ov;
     ov.revision = 1;
-    ov.objects.push_back({scene->objects.front().id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""});
+    ov.objects.push_back(
+        {scene->objects.front().id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", std::nullopt, false});
     const auto changed = render_binaural_stream_with_mid_override(in, k_boundary, ov);
     if (!baseline || !changed || !check(changed->size() == baseline->size(), "gain-ramp: frame count unchanged")) {
         return false;
@@ -1231,7 +1350,8 @@ bool verify_binaural_stream_topology_crossfade() {
     const auto baseline = render_binaural_stream(in, {1024}, nullptr);
     mradm::LiveOverrides ov;
     ov.revision = 1;
-    ov.objects.push_back({scene->objects.front().id, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""});
+    ov.objects.push_back(
+        {scene->objects.front().id, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", std::nullopt, false});
     const auto changed = render_binaural_stream_with_mid_override(in, k_boundary, ov);
     if (!baseline || !changed || !check(changed->size() == baseline->size(), "topology-xfade: frame count unchanged")) {
         return false;
@@ -1305,13 +1425,14 @@ bool verify_binaural_stream_topology_reprepare() {
     auto extent_override = [&](float scale) {
         mradm::LiveOverrides o;
         o.revision = 1;
-        o.objects.push_back({object_id, 0.0F, 1.0F, scale, 1.0F, 1.0F, 1.0F, 1.0F, ""}); // extent_scale = scale
+        o.objects.push_back(
+            {object_id, 0.0F, 1.0F, scale, 1.0F, 1.0F, 1.0F, 1.0F, "", std::nullopt, false}); // extent_scale
         return o;
     };
     auto extent_width_override = [&](float scale) {
         mradm::LiveOverrides o;
         o.revision = 1;
-        o.objects.push_back({object_id, 0.0F, 1.0F, 1.0F, 1.0F, scale, 1.0F, 1.0F, ""});
+        o.objects.push_back({object_id, 0.0F, 1.0F, 1.0F, 1.0F, scale, 1.0F, 1.0F, "", std::nullopt, false});
         return o;
     };
 
@@ -1333,9 +1454,9 @@ bool verify_binaural_stream_topology_reprepare() {
     return ok;
 }
 
-// A live listener head orientation rotates world-locked sources into the head frame before the
-// HRTF lookup: turning the head left (yaw +90°) swings a front source onto the right ear. A
-// head-locked object (per-object override) is exempt and stays put — same balance as at rest.
+// A listener head orientation rotates scene-relative sources into the head frame before HRTF lookup:
+// turning left (yaw +90°) swings a front source onto the right ear. ADM headLocked and explicit live
+// overrides exempt head-relative sources, while a gain-only live override must continue to inherit ADM.
 bool verify_binaural_head_tracking() {
     const auto in = write_fixture(0.0F, std::chrono::milliseconds{0}, std::chrono::milliseconds{120}, 8192U);
     FileGuard in_guard(in);
@@ -1366,16 +1487,151 @@ bool verify_binaural_head_tracking() {
     ok &= check(b_l > 1.0e-3 && std::fabs(b_l - b_r) < b_l * 0.5, "headtrack: front source ~balanced at rest");
     ok &= check(t_r > t_l * 2.0, "headtrack: yaw-left moves a front source onto the right ear");
 
-    // A head-locked object ignores the orientation: glued to the head → balanced like at rest.
-    mradm::LiveOverrides locked;
-    locked.revision = 1;
-    locked.objects.push_back({object_id, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", true}); // head_locked
-    const auto locked_turned = render_binaural_stream(in, {1024}, &locked, &yaw_left);
-    if (!locked_turned) {
+    // An explicit live true remains supported for source material with no ADM headLocked value.
+    mradm::LiveOverrides live_locked;
+    live_locked.revision = 1;
+    mradm::LiveObjectOverride live_locked_object;
+    live_locked_object.object_id = object_id;
+    live_locked_object.head_locked = true;
+    live_locked.objects.push_back(live_locked_object);
+    const auto live_locked_turned = render_binaural_stream(in, {1024}, &live_locked, &yaw_left);
+    if (!live_locked_turned) {
         return false;
     }
-    const auto [k_l, k_r] = lr(*locked_turned);
-    ok &= check(std::fabs(k_l - k_r) < k_l * 0.5, "headtrack: head-locked object is exempt from tracking");
+    const auto [live_k_l, live_k_r] = lr(*live_locked_turned);
+    ok &=
+        check(std::fabs(live_k_l - live_k_r) < live_k_l * 0.5, "headtrack: explicit live true is exempt from tracking");
+
+    ObjectFixtureOptions adm_locked_options;
+    adm_locked_options.duration = std::chrono::milliseconds{120};
+    adm_locked_options.object_head_locked = true;
+    const auto adm_locked_in = write_fixture(adm_locked_options, 8192U);
+    FileGuard adm_locked_guard(adm_locked_in);
+    auto adm_locked_scene = mradm::io::import_scene(adm_locked_in.string());
+    if (!check(adm_locked_scene.has_value() && !adm_locked_scene->objects.empty(),
+               "headtrack: import ADM head-locked object")) {
+        return false;
+    }
+    const std::string adm_locked_id = adm_locked_scene->objects.front().id;
+
+    const auto adm_locked_turned = render_binaural_stream(adm_locked_in, {1024}, nullptr, &yaw_left);
+    mradm::LiveOverrides gain_only;
+    gain_only.revision = 2;
+    mradm::LiveObjectOverride gain_only_object;
+    gain_only_object.object_id = adm_locked_id;
+    gain_only_object.gain_db = -3.0F;
+    gain_only.objects.push_back(gain_only_object);
+    const auto gain_only_turned = render_binaural_stream(adm_locked_in, {1024}, &gain_only, &yaw_left);
+
+    mradm::LiveOverrides live_unlocked;
+    live_unlocked.revision = 3;
+    mradm::LiveObjectOverride live_unlocked_object;
+    live_unlocked_object.object_id = adm_locked_id;
+    live_unlocked_object.head_locked = false;
+    live_unlocked.objects.push_back(live_unlocked_object);
+    const auto live_unlocked_turned = render_binaural_stream(adm_locked_in, {1024}, &live_unlocked, &yaw_left);
+    const auto offline_locked = render_binaural_window(adm_locked_in, yaw_left);
+    if (!adm_locked_turned || !gain_only_turned || !live_unlocked_turned || !offline_locked) {
+        return false;
+    }
+    const auto [adm_k_l, adm_k_r] = lr(*adm_locked_turned);
+    const auto [gain_k_l, gain_k_r] = lr(*gain_only_turned);
+    const auto [live_u_l, live_u_r] = lr(*live_unlocked_turned);
+    const auto [offline_k_l, offline_k_r] = lr(*offline_locked);
+    ok &= check(std::fabs(adm_k_l - adm_k_r) < adm_k_l * 0.5,
+                "headtrack: source ADM headLocked is used by realtime rendering");
+    ok &= check(std::fabs(gain_k_l - gain_k_r) < gain_k_l * 0.5,
+                "headtrack: gain-only live override inherits ADM headLocked");
+    ok &= check(live_u_r > live_u_l * 2.0, "headtrack: explicit live false overrides ADM headLocked");
+    ok &= check(std::fabs(offline_k_l - offline_k_r) < offline_k_l * 0.5,
+                "headtrack: source ADM headLocked is used by offline rendering");
+
+    // A block-level explicit false must override an AudioObject-level true all the way through rendering.
+    ObjectFixtureOptions block_unlocked_options = adm_locked_options;
+    block_unlocked_options.block_head_locked = false;
+    const auto block_unlocked_in = write_fixture(block_unlocked_options, 8192U);
+    FileGuard block_unlocked_guard(block_unlocked_in);
+    const auto block_unlocked = render_binaural_stream(block_unlocked_in, {1024}, nullptr, &yaw_left);
+    if (!block_unlocked) {
+        return false;
+    }
+    const auto [block_u_l, block_u_r] = lr(*block_unlocked);
+    ok &= check(block_u_r > block_u_l * 2.0,
+                "headtrack: explicit block false overrides AudioObject true during rendering");
+
+    // Exercise the cloud and diffuse OLA branches with inherited ADM headLocked.
+    ObjectFixtureOptions cloud_options = adm_locked_options;
+    cloud_options.width = 0.35F;
+    cloud_options.diffuse = 0.35F;
+    const auto cloud_in = write_fixture(cloud_options, 8192U);
+    FileGuard cloud_guard(cloud_in);
+    const auto cloud_locked = render_binaural_stream(cloud_in, {1024}, nullptr, &yaw_left);
+    if (!cloud_locked) {
+        return false;
+    }
+    const auto [cloud_l, cloud_r] = lr(*cloud_locked);
+    ok &= check(std::fabs(cloud_l - cloud_r) < cloud_l * 0.7,
+                "headtrack: cloud and diffuse branches inherit ADM headLocked");
+
+    // The SAF spreader is offline-only, but must use the same active-block state.
+    ObjectFixtureOptions spreader_options = adm_locked_options;
+    spreader_options.width = 0.35F;
+    const auto spreader_in = write_fixture(spreader_options, 8192U);
+    FileGuard spreader_guard(spreader_in);
+    const auto spreader_locked = render_binaural_window(spreader_in, yaw_left, mradm::BinauralSpreadMode::saf_spreader);
+    if (!spreader_locked) {
+        return false;
+    }
+    const auto [spreader_l, spreader_r] = lr(*spreader_locked);
+    ok &= check(std::fabs(spreader_l - spreader_r) < spreader_l * 0.7,
+                "headtrack: SAF spreader inherits active-block ADM headLocked");
+    return ok;
+}
+
+bool verify_binaural_head_locked_timeline() {
+    constexpr std::size_t k_frames = 19200U;
+    const auto in = write_head_locked_timeline_fixture(k_frames);
+    FileGuard in_guard(in);
+
+    auto scene = mradm::io::import_scene(in.string());
+    if (!check(scene.has_value() && scene->objects.size() == 1U && scene->objects.front().tracks.size() == 1U &&
+                   scene->objects.front().tracks.front().blocks.size() == 2U,
+               "headtrack-timeline: import two Objects blocks")) {
+        return false;
+    }
+    const auto& blocks = scene->objects.front().tracks.front().blocks;
+    bool ok = true;
+    ok &= check(!blocks[0].head_locked && blocks[1].head_locked,
+                "headtrack-timeline: imported blocks keep explicit false/true");
+
+    const mradm::ListenerOrientation yaw_left{90.0F, 0.0F, 0.0F};
+    const auto realtime = render_binaural_stream(in, {333, 1024, 511}, nullptr, &yaw_left);
+    const auto offline = render_binaural_window(in, yaw_left);
+    if (!realtime || !offline || realtime->size() < k_frames * 2U || offline->size() < k_frames * 2U) {
+        return false;
+    }
+
+    const auto verify_windows =
+        [&](const std::vector<float>& samples, const char* realtime_msg, const char* locked_msg) {
+            constexpr std::size_t first_begin = 3072U;
+            constexpr std::size_t first_end = 8192U;
+            constexpr std::size_t second_begin = 11264U;
+            constexpr std::size_t second_end = 17408U;
+            const double first_l = channel_energy(samples, 2U, 0U, first_begin, first_end);
+            const double first_r = channel_energy(samples, 2U, 1U, first_begin, first_end);
+            const double second_l = channel_energy(samples, 2U, 0U, second_begin, second_end);
+            const double second_r = channel_energy(samples, 2U, 1U, second_begin, second_end);
+            bool windows_ok = true;
+            windows_ok &= check(first_r > first_l * 2.0, realtime_msg);
+            windows_ok &= check(std::fabs(second_l - second_r) < second_l * 0.5, locked_msg);
+            return windows_ok;
+        };
+    ok &= verify_windows(*realtime,
+                         "headtrack-timeline: realtime explicit-false block follows listener rotation",
+                         "headtrack-timeline: realtime explicit-true block stays head-relative");
+    ok &= verify_windows(*offline,
+                         "headtrack-timeline: offline explicit-false block follows listener rotation",
+                         "headtrack-timeline: offline explicit-true block stays head-relative");
     return ok;
 }
 
@@ -1472,6 +1728,7 @@ int main() {
     ok &= verify_binaural_stream_topology_crossfade();
     ok &= verify_binaural_stream_topology_reprepare();
     ok &= verify_binaural_head_tracking();
+    ok &= verify_binaural_head_locked_timeline();
     ok &= verify_binaural_head_tracking_dynamic();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

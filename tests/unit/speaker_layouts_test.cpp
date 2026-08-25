@@ -186,11 +186,50 @@ bool verify_shared_direct_speakers_routing() {
     return ok;
 }
 
+bool verify_live_head_locked_precedence() {
+    mradm::LiveOverrides overrides;
+
+    mradm::LiveObjectOverride whole;
+    whole.object_id = "AO_bed";
+    whole.head_locked = true;
+    overrides.objects.push_back(whole);
+
+    // A gain-only channel entry must not mask the object's explicit head lock.
+    mradm::LiveObjectOverride gain_only;
+    gain_only.object_id = "AO_bed";
+    gain_only.speaker_label = "M+030";
+    gain_only.gain_db = -6.0F;
+    overrides.objects.push_back(gain_only);
+    const auto inherited = mradm::render_common::resolve_live_head_locked(overrides, "AO_bed", "M+030");
+
+    // Once the channel supplies an explicit value, it wins over the object.
+    mradm::LiveObjectOverride channel;
+    channel.object_id = "AO_bed";
+    channel.speaker_label = "M+030";
+    channel.head_locked = false;
+    overrides.objects.push_back(channel);
+    const auto explicit_channel = mradm::render_common::resolve_live_head_locked(overrides, "AO_bed", "M+030");
+    const auto other_channel = mradm::render_common::resolve_live_head_locked(overrides, "AO_bed", "M-030");
+
+    mradm::LiveOverrides gain_only_set;
+    gain_only_set.objects.push_back(gain_only);
+    const auto absent = mradm::render_common::resolve_live_head_locked(gain_only_set, "AO_bed", "M+030");
+
+    bool ok = check(inherited.has_value() && *inherited,
+                    "gain-only channel override inherits explicit whole-object head lock");
+    ok &= check(explicit_channel.has_value() && !*explicit_channel,
+                "explicit channel head lock wins over whole-object value");
+    ok &= check(other_channel.has_value() && *other_channel, "unmatched channel keeps whole-object head lock");
+    ok &= check(!absent.has_value(), "gain-only override leaves head lock inherited from ADM");
+    return ok;
+}
+
 } // namespace
 
 int main() {
     const bool ok = verify_profile_inventory() && verify_profile_structure_and_ranges() &&
-                    verify_expected_coordinates() && verify_shared_direct_speakers_routing();
+                    verify_expected_coordinates() && verify_shared_direct_speakers_routing() &&
+                    verify_live_head_locked_precedence();
     if (ok) {
         std::cout << "speaker layouts test passed\n";
         return EXIT_SUCCESS;

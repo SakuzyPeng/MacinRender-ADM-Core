@@ -91,7 +91,7 @@ WAVEFORMATEXTENSIBLE channel mask；无效 ADM 直接报错。也可显式选择
 
 公开两声道输出采用 `binaural` 语义，并作为默认输出。后端与 HRTF 来源分别选择：
 `saf-binaural` 提供内置 KEMAR 与构建支持时的 `--sofa` 用户 HRIR；`apple` 使用 Apple 系统 HRTF。
-当前入口覆盖 CLI、C++ API 与 C ABI v1.32。
+当前入口覆盖 CLI、C++ API 与 C ABI v1.34。
 
 ## C ABI 与 GUI 集成
 
@@ -202,19 +202,29 @@ EAR / SAF 的输出扬声器几何可用 `--speaker-geometry standard|apple` 切
 没有本项目 `9.1.4` 和内部 speaker-stereo 的对应固定布局，因此这两种组合会明确报 unsupported。
 Apple 后端始终使用 CoreAudio 几何，不受该选项影响；LFE 不参与几何切换。
 
-SAF / Apple 扬声器 DirectSpeakers 可用
-`--direct-speakers-routing auto|label|position` 切换。默认 `auto` 在两者上都解析为 `label`：先精确
+DirectSpeakers 可用 `--direct-speakers-routing auto|label|position|matrix` 切换。默认 `auto` 在 SAF / Apple
+扬声器上解析为 `label`：先精确
 匹配输出标签，再用共享别名（例如 `L` → `M+030`），命中后 one-hot 直达输出槽位；未命中按坐标
 空间化：已知 BS.2051 / 别名标签优先使用标签方向，否则使用 ADM 标称坐标。`position` 忽略非 LFE
 标签，以块的标称坐标做零扩散、无插值空间化；SAF 使用当前 `--speaker-geometry`，Apple
 使用 AmbienceBed。需要坐标回退但缺少坐标时使用 `(0°,0°)` 并 warning。
-Apple binaural 的 `auto` 仍为 `position`，显式 `label` 返回 unsupported；EAR、SAF binaural、HOA
-保持原有行为并拒绝显式模式。LFE 始终先走现有专用路由。
+
+`matrix` 配合 `--direct-speakers-matrix <json>`，在 EAR、SAF 与 Apple 扬声器输出上把每个非 LFE
+输入标签按稀疏权重送往一个或多个目标标签。每行权重固定归一为 `sqrt(weight/sum)`；也可用
+`mute:true` 显式静音。profile 必须绑定当前输出布局，并完整覆盖素材中每个非 LFE DirectSpeakers
+块；重复、未知、歧义标签与 LFE source/target 都会报错。LFE 始终先走现有专用路由。
+Apple binaural 的 `auto` 仍为 `position`，显式 `label` 返回 unsupported，并拒绝 `matrix`；EAR 只新增
+`matrix`，原有显式 `label` / `position` 仍不支持；SAF binaural 与 HOA 保持 `auto` 原生行为并拒绝所有
+显式模式。本阶段只提供 CLI、C++ 与 C ABI，GUI 控件后置。
 桌面端在 EAR / SAF 扬声器渲染器下提供同一项“扬声器几何”下拉选择，并记住上次选择。
 
 ```bash
 ./build/release/mradm render -i input.wav -o saf_apple_222.wav \
   --renderer saf --output-layout 22.2 --speaker-geometry apple
+
+./build/release/mradm render -i bed.wav -o remapped_714.wav \
+  --renderer ear --output-layout 7.1.4 \
+  --direct-speakers-routing matrix --direct-speakers-matrix routes.json
 ```
 
 声道顺序取决于最终输出格式。完整表可用 CLI 查询：
@@ -249,7 +259,8 @@ Apple binaural 的 `auto` 仍为 `position`，显式 `label` 返回 unsupported�
 | `--input-channels <csv>` | 自定义普通输入标签，严格按文件声道顺序；与显式 `--input-layout` 二选一 | 关闭 |
 | `--output-layout <layout>` | 输出语义或布局：`binaural`、多声道布局或 `hoa3` | `binaural` |
 | `--speaker-geometry standard\|apple` | EAR / SAF 输出扬声器坐标；Apple 后端始终使用 CoreAudio 几何 | `standard` |
-| `--direct-speakers-routing auto\|label\|position` | SAF / Apple DirectSpeakers 标签直达或位置空间化 | `auto` |
+| `--direct-speakers-routing auto\|label\|position\|matrix` | DirectSpeakers 原生、标签、位置或自定义标签矩阵路由 | `auto` |
+| `--direct-speakers-matrix <path>` | `matrix` 模式所需的严格 v1 稀疏矩阵 JSON | 关闭 |
 | `--output-bit-depth f32\|i24\|i16` | WAV 输出位深（CAF 固定 float32；FLAC 固定 24-bit / 最多 8 声道） | `f32` |
 | `--loudness-target <LUFS>` | 响度归一化目标；HOA 通过 7.1.4 AllRAD 参考解码测量，LUFS 使用全频声道 | 关闭 |
 | `--peak-limit-dbtp <dBTP>` | True Peak 限制目标 | `-1.0` |

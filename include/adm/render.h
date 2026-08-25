@@ -20,6 +20,8 @@
 
 namespace mradm {
 
+struct DirectSpeakersMatrix;
+
 struct Diagnostic {
     LogLevel level{LogLevel::info};
     std::string message;
@@ -90,6 +92,9 @@ struct RenderPlan {
     // Effective output-speaker coordinates for software speaker renderers.
     SpeakerGeometry speaker_geometry{SpeakerGeometry::standard};
     DirectSpeakersRoutingMode direct_speakers_routing_mode{DirectSpeakersRoutingMode::automatic};
+    // Parsed and scene-validated sparse routing matrix. Non-null exactly when
+    // direct_speakers_routing_mode == matrix.
+    std::shared_ptr<const DirectSpeakersMatrix> direct_speakers_matrix;
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
     LfeRoutingMode lfe_routing_mode{LfeRoutingMode::direct};

@@ -2202,7 +2202,8 @@ bool verify_vbap_stream_gain_override() {
         if (with_override) {
             mradm::LiveOverrides ov;
             ov.revision = 1;
-            ov.objects.push_back({object_id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, ""}); // 0.1 linear
+            ov.objects.push_back(
+                {object_id, -20.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", std::nullopt, false}); // 0.1
             (*stream)->set_overrides(ov);
         }
         const uint32_t oc = (*stream)->out_channels();

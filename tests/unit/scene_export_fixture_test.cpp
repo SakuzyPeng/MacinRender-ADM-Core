@@ -18,6 +18,7 @@
 
 // libadm / libbw64 — used here only to construct and inspect the fixture file.
 #include <adm/adm.hpp>
+#include <adm/parse.hpp>
 #include <adm/utilities/id_assignment.hpp>
 #include <adm/write.hpp>
 #include <bw64/bw64.hpp>
@@ -89,6 +90,59 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc() {
     doc->add(content);
 
     auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"ExpProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+
+    adm::reassignIds(doc);
+    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+}
+
+// Source for headLocked write-back tests: the AudioObject is explicitly locked,
+// while the single block omits headLocked and therefore inherits true.
+std::pair<std::shared_ptr<adm::Document>, std::string> make_head_locked_doc(adm::TypeDescriptor type) {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"HeadLockedCF"}, type);
+    if (type == adm::TypeDefinition::OBJECTS) {
+        cf->add(adm::AudioBlockFormatObjects{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}});
+    } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
+        adm::AudioBlockFormatDirectSpeakers block{
+            adm::SphericalSpeakerPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
+        block.add(adm::SpeakerLabel{"M+000"});
+        cf->add(block);
+    } else {
+        cf->add(adm::AudioBlockFormatHoa{adm::Order{0}, adm::Degree{0}});
+    }
+    doc->add(cf);
+
+    std::shared_ptr<adm::AudioPackFormat> pf;
+    if (type == adm::TypeDefinition::HOA) {
+        pf = adm::AudioPackFormatHoa::create(adm::AudioPackFormatName{"HeadLockedPF"});
+    } else {
+        pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"HeadLockedPF"}, type);
+    }
+    pf->addReference(cf);
+    doc->add(pf);
+
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"HeadLockedSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"HeadLockedTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"HeadLockedObject"});
+    object->set(adm::HeadLocked{true});
+    object->addReference(uid);
+    doc->add(object);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"HeadLockedContent"});
+    content->addReference(object);
+    doc->add(content);
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"HeadLockedProgramme"});
     programme->addReference(content);
     doc->add(programme);
 
@@ -395,6 +449,108 @@ bool verify_export_position_override_deferred() {
     return ok;
 }
 
+bool verify_export_head_locked_block_override() {
+    const std::array types{
+        adm::TypeDefinition::OBJECTS, adm::TypeDefinition::DIRECT_SPEAKERS, adm::TypeDefinition::HOA};
+    bool ok = true;
+    for (const auto type : types) {
+        const char* type_name = "hoa";
+        if (type == adm::TypeDefinition::OBJECTS) {
+            type_name = "objects";
+        } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
+            type_name = "direct_speakers";
+        }
+        auto [doc, uid] = make_head_locked_doc(type);
+        auto src = write_fixture(uid, serialize_doc(doc), ramp_samples(96));
+        const FileGuard src_guard{src};
+        const auto original = mradm::io::import_scene(src.string());
+        if (!original) {
+            std::cerr << "FAIL: headLocked " << type_name << " source import: " << original.error().message << "\n";
+            ok = false;
+            continue;
+        }
+
+        auto effective = *original;
+        if (type == adm::TypeDefinition::OBJECTS) {
+            effective.objects.at(0).tracks.at(0).blocks.at(0).head_locked = false;
+        } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
+            effective.objects.at(0).tracks.at(0).ds_blocks.at(0).head_locked = false;
+        } else {
+            effective.hoa_tracks.at(0).channels.at(0).blocks.at(0).head_locked = false;
+        }
+
+        const auto dst =
+            std::filesystem::temp_directory_path() / (std::string{"mr_adm_export_head_locked_"} + type_name + ".wav");
+        const FileGuard dst_guard{dst};
+        const auto written = mradm::io::write_scene(src.string(), *original, effective, dst.string());
+        if (!written) {
+            std::cerr << "FAIL: headLocked " << type_name << " write: " << written.error().message << "\n";
+            ok = false;
+            continue;
+        }
+
+        const auto reimported = mradm::io::import_scene(dst.string());
+        if (!reimported) {
+            std::cerr << "FAIL: headLocked " << type_name << " output import: " << reimported.error().message << "\n";
+            ok = false;
+            continue;
+        }
+        bool effective_locked = false;
+        if (type == adm::TypeDefinition::OBJECTS) {
+            effective_locked = reimported->objects.at(0).tracks.at(0).blocks.at(0).head_locked;
+        } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
+            effective_locked = reimported->objects.at(0).tracks.at(0).ds_blocks.at(0).head_locked;
+        } else {
+            effective_locked = reimported->hoa_tracks.at(0).channels.at(0).blocks.at(0).head_locked;
+        }
+        if (!reimported->objects.at(0).head_locked || effective_locked) {
+            std::cerr << "FAIL: headLocked " << type_name << " did not preserve object=true + block=false precedence\n";
+            ok = false;
+        }
+
+        // Parse the regenerated AXML to prove false was explicitly authored,
+        // rather than merely appearing through the ADM default.
+        const auto axml = mradm::io::get_axml(dst.string());
+        if (!axml) {
+            std::cerr << "FAIL: headLocked " << type_name << " output AXML missing\n";
+            ok = false;
+            continue;
+        }
+        std::istringstream stream{*axml};
+        const auto written_doc = adm::parseXml(stream);
+        const auto raw_objects = written_doc->getElements<adm::AudioObject>();
+        const auto raw_object = *raw_objects.begin();
+        bool explicit_false = false;
+        const auto raw_uids = raw_object->getReferences<adm::AudioTrackUid>();
+        const auto raw_uid = *raw_uids.begin();
+        const auto raw_tf = raw_uid->getReference<adm::AudioTrackFormat>();
+        const auto raw_sf = raw_tf->getReference<adm::AudioStreamFormat>();
+        const auto raw_cf = raw_sf->getReference<adm::AudioChannelFormat>();
+        if (type == adm::TypeDefinition::OBJECTS) {
+            const auto raw_blocks = raw_cf->getElements<adm::AudioBlockFormatObjects>();
+            const auto raw = *raw_blocks.begin();
+            explicit_false = !raw.isDefault<adm::HeadLocked>() && !raw.get<adm::HeadLocked>().get();
+        } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
+            const auto raw_blocks = raw_cf->getElements<adm::AudioBlockFormatDirectSpeakers>();
+            const auto raw = *raw_blocks.begin();
+            explicit_false = !raw.isDefault<adm::HeadLocked>() && !raw.get<adm::HeadLocked>().get();
+        } else {
+            const auto raw_blocks = raw_cf->getElements<adm::AudioBlockFormatHoa>();
+            const auto raw = *raw_blocks.begin();
+            explicit_false = !raw.isDefault<adm::HeadLocked>() && !raw.get<adm::HeadLocked>().get();
+        }
+        if (raw_object->isDefault<adm::HeadLocked>() || !raw_object->get<adm::HeadLocked>().get() || !explicit_false) {
+            std::cerr << "FAIL: headLocked " << type_name << " output did not explicitly write block 0\n";
+            ok = false;
+        }
+        if (read_data_chunk_bytes(src.string()) != read_data_chunk_bytes(dst.string())) {
+            std::cerr << "FAIL: headLocked " << type_name << " changed PCM data\n";
+            ok = false;
+        }
+    }
+    return ok;
+}
+
 // Surgically convert a libbw64-written RIFF fixture into an equivalent BW64 file:
 // flip the tag to BW64, insert a ds64 chunk after WAVE, and set the data chunk's
 // 32-bit size field to the 0xFFFFFFFF sentinel (real size lives in ds64.dataSize).
@@ -522,6 +678,7 @@ int main() {
     ok &= verify_export_gain_override();
     ok &= verify_export_interpolation_override();
     ok &= verify_export_position_override_deferred();
+    ok &= verify_export_head_locked_block_override();
     ok &= verify_export_bw64_roundtrip();
     return ok ? 0 : 1;
 }

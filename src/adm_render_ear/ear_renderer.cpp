@@ -127,6 +127,19 @@ struct DecorrState {
     return result;
 }
 
+[[nodiscard]] std::vector<render_common::DirectSpeakerRoutingTarget> direct_speaker_targets(const ear::Layout& layout) {
+    std::vector<render_common::DirectSpeakerRoutingTarget> result;
+    result.reserve(layout.channels().size());
+    for (const auto& channel : layout.channels()) {
+        const auto position = channel.polarPosition();
+        result.push_back({channel.name(),
+                          static_cast<float>(position.azimuth),
+                          static_cast<float>(position.elevation),
+                          channel.isLfe()});
+    }
+    return result;
+}
+
 [[nodiscard]] boost::optional<std::pair<double, double>>
 to_ear_range(const std::optional<std::pair<float, float>>& range) {
     if (!range.has_value()) {
@@ -315,12 +328,13 @@ void append_object_blocks(const SceneTrackRef& track,
     return meta;
 }
 
-void append_direct_speakers_blocks(const SceneTrackRef& track,
-                                   const SceneObject& obj,
-                                   ChannelGainInfo& cg,
-                                   ear::GainCalculatorDirectSpeakers& direct_speakers_calc,
-                                   std::size_t num_out,
-                                   const render_common::LfeRoutingPlan& lfe_routing) {
+Result<void> append_direct_speakers_blocks(const SceneTrackRef& track,
+                                           const SceneObject& obj,
+                                           ChannelGainInfo& cg,
+                                           ear::GainCalculatorDirectSpeakers& direct_speakers_calc,
+                                           std::size_t num_out,
+                                           const render_common::ResolvedDirectSpeakersMatrix* matrix,
+                                           const render_common::LfeRoutingPlan& lfe_routing) {
     for (const auto& ds : track.ds_blocks) {
         BlockGains bg;
         bg.gains.resize(num_out, 0.0);
@@ -332,6 +346,17 @@ void append_direct_speakers_blocks(const SceneTrackRef& track,
         if (lfe_routing.applies_to_22_2 && lfe_target != render_common::LfeTarget::none) {
             bg.gains[render_common::k_22_2_lfe1_index] = lfe_routing.gain(lfe_target, render_common::LfeTarget::lfe1);
             bg.gains[render_common::k_22_2_lfe2_index] = lfe_routing.gain(lfe_target, render_common::LfeTarget::lfe2);
+        } else if (lfe_target != render_common::LfeTarget::none) {
+            auto meta = direct_speakers_metadata_from_block(ds);
+            direct_speakers_calc.calculate(meta, bg.gains);
+        } else if (matrix != nullptr) {
+            auto route = render_common::direct_speakers_matrix_route_for_block(*matrix, ds);
+            if (!route) {
+                return tl::unexpected{route.error()};
+            }
+            for (const auto& target : (*route)->targets) {
+                bg.gains[target.output_channel] = static_cast<double>(target.gain);
+            }
         } else {
             auto meta = direct_speakers_metadata_from_block(ds);
             direct_speakers_calc.calculate(meta, bg.gains);
@@ -340,6 +365,7 @@ void append_direct_speakers_blocks(const SceneTrackRef& track,
         std::ranges::transform(bg.gains, bg.gains.begin(), [ds_gain](double g) { return g * ds_gain; });
         cg.blocks.push_back(std::move(bg));
     }
+    return {};
 }
 
 void append_hoa_blocks(const SceneHOATracks& pack,
@@ -395,10 +421,11 @@ void append_hoa_blocks(const SceneHOATracks& pack,
     }
 }
 
-std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene,
-                                               const ear::Layout& layout,
-                                               LogSink& logs,
-                                               const render_common::LfeRoutingPlan& lfe_routing) {
+Result<std::vector<ChannelGainInfo>> build_gain_matrix(const AdmScene& scene,
+                                                       const ear::Layout& layout,
+                                                       LogSink& logs,
+                                                       const render_common::ResolvedDirectSpeakersMatrix* matrix,
+                                                       const render_common::LfeRoutingPlan& lfe_routing) {
     std::map<uint16_t, ChannelGainInfo> by_channel;
     ear::GainCalculatorObjects objects_calc{layout};
     ear::GainCalculatorDirectSpeakers direct_speakers_calc{layout};
@@ -426,7 +453,11 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene,
                     render_common::canonicalise_speaker_label(track.ds_blocks.front().speaker_labels.front());
             }
             append_object_blocks(track, obj, cg, objects_calc, speakers, num_out, logs, screen_ref_warned);
-            append_direct_speakers_blocks(track, obj, cg, direct_speakers_calc, num_out, lfe_routing);
+            auto direct_speakers =
+                append_direct_speakers_blocks(track, obj, cg, direct_speakers_calc, num_out, matrix, lfe_routing);
+            if (!direct_speakers) {
+                return tl::unexpected{direct_speakers.error()};
+            }
         }
     }
 
@@ -1024,9 +1055,10 @@ CapabilityReport EarRenderer::capabilities() const {
 }
 
 Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
-    if (plan.direct_speakers_routing_mode != DirectSpeakersRoutingMode::automatic) {
+    if (plan.direct_speakers_routing_mode != DirectSpeakersRoutingMode::automatic &&
+        plan.direct_speakers_routing_mode != DirectSpeakersRoutingMode::matrix) {
         return make_error(
-            ErrorCode::unsupported, "EAR renderer does not support explicit DirectSpeakers routing; use automatic", {});
+            ErrorCode::unsupported, "EAR renderer supports only automatic or matrix DirectSpeakers routing", {});
     }
     try {
         auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "ear");
@@ -1038,16 +1070,35 @@ Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& 
                  "ear",
                  fmt::format("speaker geometry: {}",
                              plan.speaker_geometry == SpeakerGeometry::apple ? "apple" : "standard"));
-        auto gain_matrix = build_gain_matrix(plan.scene, layout, logs, *lfe_routing);
+        std::optional<render_common::ResolvedDirectSpeakersMatrix> resolved_matrix;
+        if (plan.direct_speakers_routing_mode == DirectSpeakersRoutingMode::matrix) {
+            if (plan.direct_speakers_matrix == nullptr) {
+                return make_error(ErrorCode::invalid_argument,
+                                  "DirectSpeakers matrix routing requires a parsed matrix");
+            }
+            const auto targets = direct_speaker_targets(layout);
+            auto resolved = render_common::resolve_direct_speakers_matrix_targets(
+                *plan.direct_speakers_matrix, targets, plan.output_layout);
+            if (!resolved) {
+                return tl::unexpected{resolved.error()};
+            }
+            resolved_matrix = std::move(*resolved);
+            logs.log(LogLevel::info, "ear", "DirectSpeakers routing: matrix");
+        }
+        auto gain_matrix =
+            build_gain_matrix(plan.scene, layout, logs, resolved_matrix ? &*resolved_matrix : nullptr, *lfe_routing);
 
-        if (gain_matrix.empty()) {
+        if (!gain_matrix) {
+            return tl::unexpected{gain_matrix.error()};
+        }
+        if (gain_matrix->empty()) {
             logs.log(LogLevel::warning, "ear", "no renderable tracks found (all muted?), writing silence");
         }
 
         const auto num_in_ch = plan.scene.info.num_channels;
         const auto invalid_channel =
-            std::ranges::find_if(gain_matrix, [num_in_ch](const auto& cg) { return cg.input_channel >= num_in_ch; });
-        if (invalid_channel != gain_matrix.end()) {
+            std::ranges::find_if(*gain_matrix, [num_in_ch](const auto& cg) { return cg.input_channel >= num_in_ch; });
+        if (invalid_channel != gain_matrix->end()) {
             return make_error(ErrorCode::render_failed,
                               fmt::format("track channel index {} is outside input channel count {}",
                                           invalid_channel->input_channel,
@@ -1057,7 +1108,7 @@ Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& 
 
         auto prepared = std::make_shared<EarPrepared>();
         prepared->layout = std::move(layout);
-        prepared->gain_matrix = std::move(gain_matrix);
+        prepared->gain_matrix = std::move(*gain_matrix);
         return std::static_pointer_cast<IPreparedRender>(prepared);
     } catch (const std::invalid_argument& e) {
         return make_error(ErrorCode::unsupported,

@@ -884,6 +884,7 @@ struct BinauralSource {
         uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
         bool jump_position{false};
         std::optional<uint64_t> interp_length_samples;
+        bool head_locked{false};
     };
     std::vector<Block> blocks;
 };
@@ -937,6 +938,7 @@ struct SpreaderBlock {
     std::vector<SpreaderSubSource> sources;
     uint64_t start_sample{0};
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
+    bool head_locked{false};
 };
 
 struct SpreaderTrack {
@@ -1046,6 +1048,7 @@ std::vector<SpreaderTrack> build_spreader_tracks(const AdmScene& scene, LogSink&
                 SpreaderBlock sb;
                 sb.start_sample = prepared.start_sample;
                 sb.end_sample = prepared.end_sample;
+                sb.head_locked = blk.head_locked;
                 for (const auto& src : prepared.sources) {
                     const float diffuse = std::clamp(src.diffuse, 0.0F, 1.0F);
                     const float direct_scale = std::sqrt(1.0F - diffuse);
@@ -1183,7 +1186,8 @@ void append_object_track_sources(const SceneObject& obj,
                                                                     prepared.start_sample,
                                                                     prepared.end_sample,
                                                                     prepared.jump_position,
-                                                                    prepared.interp_length_samples});
+                                                                    prepared.interp_length_samples,
+                                                                    source_block.head_locked});
                 }
             }
             if (diffuse_scale <= 1.0e-4F) {
@@ -1200,7 +1204,8 @@ void append_object_track_sources(const SceneObject& obj,
                                                                  prepared.start_sample,
                                                                  prepared.end_sample,
                                                                  prepared.jump_position,
-                                                                 prepared.interp_length_samples});
+                                                                 prepared.interp_length_samples,
+                                                                 source_block.head_locked});
             }
         }
     }
@@ -1250,7 +1255,8 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs, 
                                           ds.start_sample,
                                           std::min(ds.end_sample, obj.end_sample),
                                           true,
-                                          std::nullopt});
+                                          std::nullopt,
+                                          ds.head_locked});
                     srcs.push_back(std::move(src));
                     continue;
                 }
@@ -1284,8 +1290,14 @@ std::vector<BinauralSource> build_sources(const AdmScene& scene, LogSink& logs, 
                 src.gain = obj.gain;
                 src.object_id = obj.id;
                 src.speaker_label_key = ds_label_key;
-                src.blocks.push_back(
-                    {az, el, ds.gain, ds.start_sample, std::min(ds.end_sample, obj.end_sample), true, std::nullopt});
+                src.blocks.push_back({az,
+                                      el,
+                                      ds.gain,
+                                      ds.start_sample,
+                                      std::min(ds.end_sample, obj.end_sample),
+                                      true,
+                                      std::nullopt,
+                                      ds.head_locked});
                 srcs.push_back(std::move(src));
             }
         }
@@ -1413,6 +1425,7 @@ void render_source_ola_block(const BinauralSource& src,
                              uint64_t frames_now,
                              uint32_t object_smoothing_frames,
                              const HeadRotation* head = nullptr,
+                             std::optional<bool> live_head_locked = std::nullopt,
                              HeadSmoothState* head_prev = nullptr) {
     if (src.blocks.empty()) {
         return;
@@ -1426,48 +1439,47 @@ void render_source_ola_block(const BinauralSource& src,
 
     const uint64_t chunk_end = chunk_start + frames_now;
 
-    // Head tracking: rotate a block's world direction into the head frame before the HRTF lookup.
-    // `head` is non-null only for world-locked sources under a non-identity listener pose; head-
-    // locked sources (and the static-pose default) keep their raw direction. The HrtfCache keys on
-    // the post-rotation az/el, so a moving head simply misses + recomputes per block.
-    const auto hrtf_dir = [head](float az, float el) -> std::pair<float, float> {
-        return head != nullptr ? head->rotate_az_el(az, el) : std::pair<float, float>{az, el};
+    // Head tracking is resolved per active ADM block. An explicit live value wins;
+    // otherwise the block's imported effective headLocked value is used.
+    const auto block_tracks_head = [&](const BinauralSource::Block& block) {
+        return head != nullptr && !live_head_locked.value_or(block.head_locked);
+    };
+    const auto hrtf_dir = [&](const BinauralSource::Block& block, float az, float el) -> std::pair<float, float> {
+        return block_tracks_head(block) ? head->rotate_az_el(az, el) : std::pair<float, float>{az, el};
     };
 
     // Head-rotation smoothing for the steady single-block case (beds, static objects, diffuse): as
     // the listener turns, the rotated direction shifts every block; switching the HRTF kernel abruptly
     // clicks (zipper noise). When the direction actually changed since the last block, crossfade the
     // kernel old→new across the block (object-motion smoothing below already morphs moving objects).
-    if (head != nullptr && head_prev != nullptr && !src.bypass_lfe) {
-        if (const auto* steady = steady_block_over(src, chunk_start, chunk_end); steady != nullptr) {
-            const auto [cur_az, cur_el] = head->rotate_az_el(steady->az, steady->el);
-            copy_windowed_object_input(src, in_block, num_in_ch, chunk_start, frames_now, cs.ch_in.data());
-            const float* conv_in = cs.ch_in.data();
-            if (src.diffuse_bus) {
-                decorrelate_diffuse_mono(diffuse, cs.ch_in.data(), frames_now, cs.diffuse_in.data());
-                conv_in = cs.diffuse_in.data();
-            }
-            const float gain = src.gain * steady->block_gain;
-            if (head_prev->valid && (cur_az != head_prev->az || cur_el != head_prev->el)) {
-                const auto& start_hrtf = get_cached_hrtf(bs, head_prev->az, head_prev->el, hrtf_cache);
-                const auto end_hrtf = hrtf_for_dir(bs, cur_az, cur_el);
-                convolve_crossfaded_object_block(
-                    cs.hfft, bs, conv_in, frames_now, gain, gain, start_hrtf, end_hrtf, ola, src_l, src_r, cs.scratch);
-            } else {
-                const auto& hrtf = get_cached_hrtf(bs, cur_az, cur_el, hrtf_cache);
-                convolve_and_accumulate(cs.hfft, bs, conv_in, frames_now, gain, hrtf, ola, src_l, src_r, cs.scratch);
-            }
-            head_prev->az = cur_az;
-            head_prev->el = cur_el;
-            head_prev->valid = true;
-            return;
+    const auto* steady = steady_block_over(src, chunk_start, chunk_end);
+    if (head_prev != nullptr && !src.bypass_lfe && steady != nullptr && block_tracks_head(*steady)) {
+        const auto [cur_az, cur_el] = head->rotate_az_el(steady->az, steady->el);
+        copy_windowed_object_input(src, in_block, num_in_ch, chunk_start, frames_now, cs.ch_in.data());
+        const float* conv_in = cs.ch_in.data();
+        if (src.diffuse_bus) {
+            decorrelate_diffuse_mono(diffuse, cs.ch_in.data(), frames_now, cs.diffuse_in.data());
+            conv_in = cs.diffuse_in.data();
         }
-        // Tracking active but this chunk spans a block boundary / silence gap (non-steady) → the
-        // segmented path below renders it. Invalidate so the next steady chunk re-seeds at its own
-        // direction instead of crossfading in from a now-stale earlier pose (positional jump).
+        const float gain = src.gain * steady->block_gain;
+        if (head_prev->valid && (cur_az != head_prev->az || cur_el != head_prev->el)) {
+            const auto& start_hrtf = get_cached_hrtf(bs, head_prev->az, head_prev->el, hrtf_cache);
+            const auto end_hrtf = hrtf_for_dir(bs, cur_az, cur_el);
+            convolve_crossfaded_object_block(
+                cs.hfft, bs, conv_in, frames_now, gain, gain, start_hrtf, end_hrtf, ola, src_l, src_r, cs.scratch);
+        } else {
+            const auto& hrtf = get_cached_hrtf(bs, cur_az, cur_el, hrtf_cache);
+            convolve_and_accumulate(cs.hfft, bs, conv_in, frames_now, gain, hrtf, ola, src_l, src_r, cs.scratch);
+        }
+        head_prev->az = cur_az;
+        head_prev->el = cur_el;
+        head_prev->valid = true;
+        return;
+    }
+    if (head_prev != nullptr) {
+        // Tracking inactive/head-locked, or a block boundary/gap: re-seed if a
+        // later steady world-relative block starts tracking again.
         head_prev->valid = false;
-    } else if (head_prev != nullptr) {
-        head_prev->valid = false; // tracking inactive: re-seed cleanly when it resumes
     }
 
     if (object_smoothing_frames > 0 && src.smoothable_object && !src.bypass_lfe) {
@@ -1482,8 +1494,8 @@ void render_source_ola_block(const BinauralSource& src,
                     decorrelate_diffuse_mono(diffuse, cs.ch_in.data(), frames_now, cs.diffuse_in.data());
                     conv_in = cs.diffuse_in.data();
                 }
-                const auto [s_az, s_el] = hrtf_dir(start_block->az, start_block->el);
-                const auto [e_az, e_el] = hrtf_dir(end_block->az, end_block->el);
+                const auto [s_az, s_el] = hrtf_dir(*start_block, start_block->az, start_block->el);
+                const auto [e_az, e_el] = hrtf_dir(*end_block, end_block->az, end_block->el);
                 const auto& start_hrtf = get_cached_hrtf(bs, s_az, s_el, hrtf_cache);
                 const auto end_hrtf = hrtf_for_dir(bs, e_az, e_el);
                 convolve_crossfaded_object_block(cs.hfft,
@@ -1554,7 +1566,7 @@ void render_source_ola_block(const BinauralSource& src,
                 decorrelate_diffuse_mono(diffuse, cs.ch_in.data(), seg_frames, cs.diffuse_in.data());
                 conv_in = cs.diffuse_in.data();
             }
-            const auto [h_az, h_el] = hrtf_dir(blk.az, blk.el);
+            const auto [h_az, h_el] = hrtf_dir(blk, blk.az, blk.el);
             const auto& hrtf = get_cached_hrtf(bs, h_az, h_el, hrtf_cache);
             convolve_and_accumulate(
                 cs.hfft, bs, conv_in, seg_frames, gain, hrtf, ola, src_l + off, src_r + off, cs.scratch);
@@ -1868,9 +1880,9 @@ class BinauralStream final : public IRenderStream {
         const bool head_active = !listener_orientation_.is_identity();
         const HeadRotation head_rot{listener_orientation_};
         ola_pool_.parallel_for(sources.size(), [&](std::size_t si) {
-            const bool locked = render_common::resolve_live_head_locked(
+            const auto live_head_locked = render_common::resolve_live_head_locked(
                 live_overrides_, sources[si].object_id, sources[si].speaker_label_key);
-            const HeadRotation* head = (head_active && !locked) ? &head_rot : nullptr;
+            const HeadRotation* head = head_active ? &head_rot : nullptr;
             render_source_ola_block(sources[si],
                                     *prepared_.bs,
                                     src_cs_[si],
@@ -1883,6 +1895,7 @@ class BinauralStream final : public IRenderStream {
                                     frames_now,
                                     object_smoothing_frames_,
                                     head,
+                                    live_head_locked,
                                     &head_smooth_[si]);
         });
 
@@ -2302,8 +2315,9 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
         }
 
         // Process each OLA source independently; parallelise across sources. A non-identity static
-        // listener orientation (plan.listener_orientation) rotates every source into the head frame,
-        // matching the Apple offline path; offline has no live overrides, so nothing is head-locked.
+        // listener orientation (plan.listener_orientation) rotates each scene-relative source into
+        // the head frame. The active ADM block's effective headLocked value exempts head-relative
+        // sources; the offline path simply has no additional live override layer.
         const HeadRotation* offline_head = head_pose_active ? &offline_head_rot : nullptr;
         ola_pool.parallel_for(sources.size(), [&](std::size_t si) {
             render_source_ola_block(sources[si],
@@ -2318,6 +2332,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
                                     frames_now,
                                     plan.object_smoothing_frames,
                                     offline_head,
+                                    std::nullopt,
                                     &head_smooth[si]);
         });
 
@@ -2398,7 +2413,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
                             // Rotate the spreader cone's centre direction by the static listener pose too,
                             // so the extent cloud tracks the head consistently with the point-source path
                             // above (the cone half-angle spread_deg is orientation-independent).
-                            const auto [sp_az, sp_el] = offline_head != nullptr
+                            const auto [sp_az, sp_el] = offline_head != nullptr && !active->head_locked
                                                             ? offline_head->rotate_az_el(ss.az, ss.el)
                                                             : std::pair<float, float>{ss.az, ss.el};
                             adapter.set_source(

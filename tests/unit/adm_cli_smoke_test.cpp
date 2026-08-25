@@ -31,6 +31,7 @@ class FileGuard {
     FileGuard(FileGuard&&) = delete;
     FileGuard& operator=(FileGuard&&) = delete;
     ~FileGuard() { std::filesystem::remove(path_); }
+    [[nodiscard]] const std::filesystem::path& path() const noexcept { return path_; }
 
   private:
     std::filesystem::path path_;
@@ -153,6 +154,67 @@ std::filesystem::path write_fixture() {
     return path;
 }
 
+std::filesystem::path write_direct_speakers_fixture() {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"CliMatrixCF"},
+                                              adm::TypeDefinition::DIRECT_SPEAKERS);
+    adm::AudioBlockFormatDirectSpeakers block{
+        adm::SphericalSpeakerPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
+    block.add(adm::SpeakerLabel{"M+000"});
+    cf->add(block);
+    doc->add(cf);
+    auto pf =
+        adm::AudioPackFormat::create(adm::AudioPackFormatName{"CliMatrixPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    pf->addReference(cf);
+    doc->add(pf);
+    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"CliMatrixSF"}, adm::FormatDefinition::PCM);
+    sf->setReference(cf);
+    doc->add(sf);
+    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"CliMatrixTF"}, adm::FormatDefinition::PCM);
+    tf->setReference(sf);
+    sf->addReference(tf);
+    doc->add(tf);
+    auto uid = adm::AudioTrackUid::create();
+    uid->setReference(tf);
+    uid->setReference(pf);
+    doc->add(uid);
+    auto object = adm::AudioObject::create(adm::AudioObjectName{"CliMatrixObject"});
+    object->addReference(uid);
+    doc->add(object);
+    auto content = adm::AudioContent::create(adm::AudioContentName{"CliMatrixContent"});
+    content->addReference(object);
+    doc->add(content);
+    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"CliMatrixProgramme"});
+    programme->addReference(content);
+    doc->add(programme);
+    adm::reassignIds(doc);
+
+    std::ostringstream xml;
+    adm::writeXml(xml, doc);
+    const auto path = std::filesystem::temp_directory_path() / "mr_adm_cli_matrix_fixture.wav";
+    const std::string uid_string = adm::formatId(uid->get<adm::AudioTrackUidId>());
+    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_string, "", "")});
+    auto axml = std::make_shared<bw64::AxmlChunk>(xml.str());
+    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+    std::vector<float> samples(4096U, 0.25F);
+    writer->write(samples.data(), samples.size());
+    return path;
+}
+
+std::filesystem::path write_direct_speakers_matrix_fixture() {
+    const auto path = std::filesystem::temp_directory_path() / "mr_adm_cli_matrix.json";
+    std::ofstream file(path);
+    file << R"json({
+      "schema":"mradm.direct-speakers-matrix.v1",
+      "output_layout":"5.1",
+      "routes":[{
+        "source_label":"C",
+        "targets":[{"label":"L","weight":1},{"label":"R","weight":1}]
+      }]
+    })json";
+    return path;
+}
+
 } // namespace
 
 // NOLINTNEXTLINE(readability-function-size): this is a linear CLI smoke script.
@@ -216,6 +278,8 @@ int main() {
                     "render --help: speaker-geometry option listed");
         ok &= check(r.out.find("--direct-speakers-routing") != std::string::npos,
                     "render --help: DirectSpeakers routing option listed");
+        ok &= check(r.out.find("--direct-speakers-matrix") != std::string::npos,
+                    "render --help: DirectSpeakers matrix path option listed");
         ok &= check(r.out.find("spatialize label/nominal direction") != std::string::npos,
                     "render --help: label miss spatialization is documented");
         ok &= check(r.out.find("--binaural-spread-mode") != std::string::npos,
@@ -265,7 +329,7 @@ int main() {
             auto r = run_cmd(mradm_exe + " render --speaker-geometry invalid_xyz");
             ok &= check(r.code != 0, "render --speaker-geometry invalid: non-zero exit");
         }
-        for (const auto* val : {"auto", "label", "position"}) {
+        for (const auto* val : {"auto", "label", "position", "matrix"}) {
             auto r = run_cmd(mradm_exe + " render --help --direct-speakers-routing " + val);
             const std::string msg = std::string("render --direct-speakers-routing ") + val + ": exit 0";
             ok &= check(r.code == 0, msg.c_str());
@@ -333,6 +397,67 @@ int main() {
         {
             auto r = run_cmd(mradm_exe + " render --help --iamf-layers 5.1,5.1.2,5.1.4,7.1.4");
             ok &= check(r.code == 0, "render --iamf-layers valid CSV parses");
+        }
+    }
+
+    // ── DirectSpeakers matrix path and backend validation ───────────────────
+    {
+        const FileGuard matrix_input{write_direct_speakers_fixture()};
+        const FileGuard matrix_profile{write_direct_speakers_matrix_fixture()};
+        const std::string matrix_in = shell_quote(matrix_input.path().string());
+        const std::string matrix_path = shell_quote(matrix_profile.path().string());
+
+        for (const auto* renderer : {"saf", "ear"}) {
+            const auto out =
+                std::filesystem::temp_directory_path() / (std::string{"mr_adm_cli_matrix_"} + renderer + ".wav");
+            const FileGuard out_guard{out};
+            std::string command = mradm_exe;
+            command.append(" render --renderer ")
+                .append(renderer)
+                .append(" --output-layout 5.1 --direct-speakers-routing matrix --direct-speakers-matrix ")
+                .append(matrix_path)
+                .append(" --no-peak-limit -o ")
+                .append(shell_quote(out.string()))
+                .append(" -i ")
+                .append(matrix_in);
+            auto r = run_cmd(command);
+            const std::string message = std::string{"DirectSpeakers matrix CLI render with "} + renderer + " succeeds";
+            ok &= check(r.code == 0, message.c_str());
+        }
+
+        {
+            const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_matrix_auto.wav";
+            const FileGuard out_guard{out};
+            auto r = run_cmd(mradm_exe +
+                             " render --output-layout 5.1 --direct-speakers-routing matrix "
+                             "--direct-speakers-matrix " +
+                             matrix_path + " --no-peak-limit -o " + shell_quote(out.string()) + " -i " + matrix_in);
+            ok &= check(r.code == 0, "DirectSpeakers matrix CLI automatic renderer resolves to EAR");
+        }
+        {
+            const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_matrix_missing.wav";
+            const FileGuard out_guard{out};
+            auto r = run_cmd(mradm_exe +
+                             " render --renderer saf --output-layout 5.1 --direct-speakers-routing matrix "
+                             "--no-peak-limit -o " +
+                             shell_quote(out.string()) + " -i " + matrix_in);
+            ok &= check(r.code != 0, "DirectSpeakers matrix CLI requires a profile path");
+        }
+        {
+            const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_matrix_stray.wav";
+            const FileGuard out_guard{out};
+            auto r = run_cmd(mradm_exe + " render --renderer saf --output-layout 5.1 --direct-speakers-matrix " +
+                             matrix_path + " --no-peak-limit -o " + shell_quote(out.string()) + " -i " + matrix_in);
+            ok &= check(r.code != 0, "DirectSpeakers matrix CLI rejects a profile outside matrix mode");
+        }
+        {
+            const auto out = std::filesystem::temp_directory_path() / "mr_adm_cli_matrix_binaural.wav";
+            const FileGuard out_guard{out};
+            auto r = run_cmd(mradm_exe +
+                             " render --renderer saf-binaural --output-layout binaural "
+                             "--direct-speakers-routing matrix --direct-speakers-matrix " +
+                             matrix_path + " --no-peak-limit -o " + shell_quote(out.string()) + " -i " + matrix_in);
+            ok &= check(r.code != 0, "DirectSpeakers matrix CLI rejects binaural backend");
         }
     }
 
