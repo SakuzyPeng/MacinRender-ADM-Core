@@ -1,8 +1,11 @@
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -15,6 +18,8 @@
 #include "adm/c_api.h"
 #include "adm/monitor.h"
 #include "adm/render.h"
+
+#include "scene_stream_engine.h"
 
 namespace {
 
@@ -344,13 +349,15 @@ struct adm_preview_session_t {
     mradm::PreviewSession session;
 };
 
-static void clear_last_error(adm_context_t* context) {
+namespace {
+
+void clear_last_error(adm_context_t* context) {
     if (context != nullptr) {
         context->last_error_message.clear();
     }
 }
 
-static void store_last_error(adm_context_t* context, const mradm::Error& error) {
+void store_last_error(adm_context_t* context, const mradm::Error& error) {
     if (context == nullptr) {
         return;
     }
@@ -362,6 +369,8 @@ static void store_last_error(adm_context_t* context, const mradm::Error& error) 
     }
 }
 
+} // namespace
+
 struct adm_monitor_t {
     std::unique_ptr<mradm::MonitorSession> session;
     std::string last_error_message;
@@ -371,13 +380,23 @@ struct adm_monitor_t {
     std::string log_message;
 };
 
-static void clear_last_error(adm_monitor_t* monitor) {
+struct adm_scene_stream_t {
+    std::unique_ptr<mradm::realtime::SceneStreamEngine> engine;
+    mutable std::mutex message_mutex;
+    std::string last_error_message;
+    // Backs adm_scene_diagnostic_t::message until another non-pull stream call.
+    std::string diagnostic_message;
+};
+
+namespace {
+
+void clear_last_error(adm_monitor_t* monitor) {
     if (monitor != nullptr) {
         monitor->last_error_message.clear();
     }
 }
 
-static void store_last_error(adm_monitor_t* monitor, const mradm::Error& error) {
+void store_last_error(adm_monitor_t* monitor, const mradm::Error& error) {
     if (monitor == nullptr) {
         return;
     }
@@ -389,10 +408,109 @@ static void store_last_error(adm_monitor_t* monitor, const mradm::Error& error) 
     }
 }
 
+void clear_last_error(adm_scene_stream_t* stream) {
+    if (stream != nullptr) {
+        const std::lock_guard<std::mutex> lock(stream->message_mutex);
+        stream->last_error_message.clear();
+        stream->diagnostic_message.clear();
+    }
+}
+
+void store_last_error_message(adm_scene_stream_t* stream, std::string message) {
+    if (stream == nullptr) {
+        return;
+    }
+    const std::lock_guard<std::mutex> lock(stream->message_mutex);
+    stream->last_error_message = std::move(message);
+}
+
+void store_last_error(adm_scene_stream_t* stream, const mradm::Error& error) {
+    std::string message = error.message;
+    if (!error.context.empty()) {
+        message += ": ";
+        message += error.context;
+    }
+    store_last_error_message(stream, std::move(message));
+}
+
+template <typename T>
+bool load_sized_array(const T* source, uint32_t count, std::size_t minimum_size, std::vector<T>& destination) {
+    destination.clear();
+    if (count == 0U) {
+        return true;
+    }
+    if (source == nullptr) {
+        return false;
+    }
+    const auto* bytes = reinterpret_cast<const std::byte*>(source);
+    uint32_t stride = 0U;
+    std::memcpy(&stride, bytes, sizeof(stride));
+    if (stride < minimum_size ||
+        static_cast<std::size_t>(count) > std::numeric_limits<std::size_t>::max() / static_cast<std::size_t>(stride)) {
+        return false;
+    }
+    destination.reserve(count);
+    for (uint32_t index = 0U; index < count; ++index) {
+        const auto* element = bytes + (static_cast<std::size_t>(index) * stride);
+        uint32_t element_size = 0U;
+        std::memcpy(&element_size, element, sizeof(element_size));
+        if (element_size != stride) {
+            return false;
+        }
+        T value{};
+        std::memcpy(&value, element, std::min<std::size_t>(sizeof(value), stride));
+        destination.push_back(value);
+    }
+    return true;
+}
+
+template <typename T> bool output_struct_valid(const T* output) noexcept {
+    return output != nullptr && output->struct_size >= sizeof(uint32_t);
+}
+
+template <typename T> void write_sized_output(T* output, T value) noexcept {
+    const uint32_t caller_size = output->struct_size;
+    value.struct_size = caller_size;
+    std::memcpy(output, &value, std::min<std::size_t>(caller_size, sizeof(value)));
+}
+
+mradm::live_scene::ObjectState to_scene_state(const adm_scene_object_state_t& state) noexcept {
+    mradm::live_scene::ObjectState converted;
+    converted.valid_fields = state.valid_fields;
+    converted.active = state.active != 0;
+    converted.linear_gain = state.linear_gain;
+    converted.x = state.position_x;
+    converted.y = state.position_y;
+    converted.z = state.position_z;
+    converted.width = state.extent_width;
+    converted.height = state.extent_height;
+    converted.depth = state.extent_depth;
+    converted.diffuse = state.diffuse;
+    converted.divergence = state.divergence;
+    converted.channel_lock = state.channel_lock != 0;
+    converted.screen_reference = state.screen_reference != 0;
+    converted.head_locked = state.head_locked != 0;
+    return converted;
+}
+
+static_assert(static_cast<int>(mradm::live_scene::ElementRole::object) == ADM_SCENE_ELEMENT_OBJECT);
+static_assert(static_cast<int>(mradm::live_scene::ElementRole::direct_speaker) == ADM_SCENE_ELEMENT_DIRECT_SPEAKER);
+static_assert(static_cast<int>(mradm::live_scene::ElementRole::lfe) == ADM_SCENE_ELEMENT_LFE);
+static_assert(static_cast<int>(mradm::realtime::SceneSubmitStatus::accepted) == ADM_SCENE_SUBMIT_ACCEPTED);
+static_assert(static_cast<int>(mradm::realtime::SceneSubmitStatus::would_block) == ADM_SCENE_SUBMIT_WOULD_BLOCK);
+static_assert(static_cast<int>(mradm::realtime::SceneSubmitStatus::timed_out) == ADM_SCENE_SUBMIT_TIMED_OUT);
+static_assert(static_cast<int>(mradm::realtime::SceneSubmitStatus::closed) == ADM_SCENE_SUBMIT_CLOSED);
+static_assert(static_cast<int>(mradm::realtime::SceneStreamState::idle) == ADM_SCENE_STREAM_IDLE);
+static_assert(static_cast<int>(mradm::realtime::SceneStreamState::buffering) == ADM_SCENE_STREAM_BUFFERING);
+static_assert(static_cast<int>(mradm::realtime::SceneStreamState::running) == ADM_SCENE_STREAM_RUNNING);
+static_assert(static_cast<int>(mradm::realtime::SceneStreamState::draining) == ADM_SCENE_STREAM_DRAINING);
+static_assert(static_cast<int>(mradm::realtime::SceneStreamState::ended) == ADM_SCENE_STREAM_ENDED);
+static_assert(static_cast<int>(mradm::realtime::SceneStreamState::failed) == ADM_SCENE_STREAM_FAILED);
+
 // Build an owned C result handle from a finished render. Shared by adm_render_file_ex
 // and adm_preview_render_window. Returns nullptr on allocation failure.
-// NOLINTNEXTLINE(misc-use-anonymous-namespace,cppcoreguidelines-rvalue-reference-param-not-moved)
-static adm_render_result_t* make_c_result(mradm::RenderResult&& cpp_result, std::vector<CLogEntry>&& captured) {
+// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
+adm_render_result_t* make_c_result(mradm::RenderResult&& cpp_result, std::vector<CLogEntry>&& captured) {
     // cppcheck-suppress unreadVariable -- c is used via operator-> and release()
     auto c = std::unique_ptr<adm_render_result_t>(new (std::nothrow) adm_render_result_t{});
     if (!c) {
@@ -411,6 +529,8 @@ static adm_render_result_t* make_c_result(mradm::RenderResult&& cpp_result, std:
     c->logs = std::move(captured);
     return c.release();
 }
+
+} // namespace
 
 struct adm_scene_info_t {
     uint32_t sample_rate{0};
@@ -1247,8 +1367,8 @@ adm_error_code_t adm_monitor_output_devices_json(adm_context_t* context, char** 
                 json += ',';
             }
             first = false;
-            json += "{\"id\":\"" + escape(d.id) + "\",\"name\":\"" + escape(d.name) +
-                    "\",\"default\":" + (d.is_default ? "true" : "false") + "}";
+            json += R"({"id":")" + escape(d.id) + R"(","name":")" + escape(d.name) + R"(","default":)" +
+                    (d.is_default ? "true" : "false") + "}";
         }
         json += "]";
 
@@ -1971,5 +2091,350 @@ adm_error_code_t adm_render_support_matrix_json(adm_context_t* context, char** o
         return ADM_ERROR_OK;
     } catch (...) {
         return ADM_ERROR_INTERNAL;
+    }
+}
+
+/* ── Producer-neutral realtime Scene stream (v1.35) ─────────────────────── */
+
+adm_error_code_t adm_create_scene_stream(adm_context_t* context,
+                                         const adm_scene_stream_config_t* config,
+                                         adm_scene_stream_t** out) noexcept {
+    if (out != nullptr) {
+        *out = nullptr;
+    }
+    if (context == nullptr || config == nullptr || out == nullptr || config->struct_size < sizeof(*config)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(context);
+        adm_scene_stream_config_t input{};
+        std::memcpy(&input, config, sizeof(input));
+        if ((input.renderer != ADM_RENDERER_SAF && input.renderer != ADM_RENDERER_SAF_BINAURAL) ||
+            input.speaker_geometry < ADM_SPEAKER_GEOMETRY_STANDARD ||
+            input.speaker_geometry > ADM_SPEAKER_GEOMETRY_APPLE ||
+            input.speaker_spread_mode < ADM_SPEAKER_SPREAD_AUTOMATIC ||
+            input.speaker_spread_mode > ADM_SPEAKER_SPREAD_MDAP ||
+            input.binaural_spread_mode < ADM_BINAURAL_SPREAD_AUTOMATIC ||
+            input.binaural_spread_mode > ADM_BINAURAL_SPREAD_SAF_SPREADER ||
+            input.lfe_routing_mode < ADM_LFE_ROUTING_DIRECT || input.lfe_routing_mode > ADM_LFE_ROUTING_SPLIT_POWER) {
+            context->last_error_message = "invalid live Scene renderer configuration enum";
+            return ADM_ERROR_INVALID_ARGUMENT;
+        }
+        if (input.renderer == ADM_RENDERER_SAF && (input.output_layout == nullptr || input.output_layout[0] == '\0')) {
+            context->last_error_message = "SAF VBAP live Scene rendering requires an output layout";
+            return ADM_ERROR_INVALID_ARGUMENT;
+        }
+        if (input.renderer == ADM_RENDERER_SAF_BINAURAL && input.output_layout != nullptr &&
+            input.output_layout[0] != '\0' && std::string_view{input.output_layout} != "binaural") {
+            context->last_error_message = "SAF binaural live Scene output layout must be 'binaural'";
+            return ADM_ERROR_UNSUPPORTED;
+        }
+
+        mradm::realtime::SceneStreamConfig converted;
+        converted.renderer.renderer = static_cast<mradm::RendererSelection>(input.renderer);
+        converted.renderer.output_layout = input.output_layout != nullptr ? input.output_layout : "binaural";
+        if (input.sofa_path != nullptr && input.sofa_path[0] != '\0') {
+            converted.renderer.sofa_path = input.sofa_path;
+        }
+        converted.renderer.speaker_geometry = static_cast<mradm::SpeakerGeometry>(input.speaker_geometry);
+        converted.renderer.speaker_spread_mode = static_cast<mradm::SpeakerSpreadMode>(input.speaker_spread_mode);
+        converted.renderer.binaural_spread_mode = static_cast<mradm::BinauralSpreadMode>(input.binaural_spread_mode);
+        converted.renderer.lfe_routing_mode = static_cast<mradm::LfeRoutingMode>(input.lfe_routing_mode);
+        converted.renderer.sample_rate = input.input_sample_rate;
+        converted.output_sample_rate = input.output_sample_rate;
+        converted.input_queue_samples = input.input_queue_samples;
+        converted.input_queue_bytes = input.input_queue_bytes;
+        converted.output_ring_frames = input.output_ring_frames;
+        converted.startup_watermark_frames = input.startup_watermark_frames;
+
+        auto created = mradm::realtime::SceneStreamEngine::create(std::move(converted));
+        if (!created) {
+            store_last_error(context, created.error());
+            return map_error(created.error().code);
+        }
+        auto handle = std::make_unique<adm_scene_stream_t>();
+        handle->engine = std::move(*created);
+        *out = handle.release();
+        return ADM_ERROR_OK;
+    } catch (const std::exception& exception) {
+        context->last_error_message =
+            std::string{"unexpected exception while creating live Scene stream: "} + exception.what();
+        return ADM_ERROR_INTERNAL;
+    } catch (...) {
+        context->last_error_message = "unexpected exception while creating live Scene stream";
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+void adm_destroy_scene_stream(adm_scene_stream_t* stream) noexcept {
+    delete stream;
+}
+
+const char* adm_scene_stream_last_error_message(const adm_scene_stream_t* stream) noexcept {
+    if (stream == nullptr) {
+        return "";
+    }
+    const std::lock_guard<std::mutex> lock(stream->message_mutex);
+    return stream->last_error_message.c_str();
+}
+
+adm_error_code_t adm_scene_stream_get_output_format(adm_scene_stream_t* stream,
+                                                    adm_scene_output_format_t* out) noexcept {
+    if (stream == nullptr || !stream->engine || !output_struct_valid(out)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    clear_last_error(stream);
+    const auto format = stream->engine->output_format();
+    adm_scene_output_format_t converted{};
+    converted.sample_format = ADM_SCENE_SAMPLE_F32;
+    converted.sample_rate = format.sample_rate;
+    converted.channels = format.channels;
+    converted.interleaved = 1;
+    write_sized_output(out, converted);
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t
+adm_scene_stream_begin_epoch(adm_scene_stream_t* stream, uint64_t epoch_id, int64_t target_sample) noexcept {
+    if (stream == nullptr || !stream->engine) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(stream);
+        auto result = stream->engine->begin_epoch(epoch_id, target_sample);
+        if (!result) {
+            store_last_error(stream, result.error());
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        store_last_error_message(stream, "unexpected exception while beginning live Scene epoch");
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_scene_stream_configure_generation(adm_scene_stream_t* stream,
+                                                       uint64_t epoch_id,
+                                                       uint64_t generation_id,
+                                                       const adm_scene_element_descriptor_t* elements,
+                                                       uint32_t element_count) noexcept {
+    if (stream == nullptr || !stream->engine) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(stream);
+        std::vector<adm_scene_element_descriptor_t> borrowed;
+        if (!load_sized_array(elements, element_count, sizeof(adm_scene_element_descriptor_t), borrowed)) {
+            store_last_error_message(stream, "invalid live Scene element descriptor array/stride");
+            return ADM_ERROR_INVALID_ARGUMENT;
+        }
+        std::vector<mradm::live_scene::ElementDescriptor> converted;
+        converted.reserve(borrowed.size());
+        for (const auto& descriptor : borrowed) {
+            if (descriptor.role < ADM_SCENE_ELEMENT_OBJECT || descriptor.role > ADM_SCENE_ELEMENT_LFE) {
+                store_last_error_message(stream, "invalid live Scene element role");
+                return ADM_ERROR_INVALID_ARGUMENT;
+            }
+            mradm::live_scene::ElementDescriptor element;
+            element.element_id = descriptor.element_id;
+            element.role = static_cast<mradm::live_scene::ElementRole>(descriptor.role);
+            if (descriptor.speaker_label != nullptr) {
+                element.speaker_label = descriptor.speaker_label;
+            }
+            element.flags = descriptor.flags;
+            element.has_position = descriptor.has_position != 0;
+            element.x = descriptor.position_x;
+            element.y = descriptor.position_y;
+            element.z = descriptor.position_z;
+            converted.push_back(std::move(element));
+        }
+        auto result = stream->engine->configure_generation(epoch_id, generation_id, converted);
+        if (!result) {
+            store_last_error(stream, result.error());
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        store_last_error_message(stream, "unexpected exception while configuring live Scene generation");
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_scene_stream_submit_frame(adm_scene_stream_t* stream,
+                                               const adm_scene_frame_t* frame,
+                                               uint32_t timeout_ms,
+                                               int32_t* out_submit_status) noexcept {
+    if (out_submit_status != nullptr) {
+        *out_submit_status = ADM_SCENE_SUBMIT_CLOSED;
+    }
+    if (stream == nullptr || !stream->engine || frame == nullptr || out_submit_status == nullptr ||
+        frame->struct_size < sizeof(*frame)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(stream);
+        adm_scene_frame_t input{};
+        std::memcpy(&input, frame, sizeof(input));
+        std::vector<adm_scene_pcm_plane_t> pcm;
+        std::vector<adm_scene_initial_state_t> initial_states;
+        std::vector<adm_scene_metadata_update_t> updates;
+        if (!load_sized_array(input.pcm, input.pcm_count, sizeof(adm_scene_pcm_plane_t), pcm) ||
+            !load_sized_array(
+                input.initial_states, input.initial_state_count, sizeof(adm_scene_initial_state_t), initial_states) ||
+            !load_sized_array(
+                input.metadata_updates, input.metadata_update_count, sizeof(adm_scene_metadata_update_t), updates)) {
+            store_last_error_message(stream, "invalid live Scene frame array pointer/stride");
+            return ADM_ERROR_INVALID_ARGUMENT;
+        }
+
+        std::vector<mradm::realtime::ScenePcmPlaneView> pcm_views;
+        pcm_views.reserve(pcm.size());
+        std::ranges::transform(pcm, std::back_inserter(pcm_views), [](const adm_scene_pcm_plane_t& plane) {
+            return mradm::realtime::ScenePcmPlaneView{
+                plane.element_id, plane.samples, plane.sample_count, plane.stride, plane.has_signal != 0};
+        });
+        std::vector<mradm::live_scene::StateEntry> state_views;
+        state_views.reserve(initial_states.size());
+        for (const auto& initial : initial_states) {
+            if (initial.state.struct_size < sizeof(adm_scene_object_state_t)) {
+                store_last_error_message(stream, "invalid live Scene initial-state struct_size");
+                return ADM_ERROR_INVALID_ARGUMENT;
+            }
+            state_views.push_back({initial.element_id, to_scene_state(initial.state)});
+        }
+        std::vector<mradm::live_scene::MetadataUpdate> update_views;
+        update_views.reserve(updates.size());
+        for (const auto& update : updates) {
+            if (update.state.struct_size < sizeof(adm_scene_object_state_t)) {
+                store_last_error_message(stream, "invalid live Scene metadata target struct_size");
+                return ADM_ERROR_INVALID_ARGUMENT;
+            }
+            update_views.push_back({update.element_id,
+                                    update.offset_samples,
+                                    update.ramp_duration_samples,
+                                    update.changed_fields,
+                                    to_scene_state(update.state),
+                                    0U});
+        }
+
+        const mradm::realtime::SceneFrameView view{input.epoch_id,
+                                                   input.generation_id,
+                                                   input.media_sample_start,
+                                                   input.duration_samples,
+                                                   input.flags,
+                                                   pcm_views,
+                                                   state_views,
+                                                   update_views};
+        auto result = stream->engine->submit_frame(view, std::chrono::milliseconds{timeout_ms});
+        if (!result) {
+            store_last_error(stream, result.error());
+            return map_error(result.error().code);
+        }
+        *out_submit_status = static_cast<int32_t>(*result);
+        return ADM_ERROR_OK;
+    } catch (...) {
+        store_last_error_message(stream, "unexpected exception while submitting live Scene frame");
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t
+adm_scene_stream_signal_end(adm_scene_stream_t* stream, uint64_t epoch_id, int64_t end_sample) noexcept {
+    if (stream == nullptr || !stream->engine) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(stream);
+        auto result = stream->engine->signal_end(epoch_id, end_sample);
+        if (!result) {
+            store_last_error(stream, result.error());
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        store_last_error_message(stream, "unexpected exception while ending live Scene epoch");
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_scene_stream_pull(adm_scene_stream_t* stream,
+                                       float* interleaved_output,
+                                       uint32_t frames,
+                                       adm_scene_pull_result_t* result) noexcept {
+    if (stream == nullptr || !stream->engine || !output_struct_valid(result) ||
+        (frames != 0U && interleaved_output == nullptr)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    const auto pulled = stream->engine->pull(interleaved_output, frames);
+    adm_scene_pull_result_t converted{};
+    converted.flags = pulled.flags;
+    converted.epoch_id = pulled.epoch_id;
+    converted.first_media_frame = pulled.first_media_frame;
+    converted.media_frames = pulled.media_frames;
+    converted.requested_frames = pulled.requested_frames;
+    write_sized_output(result, converted);
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_scene_stream_get_status(adm_scene_stream_t* stream, adm_scene_stream_status_t* out) noexcept {
+    if (stream == nullptr || !stream->engine || !output_struct_valid(out)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    const auto status = stream->engine->status();
+    adm_scene_stream_status_t converted{};
+    converted.state = static_cast<int32_t>(status.state);
+    converted.epoch_id = status.epoch_id;
+    converted.generation_id = status.generation_id;
+    converted.queued_input_samples = status.queued_input_samples;
+    converted.queued_input_bytes = status.queued_input_bytes;
+    converted.buffered_output_frames = status.buffered_output_frames;
+    converted.media_frames_pulled = status.media_frames_pulled;
+    converted.underruns = status.underruns;
+    converted.semantic_degradations = status.semantic_degradations;
+    converted.ring_fill = status.ring_fill;
+    converted.ended = status.ended ? 1 : 0;
+    converted.failed = status.failed ? 1 : 0;
+    write_sized_output(out, converted);
+    return ADM_ERROR_OK;
+}
+
+uint32_t adm_scene_stream_log_count(adm_scene_stream_t* stream) noexcept {
+    if (stream == nullptr || !stream->engine) {
+        return 0U;
+    }
+    try {
+        const std::lock_guard<std::mutex> lock(stream->message_mutex);
+        stream->diagnostic_message.clear();
+        return static_cast<uint32_t>(
+            std::min<std::size_t>(stream->engine->diagnostic_count(), std::numeric_limits<uint32_t>::max()));
+    } catch (...) {
+        return 0U;
+    }
+}
+
+int adm_scene_stream_log_entry(adm_scene_stream_t* stream, uint32_t index, adm_scene_diagnostic_t* out) noexcept {
+    if (stream == nullptr || !stream->engine || !output_struct_valid(out)) {
+        return 0;
+    }
+    try {
+        const std::lock_guard<std::mutex> lock(stream->message_mutex);
+        stream->diagnostic_message.clear();
+        const auto diagnostic = stream->engine->diagnostic(index);
+        if (!diagnostic.has_value()) {
+            return 0;
+        }
+        stream->diagnostic_message = diagnostic->message;
+        adm_scene_diagnostic_t converted{};
+        converted.level = to_c_log_level(diagnostic->level);
+        converted.code = static_cast<int32_t>(diagnostic->code);
+        converted.epoch_id = diagnostic->epoch_id;
+        converted.generation_id = diagnostic->generation_id;
+        converted.element_id = diagnostic->element_id;
+        converted.field_mask = diagnostic->field_mask;
+        converted.message = stream->diagnostic_message.c_str();
+        write_sized_output(out, converted);
+        return 1;
+    } catch (...) {
+        return 0;
     }
 }

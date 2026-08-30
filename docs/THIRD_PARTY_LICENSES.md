@@ -38,6 +38,7 @@
 | `libebur128` @ v1.2.6 | LUFS/True Peak 测量 | MIT | 可用 |  |
 | `dr_libs` @ 47a4f08e777faddf59a8955c4ea84f69f41020d5 | WAV/FLAC 轻量读写（dr_wav / dr_flac） | Unlicense OR MIT-0 | 可用 | header-only；本项目按 MIT-0/Unlicense 宽松使用 |
 | `miniaudio` @ 0.11.21 | 实时音频设备输出（监听引擎） | Unlicense OR MIT-0 | 可用 | header-only；实现仅在 src/adm_realtime/miniaudio_device.cpp；Linux dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox |
+| `libsamplerate` @ 0.2.2 | 实时 Scene 空间渲染后的输出采样率转换 | BSD-2-Clause | 可用 | 固定 SRC_SINC_MEDIUM_QUALITY；仅作为 PRIVATE 实现依赖 |
 | `libFLAC` @ 1.5.0 | FLAC 编码与 metadata | BSD-3-Clause | 可用 | 默认仅链接 libFLAC（Xiph BSD-like）；源码包内 COPYING.GPL/LGPL/FDL 覆盖未链接的 C++ libs/programs/docs，默认发行不涉及 |
 | `libbw64` @ 0.10.0 | BW64/ADM BWF 读写 | Apache-2.0 | 可用 |  |
 | `libadm` @ 0.14.0 | ADM XML 建模/解析 | Apache-2.0 | 可用 | 内含 RapidXML（Boost Software License 或 MIT） |

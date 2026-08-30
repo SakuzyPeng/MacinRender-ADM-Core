@@ -19,6 +19,7 @@
 | libFLAC | 1.5.0 | BSD-3-Clause | `COPYING.Xiph` |
 | libmysofa | bundled-in-SAF@v1.3.4 | BSD-3-Clause | `LICENSE` |
 | libopus | v1.5.2 | BSD-3-Clause | `COPYING`, `LICENSE_PLEASE_READ.txt` |
+| libsamplerate | 0.2.2 | BSD-2-Clause | `COPYING` |
 | miniaudio | 0.11.21 | Unlicense OR MIT-0 | `LICENSE` |
 | nlohmann_json | v3.12.0 | MIT | `LICENSE.MIT` |
 | Spatial_Audio_Framework | v1.3.4 | ISC | `LICENSE.md` |

@@ -11,15 +11,19 @@
 // boundary (SAF types stay inside the binaural module).
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <saf_utility_complex.h>
 #include <string>
 #include <vector>
 
+#include "adm/errors.h"
+
 namespace mradm::binaural_internal {
 
 inline constexpr int k_n_ears = 2;
 
+// cppcheck-suppress-begin unusedStructMember
 struct HrtfDataset {
     std::string name;
     int sample_rate{0};
@@ -54,9 +58,14 @@ struct BinauralState {
     BinauralState& operator=(const BinauralState&) = delete;
 };
 // NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
+// cppcheck-suppress-end unusedStructMember
 
 // Built-in SAF KEMAR HRTF dataset.
 HrtfDataset built_in_kemar_dataset();
+
+// Load a user SOFA dataset. This remains module-private; live Scene rendering uses the
+// same validation and reader path as the file renderer.
+Result<HrtfDataset> load_sofa_dataset(const std::filesystem::path& path, std::uint32_t input_sample_rate);
 
 // Build the pre-computed state (frequency-domain HRTFs + compressed VBAP grid) once.
 // Returns nullptr on VBAP triangulation failure.

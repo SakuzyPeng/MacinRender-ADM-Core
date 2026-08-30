@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.34）
-> 日期：2026-05-17（增量记录持续更新至 2026-08-24 的 v1.34）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.35）
+> 日期：2026-05-17（增量记录持续更新至 2026-08-30 的 v1.35）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -450,6 +450,31 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
   既有 `direct` / `split-power` 专用路由。
 - **兼容性**：只追加 enum 值和 symbol，不改变 opaque struct、既有函数 signature 或旧 enum 数值；
   动态库 `SOVERSION` 继续为 1。旧调用方不设置新模式与配置时行为不变。
+
+### v1.35.0（additive，向后二进制兼容，`SOVERSION` 仍为 1）
+
+新增 producer-neutral 实时 Scene 输入与播放器 pull 输出。接口只描述 Renderer-native canonical Scene，
+不记录、识别或推断 producer、codec、语言或项目来源。
+
+- **新增 opaque handle**：`adm_scene_stream_t`；由 `adm_create_scene_stream` /
+  `adm_destroy_scene_stream` 严格配对。配置冻结输入/输出采样率、有界输入容量、输出 SPSC ring、水位线和
+  SAF VBAP / SAF binaural 的原生布局、SOFA、spread、geometry、LFE routing 选项。
+- **新增 canonical Scene POD**：element descriptor、完整 object state、mono planar PCM、初始状态、
+  sample-accurate metadata update 与原子 `SceneFrame`。所有非 opaque POD 首字段均为 `struct_size`；
+  POD 数组以首元素 `struct_size` 为 stride，同一数组每个元素尺寸必须相同。字符串与数组仅借用至
+  当前调用返回；`submit` 返回前完成深拷贝。
+- **时间线与 backpressure**：`begin_epoch` 是同步 reset barrier，epoch 严格递增；generation 在首帧前
+  配置且拓扑不可变；frame 必须连续，gap/overlap 需新 epoch。`submit(timeout_ms)` 明确返回 accepted、
+  would-block、timed-out 或 closed，不丢弃已接受 frame。输入队列同时受 sample 与 owned-byte budget 限制。
+- **播放器 pull**：输出固定为 interleaved normalized `f32`。`pull` 始终填满缓冲并把短缺尾部补零；
+  buffering/underrun 的零不推进媒体位置。pull 路径不加锁、不分配、不做 I/O，也不写日志或错误字符串。
+- **渲染与采样率**：metadata 在输入 sample domain 生效，动态 SAF backend 完成空间渲染后再经 PRIVATE
+  libsamplerate 0.2.2（`SRC_SINC_MEDIUM_QUALITY`）转换；同采样率旁路。持续有理数 accumulator 保证
+  EOS 总长为 `ceil((end-target) * output_rate / input_rate)`，不按 SceneFrame 独立取整。
+- **线程模型**：同一 handle 允许一个 producer/control 线程、一个 audio-pull 线程和一个 status 轮询
+  线程；create/destroy 不得与其它调用并发。播放器仍独占设备、播放状态、A/V 同步与主时钟。
+- **兼容性**：只新增 enum、POD、opaque handle 与 symbol；没有改动 v1.34 或更早的布局、signature、
+  enum 数值和 callback，`SOVERSION` 继续为 1。
 
 ## opaque 指针与 callback 生命周期
 

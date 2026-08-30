@@ -167,12 +167,18 @@
  * v1.34 新增（additive，SOVERSION 不变）：
  *   DirectSpeakers routing 追加 matrix=3，并新增 path / 内存 JSON setter；EAR / SAF /
  *   Apple 扬声器输出可按稀疏标签矩阵做一对多等功率直达。GUI 接入后置。
+ *
+ * v1.35 新增（additive，SOVERSION 不变）：
+ *   producer-neutral realtime Scene C ABI。adm_scene_stream_t 接收同步借用的 mono planar
+ *   float32 SceneFrame（Objects / DirectSpeakers / LFE + sample-accurate metadata），在返回前
+ *   深拷贝到有界队列，并由 SAF VBAP / SAF binaural worker 渲染；播放器通过无锁
+ *   adm_scene_stream_pull 拉取最终 interleaved float32 PCM。接口不携带 codec/source provenance。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 34
+#define ADM_API_VERSION_MINOR 35
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -206,6 +212,7 @@ typedef struct adm_render_options_t adm_render_options_t;   /* v1.1 */
 typedef struct adm_scene_info_t adm_scene_info_t;           /* v1.1 */
 typedef struct adm_cancel_token_t adm_cancel_token_t;       /* v1.4 */
 typedef struct adm_preview_session_t adm_preview_session_t; /* v1.8 */
+typedef struct adm_scene_stream_t adm_scene_stream_t;       /* v1.35 */
 
 /* ── Error codes ─────────────────────────────────────────────────────────── */
 /*
@@ -1182,6 +1189,269 @@ int adm_monitor_log_entry(adm_monitor_t* monitor,
                           int32_t* out_level,
                           const char** out_module,
                           const char** out_message) ADM_API_NOEXCEPT;
+
+/* ── Producer-neutral realtime Scene stream (v1.35) ─────────────────────── */
+
+/*
+ * Thread/lifetime contract:
+ * - One producer/control thread may call begin/configure/submit/signal_end.
+ * - One audio thread may call pull concurrently; one additional thread may poll status/logs.
+ * - create/destroy must not overlap any other call on the same handle.
+ * - submit deep-copies every descriptor/state/event/PCM value before returning and retains no
+ *   caller pointer. pull performs no allocation, locking, I/O, logging, or error-string update.
+ *
+ * Timeline values are signed samples in input_sample_rate. They identify media only and carry no
+ * codec/source provenance. Canonical Cartesian axes are X=right, Y=front, Z=up. PCM remains
+ * normalized float32 throughout; 1.0 is nominal full scale and legal overrange is not clipped.
+ */
+
+typedef enum adm_scene_element_role_t {
+    ADM_SCENE_ELEMENT_OBJECT = 0,
+    ADM_SCENE_ELEMENT_DIRECT_SPEAKER = 1,
+    ADM_SCENE_ELEMENT_LFE = 2
+} adm_scene_element_role_t;
+
+typedef enum adm_scene_submit_status_t {
+    ADM_SCENE_SUBMIT_ACCEPTED = 0,
+    ADM_SCENE_SUBMIT_WOULD_BLOCK = 1,
+    ADM_SCENE_SUBMIT_TIMED_OUT = 2,
+    ADM_SCENE_SUBMIT_CLOSED = 3
+} adm_scene_submit_status_t;
+
+typedef enum adm_scene_stream_state_t {
+    ADM_SCENE_STREAM_IDLE = 0,
+    ADM_SCENE_STREAM_BUFFERING = 1,
+    ADM_SCENE_STREAM_RUNNING = 2,
+    ADM_SCENE_STREAM_DRAINING = 3,
+    ADM_SCENE_STREAM_ENDED = 4,
+    ADM_SCENE_STREAM_FAILED = 5
+} adm_scene_stream_state_t;
+
+typedef enum adm_scene_sample_format_t { ADM_SCENE_SAMPLE_F32 = 0 } adm_scene_sample_format_t;
+
+typedef enum adm_scene_diagnostic_code_t {
+    ADM_SCENE_DIAGNOSTIC_NONE = 0,
+    ADM_SCENE_DIAGNOSTIC_SEMANTIC_DEGRADED = 1,
+    ADM_SCENE_DIAGNOSTIC_DIRECT_SPEAKER_FALLBACK = 2,
+    ADM_SCENE_DIAGNOSTIC_MISSING_LFE_OUTPUT = 3,
+    ADM_SCENE_DIAGNOSTIC_INCOMPLETE_STATE = 4,
+    ADM_SCENE_DIAGNOSTIC_TIMELINE_DISCONTINUITY = 5,
+    ADM_SCENE_DIAGNOSTIC_BACKEND_FAILURE = 6
+} adm_scene_diagnostic_code_t;
+
+#define ADM_SCENE_STATE_ACTIVE (UINT64_C(1) << 0)
+#define ADM_SCENE_STATE_LINEAR_GAIN (UINT64_C(1) << 1)
+#define ADM_SCENE_STATE_POSITION (UINT64_C(1) << 2)
+#define ADM_SCENE_STATE_EXTENT (UINT64_C(1) << 3)
+#define ADM_SCENE_STATE_DIFFUSE (UINT64_C(1) << 4)
+#define ADM_SCENE_STATE_DIVERGENCE (UINT64_C(1) << 5)
+#define ADM_SCENE_STATE_CHANNEL_LOCK (UINT64_C(1) << 6)
+#define ADM_SCENE_STATE_SCREEN_REFERENCE (UINT64_C(1) << 7)
+#define ADM_SCENE_STATE_HEAD_LOCKED (UINT64_C(1) << 8)
+
+#define ADM_SCENE_FRAME_STATE_COMPLETE (UINT32_C(1) << 0)
+#define ADM_SCENE_FRAME_WARMUP (UINT32_C(1) << 1)
+#define ADM_SCENE_FRAME_DISCONTINUITY (UINT32_C(1) << 2)
+#define ADM_SCENE_FRAME_CONCEALED (UINT32_C(1) << 3)
+
+/* DISCONTINUITY is valid only on the first accepted frame after begin_epoch; later
+ * discontinuities, gaps, and overlaps require another begin_epoch barrier. A frame
+ * without STATE_COMPLETE, or with WARMUP, advances Renderer/resampler state and the
+ * media timeline but contributes zero audible PCM. */
+
+#define ADM_SCENE_PULL_BUFFERING (UINT32_C(1) << 0)
+#define ADM_SCENE_PULL_UNDERRUN (UINT32_C(1) << 1)
+#define ADM_SCENE_PULL_EOS (UINT32_C(1) << 2)
+#define ADM_SCENE_PULL_FAILED (UINT32_C(1) << 3)
+
+/* Zero capacities select the documented defaults: 32768 input samples, 64 MiB,
+ * 8192 output frames, and a 4096-frame startup watermark. output_layout may be
+ * NULL only for ADM_RENDERER_SAF_BINAURAL (it resolves to "binaural"). */
+typedef struct adm_scene_stream_config_t {
+    uint32_t struct_size;
+    int32_t renderer; /* adm_renderer_t: SAF or SAF_BINAURAL */
+    const char* output_layout;
+    const char* sofa_path;
+    int32_t speaker_geometry;     /* adm_speaker_geometry_t */
+    int32_t speaker_spread_mode;  /* adm_speaker_spread_mode_t */
+    int32_t binaural_spread_mode; /* adm_binaural_spread_mode_t */
+    int32_t lfe_routing_mode;     /* adm_lfe_routing_mode_t */
+    uint32_t input_sample_rate;
+    uint32_t output_sample_rate;
+    uint32_t input_queue_samples;
+    uint32_t output_ring_frames;
+    uint32_t startup_watermark_frames;
+    uint32_t reserved_v1_35;
+    uint64_t input_queue_bytes;
+} adm_scene_stream_config_t;
+
+/* One independently-rendered mono source. Strings and this descriptor are borrowed
+ * only for adm_scene_stream_configure_generation; the stream copies them before return. */
+typedef struct adm_scene_element_descriptor_t {
+    uint32_t struct_size;
+    int32_t role; /* adm_scene_element_role_t */
+    uint64_t element_id;
+    const char* speaker_label; /* optional DirectSpeakers/LFE label */
+    uint64_t flags;
+    int32_t has_position;
+    uint32_t reserved_v1_35;
+    float position_x; /* [-1, 1], +right */
+    float position_y; /* [-1, 1], +front */
+    float position_z; /* [-1, 1], +up */
+} adm_scene_element_descriptor_t;
+
+/* Canonical Renderer/ADM state. valid_fields determines which values are meaningful;
+ * no optional value is encoded with NaN or a magic scalar. linear_gain is finite and
+ * non-negative; Cartesian coordinates are [-1, 1]; extent/diffuse/divergence are [0, 1]. */
+typedef struct adm_scene_object_state_t {
+    uint32_t struct_size;
+    uint32_t reserved_v1_35;
+    uint64_t valid_fields;
+    int32_t active;
+    float linear_gain;
+    float position_x;
+    float position_y;
+    float position_z;
+    float extent_width;
+    float extent_height;
+    float extent_depth;
+    float diffuse;
+    float divergence;
+    int32_t channel_lock;
+    int32_t screen_reference;
+    int32_t head_locked;
+} adm_scene_object_state_t;
+
+typedef struct adm_scene_pcm_plane_t {
+    uint32_t struct_size;
+    uint32_t reserved_v1_35;
+    uint64_t element_id;
+    const float* samples; /* may be NULL only when has_signal == 0 */
+    uint32_t sample_count;
+    uint32_t stride; /* adjacent-sample float stride; must be >= 1 when has_signal */
+    int32_t has_signal;
+    uint32_t reserved2_v1_35;
+} adm_scene_pcm_plane_t;
+
+typedef struct adm_scene_initial_state_t {
+    uint32_t struct_size;
+    uint32_t reserved_v1_35;
+    uint64_t element_id;
+    adm_scene_object_state_t state;
+} adm_scene_initial_state_t;
+
+typedef struct adm_scene_metadata_update_t {
+    uint32_t struct_size;
+    uint32_t reserved_v1_35;
+    uint64_t element_id;
+    uint32_t offset_samples;
+    uint32_t ramp_duration_samples;
+    uint64_t changed_fields;
+    adm_scene_object_state_t state; /* complete target state */
+} adm_scene_metadata_update_t;
+
+/* PCM/state/update arrays use their first element's struct_size as the stride. All
+ * elements in one array must use the same struct_size. The complete view remains owned
+ * by the caller and only has to stay alive until submit returns. */
+typedef struct adm_scene_frame_t {
+    uint32_t struct_size;
+    uint32_t flags;
+    uint64_t epoch_id;
+    uint64_t generation_id;
+    int64_t media_sample_start;
+    uint32_t duration_samples;
+    uint32_t pcm_count;
+    const adm_scene_pcm_plane_t* pcm;
+    uint32_t initial_state_count;
+    uint32_t metadata_update_count;
+    const adm_scene_initial_state_t* initial_states;
+    const adm_scene_metadata_update_t* metadata_updates;
+} adm_scene_frame_t;
+
+typedef struct adm_scene_output_format_t {
+    uint32_t struct_size;
+    int32_t sample_format; /* adm_scene_sample_format_t */
+    uint32_t sample_rate;
+    uint32_t channels;
+    int32_t interleaved; /* always non-zero in v1.35 */
+    uint32_t reserved_v1_35;
+} adm_scene_output_format_t;
+
+typedef struct adm_scene_pull_result_t {
+    uint32_t struct_size;
+    uint32_t flags;
+    uint64_t epoch_id;
+    uint64_t first_media_frame;
+    uint32_t media_frames;
+    uint32_t requested_frames;
+} adm_scene_pull_result_t;
+
+typedef struct adm_scene_stream_status_t {
+    uint32_t struct_size;
+    int32_t state; /* adm_scene_stream_state_t */
+    uint64_t epoch_id;
+    uint64_t generation_id;
+    uint64_t queued_input_samples;
+    uint64_t queued_input_bytes;
+    uint64_t buffered_output_frames;
+    uint64_t media_frames_pulled;
+    uint64_t underruns;
+    uint64_t semantic_degradations;
+    float ring_fill;
+    int32_t ended;
+    int32_t failed;
+} adm_scene_stream_status_t;
+
+typedef struct adm_scene_diagnostic_t {
+    uint32_t struct_size;
+    int32_t level; /* adm_log_level_t */
+    int32_t code;  /* adm_scene_diagnostic_code_t */
+    uint32_t reserved_v1_35;
+    uint64_t epoch_id;
+    uint64_t generation_id;
+    uint64_t element_id;
+    uint64_t field_mask;
+    const char* message; /* stream-owned until the next non-pull stream call */
+} adm_scene_diagnostic_t;
+
+#ifdef __cplusplus
+static_assert(sizeof(adm_scene_element_role_t) == sizeof(int));
+static_assert(sizeof(adm_scene_submit_status_t) == sizeof(int));
+static_assert(sizeof(adm_scene_stream_state_t) == sizeof(int));
+static_assert(sizeof(adm_scene_sample_format_t) == sizeof(int));
+static_assert(sizeof(adm_scene_diagnostic_code_t) == sizeof(int));
+#endif
+
+adm_error_code_t adm_create_scene_stream(adm_context_t* context,
+                                         const adm_scene_stream_config_t* config,
+                                         adm_scene_stream_t** out) ADM_API_NOEXCEPT;
+void adm_destroy_scene_stream(adm_scene_stream_t* stream) ADM_API_NOEXCEPT;
+const char* adm_scene_stream_last_error_message(const adm_scene_stream_t* stream) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_stream_get_output_format(adm_scene_stream_t* stream,
+                                                    adm_scene_output_format_t* out) ADM_API_NOEXCEPT;
+adm_error_code_t
+adm_scene_stream_begin_epoch(adm_scene_stream_t* stream, uint64_t epoch_id, int64_t target_sample) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_stream_configure_generation(adm_scene_stream_t* stream,
+                                                       uint64_t epoch_id,
+                                                       uint64_t generation_id,
+                                                       const adm_scene_element_descriptor_t* elements,
+                                                       uint32_t element_count) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_stream_submit_frame(adm_scene_stream_t* stream,
+                                               const adm_scene_frame_t* frame,
+                                               uint32_t timeout_ms,
+                                               int32_t* out_submit_status) ADM_API_NOEXCEPT;
+adm_error_code_t
+adm_scene_stream_signal_end(adm_scene_stream_t* stream, uint64_t epoch_id, int64_t end_sample) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_stream_pull(adm_scene_stream_t* stream,
+                                       float* interleaved_output,
+                                       uint32_t frames,
+                                       adm_scene_pull_result_t* result) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_stream_get_status(adm_scene_stream_t* stream,
+                                             adm_scene_stream_status_t* out) ADM_API_NOEXCEPT;
+uint32_t adm_scene_stream_log_count(adm_scene_stream_t* stream) ADM_API_NOEXCEPT;
+int adm_scene_stream_log_entry(adm_scene_stream_t* stream,
+                               uint32_t index,
+                               adm_scene_diagnostic_t* out) ADM_API_NOEXCEPT;
 
 #ifdef __cplusplus
 } /* extern "C" */

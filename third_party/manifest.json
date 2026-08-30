@@ -147,6 +147,24 @@
       "notes": "header-only；实现仅在 src/adm_realtime/miniaudio_device.cpp；Linux dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox"
     },
     {
+      "name": "libsamplerate",
+      "version": "0.2.2",
+      "cmake_key": "SampleRate",
+      "purl": "pkg:github/libsndfile/libsamplerate@0.2.2",
+      "license": "BSD-2-Clause",
+      "purpose": "实时 Scene 空间渲染后的输出采样率转换",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "samplerate-src",
+        "parent": null,
+        "license_files": [
+          "COPYING"
+        ]
+      },
+      "notes": "固定 SRC_SINC_MEDIUM_QUALITY；仅作为 PRIVATE 实现依赖"
+    },
+    {
       "name": "libFLAC",
       "version": "1.5.0",
       "cmake_key": "FLAC",
