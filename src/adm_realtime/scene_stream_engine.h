@@ -7,9 +7,11 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "adm/errors.h"
+#include "adm/options.h"
 
 #include "../adm_render_common/live_scene_renderer.h"
 
@@ -86,6 +88,7 @@ struct SceneStreamStatus {
     std::uint64_t media_frames_pulled{0};
     std::uint64_t underruns{0};
     std::uint64_t semantic_degradations{0};
+    std::uint64_t semantic_policy_revision{0};
     float ring_fill{0.0F};
     bool ended{false};
     bool failed{false};
@@ -102,12 +105,16 @@ class SceneStreamEngine {
     SceneStreamEngine& operator=(SceneStreamEngine&&) = delete;
 
     [[nodiscard]] SceneOutputFormat output_format() const noexcept;
+    [[nodiscard]] std::uint32_t input_sample_rate() const noexcept;
     [[nodiscard]] Result<void> begin_epoch(std::uint64_t epoch_id, std::int64_t target_sample);
     [[nodiscard]] Result<void> configure_generation(std::uint64_t epoch_id,
                                                     std::uint64_t generation_id,
                                                     std::span<const live_scene::ElementDescriptor> elements);
     [[nodiscard]] Result<SceneSubmitStatus> submit_frame(const SceneFrameView& view, std::chrono::milliseconds timeout);
     [[nodiscard]] Result<void> signal_end(std::uint64_t epoch_id, std::int64_t end_sample);
+    [[nodiscard]] Result<void> switch_backend(live_scene::RendererConfig config);
+    void set_listener_orientation(const ListenerOrientation& orientation);
+    [[nodiscard]] Result<void> set_semantic_policy_json(std::string_view json, std::uint64_t revision);
 
     [[nodiscard]] ScenePullResult pull(float* interleaved_output, std::uint32_t frames) noexcept;
     [[nodiscard]] SceneStreamStatus status() const noexcept;

@@ -26,6 +26,7 @@ using Clock = std::chrono::steady_clock;
 
 constexpr std::uint32_t k_sample_rate = 48000U;
 constexpr std::uint32_t k_chunk_frames = 480U;
+constexpr std::uint32_t k_max_scene_frame = 65536U;
 constexpr auto k_chunk_duration = std::chrono::milliseconds(10);
 constexpr std::uint64_t k_rss_tolerance = 4ULL * 1024ULL * 1024ULL;
 
@@ -106,18 +107,31 @@ struct StreamGuard {
 [[nodiscard]] adm_scene_stream_config_t make_config(bool binaural, bool latency_benchmark) noexcept {
     adm_scene_stream_config_t config{};
     config.struct_size = sizeof(config);
-    config.renderer = binaural ? ADM_RENDERER_SAF_BINAURAL : ADM_RENDERER_SAF;
-    config.output_layout = binaural ? "binaural" : "0+2+0";
-    config.speaker_geometry = ADM_SPEAKER_GEOMETRY_STANDARD;
-    config.speaker_spread_mode = ADM_SPEAKER_SPREAD_AUTOMATIC;
-    config.binaural_spread_mode = ADM_BINAURAL_SPREAD_AUTOMATIC;
-    config.lfe_routing_mode = ADM_LFE_ROUTING_DIRECT;
+    config.rendering.struct_size = sizeof(config.rendering);
+    config.rendering.renderer = binaural ? ADM_RENDERER_SAF_BINAURAL : ADM_RENDERER_SAF;
+    config.rendering.output_layout = binaural ? "binaural" : "0+2+0";
+    config.rendering.speaker_geometry = ADM_SPEAKER_GEOMETRY_STANDARD;
+    config.rendering.speaker_spread_mode = ADM_SPEAKER_SPREAD_AUTOMATIC;
+    config.rendering.binaural_spread_mode = ADM_BINAURAL_SPREAD_AUTOMATIC;
+    config.rendering.lfe_routing_mode = ADM_LFE_ROUTING_DIRECT;
     config.input_sample_rate = k_sample_rate;
     config.output_sample_rate = k_sample_rate;
     config.input_queue_samples = latency_benchmark ? (2U * k_chunk_frames) : 65536U;
     config.input_queue_bytes = latency_benchmark ? (1ULL * 1024ULL * 1024ULL) : (8ULL * 1024ULL * 1024ULL);
     config.output_ring_frames = latency_benchmark ? 2048U : 32768U;
     config.startup_watermark_frames = latency_benchmark ? 1U : 9600U;
+    return config;
+}
+
+[[nodiscard]] adm_scene_renderer_config_t make_renderer_config(bool binaural) noexcept {
+    adm_scene_renderer_config_t config{};
+    config.struct_size = sizeof(config);
+    config.renderer = binaural ? ADM_RENDERER_SAF_BINAURAL : ADM_RENDERER_SAF;
+    config.output_layout = binaural ? "binaural" : "0+2+0";
+    config.speaker_geometry = ADM_SPEAKER_GEOMETRY_STANDARD;
+    config.speaker_spread_mode = ADM_SPEAKER_SPREAD_AUTOMATIC;
+    config.binaural_spread_mode = ADM_BINAURAL_SPREAD_AUTOMATIC;
+    config.lfe_routing_mode = ADM_LFE_ROUTING_DIRECT;
     return config;
 }
 
@@ -158,16 +172,18 @@ struct StreamGuard {
     state.struct_size = sizeof(state);
     state.valid_fields = ADM_SCENE_STATE_ACTIVE | ADM_SCENE_STATE_LINEAR_GAIN | ADM_SCENE_STATE_POSITION |
                          ADM_SCENE_STATE_EXTENT | ADM_SCENE_STATE_DIFFUSE | ADM_SCENE_STATE_DIVERGENCE |
-                         ADM_SCENE_STATE_CHANNEL_LOCK | ADM_SCENE_STATE_SCREEN_REFERENCE | ADM_SCENE_STATE_HEAD_LOCKED;
+                         ADM_SCENE_STATE_CHANNEL_LOCK | ADM_SCENE_STATE_SCREEN_REFERENCE | ADM_SCENE_STATE_HEAD_LOCKED |
+                         ADM_SCENE_STATE_DIVERGENCE_RANGE | ADM_SCENE_STATE_CHANNEL_LOCK_MAX_DISTANCE;
     state.active = 1;
     state.linear_gain = 0.75F;
     state.position_y = 1.0F;
+    state.divergence_azimuth_range = 45.0F;
     return state;
 }
 
 class FramePayload {
   public:
-    FramePayload() : samples_(k_chunk_frames) {
+    explicit FramePayload(std::uint32_t frame_count = k_chunk_frames) : samples_(frame_count) {
         constexpr float frequency = 997.0F;
         for (std::size_t frame = 0U; frame < samples_.size(); ++frame) {
             const float phase = 2.0F * std::numbers::pi_v<float> * frequency * static_cast<float>(frame) /
@@ -178,7 +194,7 @@ class FramePayload {
         plane_.struct_size = sizeof(plane_);
         plane_.element_id = 1U;
         plane_.samples = samples_.data();
-        plane_.sample_count = k_chunk_frames;
+        plane_.sample_count = frame_count;
         plane_.stride = 1U;
         plane_.has_signal = 1;
 
@@ -188,15 +204,15 @@ class FramePayload {
 
         update_.struct_size = sizeof(update_);
         update_.element_id = 1U;
-        update_.offset_samples = k_chunk_frames / 2U;
-        update_.ramp_duration_samples = k_chunk_frames;
+        update_.offset_samples = frame_count / 2U;
+        update_.ramp_duration_samples = frame_count;
         update_.changed_fields = ADM_SCENE_STATE_LINEAR_GAIN | ADM_SCENE_STATE_POSITION;
         update_.state = complete_state();
 
         frame_.struct_size = sizeof(frame_);
         frame_.flags = ADM_SCENE_FRAME_STATE_COMPLETE;
         frame_.generation_id = 1U;
-        frame_.duration_samples = k_chunk_frames;
+        frame_.duration_samples = frame_count;
         frame_.pcm_count = 1U;
         frame_.pcm = &plane_;
         frame_.metadata_update_count = 1U;
@@ -214,6 +230,8 @@ class FramePayload {
         update_.state.position_y = 0.65F;
         return &frame_;
     }
+
+    [[nodiscard]] std::uint32_t frame_count() const noexcept { return frame_.duration_samples; }
 
   private:
     std::vector<float> samples_;
@@ -353,8 +371,10 @@ average_rss(const std::vector<StatusSample>& samples, std::size_t first, std::si
     return sum / (last - first);
 }
 
-// One producer, one real-time pull thread (this function), and one status sampler exercise the
-// published concurrency contract for a sustained wall-clock interval.
+// One producer, one real-time pull thread (this function), one status sampler, and
+// one pose/policy/backend controller exercise the published concurrency contract
+// for a sustained wall-clock interval. The producer starts with the maximum
+// configured SceneFrame so worker-side slicing is covered under the same load.
 // NOLINTNEXTLINE(readability-function-size)
 [[nodiscard]] bool run_continuous(adm_context_t* context, bool binaural, std::uint32_t seconds) {
     StreamGuard stream;
@@ -368,18 +388,20 @@ average_rss(const std::vector<StatusSample>& samples, std::size_t first, std::si
     std::int64_t producer_next_sample = 0;
     std::thread producer([&] {
         FramePayload payload;
+        FramePayload maximum_payload{k_max_scene_frame};
         bool first_frame = true;
         while (!stop_producer.load(std::memory_order_acquire)) {
+            auto& current = first_frame ? maximum_payload : payload;
             int32_t submit_status = ADM_SCENE_SUBMIT_CLOSED;
             const auto code = adm_scene_stream_submit_frame(
-                stream.value, payload.prepare(2U, producer_next_sample, first_frame), 50U, &submit_status);
+                stream.value, current.prepare(2U, producer_next_sample, first_frame), 50U, &submit_status);
             if (code != ADM_ERROR_OK) {
                 producer_failed = true;
                 producer_error = adm_scene_stream_last_error_message(stream.value);
                 return;
             }
             if (submit_status == ADM_SCENE_SUBMIT_ACCEPTED) {
-                producer_next_sample += k_chunk_frames;
+                producer_next_sample += current.frame_count();
                 first_frame = false;
             } else if (submit_status == ADM_SCENE_SUBMIT_CLOSED) {
                 if (!stop_producer.load(std::memory_order_acquire)) {
@@ -410,6 +432,49 @@ average_rss(const std::vector<StatusSample>& samples, std::size_t first, std::si
         std::cerr << "FAIL: stream did not reach its startup watermark\n";
         return false;
     }
+
+    std::atomic<bool> stop_controller{false};
+    bool controller_failed = false;
+    std::string controller_error;
+    std::uint64_t final_policy_revision = 0U;
+    std::thread controller([&] {
+        std::uint64_t revision = 0U;
+        std::uint64_t iteration = 0U;
+        const auto backend = make_renderer_config(binaural);
+        while (!stop_controller.load(std::memory_order_acquire)) {
+            const auto phase = static_cast<float>(iteration % 360U);
+            auto code = adm_scene_stream_set_listener_orientation(
+                stream.value, std::sin(phase * 0.0174532925F) * 45.0F, 10.0F, -5.0F);
+            if (code != ADM_ERROR_OK) {
+                controller_failed = true;
+                controller_error = "listener orientation control failed";
+                return;
+            }
+            if ((iteration % 10U) == 0U) {
+                ++revision;
+                const char* policy = (revision & 1U) != 0U
+                                         ? R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":0.95}}})"
+                                         : R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":1.0}}})";
+                code = adm_scene_stream_set_semantic_policy_json(stream.value, policy, revision);
+                if (code != ADM_ERROR_OK) {
+                    controller_failed = true;
+                    controller_error = "semantic policy control failed";
+                    return;
+                }
+                final_policy_revision = revision;
+            }
+            if ((iteration % 200U) == 0U) {
+                code = adm_scene_stream_switch_backend(stream.value, &backend);
+                if (code != ADM_ERROR_OK) {
+                    controller_failed = true;
+                    controller_error = "backend control failed";
+                    return;
+                }
+            }
+            ++iteration;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    });
 
     std::atomic<bool> stop_sampler{false};
     std::vector<StatusSample> status_samples;
@@ -450,6 +515,8 @@ average_rss(const std::vector<StatusSample>& samples, std::size_t first, std::si
         std::this_thread::sleep_until(next_tick);
     }
 
+    stop_controller.store(true, std::memory_order_release);
+    controller.join();
     stop_producer.store(true, std::memory_order_release);
     producer.join();
     stop_sampler.store(true, std::memory_order_release);
@@ -458,10 +525,14 @@ average_rss(const std::vector<StatusSample>& samples, std::size_t first, std::si
     adm_scene_stream_status_t status{};
     const bool have_status = query_status(stream.value, status);
     const auto expected_media_frames = pull_count * k_chunk_frames;
-    bool ok = !pull_failed && !producer_failed && have_status && status.failed == 0 && status.underruns == 0U &&
-              status.media_frames_pulled == expected_media_frames;
+    bool ok = !pull_failed && !producer_failed && !controller_failed && have_status && status.failed == 0 &&
+              status.underruns == 0U && status.media_frames_pulled == expected_media_frames &&
+              status.semantic_policy_revision > 0U && status.semantic_policy_revision <= final_policy_revision;
     if (producer_failed) {
         std::cerr << "FAIL: producer: " << producer_error << '\n';
+    }
+    if (controller_failed) {
+        std::cerr << "FAIL: controller: " << controller_error << '\n';
     }
     if (have_status && (status.underruns != 0U || status.failed != 0)) {
         std::cerr << "FAIL: final status underruns=" << status.underruns << " failed=" << status.failed << '\n';
@@ -494,8 +565,8 @@ average_rss(const std::vector<StatusSample>& samples, std::size_t first, std::si
 
     std::cout << "continuous renderer=" << renderer_name(binaural) << " seconds=" << seconds
               << " media_frames=" << status.media_frames_pulled << " underruns=" << status.underruns
-              << " pull_p99_us=" << pull_p99_us << " rss_baseline=" << rss_baseline << " rss_end=" << rss_end
-              << " rss_peak=" << rss_peak << '\n';
+              << " policy_revision=" << status.semantic_policy_revision << " pull_p99_us=" << pull_p99_us
+              << " rss_baseline=" << rss_baseline << " rss_end=" << rss_end << " rss_peak=" << rss_peak << '\n';
 
     if (!call_ok(adm_scene_stream_signal_end(stream.value, 2U, producer_next_sample), stream.value, "stress EOS") ||
         !drain_to_eos(stream.value)) {

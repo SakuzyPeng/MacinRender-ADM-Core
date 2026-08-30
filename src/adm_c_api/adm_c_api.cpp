@@ -490,7 +490,99 @@ mradm::live_scene::ObjectState to_scene_state(const adm_scene_object_state_t& st
     converted.channel_lock = state.channel_lock != 0;
     converted.screen_reference = state.screen_reference != 0;
     converted.head_locked = state.head_locked != 0;
+    converted.divergence_azimuth_range = state.divergence_azimuth_range;
+    converted.divergence_position_range = state.divergence_position_range;
+    if (state.has_channel_lock_max_distance != 0) {
+        converted.channel_lock_max_distance = state.channel_lock_max_distance;
+    }
     return converted;
+}
+
+[[nodiscard]] mradm::Result<mradm::live_scene::RendererConfig>
+to_scene_renderer_config(const adm_scene_renderer_config_t* config, std::uint32_t sample_rate) {
+    if (config == nullptr || config->struct_size < sizeof(*config)) {
+        return mradm::make_error(mradm::ErrorCode::invalid_argument,
+                                 "invalid live Scene renderer configuration struct_size");
+    }
+    adm_scene_renderer_config_t input{};
+    std::memcpy(&input, config, sizeof(input));
+    if ((input.renderer != ADM_RENDERER_SAF && input.renderer != ADM_RENDERER_SAF_BINAURAL) ||
+        input.speaker_geometry < ADM_SPEAKER_GEOMETRY_STANDARD || input.speaker_geometry > ADM_SPEAKER_GEOMETRY_APPLE ||
+        input.speaker_spread_mode < ADM_SPEAKER_SPREAD_AUTOMATIC ||
+        input.speaker_spread_mode > ADM_SPEAKER_SPREAD_MDAP ||
+        input.binaural_spread_mode < ADM_BINAURAL_SPREAD_AUTOMATIC ||
+        input.binaural_spread_mode > ADM_BINAURAL_SPREAD_SAF_SPREADER ||
+        input.lfe_routing_mode < ADM_LFE_ROUTING_DIRECT || input.lfe_routing_mode > ADM_LFE_ROUTING_SPLIT_POWER ||
+        input.object_smoothing_frames > 48000U) {
+        return mradm::make_error(mradm::ErrorCode::invalid_argument, "invalid live Scene renderer configuration value");
+    }
+    if (input.renderer == ADM_RENDERER_SAF && (input.output_layout == nullptr || input.output_layout[0] == '\0')) {
+        return mradm::make_error(mradm::ErrorCode::invalid_argument,
+                                 "SAF VBAP live Scene rendering requires an output layout");
+    }
+    if (input.renderer == ADM_RENDERER_SAF && input.sofa_path != nullptr && input.sofa_path[0] != '\0') {
+        return mradm::make_error(mradm::ErrorCode::unsupported,
+                                 "a live Scene SOFA path is valid only for SAF binaural rendering");
+    }
+    if (input.renderer == ADM_RENDERER_SAF_BINAURAL && input.output_layout != nullptr &&
+        input.output_layout[0] != '\0' && std::string_view{input.output_layout} != "binaural") {
+        return mradm::make_error(mradm::ErrorCode::unsupported,
+                                 "SAF binaural live Scene output layout must be 'binaural'");
+    }
+
+    mradm::live_scene::RendererConfig converted;
+    converted.renderer = static_cast<mradm::RendererSelection>(input.renderer);
+    converted.output_layout =
+        input.output_layout != nullptr && input.output_layout[0] != '\0' ? input.output_layout : "binaural";
+    if (input.sofa_path != nullptr && input.sofa_path[0] != '\0') {
+        converted.sofa_path = input.sofa_path;
+    }
+    converted.speaker_geometry = static_cast<mradm::SpeakerGeometry>(input.speaker_geometry);
+    converted.speaker_spread_mode = static_cast<mradm::SpeakerSpreadMode>(input.speaker_spread_mode);
+    converted.binaural_spread_mode = static_cast<mradm::BinauralSpreadMode>(input.binaural_spread_mode);
+    converted.lfe_routing_mode = static_cast<mradm::LfeRoutingMode>(input.lfe_routing_mode);
+    converted.object_smoothing_frames = input.object_smoothing_frames;
+    converted.sample_rate = sample_rate;
+    return converted;
+}
+
+[[nodiscard]] bool to_scene_semantic_identity(const adm_scene_semantic_identity_t* source,
+                                              mradm::live_scene::SemanticIdentity& destination) {
+    if (source == nullptr) {
+        return true;
+    }
+    if (source->struct_size < sizeof(*source) ||
+        (source->has_importance != 0 && (source->importance < 0 || source->importance > 10)) ||
+        (source->has_dialogue_id != 0 && (source->dialogue_id < 0 || source->dialogue_id > 2))) {
+        return false;
+    }
+    destination.object_id = source->object_id != nullptr ? source->object_id : "";
+    destination.object_name = source->object_name != nullptr ? source->object_name : "";
+    destination.track_uid = source->track_uid != nullptr ? source->track_uid : "";
+    if (source->has_importance != 0) {
+        destination.importance = source->importance;
+    }
+    if (source->has_dialogue_id != 0) {
+        destination.dialogue_id = source->dialogue_id;
+    }
+    std::vector<adm_scene_semantic_entity_t> contents;
+    std::vector<adm_scene_semantic_entity_t> programmes;
+    if (!load_sized_array(source->contents, source->content_count, sizeof(adm_scene_semantic_entity_t), contents) ||
+        !load_sized_array(
+            source->programmes, source->programme_count, sizeof(adm_scene_semantic_entity_t), programmes)) {
+        return false;
+    }
+    destination.contents.reserve(contents.size());
+    for (const auto& entity : contents) {
+        destination.contents.push_back(
+            {entity.id != nullptr ? entity.id : "", entity.name != nullptr ? entity.name : ""});
+    }
+    destination.programmes.reserve(programmes.size());
+    for (const auto& entity : programmes) {
+        destination.programmes.push_back(
+            {entity.id != nullptr ? entity.id : "", entity.name != nullptr ? entity.name : ""});
+    }
+    return true;
 }
 
 static_assert(static_cast<int>(mradm::live_scene::ElementRole::object) == ADM_SCENE_ELEMENT_OBJECT);
@@ -2109,38 +2201,14 @@ adm_error_code_t adm_create_scene_stream(adm_context_t* context,
         clear_last_error(context);
         adm_scene_stream_config_t input{};
         std::memcpy(&input, config, sizeof(input));
-        if ((input.renderer != ADM_RENDERER_SAF && input.renderer != ADM_RENDERER_SAF_BINAURAL) ||
-            input.speaker_geometry < ADM_SPEAKER_GEOMETRY_STANDARD ||
-            input.speaker_geometry > ADM_SPEAKER_GEOMETRY_APPLE ||
-            input.speaker_spread_mode < ADM_SPEAKER_SPREAD_AUTOMATIC ||
-            input.speaker_spread_mode > ADM_SPEAKER_SPREAD_MDAP ||
-            input.binaural_spread_mode < ADM_BINAURAL_SPREAD_AUTOMATIC ||
-            input.binaural_spread_mode > ADM_BINAURAL_SPREAD_SAF_SPREADER ||
-            input.lfe_routing_mode < ADM_LFE_ROUTING_DIRECT || input.lfe_routing_mode > ADM_LFE_ROUTING_SPLIT_POWER) {
-            context->last_error_message = "invalid live Scene renderer configuration enum";
-            return ADM_ERROR_INVALID_ARGUMENT;
-        }
-        if (input.renderer == ADM_RENDERER_SAF && (input.output_layout == nullptr || input.output_layout[0] == '\0')) {
-            context->last_error_message = "SAF VBAP live Scene rendering requires an output layout";
-            return ADM_ERROR_INVALID_ARGUMENT;
-        }
-        if (input.renderer == ADM_RENDERER_SAF_BINAURAL && input.output_layout != nullptr &&
-            input.output_layout[0] != '\0' && std::string_view{input.output_layout} != "binaural") {
-            context->last_error_message = "SAF binaural live Scene output layout must be 'binaural'";
-            return ADM_ERROR_UNSUPPORTED;
+        auto renderer = to_scene_renderer_config(&input.rendering, input.input_sample_rate);
+        if (!renderer) {
+            store_last_error(context, renderer.error());
+            return map_error(renderer.error().code);
         }
 
         mradm::realtime::SceneStreamConfig converted;
-        converted.renderer.renderer = static_cast<mradm::RendererSelection>(input.renderer);
-        converted.renderer.output_layout = input.output_layout != nullptr ? input.output_layout : "binaural";
-        if (input.sofa_path != nullptr && input.sofa_path[0] != '\0') {
-            converted.renderer.sofa_path = input.sofa_path;
-        }
-        converted.renderer.speaker_geometry = static_cast<mradm::SpeakerGeometry>(input.speaker_geometry);
-        converted.renderer.speaker_spread_mode = static_cast<mradm::SpeakerSpreadMode>(input.speaker_spread_mode);
-        converted.renderer.binaural_spread_mode = static_cast<mradm::BinauralSpreadMode>(input.binaural_spread_mode);
-        converted.renderer.lfe_routing_mode = static_cast<mradm::LfeRoutingMode>(input.lfe_routing_mode);
-        converted.renderer.sample_rate = input.input_sample_rate;
+        converted.renderer = std::move(*renderer);
         converted.output_sample_rate = input.output_sample_rate;
         converted.input_queue_samples = input.input_queue_samples;
         converted.input_queue_bytes = input.input_queue_bytes;
@@ -2246,6 +2314,14 @@ adm_error_code_t adm_scene_stream_configure_generation(adm_scene_stream_t* strea
             element.x = descriptor.position_x;
             element.y = descriptor.position_y;
             element.z = descriptor.position_z;
+            if (descriptor.semantic_identity != nullptr) {
+                mradm::live_scene::SemanticIdentity identity;
+                if (!to_scene_semantic_identity(descriptor.semantic_identity, identity)) {
+                    store_last_error_message(stream, "invalid live Scene semantic identity or membership array");
+                    return ADM_ERROR_INVALID_ARGUMENT;
+                }
+                element.semantic_identity = std::move(identity);
+            }
             converted.push_back(std::move(element));
         }
         auto result = stream->engine->configure_generation(epoch_id, generation_id, converted);
@@ -2312,6 +2388,7 @@ adm_error_code_t adm_scene_stream_submit_frame(adm_scene_stream_t* stream,
             update_views.push_back({update.element_id,
                                     update.offset_samples,
                                     update.ramp_duration_samples,
+                                    update.jump_position != 0,
                                     update.changed_fields,
                                     to_scene_state(update.state),
                                     0U});
@@ -2391,11 +2468,78 @@ adm_error_code_t adm_scene_stream_get_status(adm_scene_stream_t* stream, adm_sce
     converted.media_frames_pulled = status.media_frames_pulled;
     converted.underruns = status.underruns;
     converted.semantic_degradations = status.semantic_degradations;
+    converted.semantic_policy_revision = status.semantic_policy_revision;
     converted.ring_fill = status.ring_fill;
     converted.ended = status.ended ? 1 : 0;
     converted.failed = status.failed ? 1 : 0;
     write_sized_output(out, converted);
     return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_scene_stream_switch_backend(adm_scene_stream_t* stream,
+                                                 const adm_scene_renderer_config_t* config) noexcept {
+    if (stream == nullptr || !stream->engine) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(stream);
+        auto converted = to_scene_renderer_config(config, stream->engine->input_sample_rate());
+        if (!converted) {
+            store_last_error(stream, converted.error());
+            return map_error(converted.error().code);
+        }
+        auto result = stream->engine->switch_backend(std::move(*converted));
+        if (!result) {
+            store_last_error(stream, result.error());
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        store_last_error_message(stream, "unexpected exception while switching live Scene backend");
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_scene_stream_set_listener_orientation(adm_scene_stream_t* stream,
+                                                           float yaw_deg,
+                                                           float pitch_deg,
+                                                           float roll_deg) noexcept {
+    if (stream == nullptr || !stream->engine || !std::isfinite(yaw_deg) || !std::isfinite(pitch_deg) ||
+        !std::isfinite(roll_deg)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(stream);
+        mradm::ListenerOrientation orientation;
+        orientation.yaw_deg = yaw_deg;
+        orientation.pitch_deg = pitch_deg;
+        orientation.roll_deg = roll_deg;
+        stream->engine->set_listener_orientation(orientation);
+        return ADM_ERROR_OK;
+    } catch (...) {
+        store_last_error_message(stream, "unexpected exception while setting live Scene listener orientation");
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t
+adm_scene_stream_set_semantic_policy_json(adm_scene_stream_t* stream, const char* json, uint64_t revision) noexcept {
+    if (stream == nullptr || !stream->engine) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(stream);
+        const std::string_view document = json != nullptr ? std::string_view{json} : std::string_view{};
+        auto result = stream->engine->set_semantic_policy_json(document, revision);
+        if (!result) {
+            store_last_error(stream, result.error());
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        store_last_error_message(stream, "unexpected exception while setting live Scene semantic policy");
+        return ADM_ERROR_INTERNAL;
+    }
 }
 
 uint32_t adm_scene_stream_log_count(adm_scene_stream_t* stream) noexcept {

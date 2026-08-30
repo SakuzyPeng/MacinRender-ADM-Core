@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -116,6 +118,41 @@ struct SemanticPolicy {
     std::optional<SemanticPolicyOverride> global;
     std::vector<SemanticObjectRule> objects;
 };
+
+// Producer-neutral identity used by realtime Scene streams and by the ADM-scene
+// application path. Track/content/programme dimensions preserve the policy's
+// AudioObject-level OR matching semantics without requiring an AdmScene instance.
+struct SemanticPolicyIdentity {
+    std::string object_id;
+    std::string object_name;
+    std::vector<std::string> track_uids;
+    std::optional<int> importance;
+    std::optional<int> dialogue_id;
+    std::vector<std::string> content_ids;
+    std::vector<std::string> content_names;
+    std::vector<std::string> programme_ids;
+    std::vector<std::string> programme_names;
+};
+
+struct ResolvedSemanticPolicy {
+    SemanticPolicyOverride object;
+    std::vector<DirectSpeakersPolicy> direct_speakers;
+    std::vector<std::size_t> matched_rule_indices;
+};
+
+[[nodiscard]] ResolvedSemanticPolicy resolve_semantic_policy(const SemanticPolicy& policy,
+                                                             const SemanticPolicyIdentity& identity);
+
+// Shared transforms used after identity resolution by both bounded-file and
+// producer-neutral realtime rendering. They deliberately operate on the canonical
+// Scene types so policy arithmetic and clamping cannot drift between paths.
+void apply_resolved_semantic_object(SceneObject& object, const SemanticPolicyOverride& policy);
+void apply_resolved_semantic_object_block(SceneObjectBlock& block,
+                                          const SemanticPolicyOverride& policy,
+                                          uint32_t sample_rate);
+void apply_resolved_semantic_direct_speaker(SceneDirectSpeakersBlock& block,
+                                            std::span<const DirectSpeakersPolicy> policies,
+                                            const SemanticPolicyOverride& object_policy);
 
 struct SemanticPolicyReportOptions {
     std::string renderer;

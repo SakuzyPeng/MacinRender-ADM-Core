@@ -172,7 +172,9 @@
  *   producer-neutral realtime Scene C ABI。adm_scene_stream_t 接收同步借用的 mono planar
  *   float32 SceneFrame（Objects / DirectSpeakers / LFE + sample-accurate metadata），在返回前
  *   深拷贝到有界队列，并由 SAF VBAP / SAF binaural worker 渲染；播放器通过无锁
- *   adm_scene_stream_pull 拉取最终 interleaved float32 PCM。接口不携带 codec/source provenance。
+ *   adm_scene_stream_pull 拉取最终 interleaved float32 PCM。同版本直接包含 renderer/SOFA
+ *   热切换、听者朝向/头追与 mradm.semantic-policy.v1 热替换；接口不携带
+ *   codec/source provenance。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
@@ -1194,7 +1196,9 @@ int adm_monitor_log_entry(adm_monitor_t* monitor,
 
 /*
  * Thread/lifetime contract:
- * - One producer/control thread may call begin/configure/submit/signal_end.
+ * - One producer thread may call begin/configure/submit/signal_end.
+ * - Control calls (backend/policy/orientation) may run concurrently with that producer, pull,
+ *   and status/log polling; the implementation serialises them and latest pending values win.
  * - One audio thread may call pull concurrently; one additional thread may poll status/logs.
  * - create/destroy must not overlap any other call on the same handle.
  * - submit deep-copies every descriptor/state/event/PCM value before returning and retains no
@@ -1248,6 +1252,8 @@ typedef enum adm_scene_diagnostic_code_t {
 #define ADM_SCENE_STATE_CHANNEL_LOCK (UINT64_C(1) << 6)
 #define ADM_SCENE_STATE_SCREEN_REFERENCE (UINT64_C(1) << 7)
 #define ADM_SCENE_STATE_HEAD_LOCKED (UINT64_C(1) << 8)
+#define ADM_SCENE_STATE_DIVERGENCE_RANGE (UINT64_C(1) << 9)
+#define ADM_SCENE_STATE_CHANNEL_LOCK_MAX_DISTANCE (UINT64_C(1) << 10)
 
 #define ADM_SCENE_FRAME_STATE_COMPLETE (UINT32_C(1) << 0)
 #define ADM_SCENE_FRAME_WARMUP (UINT32_C(1) << 1)
@@ -1264,18 +1270,26 @@ typedef enum adm_scene_diagnostic_code_t {
 #define ADM_SCENE_PULL_EOS (UINT32_C(1) << 2)
 #define ADM_SCENE_PULL_FAILED (UINT32_C(1) << 3)
 
-/* Zero capacities select the documented defaults: 32768 input samples, 64 MiB,
- * 8192 output frames, and a 4096-frame startup watermark. output_layout may be
- * NULL only for ADM_RENDERER_SAF_BINAURAL (it resolves to "binaural"). */
-typedef struct adm_scene_stream_config_t {
+/* Renderer-only settings shared by create and adm_scene_stream_switch_backend.
+ * output_layout may be NULL only for ADM_RENDERER_SAF_BINAURAL ("binaural").
+ * sofa_path NULL/"" selects the built-in KEMAR dataset. */
+typedef struct adm_scene_renderer_config_t {
     uint32_t struct_size;
     int32_t renderer; /* adm_renderer_t: SAF or SAF_BINAURAL */
     const char* output_layout;
     const char* sofa_path;
-    int32_t speaker_geometry;     /* adm_speaker_geometry_t */
-    int32_t speaker_spread_mode;  /* adm_speaker_spread_mode_t */
-    int32_t binaural_spread_mode; /* adm_binaural_spread_mode_t */
-    int32_t lfe_routing_mode;     /* adm_lfe_routing_mode_t */
+    int32_t speaker_geometry;         /* adm_speaker_geometry_t */
+    int32_t speaker_spread_mode;      /* adm_speaker_spread_mode_t */
+    int32_t binaural_spread_mode;     /* adm_binaural_spread_mode_t */
+    int32_t lfe_routing_mode;         /* adm_lfe_routing_mode_t */
+    uint32_t object_smoothing_frames; /* 0 = disabled; maximum 48000 */
+} adm_scene_renderer_config_t;
+
+/* Zero capacities select the documented defaults: 32768 input samples, 64 MiB,
+ * 8192 output frames, and a 4096-frame startup watermark. */
+typedef struct adm_scene_stream_config_t {
+    uint32_t struct_size;
+    adm_scene_renderer_config_t rendering;
     uint32_t input_sample_rate;
     uint32_t output_sample_rate;
     uint32_t input_queue_samples;
@@ -1284,6 +1298,33 @@ typedef struct adm_scene_stream_config_t {
     uint32_t reserved_v1_35;
     uint64_t input_queue_bytes;
 } adm_scene_stream_config_t;
+
+/* One ID/name pair used by content/programme membership. Strings and arrays are
+ * borrowed only for configure_generation and recursively copied before return. */
+typedef struct adm_scene_semantic_entity_t {
+    uint32_t struct_size;
+    uint32_t reserved_v1_35;
+    const char* id;
+    const char* name;
+} adm_scene_semantic_entity_t;
+
+/* Optional ADM identity used by mradm.semantic-policy.v1 selectors. Elements with
+ * the same non-empty object_id are evaluated as tracks/channels of one AudioObject. */
+typedef struct adm_scene_semantic_identity_t {
+    uint32_t struct_size;
+    uint32_t reserved_v1_35;
+    const char* object_id;
+    const char* object_name;
+    const char* track_uid;
+    int32_t has_importance;
+    int32_t importance;
+    int32_t has_dialogue_id;
+    int32_t dialogue_id;
+    uint32_t content_count;
+    const adm_scene_semantic_entity_t* contents;
+    uint32_t programme_count;
+    const adm_scene_semantic_entity_t* programmes;
+} adm_scene_semantic_identity_t;
 
 /* One independently-rendered mono source. Strings and this descriptor are borrowed
  * only for adm_scene_stream_configure_generation; the stream copies them before return. */
@@ -1295,9 +1336,10 @@ typedef struct adm_scene_element_descriptor_t {
     uint64_t flags;
     int32_t has_position;
     uint32_t reserved_v1_35;
-    float position_x; /* [-1, 1], +right */
-    float position_y; /* [-1, 1], +front */
-    float position_z; /* [-1, 1], +up */
+    float position_x;                                       /* [-1, 1], +right */
+    float position_y;                                       /* [-1, 1], +front */
+    float position_z;                                       /* [-1, 1], +up */
+    const adm_scene_semantic_identity_t* semantic_identity; /* optional */
 } adm_scene_element_descriptor_t;
 
 /* Canonical Renderer/ADM state. valid_fields determines which values are meaningful;
@@ -1320,6 +1362,10 @@ typedef struct adm_scene_object_state_t {
     int32_t channel_lock;
     int32_t screen_reference;
     int32_t head_locked;
+    float divergence_azimuth_range;  /* finite, >= 0; default 45 degrees */
+    float divergence_position_range; /* finite, >= 0; default 0 */
+    int32_t has_channel_lock_max_distance;
+    float channel_lock_max_distance; /* finite, >= 0 when present */
 } adm_scene_object_state_t;
 
 typedef struct adm_scene_pcm_plane_t {
@@ -1346,6 +1392,8 @@ typedef struct adm_scene_metadata_update_t {
     uint64_t element_id;
     uint32_t offset_samples;
     uint32_t ramp_duration_samples;
+    int32_t jump_position; /* non-zero forces an instantaneous target unless policy disables honoring it */
+    uint32_t reserved2_v1_35;
     uint64_t changed_fields;
     adm_scene_object_state_t state; /* complete target state */
 } adm_scene_metadata_update_t;
@@ -1397,6 +1445,7 @@ typedef struct adm_scene_stream_status_t {
     uint64_t media_frames_pulled;
     uint64_t underruns;
     uint64_t semantic_degradations;
+    uint64_t semantic_policy_revision;
     float ring_fill;
     int32_t ended;
     int32_t failed;
@@ -1448,6 +1497,21 @@ adm_error_code_t adm_scene_stream_pull(adm_scene_stream_t* stream,
                                        adm_scene_pull_result_t* result) ADM_API_NOEXCEPT;
 adm_error_code_t adm_scene_stream_get_status(adm_scene_stream_t* stream,
                                              adm_scene_stream_status_t* out) ADM_API_NOEXCEPT;
+/* Prepare the new renderer synchronously. On success it takes over at the next worker
+ * slice with a 2048-input-frame crossfade; on error the current renderer is retained.
+ * The resolved output channel count must remain unchanged. */
+adm_error_code_t adm_scene_stream_switch_backend(adm_scene_stream_t* stream,
+                                                 const adm_scene_renderer_config_t* config) ADM_API_NOEXCEPT;
+/* Same yaw/pitch/roll convention and finite-value validation as the monitor API. */
+adm_error_code_t adm_scene_stream_set_listener_orientation(adm_scene_stream_t* stream,
+                                                           float yaw_deg,
+                                                           float pitch_deg,
+                                                           float roll_deg) ADM_API_NOEXCEPT;
+/* Parse and replace the full in-memory mradm.semantic-policy.v1 document. NULL/""
+ * clears it. A failed update leaves the previous policy and revision active. */
+adm_error_code_t adm_scene_stream_set_semantic_policy_json(adm_scene_stream_t* stream,
+                                                           const char* json,
+                                                           uint64_t revision) ADM_API_NOEXCEPT;
 uint32_t adm_scene_stream_log_count(adm_scene_stream_t* stream) ADM_API_NOEXCEPT;
 int adm_scene_stream_log_entry(adm_scene_stream_t* stream,
                                uint32_t index,

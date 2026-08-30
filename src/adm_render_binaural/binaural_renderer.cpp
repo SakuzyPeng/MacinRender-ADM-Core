@@ -43,6 +43,7 @@
 
 #include "binaural_internal.h"
 #include "binaural_spreader.h"
+#include "head_rotation.h"
 #include "render_common.h"
 
 namespace mradm {
@@ -285,62 +286,7 @@ int vbap_grid_idx(float az_deg, float el_deg) {
 // (+left) about +z, pitch (+up) about +x, roll about +y, composed q_yaw·q_pitch·q_roll as
 // head→world. We apply the inverse (world→head) so a source that is "front in the world" lands to
 // the listener's right when they turn their head left.
-struct QuatD {
-    double w{1.0};
-    double x{};
-    double y{};
-    double z{};
-};
-
-[[nodiscard]] QuatD quat_mul(const QuatD& a, const QuatD& b) noexcept {
-    return {
-        (a.w * b.w) - (a.x * b.x) - (a.y * b.y) - (a.z * b.z),
-        (a.w * b.x) + (a.x * b.w) + (a.y * b.z) - (a.z * b.y),
-        (a.w * b.y) - (a.x * b.z) + (a.y * b.w) + (a.z * b.x),
-        (a.w * b.z) + (a.x * b.y) - (a.y * b.x) + (a.z * b.w),
-    };
-}
-
-[[nodiscard]] QuatD quat_axis_angle(double ax, double ay, double az, double radians) noexcept {
-    const double half = radians * 0.5;
-    const double s = std::sin(half);
-    return {std::cos(half), ax * s, ay * s, az * s};
-}
-
-// Precomputed world→head rotation for a fixed head pose; apply() rotates a unit direction.
-struct HeadRotation {
-    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes)
-    QuatD world_to_head;
-
-    explicit HeadRotation(const ListenerOrientation& o) noexcept {
-        constexpr double d2r = std::numbers::pi_v<double> / 180.0;
-        const QuatD q_roll = quat_axis_angle(0.0, 1.0, 0.0, static_cast<double>(o.roll_deg) * d2r);
-        const QuatD q_pitch = quat_axis_angle(1.0, 0.0, 0.0, static_cast<double>(o.pitch_deg) * d2r);
-        const QuatD q_yaw = quat_axis_angle(0.0, 0.0, 1.0, static_cast<double>(o.yaw_deg) * d2r);
-        const QuatD head_to_world = quat_mul(q_yaw, quat_mul(q_pitch, q_roll));
-        world_to_head = {head_to_world.w, -head_to_world.x, -head_to_world.y, -head_to_world.z}; // conjugate
-    }
-
-    [[nodiscard]] Vec3 apply(Vec3 v) const noexcept {
-        const QuatD p{0.0, static_cast<double>(v.x), static_cast<double>(v.y), static_cast<double>(v.z)};
-        const QuatD& q = world_to_head;
-        const QuatD qc{q.w, -q.x, -q.y, -q.z};
-        const QuatD r = quat_mul(quat_mul(q, p), qc);
-        return {static_cast<float>(r.x), static_cast<float>(r.y), static_cast<float>(r.z)};
-    }
-
-    // Rotate an (az,el) direction in degrees (ADM convention: +az left, +el up) through the head pose.
-    [[nodiscard]] std::pair<float, float> rotate_az_el(float az_deg, float el_deg) const noexcept {
-        constexpr double d2r = std::numbers::pi_v<double> / 180.0;
-        const double a = static_cast<double>(az_deg) * d2r;
-        const double e = static_cast<double>(el_deg) * d2r;
-        const double ce = std::cos(e);
-        const Vec3 world{static_cast<float>(-std::sin(a) * ce),
-                         static_cast<float>(std::cos(a) * ce),
-                         static_cast<float>(std::sin(e))};
-        return polar_from_direction(apply(world));
-    }
-};
+using render_common::HeadRotation;
 
 #ifdef SAF_ENABLE_SOFA_READER_MODULE
 // SOFA Cartesian (front=+X, left=+Y, up=+Z) → polar az/el in degrees.

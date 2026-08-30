@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -29,11 +30,14 @@ enum StateField : std::uint64_t {
     state_channel_lock = 1ULL << 6U,
     state_screen_reference = 1ULL << 7U,
     state_head_locked = 1ULL << 8U,
+    state_divergence_range = 1ULL << 9U,
+    state_channel_lock_max_distance = 1ULL << 10U,
 };
 
 inline constexpr std::uint64_t k_known_state_fields = state_active | state_linear_gain | state_position | state_extent |
                                                       state_diffuse | state_divergence | state_channel_lock |
-                                                      state_screen_reference | state_head_locked;
+                                                      state_screen_reference | state_head_locked |
+                                                      state_divergence_range | state_channel_lock_max_distance;
 
 struct ObjectState {
     std::uint64_t valid_fields{0};
@@ -50,6 +54,24 @@ struct ObjectState {
     bool channel_lock{false};
     bool screen_reference{false};
     bool head_locked{false};
+    float divergence_azimuth_range{45.0F};
+    float divergence_position_range{0.0F};
+    std::optional<float> channel_lock_max_distance;
+};
+
+struct SemanticEntity {
+    std::string id;
+    std::string name;
+};
+
+struct SemanticIdentity {
+    std::string object_id;
+    std::string object_name;
+    std::string track_uid;
+    std::optional<int> importance;
+    std::optional<int> dialogue_id;
+    std::vector<SemanticEntity> contents;
+    std::vector<SemanticEntity> programmes;
 };
 
 struct ElementDescriptor {
@@ -61,6 +83,7 @@ struct ElementDescriptor {
     float y{1.0F};
     float z{0.0F};
     std::uint64_t flags{0};
+    std::optional<SemanticIdentity> semantic_identity;
 };
 
 struct PcmPlane {
@@ -78,9 +101,14 @@ struct MetadataUpdate {
     std::uint64_t element_id{0};
     std::uint32_t offset_samples{0};
     std::uint32_t ramp_duration_samples{0};
+    bool jump_position{false};
     std::uint64_t changed_fields{0};
     ObjectState state;
     std::uint64_t stream_order{0};
+    // Worker-generated policy retargets can remove an optional effective field
+    // (for example, clearing a DirectSpeakers position override). Producer C ABI
+    // updates never set this internal-only mask.
+    std::uint64_t cleared_fields{0};
 };
 
 enum FrameFlag : std::uint32_t {
@@ -109,6 +137,7 @@ struct RendererConfig {
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
     LfeRoutingMode lfe_routing_mode{LfeRoutingMode::direct};
+    std::uint32_t object_smoothing_frames{0U};
     std::uint32_t sample_rate{48000U};
 };
 
@@ -146,6 +175,7 @@ class ILiveSceneRenderer {
                                                             std::span<const ElementDescriptor> elements) = 0;
     virtual void reset() = 0;
     [[nodiscard]] virtual Result<void> render(const Frame& frame, std::span<float> interleaved_output) = 0;
+    virtual void set_listener_orientation(const ListenerOrientation& orientation) { (void) orientation; }
 
     [[nodiscard]] virtual std::uint32_t output_channels() const noexcept = 0;
     [[nodiscard]] virtual std::uint32_t sample_rate() const noexcept = 0;
