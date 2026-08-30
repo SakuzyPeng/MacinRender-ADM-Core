@@ -485,11 +485,11 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
                       DiagnosticCode::direct_speaker_fallback,
                       "DirectSpeakers label is unknown; using its canonical fixed position");
         }
-        if (element.descriptor.has_position) {
-            return cartesian_to_polar(element.descriptor.x, element.descriptor.y, element.descriptor.z);
-        }
         if ((state.valid_fields & state_position) != 0U) {
             return cartesian_to_polar(state.x, state.y, state.z);
+        }
+        if (element.descriptor.has_position) {
+            return cartesian_to_polar(element.descriptor.x, element.descriptor.y, element.descriptor.z);
         }
         if (element.descriptor.role == ElementRole::direct_speaker) {
             return make_error(ErrorCode::unsupported,

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <iostream>
 #include <limits>
+#include <numeric>
 #include <string_view>
 #include <thread>
 #include <type_traits>
@@ -381,6 +382,51 @@ bool test_resampling_length(adm_context_t* context) {
     return ok;
 }
 
+bool test_resampling_preroll_boundary(adm_context_t* context) {
+    StreamGuard stream;
+    auto config = stream_config(48000U, 44100U);
+    config.output_ring_frames = 512U;
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok =
+        check(adm_scene_stream_begin_epoch(stream.value, 32U, 0) == ADM_ERROR_OK, "begin resampled preroll epoch") &&
+        configure_object(stream.value, 32U, 1U);
+    int32_t submit = -1;
+
+    std::vector<float> first_samples(256U, -1.0F);
+    adm_scene_pcm_plane_t first_plane{};
+    adm_scene_initial_state_t first_initial{};
+    auto first = object_frame(32U, 1U, -512, first_samples, first_plane, first_initial);
+    first.flags |= ADM_SCENE_FRAME_DISCONTINUITY;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &first, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit a fully hidden resampled SceneFrame");
+
+    std::vector<float> crossing_samples(416U, -1.0F);
+    std::fill(crossing_samples.begin() + 256, crossing_samples.end(), 1.0F);
+    adm_scene_pcm_plane_t crossing_plane{};
+    adm_scene_initial_state_t crossing_initial{};
+    auto crossing = object_frame(32U, 1U, -256, crossing_samples, crossing_plane, crossing_initial);
+    crossing.initial_state_count = 0U;
+    crossing.initial_states = nullptr;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &crossing, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit a resampled SceneFrame crossing the target boundary");
+    ok &= check(adm_scene_stream_signal_end(stream.value, 32U, 160) == ADM_ERROR_OK,
+                "close the resampled preroll timeline");
+
+    bool saw_signal = false;
+    std::vector<float> output;
+    ok &= wait_for_output(stream.value, 2U, 147U, saw_signal, &output);
+    ok &= check(saw_signal && output.size() == 294U, "resampled preroll preserves the exact audible length");
+    if (output.size() >= 32U) {
+        const float leading_mean = std::accumulate(output.begin(), output.begin() + 32, 0.0F) / 32.0F;
+        ok &= check(leading_mean > 0.0F, "resampler latency cannot leak pre-target PCM into the audible output prefix");
+    }
+    return ok;
+}
+
 bool test_rational_accumulator_many_frames(adm_context_t* context) {
     StreamGuard stream;
     auto config = stream_config(48000U, 44100U);
@@ -477,6 +523,30 @@ bool test_generation_topology_contract(adm_context_t* context) {
     ok &= check(adm_scene_stream_configure_generation(stream.value, 999U, 6U, &descriptor, 1U) ==
                     ADM_ERROR_INVALID_ARGUMENT,
                 "generation configuration rejects an unknown epoch");
+    return ok;
+}
+
+bool test_zero_generation_id(adm_context_t* context) {
+    StreamGuard stream;
+    const auto config = stream_config();
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok =
+        check(adm_scene_stream_begin_epoch(stream.value, 33U, 0) == ADM_ERROR_OK, "begin generation-zero epoch") &&
+        configure_object(stream.value, 33U, 0U);
+    std::vector<float> samples(64U, 0.25F);
+    adm_scene_pcm_plane_t plane{};
+    adm_scene_initial_state_t initial{};
+    auto frame = object_frame(33U, 0U, 0, samples, plane, initial);
+    int32_t submit = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit SceneFrame using generation zero");
+    ok &= check(adm_scene_stream_signal_end(stream.value, 33U, 64) == ADM_ERROR_OK, "close generation-zero epoch");
+    bool saw_signal = false;
+    ok &= wait_for_output(stream.value, 2U, 64U, saw_signal);
+    ok &= check(saw_signal, "generation zero configures its renderer and produces PCM");
     return ok;
 }
 
@@ -909,6 +979,56 @@ bool test_binaural_backend(adm_context_t* context) {
     return ok;
 }
 
+bool render_binaural_position(adm_context_t* context,
+                              std::uint64_t epoch,
+                              float position_x,
+                              std::vector<float>& output) {
+    StreamGuard stream;
+    auto config = stream_config();
+    config.renderer = ADM_RENDERER_SAF_BINAURAL;
+    config.output_layout = "binaural";
+    config.output_ring_frames = 1024U;
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok = check(adm_scene_stream_begin_epoch(stream.value, epoch, 0) == ADM_ERROR_OK,
+                    "begin positioned binaural Scene epoch") &&
+              configure_object(stream.value, epoch, 1U);
+    std::vector<float> samples(256U, 0.1F);
+    adm_scene_pcm_plane_t plane{};
+    adm_scene_initial_state_t initial{};
+    auto frame = object_frame(epoch, 1U, 0, samples, plane, initial);
+    initial.state.position_x = position_x;
+    initial.state.position_y = 0.0F;
+    int32_t submit = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit positioned binaural SceneFrame");
+    ok &= check(adm_scene_stream_signal_end(stream.value, epoch, 256) == ADM_ERROR_OK,
+                "close positioned binaural Scene epoch");
+    bool saw_signal = false;
+    ok &= wait_for_output(stream.value, 2U, 256U, saw_signal, &output);
+    return ok && check(saw_signal, "positioned binaural Scene produces PCM");
+}
+
+bool test_binaural_dynamic_position(adm_context_t* context) {
+    std::vector<float> left_output;
+    std::vector<float> right_output;
+    bool ok = render_binaural_position(context, 34U, -1.0F, left_output);
+    ok &= render_binaural_position(context, 35U, 1.0F, right_output);
+    ok &= check(left_output.size() == right_output.size() && !left_output.empty(),
+                "positioned binaural comparisons have matching output lengths");
+    if (left_output.size() == right_output.size()) {
+        float maximum_difference = 0.0F;
+        for (std::size_t index = 0U; index < left_output.size(); ++index) {
+            maximum_difference = std::max(maximum_difference, std::fabs(left_output[index] - right_output[index]));
+        }
+        ok &= check(maximum_difference > 1.0e-6F,
+                    "binaural rendering follows current object state instead of the fixed descriptor position");
+    }
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -918,14 +1038,17 @@ int main() {
         ok &= test_deep_copy_and_timeline(context);
         ok &= test_validation_and_backpressure(context);
         ok &= test_resampling_length(context);
+        ok &= test_resampling_preroll_boundary(context);
         ok &= test_rational_accumulator_many_frames(context);
         ok &= test_generation_topology_contract(context);
+        ok &= test_zero_generation_id(context);
         ok &= test_sample_accurate_ramp(context);
         ok &= test_incomplete_generation_silence(context);
         ok &= test_pull_state_contract(context);
         ok &= test_worker_failure_pull(context);
         ok &= test_renderer_native_roles_and_events(context);
         ok &= test_binaural_backend(context);
+        ok &= test_binaural_dynamic_position(context);
     }
     adm_destroy_context(context);
     if (ok) {
