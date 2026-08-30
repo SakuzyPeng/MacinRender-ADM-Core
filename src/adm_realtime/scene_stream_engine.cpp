@@ -24,6 +24,11 @@
 #include <utility>
 #include <vector>
 
+#include <fmt/format.h>
+
+#include "adm/scene.h"
+#include "adm/semantic_policy.h"
+
 #include "live_binaural_renderer.h"
 #include "live_vbap_renderer.h"
 #include "ring_buffer.h"
@@ -40,6 +45,12 @@ constexpr std::uint32_t k_default_output_frames = 8192U;
 constexpr std::uint32_t k_default_watermark_frames = 4096U;
 constexpr std::uint32_t k_resampler_output_frames = 4096U;
 constexpr std::uint32_t k_generation_declick_ms = 10U;
+constexpr std::uint32_t k_policy_transition_ms = 20U;
+constexpr std::uint32_t k_worker_chunk_frames = 1024U;
+constexpr std::uint32_t k_tracking_chunk_frames = 512U;
+constexpr std::uint32_t k_tracking_lookahead_frames = 2048U;
+constexpr std::uint32_t k_backend_crossfade_frames = 2048U;
+constexpr auto k_tracking_active_window = std::chrono::milliseconds(750);
 constexpr auto k_ring_wait = std::chrono::milliseconds(1);
 
 class DiagnosticStore {
@@ -88,6 +99,107 @@ struct SrcDeleter {
 
 using SrcPtr = std::unique_ptr<SRC_STATE, SrcDeleter>;
 
+[[nodiscard]] Result<std::unique_ptr<live_scene::ILiveSceneRenderer>>
+create_live_renderer(const live_scene::RendererConfig& config, const live_scene::DiagnosticSink& diagnostics) {
+    if (config.renderer == RendererSelection::saf) {
+        return live_scene::create_live_vbap_renderer(config, diagnostics);
+    }
+    if (config.renderer == RendererSelection::saf_binaural) {
+        return live_scene::create_live_binaural_renderer(config, diagnostics);
+    }
+    return make_error(ErrorCode::unsupported, "Scene stream v1 supports only SAF VBAP and SAF binaural renderers");
+}
+
+[[nodiscard]] live_scene::ObjectState default_state(const live_scene::ElementDescriptor& descriptor) {
+    live_scene::ObjectState state;
+    state.valid_fields = live_scene::k_known_state_fields & ~live_scene::state_position;
+    if (descriptor.role == live_scene::ElementRole::object || descriptor.has_position) {
+        state.valid_fields |= live_scene::state_position;
+    }
+    if (descriptor.has_position) {
+        state.x = descriptor.x;
+        state.y = descriptor.y;
+        state.z = descriptor.z;
+    }
+    return state;
+}
+
+void copy_state_fields(live_scene::ObjectState& destination,
+                       const live_scene::ObjectState& source,
+                       std::uint64_t requested_fields) {
+    const auto fields = source.valid_fields & requested_fields;
+    if ((fields & live_scene::state_active) != 0U) {
+        destination.active = source.active;
+    }
+    if ((fields & live_scene::state_linear_gain) != 0U) {
+        destination.linear_gain = source.linear_gain;
+    }
+    if ((fields & live_scene::state_position) != 0U) {
+        destination.x = source.x;
+        destination.y = source.y;
+        destination.z = source.z;
+    }
+    if ((fields & live_scene::state_extent) != 0U) {
+        destination.width = source.width;
+        destination.height = source.height;
+        destination.depth = source.depth;
+    }
+    if ((fields & live_scene::state_diffuse) != 0U) {
+        destination.diffuse = source.diffuse;
+    }
+    if ((fields & live_scene::state_divergence) != 0U) {
+        destination.divergence = source.divergence;
+    }
+    if ((fields & live_scene::state_channel_lock) != 0U) {
+        destination.channel_lock = source.channel_lock;
+    }
+    if ((fields & live_scene::state_screen_reference) != 0U) {
+        destination.screen_reference = source.screen_reference;
+    }
+    if ((fields & live_scene::state_head_locked) != 0U) {
+        destination.head_locked = source.head_locked;
+    }
+    if ((fields & live_scene::state_divergence_range) != 0U) {
+        destination.divergence_azimuth_range = source.divergence_azimuth_range;
+        destination.divergence_position_range = source.divergence_position_range;
+    }
+    if ((fields & live_scene::state_channel_lock_max_distance) != 0U) {
+        destination.channel_lock_max_distance = source.channel_lock_max_distance;
+    }
+    destination.valid_fields |= fields;
+}
+
+[[nodiscard]] bool object_state_equal(const live_scene::ObjectState& lhs, const live_scene::ObjectState& rhs) noexcept {
+    return lhs.valid_fields == rhs.valid_fields && lhs.active == rhs.active && lhs.linear_gain == rhs.linear_gain &&
+           lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.width == rhs.width && lhs.height == rhs.height &&
+           lhs.depth == rhs.depth && lhs.diffuse == rhs.diffuse && lhs.divergence == rhs.divergence &&
+           lhs.channel_lock == rhs.channel_lock && lhs.screen_reference == rhs.screen_reference &&
+           lhs.head_locked == rhs.head_locked && lhs.divergence_azimuth_range == rhs.divergence_azimuth_range &&
+           lhs.divergence_position_range == rhs.divergence_position_range &&
+           lhs.channel_lock_max_distance == rhs.channel_lock_max_distance;
+}
+
+[[nodiscard]] bool semantic_entity_equal(const live_scene::SemanticEntity& lhs,
+                                         const live_scene::SemanticEntity& rhs) noexcept {
+    return lhs.id == rhs.id && lhs.name == rhs.name;
+}
+
+[[nodiscard]] bool semantic_identity_equal(const std::optional<live_scene::SemanticIdentity>& lhs,
+                                           const std::optional<live_scene::SemanticIdentity>& rhs) noexcept {
+    if (lhs.has_value() != rhs.has_value()) {
+        return false;
+    }
+    if (!lhs) {
+        return true;
+    }
+    return lhs->object_id == rhs->object_id && lhs->object_name == rhs->object_name &&
+           lhs->track_uid == rhs->track_uid && lhs->importance == rhs->importance &&
+           lhs->dialogue_id == rhs->dialogue_id && lhs->contents.size() == rhs->contents.size() &&
+           lhs->programmes.size() == rhs->programmes.size() &&
+           std::equal(lhs->contents.begin(), lhs->contents.end(), rhs->contents.begin(), semantic_entity_equal) &&
+           std::equal(lhs->programmes.begin(), lhs->programmes.end(), rhs->programmes.begin(), semantic_entity_equal);
+}
+
 // Private player-facing completion queue. It knows nothing about devices, clocks,
 // epochs, or Scene metadata; the worker is its sole producer and the player's audio
 // thread is its sole consumer.
@@ -113,7 +225,7 @@ class PlayerOutputEngine {
                                     const live_scene::ElementDescriptor& rhs) noexcept {
     return lhs.element_id == rhs.element_id && lhs.role == rhs.role && lhs.speaker_label == rhs.speaker_label &&
            lhs.has_position == rhs.has_position && lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z &&
-           lhs.flags == rhs.flags;
+           lhs.flags == rhs.flags && semantic_identity_equal(lhs.semantic_identity, rhs.semantic_identity);
 }
 
 [[nodiscard]] bool finite_state(const live_scene::ObjectState& state) noexcept {
@@ -144,6 +256,16 @@ class PlayerOutputEngine {
         (!finite(state.divergence) || state.divergence < 0.0F || state.divergence > 1.0F)) {
         return false;
     }
+    if ((state.valid_fields & live_scene::state_divergence_range) != 0U &&
+        (!finite(state.divergence_azimuth_range) || state.divergence_azimuth_range < 0.0F ||
+         !finite(state.divergence_position_range) || state.divergence_position_range < 0.0F)) {
+        return false;
+    }
+    if ((state.valid_fields & live_scene::state_channel_lock_max_distance) != 0U &&
+        state.channel_lock_max_distance.has_value() &&
+        (!finite(*state.channel_lock_max_distance) || *state.channel_lock_max_distance < 0.0F)) {
+        return false;
+    }
     return true;
 }
 
@@ -155,6 +277,92 @@ class PlayerOutputEngine {
     return true;
 }
 
+void append_unique(std::vector<std::string>& values, const std::string& value) {
+    if (!value.empty() && std::ranges::find(values, value) == values.end()) {
+        values.push_back(value);
+    }
+}
+
+[[nodiscard]] Result<std::vector<SemanticPolicyIdentity>>
+// NOLINTNEXTLINE(readability-function-size)
+build_policy_identities(std::span<const live_scene::ElementDescriptor> elements) {
+    std::vector<SemanticPolicyIdentity> identities(elements.size());
+    std::unordered_map<std::string, std::vector<std::size_t>> groups;
+    for (std::size_t index = 0U; index < elements.size(); ++index) {
+        const auto& optional = elements[index].semantic_identity;
+        if (!optional) {
+            continue;
+        }
+        const auto& source = *optional;
+        auto& identity = identities[index];
+        identity.object_id = source.object_id;
+        identity.object_name = source.object_name;
+        append_unique(identity.track_uids, source.track_uid);
+        identity.importance = source.importance;
+        identity.dialogue_id = source.dialogue_id;
+        for (const auto& content : source.contents) {
+            append_unique(identity.content_ids, content.id);
+            append_unique(identity.content_names, content.name);
+        }
+        for (const auto& programme : source.programmes) {
+            append_unique(identity.programme_ids, programme.id);
+            append_unique(identity.programme_names, programme.name);
+        }
+        if (!source.object_id.empty()) {
+            groups[source.object_id].push_back(index);
+        }
+    }
+
+    for (const auto& [object_id, indices] : groups) {
+        SemanticPolicyIdentity aggregate;
+        aggregate.object_id = object_id;
+        for (const auto index : indices) {
+            const auto& source = identities[index];
+            if (!aggregate.object_name.empty() && !source.object_name.empty() &&
+                aggregate.object_name != source.object_name) {
+                return make_error(ErrorCode::invalid_argument,
+                                  "Scene semantic identities disagree on object_name for object_id " + object_id);
+            }
+            if (aggregate.importance && source.importance && aggregate.importance != source.importance) {
+                return make_error(ErrorCode::invalid_argument,
+                                  "Scene semantic identities disagree on importance for object_id " + object_id);
+            }
+            if (aggregate.dialogue_id && source.dialogue_id && aggregate.dialogue_id != source.dialogue_id) {
+                return make_error(ErrorCode::invalid_argument,
+                                  "Scene semantic identities disagree on dialogue_id for object_id " + object_id);
+            }
+            if (aggregate.object_name.empty()) {
+                aggregate.object_name = source.object_name;
+            }
+            if (!aggregate.importance) {
+                aggregate.importance = source.importance;
+            }
+            if (!aggregate.dialogue_id) {
+                aggregate.dialogue_id = source.dialogue_id;
+            }
+            for (const auto& value : source.track_uids) {
+                append_unique(aggregate.track_uids, value);
+            }
+            for (const auto& value : source.content_ids) {
+                append_unique(aggregate.content_ids, value);
+            }
+            for (const auto& value : source.content_names) {
+                append_unique(aggregate.content_names, value);
+            }
+            for (const auto& value : source.programme_ids) {
+                append_unique(aggregate.programme_ids, value);
+            }
+            for (const auto& value : source.programme_names) {
+                append_unique(aggregate.programme_names, value);
+            }
+        }
+        for (const auto index : indices) {
+            identities[index] = aggregate;
+        }
+    }
+    return identities;
+}
+
 } // namespace
 
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes,clang-analyzer-optin.performance.Padding)
@@ -162,6 +370,24 @@ struct SceneStreamEngine::Impl {
     struct Generation {
         std::uint64_t id{0U};
         std::vector<live_scene::ElementDescriptor> elements;
+        std::vector<SemanticPolicyIdentity> policy_identities;
+    };
+
+    struct PendingBackend {
+        live_scene::RendererConfig config;
+        std::unique_ptr<live_scene::ILiveSceneRenderer> renderer;
+    };
+
+    struct PendingControls {
+        std::unique_ptr<PendingBackend> backend;
+        std::optional<ListenerOrientation> orientation;
+        bool has_policy_update{false};
+        std::shared_ptr<const SemanticPolicy> policy;
+        std::uint64_t policy_revision{0U};
+
+        [[nodiscard]] bool empty() const noexcept {
+            return backend == nullptr && !orientation.has_value() && !has_policy_update;
+        }
     };
 
     struct WorkItem {
@@ -179,8 +405,8 @@ struct SceneStreamEngine::Impl {
          std::unique_ptr<live_scene::ILiveSceneRenderer> live_renderer,
          std::shared_ptr<DiagnosticStore> diagnostic_store)
         : config(std::move(stream_config)), renderer(std::move(live_renderer)),
-          diagnostics(std::move(diagnostic_store)), channels(renderer->output_channels()),
-          player_output(channels, config.output_ring_frames),
+          input_sample_rate(config.renderer.sample_rate), diagnostics(std::move(diagnostic_store)),
+          channels(renderer->output_channels()), player_output(channels, config.output_ring_frames),
           resample_output(static_cast<std::size_t>(k_resampler_output_frames) * channels, 0.0F),
           zero_output(static_cast<std::size_t>(k_resampler_output_frames) * channels, 0.0F),
           last_output_frame(channels, 0.0F), transition_anchor(channels, 0.0F) {
@@ -280,8 +506,291 @@ struct SceneStreamEngine::Impl {
         queue_cv.notify_all();
     }
 
+    [[nodiscard]] bool head_tracking_recent() const noexcept {
+        const auto raw = last_orientation_update_ns.load(std::memory_order_relaxed);
+        if (raw == 0) {
+            return false;
+        }
+        const std::chrono::steady_clock::time_point last{std::chrono::steady_clock::duration{raw}};
+        return (std::chrono::steady_clock::now() - last) < k_tracking_active_window;
+    }
+
+    void finalize_backend_switch() {
+        if (!incoming_renderer) {
+            return;
+        }
+        renderer = std::move(incoming_renderer);
+        config.renderer = std::move(incoming_config);
+        backend_crossfade_position = 0U;
+        incoming_needs_initial_state = false;
+    }
+
+    [[nodiscard]] std::vector<ResolvedSemanticPolicy>
+    resolve_policy_for_current_generation(const std::shared_ptr<const SemanticPolicy>& policy) {
+        if (!current_generation_model) {
+            return {};
+        }
+        std::vector<ResolvedSemanticPolicy> resolved(current_generation_model->elements.size());
+        if (!policy) {
+            return resolved;
+        }
+        std::unordered_set<std::size_t> matched;
+        for (std::size_t index = 0U; index < current_generation_model->policy_identities.size(); ++index) {
+            resolved[index] = resolve_semantic_policy(*policy, current_generation_model->policy_identities[index]);
+            matched.insert(resolved[index].matched_rule_indices.begin(), resolved[index].matched_rule_indices.end());
+        }
+        for (std::size_t index = 0U; index < policy->objects.size(); ++index) {
+            if (matched.contains(index)) {
+                continue;
+            }
+            add_diagnostic({LogLevel::warning,
+                            live_scene::DiagnosticCode::semantic_degraded,
+                            epoch_status.load(std::memory_order_relaxed),
+                            current_generation,
+                            0U,
+                            0U,
+                            fmt::format("semantic policy objects[{}] did not match this Scene generation", index)});
+        }
+        return resolved;
+    }
+
+    void compile_policy_for_current_generation() {
+        resolved_policy = resolve_policy_for_current_generation(current_policy);
+    }
+
+    // NOLINTNEXTLINE(readability-function-size)
+    [[nodiscard]] live_scene::ObjectState apply_policy_to_state(std::size_t element_index,
+                                                                const live_scene::ObjectState& base,
+                                                                live_scene::MetadataUpdate* update = nullptr) const {
+        if (!current_policy || element_index >= resolved_policy.size() || !current_generation_model) {
+            return base;
+        }
+        const auto& descriptor = current_generation_model->elements[element_index];
+        const auto& resolved = resolved_policy[element_index];
+        live_scene::ObjectState out = base;
+
+        SceneObject object;
+        object.gain = 1.0F;
+        apply_resolved_semantic_object(object, resolved.object);
+        const float object_gain = object.mute ? 0.0F : object.gain;
+
+        if (descriptor.role == live_scene::ElementRole::object) {
+            SceneObjectBlock block;
+            block.position.cartesian = true;
+            block.position.x = base.x;
+            block.position.y = base.y;
+            block.position.z = base.z;
+            block.gain = base.linear_gain;
+            block.diffuse = base.diffuse;
+            block.width = base.width;
+            block.height = base.height;
+            block.depth = base.depth;
+            block.channel_lock = base.channel_lock;
+            block.channel_lock_max_distance = base.channel_lock_max_distance;
+            block.divergence = base.divergence;
+            block.divergence_azimuth_range = base.divergence_azimuth_range;
+            block.divergence_position_range = base.divergence_position_range;
+            block.screen_ref = base.screen_reference;
+            block.head_locked = base.head_locked;
+            if (update != nullptr) {
+                block.jump_position = update->jump_position;
+                if (update->ramp_duration_samples != 0U) {
+                    block.interp_length_samples = update->ramp_duration_samples;
+                }
+            }
+            apply_resolved_semantic_object_block(block, resolved.object, config.renderer.sample_rate);
+            out.linear_gain = block.gain * object_gain;
+            out.diffuse = block.diffuse;
+            out.width = block.width;
+            out.height = block.height;
+            out.depth = block.depth;
+            out.channel_lock = block.channel_lock;
+            out.channel_lock_max_distance = block.channel_lock_max_distance;
+            out.divergence = block.divergence;
+            out.divergence_azimuth_range = block.divergence_azimuth_range;
+            out.divergence_position_range = block.divergence_position_range;
+            out.screen_reference = block.screen_ref;
+            out.head_locked = block.head_locked;
+            if (!block.position.cartesian) {
+                const auto direction = direction_vector_from_polar(block.position.azimuth, block.position.elevation);
+                out.x = direction.x * block.position.distance;
+                out.y = direction.y * block.position.distance;
+                out.z = direction.z * block.position.distance;
+            } else {
+                out.x = block.position.x;
+                out.y = block.position.y;
+                out.z = block.position.z;
+            }
+            if (update != nullptr) {
+                update->jump_position = block.jump_position;
+                update->ramp_duration_samples =
+                    block.interp_length_samples.has_value()
+                        ? static_cast<std::uint32_t>(std::min<std::uint64_t>(*block.interp_length_samples,
+                                                                             std::numeric_limits<std::uint32_t>::max()))
+                        : 0U;
+            }
+            return out;
+        }
+
+        SceneDirectSpeakersBlock block;
+        if (!descriptor.speaker_label.empty()) {
+            block.speaker_labels.push_back(descriptor.speaker_label);
+        }
+        if (descriptor.role == live_scene::ElementRole::lfe) {
+            block.low_pass_hz = 120.0F;
+        }
+        block.gain = base.linear_gain;
+        block.head_locked = base.head_locked;
+        if ((base.valid_fields & live_scene::state_position) != 0U) {
+            const auto polar =
+                scene_position_to_polar(SceneBlockPosition{true, 0.0F, 0.0F, 1.0F, base.x, base.y, base.z});
+            block.azimuth = polar.azimuth;
+            block.elevation = polar.elevation;
+            block.distance = polar.distance;
+            block.has_position = true;
+        } else if (descriptor.has_position) {
+            const auto polar = scene_position_to_polar(
+                SceneBlockPosition{true, 0.0F, 0.0F, 1.0F, descriptor.x, descriptor.y, descriptor.z});
+            block.azimuth = polar.azimuth;
+            block.elevation = polar.elevation;
+            block.distance = polar.distance;
+            block.has_position = true;
+        }
+        apply_resolved_semantic_direct_speaker(block, resolved.direct_speakers, resolved.object);
+        out.linear_gain = block.gain * object_gain;
+        out.head_locked = block.head_locked;
+        if (block.has_position) {
+            const auto direction = direction_vector_from_polar(block.azimuth, block.elevation);
+            out.x = direction.x * block.distance;
+            out.y = direction.y * block.distance;
+            out.z = direction.z * block.distance;
+            out.valid_fields |= live_scene::state_position;
+        }
+        return out;
+    }
+
+    [[nodiscard]] std::vector<live_scene::StateEntry> effective_state_snapshot() const {
+        std::vector<live_scene::StateEntry> snapshot;
+        if (!current_generation_model) {
+            return snapshot;
+        }
+        snapshot.reserve(current_generation_model->elements.size());
+        for (const auto& descriptor : current_generation_model->elements) {
+            const auto found = effective_states.find(descriptor.element_id);
+            snapshot.push_back(
+                {descriptor.element_id, found != effective_states.end() ? found->second : default_state(descriptor)});
+        }
+        return snapshot;
+    }
+
+    [[nodiscard]] PendingControls take_pending_controls() {
+        PendingControls controls;
+        const std::lock_guard<std::mutex> lock(queue_mutex);
+        if (reset_request != 0U) {
+            return controls;
+        }
+        controls.backend = std::move(pending_backend);
+        if (orientation_pending) {
+            controls.orientation = pending_orientation;
+            orientation_pending = false;
+        }
+        if (policy_pending) {
+            controls.has_policy_update = true;
+            controls.policy = std::move(pending_policy);
+            controls.policy_revision = pending_policy_revision;
+            policy_pending = false;
+        }
+        return controls;
+    }
+
+    void apply_pending_controls(std::unique_ptr<PendingBackend> backend,
+                                std::optional<ListenerOrientation> orientation,
+                                bool has_policy_update,
+                                std::shared_ptr<const SemanticPolicy> policy,
+                                std::uint64_t policy_revision) {
+        if (has_policy_update) {
+            try {
+                auto next_resolved = resolve_policy_for_current_generation(policy);
+                current_policy = std::move(policy);
+                resolved_policy = std::move(next_resolved);
+                policy_retarget_pending = has_current_generation;
+                applied_policy_revision.store(policy_revision, std::memory_order_release);
+            } catch (const std::exception& exception) {
+                add_diagnostic({LogLevel::error,
+                                live_scene::DiagnosticCode::semantic_degraded,
+                                epoch_status.load(std::memory_order_relaxed),
+                                current_generation,
+                                0U,
+                                0U,
+                                std::string{"live Scene semantic policy preparation failed; keeping the previous "
+                                            "policy: "} +
+                                    exception.what()});
+            } catch (...) {
+                add_diagnostic({LogLevel::error,
+                                live_scene::DiagnosticCode::semantic_degraded,
+                                epoch_status.load(std::memory_order_relaxed),
+                                current_generation,
+                                0U,
+                                0U,
+                                "live Scene semantic policy preparation failed; keeping the previous policy"});
+            }
+        }
+        if (orientation) {
+            current_orientation = *orientation;
+            renderer->set_listener_orientation(current_orientation);
+            if (incoming_renderer) {
+                incoming_renderer->set_listener_orientation(current_orientation);
+            }
+        }
+        if (!backend) {
+            return;
+        }
+        // A newer prepared switch supersedes an unfinished incoming renderer. The
+        // audible renderer remains the same, so rapid control updates do not turn a
+        // partially faded-in intermediate backend into an abrupt new baseline.
+        incoming_renderer = nullptr;
+        backend_crossfade_position = 0U;
+        incoming_needs_initial_state = false;
+        backend->renderer->set_listener_orientation(current_orientation);
+        if (!has_current_generation || !current_generation_model) {
+            renderer = std::move(backend->renderer);
+            config.renderer = std::move(backend->config);
+            return;
+        }
+        auto configured =
+            backend->renderer->configure_generation(current_generation, current_generation_model->elements);
+        if (!configured) {
+            add_diagnostic({LogLevel::error,
+                            live_scene::DiagnosticCode::backend_failure,
+                            epoch_status.load(std::memory_order_relaxed),
+                            current_generation,
+                            0U,
+                            0U,
+                            "live Scene backend switch was rejected: " + configured.error().message});
+            return;
+        }
+        incoming_config = std::move(backend->config);
+        incoming_renderer = std::move(backend->renderer);
+        backend_crossfade_position = 0U;
+        incoming_needs_initial_state = true;
+    }
+
+    void apply_available_controls() {
+        auto controls = take_pending_controls();
+        if (controls.empty()) {
+            return;
+        }
+        apply_pending_controls(std::move(controls.backend),
+                               controls.orientation,
+                               controls.has_policy_update,
+                               std::move(controls.policy),
+                               controls.policy_revision);
+    }
+
     void perform_reset(std::uint64_t serial, std::int64_t target_sample) {
+        finalize_backend_switch();
         (*renderer).reset();
+        renderer->set_listener_orientation(current_orientation);
         if (resampler != nullptr) {
             src_reset(resampler.get());
         }
@@ -290,6 +799,12 @@ struct SceneStreamEngine::Impl {
         pending_frame_offset = 0U;
         current_generation = 0U;
         has_current_generation = false;
+        current_generation_model.reset();
+        current_element_index.clear();
+        resolved_policy.clear();
+        base_states.clear();
+        effective_states.clear();
+        policy_retarget_pending = false;
         target_sample_worker = target_sample;
         preroll_output_boundary = 0U;
         preroll_rational_remainder = 0U;
@@ -320,12 +835,14 @@ struct SceneStreamEngine::Impl {
         while (!quit.load(std::memory_order_acquire)) {
             WorkItem item;
             bool have_item = false;
+            PendingControls controls;
             std::uint64_t pending_reset = 0U;
             std::int64_t pending_target = 0;
             {
                 std::unique_lock<std::mutex> lock(queue_mutex);
                 queue_cv.wait(lock, [&] {
-                    return quit.load(std::memory_order_acquire) || reset_request != 0U || !queue.empty();
+                    return quit.load(std::memory_order_acquire) || reset_request != 0U || !queue.empty() ||
+                           pending_backend != nullptr || orientation_pending || policy_pending;
                 });
                 if (quit.load(std::memory_order_acquire)) {
                     return;
@@ -334,15 +851,35 @@ struct SceneStreamEngine::Impl {
                     pending_reset = reset_request;
                     pending_target = reset_target;
                     reset_request = 0U;
-                } else if (!queue.empty()) {
-                    item = std::move(queue.front());
-                    queue.pop_front();
-                    have_item = true;
+                } else {
+                    controls.backend = std::move(pending_backend);
+                    if (orientation_pending) {
+                        controls.orientation = pending_orientation;
+                        orientation_pending = false;
+                    }
+                    if (policy_pending) {
+                        controls.has_policy_update = true;
+                        controls.policy = std::move(pending_policy);
+                        controls.policy_revision = pending_policy_revision;
+                        policy_pending = false;
+                    }
+                    if (!queue.empty()) {
+                        item = std::move(queue.front());
+                        queue.pop_front();
+                        have_item = true;
+                    }
                 }
             }
             if (pending_reset != 0U) {
                 perform_reset(pending_reset, pending_target);
                 continue;
+            }
+            if (!controls.empty()) {
+                apply_pending_controls(std::move(controls.backend),
+                                       controls.orientation,
+                                       controls.has_policy_update,
+                                       std::move(controls.policy),
+                                       controls.policy_revision);
             }
             if (!have_item || item.serial != reset_serial.load(std::memory_order_acquire)) {
                 continue;
@@ -372,25 +909,253 @@ struct SceneStreamEngine::Impl {
         }
     }
 
-    [[nodiscard]] Result<void> switch_generation(const WorkItem& item) {
+    [[nodiscard]] Result<bool> switch_generation(const WorkItem& item) {
         if (item.generation == nullptr) {
             return make_error(ErrorCode::internal_error, "Scene frame lost its generation descriptor");
         }
         if (has_current_generation && current_generation == item.generation->id) {
-            return {};
+            return false;
         }
         auto configured = renderer->configure_generation(item.generation->id, item.generation->elements);
         if (!configured) {
             return tl::unexpected{configured.error()};
         }
+        if (incoming_renderer) {
+            auto incoming_configured =
+                incoming_renderer->configure_generation(item.generation->id, item.generation->elements);
+            if (!incoming_configured) {
+                add_diagnostic({LogLevel::error,
+                                live_scene::DiagnosticCode::backend_failure,
+                                item.frame.epoch_id,
+                                item.generation->id,
+                                0U,
+                                0U,
+                                "incoming live Scene backend rejected a generation; keeping the current backend: " +
+                                    incoming_configured.error().message});
+                incoming_renderer = nullptr;
+                backend_crossfade_position = 0U;
+                incoming_needs_initial_state = false;
+            }
+        }
         current_generation = item.generation->id;
         has_current_generation = true;
+        current_generation_model = item.generation;
+        current_element_index.clear();
+        base_states.clear();
+        effective_states.clear();
+        current_element_index.reserve(item.generation->elements.size());
+        base_states.reserve(item.generation->elements.size());
+        effective_states.reserve(item.generation->elements.size());
+        for (std::size_t index = 0U; index < item.generation->elements.size(); ++index) {
+            const auto& descriptor = item.generation->elements[index];
+            current_element_index.emplace(descriptor.element_id, index);
+            base_states.emplace(descriptor.element_id, default_state(descriptor));
+        }
+        try {
+            compile_policy_for_current_generation();
+        } catch (const std::exception& exception) {
+            resolved_policy.assign(item.generation->elements.size(), {});
+            add_diagnostic({LogLevel::error,
+                            live_scene::DiagnosticCode::semantic_degraded,
+                            item.frame.epoch_id,
+                            item.generation->id,
+                            0U,
+                            0U,
+                            std::string{"live Scene semantic policy could not be prepared for the new generation; "
+                                        "using producer state: "} +
+                                exception.what()});
+        } catch (...) {
+            resolved_policy.assign(item.generation->elements.size(), {});
+            add_diagnostic({LogLevel::error,
+                            live_scene::DiagnosticCode::semantic_degraded,
+                            item.frame.epoch_id,
+                            item.generation->id,
+                            0U,
+                            0U,
+                            "live Scene semantic policy could not be prepared for the new generation; using "
+                            "producer state"});
+        }
+        for (std::size_t index = 0U; index < item.generation->elements.size(); ++index) {
+            const auto& descriptor = item.generation->elements[index];
+            effective_states.emplace(descriptor.element_id,
+                                     apply_policy_to_state(index, base_states.at(descriptor.element_id)));
+        }
+        policy_retarget_pending = false;
+        incoming_needs_initial_state = incoming_renderer != nullptr;
         generation_status.store(current_generation, std::memory_order_release);
         transition_anchor = last_output_frame;
         transition_remaining = std::max<std::uint64_t>(
             1U, (static_cast<std::uint64_t>(config.output_sample_rate) * k_generation_declick_ms) / 1000U);
         transition_position = 0U;
+        return true;
+    }
+
+    void apply_initial_states(std::span<const live_scene::StateEntry> source,
+                              bool generation_switched,
+                              std::vector<live_scene::StateEntry>& converted) {
+        for (const auto& initial : source) {
+            const auto found = current_element_index.find(initial.element_id);
+            if (found == current_element_index.end()) {
+                continue;
+            }
+            const auto& descriptor = current_generation_model->elements[found->second];
+            auto base = default_state(descriptor);
+            copy_state_fields(base, initial.state, initial.state.valid_fields);
+            base_states[initial.element_id] = base;
+            effective_states[initial.element_id] = apply_policy_to_state(found->second, base);
+        }
+
+        if (generation_switched) {
+            converted = effective_state_snapshot();
+            return;
+        }
+        converted.reserve(source.size());
+        for (const auto& initial : source) {
+            const auto found = effective_states.find(initial.element_id);
+            if (found != effective_states.end()) {
+                converted.push_back({initial.element_id, found->second});
+            }
+        }
+    }
+
+    void append_policy_retargets(std::vector<live_scene::MetadataUpdate>& updates, std::uint64_t& stream_order) {
+        if (!policy_retarget_pending || !current_generation_model) {
+            return;
+        }
+        const auto transition_samples = std::max<std::uint32_t>(
+            1U,
+            static_cast<std::uint32_t>(
+                (static_cast<std::uint64_t>(config.renderer.sample_rate) * k_policy_transition_ms) / 1000U));
+        for (std::size_t index = 0U; index < current_generation_model->elements.size(); ++index) {
+            const auto& descriptor = current_generation_model->elements[index];
+            const auto base = base_states.find(descriptor.element_id);
+            const auto producer_state = base != base_states.end() ? base->second : default_state(descriptor);
+            const auto next = apply_policy_to_state(index, producer_state);
+            const auto previous = effective_states.find(descriptor.element_id);
+            if (previous == effective_states.end() || !object_state_equal(previous->second, next)) {
+                live_scene::MetadataUpdate update;
+                update.element_id = descriptor.element_id;
+                update.offset_samples = 0U;
+                update.ramp_duration_samples = transition_samples;
+                update.jump_position = false;
+                update.changed_fields = next.valid_fields;
+                update.state = next;
+                update.stream_order = stream_order++;
+                if (previous != effective_states.end()) {
+                    update.cleared_fields = previous->second.valid_fields & ~next.valid_fields;
+                }
+                updates.push_back(update);
+            }
+            effective_states[descriptor.element_id] = next;
+        }
+        policy_retarget_pending = false;
+    }
+
+    void append_producer_update(const live_scene::MetadataUpdate& source,
+                                std::uint32_t slice_start,
+                                std::vector<live_scene::MetadataUpdate>& updates,
+                                std::uint64_t& stream_order) {
+        const auto found = current_element_index.find(source.element_id);
+        if (found == current_element_index.end()) {
+            return;
+        }
+        const auto& descriptor = current_generation_model->elements[found->second];
+        auto base =
+            base_states.contains(source.element_id) ? base_states.at(source.element_id) : default_state(descriptor);
+        copy_state_fields(base, source.state, source.changed_fields);
+        base_states[source.element_id] = base;
+
+        auto converted = source;
+        converted.offset_samples -= slice_start;
+        converted.state = apply_policy_to_state(found->second, base, &converted);
+        // Policy transforms may couple one producer field to another (for example
+        // channel-lock and its maximum distance). Publishing the complete effective
+        // target keeps the renderer state coherent and still starts its ramp from the
+        // renderer's current in-flight value.
+        converted.changed_fields = converted.state.valid_fields;
+        converted.stream_order = stream_order++;
+        effective_states[source.element_id] = converted.state;
+        updates.push_back(converted);
+    }
+
+    [[nodiscard]] Result<void> render_slice(const live_scene::Frame& frame,
+                                            const std::vector<live_scene::StateEntry>& incoming_snapshot) {
+        render_output.resize(static_cast<std::size_t>(frame.duration_samples) * channels);
+        auto rendered = renderer->render(frame, render_output);
+        if (!rendered) {
+            return tl::unexpected{rendered.error()};
+        }
+        if (!incoming_renderer) {
+            return {};
+        }
+
+        live_scene::Frame incoming_frame = frame;
+        if (incoming_needs_initial_state) {
+            incoming_frame.initial_states = incoming_snapshot;
+        }
+        render_output_b.resize(static_cast<std::size_t>(frame.duration_samples) * channels);
+        auto incoming_rendered = incoming_renderer->render(incoming_frame, render_output_b);
+        if (!incoming_rendered) {
+            add_diagnostic({LogLevel::error,
+                            live_scene::DiagnosticCode::backend_failure,
+                            frame.epoch_id,
+                            frame.generation_id,
+                            0U,
+                            0U,
+                            "incoming live Scene backend failed while crossfading; keeping the current backend: " +
+                                incoming_rendered.error().message});
+            incoming_renderer = nullptr;
+            backend_crossfade_position = 0U;
+            incoming_needs_initial_state = false;
+            return {};
+        }
+        incoming_needs_initial_state = false;
+
+        for (std::uint32_t frame_index = 0U; frame_index < frame.duration_samples; ++frame_index) {
+            const auto position = std::min<std::uint64_t>(backend_crossfade_position + 1U, k_backend_crossfade_frames);
+            const float incoming_weight = static_cast<float>(position) / static_cast<float>(k_backend_crossfade_frames);
+            const float outgoing_weight = 1.0F - incoming_weight;
+            const auto output_index = static_cast<std::size_t>(frame_index) * channels;
+            for (std::size_t channel = 0U; channel < channels; ++channel) {
+                render_output[output_index + channel] = (render_output[output_index + channel] * outgoing_weight) +
+                                                        (render_output_b[output_index + channel] * incoming_weight);
+            }
+            ++backend_crossfade_position;
+        }
+        if (backend_crossfade_position >= k_backend_crossfade_frames) {
+            finalize_backend_switch();
+        }
         return {};
+    }
+
+    [[nodiscard]] Result<void> feed_rendered_slice(const live_scene::Frame& frame, std::uint64_t serial) {
+        const auto frame_end = frame.media_sample_start + static_cast<std::int64_t>(frame.duration_samples);
+        std::uint32_t hidden_frames = 0U;
+        if (frame.media_sample_start < target_sample_worker) {
+            const auto hidden_end = std::min(frame_end, target_sample_worker);
+            hidden_frames = static_cast<std::uint32_t>(hidden_end - frame.media_sample_start);
+        }
+        if (hidden_frames > 0U) {
+            add_preroll_samples(hidden_frames);
+            auto hidden = feed_samples(render_output.data(), hidden_frames, false, false, false, true, serial);
+            if (!hidden) {
+                return tl::unexpected{hidden.error()};
+            }
+        }
+        if (hidden_frames == frame.duration_samples) {
+            return {};
+        }
+
+        finish_preroll();
+        const auto audible_frames = frame.duration_samples - hidden_frames;
+        const bool state_complete = (frame.flags & live_scene::frame_state_complete) != 0U;
+        const bool warmup = (frame.flags & live_scene::frame_warmup) != 0U;
+        float* audible = render_output.data() + (static_cast<std::size_t>(hidden_frames) * channels);
+        const bool force_silence = !state_complete || warmup;
+        if (force_silence) {
+            std::fill_n(audible, static_cast<std::size_t>(audible_frames) * channels, 0.0F);
+        }
+        return feed_samples(audible, audible_frames, true, true, force_silence, false, serial);
     }
 
     [[nodiscard]] Result<void> process_frame(const WorkItem& item) {
@@ -403,43 +1168,67 @@ struct SceneStreamEngine::Impl {
         }
 
         const auto& frame = item.frame;
-        render_output.resize(static_cast<std::size_t>(frame.duration_samples) * channels);
-        auto rendered = renderer->render(frame, render_output);
-        if (!rendered) {
-            return tl::unexpected{rendered.error()};
-        }
-        if (reset_or_quit(item.serial)) {
-            return {};
-        }
-
-        const auto frame_end = frame.media_sample_start + static_cast<std::int64_t>(frame.duration_samples);
-        std::uint32_t hidden_frames = 0U;
-        if (frame.media_sample_start < target_sample_worker) {
-            const auto hidden_end = std::min(frame_end, target_sample_worker);
-            hidden_frames = static_cast<std::uint32_t>(hidden_end - frame.media_sample_start);
-        }
-        if (hidden_frames > 0U) {
-            add_preroll_samples(hidden_frames);
-            auto hidden = feed_samples(render_output.data(), hidden_frames, false, false, false, true, item.serial);
-            if (!hidden) {
-                return tl::unexpected{hidden.error()};
+        std::size_t update_index = 0U;
+        std::uint32_t slice_start = 0U;
+        bool first_slice = true;
+        while (slice_start < frame.duration_samples) {
+            if (reset_or_quit(item.serial)) {
+                return {};
             }
-        }
-        if (hidden_frames == frame.duration_samples) {
-            return {};
-        }
+            apply_available_controls();
+            if (reset_or_quit(item.serial)) {
+                return {};
+            }
+            const auto maximum = head_tracking_recent() ? k_tracking_chunk_frames : k_worker_chunk_frames;
+            const auto count = std::min(maximum, frame.duration_samples - slice_start);
+            const auto slice_end = slice_start + count;
 
-        finish_preroll();
+            live_scene::Frame slice;
+            slice.epoch_id = frame.epoch_id;
+            slice.generation_id = frame.generation_id;
+            slice.media_sample_start = frame.media_sample_start + static_cast<std::int64_t>(slice_start);
+            slice.duration_samples = count;
+            slice.flags = first_slice ? frame.flags : (frame.flags & ~live_scene::frame_discontinuity);
+            slice.pcm.reserve(frame.pcm.size());
+            for (const auto& plane : frame.pcm) {
+                live_scene::PcmPlane sliced;
+                sliced.element_id = plane.element_id;
+                sliced.has_signal = plane.has_signal;
+                if (plane.has_signal) {
+                    const auto begin = plane.samples.begin() + static_cast<std::ptrdiff_t>(slice_start);
+                    sliced.samples.assign(begin, begin + static_cast<std::ptrdiff_t>(count));
+                }
+                slice.pcm.push_back(std::move(sliced));
+            }
 
-        const auto audible_frames = frame.duration_samples - hidden_frames;
-        const bool state_complete = (frame.flags & live_scene::frame_state_complete) != 0U;
-        const bool warmup = (frame.flags & live_scene::frame_warmup) != 0U;
-        float* audible = render_output.data() + (static_cast<std::size_t>(hidden_frames) * channels);
-        const bool force_silence = !state_complete || warmup;
-        if (force_silence) {
-            std::fill_n(audible, static_cast<std::size_t>(audible_frames) * channels, 0.0F);
+            if (first_slice) {
+                apply_initial_states(frame.initial_states, *switched, slice.initial_states);
+            }
+            const auto incoming_snapshot = incoming_renderer && incoming_needs_initial_state
+                                               ? effective_state_snapshot()
+                                               : std::vector<live_scene::StateEntry>{};
+            std::uint64_t stream_order = 0U;
+            append_policy_retargets(slice.updates, stream_order);
+            while (update_index < frame.updates.size() && frame.updates[update_index].offset_samples < slice_end) {
+                append_producer_update(frame.updates[update_index], slice_start, slice.updates, stream_order);
+                ++update_index;
+            }
+
+            auto rendered = render_slice(slice, incoming_snapshot);
+            if (!rendered) {
+                return tl::unexpected{rendered.error()};
+            }
+            if (reset_or_quit(item.serial)) {
+                return {};
+            }
+            auto fed = feed_rendered_slice(slice, item.serial);
+            if (!fed) {
+                return tl::unexpected{fed.error()};
+            }
+            slice_start = slice_end;
+            first_slice = false;
         }
-        return feed_samples(audible, audible_frames, true, true, force_silence, false, item.serial);
+        return {};
     }
 
     void add_preroll_samples(std::uint64_t input_frames) noexcept {
@@ -519,13 +1308,26 @@ struct SceneStreamEngine::Impl {
             if (reset_or_quit(serial)) {
                 return {};
             }
-            const auto remaining_floats = static_cast<std::size_t>(frames - offset) * channels;
+            const bool tracking = head_tracking_recent();
+            const auto lookahead =
+                tracking ? std::min<std::size_t>(player_output.capacity_frames(), k_tracking_lookahead_frames)
+                         : static_cast<std::size_t>(player_output.capacity_frames());
+            const auto buffered = player_output.buffered_frames();
+            if (buffered >= lookahead) {
+                std::this_thread::sleep_for(k_ring_wait);
+                continue;
+            }
+            const auto permitted_frames = std::min<std::uint64_t>(frames - offset, lookahead - buffered);
+            const auto remaining_floats = static_cast<std::size_t>(permitted_frames) * channels;
             const auto pushed =
                 player_output.push(samples + (static_cast<std::size_t>(offset) * channels), remaining_floats);
             const auto pushed_frames = pushed / channels;
             offset += pushed_frames;
             output_frames_pushed += pushed_frames;
-            if (player_output.buffered_frames() >= config.startup_watermark_frames) {
+            const auto effective_watermark = tracking
+                                                 ? std::min<std::size_t>(config.startup_watermark_frames, lookahead)
+                                                 : static_cast<std::size_t>(config.startup_watermark_frames);
+            if (player_output.buffered_frames() >= effective_watermark) {
                 output_ready.store(true, std::memory_order_release);
                 state.store(SceneStreamState::running, std::memory_order_release);
             }
@@ -675,22 +1477,32 @@ struct SceneStreamEngine::Impl {
     }
 
     [[nodiscard]] Result<void> flush_backend(const WorkItem& item) {
-        std::uint32_t remaining = renderer->tail_input_frames();
-        if (remaining == 0U || !has_current_generation) {
+        apply_available_controls();
+        if (!has_current_generation) {
             return {};
+        }
+        std::uint32_t remaining = renderer->tail_input_frames();
+        if (incoming_renderer) {
+            remaining = std::max(remaining, incoming_renderer->tail_input_frames());
         }
         while (remaining > 0U) {
             if (reset_or_quit(item.serial)) {
                 return {};
             }
-            const auto count = std::min(remaining, k_resampler_output_frames);
+            apply_available_controls();
+            const auto maximum = head_tracking_recent() ? k_tracking_chunk_frames : k_worker_chunk_frames;
+            const auto count = std::min(remaining, maximum);
             live_scene::Frame tail;
             tail.epoch_id = item.frame.epoch_id;
             tail.generation_id = current_generation;
             tail.duration_samples = count;
             tail.flags = live_scene::frame_state_complete;
-            render_output.resize(static_cast<std::size_t>(count) * channels);
-            auto rendered = renderer->render(tail, render_output);
+            const auto incoming_snapshot = incoming_renderer && incoming_needs_initial_state
+                                               ? effective_state_snapshot()
+                                               : std::vector<live_scene::StateEntry>{};
+            std::uint64_t stream_order = 0U;
+            append_policy_retargets(tail.updates, stream_order);
+            auto rendered = render_slice(tail, incoming_snapshot);
             if (!rendered) {
                 return tl::unexpected{rendered.error()};
             }
@@ -736,6 +1548,7 @@ struct SceneStreamEngine::Impl {
 
     SceneStreamConfig config;
     std::unique_ptr<live_scene::ILiveSceneRenderer> renderer;
+    const std::uint32_t input_sample_rate{0U};
     std::shared_ptr<DiagnosticStore> diagnostics;
     std::size_t channels{0U};
     PlayerOutputEngine player_output;
@@ -747,6 +1560,12 @@ struct SceneStreamEngine::Impl {
     std::condition_variable queue_cv;
     std::deque<WorkItem> queue;
     std::unordered_map<std::uint64_t, std::shared_ptr<const Generation>> generations;
+    std::unique_ptr<PendingBackend> pending_backend;
+    bool orientation_pending{false};
+    ListenerOrientation pending_orientation{};
+    bool policy_pending{false};
+    std::shared_ptr<const SemanticPolicy> pending_policy;
+    std::uint64_t pending_policy_revision{0U};
     std::uint64_t reserved_samples{0U};
     std::uint64_t reserved_bytes{0U};
     bool has_epoch{false};
@@ -769,6 +1588,7 @@ struct SceneStreamEngine::Impl {
     std::atomic<std::uint64_t> queued_bytes{0U};
     std::atomic<std::uint64_t> media_frames_pulled{0U};
     std::atomic<std::uint64_t> underruns{0U};
+    std::atomic<std::uint64_t> applied_policy_revision{0U};
     std::atomic<bool> output_ready{false};
     std::atomic<bool> production_done{false};
     std::atomic<bool> failed{false};
@@ -776,7 +1596,21 @@ struct SceneStreamEngine::Impl {
     std::int64_t target_sample_worker{0};
     std::uint64_t current_generation{0U};
     bool has_current_generation{false};
+    std::shared_ptr<const Generation> current_generation_model;
+    std::shared_ptr<const SemanticPolicy> current_policy;
+    std::vector<ResolvedSemanticPolicy> resolved_policy;
+    bool policy_retarget_pending{false};
+    ListenerOrientation current_orientation{};
+    std::atomic<std::int64_t> last_orientation_update_ns{0};
+    std::unordered_map<std::uint64_t, live_scene::ObjectState> base_states;
+    std::unordered_map<std::uint64_t, live_scene::ObjectState> effective_states;
+    std::unordered_map<std::uint64_t, std::size_t> current_element_index;
+    std::unique_ptr<live_scene::ILiveSceneRenderer> incoming_renderer;
+    live_scene::RendererConfig incoming_config;
+    std::uint64_t backend_crossfade_position{0U};
+    bool incoming_needs_initial_state{false};
     std::vector<float> render_output;
+    std::vector<float> render_output_b;
     std::vector<float> resample_output;
     std::vector<float> zero_output;
     std::vector<float> pending_output;
@@ -816,16 +1650,7 @@ Result<std::unique_ptr<SceneStreamEngine>> SceneStreamEngine::create(SceneStream
     const live_scene::DiagnosticSink sink = [diagnostics](live_scene::Diagnostic diagnostic) {
         diagnostics->push(std::move(diagnostic));
     };
-    Result<std::unique_ptr<live_scene::ILiveSceneRenderer>> renderer = [&]() {
-        if (config.renderer.renderer == RendererSelection::saf) {
-            return live_scene::create_live_vbap_renderer(config.renderer, sink);
-        }
-        if (config.renderer.renderer == RendererSelection::saf_binaural) {
-            return live_scene::create_live_binaural_renderer(config.renderer, sink);
-        }
-        return Result<std::unique_ptr<live_scene::ILiveSceneRenderer>>{
-            make_error(ErrorCode::unsupported, "Scene stream v1 supports only SAF VBAP and SAF binaural renderers")};
-    }();
+    auto renderer = create_live_renderer(config.renderer, sink);
     if (!renderer) {
         return tl::unexpected{renderer.error()};
     }
@@ -854,6 +1679,77 @@ SceneStreamEngine::~SceneStreamEngine() = default;
 
 SceneOutputFormat SceneStreamEngine::output_format() const noexcept {
     return {impl_->config.output_sample_rate, static_cast<std::uint32_t>(impl_->channels)};
+}
+
+std::uint32_t SceneStreamEngine::input_sample_rate() const noexcept {
+    return impl_->input_sample_rate;
+}
+
+Result<void> SceneStreamEngine::switch_backend(live_scene::RendererConfig config) {
+    if (config.sample_rate != impl_->input_sample_rate) {
+        return make_error(ErrorCode::unsupported, "live Scene backend switches cannot change the input sample rate");
+    }
+    const auto diagnostics = impl_->diagnostics;
+    const live_scene::DiagnosticSink sink = [diagnostics](live_scene::Diagnostic diagnostic) {
+        diagnostics->push(std::move(diagnostic));
+    };
+    auto prepared = create_live_renderer(config, sink);
+    if (!prepared) {
+        return tl::unexpected{prepared.error()};
+    }
+    if (*prepared == nullptr || (*prepared)->output_channels() == 0U) {
+        return make_error(ErrorCode::internal_error, "prepared live Scene renderer has an invalid output format");
+    }
+    if ((*prepared)->sample_rate() != impl_->input_sample_rate) {
+        return make_error(ErrorCode::unsupported, "live Scene backend switches cannot change the renderer sample rate");
+    }
+    if ((*prepared)->output_channels() != impl_->channels) {
+        return make_error(ErrorCode::unsupported, "live Scene backend switches cannot change the output channel count");
+    }
+
+    auto pending = std::make_unique<Impl::PendingBackend>();
+    pending->config = std::move(config);
+    pending->renderer = std::move(*prepared);
+    {
+        const std::lock_guard<std::mutex> lock(impl_->queue_mutex);
+        impl_->pending_backend = std::move(pending);
+    }
+    impl_->queue_cv.notify_one();
+    return {};
+}
+
+void SceneStreamEngine::set_listener_orientation(const ListenerOrientation& orientation) {
+    impl_->last_orientation_update_ns.store(std::chrono::steady_clock::now().time_since_epoch().count(),
+                                            std::memory_order_relaxed);
+    {
+        const std::lock_guard<std::mutex> lock(impl_->queue_mutex);
+        impl_->pending_orientation = orientation;
+        impl_->orientation_pending = true;
+    }
+    impl_->queue_cv.notify_one();
+}
+
+Result<void> SceneStreamEngine::set_semantic_policy_json(std::string_view json, std::uint64_t revision) {
+    std::shared_ptr<const SemanticPolicy> parsed;
+    if (!json.empty()) {
+        auto policy = parse_semantic_policy(json, "<scene-stream>");
+        if (!policy) {
+            return tl::unexpected{policy.error()};
+        }
+        try {
+            parsed = std::make_shared<const SemanticPolicy>(std::move(*policy));
+        } catch (...) {
+            return make_error(ErrorCode::internal_error, "failed to retain the live Scene semantic policy");
+        }
+    }
+    {
+        const std::lock_guard<std::mutex> lock(impl_->queue_mutex);
+        impl_->pending_policy = std::move(parsed);
+        impl_->pending_policy_revision = revision;
+        impl_->policy_pending = true;
+    }
+    impl_->queue_cv.notify_one();
+    return {};
 }
 
 Result<void> SceneStreamEngine::begin_epoch(std::uint64_t epoch_id, std::int64_t target_sample) {
@@ -929,6 +1825,11 @@ Result<void> SceneStreamEngine::configure_generation(std::uint64_t epoch_id,
         auto generation = std::make_shared<Impl::Generation>();
         generation->id = generation_id;
         generation->elements.assign(elements.begin(), elements.end());
+        auto identities = build_policy_identities(generation->elements);
+        if (!identities) {
+            return tl::unexpected{identities.error()};
+        }
+        generation->policy_identities = std::move(*identities);
         const std::lock_guard<std::mutex> lock(impl_->queue_mutex);
         if (!impl_->has_epoch || epoch_id != impl_->control_epoch) {
             return make_error(ErrorCode::invalid_argument, "Scene generation uses an unknown epoch");
@@ -1243,6 +2144,7 @@ SceneStreamStatus SceneStreamEngine::status() const noexcept {
     result.media_frames_pulled = impl_->media_frames_pulled.load(std::memory_order_relaxed);
     result.underruns = impl_->underruns.load(std::memory_order_relaxed);
     result.semantic_degradations = impl_->diagnostics->degradation_count();
+    result.semantic_policy_revision = impl_->applied_policy_revision.load(std::memory_order_acquire);
     result.ring_fill = impl_->player_output.capacity_frames() == 0U
                            ? 0.0F
                            : static_cast<float>(result.buffered_output_frames) /

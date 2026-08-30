@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
 > 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.35）
-> 日期：2026-05-17（增量记录持续更新至 2026-08-30 的 v1.35）
+> 日期：2026-05-17（增量记录持续更新至 2026-08-31 的 v1.35）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -457,12 +457,28 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 不记录、识别或推断 producer、codec、语言或项目来源。
 
 - **新增 opaque handle**：`adm_scene_stream_t`；由 `adm_create_scene_stream` /
-  `adm_destroy_scene_stream` 严格配对。配置冻结输入/输出采样率、有界输入容量、输出 SPSC ring、水位线和
-  SAF VBAP / SAF binaural 的原生布局、SOFA、spread、geometry、LFE routing 选项。
+  `adm_destroy_scene_stream` 严格配对。`adm_scene_stream_config_t` 冻结输入/输出采样率、有界输入容量、
+  输出 SPSC ring 与水位线；其中嵌入的 `adm_scene_renderer_config_t` 统一表达创建和热切换所需的 SAF
+  renderer、布局、SOFA、spread、geometry、LFE routing 与 object smoothing。
 - **新增 canonical Scene POD**：element descriptor、完整 object state、mono planar PCM、初始状态、
-  sample-accurate metadata update 与原子 `SceneFrame`。所有非 opaque POD 首字段均为 `struct_size`；
-  POD 数组以首元素 `struct_size` 为 stride，同一数组每个元素尺寸必须相同。字符串与数组仅借用至
-  当前调用返回；`submit` 返回前完成深拷贝。
+  sample-accurate metadata update 与原子 `SceneFrame`。state 包含 divergence azimuth/position range、
+  channel-lock max distance，metadata update 显式携带 jump-position。所有非 opaque POD 首字段均为
+  `struct_size`；POD 数组以首元素 `struct_size` 为 stride，同一数组每个元素尺寸必须相同。字符串与
+  数组仅借用至当前调用返回；`configure_generation` / `submit` 返回前完成递归深拷贝。
+- **语义身份与策略热替换**：element 可选携带 object ID/name、track UID、importance、dialogue ID 及
+  content/programme ID/name 集合；相同非空 object ID 聚合为一个 AudioObject 语义组。新增
+  `adm_scene_stream_set_semantic_policy_json`，接收完整 `mradm.semantic-policy.v1`，`NULL`/空串清除；
+  revision 仅在 worker 成功接纳后发布到 status。Scene 与离线渲染共用 selector、规则顺序和变换实现；
+  每次都从 producer canonical 基线重算，替换/清除用 20 ms 过渡，不累积旧策略。Scene v1.35 没有 HOA
+  element role，因此 parser 接受的 `pack_format` 规则不会命中，并通过诊断报告。
+- **renderer/SOFA 热切换**：新增 `adm_scene_stream_switch_backend`。新 renderer（含外部 SOFA）在调用线程
+  同步加载、验证；只允许保持输入采样率及输出采样率/声道数不变。失败保留旧 renderer；成功从下一
+  未渲染 worker slice 开始，在共享 resampler 前做 2048 输入帧双 renderer 交叉淡化。新 renderer 从
+  当前 generation、producer canonical state、有效 policy 与 pose 快照初始化；已进入输出 ring 的音频
+  不回溯重渲染。空 SOFA 路径恢复内置 KEMAR。
+- **头部追踪**：新增 `adm_scene_stream_set_listener_orientation`，使用本体相同的 yaw/pitch/roll 与
+  world→head 旋转；有效 `head_locked` 跳过旋转，零姿态保持未设置路径。头姿态更新后的 750 ms 内，
+  worker 使用至多 512 输入帧 slice 和 2048 输出帧 lookahead；其它时候 slice 至多 1024 输入帧。
 - **时间线与 backpressure**：`begin_epoch` 是同步 reset barrier，epoch 严格递增；generation 在首帧前
   配置且拓扑不可变；frame 必须连续，gap/overlap 需新 epoch。`submit(timeout_ms)` 明确返回 accepted、
   would-block、timed-out 或 closed，不丢弃已接受 frame。输入队列同时受 sample 与 owned-byte budget 限制。
@@ -471,10 +487,12 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - **渲染与采样率**：metadata 在输入 sample domain 生效，动态 SAF backend 完成空间渲染后再经 PRIVATE
   libsamplerate 0.2.2（`SRC_SINC_MEDIUM_QUALITY`）转换；同采样率旁路。持续有理数 accumulator 保证
   EOS 总长为 `ceil((end-target) * output_rate / input_rate)`，不按 SceneFrame 独立取整。
-- **线程模型**：同一 handle 允许一个 producer/control 线程、一个 audio-pull 线程和一个 status 轮询
-  线程；create/destroy 不得与其它调用并发。播放器仍独占设备、播放状态、A/V 同步与主时钟。
-- **兼容性**：只新增 enum、POD、opaque handle 与 symbol；没有改动 v1.34 或更早的布局、signature、
-  enum 数值和 callback，`SOVERSION` 继续为 1。
+- **线程模型**：同一 handle 允许 producer、audio-pull、status/log 轮询，以及 backend/policy/pose
+  control 调用并发；控制值由 worker 在 slice 边界合并，连续更新采用最新值。create/destroy 不得与
+  其它调用并发。播放器仍独占设备、播放状态、A/V 同步与主时钟。
+- **兼容性**：`42302dc`、`8ff675e` 中的早期 Scene 形状从未发布，因此直接收口为上述 v1.35 表面，
+  不增加 v1.36 兼容层或 `_ex` 入口。相对已发布 v1.34 仍只新增 enum、POD、opaque handle 与 symbol；
+  没有改动 v1.34 或更早的布局、signature、enum 数值和 callback，`SOVERSION` 继续为 1。
 
 ## opaque 指针与 callback 生命周期
 

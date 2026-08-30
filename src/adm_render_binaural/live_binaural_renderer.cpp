@@ -15,6 +15,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -28,6 +29,7 @@
 #include <fmt/format.h>
 
 #include "binaural_internal.h"
+#include "head_rotation.h"
 
 namespace mradm::live_scene {
 
@@ -145,6 +147,13 @@ void copy_state_fields(ObjectState& destination, const ObjectState& source, std:
     if ((fields & state_head_locked) != 0U) {
         destination.head_locked = source.head_locked;
     }
+    if ((fields & state_divergence_range) != 0U) {
+        destination.divergence_azimuth_range = source.divergence_azimuth_range;
+        destination.divergence_position_range = source.divergence_position_range;
+    }
+    if ((fields & state_channel_lock_max_distance) != 0U) {
+        destination.channel_lock_max_distance = source.channel_lock_max_distance;
+    }
     destination.valid_fields |= fields;
 }
 
@@ -161,11 +170,17 @@ interpolated_state(const ObjectState& start, const ObjectState& target, float al
     result.depth = lerp(start.depth, target.depth);
     result.diffuse = lerp(start.diffuse, target.diffuse);
     result.divergence = lerp(start.divergence, target.divergence);
+    result.divergence_azimuth_range = lerp(start.divergence_azimuth_range, target.divergence_azimuth_range);
+    result.divergence_position_range = lerp(start.divergence_position_range, target.divergence_position_range);
+    if (start.channel_lock_max_distance && target.channel_lock_max_distance) {
+        result.channel_lock_max_distance = lerp(*start.channel_lock_max_distance, *target.channel_lock_max_distance);
+    }
     if (alpha >= 1.0F) {
         result.active = target.active;
         result.channel_lock = target.channel_lock;
         result.screen_reference = target.screen_reference;
         result.head_locked = target.head_locked;
+        result.channel_lock_max_distance = target.channel_lock_max_distance;
         result.valid_fields = target.valid_fields;
     }
     return result;
@@ -428,6 +443,9 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
 
     [[nodiscard]] std::uint32_t output_channels() const noexcept override { return 2U; }
     [[nodiscard]] std::uint32_t sample_rate() const noexcept override { return config_.sample_rate; }
+    void set_listener_orientation(const ListenerOrientation& orientation) override {
+        listener_orientation_ = orientation;
+    }
     [[nodiscard]] std::uint32_t tail_input_frames() const noexcept override {
         return static_cast<std::uint32_t>(state_->overlap_len) + static_cast<std::uint32_t>(k_diffuse_delay_len);
     }
@@ -440,9 +458,15 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         }
         auto& element = elements_[found->second];
         ObjectState target = element.target;
+        target.valid_fields &= ~update.cleared_fields;
         copy_state_fields(target, update.state, update.changed_fields);
         element.target = target;
-        element.ramp_remaining = update.ramp_duration_samples;
+        element.ramp_remaining = config_.object_smoothing_frames;
+        if (update.jump_position) {
+            element.ramp_remaining = 0U;
+        } else if (update.ramp_duration_samples != 0U) {
+            element.ramp_remaining = update.ramp_duration_samples;
+        }
         if (element.ramp_remaining == 0U) {
             element.current = element.target;
         }
@@ -475,6 +499,12 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
 
     [[nodiscard]] Result<std::pair<float, float>>
     direction_for(const RuntimeElement& element, const ObjectState& state, const Frame& frame) {
+        // A current canonical position (including a semantic-policy re-aim) wins
+        // over the topology's fixed label. Without one, preserve label routing and
+        // use the descriptor position only as its fallback.
+        if ((state.valid_fields & state_position) != 0U) {
+            return cartesian_to_polar(state.x, state.y, state.z);
+        }
         if (element.descriptor.role == ElementRole::direct_speaker && !element.descriptor.speaker_label.empty()) {
             if (const auto direction = label_position(element.descriptor.speaker_label)) {
                 return *direction;
@@ -484,9 +514,6 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
                       0U,
                       DiagnosticCode::direct_speaker_fallback,
                       "DirectSpeakers label is unknown; using its canonical fixed position");
-        }
-        if ((state.valid_fields & state_position) != 0U) {
-            return cartesian_to_polar(state.x, state.y, state.z);
         }
         if (element.descriptor.has_position) {
             return cartesian_to_polar(element.descriptor.x, element.descriptor.y, element.descriptor.z);
@@ -508,9 +535,20 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             return tl::unexpected{direction.error()};
         }
         float azimuth = direction->first;
-        const float elevation = direction->second;
+        float elevation = direction->second;
         if (object_state.channel_lock) {
-            azimuth = std::fabs(azimuth - 30.0F) < std::fabs(azimuth + 30.0F) ? 30.0F : -30.0F;
+            const float target = std::fabs(azimuth - 30.0F) < std::fabs(azimuth + 30.0F) ? 30.0F : -30.0F;
+            constexpr double k_degrees_to_radians = std::numbers::pi_v<double> / 180.0;
+            const double delta = static_cast<double>(azimuth - target) * k_degrees_to_radians;
+            const auto distance = static_cast<float>(2.0 * std::sin(std::fabs(delta) * 0.5));
+            if (!object_state.channel_lock_max_distance ||
+                distance <= *object_state.channel_lock_max_distance + 1.0e-4F) {
+                azimuth = target;
+            }
+        }
+        if (!listener_orientation_.is_identity() && !object_state.head_locked) {
+            const render_common::HeadRotation rotation{listener_orientation_};
+            std::tie(azimuth, elevation) = rotation.rotate_az_el(azimuth, elevation);
         }
         if (object_state.screen_reference) {
             warn_once(frame,
@@ -529,9 +567,23 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         if (element.descriptor.role == ElementRole::object) {
             const float divergence = std::clamp(object_state.divergence, 0.0F, 1.0F);
             if (divergence > 0.0F) {
-                directions.front().weight = 1.0F - divergence;
-                directions.push_back({azimuth - (30.0F * divergence), elevation, divergence * 0.5F});
-                directions.push_back({azimuth + (30.0F * divergence), elevation, divergence * 0.5F});
+                float divergence_angle = object_state.divergence_azimuth_range;
+                if (object_state.divergence_position_range > 0.0F &&
+                    (object_state.valid_fields & state_position) != 0U) {
+                    constexpr double k_radians_to_degrees = 180.0 / std::numbers::pi_v<double>;
+                    const double distance = std::max(1.0e-6,
+                                                     std::sqrt((static_cast<double>(object_state.x) * object_state.x) +
+                                                               (static_cast<double>(object_state.y) * object_state.y) +
+                                                               (static_cast<double>(object_state.z) * object_state.z)));
+                    divergence_angle = static_cast<float>(
+                        std::atan2(static_cast<double>(object_state.divergence_position_range), distance) *
+                        k_radians_to_degrees);
+                }
+                divergence_angle = std::clamp(divergence_angle, 0.0F, 120.0F);
+                const float side_weight = divergence / (divergence + 1.0F);
+                directions.front().weight = (1.0F - divergence) / (divergence + 1.0F);
+                directions.push_back({azimuth - divergence_angle, elevation, side_weight});
+                directions.push_back({azimuth + divergence_angle, elevation, side_weight});
             }
             const float width = std::clamp(object_state.width, 0.0F, 1.0F) * 60.0F;
             const float height = std::clamp(object_state.height, 0.0F, 1.0F) * 45.0F;
@@ -708,6 +760,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
     std::vector<RuntimeElement> elements_;
     std::unordered_map<std::uint64_t, std::size_t> element_index_;
     std::unordered_set<std::uint64_t> warned_;
+    ListenerOrientation listener_orientation_{};
 };
 
 } // namespace

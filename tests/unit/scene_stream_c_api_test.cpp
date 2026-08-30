@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <numeric>
@@ -17,6 +18,9 @@
 namespace {
 
 static_assert(std::is_standard_layout_v<adm_scene_stream_config_t>);
+static_assert(std::is_standard_layout_v<adm_scene_renderer_config_t>);
+static_assert(std::is_standard_layout_v<adm_scene_semantic_entity_t>);
+static_assert(std::is_standard_layout_v<adm_scene_semantic_identity_t>);
 static_assert(std::is_standard_layout_v<adm_scene_element_descriptor_t>);
 static_assert(std::is_standard_layout_v<adm_scene_object_state_t>);
 static_assert(std::is_standard_layout_v<adm_scene_pcm_plane_t>);
@@ -28,6 +32,9 @@ static_assert(std::is_standard_layout_v<adm_scene_pull_result_t>);
 static_assert(std::is_standard_layout_v<adm_scene_stream_status_t>);
 static_assert(std::is_standard_layout_v<adm_scene_diagnostic_t>);
 static_assert(offsetof(adm_scene_stream_config_t, struct_size) == 0U);
+static_assert(offsetof(adm_scene_renderer_config_t, struct_size) == 0U);
+static_assert(offsetof(adm_scene_semantic_entity_t, struct_size) == 0U);
+static_assert(offsetof(adm_scene_semantic_identity_t, struct_size) == 0U);
 static_assert(offsetof(adm_scene_element_descriptor_t, struct_size) == 0U);
 static_assert(offsetof(adm_scene_object_state_t, struct_size) == 0U);
 static_assert(offsetof(adm_scene_pcm_plane_t, struct_size) == 0U);
@@ -49,12 +56,13 @@ bool check(bool condition, std::string_view message) {
 adm_scene_stream_config_t stream_config(std::uint32_t input_rate = 48000U, std::uint32_t output_rate = 48000U) {
     adm_scene_stream_config_t config{};
     config.struct_size = sizeof(config);
-    config.renderer = ADM_RENDERER_SAF;
-    config.output_layout = "0+2+0";
-    config.speaker_geometry = ADM_SPEAKER_GEOMETRY_STANDARD;
-    config.speaker_spread_mode = ADM_SPEAKER_SPREAD_AUTOMATIC;
-    config.binaural_spread_mode = ADM_BINAURAL_SPREAD_AUTOMATIC;
-    config.lfe_routing_mode = ADM_LFE_ROUTING_DIRECT;
+    config.rendering.struct_size = sizeof(config.rendering);
+    config.rendering.renderer = ADM_RENDERER_SAF;
+    config.rendering.output_layout = "0+2+0";
+    config.rendering.speaker_geometry = ADM_SPEAKER_GEOMETRY_STANDARD;
+    config.rendering.speaker_spread_mode = ADM_SPEAKER_SPREAD_AUTOMATIC;
+    config.rendering.binaural_spread_mode = ADM_BINAURAL_SPREAD_AUTOMATIC;
+    config.rendering.lfe_routing_mode = ADM_LFE_ROUTING_DIRECT;
     config.input_sample_rate = input_rate;
     config.output_sample_rate = output_rate;
     config.input_queue_samples = 4096U;
@@ -64,15 +72,36 @@ adm_scene_stream_config_t stream_config(std::uint32_t input_rate = 48000U, std::
     return config;
 }
 
+adm_scene_renderer_config_t vbap_renderer_config(std::string_view layout = "0+2+0") {
+    adm_scene_renderer_config_t config{};
+    config.struct_size = sizeof(config);
+    config.renderer = ADM_RENDERER_SAF;
+    config.output_layout = layout.data();
+    config.speaker_geometry = ADM_SPEAKER_GEOMETRY_STANDARD;
+    config.speaker_spread_mode = ADM_SPEAKER_SPREAD_AUTOMATIC;
+    config.binaural_spread_mode = ADM_BINAURAL_SPREAD_AUTOMATIC;
+    config.lfe_routing_mode = ADM_LFE_ROUTING_DIRECT;
+    return config;
+}
+
+adm_scene_renderer_config_t binaural_renderer_config(const char* sofa_path = nullptr) {
+    auto config = vbap_renderer_config("binaural");
+    config.renderer = ADM_RENDERER_SAF_BINAURAL;
+    config.sofa_path = sofa_path;
+    return config;
+}
+
 adm_scene_object_state_t complete_state(float gain = 1.0F) {
     adm_scene_object_state_t state{};
     state.struct_size = sizeof(state);
     state.valid_fields = ADM_SCENE_STATE_ACTIVE | ADM_SCENE_STATE_LINEAR_GAIN | ADM_SCENE_STATE_POSITION |
                          ADM_SCENE_STATE_EXTENT | ADM_SCENE_STATE_DIFFUSE | ADM_SCENE_STATE_DIVERGENCE |
-                         ADM_SCENE_STATE_CHANNEL_LOCK | ADM_SCENE_STATE_SCREEN_REFERENCE | ADM_SCENE_STATE_HEAD_LOCKED;
+                         ADM_SCENE_STATE_CHANNEL_LOCK | ADM_SCENE_STATE_SCREEN_REFERENCE | ADM_SCENE_STATE_HEAD_LOCKED |
+                         ADM_SCENE_STATE_DIVERGENCE_RANGE | ADM_SCENE_STATE_CHANNEL_LOCK_MAX_DISTANCE;
     state.active = 1;
     state.linear_gain = gain;
     state.position_y = 1.0F;
+    state.divergence_azimuth_range = 45.0F;
     return state;
 }
 
@@ -179,6 +208,80 @@ bool wait_for_output(adm_scene_stream_t* stream,
     }
     return check(saw_eos, "live Scene stream reaches EOS") &&
            check(media_frames == expected_frames, "live Scene output length matches the rational timeline");
+}
+
+bool pull_open_stream(adm_scene_stream_t* stream,
+                      std::uint32_t channels,
+                      std::uint32_t expected_frames,
+                      std::vector<float>& captured) {
+    std::uint32_t media_frames = 0U;
+    for (int attempt = 0; attempt < 5000 && media_frames < expected_frames; ++attempt) {
+        const auto requested = std::min<std::uint32_t>(64U, expected_frames - media_frames);
+        std::vector<float> output(static_cast<std::size_t>(requested) * channels, -99.0F);
+        adm_scene_pull_result_t pulled{};
+        pulled.struct_size = sizeof(pulled);
+        if (!check(adm_scene_stream_pull(stream, output.data(), requested, &pulled) == ADM_ERROR_OK,
+                   "pull open live Scene stream") ||
+            !check((pulled.flags & ADM_SCENE_PULL_FAILED) == 0U, "open live Scene stream remains healthy")) {
+            return false;
+        }
+        captured.insert(captured.end(),
+                        output.begin(),
+                        output.begin() +
+                            (static_cast<std::ptrdiff_t>(pulled.media_frames) * static_cast<std::ptrdiff_t>(channels)));
+        media_frames += pulled.media_frames;
+        if (pulled.media_frames == 0U) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    return check(media_frames == expected_frames, "open live Scene pull reaches the requested media frame");
+}
+
+bool wait_for_policy_revision(adm_scene_stream_t* stream, std::uint64_t revision) {
+    for (int attempt = 0; attempt < 5000; ++attempt) {
+        adm_scene_stream_status_t status{};
+        status.struct_size = sizeof(status);
+        if (adm_scene_stream_get_status(stream, &status) == ADM_ERROR_OK &&
+            status.semantic_policy_revision == revision) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return check(false, "live Scene worker applies semantic policy revision");
+}
+
+float mean_absolute_tail(const std::vector<float>& samples, std::size_t channels, std::size_t tail_frames) {
+    if (samples.empty() || channels == 0U) {
+        return 0.0F;
+    }
+    const auto total_frames = samples.size() / channels;
+    const auto first_frame = total_frames > tail_frames ? total_frames - tail_frames : 0U;
+    double sum = 0.0;
+    std::size_t count = 0U;
+    for (std::size_t frame = first_frame; frame < total_frames; ++frame) {
+        for (std::size_t channel = 0U; channel < channels; ++channel) {
+            sum += std::fabs(samples[(frame * channels) + channel]);
+            ++count;
+        }
+    }
+    return count == 0U ? 0.0F : static_cast<float>(sum / static_cast<double>(count));
+}
+
+float mean_absolute_channel_tail(const std::vector<float>& samples,
+                                 std::size_t channels,
+                                 std::size_t channel,
+                                 std::size_t tail_frames) {
+    if (samples.empty() || channels == 0U || channel >= channels) {
+        return 0.0F;
+    }
+    const auto total_frames = samples.size() / channels;
+    const auto first_frame = total_frames > tail_frames ? total_frames - tail_frames : 0U;
+    double sum = 0.0;
+    for (std::size_t frame = first_frame; frame < total_frames; ++frame) {
+        sum += std::fabs(samples[(frame * channels) + channel]);
+    }
+    const auto count = total_frames - first_frame;
+    return count == 0U ? 0.0F : static_cast<float>(sum / static_cast<double>(count));
 }
 
 bool test_deep_copy_and_timeline(adm_context_t* context) {
@@ -857,7 +960,7 @@ bool test_worker_failure_pull(adm_context_t* context) {
 bool test_renderer_native_roles_and_events(adm_context_t* context) {
     StreamGuard stream;
     auto config = stream_config();
-    config.output_layout = "0+5+0";
+    config.rendering.output_layout = "0+5+0";
     if (!create_stream(context, config, stream)) {
         return false;
     }
@@ -956,8 +1059,8 @@ bool test_renderer_native_roles_and_events(adm_context_t* context) {
 bool test_binaural_backend(adm_context_t* context) {
     StreamGuard stream;
     auto config = stream_config();
-    config.renderer = ADM_RENDERER_SAF_BINAURAL;
-    config.output_layout = "binaural";
+    config.rendering.renderer = ADM_RENDERER_SAF_BINAURAL;
+    config.rendering.output_layout = "binaural";
     config.output_ring_frames = 1024U;
     if (!create_stream(context, config, stream)) {
         return false;
@@ -985,8 +1088,8 @@ bool render_binaural_position(adm_context_t* context,
                               std::vector<float>& output) {
     StreamGuard stream;
     auto config = stream_config();
-    config.renderer = ADM_RENDERER_SAF_BINAURAL;
-    config.output_layout = "binaural";
+    config.rendering.renderer = ADM_RENDERER_SAF_BINAURAL;
+    config.rendering.output_layout = "binaural";
     config.output_ring_frames = 1024U;
     if (!create_stream(context, config, stream)) {
         return false;
@@ -1029,6 +1132,615 @@ bool test_binaural_dynamic_position(adm_context_t* context) {
     return ok;
 }
 
+// Backend preparation is synchronous, while takeover is worker-owned. This test keeps
+// one generation alive across failed and rapid successful switches so state retention
+// and the pre-resampler crossfade are exercised together.
+// NOLINTNEXTLINE(readability-function-size)
+bool test_backend_hot_switch(adm_context_t* context) {
+    StreamGuard stream;
+    auto config = stream_config();
+    config.output_ring_frames = 8192U;
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok =
+        check(adm_scene_stream_begin_epoch(stream.value, 40U, 0) == ADM_ERROR_OK, "begin backend-switch Scene epoch") &&
+        configure_object(stream.value, 40U, 1U);
+    ok &= check(adm_scene_stream_set_semantic_policy_json(
+                    stream.value, R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":1}}})", 71U) ==
+                    ADM_ERROR_OK,
+                "install neutral policy before backend switch");
+    ok &= wait_for_policy_revision(stream.value, 71U);
+    ok &= check(adm_scene_stream_set_listener_orientation(stream.value, 12.0F, -4.0F, 3.0F) == ADM_ERROR_OK,
+                "set pose retained by backend switch");
+
+    std::vector<float> first_samples(1024U, 0.05F);
+    adm_scene_pcm_plane_t first_plane{};
+    adm_scene_initial_state_t first_initial{};
+    auto first = object_frame(40U, 1U, 0, first_samples, first_plane, first_initial);
+    int32_t submit = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &first, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit pre-switch Scene audio");
+    std::vector<float> output;
+    ok &= pull_open_stream(stream.value, 2U, 1024U, output);
+
+    auto invalid_sofa = binaural_renderer_config("/definitely/missing/mradm-scene-stream-test.sofa");
+    ok &= check(adm_scene_stream_switch_backend(stream.value, &invalid_sofa) != ADM_ERROR_OK,
+                "invalid external SOFA rejects synchronously");
+    auto vbap_with_sofa = vbap_renderer_config();
+    vbap_with_sofa.sofa_path = "/definitely/missing/unused-vbap.sofa";
+    ok &= check(adm_scene_stream_switch_backend(stream.value, &vbap_with_sofa) == ADM_ERROR_UNSUPPORTED,
+                "SOFA configuration is rejected for non-binaural SAF rendering");
+    auto incompatible = vbap_renderer_config("0+5+0");
+    ok &= check(adm_scene_stream_switch_backend(stream.value, &incompatible) == ADM_ERROR_UNSUPPORTED,
+                "backend switch rejects a channel-count change");
+    adm_scene_stream_status_t preserved{};
+    preserved.struct_size = sizeof(preserved);
+    ok &= check(adm_scene_stream_get_status(stream.value, &preserved) == ADM_ERROR_OK && preserved.failed == 0 &&
+                    preserved.generation_id == 1U && preserved.semantic_policy_revision == 71U,
+                "failed backend preparation preserves stream, generation, and policy status");
+
+    if (const char* sofa = std::getenv("MR_ADM_TEST_SOFA_PATH"); sofa != nullptr && sofa[0] != '\0') {
+        auto external = binaural_renderer_config(sofa);
+        ok &= check(adm_scene_stream_switch_backend(stream.value, &external) == ADM_ERROR_OK,
+                    "valid external SOFA prepares for Scene hot switch");
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        auto kemar = binaural_renderer_config();
+        ok &= check(adm_scene_stream_switch_backend(stream.value, &kemar) == ADM_ERROR_OK,
+                    "empty SOFA path restores built-in KEMAR");
+    }
+
+    // Only the newest pending renderer matters. Deliberately issue more updates than
+    // the worker can be required to consume between calls.
+    auto binaural = binaural_renderer_config();
+    auto vbap = vbap_renderer_config();
+    ok &= check(adm_scene_stream_switch_backend(stream.value, &binaural) == ADM_ERROR_OK,
+                "prepare first rapid backend switch");
+    ok &= check(adm_scene_stream_switch_backend(stream.value, &vbap) == ADM_ERROR_OK,
+                "prepare superseding rapid backend switch");
+    ok &= check(adm_scene_stream_switch_backend(stream.value, &binaural) == ADM_ERROR_OK,
+                "prepare latest rapid backend switch");
+
+    std::vector<float> second_samples(4096U, 0.05F);
+    adm_scene_pcm_plane_t second_plane{};
+    adm_scene_initial_state_t second_initial{};
+    auto second = object_frame(40U, 1U, 1024, second_samples, second_plane, second_initial);
+    second.initial_state_count = 0U;
+    second.initial_states = nullptr;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &second, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit audio spanning the backend crossfade");
+    ok &=
+        check(adm_scene_stream_signal_end(stream.value, 40U, 5120) == ADM_ERROR_OK, "close backend-switch Scene epoch");
+    bool saw_signal = false;
+    std::vector<float> switched_output;
+    ok &= wait_for_output(stream.value, 2U, 4096U, saw_signal, &switched_output);
+    output.insert(output.end(), switched_output.begin(), switched_output.end());
+    ok &= check(saw_signal && std::ranges::all_of(output, [](float sample) { return std::isfinite(sample); }),
+                "rapid backend switches keep finite audible output");
+    float maximum_step = 0.0F;
+    for (std::size_t index = 2U; index < output.size(); ++index) {
+        maximum_step = std::max(maximum_step, std::fabs(output[index] - output[index - 2U]));
+    }
+    ok &= check(maximum_step < 0.25F, "backend takeover has no hard full-scale discontinuity");
+    preserved = {};
+    preserved.struct_size = sizeof(preserved);
+    ok &= check(adm_scene_stream_get_status(stream.value, &preserved) == ADM_ERROR_OK && preserved.failed == 0 &&
+                    preserved.generation_id == 1U && preserved.semantic_policy_revision == 71U,
+                "successful backend switch retains generation, pose, and policy state");
+    return ok;
+}
+
+// NOLINTNEXTLINE(readability-function-size)
+bool test_semantic_policy_hot_replace(adm_context_t* context) {
+    StreamGuard stream;
+    auto config = stream_config();
+    config.output_ring_frames = 4096U;
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok =
+        check(adm_scene_stream_begin_epoch(stream.value, 41U, 0) == ADM_ERROR_OK, "begin semantic-policy Scene epoch");
+
+    adm_scene_semantic_entity_t content{};
+    content.struct_size = sizeof(content);
+    content.id = "ACO_1";
+    content.name = "Dialogue";
+    adm_scene_semantic_entity_t programme{};
+    programme.struct_size = sizeof(programme);
+    programme.id = "APR_1";
+    programme.name = "Main";
+    adm_scene_semantic_identity_t identity{};
+    identity.struct_size = sizeof(identity);
+    identity.object_id = "AO_1";
+    identity.object_name = "Voice";
+    identity.track_uid = "ATU_1";
+    identity.has_importance = 1;
+    identity.importance = 7;
+    identity.has_dialogue_id = 1;
+    identity.dialogue_id = 1;
+    identity.content_count = 1U;
+    identity.contents = &content;
+    identity.programme_count = 1U;
+    identity.programmes = &programme;
+    adm_scene_element_descriptor_t descriptor{};
+    descriptor.struct_size = sizeof(descriptor);
+    descriptor.role = ADM_SCENE_ELEMENT_OBJECT;
+    descriptor.element_id = 7U;
+    descriptor.has_position = 1;
+    descriptor.position_y = 1.0F;
+    descriptor.semantic_identity = &identity;
+    ok &= check(adm_scene_stream_configure_generation(stream.value, 41U, 1U, &descriptor, 1U) == ADM_ERROR_OK,
+                "configure Scene semantic identity");
+
+    constexpr const char* k_mute =
+        R"({"schema":"mradm.semantic-policy.v1","objects":[{"id":"AO_1","gain":{"mute":true}}]})";
+    constexpr const char* k_half =
+        R"({"schema":"mradm.semantic-policy.v1","objects":[{"programme":"Main","gain":{"scale":0.5}}]})";
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_mute, 1U) == ADM_ERROR_OK,
+                "install object-ID semantic policy");
+    ok &= wait_for_policy_revision(stream.value, 1U);
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, "{not-json", 99U) == ADM_ERROR_INVALID_ARGUMENT,
+                "invalid policy JSON is rejected synchronously");
+    adm_scene_stream_status_t status{};
+    status.struct_size = sizeof(status);
+    ok &= check(adm_scene_stream_get_status(stream.value, &status) == ADM_ERROR_OK &&
+                    status.semantic_policy_revision == 1U,
+                "invalid policy keeps the previous applied revision");
+
+    int32_t submit = -1;
+    std::vector<float> samples(2048U, 0.1F);
+    adm_scene_pcm_plane_t plane{};
+    adm_scene_initial_state_t initial{};
+    auto frame = object_frame(41U, 1U, 0, samples, plane, initial);
+    frame.duration_samples = 1024U;
+    plane.sample_count = 1024U;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit muted semantic-policy block");
+    std::vector<float> muted;
+    ok &= pull_open_stream(stream.value, 2U, 1024U, muted);
+    ok &= check(std::ranges::all_of(muted, [](float sample) { return sample == 0.0F; }),
+                "object identity selector mutes the matching Scene element");
+
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_half, 2U) == ADM_ERROR_OK,
+                "replace semantic policy while running");
+    ok &= wait_for_policy_revision(stream.value, 2U);
+    frame = object_frame(41U, 1U, 1024, samples, plane, initial);
+    frame.initial_state_count = 0U;
+    frame.initial_states = nullptr;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit policy transition block");
+    std::vector<float> half_transition;
+    ok &= pull_open_stream(stream.value, 2U, 2048U, half_transition);
+    const float half_level = mean_absolute_tail(half_transition, 2U, 256U);
+    ok &= check(half_level > 0.0F, "policy replacement fades from mute to the new effective gain");
+
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_half, 3U) == ADM_ERROR_OK,
+                "replace policy with the same arithmetic target");
+    ok &= wait_for_policy_revision(stream.value, 3U);
+    samples.assign(1024U, 0.1F);
+    frame = object_frame(41U, 1U, 3072, samples, plane, initial);
+    frame.initial_state_count = 0U;
+    frame.initial_states = nullptr;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit repeated-policy block");
+    std::vector<float> repeated;
+    ok &= pull_open_stream(stream.value, 2U, 1024U, repeated);
+    const float repeated_level = mean_absolute_tail(repeated, 2U, 256U);
+    ok &= check(half_level > 0.0F && std::fabs(repeated_level - half_level) < half_level * 0.05F,
+                "replacing a policy recomputes from producer baseline instead of compounding gain");
+
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, nullptr, 4U) == ADM_ERROR_OK,
+                "NULL semantic policy clears the active policy");
+    ok &= wait_for_policy_revision(stream.value, 4U);
+    samples.assign(2048U, 0.1F);
+    frame = object_frame(41U, 1U, 4096, samples, plane, initial);
+    frame.initial_state_count = 0U;
+    frame.initial_states = nullptr;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit policy-clear transition block");
+    ok &= check(adm_scene_stream_signal_end(stream.value, 41U, 6144) == ADM_ERROR_OK,
+                "close semantic-policy Scene epoch");
+    bool saw_signal = false;
+    std::vector<float> restored;
+    ok &= wait_for_output(stream.value, 2U, 2048U, saw_signal, &restored);
+    const float restored_level = mean_absolute_tail(restored, 2U, 256U);
+    ok &= check(saw_signal && restored_level > half_level * 1.8F && restored_level < half_level * 2.2F,
+                "clearing policy restores the unmodified producer baseline with a smooth transition");
+
+    constexpr const char* k_unmatched =
+        R"({"schema":"mradm.semantic-policy.v1","objects":[{"id":"missing","gain":{"mute":true}}]})";
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_unmatched, 5U) == ADM_ERROR_OK,
+                "accept an unmatched but valid semantic rule");
+    ok &= wait_for_policy_revision(stream.value, 5U);
+    std::uint32_t unmatched_diagnostics = 0U;
+    const auto diagnostic_count = adm_scene_stream_log_count(stream.value);
+    for (std::uint32_t index = 0U; index < diagnostic_count; ++index) {
+        adm_scene_diagnostic_t diagnostic{};
+        diagnostic.struct_size = sizeof(diagnostic);
+        if (adm_scene_stream_log_entry(stream.value, index, &diagnostic) != 0 && diagnostic.message != nullptr &&
+            std::string_view{diagnostic.message}.find("objects[0] did not match") != std::string_view::npos) {
+            ++unmatched_diagnostics;
+        }
+    }
+    ok &= check(unmatched_diagnostics == 1U, "an unmatched Scene semantic rule emits one diagnostic");
+    return ok;
+}
+
+// Legacy/no-identity input, AudioObject track aggregation, and DirectSpeakers use
+// the same policy resolver but take different Scene conversion paths.
+// NOLINTNEXTLINE(readability-function-size)
+bool test_semantic_identity_grouping_and_roles(adm_context_t* context) {
+    StreamGuard stream;
+    auto config = stream_config();
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok = check(adm_scene_stream_begin_epoch(stream.value, 50U, 0) == ADM_ERROR_OK,
+                    "begin grouped semantic identity epoch");
+    std::array<adm_scene_semantic_identity_t, 2U> identities{};
+    std::array<adm_scene_element_descriptor_t, 2U> descriptors{};
+    for (std::size_t index = 0U; index < descriptors.size(); ++index) {
+        auto& identity = identities.at(index);
+        auto& descriptor = descriptors.at(index);
+        identity.struct_size = sizeof(identity);
+        identity.object_id = "AO_GROUP";
+        identity.object_name = "Grouped object";
+        identity.track_uid = index == 0U ? "ATU_A" : "ATU_B";
+        descriptor.struct_size = sizeof(descriptor);
+        descriptor.role = ADM_SCENE_ELEMENT_OBJECT;
+        descriptor.element_id = index + 1U;
+        descriptor.has_position = 1;
+        descriptor.position_x = index == 0U ? -0.5F : 0.5F;
+        descriptor.position_y = 1.0F;
+        descriptor.semantic_identity = &identity;
+    }
+    ok &= check(adm_scene_stream_configure_generation(
+                    stream.value, 50U, 1U, descriptors.data(), static_cast<std::uint32_t>(descriptors.size())) ==
+                    ADM_ERROR_OK,
+                "configure two tracks of one semantic AudioObject");
+    constexpr const char* k_track_policy =
+        R"({"schema":"mradm.semantic-policy.v1","objects":[{"track_uid":"ATU_B","gain":{"mute":true}}]})";
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_track_policy, 10U) == ADM_ERROR_OK,
+                "install grouped track-UID policy");
+    ok &= wait_for_policy_revision(stream.value, 10U);
+    std::array<std::vector<float>, 2U> samples{std::vector<float>(128U, 0.05F), std::vector<float>(128U, 0.05F)};
+    std::array<adm_scene_pcm_plane_t, 2U> planes{};
+    std::array<adm_scene_initial_state_t, 2U> initials{};
+    for (std::size_t index = 0U; index < planes.size(); ++index) {
+        auto& plane = planes.at(index);
+        auto& initial = initials.at(index);
+        plane.struct_size = sizeof(plane);
+        plane.element_id = index + 1U;
+        plane.samples = samples.at(index).data();
+        plane.sample_count = 128U;
+        plane.stride = 1U;
+        plane.has_signal = 1;
+        initial.struct_size = sizeof(initial);
+        initial.element_id = index + 1U;
+        initial.state = complete_state();
+    }
+    adm_scene_frame_t frame{};
+    frame.struct_size = sizeof(frame);
+    frame.flags = ADM_SCENE_FRAME_STATE_COMPLETE;
+    frame.epoch_id = 50U;
+    frame.generation_id = 1U;
+    frame.duration_samples = 128U;
+    frame.pcm_count = static_cast<std::uint32_t>(planes.size());
+    frame.pcm = planes.data();
+    frame.initial_state_count = static_cast<std::uint32_t>(initials.size());
+    frame.initial_states = initials.data();
+    int32_t submit = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit grouped semantic object tracks");
+    ok &= check(adm_scene_stream_signal_end(stream.value, 50U, 128) == ADM_ERROR_OK,
+                "close grouped semantic identity epoch");
+    bool saw_signal = false;
+    std::vector<float> output;
+    ok &= wait_for_output(stream.value, 2U, 128U, saw_signal, &output);
+    ok &= check(!saw_signal && std::ranges::all_of(output, [](float sample) { return sample == 0.0F; }),
+                "one track-UID match applies to every element sharing its object_id");
+
+    ok &= check(adm_scene_stream_begin_epoch(stream.value, 51U, 0) == ADM_ERROR_OK,
+                "begin legacy no-identity policy epoch");
+    ok &= configure_object(stream.value, 51U, 1U);
+    constexpr const char* k_legacy_policy =
+        R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":1}},"objects":[{"all":true,"gain":{"mute":true}},{"id":"missing","gain":{"mute":true}}]})";
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_legacy_policy, 11U) == ADM_ERROR_OK,
+                "install global/all policy for a descriptor without identity");
+    ok &= wait_for_policy_revision(stream.value, 11U);
+    std::vector<float> legacy_samples(128U, 0.05F);
+    adm_scene_pcm_plane_t legacy_plane{};
+    adm_scene_initial_state_t legacy_initial{};
+    auto legacy_frame = object_frame(51U, 1U, 0, legacy_samples, legacy_plane, legacy_initial);
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &legacy_frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit legacy no-identity Scene element");
+    ok &= check(adm_scene_stream_signal_end(stream.value, 51U, 128) == ADM_ERROR_OK,
+                "close legacy no-identity policy epoch");
+    saw_signal = false;
+    output.clear();
+    ok &= wait_for_output(stream.value, 2U, 128U, saw_signal, &output);
+    ok &= check(!saw_signal, "global/all semantic rules remain available without identity");
+    std::uint32_t missing_count = 0U;
+    for (std::uint32_t index = 0U; index < adm_scene_stream_log_count(stream.value); ++index) {
+        adm_scene_diagnostic_t diagnostic{};
+        diagnostic.struct_size = sizeof(diagnostic);
+        if (adm_scene_stream_log_entry(stream.value, index, &diagnostic) != 0 && diagnostic.message != nullptr &&
+            std::string_view{diagnostic.message}.find("objects[1] did not match") != std::string_view::npos) {
+            ++missing_count;
+        }
+    }
+    ok &= check(missing_count == 1U, "non-global legacy selector emits one unmatched diagnostic");
+
+    ok &=
+        check(adm_scene_stream_begin_epoch(stream.value, 52U, 0) == ADM_ERROR_OK, "begin DirectSpeakers policy epoch");
+    adm_scene_semantic_identity_t direct_identity{};
+    direct_identity.struct_size = sizeof(direct_identity);
+    direct_identity.object_id = "AO_DS";
+    adm_scene_element_descriptor_t direct{};
+    direct.struct_size = sizeof(direct);
+    direct.role = ADM_SCENE_ELEMENT_DIRECT_SPEAKER;
+    direct.element_id = 9U;
+    direct.speaker_label = "M+030";
+    direct.semantic_identity = &direct_identity;
+    ok &= check(adm_scene_stream_configure_generation(stream.value, 52U, 1U, &direct, 1U) == ADM_ERROR_OK,
+                "configure semantic DirectSpeakers element");
+    constexpr const char* k_direct_policy =
+        R"({"schema":"mradm.semantic-policy.v1","objects":[{"id":"AO_DS","direct_speakers":{"speaker_label":"M+030","gain":{"mute":true},"head_locked":true}}]})";
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_direct_policy, 12U) == ADM_ERROR_OK,
+                "install DirectSpeakers semantic operation");
+    ok &= wait_for_policy_revision(stream.value, 12U);
+    std::vector<float> direct_samples(128U, 0.05F);
+    adm_scene_pcm_plane_t direct_plane{};
+    direct_plane.struct_size = sizeof(direct_plane);
+    direct_plane.element_id = 9U;
+    direct_plane.samples = direct_samples.data();
+    direct_plane.sample_count = 128U;
+    direct_plane.stride = 1U;
+    direct_plane.has_signal = 1;
+    adm_scene_initial_state_t direct_initial{};
+    direct_initial.struct_size = sizeof(direct_initial);
+    direct_initial.element_id = 9U;
+    direct_initial.state = complete_state();
+    frame = {};
+    frame.struct_size = sizeof(frame);
+    frame.flags = ADM_SCENE_FRAME_STATE_COMPLETE;
+    frame.epoch_id = 52U;
+    frame.generation_id = 1U;
+    frame.duration_samples = 128U;
+    frame.pcm_count = 1U;
+    frame.pcm = &direct_plane;
+    frame.initial_state_count = 1U;
+    frame.initial_states = &direct_initial;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit policy-controlled DirectSpeakers element");
+    ok &=
+        check(adm_scene_stream_signal_end(stream.value, 52U, 128) == ADM_ERROR_OK, "close DirectSpeakers policy epoch");
+    saw_signal = false;
+    output.clear();
+    ok &= wait_for_output(stream.value, 2U, 128U, saw_signal, &output);
+    ok &= check(!saw_signal, "filtered DirectSpeakers gain/mute operation is applied");
+    return ok;
+}
+
+bool test_direct_speaker_policy_position_clear(adm_context_t* context) {
+    StreamGuard stream;
+    auto config = stream_config();
+    config.output_ring_frames = 4096U;
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+
+    bool ok = check(adm_scene_stream_begin_epoch(stream.value, 53U, 0) == ADM_ERROR_OK,
+                    "begin DirectSpeakers position-policy epoch");
+    adm_scene_semantic_identity_t identity{};
+    identity.struct_size = sizeof(identity);
+    identity.object_id = "AO_DS_POSITION";
+    adm_scene_element_descriptor_t descriptor{};
+    descriptor.struct_size = sizeof(descriptor);
+    descriptor.role = ADM_SCENE_ELEMENT_DIRECT_SPEAKER;
+    descriptor.element_id = 10U;
+    descriptor.speaker_label = "M+030";
+    descriptor.semantic_identity = &identity;
+    ok &= check(adm_scene_stream_configure_generation(stream.value, 53U, 1U, &descriptor, 1U) == ADM_ERROR_OK,
+                "configure labelled DirectSpeakers element without producer position");
+
+    constexpr const char* k_position_policy =
+        R"({"schema":"mradm.semantic-policy.v1","objects":[{"id":"AO_DS_POSITION","direct_speakers":{"speaker_label":"M+030","position":{"azimuth":-30}}}]})";
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_position_policy, 13U) == ADM_ERROR_OK,
+                "install DirectSpeakers position override");
+    ok &= wait_for_policy_revision(stream.value, 13U);
+
+    std::vector<float> samples(2048U, 0.05F);
+    adm_scene_pcm_plane_t plane{};
+    plane.struct_size = sizeof(plane);
+    plane.element_id = 10U;
+    plane.samples = samples.data();
+    plane.sample_count = static_cast<std::uint32_t>(samples.size());
+    plane.stride = 1U;
+    plane.has_signal = 1;
+    adm_scene_initial_state_t initial{};
+    initial.struct_size = sizeof(initial);
+    initial.element_id = 10U;
+    initial.state = complete_state();
+    initial.state.valid_fields &= ~static_cast<std::uint64_t>(ADM_SCENE_STATE_POSITION);
+    adm_scene_frame_t frame{};
+    frame.struct_size = sizeof(frame);
+    frame.flags = ADM_SCENE_FRAME_STATE_COMPLETE;
+    frame.epoch_id = 53U;
+    frame.generation_id = 1U;
+    frame.duration_samples = static_cast<std::uint32_t>(samples.size());
+    frame.pcm_count = 1U;
+    frame.pcm = &plane;
+    frame.initial_state_count = 1U;
+    frame.initial_states = &initial;
+    int32_t submit = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit DirectSpeakers position-override block");
+    std::vector<float> positioned;
+    ok &= pull_open_stream(stream.value, 2U, 2048U, positioned);
+
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, nullptr, 14U) == ADM_ERROR_OK,
+                "clear DirectSpeakers position override");
+    ok &= wait_for_policy_revision(stream.value, 14U);
+    frame.media_sample_start = 2048;
+    frame.initial_state_count = 0U;
+    frame.initial_states = nullptr;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit DirectSpeakers policy-clear transition block");
+    std::vector<float> restored;
+    ok &= pull_open_stream(stream.value, 2U, 2048U, restored);
+
+    const auto positioned_ch0 = mean_absolute_channel_tail(positioned, 2U, 0U, 256U);
+    const auto positioned_ch1 = mean_absolute_channel_tail(positioned, 2U, 1U, 256U);
+    const auto restored_ch0 = mean_absolute_channel_tail(restored, 2U, 0U, 256U);
+    const auto restored_ch1 = mean_absolute_channel_tail(restored, 2U, 1U, 256U);
+    const bool positioned_uses_ch0 = positioned_ch0 > positioned_ch1;
+    const bool restored_uses_ch0 = restored_ch0 > restored_ch1;
+    ok &= check(std::max(positioned_ch0, positioned_ch1) > std::min(positioned_ch0, positioned_ch1) * 10.0F &&
+                    std::max(restored_ch0, restored_ch1) > std::min(restored_ch0, restored_ch1) * 10.0F &&
+                    positioned_uses_ch0 != restored_uses_ch0,
+                "clearing a DirectSpeakers position policy removes the canonical override and restores label routing");
+
+    ok &= check(adm_scene_stream_signal_end(stream.value, 53U, 4096) == ADM_ERROR_OK,
+                "close DirectSpeakers position-policy epoch");
+    bool saw_signal = false;
+    ok &= wait_for_output(stream.value, 2U, 0U, saw_signal);
+    return ok;
+}
+
+bool render_binaural_pose(adm_context_t* context,
+                          std::uint64_t epoch,
+                          bool set_pose,
+                          float yaw,
+                          float pitch,
+                          float roll,
+                          bool head_locked,
+                          std::vector<float>& output) {
+    StreamGuard stream;
+    auto config = stream_config();
+    config.rendering.renderer = ADM_RENDERER_SAF_BINAURAL;
+    config.rendering.output_layout = "binaural";
+    config.output_ring_frames = 4096U;
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok = check(adm_scene_stream_begin_epoch(stream.value, epoch, 0) == ADM_ERROR_OK,
+                    "begin posed binaural Scene epoch") &&
+              configure_object(stream.value, epoch, 1U);
+    if (set_pose) {
+        ok &= check(adm_scene_stream_set_listener_orientation(stream.value, yaw, pitch, roll) == ADM_ERROR_OK,
+                    "set live Scene listener yaw/pitch/roll");
+    }
+    std::vector<float> samples(512U, 0.1F);
+    adm_scene_pcm_plane_t plane{};
+    adm_scene_initial_state_t initial{};
+    auto frame = object_frame(epoch, 1U, 0, samples, plane, initial);
+    initial.state.position_x = 0.0F;
+    initial.state.position_y = 1.0F;
+    initial.state.head_locked = head_locked ? 1 : 0;
+    int32_t submit = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit posed binaural SceneFrame");
+    ok &= check(adm_scene_stream_signal_end(stream.value, epoch, 512) == ADM_ERROR_OK,
+                "close posed binaural Scene epoch");
+    bool saw_signal = false;
+    ok &= wait_for_output(stream.value, 2U, 512U, saw_signal, &output);
+    return ok && check(saw_signal, "posed binaural Scene produces PCM");
+}
+
+float maximum_difference(const std::vector<float>& lhs, const std::vector<float>& rhs) {
+    if (lhs.size() != rhs.size()) {
+        return std::numeric_limits<float>::infinity();
+    }
+    float result = 0.0F;
+    for (std::size_t index = 0U; index < lhs.size(); ++index) {
+        result = std::max(result, std::fabs(lhs[index] - rhs[index]));
+    }
+    return result;
+}
+
+// NOLINTNEXTLINE(readability-function-size)
+bool test_listener_orientation(adm_context_t* context) {
+    std::vector<float> baseline;
+    std::vector<float> identity;
+    std::vector<float> yaw_left;
+    std::vector<float> yaw_right;
+    std::vector<float> pitch_roll;
+    std::vector<float> locked_baseline;
+    std::vector<float> locked_pose;
+    bool ok = render_binaural_pose(context, 42U, false, 0.0F, 0.0F, 0.0F, false, baseline);
+    ok &= render_binaural_pose(context, 43U, true, 0.0F, 0.0F, 0.0F, false, identity);
+    ok &= check(baseline == identity, "explicit zero listener pose remains bit-exact");
+    ok &= render_binaural_pose(context, 44U, true, 90.0F, 0.0F, 0.0F, false, yaw_left);
+    ok &= render_binaural_pose(context, 45U, true, -90.0F, 0.0F, 0.0F, false, yaw_right);
+    ok &= check(maximum_difference(yaw_left, yaw_right) > 1.0e-6F,
+                "opposite yaw poses produce opposite binaural directions");
+    ok &= render_binaural_pose(context, 46U, true, 15.0F, 25.0F, -20.0F, false, pitch_roll);
+    ok &= check(maximum_difference(baseline, pitch_roll) > 1.0e-6F,
+                "pitch and roll participate in world-to-head rotation");
+    ok &= render_binaural_pose(context, 47U, false, 0.0F, 0.0F, 0.0F, true, locked_baseline);
+    ok &= render_binaural_pose(context, 48U, true, 80.0F, -30.0F, 25.0F, true, locked_pose);
+    ok &= check(locked_baseline == locked_pose, "effective head_locked elements ignore listener rotation");
+    ok &= check(adm_scene_stream_set_listener_orientation(nullptr, 0.0F, 0.0F, 0.0F) == ADM_ERROR_INVALID_ARGUMENT &&
+                    adm_scene_stream_set_listener_orientation(
+                        nullptr, std::numeric_limits<float>::quiet_NaN(), 0.0F, 0.0F) == ADM_ERROR_INVALID_ARGUMENT,
+                "listener-orientation C API validates handle and finite values");
+
+    StreamGuard low_latency;
+    auto config = stream_config();
+    config.rendering.renderer = ADM_RENDERER_SAF_BINAURAL;
+    config.rendering.output_layout = "binaural";
+    config.output_ring_frames = 8192U;
+    config.startup_watermark_frames = 4096U;
+    ok &= create_stream(context, config, low_latency);
+    ok &= check(adm_scene_stream_begin_epoch(low_latency.value, 49U, 0) == ADM_ERROR_OK,
+                "begin low-lookahead head-tracking epoch");
+    ok &= configure_object(low_latency.value, 49U, 1U);
+    ok &= check(adm_scene_stream_set_listener_orientation(low_latency.value, 5.0F, 0.0F, 0.0F) == ADM_ERROR_OK,
+                "activate low-lookahead head tracking");
+    std::vector<float> samples(4096U, 0.05F);
+    adm_scene_pcm_plane_t plane{};
+    adm_scene_initial_state_t initial{};
+    auto frame = object_frame(49U, 1U, 0, samples, plane, initial);
+    int32_t submit = -1;
+    ok &= check(adm_scene_stream_submit_frame(low_latency.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit maximum head-tracked SceneFrame");
+    adm_scene_stream_status_t status{};
+    bool reached_shallow_lead = false;
+    for (int attempt = 0; attempt < 5000; ++attempt) {
+        status = {};
+        status.struct_size = sizeof(status);
+        if (adm_scene_stream_get_status(low_latency.value, &status) == ADM_ERROR_OK &&
+            status.buffered_output_frames >= 2048U) {
+            reached_shallow_lead = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    ok &= check(reached_shallow_lead && status.buffered_output_frames <= 2048U && status.queued_input_samples == 4096U,
+                "active head tracking caps worker lookahead at 2048 output frames");
+    ok &= check(adm_scene_stream_signal_end(low_latency.value, 49U, 4096) == ADM_ERROR_OK,
+                "close low-lookahead head-tracking epoch");
+    bool saw_signal = false;
+    std::vector<float> tracked_output;
+    ok &= wait_for_output(low_latency.value, 2U, 4096U, saw_signal, &tracked_output);
+    ok &= check(saw_signal, "low-lookahead stream drains without losing media frames");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -1049,6 +1761,11 @@ int main() {
         ok &= test_renderer_native_roles_and_events(context);
         ok &= test_binaural_backend(context);
         ok &= test_binaural_dynamic_position(context);
+        ok &= test_backend_hot_switch(context);
+        ok &= test_semantic_policy_hot_replace(context);
+        ok &= test_semantic_identity_grouping_and_roles(context);
+        ok &= test_direct_speaker_policy_position_clear(context);
+        ok &= test_listener_orientation(context);
     }
     adm_destroy_context(context);
     if (ok) {

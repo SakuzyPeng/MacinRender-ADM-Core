@@ -782,37 +782,6 @@ matched_rule_names(const SceneObject& object, const ObjectMembership& membership
     return out;
 }
 
-[[nodiscard]] SemanticPolicyOverride
-effective_override(const SceneObject& object, const ObjectMembership& membership, const SemanticPolicy& policy) {
-    SemanticPolicyOverride out;
-    if (policy.global) {
-        merge_override(out, *policy.global);
-    }
-    for (const auto& rule : policy.objects) {
-        if (rule_matches(object, membership, rule)) {
-            merge_override(out, rule);
-        }
-    }
-    return out;
-}
-
-// Ordered list of DirectSpeakers policies applicable to an object (global first,
-// then matching object rules in order). Each carries its own per-block filter and
-// is applied independently — they are NOT merged (see merge note above).
-[[nodiscard]] std::vector<const DirectSpeakersPolicy*>
-collect_ds_policies(const SceneObject& object, const ObjectMembership& membership, const SemanticPolicy& policy) {
-    std::vector<const DirectSpeakersPolicy*> out;
-    if (policy.global && policy.global->direct_speakers) {
-        out.push_back(&*policy.global->direct_speakers);
-    }
-    for (const auto& rule : policy.objects) {
-        if (rule.direct_speakers && rule_matches(object, membership, rule)) {
-            out.push_back(&*rule.direct_speakers);
-        }
-    }
-    return out;
-}
-
 // Object-level (per AudioObject) application: gain + mute. Called once per object.
 void apply_object_override(SceneObject& object, const SemanticPolicyOverride& policy) {
     if (policy.gain) {
@@ -1379,6 +1348,86 @@ Result<SemanticPolicy> load_semantic_policy_file(const std::filesystem::path& pa
     return parse_semantic_policy(buf.str(), path.string());
 }
 
+ResolvedSemanticPolicy resolve_semantic_policy(const SemanticPolicy& policy, const SemanticPolicyIdentity& identity) {
+    const auto matches = [&](const SemanticObjectRule& rule) {
+        if (rule.all.value_or(false)) {
+            return true;
+        }
+        if (!rule.id.empty() && ascii_equal_ignore_case(identity.object_id, rule.id)) {
+            return true;
+        }
+        if (!rule.name.empty() && ascii_equal_ignore_case(identity.object_name, rule.name)) {
+            return true;
+        }
+        if (!rule.name_glob.empty() && glob_match_lower(rule.name_glob, identity.object_name)) {
+            return true;
+        }
+        if (!rule.track_uid.empty() && any_equal_ignore_case(identity.track_uids, rule.track_uid)) {
+            return true;
+        }
+        if ((rule.importance_min || rule.importance_max) && identity.importance.has_value()) {
+            const int value = *identity.importance;
+            if (value >= rule.importance_min.value_or(std::numeric_limits<int>::min()) &&
+                value <= rule.importance_max.value_or(std::numeric_limits<int>::max())) {
+                return true;
+            }
+        }
+        if (rule.dialogue_id && identity.dialogue_id.has_value() && *identity.dialogue_id == *rule.dialogue_id) {
+            return true;
+        }
+        if (!rule.content.empty() && (any_equal_ignore_case(identity.content_ids, rule.content) ||
+                                      any_equal_ignore_case(identity.content_names, rule.content))) {
+            return true;
+        }
+        if (!rule.programme.empty() && (any_equal_ignore_case(identity.programme_ids, rule.programme) ||
+                                        any_equal_ignore_case(identity.programme_names, rule.programme))) {
+            return true;
+        }
+        return false;
+    };
+
+    ResolvedSemanticPolicy out;
+    if (policy.global) {
+        merge_override(out.object, *policy.global);
+        if (policy.global->direct_speakers) {
+            out.direct_speakers.push_back(*policy.global->direct_speakers);
+        }
+    }
+    for (std::size_t index = 0U; index < policy.objects.size(); ++index) {
+        const auto& rule = policy.objects[index];
+        if (!matches(rule)) {
+            continue;
+        }
+        out.matched_rule_indices.push_back(index);
+        merge_override(out.object, rule);
+        if (rule.direct_speakers) {
+            out.direct_speakers.push_back(*rule.direct_speakers);
+        }
+    }
+    return out;
+}
+
+void apply_resolved_semantic_object(SceneObject& object, const SemanticPolicyOverride& policy) {
+    apply_object_override(object, policy);
+}
+
+void apply_resolved_semantic_object_block(SceneObjectBlock& block,
+                                          const SemanticPolicyOverride& policy,
+                                          uint32_t sample_rate) {
+    apply_override(block, policy, sample_rate);
+}
+
+void apply_resolved_semantic_direct_speaker(SceneDirectSpeakersBlock& block,
+                                            std::span<const DirectSpeakersPolicy> policies,
+                                            const SemanticPolicyOverride& object_policy) {
+    if (object_policy.head_locked.has_value()) {
+        block.head_locked = *object_policy.head_locked;
+    }
+    for (const auto& policy : policies) {
+        apply_ds_override(block, policy);
+    }
+}
+
 Result<void> apply_semantic_policy(AdmScene& scene,
                                    const SemanticPolicy& policy,
                                    uint32_t sample_rate,
@@ -1403,23 +1452,29 @@ Result<void> apply_semantic_policy(AdmScene& scene,
 
     for (auto& object : scene.objects) {
         const auto& mem = membership_for(object);
-        const auto policy_for_object = effective_override(object, mem, policy);
-        apply_object_override(object, policy_for_object);
+        SemanticPolicyIdentity identity;
+        identity.object_id = object.id;
+        identity.object_name = object.name;
+        identity.importance = object.importance;
+        if (object.dialogue_id.has_value()) {
+            identity.dialogue_id = static_cast<int>(*object.dialogue_id);
+        }
+        std::ranges::transform(object.tracks, std::back_inserter(identity.track_uids), &SceneTrackRef::track_uid);
+        identity.content_ids = mem.content_ids;
+        identity.content_names = mem.content_names;
+        identity.programme_ids = mem.programme_ids;
+        identity.programme_names = mem.programme_names;
+        const auto resolved = resolve_semantic_policy(policy, identity);
+        apply_resolved_semantic_object(object, resolved.object);
         // DS policies are applied per-rule (each with its own filter), in order,
         // rather than merged — so independent rules (e.g. one targeting M+000 and
         // one targeting LFE) don't cross-contaminate each other's filters.
-        const auto ds_policies = collect_ds_policies(object, mem, policy);
         for (auto& track : object.tracks) {
             for (auto& block : track.blocks) {
-                apply_override(block, policy_for_object, sample_rate);
+                apply_resolved_semantic_object_block(block, resolved.object, sample_rate);
             }
             for (auto& ds : track.ds_blocks) {
-                if (policy_for_object.head_locked.has_value()) {
-                    ds.head_locked = *policy_for_object.head_locked;
-                }
-                for (const auto* ds_policy : ds_policies) {
-                    apply_ds_override(ds, *ds_policy);
-                }
+                apply_resolved_semantic_direct_speaker(ds, resolved.direct_speakers, resolved.object);
             }
         }
     }

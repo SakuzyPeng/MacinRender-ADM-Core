@@ -101,6 +101,13 @@ void copy_state_fields(ObjectState& destination, const ObjectState& source, std:
     if ((fields & state_head_locked) != 0U) {
         destination.head_locked = source.head_locked;
     }
+    if ((fields & state_divergence_range) != 0U) {
+        destination.divergence_azimuth_range = source.divergence_azimuth_range;
+        destination.divergence_position_range = source.divergence_position_range;
+    }
+    if ((fields & state_channel_lock_max_distance) != 0U) {
+        destination.channel_lock_max_distance = source.channel_lock_max_distance;
+    }
     destination.valid_fields |= fields;
 }
 
@@ -204,13 +211,20 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
                 }
                 auto& element = elements_[found->second];
                 ObjectState target = element.target_state;
+                target.valid_fields &= ~update.cleared_fields;
                 copy_state_fields(target, update.state, update.changed_fields);
                 element.target_state = target;
                 auto gains = gains_for(element, target, frame);
                 if (!gains) {
                     return tl::unexpected{gains.error()};
                 }
-                set_target(element, std::move(*gains), update.ramp_duration_samples);
+                std::uint32_t ramp = config_.object_smoothing_frames;
+                if (update.jump_position) {
+                    ramp = 0U;
+                } else if (update.ramp_duration_samples != 0U) {
+                    ramp = update.ramp_duration_samples;
+                }
+                set_target(element, std::move(*gains), ramp);
             }
 
             for (auto& element : elements_) {
@@ -318,7 +332,10 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
         block.depth = state.depth;
         block.diffuse = state.diffuse;
         block.divergence = state.divergence;
+        block.divergence_azimuth_range = state.divergence_azimuth_range;
+        block.divergence_position_range = state.divergence_position_range;
         block.channel_lock = state.channel_lock;
+        block.channel_lock_max_distance = state.channel_lock_max_distance;
         block.screen_ref = state.screen_reference;
         block.head_locked = state.head_locked;
         if (block.channel_lock) {
@@ -377,19 +394,18 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
         if (!descriptor.speaker_label.empty()) {
             labels.push_back(descriptor.speaker_label);
         }
-        const auto target = render_common::direct_speaker_index_for_labels(routing_targets_, labels);
-        if (target && !layout_.speakers[*target].is_lfe) {
+
+        SceneBlockPosition position;
+        bool has_position = (state.valid_fields & state_position) != 0U;
+        if (has_position) {
+            position = canonical_position(state.x, state.y, state.z);
+        } else if (const auto target = render_common::direct_speaker_index_for_labels(routing_targets_, labels);
+                   target && !layout_.speakers[*target].is_lfe) {
             std::vector<float> gains(layout_.speakers.size(), 0.0F);
             gains[*target] = gain;
             return gains;
-        }
-
-        SceneBlockPosition position;
-        bool has_position = descriptor.has_position;
-        if (has_position) {
+        } else if (descriptor.has_position) {
             position = canonical_position(descriptor.x, descriptor.y, descriptor.z);
-        } else if ((state.valid_fields & state_position) != 0U) {
-            position = canonical_position(state.x, state.y, state.z);
             has_position = true;
         } else if (const auto label_position = render_common::direct_speaker_position_for_labels(labels)) {
             position.azimuth = label_position->azimuth;
@@ -406,7 +422,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
         warn_once(frame,
                   descriptor.element_id,
                   0,
-                  "DirectSpeakers label is absent from the output layout; spatializing its canonical position",
+                  "DirectSpeakers uses its current canonical position instead of fixed label routing",
                   DiagnosticCode::direct_speaker_fallback);
         return point_gains(polar.azimuth, polar.elevation, gain, 0.0F);
     }
