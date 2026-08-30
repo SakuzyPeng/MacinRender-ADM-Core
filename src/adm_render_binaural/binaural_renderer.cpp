@@ -309,6 +309,7 @@ struct QuatD {
 
 // Precomputed world→head rotation for a fixed head pose; apply() rotates a unit direction.
 struct HeadRotation {
+    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes)
     QuatD world_to_head;
 
     explicit HeadRotation(const ListenerOrientation& o) noexcept {
@@ -430,7 +431,7 @@ Result<HrtfDataset> load_sofa_dataset(const std::filesystem::path& path, uint32_
                           fmt::format("SOFA: expected 2 receivers, got {}", sofa.nReceivers),
                           "path=" + sofa_path);
     }
-    if (std::lround(sofa.DataSamplingRate) != static_cast<long>(input_sample_rate)) {
+    if (input_sample_rate != 0U && std::lround(sofa.DataSamplingRate) != static_cast<long>(input_sample_rate)) {
         return make_error(
             ErrorCode::unsupported,
             fmt::format("SOFA: sample rate {} Hz does not match input {} Hz", sofa.DataSamplingRate, input_sample_rate),
@@ -1413,6 +1414,7 @@ void convolve_crossfaded_object_block(void* hfft,
 // from construction). Carries ola / diffuse / hrtf_cache across calls. Extracted verbatim
 // from render_window's per-source loop so the offline batch path and the realtime
 // BinauralStream share one implementation and cannot drift (bit-exactness contract).
+// NOLINTNEXTLINE(readability-function-size)
 void render_source_ola_block(const BinauralSource& src,
                              const BinauralState& bs,
                              PerSourceConvState& cs,

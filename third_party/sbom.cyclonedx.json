@@ -207,6 +207,30 @@
     },
     {
       "type": "library",
+      "name": "libsamplerate",
+      "version": "0.2.2",
+      "description": "实时 Scene 空间渲染后的输出采样率转换",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-2-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:github/libsndfile/libsamplerate@0.2.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "fetchcontent"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "libFLAC",
       "version": "1.5.0",
       "description": "FLAC 编码与 metadata",

@@ -240,6 +240,7 @@ target_sources(
     mr_adm_render_vbap
     PRIVATE
         src/adm_render_vbap/vbap_renderer.cpp
+        src/adm_render_vbap/live_vbap_renderer.cpp
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS include
@@ -302,6 +303,7 @@ target_sources(
     PRIVATE
         src/adm_render_binaural/binaural_renderer.cpp
         src/adm_render_binaural/binaural_spreader.cpp
+        src/adm_render_binaural/live_binaural_renderer.cpp
         src/adm_render_binaural/spreader_mr.c
     PUBLIC
         FILE_SET HEADERS
@@ -312,7 +314,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_binaural
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE libbw64 saf ebur128 SampleRate::samplerate MacinRender::ADMAudio MacinRender::ADMRenderCommon
 )
 target_include_directories(mr_adm_render_binaural
     SYSTEM PRIVATE
@@ -560,11 +562,26 @@ add_library(MacinRender::ADMRealtime ALIAS mr_adm_realtime)
 target_sources(mr_adm_realtime PRIVATE
     src/adm_realtime/monitor_engine.cpp
     src/adm_realtime/miniaudio_device.cpp
+    src/adm_realtime/scene_stream_engine.cpp
 )
 target_include_directories(mr_adm_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
 # miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
 # ebur128 is PRIVATE too: the realtime LUFS meter lives inside monitor_engine.cpp only.
-target_link_libraries(mr_adm_realtime PUBLIC MacinRender::ADMCore PRIVATE Threads::Threads miniaudio ebur128)
+target_link_libraries(mr_adm_realtime
+    PUBLIC MacinRender::ADMCore
+    PRIVATE
+        Threads::Threads
+        miniaudio
+        ebur128
+        SampleRate::samplerate
+        MacinRender::ADMRenderCommon
+        MacinRender::ADMRenderVBAP
+        MacinRender::ADMRenderBinaural
+)
+target_include_directories(mr_adm_realtime PRIVATE
+    src/adm_render_vbap
+    src/adm_render_binaural
+)
 # libebur128 uses legacy include_directories() that does not propagate via the target.
 target_include_directories(mr_adm_realtime SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
 mr_adm_core_apply_warnings(mr_adm_realtime)
@@ -587,7 +604,7 @@ target_sources(
             include/adm/c_api.h
 )
 
-target_link_libraries(mr_adm_c_api PUBLIC MacinRender::ADMEngine)
+target_link_libraries(mr_adm_c_api PUBLIC MacinRender::ADMEngine PRIVATE MacinRender::ADMRealtime)
 set_target_properties(mr_adm_c_api PROPERTIES
     VERSION   ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
@@ -611,7 +628,7 @@ if(MR_ADM_BUILD_CAPI_BUNDLE)
         SOVERSION ${PROJECT_VERSION_MAJOR}
         WINDOWS_EXPORT_ALL_SYMBOLS ON
     )
-    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMEngine)
+    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime)
 endif()
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -697,6 +714,19 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_c_api_header_smoke)
     mr_adm_core_apply_static_analysis(mr_adm_c_api_header_smoke)
     add_test(NAME mr_adm_c_api_header_smoke COMMAND mr_adm_c_api_header_smoke)
+
+    add_executable(mr_adm_scene_stream_c_api_tests tests/unit/scene_stream_c_api_test.cpp)
+    target_link_libraries(mr_adm_scene_stream_c_api_tests PRIVATE MacinRender::ADMCAPI)
+    mr_adm_core_apply_warnings(mr_adm_scene_stream_c_api_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_scene_stream_c_api_tests)
+    add_test(NAME mr_adm_scene_stream_c_api_tests COMMAND mr_adm_scene_stream_c_api_tests)
+
+    # Release-only/manual acceptance tool. It is deliberately excluded from the default build and
+    # CTest because its normal invocation runs for ten wall-clock minutes.
+    add_executable(mr_adm_scene_stream_stress EXCLUDE_FROM_ALL tests/manual/scene_stream_stress.cpp)
+    target_link_libraries(mr_adm_scene_stream_stress PRIVATE MacinRender::ADMCAPI)
+    mr_adm_core_apply_warnings(mr_adm_scene_stream_stress)
+    mr_adm_core_apply_static_analysis(mr_adm_scene_stream_stress)
 
     add_executable(mr_adm_semantic_policy_tests tests/unit/semantic_policy_test.cpp)
     target_link_libraries(mr_adm_semantic_policy_tests PRIVATE MacinRender::ADMCore)
@@ -1017,7 +1047,18 @@ install(
 # libraries provide proper installed CMake configs. Install binaries and headers
 # without export; re-integrate post-M3.
 install(
-    TARGETS mr_adm_c_api mr_adm_io mr_adm_render_ear mr_adm_render_vbap mr_adm_render_hoa mr_adm_render_binaural mr_adm_peak mr_adm_loudness mr_adm_engine mr_adm_audio
+    TARGETS
+        mr_adm_c_api
+        mr_adm_io
+        mr_adm_render_ear
+        mr_adm_render_vbap
+        mr_adm_render_hoa
+        mr_adm_render_binaural
+        mr_adm_peak
+        mr_adm_loudness
+        mr_adm_engine
+        mr_adm_audio
+        mr_adm_realtime
     FILE_SET HEADERS
 )
 
