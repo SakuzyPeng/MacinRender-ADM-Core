@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <exception>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -216,19 +217,13 @@ struct SceneStreamEngine::Impl {
 
     void add_diagnostic(live_scene::Diagnostic entry) const { diagnostics->push(std::move(entry)); }
 
-    void fail(const Error& error, std::uint64_t epoch_id, std::uint64_t generation_id) {
-        add_diagnostic({LogLevel::error,
-                        live_scene::DiagnosticCode::backend_failure,
-                        epoch_id,
-                        generation_id,
-                        0U,
-                        0U,
-                        error.message + (error.context.empty() ? std::string{} : ": " + error.context)});
+    void enter_failed_state() noexcept {
         failed.store(true, std::memory_order_release);
         production_done.store(true, std::memory_order_release);
         output_ready.store(true, std::memory_order_release);
         state.store(SceneStreamState::failed, std::memory_order_release);
-        {
+
+        try {
             const std::lock_guard<std::mutex> lock(queue_mutex);
             producer_closed = true;
             queue.clear();
@@ -236,8 +231,41 @@ struct SceneStreamEngine::Impl {
             reserved_bytes = 0U;
             queued_samples.store(0U, std::memory_order_relaxed);
             queued_bytes.store(0U, std::memory_order_relaxed);
+        } catch (...) {
+            // The atomic failure state must remain observable even if locking the control queue fails.
+            queued_samples.store(0U, std::memory_order_relaxed);
+            queued_bytes.store(0U, std::memory_order_relaxed);
+            queue_cv.notify_all();
+            return;
         }
         queue_cv.notify_all();
+    }
+
+    void fail(const Error& error, std::uint64_t epoch_id, std::uint64_t generation_id) noexcept {
+        try {
+            add_diagnostic({LogLevel::error,
+                            live_scene::DiagnosticCode::backend_failure,
+                            epoch_id,
+                            generation_id,
+                            0U,
+                            0U,
+                            error.message + (error.context.empty() ? std::string{} : ": " + error.context)});
+        } catch (...) {
+            // Diagnostics are best effort; allocation failure must not keep the stream alive.
+            enter_failed_state();
+            return;
+        }
+        enter_failed_state();
+    }
+
+    void fail_worker_exception(const char* context, std::uint64_t epoch_id, std::uint64_t generation_id) noexcept {
+        try {
+            fail(Error{ErrorCode::internal_error, "live Scene worker threw an exception", context},
+                 epoch_id,
+                 generation_id);
+        } catch (...) {
+            enter_failed_state();
+        }
     }
 
     void release_budget(const WorkItem& item) {
@@ -261,7 +289,13 @@ struct SceneStreamEngine::Impl {
         pending_output.clear();
         pending_frame_offset = 0U;
         current_generation = 0U;
+        has_current_generation = false;
         target_sample_worker = target_sample;
+        preroll_output_boundary = 0U;
+        preroll_rational_remainder = 0U;
+        preroll_output_frames_generated = 0U;
+        output_frames_to_skip = 0U;
+        target_reached = false;
         rational_remainder = 0U;
         allowed_output_frames = 0U;
         output_frames_pushed = 0U;
@@ -314,17 +348,26 @@ struct SceneStreamEngine::Impl {
                 continue;
             }
 
-            Result<void> processed;
-            if (item.kind == WorkItem::Kind::frame) {
-                processed = process_frame(item);
-            } else {
-                processed = process_end(item);
-            }
-            release_budget(item);
-            if (!processed && !reset_or_quit(item.serial)) {
-                fail(processed.error(),
-                     item.frame.epoch_id != 0U ? item.frame.epoch_id : epoch_status.load(),
-                     item.frame.generation_id);
+            const auto epoch_id = item.frame.epoch_id != 0U ? item.frame.epoch_id : epoch_status.load();
+            try {
+                Result<void> processed;
+                if (item.kind == WorkItem::Kind::frame) {
+                    processed = process_frame(item);
+                } else {
+                    processed = process_end(item);
+                }
+                release_budget(item);
+                if (!processed && !reset_or_quit(item.serial)) {
+                    fail(processed.error(), epoch_id, item.frame.generation_id);
+                }
+            } catch (const std::exception& exception) {
+                if (!reset_or_quit(item.serial)) {
+                    fail_worker_exception(exception.what(), epoch_id, item.frame.generation_id);
+                }
+            } catch (...) {
+                if (!reset_or_quit(item.serial)) {
+                    fail_worker_exception("unknown exception", epoch_id, item.frame.generation_id);
+                }
             }
         }
     }
@@ -333,7 +376,7 @@ struct SceneStreamEngine::Impl {
         if (item.generation == nullptr) {
             return make_error(ErrorCode::internal_error, "Scene frame lost its generation descriptor");
         }
-        if (current_generation == item.generation->id) {
+        if (has_current_generation && current_generation == item.generation->id) {
             return {};
         }
         auto configured = renderer->configure_generation(item.generation->id, item.generation->elements);
@@ -341,6 +384,7 @@ struct SceneStreamEngine::Impl {
             return tl::unexpected{configured.error()};
         }
         current_generation = item.generation->id;
+        has_current_generation = true;
         generation_status.store(current_generation, std::memory_order_release);
         transition_anchor = last_output_frame;
         transition_remaining = std::max<std::uint64_t>(
@@ -375,7 +419,8 @@ struct SceneStreamEngine::Impl {
             hidden_frames = static_cast<std::uint32_t>(hidden_end - frame.media_sample_start);
         }
         if (hidden_frames > 0U) {
-            auto hidden = feed_samples(render_output.data(), hidden_frames, false, false, false, item.serial);
+            add_preroll_samples(hidden_frames);
+            auto hidden = feed_samples(render_output.data(), hidden_frames, false, false, false, true, item.serial);
             if (!hidden) {
                 return tl::unexpected{hidden.error()};
             }
@@ -383,6 +428,8 @@ struct SceneStreamEngine::Impl {
         if (hidden_frames == frame.duration_samples) {
             return {};
         }
+
+        finish_preroll();
 
         const auto audible_frames = frame.duration_samples - hidden_frames;
         const bool state_complete = (frame.flags & live_scene::frame_state_complete) != 0U;
@@ -392,7 +439,25 @@ struct SceneStreamEngine::Impl {
         if (force_silence) {
             std::fill_n(audible, static_cast<std::size_t>(audible_frames) * channels, 0.0F);
         }
-        return feed_samples(audible, audible_frames, true, true, force_silence, item.serial);
+        return feed_samples(audible, audible_frames, true, true, force_silence, false, item.serial);
+    }
+
+    void add_preroll_samples(std::uint64_t input_frames) noexcept {
+        const std::uint64_t product = input_frames * static_cast<std::uint64_t>(config.output_sample_rate);
+        const std::uint64_t numerator = preroll_rational_remainder + product;
+        preroll_output_boundary += numerator / config.renderer.sample_rate;
+        preroll_rational_remainder = numerator % config.renderer.sample_rate;
+    }
+
+    void finish_preroll() noexcept {
+        if (target_reached) {
+            return;
+        }
+        const auto boundary = preroll_output_boundary + (preroll_rational_remainder != 0U ? 1U : 0U);
+        // libsamplerate may emit the final pre-target frames only after audible input arrives.
+        output_frames_to_skip =
+            boundary > preroll_output_frames_generated ? boundary - preroll_output_frames_generated : 0U;
+        target_reached = true;
     }
 
     void add_timeline_samples(std::uint64_t input_frames) noexcept {
@@ -490,10 +555,24 @@ struct SceneStreamEngine::Impl {
         return {};
     }
 
-    [[nodiscard]] Result<void> accept_resampled(
-        float* samples, std::size_t frames, bool collect_output, bool force_silence, std::uint64_t serial) {
+    [[nodiscard]] Result<void> accept_resampled(float* samples,
+                                                std::size_t frames,
+                                                bool collect_output,
+                                                bool force_silence,
+                                                bool before_target,
+                                                std::uint64_t serial) {
         apply_transition(samples, frames, force_silence);
+        if (before_target) {
+            preroll_output_frames_generated += static_cast<std::uint64_t>(frames);
+        }
         if (!collect_output || frames == 0U) {
+            return {};
+        }
+        const auto skipped = std::min<std::uint64_t>(output_frames_to_skip, frames);
+        samples += static_cast<std::size_t>(skipped) * channels;
+        frames -= static_cast<std::size_t>(skipped);
+        output_frames_to_skip -= skipped;
+        if (frames == 0U) {
             return {};
         }
         compact_pending();
@@ -506,6 +585,7 @@ struct SceneStreamEngine::Impl {
                                             bool count_timeline,
                                             bool collect_output,
                                             bool force_silence,
+                                            bool before_target,
                                             std::uint64_t serial) {
         if (count_timeline) {
             add_timeline_samples(frames);
@@ -517,7 +597,8 @@ struct SceneStreamEngine::Impl {
                 std::copy_n(samples + (static_cast<std::size_t>(offset) * channels),
                             static_cast<std::size_t>(count) * channels,
                             resample_output.data());
-                auto accepted = accept_resampled(resample_output.data(), count, collect_output, force_silence, serial);
+                auto accepted = accept_resampled(
+                    resample_output.data(), count, collect_output, force_silence, before_target, serial);
                 if (!accepted) {
                     return tl::unexpected{accepted.error()};
                 }
@@ -546,6 +627,7 @@ struct SceneStreamEngine::Impl {
                                              static_cast<std::size_t>(request.output_frames_gen),
                                              collect_output,
                                              force_silence,
+                                             before_target,
                                              serial);
             if (!accepted) {
                 return tl::unexpected{accepted.error()};
@@ -578,8 +660,12 @@ struct SceneStreamEngine::Impl {
                 if (request.output_frames_gen == 0) {
                     break;
                 }
-                auto accepted = accept_resampled(
-                    resample_output.data(), static_cast<std::size_t>(request.output_frames_gen), true, false, serial);
+                auto accepted = accept_resampled(resample_output.data(),
+                                                 static_cast<std::size_t>(request.output_frames_gen),
+                                                 true,
+                                                 false,
+                                                 false,
+                                                 serial);
                 if (!accepted) {
                     return tl::unexpected{accepted.error()};
                 }
@@ -590,7 +676,7 @@ struct SceneStreamEngine::Impl {
 
     [[nodiscard]] Result<void> flush_backend(const WorkItem& item) {
         std::uint32_t remaining = renderer->tail_input_frames();
-        if (remaining == 0U || current_generation == 0U) {
+        if (remaining == 0U || !has_current_generation) {
             return {};
         }
         while (remaining > 0U) {
@@ -608,7 +694,7 @@ struct SceneStreamEngine::Impl {
             if (!rendered) {
                 return tl::unexpected{rendered.error()};
             }
-            auto fed = feed_samples(render_output.data(), count, false, true, false, item.serial);
+            auto fed = feed_samples(render_output.data(), count, false, true, false, false, item.serial);
             if (!fed) {
                 return tl::unexpected{fed.error()};
             }
@@ -618,6 +704,7 @@ struct SceneStreamEngine::Impl {
     }
 
     [[nodiscard]] Result<void> process_end(const WorkItem& item) {
+        finish_preroll();
         if (rational_remainder != 0U) {
             ++allowed_output_frames;
             rational_remainder = 0U;
@@ -688,11 +775,17 @@ struct SceneStreamEngine::Impl {
 
     std::int64_t target_sample_worker{0};
     std::uint64_t current_generation{0U};
+    bool has_current_generation{false};
     std::vector<float> render_output;
     std::vector<float> resample_output;
     std::vector<float> zero_output;
     std::vector<float> pending_output;
     std::size_t pending_frame_offset{0U};
+    std::uint64_t preroll_output_boundary{0U};
+    std::uint64_t preroll_rational_remainder{0U};
+    std::uint64_t preroll_output_frames_generated{0U};
+    std::uint64_t output_frames_to_skip{0U};
+    bool target_reached{false};
     std::uint64_t rational_remainder{0U};
     std::uint64_t allowed_output_frames{0U};
     std::uint64_t output_frames_pushed{0U};
