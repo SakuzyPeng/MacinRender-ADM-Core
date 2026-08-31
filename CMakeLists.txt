@@ -711,6 +711,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_c_api_header_smoke tests/unit/c_api_header_smoke.c)
     target_include_directories(mr_adm_c_api_header_smoke PRIVATE include)
+    target_compile_features(mr_adm_c_api_header_smoke PRIVATE c_std_11)
     mr_adm_core_apply_warnings(mr_adm_c_api_header_smoke)
     mr_adm_core_apply_static_analysis(mr_adm_c_api_header_smoke)
     add_test(NAME mr_adm_c_api_header_smoke COMMAND mr_adm_c_api_header_smoke)
