@@ -113,7 +113,7 @@ create_live_renderer(const live_scene::RendererConfig& config, const live_scene:
 [[nodiscard]] live_scene::ObjectState default_state(const live_scene::ElementDescriptor& descriptor) {
     live_scene::ObjectState state;
     state.valid_fields = live_scene::k_known_state_fields & ~live_scene::state_position;
-    if (descriptor.role == live_scene::ElementRole::object || descriptor.has_position) {
+    if (descriptor.role == live_scene::ElementRole::object) {
         state.valid_fields |= live_scene::state_position;
     }
     if (descriptor.has_position) {
@@ -515,6 +515,65 @@ struct SceneStreamEngine::Impl {
         return (std::chrono::steady_clock::now() - last) < k_tracking_active_window;
     }
 
+    void report_backend_switch_failure(std::string detail) const {
+        add_diagnostic({LogLevel::error,
+                        live_scene::DiagnosticCode::backend_failure,
+                        epoch_status.load(std::memory_order_relaxed),
+                        current_generation,
+                        0U,
+                        0U,
+                        "live Scene backend switch was rejected: " + std::move(detail)});
+    }
+
+    void begin_backend_switch(std::unique_ptr<PendingBackend> backend) {
+        if (!backend) {
+            return;
+        }
+        try {
+            backend->renderer->set_listener_orientation(current_orientation);
+            if (has_current_generation && current_generation_model) {
+                auto configured =
+                    backend->renderer->configure_generation(current_generation, current_generation_model->elements);
+                if (!configured) {
+                    report_backend_switch_failure(configured.error().message);
+                    return;
+                }
+            }
+        } catch (const std::exception& exception) {
+            report_backend_switch_failure(std::string{"candidate backend threw while being configured: "} +
+                                          exception.what());
+            return;
+        } catch (...) {
+            report_backend_switch_failure("candidate backend threw while being configured");
+            return;
+        }
+
+        if (!has_current_generation || !current_generation_model) {
+            renderer = std::move(backend->renderer);
+            config.renderer = std::move(backend->config);
+            return;
+        }
+        incoming_config = std::move(backend->config);
+        incoming_renderer = std::move(backend->renderer);
+        backend_crossfade_position = 0U;
+        incoming_needs_initial_state = true;
+    }
+
+    void start_deferred_backend_switch() {
+        if (incoming_renderer || !deferred_backend) {
+            return;
+        }
+        auto next = std::move(deferred_backend);
+        begin_backend_switch(std::move(next));
+    }
+
+    void abandon_incoming_backend() {
+        incoming_renderer = nullptr;
+        backend_crossfade_position = 0U;
+        incoming_needs_initial_state = false;
+        start_deferred_backend_switch();
+    }
+
     void finalize_backend_switch() {
         if (!incoming_renderer) {
             return;
@@ -523,6 +582,7 @@ struct SceneStreamEngine::Impl {
         config.renderer = std::move(incoming_config);
         backend_crossfade_position = 0U;
         incoming_needs_initial_state = false;
+        start_deferred_backend_switch();
     }
 
     [[nodiscard]] std::vector<ResolvedSemanticPolicy>
@@ -641,7 +701,8 @@ struct SceneStreamEngine::Impl {
         }
         block.gain = base.linear_gain;
         block.head_locked = base.head_locked;
-        if ((base.valid_fields & live_scene::state_position) != 0U) {
+        const bool producer_has_position = (base.valid_fields & live_scene::state_position) != 0U;
+        if (producer_has_position) {
             const auto polar =
                 scene_position_to_polar(SceneBlockPosition{true, 0.0F, 0.0F, 1.0F, base.x, base.y, base.z});
             block.azimuth = polar.azimuth;
@@ -656,15 +717,24 @@ struct SceneStreamEngine::Impl {
             block.distance = polar.distance;
             block.has_position = true;
         }
+        // A descriptor position is only a routing fallback. Probe the resolved
+        // DirectSpeakers rules separately so only a matching position operation
+        // promotes that fallback into the renderer's explicit state.
+        auto position_probe = block;
+        position_probe.has_position = false;
+        apply_resolved_semantic_direct_speaker(position_probe, resolved.direct_speakers, resolved.object);
+        const bool policy_has_position = position_probe.has_position;
         apply_resolved_semantic_direct_speaker(block, resolved.direct_speakers, resolved.object);
         out.linear_gain = block.gain * object_gain;
         out.head_locked = block.head_locked;
-        if (block.has_position) {
+        if (block.has_position && (producer_has_position || policy_has_position)) {
             const auto direction = direction_vector_from_polar(block.azimuth, block.elevation);
             out.x = direction.x * block.distance;
             out.y = direction.y * block.distance;
             out.z = direction.z * block.distance;
             out.valid_fields |= live_scene::state_position;
+        } else {
+            out.valid_fields &= ~live_scene::state_position;
         }
         return out;
     }
@@ -741,38 +811,24 @@ struct SceneStreamEngine::Impl {
             if (incoming_renderer) {
                 incoming_renderer->set_listener_orientation(current_orientation);
             }
+            if (deferred_backend) {
+                deferred_backend->renderer->set_listener_orientation(current_orientation);
+            }
         }
         if (!backend) {
             return;
         }
-        // A newer prepared switch supersedes an unfinished incoming renderer. The
-        // audible renderer remains the same, so rapid control updates do not turn a
-        // partially faded-in intermediate backend into an abrupt new baseline.
+        if (incoming_renderer && backend_crossfade_position > 0U) {
+            // Replacing an already-audible incoming renderer would jump back to
+            // the outgoing backend. Finish this curve, then start the latest one.
+            deferred_backend = std::move(backend);
+            return;
+        }
         incoming_renderer = nullptr;
         backend_crossfade_position = 0U;
         incoming_needs_initial_state = false;
-        backend->renderer->set_listener_orientation(current_orientation);
-        if (!has_current_generation || !current_generation_model) {
-            renderer = std::move(backend->renderer);
-            config.renderer = std::move(backend->config);
-            return;
-        }
-        auto configured =
-            backend->renderer->configure_generation(current_generation, current_generation_model->elements);
-        if (!configured) {
-            add_diagnostic({LogLevel::error,
-                            live_scene::DiagnosticCode::backend_failure,
-                            epoch_status.load(std::memory_order_relaxed),
-                            current_generation,
-                            0U,
-                            0U,
-                            "live Scene backend switch was rejected: " + configured.error().message});
-            return;
-        }
-        incoming_config = std::move(backend->config);
-        incoming_renderer = std::move(backend->renderer);
-        backend_crossfade_position = 0U;
-        incoming_needs_initial_state = true;
+        deferred_backend.reset();
+        begin_backend_switch(std::move(backend));
     }
 
     void apply_available_controls() {
@@ -788,7 +844,25 @@ struct SceneStreamEngine::Impl {
     }
 
     void perform_reset(std::uint64_t serial, std::int64_t target_sample) {
-        finalize_backend_switch();
+        std::unique_ptr<PendingBackend> latest_backend;
+        {
+            const std::lock_guard<std::mutex> lock(queue_mutex);
+            latest_backend = std::move(pending_backend);
+        }
+        if (!latest_backend) {
+            latest_backend = std::move(deferred_backend);
+        }
+        if (latest_backend) {
+            renderer = std::move(latest_backend->renderer);
+            config.renderer = std::move(latest_backend->config);
+            incoming_renderer = nullptr;
+        } else if (incoming_renderer) {
+            renderer = std::move(incoming_renderer);
+            config.renderer = std::move(incoming_config);
+        }
+        deferred_backend.reset();
+        backend_crossfade_position = 0U;
+        incoming_needs_initial_state = false;
         (*renderer).reset();
         renderer->set_listener_orientation(current_orientation);
         if (resampler != nullptr) {
@@ -831,6 +905,17 @@ struct SceneStreamEngine::Impl {
         queue_cv.notify_all();
     }
 
+    void acknowledge_failed_reset(std::uint64_t serial) noexcept {
+        try {
+            const std::lock_guard<std::mutex> lock(queue_mutex);
+            reset_ack = std::max(reset_ack, serial);
+        } catch (...) {
+            // A broken control mutex cannot support recovery; wake the waiter through the terminal predicate.
+            quit.store(true, std::memory_order_release);
+        }
+        queue_cv.notify_all();
+    }
+
     void worker_loop() {
         while (!quit.load(std::memory_order_acquire)) {
             WorkItem item;
@@ -870,23 +955,23 @@ struct SceneStreamEngine::Impl {
                     }
                 }
             }
-            if (pending_reset != 0U) {
-                perform_reset(pending_reset, pending_target);
-                continue;
-            }
-            if (!controls.empty()) {
-                apply_pending_controls(std::move(controls.backend),
-                                       controls.orientation,
-                                       controls.has_policy_update,
-                                       std::move(controls.policy),
-                                       controls.policy_revision);
-            }
-            if (!have_item || item.serial != reset_serial.load(std::memory_order_acquire)) {
-                continue;
-            }
-
             const auto epoch_id = item.frame.epoch_id != 0U ? item.frame.epoch_id : epoch_status.load();
             try {
+                if (pending_reset != 0U) {
+                    perform_reset(pending_reset, pending_target);
+                    continue;
+                }
+                if (!controls.empty()) {
+                    apply_pending_controls(std::move(controls.backend),
+                                           controls.orientation,
+                                           controls.has_policy_update,
+                                           std::move(controls.policy),
+                                           controls.policy_revision);
+                }
+                if (!have_item || item.serial != reset_serial.load(std::memory_order_acquire)) {
+                    continue;
+                }
+
                 Result<void> processed;
                 if (item.kind == WorkItem::Kind::frame) {
                     processed = process_frame(item);
@@ -898,11 +983,17 @@ struct SceneStreamEngine::Impl {
                     fail(processed.error(), epoch_id, item.frame.generation_id);
                 }
             } catch (const std::exception& exception) {
-                if (!reset_or_quit(item.serial)) {
+                if (pending_reset != 0U) {
+                    acknowledge_failed_reset(pending_reset);
+                }
+                if (!have_item || !reset_or_quit(item.serial)) {
                     fail_worker_exception(exception.what(), epoch_id, item.frame.generation_id);
                 }
             } catch (...) {
-                if (!reset_or_quit(item.serial)) {
+                if (pending_reset != 0U) {
+                    acknowledge_failed_reset(pending_reset);
+                }
+                if (!have_item || !reset_or_quit(item.serial)) {
                     fail_worker_exception("unknown exception", epoch_id, item.frame.generation_id);
                 }
             }
@@ -921,9 +1012,20 @@ struct SceneStreamEngine::Impl {
             return tl::unexpected{configured.error()};
         }
         if (incoming_renderer) {
-            auto incoming_configured =
-                incoming_renderer->configure_generation(item.generation->id, item.generation->elements);
-            if (!incoming_configured) {
+            std::optional<std::string> incoming_failure;
+            try {
+                auto incoming_configured =
+                    incoming_renderer->configure_generation(item.generation->id, item.generation->elements);
+                if (!incoming_configured) {
+                    incoming_failure = incoming_configured.error().message;
+                }
+            } catch (const std::exception& exception) {
+                incoming_failure =
+                    std::string{"candidate backend threw while configuring a generation: "} + exception.what();
+            } catch (...) {
+                incoming_failure = "candidate backend threw while configuring a generation";
+            }
+            if (incoming_failure) {
                 add_diagnostic({LogLevel::error,
                                 live_scene::DiagnosticCode::backend_failure,
                                 item.frame.epoch_id,
@@ -931,7 +1033,7 @@ struct SceneStreamEngine::Impl {
                                 0U,
                                 0U,
                                 "incoming live Scene backend rejected a generation; keeping the current backend: " +
-                                    incoming_configured.error().message});
+                                    *incoming_failure});
                 incoming_renderer = nullptr;
                 backend_crossfade_position = 0U;
                 incoming_needs_initial_state = false;
@@ -981,6 +1083,7 @@ struct SceneStreamEngine::Impl {
                                      apply_policy_to_state(index, base_states.at(descriptor.element_id)));
         }
         policy_retarget_pending = false;
+        start_deferred_backend_switch();
         incoming_needs_initial_state = incoming_renderer != nullptr;
         generation_status.store(current_generation, std::memory_order_release);
         transition_anchor = last_output_frame;
@@ -1104,9 +1207,7 @@ struct SceneStreamEngine::Impl {
                             0U,
                             "incoming live Scene backend failed while crossfading; keeping the current backend: " +
                                 incoming_rendered.error().message});
-            incoming_renderer = nullptr;
-            backend_crossfade_position = 0U;
-            incoming_needs_initial_state = false;
+            abandon_incoming_backend();
             return {};
         }
         incoming_needs_initial_state = false;
@@ -1606,6 +1707,7 @@ struct SceneStreamEngine::Impl {
     std::unordered_map<std::uint64_t, live_scene::ObjectState> effective_states;
     std::unordered_map<std::uint64_t, std::size_t> current_element_index;
     std::unique_ptr<live_scene::ILiveSceneRenderer> incoming_renderer;
+    std::unique_ptr<PendingBackend> deferred_backend;
     live_scene::RendererConfig incoming_config;
     std::uint64_t backend_crossfade_position{0U};
     bool incoming_needs_initial_state{false};
@@ -1796,6 +1898,9 @@ Result<void> SceneStreamEngine::begin_epoch(std::uint64_t epoch_id, std::int64_t
     impl_->reset_gate.store(false, std::memory_order_seq_cst);
     if (impl_->quit.load(std::memory_order_acquire)) {
         return make_error(ErrorCode::internal_error, "Scene stream closed while resetting its epoch");
+    }
+    if (impl_->failed.load(std::memory_order_acquire)) {
+        return make_error(ErrorCode::internal_error, "Scene stream worker failed while resetting its epoch");
     }
     return {};
 }

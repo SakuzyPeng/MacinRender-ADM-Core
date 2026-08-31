@@ -1202,17 +1202,33 @@ bool test_backend_hot_switch(adm_context_t* context) {
     ok &= check(adm_scene_stream_switch_backend(stream.value, &binaural) == ADM_ERROR_OK,
                 "prepare latest rapid backend switch");
 
+    std::vector<float> crossfade_start_samples(1024U, 0.05F);
+    adm_scene_pcm_plane_t crossfade_start_plane{};
+    adm_scene_initial_state_t crossfade_start_initial{};
+    auto crossfade_start =
+        object_frame(40U, 1U, 1024, crossfade_start_samples, crossfade_start_plane, crossfade_start_initial);
+    crossfade_start.initial_state_count = 0U;
+    crossfade_start.initial_states = nullptr;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &crossfade_start, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit the audible first half of a backend crossfade");
+    std::vector<float> crossfade_start_output;
+    ok &= pull_open_stream(stream.value, 2U, 1024U, crossfade_start_output);
+    output.insert(output.end(), crossfade_start_output.begin(), crossfade_start_output.end());
+
+    ok &= check(adm_scene_stream_switch_backend(stream.value, &vbap) == ADM_ERROR_OK,
+                "defer a newer backend after the current crossfade becomes audible");
     std::vector<float> second_samples(4096U, 0.05F);
     adm_scene_pcm_plane_t second_plane{};
     adm_scene_initial_state_t second_initial{};
-    auto second = object_frame(40U, 1U, 1024, second_samples, second_plane, second_initial);
+    auto second = object_frame(40U, 1U, 2048, second_samples, second_plane, second_initial);
     second.initial_state_count = 0U;
     second.initial_states = nullptr;
     ok &= check(adm_scene_stream_submit_frame(stream.value, &second, 0U, &submit) == ADM_ERROR_OK &&
                     submit == ADM_SCENE_SUBMIT_ACCEPTED,
                 "submit audio spanning the backend crossfade");
     ok &=
-        check(adm_scene_stream_signal_end(stream.value, 40U, 5120) == ADM_ERROR_OK, "close backend-switch Scene epoch");
+        check(adm_scene_stream_signal_end(stream.value, 40U, 6144) == ADM_ERROR_OK, "close backend-switch Scene epoch");
     bool saw_signal = false;
     std::vector<float> switched_output;
     ok &= wait_for_output(stream.value, 2U, 4096U, saw_signal, &switched_output);
@@ -1223,7 +1239,7 @@ bool test_backend_hot_switch(adm_context_t* context) {
     for (std::size_t index = 2U; index < output.size(); ++index) {
         maximum_step = std::max(maximum_step, std::fabs(output[index] - output[index - 2U]));
     }
-    ok &= check(maximum_step < 0.25F, "backend takeover has no hard full-scale discontinuity");
+    ok &= check(maximum_step < 0.005F, "interrupted backend takeovers remain continuous");
     preserved = {};
     preserved.struct_size = sizeof(preserved);
     ok &= check(adm_scene_stream_get_status(stream.value, &preserved) == ADM_ERROR_OK && preserved.failed == 0 &&
@@ -1549,15 +1565,19 @@ bool test_direct_speaker_policy_position_clear(adm_context_t* context) {
     descriptor.role = ADM_SCENE_ELEMENT_DIRECT_SPEAKER;
     descriptor.element_id = 10U;
     descriptor.speaker_label = "M+030";
+    descriptor.has_position = 1;
+    descriptor.position_x = 0.5F;
+    descriptor.position_y = 0.8660254F;
     descriptor.semantic_identity = &identity;
     ok &= check(adm_scene_stream_configure_generation(stream.value, 53U, 1U, &descriptor, 1U) == ADM_ERROR_OK,
-                "configure labelled DirectSpeakers element without producer position");
+                "configure labelled DirectSpeakers element with an opposite fallback position");
 
+    constexpr const char* k_neutral_policy = R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":1}}})";
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_neutral_policy, 13U) == ADM_ERROR_OK,
+                "install neutral DirectSpeakers policy");
+    ok &= wait_for_policy_revision(stream.value, 13U);
     constexpr const char* k_position_policy =
         R"({"schema":"mradm.semantic-policy.v1","objects":[{"id":"AO_DS_POSITION","direct_speakers":{"speaker_label":"M+030","position":{"azimuth":-30}}}]})";
-    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_position_policy, 13U) == ADM_ERROR_OK,
-                "install DirectSpeakers position override");
-    ok &= wait_for_policy_revision(stream.value, 13U);
 
     std::vector<float> samples(2048U, 0.05F);
     adm_scene_pcm_plane_t plane{};
@@ -1585,37 +1605,195 @@ bool test_direct_speaker_policy_position_clear(adm_context_t* context) {
     int32_t submit = -1;
     ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
                     submit == ADM_SCENE_SUBMIT_ACCEPTED,
-                "submit DirectSpeakers position-override block");
-    std::vector<float> positioned;
-    ok &= pull_open_stream(stream.value, 2U, 2048U, positioned);
+                "submit neutral-policy DirectSpeakers block");
+    std::vector<float> labelled;
+    ok &= pull_open_stream(stream.value, 2U, 2048U, labelled);
 
-    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, nullptr, 14U) == ADM_ERROR_OK,
-                "clear DirectSpeakers position override");
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_position_policy, 14U) == ADM_ERROR_OK,
+                "install DirectSpeakers position override");
     ok &= wait_for_policy_revision(stream.value, 14U);
     frame.media_sample_start = 2048;
     frame.initial_state_count = 0U;
     frame.initial_states = nullptr;
     ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
                     submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit DirectSpeakers position-override block");
+    std::vector<float> positioned;
+    ok &= pull_open_stream(stream.value, 2U, 2048U, positioned);
+
+    ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, nullptr, 15U) == ADM_ERROR_OK,
+                "clear DirectSpeakers position override");
+    ok &= wait_for_policy_revision(stream.value, 15U);
+    frame.media_sample_start = 4096;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
                 "submit DirectSpeakers policy-clear transition block");
     std::vector<float> restored;
     ok &= pull_open_stream(stream.value, 2U, 2048U, restored);
 
+    const auto labelled_ch0 = mean_absolute_channel_tail(labelled, 2U, 0U, 256U);
+    const auto labelled_ch1 = mean_absolute_channel_tail(labelled, 2U, 1U, 256U);
     const auto positioned_ch0 = mean_absolute_channel_tail(positioned, 2U, 0U, 256U);
     const auto positioned_ch1 = mean_absolute_channel_tail(positioned, 2U, 1U, 256U);
     const auto restored_ch0 = mean_absolute_channel_tail(restored, 2U, 0U, 256U);
     const auto restored_ch1 = mean_absolute_channel_tail(restored, 2U, 1U, 256U);
+    const bool labelled_uses_ch0 = labelled_ch0 > labelled_ch1;
     const bool positioned_uses_ch0 = positioned_ch0 > positioned_ch1;
     const bool restored_uses_ch0 = restored_ch0 > restored_ch1;
-    ok &= check(std::max(positioned_ch0, positioned_ch1) > std::min(positioned_ch0, positioned_ch1) * 10.0F &&
+    ok &= check(std::max(labelled_ch0, labelled_ch1) > std::min(labelled_ch0, labelled_ch1) * 10.0F &&
+                    std::max(positioned_ch0, positioned_ch1) > std::min(positioned_ch0, positioned_ch1) * 10.0F &&
                     std::max(restored_ch0, restored_ch1) > std::min(restored_ch0, restored_ch1) * 10.0F &&
-                    positioned_uses_ch0 != restored_uses_ch0,
-                "clearing a DirectSpeakers position policy removes the canonical override and restores label routing");
+                    labelled_uses_ch0 == restored_uses_ch0 && labelled_uses_ch0 != positioned_uses_ch0,
+                "descriptor fallback and neutral policy preserve label routing; clearing an override restores it");
 
-    ok &= check(adm_scene_stream_signal_end(stream.value, 53U, 4096) == ADM_ERROR_OK,
+    ok &= check(adm_scene_stream_signal_end(stream.value, 53U, 6144) == ADM_ERROR_OK,
                 "close DirectSpeakers position-policy epoch");
     bool saw_signal = false;
     ok &= wait_for_output(stream.value, 2U, 0U, saw_signal);
+    return ok;
+}
+
+enum class BinauralDirectSpeakerRun : std::uint8_t { transitions, label_reference, position_reference };
+
+// NOLINTNEXTLINE(readability-function-size)
+bool render_binaural_direct_speaker_run(adm_context_t* context,
+                                        std::uint64_t epoch,
+                                        BinauralDirectSpeakerRun run,
+                                        std::vector<float>& first_capture,
+                                        std::vector<float>& second_capture) {
+    StreamGuard stream;
+    auto config = stream_config();
+    config.rendering.renderer = ADM_RENDERER_SAF_BINAURAL;
+    config.rendering.output_layout = "binaural";
+    config.output_ring_frames = 4096U;
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok = check(adm_scene_stream_begin_epoch(stream.value, epoch, 0) == ADM_ERROR_OK,
+                    "begin binaural DirectSpeakers transition epoch");
+    adm_scene_semantic_identity_t identity{};
+    identity.struct_size = sizeof(identity);
+    identity.object_id = "AO_DS_BINAURAL_RAMP";
+    adm_scene_element_descriptor_t descriptor{};
+    descriptor.struct_size = sizeof(descriptor);
+    descriptor.role = ADM_SCENE_ELEMENT_DIRECT_SPEAKER;
+    descriptor.element_id = 11U;
+    descriptor.speaker_label = "M+030";
+    descriptor.semantic_identity = &identity;
+    ok &= check(adm_scene_stream_configure_generation(stream.value, epoch, 1U, &descriptor, 1U) == ADM_ERROR_OK,
+                "configure binaural DirectSpeakers transition element");
+
+    constexpr const char* k_position_policy =
+        R"({"schema":"mradm.semantic-policy.v1","objects":[{"id":"AO_DS_BINAURAL_RAMP","direct_speakers":{"speaker_label":"M+030","position":{"azimuth":-30}}}]})";
+    if (run == BinauralDirectSpeakerRun::position_reference) {
+        ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_position_policy, 1U) == ADM_ERROR_OK,
+                    "install initial binaural DirectSpeakers position policy");
+        ok &= wait_for_policy_revision(stream.value, 1U);
+    }
+    ok &= check(adm_scene_stream_set_listener_orientation(stream.value, 0.0F, 0.0F, 0.0F) == ADM_ERROR_OK,
+                "activate 512-frame binaural DirectSpeakers control slices");
+
+    std::vector<float> samples(1024U);
+    for (std::size_t index = 0U; index < samples.size(); ++index) {
+        samples[index] = (std::sin(static_cast<float>(index) * 0.113F) * 0.05F) +
+                         (std::cos(static_cast<float>(index) * 0.173F) * 0.025F);
+    }
+    std::int64_t media_sample_start = 0;
+    bool send_initial_state = true;
+    auto render_block = [&](std::vector<float>* capture) {
+        adm_scene_pcm_plane_t plane{};
+        plane.struct_size = sizeof(plane);
+        plane.element_id = 11U;
+        plane.samples = samples.data();
+        plane.sample_count = static_cast<std::uint32_t>(samples.size());
+        plane.stride = 1U;
+        plane.has_signal = 1;
+        adm_scene_initial_state_t initial{};
+        initial.struct_size = sizeof(initial);
+        initial.element_id = 11U;
+        initial.state = complete_state();
+        initial.state.valid_fields &= ~static_cast<std::uint64_t>(ADM_SCENE_STATE_POSITION);
+        adm_scene_frame_t frame{};
+        frame.struct_size = sizeof(frame);
+        frame.flags = ADM_SCENE_FRAME_STATE_COMPLETE;
+        frame.epoch_id = epoch;
+        frame.generation_id = 1U;
+        frame.media_sample_start = media_sample_start;
+        frame.duration_samples = static_cast<std::uint32_t>(samples.size());
+        frame.pcm_count = 1U;
+        frame.pcm = &plane;
+        frame.initial_state_count = send_initial_state ? 1U : 0U;
+        frame.initial_states = send_initial_state ? &initial : nullptr;
+        int32_t submit = -1;
+        bool rendered = check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                                  submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                              "submit binaural DirectSpeakers control block");
+        std::vector<float> discarded;
+        rendered &= pull_open_stream(
+            stream.value, 2U, static_cast<std::uint32_t>(samples.size()), capture != nullptr ? *capture : discarded);
+        media_sample_start += static_cast<std::int64_t>(samples.size());
+        send_initial_state = false;
+        return rendered;
+    };
+
+    ok &= render_block(nullptr);
+    ok &= render_block(nullptr);
+    if (run == BinauralDirectSpeakerRun::transitions) {
+        ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, k_position_policy, 1U) == ADM_ERROR_OK,
+                    "start binaural DirectSpeakers position-policy ramp");
+        ok &= wait_for_policy_revision(stream.value, 1U);
+        ok &= check(adm_scene_stream_set_listener_orientation(stream.value, 0.0F, 0.0F, 0.0F) == ADM_ERROR_OK,
+                    "keep position-policy ramp split into two control slices");
+        ok &= render_block(&first_capture);
+        ok &= render_block(nullptr);
+        ok &= render_block(nullptr);
+        ok &= check(adm_scene_stream_set_semantic_policy_json(stream.value, nullptr, 2U) == ADM_ERROR_OK,
+                    "start binaural DirectSpeakers policy-clear ramp");
+        ok &= wait_for_policy_revision(stream.value, 2U);
+        ok &= check(adm_scene_stream_set_listener_orientation(stream.value, 0.0F, 0.0F, 0.0F) == ADM_ERROR_OK,
+                    "keep policy-clear ramp split into two control slices");
+        ok &= render_block(&second_capture);
+    } else {
+        ok &= render_block(&first_capture);
+    }
+
+    ok &= check(adm_scene_stream_signal_end(stream.value, epoch, media_sample_start) == ADM_ERROR_OK,
+                "close binaural DirectSpeakers transition epoch");
+    bool saw_signal = false;
+    ok &= wait_for_output(stream.value, 2U, 0U, saw_signal);
+    return ok;
+}
+
+float maximum_difference_prefix(const std::vector<float>& lhs,
+                                const std::vector<float>& rhs,
+                                std::size_t sample_count) {
+    const auto count = std::min({lhs.size(), rhs.size(), sample_count});
+    float result = 0.0F;
+    for (std::size_t index = 0U; index < count; ++index) {
+        result = std::max(result, std::fabs(lhs[index] - rhs[index]));
+    }
+    return result;
+}
+
+bool test_binaural_direct_speaker_policy_ramps(adm_context_t* context) {
+    std::vector<float> position_transition;
+    std::vector<float> clear_transition;
+    std::vector<float> label_reference;
+    std::vector<float> unused;
+    std::vector<float> position_reference;
+    bool ok = render_binaural_direct_speaker_run(
+        context, 54U, BinauralDirectSpeakerRun::transitions, position_transition, clear_transition);
+    ok &= render_binaural_direct_speaker_run(
+        context, 55U, BinauralDirectSpeakerRun::label_reference, label_reference, unused);
+    ok &= render_binaural_direct_speaker_run(
+        context, 56U, BinauralDirectSpeakerRun::position_reference, position_reference, unused);
+    constexpr std::size_t k_first_control_slice_samples = static_cast<std::size_t>(512U) * 2U;
+    ok &=
+        check(maximum_difference_prefix(position_transition, label_reference, k_first_control_slice_samples) > 1.0e-6F,
+              "binaural DirectSpeakers position override starts changing within the first policy-ramp slice");
+    ok &=
+        check(maximum_difference_prefix(clear_transition, position_reference, k_first_control_slice_samples) > 1.0e-6F,
+              "binaural DirectSpeakers position clear starts restoring label routing in the first ramp slice");
     return ok;
 }
 
@@ -1669,6 +1847,124 @@ float maximum_difference(const std::vector<float>& lhs, const std::vector<float>
         result = std::max(result, std::fabs(lhs[index] - rhs[index]));
     }
     return result;
+}
+
+struct BinauralObjectCase {
+    float azimuth{0.0F};
+    float elevation{0.0F};
+    float width{0.0F};
+    float height{0.0F};
+    bool channel_lock{false};
+    bool has_channel_lock_max_distance{false};
+    float channel_lock_max_distance{0.0F};
+    bool set_pose{false};
+    float yaw{0.0F};
+    float pitch{0.0F};
+    float roll{0.0F};
+};
+
+bool render_binaural_object_case(adm_context_t* context,
+                                 std::uint64_t epoch,
+                                 const BinauralObjectCase& render_case,
+                                 std::vector<float>& output) {
+    StreamGuard stream;
+    auto config = stream_config();
+    config.rendering.renderer = ADM_RENDERER_SAF_BINAURAL;
+    config.rendering.output_layout = "binaural";
+    config.output_ring_frames = 4096U;
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok = check(adm_scene_stream_begin_epoch(stream.value, epoch, 0) == ADM_ERROR_OK,
+                    "begin binaural spatial-semantics epoch") &&
+              configure_object(stream.value, epoch, 1U);
+    if (render_case.set_pose) {
+        ok &= check(adm_scene_stream_set_listener_orientation(
+                        stream.value, render_case.yaw, render_case.pitch, render_case.roll) == ADM_ERROR_OK,
+                    "set binaural spatial-semantics listener pose");
+    }
+
+    std::vector<float> samples(2048U);
+    for (std::size_t index = 0U; index < samples.size(); ++index) {
+        samples[index] = (std::sin(static_cast<float>(index) * 0.071F) * 0.05F) +
+                         (std::cos(static_cast<float>(index) * 0.131F) * 0.025F);
+    }
+    adm_scene_pcm_plane_t plane{};
+    adm_scene_initial_state_t initial{};
+    auto frame = object_frame(epoch, 1U, 0, samples, plane, initial);
+    constexpr float k_degrees_to_radians = 0.01745329251994329577F;
+    const float azimuth = render_case.azimuth * k_degrees_to_radians;
+    const float elevation = render_case.elevation * k_degrees_to_radians;
+    const float cos_elevation = std::cos(elevation);
+    initial.state.position_x = -std::sin(azimuth) * cos_elevation;
+    initial.state.position_y = std::cos(azimuth) * cos_elevation;
+    initial.state.position_z = std::sin(elevation);
+    initial.state.extent_width = render_case.width;
+    initial.state.extent_height = render_case.height;
+    initial.state.channel_lock = render_case.channel_lock ? 1 : 0;
+    initial.state.has_channel_lock_max_distance = render_case.has_channel_lock_max_distance ? 1 : 0;
+    initial.state.channel_lock_max_distance = render_case.channel_lock_max_distance;
+    int32_t submit = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit binaural spatial-semantics frame");
+    ok &= check(adm_scene_stream_signal_end(stream.value, epoch, 2048) == ADM_ERROR_OK,
+                "close binaural spatial-semantics epoch");
+    bool saw_signal = false;
+    ok &= wait_for_output(stream.value, 2U, 2048U, saw_signal, &output);
+    return ok && check(saw_signal, "binaural spatial-semantics case produces PCM");
+}
+
+bool test_binaural_channel_lock_geometry(adm_context_t* context) {
+    BinauralObjectCase elevated;
+    elevated.azimuth = 20.0F;
+    elevated.elevation = 60.0F;
+    auto thresholded = elevated;
+    thresholded.channel_lock = true;
+    thresholded.has_channel_lock_max_distance = true;
+    thresholded.channel_lock_max_distance = 0.2F;
+    auto unbounded = elevated;
+    unbounded.channel_lock = true;
+    BinauralObjectCase locked_reference;
+    locked_reference.azimuth = 30.0F;
+
+    std::vector<float> elevated_output;
+    std::vector<float> thresholded_output;
+    std::vector<float> unbounded_output;
+    std::vector<float> locked_reference_output;
+    bool ok = render_binaural_object_case(context, 60U, elevated, elevated_output);
+    ok &= render_binaural_object_case(context, 61U, thresholded, thresholded_output);
+    ok &= render_binaural_object_case(context, 62U, unbounded, unbounded_output);
+    ok &= render_binaural_object_case(context, 63U, locked_reference, locked_reference_output);
+    ok &= check(elevated_output == thresholded_output,
+                "binaural channelLock maxDistance uses full 3D direction distance");
+    ok &= check(unbounded_output == locked_reference_output,
+                "binaural channelLock snaps both azimuth and elevation to the stereo reference");
+    ok &= check(maximum_difference(elevated_output, locked_reference_output) > 1.0e-6F,
+                "channelLock geometry references have distinct HRTFs");
+    return ok;
+}
+
+bool test_binaural_pose_rotates_spread_cloud(adm_context_t* context) {
+    BinauralObjectCase horizontal;
+    horizontal.width = 0.5F;
+    auto rolled_horizontal = horizontal;
+    rolled_horizontal.set_pose = true;
+    rolled_horizontal.roll = 90.0F;
+    BinauralObjectCase vertical;
+    vertical.height = 2.0F / 3.0F;
+
+    std::vector<float> horizontal_output;
+    std::vector<float> rolled_output;
+    std::vector<float> vertical_output;
+    bool ok = render_binaural_object_case(context, 64U, horizontal, horizontal_output);
+    ok &= render_binaural_object_case(context, 65U, rolled_horizontal, rolled_output);
+    ok &= render_binaural_object_case(context, 66U, vertical, vertical_output);
+    ok &= check(maximum_difference(rolled_output, vertical_output) < 1.0e-5F,
+                "listener roll rotates every world-space extent direction into head space");
+    ok &= check(maximum_difference(horizontal_output, vertical_output) > 1.0e-6F,
+                "horizontal and vertical spread references remain distinguishable");
+    return ok;
 }
 
 // NOLINTNEXTLINE(readability-function-size)
@@ -1765,6 +2061,9 @@ int main() {
         ok &= test_semantic_policy_hot_replace(context);
         ok &= test_semantic_identity_grouping_and_roles(context);
         ok &= test_direct_speaker_policy_position_clear(context);
+        ok &= test_binaural_direct_speaker_policy_ramps(context);
+        ok &= test_binaural_channel_lock_geometry(context);
+        ok &= test_binaural_pose_rotates_spread_cloud(context);
         ok &= test_listener_orientation(context);
     }
     adm_destroy_context(context);
