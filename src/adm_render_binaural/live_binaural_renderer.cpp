@@ -28,6 +28,8 @@
 
 #include <fmt/format.h>
 
+#include "adm/scene.h"
+
 #include "binaural_internal.h"
 #include "head_rotation.h"
 
@@ -62,6 +64,8 @@ struct RuntimeElement {
     ElementDescriptor descriptor;
     ObjectState current;
     ObjectState target;
+    std::optional<std::pair<float, float>> current_direction;
+    std::optional<std::pair<float, float>> target_direction;
     std::uint32_t ramp_remaining{0U};
     bool initialized{false};
     OlaState ola;
@@ -103,7 +107,7 @@ struct ConvolutionScratch {
 [[nodiscard]] ObjectState default_state(const ElementDescriptor& descriptor) {
     ObjectState state;
     state.valid_fields = k_known_state_fields & ~state_position;
-    if (descriptor.role == ElementRole::object || descriptor.has_position) {
+    if (descriptor.role == ElementRole::object) {
         state.valid_fields |= state_position;
     }
     if (descriptor.has_position) {
@@ -186,6 +190,16 @@ interpolated_state(const ObjectState& start, const ObjectState& target, float al
     return result;
 }
 
+[[nodiscard]] std::pair<float, float> interpolated_direction(const std::pair<float, float>& start,
+                                                             const std::pair<float, float>& target,
+                                                             float alpha) noexcept {
+    if (alpha >= 1.0F) {
+        return target;
+    }
+    const float azimuth_delta = std::remainder(target.first - start.first, 360.0F);
+    return {start.first + (azimuth_delta * alpha), start.second + ((target.second - start.second) * alpha)};
+}
+
 [[nodiscard]] std::pair<float, float> cartesian_to_polar(float x, float y, float z) noexcept {
     constexpr double k_rad_to_deg = 180.0 / std::numbers::pi_v<double>;
     const double horizontal = std::hypot(static_cast<double>(x), static_cast<double>(y));
@@ -211,6 +225,27 @@ interpolated_state(const ObjectState& start, const ObjectState& target, float al
         return std::nullopt;
     }
     return found->second;
+}
+
+[[nodiscard]] std::pair<float, float>
+channel_locked_direction(float azimuth, float elevation, const ObjectState& object_state) {
+    if (!object_state.channel_lock) {
+        return {azimuth, elevation};
+    }
+    SceneObjectBlock block;
+    block.position.cartesian = false;
+    block.position.azimuth = azimuth;
+    block.position.elevation = elevation;
+    block.position.distance = 1.0F;
+    block.channel_lock = true;
+    block.channel_lock_max_distance = object_state.channel_lock_max_distance;
+    static const std::vector<SceneOutputSpeaker> k_lock_speakers{
+        {30.0F, 0.0F, false},
+        {-30.0F, 0.0F, false},
+    };
+    const auto locked = apply_channel_lock(block, k_lock_speakers);
+    const auto locked_position = scene_position_to_polar(locked.position);
+    return {locked_position.azimuth, locked_position.elevation};
 }
 
 [[nodiscard]] Result<HrtfDataset> resample_dataset(HrtfDataset dataset, std::uint32_t sample_rate) {
@@ -389,11 +424,19 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             copy_state_fields(state, initial.state, initial.state.valid_fields);
             element.current = state;
             element.target = state;
+            auto direction_initialized = initialize_direction(element, state, frame);
+            if (!direction_initialized) {
+                return tl::unexpected{direction_initialized.error()};
+            }
             element.ramp_remaining = 0U;
             element.initialized = true;
         }
         for (auto& element : elements_) {
             if (!element.initialized) {
+                auto direction_initialized = initialize_direction(element, element.current, frame);
+                if (!direction_initialized) {
+                    return tl::unexpected{direction_initialized.error()};
+                }
                 element.initialized = true;
             }
         }
@@ -408,7 +451,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         std::uint32_t cursor = 0U;
         while (cursor < frame.duration_samples) {
             while (update_index < frame.updates.size() && frame.updates[update_index].offset_samples == cursor) {
-                const auto applied = apply_update(frame.updates[update_index]);
+                const auto applied = apply_update(frame.updates[update_index], frame);
                 if (!applied) {
                     return tl::unexpected{applied.error()};
                 }
@@ -451,7 +494,21 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
     }
 
   private:
-    [[nodiscard]] Result<void> apply_update(const MetadataUpdate& update) {
+    [[nodiscard]] Result<void>
+    initialize_direction(RuntimeElement& element, const ObjectState& state, const Frame& frame) {
+        if (element.descriptor.role != ElementRole::direct_speaker) {
+            return {};
+        }
+        auto direction = direction_for(element, state, frame);
+        if (!direction) {
+            return tl::unexpected{direction.error()};
+        }
+        element.current_direction = *direction;
+        element.target_direction = *direction;
+        return {};
+    }
+
+    [[nodiscard]] Result<void> apply_update(const MetadataUpdate& update, const Frame& frame) {
         const auto found = element_index_.find(update.element_id);
         if (found == element_index_.end()) {
             return make_error(ErrorCode::invalid_argument, "metadata update references an unknown element");
@@ -460,7 +517,18 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         ObjectState target = element.target;
         target.valid_fields &= ~update.cleared_fields;
         copy_state_fields(target, update.state, update.changed_fields);
+        std::optional<std::pair<float, float>> target_direction;
+        if (element.descriptor.role == ElementRole::direct_speaker) {
+            auto direction = direction_for(element, target, frame);
+            if (!direction) {
+                return tl::unexpected{direction.error()};
+            }
+            target_direction = *direction;
+        }
         element.target = target;
+        if (target_direction) {
+            element.target_direction = *target_direction;
+        }
         element.ramp_remaining = config_.object_smoothing_frames;
         if (update.jump_position) {
             element.ramp_remaining = 0U;
@@ -469,6 +537,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         }
         if (element.ramp_remaining == 0U) {
             element.current = element.target;
+            element.current_direction = element.target_direction;
         }
         return {};
     }
@@ -481,9 +550,14 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             const auto advanced = std::min(frames, element.ramp_remaining);
             const float alpha = static_cast<float>(advanced) / static_cast<float>(element.ramp_remaining);
             element.current = interpolated_state(element.current, element.target, alpha);
+            if (element.current_direction && element.target_direction) {
+                element.current_direction =
+                    interpolated_direction(*element.current_direction, *element.target_direction, alpha);
+            }
             element.ramp_remaining -= advanced;
             if (element.ramp_remaining == 0U) {
                 element.current = element.target;
+                element.current_direction = element.target_direction;
             }
         }
     }
@@ -495,6 +569,16 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         const float alpha =
             static_cast<float>(std::min(frames, element.ramp_remaining)) / static_cast<float>(element.ramp_remaining);
         return interpolated_state(element.current, element.target, alpha);
+    }
+
+    [[nodiscard]] std::optional<std::pair<float, float>> segment_end_direction(const RuntimeElement& element,
+                                                                               std::uint32_t frames) const noexcept {
+        if (!element.current_direction || !element.target_direction || element.ramp_remaining == 0U) {
+            return element.current_direction;
+        }
+        const float alpha =
+            static_cast<float>(std::min(frames, element.ramp_remaining)) / static_cast<float>(element.ramp_remaining);
+        return interpolated_direction(*element.current_direction, *element.target_direction, alpha);
     }
 
     [[nodiscard]] Result<std::pair<float, float>>
@@ -526,30 +610,25 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         return std::pair<float, float>{0.0F, 0.0F};
     }
 
-    [[nodiscard]] Result<void> hrtf_for(const RuntimeElement& element,
-                                        const ObjectState& object_state,
-                                        const Frame& frame,
-                                        std::vector<float_complex>& output) {
-        auto direction = direction_for(element, object_state, frame);
-        if (!direction) {
-            return tl::unexpected{direction.error()};
-        }
-        float azimuth = direction->first;
-        float elevation = direction->second;
-        if (object_state.channel_lock) {
-            const float target = std::fabs(azimuth - 30.0F) < std::fabs(azimuth + 30.0F) ? 30.0F : -30.0F;
-            constexpr double k_degrees_to_radians = std::numbers::pi_v<double> / 180.0;
-            const double delta = static_cast<double>(azimuth - target) * k_degrees_to_radians;
-            const auto distance = static_cast<float>(2.0 * std::sin(std::fabs(delta) * 0.5));
-            if (!object_state.channel_lock_max_distance ||
-                distance <= *object_state.channel_lock_max_distance + 1.0e-4F) {
-                azimuth = target;
+    [[nodiscard]] Result<void>
+    hrtf_for(const RuntimeElement& element,
+             const ObjectState& object_state,
+             const Frame& frame,
+             std::vector<float_complex>& output,
+             const std::optional<std::pair<float, float>>& direction_override = std::nullopt) {
+        std::pair<float, float> direction;
+        if (direction_override) {
+            direction = *direction_override;
+        } else {
+            auto resolved = direction_for(element, object_state, frame);
+            if (!resolved) {
+                return tl::unexpected{resolved.error()};
             }
+            direction = *resolved;
         }
-        if (!listener_orientation_.is_identity() && !object_state.head_locked) {
-            const render_common::HeadRotation rotation{listener_orientation_};
-            std::tie(azimuth, elevation) = rotation.rotate_az_el(azimuth, elevation);
-        }
+        float azimuth = direction.first;
+        float elevation = direction.second;
+        std::tie(azimuth, elevation) = channel_locked_direction(azimuth, elevation, object_state);
         if (object_state.screen_reference) {
             warn_once(frame,
                       element.descriptor.element_id,
@@ -618,8 +697,16 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
                 return sum + item.weight;
             });
         output.assign(static_cast<std::size_t>(state_->n_bands) * k_n_ears, float_complex{0.0F, 0.0F});
+        const bool rotate_to_head_space = !listener_orientation_.is_identity() && !object_state.head_locked;
+        const render_common::HeadRotation rotation{listener_orientation_};
         for (const auto& item : directions) {
-            compute_hrtf_into(*state_, item.azimuth, item.elevation, scratch_.hrtf_temp);
+            float rendered_azimuth = item.azimuth;
+            float rendered_elevation = item.elevation;
+            if (rotate_to_head_space) {
+                std::tie(rendered_azimuth, rendered_elevation) =
+                    rotation.rotate_az_el(rendered_azimuth, rendered_elevation);
+            }
+            compute_hrtf_into(*state_, rendered_azimuth, rendered_elevation, scratch_.hrtf_temp);
             const float normalized = item.weight / std::max(weight_sum, 1.0e-6F);
             for (std::size_t band = 0; band < output.size(); ++band) {
                 output[band] += scratch_.hrtf_temp[band] * normalized;
@@ -636,6 +723,8 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
                                               std::span<float> output) {
         const ObjectState start = element.current;
         const ObjectState end = segment_end_state(element, frames);
+        const auto start_direction = element.current_direction;
+        const auto end_direction = segment_end_direction(element, frames);
         const auto frame_count = static_cast<std::size_t>(frames);
         const bool has_signal = plane != nullptr && plane->has_signal;
         for (std::size_t index = 0; index < frame_count; ++index) {
@@ -677,11 +766,11 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
                 scratch_.source_start[index] =
                     (scratch_.source_start[index] * (1.0F - start_diffuse)) + (scratch_.diffuse[index] * start_diffuse);
             }
-            auto start_hrtf = hrtf_for(element, start, frame, scratch_.hrtf_start);
+            auto start_hrtf = hrtf_for(element, start, frame, scratch_.hrtf_start, start_direction);
             if (!start_hrtf) {
                 return tl::unexpected{start_hrtf.error()};
             }
-            auto end_hrtf = hrtf_for(element, end, frame, scratch_.hrtf_end);
+            auto end_hrtf = hrtf_for(element, end, frame, scratch_.hrtf_end, end_direction);
             if (!end_hrtf) {
                 return tl::unexpected{end_hrtf.error()};
             }

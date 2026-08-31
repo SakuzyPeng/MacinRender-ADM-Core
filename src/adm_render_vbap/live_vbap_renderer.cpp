@@ -57,7 +57,7 @@ struct RuntimeElement {
 [[nodiscard]] ObjectState default_state(const ElementDescriptor& descriptor) {
     ObjectState state;
     state.valid_fields = k_known_state_fields & ~state_position;
-    if (descriptor.role == ElementRole::object || descriptor.has_position) {
+    if (descriptor.role == ElementRole::object) {
         state.valid_fields |= state_position;
     }
     if (descriptor.has_position) {
