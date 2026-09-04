@@ -78,7 +78,6 @@ jobs:
           -DMR_ADM_FLAC_PROVIDER=VENDORED
           -DMR_ADM_OPUS_PROVIDER=VENDORED
           -DMR_ADM_ENABLE_IAMF=OFF
-          -DMR_ADM_BUILD_CAPI_BUNDLE=ON
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -87,6 +86,14 @@ jobs:
 
       - name: Test
         run: ctest --preset debug
+
+      # Keep the normal test build unchanged, then reconfigure the same tree so
+      # the bundle's complete static dependency closure is rebuilt as PIC.
+      - name: Configure C API bundle
+        run: cmake --preset debug -DMR_ADM_BUILD_CAPI_BUNDLE=ON
+
+      - name: Build C API bundle
+        run: cmake --build --preset debug --target mradm_capi_bundle
 
       - name: ccache stats
         if: always()
@@ -236,7 +243,6 @@ jobs:
             -DMR_ADM_FLAC_PROVIDER=VENDORED ^
             -DMR_ADM_OPUS_PROVIDER=VENDORED ^
             -DMR_ADM_ENABLE_IAMF=OFF ^
-            -DMR_ADM_BUILD_CAPI_BUNDLE=ON ^
             -DMR_ADM_ENABLE_SOFA=ON ^
             -DSAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE ^
             -DOPENBLAS_LIBRARY="%OPENBLAS_LIBRARY%" ^
@@ -257,6 +263,18 @@ jobs:
         run: |
           call "%VCVARS64%"
           ctest --test-dir build/windows --output-on-failure -j %NUMBER_OF_PROCESSORS%
+
+      - name: Configure C API bundle
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          cmake -S . -B build/windows -DMR_ADM_BUILD_CAPI_BUNDLE=ON
+
+      - name: Build C API bundle
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          cmake --build build/windows --target mradm_capi_bundle
 
       - name: sccache stats
         if: always()
