@@ -70,11 +70,12 @@ jobs:
           -DMR_ADM_FLAC_PROVIDER=VENDORED
           -DMR_ADM_OPUS_PROVIDER=VENDORED
           -DMR_ADM_ENABLE_IAMF=OFF
+          -DMR_ADM_BUILD_CAPI_BUNDLE=ON
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build --preset release --target mradm_exe
+        run: cmake --build --preset release --target mradm_exe mradm_capi_bundle
 
       - name: License full-coverage check
         run: scripts/quality/check-licenses.sh --build-dir "$FC_CACHE_DIR" --require-full
@@ -159,11 +160,12 @@ jobs:
           -DMR_ADM_FLAC_PROVIDER=VENDORED
           -DMR_ADM_OPUS_PROVIDER=VENDORED
           -DMR_ADM_ENABLE_IAMF=OFF
+          -DMR_ADM_BUILD_CAPI_BUNDLE=ON
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build --preset release --target mradm_exe
+        run: cmake --build --preset release --target mradm_exe mradm_capi_bundle
 
       - name: License full-coverage check
         run: scripts/quality/check-licenses.sh --build-dir "$FC_CACHE_DIR" --require-full
@@ -302,6 +304,7 @@ jobs:
             -DMR_ADM_FLAC_PROVIDER=VENDORED ^
             -DMR_ADM_OPUS_PROVIDER=VENDORED ^
             -DMR_ADM_ENABLE_IAMF=OFF ^
+            -DMR_ADM_BUILD_CAPI_BUNDLE=ON ^
             -DSAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE ^
             -DOPENBLAS_LIBRARY="%OPENBLAS_LIBRARY%" ^
             -DLAPACKE_LIBRARY="%LAPACKE_LIBRARY%" ^
@@ -312,7 +315,7 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/windows --target mradm_exe mr_adm_flac_io_smoke_tests --config RelWithDebInfo
+          cmake --build build/windows --target mradm_exe mradm_capi_bundle mr_adm_flac_io_smoke_tests --config RelWithDebInfo
 
       - name: Smoke
         shell: pwsh

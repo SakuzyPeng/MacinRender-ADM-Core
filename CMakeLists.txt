@@ -19,6 +19,15 @@ option(MR_ADM_CORE_ENABLE_CLANG_TIDY "Run clang-tidy as part of compilation when
 option(MR_ADM_CORE_ENABLE_CPPCHECK "Run cppcheck as part of compilation when available" OFF)
 option(MR_ADM_ENABLE_SOFA "Enable user SOFA HRIR loading for the binaural renderer" ON)
 option(MR_ADM_ENABLE_IAMF "Enable IAMF encoding via the official AOM iamf-tools prebuilt bridge" OFF)
+option(MR_ADM_BUILD_CAPI_BUNDLE "Build self-contained libmradm_capi shared lib for GUI/P-Invoke" OFF)
+
+# The C API bundle links the complete static dependency closure into one shared
+# library. On ELF platforms every object in those archives must be built as PIC,
+# so establish the default before FetchContent and any project targets are created.
+if(MR_ADM_BUILD_CAPI_BUNDLE)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
 set(MR_ADM_IAMF_AOM_ROOT "" CACHE PATH "Root directory of the prebuilt AOM iamf-tools bridge SDK")
 set(MR_ADM_FLAC_PROVIDER "AUTO" CACHE STRING "libFLAC provider: AUTO, SYSTEM, or VENDORED")
 set_property(CACHE MR_ADM_FLAC_PROVIDER PROPERTY STRINGS AUTO SYSTEM VENDORED)
@@ -617,8 +626,6 @@ mr_adm_core_apply_static_analysis(mr_adm_c_api)
 # 把 c_api 与其全部静态依赖(engine → renderers → 第三方)whole-archive 进同一动态库,
 # 供托管侧(Avalonia GUI)经 [LibraryImport("mradm_capi")] 直接加载。
 # core 源码完全不动:这里只是多一个可选的链接目标。
-option(MR_ADM_BUILD_CAPI_BUNDLE "Build self-contained libmradm_capi shared lib for GUI/P-Invoke" OFF)
-
 if(MR_ADM_BUILD_CAPI_BUNDLE)
     # 直接把 C ABI 源文件编进 SHARED 目标,让 Windows 导出扫描能看到 adm_* 入口。
     add_library(mradm_capi_bundle SHARED src/adm_c_api/adm_c_api.cpp)
