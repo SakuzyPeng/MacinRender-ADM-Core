@@ -1849,6 +1849,35 @@ float maximum_difference(const std::vector<float>& lhs, const std::vector<float>
     return result;
 }
 
+bool check_output_equivalence(const std::vector<float>& lhs,
+                              const std::vector<float>& rhs,
+                              float tolerance,
+                              std::string_view message) {
+    if (lhs.size() != rhs.size()) {
+        std::cerr << "FAIL: " << message << " (output sizes " << lhs.size() << " and " << rhs.size() << ")\n";
+        return false;
+    }
+
+    float difference = 0.0F;
+    for (std::size_t index = 0U; index < lhs.size(); ++index) {
+        if (!std::isfinite(lhs[index]) || !std::isfinite(rhs[index])) {
+            std::cerr << "FAIL: " << message << " (non-finite output at sample " << index << ")\n";
+            return false;
+        }
+        difference = std::max(difference, std::fabs(lhs[index] - rhs[index]));
+    }
+    if (difference > tolerance) {
+        std::cerr << "FAIL: " << message << " (maximum absolute difference " << difference << ", tolerance "
+                  << tolerance << ")\n";
+        return false;
+    }
+    return true;
+}
+
+// SAF prepares floating-point HRTF state independently for each stream, so equivalent geometry can differ by a few
+// float ULPs. Keep this one order of magnitude below the 1e-6 checks that require spatially distinct output.
+constexpr float k_binaural_equivalence_tolerance = 1.0e-7F;
+
 struct BinauralObjectCase {
     float azimuth{0.0F};
     float elevation{0.0F};
@@ -1936,10 +1965,14 @@ bool test_binaural_channel_lock_geometry(adm_context_t* context) {
     ok &= render_binaural_object_case(context, 61U, thresholded, thresholded_output);
     ok &= render_binaural_object_case(context, 62U, unbounded, unbounded_output);
     ok &= render_binaural_object_case(context, 63U, locked_reference, locked_reference_output);
-    ok &= check(elevated_output == thresholded_output,
-                "binaural channelLock maxDistance uses full 3D direction distance");
-    ok &= check(unbounded_output == locked_reference_output,
-                "binaural channelLock snaps both azimuth and elevation to the stereo reference");
+    ok &= check_output_equivalence(elevated_output,
+                                   thresholded_output,
+                                   k_binaural_equivalence_tolerance,
+                                   "binaural channelLock maxDistance uses full 3D direction distance");
+    ok &= check_output_equivalence(unbounded_output,
+                                   locked_reference_output,
+                                   k_binaural_equivalence_tolerance,
+                                   "binaural channelLock snaps both azimuth and elevation to the stereo reference");
     ok &= check(maximum_difference(elevated_output, locked_reference_output) > 1.0e-6F,
                 "channelLock geometry references have distinct HRTFs");
     return ok;
@@ -1960,8 +1993,10 @@ bool test_binaural_pose_rotates_spread_cloud(adm_context_t* context) {
     bool ok = render_binaural_object_case(context, 64U, horizontal, horizontal_output);
     ok &= render_binaural_object_case(context, 65U, rolled_horizontal, rolled_output);
     ok &= render_binaural_object_case(context, 66U, vertical, vertical_output);
-    ok &= check(maximum_difference(rolled_output, vertical_output) < 1.0e-5F,
-                "listener roll rotates every world-space extent direction into head space");
+    ok &= check_output_equivalence(rolled_output,
+                                   vertical_output,
+                                   1.0e-5F,
+                                   "listener roll rotates every world-space extent direction into head space");
     ok &= check(maximum_difference(horizontal_output, vertical_output) > 1.0e-6F,
                 "horizontal and vertical spread references remain distinguishable");
     return ok;
@@ -1978,7 +2013,10 @@ bool test_listener_orientation(adm_context_t* context) {
     std::vector<float> locked_pose;
     bool ok = render_binaural_pose(context, 42U, false, 0.0F, 0.0F, 0.0F, false, baseline);
     ok &= render_binaural_pose(context, 43U, true, 0.0F, 0.0F, 0.0F, false, identity);
-    ok &= check(baseline == identity, "explicit zero listener pose remains bit-exact");
+    ok &= check_output_equivalence(baseline,
+                                   identity,
+                                   k_binaural_equivalence_tolerance,
+                                   "explicit zero listener pose remains numerically equivalent");
     ok &= render_binaural_pose(context, 44U, true, 90.0F, 0.0F, 0.0F, false, yaw_left);
     ok &= render_binaural_pose(context, 45U, true, -90.0F, 0.0F, 0.0F, false, yaw_right);
     ok &= check(maximum_difference(yaw_left, yaw_right) > 1.0e-6F,
@@ -1988,7 +2026,10 @@ bool test_listener_orientation(adm_context_t* context) {
                 "pitch and roll participate in world-to-head rotation");
     ok &= render_binaural_pose(context, 47U, false, 0.0F, 0.0F, 0.0F, true, locked_baseline);
     ok &= render_binaural_pose(context, 48U, true, 80.0F, -30.0F, 25.0F, true, locked_pose);
-    ok &= check(locked_baseline == locked_pose, "effective head_locked elements ignore listener rotation");
+    ok &= check_output_equivalence(locked_baseline,
+                                   locked_pose,
+                                   k_binaural_equivalence_tolerance,
+                                   "effective head_locked elements ignore listener rotation");
     ok &= check(adm_scene_stream_set_listener_orientation(nullptr, 0.0F, 0.0F, 0.0F) == ADM_ERROR_INVALID_ARGUMENT &&
                     adm_scene_stream_set_listener_orientation(
                         nullptr, std::numeric_limits<float>::quiet_NaN(), 0.0F, 0.0F) == ADM_ERROR_INVALID_ARGUMENT,
