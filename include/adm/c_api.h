@@ -175,12 +175,16 @@
  *   adm_scene_stream_pull 拉取最终 interleaved float32 PCM。同版本直接包含 renderer/SOFA
  *   热切换、听者朝向/头追与 mradm.semantic-policy.v1 热替换；接口不携带
  *   codec/source provenance。
+ *
+ * v1.36 新增：adm_scene_output_t 绑定 Scene stream 并独占 PCM 消费，提供系统空间音频／
+ *   双耳设备输出、播放/暂停/音量、设备与 Scene 协同 epoch reset，以及独立的已消费／
+ *   已呈现媒体帧。原始 stream pull/reset 在设备绑定期间拒绝第二条消费路径。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 35
+#define ADM_API_VERSION_MINOR 36
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -1516,6 +1520,82 @@ uint32_t adm_scene_stream_log_count(adm_scene_stream_t* stream) ADM_API_NOEXCEPT
 int adm_scene_stream_log_entry(adm_scene_stream_t* stream,
                                uint32_t index,
                                adm_scene_diagnostic_t* out) ADM_API_NOEXCEPT;
+
+/* ── Scene device playback (v1.36) ─────────────────────────────────────────
+ * A device output retains the stream engine and exclusively consumes its PCM.
+ * While attached, direct stream_pull and stream_begin_epoch are rejected; use
+ * output_begin_epoch to park playback and reset both the device and Scene queue.
+ * The producer still configures/submits/signals through the stream handle.
+ * Output controls and status calls are serialized internally. create/destroy
+ * must not overlap other calls on that output. Destroying the stream handle
+ * first is safe, but prevents further producer calls. No callbacks enter Rust.
+ */
+typedef struct adm_scene_output_t adm_scene_output_t;
+typedef enum adm_scene_output_kind_t {
+    ADM_SCENE_OUTPUT_SYSTEM_SPATIAL = 0,
+    ADM_SCENE_OUTPUT_STEREO = 1,
+    ADM_SCENE_OUTPUT_NULL = 2 /* Timer-driven, no hardware; intended for tests. */
+} adm_scene_output_kind_t;
+typedef enum adm_scene_output_state_t {
+    ADM_SCENE_OUTPUT_PAUSED = 0,
+    ADM_SCENE_OUTPUT_PLAYING = 1,
+    ADM_SCENE_OUTPUT_BUFFERING = 2,
+    ADM_SCENE_OUTPUT_DRAINING = 3,
+    ADM_SCENE_OUTPUT_ENDED = 4,
+    ADM_SCENE_OUTPUT_FAILED = 5
+} adm_scene_output_state_t;
+typedef enum adm_scene_output_clock_t {
+    ADM_SCENE_OUTPUT_CLOCK_CALLBACK = 0, /* Previous callback consumed; not a DAC clock. */
+    ADM_SCENE_OUTPUT_CLOCK_MEDIA = 1     /* System media PTS clock, excluding padding/gaps. */
+} adm_scene_output_clock_t;
+typedef struct adm_scene_output_config_t {
+    uint32_t struct_size;
+    int32_t kind;
+    const char* output_layout; /* Canonical speaker layout for system-spatial. */
+    const char* device_id;     /* Stereo: monitor_output_devices_json token; NULL = default. */
+    int32_t speaker_geometry;
+    uint32_t reserved_v1_36;
+} adm_scene_output_config_t;
+typedef struct adm_scene_output_status_t {
+    uint32_t struct_size;
+    int32_t state;
+    uint64_t epoch_id;
+    uint64_t consumed_frames;
+    uint64_t presented_frames;
+    uint64_t queued_frames;
+    uint64_t underruns;
+    int32_t clock_kind;
+    int32_t recovering;
+    int32_t failed;
+    int32_t ended;
+} adm_scene_output_status_t;
+
+/* Creation starts the device paused. Strings are copied before return. Status
+ * frames are output-rate frames relative to the current epoch's target; only
+ * presented_frames drives a playback UI. ended means the device drained media. */
+adm_error_code_t adm_create_scene_output(adm_context_t* context,
+                                         const adm_scene_stream_t* stream,
+                                         const adm_scene_output_config_t* config,
+                                         adm_scene_output_t** out) ADM_API_NOEXCEPT;
+void adm_destroy_scene_output(adm_scene_output_t* output) ADM_API_NOEXCEPT;
+const char* adm_scene_output_last_error_message(const adm_scene_output_t* output) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_output_play(adm_scene_output_t* output) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_output_pause(adm_scene_output_t* output) ADM_API_NOEXCEPT;
+/* Ends paused. The producer configures the new generation and submits frames,
+ * then explicitly restores its play/pause intent. epoch must strictly increase. */
+adm_error_code_t
+adm_scene_output_begin_epoch(adm_scene_output_t* output, uint64_t epoch, int64_t target_sample) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_output_set_volume(adm_scene_output_t* output, float gain) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_output_get_status(adm_scene_output_t* output,
+                                             adm_scene_output_status_t* out) ADM_API_NOEXCEPT;
+
+/* v1.36: synchronous backend preparation with an owned per-call error string.
+ * Does not touch the stream's borrowed last-error storage, so a loader thread
+ * can run concurrently with the producer without serializing error borrowing.
+ * *out_error is NULL on success; release any returned string with adm_free_string. */
+adm_error_code_t adm_scene_stream_switch_backend_ex(const adm_scene_stream_t* stream,
+                                                    const adm_scene_renderer_config_t* config,
+                                                    char** out_error) ADM_API_NOEXCEPT;
 
 #ifdef __cplusplus
 } /* extern "C" */

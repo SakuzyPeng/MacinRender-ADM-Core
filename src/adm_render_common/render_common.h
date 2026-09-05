@@ -176,6 +176,10 @@ inline constexpr std::size_t k_22_2_lfe1_index = 3U;
 inline constexpr std::size_t k_22_2_lfe2_index = 9U;
 inline constexpr float k_lfe_split_power_gain = 0.70710678118654752440F;
 
+[[nodiscard]] constexpr float mix_lfe_pair(float first, float second, bool both_active) noexcept {
+    return (first + second) * (both_active ? k_lfe_split_power_gain : 1.0F);
+}
+
 // Shared, immutable 22.2 routing decision used by every speaker backend. The
 // resolver scans scene metadata before any output writer is opened, so an invalid
 // dual-LFE split request fails consistently in prepare().

@@ -95,6 +95,12 @@ WAVEFORMATEXTENSIBLE channel mask；无效 ADM 直接报错。也可显式选择
 
 ## C ABI 与 GUI 集成
 
+外部解码器可使用 C ABI v1.36 的实时 Scene + device output 接口：逐对象提交 normalized float32
+PCM 和按采样点定位的空间元数据，再把 `adm_scene_stream_t` 绑定到 `adm_scene_output_t`。
+设备输出支持 macOS ASBR、Windows 系统空间音频和普通双耳设备；独立报告已消费与已呈现帧，
+并提供播放、暂停、音量和协同 seek。实时 Scene 当前支持 SAF VBAP 与 SAF 双耳。
+详见 `include/adm/c_api.h` 和 C ABI 稳定性 ADR。
+
 `include/adm/c_api.h` 提供稳定 v1 C ABI。新 GUI 接入应优先使用 `adm_render_file_ex2` 和
 `adm_preview_render_window_v2` 的结构化进度回调：事件包含稳定阶段枚举、操作枚举、整体进度、
 阶段内进度以及渲染/后处理可用时的帧级 `current_frame / total_frames`。旧 `adm_progress_cb`
