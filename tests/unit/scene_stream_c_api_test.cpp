@@ -1058,6 +1058,65 @@ bool test_renderer_native_roles_and_events(adm_context_t* context) {
     return ok;
 }
 
+bool test_tracking_activation_during_startup(adm_context_t* context, bool resume_producer) {
+    StreamGuard stream;
+    auto config = stream_config();
+    config.output_ring_frames = 8192U;
+    config.startup_watermark_frames = 4096U;
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok =
+        check(adm_scene_stream_begin_epoch(stream.value, 1U, 0) == ADM_ERROR_OK, "begin tracking-startup epoch") &&
+        configure_object(stream.value, 1U, 1U);
+    std::vector<float> samples(2048U, 0.05F);
+    adm_scene_pcm_plane_t plane{};
+    adm_scene_initial_state_t initial{};
+    auto frame = object_frame(1U, 1U, 0, samples, plane, initial);
+    int32_t submitted = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submitted) == ADM_ERROR_OK &&
+                    submitted == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit half the ordinary startup watermark");
+    adm_scene_stream_status_t status{};
+    status.struct_size = sizeof(status);
+    const auto fill_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (std::chrono::steady_clock::now() < fill_deadline) {
+        ok &= check(adm_scene_stream_get_status(stream.value, &status) == ADM_ERROR_OK, "query partial startup buffer");
+        if (status.buffered_output_frames == 2048U) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    ok &= check(status.buffered_output_frames == 2048U && status.state == ADM_SCENE_STREAM_BUFFERING,
+                "untracked startup waits for 4096 frames after buffering 2048");
+    ok &= check(adm_scene_stream_set_listener_orientation(stream.value, 3.0F, 1.0F, 0.0F) == ADM_ERROR_OK,
+                "head tracking arrives after the partial prefill");
+    if (resume_producer) {
+        frame.media_sample_start = 2048;
+        ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 100U, &submitted) == ADM_ERROR_OK &&
+                        submitted == ADM_SCENE_SUBMIT_ACCEPTED,
+                    "queue more audio after the lookahead shrinks");
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
+        while (std::chrono::steady_clock::now() < deadline) {
+            ok &= check(adm_scene_stream_get_status(stream.value, &status) == ADM_ERROR_OK,
+                        "query tracking startup readiness");
+            if (status.state == ADM_SCENE_STREAM_RUNNING) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        ok &= check(status.state == ADM_SCENE_STREAM_RUNNING,
+                    "producer must publish readiness before waiting at the tracking lookahead cap");
+    }
+    std::array<float, 128U> output{};
+    adm_scene_pull_result_t pulled{};
+    pulled.struct_size = sizeof(pulled);
+    ok &= check(adm_scene_stream_pull(stream.value, output.data(), 64U, &pulled) == ADM_ERROR_OK &&
+                    pulled.media_frames == 64U,
+                "consumer starts at the effective tracking watermark without waiting for a head-tracking timeout");
+    return ok;
+}
+
 bool test_binaural_backend(adm_context_t* context) {
     StreamGuard stream;
     auto config = stream_config();
@@ -2133,6 +2192,10 @@ int main() {
         ok &= test_worker_failure_pull(context);
         ok &= test_renderer_native_roles_and_events(context);
         ok &= test_binaural_backend(context);
+        for (int replay = 0; replay < 8; ++replay) {
+            ok &= test_tracking_activation_during_startup(context, false);
+            ok &= test_tracking_activation_during_startup(context, true);
+        }
         ok &= test_binaural_dynamic_position(context);
         ok &= test_sofa_cache_invalidation(context);
         ok &= test_backend_hot_switch(context);
