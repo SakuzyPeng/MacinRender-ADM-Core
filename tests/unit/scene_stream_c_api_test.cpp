@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <numeric>
@@ -1129,6 +1131,40 @@ bool test_binaural_dynamic_position(adm_context_t* context) {
         ok &= check(maximum_difference > 1.0e-6F,
                     "binaural rendering follows current object state instead of the fixed descriptor position");
     }
+    std::vector<float> repeated_left;
+    ok &= render_binaural_position(context, 36U, -1.0F, repeated_left);
+    ok &= check(repeated_left == left_output,
+                "cached HRTF data must not share convolution tails or object state between renderers");
+    return ok;
+}
+
+bool test_sofa_cache_invalidation(adm_context_t* context) {
+    const char* source = std::getenv("MR_ADM_TEST_SOFA_PATH");
+    if (source == nullptr || source[0] == '\0') {
+        return true;
+    }
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto copy =
+        std::filesystem::temp_directory_path() / ("mradm_scene_cached_" + std::to_string(nonce) + ".sofa");
+    std::filesystem::copy_file(source, copy);
+    const auto path = copy.string();
+    auto config = stream_config();
+    config.rendering = binaural_renderer_config(path.c_str());
+    StreamGuard original;
+    bool ok = create_stream(context, config, original);
+    if (ok) {
+        StreamGuard cached;
+        ok &= create_stream(context, config, cached);
+        std::ofstream changed(copy, std::ios::binary | std::ios::trunc);
+        changed << "invalid replacement";
+        changed.close();
+        StreamGuard replaced;
+        ok &= check(adm_create_scene_stream(context, &config, &replaced.value) != ADM_ERROR_OK,
+                    "a changed SOFA file must not reuse stale cached HRTFs");
+        ok &= check(adm_scene_stream_begin_epoch(original.value, 37U, 0) == ADM_ERROR_OK,
+                    "invalidating a cached file does not damage its existing renderer");
+    }
+    std::filesystem::remove(copy);
     return ok;
 }
 
@@ -2098,6 +2134,7 @@ int main() {
         ok &= test_renderer_native_roles_and_events(context);
         ok &= test_binaural_backend(context);
         ok &= test_binaural_dynamic_position(context);
+        ok &= test_sofa_cache_invalidation(context);
         ok &= test_backend_hot_switch(context);
         ok &= test_semantic_policy_hot_replace(context);
         ok &= test_semantic_identity_grouping_and_roles(context);

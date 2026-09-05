@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <numbers>
 #include <numeric>
 #include <optional>
@@ -291,6 +292,120 @@ channel_locked_direction(float azimuth, float elevation, const ObjectState& obje
     return dataset;
 }
 
+// Cache only immutable interpolation data. FFT workspaces and convolution tails
+// remain private to each renderer, so preparing another output cannot alter it.
+class HrtfStateCache {
+  public:
+    class Key {
+      public:
+        bool operator==(const Key&) const = default;
+
+      private:
+        friend class HrtfStateCache;
+        std::filesystem::path path;
+        std::filesystem::file_time_type modified;
+        std::uintmax_t size{0U};
+        std::uint32_t sample_rate{0U};
+    };
+
+    [[nodiscard]] static std::optional<Key> make_key(const RendererConfig& config) {
+        Key result;
+        result.sample_rate = config.sample_rate;
+        if (!config.sofa_path.empty()) {
+            std::error_code error;
+            result.path = std::filesystem::canonical(config.sofa_path, error);
+            if (error) {
+                return std::nullopt;
+            }
+            result.modified = std::filesystem::last_write_time(result.path, error);
+            if (error) {
+                return std::nullopt;
+            }
+            result.size = std::filesystem::file_size(result.path, error);
+            if (error) {
+                return std::nullopt;
+            }
+        }
+        return result;
+    }
+
+    [[nodiscard]] std::shared_ptr<const BinauralState> find(const Key& key) {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        const auto found = std::ranges::find(entries_, key, &Entry::key);
+        if (found == entries_.end()) {
+            return {};
+        }
+        auto entry = std::move(*found);
+        entries_.erase(found);
+        auto state = entry.state;
+        entries_.push_back(std::move(entry));
+        return state;
+    }
+
+    void insert(Key key, std::shared_ptr<const BinauralState> state) {
+        const auto bytes =
+            sizeof(BinauralState) + state->dataset_name.capacity() +
+            (state->hrtf_fd.capacity() * sizeof(float_complex)) +
+            ((state->vbap_gains.capacity() + state->hrtf_td.capacity() + state->grid_dirs_deg.capacity()) *
+             sizeof(float)) +
+            (state->vbap_dirs.capacity() * sizeof(int));
+        constexpr std::size_t k_byte_budget = std::size_t{64U} * 1024U * 1024U;
+        if (bytes > k_byte_budget) {
+            return;
+        }
+        const std::lock_guard<std::mutex> lock(mutex_);
+        if (std::ranges::find(entries_, key, &Entry::key) != entries_.end()) {
+            return;
+        }
+        while (!entries_.empty() && (entries_.size() >= 4U || bytes_ + bytes > k_byte_budget)) {
+            bytes_ -= entries_.front().bytes;
+            entries_.erase(entries_.begin());
+        }
+        entries_.push_back({std::move(key), std::move(state), bytes});
+        bytes_ += bytes;
+    }
+
+  private:
+    struct Entry {
+        Key key;
+        std::shared_ptr<const BinauralState> state;
+        std::size_t bytes{0U};
+    };
+    std::mutex mutex_;
+    std::vector<Entry> entries_;
+    std::size_t bytes_{0U};
+};
+
+[[nodiscard]] Result<std::shared_ptr<const BinauralState>> prepare_hrtf_state(const RendererConfig& config) {
+    static HrtfStateCache cache;
+    const auto key = HrtfStateCache::make_key(config);
+    if (key) {
+        if (auto cached = cache.find(*key)) {
+            return cached;
+        }
+    }
+    // File IO, resampling and table construction never hold the cache mutex.
+    Result<HrtfDataset> dataset = config.sofa_path.empty()
+                                      ? Result<HrtfDataset>{binaural_internal::built_in_kemar_dataset()}
+                                      : binaural_internal::load_sofa_dataset(config.sofa_path, 0U);
+    if (!dataset) {
+        return tl::unexpected{dataset.error()};
+    }
+    auto resampled = resample_dataset(std::move(*dataset), config.sample_rate);
+    if (!resampled) {
+        return tl::unexpected{resampled.error()};
+    }
+    std::shared_ptr<const BinauralState> state =
+        binaural_internal::build_binaural_state(std::move(*resampled), k_convolution_block);
+    if (!state) {
+        return make_error(ErrorCode::render_failed, "failed to build live binaural HRTF interpolation state");
+    }
+    if (key && key == HrtfStateCache::make_key(config)) {
+        cache.insert(*key, state);
+    }
+    return state;
+}
+
 void decorrelate(DiffuseState& state, const float* input, std::size_t frames, float* output) noexcept {
     constexpr std::array<std::size_t, 8U> k_offsets{3U, 7U, 11U, 17U, 19U, 23U, 29U, 31U};
     constexpr std::array<float, 8U> k_polarity{1.0F, -1.0F, 1.0F, 1.0F, -1.0F, 1.0F, -1.0F, -1.0F};
@@ -361,7 +476,7 @@ void convolve(void* fft,
 
 class LiveBinauralRenderer final : public ILiveSceneRenderer {
   public:
-    LiveBinauralRenderer(RendererConfig config, std::unique_ptr<BinauralState> state, DiagnosticSink diagnostics)
+    LiveBinauralRenderer(RendererConfig config, std::shared_ptr<const BinauralState> state, DiagnosticSink diagnostics)
         : config_(std::move(config)), state_(std::move(state)), diagnostics_(std::move(diagnostics)) {
         saf_rfft_create(&fft_, state_->fft_size);
         scratch_.resize(*state_);
@@ -841,7 +956,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
     }
 
     RendererConfig config_;
-    std::unique_ptr<BinauralState> state_;
+    std::shared_ptr<const BinauralState> state_;
     DiagnosticSink diagnostics_;
     void* fft_{nullptr};
     ConvolutionScratch scratch_;
@@ -856,21 +971,11 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
 
 Result<std::unique_ptr<ILiveSceneRenderer>> create_live_binaural_renderer(const RendererConfig& config,
                                                                           DiagnosticSink diagnostics) {
-    Result<HrtfDataset> dataset = config.sofa_path.empty()
-                                      ? Result<HrtfDataset>{binaural_internal::built_in_kemar_dataset()}
-                                      : binaural_internal::load_sofa_dataset(config.sofa_path, 0U);
-    if (!dataset) {
-        return tl::unexpected{dataset.error()};
+    auto state = prepare_hrtf_state(config);
+    if (!state) {
+        return tl::unexpected{state.error()};
     }
-    auto resampled = resample_dataset(std::move(*dataset), config.sample_rate);
-    if (!resampled) {
-        return tl::unexpected{resampled.error()};
-    }
-    auto state = binaural_internal::build_binaural_state(std::move(*resampled), k_convolution_block);
-    if (state == nullptr) {
-        return make_error(ErrorCode::render_failed, "failed to build live binaural HRTF interpolation state");
-    }
-    auto renderer = std::make_unique<LiveBinauralRenderer>(config, std::move(state), std::move(diagnostics));
+    auto renderer = std::make_unique<LiveBinauralRenderer>(config, std::move(*state), std::move(diagnostics));
     if (renderer->sample_rate() == 0U) {
         return make_error(ErrorCode::render_failed, "live binaural renderer has an invalid sample rate");
     }
