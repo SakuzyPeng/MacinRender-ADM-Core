@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <future>
+#include <numbers>
 #include <span>
 #include <string>
 #include <thread>
@@ -38,6 +39,8 @@
 
 #include "adm/errors.h"
 
+#include "../adm_render_common/render_common.h"
+#include "../adm_render_common/speaker_layouts.h"
 #include "audio_output_device.h"
 #include "windows_layouts.h"
 
@@ -46,7 +49,6 @@ namespace {
 
 using Microsoft::WRL::ComPtr;
 
-constexpr float k_lfe_pair_gain = 0.70710678F;
 constexpr float k_lfe_active_epsilon = 1.0e-12F;
 
 // Build an error (carrying the failing HRESULT in hex) ready to return into a Result<>. Mirrors
@@ -60,7 +62,8 @@ hr_error(ErrorCode code, std::string message, const std::string& where, HRESULT 
 
 class SpatialAudioClientDevice final : public IAudioOutputDevice {
   public:
-    explicit SpatialAudioClientDevice(std::string layout_id) : layout_id_(std::move(layout_id)) {}
+    SpatialAudioClientDevice(std::string layout_id, SpeakerGeometry geometry)
+        : layout_id_(std::move(layout_id)), geometry_(geometry) {}
     ~SpatialAudioClientDevice() override { stop(); }
 
     [[nodiscard]] Result<void> start(uint32_t channels, uint32_t sample_rate, PullFn pull) override {
@@ -124,6 +127,7 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
 
     [[nodiscard]] uint32_t actual_sample_rate() const override { return sample_rate_; }
     [[nodiscard]] bool pull_is_realtime_playback() const override { return true; }
+    [[nodiscard]] AudioDeviceProgress progress() const override { return {0, false, false, recovering_.load()}; }
 
   private:
     enum class PumpResult { Stopped, Invalidated };
@@ -148,6 +152,7 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
         ready.set_value({});
 
         while (pump() == PumpResult::Invalidated && !stop_.load(std::memory_order_acquire)) {
+            recovering_.store(true);
             teardown();
             // Let the spatializer switch settle before rebuilding; also bounds the rate if a freshly
             // rebuilt stream gets invalidated again while the switch is still in progress.
@@ -158,6 +163,7 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
                 teardown();
                 Sleep(150);
             }
+            recovering_.store(false);
         }
 
         teardown();
@@ -241,7 +247,19 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
         object_routes_.assign(object_count, {});
         object_sources_.assign(object_count, {});
         for (std::size_t ch = 0; ch < layout_->routes.size(); ++ch) {
-            const windows_layouts::ChannelRoute& route = layout_->routes[ch];
+            auto route = layout_->routes[ch];
+            if (route.is_dynamic) {
+                const auto* speakers = render_layouts::find_speaker_layout(layout_id_, geometry_);
+                if (speakers == nullptr || ch >= speakers->speakers.size()) {
+                    return make_error(ErrorCode::invalid_argument, "Missing system-spatial speaker geometry");
+                }
+                const auto& speaker = speakers->speakers[ch];
+                const float azimuth = speaker.azimuth * std::numbers::pi_v<float> / 180.0F;
+                const float elevation = speaker.elevation * std::numbers::pi_v<float> / 180.0F;
+                route.x = -std::cos(elevation) * std::sin(azimuth);
+                route.y = std::sin(elevation);
+                route.z = -std::cos(elevation) * std::cos(azimuth);
+            }
             const std::size_t slot = windows_layouts::object_slot(route, ch);
             if (object_routes_[slot].type == AudioObjectType_None) {
                 object_routes_[slot] = route;
@@ -365,7 +383,7 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
                         const std::size_t frame_offset = static_cast<std::size_t>(f) * channels_;
                         const float a = scratch_[frame_offset + sources[0]];
                         const float b = scratch_[frame_offset + sources[1]];
-                        dst[f] = attenuate_sum ? (a + b) * k_lfe_pair_gain : (a + b);
+                        dst[f] = render_common::mix_lfe_pair(a, b, attenuate_sum);
                     }
                 } else if (sources.size() == 1U) {
                     const std::size_t ch = sources.front();
@@ -405,6 +423,8 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
     }
 
     std::string layout_id_;
+    SpeakerGeometry geometry_;
+    std::atomic<bool> recovering_{false};
     const windows_layouts::WindowsSpeakerLayout* layout_{nullptr};
     uint32_t channels_{0};
     uint32_t sample_rate_{0};
@@ -424,8 +444,8 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
 
 } // namespace
 
-std::unique_ptr<IAudioOutputDevice> make_spatialaudioclient_device(std::string layout_id) {
-    return std::make_unique<SpatialAudioClientDevice>(std::move(layout_id));
+std::unique_ptr<IAudioOutputDevice> make_spatialaudioclient_device(std::string layout_id, SpeakerGeometry geometry) {
+    return std::make_unique<SpatialAudioClientDevice>(std::move(layout_id), geometry);
 }
 
 std::vector<SystemSpatialLayoutInfo> system_spatial_layouts() {

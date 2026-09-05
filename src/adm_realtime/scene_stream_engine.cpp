@@ -1691,6 +1691,7 @@ struct SceneStreamEngine::Impl {
     std::atomic<std::uint64_t> underruns{0U};
     std::atomic<std::uint64_t> applied_policy_revision{0U};
     std::atomic<bool> output_ready{false};
+    std::atomic<bool> output_attached{false};
     std::atomic<bool> production_done{false};
     std::atomic<bool> failed{false};
 
@@ -2183,6 +2184,19 @@ Result<void> SceneStreamEngine::signal_end(std::uint64_t epoch_id, std::int64_t 
     impl_->state.store(SceneStreamState::draining, std::memory_order_release);
     impl_->queue_cv.notify_one();
     return {};
+}
+
+bool SceneStreamEngine::attach_output() noexcept {
+    bool expected = false;
+    return impl_->output_attached.compare_exchange_strong(expected, true);
+}
+
+void SceneStreamEngine::detach_output() noexcept {
+    impl_->output_attached.store(false);
+}
+
+bool SceneStreamEngine::output_attached() const noexcept {
+    return impl_->output_attached.load();
 }
 
 ScenePullResult SceneStreamEngine::pull(float* output, std::uint32_t frames) noexcept {

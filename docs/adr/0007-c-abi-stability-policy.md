@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.35）
-> 日期：2026-05-17（增量记录持续更新至 2026-08-31 的 v1.35）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.36）
+> 日期：2026-05-17（增量记录持续更新至 2026-09-05 的 v1.36）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -493,6 +493,27 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - **兼容性**：`42302dc`、`8ff675e` 中的早期 Scene 形状从未发布，因此直接收口为上述 v1.35 表面，
   不增加 v1.36 兼容层或 `_ex` 入口。相对已发布 v1.34 仍只新增 enum、POD、opaque handle 与 symbol；
   没有改动 v1.34 或更早的布局、signature、enum 数值和 callback，`SOVERSION` 继续为 1。
+
+### v1.36.0（additive，`SOVERSION` 仍为 1）
+
+- 新增 `adm_scene_output_t`，将现有 Scene stream 接到系统空间音频、普通双耳设备或供测试使用的
+  timed null device。输出句柄持有 engine 的共享所有权，销毁 stream 句柄后设备仍可安全释放。
+- 每条 Scene stream 最多绑定一个设备消费者。绑定期间 `adm_scene_stream_pull` 与原始
+  `adm_scene_stream_begin_epoch` 返回 invalid argument；通过 `adm_scene_output_begin_epoch`
+  同步暂停设备、清空未播缓冲、重置 Scene，再由 producer 配置 generation 和补充帧。设备创建／
+  绑定不得与原先的外部 pull 并发；原有未绑定设备的 v1.35 调用行为不变。
+- 配置与状态采用 `struct_size` POD。公开播放、暂停、音量与状态查询；设备控制序列化，PCM 消费
+  始终在 C++ 内，不回调调用方语言。创建和销毁不得与该句柄的其他调用重叠。
+- 状态显式区分 `consumed_frames`、`presented_frames` 和 `queued_frames`，均为输出采样率下
+  相对 epoch target 的媒体帧。ASBR 使用 PTS→媒体映射，零填充与传输空隙不推进媒体位置；
+  miniaudio／Windows 使用上一 callback 的消费进度，`clock_kind` 明确说明非 DAC 精度。
+- 新增 `adm_scene_stream_switch_backend_ex`，返回调用方持有的错误字符串，不操作共享借用错误缓存；
+  下游可在独立加载线程准备 SOFA，同时继续提交音频和查询设备状态。
+- ASBR 以有界定时器补缓存，设备欠载仅统计实际缓冲停顿，不把补缓存时的空读计为播放欠载。
+- `ended` 表示设备已呈现最后有效媒体帧，而不是 Scene worker 已结束。ASBR 支持不足 1024 帧
+  的尾部和不足预填充水位的短片；补齐传输块和必要预填充静音不增加媒体长度。
+- Windows system-spatial 的动态扩展扬声器按所选几何表生成位置；静态对象仍使用 OS 具名槽位。
+  独立的可选 AirPods polling shim 属于平台辅助库，CoreMotion 不链接进入渲染核心。
 
 ## opaque 指针与 callback 生命周期
 
