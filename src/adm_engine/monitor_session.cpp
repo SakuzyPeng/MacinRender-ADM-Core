@@ -237,7 +237,8 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
     // macOS there is no per-route reason to pin this — but keep it on the same selection path so a
     // device refresh can't silently drop to miniaudio and lose spatialization.
     if (options.monitor_system_spatial) {
-        return realtime::make_spatialaudioclient_device(normalize_output_layout(options.output_layout));
+        return realtime::make_spatialaudioclient_device(normalize_output_layout(options.output_layout),
+                                                        options.speaker_geometry);
     }
 #else
     (void) options;

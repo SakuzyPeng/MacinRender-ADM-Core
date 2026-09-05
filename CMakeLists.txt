@@ -20,6 +20,7 @@ option(MR_ADM_CORE_ENABLE_CPPCHECK "Run cppcheck as part of compilation when ava
 option(MR_ADM_ENABLE_SOFA "Enable user SOFA HRIR loading for the binaural renderer" ON)
 option(MR_ADM_ENABLE_IAMF "Enable IAMF encoding via the official AOM iamf-tools prebuilt bridge" OFF)
 option(MR_ADM_BUILD_CAPI_BUNDLE "Build self-contained libmradm_capi shared lib for GUI/P-Invoke" OFF)
+option(MR_ADM_BUILD_HEADMOTION "Build standalone AirPods motion shim (macOS)" OFF)
 
 # The C API bundle links the complete static dependency closure into one shared
 # library. On ELF platforms every object in those archives must be built as PIC,
@@ -435,7 +436,7 @@ if(WIN32)
     )
     target_link_libraries(mr_adm_windows
         PUBLIC MacinRender::ADMCore
-        PRIVATE Ole32
+        PRIVATE Ole32 MacinRender::ADMRenderCommon
     )
     # adm_windows consumes the realtime IAudioOutputDevice interface (third-party-free header) to
     # provide the ISpatialAudioClient monitor sink. Include-only, no link dependency — the device
@@ -529,6 +530,7 @@ target_sources(
     PRIVATE
         src/adm_engine/render_service.cpp
         src/adm_engine/monitor_session.cpp
+        src/adm_engine/scene_output_session.cpp
         src/adm_engine/scene_json.cpp
         src/adm_engine/capability_json.cpp
         src/adm_engine/input_layout_json.cpp
@@ -639,6 +641,13 @@ if(MR_ADM_BUILD_CAPI_BUNDLE)
 endif()
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
+if(APPLE AND MR_ADM_BUILD_HEADMOTION)
+    enable_language(OBJC)
+    add_library(mr_headtrack SHARED gui/native/mr_headtrack.m gui/native/mr_headmotion.m)
+    target_compile_options(mr_headtrack PRIVATE -fobjc-arc)
+    target_link_libraries(mr_headtrack PRIVATE "-framework CoreMotion" "-framework Foundation")
+    set_target_properties(mr_headtrack PROPERTIES INSTALL_NAME_DIR "@rpath")
+endif()
 
 if(MR_ADM_CORE_BUILD_CLI)
     add_executable(mradm_exe)
@@ -728,6 +737,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_scene_stream_c_api_tests)
     mr_adm_core_apply_static_analysis(mr_adm_scene_stream_c_api_tests)
     add_test(NAME mr_adm_scene_stream_c_api_tests COMMAND mr_adm_scene_stream_c_api_tests)
+
+    add_executable(mr_adm_scene_output_c_api_tests tests/unit/scene_output_c_api_test.cpp)
+    target_link_libraries(mr_adm_scene_output_c_api_tests PRIVATE MacinRender::ADMCAPI)
+    mr_adm_core_apply_warnings(mr_adm_scene_output_c_api_tests)
+    add_test(NAME mr_adm_scene_output_c_api_tests COMMAND mr_adm_scene_output_c_api_tests)
 
     # Release-only/manual acceptance tool. It is deliberately excluded from the default build and
     # CTest because its normal invocation runs for ten wall-clock minutes.

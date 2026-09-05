@@ -117,6 +117,9 @@ class SceneStreamEngine {
     [[nodiscard]] Result<void> set_semantic_policy_json(std::string_view json, std::uint64_t revision);
 
     [[nodiscard]] ScenePullResult pull(float* interleaved_output, std::uint32_t frames) noexcept;
+    [[nodiscard]] bool attach_output() noexcept;
+    void detach_output() noexcept;
+    [[nodiscard]] bool output_attached() const noexcept;
     [[nodiscard]] SceneStreamStatus status() const noexcept;
 
     [[nodiscard]] std::size_t diagnostic_count() const noexcept;

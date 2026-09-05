@@ -602,6 +602,9 @@ std::size_t MonitorEngine::pull(std::span<float> out, std::size_t frames) {
         produced_frames = got / channels_;
     }
 
+    if (!output_stage_ && ended_.load(std::memory_order_relaxed) && ring_.available_read() == 0U) {
+        device_.mark_end();
+    }
     apply_seek_transition(out, frames, produced_frames, active);
 
     // Per-channel peak / RMS over the block (silence included), for the UI meters.

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "adm/errors.h"
+#include "adm/options.h"
 
 // Abstract realtime audio output device. The monitor engine starts the device with a
 // pull callback; the device's audio thread repeatedly asks the callback to fill its
@@ -16,6 +17,14 @@
 // interface is deliberately third-party-free so miniaudio types never cross the module
 // boundary (ADR 0003). See REALTIME_MONITORING_SLICE1.md §4.
 namespace mradm::realtime {
+
+struct AudioDeviceProgress {
+    std::uint64_t presented_frames{0};
+    bool has_media_clock{false};
+    bool failed{false};
+    bool recovering{false};
+    std::uint64_t underruns{0};
+};
 
 class IAudioOutputDevice {
   public:
@@ -55,6 +64,13 @@ class IAudioOutputDevice {
     // otherwise run away during a long pause — it overrides these to setRate 0 / 1.
     virtual void pause() {}
     virtual void resume() {}
+
+    // Buffered devices count only valid media, excluding transport padding. Realtime
+    // sinks use the caller's callback-consumption clock instead (not a hardware clock).
+    [[nodiscard]] virtual AudioDeviceProgress progress() const { return {}; }
+    virtual void mark_end() {}
+    [[nodiscard]] virtual bool has_device_volume() const { return false; }
+    virtual void set_volume(float /*gain*/) {}
 
   protected:
     IAudioOutputDevice() = default;
@@ -102,7 +118,8 @@ struct AudioDeviceInfo {
 // adm_windows/spatialaudioclient_device.cpp — no Windows COM type crosses this boundary (ADR 0003).
 // The start() channel count must match the layout's channel count. Returns an unsupported error from
 // start() when no spatial audio format is enabled on the output endpoint.
-[[nodiscard]] std::unique_ptr<IAudioOutputDevice> make_spatialaudioclient_device(std::string layout_id);
+[[nodiscard]] std::unique_ptr<IAudioOutputDevice>
+make_spatialaudioclient_device(std::string layout_id, SpeakerGeometry geometry = SpeakerGeometry::standard);
 
 // Speaker layouts the Windows system-spatial sink accepts, as plain data (no COM types) so
 // adm_engine / the capabilities query can report them across the module boundary (ADR 0003). The
