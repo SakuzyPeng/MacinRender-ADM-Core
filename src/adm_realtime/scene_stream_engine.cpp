@@ -515,6 +515,22 @@ struct SceneStreamEngine::Impl {
         return (std::chrono::steady_clock::now() - last) < k_tracking_active_window;
     }
 
+    [[nodiscard]] std::size_t output_lookahead_frames() const noexcept {
+        const auto capacity = static_cast<std::size_t>(player_output.capacity_frames());
+        return head_tracking_recent() ? std::min<std::size_t>(capacity, k_tracking_lookahead_frames) : capacity;
+    }
+
+    [[nodiscard]] std::size_t effective_startup_watermark() const noexcept {
+        return std::min<std::size_t>(config.startup_watermark_frames, output_lookahead_frames());
+    }
+
+    void publish_output_readiness(std::size_t buffered, std::size_t lookahead) noexcept {
+        if (buffered >= std::min<std::size_t>(config.startup_watermark_frames, lookahead)) {
+            output_ready.store(true, std::memory_order_release);
+            state.store(SceneStreamState::running, std::memory_order_release);
+        }
+    }
+
     void report_backend_switch_failure(std::string detail) const {
         add_diagnostic({LogLevel::error,
                         live_scene::DiagnosticCode::backend_failure,
@@ -1409,11 +1425,11 @@ struct SceneStreamEngine::Impl {
             if (reset_or_quit(serial)) {
                 return {};
             }
-            const bool tracking = head_tracking_recent();
-            const auto lookahead =
-                tracking ? std::min<std::size_t>(player_output.capacity_frames(), k_tracking_lookahead_frames)
-                         : static_cast<std::size_t>(player_output.capacity_frames());
+            const auto lookahead = output_lookahead_frames();
             const auto buffered = player_output.buffered_frames();
+            // Head tracking can lower the cap after an untracked partial fill.
+            // Publish readiness even if no further push fits under that cap.
+            publish_output_readiness(buffered, lookahead);
             if (buffered >= lookahead) {
                 std::this_thread::sleep_for(k_ring_wait);
                 continue;
@@ -1425,13 +1441,7 @@ struct SceneStreamEngine::Impl {
             const auto pushed_frames = pushed / channels;
             offset += pushed_frames;
             output_frames_pushed += pushed_frames;
-            const auto effective_watermark = tracking
-                                                 ? std::min<std::size_t>(config.startup_watermark_frames, lookahead)
-                                                 : static_cast<std::size_t>(config.startup_watermark_frames);
-            if (player_output.buffered_frames() >= effective_watermark) {
-                output_ready.store(true, std::memory_order_release);
-                state.store(SceneStreamState::running, std::memory_order_release);
-            }
+            publish_output_readiness(player_output.buffered_frames(), lookahead);
             if (pushed_frames == 0U) {
                 std::this_thread::sleep_for(k_ring_wait);
             }
@@ -1691,6 +1701,7 @@ struct SceneStreamEngine::Impl {
     std::atomic<std::uint64_t> underruns{0U};
     std::atomic<std::uint64_t> applied_policy_revision{0U};
     std::atomic<bool> output_ready{false};
+    std::atomic<bool> output_attached{false};
     std::atomic<bool> production_done{false};
     std::atomic<bool> failed{false};
 
@@ -2185,6 +2196,19 @@ Result<void> SceneStreamEngine::signal_end(std::uint64_t epoch_id, std::int64_t 
     return {};
 }
 
+bool SceneStreamEngine::attach_output() noexcept {
+    bool expected = false;
+    return impl_->output_attached.compare_exchange_strong(expected, true);
+}
+
+void SceneStreamEngine::detach_output() noexcept {
+    impl_->output_attached.store(false);
+}
+
+bool SceneStreamEngine::output_attached() const noexcept {
+    return impl_->output_attached.load();
+}
+
 ScenePullResult SceneStreamEngine::pull(float* output, std::uint32_t frames) noexcept {
     ScenePullResult result;
     result.requested_frames = frames;
@@ -2208,7 +2232,7 @@ ScenePullResult SceneStreamEngine::pull(float* output, std::uint32_t frames) noe
     const auto available_frames = impl_->player_output.buffered_frames();
     const bool done = impl_->production_done.load(std::memory_order_acquire);
     bool ready = impl_->output_ready.load(std::memory_order_acquire);
-    if (!ready && (available_frames >= impl_->config.startup_watermark_frames || done)) {
+    if (!ready && (available_frames >= impl_->effective_startup_watermark() || done)) {
         impl_->output_ready.store(true, std::memory_order_release);
         ready = true;
     }

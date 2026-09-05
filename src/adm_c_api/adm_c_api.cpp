@@ -13,12 +13,14 @@
 #include <stop_token>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "adm/c_api.h"
 #include "adm/monitor.h"
 #include "adm/render.h"
 
+#include "../adm_engine/scene_output_session.h"
 #include "scene_stream_engine.h"
 
 namespace {
@@ -381,11 +383,17 @@ struct adm_monitor_t {
 };
 
 struct adm_scene_stream_t {
-    std::unique_ptr<mradm::realtime::SceneStreamEngine> engine;
+    std::shared_ptr<mradm::realtime::SceneStreamEngine> engine;
     mutable std::mutex message_mutex;
     std::string last_error_message;
     // Backs adm_scene_diagnostic_t::message until another non-pull stream call.
     std::string diagnostic_message;
+};
+
+struct adm_scene_output_t {
+    std::unique_ptr<mradm::realtime::SceneOutputSession> session;
+    mutable std::mutex mutex;
+    std::string message;
 };
 
 namespace {
@@ -2264,7 +2272,7 @@ adm_error_code_t adm_scene_stream_get_output_format(adm_scene_stream_t* stream,
 
 adm_error_code_t
 adm_scene_stream_begin_epoch(adm_scene_stream_t* stream, uint64_t epoch_id, int64_t target_sample) noexcept {
-    if (stream == nullptr || !stream->engine) {
+    if (stream == nullptr || !stream->engine || stream->engine->output_attached()) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     try {
@@ -2438,7 +2446,7 @@ adm_error_code_t adm_scene_stream_pull(adm_scene_stream_t* stream,
                                        float* interleaved_output,
                                        uint32_t frames,
                                        adm_scene_pull_result_t* result) noexcept {
-    if (stream == nullptr || !stream->engine || !output_struct_valid(result) ||
+    if (stream == nullptr || !stream->engine || stream->engine->output_attached() || !output_struct_valid(result) ||
         (frames != 0U && interleaved_output == nullptr)) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
@@ -2522,6 +2530,35 @@ adm_error_code_t adm_scene_stream_set_listener_orientation(adm_scene_stream_t* s
     }
 }
 
+adm_error_code_t adm_scene_stream_switch_backend_ex(const adm_scene_stream_t* stream,
+                                                    const adm_scene_renderer_config_t* config,
+                                                    char** out_error) noexcept {
+    if (out_error == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    *out_error = nullptr;
+    if (stream == nullptr || !stream->engine) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        const auto fail = [out_error](const mradm::Error& error) {
+            const auto& message = error.message;
+            auto owned = std::make_unique<char[]>(message.size() + 1U);
+            std::memcpy(owned.get(), message.c_str(), message.size() + 1U);
+            *out_error = owned.release();
+            return map_error(error.code);
+        };
+        auto converted = to_scene_renderer_config(config, stream->engine->input_sample_rate());
+        if (!converted) {
+            return fail(converted.error());
+        }
+        auto result = stream->engine->switch_backend(std::move(*converted));
+        return result ? ADM_ERROR_OK : fail(result.error());
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
 adm_error_code_t
 adm_scene_stream_set_semantic_policy_json(adm_scene_stream_t* stream, const char* json, uint64_t revision) noexcept {
     if (stream == nullptr || !stream->engine) {
@@ -2581,4 +2618,110 @@ int adm_scene_stream_log_entry(adm_scene_stream_t* stream, uint32_t index, adm_s
     } catch (...) {
         return 0;
     }
+}
+
+namespace {
+template <typename Fn> adm_error_code_t scene_output_call(adm_scene_output_t* output, Fn&& action) noexcept {
+    if (output == nullptr || !output->session) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        const std::lock_guard lock(output->mutex);
+        auto result = std::forward<Fn>(action)(*output->session);
+        output->message = result ? std::string{} : result.error().message;
+        return result ? ADM_ERROR_OK : map_error(result.error().code);
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+} // namespace
+
+adm_error_code_t adm_create_scene_output(adm_context_t* context,
+                                         const adm_scene_stream_t* stream,
+                                         const adm_scene_output_config_t* config,
+                                         adm_scene_output_t** out) noexcept {
+    if (out != nullptr) {
+        *out = nullptr;
+    }
+    if (context == nullptr || stream == nullptr || !stream->engine || config == nullptr || out == nullptr ||
+        config->struct_size < sizeof(*config) || config->kind < ADM_SCENE_OUTPUT_SYSTEM_SPATIAL ||
+        config->kind > ADM_SCENE_OUTPUT_NULL || config->speaker_geometry < ADM_SPEAKER_GEOMETRY_STANDARD ||
+        config->speaker_geometry > ADM_SPEAKER_GEOMETRY_APPLE) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        mradm::realtime::SceneDeviceConfig options;
+        options.kind = static_cast<mradm::realtime::SceneOutputKind>(config->kind);
+        options.layout = config->output_layout == nullptr ? "" : config->output_layout;
+        options.device_id = config->device_id == nullptr ? "" : config->device_id;
+        options.geometry = static_cast<mradm::SpeakerGeometry>(config->speaker_geometry);
+        auto session = mradm::realtime::SceneOutputSession::create(stream->engine, options);
+        if (!session) {
+            store_last_error(context, session.error());
+            return map_error(session.error().code);
+        }
+        auto output = std::make_unique<adm_scene_output_t>();
+        output->session = std::move(*session);
+        *out = output.release();
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+void adm_destroy_scene_output(adm_scene_output_t* output) noexcept {
+    delete output;
+}
+
+const char* adm_scene_output_last_error_message(const adm_scene_output_t* output) noexcept {
+    if (output == nullptr) {
+        return "";
+    }
+    const std::lock_guard lock(output->mutex);
+    return output->message.c_str();
+}
+
+adm_error_code_t adm_scene_output_play(adm_scene_output_t* output) noexcept {
+    return scene_output_call(output, [](auto& session) -> mradm::Result<void> {
+        session.play();
+        return {};
+    });
+}
+
+adm_error_code_t adm_scene_output_pause(adm_scene_output_t* output) noexcept {
+    return scene_output_call(output, [](auto& session) -> mradm::Result<void> {
+        session.pause();
+        return {};
+    });
+}
+
+adm_error_code_t
+adm_scene_output_begin_epoch(adm_scene_output_t* output, uint64_t epoch, int64_t target_sample) noexcept {
+    return scene_output_call(output, [=](auto& session) { return session.begin_epoch(epoch, target_sample); });
+}
+
+adm_error_code_t adm_scene_output_set_volume(adm_scene_output_t* output, float gain) noexcept {
+    return scene_output_call(output, [=](auto& session) { return session.set_volume(gain); });
+}
+
+adm_error_code_t adm_scene_output_get_status(adm_scene_output_t* output, adm_scene_output_status_t* out) noexcept {
+    if (!output_struct_valid(out)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    return scene_output_call(output, [out](auto& session) -> mradm::Result<void> {
+        const auto status = session.status();
+        adm_scene_output_status_t value{};
+        value.state = static_cast<int32_t>(status.state);
+        value.epoch_id = status.epoch_id;
+        value.consumed_frames = status.consumed_frames;
+        value.presented_frames = status.presented_frames;
+        value.queued_frames = status.queued_frames;
+        value.underruns = status.underruns;
+        value.clock_kind = status.media_clock ? ADM_SCENE_OUTPUT_CLOCK_MEDIA : ADM_SCENE_OUTPUT_CLOCK_CALLBACK;
+        value.recovering = status.recovering ? 1 : 0;
+        value.failed = status.failed ? 1 : 0;
+        value.ended = status.ended ? 1 : 0;
+        write_sized_output(out, value);
+        return {};
+    });
 }

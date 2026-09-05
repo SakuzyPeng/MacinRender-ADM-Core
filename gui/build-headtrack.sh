@@ -20,7 +20,7 @@ dst_dir="$here/MacinRender.Gui/runtimes/$rid/native"
 dst="$dst_dir/libmr_headtrack.dylib"
 
 mkdir -p "$dst_dir"
-clang -fobjc-arc -dynamiclib -arch "$arch" \
+clang -fobjc-arc -dynamiclib -arch "$arch" "$here/native/mr_headmotion.m" \
     -framework CoreMotion -framework Foundation \
     -install_name "@rpath/libmr_headtrack.dylib" \
     -o "$dst" "$src"

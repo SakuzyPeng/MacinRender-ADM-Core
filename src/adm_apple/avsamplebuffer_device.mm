@@ -8,23 +8,24 @@
 // system treat the stream as spatial content. Apple framework types stay confined to adm_apple
 // (ADR 0003); the factory returns the third-party-free IAudioOutputDevice interface.
 
-#import <AVFoundation/AVFoundation.h>
-#import <CoreMedia/CoreMedia.h>
-
 #include <algorithm>
 #include <atomic>
-#include <cstddef>
 #include <cmath>
+#include <cstddef>
 #include <memory>
 #include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
+#import <AVFoundation/AVFoundation.h>
+#import <CoreMedia/CoreMedia.h>
+
 #include "adm/errors.h"
 
 #include "apple_layouts.h"
 #include "audio_output_device.h"
+#include "buffered_media_timeline.h"
 
 namespace mradm::realtime {
 namespace {
@@ -81,6 +82,11 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         stopping_.store(false, std::memory_order_release);
         staging_.assign(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F);
         staged_frames_ = 0;
+        timeline_.reset();
+        presented_.store(0);
+        end_marked_.store(false);
+        failed_.store(false);
+        underruns_.store(0);
 
         if (!build_format(layout->layout_tag)) {
             return make_error(ErrorCode::render_failed, "创建 CMAudioFormatDescription 失败", "layout=" + layout_id_);
@@ -98,22 +104,19 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
 
         AVSampleBufferDevice* self = this; // raw; stop() drains the queue before teardown
         feed_timer_ = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue_);
-        dispatch_source_set_timer(feed_timer_,
-                                  dispatch_time(DISPATCH_TIME_NOW, 0),
-                                  k_feed_interval_ns,
-                                  k_feed_leeway_ns);
-        dispatch_source_set_event_handler(feed_timer_, ^{
-          self->feed_queue();
-        });
+        dispatch_source_set_timer(
+            feed_timer_, dispatch_time(DISPATCH_TIME_NOW, 0), k_feed_interval_ns, k_feed_leeway_ns);
+        dispatch_source_set_event_handler(feed_timer_, ^{ self->feed_queue(); });
+        // Use the bounded timer as the only feeder. requestMediaDataWhenReady
+        // remains ready below ASBR's own (larger) watermark, and can otherwise
+        // spin continuously while our ring is empty or our target lead is full.
         dispatch_resume(feed_timer_);
 
-        arm_media_request();
         return {};
     }
 
     void stop() override {
         stopping_.store(true, std::memory_order_release);
-        stop_media_request();
         dispatch_source_t timer = feed_timer_;
         feed_timer_ = nil;
         if (timer != nil) {
@@ -122,8 +125,7 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         // Drain any in-flight enqueue block so the audio queue stops touching pull_/scratch_
         // before we release them (the block runs on queue_, a serial queue).
         if (queue_ != nil) {
-            dispatch_sync(queue_, ^{
-            });
+            dispatch_sync(queue_, ^{});
         }
         if (synchronizer_ != nil) {
             [synchronizer_ setRate:0.0F time:kCMTimeZero];
@@ -143,6 +145,16 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
 
     [[nodiscard]] uint32_t actual_sample_rate() const override { return sample_rate_; }
     [[nodiscard]] bool pull_is_realtime_playback() const override { return false; }
+    [[nodiscard]] AudioDeviceProgress progress() const override {
+        return {presented_.load(), true, failed_.load(), false, underruns_.load()};
+    }
+    void mark_end() override { end_marked_.store(true); }
+    [[nodiscard]] bool has_device_volume() const override { return true; }
+    void set_volume(float gain) override {
+        if (queue_ != nil) {
+            dispatch_sync(queue_, ^{ renderer_.volume = gain; });
+        }
+    }
 
     void flush() override {
         if (queue_ == nil) {
@@ -181,25 +193,6 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
     }
 
   private:
-    void arm_media_request() {
-        if (renderer_ == nil || queue_ == nil || stopping_.load(std::memory_order_acquire) ||
-            media_request_armed_.exchange(true, std::memory_order_acq_rel)) {
-            return;
-        }
-        AVSampleBufferDevice* self = this; // raw; stop() drains queue_ before teardown
-        [renderer_ requestMediaDataWhenReadyOnQueue:queue_
-                                         usingBlock:^{
-                                           self->feed_queue();
-                                         }];
-    }
-
-    void stop_media_request() {
-        if (renderer_ != nil) {
-            [renderer_ stopRequestingMediaData];
-        }
-        media_request_armed_.store(false, std::memory_order_release);
-    }
-
     // Destructive re-prefill: drop ASBR's enqueued buffers and realign PTS to a fresh clock. Only
     // for seek (flush()), where we genuinely want to discard buffered audio and restart at the new
     // position. Underflow no longer comes through here — it freezes/resumes the clock instead.
@@ -207,7 +200,6 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         if (synchronizer_ != nil) {
             [synchronizer_ setRate:0.0F time:kCMTimeZero];
         }
-        stop_media_request();
         if (renderer_ != nil) {
             // Queue destruction can otherwise leak a short device transient even while the media
             // clock is stopped. Keep the renderer muted until a complete post-seek prefill is ready.
@@ -216,9 +208,13 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         }
         staged_frames_ = 0;
         pts_frames_ = 0;
+        timeline_.reset();
+        presented_.store(0);
+        end_marked_.store(false);
+        failed_.store(false);
+        underruns_.store(0);
         playing_started_ = false;
         stalled_ = false;
-        arm_media_request();
     }
 
     // The clock should run iff playback has started, the user hasn't paused, and we're not riding
@@ -278,6 +274,11 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         if (renderer_ == nil || stopping_.load(std::memory_order_acquire)) {
             return;
         }
+        if (renderer_.status == AVQueuedSampleBufferRenderingStatusFailed) {
+            failed_.store(true);
+            return;
+        }
+        presented_.store(timeline_.advance(clock_frames()));
 
         // Top up the system queue from the ring (bounded by isReadyForMoreMediaData + target depth).
         while ([renderer_ isReadyForMoreMediaData] && queued_frames() < k_target_queue_frames) {
@@ -306,8 +307,16 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         // 队尾发出坏声音)时,只 setRate:0 冻住时钟,**不 flush、不动 PTS**,已入队的好音频原样保留;worker
         // 把 ring 补回来、队列回到 high 水位后再 setRate:1 无缝续播。带迟滞,避免在低水位附近抖动反复切换;
         // worker 长时间落后就一直冻着(可控静音),不会像旧的 flush 重灌那样丢音频锯齿成永久静音。
+        if (end_marked_.load()) {
+            if (stalled_) {
+                stalled_ = false;
+                apply_desired_rate();
+            }
+            return;
+        }
         if (!stalled_ && queued_frames() < k_stall_low_frames) {
             stalled_ = true;
+            underruns_.fetch_add(1);
             apply_desired_rate(); // → freeze
         } else if (stalled_ && queued_frames() >= k_stall_high_frames) {
             stalled_ = false;
@@ -321,7 +330,7 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
     // size buffer or a silence-padded tail. +1-retained; caller CFReleases. Runs on queue_, the
     // only thread touching staging_/staged_frames_/pts_.
     [[nodiscard]] CMSampleBufferRef next_buffer() {
-        while (staged_frames_ < k_chunk_frames) {
+        while (staged_frames_ < k_chunk_frames && !end_marked_.load()) {
             const std::size_t need = k_chunk_frames - staged_frames_;
             const std::size_t produced =
                 pull_ ? pull_(std::span<float>(staging_.data() + (staged_frames_ * channels_), need * channels_), need)
@@ -331,9 +340,18 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
                 break; // ring drained mid-fill — keep what we have, finish the block next time
             }
         }
-        if (staged_frames_ < k_chunk_frames) {
+        if (staged_frames_ < k_chunk_frames && !end_marked_.load()) {
             return nullptr; // not a full block yet
         }
+        // An EOS tail must not be stranded in staging. Keep fixed transport blocks,
+        // but count only their real samples. Very short clips also need enough
+        // transport lead to start ASBR; the extra prefill is non-media silence.
+        if (staged_frames_ == 0U &&
+            (playing_started_ || pts_frames_ >= static_cast<int64_t>(k_prefill_frames) || timeline_.enqueued() == 0U)) {
+            return nullptr;
+        }
+        const auto valid_frames = static_cast<std::uint32_t>(staged_frames_);
+        std::fill(staging_.begin() + static_cast<std::ptrdiff_t>(staged_frames_ * channels_), staging_.end(), 0.0F);
 
         const std::size_t byte_count = static_cast<std::size_t>(k_chunk_frames) * channels_ * sizeof(float);
         CMBlockBufferRef block = nullptr;
@@ -361,8 +379,10 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
             kCFAllocatorDefault, block, format_, static_cast<CMItemCount>(k_chunk_frames), pts, nullptr, &sample);
         CFRelease(block);
         if (st != noErr || sample == nullptr) {
+            failed_.store(true);
             return nullptr;
         }
+        timeline_.enqueue(pts_frames_, valid_frames);
         pts_frames_ += static_cast<int64_t>(k_chunk_frames);
         staged_frames_ = 0;
         return sample;
@@ -387,8 +407,12 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
     dispatch_queue_t queue_{nil};
     dispatch_source_t feed_timer_{nil};
     CMAudioFormatDescriptionRef format_{nullptr};
-    std::atomic<bool> media_request_armed_{false};
     std::atomic<bool> stopping_{false};
+    BufferedMediaTimeline timeline_;
+    std::atomic<std::uint64_t> presented_{0};
+    std::atomic<bool> end_marked_{false};
+    std::atomic<bool> failed_{false};
+    std::atomic<std::uint64_t> underruns_{0};
 };
 
 } // namespace
