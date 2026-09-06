@@ -395,11 +395,17 @@ class HrtfStateCache {
     if (!resampled) {
         return tl::unexpected{resampled.error()};
     }
-    std::shared_ptr<const BinauralState> state =
-        binaural_internal::build_binaural_state(std::move(*resampled), k_convolution_block);
-    if (!state) {
+    auto prepared = binaural_internal::build_binaural_state(std::move(*resampled), k_convolution_block);
+    if (!prepared) {
         return make_error(ErrorCode::render_failed, "failed to build live binaural HRTF interpolation state");
     }
+    // Live convolution and extent rendering use only the frequency-domain HRTFs
+    // and compressed interpolation grid. The original HRIRs and measurement
+    // directions are needed during preparation (and by the offline SAF spreader),
+    // but retaining them in this live-only cache wastes a full dataset per entry.
+    std::vector<float>{}.swap(prepared->hrtf_td);
+    std::vector<float>{}.swap(prepared->grid_dirs_deg);
+    std::shared_ptr<const BinauralState> state = std::move(prepared);
     if (key && key == HrtfStateCache::make_key(config)) {
         cache.insert(*key, state);
     }
