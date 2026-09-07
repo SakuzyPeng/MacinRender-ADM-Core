@@ -1,6 +1,6 @@
 # Rust 落地与 SAF 替换路线图
 
-> 状态：规划中（阶段 0 未开工）。本文是 ADR 0008 的执行细节：`rust/` workspace 的 crate 划分与理由、Cargo↔CMake 集成的具体约束、四个阶段的内容与退出条件、差分测试与跨平台一致性验证的搭法。
+> 状态：规划中（阶段 0 第 1 项已完成，其余未开工）。本文是 ADR 0008 的执行细节：`rust/` workspace 的 crate 划分与理由、Cargo↔CMake 集成的具体约束、四个阶段的内容与退出条件、差分测试与跨平台一致性验证的搭法。
 >
 > 相关：ADR 0008（Rust 落地方向与 SAF 按模块替换）、ADR 0002（语言路线）、ADR 0003（后端边界）、ADR 0004（依赖接入）、ADR 0007（C ABI 稳定性）。
 
@@ -98,7 +98,7 @@ rust/
 
 **必须先做。** 目的是建立「今天三平台差多少、差在哪」的可测量基线——没有它，无法区分 Rust 修复了什么、引入了什么。
 
-1. 修 `src/adm_render_ear/ear_renderer.cpp:94` 与 `:673` 的错误注释，改为如实描述平台分支。
+1. ~~修 `src/adm_render_ear/ear_renderer.cpp` 的错误注释，改为如实描述平台分支。~~ **已完成**——现 `:93-100`（`DecorrState` 前）与 `:679-680`（`apply_decorrelator` 前）如实记录后端随 `SAF_PERFORMANCE_LIB` 分叉。注意这只修了**描述**，分歧本身要等阶段 1。
 2. 全树统一 `-ffp-contract=off`（Clang/GCC）/ `/fp:precise`（MSVC），CI 断言生效。
 3. libear 只构建 `ear_default_arch`（关掉 per-arch SIMD 分派）。`cmake/MRDependencies.cmake` 里为 `EIGEN_MPL2_ONLY` 逐个遍历 `BUILDSYSTEM_TARGETS` 的那段可直接复用其目标枚举逻辑。
 4. 建立跨平台一致性 CI job（见 §6.1）。**首次运行预期是红的——那就是基线。**
@@ -108,11 +108,11 @@ rust/
 
 ### 5.2 阶段 1：`mradm-math` + 替换 EAR 的 FFT
 
-最小可验证切片。选此入口的四条理由：它是已确认的 macOS/Windows 分歧源；位于默认 EAR 渲染器；接缝只有 4 个函数且已被隔离在 `DecorrState`（`ear_renderer.cpp:94-109`）；`render_trim_fixture_test.cpp` 已有 EAR **bit-exact** 断言作为现成回归护栏。
+最小可验证切片。选此入口的四条理由：它是已确认的 macOS/Windows 分歧源；位于默认 EAR 渲染器；接缝只有 4 个函数且已被隔离在 `DecorrState`（`ear_renderer.cpp:103-123`）；`render_trim_fixture_test.cpp` 已有 EAR **bit-exact** 断言作为现成回归护栏。
 
 `mradm-math` 本阶段内容：
 
-- **`fft`**：实数 FFT，替换 `saf_rfft_*`。必须是标量确定性实现（ADR 0008 决策六）。注意 `saf_rfft_backward` 内部已做 1/N 缩放（`ear_renderer.cpp:700` 注释），替换实现必须保持同一约定，否则增益差 N 倍。
+- **`fft`**：实数 FFT，替换 `saf_rfft_*`。必须是标量确定性实现（ADR 0008 决策六）。注意 `saf_rfft_backward` 内部已做 1/N 缩放（`ear_renderer.cpp:707` 注释），替换实现必须保持同一约定，否则增益差 N 倍。
 - **`libm`**：确定性超越函数，走 `libm` crate。
 
 **不需要 RNG**。实测渲染路径无随机数：`opus_mka_io.cpp:520` 的 Matroska UID 与 `render_service.cpp:52` / `audio_handles.cpp:44` 的临时文件名是仅有的用例，均无确定性要求。若将来加 dither，再进 `mradm-math`。

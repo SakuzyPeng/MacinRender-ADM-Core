@@ -91,7 +91,13 @@ struct AccumulateContext {
 };
 
 // FIR decorrelator state for the diffuse bus (BS.2127).
-// Uses overlap-add FFT convolution via saf_rfft (KissFFT backend, platform-agnostic).
+// Uses overlap-add FFT convolution via saf_rfft. NOTE: saf_rfft is NOT
+// platform-agnostic — its backend follows SAF_PERFORMANCE_LIB. We pass
+// SAF_USE_APPLE_ACCELERATE_ILP64 on macOS, which SAF's CMake matches into
+// SAF_USE_APPLE_ACCELERATE, selecting vDSP; Windows/Linux build against
+// OpenBLAS and fall through to KissFFT. The two backends round differently,
+// so EAR diffuse output is not bit-identical across platforms. Tracked as a
+// determinism gap; see docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md §5.2.
 // FFT size L=2048 (next power-of-2 >= block_size(1024) + filter_len(512) - 1).
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct DecorrState {
@@ -670,7 +676,8 @@ void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
     }
 }
 
-// Apply 512-tap FIR decorrelator via overlap-add FFT convolution (saf_rfft / KissFFT).
+// Apply 512-tap FIR decorrelator via overlap-add FFT convolution (saf_rfft; the
+// backend is vDSP on macOS and KissFFT elsewhere — see DecorrState above).
 // diffuse_in:  [frames_now × num_out_ch] interleaved, float
 // diffuse_out: [frames_now × num_out_ch] interleaved, float  (written)
 void apply_decorrelator(DecorrState& state,
