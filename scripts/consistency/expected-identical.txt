@@ -1,0 +1,11 @@
+# Cases that must stay bit-identical across macOS / Linux / Windows.
+#
+# compare-platforms.sh always reports the full divergence table, but only fails on the cases
+# listed here. Phase 0 is a measurement exercise, so this file starts empty on purpose: nothing
+# has been shown to hold across all three platforms yet, and a permanently red job would be
+# worse than no job (roadmap §5.1).
+#
+# Populate it from the first full three-platform run: every case that comes back identical
+# belongs here, so that it is gated from then on. Add newly fixed cases as each phase lands.
+#
+# One case name per line; '#' starts a comment.
