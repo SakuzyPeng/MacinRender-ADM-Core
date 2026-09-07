@@ -750,6 +750,22 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_scene_stream_stress)
     mr_adm_core_apply_static_analysis(mr_adm_scene_stream_stress)
 
+    # Cross-platform numerical baseline tool (docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md §6.1).
+    # Extracts the final float32 PCM as a canonical little-endian bit image and bit-compares two
+    # such images. Excluded from the default build like the other non-CTest tools; CI builds it
+    # explicitly with --target mr_adm_pcm_bits.
+    add_executable(mr_adm_pcm_bits EXCLUDE_FROM_ALL tests/tools/pcm_bits.cpp)
+    target_link_libraries(mr_adm_pcm_bits PRIVATE MacinRender::ADMAudio)
+    mr_adm_core_apply_warnings(mr_adm_pcm_bits)
+    mr_adm_core_apply_static_analysis(mr_adm_pcm_bits)
+
+    # Deterministic baseline inputs. Bit-exact by construction so the three runners can be shown
+    # to render the same bytes before their outputs are compared.
+    add_executable(mr_adm_make_fixture EXCLUDE_FROM_ALL tests/tools/make_fixture.cpp)
+    target_link_libraries(mr_adm_make_fixture PRIVATE libbw64 adm)
+    mr_adm_core_apply_warnings(mr_adm_make_fixture)
+    mr_adm_core_apply_static_analysis(mr_adm_make_fixture)
+
     add_executable(mr_adm_semantic_policy_tests tests/unit/semantic_policy_test.cpp)
     target_link_libraries(mr_adm_semantic_policy_tests PRIVATE MacinRender::ADMCore)
     mr_adm_core_apply_warnings(mr_adm_semantic_policy_tests)

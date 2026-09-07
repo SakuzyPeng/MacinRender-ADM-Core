@@ -14,6 +14,14 @@ ADR 0002 确立了先建立 C++ 地基、再按模块引入 Rust 的路线。本
 
 保留这一标准实现能减少重新验证 BS.2127 语义的工作，但边界窄不代表其数值输出与平台无关。`libear` 的 `designDecorrelatorBasic()` 使用 `std::mt19937`、复数 `std::exp` 和内部 KissFFT；增益计算也使用三角函数、Eigen 和可选 xsimd 路径。即使不重写标准算法，也需要统一或验证这些实现、系数和构建选项。
 
+这三项的风险并不等价，已按源码区分（libear `src/decorrelate.cpp`）：
+
+- **随机序列可复现，不构成分歧源。** `:19-21` 的 `genRandFloat` 是 `e() / static_cast<double>(0x100000000l)`，即 mt19937 输出的整数除法，**不是** `std::uniform_real_distribution`（后者的取值与实现相关，各标准库不一致）。`std::mt19937` 的序列由标准规定，整数转 `double` 的除法 IEEE 精确，且种子是确定的 `decorrelatorId`。因此这条链路不需要替换 RNG。
+- **`std::exp(std::complex<double>)`（`:36-37`）是这里的实际风险**：它展开为 `exp(re)` 与 `cos(im)` / `sin(im)`，落到平台 libm，Apple / glibc / MSVC UCRT 三家结果不同。
+- **内部 KissFFT（`:43`）是同一份源码**，风险不在算法而在编译期 FP 行为（contraction、向量化），随受控构建选项处理。
+
+结论：EAR 的 FIR 系数若要跨平台一致，需要统一 `sin` / `cos` 入口或保存经验证的固定系数表；不需要为 RNG 单独设计方案。SAF 去相关器是另一回事（见下），其 C `rand()` 确为分歧源。
+
 ### 二、SAF 的调用面需要沿传递依赖盘点
 
 SAF 用于 EAR FFT、VBAP、HOA 解码、HRTF 准备、SOFA、afSTFT、格型去相关器以及 spreader 的协方差合成。只统计项目源文件中的 `saf_*`、`utility_*` 或 `cblas_*` 符号会漏掉实际执行的数学代码。

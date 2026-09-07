@@ -1,6 +1,6 @@
 # Rust 落地与 SAF 替换路线图
 
-> 状态：规划中。EAR 的 FFT 后端注释已修正；构建改造、Rust 模块及三平台数值验证尚未实现。
+> 状态：阶段 0 测量基建已落地（fixture 生成器、PCM 位提取 / 比较工具、渲染矩阵脚本、三平台 CI workflow）；三平台基线尚未采集。Rust 模块、`MR_ADM_ENABLE_RUST` 与受控构建选项仍未实现。
 >
 > 本文落实 [ADR 0008](../adr/0008-rust-entry-and-saf-replacement.md) 的模块边界与确定性契约，沿用 ADR 0002 / 0003 / 0004 / 0005 / 0007 的语言、依赖、错误处理和 ABI 约束。
 
@@ -99,7 +99,14 @@ rust/
 4. libear 标量参考用 `EAR_SIMD=OFF`，让 dispatcher 进入 `generic_for_dispatch` 对应的 scalar 实现。`ear_default_arch` 仍是 `PolarExtentCoreSimd<xsimd::default_arch>`，会随目标架构变化；同时核对 Eigen 的向量化 / FMA 配置。
 5. 建立 §6 的 PCM 比较工具与矩阵。原始路径的预期差异作为报告保存，不用一个永久失败的 CI job 代替基线；已有通过的能力应成为持续通过的门禁。
 
+   已实现：`tests/tools/make_fixture.cpp`（确定性输入）、`tests/tools/pcm_bits.cpp`（位提取与比较）、`scripts/consistency/render-matrix.sh`（11 个 case 的矩阵）、`scripts/consistency/compare-platforms.sh`（比对与报告）、`.github/workflows/consistency.yml`（三平台 + 汇总 job）。门禁清单是 `scripts/consistency/expected-identical.txt`，初始为空，按首次三平台运行的结果填充。
+
 **退出条件**：共享输入的哈希、三平台构建与依赖记录、原始 / 受控输出比较表、首次不同的计算阶段、待处理调用链。覆盖同进程重复渲染和不同线程数，避免把全局 RNG 或状态历史漏掉。
+
+已在 Linux 上完成的部分验证（尚不构成三平台基线）：
+
+- **重复渲染**：完整 11 case 矩阵连跑两次，输入与全部输出逐位一致。带 `saf-spreader` 的 case 同样稳定，说明 SAF 侧的 C `rand()` 在默认种子加稳定调用顺序下同进程可复现；跨平台是否一致仍未知（各 libc 的 PRNG 算法不同）。
+- **线程数**：`binaural_renderer.cpp` 的 `ola_worker_count()` 直接取 `std::thread::hardware_concurrency()`，无 CLI 开关，因此并行度随机器核数变化。用 `taskset` 限制为 1 / 2 / 4 核重跑 `saf-binaural + saf-spreader`，输出逐位一致——OLA 的并行切分没有改变累加顺序。这一条很重要：三平台 runner 核数本就不同，若该路径对线程数敏感，产生的差异会被误读成平台差异。渲染器并行结构变更时需重测。
 
 阶段 0 会决定后续切片大小。尚未定位的路径继续标为未完成，不因语言或库名推定确定性。
 
@@ -113,7 +120,10 @@ rust/
 
 同时检查 EAR 的上游输入：`designDecorrelators()` 的 FIR 系数、增益向量和共用数学。可保留 libear 算法并统一数学入口或保存经过验证的固定系数；仅改变项目侧 FFT 不会自动统一 libear 内部的 `std::exp` / KissFFT 结果。
 
-随机数也需追踪。libear 已使用明确的 mt19937 序列，仍要核对种子和后续浮点换算；阶段 2 的 SAF 去相关器必须改用实例化的固定随机算法或固定延迟表，不能等到未来 dither 功能再处理。
+随机数也需追踪，但两处性质不同，已按源码核对：
+
+- libear 侧**已确认无需处理**。`src/decorrelate.cpp:19-21` 的 `genRandFloat` 是 `e() / static_cast<double>(0x100000000l)`，不是实现相关的 `std::uniform_real_distribution`；mt19937 序列由标准规定，种子是确定的 `decorrelatorId`，整数转 `double` 的除法 IEEE 精确。该链路跨平台可复现。这条路径上真正需要统一的是同函数 `:36-37` 的 `std::exp(std::complex<double>)`（落到平台 libm 的 `cos`/`sin`）。
+- 阶段 2 的 SAF 去相关器**确为分歧源**，必须改用实例化的固定随机算法或固定延迟表：`saf_utility_decor.c:100` 用 C `rand()` 算去相关延迟、`:154` 用它生成白噪声，`:102` 的 `randperm()`（`saf_utility_misc.c:169`）同样基于 `rand()`。C `rand()` 的算法由各 libc 自定，且项目未调用 `srand()`，序列还依赖进程内的调用历史。不能等到未来 dither 功能再处理。
 
 **模块退出条件**：相同 FFT 输入与状态在三平台位相等，数学正确性与旧实现误差指标通过，Release 性能可接受。
 
@@ -155,7 +165,7 @@ VBAP 覆盖二维 / 三维布局、虚拟扬声器、extent、凸包与退化几
 
 1. 使用 Release 输出 float32 WAV 或直接采集目标 PCM 缓冲区，保留完整的采样率、声道标签顺序、帧数和生效参数。
 2. 提取 PCM，确认读取没有量化或重采样。将 float32 的每个 32-bit 位模式按统一小端顺序序列化，先拒绝 NaN / Inf，再比较字节或其 SHA-256。正负零按位区分。
-3. 元数据单独比较需要稳定的字段。**不比较完整容器哈希来判断 DSP 一致性**：输出会写入当前 UTC 时间；FLAC 还会先将 float32 量化为 24-bit，既可能误报文件差异，也可能掩盖渲染差异。
+3. 元数据单独比较需要稳定的字段。**不比较完整容器哈希来判断 DSP 一致性**：输出会写入当前 UTC 时间；FLAC 还会先将 float32 量化为 24-bit，既可能误报文件差异，也可能掩盖渲染差异。已实测确认：同一输入、同一参数、间隔一秒的两次 `--renderer ear` 渲染，输出 WAV 文件不同（`render_service.cpp` 的 `date_utc` 经 bext `OriginationDate`/`OriginationTime` 写入），而提取出的 PCM 逐位相同。输入侧则无此问题——`make_fixture` 生成的 ADM BWF 跨次运行逐字节一致，因此输入用整文件比较即可，不需要另外取哈希。
 4. 失败时报告首个不同的 frame / channel、两侧位模式、最大绝对误差和 ULP 分布；误差指标用于定位，不用于放宽位一致门禁。
 
 覆盖矩阵至少包含 `ear × 5.1`、`saf × 5.1`、`hoa × hoa3`、`saf-binaural × binaural`，并明确区分 point、extent、diffuse、spreader OM、DirectSpeakers、坐标转换、动态块与自定义 HRIR 等实际路径。
@@ -184,7 +194,19 @@ VBAP 覆盖二维 / 三维布局、虚拟扬声器、extent、凸包与退化几
 
 ### 6.4 本地验证入口
 
-以下为 macOS 上实现 Rust 开关后的命令示例。当前 `MR_ADM_ENABLE_RUST` 与 PCM 提取 / 比较工具尚未实现；现有 CTest 没有名为 `release` 的测试 preset，Release 测试使用构建目录：
+PCM 提取 / 比较工具与矩阵脚本已实现，可直接运行；`MR_ADM_ENABLE_RUST` 仍未实现，下面带该选项的命令是阶段 1 的形态。现有 CTest 没有名为 `release` 的测试 preset，Release 测试使用构建目录。
+
+跑完整矩阵并与另一平台的产物比对：
+
+```bash
+cmake --preset release
+cmake --build build/release --target mradm_exe mr_adm_pcm_bits mr_adm_make_fixture
+bash scripts/consistency/render-matrix.sh build/release out/local
+# 取另一平台的 out/<platform> 后：
+bash scripts/consistency/compare-platforms.sh build/release/mr_adm_pcm_bits out/local out/other
+```
+
+单个文件的手工检查：
 
 ```bash
 cmake --preset release -DMR_ADM_ENABLE_RUST=ON
