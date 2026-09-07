@@ -96,10 +96,18 @@ rust/
 1. EAR 的 FFT 注释已修正；该修改没有改变运行时计算。
 2. 先用当前 Release 配置采集原始输出与构建信息，再采集受控配置；不能先改数学选项再把输出称为原始基线。
 3. 受控 C/C++ 构建显式处理 FP contraction / fast-math，例如 Clang/GCC 的 `-ffp-contract=off`、现代 MSVC 的 `/fp:precise`，并检查实际编译命令、显式 FMA 与剩余向量化。系统预编译库不受项目编译选项控制，必须另行验证或使用可控构建。
+
+   已实现：`MR_ADM_STRICT_FP`（`cmake/MRStrictFp.cmake`）。Clang / GCC 加 `-fno-fast-math -ffp-contract=off`，MSVC 加 `/fp:precise` 并探测是否接受显式关闭 contraction 的开关（接受与否记进构建记录，不靠文档推断版本行为）。标志走 `CMAKE_<lang>_FLAGS` 而不是 `add_compile_options()`，前者按语言分开、不会漏进依赖可能启用的汇编方言；设置点在 `include(MRDependencies)` 之前，所以 FetchContent 拉进来的第三方目录同样受控。
 4. libear 标量参考用 `EAR_SIMD=OFF`，让 dispatcher 进入 `generic_for_dispatch` 对应的 scalar 实现。`ear_default_arch` 仍是 `PolarExtentCoreSimd<xsimd::default_arch>`，会随目标架构变化；同时核对 Eigen 的向量化 / FMA 配置。
+
+   已实现：`MR_ADM_EAR_SCALAR_REFERENCE` 把 libear 的 `EAR_SIMD` 置 OFF。生效证据取自 libear 自己传下来的 `XSIMD_ARCHS`：默认构建是 `avx512bw,avx2_fma,avx,sse4_2,default_arch,generic_for_dispatch`，开关打开后只剩 `generic_for_dispatch`。顺带说明默认构建的一个性质——这串 arch 是**运行时**按 CPU 特性分派的，所以同一平台上两台特性不同的机器本来就可能走不同实现，这是平台内的差异来源，不是平台间的。若 libear 来自已安装包，本开关对它无效，配置阶段直接 FATAL 而不是静默降级成一个站不住的「标量参考」。
 5. 建立 §6 的 PCM 比较工具与矩阵。原始路径的预期差异作为报告保存，不用一个永久失败的 CI job 代替基线；已有通过的能力应成为持续通过的门禁。
 
    已实现：`tests/tools/make_fixture.cpp`（确定性输入）、`tests/tools/pcm_bits.cpp`（位提取、格式校验与比较）、`tests/tools/repeat_render.cpp`（同进程两次渲染）、`scripts/consistency/render-matrix.sh`（12 个跨平台 case 及同进程重复测量）、`scripts/consistency/compare-platforms.sh`（比对与报告）、`.github/workflows/consistency.yml`（三平台 + 汇总 job）。门禁清单是 `scripts/consistency/expected-identical.txt`，初始为空，按首次三平台运行的结果填充。
+
+   两组配置由 preset `consistency-a`（默认数值）与 `consistency-b`（受控数值）固定。两者都关掉已安装包查找并锁定 FLAC / Opus 为 vendored，使 A、B 之间只差受测的数值选项；否则依赖来源不同会混进比较结果。两组各有自己的门禁清单——`expected-identical.txt` 与 `expected-identical-controlled.txt`，经 `compare-platforms.sh --expected` 选择——因为受控构建预期能收敛的 case 多于默认构建，拿它的成果去卡默认构建等于让后者为自己没声称过的结果长红。
+
+   每个 runner 另外产出两份记录：`scripts/consistency/build-info.sh` 写编译器、**实际到达编译器的标志**（从 `compile_commands.json` 统计，不看 CMake 选项的意图）、SAF 选中的 BLAS 后端与全部依赖 commit；`scripts/consistency/scan-fp.sh` 数二进制里残留的 FMA 指令。后者是必要的：`-ffp-contract=off` 只阻止编译器自行融合，管不了显式 intrinsic，所以「设了标志」和「FMA 没了」是两件事。
 
 **退出条件**：共享输入的哈希、三平台构建与依赖记录、原始 / 受控输出比较表、首次不同的计算阶段、待处理调用链。覆盖同进程重复渲染和不同线程数，避免把全局 RNG 或状态历史漏掉。
 
@@ -109,6 +117,15 @@ rust/
 - 单音轨 spreader fixture 只有一个 OLA source 和一个 adapter group，不会进入多 worker 路径。新增 `objects-extent-multi` 提供三个 Objects 音轨，在多核环境中覆盖多个 source / group；日志保存 `hardware_concurrency` 和准备期源数、分组数。
 - 这些日志与多音轨 case 不等于已证明固定 1 / 2 / 4 worker 下输出一致。`taskset` 改变 CPU 亲和性也不保证 `hardware_concurrency()` 或线程池大小变化；固定 worker 数的等价性实验仍需可验证的控制入口。
 - `out/<platform>/repeats/` 保存单 / 多音轨的两份 PCM、准备日志及同进程比较结果。已知数值差异按阶段 0 记录，渲染失败、损坏 PCM 或工具错误立即失败。跨平台汇总报告附上这些结果，以免把平台内的不稳定性直接归因于平台差异。
+
+**配置 A / B 的首批 Linux 实测（GCC 13.3、Release、x86-64；单平台数据，尚不构成三平台基线）**：
+
+- 同一构建把 12 个 case 的矩阵连跑两遍，逐位一致。这是解读下面几条的前提——否则 A / B 的差异分不清是构建配置还是运行噪声。
+- **只开 `MR_ADM_STRICT_FP`**：12 个 case 全部与默认构建逐位相同。`-ffp-contract=off` 落到 415 个翻译单元（默认构建 0 个），`mradm` 中的 FMA 指令从 212 条降到 54 条，却没有改变任何一个 case 的输出位。**这不等于 contraction 无害**，只说明本矩阵覆盖到的路径上它没有产生可观测差异。
+- **再加 `MR_ADM_EAR_SCALAR_REFERENCE`（完整配置 B）**：只有 `ear-5_1-extent` 改变（288000 个采样中 87439 个不同，最大绝对误差 1.34e-07），其余 11 个仍逐位相同。它也是矩阵里唯一带 extent 的 EAR case，即唯一会进 `PolarExtentCore` 的那个，与「差异来自 SIMD 分派」一致。
+- **剩余 FMA 全部来自 libear**：单独统计 `libear.a`，默认构建 60 条、只关 contraction 后 54 条、关掉 `EAR_SIMD` 后 0 条；此时整个 `mradm` 也是 0 条。即编译器自行融合的部分靠编译选项就能清掉，剩下的是 xsimd 的显式 intrinsic，只能靠换实现或关掉分派。这正是第 3 项要求「检查显式 FMA」而不是只看编译选项的原因。
+- 全构建没有任何 `-ffast-math`：SAF 的由 `SAF_USE_FAST_MATH_FLAG=OFF` 关掉，libopus 的挂在默认关闭的 `OPUS_FLOAT_APPROX` 之下。这条由 build-info 的计数守着，不是读代码得出的结论——依赖哪天把它打开，计数会立刻变成非零。
+- 覆盖不到的一层：Linux / Windows 的 OpenBLAS 与 macOS 的 Accelerate 是预编译库，任何项目编译选项都到不了；SAF 实际选中的后端记在 build-info 里。受控构建不能声称覆盖它们。
 
 阶段 0 会决定后续切片大小。尚未定位的路径继续标为未完成，不因语言或库名推定确定性。
 
@@ -190,7 +207,7 @@ VBAP 覆盖二维 / 三维布局、虚拟扬声器、extent、凸包与退化几
 
 ### 6.3 测量工具的回归测试
 
-`tests/unit/consistency_tools_test.py` 仅使用 Python 标准库，调用真实工具与脚本，覆盖正负零、跨零 ULP 距离、NaN / Inf、损坏与溢出 header、缺失产物、case / fixture 清单不一致、比较工具错误以及门禁经 `tee` 管道传播的失败状态。工具输出状态约定为 0=通过、1=数值不同、2=输入 / IO / 配置错误。
+`tests/unit/consistency_tools_test.py` 仅使用 Python 标准库，调用真实工具与脚本，覆盖正负零、跨零 ULP 距离、NaN / Inf、损坏与溢出 header、缺失产物、case / fixture 清单不一致、比较工具错误、`--expected` 选中的替代门禁清单（生效、被强制执行、文件缺失即报错），以及门禁经 `tee` 管道传播的失败状态。工具输出状态约定为 0=通过、1=数值不同、2=输入 / IO / 配置错误。
 
 `compare-platforms.sh` 在数值比较前校验所有平台的清单和每份 `.pcmbits`，拒绝空 / 重复清单、遗漏文件和失效门禁配置；对所有平台对输出结果。未登记的数值差异可以记录为基线，基础设施错误不能当作正常差异。workflow 显式使用带 `pipefail` 的 Bash，并在每个平台运行工具回归测试。
 
@@ -215,6 +232,26 @@ bash scripts/consistency/render-matrix.sh build/release out/local
 # 取另一平台的 out/<platform> 后：
 bash scripts/consistency/compare-platforms.sh build/release/mr_adm_pcm_bits out/local out/other
 ```
+
+跑原始 / 受控两组配置（阶段 0 第 2-4 项）。同一台机器上跑完 A、B 两组再互相比较，得到的是「构建选项改变了哪些 case」；把两组分别与其他平台的同组产物比较，得到的才是「受控构建收敛了多少跨平台差异」：
+
+```bash
+for c in a b; do
+    cmake --preset consistency-$c
+    cmake --build --preset consistency-$c \
+        --target mradm_exe mr_adm_pcm_bits mr_adm_make_fixture mr_adm_repeat_render
+    bash scripts/consistency/render-matrix.sh build/consistency-$c out/config-$c
+    bash scripts/consistency/build-info.sh build/consistency-$c out/config-$c/build-info.txt
+    bash scripts/consistency/scan-fp.sh build/consistency-$c/mradm out/config-$c/scan-fp.txt
+done
+bash scripts/consistency/compare-platforms.sh build/consistency-a/mr_adm_pcm_bits out/config-a out/config-b
+# 受控组与其他平台比对时换用受控门禁清单：
+bash scripts/consistency/compare-platforms.sh \
+    --expected scripts/consistency/expected-identical-controlled.txt \
+    build/consistency-a/mr_adm_pcm_bits out/config-b out/other-config-b
+```
+
+单个开关也可以单独打开（`-DMR_ADM_STRICT_FP=ON` 或 `-DMR_ADM_EAR_SCALAR_REFERENCE=ON`），用来把配置 B 的效果拆到具体某一项上。
 
 单个文件的手工检查：
 

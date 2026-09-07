@@ -37,6 +37,27 @@
         "MR_ADM_CORE_ENABLE_CLANG_TIDY": "ON",
         "MR_ADM_CORE_ENABLE_CPPCHECK": "ON"
       }
+    },
+    {
+      "name": "consistency-a",
+      "displayName": "Consistency baseline A (default numerics)",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/consistency-a",
+      "cacheVariables": {
+        "MR_ADM_FLAC_PROVIDER": "VENDORED",
+        "MR_ADM_OPUS_PROVIDER": "VENDORED",
+        "MR_ADM_CORE_USE_INSTALLED_DEPS": "OFF"
+      }
+    },
+    {
+      "name": "consistency-b",
+      "displayName": "Consistency baseline B (controlled numerics)",
+      "inherits": "consistency-a",
+      "binaryDir": "${sourceDir}/build/consistency-b",
+      "cacheVariables": {
+        "MR_ADM_STRICT_FP": "ON",
+        "MR_ADM_EAR_SCALAR_REFERENCE": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -51,6 +72,14 @@
     {
       "name": "quality",
       "configurePreset": "quality"
+    },
+    {
+      "name": "consistency-a",
+      "configurePreset": "consistency-a"
+    },
+    {
+      "name": "consistency-b",
+      "configurePreset": "consistency-b"
     }
   ],
   "testPresets": [

@@ -115,6 +115,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(GNUInstallDirs)
 include(MRWarnings)
+# 受控数值构建的编译标志必须在依赖被 add_subdirectory() 进来之前设好，否则 FetchContent
+# 拉下来的第三方目录拿不到（路线图 §5.1 第 3 项）。
+include(MRStrictFp)
 include(MRDependencies)
 include(MRStaticAnalysis)
 find_package(Threads REQUIRED)
