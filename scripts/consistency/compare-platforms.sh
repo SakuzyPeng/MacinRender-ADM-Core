@@ -1,158 +1,135 @@
 #!/usr/bin/env bash
-# Compare the numerical baseline outputs produced by several platforms.
-#
+# Compare complete, validated platform baselines. Numerical divergence is measurement unless
+# gated by expected-identical.txt; missing inputs/outputs and tool/IO errors always fail.
 # usage: compare-platforms.sh <pcm-bits-tool> <dir1> <dir2> [dir3 ...]
-#
-# Each <dir> is one platform's output from render-matrix.sh. Directory names are used as the
-# platform labels in the report.
-#
-# Gate policy (docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md §5.1): phase 0 measures the
-# current state, so known divergence must not turn this into a permanently red job. The full
-# table is always printed. The exit status is driven only by:
-#   - input fixtures differing between platforms, which invalidates the whole comparison, and
-#   - cases listed in expected-identical.txt, which are capabilities already shown to hold and
-#     must therefore keep holding.
-# As cases are fixed they get added to that list and become gated from then on.
-
 set -euo pipefail
+export LC_ALL=C
+shopt -s nullglob
+
+fail() { echo "error: $*" >&2; exit 2; }
+label_of() { basename "$1"; }
 
 if [ "$#" -lt 3 ]; then
-    echo "usage: $0 <pcm-bits-tool> <dir1> <dir2> [dir3 ...]" >&2
-    exit 2
+    fail "usage: $0 <pcm-bits-tool> <dir1> <dir2> [dir3 ...]"
 fi
-
 pcm_bits="$1"
 shift
 dirs=("$@")
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 expected_list="${script_dir}/expected-identical.txt"
+[ -x "$pcm_bits" ] || fail "missing or non-executable comparison tool: $pcm_bits"
+[ -f "$expected_list" ] || fail "missing gate configuration: $expected_list"
+validation_dir="$(mktemp -d)"
+trap 'rm -rf "$validation_dir"' EXIT
 
-label_of() { basename "$1"; }
+# Validate the inventories before interpreting any difference as a numerical result. Keep
+# sorted lists in private temporary files so order is irrelevant and producer errors propagate.
+for ((i = 0; i < ${#dirs[@]}; i++)); do
+    d="${dirs[i]}"
+    [ -f "$d/cases.txt" ] || fail "missing cases.txt on $d"
+    [ -d "$d/fixtures" ] && [ -d "$d/pcm" ] || fail "missing fixture/PCM directory on $d"
+    : >"$validation_dir/cases-$i"
+    while IFS= read -r name || [ -n "$name" ]; do
+        name="${name%$'\r'}"
+        [[ "$name" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]] || fail "invalid case name on $d: $name"
+        printf '%s\n' "$name" >>"$validation_dir/cases-$i"
+    done <"$d/cases.txt"
+    [ -s "$validation_dir/cases-$i" ] || fail "empty case inventory on $d"
+    sort -o "$validation_dir/cases-$i" "$validation_dir/cases-$i"
+    duplicates="$(uniq -d "$validation_dir/cases-$i")"
+    [ -z "$duplicates" ] || fail "duplicate cases on $d: $duplicates"
 
-echo "=============================================="
-echo " Cross-platform numerical baseline"
-echo "=============================================="
-echo "platforms:"
+    fixtures=("$d/fixtures/"*.wav)
+    [ "${#fixtures[@]}" -gt 0 ] || fail "empty fixture inventory on $d"
+    : >"$validation_dir/fixtures-$i"
+    for f in "${fixtures[@]}"; do
+        [ -f "$f" ] || fail "fixture is not a file: $f"
+        basename "$f" >>"$validation_dir/fixtures-$i"
+    done
+    sort -o "$validation_dir/fixtures-$i" "$validation_dir/fixtures-$i"
+    if [ "$i" -ne 0 ]; then
+        cmp -s "$validation_dir/cases-0" "$validation_dir/cases-$i" || fail "case inventories differ on $d"
+        cmp -s "$validation_dir/fixtures-0" "$validation_dir/fixtures-$i" || fail "fixture inventories differ on $d"
+    fi
+    while IFS= read -r name; do
+        bits="$d/pcm/$name.pcmbits"
+        [ -f "$bits" ] || fail "missing PCM output: $bits"
+        "$pcm_bits" validate "$bits" || fail "invalid PCM image or failed validator: $bits"
+    done <"$validation_dir/cases-$i"
+done
+
+# A missing or misspelled gate must not silently disable an assertion.
+: >"$validation_dir/gates"
+while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%%#*}"
+    line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    [ -n "$line" ] || continue
+    [[ "$line" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]] || fail "invalid gated case: $line"
+    grep -Fxq -- "$line" "$validation_dir/cases-0" || fail "gated case absent from inventory: $line"
+    printf '%s\n' "$line" >>"$validation_dir/gates"
+done <"$expected_list"
+
+printf 'Cross-platform numerical baseline\nplatforms:\n'
 for d in "${dirs[@]}"; do
     echo "  - $(label_of "$d")"
 done
-echo
 
-# ---- gate 1: inputs must match, or nothing downstream means anything ----
 echo "== input fixtures =="
-input_fail=0
 ref="${dirs[0]}"
-for f in "${ref}/fixtures/"*.wav; do
-    name="$(basename "$f")"
-    status="identical"
+while IFS= read -r name; do
     for d in "${dirs[@]:1}"; do
-        other="${d}/fixtures/${name}"
-        if [ ! -f "$other" ]; then
-            status="MISSING on $(label_of "$d")"
-            input_fail=1
-            break
-        fi
-        if ! cmp -s "$f" "$other"; then
-            status="DIFFERS on $(label_of "$d")"
-            input_fail=1
-            break
+        if ! cmp -s "$ref/fixtures/$name" "$d/fixtures/$name"; then
+            echo "error: input fixture differs or is unreadable: $name on $d" >&2
+            exit 1
         fi
     done
-    printf '  %-28s %s\n' "$name" "$status"
-done
-echo
+    printf '  %-28s identical\n' "$name"
+done <"$validation_dir/fixtures-0"
 
-if [ "$input_fail" -ne 0 ]; then
-    echo "error: input fixtures differ between platforms; output comparison would be meaningless." >&2
-    echo "       the generator is integer-only by construction, so this indicates a real bug." >&2
-    exit 1
-fi
-
-# ---- the report ----
-declare -a differing=()
-declare -a identical=()
-
-echo "== rendered PCM =="
-while read -r case_name; do
-    [ -n "$case_name" ] || continue
-    ref_bits="${ref}/pcm/${case_name}.pcmbits"
-    if [ ! -f "$ref_bits" ]; then
-        printf '  %-32s %s\n' "$case_name" "MISSING on $(label_of "$ref")"
-        differing+=("$case_name")
-        continue
-    fi
-
-    case_status="identical"
-    for d in "${dirs[@]:1}"; do
-        other="${d}/pcm/${case_name}.pcmbits"
-        if [ ! -f "$other" ]; then
-            case_status="MISSING on $(label_of "$d")"
-            break
-        fi
-        if ! cmp -s "$ref_bits" "$other"; then
-            case_status="differs: $(label_of "$ref") vs $(label_of "$d")"
-            break
-        fi
-    done
-
-    printf '  %-32s %s\n' "$case_name" "$case_status"
-    if [ "$case_status" = "identical" ]; then
-        identical+=("$case_name")
-    else
-        differing+=("$case_name")
-    fi
-done <"${ref}/cases.txt"
-echo
-
-# ---- localisation for whatever differs ----
-if [ "${#differing[@]}" -ne 0 ]; then
-    echo "== first difference per diverging case =="
-    for case_name in "${differing[@]}"; do
-        for d in "${dirs[@]:1}"; do
-            a="${ref}/pcm/${case_name}.pcmbits"
-            b="${d}/pcm/${case_name}.pcmbits"
-            if [ -f "$a" ] && [ -f "$b" ] && ! cmp -s "$a" "$b"; then
-                echo "-- ${case_name}: $(label_of "$ref") vs $(label_of "$d")"
-                "$pcm_bits" compare "$a" "$b" || true
-                break
+echo "== rendered PCM (all platform pairs) =="
+identical=()
+differing=()
+while IFS= read -r name; do
+    case_identical=1
+    for ((i = 0; i < ${#dirs[@]} - 1; i++)); do
+        for ((j = i + 1; j < ${#dirs[@]}; j++)); do
+            a="${dirs[i]}/pcm/$name.pcmbits"
+            b="${dirs[j]}/pcm/$name.pcmbits"
+            printf '  %s: %s vs %s: ' "$name" "$(label_of "${dirs[i]}")" "$(label_of "${dirs[j]}")"
+            if "$pcm_bits" compare "$a" "$b" >"$validation_dir/comparison" 2>&1; then
+                echo "identical"
+            else
+                status=$?
+                cat "$validation_dir/comparison"
+                [ "$status" -eq 1 ] || fail "comparison tool failed with status $status for $name"
+                case_identical=0
             fi
         done
     done
-    echo
-fi
-
-echo "== summary =="
-echo "  identical: ${#identical[@]}"
-echo "  differing: ${#differing[@]}"
-echo
-
-# ---- gate 2: previously-passing cases must keep passing ----
-gate_fail=0
-if [ -f "$expected_list" ]; then
-    echo "== gated cases (expected-identical.txt) =="
-    gated=0
-    while read -r line; do
-        line="${line%%#*}"
-        line="$(echo "$line" | tr -d '[:space:]')"
-        [ -n "$line" ] || continue
-        gated=$((gated + 1))
-        if printf '%s\n' "${identical[@]:-}" | grep -qx "$line"; then
-            printf '  %-32s ok\n' "$line"
-        else
-            printf '  %-32s REGRESSED\n' "$line"
-            gate_fail=1
-        fi
-    done <"$expected_list"
-    if [ "$gated" -eq 0 ]; then
-        echo "  (none yet — populate from the first full three-platform run)"
+    if [ "$case_identical" -eq 1 ]; then
+        identical+=("$name")
+    else
+        differing+=("$name")
     fi
-    echo
-fi
+done <"$validation_dir/cases-0"
 
+printf '\n== summary ==\n  identical: %s\n  differing: %s\n' "${#identical[@]}" "${#differing[@]}"
+printf '%s\n' "${identical[@]:-}" >"$validation_dir/identical"
+echo "== gated cases (expected-identical.txt) =="
+gate_fail=0
+while IFS= read -r name; do
+    if grep -Fxq -- "$name" "$validation_dir/identical"; then
+        printf '  %-32s ok\n' "$name"
+    else
+        printf '  %-32s REGRESSED\n' "$name"
+        gate_fail=1
+    fi
+done <"$validation_dir/gates"
+if [ ! -s "$validation_dir/gates" ]; then
+    echo "  (none yet — populate from the first full three-platform run)"
+fi
 if [ "$gate_fail" -ne 0 ]; then
-    echo "error: a case listed in expected-identical.txt is no longer bit-identical." >&2
+    echo "error: a gated case is no longer bit-identical." >&2
     exit 1
 fi
-
-echo "baseline recorded. divergence above is measurement, not a gate;"
-echo "add a case to scripts/consistency/expected-identical.txt once it is fixed."
+echo "baseline recorded; ungated numerical divergence is measurement, not a gate."

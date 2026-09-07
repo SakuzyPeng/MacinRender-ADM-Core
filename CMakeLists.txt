@@ -752,9 +752,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # Cross-platform numerical baseline tool (docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md §6.1).
     # Extracts the final float32 PCM as a canonical little-endian bit image and bit-compares two
-    # such images. Excluded from the default build like the other non-CTest tools; CI builds it
-    # explicitly with --target mr_adm_pcm_bits.
-    add_executable(mr_adm_pcm_bits EXCLUDE_FROM_ALL tests/tools/pcm_bits.cpp)
+    # such images. Built by default so the CLI/protocol regression test can run through CTest.
+    add_executable(mr_adm_pcm_bits tests/tools/pcm_bits.cpp)
     target_link_libraries(mr_adm_pcm_bits PRIVATE MacinRender::ADMAudio)
     mr_adm_core_apply_warnings(mr_adm_pcm_bits)
     mr_adm_core_apply_static_analysis(mr_adm_pcm_bits)
@@ -765,6 +764,32 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_make_fixture PRIVATE libbw64 adm)
     mr_adm_core_apply_warnings(mr_adm_make_fixture)
     mr_adm_core_apply_static_analysis(mr_adm_make_fixture)
+
+    # Explicitly built in Release by the baseline workflow; measures state across two renders.
+    add_executable(mr_adm_repeat_render EXCLUDE_FROM_ALL tests/tools/repeat_render.cpp)
+    target_link_libraries(mr_adm_repeat_render PRIVATE MacinRender::ADMEngine)
+    mr_adm_core_apply_warnings(mr_adm_repeat_render)
+    mr_adm_core_apply_static_analysis(mr_adm_repeat_render)
+
+    # Standard-library-only Python tests exercise the actual executable and shell exit codes.
+    # Native builds without Python can still use the tools; the consistency workflow requires
+    # this test explicitly on each runner so its checks cannot silently disappear there.
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        if(WIN32)
+            find_program(MR_ADM_CONSISTENCY_BASH NAMES bash
+                PATHS "$ENV{ProgramFiles}/Git/bin" "$ENV{ProgramFiles}/Git/usr/bin" NO_DEFAULT_PATH)
+        else()
+            find_program(MR_ADM_CONSISTENCY_BASH NAMES bash)
+        endif()
+        set(_mr_consistency_bash "")
+        if(MR_ADM_CONSISTENCY_BASH)
+            set(_mr_consistency_bash "${MR_ADM_CONSISTENCY_BASH}")
+        endif()
+        add_test(NAME mr_adm_consistency_tool_tests
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/consistency_tools_test.py"
+                --pcm-bits $<TARGET_FILE:mr_adm_pcm_bits> --bash "${_mr_consistency_bash}")
+    endif()
 
     add_executable(mr_adm_semantic_policy_tests tests/unit/semantic_policy_test.cpp)
     target_link_libraries(mr_adm_semantic_policy_tests PRIVATE MacinRender::ADMCore)

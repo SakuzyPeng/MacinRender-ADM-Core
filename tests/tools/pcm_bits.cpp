@@ -30,6 +30,7 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -51,6 +52,15 @@ struct PcmImage {
     uint64_t frames{0};
     std::vector<uint32_t> bits; // frames * channels, interleaved, host order
 };
+
+[[nodiscard]] bool valid_shape(const std::string& path, const PcmImage& img) {
+    if (img.channels == 0U || img.sample_rate == 0U ||
+        img.frames > std::numeric_limits<std::size_t>::max() / img.channels) {
+        std::cerr << "error: invalid or overflowing PCM shape in " << path << "\n";
+        return false;
+    }
+    return true;
+}
 
 void put_u32_le(std::vector<uint8_t>& out, uint32_t v) {
     out.push_back(static_cast<uint8_t>(v & 0xFFU));
@@ -106,8 +116,7 @@ void put_u64_le(std::vector<uint8_t>& out, uint64_t v) {
     img.channels = reader.channels();
     img.sample_rate = reader.sample_rate();
     img.frames = reader.frame_count();
-    if (img.channels == 0U) {
-        std::cerr << "error: " << path << " reports zero channels\n";
+    if (!valid_shape(path, img)) {
         return false;
     }
 
@@ -160,6 +169,9 @@ void put_u64_le(std::vector<uint8_t>& out, uint64_t v) {
     img.channels = get_u32_le(raw.data() + 8);
     img.sample_rate = get_u32_le(raw.data() + 12);
     img.frames = get_u64_le(raw.data() + 16);
+    if (!valid_shape(path, img)) {
+        return false;
+    }
 
     const std::size_t payload = raw.size() - k_header_bytes;
     if ((payload % 4U) != 0U) {
@@ -176,6 +188,11 @@ void put_u64_le(std::vector<uint8_t>& out, uint64_t v) {
     img.bits.resize(samples);
     for (std::size_t i = 0; i < samples; ++i) {
         img.bits[i] = get_u32_le(raw.data() + k_header_bytes + (i * 4U));
+        if (!std::isfinite(std::bit_cast<float>(img.bits[i]))) {
+            std::cerr << "error: non-finite sample in " << path << " at frame " << (i / img.channels) << " channel "
+                      << (i % img.channels) << "\n";
+            return false;
+        }
     }
     return true;
 }
@@ -212,7 +229,8 @@ void put_u64_le(std::vector<uint8_t>& out, uint64_t v) {
         return false;
     }
     const std::size_t wrote = std::fwrite(out.data(), 1, out.size(), f);
-    const bool ok = wrote == out.size() && std::fclose(f) == 0;
+    const int close_status = std::fclose(f);
+    const bool ok = wrote == out.size() && close_status == 0;
     if (!ok) {
         std::cerr << "error: short write for " << path << "\n";
     }
@@ -220,11 +238,12 @@ void put_u64_le(std::vector<uint8_t>& out, uint64_t v) {
 }
 
 // Map a float onto a monotonically ordered integer so that ULP distance is a plain subtraction
-// across the sign boundary. Used only for diagnostics — the pass/fail decision stays a bit
-// comparison, per the contract.
+// across the sign boundary. Negative bit patterns run in reverse order; complement them,
+// then put positive patterns above them. -0 and +0 are adjacent (distance 1). Used only for
+// diagnostics — the pass/fail decision stays a bit comparison, per the contract.
 [[nodiscard]] int64_t ordered_key(uint32_t bits) {
-    const auto signed_bits = static_cast<int64_t>(static_cast<int32_t>(bits));
-    return signed_bits >= 0 ? signed_bits : (static_cast<int64_t>(0x80000000) - signed_bits);
+    constexpr uint32_t k_sign = 0x80000000U;
+    return static_cast<int64_t>((bits & k_sign) != 0U ? ~bits : (bits | k_sign));
 }
 
 void print_meta(const std::string& label, const PcmImage& img) {
@@ -235,10 +254,10 @@ void print_meta(const std::string& label, const PcmImage& img) {
 [[nodiscard]] int run_extract(const std::string& in_path, const std::string& out_path) {
     PcmImage img;
     if (!load_audio(in_path, img)) {
-        return 1;
+        return 2;
     }
     if (!write_image(out_path, img)) {
-        return 1;
+        return 2;
     }
     print_meta("extracted", img);
     return 0;
@@ -302,6 +321,7 @@ void print_meta(const std::string& label, const PcmImage& img) {
 void print_usage() {
     std::cerr << "usage:\n"
               << "  mr_adm_pcm_bits extract <audio-in> <bits-out>\n"
+              << "  mr_adm_pcm_bits validate <image>     # validate a canonical .pcmbits image\n"
               << "  mr_adm_pcm_bits compare <a> <b>        # .pcmbits images or audio files\n"
               << "exit: 0 identical / 1 differ / 2 usage or IO error\n";
 }
@@ -315,6 +335,10 @@ int main(int argc, char** argv) {
         return 2;
     }
     const std::string_view mode = args[1];
+    if (mode == "validate" && args.size() == 3) {
+        PcmImage img;
+        return load_image_file(std::string{args[2]}, img) ? 0 : 2;
+    }
     if (mode == "extract" && args.size() == 4) {
         return run_extract(std::string{args[2]}, std::string{args[3]});
     }
