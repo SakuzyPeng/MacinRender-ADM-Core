@@ -124,6 +124,10 @@ C++ 核心不能写成未来 Rust 的障碍。需要从第一阶段就保持：
 - 从第一阶段就要求 C ABI、模块化后端和 golden fixtures。
 - 后续新增公共 API 时评估跨语言绑定影响。
 
+## 后续
+
+第二阶段的具体化见 [ADR 0008：Rust 落地方向与 SAF 按模块替换](0008-rust-entry-and-saf-replacement.md)——它基于对依赖树的实测盘点，确定了首个 Rust 落点、`libear` 永久保留的边界，以及 SAF 作为唯一替换目标的路线。ADR 0008 不推翻本 ADR。
+
 ## 参考资料
 
 - `libear` 文档：https://libear.readthedocs.io/
