@@ -11,6 +11,7 @@
 #   fixtures/<kind>.wav        deterministic inputs (byte-compared across runners first)
 #   pcm/<case>.pcmbits         canonical little-endian float32 bit image of the rendered PCM
 #   cases.txt                  the case list actually run, for the compare job to iterate
+#   repeats/                   two renders per fixture in one process, logs and PCM comparisons
 #
 # Design notes tied to the determinism contract (docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md §6.1):
 #   - Output is always float32. Integer quantisation and encoder output are validated separately.
@@ -37,8 +38,9 @@ sfx="${3:-}"
 mradm="${bin_dir}/mradm${sfx}"
 pcm_bits="${bin_dir}/mr_adm_pcm_bits${sfx}"
 make_fixture="${bin_dir}/mr_adm_make_fixture${sfx}"
+repeat_render="${bin_dir}/mr_adm_repeat_render${sfx}"
 
-for tool in "$mradm" "$pcm_bits" "$make_fixture"; do
+for tool in "$mradm" "$pcm_bits" "$make_fixture" "$repeat_render"; do
     if [ ! -x "$tool" ]; then
         echo "error: missing or non-executable: $tool" >&2
         exit 2
@@ -50,7 +52,7 @@ pcm_dir="${out_dir}/pcm"
 mkdir -p "$fixture_dir" "$pcm_dir"
 
 echo "== generating fixtures =="
-for kind in objects-point objects-extent directspeakers hoa; do
+for kind in objects-point objects-extent objects-extent-multi directspeakers hoa; do
     "$make_fixture" "$kind" "${fixture_dir}/${kind}.wav"
 done
 
@@ -68,6 +70,7 @@ hoa-hoa3-point|objects-point|--renderer hoa --output-layout hoa3 --no-peak-limit
 binaural-point|objects-point|--renderer saf-binaural --output-layout binaural --no-peak-limit
 binaural-extent-cloud|objects-extent|--renderer saf-binaural --output-layout binaural --no-peak-limit --binaural-spread-mode cloud
 binaural-extent-spreader|objects-extent|--renderer saf-binaural --output-layout binaural --no-peak-limit --binaural-spread-mode saf-spreader
+binaural-extent-spreader-multi|objects-extent-multi|--renderer saf-binaural --output-layout binaural --no-peak-limit --binaural-spread-mode saf-spreader
 EOF
 )
 
@@ -78,9 +81,11 @@ echo "== rendering matrix =="
 while IFS='|' read -r name kind args; do
     [ -n "$name" ] || continue
     wav="${out_dir}/${name}.wav"
-    # shellcheck disable=SC2086 -- args is a deliberate word-split argument list
-    if ! "$mradm" render -i "${fixture_dir}/${kind}.wav" -o "$wav" --output-bit-depth f32 $args >/dev/null 2>&1; then
+    # args is a deliberate word-split argument list.
+    # shellcheck disable=SC2086
+    if ! "$mradm" render -i "${fixture_dir}/${kind}.wav" -o "$wav" --output-bit-depth f32 $args >"${out_dir}/${name}.log" 2>&1; then
         echo "FAIL render: $name" >&2
+        cat "${out_dir}/${name}.log" >&2
         failures=$((failures + 1))
         continue
     fi
@@ -100,3 +105,27 @@ if [ "$failures" -ne 0 ]; then
 fi
 
 echo "== done: $(wc -l <"${out_dir}/cases.txt") case(s) =="
+
+# Each invocation runs twice inside a single process, preserving global state. The multi-track
+# input also exercises multiple OLA sources/spreader groups on multicore machines. Logs record
+# hardware_concurrency and preparation counts; this is not a fixed-worker-count experiment.
+mkdir -p "${out_dir}/repeats"
+for kind in objects-extent objects-extent-multi; do
+    prefix="${out_dir}/repeats/${kind}"
+    if ! "$repeat_render" "${fixture_dir}/${kind}.wav" "$prefix" >"${prefix}.log" 2>&1; then
+        cat "${prefix}.log" >&2
+        exit 2
+    fi
+    for pass in 1 2; do
+        "$pcm_bits" extract "${prefix}-${pass}.wav" "${prefix}-${pass}.pcmbits"
+        rm -f "${prefix}-${pass}.wav"
+    done
+    if "$pcm_bits" compare "${prefix}-1.pcmbits" "${prefix}-2.pcmbits" >"${prefix}.comparison.txt" 2>&1; then
+        echo "same-process $kind: identical"
+    else
+        status=$?
+        cat "${prefix}.comparison.txt"
+        [ "$status" -eq 1 ] || exit "$status"
+        echo "same-process $kind: differs (phase 0 measurement)"
+    fi
+done

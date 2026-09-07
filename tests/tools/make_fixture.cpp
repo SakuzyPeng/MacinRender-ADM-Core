@@ -7,25 +7,28 @@
 //   - The sample values come from a 32-bit LCG. The integer is mapped to float by subtracting
 //     2^23 and dividing by 2^23. Both steps are exact in binary32 (|v| <= 2^23 converts
 //     exactly, and the divisor is a power of two), so no libm and no rounding choice is
-//     involved. The values are also exactly representable at 24-bit, so the container write
-//     quantises losslessly.
+//     involved. libbw64 subsequently applies its fixed 24-bit quantisation; the generated
+//     container bytes are compared across platforms too.
 //   - Positions, extents and gains are exact decimals that round-trip through the ADM XML text.
 //
-// CI still hashes the generated inputs on each runner and compares them before rendering; this
+// CI compares generated input bytes before interpreting output differences; this
 // generator is designed so that check passes, not assumed to.
 //
 // Kinds:
 //   objects-point    1 Objects channel, no extent  — clean gain path, no decorrelator
 //   objects-extent   1 Objects channel with width/height/diffuse — drives the decorrelator and,
 //                    with --binaural-spread-mode saf-spreader, the SAF OM spreader
+//   objects-extent-multi  3 Objects tracks — enables multiple OLA sources / spreader groups
 //   directspeakers   5.1 bed — DirectSpeakers gain calculation plus LFE routing
 //   hoa              HOA1 (4 channels) — HOA-typed input path
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -60,9 +63,7 @@ constexpr uint16_t k_bit_depth = 24;
 [[nodiscard]] std::vector<float> make_signal(uint32_t channels, uint32_t frames, uint32_t seed) {
     std::vector<float> out(static_cast<std::size_t>(frames) * channels);
     uint32_t state = seed;
-    for (float& s : out) {
-        s = exact_sample(lcg_next(state));
-    }
+    std::ranges::generate(out, [&state] { return exact_sample(lcg_next(state)); });
     return out;
 }
 
@@ -115,29 +116,37 @@ void finish_doc(const std::shared_ptr<adm::Document>& doc,
     adm::reassignIds(doc);
 }
 
-[[nodiscard]] BuiltDoc build_objects(bool with_extent) {
+[[nodiscard]] BuiltDoc build_objects(bool with_extent, int track_count = 1) {
     auto doc = adm::Document::create();
-
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"ObjCF"}, adm::TypeDefinition::OBJECTS);
-    adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{0.0F}}};
-    if (with_extent) {
-        // Width well above the binaural spreader's 1.0 deg gate so the OM path is actually
-        // reached when --binaural-spread-mode saf-spreader is set; diffuse drives the
-        // BS.2127 decorrelator.
-        block.set(adm::Width{30.0F});
-        block.set(adm::Height{10.0F});
-        block.set(adm::Diffuse{0.5F});
+    std::vector<std::shared_ptr<adm::AudioTrackUid>> uids;
+    for (int i = 0; i < track_count; ++i) {
+        const std::string suffix = track_count == 1 ? "" : std::to_string(i);
+        auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"ObjCF" + suffix},
+                                                  adm::TypeDefinition::OBJECTS);
+        adm::AudioBlockFormatObjects block{
+            adm::SphericalPosition{adm::Azimuth{30.0F - (static_cast<float>(i) * 60.0F)}, adm::Elevation{0.0F}}};
+        if (with_extent) {
+            // Width exceeds the spreader gate; diffuse keeps the OLA bus active as well.
+            block.set(adm::Width{30.0F});
+            block.set(adm::Height{10.0F});
+            block.set(adm::Diffuse{0.5F});
+        }
+        cf->add(block);
+        doc->add(cf);
+        auto pf =
+            adm::AudioPackFormat::create(adm::AudioPackFormatName{"ObjPF" + suffix}, adm::TypeDefinition::OBJECTS);
+        pf->addReference(cf);
+        doc->add(pf);
+        uids.push_back(wire_channel(doc, cf, pf, "Obj" + suffix));
     }
-    cf->add(block);
-    doc->add(cf);
-
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"ObjPF"}, adm::TypeDefinition::OBJECTS);
-    pf->addReference(cf);
-    doc->add(pf);
-
-    const auto uid = wire_channel(doc, cf, pf, "Obj");
-    finish_doc(doc, {uid}, with_extent ? "ObjectsExtent" : "ObjectsPoint");
-    return {doc, {adm::formatId(uid->get<adm::AudioTrackUidId>())}};
+    const std::string name = with_extent ? "ObjectsExtent" : "ObjectsPoint";
+    finish_doc(doc, uids, name + (track_count == 1 ? "" : "Multi"));
+    std::vector<std::string> uid_strs;
+    uid_strs.reserve(uids.size());
+    std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
+        return adm::formatId(uid->template get<adm::AudioTrackUidId>());
+    });
+    return {doc, uid_strs};
 }
 
 [[nodiscard]] BuiltDoc build_direct_speakers() {
@@ -176,9 +185,9 @@ void finish_doc(const std::shared_ptr<adm::Document>& doc,
 
     finish_doc(doc, uids, "DirectSpeakers");
     uid_strs.reserve(uids.size());
-    for (const auto& uid : uids) {
-        uid_strs.push_back(adm::formatId(uid->get<adm::AudioTrackUidId>()));
-    }
+    std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
+        return adm::formatId(uid->template get<adm::AudioTrackUidId>());
+    });
     return {doc, uid_strs};
 }
 
@@ -211,14 +220,14 @@ void finish_doc(const std::shared_ptr<adm::Document>& doc,
 
     finish_doc(doc, uids, "Hoa1");
     uid_strs.reserve(uids.size());
-    for (const auto& uid : uids) {
-        uid_strs.push_back(adm::formatId(uid->get<adm::AudioTrackUidId>()));
-    }
+    std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
+        return adm::formatId(uid->template get<adm::AudioTrackUidId>());
+    });
     return {doc, uid_strs};
 }
 
 [[nodiscard]] bool write_fixture(const BuiltDoc& built, const std::string& out_path, uint32_t seed) {
-    const auto channels = static_cast<uint32_t>(built.uids.size());
+    const auto channels = static_cast<uint16_t>(built.uids.size());
 
     std::ostringstream xml_buf;
     adm::writeXml(xml_buf, built.doc);
@@ -243,7 +252,7 @@ void finish_doc(const std::shared_ptr<adm::Document>& doc,
 
 void print_usage() {
     std::cerr << "usage: mr_adm_make_fixture <kind> <out.wav>\n"
-              << "kinds: objects-point | objects-extent | directspeakers | hoa\n";
+              << "kinds: objects-point | objects-extent | objects-extent-multi | directspeakers | hoa\n";
 }
 
 } // namespace
@@ -266,6 +275,9 @@ int main(int argc, char** argv) {
     } else if (kind == "objects-extent") {
         built = build_objects(true);
         seed = 0x22222222U;
+    } else if (kind == "objects-extent-multi") {
+        built = build_objects(true, 3);
+        seed = 0x55555555U;
     } else if (kind == "directspeakers") {
         built = build_direct_speakers();
         seed = 0x33333333U;
