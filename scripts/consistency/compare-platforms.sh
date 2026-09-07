@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Compare complete, validated platform baselines. Numerical divergence is measurement unless
-# gated by expected-identical.txt; missing inputs/outputs and tool/IO errors always fail.
-# usage: compare-platforms.sh <pcm-bits-tool> <dir1> <dir2> [dir3 ...]
+# gated by the gate list; missing inputs/outputs and tool/IO errors always fail.
+# usage: compare-platforms.sh [--expected <file>] <pcm-bits-tool> <dir1> <dir2> [dir3 ...]
+#
+# --expected selects the gate list, defaulting to expected-identical.txt next to this script.
+# The default and controlled builds (roadmap §5.1 configs A and B) converge on different sets of
+# cases, so they keep separate lists: gating the default build on something only the controlled
+# build achieves would make it permanently red for a result it never claimed.
 set -euo pipefail
 export LC_ALL=C
 shopt -s nullglob
@@ -9,14 +14,26 @@ shopt -s nullglob
 fail() { echo "error: $*" >&2; exit 2; }
 label_of() { basename "$1"; }
 
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+expected_list="${script_dir}/expected-identical.txt"
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --expected)
+            [ "$#" -ge 2 ] || fail "--expected needs a file"
+            expected_list="$2"
+            shift 2
+            ;;
+        --) shift; break ;;
+        *) break ;;
+    esac
+done
+
 if [ "$#" -lt 3 ]; then
-    fail "usage: $0 <pcm-bits-tool> <dir1> <dir2> [dir3 ...]"
+    fail "usage: $0 [--expected <file>] <pcm-bits-tool> <dir1> <dir2> [dir3 ...]"
 fi
 pcm_bits="$1"
 shift
 dirs=("$@")
-script_dir="$(cd "$(dirname "$0")" && pwd)"
-expected_list="${script_dir}/expected-identical.txt"
 [ -x "$pcm_bits" ] || fail "missing or non-executable comparison tool: $pcm_bits"
 [ -f "$expected_list" ] || fail "missing gate configuration: $expected_list"
 validation_dir="$(mktemp -d)"
@@ -115,7 +132,7 @@ done <"$validation_dir/cases-0"
 
 printf '\n== summary ==\n  identical: %s\n  differing: %s\n' "${#identical[@]}" "${#differing[@]}"
 printf '%s\n' "${identical[@]:-}" >"$validation_dir/identical"
-echo "== gated cases (expected-identical.txt) =="
+echo "== gated cases ($(basename "$expected_list")) =="
 gate_fail=0
 while IFS= read -r name; do
     if grep -Fxq -- "$name" "$validation_dir/identical"; then

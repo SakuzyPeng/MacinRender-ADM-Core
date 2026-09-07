@@ -318,6 +318,13 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         set(EAR_EXAMPLES OFF CACHE BOOL "" FORCE)
         set(EAR_USE_INTERNAL_EIGEN ON CACHE BOOL "" FORCE)
         set(EAR_USE_INTERNAL_XSIMD ON CACHE BOOL "" FORCE)
+        if(MR_ADM_EAR_SCALAR_REFERENCE)
+            # 受控标量参考（路线图 §5.1 第 4 项）。关掉 per-arch 目标后 libear 的
+            # XSIMD_ARCHS 只剩 xsimd::generic_for_dispatch，运行时分派进标量实现。
+            # 注意 ear_default_arch 不是标量——它是 PolarExtentCoreSimd<xsimd::default_arch>，
+            # 随目标架构变化（x86_64 上通常是 SSE2，arm64 上是 NEON）。
+            set(EAR_SIMD OFF CACHE BOOL "" FORCE)
+        endif()
         FetchContent_Declare(
             libear
             GIT_REPOSITORY https://github.com/ebu/libear.git
@@ -508,6 +515,18 @@ mr_adm_core_find_or_fetch(FLAC FLAC::FLAC)
 mr_adm_core_find_or_fetch(libbw64 libbw64)
 mr_adm_core_find_or_fetch(libadm adm)
 mr_adm_core_find_or_fetch(libear ear)
+if(MR_ADM_EAR_SCALAR_REFERENCE)
+    # <name>_SOURCE_DIR 是 FetchContent 在函数作用域里设的普通变量，这里读不到；
+    # FetchContent_GetProperties 从全局属性重新取，跨作用域可用。
+    FetchContent_GetProperties(libear)
+    if(NOT libear_POPULATED)
+        # 装好的 libear 是别人用自己的 EAR_SIMD 编的，本项目的开关对它无效。静默沿用会让
+        # 配置 B 的「标量参考」结论完全站不住，所以直接失败而不是降级。
+        message(FATAL_ERROR
+            "MR_ADM_EAR_SCALAR_REFERENCE=ON 需要由本项目构建 libear，但当前用的是已安装的包。"
+            "请加 -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF 重新配置。")
+    endif()
+endif()
 mr_adm_core_find_or_fetch(Spatial_Audio_Framework saf)
 mr_adm_core_find_or_fetch(Opus Opus::opus)
 mr_adm_core_find_or_fetch(miniaudio miniaudio)

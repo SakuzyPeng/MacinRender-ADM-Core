@@ -134,12 +134,13 @@ class ScriptTests(Harness):
             (d / 'fixtures/input.wav').write_bytes(wav_bytes([0x3E800000]))
             (d / 'pcm/probe.pcmbits').write_bytes(image_bytes([0x3E800000]))
 
-    def command(self, tool=None):
-        return [self.bash, self.script.as_posix(), (tool or self.tool).as_posix(),
+    def command(self, tool=None, expected=None):
+        flag = ['--expected', Path(expected).as_posix()] if expected else []
+        return [self.bash, self.script.as_posix(), *flag, (tool or self.tool).as_posix(),
                 *[d.as_posix() for d in self.dirs]]
 
-    def compare(self, tool=None):
-        return subprocess.run(self.command(tool), capture_output=True, text=True)
+    def compare(self, tool=None, expected=None):
+        return subprocess.run(self.command(tool, expected), capture_output=True, text=True)
 
     def test_complete_and_ungated_different_baselines(self):
         self.assert_status(self.compare(), 0)
@@ -203,6 +204,27 @@ class ScriptTests(Harness):
     def test_unknown_gated_case_is_an_error(self):
         self.gates.write_text('unknown\n', encoding='utf-8')
         self.assert_status(self.compare(), 2)
+
+    def test_alternate_gate_list_replaces_the_default(self):
+        # The controlled build (roadmap config B) gates on its own list, so --expected must both
+        # take effect and leave the default list unused.
+        self.gates.write_text('probe\n', encoding='utf-8')
+        other = self.root / 'expected-identical-controlled.txt'
+        other.write_text('# Ungated.\n', encoding='utf-8')
+        (self.dirs[1] / 'pcm/probe.pcmbits').write_bytes(image_bytes([0x3F000000]))
+        self.assert_status(self.compare(), 1)
+        result = self.compare(expected=other)
+        self.assert_status(result, 0)
+        self.assertIn('expected-identical-controlled.txt', result.stdout)
+
+    def test_alternate_gate_list_is_enforced_and_must_exist(self):
+        other = self.root / 'expected-identical-controlled.txt'
+        other.write_text('probe\n', encoding='utf-8')
+        self.assert_status(self.compare(expected=other), 0)
+        (self.dirs[1] / 'pcm/probe.pcmbits').write_bytes(image_bytes([0x3F000000]))
+        self.assert_status(self.compare(expected=other), 1)
+        other.unlink()
+        self.assert_status(self.compare(expected=other), 2)
 
 
 if __name__ == '__main__':
