@@ -126,7 +126,7 @@ C++ 核心不能写成未来 Rust 的障碍。需要从第一阶段就保持：
 
 ## 后续
 
-第二阶段的具体化见 [ADR 0008：Rust 落地方向与 SAF 按模块替换](0008-rust-entry-and-saf-replacement.md)——它基于对依赖树的实测盘点，确定了首个 Rust 落点、`libear` 永久保留的边界，以及 SAF 作为唯一替换目标的路线。ADR 0008 不推翻本 ADR。
+第二阶段的具体化见 [ADR 0008：Rust 落地方向与 SAF 按模块替换](0008-rust-entry-and-saf-replacement.md)。它确定了同仓库 Cargo workspace、保留 `libear` 标准算法实现、优先替换 SAF 数学模块的路线，同时要求审计所有会影响 PCM 的数值路径。保留依赖不代表其数学实现已满足跨平台逐位一致；具体替换范围由基线验证决定。ADR 0008 不推翻本 ADR。
 
 ## 参考资料
 
