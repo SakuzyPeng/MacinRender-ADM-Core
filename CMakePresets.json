@@ -46,7 +46,10 @@
       "cacheVariables": {
         "MR_ADM_FLAC_PROVIDER": "VENDORED",
         "MR_ADM_OPUS_PROVIDER": "VENDORED",
-        "MR_ADM_CORE_USE_INSTALLED_DEPS": "OFF"
+        "MR_ADM_CORE_USE_INSTALLED_DEPS": "OFF",
+        "MR_ADM_STRICT_FP": "OFF",
+        "MR_ADM_EAR_SCALAR_REFERENCE": "OFF",
+        "EAR_SIMD": "ON"
       }
     },
     {
