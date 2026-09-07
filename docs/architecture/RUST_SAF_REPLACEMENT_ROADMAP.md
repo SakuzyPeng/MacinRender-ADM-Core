@@ -1,210 +1,220 @@
 # Rust 落地与 SAF 替换路线图
 
-> 状态：规划中（阶段 0 第 1 项已完成，其余未开工）。本文是 ADR 0008 的执行细节：`rust/` workspace 的 crate 划分与理由、Cargo↔CMake 集成的具体约束、四个阶段的内容与退出条件、差分测试与跨平台一致性验证的搭法。
+> 状态：规划中。EAR 的 FFT 后端注释已修正；构建改造、Rust 模块及三平台数值验证尚未实现。
 >
-> 相关：ADR 0008（Rust 落地方向与 SAF 按模块替换）、ADR 0002（语言路线）、ADR 0003（后端边界）、ADR 0004（依赖接入）、ADR 0007（C ABI 稳定性）。
+> 本文落实 [ADR 0008](../adr/0008-rust-entry-and-saf-replacement.md) 的模块边界与确定性契约，沿用 ADR 0002 / 0003 / 0004 / 0005 / 0007 的语言、依赖、错误处理和 ABI 约束。
 
-## 1. 目标与非目标
+## 1. 目标与范围
 
-**目标**：消除跨平台浮点分歧，同时按模块收敛对 SAF 的依赖。
+目标是在 macOS arm64、Windows x64、Linux x64 上，对相同输入、参数和实现版本产生逐位一致的最终 float32 PCM，并逐步减少原生数学库依赖。首批替换重点是 SAF 数学模块，数值审计覆盖完整调用链。
 
-**非目标**：
-- 不重写 `libear`（BS.2127 增益计算永久保留，见 ADR 0008 决策一）
-- 不替换 `libadm` / `libbw64`（不是 SAF 问题，超出本路线定位）
-- 不替换双耳 HRTF / afSTFT / SOFA 链路（风险最高，须在前序阶段建立差分测试信任后单独决策）
-- 不让 Rust 拥有 `adm_c_api`，GUI 边界零变更
+本路线保留 `libear` 的 BS.2127 算法实现及 `libadm` / `libbw64` 的 IO 职责，不复制完整场景模型，不改变 GUI 的公开 C ABI。保留的模块若仍影响 PCM，必须统一其数值实现或继续列为阻塞项。HRTF / afSTFT / SOFA 不预设为全量重写目标，也不能整体标作“无需验证”。
 
-## 2. 现状：SAF 的实际调用面
+验收按 renderer × 布局 × 语义 / 后处理组合记录。软件渲染的承诺不覆盖 Apple AUSpatialMixer、设备混音或系统编码器；整数量化和编码文件另行验证。
 
-实测 30 个函数，跨 8 个区域。上游代码量已剔除数据表（`saf_utility_loudspeaker_presets.c` 的 53,500 行是数据不是代码）。
+## 2. 现状：从调用点追踪到实际计算
 
-| 区域 | 项目调用的函数 | 上游真实代码量 | 是否为分歧源 | 处置阶段 |
-|---|---|---|---|---|
-| FFT | `saf_rfft_{create,forward,backward,destroy}` | 973 + kissFFT 952 | **是**（vDSP vs KissFFT） | 阶段 1 |
-| veclib | `utility_{cseig,siminv,cvsmul,svsmul,svvcopy}` | 4,800（92 处 BLAS/LAPACK） | **是**（`cseig` → LAPACK `cheev_`） | 阶段 2 |
-| VBAP | `generateVBAPgainTable{3D,3D_srcs,2D_srcs}` | 1,592 + convhull_3d 1,672 | 间接（内部走 BLAS） | 阶段 3 |
-| HOA 解码 | `getLoudspeakerDecoderMtx` | saf_hoa 2,085 + saf_sh 4,894 | 间接（内部走 BLAS） | 阶段 3 |
-| HRIR | `HRIRs2HRTFs` + 内置 KEMAR 数据 | 764 代码 + 1,714 数据表 | 间接 | 不在本路线 |
-| SOFA | `saf_sofa_{open,close}` | 919 + libmysofa 5,057 + zlib 11,296 | 否 | 不在本路线 |
-| afSTFT | `afSTFT_*` ×6 | 4,793 | 间接 | 不在本路线 |
-| 格删相关器 | `latticeDecorrelator_*` ×3 | filters 1,389 + 系数表 3,159 | 否 | 不在本路线 |
+下表是源码审计结果，不是三平台输出差异的实测表。函数封装数量和源码行数不足以估算替换工作量，必须继续追踪所选模式的内部调用。
 
-另有项目自有的 `src/adm_render_binaural/spreader_mr.c`（fork 自 SAF examples，904 行），内含约 30 处 cblas 直接调用——它不是上游代码，改动不涉及上游同步，是阶段 2 的主战场。
+| 区域 | 项目入口或传递调用 | 需要处理的数值边界 | 计划 |
+|---|---|---|---|
+| EAR FFT | `saf_rfft_{create,forward,backward,destroy}` | 当前默认 vDSP / KissFFT 分支，FFT 系数与缩放 | 阶段 1 |
+| libear | 增益计算、`designDecorrelators()` | 平台数学函数、内部 KissFFT、Eigen / xsimd、FIR 系数 | 阶段 0 盘点，阶段 1 同步处理 EAR 所需路径 |
+| 项目共用数学 | 场景坐标、头部旋转、extent、增益与 HOA 编码 | `sin` / `cos` / `atan2` / `tan` / `pow` 等及运算顺序 | 随使用它的目标路径处理 |
+| spreader 默认 OM | `formulate_M_and_Cr_cmplx()` / `formulate_M_and_Cr()` → `saf_cdf4sap` | `utility_csvd` / `utility_ssvd` 与内部 GEMM | 阶段 2 主路径 |
+| spreader EVD | `utility_cseig()` | LAPACK EVD、特征值顺序、相位和简并子空间 | 阶段 2 按实际暴露的模式处理 |
+| 格型去相关器 | `latticeDecorrelator_*` → `getDecorrelationDelays()` / `randperm()` | C `rand()`、全局调用历史、延迟与滤波器状态 | 阶段 2 必须处理 |
+| spreader 向量 / 矩阵 | 项目直接 `cblas_*` / `utility_*` 及其内部调用 | 累加顺序、复数布局、舍入 | 阶段 2 |
+| HRIR / afSTFT | `HRIRs2HRTFs()` / `afSTFT_*` | 内部 FFT、系数准备、矩阵及历史状态 | 双耳端到端验收前必须处理；可保留外壳 |
+| SOFA | `saf_sofa_open/close()` 与后续 HRTF 准备 | 同一文件解出的方向、样本和元数据，后续重采样 / 变换 | 双耳验收覆盖，解析器全量替换另议 |
+| VBAP | `generateVBAPgainTable*`、凸包及几何辅助 | BLAS、三角函数、排序与退化几何处理 | 阶段 3 |
+| HOA 解码 | `getLoudspeakerDecoderMtx()` 及内部 SH / AllRAD | 解码矩阵、归一化与用于计量的信号 | 阶段 3 |
+| 计量 / 后处理 | `libebur128`、响度 / True Peak / 最终增益 | 测量反馈到 PCM 的增益，平台数学与阈值判断 | 每条最终输出路径的验收范围 |
+| 重采样 | `libsamplerate` 与使用它的 HRTF / 实时路径 | 系数、精度、状态和调用分块 | 启用该功能的验收范围 |
 
-**veclib 的关键观察**：项目只碰到 5 个 veclib 函数，其中 `cvsmul` / `svsmul` / `svvcopy` / `siminv` 分别是标量乘、拷贝、找最小索引，各三行即可自研；**只有 `utility_cseig` 是真 LAPACK**。SAF 的 92 处 BLAS/LAPACK 调用里，项目直接触达的非平凡路径只有这一条（外加 VBAP/HOA/HRIR/afSTFT 内部间接使用）。
+`BinauralSpreaderAdapter` 当前显式设为 `SPREADER_MODE_OM`。该模式内部有实数、复数 SVD；项目中的 `utility_cseig()` 属于另一条 EVD 分支。替换直接看到的 `cblas_*` 和 `cheev` 不足以消除默认 spreader 的 BLAS/LAPACK 依赖。
+
+`spreader_mr.c` 是项目维护的 SAF fork。修改它不要求先改上游，但仍需保留许可证、记录相对上游的改动，并评估后续同步成本。
 
 ## 3. Workspace 布局
 
-```
+继续使用当前仓库。以下是建议布局，首次只建立数学模块及其内部 FFI 边界，后续按实际边界增加 crate：
+
+```text
 rust/
-├── Cargo.toml              # workspace；[profile.*] 固定确定性开关
-├── rust-toolchain.toml     # 钉住工具链版本（可复现构建）
+├── Cargo.toml              # workspace 与 profiles
+├── Cargo.lock             # 锁定依赖
+├── rust-toolchain.toml     # 锁定工具链
 └── crates/
-    ├── mradm-math/         # 阶段 1：纯 safe Rust，无 unsafe、无 C ABI
-    ├── mradm-math-cabi/    # 阶段 1：staticlib，唯一持有 unsafe / #[no_mangle] / repr(C)
-    ├── mradm-vbap/         # 阶段 3
-    ├── mradm-vbap-cabi/
-    ├── mradm-hoa/          # 阶段 3
-    └── mradm-hoa-cabi/
+    ├── mradm-math/         # 首批数学内核，普通 Rust 库
+    ├── mradm-ffi/          # 内部 staticlib，按功能聚合 C 接口
+    ├── mradm-vbap/         # 阶段 3，按需要拆分
+    └── mradm-hoa/          # 阶段 3，按需要拆分
 ```
 
-划分依据是**接缝形状**而非领域概念（ADR 0008 决策五）。三条具体理由：
-
-1. **不设 `scene` crate**：`AdmScene`（`include/adm/scene.h`，394 行、约 15 个 struct）被 `RenderPlan` 按值持有（`include/adm/render.h:80`）。Rust 侧再建一份等于两个领域模型要同步 + 每次调用 marshal，且场景/时间线/语义既不是一致性问题也不是依赖问题。
-2. **不把 DSP 合成一个 crate**：VBAP 与 HOA 的接缝是纯函数（见 §5.3），双耳则涉及 afSTFT + 协方差域合成 + LAPACK 特征分解 + SOFA。合并意味着成熟部分要等最不成熟部分。
-3. **不设集中式 `ffi` crate**：见 §4.2——Windows 上 Rust 符号根本无法直接进导出表，集中式 FFI crate 是无目的的间接层，还会因入口点未被 C++ 直接引用而需要 whole-archive。
-
-算法 crate 与 `-cabi` 分离：前者保持纯 safe Rust（`cargo test` 直接可跑），后者隔离全部 `unsafe`；且 `staticlib` crate-type 会拉入完整 Rust std，不适合作为普通依赖复用。
+- C++ 持有 `AdmScene` 和 renderer 编排，Rust 首批只接收计算所需的数据。场景模型无需复制，但模型中的坐标和时间换算仍要审计。
+- 算法与 FFI 分离；算法可独立运行 `cargo test`，FFI 负责缓冲区、状态句柄和错误转换。FFT plan / scratch / RNG 可有实例状态，不能机械限制为无状态函数。
+- 集中式 `mradm-ffi` 与算法伴生 `-cabi` 都可行。示意采用一个 staticlib，功能开关控制各算法是否进入构建；独立发布确有需求时再评估拆分。
+- crate、回滚单元和发布单元不必一一对应。C++ 调用点可以按算法选择实现，不要求尚未成熟的算法与已完成部分同时上线。
 
 ## 4. 构建集成
 
-### 4.1 Cargo ↔ CMake
+### 4.1 Cargo 与 CMake
 
-用 **Corrosion**，经 `cmake/MRDependencies.cmake` 的 `mr_adm_core_find_or_fetch()` 接入（ADR 0004 强制新依赖走该函数）。手写等价物约 200 行 CMake（cargo profile 映射、target dir、增量重建依赖跟踪、MSVC CRT 匹配、IMPORTED 目标生成）且需长期维护。
+拟使用 Corrosion，通过 `cmake/MRDependencies.cmake` 的统一依赖路径接入，并在 `cmake/MRRust.cmake` 封装 Cargo 导入、目标命名和选项。这些文件与选项尚未实现。
 
-新增 `cmake/MRRust.cmake`，遵循 `cmake/MRIamfAomBridge.cmake` 的既有范式：`MacinRender::Xxx` 命名 + `mr_adm_core_find_xxx()` 函数封装 + `MR_ADM_XXX_ROOT` cache 变量 + 顶层 `option()` 门控。
+新增 `MR_ADM_ENABLE_RUST`，初期默认 OFF。关闭时不查找 Rust、不调用 Cargo；开启时应锁定 Corrosion、Cargo 依赖及工具链，并确保 Cargo 实际使用 `rust/rust-toolchain.toml` 指定的版本。
 
-新增 `MR_ADM_ENABLE_RUST`（**默认 OFF**）作为整体回滚开关。默认 OFF 同时保证 `MR_ADM_CORE_FETCH_DEPS=OFF` 的离线/发行版打包路径不受影响。
+需要验证的构建边界：
 
-已实测确认的约束：
+- **PIC**：C++ 的 `CMAKE_POSITION_INDEPENDENT_CODE` 不自动配置 Rust，需核对共享 bundle 所链接的 Rust 产物。
+- **配置**：当前 preset 与规范 Windows 路径使用 Ninja 单配置生成器。明确 Debug / Release / MinSizeRel 与 Cargo profile 的映射；若支持其他生成器，再补对应验证。
+- **MSVC CRT**：分别核对 C++ Debug `/MDd`、Release `/MD` 与 Rust 实际链接的运行库，不能仅凭“都是动态 CRT”认定匹配。跨 FFI 的分配必须由原分配方释放。
+- **离线构建**：Rust 关闭只保证旧构建路径继续可用。开启后要另外准备 Cargo 缓存或 vendor 目录，并验证 `--locked --offline`、Corrosion 来源及工具链可用性。
+- **依赖登记**：Corrosion 和新增 Rust 依赖的许可证 / 版本需要登记；现有 manifest 与 CMake tag 检查不足以自动审计全部 Cargo 传递依赖。
 
-- **PIC**：`MR_ADM_BUILD_CAPI_BUNDLE=ON` 时全局 `CMAKE_POSITION_INDEPENDENT_CODE ON`（`CMakeLists.txt:28-30`），Rust 侧产物需确认匹配。
-- **单配置生成器**：三个 preset（`CMakePresets.json`）与全部 CI 都是 `-G Ninja`；Windows 规范构建树 `build\win-canon` 与 CI Windows job 同样是 Ninja + `cl`。无多配置场景，`CMAKE_BUILD_TYPE` ↔ cargo profile 可一一映射，不需处理 `$<CONFIG>` 子目录。
-- **MSVC CRT**：项目未覆盖 `CMAKE_MSVC_RUNTIME_LIBRARY`，用 CMake/MSVC 默认的 `/MD`、`/MDd`，与 Rust `x86_64-pc-windows-msvc` target 默认动态 CRT 一致——但需在集成时显式确认。
-- **依赖登记**：Corrosion 须进 `third_party/manifest.json`、SBOM，并通过 `scripts/quality/check-licenses.sh` 的 manifest↔CMake `GIT_TAG` 一致性校验。
+### 4.2 符号导出与内部 FFI
 
-### 4.2 符号导出与可见性
+现有 `mradm_capi_bundle` 把 `adm_c_api.cpp` 直接编入 SHARED 目标，让 Windows 自动导出扫描看到公开入口。内部 Rust 算法由这些 C++ 路径调用，无需改变 GUI 的导出契约。
 
-`mradm_capi_bundle`（`CMakeLists.txt:626-641`）把 `src/adm_c_api/adm_c_api.cpp` **直接编进 SHARED 目标**，因为 `WINDOWS_EXPORT_ALL_SYMBOLS` 不导出从静态归档传递进来的符号（`:632` 注释已点明）。
+`WINDOWS_EXPORT_ALL_SYMBOLS` 不自动扫描所有静态归档，但允许合并显式 `.def` 文件以导出依赖符号。Rust 符号并非无法进入 DLL；保持 C++ 公开入口是本阶段的迁移选择，不能据此排除集中式 FFI。
 
-推论有两条：
+直接引用通常可以拉取所需归档对象。注册表、链接时裁剪、LTO 和仅用于导出的符号需单独验证是否需要显式保留。阶段 1 应在三平台检查实际导出表、符号冲突和链接闭包；Windows、ELF、Mach-O 不能套用同一项“导出全部符号”的结论。
 
-1. **Rust 函数必须由 C++ 包装转调**，不能期待 Rust 符号自动出现在 DLL 导出表。这是 ADR 0008 决策三「C++ 调 Rust」的构建层依据。
-2. 因为 C++ 直接引用 Rust 函数，普通链接即可拉取目标文件，**不需要** `$<LINK_LIBRARY:WHOLE_ARCHIVE,...>`（CMake 3.24 恰好支持，若将来方向改变需记得这一点）。
-
-**已知既有缺口**：仓库目前没有任何 `-fvisibility=hidden` / version script / 导出白名单，bundle 会导出全部传递静态库的默认可见性符号。加入 Rust 后 `compiler_builtins` 提供的 `memcpy`/`memset` 等可能与 C 侧冲突。阶段 1 早期实测是否真冲突；补可见性收敛是**独立的既有卫生项**，不作为本路线阻塞项。
+内部 FFI 在实现前明确参数范围、长度、别名规则、句柄释放和线程约束。错误按 ADR 0005 翻译，Rust panic / C++ 异常不穿过普通 C ABI。公开 ABI 的值和签名按 ADR 0007 保持兼容。
 
 ### 4.3 CI
 
-插入点已确认：
+在现有三平台 CI 中增加固定 Rust 工具链、Cargo 缓存和 Rust ON / OFF 构建验证。缓存 key 包含目标平台、工具链和 lockfile，并核对现有缓存清理规则是否匹配。
 
-- macOS/Linux 工具链：`.github/workflows/ci.yml:37`（`brew install`）与 `:40-42`（`apt-get`），或用独立的 `dtolnay/rust-toolchain` step。
-- Windows：`:205-217` 定位 MSVC 环境，`:223` 起各步骤 `call "%VCVARS64%"`。cargo 复用同一 shell 环境即可——`link.exe` / `lib.exe` 已在 PATH。
-- 缓存：照抄现有 `actions/cache@v5` 模式加一个 key family（如 `cargo-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock') }}`）。`cache-maintenance.yml` 按「family-hash」正则自动纳管，无需改动。
+数值验收使用 Release 构建，正确性与错误路径检查继续使用 Debug。PR 修改数学代码、系数、相关依赖或构建选项时运行受影响的数值矩阵；main / 手动任务补完整矩阵。不得仅在合并后才发现已承诺路径的确定性回归。
 
 ## 5. 阶段
 
-### 5.1 阶段 0：纯 C++ 前置（不碰 Rust）
+### 5.1 阶段 0：建立原始与受控基线
 
-**必须先做。** 目的是建立「今天三平台差多少、差在哪」的可测量基线——没有它，无法区分 Rust 修复了什么、引入了什么。
+1. EAR 的 FFT 注释已修正；该修改没有改变运行时计算。
+2. 先用当前 Release 配置采集原始输出与构建信息，再采集受控配置；不能先改数学选项再把输出称为原始基线。
+3. 受控 C/C++ 构建显式处理 FP contraction / fast-math，例如 Clang/GCC 的 `-ffp-contract=off`、现代 MSVC 的 `/fp:precise`，并检查实际编译命令、显式 FMA 与剩余向量化。系统预编译库不受项目编译选项控制，必须另行验证或使用可控构建。
+4. libear 标量参考用 `EAR_SIMD=OFF`，让 dispatcher 进入 `generic_for_dispatch` 对应的 scalar 实现。`ear_default_arch` 仍是 `PolarExtentCoreSimd<xsimd::default_arch>`，会随目标架构变化；同时核对 Eigen 的向量化 / FMA 配置。
+5. 建立 §6 的 PCM 比较工具与矩阵。原始路径的预期差异作为报告保存，不用一个永久失败的 CI job 代替基线；已有通过的能力应成为持续通过的门禁。
 
-1. ~~修 `src/adm_render_ear/ear_renderer.cpp` 的错误注释，改为如实描述平台分支。~~ **已完成**——现 `:93-100`（`DecorrState` 前）与 `:679-680`（`apply_decorrelator` 前）如实记录后端随 `SAF_PERFORMANCE_LIB` 分叉。注意这只修了**描述**，分歧本身要等阶段 1。
-2. 全树统一 `-ffp-contract=off`（Clang/GCC）/ `/fp:precise`（MSVC），CI 断言生效。
-3. libear 只构建 `ear_default_arch`（关掉 per-arch SIMD 分派）。`cmake/MRDependencies.cmake` 里为 `EIGEN_MPL2_ONLY` 逐个遍历 `BUILDSYSTEM_TARGETS` 的那段可直接复用其目标枚举逻辑。
-4. 建立跨平台一致性 CI job（见 §6.1）。**首次运行预期是红的——那就是基线。**
+**退出条件**：共享输入的哈希、三平台构建与依赖记录、原始 / 受控输出比较表、首次不同的计算阶段、待处理调用链。覆盖同进程重复渲染和不同线程数，避免把全局 RNG 或状态历史漏掉。
 
-**退出条件**：产出一张「哪个 renderer × 哪个布局在哪两个平台之间不一致」的表。
-**回滚**：全部是构建标志与注释，`git revert` 即可。
+阶段 0 会决定后续切片大小。尚未定位的路径继续标为未完成，不因语言或库名推定确定性。
 
-### 5.2 阶段 1：`mradm-math` + 替换 EAR 的 FFT
+### 5.2 阶段 1：数学内核与 EAR FFT 切片
 
-最小可验证切片。选此入口的四条理由：它是已确认的 macOS/Windows 分歧源；位于默认 EAR 渲染器；接缝只有 4 个函数且已被隔离在 `DecorrState`（`ear_renderer.cpp:103-123`）；`render_trim_fixture_test.cpp` 已有 EAR **bit-exact** 断言作为现成回归护栏。
+先建立 `mradm-math`、内部 FFI 和回滚开关。首批功能：
 
-`mradm-math` 本阶段内容：
+- 实数 FFT：替换 EAR 的 `saf_rfft_*`，保持长度、频谱布局和逆变换 1/N 缩放约定，验证系数生成及运算顺序。
+- 数学函数：选择可审计实现。使用 `libm` 时锁定版本和 features，核对 `arch` / intrinsics 等实现选择，并用三平台位模式测试验证；不能仅凭使用该 crate 判定一致。
+- 实例状态与缓冲管理：FFT plan 和 scratch 的创建 / 销毁不进入每个音频块的热路径。
 
-- **`fft`**：实数 FFT，替换 `saf_rfft_*`。必须是标量确定性实现（ADR 0008 决策六）。注意 `saf_rfft_backward` 内部已做 1/N 缩放（`ear_renderer.cpp:707` 注释），替换实现必须保持同一约定，否则增益差 N 倍。
-- **`libm`**：确定性超越函数，走 `libm` crate。
+同时检查 EAR 的上游输入：`designDecorrelators()` 的 FIR 系数、增益向量和共用数学。可保留 libear 算法并统一数学入口或保存经过验证的固定系数；仅改变项目侧 FFT 不会自动统一 libear 内部的 `std::exp` / KissFFT 结果。
 
-**不需要 RNG**。实测渲染路径无随机数：`opus_mka_io.cpp:520` 的 Matroska UID 与 `render_service.cpp:52` / `audio_handles.cpp:44` 的临时文件名是仅有的用例，均无确定性要求。若将来加 dither，再进 `mradm-math`。
+随机数也需追踪。libear 已使用明确的 mt19937 序列，仍要核对种子和后续浮点换算；阶段 2 的 SAF 去相关器必须改用实例化的固定随机算法或固定延迟表，不能等到未来 dither 功能再处理。
 
-**退出条件**：同一 fixture 经 `--renderer ear` 在三平台产出 byte-identical 输出；性能回归经实测确认可接受。
-**回滚**：`MR_ADM_ENABLE_RUST=OFF`，C++ 侧走原 `saf_rfft_*` 分支。
+**模块退出条件**：相同 FFT 输入与状态在三平台位相等，数学正确性与旧实现误差指标通过，Release 性能可接受。
 
-### 5.3 阶段 2：`spreader_mr` 去 BLAS + 确定性特征分解
+**EAR 路径退出条件**：选定矩阵内的增益、FIR、卷积和启用的后处理共同通过最终 float32 PCM 位比较。模块完成后仍有分歧的组合继续列为阻塞项，不宣称完整 EAR 已达标。
 
-`spreader_mr.c` 是项目自有 fork，改动不涉及上游同步。
+**回滚**：`MR_ADM_ENABLE_RUST=OFF` 恢复现有实现；测试构建保留按单元选择新旧实现的能力。
 
-- `mradm-math` 增补 `blas1`（`scal` / `axpy` / `copy` / `dot`）与**固定累加顺序**的 `gemm`。`spreader_mr.c` 的 30 处 cblas 调用里绝大多数是 `sscal` / `saxpy` / `scopy`，工作量小；只有几处 `cgemm` 需要认真写。
-- `mradm-math` 增补 `linalg::cheev` 替换 `utility_cseig`：用**循环 Jacobi**（确定性，无主元选择歧义），并**规范化特征向量相位**（例如强制最大模分量为正实数）。这比任何 BLAS 都强——它让结果唯一，直接消灭「特征向量符号/相位跨平台不同」这一整类问题。矩阵是 Q×Q 小矩阵，性能不敏感。
+### 5.3 阶段 2：默认 OM spreader 的完整数学调用链
 
-**退出条件**：`--renderer saf-binaural` 三平台差异从「有界容差」收敛到 byte-identical 或 1 ULP；`render_trim_fixture_test.cpp:800` 的容差注释可删除或收紧。
-**回滚**：保留 `#ifdef` 双路径一个发布周期。
+本阶段以实际使用的 `SPREADER_MODE_OM` 为重点：
 
-### 5.4 阶段 3：`mradm-vbap` / `mradm-hoa`
+- 替换项目直接调用的向量 / 矩阵运算，固定复数表示、累加、缩放和别名规则。
+- 处理 `saf_cdf4sap` 内部的实数 / 复数 SVD 与 GEMM，即 `formulate_M_and_Cr_cmplx()` / `formulate_M_and_Cr()` 的传递调用。先列明矩阵尺寸、退化输入和调用频率，再决定实现及性能预算。
+- 统一格型去相关器的随机算法、种子派生、延迟表、滤波器状态与重置顺序，消除进程级 C `rand()` 依赖。
+- 统一该路径实际使用的 HRIR / afSTFT FFT、系数和矩阵计算。可以保留 SAF 外壳，但不能仅替换 EAR FFT 后继续使用不同平台的内部 FFT。
+- 对要暴露的 EVD 模式再处理 `utility_cseig()`。循环 Jacobi 可作为候选，但须定义初始化、遍历、停止、特征值排序、并列与简并处理；规范化相位本身不让简并特征向量唯一。
 
-两者的接缝都是纯函数、POD 进出、prepare 期只调一次：
+**退出条件**：声明覆盖的双耳模式和语义组合在三平台最终 float32 PCM 位相等，并通过旧版语义 / 音质指标回归、重复初始化和状态测试。**1 ULP 不属于通过。** 保留模块中的未解决数学路径会阻塞此端到端退出条件。
 
-- `generateVBAPgainTable3D_srcs(source, n_src, speakers, n_spk, omit_large_triangles, enable_dummies, spread, &out_table, &out_size, &out_simplex)` — `vbap_renderer.cpp:179-196`
-- `getLoudspeakerDecoderMtx(dirs, nls, LOUDSPEAKER_DECODER_ALLRAD, order, norm, out_mtx)` — `hoa_renderer.cpp:802`
+**回滚与性能**：按调用单元保留双路径，Release 实测吞吐、内存和实时延迟；小矩阵在频带 / 音源循环中的总成本也需测量。
 
-**HOA 的归一化陷阱**：SAF 内部用 N3D，项目输出 SN3D，现有代码在 `hoa_renderer.cpp:803-807` 逐列乘 `sqrt(2n+1)` 补偿。替换实现要么保持同一约定（输出 N3D 再由调用方补偿），要么直接输出 SN3D 并同步删掉那段补偿——两者必须同时改，不能只改一边。
+### 5.4 阶段 3：VBAP、HOA 与共用数学收敛
 
-**退出条件**：各自替换后三平台 byte-identical，且与 SAF 参考实现在既有测试容差内一致。
+主要入口是 `generateVBAPgainTable*()` 和 `getLoudspeakerDecoderMtx()`，但不能假定二者都只在 prepare 阶段调用一次。动态位置和实时场景可能重复计算 VBAP；需要分别记录准备期与更新期的调用范围。
+
+VBAP 覆盖二维 / 三维布局、虚拟扬声器、extent、凸包与退化几何，以及内部 BLAS / 数学调用。HOA 覆盖项目自己的编码系数、语义处理和用于响度测量的 AllRAD 解码，不能只替换解码矩阵生成函数。
+
+**HOA 归一化约定**：现有 AllRAD 解码矩阵按 N3D 基底生成，项目对输入为 SN3D 的 HOA 信号逐列乘 `sqrt(2n+1)`。替换实现必须明确输出矩阵对应的基底；若直接生成适配 SN3D 输入的矩阵，就同时移除原补偿，避免重复缩放。
+
+**退出条件**：声明的布局、语义、动态更新与后处理组合通过三平台 PCM 位比较，并在约定指标内通过旧 SAF / libear 行为回归。最终审查原生链接闭包，逐项记录仍保留的 SAF / libear / IO 依赖，不用已替换函数数冒充已删除库数。
 
 ## 6. 验证
 
-### 6.1 跨平台一致性 CI job
+### 6.1 跨平台 PCM 比较
 
-本路线的**目标度量**。三平台各自渲染同一组 fixture，对输出文件取 SHA-256，比对三方结果。
+三个 runner 使用同一份已固化的输入文件、ADM / policy / HRIR 和参数清单。记录输入哈希；若要合成 fixture，应生成一次后共享或使用已验证的整数 / 位模式生成器，不能让各平台分别用未受控的 `sin()` 生成输入。
 
-**v1 不引入 golden 基线文件**——直接让三个 runner 的产物互相比对即可暴露分歧，避免过早发明参考文件格式。将来需要固化基线时，按 `CPP_ADM_PLATFORM_REWRITE.md` §10 已规划的 `tests/golden/` + `tests/fixtures/` 目录与字段清单（解析摘要 / 布局摘要 / 时长 / 声道 / 峰值 / 响度 / True Peak / 按 renderer×layout 的误差阈值 / warning 列表）来做，不要另起一套。
+验收流程：
 
-覆盖矩阵至少：`ear × 5.1`、`saf`(VBAP) × `5.1`、`hoa × hoa3`、`saf-binaural × binaural`。
+1. 使用 Release 输出 float32 WAV 或直接采集目标 PCM 缓冲区，保留完整的采样率、声道标签顺序、帧数和生效参数。
+2. 提取 PCM，确认读取没有量化或重采样。将 float32 的每个 32-bit 位模式按统一小端顺序序列化，先拒绝 NaN / Inf，再比较字节或其 SHA-256。正负零按位区分。
+3. 元数据单独比较需要稳定的字段。**不比较完整容器哈希来判断 DSP 一致性**：输出会写入当前 UTC 时间；FLAC 还会先将 float32 量化为 24-bit，既可能误报文件差异，也可能掩盖渲染差异。
+4. 失败时报告首个不同的 frame / channel、两侧位模式、最大绝对误差和 ULP 分布；误差指标用于定位，不用于放宽位一致门禁。
 
-考虑只在 push main + 手动触发时跑，避免拖慢 PR 反馈。
+覆盖矩阵至少包含 `ear × 5.1`、`saf × 5.1`、`hoa × hoa3`、`saf-binaural × binaural`，并明确区分 point、extent、diffuse、spreader OM、DirectSpeakers、坐标转换、动态块与自定义 HRIR 等实际路径。
 
-### 6.2 进程内 A/B 差分测试
+双耳的 `auto` 当前选择 cloud，不能用默认双耳输出代替 spreader 验证。OM 测试须显式设置 `--binaural-spread-mode saf-spreader`，使用能实际进入该路径的 extent 元数据，并核对生效语义；需要改变 diffuse / extent 覆盖时使用临时 `--semantic-policy` 和 `--write-semantic-report`，不修改原始 ADM 音频文件。
 
-加一个 `MR_ADM_MATH_BACKEND=saf|rust` 开关，让**一个测试二进制**用两条路径渲染同一 fixture 并逐样本 diff。信号最强、不需要 CI 编排。
+基础渲染先关闭响度归一化与峰值增益调整，随后分别验证默认 True Peak 行为、响度目标、峰值归一化和最终增益。只有关闭后处理的单元通过时，不得声称带后处理的最终输出已通过。实时能力另加重采样、固定事件时间线和设备前 PCM 检查。
 
-复用现有设施，**不引入新测试框架**（全仓库无 Catch2/doctest，一律手写 `check()`）：
+初期可以互相比对三平台产物，无需先建立新的 golden 文件格式；同时保存原始参考产物与独立正确性检查，避免三平台共同出现同一种错误仍被当作正确。固化基线时沿用 `CPP_ADM_PLATFORM_REWRITE.md` §10 的目录约定。
 
-| 需要的东西 | 复用什么 |
-|---|---|
-| 读回输出音频 | `mradm::audio::ReaderHandle`（`include/adm/audio_io.h:227-246`），wav/caf/flac 通吃 |
-| 两 buffer 比较 + 诊断 | `tests/unit/scene_stream_c_api_test.cpp:1936-1970` 的 `maximum_difference()` / `check_output_equivalence()`，**提炼成共享头** `tests/unit/test_numeric_compare.h`（`tests/unit/test_portable.h` 是既有先例） |
-| 两文件逐样本 diff | `tests/unit/render_trim_fixture_test.cpp:729-796` 的 `window_bit_exact()`，已含 sample_index/frame/channel/expected/actual/max_abs_diff 的失败诊断 |
-| 参数化 fixture 生成 | `tests/unit/binaural_render_fixture_test.cpp:109-122` 的 `ObjectFixtureOptions` struct + `write_fixture(opts, frames)` 形态 |
-| 测试目标注册 | 根 `CMakeLists.txt:696-1055` 的四步样板（`add_executable` + `target_link_libraries` + `mr_adm_core_apply_warnings` + `mr_adm_core_apply_static_analysis` + `add_test`），没有专用宏 |
-| Rust 二进制路径注入 | 照抄 `CMakeLists.txt:1006-1011` 的 `MRADM_EXE_PATH` 模式（`if(TARGET ...)` 防御 + `target_compile_definitions` + `add_dependencies`） |
+### 6.2 新旧实现差分与按位比较分开
 
-**容差默认 0（bit-exact）**。这是全仓库唯一被严格遵守的纪律：只在定位到具体非确定性来源时才放宽，并在代码注释里写明原因。
+测试构建拟增加 `MR_ADM_MATH_BACKEND=saf|rust` 或等价内部选择机制，让同一个测试进程比较两条实现。每次运行重置完整状态与固定随机序列，不能受上一次调用历史影响。
 
-### 6.3 Rust 侧单元测试
+- **新实现跨平台、重复运行、线程数变化**：承诺范围内要求位相等。
+- **新实现与旧实现**：按模块预先约定绝对 / 相对误差、能量、增益和语义等指标。旧平台 FFT 本身不同，不能要求统一的新算法逐位复制所有旧平台结果。
+- **窗口渲染与完整渲染切片**：保持独立的时间线 / 状态测试，不因跨平台验证通过而直接删除现有容差。
 
-`cargo test` 覆盖 `mradm-math` 各函数对已知解析解的一致性：FFT 对 DFT 直接定义、Jacobi 对已知特征值矩阵、`libm` 对标准值表。
+复用 `ReaderHandle`、现有 fixture 构造与 CTest 注册方式；提取共享比较工具时，明确提供“位比较”和“有界误差比较”两个接口。现有 `maximum_difference()` / `window_bit_exact()` 用绝对差值，不等价于位比较；零容差不能区分正负零，未显式检查有限值的差值比较还可能漏过 NaN。
 
-### 6.4 本地手工验证
+### 6.3 Rust 数学正确性
+
+`cargo test` 使用独立解析解或高精度参考验证 FFT、SVD / EVD、矩阵与数学函数，覆盖零输入、极小值、边界尺寸及退化矩阵。SVD / EVD 除参考结果外，验证重建残差与正交性；跨平台一致但数学错误仍必须失败。
+
+系数、随机序列和内部状态也需要固定测试向量。性能验证使用 Release，记录优化前后实际配置；不能以 Debug 时间作为发布性能依据。
+
+### 6.4 本地验证入口
+
+以下为 macOS 上实现 Rust 开关后的命令示例。当前 `MR_ADM_ENABLE_RUST` 与 PCM 提取 / 比较工具尚未实现；现有 CTest 没有名为 `release` 的测试 preset，Release 测试使用构建目录：
 
 ```bash
 cmake --preset release -DMR_ADM_ENABLE_RUST=ON
 cmake --build --preset release
-ctest --preset release --output-on-failure
+ctest --test-dir build/release -R '(ear|render_trim)' --parallel "$(sysctl -n hw.ncpu)" --output-on-failure
 
-# 同一输入在三平台跑，比对哈希
-./build/release/mradm render -i fixture.wav -o out.ear.flac --output-layout 5.1
-shasum -a 256 out.ear.flac
+# 基础渲染：float32，关闭默认峰值增益调整；不传 --loudness-target。
+./build/release/mradm render -i fixture.wav -o out.ear.wav --renderer ear --output-layout 5.1 --output-bit-depth f32 --no-peak-limit
 ```
+
+随后按 §6.1 提取 PCM 比较；不要对 `out.ear.wav` 整文件取哈希作为数学验收。后处理矩阵另用相应参数运行。Windows 使用仓库规范构建路径与 Windows 命令，不照搬 macOS 的 `sysctl`。
 
 ## 7. 风险与缓解
 
-| 风险 | 影响 | 缓解 |
-|---|---|---|
-| 标量 FFT 性能不足 | 离线渲染变慢，实时监听可能掉帧 | 阶段 1 必须实测。加速只走跨声道 SIMD，不动蝶形内顺序。若不可接受需回 ADR 重新权衡确定性 vs 性能 |
-| Rust std 符号与 bundle 内 C 符号冲突 | Windows/ELF 链接失败或运行期错乱 | 阶段 1 早期实测；可见性收敛作为独立项 |
-| MSVC CRT 不匹配 | Windows 链接失败 | 默认 `/MD` 与 Rust windows-msvc target 默认一致，但需显式确认 |
-| Corrosion 引入新构建期依赖 | 与离线/发行版打包路径张力 | `MR_ADM_ENABLE_RUST` 默认 OFF；走 `mr_adm_core_find_or_fetch` + 登记 manifest/SBOM/license check |
-| `spreader_mr.c` 去 BLAS 后性能回归 | `cgemm` 在热路径 | 保留 `#ifdef` 双路径一个周期，实测后再删 |
-| 阶段 0 暴露的分歧点多于预期 | 后续排期变长 | 这正是阶段 0 先行的目的；分歧表产出后重排优先级 |
-| CI 时间增加 | 反馈变慢 | cargo 缓存照抄现有模式；一致性 job 只在 push main + 手动触发时跑 |
+| 风险 | 处理方式 |
+|---|---|
+| FFT、SVD、矩阵替换后吞吐或实时延迟回归 | Release 测量；优化逐项证明与位基线一致 |
+| 剩余 C/C++ / 第三方数学导致端到端不一致 | 沿实际调用链定位，不把保留库排除审计 |
+| 随机初始化或状态历史破坏重复性 | 实例 RNG、固定种子 / 转换、重复创建与同进程 A/B |
+| Cargo / CMake、PIC、CRT、符号与 LTO 不兼容 | 阶段 1 验证三平台实际链接、导出表与释放边界 |
+| 离线构建和依赖审计不完整 | Rust ON / OFF 分别验证，锁定 Cargo 传递依赖并纳入许可证检查 |
+| 双路径长期维护 | 每个替换单元记录门禁、默认切换和旧路径退出条件 |
+| 仅模块一致却宣称完整 renderer 一致 | 分开记录模块与端到端状态，按语义 / 后处理组合公布覆盖 |
 
-## 8. 后续方向（不在本路线内）
+## 8. 后续方向
 
-以下都需要单独 ADR 决策，不因本路线自动获批：
+以下需要独立评估，不由本路线自动扩展实现范围：
 
-- **BW64/RF64 容器自研**（替 `libbw64` + `dr_wav` + `dr_flac`）：风险最低、能一次干掉 3 个依赖，并顺带修掉 `libbw64` `seek(int32_t)` 2³¹ 帧上限的 workaround（现由 `render_common::seek_reader_abs` 兜住）。不在本路线只因它不是 SAF 问题。
-- **`ebur128` / `rubato` / `cpal` 三换三**：分别替 `libebur128` / `libsamplerate` / `miniaudio`，均有成熟纯 Rust 替代。
-- **CLI 迁 Rust**（ADR 0002 点名的第一入口）：可干掉 CLI11 + spdlog + fmt + nlohmann + tl-expected。
-- **SOFA 读取**：为读 SOFA 拖进 libmysofa + zlib（约 16K 行）是全树依赖比最差的一处，值得单独评估。
-- **双耳 afSTFT + spreader 全替换**：风险最高、收益最低，最后再碰。
-- **`ADM_RENDERER_SAF` 等 ABI 名字的处置**：SAF 实际被替换后这些名字变成历史遗留命名，需在 ADR 0007 框架下决定保留还是 deprecate。
+- **BW64/RF64 自研**：可替换 `libbw64` 和对应 WAV 读写路径，需验证大文件、seek 和 ADM metadata。`dr_flac` 是 FLAC 解码器，不能由 BW64 容器实现替代；`dr_wav` / `dr_flac` 同属 dr_libs，依赖收益还要看保留用途。
+- **计量 / 重采样 / 设备库替换**：评估 Rust `ebur128`、`rubato`、`cpal` 等候选的功能、数值与延迟，以及原生和 Cargo 传递依赖；使用 Rust 封装不自动移除系统音频依赖。
+- **CLI 迁移**：有机会移除 CLI11 / spdlog 的 CLI 用途。`fmt`、`nlohmann_json`、`tl-expected` 仍被 core / engine 等使用，只有这些使用点也迁移后才能从闭包移除。
+- **SOFA / afSTFT / spreader 全量替换**：与本路线中必要的数学入口统一区分，按兼容性、性能和真实依赖收益另行决定，不预先断言收益最低。
+- **历史 ABI 命名**：可以继续保留 `ADM_RENDERER_SAF` 等名字及数值；若要调整，遵循 ADR 0007，不把改名作为内部替换的前置条件。

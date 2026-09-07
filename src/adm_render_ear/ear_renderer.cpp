@@ -95,9 +95,10 @@ struct AccumulateContext {
 // platform-agnostic — its backend follows SAF_PERFORMANCE_LIB. We pass
 // SAF_USE_APPLE_ACCELERATE_ILP64 on macOS, which SAF's CMake matches into
 // SAF_USE_APPLE_ACCELERATE, selecting vDSP; Windows/Linux build against
-// OpenBLAS and fall through to KissFFT. The two backends round differently,
-// so EAR diffuse output is not bit-identical across platforms. Tracked as a
-// determinism gap; see docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md §5.2.
+// OpenBLAS and fall through to KissFFT. This split does not guarantee identical
+// rounding across platforms. Unifying this FFT alone is insufficient: libear's
+// FIR design and gain calculations also require a numerical audit. See
+// docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md §5.2.
 // FFT size L=2048 (next power-of-2 >= block_size(1024) + filter_len(512) - 1).
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct DecorrState {
