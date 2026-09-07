@@ -37,7 +37,7 @@ ADM_BINAURAL_SPREAD_SAF_SPREADER
 已验证的链条：
 
 - 项目设 `SAF_PERFORMANCE_LIB=SAF_USE_APPLE_ACCELERATE_ILP64`（`cmake/MRDependencies.cmake`）→ SAF 上游 `framework/CMakeLists.txt:175` 用 `MATCHES` 正则命中该值 → `:177` 定义 `SAF_USE_APPLE_ACCELERATE=1` → `saf_utility_fft.c:573` 走 **vDSP DFT**；Windows/Linux 走 **KissFFT**。
-- 因此 `src/adm_render_ear/ear_renderer.cpp:94` 与 `:673` 的注释「Uses overlap-add FFT convolution via saf_rfft (KissFFT backend, platform-agnostic)」**在 macOS 上不成立**。这是一处实际缺陷，且位于默认 EAR 渲染器的 diffuse/去相关路径。
+- 因此 `src/adm_render_ear/ear_renderer.cpp` 原注释「Uses overlap-add FFT convolution via saf_rfft (KissFFT backend, platform-agnostic)」**在 macOS 上不成立**。这是一处实际缺陷，且位于默认 EAR 渲染器的 diffuse/去相关路径。注释已随本 ADR 一并修正（现 `:93-100` 与 `:679-680`，如实记录后端随 `SAF_PERFORMANCE_LIB` 分叉），但**分歧本身仍在**——真正的修复是路线图阶段 1。
 - `saf_utility_veclib.c` 的 `utility_cseig` 走 LAPACK `cheev_`（复 Hermitian 特征分解）。Accelerate LAPACK 与 OpenBLAS LAPACK 的特征向量**符号/相位可能不同**，简并特征值时顺序也可能不同——这是可听差异级别，不是舍入级别。
 - `src/adm_render_binaural/spreader_mr.c`（项目自有 fork，904 行）有约 30 处 cblas 直接调用，是 BLAS 分裂的最大暴露面。
 - `tests/unit/render_trim_fixture_test.cpp:800` 已有记录：EAR/VBAP/HOA 要求 bit-exact，binaural 需放宽容差以容纳「platform math differences in the HRTF overlap path」。
@@ -101,7 +101,7 @@ Rust 侧数学实现受以下硬约束，违反即视为缺陷：
 - **Rust std 符号污染 bundle 导出表**：仓库目前没有任何 `-fvisibility=hidden` / version script / 导出白名单，`mradm_capi_bundle` 会导出全部传递静态库的默认可见性符号。加入 Rust 后 `compiler_builtins` 提供的 `memcpy`/`memset` 等可能与 C 侧冲突。缓解：阶段 1 早期实测；补可见性收敛作为独立的既有卫生项。
 - **构建期依赖增加**：Cargo-CMake 桥接（Corrosion）与 Rust 工具链进入构建链路，与 `MR_ADM_CORE_FETCH_DEPS=OFF` 的离线/发行版打包路径存在张力。缓解：`MR_ADM_ENABLE_RUST` 默认 OFF，发行版打包路径不受影响；Corrosion 走 `mr_adm_core_find_or_fetch()` 并登记 `third_party/manifest.json` + SBOM + `scripts/quality/check-licenses.sh`。
 - **`spreader_mr.c` 去 BLAS 后性能回归**：`cgemm` 在热路径上。缓解：保留 `#ifdef` 双路径一个发布周期，实测后再删。
-- **阶段 0 暴露的分歧点多于预期**：`ear_renderer.cpp:94` 的错误注释说明当前对平台分歧的认知不完整。缓解：这正是阶段 0 先行的目的；分歧表产出后重排后续优先级。
+- **阶段 0 暴露的分歧点多于预期**：`ear_renderer.cpp` 那处错误注释说明当前对平台分歧的认知不完整——一个被明文断言为 platform-agnostic 的路径实际并不是。缓解：这正是阶段 0 先行的目的；分歧表产出后重排后续优先级。
 
 ## 后果
 
