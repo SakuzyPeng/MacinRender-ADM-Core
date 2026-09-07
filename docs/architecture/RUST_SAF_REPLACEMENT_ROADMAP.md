@@ -1,6 +1,6 @@
 # Rust 落地与 SAF 替换路线图
 
-> 状态：阶段 0 测量基建已落地（fixture 生成器、PCM 位提取 / 比较工具、渲染矩阵脚本、三平台 CI workflow）；三平台基线尚未采集。Rust 模块、`MR_ADM_ENABLE_RUST` 与受控构建选项仍未实现。
+> 状态：阶段 0 测量基建与 A/B 受控构建已落地（fixture、PCM 工具、构建记录、渲染矩阵和三平台 CI workflow）；完整三平台基线尚未采集。Rust 模块与 `MR_ADM_ENABLE_RUST` 仍未实现。
 >
 > 本文落实 [ADR 0008](../adr/0008-rust-entry-and-saf-replacement.md) 的模块边界与确定性契约，沿用 ADR 0002 / 0003 / 0004 / 0005 / 0007 的语言、依赖、错误处理和 ABI 约束。
 
@@ -97,17 +97,17 @@ rust/
 2. 先用当前 Release 配置采集原始输出与构建信息，再采集受控配置；不能先改数学选项再把输出称为原始基线。
 3. 受控 C/C++ 构建显式处理 FP contraction / fast-math，例如 Clang/GCC 的 `-ffp-contract=off`、现代 MSVC 的 `/fp:precise`，并检查实际编译命令、显式 FMA 与剩余向量化。系统预编译库不受项目编译选项控制，必须另行验证或使用可控构建。
 
-   已实现：`MR_ADM_STRICT_FP`（`cmake/MRStrictFp.cmake`）。Clang / GCC 加 `-fno-fast-math -ffp-contract=off`，MSVC 加 `/fp:precise` 并探测是否接受显式关闭 contraction 的开关（接受与否记进构建记录，不靠文档推断版本行为）。标志走 `CMAKE_<lang>_FLAGS` 而不是 `add_compile_options()`，前者按语言分开、不会漏进依赖可能启用的汇编方言；设置点在 `include(MRDependencies)` 之前，所以 FetchContent 拉进来的第三方目录同样受控。
+   已实现：`MR_ADM_STRICT_FP`（`cmake/MRStrictFp.cmake`）。Clang / GCC 加 `-fno-fast-math -ffp-contract=off`，MSVC 加 `/fp:precise` 并探测是否接受显式关闭 contraction 的开关（接受与否记进构建记录，不靠文档推断版本行为）。标志走 `CMAKE_<lang>_FLAGS`，按语言分开、不会漏进汇编方言；设置点在 `include(MRDependencies)` 之前。通用及活动配置的 `-Ofast`、`-ffast-math`、`/fp:fast` 等冲突选项会在配置时直接报错；vendored FLAC 自行追加的重结合 / `/fp:fast` 选项仅在受控配置中移除，默认配置保持原行为。其他目标追加的冲突由构建记录检查，失败时不得发布为有效受控基线。
 4. libear 标量参考用 `EAR_SIMD=OFF`，让 dispatcher 进入 `generic_for_dispatch` 对应的 scalar 实现。`ear_default_arch` 仍是 `PolarExtentCoreSimd<xsimd::default_arch>`，会随目标架构变化；同时核对 Eigen 的向量化 / FMA 配置。
 
-   已实现：`MR_ADM_EAR_SCALAR_REFERENCE` 把 libear 的 `EAR_SIMD` 置 OFF。生效证据取自 libear 自己传下来的 `XSIMD_ARCHS`：默认构建是 `avx512bw,avx2_fma,avx,sse4_2,default_arch,generic_for_dispatch`，开关打开后只剩 `generic_for_dispatch`。顺带说明默认构建的一个性质——这串 arch 是**运行时**按 CPU 特性分派的，所以同一平台上两台特性不同的机器本来就可能走不同实现，这是平台内的差异来源，不是平台间的。若 libear 来自已安装包，本开关对它无效，配置阶段直接 FATAL 而不是静默降级成一个站不住的「标量参考」。
+   已实现：`MR_ADM_EAR_SCALAR_REFERENCE` 只在配置 libear 的局部作用域把 `EAR_SIMD` 置 OFF，并用 CMP0077 保留用户缓存；关闭后恢复使用原设置。实际选择记录在 `MR_ADM_EAR_SIMD_EFFECTIVE`，不能用缓存中的 `EAR_SIMD` 偏好代替实际状态。生效证据取自 libear 自己传下来的 `XSIMD_ARCHS`：默认构建是 `avx512bw,avx2_fma,avx,sse4_2,default_arch,generic_for_dispatch`，开关打开后只剩 `generic_for_dispatch`。顺带说明默认构建的一个性质——这串 arch 是**运行时**按 CPU 特性分派的，所以同一平台上两台特性不同的机器本来就可能走不同实现，这是平台内的差异来源，不是平台间的。若 libear 来自已安装包，本开关对它无效，配置阶段直接 FATAL 而不是静默降级成一个站不住的「标量参考」。
 5. 建立 §6 的 PCM 比较工具与矩阵。原始路径的预期差异作为报告保存，不用一个永久失败的 CI job 代替基线；已有通过的能力应成为持续通过的门禁。
 
    已实现：`tests/tools/make_fixture.cpp`（确定性输入）、`tests/tools/pcm_bits.cpp`（位提取、格式校验与比较）、`tests/tools/repeat_render.cpp`（同进程两次渲染）、`scripts/consistency/render-matrix.sh`（12 个跨平台 case 及同进程重复测量）、`scripts/consistency/compare-platforms.sh`（比对与报告）、`.github/workflows/consistency.yml`（三平台 + 汇总 job）。门禁清单是 `scripts/consistency/expected-identical.txt`，初始为空，按首次三平台运行的结果填充。
 
-   两组配置由 preset `consistency-a`（默认数值）与 `consistency-b`（受控数值）固定。两者都关掉已安装包查找并锁定 FLAC / Opus 为 vendored，使 A、B 之间只差受测的数值选项；否则依赖来源不同会混进比较结果。两组各有自己的门禁清单——`expected-identical.txt` 与 `expected-identical-controlled.txt`，经 `compare-platforms.sh --expected` 选择——因为受控构建预期能收敛的 case 多于默认构建，拿它的成果去卡默认构建等于让后者为自己没声称过的结果长红。
+   两组配置由 preset `consistency-a`（默认数值）与 `consistency-b`（受控数值）固定。两者都关掉已安装包查找并锁定 FLAC / Opus 为 vendored。A 显式关闭两个受控开关、选择默认 EAR SIMD，B 在此基础上开启控制，避免沿用实验缓存；否则依赖来源不同会混进比较结果。两组各有自己的门禁清单——`expected-identical.txt` 与 `expected-identical-controlled.txt`，经 `compare-platforms.sh --expected` 选择——因为受控构建预期能收敛的 case 多于默认构建，拿它的成果去卡默认构建等于让后者为自己没声称过的结果长红。
 
-   每个 runner 另外产出两份记录：`scripts/consistency/build-info.sh` 写编译器、**实际到达编译器的标志**（从 `compile_commands.json` 统计，不看 CMake 选项的意图）、SAF 选中的 BLAS 后端与全部依赖 commit；`scripts/consistency/scan-fp.sh` 数二进制里残留的 FMA 指令。后者是必要的：`-ffp-contract=off` 只阻止编译器自行融合，管不了显式 intrinsic，所以「设了标志」和「FMA 没了」是两件事。
+   每个 runner 另外产出两份记录：`scripts/consistency/build-info.sh` 调用 Python 标准库实现，读取 `compile_commands.json`、CMake 导出的 `consistency-dependencies.json` 和真实源码目录，记录编译器、实际标志、SAF 后端与可取得的依赖 commit / dirty 状态。它支持自定义 FetchContent 缓存、源码目录覆盖和 `.git` 文件；外部包或非 Git 源码会明确记为 unavailable，不会把缓存中的闲置目录算作实际依赖。旧构建须先重新配置以生成依赖记录；受控编译命令缺失必要标志或仍有冲突时记录步骤返回失败；`scripts/consistency/scan-fp.sh` 数二进制里残留的 FMA 指令。后者是必要的：`-ffp-contract=off` 只阻止编译器自行融合，管不了显式 intrinsic，所以「设了标志」和「FMA 没了」是两件事。
 
 **退出条件**：共享输入的哈希、三平台构建与依赖记录、原始 / 受控输出比较表、首次不同的计算阶段、待处理调用链。覆盖同进程重复渲染和不同线程数，避免把全局 RNG 或状态历史漏掉。
 
@@ -118,13 +118,13 @@ rust/
 - 这些日志与多音轨 case 不等于已证明固定 1 / 2 / 4 worker 下输出一致。`taskset` 改变 CPU 亲和性也不保证 `hardware_concurrency()` 或线程池大小变化；固定 worker 数的等价性实验仍需可验证的控制入口。
 - `out/<platform>/repeats/` 保存单 / 多音轨的两份 PCM、准备日志及同进程比较结果。已知数值差异按阶段 0 记录，渲染失败、损坏 PCM 或工具错误立即失败。跨平台汇总报告附上这些结果，以免把平台内的不稳定性直接归因于平台差异。
 
-**配置 A / B 的首批 Linux 实测（GCC 13.3、Release、x86-64；单平台数据，尚不构成三平台基线）**：
+**配置 A / B 的首批 Linux 实测（GCC 13.3、Release、x86-64；历史单平台数据，早于本次 FLAC 选项修正，须重新采集新版基线）**：
 
 - 同一构建把 12 个 case 的矩阵连跑两遍，逐位一致。这是解读下面几条的前提——否则 A / B 的差异分不清是构建配置还是运行噪声。
 - **只开 `MR_ADM_STRICT_FP`**：12 个 case 全部与默认构建逐位相同。`-ffp-contract=off` 落到 415 个翻译单元（默认构建 0 个），`mradm` 中的 FMA 指令从 212 条降到 54 条，却没有改变任何一个 case 的输出位。**这不等于 contraction 无害**，只说明本矩阵覆盖到的路径上它没有产生可观测差异。
 - **再加 `MR_ADM_EAR_SCALAR_REFERENCE`（完整配置 B）**：只有 `ear-5_1-extent` 改变（288000 个采样中 87439 个不同，最大绝对误差 1.34e-07），其余 11 个仍逐位相同。它也是矩阵里唯一带 extent 的 EAR case，即唯一会进 `PolarExtentCore` 的那个，与「差异来自 SIMD 分派」一致。
 - **剩余 FMA 全部来自 libear**：单独统计 `libear.a`，默认构建 60 条、只关 contraction 后 54 条、关掉 `EAR_SIMD` 后 0 条；此时整个 `mradm` 也是 0 条。即编译器自行融合的部分靠编译选项就能清掉，剩下的是 xsimd 的显式 intrinsic，只能靠换实现或关掉分派。这正是第 3 项要求「检查显式 FMA」而不是只看编译选项的原因。
-- 全构建没有任何 `-ffast-math`：SAF 的由 `SAF_USE_FAST_MATH_FLAG=OFF` 关掉，libopus 的挂在默认关闭的 `OPUS_FLOAT_APPROX` 之下。这条由 build-info 的计数守着，不是读代码得出的结论——依赖哪天把它打开，计数会立刻变成非零。
+- 当时的全构建没有任何 `-ffast-math`：SAF 的由 `SAF_USE_FAST_MATH_FLAG=OFF` 关掉，libopus 的挂在默认关闭的 `OPUS_FLOAT_APPROX` 之下。构建记录现在还计入 `-Ofast` 及独立的非安全浮点选项，并在受控配置中拒绝冲突，不能只看 `-ffast-math` 一个计数。
 - 覆盖不到的一层：Linux / Windows 的 OpenBLAS 与 macOS 的 Accelerate 是预编译库，任何项目编译选项都到不了；SAF 实际选中的后端记在 build-info 里。受控构建不能声称覆盖它们。
 
 阶段 0 会决定后续切片大小。尚未定位的路径继续标为未完成，不因语言或库名推定确定性。
@@ -212,6 +212,10 @@ VBAP 覆盖二维 / 三维布局、虚拟扬声器、extent、凸包与退化几
 `compare-platforms.sh` 在数值比较前校验所有平台的清单和每份 `.pcmbits`，拒绝空 / 重复清单、遗漏文件和失效门禁配置；对所有平台对输出结果。未登记的数值差异可以记录为基线，基础设施错误不能当作正常差异。workflow 显式使用带 `pipefail` 的 Bash，并在每个平台运行工具回归测试。
 
 安装 Python 的测试构建会注册 `mr_adm_consistency_tool_tests`，可用 `ctest --test-dir build/debug -R consistency_tool --output-on-failure` 运行。Debug 检查协议和错误路径；矩阵与同进程 DSP 测量使用 Release。Bash 不可用时 CTest 只跑 PCM 工具部分；三平台 consistency workflow 明确传入 Bash 路径并要求完整工具测试。
+
+`tests/unit/consistency_build_test.py` 使用离线的最小 CMake 工程验证真实依赖接入代码：标量开关 ON/OFF、用户 EAR 偏好保留、A preset 重置实验选项，以及通用 / Release 编译标志冲突、FLAC 目标选项的启停恢复。构建记录测试覆盖实际源码目录、`.git` 文件、闲置缓存、非 Git / 外部包、JSON 字段顺序和 `-Ofast`。它注册为 `mr_adm_consistency_build_tests`，workflow 三平台均显式运行。
+
+早期版本用 FORCE 改写过的自定义构建目录无法自动推断原 EAR 偏好；使用更新后的 consistency presets，或显式指定一次 `-DEAR_SIMD=ON/OFF`。之后切换标量控制不会再改写该偏好。
 
 ### 6.4 Rust 数学正确性
 

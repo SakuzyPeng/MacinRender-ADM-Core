@@ -792,6 +792,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_consistency_tool_tests
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/consistency_tools_test.py"
                 --pcm-bits $<TARGET_FILE:mr_adm_pcm_bits> --bash "${_mr_consistency_bash}")
+        add_test(NAME mr_adm_consistency_build_tests
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/consistency_build_test.py"
+                --cmake "${CMAKE_COMMAND}" --c-compiler "${CMAKE_C_COMPILER}"
+                --cxx-compiler "${CMAKE_CXX_COMPILER}")
     endif()
 
     add_executable(mr_adm_semantic_policy_tests tests/unit/semantic_policy_test.cpp)

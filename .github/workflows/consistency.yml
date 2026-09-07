@@ -7,8 +7,16 @@ name: Consistency
 # reported rather than failed on — the gate is scripts/consistency/expected-identical.txt, which
 # starts empty and grows as capabilities are fixed.
 #
-# Not run on pull requests: the matrix is a full Release build on three platforms and would slow
-# PR feedback for a signal that only changes when math, coefficients or build options change.
+# Two build configurations run per platform (roadmap §5.1 items 2-4):
+#   a — the default Release build; the actual state of divergence today.
+#   b — the controlled build (MR_ADM_STRICT_FP + MR_ADM_EAR_SCALAR_REFERENCE); how much of that
+#       divergence build options alone can remove.
+# They are compared separately and gated by separate lists, because the controlled build is
+# expected to converge on cases the default one does not, and gating the default build on those
+# would make it permanently red for a result it never claimed.
+#
+# Not run on pull requests: six full Release builds would slow PR feedback for a signal that
+# only changes when math, coefficients or build options change.
 
 on:
   push:
@@ -22,18 +30,23 @@ concurrency:
 
 jobs:
   render:
-    name: ${{ matrix.name }}
+    name: ${{ matrix.name }} (config ${{ matrix.config }})
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
+        # platform stays a real matrix key so each include entry expands only its own platform.
+        # As include-only keys they would instead be layered onto every combination in turn,
+        # leaving both jobs on whichever runner came last.
+        platform: [macos, linux]
+        config: [a, b]
         include:
-          - name: macOS render
-            platform: macos
+          - platform: macos
+            name: macOS render
             runner: macos-26
             install: brew install cmake ninja boost ccache
-          - name: Linux render
-            platform: linux
+          - platform: linux
+            name: Linux render
             runner: ubuntu-24.04
             install: |
               sudo apt-get update
@@ -64,54 +77,78 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .ccache
-          key: ccache-${{ runner.os }}-consistency-${{ github.sha }}
+          key: ccache-${{ runner.os }}-consistency-${{ matrix.config }}-${{ github.sha }}
           restore-keys: |
-            ccache-${{ runner.os }}-consistency-
+            ccache-${{ runner.os }}-consistency-${{ matrix.config }}-
             ccache-${{ runner.os }}-
 
-      # Release: the determinism contract is a release-configuration property, and Debug
-      # codegen would not represent what ships.
-      # MR_ADM_CORE_BUILD_TESTS is passed explicitly: the two tools live in the tests section of
+      # The consistency-* presets are Release: the determinism contract is a release-configuration
+      # property, and Debug codegen would not represent what ships. They also pin FLAC/Opus to
+      # vendored and disable installed-package lookup, so A and B differ only in the numeric
+      # options under test.
+      # MR_ADM_CORE_BUILD_TESTS is passed explicitly: the tools live in the tests section of
       # CMakeLists.txt, so turning it off would fail this workflow with an opaque "no rule to
       # make target" rather than something that points at the cause.
       - name: Configure
         run: >
-          cmake --preset release
+          cmake --preset consistency-${{ matrix.config }}
           -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
           -DMR_ADM_CORE_BUILD_TESTS=ON
-          -DMR_ADM_FLAC_PROVIDER=VENDORED
-          -DMR_ADM_OPUS_PROVIDER=VENDORED
           -DMR_ADM_ENABLE_IAMF=OFF
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       # The fixture/repeat helpers are EXCLUDE_FROM_ALL, so name the tool targets explicitly.
       - name: Build
-        run: cmake --build build/release --target mradm_exe mr_adm_pcm_bits mr_adm_make_fixture mr_adm_repeat_render
+        run: >
+          cmake --build build/consistency-${{ matrix.config }}
+          --target mradm_exe mr_adm_pcm_bits mr_adm_make_fixture mr_adm_repeat_render
 
       - name: Test consistency utilities
         shell: bash
-        run: python3 tests/unit/consistency_tools_test.py --pcm-bits build/release/mr_adm_pcm_bits --bash "$BASH"
+        run: >
+          python3 tests/unit/consistency_tools_test.py
+          --pcm-bits build/consistency-${{ matrix.config }}/mr_adm_pcm_bits --bash "$BASH"
+
+      - name: Test numeric build controls
+        shell: bash
+        run: python3 tests/unit/consistency_build_test.py
 
       - name: Render matrix
-        run: bash scripts/consistency/render-matrix.sh build/release out/${{ matrix.platform }}
+        run: >
+          bash scripts/consistency/render-matrix.sh
+          build/consistency-${{ matrix.config }} out/${{ matrix.platform }}
+
+      # The build record travels with the PCM. A controlled-build result only means something
+      # alongside evidence that the flags reached the compiler, which BLAS backend SAF picked,
+      # and how many explicit FMA instructions survived — the option alone proves none of that.
+      # build-info fails if strict commands are missing or conflicting flags survived generation.
+      - name: Record build
+        if: always()
+        run: |
+          bash scripts/consistency/build-info.sh \
+            build/consistency-${{ matrix.config }} \
+            out/${{ matrix.platform }}/build-info.txt
+          bash scripts/consistency/scan-fp.sh \
+            build/consistency-${{ matrix.config }}/mradm \
+            out/${{ matrix.platform }}/scan-fp.txt
 
       - name: Upload baseline
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: consistency-${{ matrix.platform }}
+          name: consistency-${{ matrix.platform }}-${{ matrix.config }}
           path: out/${{ matrix.platform }}
           if-no-files-found: error
           retention-days: 14
 
-      # The compare job needs a binary to localise differences; the Linux one is enough.
+      # The compare job needs a binary to localise differences; one build is enough.
       - name: Upload compare tool
-        if: matrix.platform == 'linux'
+        if: matrix.platform == 'linux' && matrix.config == 'a'
         uses: actions/upload-artifact@v7
         with:
           name: consistency-tool
-          path: build/release/mr_adm_pcm_bits
+          path: build/consistency-a/mr_adm_pcm_bits
           if-no-files-found: error
           retention-days: 14
 
@@ -120,8 +157,16 @@ jobs:
         run: ccache --show-stats || true
 
   render-windows:
-    name: Windows render
+    name: Windows render (config ${{ matrix.config }})
     runs-on: windows-2025-vs2026
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - config: a
+            numeric_flags: "-DMR_ADM_STRICT_FP=OFF -DMR_ADM_EAR_SCALAR_REFERENCE=OFF -DEAR_SIMD=ON"
+          - config: b
+            numeric_flags: "-DMR_ADM_STRICT_FP=ON -DMR_ADM_EAR_SCALAR_REFERENCE=ON -DEAR_SIMD=ON"
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
@@ -165,9 +210,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .sccache
-          key: sccache-${{ runner.os }}-consistency-${{ github.sha }}
+          key: sccache-${{ runner.os }}-consistency-${{ matrix.config }}-${{ github.sha }}
           restore-keys: |
-            sccache-${{ runner.os }}-consistency-
+            sccache-${{ runner.os }}-consistency-${{ matrix.config }}-
             sccache-${{ runner.os }}-
 
       - name: Install native dependencies
@@ -221,9 +266,13 @@ jobs:
           "VCVARS64=$vcvars" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       # Windows has no CMake preset in this repository; the canonical path is a hand-written
-      # Ninja + cl configure, mirrored from ci.yml with Release instead of Debug.
+      # Ninja + cl configure, mirrored from ci.yml with Release instead of Debug. The cache
+      # variables the consistency-* presets set are spelled out here so the two paths stay
+      # equivalent — the only intended difference between the configurations is NUMERIC_FLAGS.
       - name: Configure
         shell: cmd
+        env:
+          NUMERIC_FLAGS: ${{ matrix.numeric_flags }}
         run: |
           call "%VCVARS64%"
           cmake -S . -B build/windows -G Ninja ^
@@ -235,6 +284,7 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
             -DFETCHCONTENT_BASE_DIR="%FC_CACHE_DIR%" ^
             -DMR_ADM_CORE_BUILD_TESTS=ON ^
+            -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF ^
             -DMR_ADM_FLAC_PROVIDER=VENDORED ^
             -DMR_ADM_OPUS_PROVIDER=VENDORED ^
             -DMR_ADM_ENABLE_IAMF=OFF ^
@@ -243,7 +293,8 @@ jobs:
             -DOPENBLAS_LIBRARY="%OPENBLAS_LIBRARY%" ^
             -DLAPACKE_LIBRARY="%LAPACKE_LIBRARY%" ^
             -DOPENBLAS_HEADER_PATH="%OPENBLAS_HEADER_PATH%" ^
-            -DLAPACKE_HEADER_PATH="%LAPACKE_HEADER_PATH%"
+            -DLAPACKE_HEADER_PATH="%LAPACKE_HEADER_PATH%" ^
+            %NUMERIC_FLAGS%
 
       - name: Build
         shell: cmd
@@ -255,6 +306,12 @@ jobs:
         shell: bash
         run: python tests/unit/consistency_tools_test.py --pcm-bits build/windows/mr_adm_pcm_bits.exe --bash "$(cygpath -w "$BASH")"
 
+      - name: Test numeric build controls
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          python tests/unit/consistency_build_test.py --c-compiler cl --cxx-compiler cl
+
       # One render script for all three platforms. cmd loads the MSVC environment first so the
       # binaries find their runtime, then hands off to Git Bash so the matrix has a single
       # implementation rather than a PowerShell copy that can drift.
@@ -264,11 +321,23 @@ jobs:
           call "%VCVARS64%"
           bash scripts/consistency/render-matrix.sh build/windows out/windows .exe
 
+      # scan-fp.sh needs a disassembler; Git Bash ships none, so it records that the scan was
+      # skipped instead of failing. build-info.sh still captures whether /fp:precise and the
+      # contraction switch actually reached cl.
+      - name: Record build
+        if: always()
+        shell: bash
+        env:
+          PYTHON: python
+        run: |
+          bash scripts/consistency/build-info.sh build/windows out/windows/build-info.txt
+          bash scripts/consistency/scan-fp.sh build/windows/mradm.exe out/windows/scan-fp.txt
+
       - name: Upload baseline
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: consistency-windows
+          name: consistency-windows-${{ matrix.config }}
           path: out/windows
           if-no-files-found: error
           retention-days: 14
@@ -296,7 +365,7 @@ jobs:
         with:
           path: baselines
 
-      - name: Compare
+      - name: Compare (config A — default numerics)
         shell: bash
         run: |
           # Explicit bash enables -eo pipefail: tee must not turn a gate failure green.
@@ -304,20 +373,47 @@ jobs:
           chmod +x baselines/consistency-tool/mr_adm_pcm_bits
           for platform in macos linux windows; do
             echo "== same-process measurements: $platform =="
-            cat "baselines/consistency-$platform"/repeats/*.comparison.txt
-          done | tee consistency-report.txt
+            cat "baselines/consistency-$platform-a"/repeats/*.comparison.txt
+            echo "== build record: $platform =="
+            cat "baselines/consistency-$platform-a"/build-info.txt "baselines/consistency-$platform-a"/scan-fp.txt
+          done | tee consistency-report-a.txt
           bash scripts/consistency/compare-platforms.sh \
+            --expected scripts/consistency/expected-identical.txt \
             baselines/consistency-tool/mr_adm_pcm_bits \
-            baselines/consistency-macos \
-            baselines/consistency-linux \
-            baselines/consistency-windows \
-            2>&1 | tee -a consistency-report.txt
+            baselines/consistency-macos-a \
+            baselines/consistency-linux-a \
+            baselines/consistency-windows-a \
+            2>&1 | tee -a consistency-report-a.txt
+
+      # Runs even when config A regressed a gated case: the controlled result is the more
+      # informative half of phase 0 and should not be withheld because the other job failed.
+      - name: Compare (config B — controlled numerics)
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          chmod +x baselines/consistency-tool/mr_adm_pcm_bits
+          for platform in macos linux windows; do
+            echo "== same-process measurements: $platform =="
+            cat "baselines/consistency-$platform-b"/repeats/*.comparison.txt
+            echo "== build record: $platform =="
+            cat "baselines/consistency-$platform-b"/build-info.txt "baselines/consistency-$platform-b"/scan-fp.txt
+          done | tee consistency-report-b.txt
+          bash scripts/consistency/compare-platforms.sh \
+            --expected scripts/consistency/expected-identical-controlled.txt \
+            baselines/consistency-tool/mr_adm_pcm_bits \
+            baselines/consistency-macos-b \
+            baselines/consistency-linux-b \
+            baselines/consistency-windows-b \
+            2>&1 | tee -a consistency-report-b.txt
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: consistency-report
-          path: consistency-report.txt
+          path: |
+            consistency-report-a.txt
+            consistency-report-b.txt
           if-no-files-found: warn
           retention-days: 90
