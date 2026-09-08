@@ -22,6 +22,8 @@ on:
   push:
     branches:
       - main
+      # Temporary bootstrap: run the baseline before this workflow lands on main.
+      - claude/rust-rewrite-difficulty-2dzh3x
   workflow_dispatch:
 
 concurrency:
