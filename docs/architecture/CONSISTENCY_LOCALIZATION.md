@@ -56,7 +56,29 @@
 | `render_common.cpp:599` | 否 | `extent_disk_cloud` 未被现有 fixture 触及 |
 | `live_vbap_renderer.cpp:360` | 否 | 实时监听路径，不在离线矩阵内 |
 
-因此三平台运行对这次改动只能证明「无回归」，不能证明「修好了什么」。它暴露的是矩阵的**覆盖缺口**：没有笛卡尔坐标位置的 fixture，也没有 3D 布局的 VBAP extent 测例——这两类内容会让上表中 4 个站点从死代码变成活跃路径。补这两个 fixture 是让该类修复可验证的前提，属于后续覆盖工作。
+三平台运行 [34248046673](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34248046673) 证实了这一点：B 仍为 7/12，7 个门禁测例全部 ok，无回归也无收敛。
+
+### 关闭覆盖缺口：`objects-cartesian` 与 5.1.4 测例
+
+上表 4 个死代码站点的成因是矩阵内容，不是代码：`distance_from_position` 只在 `pos.cartesian` 为真时求长度，而全部 fixture 用极坐标；`mdap_spread_degrees` 只在非 2D 布局被调用，而 VBAP 测例是 5.1。新增一个 fixture 与四个测例（12 → 16）：
+
+- `objects-cartesian` —— 唯一让 `block.position.cartesian` 保持为真的 fixture。坐标取 `(0.25, 0.75, 0.375)`：`0.25² + 0.75² + 0.375² = 0.765625 = 0.875²`，**真值恰好可精确表示**，正确舍入必然返回 `0x3F600000`，而 glibc 的三参数 `std::hypot` 返回 `0x3F600001`。这让该测例成为可判定对错的探针，而不是实现之间的任意平局。extent 取归一化值（`Width 0.5 / Height 0.25 / Depth 0.125`），这既是 BS.2076 对笛卡尔对象的规定，也是 `mdap_spread_degrees` 把 width 乘 60 时所假设的量纲。
+- `saf-5_1_4-extent`（极坐标 3D）、`saf-5_1_4-cartesian`、`hoa-hoa3-cartesian`、`binaural-cartesian-cloud`。
+
+用逐站点执行计数器复核，4 个站点全部转为活跃。各测例的实测灵敏度：
+
+| 测例 | 覆盖站点 | 1 ULP（`hypot` 回退） | 相对 1e-4 扰动 |
+|---|---|---|---|
+| `hoa-hoa3-cartesian` | `hoa:159` | 检出 | 检出 |
+| `saf-5_1_4-cartesian` | `vbap:158`、`vbap:166` | 未检出 | 检出 |
+| `binaural-cartesian-cloud` | `binaural:266` | 未检出 | 检出（1e-2） |
+| `saf-5_1_4-extent` | `vbap:166` | 未检出 | 未检出（见下） |
+
+即这些测例覆盖了代码路径，但除 HOA 外都不是 1 ULP 级的绊线。测灵敏度时必须隔离扰动：`spread_scale = 1/distance`，所以缩放 `canonical_vector_length` 会在链路两端自相抵消，得到「毫无反应」的假象；只扰动 `mdap_spread_degrees` 的返回值才测得出 VBAP 路径对 1e-4 敏感。
+
+`saf-5_1_4-extent` 不敏感的原因值得单独记：极坐标 fixture 的 `Width` 是 30（BS.2076 对极坐标对象以度为单位），而 `mdap_spread_degrees` 计算 `width * 60`，得 1800，`std::min(180.0F, ...)` **恒定饱和**。也就是说对极坐标 extent 内容，该函数的数值是惰性的。这条只作记录：`* 60` 对笛卡尔的归一化 width 是对的，对极坐标的度数不对，但改动它会改变既有渲染行为，不属于本轮范围。
+
+`render_common.cpp:599`（`extent_disk_cloud`）在本矩阵中**结构性无法覆盖**：其唯一调用者是 macOS-only 的 Apple 后端，而跨平台矩阵按设计排除该后端。
 
 这里给的是已验证测例的分歧边界。定位每一个后续残差、修复这些边界和验证任意 ADM 内容，是之后的实现与覆盖工作；不能把阶段 0 的有限测例当作全产品的确定性证明。
 

@@ -21,6 +21,10 @@
 //   objects-extent-multi  3 Objects tracks — enables multiple OLA sources / spreader groups
 //   directspeakers   5.1 bed — DirectSpeakers gain calculation plus LFE routing
 //   hoa              HOA1 (4 channels) — HOA-typed input path
+//   objects-cartesian  1 Objects channel with CartesianPosition + extent — the only fixture that
+//                    leaves block.position.cartesian == true, which is what distance_from_position
+//                    (hoa/vbap/binaural) and mdap_spread_degrees branch on. Without it those
+//                    length computations are dead code in the matrix.
 
 #include <algorithm>
 #include <array>
@@ -149,6 +153,45 @@ void finish_doc(const std::shared_ptr<adm::Document>& doc,
     return {doc, uid_strs};
 }
 
+// Cartesian counterpart of build_objects(true). Coordinates are chosen so the vector length is
+// exactly representable: 0.25² + 0.75² + 0.375² = 0.765625 = 0.875². A correctly rounded length
+// therefore returns exactly 0x3F600000; glibc's three-argument std::hypot returns 0x3F600001.
+// The case is a decidable correctness probe, not an arbitrary tie-break between implementations.
+[[nodiscard]] BuiltDoc build_objects_cartesian() {
+    auto doc = adm::Document::create();
+    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"ObjCartCF"}, adm::TypeDefinition::OBJECTS);
+    adm::AudioBlockFormatObjects block{adm::CartesianPosition{adm::X{0.25F}, adm::Y{0.75F}, adm::Z{0.375F}}};
+    block.set(adm::Cartesian{true});
+    // Extent is required at all: distance_from_position is reached from the extent path, so a
+    // point source would leave it dead even with cartesian coordinates.
+    //
+    // The values are normalised (0..1), which is what BS.2076 specifies for cartesian objects and
+    // what mdap_spread_degrees assumes when it scales width by 60. The polar objects-extent
+    // fixture carries degrees (Width 30), so there the same expression yields 1800 and
+    // std::min(180, ...) saturates — the spread numerics are inert in that case. Keeping this
+    // fixture normalised is what makes the VBAP spread path measurable at all.
+    block.set(adm::Width{0.5F});
+    block.set(adm::Height{0.25F});
+    block.set(adm::Depth{0.125F});
+    block.set(adm::Diffuse{0.5F});
+    cf->add(block);
+    doc->add(cf);
+
+    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"ObjCartPF"}, adm::TypeDefinition::OBJECTS);
+    pf->addReference(cf);
+    doc->add(pf);
+
+    std::vector<std::shared_ptr<adm::AudioTrackUid>> uids{wire_channel(doc, cf, pf, "ObjCart")};
+    finish_doc(doc, uids, "ObjectsCartesian");
+
+    std::vector<std::string> uid_strs;
+    uid_strs.reserve(uids.size());
+    std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
+        return adm::formatId(uid->template get<adm::AudioTrackUidId>());
+    });
+    return {doc, uid_strs};
+}
+
 [[nodiscard]] BuiltDoc build_direct_speakers() {
     struct Speaker {
         const char* label;
@@ -252,7 +295,8 @@ void finish_doc(const std::shared_ptr<adm::Document>& doc,
 
 void print_usage() {
     std::cerr << "usage: mr_adm_make_fixture <kind> <out.wav>\n"
-              << "kinds: objects-point | objects-extent | objects-extent-multi | directspeakers | hoa\n";
+              << "kinds: objects-point | objects-extent | objects-extent-multi | objects-cartesian\n"
+              << "     | directspeakers | hoa\n";
 }
 
 } // namespace
@@ -278,6 +322,9 @@ int main(int argc, char** argv) {
     } else if (kind == "objects-extent-multi") {
         built = build_objects(true, 3);
         seed = 0x55555555U;
+    } else if (kind == "objects-cartesian") {
+        built = build_objects_cartesian();
+        seed = 0x66666666U;
     } else if (kind == "directspeakers") {
         built = build_direct_speakers();
         seed = 0x33333333U;

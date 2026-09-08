@@ -20,6 +20,13 @@
 #   - Post-processing is off by default here. Loudness/True Peak feed a measured gain back into
 #     the PCM, so a divergence there would otherwise be indistinguishable from a renderer
 #     divergence. One case deliberately leaves the default post-processing on to cover it.
+#   - Four cases exist to keep vector-length code out of dead-code status. distance_from_position
+#     (hoa/vbap/binaural) only evaluates its length when block.position.cartesian is true, and
+#     mdap_spread_degrees is only called for non-2D layouts, so a matrix of polar fixtures on 5.1
+#     never reaches them. objects-cartesian supplies the first condition and 5.1.4 the second;
+#     the polar/cartesian and 5.1/5.1.4 pairs keep the two variables separable. Note that
+#     extent_disk_cloud stays uncovered here by construction: its only caller is the macOS-only
+#     Apple backend, which the cross-platform matrix deliberately excludes.
 #   - Binaural 'auto' selects the cloud path, not the SAF spreader. The spreader case sets
 #     --binaural-spread-mode saf-spreader explicitly and uses an extent fixture, because objects
 #     below the 1.0 deg extent gate bypass the spreader entirely.
@@ -52,7 +59,7 @@ pcm_dir="${out_dir}/pcm"
 mkdir -p "$fixture_dir" "$pcm_dir"
 
 echo "== generating fixtures =="
-for kind in objects-point objects-extent objects-extent-multi directspeakers hoa; do
+for kind in objects-point objects-extent objects-extent-multi objects-cartesian directspeakers hoa; do
     "$make_fixture" "$kind" "${fixture_dir}/${kind}.wav"
 done
 
@@ -71,6 +78,10 @@ binaural-point|objects-point|--renderer saf-binaural --output-layout binaural --
 binaural-extent-cloud|objects-extent|--renderer saf-binaural --output-layout binaural --no-peak-limit --binaural-spread-mode cloud
 binaural-extent-spreader|objects-extent|--renderer saf-binaural --output-layout binaural --no-peak-limit --binaural-spread-mode saf-spreader
 binaural-extent-spreader-multi|objects-extent-multi|--renderer saf-binaural --output-layout binaural --no-peak-limit --binaural-spread-mode saf-spreader
+saf-5_1_4-extent|objects-extent|--renderer saf --output-layout 5.1.4 --no-peak-limit
+saf-5_1_4-cartesian|objects-cartesian|--renderer saf --output-layout 5.1.4 --no-peak-limit
+hoa-hoa3-cartesian|objects-cartesian|--renderer hoa --output-layout hoa3 --no-peak-limit
+binaural-cartesian-cloud|objects-cartesian|--renderer saf-binaural --output-layout binaural --no-peak-limit --binaural-spread-mode cloud
 EOF
 )
 
