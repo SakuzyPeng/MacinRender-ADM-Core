@@ -1,6 +1,6 @@
 # Rust 落地与 SAF 替换路线图
 
-> 状态：阶段 0 测量基建与 A/B 受控构建已落地（fixture、PCM 工具、构建记录、渲染矩阵和三平台 CI workflow）；完整三平台基线尚未采集。Rust 模块与 `MR_ADM_ENABLE_RUST` 仍未实现。
+> 状态：阶段 0 测量基建与 A/B 受控构建已落地（fixture、PCM 工具、构建记录、渲染矩阵和三平台 CI workflow）；首轮三平台基线已于 2026-09-08 完成：默认 A 组 5/12、受控 B 组 6/12 个 case 逐位一致。Rust 模块与 `MR_ADM_ENABLE_RUST` 仍未实现。
 >
 > 本文落实 [ADR 0008](../adr/0008-rust-entry-and-saf-replacement.md) 的模块边界与确定性契约，沿用 ADR 0002 / 0003 / 0004 / 0005 / 0007 的语言、依赖、错误处理和 ABI 约束。
 
@@ -103,7 +103,7 @@ rust/
    已实现：`MR_ADM_EAR_SCALAR_REFERENCE` 只在配置 libear 的局部作用域把 `EAR_SIMD` 置 OFF，并用 CMP0077 保留用户缓存；关闭后恢复使用原设置。实际选择记录在 `MR_ADM_EAR_SIMD_EFFECTIVE`，不能用缓存中的 `EAR_SIMD` 偏好代替实际状态。生效证据取自 libear 自己传下来的 `XSIMD_ARCHS`：默认构建是 `avx512bw,avx2_fma,avx,sse4_2,default_arch,generic_for_dispatch`，开关打开后只剩 `generic_for_dispatch`。顺带说明默认构建的一个性质——这串 arch 是**运行时**按 CPU 特性分派的，所以同一平台上两台特性不同的机器本来就可能走不同实现，这是平台内的差异来源，不是平台间的。若 libear 来自已安装包，本开关对它无效，配置阶段直接 FATAL 而不是静默降级成一个站不住的「标量参考」。
 5. 建立 §6 的 PCM 比较工具与矩阵。原始路径的预期差异作为报告保存，不用一个永久失败的 CI job 代替基线；已有通过的能力应成为持续通过的门禁。
 
-   已实现：`tests/tools/make_fixture.cpp`（确定性输入）、`tests/tools/pcm_bits.cpp`（位提取、格式校验与比较）、`tests/tools/repeat_render.cpp`（同进程两次渲染）、`scripts/consistency/render-matrix.sh`（12 个跨平台 case 及同进程重复测量）、`scripts/consistency/compare-platforms.sh`（比对与报告）、`.github/workflows/consistency.yml`（三平台 + 汇总 job）。门禁清单是 `scripts/consistency/expected-identical.txt`，初始为空，按首次三平台运行的结果填充。
+   已实现：`tests/tools/make_fixture.cpp`（确定性输入）、`tests/tools/pcm_bits.cpp`（位提取、格式校验与比较）、`tests/tools/repeat_render.cpp`（同进程两次渲染）、`scripts/consistency/render-matrix.sh`（12 个跨平台 case 及同进程重复测量）、`scripts/consistency/compare-platforms.sh`（比对与报告）、`.github/workflows/consistency.yml`（三平台 + 汇总 job）。默认与受控组的门禁清单已按首轮三平台运行分别填入 5 个、6 个已确认一致的 case。
 
    两组配置由 preset `consistency-a`（默认数值）与 `consistency-b`（受控数值）固定。两者都关掉已安装包查找并锁定 FLAC / Opus 为 vendored。A 显式关闭两个受控开关、选择默认 EAR SIMD，B 在此基础上开启控制，避免沿用实验缓存；否则依赖来源不同会混进比较结果。两组各有自己的门禁清单——`expected-identical.txt` 与 `expected-identical-controlled.txt`，经 `compare-platforms.sh --expected` 选择——因为受控构建预期能收敛的 case 多于默认构建，拿它的成果去卡默认构建等于让后者为自己没声称过的结果长红。
 
@@ -126,6 +126,21 @@ rust/
 - **剩余 FMA 全部来自 libear**：单独统计 `libear.a`，默认构建 60 条、只关 contraction 后 54 条、关掉 `EAR_SIMD` 后 0 条；此时整个 `mradm` 也是 0 条。即编译器自行融合的部分靠编译选项就能清掉，剩下的是 xsimd 的显式 intrinsic，只能靠换实现或关掉分派。这正是第 3 项要求「检查显式 FMA」而不是只看编译选项的原因。
 - **只数 `-ffast-math` 会漏掉真正的破口**：默认构建的 `compile.fast_math` 是 0，而 `compile.unsafe_fp` 是 29——vendored FLAC 以目标级选项追加了 `-fassociative-math` / `-fno-signed-zeros` / `-fno-trapping-math` / `-freciprocal-math`，排在 `CMAKE_<lang>_FLAGS` 之后，早期只统计 `-ffast-math` 的记录看不见它们。移除这些选项后受控构建的 `compile.unsafe_fp` 为 0。这些 TU 全在 libFLAC，而基线矩阵统一写 f32 WAV、不经过 FLAC 编码，所以上面三条的输出比较**修正前后完全一致**；受影响的是「受控」这个说法本身能不能成立，以及一旦把 FLAC 输出纳入矩阵就会立刻显形。
 - 覆盖不到的一层：Linux / Windows 的 OpenBLAS 与 macOS 的 Accelerate 是预编译库，任何项目编译选项都到不了；SAF 实际选中的后端记在 build-info 里。受控构建不能声称覆盖它们。
+
+#### 首轮三平台基线（2026-09-08）
+
+[完整运行](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34185456813)使用提交 `3a0636e1a15d46a37100b2dc86ed3751fc95f919`，覆盖 macOS arm64、Linux x64、Windows x64。六组构建、工具回归、矩阵、构建记录和汇总均成功；CI 成功表示测量有效，不表示所有 PCM 已一致。
+
+| 配置 | 三平台逐位一致 | 仍有差异 |
+|---|---:|---:|
+| A：默认数值 | 5 / 12 | 7 / 12 |
+| B：受控数值 | 6 / 12 | 6 / 12 |
+
+两组均一致的 case 为 `ear-5_1-directspeakers`、`ear-5_1-point`、`ear-5_1-point-postproc`、`saf-5_1-point`、`saf-5_1-extent`；B 组另有 `ear-5_1-hoa-input` 一致。这些结果已写入各自的 expected-identical 门禁。
+
+两组仍有差异的是 EAR extent、HOA3 编码和四个双耳 case；A 组还包括 EAR HOA 输入。单 / 多音轨 spreader 的同进程重复测量在两组的三个平台均有差异，继续作为已知分歧记录。后续应沿这些实际路径定位，不能仅凭配置 B 或 FMA 计数宣告确定性。
+
+第一次运行的 Windows 构建控制测试曾因 Python 用 CP1252 解码 CMake UTF-8 诊断而中断；修正日志编码后完整重跑，未将前后两个运行的产物拼接成基线。
 
 阶段 0 会决定后续切片大小。尚未定位的路径继续标为未完成，不因语言或库名推定确定性。
 
