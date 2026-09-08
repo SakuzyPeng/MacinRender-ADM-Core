@@ -48,7 +48,7 @@ constexpr std::array<DsLabelAlias, 34> k_ds_aliases = {{
 }
 
 [[nodiscard]] SceneDirectionVector vec_normalize(const SceneDirectionVector& v) noexcept {
-    const float len = std::max(1.0e-6F, std::hypot(v.x, v.y, v.z));
+    const float len = std::max(1.0e-6F, canonical_vector_length(v.x, v.y, v.z));
     return {v.x / len, v.y / len, v.z / len};
 }
 

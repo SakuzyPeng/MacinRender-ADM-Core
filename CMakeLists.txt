@@ -888,6 +888,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_vbap_smoke_tests)
     add_test(NAME mr_adm_vbap_smoke_tests COMMAND mr_adm_vbap_smoke_tests)
 
+    add_executable(mr_adm_render_common_numeric_tests tests/unit/render_common_numeric_test.cpp)
+    target_link_libraries(mr_adm_render_common_numeric_tests PRIVATE MacinRender::ADMRenderCommon)
+    mr_adm_core_apply_warnings(mr_adm_render_common_numeric_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_render_common_numeric_tests)
+    add_test(NAME mr_adm_render_common_numeric_tests COMMAND mr_adm_render_common_numeric_tests)
+
     add_executable(mr_adm_speaker_layouts_tests tests/unit/speaker_layouts_test.cpp)
     target_link_libraries(mr_adm_speaker_layouts_tests PRIVATE MacinRender::ADMRenderCommon)
     mr_adm_core_apply_warnings(mr_adm_speaker_layouts_tests)
