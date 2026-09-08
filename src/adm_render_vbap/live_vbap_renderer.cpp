@@ -357,7 +357,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
                 const float width = source.width * 60.0F * scale;
                 const float height = source.height * 45.0F * scale;
                 const float depth = source.depth * 20.0F * scale;
-                spread = std::min(180.0F, std::hypot(width, height, depth));
+                spread = std::min(180.0F, render_common::canonical_vector_length(width, height, depth));
             }
             auto source_gains = point_gains(position.azimuth, position.elevation, source.gain, spread);
             if (!source_gains) {
