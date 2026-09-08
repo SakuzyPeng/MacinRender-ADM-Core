@@ -112,6 +112,10 @@ jobs:
         run: >
           cmake --build build/consistency-${{ matrix.config }}
           --target mradm_exe mr_adm_pcm_bits mr_adm_make_fixture mr_adm_repeat_render
+          mr_adm_render_common_numeric_tests
+
+      - name: Test vector length rounding
+        run: build/consistency-${{ matrix.config }}/mr_adm_render_common_numeric_tests
 
       - name: Test consistency utilities
         shell: bash
@@ -318,7 +322,13 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/windows --target mradm_exe mr_adm_pcm_bits mr_adm_make_fixture mr_adm_repeat_render
+          cmake --build build/windows --target mradm_exe mr_adm_pcm_bits mr_adm_make_fixture mr_adm_repeat_render mr_adm_render_common_numeric_tests
+
+      - name: Test vector length rounding
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          build\windows\mr_adm_render_common_numeric_tests.exe
 
       - name: Test consistency utilities
         shell: bash
