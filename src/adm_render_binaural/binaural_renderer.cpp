@@ -232,7 +232,7 @@ struct Vec3 {
 }
 
 [[nodiscard]] Vec3 normalize(Vec3 v) noexcept {
-    const float n = std::hypot(v.x, v.y, v.z);
+    const float n = render_common::canonical_vector_length(v.x, v.y, v.z);
     if (n <= 1.0e-8F) {
         return {0.0F, 1.0F, 0.0F};
     }
@@ -1957,8 +1957,8 @@ class BinauralStream final : public IRenderStream {
 
     const BinauralPrepared& prepared_; // borrowed; owner (factory) outlives the stream
     std::unique_ptr<audio::RenderInputReader> reader_;
-    AdmScene scene_;                      // policy-applied scene, for topology re-prepare (scaled copy → build_sources)
-    BinauralSpreadMode spread_mode_;      // spread mode the prepared sources were built with
+    AdmScene scene_;                 // policy-applied scene, for topology re-prepare (scaled copy → build_sources)
+    BinauralSpreadMode spread_mode_; // spread mode the prepared sources were built with
     std::vector<BinauralSource> sources_; // own (rebuildable) source list; starts == prepared_.sources
     uint16_t num_in_ch_;
     uint64_t total_frames_;

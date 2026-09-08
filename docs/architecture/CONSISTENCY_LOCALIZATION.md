@@ -19,6 +19,18 @@
 | `binaural-extent-cloud` | RNG 三角化，其后为小矩阵求逆/插值权重 | 原始顶点一致，C RNG 不同导致凸包三角形不同。统一 RNG 后三角形一致；Linux/Windows 首次剩余分歧已经出现在 `invertLsMtx3D → utility_sinv → LAPACKE_sgetrf_work / LAPACKE_sgetri_work`。 |
 | 两种 `binaural-extent-spreader` | 去相关延迟 RNG、几何 RNG；叠加 FFT/矩阵数学及分组拓扑 | 同平台连续重复即不同。统一 RNG 后延迟表收敛，仍不能推定全部 PCM 收敛；macOS 的剩余重复差异已在 HRIR → HRTF 阶段复现。 |
 
+### 已落地的修复：向量归一化的长度计算
+
+`std::hypot` 在标准里没有精度约束，上表那条已改用 `render_common::canonical_vector_length`：把三个分量转成 `double` 累加平方再取 `sqrt`。这条路径每一步都由 IEEE-754 精确规定——float 的平方在 double 中精确（至多 48 位有效位，double 有 53 位）、double 加法与 `sqrt` 都要求正确舍入、double→float 的窄化同样；`hypot` 用来防溢出的那套缩放也不再需要，因为 float 分量的平方在 double 里既不会溢出也不会下溢。用 double 累加还顺带免疫 FP contraction：平方既然精确，融合乘加与分开的乘、加结果相同，所以默认构建与受控构建一致。
+
+三处 `normalize` 辅助函数（`render_common.cpp`、`hoa_renderer.cpp`、`binaural_renderer.cpp`）统一走这个入口，各自的零长度兜底不变。
+
+本机（Linux、GCC 13.3、Release）改前 / 改后的完整矩阵对照：**12 个 case 里只有 `hoa-hoa3-point` 变化**，277,692 / 768,000 个采样不同——与基线里 macOS 对 Linux/Windows 的差异数完全相同；首个不同样本从 `0x3d8e14b1` 变成 `0x3d8e14b0`，正是基线中 macOS 那一侧的位模式。两组门禁清单里的 case 全部逐位未变。
+
+据此**预期** `hoa-hoa3-point` 在下一次三平台运行中三平台收敛，但这仍是预期：macOS 与 Windows 的实测尚未跑。按门禁只填实测结果的约定，这次不动 `expected-identical*.txt`，等下一次 consistency 运行确认后再加。
+
+`tests/unit/render_common_numeric_test.cpp` 把这条约束拉到本地 CTest：输入与期望值都是字面位模式，期望值按 IEEE-754 各步规则独立推出，不是抄某台机器的输出。改回 `std::hypot` 会让其中 4 条断言在 Linux 上立即失败（已实测）；macOS 上该测试对新旧实现都通过，因为 Darwin 的 `hypot` 恰好返回 1.0——所以它是本地的单向守卫，跨平台验收仍靠 consistency workflow。
+
 这里给的是已验证测例的分歧边界。定位每一个后续残差、修复这些边界和验证任意 ADM 内容，是之后的实现与覆盖工作；不能把阶段 0 的有限测例当作全产品的确定性证明。
 
 ### EAR HOA 输入：排除错误的 SIMD 归因
