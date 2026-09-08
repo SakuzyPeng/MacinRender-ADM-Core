@@ -156,7 +156,7 @@ Hoa3Coeffs encode_polar(float az_deg, float el_deg) noexcept {
 }
 
 [[nodiscard]] float distance_from_position(const SceneBlockPosition& pos) noexcept {
-    return pos.cartesian ? std::hypot(pos.x, pos.y, pos.z) : pos.distance;
+    return pos.cartesian ? render_common::canonical_vector_length(pos.x, pos.y, pos.z) : pos.distance;
 }
 
 [[nodiscard]] Hoa3Coeffs encode_extent(const SceneBlockPosition& pos, const SceneObjectBlock& block) {
@@ -175,7 +175,7 @@ Hoa3Coeffs encode_polar(float az_deg, float el_deg) noexcept {
 
     const Vec3 center = direction_from_position(pos);
     Vec3 horizontal = cross({0.0F, 0.0F, 1.0F}, center);
-    if (std::hypot(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
+    if (render_common::canonical_vector_length(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
         horizontal = {1.0F, 0.0F, 0.0F};
     } else {
         horizontal = normalize(horizontal);

@@ -33,6 +33,31 @@
 
 `tests/unit/render_common_numeric_test.cpp` 在本地 CTest 和三平台 consistency 的 Release A/B job 中执行。输入和期望值均为字面位模式，输入经过 volatile 读取以防 Release 常量折叠替代实际计算。用例包括三个非零分量的精确长度、三项求和的舍入边界、极大和次正规分量；最终 PCM 的验收仍由对应配置的门禁负责。
 
+### 其余三参数 `std::hypot`：已替换，但当前矩阵测不到
+
+上面那处是定位报告钉住的站点。同一类问题还留在渲染路径的另外 8 处三参数 `std::hypot` 上，已一并换成 `canonical_vector_length`（`hoa_renderer.cpp:159,178`、`vbap_renderer.cpp:158,166`、`live_vbap_renderer.cpp:360`、`binaural_renderer.cpp:266,1084`、`render_common.cpp:599`）。
+
+替换的依据是实测而非推断。glibc 2.39 上以 200 万组随机 f32 输入对照规范写法：
+
+| 形式 | 与 `canonical_vector_length` 不一致 |
+|---|---|
+| 三参数 `std::hypot` | 648,112 / 2,000,000（**32.4%**） |
+| 双参数 `std::hypot` | 0 / 2,000,000 |
+
+所以只替换三参数形式。双参数站点（`render_common.cpp:60`、`binaural_renderer.cpp:274`、`vbap_renderer.cpp:232`、`head_rotation.h:35`、`live_binaural_renderer.cpp:206`、`scene.h:167`）保持不动：标准同样没有精度约束，但没有可测到的分歧，改动只会带来无收益的风险。这是「glibc 上未观察到」，不是「跨平台已证明一致」。
+
+**这次替换当前矩阵验证不了。** Linux Release 上改前 / 改后 A、B 各 12 个 case 全部逐位不变（24/24）。用逐站点执行计数器（临时插桩，不入库）跑整轮矩阵，只有两处真正被执行：
+
+| 站点 | 矩阵中执行 | 说明 |
+|---|---|---|
+| `hoa_renderer.cpp:178`、`binaural_renderer.cpp:1084` | 是 | 阈值比较；值远离 `1.0e-4`，分支不翻转，故 PCM 不变 |
+| `hoa:159`、`vbap:158`、`binaural:266` | 否 | `distance_from_position` 只在 `pos.cartesian` 时进入，现有 fixture 全部使用极坐标 |
+| `vbap_renderer.cpp:166` | 否 | `mdap_spread_degrees` 的返回值在 2D 布局被丢弃，而矩阵里的 VBAP 测例是 5.1 |
+| `render_common.cpp:599` | 否 | `extent_disk_cloud` 未被现有 fixture 触及 |
+| `live_vbap_renderer.cpp:360` | 否 | 实时监听路径，不在离线矩阵内 |
+
+因此三平台运行对这次改动只能证明「无回归」，不能证明「修好了什么」。它暴露的是矩阵的**覆盖缺口**：没有笛卡尔坐标位置的 fixture，也没有 3D 布局的 VBAP extent 测例——这两类内容会让上表中 4 个站点从死代码变成活跃路径。补这两个 fixture 是让该类修复可验证的前提，属于后续覆盖工作。
+
 这里给的是已验证测例的分歧边界。定位每一个后续残差、修复这些边界和验证任意 ADM 内容，是之后的实现与覆盖工作；不能把阶段 0 的有限测例当作全产品的确定性证明。
 
 ### EAR HOA 输入：排除错误的 SIMD 归因

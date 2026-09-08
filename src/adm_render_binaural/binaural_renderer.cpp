@@ -263,7 +263,7 @@ int vbap_grid_idx(float az_deg, float el_deg) {
 }
 
 [[nodiscard]] float distance_from_position(const SceneBlockPosition& pos) noexcept {
-    return pos.cartesian ? std::hypot(pos.x, pos.y, pos.z) : pos.distance;
+    return pos.cartesian ? render_common::canonical_vector_length(pos.x, pos.y, pos.z) : pos.distance;
 }
 
 [[nodiscard]] std::pair<float, float> polar_from_direction(Vec3 dir) noexcept {
@@ -1081,7 +1081,7 @@ expand_binaural_extent(const SceneObjectBlock& block, float source_gain, Binaura
 
     const Vec3 center = direction_from_position(block.position);
     Vec3 horizontal = cross({0.0F, 0.0F, 1.0F}, center);
-    if (std::hypot(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
+    if (render_common::canonical_vector_length(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
         horizontal = {1.0F, 0.0F, 0.0F};
     } else {
         horizontal = normalize(horizontal);
@@ -1957,8 +1957,8 @@ class BinauralStream final : public IRenderStream {
 
     const BinauralPrepared& prepared_; // borrowed; owner (factory) outlives the stream
     std::unique_ptr<audio::RenderInputReader> reader_;
-    AdmScene scene_;                      // policy-applied scene, for topology re-prepare (scaled copy → build_sources)
-    BinauralSpreadMode spread_mode_;      // spread mode the prepared sources were built with
+    AdmScene scene_;                 // policy-applied scene, for topology re-prepare (scaled copy → build_sources)
+    BinauralSpreadMode spread_mode_; // spread mode the prepared sources were built with
     std::vector<BinauralSource> sources_; // own (rebuildable) source list; starts == prepared_.sources
     uint16_t num_in_ch_;
     uint64_t total_frames_;
