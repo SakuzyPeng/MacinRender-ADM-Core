@@ -4,6 +4,8 @@
 # Run: https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34185456813
 # HOA point confirmed by 9025d39e2b053e78d9976569db2944169a67a4cf (B only):
 # https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34213036405
+# HOA cartesian confirmed by 45f0019eecbf2ff00010a92066c9f962c57d9477 (B only):
+# https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34250832546
 # Other numerical differences remain measurements; missing/invalid data always fails.
 # One case name per line; # starts a comment.
 
@@ -11,6 +13,7 @@ ear-5_1-directspeakers
 ear-5_1-hoa-input
 ear-5_1-point
 ear-5_1-point-postproc
+hoa-hoa3-cartesian
 hoa-hoa3-point
 saf-5_1-extent
 saf-5_1-point

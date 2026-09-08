@@ -17,6 +17,8 @@
 | `ear-5_1-extent` | 扩散 FIR 的 SAF FFT 路径 | B 的直接/扩散 double 增益一致；未插桩的 macOS OpenBLAS/KissFFT 对照与原 Linux/Windows PCM 收敛。 |
 | `binaural-point` | HRIR → HRTF 的 FFT，另有 VBAP 数值边界敏感性 | 同一 HRIR 的 vDSP 和 KissFFT 频谱不同；原未插桩后端对照可收敛，但诊断构建还暴露了测量网格附近微小插值权重受三角化/求逆影响的情况。 |
 | `binaural-extent-cloud` | RNG 三角化，其后为小矩阵求逆/插值权重 | 原始顶点一致，C RNG 不同导致凸包三角形不同。统一 RNG 后三角形一致；Linux/Windows 首次剩余分歧已经出现在 `invertLsMtx3D → utility_sinv → LAPACKE_sgetrf_work / LAPACKE_sgetri_work`。 |
+| `saf-5_1_4-cartesian`，新覆盖发现 | 3D VBAP 的小矩阵求逆（macOS Accelerate vs OpenBLAS） | macOS 对 Linux/Windows 有 133,910/480,000 个采样不同，`max_ulp=7`，`max_abs=2.98e-8`；**Linux 与 Windows 逐位相同**。2D 的 `saf-5_1-extent` 三平台一致且已入门禁，所以分歧只在布局为 3D 时出现，落在 `invertLsMtx3D` 一侧而非增益应用。 |
+| `saf-5_1_4-extent`，新覆盖发现 | 同上，且 Linux ≠ Windows | 三对全不同；Linux 对 Windows 也有 94,150/480,000 个采样不同（`max_ulp=4`）。两者都用 OpenBLAS 但构建不同（发行版包 vs 预构建 0.3.33），与既有的 Linux/Windows OpenBLAS 分歧同源。该测例的 spread 恒定饱和（见下），因此分歧与长度函数无关。 |
 | 两种 `binaural-extent-spreader` | 去相关延迟 RNG、几何 RNG；叠加 FFT/矩阵数学及分组拓扑 | 同平台连续重复即不同。统一 RNG 后延迟表收敛，仍不能推定全部 PCM 收敛；macOS 的剩余重复差异已在 HRIR → HRTF 阶段复现。 |
 
 ### 已落地的修复：向量归一化的长度计算
@@ -77,6 +79,16 @@
 即这些测例覆盖了代码路径，但除 HOA 外都不是 1 ULP 级的绊线。测灵敏度时必须隔离扰动：`spread_scale = 1/distance`，所以缩放 `canonical_vector_length` 会在链路两端自相抵消，得到「毫无反应」的假象；只扰动 `mdap_spread_degrees` 的返回值才测得出 VBAP 路径对 1e-4 敏感。
 
 `saf-5_1_4-extent` 不敏感的原因值得单独记：极坐标 fixture 的 `Width` 是 30（BS.2076 对极坐标对象以度为单位），而 `mdap_spread_degrees` 计算 `width * 60`，得 1800，`std::min(180.0F, ...)` **恒定饱和**。也就是说对极坐标 extent 内容，该函数的数值是惰性的。这条只作记录：`* 60` 对笛卡尔的归一化 width 是对的，对极坐标的度数不对，但改动它会改变既有渲染行为，不属于本轮范围。
+
+三平台运行 [34250832546](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34250832546)（16 测例）的结果：
+
+- 新 fixture `objects-cartesian.wav` 三平台**输入字节一致**，与其余五个一样。
+- **`hoa-hoa3-cartesian` 三平台逐位相同**，已加入 `expected-identical-controlled.txt`。这是对 `hoa:159` 那处替换的首次跨平台验证——该测例是四个新测例里唯一对 1 ULP 敏感的，若不修 `distance_from_position`，它必然分歧。
+- `saf-5_1_4-cartesian` 与 `saf-5_1_4-extent` 各暴露一个**此前不可见的分歧**（见上表）。这正是补覆盖的目的：两处都在 3D VBAP 路径上，而矩阵此前只有 2D 布局。
+- `binaural-cartesian-cloud` 与既有的 `binaural-extent-cloud` 表现一致，属已定位的 RNG/FFT 类。
+- B 从 7/12 变为 **8/16**；7 个既有门禁测例全部 ok，8 处 `std::hypot` 替换零回归。
+
+本次未读取 A 组的逐测例结果（运行日志被构建记录挤占，未取回该段），因此 `expected-identical.txt` 不动——按只填实测的约定，缺测量与测到不一致处理方式相同。
 
 `render_common.cpp:599`（`extent_disk_cloud`）在本矩阵中**结构性无法覆盖**：其唯一调用者是 macOS-only 的 Apple 后端，而跨平台矩阵按设计排除该后端。
 
