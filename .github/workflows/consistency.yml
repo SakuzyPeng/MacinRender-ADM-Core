@@ -5,7 +5,7 @@ name: Consistency
 # Each runner renders the same deterministic matrix and uploads the canonical float32 PCM bit
 # images; a downstream job compares them. Phase 0 measures the current state, so divergence is
 # reported rather than failed on — the gate is scripts/consistency/expected-identical.txt, which
-# starts empty and grows as capabilities are fixed.
+# contains the cases confirmed by the first complete run and grows as capabilities are fixed.
 #
 # Two build configurations run per platform (roadmap §5.1 items 2-4):
 #   a — the default Release build; the actual state of divergence today.
@@ -22,8 +22,6 @@ on:
   push:
     branches:
       - main
-      # Temporary bootstrap: run the baseline before this workflow lands on main.
-      - claude/rust-rewrite-difficulty-2dzh3x
   workflow_dispatch:
 
 concurrency:

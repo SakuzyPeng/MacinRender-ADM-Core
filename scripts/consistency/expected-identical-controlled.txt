@@ -1,11 +1,13 @@
-# Cases that must stay bit-identical across macOS / Linux / Windows in the CONTROLLED build
-# (config B: MR_ADM_STRICT_FP=ON, MR_ADM_EAR_SCALAR_REFERENCE=ON).
-#
-# Separate from expected-identical.txt on purpose. Config B is expected to converge on cases the
-# default build does not, and gating the default build on those would make it permanently red
-# for a result it never claimed. Config A keeps its own list.
-#
-# Empty on purpose for the same reason as the default list: nothing has been shown to hold
-# across all three platforms yet. Populate from the first full three-platform run.
-#
-# One case name per line; '#' starts a comment.
+# Cases confirmed bit-identical across macOS arm64, Linux x64 and Windows x64.
+# Configuration B; first complete baseline recorded 2026-09-08.
+# Tested source: 3a0636e1a15d46a37100b2dc86ed3751fc95f919
+# Run: https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34185456813
+# Other numerical differences remain measurements; missing/invalid data always fails.
+# One case name per line; # starts a comment.
+
+ear-5_1-directspeakers
+ear-5_1-hoa-input
+ear-5_1-point
+ear-5_1-point-postproc
+saf-5_1-extent
+saf-5_1-point
