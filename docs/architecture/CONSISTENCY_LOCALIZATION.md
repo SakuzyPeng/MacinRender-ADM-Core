@@ -35,4 +35,6 @@ python3 scripts/consistency/compare-checkpoints.py /path/to/first /path/to/secon
 4. **分组拓扑**：`MR_ADM_DIAGNOSTIC_GROUP_BUDGET` 单独控制 `build_spreader_groups` 的预算。worker 实验固定预算为 4；拓扑实验固定 worker 为 1。预算不是最终组数，以日志为准。
 5. **数学后端**：macOS 的 OpenBLAS 变体同时改变 SAF BLAS 和 FFT（vDSP → KissFFT）。必须结合增益/FFT 检查点归因，不能把整个变体等同于只改 BLAS。
 
-脚本要求重置 RNG 后的同进程重复与固定分组的 worker 对照逐位相同。连续重复、分组变化及跨平台差异记录为测量结果。完整定位结论将在三平台诊断运行后记录于此。
+重置 RNG、固定分组 worker 对照的相等性也是待检验假设，记录在 `experiments.json` 的 `hypothesis_identical` 中；任一 PCM 差异都保留，不能因实验假设失败而停止采集后续变体。缺失检查点、错误输入、构建失败和比较器错误仍使任务失败；原 A/B 基线的一致性门禁保持有效。
+
+首轮追加实验发现 macOS runner 在统一 RNG 后，spreader 重置重复仍有约 `3.87e-7` 的残差，因而推翻了“重置 RNG 足够覆盖全部内部状态”的假设。补充检查点追踪每个 spreader 实例的 filterbank HRTF、Voronoi 权重、外积、前 16 帧的 STFT、去相关、协方差及混合矩阵；只捕获实际活动通道，避免把未使用的 scratch 空间误当计算数据。

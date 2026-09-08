@@ -530,6 +530,10 @@ void compress_vbap_rows(
     if (layout_inv_mtx == nullptr) {
         return false;
     }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    consistency::dump("binaural.02c-inverse-matrices.f32",
+                      std::span<const float>(layout_inv_mtx, static_cast<std::size_t>(num_out_faces) * 9U));
+#endif
 
     const std::size_t n_gtable = static_cast<std::size_t>(k_n_azi) * static_cast<std::size_t>(k_n_elev);
     bs.vbap_gains.assign(n_gtable * 3U, 0.0F);
@@ -626,6 +630,11 @@ void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std:
     const auto gbase = g * 3U;
     const auto nd = static_cast<std::size_t>(bs.num_dirs);
     out.resize(static_cast<std::size_t>(bs.n_bands) * k_n_ears);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    std::vector<float> trace_magnitudes(out.size() * 3U);
+    std::vector<float> trace_scale(out.size() * 2U);
+    std::vector<float_complex> trace_sum(out.size());
+#endif
     for (int b = 0; b < bs.n_bands; ++b) {
         for (std::size_t ear = 0; ear < k_n_ears; ++ear) {
             float mag = 0.0F;
@@ -634,16 +643,28 @@ void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std:
                 const float gain = bs.vbap_gains[gbase + k];
                 const auto dir = static_cast<std::size_t>(bs.vbap_dirs[gbase + k]);
                 const auto h = bs.hrtf_fd[(static_cast<std::size_t>(b) * k_n_ears * nd) + (ear * nd) + dir];
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+                trace_magnitudes[((static_cast<std::size_t>(b) * k_n_ears) + ear) * 3U + k] = std::abs(h);
+#endif
                 mag += gain * std::abs(h);
                 cpx += gain * h;
             }
             const float acpx = std::abs(cpx);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+            const auto trace_index = (static_cast<std::size_t>(b) * k_n_ears) + ear;
+            trace_sum[trace_index] = cpx;
+            trace_scale[trace_index * 2U] = mag;
+            trace_scale[trace_index * 2U + 1U] = acpx;
+#endif
             out[(static_cast<std::size_t>(b) * k_n_ears) + ear] =
                 acpx > 1e-9F ? cpx * (mag / acpx) : float_complex{mag, 0.0F};
         }
     }
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
     consistency::dump("hrtf-grid-" + std::to_string(g) + ".c32", out);
+    consistency::dump("hrtf-grid-" + std::to_string(g) + "-magnitudes.f32", trace_magnitudes);
+    consistency::dump("hrtf-grid-" + std::to_string(g) + "-complex-sum.c32", trace_sum);
+    consistency::dump("hrtf-grid-" + std::to_string(g) + "-scale.f32", trace_scale);
 #endif
 }
 
