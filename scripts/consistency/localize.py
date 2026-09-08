@@ -71,15 +71,17 @@ def main():
 
     def compare(name, first, second, require_identical=False):
         code = run("mr_adm_pcm_bits", ["compare", first, second], out / "comparisons" / (name + ".txt"),
-                   allowed=(0,) if require_identical else (0, 1))
-        comparisons.append({"name": name, "identical": code == 0, "required": require_identical})
+                   allowed=(0, 1))
+        comparisons.append({"name": name, "identical": code == 0, "hypothesis_identical": require_identical})
         print(name, "identical" if code == 0 else "different", flush=True)
 
-    def repeat(name, kind, options, workers=1, groups=4, required=False):
+    def repeat(name, kind, options, workers=1, groups=4, required=False, trace=False):
         prefix = out / "repeats" / name
         prefix.parent.mkdir(exist_ok=True)
-        run("mr_adm_repeat_render", [fixtures / (kind + ".wav"), prefix, *options], prefix.with_suffix(".log"),
-            {"MR_ADM_DIAGNOSTIC_WORKERS": str(workers), "MR_ADM_DIAGNOSTIC_GROUP_BUDGET": str(groups)})
+        env = {"MR_ADM_DIAGNOSTIC_WORKERS": str(workers), "MR_ADM_DIAGNOSTIC_GROUP_BUDGET": str(groups)}
+        if trace:
+            env["MR_ADM_TRACE_DIR"] = str(out / "spreader-checkpoints")
+        run("mr_adm_repeat_render", [fixtures / (kind + ".wav"), prefix, *options], prefix.with_suffix(".log"), env)
         # Prove the requested count reached the real pools; merely recording a request is insufficient.
         diagnostic = f"diagnostic pools: ola_workers={workers} spreader_workers={workers}"
         if diagnostic not in prefix.with_suffix(".log").read_text(encoding="utf-8", errors="replace"):
@@ -101,6 +103,8 @@ def main():
     for groups in (1, 2):
         pcm = repeat(f"workers-1-groups-{groups}", "objects-extent-multi", ["--reset-rng"], groups=groups, required=True)
         compare(f"group-budget-4-vs-{groups}-fixed-worker", first, pcm)
+
+    repeat("spreader-reset-traced", "objects-extent", ["--reset-rng"], required=True, trace=True)
 
     (out / "experiments.json").write_text(json.dumps(comparisons, indent=2) + "\n", encoding="utf-8")
 

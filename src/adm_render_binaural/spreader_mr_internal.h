@@ -42,6 +42,10 @@ typedef SPREADER_PROC_MODES _Atomic_SPREADER_PROC_MODES;
 /* ── spreader_data struct ────────────────────────────────────────────── */
 
 typedef struct _spreader {
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    int trace_instance;
+    int trace_frame;
+#endif
     /* audio buffers and time-frequency transform */
     float** inputFrameTD;
     float** outframeTD;

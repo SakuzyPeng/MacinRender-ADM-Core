@@ -344,6 +344,7 @@ mr_adm_core_apply_warnings(mr_adm_render_binaural)
 mr_adm_core_apply_static_analysis(mr_adm_render_binaural)
 
 if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
+    target_sources(mr_adm_render_binaural PRIVATE src/adm_render_binaural/consistency_spreader_trace.cpp)
     foreach(_mr_diagnostic_target IN ITEMS mr_adm_render_ear mr_adm_render_hoa mr_adm_render_binaural)
         target_compile_definitions(${_mr_diagnostic_target} PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
     endforeach()

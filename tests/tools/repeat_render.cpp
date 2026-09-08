@@ -26,6 +26,8 @@ class MeasurementLog final : public mradm::LogSink {
 
 int main(int argc, char** argv) {
     const std::vector<std::string_view> args(argv, argv + argc);
+    const char* trace_environment = std::getenv("MR_ADM_TRACE_DIR");
+    const std::string trace_directory = trace_environment != nullptr ? trace_environment : "";
     if (args.size() < 3U) {
         std::cerr << "usage: mr_adm_repeat_render <input.wav> <output-prefix> [--reset-rng] [--cloud]\n";
         return 2;
@@ -55,6 +57,17 @@ int main(int argc, char** argv) {
         cloud ? mradm::BinauralSpreadMode::cloud : mradm::BinauralSpreadMode::saf_spreader;
     std::cout << "hardware_concurrency=" << std::thread::hardware_concurrency() << "\n";
     for (int pass = 1; pass <= 2; ++pass) {
+        if (!trace_directory.empty()) {
+            const std::string directory = trace_directory + "/pass-" + std::to_string(pass);
+#ifdef _WIN32
+            if (_putenv_s("MR_ADM_TRACE_DIR", directory.c_str()) != 0) {
+#else
+            if (setenv("MR_ADM_TRACE_DIR", directory.c_str(), 1) != 0) {
+#endif
+                std::cerr << "cannot set trace directory\n";
+                return 2;
+            }
+        }
         // Diagnostic intervention only: the C RNG algorithm still differs between runtimes,
         // and process-global reseeding is unsuitable for concurrent production rendering.
         if (reset_rng) {
