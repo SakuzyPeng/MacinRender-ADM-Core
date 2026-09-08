@@ -644,7 +644,7 @@ void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std:
                 const auto dir = static_cast<std::size_t>(bs.vbap_dirs[gbase + k]);
                 const auto h = bs.hrtf_fd[(static_cast<std::size_t>(b) * k_n_ears * nd) + (ear * nd) + dir];
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-                trace_magnitudes[((static_cast<std::size_t>(b) * k_n_ears) + ear) * 3U + k] = std::abs(h);
+                trace_magnitudes[(((static_cast<std::size_t>(b) * k_n_ears) + ear) * 3U) + k] = std::abs(h);
 #endif
                 mag += gain * std::abs(h);
                 cpx += gain * h;
@@ -654,7 +654,7 @@ void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std:
             const auto trace_index = (static_cast<std::size_t>(b) * k_n_ears) + ear;
             trace_sum[trace_index] = cpx;
             trace_scale[trace_index * 2U] = mag;
-            trace_scale[trace_index * 2U + 1U] = acpx;
+            trace_scale[(trace_index * 2U) + 1U] = acpx;
 #endif
             out[(static_cast<std::size_t>(b) * k_n_ears) + ear] =
                 acpx > 1e-9F ? cpx * (mag / acpx) : float_complex{mag, 0.0F};

@@ -142,25 +142,20 @@ rust/
 
 第一次运行的 Windows 构建控制测试曾因 Python 用 CP1252 解码 CMake UTF-8 诊断而中断；修正日志编码后完整重跑，未将前后两个运行的产物拼接成基线。
 
-##### 按平台对拆开后的三组归因
+##### 从平台相关性到计算阶段定位
 
-汇总的「几个 case 一致」不足以定位。把 12 个 case 摊到三条平台对上（`compare-platforms.sh` 已逐对输出），分歧落在三组彼此独立的原因上。以下是同一次运行的实测，不是推断出来的分类。
+首轮基线中，Linux 与 Windows 在 A、B 下均有 9/12 个 case 一致；macOS 独有的小差异、两种 spreader 的大差异以及 cloud 的残差，只是输出上的分组，不能直接作为相互独立的原因。
 
-**第一组：只有 macOS 与另外两个不同（Linux ≡ Windows）。** A、B 两组下 Linux 与 Windows 都在 **9 / 12** 个 case 上逐位相同。`binaural-point`、`ear-5_1-extent`、`hoa-hoa3-point`（A 组还有 `ear-5_1-hoa-input`）都属于「Linux 与 Windows 一致、只有 macOS 不同」，幅度 1.2e-07 ~ 7.2e-07。这与构建记录里的 `SAF_PERFORMANCE_LIB` 划分吻合——macOS 是 `SAF_USE_APPLE_ACCELERATE_ILP64`（vDSP FFT + Accelerate BLAS），Linux / Windows 都是 `SAF_USE_OPEN_BLAS_AND_LAPACKE`。**这是相关性，不是证明**：直接验证是在 macOS 上另编一组 OpenBLAS 构建，看这批 case 是否收敛；受控构建本身到不了预编译库那一层。
+后续逐层检查点和控制实验见 [数值差异定位实验](CONSISTENCY_LOCALIZATION.md)。目前确认的边界包括：
 
-  受控构建在这一组只修好一个：`ear-5_1-hoa-input`（A 组差 92188 个采样，B 组三平台一致），对应 libear 的 arch 分派（arm64 的 `default_arch` 是 NEON，x86 是 AVX 系列）。`ear-5_1-extent` **没有**修好，只是变小（差异采样 122685 → 115269，`max_ulp` 4194304 → 1048576），说明它不止 SIMD 分派一个来源。
+- EAR HOA 输入的四组合实验表明，严格 FP 单独即可收敛，而单独关闭 EAR SIMD 无效。实际 f32 增益一致，首个 PCM 分歧由通道混加的 FMA 精确复现。
+- EAR extent 的直接声/扩散声增益在受控构建中一致，后续 SAF FFT 路径存在分歧。macOS 换 OpenBLAS/KissFFT 后该测例与 Linux、Windows 收敛；不能把这一结果解释成 libear extent 增益仍受 SIMD 影响。
+- HOA point 的三角函数输出和未归一化方向相同，第一次分歧发生在三参数 `std::hypot`。它属于 C++ 标准库算法差异，不能仅通过更换 BLAS 消除。
+- SAF 的全局 C RNG 同时参与去相关延迟和凸包三角化。cloud 也会受进程历史影响；point 在测量网格点的相等性，不能证明其它方向的 HRTF 插值路径一致。
+- 同一随机种子只统一同一 C 运行库内的起点；统一算法及 `RAND_MAX` 后，仍需处理 FFT、矩阵求逆、向量归约与插值数学。实际实验结果和未证明的推断须分开记录。
+- 固定分组与 RNG 起点后，worker 调度和改变分组拓扑是两种不同实验。分组随硬件并行预算改变会影响多轨 spreader 的输出，不能用普通重复渲染代替线程数/拓扑验证。
 
-**第二组：SAF 格型去相关器，三条平台对全部不同。** `binaural-extent-spreader` 与 `binaural-extent-spreader-multi` 在三个平台两两之间都不同，幅度 0.48 ~ 1.15——比第一组大五到七个数量级，也是唯一让 Linux 与 Windows 大幅分开的 case。这与 `saf_utility_decor.c` 用 C `rand()` 一致（glibc 与 UCRT 的 PRNG 是不同算法）。
-
-  **但这两个 case 目前还不能称为平台分歧**：同进程重复渲染在三个平台上各自也不同，幅度 0.54 ~ 1.15，与跨平台差异同量级。这条路径在一台机器、一个进程内就不确定，跨平台数字里没有可提取的平台信息。必须先消掉进程内状态依赖，对它的跨平台比较才开始有意义。
-
-**第三组：Linux 与 Windows 之间的小残差，尚未定位。** `binaural-extent-cloud` 在 Linux 与 Windows 之间差 41673 / 96000 个采样，但 `max_abs_error` 只有 1.19e-07（`max_ulp` 49152）；同组的 `binaural-point` 则是逐位相同。所以这点差异是 cloud 展开引入的，不在基础 HRTF 卷积上。它跨的是两个都用 OpenBLAS 的平台，算不到后端划分头上，候选是 libm（glibc 与 UCRT 的 `sin` / `cos`）。顺带一个量级观察：同一个 cloud case 的 macOS 对另外两家是 0.0171，比 Linux/Windows 之间大五个数量级——cloud 路径会放大上游差异。
-
-对后续切片的直接含义：
-
-- **第二组的优先级应当提前。** 它是唯一在同一平台同一进程内就不确定的路径，而这种不确定性会掩盖其上所有比较。§5.3 把它排在阶段 2；在它修好之前，双耳 spreader 的任何跨平台结论都读不出来。
-- **第一组正对应 §5.2 的 FFT / 数学入口切片**，并且已经有一个明确、便宜的验证手段：macOS 换 OpenBLAS 编一组，看这批 case 是否收敛。这能把「后端划分」从相关性升级为结论，也能划出剩余部分的边界。
-- **第三组单独立项**，不要并进前两组——它跨的平台对与前两组都不同。
+因此 RNG 生命周期与三角化需要提前纳入第一批确定性改造；数学切片应覆盖 FFT、向量归一化和小矩阵运算。Rust 语言本身不保证这些操作跨平台逐位相同。
 
 阶段 0 会决定后续切片大小。尚未定位的路径继续标为未完成，不因语言或库名推定确定性。
 

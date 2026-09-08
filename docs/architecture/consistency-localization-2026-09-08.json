@@ -1,0 +1,1797 @@
+{
+  "run_url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34199241959",
+  "tested_commit": "dd4775397dc63580222ced3475c2699bec1ed103",
+  "baseline_identical": {
+    "a": 5,
+    "b": 6,
+    "total": 12
+  },
+  "fixture_sha256": {
+    "objects-point": "f36ca37662b0de94d5a6fb4b2ce48743373467df576775594e6d15d291991bdf",
+    "objects-extent": "b4e11bcd7629d7be0a452b9ab6cca27bc18fcead083dc03b65f1d9a66525239b",
+    "objects-extent-multi": "6d8f3e51062ac5bc720677b4552418950bd3f22e520419612be026f437166af2"
+  },
+  "experiments": {
+    "macos/native": [
+      {
+        "name": "spreader-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "spreader-multi-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-multi-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "cloud-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "cloud-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-2-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-2-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-4-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-4-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-groups-1",
+        "identical": false,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-1-fixed-worker",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "workers-1-groups-2",
+        "identical": false,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-2-fixed-worker",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset-traced",
+        "identical": true,
+        "hypothesis_identical": true
+      }
+    ],
+    "macos/portable-rng": [
+      {
+        "name": "spreader-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "spreader-multi-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-multi-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "cloud-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "cloud-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-2-groups-4",
+        "identical": false,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-2-fixed-groups",
+        "identical": false,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-4-groups-4",
+        "identical": false,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-4-fixed-groups",
+        "identical": false,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-groups-1",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-1-fixed-worker",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "workers-1-groups-2",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-2-fixed-worker",
+        "identical": true,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset-traced",
+        "identical": true,
+        "hypothesis_identical": true
+      }
+    ],
+    "macos/openblas": [
+      {
+        "name": "spreader-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "spreader-multi-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-multi-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "cloud-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "cloud-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-2-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-2-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-4-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-4-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-groups-1",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-1-fixed-worker",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "workers-1-groups-2",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-2-fixed-worker",
+        "identical": true,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset-traced",
+        "identical": true,
+        "hypothesis_identical": true
+      }
+    ],
+    "macos/openblas-portable-rng": [
+      {
+        "name": "spreader-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "spreader-multi-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-multi-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "cloud-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "cloud-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-2-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-2-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-4-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-4-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-groups-1",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-1-fixed-worker",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "workers-1-groups-2",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-2-fixed-worker",
+        "identical": true,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset-traced",
+        "identical": true,
+        "hypothesis_identical": true
+      }
+    ],
+    "linux/native": [
+      {
+        "name": "spreader-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "spreader-multi-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-multi-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "cloud-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "cloud-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-2-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-2-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-4-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-4-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-groups-1",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-1-fixed-worker",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "workers-1-groups-2",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-2-fixed-worker",
+        "identical": true,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset-traced",
+        "identical": true,
+        "hypothesis_identical": true
+      }
+    ],
+    "linux/portable-rng": [
+      {
+        "name": "spreader-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "spreader-multi-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-multi-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "cloud-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "cloud-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-2-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-2-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-4-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-4-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-groups-1",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-1-fixed-worker",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "workers-1-groups-2",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-2-fixed-worker",
+        "identical": true,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset-traced",
+        "identical": true,
+        "hypothesis_identical": true
+      }
+    ],
+    "windows/native": [
+      {
+        "name": "spreader-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "spreader-multi-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-multi-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "cloud-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "cloud-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-2-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-2-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-4-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-4-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-groups-1",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-1-fixed-worker",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "workers-1-groups-2",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-2-fixed-worker",
+        "identical": true,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset-traced",
+        "identical": true,
+        "hypothesis_identical": true
+      }
+    ],
+    "windows/portable-rng": [
+      {
+        "name": "spreader-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "spreader-multi-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-multi-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "cloud-continuous",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "cloud-reset",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-2-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-2-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-4-groups-4",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-vs-4-fixed-groups",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "workers-1-groups-1",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-1-fixed-worker",
+        "identical": false,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "workers-1-groups-2",
+        "identical": true,
+        "hypothesis_identical": true
+      },
+      {
+        "name": "group-budget-4-vs-2-fixed-worker",
+        "identical": true,
+        "hypothesis_identical": false
+      },
+      {
+        "name": "spreader-reset-traced",
+        "identical": true,
+        "hypothesis_identical": true
+      }
+    ]
+  },
+  "checkpoint_pairs": {
+    "macos/native vs linux/native": [
+      {
+        "checkpoint": "binaural-cloud/binaural.01-hrir.f32",
+        "status": "identical",
+        "words": [
+          428032,
+          428032
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02-grid.f32",
+        "status": "identical",
+        "words": [
+          1672,
+          1672
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02a-triangulation-vertices.f32",
+        "status": "identical",
+        "words": [
+          2508,
+          2508
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02b-triangulation-faces.i32",
+        "status": "different",
+        "words": [
+          5004,
+          5004
+        ],
+        "different_words": 2786,
+        "first_word": 7,
+        "bits": [
+          "0x00000004",
+          "0x00000001"
+        ],
+        "values": [
+          4,
+          1
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02c-inverse-matrices.f32",
+        "status": "different",
+        "words": [
+          15012,
+          15012
+        ],
+        "different_words": 12987,
+        "first_word": 9,
+        "bits": [
+          "0xc0b57b23",
+          "0xc0b57b24"
+        ],
+        "values": [
+          -5.671281337738037,
+          -5.671281814575195
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.03-hrtf.c32",
+        "status": "different",
+        "words": [
+          3427600,
+          3427600
+        ],
+        "different_words": 2738999,
+        "first_word": 0,
+        "bits": [
+          "0x3e73035a",
+          "0x3e73035c"
+        ],
+        "values": [
+          0.23731747269630432,
+          0.2373175024986267
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.04-vbap-gains.f32",
+        "status": "different",
+        "words": [
+          196023,
+          196023
+        ],
+        "different_words": 158650,
+        "first_word": 16,
+        "bits": [
+          "0x34dd67dc",
+          "0x34dd67db"
+        ],
+        "values": [
+          4.124002543903771e-07,
+          4.1240022596866766e-07
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.05-vbap-dirs.i32",
+        "status": "different",
+        "words": [
+          196023,
+          196023
+        ],
+        "different_words": 15516,
+        "first_word": 12365,
+        "bits": [
+          "0x00000000",
+          "0x00000024"
+        ],
+        "values": [
+          0,
+          36
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.01-object-input.f32",
+        "status": "identical",
+        "words": [
+          8,
+          8
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.02-direct.f64",
+        "status": "identical",
+        "words": [
+          6,
+          6
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.03-diffuse.f64",
+        "status": "identical",
+        "words": [
+          6,
+          6
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.01-polar.f32",
+        "status": "identical",
+        "words": [
+          8,
+          8
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.02-direction.f32",
+        "status": "identical",
+        "words": [
+          3,
+          3
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.03-normalized.f32",
+        "status": "different",
+        "words": [
+          3,
+          3
+        ],
+        "different_words": 2,
+        "first_word": 0,
+        "bits": [
+          "0x3f5db3d7",
+          "0x3f5db3d8"
+        ],
+        "values": [
+          0.8660253882408142,
+          0.866025447845459
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.04-coefficients.f32",
+        "status": "different",
+        "words": [
+          16,
+          16
+        ],
+        "different_words": 6,
+        "first_word": 1,
+        "bits": [
+          "0x3f000000",
+          "0x3f000001"
+        ],
+        "values": [
+          0.5,
+          0.5000000596046448
+        ]
+      }
+    ],
+    "macos/openblas vs linux/native": [
+      {
+        "checkpoint": "binaural-cloud/binaural.01-hrir.f32",
+        "status": "identical",
+        "words": [
+          428032,
+          428032
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02-grid.f32",
+        "status": "identical",
+        "words": [
+          1672,
+          1672
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02a-triangulation-vertices.f32",
+        "status": "identical",
+        "words": [
+          2508,
+          2508
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02b-triangulation-faces.i32",
+        "status": "different",
+        "words": [
+          5004,
+          5004
+        ],
+        "different_words": 2786,
+        "first_word": 7,
+        "bits": [
+          "0x00000004",
+          "0x00000001"
+        ],
+        "values": [
+          4,
+          1
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02c-inverse-matrices.f32",
+        "status": "different",
+        "words": [
+          15012,
+          15012
+        ],
+        "different_words": 12836,
+        "first_word": 12,
+        "bits": [
+          "0xb3e2a018",
+          "0x00000000"
+        ],
+        "values": [
+          -1.0553065976637299e-07,
+          0.0
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.03-hrtf.c32",
+        "status": "identical",
+        "words": [
+          3427600,
+          3427600
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.04-vbap-gains.f32",
+        "status": "different",
+        "words": [
+          196023,
+          196023
+        ],
+        "different_words": 164954,
+        "first_word": 64,
+        "bits": [
+          "0x34aa18c6",
+          "0x34aa18c5"
+        ],
+        "values": [
+          3.168299258504703e-07,
+          3.168298974287609e-07
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.05-vbap-dirs.i32",
+        "status": "different",
+        "words": [
+          196023,
+          196023
+        ],
+        "different_words": 15744,
+        "first_word": 12365,
+        "bits": [
+          "0x00000000",
+          "0x00000024"
+        ],
+        "values": [
+          0,
+          36
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.01-object-input.f32",
+        "status": "identical",
+        "words": [
+          8,
+          8
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.02-direct.f64",
+        "status": "identical",
+        "words": [
+          6,
+          6
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.03-diffuse.f64",
+        "status": "identical",
+        "words": [
+          6,
+          6
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.01-polar.f32",
+        "status": "identical",
+        "words": [
+          8,
+          8
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.02-direction.f32",
+        "status": "identical",
+        "words": [
+          3,
+          3
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.03-normalized.f32",
+        "status": "different",
+        "words": [
+          3,
+          3
+        ],
+        "different_words": 2,
+        "first_word": 0,
+        "bits": [
+          "0x3f5db3d7",
+          "0x3f5db3d8"
+        ],
+        "values": [
+          0.8660253882408142,
+          0.866025447845459
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.04-coefficients.f32",
+        "status": "different",
+        "words": [
+          16,
+          16
+        ],
+        "different_words": 6,
+        "first_word": 1,
+        "bits": [
+          "0x3f000000",
+          "0x3f000001"
+        ],
+        "values": [
+          0.5,
+          0.5000000596046448
+        ]
+      }
+    ],
+    "macos/portable-rng vs linux/portable-rng": [
+      {
+        "checkpoint": "binaural-cloud/binaural.01-hrir.f32",
+        "status": "identical",
+        "words": [
+          428032,
+          428032
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02-grid.f32",
+        "status": "identical",
+        "words": [
+          1672,
+          1672
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02a-triangulation-vertices.f32",
+        "status": "identical",
+        "words": [
+          2508,
+          2508
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02b-triangulation-faces.i32",
+        "status": "identical",
+        "words": [
+          5004,
+          5004
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02c-inverse-matrices.f32",
+        "status": "different",
+        "words": [
+          15012,
+          15012
+        ],
+        "different_words": 9980,
+        "first_word": 9,
+        "bits": [
+          "0xc0b57b23",
+          "0xc0b57b24"
+        ],
+        "values": [
+          -5.671281337738037,
+          -5.671281814575195
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.03-hrtf.c32",
+        "status": "different",
+        "words": [
+          3427600,
+          3427600
+        ],
+        "different_words": 2609696,
+        "first_word": 3345,
+        "bits": [
+          "0xbd3e5c98",
+          "0xbd3e5c9c"
+        ],
+        "values": [
+          -0.04647502303123474,
+          -0.046475037932395935
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.04-vbap-gains.f32",
+        "status": "different",
+        "words": [
+          196023,
+          196023
+        ],
+        "different_words": 154199,
+        "first_word": 16,
+        "bits": [
+          "0x34dd67dc",
+          "0x34dd67db"
+        ],
+        "values": [
+          4.124002543903771e-07,
+          4.1240022596866766e-07
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.05-vbap-dirs.i32",
+        "status": "different",
+        "words": [
+          196023,
+          196023
+        ],
+        "different_words": 1344,
+        "first_word": 12365,
+        "bits": [
+          "0x00000000",
+          "0x00000024"
+        ],
+        "values": [
+          0,
+          36
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.01-object-input.f32",
+        "status": "identical",
+        "words": [
+          8,
+          8
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.02-direct.f64",
+        "status": "identical",
+        "words": [
+          6,
+          6
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.03-diffuse.f64",
+        "status": "identical",
+        "words": [
+          6,
+          6
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.01-polar.f32",
+        "status": "identical",
+        "words": [
+          8,
+          8
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.02-direction.f32",
+        "status": "identical",
+        "words": [
+          3,
+          3
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.03-normalized.f32",
+        "status": "different",
+        "words": [
+          3,
+          3
+        ],
+        "different_words": 2,
+        "first_word": 0,
+        "bits": [
+          "0x3f5db3d7",
+          "0x3f5db3d8"
+        ],
+        "values": [
+          0.8660253882408142,
+          0.866025447845459
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.04-coefficients.f32",
+        "status": "different",
+        "words": [
+          16,
+          16
+        ],
+        "different_words": 6,
+        "first_word": 1,
+        "bits": [
+          "0x3f000000",
+          "0x3f000001"
+        ],
+        "values": [
+          0.5,
+          0.5000000596046448
+        ]
+      }
+    ],
+    "macos/openblas-portable-rng vs linux/portable-rng": [
+      {
+        "checkpoint": "binaural-cloud/binaural.01-hrir.f32",
+        "status": "identical",
+        "words": [
+          428032,
+          428032
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02-grid.f32",
+        "status": "identical",
+        "words": [
+          1672,
+          1672
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02a-triangulation-vertices.f32",
+        "status": "identical",
+        "words": [
+          2508,
+          2508
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02b-triangulation-faces.i32",
+        "status": "identical",
+        "words": [
+          5004,
+          5004
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02c-inverse-matrices.f32",
+        "status": "different",
+        "words": [
+          15012,
+          15012
+        ],
+        "different_words": 9303,
+        "first_word": 12,
+        "bits": [
+          "0xb3e2a018",
+          "0x00000000"
+        ],
+        "values": [
+          -1.0553065976637299e-07,
+          0.0
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.03-hrtf.c32",
+        "status": "identical",
+        "words": [
+          3427600,
+          3427600
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.04-vbap-gains.f32",
+        "status": "different",
+        "words": [
+          196023,
+          196023
+        ],
+        "different_words": 161230,
+        "first_word": 64,
+        "bits": [
+          "0x34aa18c6",
+          "0x34aa18c5"
+        ],
+        "values": [
+          3.168299258504703e-07,
+          3.168298974287609e-07
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.05-vbap-dirs.i32",
+        "status": "different",
+        "words": [
+          196023,
+          196023
+        ],
+        "different_words": 1354,
+        "first_word": 12365,
+        "bits": [
+          "0x00000000",
+          "0x00000024"
+        ],
+        "values": [
+          0,
+          36
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.01-object-input.f32",
+        "status": "identical",
+        "words": [
+          8,
+          8
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.02-direct.f64",
+        "status": "identical",
+        "words": [
+          6,
+          6
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.03-diffuse.f64",
+        "status": "identical",
+        "words": [
+          6,
+          6
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.01-polar.f32",
+        "status": "identical",
+        "words": [
+          8,
+          8
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.02-direction.f32",
+        "status": "identical",
+        "words": [
+          3,
+          3
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.03-normalized.f32",
+        "status": "different",
+        "words": [
+          3,
+          3
+        ],
+        "different_words": 2,
+        "first_word": 0,
+        "bits": [
+          "0x3f5db3d7",
+          "0x3f5db3d8"
+        ],
+        "values": [
+          0.8660253882408142,
+          0.866025447845459
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.04-coefficients.f32",
+        "status": "different",
+        "words": [
+          16,
+          16
+        ],
+        "different_words": 6,
+        "first_word": 1,
+        "bits": [
+          "0x3f000000",
+          "0x3f000001"
+        ],
+        "values": [
+          0.5,
+          0.5000000596046448
+        ]
+      }
+    ],
+    "linux/portable-rng vs windows/portable-rng": [
+      {
+        "checkpoint": "binaural-cloud/binaural.01-hrir.f32",
+        "status": "identical",
+        "words": [
+          428032,
+          428032
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02-grid.f32",
+        "status": "identical",
+        "words": [
+          1672,
+          1672
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02a-triangulation-vertices.f32",
+        "status": "identical",
+        "words": [
+          2508,
+          2508
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02b-triangulation-faces.i32",
+        "status": "identical",
+        "words": [
+          5004,
+          5004
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02c-inverse-matrices.f32",
+        "status": "different",
+        "words": [
+          15012,
+          15012
+        ],
+        "different_words": 2230,
+        "first_word": 9,
+        "bits": [
+          "0xc0b57b24",
+          "0xc0b57b23"
+        ],
+        "values": [
+          -5.671281814575195,
+          -5.671281337738037
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.03-hrtf.c32",
+        "status": "identical",
+        "words": [
+          3427600,
+          3427600
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.04-vbap-gains.f32",
+        "status": "different",
+        "words": [
+          196023,
+          196023
+        ],
+        "different_words": 98414,
+        "first_word": 319,
+        "bits": [
+          "0x350320fd",
+          "0x350320fc"
+        ],
+        "values": [
+          4.884930717707903e-07,
+          4.884930149273714e-07
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.05-vbap-dirs.i32",
+        "status": "different",
+        "words": [
+          196023,
+          196023
+        ],
+        "different_words": 526,
+        "first_word": 12365,
+        "bits": [
+          "0x00000024",
+          "0x00000000"
+        ],
+        "values": [
+          36,
+          0
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.01-object-input.f32",
+        "status": "identical",
+        "words": [
+          8,
+          8
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.02-direct.f64",
+        "status": "identical",
+        "words": [
+          6,
+          6
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.03-diffuse.f64",
+        "status": "identical",
+        "words": [
+          6,
+          6
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.01-polar.f32",
+        "status": "identical",
+        "words": [
+          8,
+          8
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.02-direction.f32",
+        "status": "identical",
+        "words": [
+          3,
+          3
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.03-normalized.f32",
+        "status": "identical",
+        "words": [
+          3,
+          3
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.04-coefficients.f32",
+        "status": "identical",
+        "words": [
+          16,
+          16
+        ]
+      }
+    ],
+    "macos/openblas-portable-rng vs windows/portable-rng": [
+      {
+        "checkpoint": "binaural-cloud/binaural.01-hrir.f32",
+        "status": "identical",
+        "words": [
+          428032,
+          428032
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02-grid.f32",
+        "status": "identical",
+        "words": [
+          1672,
+          1672
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02a-triangulation-vertices.f32",
+        "status": "identical",
+        "words": [
+          2508,
+          2508
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02b-triangulation-faces.i32",
+        "status": "identical",
+        "words": [
+          5004,
+          5004
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.02c-inverse-matrices.f32",
+        "status": "different",
+        "words": [
+          15012,
+          15012
+        ],
+        "different_words": 9714,
+        "first_word": 9,
+        "bits": [
+          "0xc0b57b24",
+          "0xc0b57b23"
+        ],
+        "values": [
+          -5.671281814575195,
+          -5.671281337738037
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.03-hrtf.c32",
+        "status": "identical",
+        "words": [
+          3427600,
+          3427600
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.04-vbap-gains.f32",
+        "status": "different",
+        "words": [
+          196023,
+          196023
+        ],
+        "different_words": 161767,
+        "first_word": 64,
+        "bits": [
+          "0x34aa18c6",
+          "0x34aa18c5"
+        ],
+        "values": [
+          3.168299258504703e-07,
+          3.168298974287609e-07
+        ]
+      },
+      {
+        "checkpoint": "binaural-cloud/binaural.05-vbap-dirs.i32",
+        "status": "different",
+        "words": [
+          196023,
+          196023
+        ],
+        "different_words": 1388,
+        "first_word": 22925,
+        "bits": [
+          "0x00000000",
+          "0x0000003e"
+        ],
+        "values": [
+          0,
+          62
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.01-object-input.f32",
+        "status": "identical",
+        "words": [
+          8,
+          8
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.02-direct.f64",
+        "status": "identical",
+        "words": [
+          6,
+          6
+        ]
+      },
+      {
+        "checkpoint": "ear-extent/ear.03-diffuse.f64",
+        "status": "identical",
+        "words": [
+          6,
+          6
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.01-polar.f32",
+        "status": "identical",
+        "words": [
+          8,
+          8
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.02-direction.f32",
+        "status": "identical",
+        "words": [
+          3,
+          3
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.03-normalized.f32",
+        "status": "different",
+        "words": [
+          3,
+          3
+        ],
+        "different_words": 2,
+        "first_word": 0,
+        "bits": [
+          "0x3f5db3d7",
+          "0x3f5db3d8"
+        ],
+        "values": [
+          0.8660253882408142,
+          0.866025447845459
+        ]
+      },
+      {
+        "checkpoint": "hoa-point/hoa.04-coefficients.f32",
+        "status": "different",
+        "words": [
+          16,
+          16
+        ],
+        "different_words": 6,
+        "first_word": 1,
+        "bits": [
+          "0x3f000000",
+          "0x3f000001"
+        ],
+        "values": [
+          0.5,
+          0.5000000596046448
+        ]
+      }
+    ]
+  },
+  "pcm_comparisons": {
+    "macos/native vs linux/native": {
+      "ear-extent": {
+        "identical": false,
+        "report": "DIFFER: 118351 of 288000 samples\n  first: sample_index=0 frame=0 channel=0\n    a=-0.0482672 (bits=0xbd45b3d2)\n    b=-0.0482671 (bits=0xbd45b3c0)\n  max_abs_error=5.36442e-07 max_ulp=3145728\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      },
+      "hoa-point": {
+        "identical": false,
+        "report": "DIFFER: 277692 of 768000 samples\n  first: sample_index=1 frame=0 channel=1\n    a=0.0693754 (bits=0x3d8e14b0)\n    b=0.0693754 (bits=0x3d8e14b1)\n  max_abs_error=3.57628e-07 max_ulp=872641368\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      },
+      "binaural-point": {
+        "identical": false,
+        "report": "DIFFER: 89543 of 96000 samples\n  first: sample_index=0 frame=0 channel=0\n    a=-8.19564e-08 (bits=0xb3b00000)\n    b=0 (bits=0x0)\n  max_abs_error=7.82311e-07 max_ulp=1708130305\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      },
+      "binaural-cloud": {
+        "identical": false,
+        "report": "DIFFER: 96000 of 96000 samples\n  first: sample_index=0 frame=0 channel=0\n    a=-0.000225036 (bits=0xb96bf78a)\n    b=-0.000133884 (bits=0xb90c6328)\n  max_abs_error=0.0171129 max_ulp=2004812177\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      }
+    },
+    "macos/openblas vs linux/native": {
+      "ear-extent": {
+        "identical": true,
+        "report": "IDENTICAL samples=288000 frames=48000 channels=6"
+      },
+      "hoa-point": {
+        "identical": false,
+        "report": "DIFFER: 277692 of 768000 samples\n  first: sample_index=1 frame=0 channel=1\n    a=0.0693754 (bits=0x3d8e14b0)\n    b=0.0693754 (bits=0x3d8e14b1)\n  max_abs_error=3.57628e-07 max_ulp=872641368\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      },
+      "binaural-point": {
+        "identical": false,
+        "report": "DIFFER: 87611 of 96000 samples\n  first: sample_index=2 frame=1 channel=0\n    a=-3.39001e-06 (bits=0xb6638000)\n    b=-3.36766e-06 (bits=0xb6620000)\n  max_abs_error=7.45058e-07 max_ulp=8388608\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      },
+      "binaural-cloud": {
+        "identical": false,
+        "report": "DIFFER: 96000 of 96000 samples\n  first: sample_index=0 frame=0 channel=0\n    a=-0.000225024 (bits=0xb96bf488)\n    b=-0.000133884 (bits=0xb90c6328)\n  max_abs_error=0.0171129 max_ulp=2004812200\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      }
+    },
+    "macos/portable-rng vs linux/portable-rng": {
+      "ear-extent": {
+        "identical": false,
+        "report": "DIFFER: 118351 of 288000 samples\n  first: sample_index=0 frame=0 channel=0\n    a=-0.0482672 (bits=0xbd45b3d2)\n    b=-0.0482671 (bits=0xbd45b3c0)\n  max_abs_error=5.36442e-07 max_ulp=3145728\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      },
+      "hoa-point": {
+        "identical": false,
+        "report": "DIFFER: 277692 of 768000 samples\n  first: sample_index=1 frame=0 channel=1\n    a=0.0693754 (bits=0x3d8e14b0)\n    b=0.0693754 (bits=0x3d8e14b1)\n  max_abs_error=3.57628e-07 max_ulp=872641368\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      },
+      "binaural-point": {
+        "identical": false,
+        "report": "DIFFER: 85213 of 96000 samples\n  first: sample_index=0 frame=0 channel=0\n    a=-5.21541e-08 (bits=0xb3600000)\n    b=0 (bits=0x0)\n  max_abs_error=7.15256e-07 max_ulp=861929473\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      },
+      "binaural-cloud": {
+        "identical": false,
+        "report": "DIFFER: 88083 of 96000 samples\n  first: sample_index=0 frame=0 channel=0\n    a=-0.000207322 (bits=0xb95964ae)\n    b=-0.00020733 (bits=0xb95966d2)\n  max_abs_error=2.38419e-07 max_ulp=592896\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      }
+    },
+    "macos/openblas-portable-rng vs linux/portable-rng": {
+      "ear-extent": {
+        "identical": true,
+        "report": "IDENTICAL samples=288000 frames=48000 channels=6"
+      },
+      "hoa-point": {
+        "identical": false,
+        "report": "DIFFER: 277692 of 768000 samples\n  first: sample_index=1 frame=0 channel=1\n    a=0.0693754 (bits=0x3d8e14b0)\n    b=0.0693754 (bits=0x3d8e14b1)\n  max_abs_error=3.57628e-07 max_ulp=872641368\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      },
+      "binaural-point": {
+        "identical": true,
+        "report": "IDENTICAL samples=96000 frames=48000 channels=2"
+      },
+      "binaural-cloud": {
+        "identical": false,
+        "report": "DIFFER: 84487 of 96000 samples\n  first: sample_index=0 frame=0 channel=0\n    a=-0.000207316 (bits=0xb95962ea)\n    b=-0.00020733 (bits=0xb95966d2)\n  max_abs_error=1.78814e-07 max_ulp=404480\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      }
+    },
+    "linux/portable-rng vs windows/portable-rng": {
+      "ear-extent": {
+        "identical": true,
+        "report": "IDENTICAL samples=288000 frames=48000 channels=6"
+      },
+      "hoa-point": {
+        "identical": true,
+        "report": "IDENTICAL samples=768000 frames=48000 channels=16"
+      },
+      "binaural-point": {
+        "identical": true,
+        "report": "IDENTICAL samples=96000 frames=48000 channels=2"
+      },
+      "binaural-cloud": {
+        "identical": false,
+        "report": "DIFFER: 56498 of 96000 samples\n  first: sample_index=0 frame=0 channel=0\n    a=-0.00020733 (bits=0xb95966d2)\n    b=-0.000207326 (bits=0xb95965c2)\n  max_abs_error=1.19209e-07 max_ulp=48128\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      }
+    },
+    "macos/openblas-portable-rng vs windows/portable-rng": {
+      "ear-extent": {
+        "identical": true,
+        "report": "IDENTICAL samples=288000 frames=48000 channels=6"
+      },
+      "hoa-point": {
+        "identical": false,
+        "report": "DIFFER: 277692 of 768000 samples\n  first: sample_index=1 frame=0 channel=1\n    a=0.0693754 (bits=0x3d8e14b0)\n    b=0.0693754 (bits=0x3d8e14b1)\n  max_abs_error=3.57628e-07 max_ulp=872641368\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      },
+      "binaural-point": {
+        "identical": true,
+        "report": "IDENTICAL samples=96000 frames=48000 channels=2"
+      },
+      "binaural-cloud": {
+        "identical": false,
+        "report": "DIFFER: 83969 of 96000 samples\n  first: sample_index=0 frame=0 channel=0\n    a=-0.000207316 (bits=0xb95962ea)\n    b=-0.000207326 (bits=0xb95965c2)\n  max_abs_error=1.78814e-07 max_ulp=416768\n  note: error metrics locate the failing stage; they do not relax the bit-equality gate."
+      }
+    }
+  },
+  "portable_rng_geometry_and_delays_identical": true
+}

@@ -31,9 +31,11 @@ def main():
             ["cmake", "-S", str(root), "-B", str(build), "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=ON",
              "-DMR_ADM_DIAGNOSTIC_PORTABLE_RNG=" + ("ON" if portable else "OFF"), *extra],
             ["cmake", "--build", str(build), "--target", "mradm_exe", "mr_adm_pcm_bits",
-             "mr_adm_make_fixture", "mr_adm_repeat_render", "mr_adm_numeric_probe"],
+             "mr_adm_make_fixture", "mr_adm_repeat_render", "mr_adm_numeric_probe", "mr_adm_fft_lifecycle_probe"],
             [sys.executable, str(root / "scripts/consistency/localize.py"), str(build), str(destination),
              "--suffix=" + args.suffix],
+            [str(build / ("mr_adm_fft_lifecycle_probe" + args.suffix)),
+             str(destination / "checkpoints/binaural-point/binaural.01-hrir.f32")],
             [sys.executable, str(root / "scripts/consistency/build_info.py"), str(build), str(destination / "build-info.txt")],
         ]
         for index, command in enumerate(commands):

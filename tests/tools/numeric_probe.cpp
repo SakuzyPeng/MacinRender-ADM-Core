@@ -1,4 +1,5 @@
 // Release kernel checkpoints. Uses the linked SAF implementation, including its real C RNG.
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -18,12 +19,38 @@
 extern "C" void mr_adm_diagnostic_seed(unsigned int seed);
 #endif
 
+namespace {
+// Recreating an FFT plan is part of each render's HRTF preparation. Keep both
+// same-handle repetitions and new-handle repetitions, with the exact same HRIR.
+void probe_fft_lifecycle() {
+    constexpr int size = 2048;
+    std::vector<float> input(size, 0.0F);
+    std::copy_n(&__default_hrirs[0][0][0], 256, input.begin());
+    std::vector<std::vector<float_complex>> outputs(16, std::vector<float_complex>((size / 2) + 1));
+    std::vector<std::vector<float>> padding;
+    for (std::size_t pass = 0; pass < 8U; ++pass) {
+        padding.emplace_back(17U + (pass * 331U), 1.0F);
+        void* fft = nullptr;
+        saf_rfft_create(&fft, size);
+        saf_rfft_forward(fft, input.data(), outputs[pass * 2U].data());
+        saf_rfft_forward(fft, input.data(), outputs[(pass * 2U) + 1U].data());
+        saf_rfft_destroy(&fft);
+    }
+    mradm::consistency::dump("fft-lifecycle/input.f32", input);
+    for (std::size_t i = 0; i < outputs.size(); ++i) {
+        mradm::consistency::dump(
+            "fft-lifecycle/handle-" + std::to_string(i / 2U) + "-call-" + std::to_string(i % 2U) + ".c32", outputs[i]);
+    }
+}
+} // namespace
+
 int main() {
     using mradm::consistency::dump;
     if (std::getenv("MR_ADM_TRACE_DIR") == nullptr) {
         std::cerr << "MR_ADM_TRACE_DIR is required\n";
         return 2;
     }
+    probe_fft_lifecycle();
     // A runtime operand prevents the compiler from replacing the libm calls with constants.
     volatile float angle = 30.0F;
     const float az = angle * (static_cast<float>(std::numbers::pi) / 180.0F);
@@ -36,7 +63,7 @@ int main() {
     std::vector<float> input(n);
     std::uint32_t state = 0x12345678U;
     for (float& sample : input) {
-        state = state * 1664525U + 1013904223U;
+        state = (state * 1664525U) + 1013904223U;
         sample = static_cast<float>(static_cast<std::int32_t>(state >> 8U) - 8388608) / 8388608.0F;
     }
     std::vector<float_complex> fd((n / 2) + 1);
@@ -75,7 +102,7 @@ int main() {
         // spreader_initCodec constructs all eight lanes, including unused lanes.
         std::vector<int> all_delays;
         for (int lane = 0; lane < 8; ++lane) {
-            std::array<int, bands * channels> delays{};
+            std::array<int, static_cast<std::size_t>(bands) * channels> delays{};
             getDecorrelationDelays(channels, frequencies.data(), bands, 48000.0F, 12, 128, delays.data());
             all_delays.insert(all_delays.end(), delays.begin(), delays.end());
         }

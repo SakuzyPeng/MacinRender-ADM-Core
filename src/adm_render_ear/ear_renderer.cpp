@@ -412,6 +412,11 @@ void append_hoa_blocks(const SceneHOATracks& pack,
     // decode_matrix[i][out_ch] = gain for HOA channel i → output channel out_ch.
     std::vector<std::vector<double>> decode_matrix(n_hoa, std::vector<double>(num_out, 0.0));
     hoa_calc.calculate(meta, decode_matrix);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    for (std::size_t row = 0; row < decode_matrix.size(); ++row) {
+        consistency::dump("ear.hoa-decode-row-" + std::to_string(row) + ".f64", decode_matrix[row]);
+    }
+#endif
 
     const auto obj_gain = static_cast<double>(pack.gain);
 
