@@ -2,6 +2,8 @@
 # Configuration B; first complete baseline recorded 2026-09-08.
 # Tested source: 3a0636e1a15d46a37100b2dc86ed3751fc95f919
 # Run: https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34185456813
+# HOA point confirmed by 9025d39e2b053e78d9976569db2944169a67a4cf (B only):
+# https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34213036405
 # Other numerical differences remain measurements; missing/invalid data always fails.
 # One case name per line; # starts a comment.
 
@@ -9,5 +11,6 @@ ear-5_1-directspeakers
 ear-5_1-hoa-input
 ear-5_1-point
 ear-5_1-point-postproc
+hoa-hoa3-point
 saf-5_1-extent
 saf-5_1-point

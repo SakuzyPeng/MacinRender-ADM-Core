@@ -27,25 +27,17 @@
 
 namespace mradm::render_common {
 
-// 三维向量长度，跨平台逐位一致。方向向量归一化必须走这里，不要直接用 `std::hypot`。
-//
-// 标准对 `std::hypot` 没有精度要求，各 libm 的实现算法不同。2026-09-08 的定位运行实测：
-// 同一个由 cos/sin 构造出来的单位向量，Darwin 的 hypot 返回恰好 1.0，glibc / UCRT 返回
-// 1-1ulp；随后除以这个长度，每个分量就差 1 ULP，一路传到 HOA 系数和最终 PCM。检查点
-// `hoa.02-direction` 三平台相同而 `hoa.03-normalized` 不同，分歧正好落在这一步
-// （docs/architecture/CONSISTENCY_LOCALIZATION.md）。
-//
-// 换成下面的写法后，每一步都由 IEEE-754 精确规定：float 的平方在 double 里是精确的
-// （至多 48 位有效位，double 有 53 位），double 的加法与 `sqrt` 都要求正确舍入，
-// double→float 的窄化同样。用 double 累加还顺带免疫 FP contraction——平方既然是精确的，
-// 融合乘加得到的值与分开的乘、加完全相同，所以默认构建与受控构建结果一致。
-//
-// 这些是标准给的保证；真正的验收仍是三平台 PCM 位比较（consistency workflow）。
+// 方向归一化的规范长度计算；用于替代各标准库算法不同的三参数 std::hypot。
+// 对有限 binary32 分量，平方在 binary64 中精确（至多 48 位有效位），也不会溢出或下溢。
+// 在默认最近偶数舍入下，固定计算 (x² + y²) + z²，再做 binary64 sqrt 和 binary32 窄化。
+// 精确的乘积使 FP contraction 不改变这条路径，但两次加法仍会舍入：不能重排求和，
+// 也不能保证任意置换分量后长度的位模式相同。括号表达运算顺序，不覆盖 fast-math 等重排选项。
+// 三平台 PCM 验收及此约束的边界见 docs/architecture/CONSISTENCY_LOCALIZATION.md。
 [[nodiscard]] inline float canonical_vector_length(float x, float y, float z) noexcept {
     const double dx = x;
     const double dy = y;
     const double dz = z;
-    return static_cast<float>(std::sqrt((dx * dx) + (dy * dy) + (dz * dz)));
+    return static_cast<float>(std::sqrt(((dx * dx) + (dy * dy)) + (dz * dz)));
 }
 
 // Alphanumeric-only speaker-label key (uppercased; '+', '-' and separators dropped). Used for

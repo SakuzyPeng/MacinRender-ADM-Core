@@ -21,15 +21,17 @@
 
 ### 已落地的修复：向量归一化的长度计算
 
-`std::hypot` 在标准里没有精度约束，上表那条已改用 `render_common::canonical_vector_length`：把三个分量转成 `double` 累加平方再取 `sqrt`。这条路径每一步都由 IEEE-754 精确规定——float 的平方在 double 中精确（至多 48 位有效位，double 有 53 位）、double 加法与 `sqrt` 都要求正确舍入、double→float 的窄化同样；`hypot` 用来防溢出的那套缩放也不再需要，因为 float 分量的平方在 double 里既不会溢出也不会下溢。用 double 累加还顺带免疫 FP contraction：平方既然精确，融合乘加与分开的乘、加结果相同，所以默认构建与受控构建一致。
+`std::hypot` 的具体算法没有被统一，上表那条已改用 `render_common::canonical_vector_length`。对有限 binary32 分量，以 binary64 计算平方，固定按 `(x² + y²) + z²` 求和，再做 binary64 `sqrt` 和 binary32 窄化。契约采用默认最近偶数舍入，不允许加法重排。平方至多有 48 位有效位，在 binary64 中精确且不溢出或下溢，因此保持求和顺序的 FP contraction 不会改变这条路径；这不代表整个默认渲染器免疫 FMA。
+
+两次加法仍有舍入，不能承诺任意分量置换后的位模式相同。反例的输入位模式为 `(0x3f800000, 0x39b5016c, 0x368ef881)`：按 xyz 的规范顺序返回 `0x3f800001`，按 zyx 的规范顺序返回 `0x3f800000`。测试分别固定这两个预期值，约束运算顺序；不能用两个非零分量的用例证明三项求和对称。
 
 三处 `normalize` 辅助函数（`render_common.cpp`、`hoa_renderer.cpp`、`binaural_renderer.cpp`）统一走这个入口，各自的零长度兜底不变。
 
 本机（Linux、GCC 13.3、Release）改前 / 改后的完整矩阵对照：**12 个 case 里只有 `hoa-hoa3-point` 变化**，277,692 / 768,000 个采样不同——与基线里 macOS 对 Linux/Windows 的差异数完全相同；首个不同样本从 `0x3d8e14b1` 变成 `0x3d8e14b0`，正是基线中 macOS 那一侧的位模式。两组门禁清单里的 case 全部逐位未变。
 
-据此**预期** `hoa-hoa3-point` 在下一次三平台运行中三平台收敛，但这仍是预期：macOS 与 Windows 的实测尚未跑。按门禁只填实测结果的约定，这次不动 `expected-identical*.txt`，等下一次 consistency 运行确认后再加。
+提交 `9025d39e2b053e78d9976569db2944169a67a4cf` 的三平台运行 [34213036405](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34213036405) 已完成：B 的 `hoa-hoa3-point` 三平台逐位相同，总数从 6/12 提升到 **7/12**。A 仍为 **5/12**；该测例在 macOS 对 Linux/Windows 仍有 129,018 / 768,000 个采样不同，最大绝对差为 `5.96046e-8`。因此只把该测例加入 `expected-identical-controlled.txt`，A 的清单保持不变。
 
-`tests/unit/render_common_numeric_test.cpp` 把这条约束拉到本地 CTest：输入与期望值都是字面位模式，期望值按 IEEE-754 各步规则独立推出，不是抄某台机器的输出。改回 `std::hypot` 会让其中 4 条断言在 Linux 上立即失败（已实测）；macOS 上该测试对新旧实现都通过，因为 Darwin 的 `hypot` 恰好返回 1.0——所以它是本地的单向守卫，跨平台验收仍靠 consistency workflow。
+`tests/unit/render_common_numeric_test.cpp` 在本地 CTest 和三平台 consistency 的 Release A/B job 中执行。输入和期望值均为字面位模式，输入经过 volatile 读取以防 Release 常量折叠替代实际计算。用例包括三个非零分量的精确长度、三项求和的舍入边界、极大和次正规分量；最终 PCM 的验收仍由对应配置的门禁负责。
 
 这里给的是已验证测例的分歧边界。定位每一个后续残差、修复这些边界和验证任意 ADM 内容，是之后的实现与覆盖工作；不能把阶段 0 的有限测例当作全产品的确定性证明。
 

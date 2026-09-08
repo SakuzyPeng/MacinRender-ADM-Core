@@ -150,7 +150,7 @@ rust/
 
 - EAR HOA 输入的四组合实验表明，严格 FP 单独即可收敛，而单独关闭 EAR SIMD 无效。实际 f32 增益一致，首个 PCM 分歧由通道混加的 FMA 精确复现。
 - EAR extent 的直接声/扩散声增益在受控构建中一致，后续 SAF FFT 路径存在分歧。macOS 换 OpenBLAS/KissFFT 后该测例与 Linux、Windows 收敛；不能把这一结果解释成 libear extent 增益仍受 SIMD 影响。
-- HOA point 的三角函数输出和未归一化方向相同，第一次分歧发生在三参数 `std::hypot`。它属于 C++ 标准库算法差异，不能仅通过更换 BLAS 消除。**已修复**：三处方向归一化统一走 `render_common::canonical_vector_length`（double 累加平方 + `sqrt`，各步均由 IEEE-754 规定）。Linux 实测只有 `hoa-hoa3-point` 变化且落到 macOS 那一侧的位模式，门禁 case 全部未动；三平台是否收敛待下一次运行确认。
+- HOA point 的三角函数输出和未归一化方向相同，第一次分歧发生在三参数 `std::hypot`。三处方向归一化已统一走 `render_common::canonical_vector_length`，以 double 按固定顺序累加平方，再取 `sqrt` 并窄化。三平台运行 [34213036405](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34213036405) 确认 B 的该测例收敛，现已进入 B 门禁，总数为 7/12；A 仍为 5/12，不能把长度函数的收敛推广为整个默认渲染器已一致。三分量测试约束固定求和顺序，不承诺置换不变性。
 - SAF 的全局 C RNG 同时参与去相关延迟和凸包三角化。cloud 也会受进程历史影响；point 在测量网格点的相等性，不能证明其它方向的 HRTF 插值路径一致。
 - 同一随机种子只统一同一 C 运行库内的起点；统一算法及 `RAND_MAX` 后，仍需处理 FFT、矩阵求逆、向量归约与插值数学。实际实验结果和未证明的推断须分开记录。
 - 固定分组与 RNG 起点后，worker 调度和改变分组拓扑是两种不同实验。分组随硬件并行预算改变会影响多轨 spreader 的输出，不能用普通重复渲染代替线程数/拓扑验证。
