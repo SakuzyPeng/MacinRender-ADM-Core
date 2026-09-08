@@ -25,12 +25,21 @@ class Harness(unittest.TestCase):
         self.root = Path(self.temp.name).resolve()
 
     def run_ok(self, args, cwd=None):
-        result = subprocess.run(list(map(str, args)), cwd=cwd, capture_output=True, text=True)
+        result = subprocess.run(list(map(str, args)), cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result
 
 
 class CMakeTests(Harness):
+    def test_subprocess_logs_accept_utf8_and_legacy_diagnostics(self):
+        # CMake emits UTF-8 while a compiler may emit bytes from the active Windows code page.
+        # Neither stream may crash Python's reader thread or turn stdout/stderr into None.
+        command = ("import sys; sys.stdout.buffer.write('编译器诊断'.encode('utf-8')); "
+                   "sys.stderr.buffer.write(bytes([0xff]))")
+        result = self.run_ok([sys.executable, '-c', command])
+        self.assertEqual(result.stdout, '编译器诊断')
+        self.assertIn('\ufffd', result.stderr)
+
     def project(self, ear=False, flac=False):
         source = self.root / 'source with spaces'
         source.mkdir()
@@ -93,7 +102,7 @@ class CMakeTests(Harness):
             args.append('-DCMAKE_C_COMPILER=' + OPTIONS.c_compiler)
         if OPTIONS.cxx_compiler:
             args.append('-DCMAKE_CXX_COMPILER=' + OPTIONS.cxx_compiler)
-        result = subprocess.run(list(map(str, [*args, *flags])), cwd=source, capture_output=True, text=True)
+        result = subprocess.run(list(map(str, [*args, *flags])), cwd=source, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if success:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         else:
@@ -203,7 +212,7 @@ class BuildInfoTests(Harness):
     def record(self, status=0):
         out = self.root / 'record.txt'
         result = subprocess.run([sys.executable, str(REPO / 'scripts/consistency/build_info.py'),
-                                 str(self.build), str(out)], capture_output=True, text=True)
+                                 str(self.build), str(out)], capture_output=True, text=True, encoding="utf-8", errors="replace")
         self.assertEqual(result.returncode, status, result.stdout + result.stderr)
         return read_fields(out) if out.exists() else {}, result
 

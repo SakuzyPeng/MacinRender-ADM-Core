@@ -59,7 +59,7 @@ def compiler_property(build, cache, lang, prop):
 
 def git_run(source, *args):
     try:
-        result = subprocess.run(['git', '-C', str(source), *args], capture_output=True, text=True)
+        result = subprocess.run(['git', '-C', str(source), *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
     except OSError:
         return None
     return result.stdout.strip() if result.returncode == 0 else None

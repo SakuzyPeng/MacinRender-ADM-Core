@@ -44,7 +44,7 @@ class Harness(unittest.TestCase):
         return path
 
     def invoke(self, *args):
-        return subprocess.run([str(self.tool), *map(str, args)], capture_output=True, text=True)
+        return subprocess.run([str(self.tool), *map(str, args)], capture_output=True, text=True, encoding="utf-8", errors="replace")
 
     def assert_status(self, result, status):
         self.assertEqual(result.returncode, status, result.stdout + result.stderr)
@@ -140,7 +140,7 @@ class ScriptTests(Harness):
                 *[d.as_posix() for d in self.dirs]]
 
     def compare(self, tool=None, expected=None):
-        return subprocess.run(self.command(tool, expected), capture_output=True, text=True)
+        return subprocess.run(self.command(tool, expected), capture_output=True, text=True, encoding="utf-8", errors="replace")
 
     def test_complete_and_ungated_different_baselines(self):
         self.assert_status(self.compare(), 0)
@@ -197,7 +197,7 @@ class ScriptTests(Harness):
         report = self.root / 'report.txt'
         command = shlex.join(self.command()) + ' 2>&1 | tee ' + shlex.quote(report.as_posix())
         result = subprocess.run([self.bash, '--noprofile', '--norc', '-eo', 'pipefail', '-c', command],
-                                capture_output=True, text=True)
+                                capture_output=True, text=True, encoding="utf-8", errors="replace")
         self.assert_status(result, 1)
         self.assertIn('REGRESSED', report.read_text(encoding='utf-8'))
 
