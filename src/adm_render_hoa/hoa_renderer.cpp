@@ -29,6 +29,7 @@
 #include "adm/render.h"
 #include "adm/render_hoa.h"
 
+#include "consistency_trace.h"
 #include "render_common.h"
 
 namespace mradm {
@@ -122,6 +123,9 @@ Vec3 direction_from_polar(float az_deg, float el_deg) noexcept {
     const float az = az_deg * k_deg2rad;
     const float el = el_deg * k_deg2rad;
     const float cos_el = std::cos(el);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    consistency::dump("hoa.01-polar.f32", {az_deg, el_deg, az, el, cos_el, std::cos(az), std::sin(az), std::sin(el)});
+#endif
     // Standard ADM: +az = left (CCW) → sin(az) gives positive Y for left sources.
     return {cos_el * std::cos(az), cos_el * std::sin(az), std::sin(el)};
 }
@@ -133,6 +137,12 @@ Vec3 direction_from_cartesian(float xc, float yc, float zc) noexcept {
 
 Hoa3Coeffs encode_direction(Vec3 dir) noexcept {
     const Vec3 n = normalize(dir);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    consistency::dump("hoa.02-direction.f32", {dir.x, dir.y, dir.z});
+    consistency::dump("hoa.03-normalized.f32", {n.x, n.y, n.z});
+    const auto coeffs = sh_sn3d_3(n.x, n.y, n.z);
+    consistency::dump("hoa.04-coefficients.f32", std::span<const float>(coeffs));
+#endif
     return sh_sn3d_3(n.x, n.y, n.z);
 }
 

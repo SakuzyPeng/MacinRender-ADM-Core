@@ -12,6 +12,8 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/adm_core/version.cpp.in" "${MR_A
 
 option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
+option(MR_ADM_CONSISTENCY_DIAGNOSTICS "Enable private numerical checkpoints and worker controls (measurement only)" OFF)
+option(MR_ADM_DIAGNOSTIC_PORTABLE_RNG "Replace SAF's C RNG for a numerical attribution experiment only" OFF)
 option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 option(MR_ADM_CORE_FETCH_DEPS "Fetch CLI/fmt/spdlog dependencies when not found" ON)
 option(MR_ADM_CORE_USE_INSTALLED_DEPS "Use installed CMake package configs before FetchContent dependencies" ON)
@@ -340,6 +342,23 @@ target_include_directories(mr_adm_render_binaural
 )
 mr_adm_core_apply_warnings(mr_adm_render_binaural)
 mr_adm_core_apply_static_analysis(mr_adm_render_binaural)
+
+if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
+    foreach(_mr_diagnostic_target IN ITEMS mr_adm_render_ear mr_adm_render_hoa mr_adm_render_binaural)
+        target_compile_definitions(${_mr_diagnostic_target} PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
+    endforeach()
+endif()
+if(MR_ADM_DIAGNOSTIC_PORTABLE_RNG)
+    if(NOT MR_ADM_CONSISTENCY_DIAGNOSTICS)
+        message(FATAL_ERROR "MR_ADM_DIAGNOSTIC_PORTABLE_RNG requires MR_ADM_CONSISTENCY_DIAGNOSTICS=ON")
+    endif()
+    target_sources(saf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/diagnostic_rng.c")
+    if(MSVC)
+        target_compile_options(saf PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/diagnostic_rng.h")
+    else()
+        target_compile_options(saf PRIVATE -include "${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/diagnostic_rng.h")
+    endif()
+endif()
 
 # ── adm_audio ─────────────────────────────────────────────────────────────────
 # Float32 WAV/CAF/FLAC, Opus MKA, APAC, and metadata I/O.
@@ -774,6 +793,19 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_repeat_render)
     mr_adm_core_apply_static_analysis(mr_adm_repeat_render)
 
+    add_executable(mr_adm_numeric_probe EXCLUDE_FROM_ALL tests/tools/numeric_probe.cpp)
+    target_link_libraries(mr_adm_numeric_probe PRIVATE saf)
+    target_include_directories(mr_adm_numeric_probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")
+    target_include_directories(mr_adm_numeric_probe SYSTEM PRIVATE "${saf_SOURCE_DIR}/modules/saf_utilities")
+    target_compile_definitions(mr_adm_numeric_probe PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
+    mr_adm_core_apply_warnings(mr_adm_numeric_probe)
+    mr_adm_core_apply_static_analysis(mr_adm_numeric_probe)
+    if(MR_ADM_DIAGNOSTIC_PORTABLE_RNG)
+        target_compile_definitions(mr_adm_repeat_render PRIVATE MR_ADM_DIAGNOSTIC_PORTABLE_RNG=1)
+        target_compile_definitions(mr_adm_numeric_probe PRIVATE MR_ADM_DIAGNOSTIC_PORTABLE_RNG=1)
+        target_link_libraries(mr_adm_repeat_render PRIVATE saf)
+    endif()
+
     # Standard-library-only Python tests exercise the actual executable and shell exit codes.
     # Native builds without Python can still use the tools; the consistency workflow requires
     # this test explicitly on each runner so its checks cannot silently disappear there.
@@ -796,6 +828,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/consistency_build_test.py"
                 --cmake "${CMAKE_COMMAND}" --c-compiler "${CMAKE_C_COMPILER}"
                 --cxx-compiler "${CMAKE_CXX_COMPILER}")
+        add_test(NAME mr_adm_consistency_checkpoint_tests
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/consistency_checkpoints_test.py")
     endif()
 
     add_executable(mr_adm_semantic_policy_tests tests/unit/semantic_policy_test.cpp)

@@ -23,6 +23,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      localize:
+        description: Collect stage checkpoints and RNG / worker / OpenBLAS attribution experiments
+        type: boolean
+        default: false
 
 concurrency:
   group: consistency-${{ github.ref }}
@@ -64,6 +69,10 @@ jobs:
 
       - name: Install dependencies
         run: ${{ matrix.install }}
+
+      - name: Install diagnostic OpenBLAS
+        if: inputs.localize && matrix.platform == 'macos' && matrix.config == 'b'
+        run: brew install openblas
 
       - name: Restore FetchContent cache
         uses: actions/cache@v5
@@ -112,7 +121,9 @@ jobs:
 
       - name: Test numeric build controls
         shell: bash
-        run: python3 tests/unit/consistency_build_test.py
+        run: |
+          python3 tests/unit/consistency_build_test.py
+          python3 tests/unit/consistency_checkpoints_test.py
 
       - name: Render matrix
         run: >
@@ -132,6 +143,13 @@ jobs:
           bash scripts/consistency/scan-fp.sh \
             build/consistency-${{ matrix.config }}/mradm \
             out/${{ matrix.platform }}/scan-fp.txt
+
+      # Record the baseline before these sequential, explicitly labelled build interventions.
+      - name: Localize numerical differences
+        if: inputs.localize && matrix.config == 'b'
+        run: >
+          python3 scripts/consistency/run-localization.py
+          build/consistency-b out/${{ matrix.platform }}/localization
 
       - name: Upload baseline
         if: always()
@@ -311,6 +329,8 @@ jobs:
         run: |
           call "%VCVARS64%"
           python tests/unit/consistency_build_test.py --c-compiler cl --cxx-compiler cl
+          if errorlevel 1 exit /b 1
+          python tests/unit/consistency_checkpoints_test.py
 
       # One render script for all three platforms. cmd loads the MSVC environment first so the
       # binaries find their runtime, then hands off to Git Bash so the matrix has a single
@@ -332,6 +352,13 @@ jobs:
         run: |
           bash scripts/consistency/build-info.sh build/windows out/windows/build-info.txt
           bash scripts/consistency/scan-fp.sh build/windows/mradm.exe out/windows/scan-fp.txt
+
+      - name: Localize numerical differences
+        if: inputs.localize && matrix.config == 'b'
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          python scripts/consistency/run-localization.py build/windows out/windows/localization --suffix=.exe
 
       - name: Upload baseline
         if: always()
