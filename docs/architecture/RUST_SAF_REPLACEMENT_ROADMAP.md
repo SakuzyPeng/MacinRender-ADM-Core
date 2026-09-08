@@ -118,13 +118,13 @@ rust/
 - 这些日志与多音轨 case 不等于已证明固定 1 / 2 / 4 worker 下输出一致。`taskset` 改变 CPU 亲和性也不保证 `hardware_concurrency()` 或线程池大小变化；固定 worker 数的等价性实验仍需可验证的控制入口。
 - `out/<platform>/repeats/` 保存单 / 多音轨的两份 PCM、准备日志及同进程比较结果。已知数值差异按阶段 0 记录，渲染失败、损坏 PCM 或工具错误立即失败。跨平台汇总报告附上这些结果，以免把平台内的不稳定性直接归因于平台差异。
 
-**配置 A / B 的首批 Linux 实测（GCC 13.3、Release、x86-64；历史单平台数据，早于本次 FLAC 选项修正，须重新采集新版基线）**：
+**配置 A / B 的首批 Linux 实测（GCC 13.3、Release、x86-64；含 FLAC 选项修正后重采，`validation.strict_fp=passed`。单平台数据，不构成三平台基线）**：
 
 - 同一构建把 12 个 case 的矩阵连跑两遍，逐位一致。这是解读下面几条的前提——否则 A / B 的差异分不清是构建配置还是运行噪声。
-- **只开 `MR_ADM_STRICT_FP`**：12 个 case 全部与默认构建逐位相同。`-ffp-contract=off` 落到 415 个翻译单元（默认构建 0 个），`mradm` 中的 FMA 指令从 212 条降到 54 条，却没有改变任何一个 case 的输出位。**这不等于 contraction 无害**，只说明本矩阵覆盖到的路径上它没有产生可观测差异。
+- **只开 `MR_ADM_STRICT_FP`**：12 个 case 全部与默认构建逐位相同。`-ffp-contract=off` 落到全部 420 个翻译单元（默认构建 0 个），`mradm` 中的 FMA 指令从 212 条降到 54 条，却没有改变任何一个 case 的输出位。**这不等于 contraction 无害**，只说明本矩阵覆盖到的路径上它没有产生可观测差异。
 - **再加 `MR_ADM_EAR_SCALAR_REFERENCE`（完整配置 B）**：只有 `ear-5_1-extent` 改变（288000 个采样中 87439 个不同，最大绝对误差 1.34e-07），其余 11 个仍逐位相同。它也是矩阵里唯一带 extent 的 EAR case，即唯一会进 `PolarExtentCore` 的那个，与「差异来自 SIMD 分派」一致。
 - **剩余 FMA 全部来自 libear**：单独统计 `libear.a`，默认构建 60 条、只关 contraction 后 54 条、关掉 `EAR_SIMD` 后 0 条；此时整个 `mradm` 也是 0 条。即编译器自行融合的部分靠编译选项就能清掉，剩下的是 xsimd 的显式 intrinsic，只能靠换实现或关掉分派。这正是第 3 项要求「检查显式 FMA」而不是只看编译选项的原因。
-- 当时的全构建没有任何 `-ffast-math`：SAF 的由 `SAF_USE_FAST_MATH_FLAG=OFF` 关掉，libopus 的挂在默认关闭的 `OPUS_FLOAT_APPROX` 之下。构建记录现在还计入 `-Ofast` 及独立的非安全浮点选项，并在受控配置中拒绝冲突，不能只看 `-ffast-math` 一个计数。
+- **只数 `-ffast-math` 会漏掉真正的破口**：默认构建的 `compile.fast_math` 是 0，而 `compile.unsafe_fp` 是 29——vendored FLAC 以目标级选项追加了 `-fassociative-math` / `-fno-signed-zeros` / `-fno-trapping-math` / `-freciprocal-math`，排在 `CMAKE_<lang>_FLAGS` 之后，早期只统计 `-ffast-math` 的记录看不见它们。移除这些选项后受控构建的 `compile.unsafe_fp` 为 0。这些 TU 全在 libFLAC，而基线矩阵统一写 f32 WAV、不经过 FLAC 编码，所以上面三条的输出比较**修正前后完全一致**；受影响的是「受控」这个说法本身能不能成立，以及一旦把 FLAC 输出纳入矩阵就会立刻显形。
 - 覆盖不到的一层：Linux / Windows 的 OpenBLAS 与 macOS 的 Accelerate 是预编译库，任何项目编译选项都到不了；SAF 实际选中的后端记在 build-info 里。受控构建不能声称覆盖它们。
 
 阶段 0 会决定后续切片大小。尚未定位的路径继续标为未完成，不因语言或库名推定确定性。
