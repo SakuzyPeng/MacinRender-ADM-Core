@@ -30,13 +30,13 @@
 #include <saf.h>
 #include <saf_utility_complex.h>
 #include <saf_vbap.h>
-#include <saf_vbap_internal.h>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "consistency_trace.h"
+#include "vbap_probe_backend.h"
 
 #ifdef MR_ADM_DIAGNOSTIC_PORTABLE_RNG
 extern "C" void mr_adm_diagnostic_seed(unsigned int seed);
@@ -125,7 +125,7 @@ std::vector<float> spread_directions(const std::vector<float>& source) {
     } else {
         std::array<float, 3> axis{0.0F, 0.0F, 1.0F};
         std::array<float, 3> perpendicular{};
-        ccross(u.data(), axis.data(), perpendicular.data());
+        mr_adm_vbap_probe_cross(u.data(), axis.data(), perpendicular.data());
         float norm = 0.0F;
         for (float value : perpendicular) {
             // Retain SAF's explicit sequential reduction in this diagnostic replay.
@@ -156,20 +156,7 @@ std::vector<float> spread_directions(const std::vector<float>& source) {
     for (std::size_t i = 1; i < 8U; ++i) {
         std::array<float, 3> previous{};
         std::copy_n(ring.data() + ((i - 1U) * 3U), 3U, previous.begin());
-        cblas_sgemm(CblasRowMajor,
-                    CblasNoTrans,
-                    CblasNoTrans,
-                    3,
-                    1,
-                    3,
-                    1.0F,
-                    rotation.data(),
-                    3,
-                    previous.data(),
-                    1,
-                    0.0F,
-                    ring.data() + (i * 3U),
-                    1);
+        mr_adm_vbap_probe_rotate(rotation.data(), previous.data(), ring.data() + (i * 3U));
     }
     dump("spread.05-rotated-ring.f32", ring);
     std::vector<float> result(27U, 0.0F);
@@ -185,17 +172,22 @@ std::vector<float> spread_directions(const std::vector<float>& source) {
     std::ranges::copy(u, result.begin() + 24);
     std::vector<float> actual(27U);
     getSpreadSrcDirs3D(az, el, source[3], 8, 1, actual.data());
-    require(same_bits(actual, result), "spread replay differs from linked SAF");
     dump("spread.08-directions.f32", actual);
+    dump("spread.09-replayed-directions.f32", result);
+    require(same_bits(actual, result), "spread replay differs from linked SAF");
     return actual;
 }
 
-// MDAP branch of vbap3D, retaining its real utility_svvdot implementation and sum order.
+enum class DotMode { backend, separate_021, fused_012 };
+
+// MDAP branch of vbap3D. The default retains the real utility_svvdot implementation;
+// the other modes are explicit arithmetic hypotheses for the fixed-input replay only.
 std::vector<float> gains_from(const std::vector<float>& directions,
                               const std::vector<int>& faces,
                               const std::vector<float>& inverse,
                               std::size_t speakers,
-                              const std::string& prefix) {
+                              const std::string& prefix,
+                              DotMode mode = DotMode::backend) {
     require(directions.size() == 27U && inverse.size() == faces.size() * 3U, "invalid gain dimensions");
     std::vector<float> gains(speakers, 0.0F);
     std::vector<float> dots;
@@ -208,7 +200,17 @@ std::vector<float> gains_from(const std::vector<float>& directions,
             for (std::size_t row = 0; row < 3U; ++row) {
                 std::array<float, 3> matrix_row{};
                 std::copy_n(inverse.data() + (face * 9U) + (row * 3U), 3U, matrix_row.begin());
-                utility_svvdot(matrix_row.data(), u.data(), 3, &dot.at(row));
+                if (mode == DotMode::backend) {
+                    utility_svvdot(matrix_row.data(), u.data(), 3, &dot.at(row));
+                } else if (mode == DotMode::separate_021) {
+                    // Initial +0 is intentional: it also fixes the sign of zero terms.
+                    const float first = 0.0F + (matrix_row[0] * u[0]);
+                    const float second = 0.0F + (matrix_row[1] * u[1]);
+                    dot.at(row) = (first + (matrix_row[2] * u[2])) + second;
+                } else {
+                    dot.at(row) = std::fma(
+                        matrix_row[2], u[2], std::fma(matrix_row[1], u[1], std::fma(matrix_row[0], u[0], 0.0F)));
+                }
             }
             dots.insert(dots.end(), dot.begin(), dot.end());
             float min_value = 2.23e13F;
@@ -272,9 +274,10 @@ void probe(const Path& input, unsigned int seed, const Path& reference) {
     // Restrict the probe to captured 5.1.4 layouts with no bottom speaker. Match SAF's
     // bottom dummy and optional top dummy, using its actual elevation threshold.
     bool top = false;
+    const float dummy_limit = mr_adm_vbap_probe_dummy_limit();
     for (std::size_t i = 1; i < speakers.size(); i += 2U) {
-        require(speakers[i] > -ADD_DUMMY_LIMIT, "unexpected bottom speaker");
-        top = top || speakers[i] >= ADD_DUMMY_LIMIT;
+        require(speakers[i] > -dummy_limit, "unexpected bottom speaker");
+        top = top || speakers[i] >= dummy_limit;
     }
     speakers.insert(speakers.end(), {0.0F, -90.0F});
     if (!top) {
@@ -305,7 +308,9 @@ void probe(const Path& input, unsigned int seed, const Path& reference) {
     float* raw_staged = nullptr;
     vbap3D(source.data(), 1, vertex_count, faces.data(), face_count, source[3], inverse.data(), &raw_staged);
     const std::unique_ptr<float, SafFree> staged_owner(raw_staged);
-    require(raw_staged != nullptr && same_bits(full, {raw_staged, 9U}), "staged SAF differs from full wrapper");
+    require(raw_staged != nullptr, "SAF staged gain table failed");
+    dump("output.02-staged-gains.f32", std::span<const float>(raw_staged, static_cast<std::size_t>(vertex_count)));
+    require(same_bits(full, {raw_staged, 9U}), "staged SAF differs from full wrapper");
     const auto directions = spread_directions(source);
     const auto gains = gains_from(directions, faces, inverse, static_cast<std::size_t>(vertex_count), "native");
     require(same_bits(gains, {raw_staged, static_cast<std::size_t>(vertex_count)}),
@@ -327,6 +332,8 @@ void probe(const Path& input, unsigned int seed, const Path& reference) {
         gains_from(directions, ref_faces, ref_inverse, count, "replay.03-fixed-inverse");
         gains_from(ref_directions, ref_faces, local_inverse, count, "replay.04-fixed-spread");
         gains_from(ref_directions, ref_faces, ref_inverse, count, "replay.05-fixed-both");
+        gains_from(ref_directions, ref_faces, ref_inverse, count, "replay.06-separate-021", DotMode::separate_021);
+        gains_from(ref_directions, ref_faces, ref_inverse, count, "replay.07-fused-012", DotMode::fused_012);
     }
 }
 } // namespace
