@@ -11,6 +11,7 @@ def main():
     parser.add_argument("build_dir", type=Path)
     parser.add_argument("out_dir", type=Path)
     parser.add_argument("--suffix", default="")
+    parser.add_argument("--vbap-only", action="store_true", help="run only the focused 3D VBAP attribution experiment")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     build = args.build_dir.resolve()
@@ -27,17 +28,26 @@ def main():
     for name, portable, extra in variants:
         destination = out / name
         destination.mkdir(exist_ok=True)
+        targets = ["mradm_exe", "mr_adm_pcm_bits", "mr_adm_make_fixture", "mr_adm_vbap_probe"]
+        if not args.vbap_only:
+            targets.extend(["mr_adm_repeat_render", "mr_adm_numeric_probe", "mr_adm_fft_lifecycle_probe"])
         commands = [
             ["cmake", "-S", str(root), "-B", str(build), "-DMR_ADM_CONSISTENCY_DIAGNOSTICS=ON",
              "-DMR_ADM_DIAGNOSTIC_PORTABLE_RNG=" + ("ON" if portable else "OFF"), *extra],
-            ["cmake", "--build", str(build), "--target", "mradm_exe", "mr_adm_pcm_bits",
-             "mr_adm_make_fixture", "mr_adm_repeat_render", "mr_adm_numeric_probe", "mr_adm_fft_lifecycle_probe"],
-            [sys.executable, str(root / "scripts/consistency/localize.py"), str(build), str(destination),
-             "--suffix=" + args.suffix],
-            [str(build / ("mr_adm_fft_lifecycle_probe" + args.suffix)),
-             str(destination / "checkpoints/binaural-point/binaural.01-hrir.f32")],
-            [sys.executable, str(root / "scripts/consistency/build_info.py"), str(build), str(destination / "build-info.txt")],
+            ["cmake", "--build", str(build), "--target", *targets],
         ]
+        if not args.vbap_only:
+            commands.extend([
+                [sys.executable, str(root / "scripts/consistency/localize.py"), str(build), str(destination),
+                 "--suffix=" + args.suffix],
+                [str(build / ("mr_adm_fft_lifecycle_probe" + args.suffix)),
+                 str(destination / "checkpoints/binaural-point/binaural.01-hrir.f32")],
+            ])
+        commands.extend([
+            [sys.executable, str(root / "scripts/consistency/localize-vbap.py"), str(build), str(destination / "vbap"),
+             "--baseline", str(out.parent), "--suffix=" + args.suffix],
+            [sys.executable, str(root / "scripts/consistency/build_info.py"), str(build), str(destination / "build-info.txt")],
+        ])
         for index, command in enumerate(commands):
             print(name, command[0], flush=True)
             with (destination / f"step-{index}.log").open("w", encoding="utf-8") as log:
