@@ -28,6 +28,10 @@ on:
         description: Collect stage checkpoints and RNG / worker / OpenBLAS attribution experiments
         type: boolean
         default: false
+      vbap_only:
+        description: Limit localization to the two 3D VBAP cases (requires localize)
+        type: boolean
+        default: false
 
 concurrency:
   group: consistency-${{ github.ref }}
@@ -154,6 +158,7 @@ jobs:
         run: >
           python3 scripts/consistency/run-localization.py
           build/consistency-b out/${{ matrix.platform }}/localization
+          ${{ inputs.vbap_only && '--vbap-only' || '' }}
 
       - name: Upload baseline
         if: always()
@@ -368,7 +373,7 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          python scripts/consistency/run-localization.py build/windows out/windows/localization --suffix=.exe
+          python scripts/consistency/run-localization.py build/windows out/windows/localization --suffix=.exe ${{ inputs.vbap_only && '--vbap-only' || '' }}
 
       - name: Upload baseline
         if: always()

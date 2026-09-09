@@ -23,6 +23,7 @@
 #include "adm/render.h"
 #include "adm/render_vbap.h"
 
+#include "consistency_trace.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
 
@@ -173,6 +174,10 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
 
     const auto num_non_lfe = static_cast<int>(speakers.size() / 2U);
     const bool use_3d = !is_2d_layout(layout);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    consistency::dump("vbap.01-source.f32", {azimuth, elevation, gain, spread_deg});
+    consistency::dump("vbap.02-speakers.f32", speakers);
+#endif
     int table_size = 0;
     int simplex_count = 0;
     float* raw_table = nullptr;
@@ -199,6 +204,9 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
     if (table == nullptr || table_size != 1) {
         return make_error(ErrorCode::render_failed, "SAF VBAP gain calculation failed", {});
     }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    consistency::dump("vbap.03-gains.f32", std::span<const float>(table.get(), speakers.size() / 2U));
+#endif
 
     // Expand VBAP gains (non-LFE only) to full output channel count.
     // LFE channels stay zero — Objects never route to LFE.
