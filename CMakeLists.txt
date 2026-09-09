@@ -801,7 +801,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_compile_definitions(mr_adm_numeric_probe PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
     mr_adm_core_apply_warnings(mr_adm_numeric_probe)
     mr_adm_core_apply_static_analysis(mr_adm_numeric_probe)
-    add_executable(mr_adm_vbap_probe EXCLUDE_FROM_ALL tests/tools/vbap_probe.cpp)
+    add_executable(mr_adm_vbap_probe EXCLUDE_FROM_ALL
+        tests/tools/vbap_probe.cpp tests/tools/vbap_probe_backend.c)
     target_link_libraries(mr_adm_vbap_probe PRIVATE saf)
     target_include_directories(mr_adm_vbap_probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")
     target_include_directories(mr_adm_vbap_probe SYSTEM PRIVATE
