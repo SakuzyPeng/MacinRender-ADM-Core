@@ -17,9 +17,11 @@
 | `ear-5_1-extent` | 扩散 FIR 的 SAF FFT 路径 | B 的直接/扩散 double 增益一致；未插桩的 macOS OpenBLAS/KissFFT 对照与原 Linux/Windows PCM 收敛。 |
 | `binaural-point` | HRIR → HRTF 的 FFT，另有 VBAP 数值边界敏感性 | 同一 HRIR 的 vDSP 和 KissFFT 频谱不同；原未插桩后端对照可收敛，但诊断构建还暴露了测量网格附近微小插值权重受三角化/求逆影响的情况。 |
 | `binaural-extent-cloud` | RNG 三角化，其后为小矩阵求逆/插值权重 | 原始顶点一致，C RNG 不同导致凸包三角形不同。统一 RNG 后三角形一致；Linux/Windows 首次剩余分歧已经出现在 `invertLsMtx3D → utility_sinv → LAPACKE_sgetrf_work / LAPACKE_sgetri_work`。 |
-| `saf-5_1_4-cartesian`，新覆盖发现 | 3D VBAP 的小矩阵求逆（macOS Accelerate vs OpenBLAS） | macOS 对 Linux/Windows 有 133,910/480,000 个采样不同，`max_ulp=7`，`max_abs=2.98e-8`；**Linux 与 Windows 逐位相同**。2D 的 `saf-5_1-extent` 三平台一致且已入门禁，所以分歧只在布局为 3D 时出现，落在 `invertLsMtx3D` 一侧而非增益应用。 |
-| `saf-5_1_4-extent`，新覆盖发现 | 同上，且 Linux ≠ Windows | 三对全不同；Linux 对 Windows 也有 94,150/480,000 个采样不同（`max_ulp=4`）。两者都用 OpenBLAS 但构建不同（发行版包 vs 预构建 0.3.33），与既有的 Linux/Windows OpenBLAS 分歧同源。该测例的 spread 恒定饱和（见下），因此分歧与长度函数无关。 |
+| `saf-5_1_4-cartesian`，新覆盖发现 | 3D VBAP 路径；首个分歧阶段待定位 | B 组 macOS 对 Linux/Windows 有 133,910/480,000 个采样不同，`max_ulp=7`，`max_abs=2.98e-8`；**Linux 与 Windows 逐位相同**。这是最终 PCM 的平台分组，尚未证明首个分歧发生在 `invertLsMtx3D`。 |
+| `saf-5_1_4-extent`，新覆盖发现 | 3D VBAP 路径；首个分歧阶段待定位 | B 组三对全不同；Linux 对 Windows 也有 94,150/480,000 个采样不同（`max_ulp=4`）。两者的 OpenBLAS 构建不同（发行版包 vs 预构建 0.3.33），这是待验证的候选原因。该测例的 spread 恒定饱和（见下），只能排除本轮 MDAP 长度替换对传入 spread 值的影响。 |
 | 两种 `binaural-extent-spreader` | 去相关延迟 RNG、几何 RNG；叠加 FFT/矩阵数学及分组拓扑 | 同平台连续重复即不同。统一 RNG 后延迟表收敛，仍不能推定全部 PCM 收敛；macOS 的剩余重复差异已在 HRIR → HRTF 阶段复现。 |
+
+两个新增的 3D VBAP 测例来自运行 [34250832546](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34250832546)，该次运行未启用阶段定位，现有 `scripts/consistency/localize.py` 也未包含这两个测例。2D 的 `saf-5_1-extent` 三平台一致，只能说明当前覆盖的 2D 与 3D 测例表现不同。3D 路径还涉及使用 C RNG 的凸包三角化、spread 方向生成、矩阵求逆和向量点积；需比较这些阶段的输入与输出，并通过控制实验确认首个分歧。既有双耳 cloud 的求逆定位不能直接套用到新测例。
 
 ### 已落地的修复：向量归一化的长度计算
 
@@ -85,10 +87,10 @@
 - 新 fixture `objects-cartesian.wav` 三平台**输入字节一致**，与其余五个一样。
 - **`hoa-hoa3-cartesian` 三平台逐位相同**，已加入 `expected-identical-controlled.txt`。这是对 `hoa:159` 那处替换的首次跨平台验证——该测例是四个新测例里唯一对 1 ULP 敏感的，若不修 `distance_from_position`，它必然分歧。
 - `saf-5_1_4-cartesian` 与 `saf-5_1_4-extent` 各暴露一个**此前不可见的分歧**（见上表）。这正是补覆盖的目的：两处都在 3D VBAP 路径上，而矩阵此前只有 2D 布局。
-- `binaural-cartesian-cloud` 与既有的 `binaural-extent-cloud` 表现一致，属已定位的 RNG/FFT 类。
+- `binaural-cartesian-cloud` 也存在三平台差异；既有 cloud 的 RNG、FFT 与矩阵路径提供定位线索，该测例的首个分歧阶段仍待验证。
 - B 从 7/12 变为 **8/16**；7 个既有门禁测例全部 ok，8 处 `std::hypot` 替换零回归。
 
-本次未读取 A 组的逐测例结果（运行日志被构建记录挤占，未取回该段），因此 `expected-identical.txt` 不动——按只填实测的约定，缺测量与测到不一致处理方式相同。
+同次运行的 `consistency-report` artifact 中，A 组报告为 **5/16** 三平台逐位一致，既有 5 个门禁全部通过。四个新增测例均未达到三平台一致，因此 `expected-identical.txt` 保持不变。
 
 `render_common.cpp:599`（`extent_disk_cloud`）在本矩阵中**结构性无法覆盖**：其唯一调用者是 macOS-only 的 Apple 后端，而跨平台矩阵按设计排除该后端。
 

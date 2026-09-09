@@ -151,7 +151,7 @@ rust/
 - EAR HOA 输入的四组合实验表明，严格 FP 单独即可收敛，而单独关闭 EAR SIMD 无效。实际 f32 增益一致，首个 PCM 分歧由通道混加的 FMA 精确复现。
 - EAR extent 的直接声/扩散声增益在受控构建中一致，后续 SAF FFT 路径存在分歧。macOS 换 OpenBLAS/KissFFT 后该测例与 Linux、Windows 收敛；不能把这一结果解释成 libear extent 增益仍受 SIMD 影响。
 - HOA point 的三角函数输出和未归一化方向相同，第一次分歧发生在三参数 `std::hypot`。三处方向归一化已统一走 `render_common::canonical_vector_length`，以 double 按固定顺序累加平方，再取 `sqrt` 并窄化。三平台运行 [34213036405](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34213036405) 确认 B 的该测例收敛，现已进入 B 门禁，总数为 7/12；A 仍为 5/12，不能把长度函数的收敛推广为整个默认渲染器已一致。三分量测试约束固定求和顺序，不承诺置换不变性。
-- 补入笛卡尔 fixture 与 5.1.4 测例后（12 → 16），`hoa-hoa3-cartesian` 在 B 三平台逐位相同并入门禁；同时暴露两个此前不可见的 3D VBAP 分歧：`saf-5_1_4-cartesian`（macOS 对 Linux≡Windows，`max_ulp=7`）与 `saf-5_1_4-extent`（三对全不同，Linux 对 Windows `max_ulp=4`）。2D 的 `saf-5_1-extent` 三平台一致，所以分歧只在布局为 3D 时出现。矩阵覆盖不到的代码不产生分歧记录，不等于该代码一致。
+- 补入笛卡尔 fixture 与 5.1.4 测例后（12 → 16），A 为 5/16、B 为 8/16 三平台逐位一致；`hoa-hoa3-cartesian` 在 B 收敛并入门禁。同时 B 暴露两个此前不可见的 3D VBAP 分歧：`saf-5_1_4-cartesian`（macOS 对 Linux≡Windows，`max_ulp=7`）与 `saf-5_1_4-extent`（三对全不同，Linux 对 Windows `max_ulp=4`）。当前 2D 测例一致与这些 3D 测例不一致，尚不能将原因定位到矩阵求逆；三角化 RNG、spread 方向生成和点积等环节也待隔离验证。这两个 3D VBAP 测例的首个分歧阶段仍待定位。矩阵覆盖不到的代码不产生分歧记录，不等于该代码一致。
 - SAF 的全局 C RNG 同时参与去相关延迟和凸包三角化。cloud 也会受进程历史影响；point 在测量网格点的相等性，不能证明其它方向的 HRTF 插值路径一致。
 - 同一随机种子只统一同一 C 运行库内的起点；统一算法及 `RAND_MAX` 后，仍需处理 FFT、矩阵求逆、向量归约与插值数学。实际实验结果和未证明的推断须分开记录。
 - 固定分组与 RNG 起点后，worker 调度和改变分组拓扑是两种不同实验。分组随硬件并行预算改变会影响多轨 spreader 的输出，不能用普通重复渲染代替线程数/拓扑验证。
