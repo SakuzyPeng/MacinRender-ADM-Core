@@ -17,11 +17,11 @@
 | `ear-5_1-extent` | 扩散 FIR 的 SAF FFT 路径 | B 的直接/扩散 double 增益一致；未插桩的 macOS OpenBLAS/KissFFT 对照与原 Linux/Windows PCM 收敛。 |
 | `binaural-point` | HRIR → HRTF 的 FFT，另有 VBAP 数值边界敏感性 | 同一 HRIR 的 vDSP 和 KissFFT 频谱不同；原未插桩后端对照可收敛，但诊断构建还暴露了测量网格附近微小插值权重受三角化/求逆影响的情况。 |
 | `binaural-extent-cloud` | RNG 三角化，其后为小矩阵求逆/插值权重 | 原始顶点一致，C RNG 不同导致凸包三角形不同。统一 RNG 后三角形一致；Linux/Windows 首次剩余分歧已经出现在 `invertLsMtx3D → utility_sinv → LAPACKE_sgetrf_work / LAPACKE_sgetri_work`。 |
-| `saf-5_1_4-cartesian`，新覆盖发现 | 3D VBAP 路径；首个分歧阶段待定位 | B 组 macOS 对 Linux/Windows 有 133,910/480,000 个采样不同，`max_ulp=7`，`max_abs=2.98e-8`；**Linux 与 Windows 逐位相同**。这是最终 PCM 的平台分组，尚未证明首个分歧发生在 `invertLsMtx3D`。 |
-| `saf-5_1_4-extent`，新覆盖发现 | 3D VBAP 路径；首个分歧阶段待定位 | B 组三对全不同；Linux 对 Windows 也有 94,150/480,000 个采样不同（`max_ulp=4`）。两者的 OpenBLAS 构建不同（发行版包 vs 预构建 0.3.33），这是待验证的候选原因。该测例的 spread 恒定饱和（见下），只能排除本轮 MDAP 长度替换对传入 spread 值的影响。 |
+| `saf-5_1_4-cartesian`，新覆盖发现 | 三角化 RNG 与 BLAS 数值路径，见补充定位 | B 组 macOS 对 Linux/Windows 有 133,910/480,000 个采样不同，`max_ulp=7`，`max_abs=2.98e-8`；**Linux 与 Windows 逐位相同**。后续检查点先发现三角形索引差异；统一 RNG 后仍有求逆、SGEMM 旋转与 SDOT 差异，固定输入重放证实了点积算术本身的影响。 |
+| `saf-5_1_4-extent`，新覆盖发现 | Linux/Windows 的 PCM 差异由 `tanf` 重放复现；macOS 另有 BLAS 差异 | B 组三对全不同；Linux 对 Windows 有 94,150/480,000 个采样不同（`max_ulp=4`）。spread 饱和为 180° 后，SAF 的 `tanf` 输入接近 π/2；只替换 tangent 返回值即可复原 Windows 的全部 PCM，单独替换几何数据无效。 |
 | 两种 `binaural-extent-spreader` | 去相关延迟 RNG、几何 RNG；叠加 FFT/矩阵数学及分组拓扑 | 同平台连续重复即不同。统一 RNG 后延迟表收敛，仍不能推定全部 PCM 收敛；macOS 的剩余重复差异已在 HRIR → HRTF 阶段复现。 |
 
-两个新增的 3D VBAP 测例来自运行 [34250832546](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34250832546)，该次运行未启用阶段定位，现有 `scripts/consistency/localize.py` 也未包含这两个测例。2D 的 `saf-5_1-extent` 三平台一致，只能说明当前覆盖的 2D 与 3D 测例表现不同。3D 路径还涉及使用 C RNG 的凸包三角化、spread 方向生成、矩阵求逆和向量点积；需比较这些阶段的输入与输出，并通过控制实验确认首个分歧。既有双耳 cloud 的求逆定位不能直接套用到新测例。
+两个新增的 3D VBAP 测例最初在运行 [34250832546](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34250832546) 中只比较了最终 PCM。后续完整三平台运行 [34322676035](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34322676035) 已补入真实输入、几何、spread、逆矩阵与增益检查点，并逐位验证分步重放。具体控制实验、完整 PCM 因子替换与范围说明见 [3D VBAP 数值差异定位](CONSISTENCY_VBAP_LOCALIZATION.md)。求逆确有差异，但 SGEMM、SDOT 和接近 π/2 的 `tanf` 是独立边界；既有双耳 cloud 的求逆定位不能替代这些测例自身的证据。
 
 ### 已落地的修复：向量归一化的长度计算
 
