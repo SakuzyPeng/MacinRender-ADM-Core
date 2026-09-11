@@ -578,3 +578,11 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - 领域模型边界（C ABI 不暴露第三方类型）：ADR 0003
 - semver 规范：https://semver.org/lang/zh-CN/
 - Linux SONAME 实践：https://tldp.org/HOWTO/Program-Library-HOWTO/shared-libraries.html
+
+### Scene 动态字段期限修正
+
+producer 的 changed-fields 与语义策略耦合引发的额外字段共同确定有效更新范围，
+不能把单个字段事件无条件扩展为完整目标更新。`head_locked` 在事件采样处离散切换，
+即使同一事件还携带位置/增益 ramp，也不等待 ramp 结束。双耳连续字段各自保留期限，
+VBAP 声像和内容电平分别渐变；跟踪字段在 VBAP 中仍中性，不重启其它渐变。
+此修正不增加或改变 C ABI 布局、函数或枚举数值，使用现有 Scene 状态字段。

@@ -2098,6 +2098,118 @@ bool test_binaural_pose_rotates_spread_cloud(adm_context_t* context) {
 }
 
 // NOLINTNEXTLINE(readability-function-size)
+
+// Exercise the public producer path so effective-policy expansion cannot hide
+// a head-only update from the live backend.
+bool render_reference_frame_ramp(adm_context_t* context,
+                                 std::uint64_t epoch,
+                                 bool binaural,
+                                 bool add_tracking_update,
+                                 bool initially_locked,
+                                 float yaw,
+                                 std::uint32_t update_offset,
+                                 std::vector<float>& output,
+                                 bool independent = false) {
+    StreamGuard stream;
+    auto config = stream_config();
+    if (binaural) {
+        config.rendering = binaural_renderer_config();
+    }
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok = check(adm_scene_stream_begin_epoch(stream.value, epoch, 0) == ADM_ERROR_OK,
+                    "begin reference-frame ramp epoch") &&
+              configure_object(stream.value, epoch, 1U);
+    ok &= check(adm_scene_stream_set_listener_orientation(stream.value, yaw, 0.0F, 0.0F) == ADM_ERROR_OK,
+                "set reference-frame ramp pose");
+    std::vector<float> samples(1024U, 0.02F);
+    adm_scene_pcm_plane_t plane{};
+    adm_scene_initial_state_t initial{};
+    auto frame = object_frame(epoch, 1U, 0, samples, plane, initial);
+    initial.state.linear_gain = 0.1F;
+    initial.state.position_x = 0.0F;
+    initial.state.position_y = 1.0F;
+    initial.state.head_locked = initially_locked ? 1 : 0;
+    std::array<adm_scene_metadata_update_t, 4U> updates{};
+    updates[0].struct_size = sizeof(updates[0]);
+    updates[0].element_id = initial.element_id;
+    updates[0].ramp_duration_samples = 512U;
+    updates[0].changed_fields = ADM_SCENE_STATE_LINEAR_GAIN | ADM_SCENE_STATE_POSITION;
+    updates[0].state = initial.state;
+    updates[0].state.linear_gain = 0.8F;
+    updates[0].state.position_x = -0.5F;
+    if (add_tracking_update && update_offset == 0U) {
+        updates[0].changed_fields |= ADM_SCENE_STATE_HEAD_LOCKED;
+        updates[0].state.head_locked = 1;
+    }
+    updates[1] = updates[0];
+    updates[1].offset_samples = update_offset;
+    // The reference explicitly resumes the same continuous target. This also
+    // keeps convolution segmentation identical while testing the ramp lifetime.
+    updates[1].ramp_duration_samples = add_tracking_update ? 0U : 512U - update_offset;
+    updates[1].changed_fields = add_tracking_update ? ADM_SCENE_STATE_HEAD_LOCKED : updates[0].changed_fields;
+    updates[1].state.head_locked = add_tracking_update ? 1 : initial.state.head_locked;
+    if (independent) {
+        updates[0].changed_fields = ADM_SCENE_STATE_POSITION;
+        updates[0].ramp_duration_samples = 256U;
+        updates[1] = updates[0];
+        updates[1].changed_fields = ADM_SCENE_STATE_LINEAR_GAIN;
+        updates[1].ramp_duration_samples = 512U;
+        updates[2] = updates[0];
+        updates[2].offset_samples = 256U;
+        updates[2].ramp_duration_samples = 0U;
+        updates[2].changed_fields = add_tracking_update ? ADM_SCENE_STATE_HEAD_LOCKED : ADM_SCENE_STATE_POSITION;
+        updates[2].state.head_locked = add_tracking_update ? 1 : 0;
+        // Reference: position is explicitly at its deadline, while gain resumes
+        // for the remaining 256 samples. The other run only changes head lock.
+        updates[3] = updates[1];
+        updates[3].offset_samples = 256U;
+        updates[3].ramp_duration_samples = 256U;
+    }
+    frame.metadata_updates = updates.data();
+    frame.metadata_update_count = independent ? (add_tracking_update ? 3U : 4U) : (update_offset != 0U ? 2U : 1U);
+    int32_t submitted = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submitted) == ADM_ERROR_OK &&
+                    submitted == ADM_SCENE_SUBMIT_ACCEPTED,
+                "submit reference-frame ramp");
+    ok &= check(adm_scene_stream_signal_end(stream.value, epoch, 1024) == ADM_ERROR_OK, "end reference-frame ramp");
+    bool signal = false;
+    ok &= wait_for_output(stream.value, 2U, 1024U, signal, &output);
+    return ok && check(signal, "reference-frame ramp produces audio");
+}
+
+bool test_reference_frame_updates_preserve_ramps(adm_context_t* context) {
+    bool ok = true;
+    for (const bool binaural : {false, true}) {
+        std::vector<float> baseline;
+        std::vector<float> switched;
+        ok &= render_reference_frame_ramp(context, 101U, binaural, false, false, 0.0F, 128U, baseline);
+        ok &= render_reference_frame_ramp(context, 102U, binaural, true, false, 0.0F, 128U, switched);
+        ok &= check_output_equivalence(
+            baseline, switched, 1.0e-5F, "head-only update preserves ongoing gain and position ramps at identity pose");
+    }
+    for (const bool binaural : {false, true}) {
+        std::vector<float> reference;
+        std::vector<float> independent;
+        ok &= render_reference_frame_ramp(context, 106U, binaural, false, false, 0.0F, 256U, reference, true);
+        ok &= render_reference_frame_ramp(context, 107U, binaural, true, false, 0.0F, 256U, independent, true);
+        ok &= check_output_equivalence(
+            reference, independent, 1.0e-5F, "position reaches its own deadline while a longer gain ramp continues");
+    }
+    std::vector<float> locked;
+    std::vector<float> switched;
+    std::vector<float> world;
+    ok &= render_reference_frame_ramp(context, 103U, true, false, true, 80.0F, 0U, locked);
+    ok &= render_reference_frame_ramp(context, 104U, true, true, false, 80.0F, 0U, switched);
+    ok &= render_reference_frame_ramp(context, 105U, true, false, false, 80.0F, 0U, world);
+    ok &= check_output_equivalence(
+        locked, switched, 1.0e-5F, "head lock in a mixed update applies at onset, not at the ramp end");
+    ok &=
+        check(maximum_difference(locked, world) > 1.0e-6F, "reference-frame oracle distinguishes world and head space");
+    return ok;
+}
+
 bool test_listener_orientation(adm_context_t* context) {
     std::vector<float> baseline;
     std::vector<float> identity;
@@ -2206,6 +2318,7 @@ int main() {
         ok &= test_binaural_channel_lock_geometry(context);
         ok &= test_binaural_pose_rotates_spread_cloud(context);
         ok &= test_listener_orientation(context);
+        ok &= test_reference_frame_updates_preserve_ramps(context);
     }
     adm_destroy_context(context);
     if (ok) {

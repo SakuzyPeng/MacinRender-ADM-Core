@@ -1395,11 +1395,11 @@ typedef struct adm_scene_metadata_update_t {
     uint32_t reserved_v1_35;
     uint64_t element_id;
     uint32_t offset_samples;
-    uint32_t ramp_duration_samples;
-    int32_t jump_position; /* non-zero forces an instantaneous target unless policy disables honoring it */
+    uint32_t ramp_duration_samples; /* changed continuous fields only; unrelated ramps retain their deadlines */
+    int32_t jump_position;          /* non-zero forces an instantaneous target unless policy disables honoring it */
     uint32_t reserved2_v1_35;
     uint64_t changed_fields;
-    adm_scene_object_state_t state; /* complete target state */
+    adm_scene_object_state_t state; /* complete target state; head_locked switches at offset_samples, without a ramp */
 } adm_scene_metadata_update_t;
 
 /* PCM/state/update arrays use their first element's struct_size as the stride. All

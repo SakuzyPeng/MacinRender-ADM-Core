@@ -1181,17 +1181,23 @@ struct SceneStreamEngine::Impl {
         const auto& descriptor = current_generation_model->elements[found->second];
         auto base =
             base_states.contains(source.element_id) ? base_states.at(source.element_id) : default_state(descriptor);
+        const auto previous_effective = apply_policy_to_state(found->second, base);
         copy_state_fields(base, source.state, source.changed_fields);
         base_states[source.element_id] = base;
 
         auto converted = source;
         converted.offset_samples -= slice_start;
         converted.state = apply_policy_to_state(found->second, base, &converted);
-        // Policy transforms may couple one producer field to another (for example
-        // channel-lock and its maximum distance). Publishing the complete effective
-        // target keeps the renderer state coherent and still starts its ramp from the
-        // renderer's current in-flight value.
-        converted.changed_fields = converted.state.valid_fields;
+        // Retarget explicit producer fields plus any fields coupled by semantic
+        // policy. Unchanged fields retain their own in-flight ramp and deadline.
+        converted.changed_fields = source.changed_fields & converted.state.valid_fields;
+        for (std::uint64_t field = 1U; field <= live_scene::state_channel_lock_max_distance; field <<= 1U) {
+            auto probe = previous_effective;
+            copy_state_fields(probe, converted.state, field);
+            if (!object_state_equal(probe, previous_effective)) {
+                converted.changed_fields |= field;
+            }
+        }
         converted.stream_order = stream_order++;
         effective_states[source.element_id] = converted.state;
         updates.push_back(converted);

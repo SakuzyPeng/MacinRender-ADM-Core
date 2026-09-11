@@ -42,8 +42,19 @@ struct RuntimeElement {
     std::vector<float> target_gains;
     std::vector<float> gain_steps;
     std::uint32_t ramp_remaining{0};
+    float current_level{1.0F};
+    float target_level{1.0F};
+    float level_step{0.0F};
+    std::uint32_t level_remaining{0};
     bool initialized{false};
 };
+
+[[nodiscard]] float level_for(const ObjectState& state) noexcept {
+    if ((state.valid_fields & state_active) != 0U && !state.active) {
+        return 0.0F;
+    }
+    return (state.valid_fields & state_linear_gain) != 0U ? state.linear_gain : 1.0F;
+}
 
 [[nodiscard]] SceneBlockPosition canonical_position(float x, float y, float z) {
     SceneBlockPosition position;
@@ -170,6 +181,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
             ObjectState state = default_state(element.descriptor);
             copy_state_fields(state, initial.state, initial.state.valid_fields);
             element.target_state = state;
+            set_level(element, level_for(state), 0U);
             auto gains = gains_for(element, state, frame);
             if (!gains) {
                 return tl::unexpected{gains.error()};
@@ -185,6 +197,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
             if (!element.initialized) {
                 const ObjectState defaults = default_state(element.descriptor);
                 element.target_state = defaults;
+                set_level(element, level_for(defaults), 0U);
                 auto gains = gains_for(element, defaults, frame);
                 if (!gains) {
                     return tl::unexpected{gains.error()};
@@ -214,17 +227,25 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
                 target.valid_fields &= ~update.cleared_fields;
                 copy_state_fields(target, update.state, update.changed_fields);
                 element.target_state = target;
-                auto gains = gains_for(element, target, frame);
-                if (!gains) {
-                    return tl::unexpected{gains.error()};
-                }
                 std::uint32_t ramp = config_.object_smoothing_frames;
                 if (update.jump_position) {
                     ramp = 0U;
                 } else if (update.ramp_duration_samples != 0U) {
                     ramp = update.ramp_duration_samples;
                 }
-                set_target(element, std::move(*gains), ramp);
+                const auto changed = update.changed_fields | update.cleared_fields;
+                if ((changed & (state_active | state_linear_gain)) != 0U) {
+                    set_level(element, level_for(target), ramp);
+                }
+                // Speaker beds retain reference-frame metadata but have no
+                // orientation stage. Level and panning also own separate ramps.
+                if ((changed & ~(state_active | state_linear_gain | state_head_locked)) != 0U) {
+                    auto gains = gains_for(element, target, frame);
+                    if (!gains) {
+                        return tl::unexpected{gains.error()};
+                    }
+                    set_target(element, std::move(*gains), ramp);
+                }
             }
 
             for (auto& element : elements_) {
@@ -236,7 +257,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
                 const float input = plane_it->second->samples[sample];
                 for (std::size_t channel = 0; channel < layout_.speakers.size(); ++channel) {
                     output[(static_cast<std::size_t>(sample) * layout_.speakers.size()) + channel] +=
-                        input * element.current_gains[channel];
+                        input * element.current_gains[channel] * element.current_level;
                 }
                 advance_ramp(element);
             }
@@ -312,11 +333,9 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
 
     [[nodiscard]] Result<std::vector<float>>
     gains_for(const RuntimeElement& element, const ObjectState& state, const Frame& frame) {
-        const float linear_gain = (state.valid_fields & state_linear_gain) != 0U ? state.linear_gain : 1.0F;
-        const bool active = (state.valid_fields & state_active) == 0U || state.active;
-        if (!active || linear_gain == 0.0F) {
-            return std::vector<float>(layout_.speakers.size(), 0.0F);
-        }
+        // Unit-level panning avoids coupling a new gain target to an older
+        // position ramp. The independent content level is applied per sample.
+        constexpr float linear_gain = 1.0F;
         if (element.descriptor.role == ElementRole::lfe) {
             return lfe_gains(element.descriptor, linear_gain, frame);
         }
@@ -478,7 +497,23 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
         }
     }
 
+    static void set_level(RuntimeElement& element, float target, std::uint32_t frames) {
+        element.target_level = target;
+        element.level_remaining = frames;
+        element.level_step = frames == 0U ? 0.0F : (target - element.current_level) / static_cast<float>(frames);
+        if (frames == 0U) {
+            element.current_level = target;
+        }
+    }
+
     static void advance_ramp(RuntimeElement& element) {
+        if (element.level_remaining != 0U) {
+            element.current_level += element.level_step;
+            --element.level_remaining;
+            if (element.level_remaining == 0U) {
+                element.current_level = element.target_level;
+            }
+        }
         if (element.ramp_remaining == 0U) {
             return;
         }
