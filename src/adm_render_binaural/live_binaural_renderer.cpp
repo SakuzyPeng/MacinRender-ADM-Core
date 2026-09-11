@@ -67,7 +67,7 @@ struct RuntimeElement {
     ObjectState target;
     std::optional<std::pair<float, float>> current_direction;
     std::optional<std::pair<float, float>> target_direction;
-    std::uint32_t ramp_remaining{0U};
+    std::array<std::uint32_t, 11U> ramp_remaining{};
     bool initialized{false};
     OlaState ola;
     DiffuseState diffuse;
@@ -549,7 +549,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             if (!direction_initialized) {
                 return tl::unexpected{direction_initialized.error()};
             }
-            element.ramp_remaining = 0U;
+            element.ramp_remaining.fill(0U);
             element.initialized = true;
         }
         for (auto& element : elements_) {
@@ -584,8 +584,10 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             }
             std::uint32_t frames = std::min<std::uint32_t>(k_convolution_block, segment_end - cursor);
             for (const auto& element : elements_) {
-                if (element.ramp_remaining > 0U) {
-                    frames = std::min(frames, element.ramp_remaining);
+                for (const auto remaining : element.ramp_remaining) {
+                    if (remaining > 0U) {
+                        frames = std::min(frames, remaining);
+                    }
                 }
             }
             if (frames == 0U) {
@@ -647,58 +649,78 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             target_direction = *direction;
         }
         element.target = target;
+        if ((update.changed_fields & state_head_locked) != 0U) {
+            // Content reference frames switch at the event sample, independently of
+            // any continuous ramp carried by the same event or an earlier event.
+            element.current.head_locked = target.head_locked;
+            element.current.valid_fields |= state_head_locked;
+        }
+        if (update.changed_fields == state_head_locked && update.cleared_fields == 0U) {
+            return {};
+        }
         if (target_direction) {
             element.target_direction = *target_direction;
         }
-        element.ramp_remaining = config_.object_smoothing_frames;
+        std::uint32_t duration = config_.object_smoothing_frames;
         if (update.jump_position) {
-            element.ramp_remaining = 0U;
+            duration = 0U;
         } else if (update.ramp_duration_samples != 0U) {
-            element.ramp_remaining = update.ramp_duration_samples;
+            duration = update.ramp_duration_samples;
         }
-        if (element.ramp_remaining == 0U) {
-            element.current = element.target;
-            element.current_direction = element.target_direction;
+        const auto changed = update.changed_fields | update.cleared_fields;
+        for (std::size_t field = 0U; field < element.ramp_remaining.size(); ++field) {
+            const std::uint64_t mask = 1ULL << field;
+            if ((changed & mask) == 0U || mask == state_head_locked) {
+                continue;
+            }
+            element.ramp_remaining[field] = duration;
+            if (duration == 0U) {
+                copy_state_fields(element.current, target, mask);
+                element.current.valid_fields &= ~(update.cleared_fields & mask);
+                if (mask == state_position) {
+                    element.current_direction = element.target_direction;
+                }
+            }
         }
         return {};
     }
 
     void advance_states(std::uint32_t frames) noexcept {
         for (auto& element : elements_) {
-            if (element.ramp_remaining == 0U) {
-                continue;
-            }
-            const auto advanced = std::min(frames, element.ramp_remaining);
-            const float alpha = static_cast<float>(advanced) / static_cast<float>(element.ramp_remaining);
-            element.current = interpolated_state(element.current, element.target, alpha);
-            if (element.current_direction && element.target_direction) {
-                element.current_direction =
-                    interpolated_direction(*element.current_direction, *element.target_direction, alpha);
-            }
-            element.ramp_remaining -= advanced;
-            if (element.ramp_remaining == 0U) {
-                element.current = element.target;
-                element.current_direction = element.target_direction;
-            }
+            element.current_direction = segment_end_direction(element, frames);
+            element.current = segment_end_state(element, frames);
+            std::ranges::transform(element.ramp_remaining, element.ramp_remaining.begin(), [frames](auto remaining) {
+                return remaining - std::min(frames, remaining);
+            });
         }
     }
 
     [[nodiscard]] ObjectState segment_end_state(const RuntimeElement& element, std::uint32_t frames) const noexcept {
-        if (element.ramp_remaining == 0U) {
-            return element.current;
+        ObjectState result = element.current;
+        for (std::size_t field = 0U; field < element.ramp_remaining.size(); ++field) {
+            const auto remaining = element.ramp_remaining[field];
+            if (remaining == 0U) {
+                continue;
+            }
+            const auto advanced = std::min(frames, remaining);
+            const auto sample = interpolated_state(
+                element.current, element.target, static_cast<float>(advanced) / static_cast<float>(remaining));
+            const std::uint64_t mask = 1ULL << field;
+            copy_state_fields(result, sample, mask);
+            if (advanced == remaining && (element.target.valid_fields & mask) == 0U) {
+                result.valid_fields &= ~mask;
+            }
         }
-        const float alpha =
-            static_cast<float>(std::min(frames, element.ramp_remaining)) / static_cast<float>(element.ramp_remaining);
-        return interpolated_state(element.current, element.target, alpha);
+        return result;
     }
 
     [[nodiscard]] std::optional<std::pair<float, float>> segment_end_direction(const RuntimeElement& element,
                                                                                std::uint32_t frames) const noexcept {
-        if (!element.current_direction || !element.target_direction || element.ramp_remaining == 0U) {
+        const auto remaining = element.ramp_remaining[2U]; // Cartesian position / label fallback.
+        if (!element.current_direction || !element.target_direction || remaining == 0U) {
             return element.current_direction;
         }
-        const float alpha =
-            static_cast<float>(std::min(frames, element.ramp_remaining)) / static_cast<float>(element.ramp_remaining);
+        const float alpha = static_cast<float>(std::min(frames, remaining)) / static_cast<float>(remaining);
         return interpolated_direction(*element.current_direction, *element.target_direction, alpha);
     }
 
@@ -896,7 +918,8 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
                 return tl::unexpected{end_hrtf.error()};
             }
 
-            if (element.ramp_remaining == 0U && start_diffuse == end_diffuse) {
+            if (std::ranges::none_of(element.ramp_remaining, [](auto remaining) { return remaining != 0U; }) &&
+                start_diffuse == end_diffuse) {
                 convolve(fft_,
                          *state_,
                          scratch_.source_start.data(),
