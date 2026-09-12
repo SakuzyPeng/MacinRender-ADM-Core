@@ -18,6 +18,7 @@ struct BinauralConvolutionState {
     std::vector<float_complex> target_filter;
     std::vector<float_complex> target_hrtf;
     std::uint32_t fade_remaining{0U};
+    std::uint32_t tail_remaining{0U};
     bool initialized{false};
 };
 

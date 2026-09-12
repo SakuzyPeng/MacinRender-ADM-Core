@@ -113,6 +113,10 @@ void LiveBinauralConvolver::process(BinauralConvolutionState& state,
         }
     }
     std::copy_n(input_.begin() + static_cast<std::ptrdiff_t>(input.size()), history, state.history.begin());
+    state.tail_remaining =
+        std::ranges::any_of(input, [](float sample) { return sample != 0.0F; })
+            ? tail_frames()
+            : state.tail_remaining - std::min(state.tail_remaining, static_cast<std::uint32_t>(input.size()));
 }
 
 } // namespace mradm::live_scene
