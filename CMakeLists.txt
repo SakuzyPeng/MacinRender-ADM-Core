@@ -598,6 +598,7 @@ target_sources(mr_adm_realtime PRIVATE
     src/adm_realtime/monitor_engine.cpp
     src/adm_realtime/miniaudio_device.cpp
     src/adm_realtime/scene_stream_engine.cpp
+    src/adm_realtime/stereo_peak_guard.cpp
 )
 target_include_directories(mr_adm_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
 # miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
@@ -766,6 +767,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_scene_output_c_api_tests PRIVATE MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_scene_output_c_api_tests)
     add_test(NAME mr_adm_scene_output_c_api_tests COMMAND mr_adm_scene_output_c_api_tests)
+
+    add_executable(mr_adm_stereo_peak_guard_tests tests/unit/stereo_peak_guard_test.cpp)
+    target_link_libraries(mr_adm_stereo_peak_guard_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime)
+    mr_adm_core_apply_warnings(mr_adm_stereo_peak_guard_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_stereo_peak_guard_tests)
+    add_test(NAME mr_adm_stereo_peak_guard_tests COMMAND mr_adm_stereo_peak_guard_tests)
 
     # Release-only/manual acceptance tool. It is deliberately excluded from the default build and
     # CTest because its normal invocation runs for ten wall-clock minutes.

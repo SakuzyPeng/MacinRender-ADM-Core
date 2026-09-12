@@ -6,12 +6,14 @@
 #include <mutex>
 #include <span>
 #include <string>
+#include <vector>
 
 #include "adm/errors.h"
 #include "adm/options.h"
 
 #include "audio_output_device.h"
 #include "scene_stream_engine.h"
+#include "stereo_peak_guard.h"
 
 namespace mradm::realtime {
 
@@ -45,6 +47,11 @@ class SceneOutputSession {
   public:
     [[nodiscard]] static Result<std::unique_ptr<SceneOutputSession>>
     create(const std::shared_ptr<SceneStreamEngine>& stream, const SceneDeviceConfig& config);
+    // Internal injection boundary, also used by deterministic device tests.
+    [[nodiscard]] static Result<std::unique_ptr<SceneOutputSession>>
+    create_with_device(const std::shared_ptr<SceneStreamEngine>& stream,
+                       std::unique_ptr<IAudioOutputDevice> device,
+                       bool protect_stereo);
     ~SceneOutputSession();
     SceneOutputSession(const SceneOutputSession&) = delete;
     SceneOutputSession& operator=(const SceneOutputSession&) = delete;
@@ -56,9 +63,12 @@ class SceneOutputSession {
     [[nodiscard]] SceneDeviceStatus status() const;
 
   private:
-    SceneOutputSession(std::shared_ptr<SceneStreamEngine> stream, std::unique_ptr<IAudioOutputDevice> device);
+    SceneOutputSession(std::shared_ptr<SceneStreamEngine> stream,
+                       std::unique_ptr<IAudioOutputDevice> device,
+                       bool protect_stereo);
     void park();
     std::size_t pull(std::span<float> output, std::size_t frames) noexcept;
+    [[nodiscard]] ScenePullResult pull_stereo(std::span<float> output, std::uint32_t frames) noexcept;
 
     std::shared_ptr<SceneStreamEngine> stream_;
     std::unique_ptr<IAudioOutputDevice> device_;
@@ -72,6 +82,9 @@ class SceneOutputSession {
     std::atomic<bool> failed_{false};
     std::atomic<bool> buffering_{true};
     std::uint32_t channels_{0};
+    std::unique_ptr<StereoPeakGuard> peak_guard_;
+    std::vector<float> peak_input_;
+    bool peak_source_ended_{false};
 };
 
 // cppcheck-suppress-end unusedStructMember
