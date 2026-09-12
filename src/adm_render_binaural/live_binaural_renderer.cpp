@@ -830,6 +830,14 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             scratch_.source[index] =
                 gain * ((scratch_.source[index] * (1.0F - diffuse)) + (scratch_.diffuse[index] * diffuse));
         }
+        if (element.convolution.tail_remaining == 0U &&
+            std::ranges::none_of(std::span{scratch_.source}.first(frame_count),
+                                 [](float sample) { return sample != 0.0F; })) {
+            // Inactive sources need no FFT or HRTF lookup after their history
+            // drains. Re-entry initializes at the then-current direction.
+            element.convolution.initialized = false;
+            return {};
+        }
         if (!element.convolution.initialized) {
             auto initial = hrtf_for(element, start, frame, scratch_.hrtf_target, element.current_direction);
             if (!initial) {
