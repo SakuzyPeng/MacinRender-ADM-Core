@@ -41,7 +41,14 @@ typedef SPREADER_PROC_MODES _Atomic_SPREADER_PROC_MODES;
 
 /* ── spreader_data struct ────────────────────────────────────────────── */
 
+/* This is C state, initialised by spreader_create/spreader_initCodec. The quality
+ * script also parses headers as C++, where requiring a C++ constructor is inapplicable. */
+// cppcheck-suppress-begin uninitMemberVarNoCtor
 typedef struct _spreader {
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    int trace_instance;
+    int trace_frame;
+#endif
     /* audio buffers and time-frequency transform */
     float** inputFrameTD;
     float** outframeTD;
@@ -133,6 +140,7 @@ typedef struct _spreader {
     int cone_valid[SPREADER_MAX_NUM_SOURCES];
 
 } spreader_data;
+// cppcheck-suppress-end uninitMemberVarNoCtor
 
 /* ── internal function ───────────────────────────────────────────────── */
 

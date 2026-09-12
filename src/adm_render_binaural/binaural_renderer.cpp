@@ -43,6 +43,7 @@
 
 #include "binaural_internal.h"
 #include "binaural_spreader.h"
+#include "consistency_trace.h"
 #include "head_rotation.h"
 #include "render_common.h"
 
@@ -231,7 +232,7 @@ struct Vec3 {
 }
 
 [[nodiscard]] Vec3 normalize(Vec3 v) noexcept {
-    const float n = std::hypot(v.x, v.y, v.z);
+    const float n = render_common::canonical_vector_length(v.x, v.y, v.z);
     if (n <= 1.0e-8F) {
         return {0.0F, 1.0F, 0.0F};
     }
@@ -262,7 +263,7 @@ int vbap_grid_idx(float az_deg, float el_deg) {
 }
 
 [[nodiscard]] float distance_from_position(const SceneBlockPosition& pos) noexcept {
-    return pos.cartesian ? std::hypot(pos.x, pos.y, pos.z) : pos.distance;
+    return pos.cartesian ? render_common::canonical_vector_length(pos.x, pos.y, pos.z) : pos.distance;
 }
 
 [[nodiscard]] std::pair<float, float> polar_from_direction(Vec3 dir) noexcept {
@@ -516,6 +517,12 @@ void compress_vbap_rows(
     if (out_vertices == nullptr || out_faces == nullptr || num_out_faces <= 0) {
         return false;
     }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    consistency::dump("binaural.02a-triangulation-vertices.f32",
+                      std::span<const float>(out_vertices, static_cast<std::size_t>(num_out_vertices) * 3U));
+    consistency::dump("binaural.02b-triangulation-faces.i32",
+                      std::span<const int>(out_faces, static_cast<std::size_t>(num_out_faces) * 3U));
+#endif
 
     float* layout_inv_mtx = nullptr;
     invertLsMtx3D(out_vertices, out_faces, num_out_faces, &layout_inv_mtx);
@@ -523,6 +530,10 @@ void compress_vbap_rows(
     if (layout_inv_mtx == nullptr) {
         return false;
     }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    consistency::dump("binaural.02c-inverse-matrices.f32",
+                      std::span<const float>(layout_inv_mtx, static_cast<std::size_t>(num_out_faces) * 9U));
+#endif
 
     const std::size_t n_gtable = static_cast<std::size_t>(k_n_azi) * static_cast<std::size_t>(k_n_elev);
     bs.vbap_gains.assign(n_gtable * 3U, 0.0F);
@@ -580,11 +591,20 @@ std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_
     // Convert HRIRs to frequency-domain HRTFs.
     bs->hrtf_fd.resize(static_cast<std::size_t>(bs->n_bands) * k_n_ears * static_cast<std::size_t>(bs->num_dirs));
     HRIRs2HRTFs(bs->hrtf_td.data(), bs->num_dirs, bs->hrir_len, bs->fft_size, bs->hrtf_fd.data());
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    consistency::dump("binaural.01-hrir.f32", bs->hrtf_td);
+    consistency::dump("binaural.02-grid.f32", bs->grid_dirs_deg);
+    consistency::dump("binaural.03-hrtf.c32", bs->hrtf_fd);
+#endif
 
     // Build compressed VBAP gain table for the HRTF measurement directions as "loudspeakers".
     if (!build_compressed_vbap_grid(*bs)) {
         return nullptr; // triangulation failed
     }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    consistency::dump("binaural.04-vbap-gains.f32", bs->vbap_gains);
+    consistency::dump("binaural.05-vbap-dirs.i32", bs->vbap_dirs);
+#endif
 
     return bs;
 }
@@ -606,8 +626,19 @@ std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_
 // interpolated group delay. Constrained by the binaural fixture invariants (grid-point identity +
 // off-grid far-ear improvement without lateral regression).
 namespace {
-[[nodiscard]] float_complex
+struct GridBinInterpolation {
+    float_complex value{0.0F, 0.0F};
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    std::array<float, 3U> magnitudes{};
+    float_complex complex_sum{0.0F, 0.0F};
+    float magnitude{0.0F};
+    float complex_magnitude{0.0F};
+#endif
+};
+
+[[nodiscard]] GridBinInterpolation
 interpolated_grid_bin(const BinauralState& bs, std::size_t grid, int band, std::size_t ear) {
+    GridBinInterpolation result;
     const auto gbase = grid * 3U;
     const auto nd = static_cast<std::size_t>(bs.num_dirs);
     float mag = 0.0F;
@@ -617,11 +648,21 @@ interpolated_grid_bin(const BinauralState& bs, std::size_t grid, int band, std::
         const auto dir = static_cast<std::size_t>(bs.vbap_dirs[gbase + k]);
         const auto index = (static_cast<std::size_t>(band) * k_n_ears * nd) + (ear * nd) + dir;
         const auto h = bs.hrtf_fd[index];
-        mag += gain * (bs.hrtf_magnitudes.empty() ? std::abs(h) : bs.hrtf_magnitudes[index]);
+        const float magnitude = bs.hrtf_magnitudes.empty() ? std::abs(h) : bs.hrtf_magnitudes[index];
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        result.magnitudes[k] = magnitude;
+#endif
+        mag += gain * magnitude;
         cpx += gain * h;
     }
     const float acpx = std::abs(cpx);
-    return acpx > 1e-9F ? cpx * (mag / acpx) : float_complex{mag, 0.0F};
+    result.value = acpx > 1e-9F ? cpx * (mag / acpx) : float_complex{mag, 0.0F};
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    result.complex_sum = cpx;
+    result.magnitude = mag;
+    result.complex_magnitude = acpx;
+#endif
+    return result;
 }
 
 } // namespace
@@ -629,11 +670,32 @@ interpolated_grid_bin(const BinauralState& bs, std::size_t grid, int band, std::
 void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<float_complex>& out) {
     const auto g = static_cast<std::size_t>(vbap_grid_idx(az_deg, el_deg));
     out.resize(static_cast<std::size_t>(bs.n_bands) * k_n_ears);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    std::vector<float> trace_magnitudes(out.size() * 3U);
+    std::vector<float> trace_scale(out.size() * 2U);
+    std::vector<float_complex> trace_sum(out.size());
+#endif
     for (int b = 0; b < bs.n_bands; ++b) {
         for (std::size_t ear = 0; ear < k_n_ears; ++ear) {
-            out[(static_cast<std::size_t>(b) * k_n_ears) + ear] = interpolated_grid_bin(bs, g, b, ear);
+            const auto interpolated = interpolated_grid_bin(bs, g, b, ear);
+            const auto index = (static_cast<std::size_t>(b) * k_n_ears) + ear;
+            out[index] = interpolated.value;
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+            for (std::size_t k = 0; k < 3U; ++k) {
+                trace_magnitudes[(index * 3U) + k] = interpolated.magnitudes[k];
+            }
+            trace_sum[index] = interpolated.complex_sum;
+            trace_scale[index * 2U] = interpolated.magnitude;
+            trace_scale[(index * 2U) + 1U] = interpolated.complex_magnitude;
+#endif
         }
     }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    consistency::dump("hrtf-grid-" + std::to_string(g) + ".c32", out);
+    consistency::dump("hrtf-grid-" + std::to_string(g) + "-magnitudes.f32", trace_magnitudes);
+    consistency::dump("hrtf-grid-" + std::to_string(g) + "-complex-sum.c32", trace_sum);
+    consistency::dump("hrtf-grid-" + std::to_string(g) + "-scale.f32", trace_scale);
+#endif
 }
 
 void compute_continuous_hrtf_into(const BinauralState& bs,
@@ -666,7 +728,7 @@ void compute_continuous_hrtf_into(const BinauralState& bs,
             for (std::size_t ear = 0U; ear < k_n_ears; ++ear) {
                 out[(static_cast<std::size_t>(band) * k_n_ears) + ear] +=
                     weights.at(corner) *
-                    interpolated_grid_bin(bs, static_cast<std::size_t>(grids.at(corner)), band, ear);
+                    interpolated_grid_bin(bs, static_cast<std::size_t>(grids.at(corner)), band, ear).value;
             }
         }
     }
@@ -1085,7 +1147,7 @@ expand_binaural_extent(const SceneObjectBlock& block, float source_gain, Binaura
 
     const Vec3 center = direction_from_position(block.position);
     Vec3 horizontal = cross({0.0F, 0.0F, 1.0F}, center);
-    if (std::hypot(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
+    if (render_common::canonical_vector_length(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
         horizontal = {1.0F, 0.0F, 0.0F};
     } else {
         horizontal = normalize(horizontal);
@@ -1103,6 +1165,24 @@ expand_binaural_extent(const SceneObjectBlock& block, float source_gain, Binaura
         const float h = std::tan(sample.x * width_radius * k_deg2rad);
         const float v = std::tan(sample.y * height_radius * k_deg2rad);
         auto [az, el] = polar_from_direction(normalize(add(add(center, scale(horizontal, h)), scale(vertical, v))));
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        consistency::dump("cloud.01-slot-" + std::to_string(slot) + ".f32",
+                          {center.x,
+                           center.y,
+                           center.z,
+                           horizontal.x,
+                           horizontal.y,
+                           horizontal.z,
+                           vertical.x,
+                           vertical.y,
+                           vertical.z,
+                           h,
+                           v,
+                           az,
+                           el,
+                           source_gain * sample.weight});
+        consistency::dump("cloud.02-grid-" + std::to_string(slot) + ".i32", {vbap_grid_idx(az, el)});
+#endif
         sources.push_back({az, el, source_gain * sample.weight, slot});
         ++slot;
     }
@@ -1943,7 +2023,8 @@ class BinauralStream final : public IRenderStream {
 
     const BinauralPrepared& prepared_; // borrowed; owner (factory) outlives the stream
     std::unique_ptr<audio::RenderInputReader> reader_;
-    AdmScene scene_;                      // policy-applied scene, for topology re-prepare (scaled copy → build_sources)
+    // policy-applied scene, for topology re-prepare (scaled copy → build_sources)
+    AdmScene scene_;
     BinauralSpreadMode spread_mode_;      // spread mode the prepared sources were built with
     std::vector<BinauralSource> sources_; // own (rebuildable) source list; starts == prepared_.sources
     uint16_t num_in_ch_;
@@ -2055,7 +2136,8 @@ Result<std::shared_ptr<IPreparedRender>> BinauralRenderer::prepare(const RenderP
     std::vector<SpreaderGroup> spreader_groups;
     if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
         const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
-        const std::size_t parallel_budget = (hw_threads > 0U) ? hw_threads : sources.size();
+        const std::size_t parallel_budget = consistency::count_override(
+            "MR_ADM_DIAGNOSTIC_GROUP_BUDGET", (hw_threads > 0U) ? hw_threads : sources.size());
         spreader_tracks = build_spreader_tracks(plan.scene, logs);
         spreader_groups = build_spreader_groups(spreader_tracks, std::max<std::size_t>(1U, parallel_budget));
         logs.log(
@@ -2192,12 +2274,23 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
     const bool spreader_mode = !spreader_adapters.empty();
     const std::size_t spr_delay =
         spreader_mode ? static_cast<std::size_t>(BinauralSpreaderAdapter::total_latency()) : 0U;
-    const std::size_t spreader_worker_count =
-        (spreader_groups.size() > 1U && hw_threads > 1U) ? std::min(spreader_groups.size(), hw_threads) : 0U;
+    const std::size_t spreader_worker_count = consistency::count_override(
+        "MR_ADM_DIAGNOSTIC_WORKERS",
+        (spreader_groups.size() > 1U && hw_threads > 1U) ? std::min(spreader_groups.size(), hw_threads) : 0U);
     TrackWorkerPool spreader_pool(spreader_worker_count);
-    const std::size_t ola_worker_count =
-        (sources.size() > 1U && hw_threads > 1U) ? std::min(sources.size(), hw_threads) : 0U;
+    const std::size_t ola_worker_count = consistency::count_override(
+        "MR_ADM_DIAGNOSTIC_WORKERS",
+        (sources.size() > 1U && hw_threads > 1U) ? std::min(sources.size(), hw_threads) : 0U);
     TrackWorkerPool ola_pool(ola_worker_count);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    logs.log(LogLevel::info,
+             "binaural",
+             fmt::format("diagnostic pools: ola_workers={} spreader_workers={} ola_sources={} spreader_groups={}",
+                         ola_worker_count,
+                         spreader_worker_count,
+                         sources.size(),
+                         spreader_groups.size()));
+#endif
     std::vector<float> ola_dl_l;
     std::vector<float> ola_dl_r;
     std::size_t ola_dl_pos = 0;

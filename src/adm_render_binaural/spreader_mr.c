@@ -7,11 +7,43 @@
  */
 
 #include "spreader_mr_internal.h"
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+#include "consistency_spreader_trace.h"
+#define TRACE_INIT(name, data, count)                                                                                  \
+    mr_adm_trace_spreader(name, pData->trace_instance, -1, (const float*) (data), (size_t) (count))
+#define TRACE_FRAME(name, data, count)                                                                                 \
+    do {                                                                                                               \
+        if (pData->trace_frame < 16)                                                                                   \
+            mr_adm_trace_spreader(                                                                                     \
+                name, pData->trace_instance, pData->trace_frame, (const float*) (data), (size_t) (count));             \
+    } while (0)
+/* Only copy active channels: the allocation has a larger channel stride and unused
+ * channels are not initialised by the filterbank. They are not numerical evidence. */
+static void trace_tf(const char* name, const spreader_data* data, float_complex*** tf, int channels) {
+    if (data->trace_frame >= 16 || getenv("MR_ADM_TRACE_DIR") == NULL)
+        return;
+    const size_t stride = (size_t) channels * TIME_SLOTS * 2;
+    float* values = (float*) malloc1d(HYBRID_BANDS * stride * sizeof(float));
+    for (int band = 0; band < HYBRID_BANDS; ++band)
+        memcpy(values + (size_t) band * stride, FLATTEN2D(tf[band]), stride * sizeof(float));
+    mr_adm_trace_spreader(name, data->trace_instance, data->trace_frame, values, HYBRID_BANDS * stride);
+    free(values);
+}
+#define TRACE_TF(name, data, channels) trace_tf(name, pData, data, channels)
+#else
+#define TRACE_INIT(name, data, count) ((void) 0)
+#define TRACE_FRAME(name, data, count) ((void) 0)
+#define TRACE_TF(name, data, channels) ((void) 0)
+#endif
 
 void spreader_create(void** const phSpr) {
     spreader_data* pData = (spreader_data*) malloc1d(sizeof(spreader_data));
     *phSpr = (void*) pData;
     int band, t, src;
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    pData->trace_instance = mr_adm_trace_spreader_instance();
+    pData->trace_frame = 0;
+#endif
 
     /* user parameters */
     pData->sofa_filepath = NULL;
@@ -275,6 +307,8 @@ void spreader_initCodec(void* const hSpr) {
     pData->weights = realloc1d(pData->weights, pData->nGrid * sizeof(float));
     getVoronoiWeights(pData->grid_dirs_deg, pData->nGrid, 0, pData->weights);
     cblas_sscal(pData->nGrid, 1.0f / FOURPI, pData->weights, 1);
+    TRACE_INIT("01-filterbank-hrtf.f32", pData->H_grid, 2 * HYBRID_BANDS * pData->Q * pData->nGrid);
+    TRACE_INIT("02-voronoi-weights.f32", pData->weights, pData->nGrid);
     for (band = 0; band < HYBRID_BANDS; band++) {
         pData->HHH[band] = (float_complex**) realloc2d(
             (void**) pData->HHH[band], pData->nGrid, pData->Q * (pData->Q), sizeof(float_complex));
@@ -298,6 +332,11 @@ void spreader_initCodec(void* const hSpr) {
             scaleC = cmplxf(pData->weights[ng], 0.0f);
             cblas_cscal(pData->Q * (pData->Q), &scaleC, pData->HHH[band][ng], 1);
         }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        char trace_name[64];
+        snprintf(trace_name, sizeof(trace_name), "03-outer-products-band-%03d.f32", band);
+        TRACE_INIT(trace_name, FLATTEN2D(pData->HHH[band]), 2 * pData->nGrid * pData->Q * pData->Q);
+#endif
     }
     pData->angles = realloc1d(pData->angles, pData->nGrid * sizeof(float));
 
@@ -382,6 +421,8 @@ void spreader_process(
 
         afSTFT_forward_knownDimensions(
             pData->hSTFT, pData->inputFrameTD, SPREADER_FRAME_SIZE, MAX_NUM_INPUTS, TIME_SLOTS, pData->inputframeTF);
+        TRACE_FRAME("01-input.f32", pData->inputFrameTD[0], SPREADER_FRAME_SIZE);
+        TRACE_TF("02-stft.f32", pData->inputframeTF, nSources);
 
         for (band = 0; band < HYBRID_BANDS; band++)
             memset(FLATTEN2D(pData->outputframeTF[band]), 0, Q * TIME_SLOTS * sizeof(float_complex));
@@ -486,6 +527,8 @@ void spreader_process(
                            Q * TIME_SLOTS * sizeof(float_complex));
             } else {
                 latticeDecorrelator_apply(pData->hDecor[src], pData->protoframeTF, TIME_SLOTS, pData->decorframeTF);
+                TRACE_TF("03-proto.f32", pData->protoframeTF, Q);
+                TRACE_TF("04-decor.f32", pData->decorframeTF, Q);
 
                 for (band = 0; band < HYBRID_BANDS; band++) {
                     cblas_cgemm(CblasRowMajor,
@@ -712,10 +755,18 @@ void spreader_process(
 
             cblas_ccopy(HYBRID_BANDS * Q * Q, FLATTEN2D(pData->new_M), 1, FLATTEN2D(pData->prev_M[src]), 1);
             cblas_scopy(HYBRID_BANDS * Q * Q, FLATTEN2D(pData->new_Mr), 1, FLATTEN2D(pData->prev_Mr[src]), 1);
+            TRACE_FRAME("05-cproto.f32", FLATTEN2D(pData->Cproto[src]), 2 * HYBRID_BANDS * Q * Q);
+            TRACE_FRAME("06-cy.f32", FLATTEN2D(pData->Cy[src]), 2 * HYBRID_BANDS * Q * Q);
+            TRACE_FRAME("07-mixing.f32", FLATTEN2D(pData->new_M), 2 * HYBRID_BANDS * Q * Q);
+            TRACE_FRAME("08-residual-mixing.f32", FLATTEN2D(pData->new_Mr), HYBRID_BANDS * Q * Q);
         }
 
         afSTFT_backward_knownDimensions(
             pData->hSTFT, pData->outputframeTF, SPREADER_FRAME_SIZE, MAX_NUM_OUTPUTS, TIME_SLOTS, pData->outframeTD);
+        TRACE_FRAME("09-output-left.f32", pData->outframeTD[0], SPREADER_FRAME_SIZE);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        ++pData->trace_frame;
+#endif
 
         for (ch = 0; ch < SAF_MIN(Q, nOutputs); ch++)
             utility_svvcopy(pData->outframeTD[ch], SPREADER_FRAME_SIZE, outputs[ch]);

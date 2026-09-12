@@ -23,6 +23,7 @@
 #include "adm/render.h"
 #include "adm/render_vbap.h"
 
+#include "consistency_trace.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
 
@@ -153,15 +154,17 @@ struct SafFree {
 // Port of ADMVBAPMDAPSpreadDegreesForExtent from the ObjC renderer.
 // 2D layouts pass spread=0 to the SAF API (2D VBAP has no spread parameter).
 [[nodiscard]] float mdap_spread_degrees(const SceneObjectBlock& block) {
-    const float distance = block.position.cartesian ? std::hypot(block.position.x, block.position.y, block.position.z)
-                                                    : block.position.distance;
+    const float distance =
+        block.position.cartesian
+            ? render_common::canonical_vector_length(block.position.x, block.position.y, block.position.z)
+            : block.position.distance;
     const float spread_scale = std::clamp(1.0F / std::max(0.4F, distance), 0.5F, 2.5F);
     const float w = std::max(0.0F, block.width) * 60.0F * spread_scale;
     const float w_with_divergence =
         block.divergence > 1.0e-4F ? std::max(w, std::max(0.0F, block.divergence_azimuth_range) * 0.5F) : w;
     const float h = std::max(0.0F, block.height) * 45.0F * spread_scale;
     const float d = std::max(0.0F, block.depth) * 20.0F * spread_scale;
-    return std::min(180.0F, std::hypot(w_with_divergence, h, d));
+    return std::min(180.0F, render_common::canonical_vector_length(w_with_divergence, h, d));
 }
 
 [[nodiscard]] Result<std::vector<float>>
@@ -171,6 +174,10 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
 
     const auto num_non_lfe = static_cast<int>(speakers.size() / 2U);
     const bool use_3d = !is_2d_layout(layout);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    consistency::dump("vbap.01-source.f32", {azimuth, elevation, gain, spread_deg});
+    consistency::dump("vbap.02-speakers.f32", speakers);
+#endif
     int table_size = 0;
     int simplex_count = 0;
     float* raw_table = nullptr;
@@ -197,6 +204,9 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
     if (table == nullptr || table_size != 1) {
         return make_error(ErrorCode::render_failed, "SAF VBAP gain calculation failed", {});
     }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    consistency::dump("vbap.03-gains.f32", std::span<const float>(table.get(), speakers.size() / 2U));
+#endif
 
     // Expand VBAP gains (non-LFE only) to full output channel count.
     // LFE channels stay zero — Objects never route to LFE.

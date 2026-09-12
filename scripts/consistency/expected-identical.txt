@@ -1,0 +1,12 @@
+# Cases confirmed bit-identical across macOS arm64, Linux x64 and Windows x64.
+# Configuration A; first complete baseline recorded 2026-09-08.
+# Tested source: 3a0636e1a15d46a37100b2dc86ed3751fc95f919
+# Run: https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34185456813
+# Other numerical differences remain measurements; missing/invalid data always fails.
+# One case name per line; # starts a comment.
+
+ear-5_1-directspeakers
+ear-5_1-point
+ear-5_1-point-postproc
+saf-5_1-extent
+saf-5_1-point
