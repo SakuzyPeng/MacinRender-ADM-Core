@@ -24,7 +24,6 @@
 
 // Keep SAF's complex declaration outside the C linkage opened by some SAF headers.
 #include <saf_utility_complex.h>
-#include <saf_utility_fft.h>
 #include <samplerate.h>
 
 #include <fmt/format.h>
@@ -33,13 +32,14 @@
 
 #include "binaural_internal.h"
 #include "head_rotation.h"
+#include "live_binaural_convolver.h"
 
 namespace mradm::live_scene {
 
 namespace {
 
 using binaural_internal::BinauralState;
-using binaural_internal::compute_hrtf_into;
+using binaural_internal::compute_continuous_hrtf_into;
 using binaural_internal::HrtfDataset;
 using binaural_internal::k_n_ears;
 
@@ -49,13 +49,6 @@ constexpr std::size_t k_diffuse_delay_len = 32U;
 // These private renderer-local aggregate workspaces intentionally expose their storage to the
 // convolution helpers in this translation unit.
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
-struct OlaState {
-    explicit OlaState(std::size_t overlap_len = 0U) : left(overlap_len, 0.0F), right(overlap_len, 0.0F) {}
-
-    std::vector<float> left;
-    std::vector<float> right;
-};
-
 struct DiffuseState {
     std::array<float, k_diffuse_delay_len> delay{};
     std::size_t write_pos{0U};
@@ -69,38 +62,23 @@ struct RuntimeElement {
     std::optional<std::pair<float, float>> target_direction;
     std::array<std::uint32_t, 11U> ramp_remaining{};
     bool initialized{false};
-    OlaState ola;
+    BinauralConvolutionState convolution;
     DiffuseState diffuse;
 };
 
 struct ConvolutionScratch {
-    std::vector<float> fft_input;
-    std::vector<float_complex> source_fd;
-    std::vector<float_complex> output_fd;
-    std::vector<float> fft_output;
-    std::vector<float> source_start;
-    std::vector<float> source_end;
+    std::vector<float> source;
     std::vector<float> diffuse;
-    std::vector<float> left_start;
-    std::vector<float> right_start;
-    std::vector<float> left_end;
-    std::vector<float> right_end;
-    std::vector<float_complex> hrtf_start;
-    std::vector<float_complex> hrtf_end;
+    std::vector<float> left;
+    std::vector<float> right;
+    std::vector<float_complex> hrtf_target;
     std::vector<float_complex> hrtf_temp;
 
-    void resize(const BinauralState& state) {
-        fft_input.resize(static_cast<std::size_t>(state.fft_size));
-        source_fd.resize(static_cast<std::size_t>(state.n_bands));
-        output_fd.resize(static_cast<std::size_t>(state.n_bands));
-        fft_output.resize(static_cast<std::size_t>(state.fft_size));
-        source_start.resize(k_convolution_block);
-        source_end.resize(k_convolution_block);
+    void resize() {
+        source.resize(k_convolution_block);
         diffuse.resize(k_convolution_block);
-        left_start.resize(k_convolution_block);
-        right_start.resize(k_convolution_block);
-        left_end.resize(k_convolution_block);
-        right_end.resize(k_convolution_block);
+        left.resize(k_convolution_block);
+        right.resize(k_convolution_block);
     }
 };
 // NOLINTEND(misc-non-private-member-variables-in-classes)
@@ -343,12 +321,12 @@ class HrtfStateCache {
     }
 
     void insert(Key key, std::shared_ptr<const BinauralState> state) {
-        const auto bytes =
-            sizeof(BinauralState) + state->dataset_name.capacity() +
-            (state->hrtf_fd.capacity() * sizeof(float_complex)) +
-            ((state->vbap_gains.capacity() + state->hrtf_td.capacity() + state->grid_dirs_deg.capacity()) *
-             sizeof(float)) +
-            (state->vbap_dirs.capacity() * sizeof(int));
+        const auto bytes = sizeof(BinauralState) + state->dataset_name.capacity() +
+                           (state->hrtf_fd.capacity() * sizeof(float_complex)) +
+                           ((state->vbap_gains.capacity() + state->hrtf_td.capacity() +
+                             state->grid_dirs_deg.capacity() + state->hrtf_magnitudes.capacity()) *
+                            sizeof(float)) +
+                           (state->vbap_dirs.capacity() * sizeof(int));
         constexpr std::size_t k_byte_budget = std::size_t{64U} * 1024U * 1024U;
         if (bytes > k_byte_budget) {
             return;
@@ -399,6 +377,9 @@ class HrtfStateCache {
     if (!prepared) {
         return make_error(ErrorCode::render_failed, "failed to build live binaural HRTF interpolation state");
     }
+    prepared->hrtf_magnitudes.resize(prepared->hrtf_fd.size());
+    std::ranges::transform(
+        prepared->hrtf_fd, prepared->hrtf_magnitudes.begin(), [](float_complex value) { return std::abs(value); });
     // Live convolution and extent rendering use only the frequency-domain HRTFs
     // and compressed interpolation grid. The original HRIRs and measurement
     // directions are needed during preparation (and by the offline SAF spreader),
@@ -428,75 +409,12 @@ void decorrelate(DiffuseState& state, const float* input, std::size_t frames, fl
     }
 }
 
-void advance_silence(OlaState& state, std::size_t frames, float* left, float* right) noexcept {
-    const auto emitted = std::min(frames, state.left.size());
-    for (std::size_t frame = 0; frame < emitted; ++frame) {
-        left[frame] += state.left[frame];
-        right[frame] += state.right[frame];
-    }
-    if (frames >= state.left.size()) {
-        std::ranges::fill(state.left, 0.0F);
-        std::ranges::fill(state.right, 0.0F);
-        return;
-    }
-    const auto remaining = state.left.size() - frames;
-    std::move(state.left.begin() + static_cast<std::ptrdiff_t>(frames), state.left.end(), state.left.begin());
-    std::move(state.right.begin() + static_cast<std::ptrdiff_t>(frames), state.right.end(), state.right.begin());
-    std::fill(state.left.begin() + static_cast<std::ptrdiff_t>(remaining), state.left.end(), 0.0F);
-    std::fill(state.right.begin() + static_cast<std::ptrdiff_t>(remaining), state.right.end(), 0.0F);
-}
-
-// The convolution kernel keeps its preallocated FFT/OLA workspaces explicit to make allocation-free reuse obvious.
-// NOLINTNEXTLINE(readability-function-size)
-void convolve(void* fft,
-              const BinauralState& state,
-              const float* source,
-              std::size_t frames,
-              float gain,
-              const std::vector<float_complex>& hrtf,
-              OlaState& ola,
-              float* left,
-              float* right,
-              ConvolutionScratch& scratch) {
-    std::ranges::fill(scratch.fft_input, 0.0F);
-    std::copy_n(source, frames, scratch.fft_input.begin());
-    saf_rfft_forward(fft, scratch.fft_input.data(), scratch.source_fd.data());
-    for (int ear = 0; ear < k_n_ears; ++ear) {
-        for (int band = 0; band < state.n_bands; ++band) {
-            scratch.output_fd[static_cast<std::size_t>(band)] =
-                gain * scratch.source_fd[static_cast<std::size_t>(band)] *
-                hrtf[(static_cast<std::size_t>(band) * k_n_ears) + static_cast<std::size_t>(ear)];
-        }
-        saf_rfft_backward(fft, scratch.output_fd.data(), scratch.fft_output.data());
-        auto& overlap = ear == 0 ? ola.left : ola.right;
-        float* destination = ear == 0 ? left : right;
-        for (std::size_t frame = 0; frame < frames; ++frame) {
-            destination[frame] += scratch.fft_output[frame] + (frame < overlap.size() ? overlap[frame] : 0.0F);
-        }
-        for (std::size_t tap = 0; tap < overlap.size(); ++tap) {
-            const float residual = frames + tap < overlap.size() ? overlap[frames + tap] : 0.0F;
-            overlap[tap] = scratch.fft_output[frames + tap] + residual;
-        }
-    }
-}
-
 class LiveBinauralRenderer final : public ILiveSceneRenderer {
   public:
     LiveBinauralRenderer(RendererConfig config, std::shared_ptr<const BinauralState> state, DiagnosticSink diagnostics)
-        : config_(std::move(config)), state_(std::move(state)), diagnostics_(std::move(diagnostics)) {
-        saf_rfft_create(&fft_, state_->fft_size);
-        scratch_.resize(*state_);
-    }
-
-    LiveBinauralRenderer(const LiveBinauralRenderer&) = delete;
-    LiveBinauralRenderer& operator=(const LiveBinauralRenderer&) = delete;
-    LiveBinauralRenderer(LiveBinauralRenderer&&) = delete;
-    LiveBinauralRenderer& operator=(LiveBinauralRenderer&&) = delete;
-
-    ~LiveBinauralRenderer() override {
-        if (fft_ != nullptr) {
-            saf_rfft_destroy(&fft_);
-        }
+        : config_(std::move(config)), state_(std::move(state)), diagnostics_(std::move(diagnostics)),
+          convolver_(state_->fft_size, k_convolution_block, config_.sample_rate) {
+        scratch_.resize();
     }
 
     [[nodiscard]] Result<void> configure_generation(std::uint64_t generation_id,
@@ -511,7 +429,9 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             runtime.descriptor = descriptor;
             runtime.current = default_state(descriptor);
             runtime.target = runtime.current;
-            runtime.ola = OlaState(static_cast<std::size_t>(state_->overlap_len));
+            if (descriptor.role != ElementRole::lfe) {
+                runtime.convolution = convolver_.make_state();
+            }
             element_index_.emplace(descriptor.element_id, elements_.size());
             elements_.push_back(std::move(runtime));
         }
@@ -535,31 +455,9 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         }
         std::ranges::fill(output.first(required), 0.0F);
 
-        for (const auto& initial : frame.initial_states) {
-            const auto found = element_index_.find(initial.element_id);
-            if (found == element_index_.end()) {
-                return make_error(ErrorCode::invalid_argument, "initial state references an unknown element");
-            }
-            auto& element = elements_[found->second];
-            ObjectState state = default_state(element.descriptor);
-            copy_state_fields(state, initial.state, initial.state.valid_fields);
-            element.current = state;
-            element.target = state;
-            auto direction_initialized = initialize_direction(element, state, frame);
-            if (!direction_initialized) {
-                return tl::unexpected{direction_initialized.error()};
-            }
-            element.ramp_remaining.fill(0U);
-            element.initialized = true;
-        }
-        for (auto& element : elements_) {
-            if (!element.initialized) {
-                auto direction_initialized = initialize_direction(element, element.current, frame);
-                if (!direction_initialized) {
-                    return tl::unexpected{direction_initialized.error()};
-                }
-                element.initialized = true;
-            }
+        auto initialized = initialize_frame(frame);
+        if (!initialized) {
+            return tl::unexpected{initialized.error()};
         }
 
         std::unordered_map<std::uint64_t, const PcmPlane*> planes;
@@ -613,10 +511,41 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         listener_orientation_ = orientation;
     }
     [[nodiscard]] std::uint32_t tail_input_frames() const noexcept override {
-        return static_cast<std::uint32_t>(state_->overlap_len) + static_cast<std::uint32_t>(k_diffuse_delay_len);
+        return convolver_.tail_frames() + static_cast<std::uint32_t>(k_diffuse_delay_len);
     }
 
   private:
+    [[nodiscard]] Result<void> initialize_frame(const Frame& frame) {
+        for (const auto& initial : frame.initial_states) {
+            const auto found = element_index_.find(initial.element_id);
+            if (found == element_index_.end()) {
+                return make_error(ErrorCode::invalid_argument, "initial state references an unknown element");
+            }
+            auto& element = elements_[found->second];
+            ObjectState state = default_state(element.descriptor);
+            copy_state_fields(state, initial.state, initial.state.valid_fields);
+            element.current = state;
+            element.target = state;
+            auto direction_initialized = initialize_direction(element, state, frame);
+            if (!direction_initialized) {
+                return tl::unexpected{direction_initialized.error()};
+            }
+            element.ramp_remaining.fill(0U);
+            element.initialized = true;
+        }
+        for (auto& element : elements_) {
+            if (!element.initialized) {
+                auto direction_initialized = initialize_direction(element, element.current, frame);
+                if (!direction_initialized) {
+                    return tl::unexpected{direction_initialized.error()};
+                }
+                element.initialized = true;
+            }
+        }
+
+        return {};
+    }
+
     [[nodiscard]] Result<void>
     initialize_direction(RuntimeElement& element, const ObjectState& state, const Frame& frame) {
         if (element.descriptor.role != ElementRole::direct_speaker) {
@@ -673,7 +602,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             if ((changed & mask) == 0U || mask == state_head_locked) {
                 continue;
             }
-            element.ramp_remaining[field] = duration;
+            element.ramp_remaining.at(field) = duration;
             if (duration == 0U) {
                 copy_state_fields(element.current, target, mask);
                 element.current.valid_fields &= ~(update.cleared_fields & mask);
@@ -698,7 +627,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
     [[nodiscard]] ObjectState segment_end_state(const RuntimeElement& element, std::uint32_t frames) const noexcept {
         ObjectState result = element.current;
         for (std::size_t field = 0U; field < element.ramp_remaining.size(); ++field) {
-            const auto remaining = element.ramp_remaining[field];
+            const auto remaining = element.ramp_remaining.at(field);
             if (remaining == 0U) {
                 continue;
             }
@@ -849,7 +778,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
                 std::tie(rendered_azimuth, rendered_elevation) =
                     rotation.rotate_az_el(rendered_azimuth, rendered_elevation);
             }
-            compute_hrtf_into(*state_, rendered_azimuth, rendered_elevation, scratch_.hrtf_temp);
+            compute_continuous_hrtf_into(*state_, rendered_azimuth, rendered_elevation, scratch_.hrtf_temp);
             const float normalized = item.weight / std::max(weight_sum, 1.0e-6F);
             for (std::size_t band = 0; band < output.size(); ++band) {
                 output[band] += scratch_.hrtf_temp[band] * normalized;
@@ -866,21 +795,18 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
                                               std::span<float> output) {
         const ObjectState start = element.current;
         const ObjectState end = segment_end_state(element, frames);
-        const auto start_direction = element.current_direction;
-        const auto end_direction = segment_end_direction(element, frames);
         const auto frame_count = static_cast<std::size_t>(frames);
         const bool has_signal = plane != nullptr && plane->has_signal;
         for (std::size_t index = 0; index < frame_count; ++index) {
-            scratch_.source_start[index] = has_signal ? plane->samples[static_cast<std::size_t>(offset) + index] : 0.0F;
+            scratch_.source[index] = has_signal ? plane->samples[static_cast<std::size_t>(offset) + index] : 0.0F;
         }
-
         const float start_gain = start.active ? start.linear_gain : 0.0F;
         const float end_gain = end.active ? end.linear_gain : 0.0F;
         if (element.descriptor.role == ElementRole::lfe) {
             for (std::size_t index = 0; index < frame_count; ++index) {
                 const float alpha = static_cast<float>(index) / static_cast<float>(frame_count);
                 const float gain = start_gain + ((end_gain - start_gain) * alpha);
-                const float sample = scratch_.source_start[index] * gain;
+                const float sample = scratch_.source[index] * gain;
                 const auto output_index = (static_cast<std::size_t>(offset) + index) * 2U;
                 output[output_index] += sample;
                 output[output_index + 1U] += sample;
@@ -888,88 +814,50 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             return {};
         }
 
-        std::fill_n(scratch_.left_start.begin(), frame_count, 0.0F);
-        std::fill_n(scratch_.right_start.begin(), frame_count, 0.0F);
+        // Gain and diffuse belong to the input timeline. Preserve their already
+        // mixed samples in history instead of reapplying today's controls to an
+        // old, filtered output tail.
         if (start_gain == 0.0F && end_gain == 0.0F) {
-            std::fill_n(scratch_.source_start.begin(), frame_count, 0.0F);
+            std::fill_n(scratch_.source.begin(), frame_count, 0.0F);
         }
-        decorrelate(element.diffuse, scratch_.source_start.data(), frame_count, scratch_.diffuse.data());
+        decorrelate(element.diffuse, scratch_.source.data(), frame_count, scratch_.diffuse.data());
         const float start_diffuse = std::clamp(start.diffuse, 0.0F, 1.0F);
         const float end_diffuse = std::clamp(end.diffuse, 0.0F, 1.0F);
-        const bool has_diffuse_tail = (start_diffuse > 0.0F || end_diffuse > 0.0F) &&
-                                      std::any_of(scratch_.diffuse.begin(),
-                                                  scratch_.diffuse.begin() + static_cast<std::ptrdiff_t>(frame_count),
-                                                  [](float sample) { return sample != 0.0F; });
-        if ((!has_signal && !has_diffuse_tail) || (start_gain == 0.0F && end_gain == 0.0F)) {
-            advance_silence(element.ola, frame_count, scratch_.left_start.data(), scratch_.right_start.data());
-        } else {
-            for (std::size_t index = 0; index < frame_count; ++index) {
-                scratch_.source_end[index] =
-                    (scratch_.source_start[index] * (1.0F - end_diffuse)) + (scratch_.diffuse[index] * end_diffuse);
-                scratch_.source_start[index] =
-                    (scratch_.source_start[index] * (1.0F - start_diffuse)) + (scratch_.diffuse[index] * start_diffuse);
+        for (std::size_t index = 0U; index < frame_count; ++index) {
+            const float alpha = static_cast<float>(index) / static_cast<float>(frame_count);
+            const float gain = start_gain + ((end_gain - start_gain) * alpha);
+            const float diffuse = start_diffuse + ((end_diffuse - start_diffuse) * alpha);
+            scratch_.source[index] =
+                gain * ((scratch_.source[index] * (1.0F - diffuse)) + (scratch_.diffuse[index] * diffuse));
+        }
+        if (!element.convolution.initialized) {
+            auto initial = hrtf_for(element, start, frame, scratch_.hrtf_target, element.current_direction);
+            if (!initial) {
+                return tl::unexpected{initial.error()};
             }
-            auto start_hrtf = hrtf_for(element, start, frame, scratch_.hrtf_start, start_direction);
-            if (!start_hrtf) {
-                return tl::unexpected{start_hrtf.error()};
-            }
-            auto end_hrtf = hrtf_for(element, end, frame, scratch_.hrtf_end, end_direction);
-            if (!end_hrtf) {
-                return tl::unexpected{end_hrtf.error()};
-            }
-
-            if (std::ranges::none_of(element.ramp_remaining, [](auto remaining) { return remaining != 0U; }) &&
-                start_diffuse == end_diffuse) {
-                convolve(fft_,
-                         *state_,
-                         scratch_.source_start.data(),
-                         frame_count,
-                         start_gain,
-                         scratch_.hrtf_start,
-                         element.ola,
-                         scratch_.left_start.data(),
-                         scratch_.right_start.data(),
-                         scratch_);
-            } else {
-                OlaState start_ola = element.ola;
-                OlaState end_ola = element.ola;
-                std::fill_n(scratch_.left_end.begin(), frame_count, 0.0F);
-                std::fill_n(scratch_.right_end.begin(), frame_count, 0.0F);
-                convolve(fft_,
-                         *state_,
-                         scratch_.source_start.data(),
-                         frame_count,
-                         start_gain,
-                         scratch_.hrtf_start,
-                         start_ola,
-                         scratch_.left_start.data(),
-                         scratch_.right_start.data(),
-                         scratch_);
-                convolve(fft_,
-                         *state_,
-                         scratch_.source_end.data(),
-                         frame_count,
-                         end_gain,
-                         scratch_.hrtf_end,
-                         end_ola,
-                         scratch_.left_end.data(),
-                         scratch_.right_end.data(),
-                         scratch_);
-                for (std::size_t index = 0; index < frame_count; ++index) {
-                    const float alpha = static_cast<float>(index) / static_cast<float>(frame_count);
-                    scratch_.left_start[index] =
-                        (scratch_.left_start[index] * (1.0F - alpha)) + (scratch_.left_end[index] * alpha);
-                    scratch_.right_start[index] =
-                        (scratch_.right_start[index] * (1.0F - alpha)) + (scratch_.right_end[index] * alpha);
-                }
-                element.ola = std::move(end_ola);
+            convolver_.initialize(element.convolution, scratch_.hrtf_target);
+        }
+        auto target = hrtf_for(element, end, frame, scratch_.hrtf_target, segment_end_direction(element, frames));
+        if (!target) {
+            return tl::unexpected{target.error()};
+        }
+        bool spatial_ramp = false;
+        for (std::size_t field = 0U; field < element.ramp_remaining.size(); ++field) {
+            const auto mask = 1ULL << field;
+            if ((mask & (state_active | state_linear_gain | state_diffuse | state_head_locked)) == 0U) {
+                spatial_ramp = spatial_ramp || element.ramp_remaining.at(field) != 0U;
             }
         }
-
+        convolver_.process(element.convolution,
+                           scratch_.hrtf_target,
+                           std::span{scratch_.source}.first(frame_count),
+                           std::span{scratch_.left}.first(frame_count),
+                           std::span{scratch_.right}.first(frame_count),
+                           spatial_ramp);
         for (std::size_t index = 0; index < frame_count; ++index) {
             const auto output_index = (static_cast<std::size_t>(offset) + index) * 2U;
-            output[output_index] += scratch_.left_start[index];
-            output[output_index + 1U] += scratch_.right_start[index];
+            output[output_index] += scratch_.left[index];
+            output[output_index + 1U] += scratch_.right[index];
         }
         return {};
     }
@@ -987,7 +875,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
     RendererConfig config_;
     std::shared_ptr<const BinauralState> state_;
     DiagnosticSink diagnostics_;
-    void* fft_{nullptr};
+    LiveBinauralConvolver convolver_;
     ConvolutionScratch scratch_;
     std::uint64_t generation_id_{0U};
     std::vector<RuntimeElement> elements_;
