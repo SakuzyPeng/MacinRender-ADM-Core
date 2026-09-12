@@ -605,25 +605,69 @@ std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_
 // (2) The phase is unstable where |Σ wₖHₖ| → 0 and falls back to 0; it does not reconstruct true
 // interpolated group delay. Constrained by the binaural fixture invariants (grid-point identity +
 // off-grid far-ear improvement without lateral regression).
+namespace {
+[[nodiscard]] float_complex
+interpolated_grid_bin(const BinauralState& bs, std::size_t grid, int band, std::size_t ear) {
+    const auto gbase = grid * 3U;
+    const auto nd = static_cast<std::size_t>(bs.num_dirs);
+    float mag = 0.0F;
+    float_complex cpx{0.0F, 0.0F};
+    for (std::size_t k = 0; k < 3U; ++k) {
+        const float gain = bs.vbap_gains[gbase + k];
+        const auto dir = static_cast<std::size_t>(bs.vbap_dirs[gbase + k]);
+        const auto index = (static_cast<std::size_t>(band) * k_n_ears * nd) + (ear * nd) + dir;
+        const auto h = bs.hrtf_fd[index];
+        mag += gain * (bs.hrtf_magnitudes.empty() ? std::abs(h) : bs.hrtf_magnitudes[index]);
+        cpx += gain * h;
+    }
+    const float acpx = std::abs(cpx);
+    return acpx > 1e-9F ? cpx * (mag / acpx) : float_complex{mag, 0.0F};
+}
+
+} // namespace
+
 void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<float_complex>& out) {
     const auto g = static_cast<std::size_t>(vbap_grid_idx(az_deg, el_deg));
-    const auto gbase = g * 3U;
-    const auto nd = static_cast<std::size_t>(bs.num_dirs);
     out.resize(static_cast<std::size_t>(bs.n_bands) * k_n_ears);
     for (int b = 0; b < bs.n_bands; ++b) {
         for (std::size_t ear = 0; ear < k_n_ears; ++ear) {
-            float mag = 0.0F;
-            float_complex cpx{0.0F, 0.0F};
-            for (std::size_t k = 0; k < 3U; ++k) {
-                const float gain = bs.vbap_gains[gbase + k];
-                const auto dir = static_cast<std::size_t>(bs.vbap_dirs[gbase + k]);
-                const auto h = bs.hrtf_fd[(static_cast<std::size_t>(b) * k_n_ears * nd) + (ear * nd) + dir];
-                mag += gain * std::abs(h);
-                cpx += gain * h;
+            out[(static_cast<std::size_t>(b) * k_n_ears) + ear] = interpolated_grid_bin(bs, g, b, ear);
+        }
+    }
+}
+
+void compute_continuous_hrtf_into(const BinauralState& bs,
+                                  float az_deg,
+                                  float el_deg,
+                                  std::vector<float_complex>& out) {
+    float azimuth = std::fmod(az_deg + 180.0F, 360.0F);
+    if (azimuth < 0.0F) {
+        azimuth += 360.0F;
+    }
+    const float elevation = std::clamp(el_deg + 90.0F, 0.0F, 180.0F);
+    const int az0 = static_cast<int>(std::floor(azimuth));
+    const int el0 = static_cast<int>(std::floor(elevation));
+    const int az1 = (az0 + 1) % 360;
+    const int el1 = std::min(el0 + 1, 180);
+    const float az_fraction = azimuth - static_cast<float>(az0);
+    const float el_fraction = elevation - static_cast<float>(el0);
+    const std::array<int, 4U> grids{
+        (el0 * k_n_azi) + az0, (el0 * k_n_azi) + az1, (el1 * k_n_azi) + az0, (el1 * k_n_azi) + az1};
+    const std::array<float, 4U> weights{(1.0F - az_fraction) * (1.0F - el_fraction),
+                                        az_fraction * (1.0F - el_fraction),
+                                        (1.0F - az_fraction) * el_fraction,
+                                        az_fraction * el_fraction};
+    out.assign(static_cast<std::size_t>(bs.n_bands) * k_n_ears, float_complex{0.0F, 0.0F});
+    for (std::size_t corner = 0U; corner < grids.size(); ++corner) {
+        if (weights.at(corner) == 0.0F) {
+            continue;
+        }
+        for (int band = 0; band < bs.n_bands; ++band) {
+            for (std::size_t ear = 0U; ear < k_n_ears; ++ear) {
+                out[(static_cast<std::size_t>(band) * k_n_ears) + ear] +=
+                    weights.at(corner) *
+                    interpolated_grid_bin(bs, static_cast<std::size_t>(grids.at(corner)), band, ear);
             }
-            const float acpx = std::abs(cpx);
-            out[(static_cast<std::size_t>(b) * k_n_ears) + ear] =
-                acpx > 1e-9F ? cpx * (mag / acpx) : float_complex{mag, 0.0F};
         }
     }
 }

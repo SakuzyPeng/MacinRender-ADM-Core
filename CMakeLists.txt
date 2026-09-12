@@ -313,6 +313,7 @@ target_sources(
     PRIVATE
         src/adm_render_binaural/binaural_renderer.cpp
         src/adm_render_binaural/binaural_spreader.cpp
+        src/adm_render_binaural/live_binaural_convolver.cpp
         src/adm_render_binaural/live_binaural_renderer.cpp
         src/adm_render_binaural/spreader_mr.c
     PUBLIC
@@ -939,6 +940,17 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_binaural_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_binaural_fixture_tests)
     add_test(NAME mr_adm_binaural_fixture_tests COMMAND mr_adm_binaural_fixture_tests)
+
+    add_executable(mr_adm_live_binaural_continuity_tests tests/unit/live_binaural_continuity_test.cpp)
+    target_link_libraries(mr_adm_live_binaural_continuity_tests PRIVATE MacinRender::ADMRenderBinaural)
+    target_include_directories(mr_adm_live_binaural_continuity_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")
+    target_include_directories(mr_adm_live_binaural_continuity_tests SYSTEM PRIVATE
+        "${saf_SOURCE_DIR}/modules/saf_utilities")
+    mr_adm_core_apply_warnings(mr_adm_live_binaural_continuity_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_live_binaural_continuity_tests)
+    add_test(NAME mr_adm_live_binaural_continuity_tests COMMAND mr_adm_live_binaural_continuity_tests)
 
     # Fixture test: integrated loudness normalization — loud sine wave → -23 LUFS target.
     add_executable(mr_adm_loudness_fixture_tests tests/unit/loudness_fixture_test.cpp)

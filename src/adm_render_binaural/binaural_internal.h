@@ -45,6 +45,8 @@ struct BinauralState {
     // interpolates magnitude and phase from these separately (see there) to avoid the ITD-comb of
     // direct complex weighting at off-grid directions.
     std::vector<float_complex> hrtf_fd;
+    // Optional live-only magnitude cache, prepared off the render thread.
+    std::vector<float> hrtf_magnitudes;
     // Compressed VBAP table: amplitude-normalised gains + direction indices per grid point.
     std::vector<float> vbap_gains; // FLAT: [N_gtable × 3]
     std::vector<int> vbap_dirs;    // FLAT: [N_gtable × 3]
@@ -76,5 +78,10 @@ int vbap_grid_idx(float az_deg, float el_deg);
 
 // Interpolate the HRTF at (az,el) into out (magnitude/phase split; see definition).
 void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<float_complex>& out);
+
+// Live motion interpolates the complex responses of adjacent one-degree cells.
+// Integer directions retain the existing magnitude-preserving response; moving
+// within or across a cell is continuous, including the +/-180 degree seam.
+void compute_continuous_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<float_complex>& out);
 
 } // namespace mradm::binaural_internal
