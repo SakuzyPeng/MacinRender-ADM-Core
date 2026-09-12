@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -25,6 +26,19 @@
 #include "adm/scene.h"
 
 namespace mradm::render_common {
+
+// 方向归一化的规范长度计算；用于替代各标准库算法不同的三参数 std::hypot。
+// 对有限 binary32 分量，平方在 binary64 中精确（至多 48 位有效位），也不会溢出或下溢。
+// 在默认最近偶数舍入下，固定计算 (x² + y²) + z²，再做 binary64 sqrt 和 binary32 窄化。
+// 精确的乘积使 FP contraction 不改变这条路径，但两次加法仍会舍入：不能重排求和，
+// 也不能保证任意置换分量后长度的位模式相同。括号表达运算顺序，不覆盖 fast-math 等重排选项。
+// 三平台 PCM 验收及此约束的边界见 docs/architecture/CONSISTENCY_LOCALIZATION.md。
+[[nodiscard]] inline float canonical_vector_length(float x, float y, float z) noexcept {
+    const double dx = x;
+    const double dy = y;
+    const double dz = z;
+    return static_cast<float>(std::sqrt(((dx * dx) + (dy * dy)) + (dz * dz)));
+}
 
 // Alphanumeric-only speaker-label key (uppercased; '+', '-' and separators dropped). Used for
 // LFE keyword detection where the sign / position digits do not matter (LFE / LFE1 / SUB …).

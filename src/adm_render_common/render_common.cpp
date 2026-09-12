@@ -48,7 +48,7 @@ constexpr std::array<DsLabelAlias, 34> k_ds_aliases = {{
 }
 
 [[nodiscard]] SceneDirectionVector vec_normalize(const SceneDirectionVector& v) noexcept {
-    const float len = std::max(1.0e-6F, std::hypot(v.x, v.y, v.z));
+    const float len = std::max(1.0e-6F, canonical_vector_length(v.x, v.y, v.z));
     return {v.x / len, v.y / len, v.z / len};
 }
 
@@ -596,7 +596,7 @@ extent_disk_cloud(const SceneBlockPosition& position, float width, float height,
 
     const SceneDirectionVector center = direction_vector_from_position(position);
     SceneDirectionVector horizontal = vec_cross({0.0F, 0.0F, 1.0F}, center);
-    if (std::hypot(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
+    if (canonical_vector_length(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
         horizontal = {1.0F, 0.0F, 0.0F};
     } else {
         horizontal = vec_normalize(horizontal);

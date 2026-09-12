@@ -12,6 +12,8 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/adm_core/version.cpp.in" "${MR_A
 
 option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
+option(MR_ADM_CONSISTENCY_DIAGNOSTICS "Enable private numerical checkpoints and worker controls (measurement only)" OFF)
+option(MR_ADM_DIAGNOSTIC_PORTABLE_RNG "Replace SAF's C RNG for a numerical attribution experiment only" OFF)
 option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 option(MR_ADM_CORE_FETCH_DEPS "Fetch CLI/fmt/spdlog dependencies when not found" ON)
 option(MR_ADM_CORE_USE_INSTALLED_DEPS "Use installed CMake package configs before FetchContent dependencies" ON)
@@ -115,6 +117,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(GNUInstallDirs)
 include(MRWarnings)
+# 受控数值构建的编译标志必须在依赖被 add_subdirectory() 进来之前设好，否则 FetchContent
+# 拉下来的第三方目录拿不到（路线图 §5.1 第 3 项）。
+include(MRStrictFp)
 include(MRDependencies)
 include(MRStaticAnalysis)
 find_package(Threads REQUIRED)
@@ -338,6 +343,24 @@ target_include_directories(mr_adm_render_binaural
 )
 mr_adm_core_apply_warnings(mr_adm_render_binaural)
 mr_adm_core_apply_static_analysis(mr_adm_render_binaural)
+
+if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
+    target_sources(mr_adm_render_binaural PRIVATE src/adm_render_binaural/consistency_spreader_trace.cpp)
+    foreach(_mr_diagnostic_target IN ITEMS mr_adm_render_ear mr_adm_render_hoa mr_adm_render_binaural mr_adm_render_vbap)
+        target_compile_definitions(${_mr_diagnostic_target} PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
+    endforeach()
+endif()
+if(MR_ADM_DIAGNOSTIC_PORTABLE_RNG)
+    if(NOT MR_ADM_CONSISTENCY_DIAGNOSTICS)
+        message(FATAL_ERROR "MR_ADM_DIAGNOSTIC_PORTABLE_RNG requires MR_ADM_CONSISTENCY_DIAGNOSTICS=ON")
+    endif()
+    target_sources(saf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/diagnostic_rng.c")
+    if(MSVC)
+        target_compile_options(saf PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/diagnostic_rng.h")
+    else()
+        target_compile_options(saf PRIVATE -include "${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/diagnostic_rng.h")
+    endif()
+endif()
 
 # ── adm_audio ─────────────────────────────────────────────────────────────────
 # Float32 WAV/CAF/FLAC, Opus MKA, APAC, and metadata I/O.
@@ -751,6 +774,81 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_scene_stream_stress)
     mr_adm_core_apply_static_analysis(mr_adm_scene_stream_stress)
 
+    # Cross-platform numerical baseline tool (docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md §6.1).
+    # Extracts the final float32 PCM as a canonical little-endian bit image and bit-compares two
+    # such images. Built by default so the CLI/protocol regression test can run through CTest.
+    add_executable(mr_adm_pcm_bits tests/tools/pcm_bits.cpp)
+    target_link_libraries(mr_adm_pcm_bits PRIVATE MacinRender::ADMAudio)
+    mr_adm_core_apply_warnings(mr_adm_pcm_bits)
+    mr_adm_core_apply_static_analysis(mr_adm_pcm_bits)
+
+    # Deterministic baseline inputs. Bit-exact by construction so the three runners can be shown
+    # to render the same bytes before their outputs are compared.
+    add_executable(mr_adm_make_fixture EXCLUDE_FROM_ALL tests/tools/make_fixture.cpp)
+    target_link_libraries(mr_adm_make_fixture PRIVATE libbw64 adm)
+    mr_adm_core_apply_warnings(mr_adm_make_fixture)
+    mr_adm_core_apply_static_analysis(mr_adm_make_fixture)
+
+    # Explicitly built in Release by the baseline workflow; measures state across two renders.
+    add_executable(mr_adm_repeat_render EXCLUDE_FROM_ALL tests/tools/repeat_render.cpp)
+    target_link_libraries(mr_adm_repeat_render PRIVATE MacinRender::ADMEngine)
+    mr_adm_core_apply_warnings(mr_adm_repeat_render)
+    mr_adm_core_apply_static_analysis(mr_adm_repeat_render)
+
+    add_executable(mr_adm_numeric_probe EXCLUDE_FROM_ALL tests/tools/numeric_probe.cpp)
+    target_link_libraries(mr_adm_numeric_probe PRIVATE saf)
+    target_include_directories(mr_adm_numeric_probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")
+    target_include_directories(mr_adm_numeric_probe SYSTEM PRIVATE "${saf_SOURCE_DIR}/modules/saf_utilities")
+    target_compile_definitions(mr_adm_numeric_probe PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
+    mr_adm_core_apply_warnings(mr_adm_numeric_probe)
+    mr_adm_core_apply_static_analysis(mr_adm_numeric_probe)
+    add_executable(mr_adm_vbap_probe EXCLUDE_FROM_ALL
+        tests/tools/vbap_probe.cpp tests/tools/vbap_probe_backend.c)
+    target_link_libraries(mr_adm_vbap_probe PRIVATE saf)
+    target_include_directories(mr_adm_vbap_probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")
+    target_include_directories(mr_adm_vbap_probe SYSTEM PRIVATE
+        "${saf_SOURCE_DIR}/modules/saf_utilities" "${saf_SOURCE_DIR}/modules/saf_vbap")
+    target_compile_definitions(mr_adm_vbap_probe PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
+    mr_adm_core_apply_warnings(mr_adm_vbap_probe)
+    mr_adm_core_apply_static_analysis(mr_adm_vbap_probe)
+    add_executable(mr_adm_fft_lifecycle_probe EXCLUDE_FROM_ALL tests/tools/fft_lifecycle_probe.cpp)
+    target_link_libraries(mr_adm_fft_lifecycle_probe PRIVATE saf)
+    target_include_directories(mr_adm_fft_lifecycle_probe SYSTEM PRIVATE "${saf_SOURCE_DIR}/modules/saf_utilities")
+    mr_adm_core_apply_warnings(mr_adm_fft_lifecycle_probe)
+    mr_adm_core_apply_static_analysis(mr_adm_fft_lifecycle_probe)
+    if(MR_ADM_DIAGNOSTIC_PORTABLE_RNG)
+        target_compile_definitions(mr_adm_repeat_render PRIVATE MR_ADM_DIAGNOSTIC_PORTABLE_RNG=1)
+        target_compile_definitions(mr_adm_numeric_probe PRIVATE MR_ADM_DIAGNOSTIC_PORTABLE_RNG=1)
+        target_compile_definitions(mr_adm_vbap_probe PRIVATE MR_ADM_DIAGNOSTIC_PORTABLE_RNG=1)
+        target_link_libraries(mr_adm_repeat_render PRIVATE saf)
+    endif()
+
+    # Standard-library-only Python tests exercise the actual executable and shell exit codes.
+    # Native builds without Python can still use the tools; the consistency workflow requires
+    # this test explicitly on each runner so its checks cannot silently disappear there.
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        if(WIN32)
+            find_program(MR_ADM_CONSISTENCY_BASH NAMES bash
+                PATHS "$ENV{ProgramFiles}/Git/bin" "$ENV{ProgramFiles}/Git/usr/bin" NO_DEFAULT_PATH)
+        else()
+            find_program(MR_ADM_CONSISTENCY_BASH NAMES bash)
+        endif()
+        set(_mr_consistency_bash "")
+        if(MR_ADM_CONSISTENCY_BASH)
+            set(_mr_consistency_bash "${MR_ADM_CONSISTENCY_BASH}")
+        endif()
+        add_test(NAME mr_adm_consistency_tool_tests
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/consistency_tools_test.py"
+                --pcm-bits $<TARGET_FILE:mr_adm_pcm_bits> --bash "${_mr_consistency_bash}")
+        add_test(NAME mr_adm_consistency_build_tests
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/consistency_build_test.py"
+                --cmake "${CMAKE_COMMAND}" --c-compiler "${CMAKE_C_COMPILER}"
+                --cxx-compiler "${CMAKE_CXX_COMPILER}")
+        add_test(NAME mr_adm_consistency_checkpoint_tests
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/consistency_checkpoints_test.py")
+    endif()
+
     add_executable(mr_adm_semantic_policy_tests tests/unit/semantic_policy_test.cpp)
     target_link_libraries(mr_adm_semantic_policy_tests PRIVATE MacinRender::ADMCore)
     mr_adm_core_apply_warnings(mr_adm_semantic_policy_tests)
@@ -800,6 +898,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_vbap_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_vbap_smoke_tests)
     add_test(NAME mr_adm_vbap_smoke_tests COMMAND mr_adm_vbap_smoke_tests)
+
+    add_executable(mr_adm_render_common_numeric_tests tests/unit/render_common_numeric_test.cpp)
+    target_link_libraries(mr_adm_render_common_numeric_tests PRIVATE MacinRender::ADMRenderCommon)
+    mr_adm_core_apply_warnings(mr_adm_render_common_numeric_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_render_common_numeric_tests)
+    add_test(NAME mr_adm_render_common_numeric_tests COMMAND mr_adm_render_common_numeric_tests)
 
     add_executable(mr_adm_speaker_layouts_tests tests/unit/speaker_layouts_test.cpp)
     target_link_libraries(mr_adm_speaker_layouts_tests PRIVATE MacinRender::ADMRenderCommon)

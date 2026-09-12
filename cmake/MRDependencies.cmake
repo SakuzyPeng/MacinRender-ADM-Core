@@ -1,6 +1,12 @@
 include(FetchContent)
+include(MRDependencyRecord)
 
 function(mr_adm_core_find_or_fetch package_name target_name)
+    set_property(GLOBAL APPEND PROPERTY MR_ADM_DEPENDENCY_NAMES "${package_name}")
+    set_property(GLOBAL PROPERTY "MR_ADM_DEPENDENCY_TARGET_${package_name}" "${target_name}")
+    if(package_name STREQUAL "libear")
+        set(MR_ADM_EAR_SIMD_EFFECTIVE "external" CACHE INTERNAL "Actual libear SIMD selection" FORCE)
+    endif()
     if(TARGET ${target_name})
         return()
     endif()
@@ -259,6 +265,17 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_SHALLOW TRUE
         )
         FetchContent_MakeAvailable(FLAC)
+        if(MR_ADM_STRICT_FP AND TARGET FLAC)
+            # FLAC 1.5.0 adds these target-level options after CMAKE_C_FLAGS. Remove them
+            # only in the controlled configuration; changing a cache preference would leak
+            # into later baseline builds. Explicit ISA intrinsics remain subject to the scan.
+            get_target_property(_mr_flac_options FLAC COMPILE_OPTIONS)
+            if(_mr_flac_options)
+                list(REMOVE_ITEM _mr_flac_options
+                    -fassociative-math -fno-signed-zeros -fno-trapping-math -freciprocal-math "/fp:fast")
+                set_property(TARGET FLAC PROPERTY COMPILE_OPTIONS "${_mr_flac_options}")
+            endif()
+        endif()
         if(_mr_adm_core_had_shared_flac)
             set(BUILD_SHARED_LIBS "${_mr_adm_core_saved_shared_flac}" CACHE BOOL "" FORCE)
         else()
@@ -318,6 +335,16 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         set(EAR_EXAMPLES OFF CACHE BOOL "" FORCE)
         set(EAR_USE_INTERNAL_EIGEN ON CACHE BOOL "" FORCE)
         set(EAR_USE_INTERNAL_XSIMD ON CACHE BOOL "" FORCE)
+        if(MR_ADM_EAR_SCALAR_REFERENCE)
+            # 受控标量参考（路线图 §5.1 第 4 项）。关掉 per-arch 目标后 libear 的
+            # XSIMD_ARCHS 只剩 xsimd::generic_for_dispatch，运行时分派进标量实现。
+            # 注意 ear_default_arch 不是标量——它是 PolarExtentCoreSimd<xsimd::default_arch>，
+            # 随目标架构变化（x86_64 上通常是 SSE2，arm64 上是 NEON）。
+            # Override only this function/add_subdirectory scope. CMP0077 makes libear's
+            # legacy option() honor the normal variable while preserving the user's cache.
+            set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+            set(EAR_SIMD OFF)
+        endif()
         FetchContent_Declare(
             libear
             GIT_REPOSITORY https://github.com/ebu/libear.git
@@ -476,6 +503,11 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         target_compile_options(saf PRIVATE $<$<COMPILE_LANG_AND_ID:C,AppleClang,Clang>:-Wno-deprecated-declarations>)
     endif()
     if(package_name STREQUAL "libear" AND TARGET ear)
+        if(EAR_SIMD)
+            set(MR_ADM_EAR_SIMD_EFFECTIVE ON CACHE INTERNAL "Actual libear SIMD selection" FORCE)
+        else()
+            set(MR_ADM_EAR_SIMD_EFFECTIVE OFF CACHE INTERNAL "Actual libear SIMD selection" FORCE)
+        endif()
         # 许可硬约束：强制 libear 内部 Eigen 只走 MPL-2.0 代码路径，把误用 LGPL-only
         # Eigen 模块变成编译期错误（见 docs/THIRD_PARTY_LICENSES.md）。
         # libear 会按架构拆出 ear / ear_default_arch / ear_<simd> 等多个 OBJECT 目标，
@@ -508,7 +540,20 @@ mr_adm_core_find_or_fetch(FLAC FLAC::FLAC)
 mr_adm_core_find_or_fetch(libbw64 libbw64)
 mr_adm_core_find_or_fetch(libadm adm)
 mr_adm_core_find_or_fetch(libear ear)
+if(MR_ADM_EAR_SCALAR_REFERENCE)
+    # <name>_SOURCE_DIR 是 FetchContent 在函数作用域里设的普通变量，这里读不到；
+    # FetchContent_GetProperties 从全局属性重新取，跨作用域可用。
+    FetchContent_GetProperties(libear)
+    if(NOT libear_POPULATED OR NOT MR_ADM_EAR_SIMD_EFFECTIVE STREQUAL "OFF")
+        # 装好的 libear 是别人用自己的 EAR_SIMD 编的，本项目的开关对它无效。静默沿用会让
+        # 配置 B 的「标量参考」结论完全站不住，所以直接失败而不是降级。
+        message(FATAL_ERROR
+            "MR_ADM_EAR_SCALAR_REFERENCE=ON 需要由本项目配置 libear 的标量实现，但当前复用了外部目标。"
+            "请加 -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF 重新配置。")
+    endif()
+endif()
 mr_adm_core_find_or_fetch(Spatial_Audio_Framework saf)
 mr_adm_core_find_or_fetch(Opus Opus::opus)
 mr_adm_core_find_or_fetch(miniaudio miniaudio)
 mr_adm_core_find_or_fetch(SampleRate SampleRate::samplerate)
+mr_adm_core_write_dependency_record()

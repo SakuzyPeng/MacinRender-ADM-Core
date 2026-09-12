@@ -1,6 +1,6 @@
 # Rust 落地与 SAF 替换路线图
 
-> 状态：规划中。EAR 的 FFT 后端注释已修正；构建改造、Rust 模块及三平台数值验证尚未实现。
+> 状态：阶段 0 测量基建与 A/B 受控构建已落地（fixture、PCM 工具、构建记录、渲染矩阵和三平台 CI workflow）；首轮三平台基线已于 2026-09-08 完成：默认 A 组 5/12、受控 B 组 6/12 个 case 逐位一致。Rust 模块与 `MR_ADM_ENABLE_RUST` 仍未实现。
 >
 > 本文落实 [ADR 0008](../adr/0008-rust-entry-and-saf-replacement.md) 的模块边界与确定性契约，沿用 ADR 0002 / 0003 / 0004 / 0005 / 0007 的语言、依赖、错误处理和 ABI 约束。
 
@@ -96,10 +96,67 @@ rust/
 1. EAR 的 FFT 注释已修正；该修改没有改变运行时计算。
 2. 先用当前 Release 配置采集原始输出与构建信息，再采集受控配置；不能先改数学选项再把输出称为原始基线。
 3. 受控 C/C++ 构建显式处理 FP contraction / fast-math，例如 Clang/GCC 的 `-ffp-contract=off`、现代 MSVC 的 `/fp:precise`，并检查实际编译命令、显式 FMA 与剩余向量化。系统预编译库不受项目编译选项控制，必须另行验证或使用可控构建。
+
+   已实现：`MR_ADM_STRICT_FP`（`cmake/MRStrictFp.cmake`）。Clang / GCC 加 `-fno-fast-math -ffp-contract=off`，MSVC 加 `/fp:precise` 并探测是否接受显式关闭 contraction 的开关（接受与否记进构建记录，不靠文档推断版本行为）。标志走 `CMAKE_<lang>_FLAGS`，按语言分开、不会漏进汇编方言；设置点在 `include(MRDependencies)` 之前。通用及活动配置的 `-Ofast`、`-ffast-math`、`/fp:fast` 等冲突选项会在配置时直接报错；vendored FLAC 自行追加的重结合 / `/fp:fast` 选项仅在受控配置中移除，默认配置保持原行为。其他目标追加的冲突由构建记录检查，失败时不得发布为有效受控基线。
 4. libear 标量参考用 `EAR_SIMD=OFF`，让 dispatcher 进入 `generic_for_dispatch` 对应的 scalar 实现。`ear_default_arch` 仍是 `PolarExtentCoreSimd<xsimd::default_arch>`，会随目标架构变化；同时核对 Eigen 的向量化 / FMA 配置。
+
+   已实现：`MR_ADM_EAR_SCALAR_REFERENCE` 只在配置 libear 的局部作用域把 `EAR_SIMD` 置 OFF，并用 CMP0077 保留用户缓存；关闭后恢复使用原设置。实际选择记录在 `MR_ADM_EAR_SIMD_EFFECTIVE`，不能用缓存中的 `EAR_SIMD` 偏好代替实际状态。生效证据取自 libear 自己传下来的 `XSIMD_ARCHS`：默认构建是 `avx512bw,avx2_fma,avx,sse4_2,default_arch,generic_for_dispatch`，开关打开后只剩 `generic_for_dispatch`。顺带说明默认构建的一个性质——这串 arch 是**运行时**按 CPU 特性分派的，所以同一平台上两台特性不同的机器本来就可能走不同实现，这是平台内的差异来源，不是平台间的。若 libear 来自已安装包，本开关对它无效，配置阶段直接 FATAL 而不是静默降级成一个站不住的「标量参考」。
 5. 建立 §6 的 PCM 比较工具与矩阵。原始路径的预期差异作为报告保存，不用一个永久失败的 CI job 代替基线；已有通过的能力应成为持续通过的门禁。
 
+   已实现：`tests/tools/make_fixture.cpp`（确定性输入）、`tests/tools/pcm_bits.cpp`（位提取、格式校验与比较）、`tests/tools/repeat_render.cpp`（同进程两次渲染）、`scripts/consistency/render-matrix.sh`（12 个跨平台 case 及同进程重复测量）、`scripts/consistency/compare-platforms.sh`（比对与报告）、`.github/workflows/consistency.yml`（三平台 + 汇总 job）。默认与受控组的门禁清单已按首轮三平台运行分别填入 5 个、6 个已确认一致的 case。
+
+   两组配置由 preset `consistency-a`（默认数值）与 `consistency-b`（受控数值）固定。两者都关掉已安装包查找并锁定 FLAC / Opus 为 vendored。A 显式关闭两个受控开关、选择默认 EAR SIMD，B 在此基础上开启控制，避免沿用实验缓存；否则依赖来源不同会混进比较结果。两组各有自己的门禁清单——`expected-identical.txt` 与 `expected-identical-controlled.txt`，经 `compare-platforms.sh --expected` 选择——因为受控构建预期能收敛的 case 多于默认构建，拿它的成果去卡默认构建等于让后者为自己没声称过的结果长红。
+
+   每个 runner 另外产出两份记录：`scripts/consistency/build-info.sh` 调用 Python 标准库实现，读取 `compile_commands.json`、CMake 导出的 `consistency-dependencies.json` 和真实源码目录，记录编译器、实际标志、SAF 后端与可取得的依赖 commit / dirty 状态。它支持自定义 FetchContent 缓存、源码目录覆盖和 `.git` 文件；外部包或非 Git 源码会明确记为 unavailable，不会把缓存中的闲置目录算作实际依赖。旧构建须先重新配置以生成依赖记录；受控编译命令缺失必要标志或仍有冲突时记录步骤返回失败；`scripts/consistency/scan-fp.sh` 数二进制里残留的 FMA 指令。后者是必要的：`-ffp-contract=off` 只阻止编译器自行融合，管不了显式 intrinsic，所以「设了标志」和「FMA 没了」是两件事。
+
 **退出条件**：共享输入的哈希、三平台构建与依赖记录、原始 / 受控输出比较表、首次不同的计算阶段、待处理调用链。覆盖同进程重复渲染和不同线程数，避免把全局 RNG 或状态历史漏掉。
+
+重复性和并行覆盖的边界：
+
+- 两遍矩阵分别启动多个 `mradm` 进程，只能测量新进程重复性，不能证明同进程 C `rand()` 状态可复现。预检已观察到同进程 spreader 输出不同，因此现在用 `mr_adm_repeat_render` 在一个进程中对相同请求渲染两次；保留真实状态，不调用 `srand()` 掩盖差异。
+- 单音轨 spreader fixture 只有一个 OLA source 和一个 adapter group，不会进入多 worker 路径。新增 `objects-extent-multi` 提供三个 Objects 音轨，在多核环境中覆盖多个 source / group；日志保存 `hardware_concurrency` 和准备期源数、分组数。
+- 这些日志与多音轨 case 不等于已证明固定 1 / 2 / 4 worker 下输出一致。`taskset` 改变 CPU 亲和性也不保证 `hardware_concurrency()` 或线程池大小变化；固定 worker 数的等价性实验仍需可验证的控制入口。
+- `out/<platform>/repeats/` 保存单 / 多音轨的两份 PCM、准备日志及同进程比较结果。已知数值差异按阶段 0 记录，渲染失败、损坏 PCM 或工具错误立即失败。跨平台汇总报告附上这些结果，以免把平台内的不稳定性直接归因于平台差异。
+
+**配置 A / B 的首批 Linux 实测（GCC 13.3、Release、x86-64；含 FLAC 选项修正后重采，`validation.strict_fp=passed`。单平台数据，不构成三平台基线）**：
+
+- 同一构建把 12 个 case 的矩阵连跑两遍，逐位一致。这是解读下面几条的前提——否则 A / B 的差异分不清是构建配置还是运行噪声。
+- **只开 `MR_ADM_STRICT_FP`**：12 个 case 全部与默认构建逐位相同。`-ffp-contract=off` 落到全部 420 个翻译单元（默认构建 0 个），`mradm` 中的 FMA 指令从 212 条降到 54 条，却没有改变任何一个 case 的输出位。**这不等于 contraction 无害**，只说明本矩阵覆盖到的路径上它没有产生可观测差异。
+- **再加 `MR_ADM_EAR_SCALAR_REFERENCE`（完整配置 B）**：只有 `ear-5_1-extent` 改变（288000 个采样中 87439 个不同，最大绝对误差 1.34e-07），其余 11 个仍逐位相同。它也是矩阵里唯一带 extent 的 EAR case，即唯一会进 `PolarExtentCore` 的那个，与「差异来自 SIMD 分派」一致。
+- **剩余 FMA 全部来自 libear**：单独统计 `libear.a`，默认构建 60 条、只关 contraction 后 54 条、关掉 `EAR_SIMD` 后 0 条；此时整个 `mradm` 也是 0 条。即编译器自行融合的部分靠编译选项就能清掉，剩下的是 xsimd 的显式 intrinsic，只能靠换实现或关掉分派。这正是第 3 项要求「检查显式 FMA」而不是只看编译选项的原因。
+- **只数 `-ffast-math` 会漏掉真正的破口**：默认构建的 `compile.fast_math` 是 0，而 `compile.unsafe_fp` 是 29——vendored FLAC 以目标级选项追加了 `-fassociative-math` / `-fno-signed-zeros` / `-fno-trapping-math` / `-freciprocal-math`，排在 `CMAKE_<lang>_FLAGS` 之后，早期只统计 `-ffast-math` 的记录看不见它们。移除这些选项后受控构建的 `compile.unsafe_fp` 为 0。这些 TU 全在 libFLAC，而基线矩阵统一写 f32 WAV、不经过 FLAC 编码，所以上面三条的输出比较**修正前后完全一致**；受影响的是「受控」这个说法本身能不能成立，以及一旦把 FLAC 输出纳入矩阵就会立刻显形。
+- 覆盖不到的一层：Linux / Windows 的 OpenBLAS 与 macOS 的 Accelerate 是预编译库，任何项目编译选项都到不了；SAF 实际选中的后端记在 build-info 里。受控构建不能声称覆盖它们。
+
+#### 首轮三平台基线（2026-09-08）
+
+[完整运行](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34185456813)使用提交 `3a0636e1a15d46a37100b2dc86ed3751fc95f919`，覆盖 macOS arm64、Linux x64、Windows x64。六组构建、工具回归、矩阵、构建记录和汇总均成功；CI 成功表示测量有效，不表示所有 PCM 已一致。
+
+| 配置 | 三平台逐位一致 | 仍有差异 |
+|---|---:|---:|
+| A：默认数值 | 5 / 12 | 7 / 12 |
+| B：受控数值 | 6 / 12 | 6 / 12 |
+
+两组均一致的 case 为 `ear-5_1-directspeakers`、`ear-5_1-point`、`ear-5_1-point-postproc`、`saf-5_1-point`、`saf-5_1-extent`；B 组另有 `ear-5_1-hoa-input` 一致。这些结果已写入各自的 expected-identical 门禁。
+
+两组仍有差异的是 EAR extent、HOA3 编码和四个双耳 case；A 组还包括 EAR HOA 输入。单 / 多音轨 spreader 的同进程重复测量在两组的三个平台均有差异，继续作为已知分歧记录。后续应沿这些实际路径定位，不能仅凭配置 B 或 FMA 计数宣告确定性。
+
+第一次运行的 Windows 构建控制测试曾因 Python 用 CP1252 解码 CMake UTF-8 诊断而中断；修正日志编码后完整重跑，未将前后两个运行的产物拼接成基线。
+
+##### 从平台相关性到计算阶段定位
+
+首轮基线中，Linux 与 Windows 在 A、B 下均有 9/12 个 case 一致；macOS 独有的小差异、两种 spreader 的大差异以及 cloud 的残差，只是输出上的分组，不能直接作为相互独立的原因。
+
+后续逐层检查点和控制实验见 [数值差异定位实验](CONSISTENCY_LOCALIZATION.md)。目前确认的边界包括：
+
+- EAR HOA 输入的四组合实验表明，严格 FP 单独即可收敛，而单独关闭 EAR SIMD 无效。实际 f32 增益一致，首个 PCM 分歧由通道混加的 FMA 精确复现。
+- EAR extent 的直接声/扩散声增益在受控构建中一致，后续 SAF FFT 路径存在分歧。macOS 换 OpenBLAS/KissFFT 后该测例与 Linux、Windows 收敛；不能把这一结果解释成 libear extent 增益仍受 SIMD 影响。
+- HOA point 的三角函数输出和未归一化方向相同，第一次分歧发生在三参数 `std::hypot`。三处方向归一化已统一走 `render_common::canonical_vector_length`，以 double 按固定顺序累加平方，再取 `sqrt` 并窄化。三平台运行 [34213036405](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/34213036405) 确认 B 的该测例收敛，现已进入 B 门禁，总数为 7/12；A 仍为 5/12，不能把长度函数的收敛推广为整个默认渲染器已一致。三分量测试约束固定求和顺序，不承诺置换不变性。
+- 补入笛卡尔 fixture 与 5.1.4 测例后（12 → 16），A 为 5/16、B 为 8/16 三平台逐位一致；`hoa-hoa3-cartesian` 在 B 收敛并入门禁。同时 B 暴露两个此前不可见的 3D VBAP 分歧：`saf-5_1_4-cartesian`（macOS 对 Linux≡Windows，`max_ulp=7`）与 `saf-5_1_4-extent`（三对全不同，Linux 对 Windows `max_ulp=4`）。[后续受控定位](CONSISTENCY_VBAP_LOCALIZATION.md) 已确认三角化 RNG、求逆、SGEMM 旋转与 SDOT 的独立差异；Linux/Windows 的 extent PCM 分歧可通过仅替换接近 π/2 的 `tanf` 返回值完整复现。因此数学切片还需覆盖这些小型 BLAS 运算与 spread 计算，不能只替换求逆。矩阵覆盖不到的代码不产生分歧记录，不等于该代码一致。
+- SAF 的全局 C RNG 同时参与去相关延迟和凸包三角化。cloud 也会受进程历史影响；point 在测量网格点的相等性，不能证明其它方向的 HRTF 插值路径一致。
+- 同一随机种子只统一同一 C 运行库内的起点；统一算法及 `RAND_MAX` 后，仍需处理 FFT、矩阵求逆、向量归约与插值数学。实际实验结果和未证明的推断须分开记录。
+- 固定分组与 RNG 起点后，worker 调度和改变分组拓扑是两种不同实验。分组随硬件并行预算改变会影响多轨 spreader 的输出，不能用普通重复渲染代替线程数/拓扑验证。
+
+因此 RNG 生命周期与三角化需要提前纳入第一批确定性改造；数学切片应覆盖 FFT、向量归一化和小矩阵运算。Rust 语言本身不保证这些操作跨平台逐位相同。
 
 阶段 0 会决定后续切片大小。尚未定位的路径继续标为未完成，不因语言或库名推定确定性。
 
@@ -113,7 +170,10 @@ rust/
 
 同时检查 EAR 的上游输入：`designDecorrelators()` 的 FIR 系数、增益向量和共用数学。可保留 libear 算法并统一数学入口或保存经过验证的固定系数；仅改变项目侧 FFT 不会自动统一 libear 内部的 `std::exp` / KissFFT 结果。
 
-随机数也需追踪。libear 已使用明确的 mt19937 序列，仍要核对种子和后续浮点换算；阶段 2 的 SAF 去相关器必须改用实例化的固定随机算法或固定延迟表，不能等到未来 dither 功能再处理。
+随机数也需追踪，但两处性质不同，已按源码核对：
+
+- libear 侧**已确认无需处理**。`src/decorrelate.cpp:19-21` 的 `genRandFloat` 是 `e() / static_cast<double>(0x100000000l)`，不是实现相关的 `std::uniform_real_distribution`；mt19937 序列由标准规定，种子是确定的 `decorrelatorId`，整数可精确转为 `double`，再除以 2³² 的浮点运算也精确。该链路跨平台可复现。这条路径上真正需要统一的是同函数 `:36-37` 的 `std::exp(std::complex<double>)`（落到平台 libm 的 `cos`/`sin`）。
+- 阶段 2 的 SAF 去相关器**确为分歧源**，必须改用实例化的固定随机算法或固定延迟表：`saf_utility_decor.c:100` 用 C `rand()` 算去相关延迟、`:154` 用它生成白噪声，`:102` 的 `randperm()`（`saf_utility_misc.c:169`）同样基于 `rand()`。C `rand()` 的算法由各 libc 自定，且项目未调用 `srand()`，序列还依赖进程内的调用历史。不能等到未来 dither 功能再处理。
 
 **模块退出条件**：相同 FFT 输入与状态在三平台位相等，数学正确性与旧实现误差指标通过，Release 性能可接受。
 
@@ -155,7 +215,7 @@ VBAP 覆盖二维 / 三维布局、虚拟扬声器、extent、凸包与退化几
 
 1. 使用 Release 输出 float32 WAV 或直接采集目标 PCM 缓冲区，保留完整的采样率、声道标签顺序、帧数和生效参数。
 2. 提取 PCM，确认读取没有量化或重采样。将 float32 的每个 32-bit 位模式按统一小端顺序序列化，先拒绝 NaN / Inf，再比较字节或其 SHA-256。正负零按位区分。
-3. 元数据单独比较需要稳定的字段。**不比较完整容器哈希来判断 DSP 一致性**：输出会写入当前 UTC 时间；FLAC 还会先将 float32 量化为 24-bit，既可能误报文件差异，也可能掩盖渲染差异。
+3. 元数据单独比较需要稳定的字段。**不比较完整容器哈希来判断 DSP 一致性**：输出会写入当前 UTC 时间；FLAC 还会先将 float32 量化为 24-bit，既可能误报文件差异，也可能掩盖渲染差异。已实测确认：同一输入、同一参数、间隔一秒的两次 `--renderer ear` 渲染，输出 WAV 文件不同（`render_service.cpp` 的 `date_utc` 经 bext `OriginationDate`/`OriginationTime` 写入），而提取出的 PCM 逐位相同。输入侧则无此问题——`make_fixture` 生成的 ADM BWF 跨次运行逐字节一致，因此输入用整文件比较即可，不需要另外取哈希。
 4. 失败时报告首个不同的 frame / channel、两侧位模式、最大绝对误差和 ULP 分布；误差指标用于定位，不用于放宽位一致门禁。
 
 覆盖矩阵至少包含 `ear × 5.1`、`saf × 5.1`、`hoa × hoa3`、`saf-binaural × binaural`，并明确区分 point、extent、diffuse、spreader OM、DirectSpeakers、坐标转换、动态块与自定义 HRIR 等实际路径。
@@ -176,15 +236,59 @@ VBAP 覆盖二维 / 三维布局、虚拟扬声器、extent、凸包与退化几
 
 复用 `ReaderHandle`、现有 fixture 构造与 CTest 注册方式；提取共享比较工具时，明确提供“位比较”和“有界误差比较”两个接口。现有 `maximum_difference()` / `window_bit_exact()` 用绝对差值，不等价于位比较；零容差不能区分正负零，未显式检查有限值的差值比较还可能漏过 NaN。
 
-### 6.3 Rust 数学正确性
+### 6.3 测量工具的回归测试
+
+`tests/unit/consistency_tools_test.py` 仅使用 Python 标准库，调用真实工具与脚本，覆盖正负零、跨零 ULP 距离、NaN / Inf、损坏与溢出 header、缺失产物、case / fixture 清单不一致、比较工具错误、`--expected` 选中的替代门禁清单（生效、被强制执行、文件缺失即报错），以及门禁经 `tee` 管道传播的失败状态。工具输出状态约定为 0=通过、1=数值不同、2=输入 / IO / 配置错误。
+
+`compare-platforms.sh` 在数值比较前校验所有平台的清单和每份 `.pcmbits`，拒绝空 / 重复清单、遗漏文件和失效门禁配置；对所有平台对输出结果。未登记的数值差异可以记录为基线，基础设施错误不能当作正常差异。workflow 显式使用带 `pipefail` 的 Bash，并在每个平台运行工具回归测试。
+
+安装 Python 的测试构建会注册 `mr_adm_consistency_tool_tests`，可用 `ctest --test-dir build/debug -R consistency_tool --output-on-failure` 运行。Debug 检查协议和错误路径；矩阵与同进程 DSP 测量使用 Release。Bash 不可用时 CTest 只跑 PCM 工具部分；三平台 consistency workflow 明确传入 Bash 路径并要求完整工具测试。
+
+`tests/unit/consistency_build_test.py` 使用离线的最小 CMake 工程验证真实依赖接入代码：标量开关 ON/OFF、用户 EAR 偏好保留、A preset 重置实验选项，以及通用 / Release 编译标志冲突、FLAC 目标选项的启停恢复。构建记录测试覆盖实际源码目录、`.git` 文件、闲置缓存、非 Git / 外部包、JSON 字段顺序和 `-Ofast`。它注册为 `mr_adm_consistency_build_tests`，workflow 三平台均显式运行。
+
+早期版本用 FORCE 改写过的自定义构建目录无法自动推断原 EAR 偏好；使用更新后的 consistency presets，或显式指定一次 `-DEAR_SIMD=ON/OFF`。之后切换标量控制不会再改写该偏好。
+
+### 6.4 Rust 数学正确性
 
 `cargo test` 使用独立解析解或高精度参考验证 FFT、SVD / EVD、矩阵与数学函数，覆盖零输入、极小值、边界尺寸及退化矩阵。SVD / EVD 除参考结果外，验证重建残差与正交性；跨平台一致但数学错误仍必须失败。
 
 系数、随机序列和内部状态也需要固定测试向量。性能验证使用 Release，记录优化前后实际配置；不能以 Debug 时间作为发布性能依据。
 
-### 6.4 本地验证入口
+### 6.5 本地验证入口
 
-以下为 macOS 上实现 Rust 开关后的命令示例。当前 `MR_ADM_ENABLE_RUST` 与 PCM 提取 / 比较工具尚未实现；现有 CTest 没有名为 `release` 的测试 preset，Release 测试使用构建目录：
+PCM 提取 / 比较工具与矩阵脚本已实现，可直接运行；`MR_ADM_ENABLE_RUST` 仍未实现，下面带该选项的命令是阶段 1 的形态。现有 CTest 没有名为 `release` 的测试 preset，Release 测试使用构建目录。
+
+跑完整矩阵并与另一平台的产物比对：
+
+```bash
+cmake --preset release
+cmake --build build/release --target mradm_exe mr_adm_pcm_bits mr_adm_make_fixture mr_adm_repeat_render
+bash scripts/consistency/render-matrix.sh build/release out/local
+# 取另一平台的 out/<platform> 后：
+bash scripts/consistency/compare-platforms.sh build/release/mr_adm_pcm_bits out/local out/other
+```
+
+跑原始 / 受控两组配置（阶段 0 第 2-4 项）。同一台机器上跑完 A、B 两组再互相比较，得到的是「构建选项改变了哪些 case」；把两组分别与其他平台的同组产物比较，得到的才是「受控构建收敛了多少跨平台差异」：
+
+```bash
+for c in a b; do
+    cmake --preset consistency-$c
+    cmake --build --preset consistency-$c \
+        --target mradm_exe mr_adm_pcm_bits mr_adm_make_fixture mr_adm_repeat_render
+    bash scripts/consistency/render-matrix.sh build/consistency-$c out/config-$c
+    bash scripts/consistency/build-info.sh build/consistency-$c out/config-$c/build-info.txt
+    bash scripts/consistency/scan-fp.sh build/consistency-$c/mradm out/config-$c/scan-fp.txt
+done
+bash scripts/consistency/compare-platforms.sh build/consistency-a/mr_adm_pcm_bits out/config-a out/config-b
+# 受控组与其他平台比对时换用受控门禁清单：
+bash scripts/consistency/compare-platforms.sh \
+    --expected scripts/consistency/expected-identical-controlled.txt \
+    build/consistency-a/mr_adm_pcm_bits out/config-b out/other-config-b
+```
+
+单个开关也可以单独打开（`-DMR_ADM_STRICT_FP=ON` 或 `-DMR_ADM_EAR_SCALAR_REFERENCE=ON`），用来把配置 B 的效果拆到具体某一项上。
+
+单个文件的手工检查：
 
 ```bash
 cmake --preset release -DMR_ADM_ENABLE_RUST=ON

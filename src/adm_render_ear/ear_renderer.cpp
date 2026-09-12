@@ -26,6 +26,7 @@
 #include "adm/render.h"
 #include "adm/render_ear.h"
 
+#include "consistency_trace.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
 
@@ -282,6 +283,19 @@ void append_object_blocks(const SceneTrackRef& track,
             // project-owned preprocessing above keeps libear away from its
             // not_implemented paths for these fields.
             objects_calc.calculate(meta, direct, diffuse);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+            consistency::dump("ear.01-object-input.f32",
+                              {source.position.azimuth,
+                               source.position.elevation,
+                               source.position.distance,
+                               source.width,
+                               source.height,
+                               source.depth,
+                               source.gain,
+                               source.diffuse});
+            consistency::dump("ear.02-direct.f64", direct);
+            consistency::dump("ear.03-diffuse.f64", diffuse);
+#endif
             for (std::size_t out_ch = 0; out_ch < num_out; ++out_ch) {
                 bg.gains[out_ch] += direct[out_ch];
                 bg.diffuse_gains[out_ch] += diffuse[out_ch];
@@ -398,6 +412,11 @@ void append_hoa_blocks(const SceneHOATracks& pack,
     // decode_matrix[i][out_ch] = gain for HOA channel i → output channel out_ch.
     std::vector<std::vector<double>> decode_matrix(n_hoa, std::vector<double>(num_out, 0.0));
     hoa_calc.calculate(meta, decode_matrix);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    for (std::size_t row = 0; row < decode_matrix.size(); ++row) {
+        consistency::dump("ear.hoa-decode-row-" + std::to_string(row) + ".f64", decode_matrix[row]);
+    }
+#endif
 
     const auto obj_gain = static_cast<double>(pack.gain);
 
