@@ -200,7 +200,7 @@ mradm_exe (CLI)     PRIVATE: ADMEngine + 所有 renderer + CLI11 + spdlog
 
 GUI 新接入进度条优先使用 `adm_render_file_ex2` / `adm_preview_render_window_v2` 的结构化 progress v2；旧 `adm_progress_cb` 仅保留兼容单一 fraction/stage/message 的调用方。v2 的 `message` 指针与旧 callback 一样只在回调期间有效。
 
-实时监听经 `adm_monitor_*` 家族：create/play/pause/seek/loop/status/levels/log、`adm_monitor_set_overrides`（gain 即时；diffuse/extent/divergence 视后端可能轻量 re-prepare）、`adm_monitor_switch_backend`（热切换后端/布局带交叉淡化）、`adm_monitor_output_devices_json` + `adm_create_monitor_ex` / `adm_monitor_set_output_device`（输出设备枚举与切换）、`adm_monitor_set_listener_orientation`（头追踪/自由视角）。
+实时监听经 `adm_monitor_*` 家族：create/play/pause/seek/loop/status/levels/log、`adm_monitor_set_overrides`（gain 即时；diffuse/extent/divergence 视后端可能轻量 re-prepare）、`adm_monitor_switch_backend`（热切换后端/布局带交叉淡化）、`adm_monitor_output_devices_json` + `adm_create_monitor_ex` / `adm_monitor_set_output_device`（输出设备枚举与切换）、`adm_monitor_set_listener_orientation`（头追踪/自由视角）、`adm_monitor_set_hptf` + `adm_monitor_get_hptf_info`（HpTF 耳机补偿，加载 AutoEq ParametricEQ；仅双声道耳机馈送，切换带交叉淡化，**刻意不影响 LUFS 表**——换耳机不该改变节目响度读数）。
 
 ## 输出格式与渲染后端约束
 
@@ -266,6 +266,7 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 - `docs/architecture/ADM_FEATURE_COVERAGE.md` — ADM 特性覆盖审计
 - `docs/architecture/ADM_APPLE_BACKEND.md` — macOS AUSpatialMixer 后端 + ASBR 系统空间监听 sink
 - `docs/architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md` — Windows ISpatialAudioClient 系统空间监听 sink（静态床/能力实测/切换恢复）
+- `docs/architecture/hptf-eq.md` — HpTF 耳机补偿（AutoEq ParametricEQ，实时监听专用，设备绑定）
 - `docs/adr/0001` C++20 标准 | `0002` C++-first，Rust-later | `0003` 自有领域模型与后端边界 | `0004` 第三方依赖管理 | `0005` 错误处理模型 | `0006` CLI11 选择 | `0007` C ABI 稳定性
 - `docs/guides/QUALITY.md` — 质量工具与策略
 - `docs/guides/CI.md` — CI 设计与边界
