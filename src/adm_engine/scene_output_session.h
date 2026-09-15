@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "adm/errors.h"
+#include "adm/monitor.h" // HptfInfo（两条实时路径共用）
 #include "adm/options.h"
 
 #include "../adm_render_common/hptf_eq.h"
@@ -70,6 +71,14 @@ class SceneOutputSession {
     // bed handed to the OS for HRTF has no 2ch signal on our side to compensate.
     [[nodiscard]] Result<void> set_hptf(const std::optional<render_common::HptfCoefficients>& coeffs,
                                         std::uint64_t revision);
+
+    // Path-based form, mirroring MonitorSession::set_hptf: loads an AutoEq ParametricEQ profile,
+    // designs it for this stream's rate and publishes it. Empty path disables. Parsing happens on
+    // the caller's thread so a bad file is rejected without ever disturbing the audio callback.
+    [[nodiscard]] Result<void>
+    set_hptf_profile(const std::string& profile_path, HptfPreampMode mode, std::uint64_t revision);
+
+    [[nodiscard]] HptfInfo hptf_info() const;
     [[nodiscard]] bool hptf_supported() const { return peak_guard_ != nullptr; }
     [[nodiscard]] std::uint64_t hptf_applied_revision() const { return hptf_.applied_revision(); }
     [[nodiscard]] render_common::HptfCoefficients hptf_active_coefficients() const {
@@ -104,6 +113,8 @@ class SceneOutputSession {
     // Headphone compensation, applied to peak_input_ upstream of peak_guard_. Only prepared when
     // this session owns a stereo feed; otherwise it stays a no-op bypass.
     render_common::HptfProcessor hptf_;
+    // The rate-independent profile is kept so hptf_info() can report the file's own Preamp value.
+    std::optional<render_common::HptfProfile> hptf_profile_;
 };
 
 // cppcheck-suppress-end unusedStructMember

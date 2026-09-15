@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <iterator>
 #include <memory>
 #include <mutex>
@@ -10,6 +11,8 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#include <fmt/format.h>
 
 #include "adm/monitor.h"
 #include "adm/render.h"
@@ -260,7 +263,14 @@ struct MonitorSession::Impl {
     RenderOptions current_options;   // last-used options (create / switch_backend), to rebuild on device switch
     LiveOverrides current_overrides; // last-applied overrides, re-applied after a device switch
     ListenerOrientation current_orientation{}; // last-applied head orientation, re-applied after a device switch
-    std::string device_id;                     // current output device token ("" = default)
+    // HpTF: the PARSED PROFILE is kept, not the designed coefficients, because a rebuilt engine
+    // may resolve a different sample rate — re-running design_cascade() there is cheap and removes
+    // that failure mode entirely. Without this, set_output_device() would silently drop the user's
+    // headphone compensation at exactly the moment they plug in headphones.
+    std::optional<render_common::HptfProfile> current_hptf;
+    HptfPreampMode current_hptf_mode{HptfPreampMode::warn_only};
+    std::uint64_t current_hptf_revision{0};
+    std::string device_id; // current output device token ("" = default)
     uint32_t sample_rate{48000};
     uint64_t total_frames{0};
 
@@ -270,6 +280,25 @@ struct MonitorSession::Impl {
     // real pose is still kept in current_orientation (and drives the GUI spatial view separately).
     [[nodiscard]] ListenerOrientation effective_orientation() const {
         return current_options.monitor_system_spatial ? ListenerOrientation{} : current_orientation;
+    }
+
+    // Design the stored profile for the CURRENT engine's rate and publish it. Called on every
+    // path that creates or rebuilds the engine, so HpTF survives switch_backend /
+    // set_output_device. Silent no-op when the engine cannot carry it (not a stereo feed).
+    void republish_hptf() {
+        if (engine == nullptr || !engine->hptf_supported()) {
+            return;
+        }
+        if (!current_hptf.has_value()) {
+            engine->set_hptf(std::nullopt, current_hptf_revision);
+            return;
+        }
+        auto coeffs = render_common::design_cascade(*current_hptf, engine->sample_rate(), current_hptf_mode);
+        if (!coeffs) {
+            log_sink.log(LogLevel::warning, "monitor", "耳机补偿重建失败:" + coeffs.error().message);
+            return;
+        }
+        engine->set_hptf(*coeffs, current_hptf_revision);
     }
 };
 
@@ -365,6 +394,65 @@ void MonitorSession::set_listener_orientation(const ListenerOrientation& orienta
     impl_->engine->set_listener_orientation(impl_->effective_orientation());
 }
 
+Result<void> MonitorSession::set_hptf(const std::string& profile_path, HptfPreampMode mode, std::uint64_t revision) {
+    if (impl_->engine == nullptr) {
+        return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
+    }
+    if (!impl_->engine->hptf_supported()) {
+        return make_error(ErrorCode::unsupported,
+                          "耳机补偿(HpTF)只适用于双声道耳机监听;多声道扬声器输出与系统空间音频不支持");
+    }
+
+    if (profile_path.empty()) {
+        impl_->current_hptf.reset();
+        impl_->current_hptf_mode = mode;
+        impl_->current_hptf_revision = revision;
+        impl_->engine->set_hptf(std::nullopt, revision);
+        return {};
+    }
+
+    // Parse + design synchronously here: a bad file must surface as an error, not disturb audio.
+    auto profile = render_common::load_parametric_eq_file(std::filesystem::path{profile_path});
+    if (!profile) {
+        return tl::unexpected{profile.error()};
+    }
+    auto coeffs = render_common::design_cascade(*profile, impl_->engine->sample_rate(), mode);
+    if (!coeffs) {
+        return tl::unexpected{coeffs.error()};
+    }
+    if (coeffs->max_response_db > 0.0F) {
+        // warn_only leaves the user's gain alone; auto_trim has already folded the excess in, so
+        // this only ever fires under warn_only.
+        impl_->log_sink.log(LogLevel::warning,
+                            "monitor",
+                            fmt::format("耳机补偿曲线峰值 {:+.1f} dB,可能削波(Preamp {:+.1f} dB)",
+                                        static_cast<double>(coeffs->max_response_db),
+                                        profile->preamp_db));
+    }
+
+    impl_->current_hptf = std::move(*profile);
+    impl_->current_hptf_mode = mode;
+    impl_->current_hptf_revision = revision;
+    impl_->engine->set_hptf(*coeffs, revision);
+    return {};
+}
+
+HptfInfo MonitorSession::hptf_info() const {
+    HptfInfo info;
+    if (impl_->engine == nullptr) {
+        return info;
+    }
+    const auto coeffs = impl_->engine->hptf_active_coefficients();
+    info.enabled = coeffs.band_count > 0;
+    info.band_count = coeffs.band_count;
+    info.sample_rate = coeffs.sample_rate;
+    info.preamp_db = impl_->current_hptf.has_value() ? static_cast<float>(impl_->current_hptf->preamp_db) : 0.0F;
+    info.auto_trim_db = coeffs.auto_trim_db;
+    info.max_response_db = coeffs.max_response_db;
+    info.applied_revision = impl_->engine->hptf_applied_revision();
+    return info;
+}
+
 Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
     if (impl_->engine == nullptr) {
         return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
@@ -431,6 +519,7 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
         impl_->engine->seek(playhead);
         impl_->engine->set_overrides(impl_->current_overrides);
         impl_->engine->set_listener_orientation(impl_->effective_orientation());
+        impl_->republish_hptf(); // a rebuilt engine starts with an empty cascade
         if (was_playing) {
             impl_->engine->play();
         }
@@ -513,6 +602,7 @@ Result<void> MonitorSession::set_output_device(const std::string& device_id) {
     impl_->engine->seek(playhead);
     impl_->engine->set_overrides(impl_->current_overrides);
     impl_->engine->set_listener_orientation(impl_->effective_orientation()); // 系统空间化→中立(见 setter)
+    impl_->republish_hptf(); // a rebuilt engine starts with an empty cascade
     if (was_playing) {
         impl_->engine->play();
     }

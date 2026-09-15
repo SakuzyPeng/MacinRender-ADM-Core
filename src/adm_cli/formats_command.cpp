@@ -22,11 +22,12 @@ std::string join_space(const std::vector<std::string>& items) {
 
 void print_formats(const mradm::OutputFormats& data) {
     const auto yn = [](bool b) { return b ? "yes" : "no"; };
-    fmt::print("Build features: apac={}  iamf={}  iamf_mp4_packager={}  sofa={}\n\n",
+    fmt::print("Build features: apac={}  iamf={}  iamf_mp4_packager={}  sofa={}  hptf={}\n\n",
                yn(data.features.apac),
                yn(data.features.iamf),
                yn(data.features.iamf_mp4_packager),
-               yn(data.features.sofa));
+               yn(data.features.sofa),
+               yn(data.features.hptf));
 
     for (const auto& f : data.formats) {
         fmt::print("{:<10} {}\n", f.format, join_space(f.extensions));

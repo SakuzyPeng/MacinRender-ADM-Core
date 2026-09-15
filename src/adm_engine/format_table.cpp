@@ -31,7 +31,8 @@ OutputFormats build_output_formats() {
     const bool iamf_mp4 = iamf && audio::iamf_mp4_packager_available();
 
     OutputFormats out;
-    out.features = {.apac = apac, .iamf = iamf, .iamf_mp4_packager = iamf_mp4, .sofa = binaural_sofa_supported()};
+    out.features = {
+        .apac = apac, .iamf = iamf, .iamf_mp4_packager = iamf_mp4, .sofa = binaural_sofa_supported(), .hptf = true};
 
     // wav — always available; bit depth selectable.
     out.formats.push_back({.format = "wav",
@@ -132,6 +133,7 @@ std::string output_formats_to_json() {
     features["iamf"] = data.features.iamf;
     features["iamf_mp4_packager"] = data.features.iamf_mp4_packager;
     features["sofa"] = data.features.sofa;
+    features["hptf"] = data.features.hptf;
     root["features"] = std::move(features);
 
     json formats = json::array();

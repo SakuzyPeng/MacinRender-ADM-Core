@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "adm/errors.h"
+#include "adm/options.h" // HptfPreampMode(公共选项枚举,GUI / C ABI 共用)
 
 namespace mradm::render_common {
 
@@ -64,13 +65,6 @@ struct HptfProfile {
     double preamp_db{0.0};
     std::vector<HptfBand> bands;
     std::string name; // 展示用;通常是文件名
-};
-
-// Preamp 安全策略。默认 warn_only:严格使用文件里的 Preamp 值,只在合成响应可能
-// 削波时记一条警告,不擅自改用户的数值。
-enum class HptfPreampMode : std::uint8_t {
-    warn_only,
-    auto_trim,
 };
 
 // 归一化后的双二阶段(a0 已除掉)。

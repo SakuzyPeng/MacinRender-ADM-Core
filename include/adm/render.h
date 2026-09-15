@@ -340,6 +340,9 @@ struct OutputFormatFeatures {
     bool iamf{false};
     bool iamf_mp4_packager{false};
     bool sofa{false};
+    // HpTF 耳机补偿（AutoEq ParametricEQ）。无构建/平台门控，本核心恒为 true——它的作用是让
+    // GUI 能区分"核心支持但没开"与"核心太旧根本没有这个字段"（缺失即 false）。
+    bool hptf{false};
 };
 
 // The full output-format reference: per-build feature flags + the container list.

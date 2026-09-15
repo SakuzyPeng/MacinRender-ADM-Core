@@ -50,6 +50,13 @@ enum class DirectSpeakersRoutingMode {
     matrix,
 };
 
+// HpTF(耳机传输函数)补偿的 Preamp 安全策略。AutoEq 的 ParametricEQ 文件自带一行
+// `Preamp:`,用来把整条曲线压到不削波;但手改过的文件或非 AutoEq 来源没有这个保证。
+enum class HptfPreampMode {
+    warn_only, // 默认:严格使用文件里的 Preamp,合成响应仍 > 0 dB 时只记一条警告
+    auto_trim, // 额外再减掉超出量,保证级联绝不放大
+};
+
 enum class BinauralSpreadMode {
     automatic,    // cloud
     none,         // point source; extent parameters ignored

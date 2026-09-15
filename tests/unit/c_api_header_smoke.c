@@ -6,7 +6,7 @@
 #error "unexpected C ABI major version"
 #endif
 
-#if ADM_API_VERSION_MINOR != 36
+#if ADM_API_VERSION_MINOR != 37
 #error "unexpected C ABI minor version"
 #endif
 
@@ -14,6 +14,9 @@
 #error "unexpected C ABI patch version"
 #endif
 
+_Static_assert(sizeof(adm_hptf_preamp_mode_t) == sizeof(int), "HpTF preamp mode enum must remain int-sized");
+_Static_assert(offsetof(adm_hptf_config_t, struct_size) == 0, "HpTF config must start with struct_size");
+_Static_assert(offsetof(adm_hptf_info_t, struct_size) == 0, "HpTF info must start with struct_size");
 _Static_assert(sizeof(adm_scene_element_role_t) == sizeof(int), "Scene role enum must remain int-sized");
 _Static_assert(sizeof(adm_scene_submit_status_t) == sizeof(int), "Scene submit enum must remain int-sized");
 _Static_assert(sizeof(adm_scene_stream_state_t) == sizeof(int), "Scene state enum must remain int-sized");

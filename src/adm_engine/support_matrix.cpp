@@ -264,6 +264,7 @@ json features_to_json(const OutputFormatFeatures& features) {
     j["iamf"] = features.iamf;
     j["iamf_mp4_packager"] = features.iamf_mp4_packager;
     j["sofa"] = features.sofa;
+    j["hptf"] = features.hptf;
     return j;
 }
 
