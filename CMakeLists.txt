@@ -888,7 +888,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # Realtime engine scaffolding: SPSC ring + IRenderStream/device/factory abstractions,
     # exercised with a deterministic PatternStream (no real backend). Cross-platform.
     add_executable(mr_adm_realtime_tests tests/unit/realtime_stream_fixture_test.cpp)
-    target_link_libraries(mr_adm_realtime_tests PRIVATE MacinRender::ADMRealtime Threads::Threads)
+    # ADMRenderCommon is PRIVATE on mr_adm_realtime, so its PUBLIC include dir does not
+    # propagate; the HpTF tests below use that module's API directly, hence the explicit link.
+    target_link_libraries(
+        mr_adm_realtime_tests
+        PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon Threads::Threads
+    )
     mr_adm_core_apply_warnings(mr_adm_realtime_tests)
     mr_adm_core_apply_static_analysis(mr_adm_realtime_tests)
     add_test(NAME mr_adm_realtime_tests COMMAND mr_adm_realtime_tests)

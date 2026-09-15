@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <thread>
 #include <vector>
@@ -18,6 +19,7 @@
 #include "adm/options.h"
 #include "adm/scene.h"
 
+#include "../adm_render_common/hptf_eq.h"
 #include "audio_output_device.h"
 #include "render_stream_factory.h"
 #include "ring_buffer.h"
@@ -99,6 +101,20 @@ class MonitorEngine {
     // playhead and crossfades; takes effect after the ring drains, like the other edits.
     void switch_stream(std::unique_ptr<IRenderStream> next);
 
+    // Publish a headphone-compensation (HpTF) cascade, or bypass when `coeffs` is nullopt.
+    // Unlike set_overrides() this does NOT go through the worker: the coefficients are consumed
+    // by the audio callback in pull(), so a worker round-trip would only add ring-drain latency.
+    // The handoff is lock-free (double-buffered slots + an atomic generation); the swap itself
+    // is a short linear blend of the outgoing and incoming cascades, so it never clicks.
+    // Only meaningful for a 2-channel (headphone) monitor feed — see hptf_supported().
+    void set_hptf(const std::optional<render_common::HptfCoefficients>& coeffs, uint64_t revision);
+
+    // HpTF only applies to a real 2ch headphone feed. A multichannel speaker feed, and a
+    // system-spatial bed handed to the OS for HRTF, are not headphone signals — the session
+    // rejects set_hptf there rather than silently ignoring it.
+    [[nodiscard]] bool hptf_supported() const { return channels_ == 2U; }
+    [[nodiscard]] uint64_t hptf_applied_revision() const { return hptf_.applied_revision(); }
+
     [[nodiscard]] MonitorStatus status() const;
     [[nodiscard]] MonitorLevels levels() const;
 
@@ -156,6 +172,9 @@ class MonitorEngine {
     FloatRingBuffer meter_ring_;
     std::vector<float> pull_scratch_;
     std::vector<float> meter_scratch_;
+    // Headphone compensation, applied in pull() on the final output PCM. Its own lock-free
+    // publish/consume handshake; the control thread never blocks the callback and vice versa.
+    render_common::HptfProcessor hptf_;
     // Seek de-click state. seek_generation_ is published by the worker after a successful seek;
     // every other field is owned exclusively by the device callback. Realtime sinks bridge from
     // the last emitted sample, while buffered push sinks fade the fresh queue in from silence.
