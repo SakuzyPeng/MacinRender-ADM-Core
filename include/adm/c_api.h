@@ -179,12 +179,21 @@
  * v1.36 新增：adm_scene_output_t 绑定 Scene stream 并独占 PCM 消费，提供系统空间音频／
  *   双耳设备输出、播放/暂停/音量、设备与 Scene 协同 epoch reset，以及独立的已消费／
  *   已呈现媒体帧。原始 stream pull/reset 在设备绑定期间拒绝第二条消费路径。
+ *
+ * v1.37 新增：HpTF（耳机传输函数）补偿。adm_hptf_config_t / adm_hptf_info_t 与
+ *   adm_monitor_set_hptf / adm_monitor_get_hptf_info / adm_scene_output_set_hptf /
+ *   adm_scene_output_get_hptf_info。加载 AutoEq ParametricEQ 文本，实时应用到**设备绑定的
+ *   双声道耳机馈送**上；profile_path 为 NULL/"" 表示关闭（精确直通）。切换 profile 走短交叉
+ *   淡化，不中断播放；即时生效（不等 ring 排空），且能跨后端/输出设备切换存活。
+ *   HpTF 是听者侧补偿，**刻意不影响 LUFS 表**（换耳机不该改变节目响度读数），但会影响
+ *   peak/RMS（它们反映设备实际收到的信号）。多声道扬声器输出与系统空间音频返回
+ *   ADM_ERROR_UNSUPPORTED——那些路径上最终 2ch 耳机信号不由本库生成。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 36
+#define ADM_API_VERSION_MINOR 37
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -879,7 +888,7 @@ adm_error_code_t adm_input_layouts_json(adm_context_t* context, char** out_json)
  * optional "bit_depths", and a bitrate range ("bitrate_kbps_per_ch" for Opus or
  * "bitrate_kbps_total" for APAC, each {min, max, auto:0}). The root also carries a
  * "features" object of build/platform flags: "apac", "iamf", "iamf_mp4_packager",
- * "sofa". A GUI uses this to gray out unavailable formats and validate inputs,
+ * "sofa", "hptf". A GUI uses this to gray out unavailable formats and validate inputs,
  * rather than hard-coding the platform/build matrix.
  *
  * The root object carries a stable schema identity for version detection:
@@ -1124,6 +1133,54 @@ adm_error_code_t adm_monitor_set_listener_orientation(adm_monitor_t* monitor,
  * return ADM_ERROR_UNSUPPORTED. Returns the resolve / prepare error otherwise.
  */
 adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_render_options_t* opts) ADM_API_NOEXCEPT;
+
+/* ── v1.37: HpTF 耳机补偿 ──────────────────────────────────────────────────── */
+
+typedef enum adm_hptf_preamp_mode_t {
+    /* 严格使用文件里的 Preamp 值；合成响应仍 > 0 dB 时只在日志里告警，不改用户数值。 */
+    ADM_HPTF_PREAMP_WARN_ONLY = 0,
+    /* 额外再减掉超出量，保证级联绝不放大（实际曲线会与 AutoEq 标称有偏差）。 */
+    ADM_HPTF_PREAMP_AUTO_TRIM = 1
+} adm_hptf_preamp_mode_t;
+
+#ifdef __cplusplus
+static_assert(sizeof(adm_hptf_preamp_mode_t) == sizeof(int));
+#endif
+
+/* AutoEq ParametricEQ profile 与 Preamp 策略。两条实时路径共用。
+ * profile_path 为 NULL 或 "" 表示关闭补偿（精确直通）。
+ * 老调用方的 struct_size 若不含 preamp_mode，按 ADM_HPTF_PREAMP_WARN_ONLY 处理。 */
+typedef struct adm_hptf_config_t {
+    uint32_t struct_size;
+    const char* profile_path;
+    int32_t preamp_mode;     /* adm_hptf_preamp_mode_t */
+    uint32_t reserved_v1_37; /* 置 0；占住 64 位对齐的尾部填充 */
+    uint64_t revision;       /* 回调应用后经 adm_hptf_info_t.applied_revision 回显 */
+} adm_hptf_config_t;
+
+/* 当前生效的补偿状态。Set struct_size = sizeof(adm_hptf_info_t) 后调用。 */
+typedef struct adm_hptf_info_t {
+    uint32_t struct_size;
+    int32_t enabled;           /* 0 = bypass */
+    uint32_t band_count;       /* 实际进入级联的双二阶段数 */
+    uint32_t sample_rate;      /* 系数所针对的采样率 */
+    float preamp_db;           /* 文件里的 Preamp 值 */
+    float auto_trim_db;        /* 额外压低量；warn_only 下恒为 0 */
+    float max_response_db;     /* 20 Hz–20 kHz 峰值（含 preamp）；> 0 表示可能削波 */
+    uint32_t reserved_v1_37;   /* 置 0 */
+    uint64_t applied_revision; /* 音频回调已取用的 revision */
+} adm_hptf_info_t;
+
+/*
+ * v1.37: 实时加载 / 切换 / 关闭耳机补偿。文件解析与系数设计在调用线程同步完成——
+ * 坏文件直接返回错误，绝不打扰音频线程——随后无锁交给音频回调，切换是短交叉淡化而非硬切。
+ * 即时生效（不等 ring 排空），并能跨 adm_monitor_switch_backend / adm_monitor_set_output_device
+ * 存活。仅适用于双声道耳机监听：多声道扬声器输出与系统空间音频返回 ADM_ERROR_UNSUPPORTED。
+ * 解析失败返回 ADM_ERROR_INVALID_ARGUMENT，文件打不开返回 ADM_ERROR_IO_ERROR；
+ * 详细信息见 adm_monitor_last_error_message。
+ */
+adm_error_code_t adm_monitor_set_hptf(adm_monitor_t* monitor, const adm_hptf_config_t* config) ADM_API_NOEXCEPT;
+adm_error_code_t adm_monitor_get_hptf_info(adm_monitor_t* monitor, adm_hptf_info_t* out) ADM_API_NOEXCEPT;
 
 /*
  * v1.21: switch the audio output device live. `device_id` is a token from
@@ -1586,6 +1643,14 @@ adm_error_code_t adm_scene_output_pause(adm_scene_output_t* output) ADM_API_NOEX
 adm_error_code_t
 adm_scene_output_begin_epoch(adm_scene_output_t* output, uint64_t epoch, int64_t target_sample) ADM_API_NOEXCEPT;
 adm_error_code_t adm_scene_output_set_volume(adm_scene_output_t* output, float gain) ADM_API_NOEXCEPT;
+
+/* v1.37: 同 adm_monitor_set_hptf，作用于 Scene 推流的设备绑定立体声输出。补偿施加在
+ * 限幅器**上游**，因此被提升的频段仍受 -1 dBFS 天花板保护。系统空间音频输出（多声道床交由
+ * OS 做 HRTF）返回 ADM_ERROR_UNSUPPORTED；裸 adm_scene_stream_pull 的调用方自行输出，
+ * 不受影响。 */
+adm_error_code_t adm_scene_output_set_hptf(adm_scene_output_t* output,
+                                           const adm_hptf_config_t* config) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_output_get_hptf_info(adm_scene_output_t* output, adm_hptf_info_t* out) ADM_API_NOEXCEPT;
 adm_error_code_t adm_scene_output_get_status(adm_scene_output_t* output,
                                              adm_scene_output_status_t* out) ADM_API_NOEXCEPT;
 

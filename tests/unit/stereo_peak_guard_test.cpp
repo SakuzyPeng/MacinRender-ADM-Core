@@ -232,7 +232,7 @@ bool test_real_pcm() {
 mradm::render_common::HptfCoefficients hptf_low_boost() {
     auto profile = mradm::render_common::parse_parametric_eq("Preamp: 0 dB\n"
                                                              "Filter 1: ON LSC Fc 200 Hz Gain 12 dB Q 0.7\n");
-    return *mradm::render_common::design_cascade(*profile, 48000U, mradm::render_common::HptfPreampMode::warn_only);
+    return *mradm::render_common::design_cascade(*profile, 48000U, mradm::HptfPreampMode::warn_only);
 }
 
 // HpTF is applied UPSTREAM of StereoPeakGuard, so a boosted band must still be caught by the

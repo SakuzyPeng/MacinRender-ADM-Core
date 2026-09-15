@@ -13,12 +13,12 @@
 
 namespace {
 
+using mradm::HptfPreampMode;
 using mradm::render_common::cascade_magnitude_db;
 using mradm::render_common::design_cascade;
 using mradm::render_common::HptfBandType;
 using mradm::render_common::HptfCascade;
 using mradm::render_common::HptfCoefficients;
-using mradm::render_common::HptfPreampMode;
 using mradm::render_common::HptfProcessor;
 using mradm::render_common::k_hptf_blend_frames;
 using mradm::render_common::parse_parametric_eq;

@@ -2460,6 +2460,37 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     static_assert(sizeof(adm_monitor_override_t) >=
                   offsetof(adm_monitor_override_t, head_locked_valid) + sizeof(int32_t));
 
+    ok = check(adm_api_version_minor() >= 37, "v1.37: HpTF headphone compensation is available") && ok;
+    // The v1.37 tail-padding guard: reserved_v1_37 must sit immediately after preamp_mode so a
+    // future appended field never lands inside a previous caller's trailing alignment padding.
+    static_assert(offsetof(adm_hptf_config_t, reserved_v1_37) ==
+                  offsetof(adm_hptf_config_t, preamp_mode) + sizeof(int32_t));
+    static_assert(offsetof(adm_hptf_config_t, revision) ==
+                  offsetof(adm_hptf_config_t, reserved_v1_37) + sizeof(uint32_t));
+    static_assert(sizeof(adm_hptf_config_t) >= offsetof(adm_hptf_config_t, revision) + sizeof(uint64_t));
+    static_assert(offsetof(adm_hptf_info_t, applied_revision) ==
+                  offsetof(adm_hptf_info_t, reserved_v1_37) + sizeof(uint32_t));
+
+    // HpTF entry points must reject bad handles / structs without needing an audio device.
+    ok = check(adm_monitor_set_hptf(nullptr, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "set_hptf(nullptr monitor) rejected") &&
+         ok;
+    ok = check(adm_monitor_get_hptf_info(nullptr, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "get_hptf_info(nullptr monitor) rejected") &&
+         ok;
+    ok = check(adm_scene_output_set_hptf(nullptr, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+               "scene set_hptf(nullptr config) rejected") &&
+         ok;
+    {
+        // A config whose struct_size is too small to even carry profile_path must be rejected
+        // before anything is read out of it.
+        adm_hptf_config_t undersized{};
+        undersized.struct_size = sizeof(uint32_t);
+        ok = check(adm_scene_output_set_hptf(nullptr, &undersized) == ADM_ERROR_INVALID_ARGUMENT,
+                   "undersized adm_hptf_config_t rejected") &&
+             ok;
+    }
+
     // v1.22 listener orientation argument validation (no device needed).
     ok = check(adm_monitor_set_listener_orientation(nullptr, 0.0F, 0.0F, 0.0F) == ADM_ERROR_INVALID_ARGUMENT,
                "set_listener_orientation(nullptr) rejected") &&

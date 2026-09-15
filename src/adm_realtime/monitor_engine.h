@@ -114,6 +114,9 @@ class MonitorEngine {
     // rejects set_hptf there rather than silently ignoring it.
     [[nodiscard]] bool hptf_supported() const { return channels_ == 2U; }
     [[nodiscard]] uint64_t hptf_applied_revision() const { return hptf_.applied_revision(); }
+    [[nodiscard]] render_common::HptfCoefficients hptf_active_coefficients() const {
+        return hptf_.active_coefficients();
+    }
 
     [[nodiscard]] MonitorStatus status() const;
     [[nodiscard]] MonitorLevels levels() const;

@@ -20,6 +20,18 @@ enum class MonitorPlaybackState : std::uint8_t { stopped = 0, playing = 1, pause
 
 inline constexpr std::size_t k_monitor_max_level_channels = 64U;
 
+// Polled HpTF (headphone compensation) state, for a UI to confirm an edit landed and to show
+// whether the loaded curve could clip.
+struct HptfInfo {
+    bool enabled{false};               // false = bypass (exact passthrough)
+    std::uint32_t band_count{0};       // biquad sections actually in the cascade
+    std::uint32_t sample_rate{0};      // rate the cascade was designed for
+    float preamp_db{0.0F};             // the file's own Preamp: value
+    float auto_trim_db{0.0F};          // extra attenuation applied; 0 under warn_only
+    float max_response_db{0.0F};       // peak over 20 Hz-20 kHz incl. preamp; > 0 can clip
+    std::uint64_t applied_revision{0}; // revision the audio callback has taken up
+};
+
 // Polled status snapshot (no callbacks; see docs/architecture/REALTIME_MONITORING.md §11).
 struct MonitorStatusSnapshot {
     MonitorPlaybackState state{MonitorPlaybackState::stopped};
@@ -108,6 +120,22 @@ class MonitorSession {
     // preserved across a brief device re-open (no crossfade — a short gap is expected). A
     // no-op if `device_id` is already current. Returns the device-open / backend error.
     [[nodiscard]] Result<void> set_output_device(const std::string& device_id);
+
+    // Load an AutoEq ParametricEQ profile and apply it as headphone compensation, live. An empty
+    // `profile_path` disables it (exact passthrough). The file is parsed and the cascade designed
+    // synchronously on this thread — a bad file returns an error and never disturbs playback —
+    // then handed to the audio callback lock-free, where the swap is a short blend rather than a
+    // cut. Takes effect immediately (no ring-drain delay) and survives backend / output-device
+    // switches, which rebuild the engine.
+    //
+    // Only valid on a 2-channel headphone feed: a multichannel speaker feed, and a system-spatial
+    // bed the OS renders to headphones itself, both return ErrorCode::unsupported. HpTF is a
+    // listener-side compensation, so it deliberately does NOT affect the LUFS meter (program
+    // loudness must not change when you swap headphones); it does affect peak/RMS, which report
+    // what the device actually receives.
+    [[nodiscard]] Result<void> set_hptf(const std::string& profile_path, HptfPreampMode mode, std::uint64_t revision);
+
+    [[nodiscard]] HptfInfo hptf_info() const;
 
     [[nodiscard]] MonitorStatusSnapshot status() const;
     [[nodiscard]] MonitorLevelsSnapshot levels() const;

@@ -1259,7 +1259,7 @@ bool test_monitor_output_stage_loop() {
 mradm::render_common::HptfCoefficients hptf_boost_1k() {
     auto profile = mradm::render_common::parse_parametric_eq("Preamp: 0 dB\n"
                                                              "Filter 1: ON PK Fc 1000 Hz Gain 6 dB Q 1.5\n");
-    return *mradm::render_common::design_cascade(*profile, 48000U, mradm::render_common::HptfPreampMode::warn_only);
+    return *mradm::render_common::design_cascade(*profile, 48000U, mradm::HptfPreampMode::warn_only);
 }
 
 // The cascade must actually reach the device feed: a 1 kHz tone through a +6 dB 1 kHz band

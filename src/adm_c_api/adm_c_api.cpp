@@ -1676,6 +1676,86 @@ adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_re
     }
 }
 
+namespace {
+// struct_size-tolerant read of adm_hptf_config_t, following adm_monitor_set_overrides. A caller
+// whose struct predates preamp_mode gets WARN_ONLY; one that predates revision gets 0.
+struct HptfRequest {
+    std::string path;
+    mradm::HptfPreampMode mode{mradm::HptfPreampMode::warn_only};
+    uint64_t revision{0};
+};
+
+[[nodiscard]] bool read_hptf_config(const adm_hptf_config_t* config, HptfRequest& out) {
+    if (config == nullptr) {
+        return false;
+    }
+    const std::size_t stride = config->struct_size;
+    constexpr std::size_t k_min = offsetof(adm_hptf_config_t, profile_path) + sizeof(const char*);
+    if (stride < k_min) {
+        return false;
+    }
+    adm_hptf_config_t src{};
+    std::memcpy(&src, config, std::min(stride, sizeof(src)));
+    const auto has_field = [stride](std::size_t offset, std::size_t size) { return stride >= offset + size; };
+
+    out.path = (src.profile_path != nullptr) ? std::string{src.profile_path} : std::string{};
+    out.mode = mradm::HptfPreampMode::warn_only;
+    if (has_field(offsetof(adm_hptf_config_t, preamp_mode), sizeof(int32_t)) &&
+        src.preamp_mode == ADM_HPTF_PREAMP_AUTO_TRIM) {
+        out.mode = mradm::HptfPreampMode::auto_trim;
+    }
+    out.revision = has_field(offsetof(adm_hptf_config_t, revision), sizeof(uint64_t)) ? src.revision : 0U;
+    return true;
+}
+
+[[nodiscard]] adm_hptf_info_t to_hptf_info(const mradm::HptfInfo& info) {
+    adm_hptf_info_t value{};
+    value.struct_size = sizeof(adm_hptf_info_t);
+    value.enabled = info.enabled ? 1 : 0;
+    value.band_count = info.band_count;
+    value.sample_rate = info.sample_rate;
+    value.preamp_db = info.preamp_db;
+    value.auto_trim_db = info.auto_trim_db;
+    value.max_response_db = info.max_response_db;
+    value.applied_revision = info.applied_revision;
+    return value;
+}
+} // namespace
+
+adm_error_code_t adm_monitor_set_hptf(adm_monitor_t* monitor, const adm_hptf_config_t* config) noexcept {
+    if (monitor == nullptr || !monitor->session) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(monitor);
+        HptfRequest request;
+        if (!read_hptf_config(config, request)) {
+            return ADM_ERROR_INVALID_ARGUMENT;
+        }
+        auto result = monitor->session->set_hptf(request.path, request.mode, request.revision);
+        if (!result) {
+            store_last_error(monitor, result.error());
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        monitor->last_error_message = "unexpected exception while setting headphone compensation";
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_monitor_get_hptf_info(adm_monitor_t* monitor, adm_hptf_info_t* out) noexcept {
+    if (monitor == nullptr || !monitor->session || !output_struct_valid(out)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        write_sized_output(out, to_hptf_info(monitor->session->hptf_info()));
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
 adm_error_code_t adm_monitor_set_output_device(adm_monitor_t* monitor, const char* device_id) noexcept {
     if (monitor == nullptr || !monitor->session) {
         return ADM_ERROR_INVALID_ARGUMENT;
@@ -2702,6 +2782,26 @@ adm_scene_output_begin_epoch(adm_scene_output_t* output, uint64_t epoch, int64_t
 
 adm_error_code_t adm_scene_output_set_volume(adm_scene_output_t* output, float gain) noexcept {
     return scene_output_call(output, [=](auto& session) { return session.set_volume(gain); });
+}
+
+adm_error_code_t adm_scene_output_set_hptf(adm_scene_output_t* output, const adm_hptf_config_t* config) noexcept {
+    HptfRequest request;
+    if (!read_hptf_config(config, request)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    return scene_output_call(output, [&request](auto& session) {
+        return session.set_hptf_profile(request.path, request.mode, request.revision);
+    });
+}
+
+adm_error_code_t adm_scene_output_get_hptf_info(adm_scene_output_t* output, adm_hptf_info_t* out) noexcept {
+    if (!output_struct_valid(out)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    return scene_output_call(output, [out](auto& session) -> mradm::Result<void> {
+        write_sized_output(out, to_hptf_info(session.hptf_info()));
+        return {};
+    });
 }
 
 adm_error_code_t adm_scene_output_get_status(adm_scene_output_t* output, adm_scene_output_status_t* out) noexcept {

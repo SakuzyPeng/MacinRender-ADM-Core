@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <limits>
 #include <thread>
 #include <utility>
@@ -160,6 +161,47 @@ Result<void> SceneOutputSession::set_hptf(const std::optional<render_common::Hpt
         hptf_.publish_bypass(revision);
     }
     return {};
+}
+
+Result<void>
+SceneOutputSession::set_hptf_profile(const std::string& profile_path, HptfPreampMode mode, std::uint64_t revision) {
+    if (peak_guard_ == nullptr) {
+        return make_error(ErrorCode::unsupported,
+                          "耳机补偿(HpTF)只适用于立体声耳机输出;系统空间音频与多声道输出不支持");
+    }
+    if (profile_path.empty()) {
+        const std::lock_guard lock(control_);
+        hptf_profile_.reset();
+        hptf_.publish_bypass(revision);
+        return {};
+    }
+    // Parse + design on this thread: a bad file must surface as an error, never as an audio glitch.
+    auto profile = render_common::load_parametric_eq_file(std::filesystem::path{profile_path});
+    if (!profile) {
+        return tl::unexpected{profile.error()};
+    }
+    auto coeffs = render_common::design_cascade(*profile, stream_->output_format().sample_rate, mode);
+    if (!coeffs) {
+        return tl::unexpected{coeffs.error()};
+    }
+    const std::lock_guard lock(control_);
+    hptf_profile_ = std::move(*profile);
+    hptf_.publish(*coeffs, revision);
+    return {};
+}
+
+HptfInfo SceneOutputSession::hptf_info() const {
+    const std::lock_guard lock(control_);
+    const auto coeffs = hptf_.active_coefficients();
+    HptfInfo info;
+    info.enabled = coeffs.band_count > 0;
+    info.band_count = coeffs.band_count;
+    info.sample_rate = coeffs.sample_rate;
+    info.preamp_db = hptf_profile_.has_value() ? static_cast<float>(hptf_profile_->preamp_db) : 0.0F;
+    info.auto_trim_db = coeffs.auto_trim_db;
+    info.max_response_db = coeffs.max_response_db;
+    info.applied_revision = hptf_.applied_revision();
+    return info;
 }
 
 std::size_t SceneOutputSession::pull(std::span<float> output, std::size_t frames) noexcept {

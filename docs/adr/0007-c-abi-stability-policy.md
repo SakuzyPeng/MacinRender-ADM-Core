@@ -509,6 +509,27 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
   miniaudio／Windows 使用上一 callback 的消费进度，`clock_kind` 明确说明非 DAC 精度。
 - 新增 `adm_scene_stream_switch_backend_ex`，返回调用方持有的错误字符串，不操作共享借用错误缓存；
   下游可在独立加载线程准备 SOFA，同时继续提交音频和查询设备状态。
+
+### v1.37.0（additive，`SOVERSION` 仍为 1）
+
+- 新增 HpTF（耳机传输函数）补偿：`adm_hptf_preamp_mode_t`、`adm_hptf_config_t`、`adm_hptf_info_t`，
+  以及 `adm_monitor_set_hptf` / `adm_monitor_get_hptf_info` / `adm_scene_output_set_hptf` /
+  `adm_scene_output_get_hptf_info`。两条实时路径共用同一组配置与信息结构。
+- 首发只支持 AutoEq 的 ParametricEQ 文本（biquad 级联）。`profile_path` 为 `NULL` 或 `""` 表示关闭，
+  沿用 `adm_render_options_set_sofa_path` 的清空约定。文件解析与系数设计在调用线程同步完成，
+  坏文件直接返回错误码，绝不打扰音频线程。
+- 两个结构体都以 `struct_size` 打头，读侧沿用 `adm_monitor_set_overrides` 的 `has_field(offset,size)`
+  惯例：`struct_size` 不含 `preamp_mode` 的老调用方按 `ADM_HPTF_PREAMP_WARN_ONLY` 处理，
+  不含 `revision` 的按 0 处理。`reserved_v1_37` 复刻 `reserved_v1_29` 的做法占住尾部填充，
+  并由 `c_api_fixture_test.cpp` 的 `static_assert` 守护偏移。
+- 状态经独立的 `*_get_hptf_info` 读取，而不是在 `adm_monitor_status_t` 上再做一次 `struct_size`
+  迁移；顺带给 `max_response_db` / `auto_trim_db` 一个自然归宿，供 UI 提示曲线可能削波。
+- 作用域刻意限定在**设备绑定的双声道耳机馈送**：多声道扬声器输出与系统空间音频（多声道床交由 OS
+  做 HRTF）返回 `ADM_ERROR_UNSUPPORTED`，裸 `adm_scene_stream_pull` 的调用方不受影响。
+  **不新增任何 `RenderOptions` 字段**——那会漏进 `adm_render_file` 与 CLI，污染离线母版。
+- HpTF 是听者侧补偿，因此不影响 LUFS 表（换耳机不该改变节目响度读数），但影响 peak/RMS。
+- `mradm.output-formats` 与 `mradm.render-support-matrix` 的 `features` 增加布尔字段 `hptf`；
+  additive 字段不 bump schema_version。
 - ASBR 以有界定时器补缓存，设备欠载仅统计实际缓冲停顿，不把补缓存时的空读计为播放欠载。
 - `ended` 表示设备已呈现最后有效媒体帧，而不是 Scene worker 已结束。ASBR 支持不足 1024 帧
   的尾部和不足预填充水位的短片；补齐传输块和必要预填充静音不增加媒体长度。
