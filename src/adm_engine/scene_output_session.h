@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -11,6 +12,7 @@
 #include "adm/errors.h"
 #include "adm/options.h"
 
+#include "../adm_render_common/hptf_eq.h"
 #include "audio_output_device.h"
 #include "scene_stream_engine.h"
 #include "stereo_peak_guard.h"
@@ -60,6 +62,20 @@ class SceneOutputSession {
     void pause();
     [[nodiscard]] Result<void> begin_epoch(std::uint64_t epoch, std::int64_t target);
     [[nodiscard]] Result<void> set_volume(float gain);
+
+    // Publish a headphone-compensation (HpTF) cascade, or bypass when `coeffs` is nullopt.
+    // Takes control_ like set_volume and deliberately does NOT park(): parking the device on every
+    // profile change would stall playback, and the handoff to the callback is lock-free anyway.
+    // Returns `unsupported` unless this session owns the stereo headphone feed — a multichannel
+    // bed handed to the OS for HRTF has no 2ch signal on our side to compensate.
+    [[nodiscard]] Result<void> set_hptf(const std::optional<render_common::HptfCoefficients>& coeffs,
+                                        std::uint64_t revision);
+    [[nodiscard]] bool hptf_supported() const { return peak_guard_ != nullptr; }
+    [[nodiscard]] std::uint64_t hptf_applied_revision() const { return hptf_.applied_revision(); }
+    [[nodiscard]] render_common::HptfCoefficients hptf_active_coefficients() const {
+        return hptf_.active_coefficients();
+    }
+
     [[nodiscard]] SceneDeviceStatus status() const;
 
   private:
@@ -85,6 +101,9 @@ class SceneOutputSession {
     std::unique_ptr<StereoPeakGuard> peak_guard_;
     std::vector<float> peak_input_;
     bool peak_source_ended_{false};
+    // Headphone compensation, applied to peak_input_ upstream of peak_guard_. Only prepared when
+    // this session owns a stereo feed; otherwise it stays a no-op bypass.
+    render_common::HptfProcessor hptf_;
 };
 
 // cppcheck-suppress-end unusedStructMember
