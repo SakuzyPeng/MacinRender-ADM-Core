@@ -68,6 +68,10 @@ MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutput
         pull_scratch_.assign(static_cast<std::size_t>(k_ring_frames) * ring_channels_, 0.0F);
         meter_scratch_.assign(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F);
     }
+    // Headphone compensation runs on the OUTPUT width (downstream of render_output), never on
+    // ring_channels_, and at the STREAM's rate — the device's actual rate can differ and its
+    // resampler sits downstream of this insert.
+    hptf_.prepare(channels_, sample_rate_);
     rebuild_meter();
 }
 
@@ -244,6 +248,22 @@ void MonitorEngine::set_overrides(const LiveOverrides& overrides) {
     wake_.notify_all();
 }
 
+void MonitorEngine::set_hptf(const std::optional<render_common::HptfCoefficients>& coeffs, uint64_t revision) {
+    // Deliberately NOT routed through worker_loop() like set_overrides(): these coefficients are
+    // consumed by the audio callback in pull(), not by the stream, so a worker round-trip would
+    // only add ring-drain latency to what should be an immediate A/B. The correct precedent is the
+    // snap_yaw_ orientation snapshot above — publish lock-free, let the callback pick it up.
+    //
+    // The publish may briefly spin waiting for the callback to leave its copy window. That is safe
+    // even when a seek holds control_mutex_ and spins on in_pop_, because a parked callback takes
+    // pull()'s inactive path and never reaches the HpTF stage — so in_copy_ is already 0 there.
+    if (coeffs.has_value()) {
+        hptf_.publish(*coeffs, revision);
+    } else {
+        hptf_.publish_bypass(revision);
+    }
+}
+
 void MonitorEngine::set_listener_orientation(const ListenerOrientation& orientation) {
     // Mark head tracking active so the worker switches to the shallow lead (low head-tracking
     // latency). Reverts to the deep lead k_tracking_active_window after updates stop.
@@ -388,6 +408,17 @@ void MonitorEngine::worker_loop() {
                         meter_ring_.clear();
                         ended_.store(false, std::memory_order_relaxed);
                         failed_.store(false, std::memory_order_relaxed);
+                        // The hard cut is a real waveform discontinuity, and until now nothing
+                        // bridged it: this branch never bumped seek_generation_, so
+                        // apply_seek_transition left it alone. On its own that is a small step;
+                        // downstream of an HpTF cascade the IIR smears it and the outgoing
+                        // ring-out crosses the cut. Bumping the generation makes the existing
+                        // k_seek_transition_ms bridge cover the splice, and resetting the
+                        // cascade stops the pre-cut tail bleeding into the new stream. Both are
+                        // safe here: the callback is parked by the flushing_/in_pop_ handshake
+                        // above, exactly as for ring_.clear().
+                        seek_generation_.fetch_add(1U, std::memory_order_release);
+                        hptf_.reset_state();
                         flushing_.store(false, std::memory_order_seq_cst);
                     } else {
                         xfade_stream_ = std::move(pending_stream_);
@@ -605,6 +636,32 @@ std::size_t MonitorEngine::pull(std::span<float> out, std::size_t frames) {
     if (!output_stage_ && ended_.load(std::memory_order_relaxed) && ring_.available_read() == 0U) {
         device_.mark_end();
     }
+
+    // Headphone compensation (HpTF). Position matters in three independent ways:
+    //
+    //  * BEFORE apply_seek_transition: that bridge anchors on last_output_frame_, which it
+    //    captures from `out` itself. Filtering afterwards would leave the anchor holding
+    //    pre-HpTF audio while post-HpTF audio is what actually plays, so every seek would step
+    //    by the cascade's instantaneous response (several dB on a typical AutoEq profile).
+    //  * AFTER both LUFS taps (worker-side feed_meter for single-stage, meter_ring_ inside
+    //    pull_output_stage for output-stage): program loudness must stay headphone-independent,
+    //    so the meter reads pre-HpTF in both modes. This placement gives that for free.
+    //  * BEFORE the peak/RMS loop below, which is correct — those are device clipping
+    //    indicators and should reflect what the device actually receives.
+    //
+    // Skipped while inactive: that path writes exact silence, and running a biquad cascade over
+    // zeros would emit its ring-out into what must be digital silence. The state is deliberately
+    // NOT reset on pause — pause neither clears the ring nor moves the playhead, so the first
+    // sample after resume is the immediate successor of the last filtered one and the filter
+    // must stay continuous across it. (Seek is the case that does reset; see apply_seek_locked.)
+    if (active) {
+        // Mirror apply_seek_transition's own rule: a realtime sink plays the zero-padded
+        // underrun tail, so the cascade should ring out into it; a push sink enqueues only the
+        // produced portion, so the cascade must not advance over frames that are never emitted.
+        const std::size_t hptf_frames = pull_is_realtime_playback_ ? frames : std::min(frames, produced_frames);
+        hptf_.process(out.data(), hptf_frames);
+    }
+
     apply_seek_transition(out, frames, produced_frames, active);
 
     // Per-channel peak / RMS over the block (silence included), for the UI meters.
@@ -792,6 +849,11 @@ void MonitorEngine::apply_seek_locked(uint64_t frame) {
     // The playhead jumped: restart loudness integration from the new position (momentary /
     // short-term windows would otherwise span the discontinuity).
     rebuild_meter();
+    // Same reasoning, and race-free for the same reason ring_.clear() above is: flushing_ plus the
+    // in_pop_ spin has parked the callback, so the worker is the only thread touching this state.
+    // Without the reset the pre-seek ring-out would splice across the timeline jump and partially
+    // defeat the k_seek_transition_ms bridge.
+    hptf_.reset_state();
     flushing_.store(false, std::memory_order_seq_cst);
 }
 

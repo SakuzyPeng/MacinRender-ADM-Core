@@ -21,6 +21,7 @@
 
 #include "audio_output_device.h"
 #include "downmix_stream.h"
+#include "hptf_eq.h"
 #include "monitor_engine.h"
 #include "render_stream_factory.h"
 #include "ring_buffer.h"
@@ -1252,6 +1253,237 @@ bool test_monitor_output_stage_loop() {
     return ok;
 }
 
+// ── HpTF(耳机补偿)在 MonitorEngine 上的集成 ────────────────────────────────────
+
+// A 1 kHz boost, strong enough that every assertion below is unambiguous.
+mradm::render_common::HptfCoefficients hptf_boost_1k() {
+    auto profile = mradm::render_common::parse_parametric_eq("Preamp: 0 dB\n"
+                                                             "Filter 1: ON PK Fc 1000 Hz Gain 6 dB Q 1.5\n");
+    return *mradm::render_common::design_cascade(*profile, 48000U, mradm::render_common::HptfPreampMode::warn_only);
+}
+
+// The cascade must actually reach the device feed: a 1 kHz tone through a +6 dB 1 kHz band
+// comes out at the gain the analysis formula predicts.
+bool test_monitor_hptf_applies() {
+    bool ok = true;
+    SineStreamFactory factory;
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+    if (!check(engine.has_value(), "hptf: engine creates")) {
+        return false;
+    }
+    ok &= check((*engine)->hptf_supported(), "hptf: 2ch monitor supports HpTF");
+
+    const auto coeffs = hptf_boost_1k();
+    (*engine)->set_hptf(coeffs, 7);
+    (*engine)->play();
+    // Well past the blend window so only the new cascade remains.
+    ok &= check(drain_exact(**engine, sink, 40000), "hptf: drains tone");
+    ok &= check((*engine)->hptf_applied_revision() == 7, "hptf: applied revision published");
+
+    const auto& cap = sink.captured();
+    double peak = 0.0;
+    for (std::size_t i = cap.size() - 8000; i < cap.size(); ++i) {
+        peak = std::max(peak, std::fabs(static_cast<double>(cap[i])));
+    }
+    const double expected = 0.5 * std::pow(10.0, mradm::render_common::cascade_magnitude_db(coeffs, 1000.0) / 20.0);
+    ok &= check(std::fabs(peak - expected) < 0.01, "hptf: 输出幅度与解析式一致");
+    return ok;
+}
+
+// The feature must cost nothing when unused: with no profile published the callback path is an
+// exact short-circuit, so the capture is bit-identical to the raw pattern.
+bool test_monitor_hptf_bypass_bit_identical() {
+    bool ok = true;
+    PatternStreamFactory factory;
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+    if (!check(engine.has_value(), "hptf bypass: engine creates")) {
+        return false;
+    }
+    (*engine)->play();
+    constexpr std::size_t k_frames = 8000;
+    ok &= check(drain_exact(**engine, sink, k_frames), "hptf bypass: drains pattern");
+
+    const auto& cap = sink.captured();
+    bool identical = true;
+    for (std::size_t f = 0; f < k_frames && identical; ++f) {
+        for (uint32_t c = 0; c < 2U; ++c) {
+            // Exact equality, not near(): a bypass that multiplied by 1.0f would still pass
+            // near() but would prove the short-circuit was gone.
+            if (cap[(f * 2U) + c] != PatternStream::sample(f, c)) {
+                identical = false;
+                break;
+            }
+        }
+    }
+    ok &= check(identical, "hptf bypass: 未启用时逐样本 bit-identical");
+    return ok;
+}
+
+// Program loudness must be headphone-independent: the LUFS meter reads PRE-HpTF in both engine
+// modes, while peak/RMS (device clipping indicators) read POST-HpTF. This is the regression lock
+// for the insertion point — moving the HpTF stage past either meter tap breaks exactly one half.
+bool test_monitor_hptf_lufs_is_pre_eq() {
+    bool ok = true;
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto run = [&](bool with_hptf, float& lufs, float& peak) {
+        SineStreamFactory factory;
+        ManualSink sink;
+        auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+        if (!engine.has_value()) {
+            return false;
+        }
+        if (with_hptf) {
+            (*engine)->set_hptf(hptf_boost_1k(), 1);
+        }
+        (*engine)->play();
+        if (!drain_exact(**engine, sink, 160000)) {
+            return false;
+        }
+        const auto lv = (*engine)->levels();
+        lufs = lv.momentary_lufs;
+        peak = lv.peak.at(0);
+        return true;
+    };
+
+    float lufs_off = 0.0F;
+    float peak_off = 0.0F;
+    float lufs_on = 0.0F;
+    float peak_on = 0.0F;
+    ok &= check(run(false, lufs_off, peak_off), "hptf lufs: baseline run");
+    ok &= check(run(true, lufs_on, peak_on), "hptf lufs: HpTF run");
+
+    ok &= check(std::isfinite(lufs_off) && std::isfinite(lufs_on), "hptf lufs: both finite");
+    ok &= check(std::fabs(lufs_on - lufs_off) < 0.1F, "hptf lufs: LUFS 不受 HpTF 影响(pre-EQ 口径)");
+    ok &= check(peak_on > peak_off + 0.2F, "hptf lufs: peak 受 HpTF 影响(post-EQ 口径)");
+    return ok;
+}
+
+// Seeking with HpTF active must not click. Two things have to line up for that: the cascade state
+// is reset while the callback is parked (apply_seek_locked), so no pre-seek ring-out splices across
+// the jump; and the HpTF stage runs BEFORE apply_seek_transition, so the de-click bridge anchors on
+// the audio that was actually emitted rather than on the pre-filter signal.
+//
+// The assertion is the user-visible property — no sample-to-sample step larger than the signal's
+// own maximum slope, anywhere across the seek. (MonitorEngine::seek is asynchronous: the worker
+// applies it, so the splice does not land at a position the test can predict; scanning the whole
+// post-seek capture is both simpler and closer to what a listener would notice.)
+bool test_monitor_hptf_seek_no_click() {
+    bool ok = true;
+    SineStreamFactory factory;
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+    if (!check(engine.has_value(), "hptf seek: engine creates")) {
+        return false;
+    }
+    (*engine)->set_hptf(hptf_boost_1k(), 1);
+    (*engine)->play();
+
+    constexpr std::size_t k_before = 20000;
+    ok &= check(drain_exact(**engine, sink, k_before), "hptf seek: drains pre-seek audio");
+
+    (*engine)->seek(100000);
+    ok &= check(drain_exact(**engine, sink, 20000), "hptf seek: drains post-seek audio");
+
+    const auto& cap = sink.captured();
+    double peak = 0.0;
+    for (const float v : cap) {
+        peak = std::max(peak, std::fabs(static_cast<double>(v)));
+    }
+    // Maximum first difference of a 1 kHz sine at 48 kHz is amplitude * 2*sin(w/2). The 10 ms
+    // bridge ramp adds at most anchor/480 per frame on top, which is negligible here.
+    constexpr double k_twopi = 6.283185307179586;
+    const double w = k_twopi * 1000.0 / 48000.0;
+    const double bound = (peak * 2.0 * std::sin(w / 2.0) * 1.1) + 0.01;
+
+    double worst = 0.0;
+    for (std::size_t i = 2; i < cap.size(); ++i) {
+        worst = std::max(worst, std::fabs(static_cast<double>(cap[i] - cap[i - 2])));
+    }
+    ok &= check(worst <= bound, "hptf seek: 跨 seek 无爆音(最大步进不超过信号自身斜率)");
+    return ok;
+}
+
+// Paused output is exact digital silence. Running a biquad cascade over the zero-fill would leak
+// its ring-out into what must be silence, so the HpTF stage is skipped while inactive.
+bool test_monitor_hptf_paused_is_silence() {
+    bool ok = true;
+    SineStreamFactory factory;
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+    if (!check(engine.has_value(), "hptf pause: engine creates")) {
+        return false;
+    }
+    (*engine)->set_hptf(hptf_boost_1k(), 1);
+    (*engine)->play();
+    ok &= check(drain_exact(**engine, sink, 4000), "hptf pause: drains some audio");
+    (*engine)->pause();
+
+    const std::size_t boundary = sink.captured().size();
+    sink.pump(2048);
+    const auto& cap = sink.captured();
+    bool all_zero = true;
+    for (std::size_t i = boundary; i < cap.size(); ++i) {
+        if (cap[i] != 0.0F) {
+            all_zero = false;
+            break;
+        }
+    }
+    ok &= check(all_zero, "hptf pause: 暂停输出为精确静音");
+    return ok;
+}
+
+// HpTF lives on the engine, not the stream, so a backend hot-switch must not drop it.
+bool test_monitor_hptf_survives_switch() {
+    bool ok = true;
+    SineStreamFactory factory;
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    mradm::AdmScene scene;
+    mradm::RenderOptions opts;
+
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+    if (!check(engine.has_value(), "hptf switch: engine creates")) {
+        return false;
+    }
+    const auto coeffs = hptf_boost_1k();
+    (*engine)->set_hptf(coeffs, 3);
+    (*engine)->play();
+    ok &= check(drain_exact(**engine, sink, 8000), "hptf switch: drains pre-switch audio");
+
+    (*engine)->switch_stream(std::make_unique<SineStream>(2U));
+    ok &= check(drain_exact(**engine, sink, 40000), "hptf switch: drains post-switch audio");
+
+    const auto& cap = sink.captured();
+    double peak = 0.0;
+    for (std::size_t i = cap.size() - 8000; i < cap.size(); ++i) {
+        peak = std::max(peak, std::fabs(static_cast<double>(cap[i])));
+    }
+    const double expected = 0.5 * std::pow(10.0, mradm::render_common::cascade_magnitude_db(coeffs, 1000.0) / 20.0);
+    ok &= check(std::fabs(peak - expected) < 0.01, "hptf switch: 换后端后补偿仍然生效");
+    return ok;
+}
+
 int main() {
     bool ok = true;
     ok &= test_ring_basic();
@@ -1275,6 +1507,12 @@ int main() {
     ok &= test_downmix_stream();
     ok &= test_monitor_miniaudio_null_device();
     ok &= test_monitor_lufs();
+    ok &= test_monitor_hptf_applies();
+    ok &= test_monitor_hptf_bypass_bit_identical();
+    ok &= test_monitor_hptf_lufs_is_pre_eq();
+    ok &= test_monitor_hptf_seek_no_click();
+    ok &= test_monitor_hptf_paused_is_silence();
+    ok &= test_monitor_hptf_survives_switch();
 
     if (ok) {
         std::cout << "realtime stream/ring tests passed\n";
