@@ -17,6 +17,10 @@ SceneOutputSession::SceneOutputSession(std::shared_ptr<SceneStreamEngine> stream
     if (protect_stereo && channels_ == 2U) {
         peak_guard_ = std::make_unique<StereoPeakGuard>(stream_->output_format().sample_rate);
         peak_input_.resize(StereoPeakGuard::k_pull_frames * 2U);
+        // HpTF is device-bound in exactly the sense StereoPeakGuard is: it only exists on the
+        // stereo headphone feed. Design against the STREAM's rate — the device's actual rate can
+        // differ and its resampler sits downstream of this insert.
+        hptf_.prepare(2U, stream_->output_format().sample_rate);
     }
 }
 
@@ -121,6 +125,11 @@ Result<void> SceneOutputSession::begin_epoch(std::uint64_t epoch, std::int64_t t
     if (peak_guard_) {
         (*peak_guard_).reset();
         peak_source_ended_ = false;
+        // Same synchronisation as the guard reset above: begin_epoch holds control_ and has
+        // called park(), which publishes playing_ = false and spins until no callback is inside
+        // pull()/pull_stereo(). Deliberately NOT done in pause(), which also parks: pause keeps
+        // the guard's lookahead, so the signal stays sample-continuous and the filter must too.
+        hptf_.reset_state();
     }
     return {};
 }
@@ -132,6 +141,24 @@ Result<void> SceneOutputSession::set_volume(float gain) {
     const std::lock_guard lock(control_);
     volume_.store(gain);
     device_->set_volume(gain);
+    return {};
+}
+
+Result<void> SceneOutputSession::set_hptf(const std::optional<render_common::HptfCoefficients>& coeffs,
+                                          std::uint64_t revision) {
+    if (peak_guard_ == nullptr) {
+        return make_error(ErrorCode::unsupported,
+                          "耳机补偿(HpTF)只适用于立体声耳机输出;系统空间音频与多声道输出不支持");
+    }
+    // control_ only serialises concurrent setters here — no park(). The publish itself is
+    // lock-free, and the swap is a short linear blend inside the callback, so playback is
+    // uninterrupted and never clicks.
+    const std::lock_guard lock(control_);
+    if (coeffs.has_value()) {
+        hptf_.publish(*coeffs, revision);
+    } else {
+        hptf_.publish_bypass(revision);
+    }
     return {};
 }
 
@@ -192,6 +219,10 @@ ScenePullResult SceneOutputSession::pull_stereo(std::span<float> output, std::ui
         result.epoch_id = pulled.epoch_id;
         result.flags |= pulled.flags & (scene_pull_buffering | scene_pull_underrun | scene_pull_failed);
         peak_source_ended_ = (pulled.flags & scene_pull_eos) != 0U;
+        // Headphone compensation, applied UPSTREAM of the peak guard so a boosted band is caught
+        // by its -1 dBFS ceiling instead of escaping it. peak_input_ is sized for k_pull_frames
+        // and `request` is clamped to it above, so this never needs to resize.
+        hptf_.process(peak_input_.data(), static_cast<std::size_t>(pulled.media_frames));
         peak_guard_->push(std::span{peak_input_}.first(static_cast<std::size_t>(pulled.media_frames) * 2U));
         if (pulled.media_frames == 0U && !peak_source_ended_) {
             break;

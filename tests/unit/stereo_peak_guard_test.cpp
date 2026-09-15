@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "../../src/adm_engine/scene_output_session.h"
+#include "../../src/adm_render_common/hptf_eq.h"
 #include "stereo_peak_guard.h"
 
 namespace {
@@ -226,6 +227,93 @@ bool test_real_pcm() {
 }
 } // namespace
 
+// A big low shelf, so even low-frequency / near-DC content gets boosted hard. A peaking band
+// would leave such content almost untouched and would not exercise the ceiling.
+mradm::render_common::HptfCoefficients hptf_low_boost() {
+    auto profile = mradm::render_common::parse_parametric_eq("Preamp: 0 dB\n"
+                                                             "Filter 1: ON LSC Fc 200 Hz Gain 12 dB Q 0.7\n");
+    return *mradm::render_common::design_cascade(*profile, 48000U, mradm::render_common::HptfPreampMode::warn_only);
+}
+
+// HpTF is applied UPSTREAM of StereoPeakGuard, so a boosted band must still be caught by the
+// -1 dBFS ceiling. This is the assertion that pins the insertion point: move the HpTF stage
+// downstream of peak_guard_->push() and a +12 dB shelf escapes the guard, failing here.
+bool test_scene_hptf_respects_ceiling() {
+    SceneStreamConfig config;
+    config.renderer.renderer = mradm::RendererSelection::saf_binaural;
+    config.renderer.output_layout = "binaural";
+    config.startup_watermark_frames = 1U;
+    auto created = SceneStreamEngine::create(config);
+    require(created);
+    auto stream = std::shared_ptr<SceneStreamEngine>(std::move(*created));
+    auto device = std::make_unique<CaptureDevice>();
+    auto* capture = device.get();
+    auto output = SceneOutputSession::create_with_device(stream, std::move(device), true);
+    require(output);
+
+    bool ok = true;
+    ok &= check((*output)->hptf_supported(), "scene hptf: stereo feed supports HpTF");
+    require((*output)->set_hptf(hptf_low_boost(), 5));
+
+    constexpr std::uint32_t k_frames = 8000U;
+    require((*output)->begin_epoch(1U, 0));
+    mradm::live_scene::ElementDescriptor element;
+    element.element_id = 1U;
+    element.role = mradm::live_scene::ElementRole::lfe;
+    require(stream->configure_generation(1U, 1U, std::span{&element, 1U}));
+    // Deliberately hot source material: without the guard a +12 dB shelf on top of this is far
+    // above full scale.
+    std::vector<float> samples(k_frames, 3.0F);
+    ScenePcmPlaneView plane{1U, samples.data(), k_frames, 1U, true};
+    SceneFrameView frame;
+    frame.epoch_id = 1U;
+    frame.generation_id = 1U;
+    frame.duration_samples = k_frames;
+    frame.flags = mradm::live_scene::frame_state_complete;
+    frame.pcm = std::span{&plane, 1U};
+    require(stream->submit_frame(frame, std::chrono::milliseconds(100)));
+    require(stream->signal_end(1U, k_frames));
+
+    (*output)->play();
+    std::vector<float> callback(960U);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!(*output)->status().ended && std::chrono::steady_clock::now() < deadline) {
+        const auto produced = capture->pull(callback);
+        for (const float sample : std::span{callback}.first(produced * 2U)) {
+            ok &= check(std::abs(sample) <= StereoPeakGuard::k_ceiling + 1.0e-6F,
+                        "scene hptf: 提升后的信号仍被 -1 dBFS 天花板挡住(HpTF 在限幅器上游)");
+        }
+        if (produced == 0U) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    ok &= check((*output)->hptf_applied_revision() == 5, "scene hptf: applied revision published");
+    return ok;
+}
+
+// A non-stereo / system-spatial session hands a multichannel bed to the OS for HRTF, so there is
+// no 2ch headphone signal on our side. Reject rather than silently ignore.
+bool test_scene_hptf_unsupported_without_stereo_guard() {
+    SceneStreamConfig config;
+    config.renderer.renderer = mradm::RendererSelection::saf_binaural;
+    config.renderer.output_layout = "binaural";
+    config.startup_watermark_frames = 1U;
+    auto created = SceneStreamEngine::create(config);
+    require(created);
+    auto stream = std::shared_ptr<SceneStreamEngine>(std::move(*created));
+    auto device = std::make_unique<CaptureDevice>();
+    // protect_stereo = false is the system-spatial path: no peak guard, and no HpTF either.
+    auto output = SceneOutputSession::create_with_device(stream, std::move(device), false);
+    require(output);
+
+    bool ok = true;
+    ok &= check(!(*output)->hptf_supported(), "scene hptf: 非立体声输出不支持 HpTF");
+    const auto res = (*output)->set_hptf(hptf_low_boost(), 1);
+    ok &= check(!res.has_value() && res.error().code == mradm::ErrorCode::unsupported,
+                "scene hptf: 非立体声输出返回 unsupported");
+    return ok;
+}
+
 int main() {
     try {
         bool ok = test_transparency_and_volume();
@@ -233,6 +321,8 @@ int main() {
         ok &= test_short_end_and_reset();
         ok &= test_device_clock_and_epoch();
         ok &= test_real_pcm();
+        ok &= test_scene_hptf_respects_ceiling();
+        ok &= test_scene_hptf_unsupported_without_stereo_guard();
         return ok ? 0 : 1;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
