@@ -91,17 +91,33 @@ hand-edited or non-AutoEq file carries no such guarantee. `HptfPreampMode`
 controls what happens when the designed cascade still peaks above 0 dB:
 
 - `warn_only` (**default**) uses the file's value verbatim and logs a warning.
-- `auto_trim` folds the excess into the preamp so the cascade never amplifies,
-  at the cost of diverging from AutoEq's nominal curve.
+- `auto_trim` attenuates against a conservative bound on the audible-band magnitude
+  response. This is a frequency-response bound, not a transient/sample-peak limiter.
 
-`max_response_db` is scanned over the **audible band, 20 Hz – 20 kHz**, and this
+`max_response_db` is searched over the **audible band, 20 Hz – 20 kHz**, and this
 is a deliberate choice rather than an oversight. On the MDR-MV1 the +9.7 dB
 105 Hz low shelf keeps rising once the 46 Hz dip stops opposing it: −0.52 dB at
 20 Hz, +2.93 dB at 10 Hz, +4.75 dB at 5 Hz. Counting the infrasonic region would
-make `auto_trim` pull the whole curve down by nearly 5 dB to protect frequencies
-no headphone reproduces and almost no programme contains. AutoEq computes its own
+make `auto_trim` pull the whole curve down further. The final stereo peak guard
+still sees and protects against infrasonic overloads. AutoEq computes its own
 preamp over the audible band; matching that convention is what makes our measured
 −0.098 dB agree with its nominal −0.1 dB.
+
+The peak search includes the extrema of every quantised biquad: squared magnitude
+is a ratio of quadratics in `sin(w/2)^2`, whose derivative has at most two roots.
+The shifted variable avoids cancellation near DC when float coefficients move a
+low-frequency peak away from its requested center.
+Within each interval, summing the individual section maxima gives a conservative
+bound for the cascade. The highest remaining interval is bisected until the bound
+is within 0.001 dB of an evaluated response, or the preparation work budget is
+reached. In the latter case the remaining upper bound is retained. This covers
+narrow peaks between grid points and overlapping bands without relying on a fixed
+512-point scan. The resulting attenuation is rounded downward.
+
+Numeric tokens must be consumed in full. Missing optional fields may use defaults;
+an explicitly malformed `Gain`, `Q`, or `Preamp` is an error. Design validates finite
+representable gains and coefficients, and checks the Jury stability conditions on
+the float coefficients that will actually run. Failure preserves the existing DSP.
 
 ## Hot-swapping without clicks
 
@@ -111,11 +127,10 @@ Changing profile runs the outgoing and incoming cascades **in parallel** over a
 Coefficient interpolation is not an option: two profiles need not have the same
 section count, interpolating `a1`/`a2` can traverse the unstable region, and
 more fundamentally there is no correspondence between the states of two different
-transfer functions, so state cannot be migrated. Running both over the same input
-means each is in true steady state with respect to the real signal at every
-instant, so at the end of the blend the incoming cascade's state is exactly what
-it would have been had it always been running — no transient at the end, and at
-the start its weight is zero.
+transfer functions, so state cannot be directly migrated. Both branches process the
+same new input. The incoming branch starts with zero history and zero weight;
+high-Q filters may take longer than the fade window to settle, so the transition
+does not claim to reconstruct an unlimited pre-switch input history.
 
 The blend is **linear, not equal-power**. Both cascades see the same input so
 their outputs are strongly correlated; a square-root law would bulge about +3 dB
@@ -129,10 +144,16 @@ audible spectral wobble instead of a smooth morph. The value matches
 `MonitorEngine`'s stream crossfade constant so a simultaneous backend + profile
 switch behaves predictably.
 
-Bypass is modelled as a cascade with `band_count == 0`, so enabling, disabling
+Bypass is modelled as zero bands **and unit preamp gain**, so enabling, disabling
 and switching profiles are one code path with one blend. The steady bypass state
 is an **exact short-circuit** (no multiply by 1.0), which keeps an unused HpTF
 stage bit-identical to no HpTF stage at all.
+
+A profile with no enabled bands and a non-unit preamp still applies that gain.
+Its status is enabled, and the reported preamp belongs to the applied revision.
+On seek, reset adopts the latest pending profile, or the incoming branch if a fade
+was already in flight, then clears both histories. It never consumes and loses a
+profile merely because playback changed epoch.
 
 Only one swap is in flight at a time: a profile arriving mid-blend replaces the
 pending slot and is picked up when the current blend finishes. Worst-case apply
@@ -144,17 +165,17 @@ Parsing and coefficient design run synchronously on the caller's thread, so a ba
 file returns an error and never disturbs audio. The callback only ever reads
 prepared coefficients.
 
-Publication is a preallocated two-slot buffer with an atomic generation counter:
-the writer spins until the callback leaves its copy window (the writer may block;
-the callback may not), writes the inactive slot, then publishes with release. The
-callback acquires the generation, copies the slot under an `in_copy_` flag, and
-starts a blend. The callback never writes a slot and the writer never reads one
-back.
+Each direction uses a preallocated three-slot mailbox. Producer and consumer own
+one private slot each; an atomic exchange transfers ownership of the middle slot.
+The producer can replace a pending update without overwriting the consumer's slot.
+No audio-thread retry, allocation, mutex or spin is needed.
 
-That writer-side spin is safe even while a seek holds `control_mutex_` and spins
-on `in_pop_`, because a parked callback takes `pull()`'s inactive path and never
-reaches the HpTF stage — so `in_copy_` is already zero. The inactive-path skip is
-part of the locking argument, not only an audio-quality choice.
+One mailbox carries requested coefficients to the callback. A second carries a
+complete applied snapshot back: coefficients, original preamp and revision move
+together. Control queries consume this snapshot rather than read the live cascade
+while it is being swapped. Small control-side mutexes serialize multiple publishers
+or pollers; the audio thread never acquires them. Seek reset publishes through the
+same path while the callback is parked by the existing output handshake.
 
 ## Numerics
 
@@ -207,3 +228,10 @@ silence, and the compensation survives a backend switch.
 `mr_adm_stereo_peak_guard_tests` pins the Scene insertion point: with a +12 dB
 shelf on hot material every captured sample still satisfies the guard's ceiling,
 which fails immediately if the stage is ever moved downstream of the limiter.
+
+`mr_adm_hptf_regression_tests` covers preamp-only processing, seek during an active
+fade and with a newer pending target, malformed/overflowing inputs, off-grid narrow
+peaks, independent impulse-response validation, and concurrent mailbox publication
+and applied-state queries. The concurrency cases also run under ThreadSanitizer;
+Apple's runtime needs `ignore_interceptors_accesses=0` to inspect the POD memcpy
+operations used by the mailboxes.

@@ -117,6 +117,7 @@ class MonitorEngine {
     [[nodiscard]] render_common::HptfCoefficients hptf_active_coefficients() const {
         return hptf_.active_coefficients();
     }
+    [[nodiscard]] render_common::HptfSnapshot hptf_active_snapshot() const { return hptf_.active_snapshot(); }
 
     [[nodiscard]] MonitorStatus status() const;
     [[nodiscard]] MonitorLevels levels() const;

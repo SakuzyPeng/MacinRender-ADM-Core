@@ -113,8 +113,6 @@ class SceneOutputSession {
     // Headphone compensation, applied to peak_input_ upstream of peak_guard_. Only prepared when
     // this session owns a stereo feed; otherwise it stays a no-op bypass.
     render_common::HptfProcessor hptf_;
-    // The rate-independent profile is kept so hptf_info() can report the file's own Preamp value.
-    std::optional<render_common::HptfProfile> hptf_profile_;
 };
 
 // cppcheck-suppress-end unusedStructMember

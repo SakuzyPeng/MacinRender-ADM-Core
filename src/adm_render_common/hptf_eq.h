@@ -17,6 +17,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -77,7 +79,7 @@ struct HptfBiquad {
 };
 
 // 设计结果。**定长 POD**:不含 vector/string,所以可以整体字节拷贝发布给音频回调,
-// 这正是无锁交接得以成立的前提。band_count == 0 表示 bypass。
+// 这正是无锁交接得以成立的前提。零段仍可只施加前级增益。
 struct HptfCoefficients {
     std::uint32_t sample_rate{0};
     std::uint32_t band_count{0};
@@ -85,6 +87,32 @@ struct HptfCoefficients {
     std::array<HptfBiquad, k_hptf_max_bands> sections{};
     float max_response_db{0.0F}; // 含 preamp;> 0 表示这条曲线可能削波
     float auto_trim_db{0.0F};    // warn_only 下恒为 0
+    float preamp_db{0.0F};       // 文件里的前级值,随同一 revision 发布
+
+    [[nodiscard]] bool is_bypass() const noexcept { return band_count == 0 && preamp_gain == 1.0F; }
+};
+
+struct HptfSnapshot {
+    HptfCoefficients coefficients;
+    std::uint64_t revision{0};
+};
+
+// Single producer / single consumer, with private read/write slots and one exchanged slot.
+// Neither side touches a slot owned by the other. A newer publication replaces pending data;
+// every consume is bounded and never waits. External control callers serialize their own side.
+class HptfMailbox {
+  public:
+    void publish(const HptfSnapshot& snapshot) noexcept;
+    [[nodiscard]] std::optional<HptfSnapshot> consume() noexcept;
+
+  private:
+    static constexpr std::uint32_t k_dirty = 4U;
+    static constexpr std::uint32_t k_index_mask = 3U;
+    static_assert(std::atomic<std::uint32_t>::is_always_lock_free);
+    std::array<HptfSnapshot, 3> slots_{};
+    std::atomic<std::uint32_t> middle_{2U};
+    std::uint32_t write_slot_{0U};
+    std::uint32_t read_slot_{1U};
 };
 
 // ── 解析 ──────────────────────────────────────────────────────────────────────
@@ -102,8 +130,8 @@ struct HptfCoefficients {
 // ── 设计 ──────────────────────────────────────────────────────────────────────
 
 // RBJ Audio-EQ-Cookbook。搁架用 **Q 参数化**形式(不是 slope S 形式)——这才是
-// EqualizerAPO / AutoEq 的 LSC/HSC 含义。fc <= 0 或 fc >= fs/2 的段在**设计期**跳过
-// (20 kHz 段在 48 kHz 合法、在 32 kHz 不合法)。
+// EqualizerAPO / AutoEq 的 LSC/HSC 含义。非法参数/不稳定系数返回错误;fc >= fs/2
+// 的段在设计期跳过(20 kHz 段在 48 kHz 合法、在 32 kHz 不合法)。
 [[nodiscard]] Result<HptfCoefficients>
 design_cascade(const HptfProfile& profile, std::uint32_t sample_rate, HptfPreampMode mode);
 
@@ -119,7 +147,7 @@ design_cascade(const HptfProfile& profile, std::uint32_t sample_rate, HptfPreamp
 class HptfCascade {
   public:
     // 控制线程:一次性分配状态。之后 set_coefficients / process 都不再分配。
-    void prepare(std::uint32_t channels);
+    void prepare(std::uint32_t channel_count);
 
     // 纯字节拷贝,回调安全。
     void set_coefficients(const HptfCoefficients& coeffs) noexcept;
@@ -127,11 +155,11 @@ class HptfCascade {
     void reset() noexcept;
 
     // 就地处理 interleaved PCM。严格无分配、无锁、无 I/O。
-    // bypass(band_count == 0)时**精确短路**——不做 x * 1.0f,保证逐样本 bit-identical。
+    // 零段且单位增益时精确短路;零段的非单位前级仍生效。
     void process(float* interleaved, std::size_t frames) noexcept;
 
     [[nodiscard]] const HptfCoefficients& coefficients() const noexcept { return coeffs_; }
-    [[nodiscard]] bool is_bypass() const noexcept { return coeffs_.band_count == 0; }
+    [[nodiscard]] bool is_bypass() const noexcept { return coeffs_.is_bypass(); }
     [[nodiscard]] std::uint32_t channels() const noexcept { return channels_; }
 
   private:
@@ -145,36 +173,36 @@ class HptfCascade {
 //
 // 为什么是"双级联并行 + 混合"而不是插值系数:两份 profile 的段数可以不同,而且在
 // a1/a2 之间插值会经过不稳定区;更根本的是,不同传递函数之间**状态没有对应关系**,
-// 无法迁移。让两条级联吃同一份输入,各自对真实输入始终处于稳态,于是混合结束时
-// 切进来的那条的状态恰好等于"它一直在跑"应有的状态——尾端无瞬态,而起点它的权重是 0。
+// 无法直接迁移。两条级联处理同一输入,新级联从零状态开始并逐渐淡入。
+// 高 Q 滤波器的收敛可能长于混合窗,因此不声称有限淡入能恢复无限长输入历史。
 //
 // 为什么是**线性**混合而不是等功率:两条级联吃同一输入、输出强相关,等功率律会在
 // 中点鼓出约 +3 dB。这与"两路不相关信号交叉淡化"的常规相反。
 class HptfProcessor {
   public:
     // 控制线程,构造期调用一次。channels 是**输出**宽度。
-    void prepare(std::uint32_t channels, std::uint32_t sample_rate);
+    void prepare(std::uint32_t channel_count, std::uint32_t rate);
 
     [[nodiscard]] std::uint32_t sample_rate() const noexcept { return sample_rate_; }
     [[nodiscard]] std::uint32_t channels() const noexcept { return channels_; }
 
-    // 控制线程:发布一组新系数。写非活动槽后以 release 发布;在此之前会自旋等待回调
-    // 退出拷贝窗口(写者可以阻塞,回调不可以)。
+    // 控制线程:写私有槽后交换所有权。互斥锁只串行化控制调用,回调从不获取它。
     void publish(const HptfCoefficients& coeffs, std::uint64_t revision);
 
-    // 控制线程:发布 bypass(band_count == 0)。启用 / 关闭 / 换 profile 因此是同一条
+    // 控制线程:发布单位增益的零段 bypass。启用 / 关闭 / 换 profile 因此是同一条
     // 代码路径、同一次混合,没有"关掉时"的特例爆音。
     void publish_bypass(std::uint64_t revision);
 
     // **仅在回调已停泊时调用**(monitor 的 apply_seek_locked / Scene 的 begin_epoch)。
-    // 清滤波器状态并结束在飞的混合。
+    // 采用最新已发布目标(或当前混合目标),再清历史;seek 不会丢失配置。
     void reset_state() noexcept;
 
     // 回调已应用的 revision,供状态轮询确认编辑落地。
-    [[nodiscard]] std::uint64_t applied_revision() const noexcept;
+    [[nodiscard]] std::uint64_t applied_revision() const;
 
     // 当前生效的系数快照(控制线程读,用于 *_get_hptf_info)。
-    [[nodiscard]] HptfCoefficients active_coefficients() const noexcept;
+    [[nodiscard]] HptfCoefficients active_coefficients() const;
+    [[nodiscard]] HptfSnapshot active_snapshot() const;
 
     // 音频回调:就地处理 interleaved PCM。无分配、无锁、无 I/O。
     void process(float* interleaved, std::size_t frames) noexcept;
@@ -182,20 +210,16 @@ class HptfProcessor {
   private:
     void finish_blend() noexcept;
 
-    // 写者拥有的双槽。回调只读、从不写槽。
-    std::array<HptfCoefficients, 2> slots_{};
-    std::array<std::uint64_t, 2> slot_revisions_{};
-
-    std::atomic<std::uint32_t> pending_{0}; // 代号;槽下标 = pending_ & 1
-    std::atomic<std::uint32_t> in_copy_{0}; // 回调正在拷贝某个槽
-    std::atomic<std::uint64_t> applied_revision_{0};
-
-    std::uint32_t generation_{0}; // 写者私有
+    std::mutex publication_mutex_; // control producers only
+    HptfMailbox pending_;
+    mutable std::mutex status_mutex_; // control readers only
+    mutable HptfMailbox status_;
+    mutable HptfSnapshot observed_;
 
     // 回调私有状态。
     HptfCascade front_;
     HptfCascade back_;
-    std::uint32_t consumed_generation_{0};
+    std::uint64_t front_revision_{0};
     bool blending_{false};
     std::uint64_t blend_pos_{0};
     std::uint64_t blend_revision_{0};

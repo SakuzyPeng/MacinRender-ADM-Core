@@ -1139,7 +1139,7 @@ adm_error_code_t adm_monitor_switch_backend(adm_monitor_t* monitor, const adm_re
 typedef enum adm_hptf_preamp_mode_t {
     /* 严格使用文件里的 Preamp 值；合成响应仍 > 0 dB 时只在日志里告警，不改用户数值。 */
     ADM_HPTF_PREAMP_WARN_ONLY = 0,
-    /* 额外再减掉超出量，保证级联绝不放大（实际曲线会与 AutoEq 标称有偏差）。 */
+    /* 按可听频段幅度响应的保守上界增加衰减；瞬态峰值仍由输出保护器处理。 */
     ADM_HPTF_PREAMP_AUTO_TRIM = 1
 } adm_hptf_preamp_mode_t;
 
@@ -1161,7 +1161,7 @@ typedef struct adm_hptf_config_t {
 /* 当前生效的补偿状态。Set struct_size = sizeof(adm_hptf_info_t) 后调用。 */
 typedef struct adm_hptf_info_t {
     uint32_t struct_size;
-    int32_t enabled;           /* 0 = bypass */
+    int32_t enabled;           /* 0 = 零滤波器且单位前级增益的 bypass */
     uint32_t band_count;       /* 实际进入级联的双二阶段数 */
     uint32_t sample_rate;      /* 系数所针对的采样率 */
     float preamp_db;           /* 文件里的 Preamp 值 */

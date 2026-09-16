@@ -171,7 +171,6 @@ SceneOutputSession::set_hptf_profile(const std::string& profile_path, HptfPreamp
     }
     if (profile_path.empty()) {
         const std::lock_guard lock(control_);
-        hptf_profile_.reset();
         hptf_.publish_bypass(revision);
         return {};
     }
@@ -185,22 +184,21 @@ SceneOutputSession::set_hptf_profile(const std::string& profile_path, HptfPreamp
         return tl::unexpected{coeffs.error()};
     }
     const std::lock_guard lock(control_);
-    hptf_profile_ = std::move(*profile);
     hptf_.publish(*coeffs, revision);
     return {};
 }
 
 HptfInfo SceneOutputSession::hptf_info() const {
-    const std::lock_guard lock(control_);
-    const auto coeffs = hptf_.active_coefficients();
+    const auto snapshot = hptf_.active_snapshot();
+    const auto& coeffs = snapshot.coefficients;
     HptfInfo info;
-    info.enabled = coeffs.band_count > 0;
+    info.enabled = !coeffs.is_bypass();
     info.band_count = coeffs.band_count;
     info.sample_rate = coeffs.sample_rate;
-    info.preamp_db = hptf_profile_.has_value() ? static_cast<float>(hptf_profile_->preamp_db) : 0.0F;
+    info.preamp_db = coeffs.preamp_db;
     info.auto_trim_db = coeffs.auto_trim_db;
     info.max_response_db = coeffs.max_response_db;
-    info.applied_revision = hptf_.applied_revision();
+    info.applied_revision = snapshot.revision;
     return info;
 }
 

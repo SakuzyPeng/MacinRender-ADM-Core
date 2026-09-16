@@ -2443,6 +2443,7 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
+// NOLINTNEXTLINE(readability-function-size): versioned ABI validation shares one session and cleanup.
 bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) {
     bool ok = check(adm_api_version_minor() == ADM_API_VERSION_MINOR, "C ABI minor version matches header");
     ok = check(adm_api_version_minor() >= 29, "v1.29: monitor mute override is available") && ok;

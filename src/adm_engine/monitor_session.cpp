@@ -227,7 +227,7 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
 
 [[nodiscard]] std::unique_ptr<realtime::IAudioOutputDevice> make_monitor_device(const RenderOptions& options,
                                                                                 const std::string& device_id) {
-#if defined(__APPLE__)
+#ifdef __APPLE__
     // System-spatial monitor follows the system media route (AirPods / current output), not a
     // selectable raw hardware token. Keep create() and set_output_device() on the same path so a
     // device refresh cannot silently fall back to miniaudio and lose system head tracking.
@@ -254,6 +254,8 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
 // Declaration order matters for teardown: the engine (which stops the device + joins the
 // worker + destroys the stream) is destroyed first, then the device, then the factory whose
 // prepared state the stream may reference, then the log buffer.
+// The private Pimpl is an aggregate owned exclusively by MonitorSession.
+// NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct MonitorSession::Impl {
     BufferingLogSink log_sink;
     std::unique_ptr<RealtimeStreamFactory> factory;
@@ -302,6 +304,7 @@ struct MonitorSession::Impl {
     }
 };
 
+// NOLINTEND(misc-non-private-member-variables-in-classes)
 MonitorSession::MonitorSession() : impl_(std::make_unique<Impl>()) {}
 MonitorSession::~MonitorSession() = default;
 
@@ -442,14 +445,15 @@ HptfInfo MonitorSession::hptf_info() const {
     if (impl_->engine == nullptr) {
         return info;
     }
-    const auto coeffs = impl_->engine->hptf_active_coefficients();
-    info.enabled = coeffs.band_count > 0;
+    const auto snapshot = impl_->engine->hptf_active_snapshot();
+    const auto& coeffs = snapshot.coefficients;
+    info.enabled = !coeffs.is_bypass();
     info.band_count = coeffs.band_count;
     info.sample_rate = coeffs.sample_rate;
-    info.preamp_db = impl_->current_hptf.has_value() ? static_cast<float>(impl_->current_hptf->preamp_db) : 0.0F;
+    info.preamp_db = coeffs.preamp_db;
     info.auto_trim_db = coeffs.auto_trim_db;
     info.max_response_db = coeffs.max_response_db;
-    info.applied_revision = impl_->engine->hptf_applied_revision();
+    info.applied_revision = snapshot.revision;
     return info;
 }
 

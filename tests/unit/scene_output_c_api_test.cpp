@@ -1,6 +1,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <iostream>
 #include <string_view>
 #include <thread>
@@ -17,6 +18,24 @@ bool check(bool condition, const char* message) {
         std::cerr << message << '\n';
     }
     return condition;
+}
+
+bool hptf_config_errors(adm_scene_output_t* output) {
+    adm_hptf_config_t config{};
+    config.struct_size = sizeof(config);
+    bool ok = true;
+    for (const int32_t mode : {-1, 2}) {
+        config.preamp_mode = mode;
+        ok &= check(adm_scene_output_set_hptf(output, &config) == ADM_ERROR_INVALID_ARGUMENT,
+                    "unknown HpTF preamp mode accepted");
+    }
+    config.struct_size = sizeof(uint32_t);
+    ok &= check(adm_scene_output_set_hptf(output, &config) == ADM_ERROR_INVALID_ARGUMENT,
+                "undersized HpTF request accepted");
+    config.struct_size = offsetof(adm_hptf_config_t, profile_path) + sizeof(config.profile_path);
+    ok &= check(adm_scene_output_set_hptf(output, &config) == ADM_ERROR_UNSUPPORTED,
+                "short HpTF config did not default absent fields before capability checking");
+    return ok;
 }
 
 bool lfe_layout(const char* layout, uint32_t channels, bool split) {
@@ -143,6 +162,7 @@ bool run(bool system_spatial) {
     adm_scene_output_t* output = nullptr;
     bool ok =
         check(adm_create_scene_output(context, stream, &device, &output) == ADM_ERROR_OK, "output creation failed");
+    ok &= hptf_config_errors(output);
     adm_scene_output_t* duplicate = nullptr;
     ok &= check(adm_create_scene_output(context, stream, &device, &duplicate) == ADM_ERROR_INVALID_ARGUMENT,
                 "a second consumer was allowed");
