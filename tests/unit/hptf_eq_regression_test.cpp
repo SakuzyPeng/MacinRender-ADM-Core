@@ -115,6 +115,12 @@ void test_invalid_parameters() {
     auto profile = *parse_parametric_eq("Filter 1: ON PK Fc 1000 Hz Gain 3 dB Q 1\n");
     profile.bands[0].q = std::numeric_limits<double>::quiet_NaN();
     require(!design_cascade(profile, k_rate, HptfPreampMode::warn_only), "in-memory profiles are validated too");
+    profile.bands[0].enabled = false;
+    require(!design_cascade(profile, k_rate, HptfPreampMode::warn_only), "disabled bands are validated consistently");
+    profile.bands[0].q = 1.0;
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange): deliberately invalid public input.
+    profile.bands[0].type = static_cast<HptfBandType>(255);
+    require(!design_cascade(profile, k_rate, HptfPreampMode::warn_only), "unknown in-memory band types are rejected");
 }
 
 void test_narrow_peak_trim() {

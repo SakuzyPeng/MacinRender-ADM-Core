@@ -25,13 +25,14 @@
 #include <vector>
 
 #include "adm/errors.h"
+#include "adm/hptf.h"
 #include "adm/options.h" // HptfPreampMode(公共选项枚举,GUI / C ABI 共用)
 
 namespace mradm::render_common {
 
 // 级联最多容纳的滤波器段数。AutoEq 的 ParametricEQ 常见 5~10 段,32 段留足余量,
 // 同时让 HptfCoefficients 保持定长 POD(可整体 memcpy 发布给音频回调)。
-inline constexpr std::size_t k_hptf_max_bands = 32;
+using mradm::k_hptf_max_bands;
 
 // 交叉淡化长度。下界不是爆音感知(任何连续混合都不爆音),而是**被淡出频段自身的
 // 衰减时间**:46 Hz 低 Q 段与 105 Hz 搁架要振铃数十毫秒,窗口短于此会听到频谱抖动
@@ -42,32 +43,9 @@ inline constexpr std::uint64_t k_hptf_blend_frames = 2048;
 // 回调内分块处理的粒度;宿主给多大的块都不需要再分配。
 inline constexpr std::size_t k_hptf_chunk_frames = 1024;
 
-enum class HptfBandType : std::uint8_t {
-    peaking,
-    low_shelf,
-    high_shelf,
-    low_pass,
-    high_pass,
-    band_pass,
-    notch,
-};
-
-// 一条解析出来的滤波器行。**与采样率无关**——重建引擎时按新采样率重跑
-// design_cascade() 即可,不必重新读文件。
-struct HptfBand {
-    HptfBandType type{HptfBandType::peaking};
-    bool enabled{true};
-    double fc_hz{1000.0};
-    double gain_db{0.0};
-    double q{0.707};
-};
-
-// 一份解析结果(= 一个 ParametricEQ.txt)。
-struct HptfProfile {
-    double preamp_db{0.0};
-    std::vector<HptfBand> bands;
-    std::string name; // 展示用;通常是文件名
-};
+using mradm::HptfBand;
+using mradm::HptfBandType;
+using mradm::HptfProfile;
 
 // 归一化后的双二阶段(a0 已除掉)。
 struct HptfBiquad {
@@ -123,6 +101,9 @@ class HptfMailbox {
 // 未知滤波器类型跳过(AutoEq 的类型词表会漂移)。数值解析**强制 C locale**——
 // 非 C locale 下 "105.5" 会被解析成 105。
 [[nodiscard]] Result<HptfProfile> parse_parametric_eq(std::string_view text);
+
+// Shared validation for imported and structured profiles, including disabled bands.
+[[nodiscard]] Result<void> validate_hptf_profile(const HptfProfile& profile);
 
 // 读文件后调用上面那个;错误的 context 带上路径(ADR 0005)。
 [[nodiscard]] Result<HptfProfile> load_parametric_eq_file(const std::filesystem::path& path);

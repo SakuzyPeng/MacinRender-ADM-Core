@@ -78,6 +78,10 @@ class SceneOutputSession {
     [[nodiscard]] Result<void>
     set_hptf_profile(const std::string& profile_path, HptfPreampMode mode, std::uint64_t revision);
 
+    [[nodiscard]] Result<void> set_hptf_parameters(const HptfProfile& profile,
+                                                   HptfPreampMode mode = HptfPreampMode::warn_only,
+                                                   std::uint64_t revision = 0);
+
     [[nodiscard]] HptfInfo hptf_info() const;
     [[nodiscard]] bool hptf_supported() const { return peak_guard_ != nullptr; }
     [[nodiscard]] std::uint64_t hptf_applied_revision() const { return hptf_.applied_revision(); }

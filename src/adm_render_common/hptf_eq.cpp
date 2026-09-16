@@ -338,6 +338,27 @@ struct PeakInterval {
 
 // ── 解析 ──────────────────────────────────────────────────────────────────────
 
+Result<void> validate_hptf_profile(const HptfProfile& profile) {
+    if (!std::isfinite(profile.preamp_db)) {
+        return make_error(ErrorCode::invalid_argument, "HpTF:Preamp 必须是有限数");
+    }
+    std::size_t enabled_count = 0;
+    for (std::size_t index = 0; index < profile.bands.size(); ++index) {
+        const auto& band = profile.bands[index];
+        if (band.type > HptfBandType::notch || !std::isfinite(band.fc_hz) || band.fc_hz <= 0.0 ||
+            !std::isfinite(band.q) || band.q <= 0.0 || !std::isfinite(band.gain_db)) {
+            return make_error(ErrorCode::invalid_argument,
+                              "HpTF:滤波器类型必须有效,参数必须为有限数且 Fc/Q 为正",
+                              "band=" + std::to_string(index + 1));
+        }
+        if (band.enabled && ++enabled_count > k_hptf_max_bands) {
+            return make_error(ErrorCode::invalid_argument,
+                              "HpTF:启用的滤波器段数超过上限 " + std::to_string(k_hptf_max_bands));
+        }
+    }
+    return {};
+}
+
 // NOLINTNEXTLINE(readability-function-size)
 Result<HptfProfile> parse_parametric_eq(std::string_view text) {
     HptfProfile profile;
@@ -408,16 +429,6 @@ Result<HptfProfile> parse_parametric_eq(std::string_view text) {
         band.gain_db = *gain;
         band.q = *q;
 
-        if (!(band.fc_hz > 0.0) || !std::isfinite(band.fc_hz)) {
-            return make_error(ErrorCode::invalid_argument, "HpTF:Fc 必须是有限正数", std::string{line});
-        }
-        if (!(band.q > 0.0) || !std::isfinite(band.q)) {
-            return make_error(ErrorCode::invalid_argument, "HpTF:Q 必须是有限正数", std::string{line});
-        }
-        if (!std::isfinite(band.gain_db)) {
-            return make_error(ErrorCode::invalid_argument, "HpTF:Gain 必须是有限数", std::string{line});
-        }
-
         profile.bands.push_back(band);
         saw_any_line = true;
     }
@@ -426,16 +437,8 @@ Result<HptfProfile> parse_parametric_eq(std::string_view text) {
         return make_error(ErrorCode::invalid_argument, "HpTF:没有可用的 ParametricEQ 参数", {});
     }
 
-    const auto enabled_count = static_cast<std::size_t>(
-        std::count_if(profile.bands.begin(), profile.bands.end(), [](const HptfBand& b) { return b.enabled; }));
-    if (enabled_count > k_hptf_max_bands) {
-        return make_error(ErrorCode::invalid_argument,
-                          "HpTF:启用的滤波器段数超过上限 " + std::to_string(k_hptf_max_bands),
-                          "count=" + std::to_string(enabled_count));
-    }
-
-    if (!std::isfinite(profile.preamp_db)) {
-        return make_error(ErrorCode::invalid_argument, "HpTF:Preamp 必须是有限数", {});
+    if (auto valid = validate_hptf_profile(profile); !valid) {
+        return tl::unexpected{valid.error()};
     }
     return profile;
 }
@@ -487,6 +490,9 @@ Result<HptfCoefficients> design_cascade(const HptfProfile& profile, std::uint32_
     if (sample_rate == 0) {
         return make_error(ErrorCode::invalid_argument, "HpTF:采样率必须为正", {});
     }
+    if (auto valid = validate_hptf_profile(profile); !valid) {
+        return tl::unexpected{valid.error()};
+    }
     if (mode != HptfPreampMode::warn_only && mode != HptfPreampMode::auto_trim) {
         return make_error(ErrorCode::invalid_argument, "HpTF:未知的前级策略");
     }
@@ -507,10 +513,6 @@ Result<HptfCoefficients> design_cascade(const HptfProfile& profile, std::uint32_
     for (const auto& band : profile.bands) {
         if (!band.enabled) {
             continue;
-        }
-        if (!std::isfinite(band.fc_hz) || band.fc_hz <= 0.0 || !std::isfinite(band.q) || band.q <= 0.0 ||
-            !std::isfinite(band.gain_db)) {
-            return make_error(ErrorCode::invalid_argument, "HpTF:滤波器参数必须为有限数且 Fc/Q 为正");
         }
         // fc 越界的段在**设计期**跳过:20 kHz 段在 48 kHz 合法、在 32 kHz 不合法。
         if (band.fc_hz <= 0.0 || band.fc_hz >= nyquist) {
@@ -739,3 +741,9 @@ void HptfProcessor::process(float* interleaved, std::size_t frames) noexcept {
 }
 
 } // namespace mradm::render_common
+
+namespace mradm {
+Result<HptfProfile> parse_hptf_parametric_eq(std::string_view text) {
+    return render_common::parse_parametric_eq(text);
+}
+} // namespace mradm

@@ -6,7 +6,7 @@
 #error "unexpected C ABI major version"
 #endif
 
-#if ADM_API_VERSION_MINOR != 37
+#if ADM_API_VERSION_MINOR != 38
 #error "unexpected C ABI minor version"
 #endif
 
@@ -17,6 +17,26 @@
 _Static_assert(sizeof(adm_hptf_preamp_mode_t) == sizeof(int), "HpTF preamp mode enum must remain int-sized");
 _Static_assert(offsetof(adm_hptf_config_t, struct_size) == 0, "HpTF config must start with struct_size");
 _Static_assert(offsetof(adm_hptf_info_t, struct_size) == 0, "HpTF info must start with struct_size");
+typedef struct hptf_v1_37_config_layout {
+    uint32_t struct_size;
+    const char* profile_path;
+    int32_t preamp_mode;
+    uint32_t reserved_v1_37;
+    uint64_t revision;
+} hptf_v1_37_config_layout;
+_Static_assert(sizeof(adm_hptf_config_t) == sizeof(hptf_v1_37_config_layout), "v1.37 config size is frozen");
+_Static_assert(offsetof(adm_hptf_config_t, revision) == offsetof(hptf_v1_37_config_layout, revision),
+               "v1.37 revision offset is frozen");
+_Static_assert(sizeof(adm_hptf_info_t) == 40, "v1.37 info size is frozen");
+_Static_assert(sizeof(adm_hptf_band_type_t) == sizeof(int), "HpTF band enum must remain int-sized");
+_Static_assert(offsetof(adm_hptf_band_t, struct_size) == 0, "HpTF band must start with struct_size");
+_Static_assert(offsetof(adm_hptf_parameters_t, struct_size) == 0, "HpTF parameters must start with struct_size");
+_Static_assert(offsetof(adm_hptf_band_t, reserved_v1_38) == offsetof(adm_hptf_band_t, enabled) + sizeof(int32_t),
+               "HpTF band must reserve alignment padding");
+_Static_assert(offsetof(adm_hptf_parameters_t, revision) ==
+                   offsetof(adm_hptf_parameters_t, reserved_v1_38) + sizeof(uint32_t),
+               "HpTF parameters must reserve alignment padding");
+_Static_assert(ADM_HPTF_BAND_PEAKING == 0 && ADM_HPTF_BAND_NOTCH == 6, "HpTF band values are stable");
 _Static_assert(sizeof(adm_scene_element_role_t) == sizeof(int), "Scene role enum must remain int-sized");
 _Static_assert(sizeof(adm_scene_submit_status_t) == sizeof(int), "Scene submit enum must remain int-sized");
 _Static_assert(sizeof(adm_scene_stream_state_t) == sizeof(int), "Scene state enum must remain int-sized");

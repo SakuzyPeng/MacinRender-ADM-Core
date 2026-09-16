@@ -170,22 +170,26 @@ SceneOutputSession::set_hptf_profile(const std::string& profile_path, HptfPreamp
                           "耳机补偿(HpTF)只适用于立体声耳机输出;系统空间音频与多声道输出不支持");
     }
     if (profile_path.empty()) {
-        const std::lock_guard lock(control_);
-        hptf_.publish_bypass(revision);
-        return {};
+        return set_hptf_parameters({}, mode, revision);
     }
     // Parse + design on this thread: a bad file must surface as an error, never as an audio glitch.
     auto profile = render_common::load_parametric_eq_file(std::filesystem::path{profile_path});
     if (!profile) {
         return tl::unexpected{profile.error()};
     }
-    auto coeffs = render_common::design_cascade(*profile, stream_->output_format().sample_rate, mode);
+    return set_hptf_parameters(*profile, mode, revision);
+}
+
+Result<void>
+SceneOutputSession::set_hptf_parameters(const HptfProfile& profile, HptfPreampMode mode, std::uint64_t revision) {
+    if (peak_guard_ == nullptr) {
+        return make_error(ErrorCode::unsupported, "耳机补偿(HpTF)只适用于立体声耳机输出");
+    }
+    auto coeffs = render_common::design_cascade(profile, stream_->output_format().sample_rate, mode);
     if (!coeffs) {
         return tl::unexpected{coeffs.error()};
     }
-    const std::lock_guard lock(control_);
-    hptf_.publish(*coeffs, revision);
-    return {};
+    return set_hptf(*coeffs, revision);
 }
 
 HptfInfo SceneOutputSession::hptf_info() const {

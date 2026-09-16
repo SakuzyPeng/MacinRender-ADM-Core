@@ -188,12 +188,15 @@
  *   HpTF 是听者侧补偿，**刻意不影响 LUFS 表**（换耳机不该改变节目响度读数），但会影响
  *   peak/RMS（它们反映设备实际收到的信号）。多声道扬声器输出与系统空间音频返回
  *   ADM_ERROR_UNSUPPORTED——那些路径上最终 2ch 耳机信号不由本库生成。
+ *
+ * v1.38 新增：adm_hptf_band_t / adm_hptf_parameters_t、AutoEq 内存文本解析、Monitor/Scene
+ *   结构化参数更新接口。实时编辑不需要临时文件；v1.37 文件接口和布局保持兼容。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 37
+#define ADM_API_VERSION_MINOR 38
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -1182,6 +1185,72 @@ typedef struct adm_hptf_info_t {
 adm_error_code_t adm_monitor_set_hptf(adm_monitor_t* monitor, const adm_hptf_config_t* config) ADM_API_NOEXCEPT;
 adm_error_code_t adm_monitor_get_hptf_info(adm_monitor_t* monitor, adm_hptf_info_t* out) ADM_API_NOEXCEPT;
 
+/* ── v1.38: editable in-memory HpTF parameters ────────────────────────────── */
+typedef enum adm_hptf_band_type_t {
+    ADM_HPTF_BAND_PEAKING = 0,
+    ADM_HPTF_BAND_LOW_SHELF = 1,
+    ADM_HPTF_BAND_HIGH_SHELF = 2,
+    ADM_HPTF_BAND_LOW_PASS = 3,
+    ADM_HPTF_BAND_HIGH_PASS = 4,
+    ADM_HPTF_BAND_BAND_PASS = 5,
+    ADM_HPTF_BAND_NOTCH = 6
+} adm_hptf_band_type_t;
+
+#ifdef __cplusplus
+static_assert(sizeof(adm_hptf_band_type_t) == sizeof(int));
+#endif
+
+/* Set struct_size on EVERY element. All elements share the same struct_size, which is the
+ * array stride, including when a newer caller appends fields. No pointers into this array
+ * are retained after a setter returns. Disabled bands are retained and still validated. */
+typedef struct adm_hptf_band_t {
+    uint32_t struct_size;
+    int32_t type;            /* adm_hptf_band_type_t */
+    int32_t enabled;         /* 0 or 1 */
+    uint32_t reserved_v1_38; /* 0 */
+    double fc_hz;            /* finite, > 0 */
+    double gain_db;          /* finite */
+    double q;                /* finite, > 0; shelves use Q, not slope S */
+} adm_hptf_band_t;
+
+/* A complete, sample-rate-independent snapshot. At most 32 bands may be enabled.
+ * band_count == 0 permits bands == NULL and still applies preamp_db. Zero bands and
+ * a 0 dB preamp mean bypass. A zero-initialized preamp_mode is WARN_ONLY.
+ * Set struct_size = sizeof(adm_hptf_parameters_t); reserved_v1_38 must be zero. */
+typedef struct adm_hptf_parameters_t {
+    uint32_t struct_size;
+    uint32_t band_count;
+    const adm_hptf_band_t* bands;
+    double preamp_db;
+    int32_t preamp_mode; /* adm_hptf_preamp_mode_t */
+    uint32_t reserved_v1_38;
+    uint64_t revision;
+} adm_hptf_parameters_t;
+
+/* Parse NUL-terminated UTF-8 AutoEq text without reading a file or opening an output device.
+ * out_preamp_db and out_count are required. First call with out_bands == NULL, capacity == 0
+ * to obtain the required count (including disabled bands); then initialize struct_size on
+ * each caller-owned output element and call again. The first output element's struct_size is
+ * the stride; every written element must have that size and fit the v1.38 band fields.
+ * Insufficient capacity returns INVALID_ARGUMENT, sets out_count/out_preamp_db to the required
+ * values, and leaves the band buffer unchanged. Other errors leave all outputs unchanged.
+ * Extra bytes of newer band structures are preserved. Details use the context's last error. */
+adm_error_code_t adm_hptf_parse_parametric_eq(adm_context_t* context,
+                                              const char* text,
+                                              double* out_preamp_db,
+                                              adm_hptf_band_t* out_bands,
+                                              uint32_t capacity,
+                                              uint32_t* out_count) ADM_API_NOEXCEPT;
+
+/* Validate, copy and apply an editor snapshot without file I/O. Design is synchronous on the
+ * caller's CONTROL thread; serialize calls as required by adm_monitor_t. Do not call from an
+ * audio callback. The input may be modified/freed on return. Failure preserves the previous
+ * parameters and sound; successful calls are accepted targets, and applied_revision confirms
+ * completion of the existing crossfade. Rapid updates retain the latest pending snapshot.
+ * Parameters survive Monitor engine/device rebuilds. Saving remains the client's decision. */
+adm_error_code_t adm_monitor_set_hptf_parameters(adm_monitor_t* monitor,
+                                                 const adm_hptf_parameters_t* parameters) ADM_API_NOEXCEPT;
+
 /*
  * v1.21: switch the audio output device live. `device_id` is a token from
  * adm_monitor_output_devices_json; NULL / "" selects the system default. The playhead,
@@ -1651,6 +1720,10 @@ adm_error_code_t adm_scene_output_set_volume(adm_scene_output_t* output, float g
 adm_error_code_t adm_scene_output_set_hptf(adm_scene_output_t* output,
                                            const adm_hptf_config_t* config) ADM_API_NOEXCEPT;
 adm_error_code_t adm_scene_output_get_hptf_info(adm_scene_output_t* output, adm_hptf_info_t* out) ADM_API_NOEXCEPT;
+/* v1.38: same snapshot/ownership semantics as adm_monitor_set_hptf_parameters. Applicable to
+ * device-bound stereo output only. Re-submit parameters when creating a NEW output session. */
+adm_error_code_t adm_scene_output_set_hptf_parameters(adm_scene_output_t* output,
+                                                      const adm_hptf_parameters_t* parameters) ADM_API_NOEXCEPT;
 adm_error_code_t adm_scene_output_get_status(adm_scene_output_t* output,
                                              adm_scene_output_status_t* out) ADM_API_NOEXCEPT;
 
