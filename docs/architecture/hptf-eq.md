@@ -6,8 +6,9 @@ judging it through that colouration. AutoEq publishes measured compensation
 curves for a large number of models; this feature applies one of them, live, to
 the headphone feed.
 
-The first release supports **AutoEq's `ParametricEQ.txt`** only, on the **two
-realtime paths**. Offline rendering and the GUI are deliberately out of scope.
+The core supports **editable PEQ parameter snapshots**, with optional AutoEq
+`ParametricEQ.txt` / in-memory text import, on the **two realtime paths**.
+Offline rendering, FIR and the GUI are deliberately out of scope.
 
 ## Scope: HpTF is device-bound
 
@@ -39,7 +40,8 @@ not better (the error is low-frequency truncation, not edge ripple). Past tap
 So the shortest usable length is around 2048 taps, which needs partitioned FFT
 convolution on the audio callback. `mr_adm_render_common` has zero third-party
 dependencies and ADR 0003 confines SAF to the vbap/hoa/binaural modules, so that
-path forces an architectural decision. A 10-biquad cascade is ~60 flops/frame
+path forces an architectural decision. A stereo 10-biquad cascade uses about 182
+scalar arithmetic operations per frame, including preamp,
 with no dependencies at all. The two are not in the same class, hence the split.
 
 Note for whoever picks the FIR path up: the two formats are **not the same
@@ -196,18 +198,68 @@ HpTF is monitor-only and never reaches an offline master, so **bit-exactness
 across platforms is not a requirement** and the consistency tooling does not need
 a checkpoint for it.
 
-## API
+## API and editing workflow
 
-C++: `MonitorSession::set_hptf` / `hptf_info`, and
-`SceneOutputSession::set_hptf_profile` / `hptf_info`. An empty path disables.
+C++ clients use the sample-rate-independent `HptfProfile` / `HptfBand` model in
+`adm/hptf.h`, with `parse_hptf_parametric_eq` for optional text import. Both
+`MonitorSession` and `SceneOutputSession` accept `set_hptf_parameters`.
 
-C ABI v1.37: `adm_hptf_config_t`, `adm_hptf_info_t`, and
-`adm_monitor_set_hptf` / `adm_monitor_get_hptf_info` /
-`adm_scene_output_set_hptf` / `adm_scene_output_get_hptf_info`. `NULL` or `""`
-for `profile_path` disables, matching the `sofa_path` convention. Availability is
-reported through the `hptf` flag in the `features` object of both
-`mradm.output-formats` and `mradm.render-support-matrix`, so a GUI never hard-codes
-it.
+C ABI **v1.38** exposes `adm_hptf_band_t`, `adm_hptf_parameters_t`,
+`adm_monitor_set_hptf_parameters` and `adm_scene_output_set_hptf_parameters`.
+Each call submits the entire editor snapshot; the core designs coefficients at
+the current stream rate and copies everything needed before returning. The caller
+can then change or release its arrays. The Monitor also retains an owned parameter
+model for device/engine rebuilding, rather than rereading an import file.
+Rebuilding retains the monitor's output width, including a multichannel backend
+already folded into a stereo monitor, so headphone compensation stays applicable.
+
+```c
+adm_hptf_band_t band = {0};
+band.struct_size = sizeof(band);
+band.type = ADM_HPTF_BAND_PEAKING;
+band.enabled = 1;
+band.fc_hz = 1000.0;
+band.gain_db = 3.0;
+band.q = 1.5;
+
+adm_hptf_parameters_t parameters = {0};
+parameters.struct_size = sizeof(parameters);
+parameters.band_count = 1;
+parameters.bands = &band;
+parameters.preamp_db = -6.0;
+parameters.revision = 1;
+/* Check the returned error code; no file is created or read. */
+adm_scene_output_set_hptf_parameters(output, &parameters);
+
+/* A later editor change is another complete snapshot. */
+band.gain_db = 1.0;
+parameters.revision = 2;
+adm_scene_output_set_hptf_parameters(output, &parameters);
+```
+
+Validation and design run on the calling control thread, so interactive clients
+should serialize submissions on a control worker. Existing Monitor threading
+rules still apply. A successful call accepts a target; `applied_revision` confirms
+the end of its crossfade. Rapid submissions replace the pending target. The audio
+callback never parses text or reads a file. Failure preserves the accepted profile
+and audible state. Saving an editor draft is a separate client operation.
+
+`adm_hptf_parse_parametric_eq` imports NUL-terminated text without a device or file:
+first pass `out_bands = NULL`, `capacity = 0` to query the total band count; then
+allocate that many elements, initialize every `struct_size`, and call again.
+Disabled entries are retained and validated. Capacity errors return the required
+count and preamp, with no partial band writes. Other errors leave outputs unchanged.
+Arrays use the caller's common element size as their stride, preserving extension
+bytes in future output structures. At most 32 entries may be enabled.
+
+Zero bands with a nonzero preamp remain an active gain stage; zero bands with
+0 dB preamp are bypass. Zero-initialized `preamp_mode` selects `warn_only`.
+
+The **v1.37** `adm_hptf_config_t`, `adm_hptf_info_t` and path-based entry points keep
+their signatures and layouts. Their file adapters now parse into the same profile
+and call the same parameter application path. An empty path remains bypass.
+The existing `hptf` feature flag describes headphone compensation availability;
+clients use the ABI minor version to detect the new memory interface.
 
 ## Tests
 
@@ -235,3 +287,11 @@ peaks, independent impulse-response validation, and concurrent mailbox publicati
 and applied-state queries. The concurrency cases also run under ThreadSanitizer;
 Apple's runtime needs `ignore_interceptors_accesses=0` to inspect the POD memcpy
 operations used by the mailboxes.
+
+`mr_adm_hptf_parameters_tests` exercises the public text parser's sizing and buffer
+contracts, forward-compatible input/output strides, caller-memory ownership,
+invalid and disabled parameters, 32 enabled sections, preamp-only/bypass updates,
+and rapid memory-only updates through the headless Scene C ABI. A capture device
+verifies sample-identical PCM for file import, text import and direct C++ parameters.
+The Monitor C ABI fixture additionally verifies that memory parameters survive
+backend/device switching after the caller's buffers have gone away.

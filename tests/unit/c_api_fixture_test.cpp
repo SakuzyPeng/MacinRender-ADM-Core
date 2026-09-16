@@ -2441,6 +2441,38 @@ bool verify_iamf_layer_validation(adm_context_t* ctx, const std::filesystem::pat
 
 } // namespace
 
+bool configure_monitor_hptf_memory(adm_monitor_t* monitor) {
+    std::array<adm_hptf_band_t, 1> bands{{{sizeof(adm_hptf_band_t), ADM_HPTF_BAND_PEAKING, 1, 0, 1000.0, 3.0, 1.5}}};
+    const adm_hptf_parameters_t parameters{
+        sizeof(adm_hptf_parameters_t), 1, bands.data(), -9.0, ADM_HPTF_PREAMP_WARN_ONLY, 0, 13801};
+    bool ok = check(adm_monitor_set_hptf_parameters(monitor, &parameters) == ADM_ERROR_OK,
+                    "monitor accepts an in-memory HpTF profile");
+    // cppcheck-suppress unreadVariable; the C ABI reads this through parameters.bands.
+    bands[0].q = std::numeric_limits<double>::quiet_NaN();
+    ok = check(adm_monitor_set_hptf_parameters(monitor, &parameters) == ADM_ERROR_INVALID_ARGUMENT,
+               "invalid editor draft preserves the accepted monitor profile") &&
+         ok;
+    // All caller-owned storage goes away here, before playback and device/engine rebuilding.
+    return ok;
+}
+
+bool verify_monitor_hptf_memory_applied(adm_monitor_t* monitor) {
+    adm_hptf_info_t info{};
+    info.struct_size = sizeof(info);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (adm_monitor_get_hptf_info(monitor, &info) != ADM_ERROR_OK) {
+            return check(false, "monitor HpTF status failed");
+        }
+        if (info.applied_revision == 13801) {
+            return check(info.enabled == 1 && info.band_count == 1 && info.preamp_db == -9.0F,
+                         "monitor rebuild preserves owned HpTF parameters and revision");
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds{2});
+    }
+    return check(false, "monitor memory HpTF did not become active");
+}
+
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
 // NOLINTNEXTLINE(readability-function-size): versioned ABI validation shares one session and cleanup.
@@ -2557,6 +2589,7 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
         return ok;
     }
     ok = check(monitor != nullptr, "create_monitor returns a monitor") && ok;
+    ok = configure_monitor_hptf_memory(monitor) && ok;
 
     ok = check(adm_monitor_play(monitor) == ADM_ERROR_OK, "monitor play") && ok;
 
@@ -2581,6 +2614,7 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
 
     ok = check(adm_monitor_seek(monitor, 0.0) == ADM_ERROR_OK, "monitor seek") && ok;
     ok = check(adm_monitor_set_loop(monitor, 0.0, 0.5) == ADM_ERROR_OK, "monitor set_loop") && ok;
+    ok = verify_monitor_hptf_memory_applied(monitor) && ok;
 
     // Clearing overrides (NULL + count 0) is valid; a populated set echoes its revision.
     ok = check(adm_monitor_set_overrides(monitor, nullptr, 0, 0) == ADM_ERROR_OK, "monitor clear overrides") && ok;
@@ -2721,6 +2755,7 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     ok = check(adm_monitor_set_output_device(monitor, "deadbeef") == ADM_ERROR_OK,
                "set_output_device bogus token falls back to default device") &&
          ok;
+    ok = verify_monitor_hptf_memory_applied(monitor) && ok;
 
     ok = check(adm_monitor_pause(monitor) == ADM_ERROR_OK, "monitor pause") && ok;
     ok = check(adm_monitor_log_entry(monitor, adm_monitor_log_count(monitor) + 100U, nullptr, nullptr, nullptr) == 0,

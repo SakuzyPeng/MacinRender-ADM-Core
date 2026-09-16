@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.37）
-> 日期：2026-05-17（增量记录持续更新至 2026-09-16 的 v1.37）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.38）
+> 日期：2026-05-17（增量记录持续更新至 2026-09-16 的 v1.38）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -535,6 +535,20 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
   的尾部和不足预填充水位的短片；补齐传输块和必要预填充静音不增加媒体长度。
 - Windows system-spatial 的动态扩展扬声器按所选几何表生成位置；静态对象仍使用 OS 具名槽位。
   独立的可选 AirPods polling shim 属于平台辅助库，CoreMotion 不链接进入渲染核心。
+
+### v1.38.0（additive，`SOVERSION` 仍为 1）
+
+- 新增 `adm_hptf_band_type_t`、`adm_hptf_band_t`、`adm_hptf_parameters_t`，以及
+  `adm_monitor_set_hptf_parameters` / `adm_scene_output_set_hptf_parameters`。提交完整的
+  无采样率 PEQ 参数快照，核心在返回前完成校验、系数设计与复制，调用方随后可释放输入数组。
+- 新增 `adm_hptf_parse_parametric_eq`：纯内存 AutoEq 文本导入，调用方先查询段数，再用自行持有的
+  缓冲区接收参数。容量不足返回 `INVALID_ARGUMENT` 并告知所需段数，不产生部分数组写入。
+- 新结构体以 `struct_size` 开头，滤波器数组按调用方的元素尺寸步进；保留显式对齐填充，
+  输出仅写入已知字段。非法类型、非有限数值、数组尺寸和指针错误均在发布前拒绝。
+- `adm_hptf_config_t`、`adm_hptf_info_t` 和 v1.37 函数签名、布局不变。文件入口解析后转调
+  同一参数应用路径。`hptf_info.applied_revision` 仍表示淡化完成后的实际版本。
+- C++ 在 `adm/hptf.h` 公开参数模型与 `parse_hptf_parametric_eq`。Monitor 保留参数副本，
+  引擎/设备重建时按新采样率重新设计；保存用户配置仍由客户端负责。
 
 ## opaque 指针与 callback 生命周期
 

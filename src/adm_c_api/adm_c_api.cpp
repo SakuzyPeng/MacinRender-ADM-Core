@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "adm/c_api.h"
+#include "adm/hptf.h"
 #include "adm/monitor.h"
 #include "adm/render.h"
 
@@ -1685,6 +1686,79 @@ struct HptfRequest {
     uint64_t revision{0};
 };
 
+struct HptfParameterRequest {
+    mradm::HptfProfile profile;
+    mradm::HptfPreampMode mode{mradm::HptfPreampMode::warn_only};
+    uint64_t revision{0};
+};
+
+static_assert(static_cast<int>(mradm::HptfBandType::peaking) == ADM_HPTF_BAND_PEAKING);
+static_assert(static_cast<int>(mradm::HptfBandType::low_shelf) == ADM_HPTF_BAND_LOW_SHELF);
+static_assert(static_cast<int>(mradm::HptfBandType::high_shelf) == ADM_HPTF_BAND_HIGH_SHELF);
+static_assert(static_cast<int>(mradm::HptfBandType::low_pass) == ADM_HPTF_BAND_LOW_PASS);
+static_assert(static_cast<int>(mradm::HptfBandType::high_pass) == ADM_HPTF_BAND_HIGH_PASS);
+static_assert(static_cast<int>(mradm::HptfBandType::band_pass) == ADM_HPTF_BAND_BAND_PASS);
+static_assert(static_cast<int>(mradm::HptfBandType::notch) == ADM_HPTF_BAND_NOTCH);
+
+[[nodiscard]] mradm::Result<HptfParameterRequest> read_hptf_parameters(const adm_hptf_parameters_t* parameters) {
+    constexpr auto k_min_parameters = offsetof(adm_hptf_parameters_t, revision) + sizeof(uint64_t);
+    constexpr auto k_min_band = offsetof(adm_hptf_band_t, q) + sizeof(double);
+    if (parameters == nullptr || parameters->struct_size < k_min_parameters) {
+        return mradm::make_error(mradm::ErrorCode::invalid_argument, "HpTF:参数结构大小无效");
+    }
+    adm_hptf_parameters_t source{};
+    std::memcpy(&source, parameters, std::min<std::size_t>(parameters->struct_size, sizeof(source)));
+    if (source.reserved_v1_38 != 0 ||
+        (source.preamp_mode != ADM_HPTF_PREAMP_WARN_ONLY && source.preamp_mode != ADM_HPTF_PREAMP_AUTO_TRIM)) {
+        return mradm::make_error(mradm::ErrorCode::invalid_argument, "HpTF:前级策略或保留字段无效");
+    }
+    std::vector<adm_hptf_band_t> bands;
+    if (!load_sized_array(source.bands, source.band_count, k_min_band, bands)) {
+        return mradm::make_error(mradm::ErrorCode::invalid_argument, "HpTF:滤波器数组指针或 stride 无效");
+    }
+    HptfParameterRequest result;
+    result.profile.preamp_db = source.preamp_db;
+    result.mode = source.preamp_mode == ADM_HPTF_PREAMP_AUTO_TRIM ? mradm::HptfPreampMode::auto_trim
+                                                                  : mradm::HptfPreampMode::warn_only;
+    result.revision = source.revision;
+    result.profile.bands.reserve(bands.size());
+    for (const auto& band : bands) {
+        if (band.type < ADM_HPTF_BAND_PEAKING || band.type > ADM_HPTF_BAND_NOTCH ||
+            (band.enabled != 0 && band.enabled != 1) || band.reserved_v1_38 != 0) {
+            return mradm::make_error(mradm::ErrorCode::invalid_argument, "HpTF:滤波器类型、启用状态或保留字段无效");
+        }
+        result.profile.bands.push_back(
+            {static_cast<mradm::HptfBandType>(band.type), band.enabled != 0, band.fc_hz, band.gain_db, band.q});
+    }
+    if (auto valid = mradm::render_common::validate_hptf_profile(result.profile); !valid) {
+        return tl::unexpected{valid.error()};
+    }
+    return result;
+}
+
+[[nodiscard]] bool hptf_output_stride(const adm_hptf_band_t* output, uint32_t count, uint32_t& stride) {
+    if (count == 0U) {
+        return true;
+    }
+    if (output == nullptr) {
+        return false;
+    }
+    const auto* bytes = reinterpret_cast<const std::byte*>(output);
+    std::memcpy(&stride, bytes, sizeof(stride));
+    if (stride < offsetof(adm_hptf_band_t, q) + sizeof(double) ||
+        static_cast<std::size_t>(count) > std::numeric_limits<std::size_t>::max() / stride) {
+        return false;
+    }
+    for (uint32_t index = 0; index < count; ++index) {
+        uint32_t size = 0;
+        std::memcpy(&size, bytes + (static_cast<std::size_t>(index) * stride), sizeof(size));
+        if (size != stride) {
+            return false;
+        }
+    }
+    return true;
+}
+
 [[nodiscard]] bool read_hptf_config(const adm_hptf_config_t* config, HptfRequest& out) {
     if (config == nullptr) {
         return false;
@@ -1724,6 +1798,89 @@ struct HptfRequest {
     return value;
 }
 } // namespace
+
+adm_error_code_t adm_hptf_parse_parametric_eq(adm_context_t* context,
+                                              const char* text,
+                                              double* out_preamp_db,
+                                              adm_hptf_band_t* out_bands,
+                                              uint32_t capacity,
+                                              uint32_t* out_count) noexcept {
+    if (context == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(context);
+        const auto invalid = [context](const char* message) {
+            store_last_error(context, {mradm::ErrorCode::invalid_argument, message, {}});
+            return ADM_ERROR_INVALID_ARGUMENT;
+        };
+        if (text == nullptr || out_preamp_db == nullptr || out_count == nullptr ||
+            (out_bands == nullptr && capacity != 0)) {
+            return invalid("HpTF:解析输入或输出指针无效");
+        }
+        auto profile = mradm::parse_hptf_parametric_eq(text);
+        if (!profile) {
+            store_last_error(context, profile.error());
+            return map_error(profile.error().code);
+        }
+        if (profile->bands.size() > std::numeric_limits<uint32_t>::max()) {
+            return invalid("HpTF:解析结果的段数超出范围");
+        }
+        const auto count = static_cast<uint32_t>(profile->bands.size());
+        if (out_bands == nullptr && capacity == 0) {
+            *out_count = count;
+            *out_preamp_db = profile->preamp_db;
+            return ADM_ERROR_OK;
+        }
+        if (capacity < count) {
+            const auto code = invalid("HpTF:输出数组容量不足");
+            *out_count = count;
+            *out_preamp_db = profile->preamp_db;
+            return code;
+        }
+        uint32_t stride = 0;
+        if (!hptf_output_stride(out_bands, count, stride)) {
+            return invalid("HpTF:输出数组的 struct_size 或 stride 无效");
+        }
+        auto* bytes = reinterpret_cast<std::byte*>(out_bands);
+        for (uint32_t index = 0; index < count; ++index) {
+            const auto& band = profile->bands[index];
+            const adm_hptf_band_t value{
+                stride, static_cast<int32_t>(band.type), band.enabled ? 1 : 0, 0, band.fc_hz, band.gain_db, band.q};
+            std::memcpy(bytes + (static_cast<std::size_t>(index) * stride),
+                        &value,
+                        std::min<std::size_t>(stride, sizeof(value)));
+        }
+        *out_count = count;
+        *out_preamp_db = profile->preamp_db;
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_monitor_set_hptf_parameters(adm_monitor_t* monitor,
+                                                 const adm_hptf_parameters_t* parameters) noexcept {
+    if (monitor == nullptr || !monitor->session) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(monitor);
+        auto request = read_hptf_parameters(parameters);
+        if (!request) {
+            store_last_error(monitor, request.error());
+            return map_error(request.error().code);
+        }
+        auto result = monitor->session->set_hptf_parameters(request->profile, request->mode, request->revision);
+        if (!result) {
+            store_last_error(monitor, result.error());
+            return map_error(result.error().code);
+        }
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
 
 adm_error_code_t adm_monitor_set_hptf(adm_monitor_t* monitor, const adm_hptf_config_t* config) noexcept {
     if (monitor == nullptr || !monitor->session) {
@@ -2804,6 +2961,17 @@ adm_error_code_t adm_scene_output_get_hptf_info(adm_scene_output_t* output, adm_
     return scene_output_call(output, [out](auto& session) -> mradm::Result<void> {
         write_sized_output(out, to_hptf_info(session.hptf_info()));
         return {};
+    });
+}
+
+adm_error_code_t adm_scene_output_set_hptf_parameters(adm_scene_output_t* output,
+                                                      const adm_hptf_parameters_t* parameters) noexcept {
+    return scene_output_call(output, [parameters](auto& session) -> mradm::Result<void> {
+        auto request = read_hptf_parameters(parameters);
+        if (!request) {
+            return tl::unexpected{request.error()};
+        }
+        return session.set_hptf_parameters(request->profile, request->mode, request->revision);
     });
 }
 

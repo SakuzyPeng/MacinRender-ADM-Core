@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "adm/errors.h"
+#include "adm/hptf.h"
 #include "adm/live_override.h"
 #include "adm/logging.h"
 #include "adm/options.h"
@@ -134,6 +135,14 @@ class MonitorSession {
     // loudness must not change when you swap headphones); it does affect peak/RMS, which report
     // what the device actually receives.
     [[nodiscard]] Result<void> set_hptf(const std::string& profile_path, HptfPreampMode mode, std::uint64_t revision);
+
+    // Copy and apply a complete editable profile without file I/O. Design runs on the caller's
+    // control thread; the callback crossfades to the latest accepted target. Input memory may be
+    // changed/released after return. Stored parameters survive engine/device rebuilds. A zero-band
+    // profile still applies its preamp; zero bands and 0 dB preamp disable compensation.
+    [[nodiscard]] Result<void> set_hptf_parameters(const HptfProfile& profile,
+                                                   HptfPreampMode mode = HptfPreampMode::warn_only,
+                                                   std::uint64_t revision = 0);
 
     [[nodiscard]] HptfInfo hptf_info() const;
 

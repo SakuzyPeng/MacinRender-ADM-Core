@@ -225,6 +225,35 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
     std::vector<BackendKeepAlive> keepalive_;
 };
 
+// Rebuilding a monitor must retain its output width, including a speaker backend
+// that was previously folded into the existing stereo headphone monitor.
+class MonitorOutputFactory final : public realtime::IRenderStreamFactory {
+  public:
+    MonitorOutputFactory(RealtimeStreamFactory& source, uint32_t channels) : source_(source), channels_(channels) {}
+
+    Result<std::unique_ptr<IRenderStream>>
+    open(const AdmScene& scene, const RenderOptions& options, LogSink& logs) override {
+        auto stream = source_.open(scene, options, logs);
+        if (!stream || (*stream)->out_channels() == channels_) {
+            return stream;
+        }
+        const auto geometry =
+            options.renderer == RendererSelection::apple ? SpeakerGeometry::apple : options.speaker_geometry;
+        auto matrix = build_downmix_matrix((*stream)->out_channels(), (*stream)->output_layout(), channels_, geometry);
+        if (!matrix) {
+            stream->reset();
+            source_.forget_last_backend();
+            return make_error(ErrorCode::unsupported, "monitor cannot preserve its output channel count");
+        }
+        return std::unique_ptr<IRenderStream>{
+            std::make_unique<realtime::DownmixStream>(std::move(*stream), std::move(*matrix), channels_)};
+    }
+
+  private:
+    RealtimeStreamFactory& source_;
+    uint32_t channels_;
+};
+
 [[nodiscard]] std::unique_ptr<realtime::IAudioOutputDevice> make_monitor_device(const RenderOptions& options,
                                                                                 const std::string& device_id) {
 #ifdef __APPLE__
@@ -407,11 +436,7 @@ Result<void> MonitorSession::set_hptf(const std::string& profile_path, HptfPream
     }
 
     if (profile_path.empty()) {
-        impl_->current_hptf.reset();
-        impl_->current_hptf_mode = mode;
-        impl_->current_hptf_revision = revision;
-        impl_->engine->set_hptf(std::nullopt, revision);
-        return {};
+        return set_hptf_parameters({}, mode, revision);
     }
 
     // Parse + design synchronously here: a bad file must surface as an error, not disturb audio.
@@ -419,7 +444,18 @@ Result<void> MonitorSession::set_hptf(const std::string& profile_path, HptfPream
     if (!profile) {
         return tl::unexpected{profile.error()};
     }
-    auto coeffs = render_common::design_cascade(*profile, impl_->engine->sample_rate(), mode);
+    return set_hptf_parameters(*profile, mode, revision);
+}
+
+Result<void>
+MonitorSession::set_hptf_parameters(const HptfProfile& profile, HptfPreampMode mode, std::uint64_t revision) {
+    if (impl_->engine == nullptr) {
+        return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
+    }
+    if (!impl_->engine->hptf_supported()) {
+        return make_error(ErrorCode::unsupported, "耳机补偿(HpTF)只适用于双声道耳机监听");
+    }
+    auto coeffs = render_common::design_cascade(profile, impl_->engine->sample_rate(), mode);
     if (!coeffs) {
         return tl::unexpected{coeffs.error()};
     }
@@ -430,10 +466,13 @@ Result<void> MonitorSession::set_hptf(const std::string& profile_path, HptfPream
                             "monitor",
                             fmt::format("耳机补偿曲线峰值 {:+.1f} dB,可能削波(Preamp {:+.1f} dB)",
                                         static_cast<double>(coeffs->max_response_db),
-                                        profile->preamp_db));
+                                        profile.preamp_db));
     }
 
-    impl_->current_hptf = std::move(*profile);
+    // Copy before changing session state: the caller can release its editor draft on return.
+    // Keep parameters, rather than coefficients, for device/rate-dependent engine rebuilds.
+    auto owned_profile = profile;
+    impl_->current_hptf = std::move(owned_profile);
     impl_->current_hptf_mode = mode;
     impl_->current_hptf_revision = revision;
     impl_->engine->set_hptf(*coeffs, revision);
@@ -498,8 +537,9 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
             impl_->factory->forget_last_backend();
             impl_->current_options = opts;
             impl_->device = make_monitor_device(opts, impl_->device_id);
+            MonitorOutputFactory factory(*impl_->factory, monitor_channels);
             auto rebuilt =
-                realtime::MonitorEngine::create(*impl_->factory, *impl_->device, impl_->scene, opts, impl_->log_sink);
+                realtime::MonitorEngine::create(factory, *impl_->device, impl_->scene, opts, impl_->log_sink);
             if (!rebuilt) {
                 impl_->engine.reset();
                 impl_->device.reset();
@@ -572,6 +612,7 @@ Result<void> MonitorSession::set_output_device(const std::string& device_id) {
     const realtime::MonitorStatus snap = impl_->engine->status();
     const uint64_t playhead = snap.playhead_frames;
     const bool was_playing = snap.state == realtime::MonitorState::playing;
+    const auto monitor_channels = impl_->engine->out_channels();
 
     // Stop the old engine + device first (engine borrows the device by reference), so two
     // devices never pull at once. Then open the new device and rebuild the engine on it.
@@ -580,8 +621,9 @@ Result<void> MonitorSession::set_output_device(const std::string& device_id) {
 
     auto open_on = [&](const std::string& id) -> Result<void> {
         impl_->device = make_monitor_device(impl_->current_options, id);
+        MonitorOutputFactory factory(*impl_->factory, monitor_channels);
         auto engine = realtime::MonitorEngine::create(
-            *impl_->factory, *impl_->device, impl_->scene, impl_->current_options, impl_->log_sink);
+            factory, *impl_->device, impl_->scene, impl_->current_options, impl_->log_sink);
         if (!engine) {
             impl_->device.reset();
             return tl::unexpected{engine.error()};
