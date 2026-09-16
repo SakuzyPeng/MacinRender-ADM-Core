@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.36）
-> 日期：2026-05-17（增量记录持续更新至 2026-09-05 的 v1.36）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.37）
+> 日期：2026-05-17（增量记录持续更新至 2026-09-16 的 v1.37）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景

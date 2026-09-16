@@ -8,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <span>
 #include <string>
 #include <string_view>
@@ -103,7 +104,7 @@ class SineStream final : public mradm::IRenderStream {
         constexpr double k_twopi = 6.283185307179586;
         const double w = k_twopi * 1000.0 / 48000.0; // 1 kHz @ 48 kHz
         for (std::size_t f = 0; f < frames; ++f) {
-            const float v = static_cast<float>(0.5 * std::sin(w * static_cast<double>(playhead_ + f)));
+            const auto v = static_cast<float>(0.5 * std::sin(w * static_cast<double>(playhead_ + f)));
             for (uint32_t c = 0; c < channels_; ++c) {
                 out[(f * channels_) + c] = v;
             }
@@ -964,8 +965,8 @@ bool test_downmix_stream() {
     ok &= check(produced.has_value() && *produced == 3U, "downmix: produces the requested frames");
     bool exact = true;
     for (std::size_t f = 0; f < 3U; ++f) {
-        exact &= near(out[(f * 2U) + 0U], 4.0F); // 1 + 3
-        exact &= near(out[(f * 2U) + 1U], 6.0F); // 2 + 4
+        exact &= near(out.at((f * 2U) + 0U), 4.0F); // 1 + 3
+        exact &= near(out.at((f * 2U) + 1U), 6.0F); // 2 + 4
     }
     ok &= check(exact, "downmix: matrix folds 4ch → stereo as specified");
     return ok;
@@ -1140,7 +1141,7 @@ class LoopProbeStream final : public mradm::IRenderStream {
                               std::size_t frames,
                               const mradm::ListenerOrientation& /*o*/) override {
         for (std::size_t f = 0; f < frames; ++f) {
-            const float expected = static_cast<float>(consumer_pos_ + f); // where the consumer thinks it is
+            const auto expected = static_cast<float>(consumer_pos_ + f); // where the consumer thinks it is
             const float v = (intermediate[f] == expected) ? expected : -1.0F;
             for (uint32_t c = 0; c < channels_; ++c) {
                 out[(f * channels_) + c] = v;
@@ -1262,6 +1263,12 @@ mradm::render_common::HptfCoefficients hptf_boost_1k() {
     return *mradm::render_common::design_cascade(*profile, 48000U, mradm::HptfPreampMode::warn_only);
 }
 
+double hptf_sample_peak(std::span<const float> samples) {
+    return std::accumulate(samples.begin(), samples.end(), 0.0, [](double peak, float value) {
+        return std::max(peak, std::abs(static_cast<double>(value)));
+    });
+}
+
 // The cascade must actually reach the device feed: a 1 kHz tone through a +6 dB 1 kHz band
 // comes out at the gain the analysis formula predicts.
 bool test_monitor_hptf_applies() {
@@ -1286,10 +1293,7 @@ bool test_monitor_hptf_applies() {
     ok &= check((*engine)->hptf_applied_revision() == 7, "hptf: applied revision published");
 
     const auto& cap = sink.captured();
-    double peak = 0.0;
-    for (std::size_t i = cap.size() - 8000; i < cap.size(); ++i) {
-        peak = std::max(peak, std::fabs(static_cast<double>(cap[i])));
-    }
+    const double peak = hptf_sample_peak(std::span{cap}.last(8000));
     const double expected = 0.5 * std::pow(10.0, mradm::render_common::cascade_magnitude_db(coeffs, 1000.0) / 20.0);
     ok &= check(std::fabs(peak - expected) < 0.01, "hptf: 输出幅度与解析式一致");
     return ok;
@@ -1398,14 +1402,19 @@ bool test_monitor_hptf_seek_no_click() {
     constexpr std::size_t k_before = 20000;
     ok &= check(drain_exact(**engine, sink, k_before), "hptf seek: drains pre-seek audio");
 
-    (*engine)->seek(100000);
+    constexpr std::uint64_t k_target = 100000;
+    (*engine)->seek(k_target);
+    // drain_exact() must not sample the old ring size while the worker flushes it.
+    // Wait for the same seek acknowledgement as test_monitor_seek before pumping.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    while ((*engine)->status().playhead_frames != k_target && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::microseconds{20});
+    }
+    ok &= check((*engine)->status().playhead_frames == k_target, "hptf seek: target applied before capture");
     ok &= check(drain_exact(**engine, sink, 20000), "hptf seek: drains post-seek audio");
 
     const auto& cap = sink.captured();
-    double peak = 0.0;
-    for (const float v : cap) {
-        peak = std::max(peak, std::fabs(static_cast<double>(v)));
-    }
+    const double peak = hptf_sample_peak(cap);
     // Maximum first difference of a 1 kHz sine at 48 kHz is amplitude * 2*sin(w/2). The 10 ms
     // bridge ramp adds at most anchor/480 per frame on top, which is negligible here.
     constexpr double k_twopi = 6.283185307179586;
@@ -1442,13 +1451,8 @@ bool test_monitor_hptf_paused_is_silence() {
     const std::size_t boundary = sink.captured().size();
     sink.pump(2048);
     const auto& cap = sink.captured();
-    bool all_zero = true;
-    for (std::size_t i = boundary; i < cap.size(); ++i) {
-        if (cap[i] != 0.0F) {
-            all_zero = false;
-            break;
-        }
-    }
+    const bool all_zero =
+        std::ranges::all_of(std::span{cap}.subspan(boundary), [](float value) { return value == 0.0F; });
     ok &= check(all_zero, "hptf pause: 暂停输出为精确静音");
     return ok;
 }
@@ -1475,10 +1479,7 @@ bool test_monitor_hptf_survives_switch() {
     ok &= check(drain_exact(**engine, sink, 40000), "hptf switch: drains post-switch audio");
 
     const auto& cap = sink.captured();
-    double peak = 0.0;
-    for (std::size_t i = cap.size() - 8000; i < cap.size(); ++i) {
-        peak = std::max(peak, std::fabs(static_cast<double>(cap[i])));
-    }
+    const double peak = hptf_sample_peak(std::span{cap}.last(8000));
     const double expected = 0.5 * std::pow(10.0, mradm::render_common::cascade_magnitude_db(coeffs, 1000.0) / 20.0);
     ok &= check(std::fabs(peak - expected) < 0.01, "hptf switch: 换后端后补偿仍然生效");
     return ok;

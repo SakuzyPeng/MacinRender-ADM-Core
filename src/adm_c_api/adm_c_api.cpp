@@ -1700,9 +1700,12 @@ struct HptfRequest {
 
     out.path = (src.profile_path != nullptr) ? std::string{src.profile_path} : std::string{};
     out.mode = mradm::HptfPreampMode::warn_only;
-    if (has_field(offsetof(adm_hptf_config_t, preamp_mode), sizeof(int32_t)) &&
-        src.preamp_mode == ADM_HPTF_PREAMP_AUTO_TRIM) {
-        out.mode = mradm::HptfPreampMode::auto_trim;
+    if (has_field(offsetof(adm_hptf_config_t, preamp_mode), sizeof(int32_t))) {
+        if (src.preamp_mode != ADM_HPTF_PREAMP_WARN_ONLY && src.preamp_mode != ADM_HPTF_PREAMP_AUTO_TRIM) {
+            return false;
+        }
+        out.mode = src.preamp_mode == ADM_HPTF_PREAMP_AUTO_TRIM ? mradm::HptfPreampMode::auto_trim
+                                                                : mradm::HptfPreampMode::warn_only;
     }
     out.revision = has_field(offsetof(adm_hptf_config_t, revision), sizeof(uint64_t)) ? src.revision : 0U;
     return true;
@@ -2785,11 +2788,11 @@ adm_error_code_t adm_scene_output_set_volume(adm_scene_output_t* output, float g
 }
 
 adm_error_code_t adm_scene_output_set_hptf(adm_scene_output_t* output, const adm_hptf_config_t* config) noexcept {
-    HptfRequest request;
-    if (!read_hptf_config(config, request)) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    return scene_output_call(output, [&request](auto& session) {
+    return scene_output_call(output, [config](auto& session) -> mradm::Result<void> {
+        HptfRequest request;
+        if (!read_hptf_config(config, request)) {
+            return mradm::make_error(mradm::ErrorCode::invalid_argument, "Invalid headphone compensation config");
+        }
         return session.set_hptf_profile(request.path, request.mode, request.revision);
     });
 }

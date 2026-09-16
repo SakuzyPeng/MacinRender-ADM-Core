@@ -314,6 +314,36 @@ bool test_scene_hptf_unsupported_without_stereo_guard() {
     return ok;
 }
 
+bool test_scene_hptf_snapshot_on_epoch() {
+    SceneStreamConfig config;
+    config.renderer.renderer = mradm::RendererSelection::saf_binaural;
+    config.renderer.output_layout = "binaural";
+    auto created = SceneStreamEngine::create(config);
+    require(created);
+    auto stream = std::shared_ptr<SceneStreamEngine>(std::move(*created));
+    auto output = SceneOutputSession::create_with_device(stream, std::make_unique<CaptureDevice>(), true);
+    require(output);
+    auto profile = mradm::render_common::parse_parametric_eq("Preamp: -6 dB\n");
+    require(profile);
+    auto coeffs = mradm::render_common::design_cascade(*profile, 48000U, mradm::HptfPreampMode::warn_only);
+    require(coeffs);
+    require((*output)->set_hptf(*coeffs, 9));
+    const auto pending = (*output)->hptf_info();
+    bool ok = check(!pending.enabled && pending.preamp_db == 0.0F && pending.applied_revision == 0,
+                    "pending preamp does not leak into applied status");
+    require((*output)->begin_epoch(1U, 0));
+    const auto applied = (*output)->hptf_info();
+    ok &= check(applied.enabled && applied.band_count == 0 && applied.preamp_db == -6.0F &&
+                    applied.applied_revision == 9 && applied.sample_rate == 48000U,
+                "epoch reset applies a preamp-only profile with coherent metadata");
+    require((*output)->set_hptf(std::nullopt, 10));
+    require((*output)->begin_epoch(2U, 0));
+    const auto bypass = (*output)->hptf_info();
+    ok &= check(!bypass.enabled && bypass.preamp_db == 0.0F && bypass.applied_revision == 10,
+                "epoch reset applies pending bypass");
+    return ok;
+}
+
 int main() {
     try {
         bool ok = test_transparency_and_volume();
@@ -323,6 +353,7 @@ int main() {
         ok &= test_real_pcm();
         ok &= test_scene_hptf_respects_ceiling();
         ok &= test_scene_hptf_unsupported_without_stereo_guard();
+        ok &= test_scene_hptf_snapshot_on_epoch();
         return ok ? 0 : 1;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

@@ -1,10 +1,13 @@
 // HpTF(AutoEq ParametricEQ)解析 / 系数设计 / 级联运行 / 热切换的单元测试。
 // 全部 fixture 都是字符串字面量与程序生成的信号,不依赖任何私有音频素材。
 
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <cstdint>
 #include <iostream>
+#include <numeric>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -32,6 +35,12 @@ bool check(bool cond, std::string_view msg) {
 
 bool near(double a, double b, double tol) {
     return std::fabs(a - b) <= tol;
+}
+
+double sample_peak(std::span<const float> samples) {
+    return std::accumulate(samples.begin(), samples.end(), 0.0, [](double peak, float value) {
+        return std::max(peak, std::abs(static_cast<double>(value)));
+    });
 }
 
 constexpr std::uint32_t k_fs = 48000;
@@ -101,7 +110,7 @@ bool test_parse() {
                                         "Filter 1: ON PK Fc 1000 Hz Gain 3 dB Q 1\n"
                                         "Filter 2: OFF PK Fc 2000 Hz Gain 3 dB Q 1\n");
     ok &= check(with_off.has_value() && with_off->bands.size() == 2, "parse: OFF 行保留");
-    ok &= check(with_off.has_value() && with_off->bands[1].enabled == false, "parse: OFF 行 enabled=false");
+    ok &= check(with_off.has_value() && !with_off->bands[1].enabled, "parse: OFF 行 enabled=false");
     if (with_off.has_value()) {
         auto c = design_cascade(*with_off, k_fs, HptfPreampMode::warn_only);
         ok &= check(c.has_value() && c->band_count == 1, "design: OFF 段不进级联");
@@ -345,31 +354,20 @@ bool test_hot_swap() {
         m += k_block;
     }
     // 对齐到同一相位:两边都取各自最后一块里的峰值幅度
-    auto peak_of = [](const std::vector<float>& v, std::size_t from) {
-        double p = 0.0;
-        for (std::size_t i = from; i < v.size(); ++i) {
-            p = std::max(p, std::fabs(static_cast<double>(v[i])));
-        }
-        return p;
-    };
-    const double after = peak_of(captured, captured.size() - k_block);
-    const double expected = peak_of(pure_buf, 0);
+    const double after = sample_peak(std::span{captured}.last(k_block));
+    const double expected = sample_peak(pure_buf);
     ok &= check(near(after, expected, 1e-3), "hot-swap: 混合后收敛到 B 的稳态幅度");
 
     // 混合确实发生过(中途存在介于两者之间的样本),而不是瞬间硬切
     const double a_gain = std::pow(10.0, cascade_magnitude_db(a, k_sine_hz) / 20.0) * 0.5;
     const double b_gain = std::pow(10.0, cascade_magnitude_db(b, k_sine_hz) / 20.0) * 0.5;
-    const double lo = std::min(a_gain, b_gain);
-    const double hi = std::max(a_gain, b_gain);
     // 混合窗中点附近的幅度应严格落在 A、B 幅度之间——证明确实混合过,而非瞬间硬切
     bool saw_between = false;
-    const std::size_t mid = static_cast<std::size_t>(k_hptf_blend_frames / 2);
+    const auto mid = static_cast<std::size_t>(k_hptf_blend_frames / 2);
     if (mid + k_block < captured.size()) {
-        double mid_peak = 0.0;
-        for (std::size_t i = mid; i < mid + k_block; ++i) {
-            mid_peak = std::max(mid_peak, std::fabs(static_cast<double>(captured[i])));
-        }
-        saw_between = (mid_peak > lo * 0.98) && (mid_peak < hi * 1.02) && (hi - lo) > 1e-4;
+        const double mid_peak = sample_peak(std::span{captured}.subspan(mid, k_block));
+        saw_between = (mid_peak > std::min(a_gain, b_gain) * 0.98) && (mid_peak < std::max(a_gain, b_gain) * 1.02) &&
+                      std::abs(a_gain - b_gain) > 1e-4;
     }
     ok &= check(saw_between, "hot-swap: 混合中点幅度落在 A/B 之间");
 
@@ -404,9 +402,13 @@ bool test_numeric_robustness() {
     ok &= check(worst < 100.0, "numeric: 20 Hz Q=8 长跑不发散");
 
     // frames == 0 不得触碰任何状态
-    std::vector<float> empty;
-    cascade.process(empty.data(), 0);
-    ok &= check(true, "numeric: frames==0 安全返回");
+    auto reference = cascade;
+    cascade.process(nullptr, 0);
+    auto after_zero = noise;
+    auto expected = noise;
+    cascade.process(after_zero.data(), 4096);
+    reference.process(expected.data(), 4096);
+    ok &= check(after_zero == expected, "numeric: frames==0 不改变滤波历史");
 
     return ok;
 }

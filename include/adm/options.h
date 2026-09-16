@@ -54,7 +54,7 @@ enum class DirectSpeakersRoutingMode {
 // `Preamp:`,用来把整条曲线压到不削波;但手改过的文件或非 AutoEq 来源没有这个保证。
 enum class HptfPreampMode {
     warn_only, // 默认:严格使用文件里的 Preamp,合成响应仍 > 0 dB 时只记一条警告
-    auto_trim, // 额外再减掉超出量,保证级联绝不放大
+    auto_trim, // 按可听频段响应的保守上界增加衰减;瞬态峰值仍由输出保护器处理
 };
 
 enum class BinauralSpreadMode {

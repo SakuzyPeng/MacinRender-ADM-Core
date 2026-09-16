@@ -254,9 +254,8 @@ void MonitorEngine::set_hptf(const std::optional<render_common::HptfCoefficients
     // only add ring-drain latency to what should be an immediate A/B. The correct precedent is the
     // snap_yaw_ orientation snapshot above — publish lock-free, let the callback pick it up.
     //
-    // The publish may briefly spin waiting for the callback to leave its copy window. That is safe
-    // even when a seek holds control_mutex_ and spins on in_pop_, because a parked callback takes
-    // pull()'s inactive path and never reaches the HpTF stage — so in_copy_ is already 0 there.
+    // Publication exchanges a preallocated private slot. Control callers are serialized inside
+    // HptfProcessor, and neither publication nor snapshot queries acquire an audio-thread lock.
     if (coeffs.has_value()) {
         hptf_.publish(*coeffs, revision);
     } else {

@@ -6,9 +6,10 @@
 #include <complex>
 #include <fstream>
 #include <ios>
+#include <limits>
 #include <locale>
+#include <queue>
 #include <sstream>
-#include <thread>
 #include <utility>
 
 namespace mradm::render_common {
@@ -16,16 +17,16 @@ namespace {
 
 constexpr double k_default_q = 0.707;
 
-// auto_trim / max_response 的扫描网格:**可听带 20 Hz – 20 kHz**(上限再夹到 Nyquist 以下),
-// 对数等分。
+// auto_trim / max_response 的搜索范围:可听带 20 Hz – 20 kHz(上限夹到 Nyquist 以下)。
 //
 // 刻意不往 20 Hz 以下扫。以 MDR-MV1 为例,+9.7 dB 的 105 Hz 低架在 46 Hz 凹陷影响消退后
 // 会一路抬起来:20 Hz 处 -0.52 dB,10 Hz 处 +2.93 dB,5 Hz 处 +4.75 dB。若把次声区计入峰值,
 // auto_trim 会为了保护无耳机能重放、也几乎不存在于节目里的频率,把整条曲线再压掉近 5 dB。
 // AutoEq 自己的 Preamp 也是按可听带算的,取同一约定才能与它的标称值对得上。
-constexpr int k_scan_points = 512;
 constexpr double k_scan_low_hz = 20.0;
 constexpr double k_scan_high_hz = 20000.0;
+constexpr double k_peak_tolerance_db = 0.001;
+constexpr std::size_t k_peak_refinements = 4096;
 
 [[nodiscard]] bool iequals(std::string_view a, std::string_view b) noexcept {
     if (a.size() != b.size()) {
@@ -52,9 +53,9 @@ constexpr double k_scan_high_hz = 20000.0;
     if (is.fail()) {
         return false;
     }
-    // 允许尾随单位词(Hz / dB),但不允许尾随垃圾数字。
+    // Units are separate tokens in AutoEq; a partial number must not silently change a curve.
     out = value;
-    return std::isfinite(value);
+    return is.eof() && std::isfinite(value);
 }
 
 [[nodiscard]] std::vector<std::string_view> tokenize(std::string_view line) {
@@ -77,13 +78,18 @@ constexpr double k_scan_high_hz = 20000.0;
 
 // 关键字后面的第一个可解析数值。按关键字扫描而不是按固定位置取,这样 AutoEq 里
 // 省略 Gain 的 LP/HP/BP 行也能正确解析。
-[[nodiscard]] bool value_after(const std::vector<std::string_view>& tokens, std::string_view key, double& out) {
-    for (std::size_t i = 0; i + 1 < tokens.size(); ++i) {
+[[nodiscard]] Result<double>
+value_after(const std::vector<std::string_view>& tokens, std::string_view key, double fallback) {
+    for (std::size_t i = 0; i < tokens.size(); ++i) {
         if (iequals(tokens[i], key)) {
-            return parse_double_c(tokens[i + 1], out);
+            double value = 0.0;
+            if (i + 1 >= tokens.size() || !parse_double_c(tokens[i + 1], value)) {
+                return make_error(ErrorCode::invalid_argument, "HpTF:数值无法解析", std::string{key});
+            }
+            return value;
         }
     }
-    return false;
+    return fallback;
 }
 
 [[nodiscard]] bool map_band_type(std::string_view token, HptfBandType& out) {
@@ -132,7 +138,7 @@ constexpr double k_scan_high_hz = 20000.0;
 
 // 单段 RBJ 系数。搁架用 Q 参数化形式(alpha = sin(w0)/(2Q)),不是 slope S 形式——
 // 这才是 EqualizerAPO / AutoEq 的 LSC/HSC 含义。
-[[nodiscard]] HptfBiquad design_band(const HptfBand& band, double sample_rate) noexcept {
+[[nodiscard]] Result<HptfBiquad> design_band(const HptfBand& band, double sample_rate) {
     const double a_amp = std::pow(10.0, band.gain_db / 40.0);
     const double w0 = 2.0 * std::acos(-1.0) * band.fc_hz / sample_rate;
     const double cs = std::cos(w0);
@@ -209,13 +215,123 @@ constexpr double k_scan_high_hz = 20000.0;
         break;
     }
 
-    HptfBiquad out;
-    out.b0 = static_cast<float>(b0 / a0);
-    out.b1 = static_cast<float>(b1 / a0);
-    out.b2 = static_cast<float>(b2 / a0);
-    out.a1 = static_cast<float>(a1 / a0);
-    out.a2 = static_cast<float>(a2 / a0);
+    const std::array normalized{b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
+    if (!std::ranges::all_of(normalized, [](double value) {
+            return std::isfinite(value) && std::abs(value) <= std::numeric_limits<float>::max();
+        })) {
+        return make_error(ErrorCode::invalid_argument, "HpTF:滤波器系数超出可表示范围");
+    }
+    const HptfBiquad out{static_cast<float>(normalized[0]),
+                         static_cast<float>(normalized[1]),
+                         static_cast<float>(normalized[2]),
+                         static_cast<float>(normalized[3]),
+                         static_cast<float>(normalized[4])};
+    // Jury stability conditions, checked AFTER coefficient quantisation.
+    const double qa1 = out.a1;
+    const double qa2 = out.a2;
+    if (1.0 + qa1 + qa2 <= 0.0 || 1.0 - qa1 + qa2 <= 0.0 || 1.0 - qa2 <= 0.0) {
+        return make_error(ErrorCode::invalid_argument, "HpTF:滤波器在当前采样率下不稳定");
+    }
     return out;
+}
+
+[[nodiscard]] double section_magnitude_db(const HptfBiquad& section, double hz, double sample_rate) {
+    const double w = 2.0 * std::acos(-1.0) * hz / sample_rate;
+    const std::complex<double> z{std::cos(-w), std::sin(-w)};
+    const auto numerator =
+        static_cast<double>(section.b0) + static_cast<double>(section.b1) * z + static_cast<double>(section.b2) * z * z;
+    const auto denominator = 1.0 + static_cast<double>(section.a1) * z + static_cast<double>(section.a2) * z * z;
+    return 20.0 * std::log10(std::max(std::abs(numerator) / std::max(std::abs(denominator), 1e-30), 1e-30));
+}
+
+struct BandExtrema {
+    HptfBiquad section;
+    std::array<double, 3> frequencies{-1.0, -1.0, -1.0};
+};
+
+[[nodiscard]] BandExtrema find_band_extrema(const HptfBiquad& section, double fc, double sample_rate) {
+    // Squared magnitude is quadratic in sin(w/2)^2. This shifted form preserves
+    // low-frequency precision: expanding in cos(w) subtracts nearly equal O(1)
+    // coefficients near DC. The derivative of the polynomial ratio has degree two.
+    const auto polynomial = [](long double b0, long double b1, long double b2) {
+        const auto sum = b0 + b1 + b2;
+        const auto difference = b0 - b2;
+        return std::array{sum * sum, 4.0L * ((difference * difference) - (sum * (b0 + b2))), 16.0L * b0 * b2};
+    };
+    const auto n = polynomial(section.b0, section.b1, section.b2);
+    const auto d = polynomial(1.0L, section.a1, section.a2);
+    const auto a = (n[2] * d[1]) - (n[1] * d[2]);
+    const auto b = 2.0L * ((n[2] * d[0]) - (n[0] * d[2]));
+    const auto c = (n[1] * d[0]) - (n[0] * d[1]);
+    BandExtrema result{section, {fc, -1.0, -1.0}};
+    const auto store_root = [&](long double root, std::size_t index) {
+        if (root >= 0.0L && root <= 1.0L) {
+            result.frequencies.at(index) =
+                static_cast<double>(std::asin(std::sqrt(root))) * sample_rate / std::acos(-1.0);
+        }
+    };
+    if (a == 0.0L) {
+        if (b != 0.0L) {
+            store_root(-c / b, 1);
+        }
+    } else if (const auto discriminant = (b * b) - (4.0L * a * c); discriminant >= 0.0L) {
+        const auto q = -0.5L * (b + std::copysign(std::sqrt(discriminant), b));
+        store_root(q / a, 1);
+        if (q != 0.0L) {
+            store_root(c / q, 2);
+        }
+    }
+    return result;
+}
+
+struct PeakInterval {
+    double low;
+    double high;
+    double upper;
+};
+
+[[nodiscard]] double peak_response_db(const HptfCoefficients& coeffs, std::span<const BandExtrema> bands) {
+    const double high = std::min(k_scan_high_hz, static_cast<double>(coeffs.sample_rate) * 0.49);
+    const double preamp_db = 20.0 * std::log10(static_cast<double>(coeffs.preamp_gain));
+    if (high <= k_scan_low_hz || bands.empty()) {
+        return preamp_db;
+    }
+    const auto interval_bound = [&](double low, double upper) {
+        double bound = preamp_db;
+        for (const auto& band : bands) {
+            double peak = std::max(section_magnitude_db(band.section, low, coeffs.sample_rate),
+                                   section_magnitude_db(band.section, upper, coeffs.sample_rate));
+            for (const double hz : band.frequencies) {
+                if (hz >= low && hz <= upper) {
+                    peak = std::max(peak, section_magnitude_db(band.section, hz, coeffs.sample_rate));
+                }
+            }
+            bound += peak;
+        }
+        return bound;
+    };
+    double measured = std::max(cascade_magnitude_db(coeffs, k_scan_low_hz), cascade_magnitude_db(coeffs, high));
+    for (const auto& band : bands) {
+        for (const double hz : band.frequencies) {
+            if (hz >= k_scan_low_hz && hz <= high) {
+                measured = std::max(measured, cascade_magnitude_db(coeffs, hz));
+            }
+        }
+    }
+    const auto compare = [](const PeakInterval& left, const PeakInterval& right) { return left.upper < right.upper; };
+    std::priority_queue<PeakInterval, std::vector<PeakInterval>, decltype(compare)> pending(compare);
+    pending.push({k_scan_low_hz, high, interval_bound(k_scan_low_hz, high)});
+    for (std::size_t i = 0; i < k_peak_refinements && pending.top().upper > measured + k_peak_tolerance_db; ++i) {
+        const auto interval = pending.top();
+        pending.pop();
+        const double middle = std::sqrt(interval.low * interval.high);
+        measured = std::max(measured, cascade_magnitude_db(coeffs, middle));
+        pending.push({interval.low, middle, interval_bound(interval.low, middle)});
+        pending.push({middle, interval.high, interval_bound(middle, interval.high)});
+    }
+    // If the work budget is exhausted, keep the remaining conservative bound.
+    const double bound = std::max(measured, pending.top().upper);
+    return bound > 0.0 ? bound + k_peak_tolerance_db : bound;
 }
 
 } // namespace
@@ -237,7 +353,6 @@ Result<HptfProfile> parse_parametric_eq(std::string_view text) {
         if (line.empty() || line.front() == '#') {
             continue;
         }
-        saw_any_line = true;
 
         const auto tokens = tokenize(line);
         if (tokens.empty()) {
@@ -246,18 +361,11 @@ Result<HptfProfile> parse_parametric_eq(std::string_view text) {
 
         if (iequals(tokens.front(), "Preamp:") || iequals(tokens.front(), "Preamp")) {
             double preamp = 0.0;
-            // "Preamp: -4.1 dB" —— 取第一个可解析的数值
-            bool got = false;
-            for (std::size_t i = 1; i < tokens.size(); ++i) {
-                if (parse_double_c(tokens[i], preamp)) {
-                    got = true;
-                    break;
-                }
-            }
-            if (!got) {
+            if (tokens.size() < 2 || !parse_double_c(tokens[1], preamp)) {
                 return make_error(ErrorCode::invalid_argument, "HpTF:Preamp 行数值无法解析", std::string{line});
             }
             profile.preamp_db = preamp;
+            saw_any_line = true;
             continue;
         }
 
@@ -286,17 +394,19 @@ Result<HptfProfile> parse_parametric_eq(std::string_view text) {
         band.type = type;
         band.enabled = enabled;
 
-        double fc = 0.0;
-        if (!value_after(tokens, "Fc", fc)) {
+        const auto fc = value_after(tokens, "Fc", 0.0);
+        if (!fc) {
             return make_error(ErrorCode::invalid_argument, "HpTF:滤波器行缺少可解析的 Fc", std::string{line});
         }
-        band.fc_hz = fc;
+        band.fc_hz = *fc;
 
-        double gain = 0.0;
-        band.gain_db = value_after(tokens, "Gain", gain) ? gain : 0.0;
-
-        double q = 0.0;
-        band.q = value_after(tokens, "Q", q) ? q : k_default_q;
+        const auto gain = value_after(tokens, "Gain", 0.0);
+        const auto q = value_after(tokens, "Q", k_default_q);
+        if (!gain || !q) {
+            return make_error(ErrorCode::invalid_argument, "HpTF:Gain 或 Q 数值无法解析", std::string{line});
+        }
+        band.gain_db = *gain;
+        band.q = *q;
 
         if (!(band.fc_hz > 0.0) || !std::isfinite(band.fc_hz)) {
             return make_error(ErrorCode::invalid_argument, "HpTF:Fc 必须是有限正数", std::string{line});
@@ -309,10 +419,11 @@ Result<HptfProfile> parse_parametric_eq(std::string_view text) {
         }
 
         profile.bands.push_back(band);
+        saw_any_line = true;
     }
 
     if (!saw_any_line) {
-        return make_error(ErrorCode::invalid_argument, "HpTF:ParametricEQ 内容为空", {});
+        return make_error(ErrorCode::invalid_argument, "HpTF:没有可用的 ParametricEQ 参数", {});
     }
 
     const auto enabled_count = static_cast<std::size_t>(
@@ -376,15 +487,30 @@ Result<HptfCoefficients> design_cascade(const HptfProfile& profile, std::uint32_
     if (sample_rate == 0) {
         return make_error(ErrorCode::invalid_argument, "HpTF:采样率必须为正", {});
     }
+    if (mode != HptfPreampMode::warn_only && mode != HptfPreampMode::auto_trim) {
+        return make_error(ErrorCode::invalid_argument, "HpTF:未知的前级策略");
+    }
+    const double gain = std::pow(10.0, profile.preamp_db / 20.0);
+    if (!std::isfinite(profile.preamp_db) || !std::isfinite(gain) || gain > std::numeric_limits<float>::max() ||
+        gain < std::numeric_limits<float>::min()) {
+        return make_error(ErrorCode::invalid_argument, "HpTF:Preamp 超出可表示范围");
+    }
 
     HptfCoefficients out;
     out.sample_rate = sample_rate;
+    out.preamp_gain = static_cast<float>(gain);
+    out.preamp_db = static_cast<float>(profile.preamp_db);
+    std::array<BandExtrema, k_hptf_max_bands> extrema;
 
     const double nyquist = static_cast<double>(sample_rate) * 0.5;
     std::uint32_t count = 0;
     for (const auto& band : profile.bands) {
         if (!band.enabled) {
             continue;
+        }
+        if (!std::isfinite(band.fc_hz) || band.fc_hz <= 0.0 || !std::isfinite(band.q) || band.q <= 0.0 ||
+            !std::isfinite(band.gain_db)) {
+            return make_error(ErrorCode::invalid_argument, "HpTF:滤波器参数必须为有限数且 Fc/Q 为正");
         }
         // fc 越界的段在**设计期**跳过:20 kHz 段在 48 kHz 合法、在 32 kHz 不合法。
         if (band.fc_hz <= 0.0 || band.fc_hz >= nyquist) {
@@ -394,29 +520,30 @@ Result<HptfCoefficients> design_cascade(const HptfProfile& profile, std::uint32_
             return make_error(
                 ErrorCode::invalid_argument, "HpTF:启用的滤波器段数超过上限 " + std::to_string(k_hptf_max_bands), {});
         }
-        out.sections.at(count) = design_band(band, static_cast<double>(sample_rate));
+        const auto section = design_band(band, static_cast<double>(sample_rate));
+        if (!section) {
+            return tl::unexpected{section.error()};
+        }
+        out.sections.at(count) = *section;
+        extrema.at(count) = find_band_extrema(*section, band.fc_hz, sample_rate);
         ++count;
     }
     out.band_count = count;
-    out.preamp_gain = static_cast<float>(std::pow(10.0, profile.preamp_db / 20.0));
-
-    // 合成响应峰值:对数网格扫描。
-    const double high = std::min(k_scan_high_hz, nyquist * 0.98);
-    double peak_db = -1000.0;
-    if (high > k_scan_low_hz && count > 0) {
-        const double ratio = std::log(high / k_scan_low_hz) / static_cast<double>(k_scan_points - 1);
-        for (int i = 0; i < k_scan_points; ++i) {
-            const double hz = k_scan_low_hz * std::exp(ratio * static_cast<double>(i));
-            peak_db = std::max(peak_db, cascade_magnitude_db(out, hz));
-        }
-    } else {
-        peak_db = 20.0 * std::log10(static_cast<double>(out.preamp_gain));
+    double peak_db = peak_response_db(out, std::span{extrema}.first(count));
+    if (!std::isfinite(peak_db) || peak_db > 20.0 * std::log10(std::numeric_limits<float>::max())) {
+        return make_error(ErrorCode::invalid_argument, "HpTF:级联响应超出可表示范围");
     }
 
     if (mode == HptfPreampMode::auto_trim && peak_db > 0.0) {
-        out.auto_trim_db = static_cast<float>(-peak_db);
-        out.preamp_gain = static_cast<float>(static_cast<double>(out.preamp_gain) * std::pow(10.0, -peak_db / 20.0));
-        peak_db = 0.0;
+        const double trimmed = static_cast<double>(out.preamp_gain) * std::pow(10.0, -peak_db / 20.0);
+        if (!std::isfinite(trimmed) || trimmed < std::numeric_limits<float>::min()) {
+            return make_error(ErrorCode::invalid_argument, "HpTF:自动衰减后的增益超出可表示范围");
+        }
+        const float trimmed_gain = std::nextafter(static_cast<float>(trimmed), 0.0F);
+        const double adjustment = 20.0 * std::log10(static_cast<double>(trimmed_gain) / out.preamp_gain);
+        out.auto_trim_db = static_cast<float>(adjustment);
+        out.preamp_gain = trimmed_gain;
+        peak_db += adjustment;
     }
     out.max_response_db = static_cast<float>(peak_db);
     return out;
@@ -424,9 +551,9 @@ Result<HptfCoefficients> design_cascade(const HptfProfile& profile, std::uint32_
 
 // ── HptfCascade ───────────────────────────────────────────────────────────────
 
-void HptfCascade::prepare(std::uint32_t channels) {
-    channels_ = channels;
-    state_.assign(static_cast<std::size_t>(channels) * k_hptf_max_bands * 2U, 0.0);
+void HptfCascade::prepare(std::uint32_t channel_count) {
+    channels_ = channel_count;
+    state_.assign(static_cast<std::size_t>(channel_count) * k_hptf_max_bands * 2U, 0.0);
 }
 
 void HptfCascade::set_coefficients(const HptfCoefficients& coeffs) noexcept {
@@ -434,12 +561,12 @@ void HptfCascade::set_coefficients(const HptfCoefficients& coeffs) noexcept {
 }
 
 void HptfCascade::reset() noexcept {
-    std::fill(state_.begin(), state_.end(), 0.0);
+    std::ranges::fill(state_, 0.0);
 }
 
 void HptfCascade::process(float* interleaved, std::size_t frames) noexcept {
     // bypass 是**精确短路**:不做 x * 1.0f,于是不启用 HpTF 时逐样本 bit-identical。
-    if (frames == 0 || channels_ == 0 || coeffs_.band_count == 0 || interleaved == nullptr) {
+    if (frames == 0 || channels_ == 0 || is_bypass() || interleaved == nullptr) {
         return;
     }
     const std::uint32_t bands = coeffs_.band_count;
@@ -478,30 +605,40 @@ void HptfCascade::process(float* interleaved, std::size_t frames) noexcept {
         }
     }
     if (non_finite || all_tiny) {
-        std::fill(state_.begin(), state_.end(), 0.0);
+        std::ranges::fill(state_, 0.0);
     }
 }
 
 // ── HptfProcessor ─────────────────────────────────────────────────────────────
 
-void HptfProcessor::prepare(std::uint32_t channels, std::uint32_t sample_rate) {
-    channels_ = channels;
-    sample_rate_ = sample_rate;
-    front_.prepare(channels);
-    back_.prepare(channels);
-    scratch_.assign(k_hptf_chunk_frames * static_cast<std::size_t>(std::max<std::uint32_t>(channels, 1U)), 0.0F);
+void HptfMailbox::publish(const HptfSnapshot& snapshot) noexcept {
+    slots_.at(write_slot_) = snapshot;
+    write_slot_ = middle_.exchange(write_slot_ | k_dirty, std::memory_order_acq_rel) & k_index_mask;
+}
+
+std::optional<HptfSnapshot> HptfMailbox::consume() noexcept {
+    if ((middle_.load(std::memory_order_acquire) & k_dirty) == 0U) {
+        return std::nullopt;
+    }
+    read_slot_ = middle_.exchange(read_slot_, std::memory_order_acq_rel) & k_index_mask;
+    return slots_.at(read_slot_);
+}
+
+void HptfProcessor::prepare(std::uint32_t channel_count, std::uint32_t rate) {
+    channels_ = channel_count;
+    sample_rate_ = rate;
+    front_.prepare(channel_count);
+    back_.prepare(channel_count);
+    HptfCoefficients bypass;
+    bypass.sample_rate = rate;
+    front_.set_coefficients(bypass);
+    status_.publish({bypass, 0});
+    scratch_.assign(k_hptf_chunk_frames * static_cast<std::size_t>(std::max<std::uint32_t>(channel_count, 1U)), 0.0F);
 }
 
 void HptfProcessor::publish(const HptfCoefficients& coeffs, std::uint64_t revision) {
-    const std::uint32_t g = ++generation_;
-    const std::size_t slot = g & 1U;
-    // 写者可以阻塞,回调不可以。等回调退出拷贝窗口(最多一次约 300 字节的 memcpy)。
-    while (in_copy_.load(std::memory_order_seq_cst) != 0U) {
-        std::this_thread::yield();
-    }
-    slots_.at(slot) = coeffs;
-    slot_revisions_.at(slot) = revision;
-    pending_.store(g, std::memory_order_release); // release 发布上面整个结构体镜像
+    const std::lock_guard lock(publication_mutex_);
+    pending_.publish({coeffs, revision});
 }
 
 void HptfProcessor::publish_bypass(std::uint64_t revision) {
@@ -512,25 +649,42 @@ void HptfProcessor::publish_bypass(std::uint64_t revision) {
 }
 
 void HptfProcessor::reset_state() noexcept {
+    if (const auto target = pending_.consume()) {
+        front_.set_coefficients(target->coefficients);
+        front_revision_ = target->revision;
+    } else if (blending_) {
+        std::swap(front_, back_);
+        front_revision_ = blend_revision_;
+    }
     front_.reset();
     back_.reset();
     blending_ = false;
     blend_pos_ = 0;
+    status_.publish({front_.coefficients(), front_revision_});
 }
 
-std::uint64_t HptfProcessor::applied_revision() const noexcept {
-    return applied_revision_.load(std::memory_order_relaxed);
+HptfSnapshot HptfProcessor::active_snapshot() const {
+    const std::lock_guard lock(status_mutex_);
+    if (const auto latest = status_.consume()) {
+        observed_ = *latest;
+    }
+    return observed_;
 }
 
-HptfCoefficients HptfProcessor::active_coefficients() const noexcept {
-    return front_.coefficients();
+std::uint64_t HptfProcessor::applied_revision() const {
+    return active_snapshot().revision;
+}
+
+HptfCoefficients HptfProcessor::active_coefficients() const {
+    return active_snapshot().coefficients;
 }
 
 void HptfProcessor::finish_blend() noexcept {
     std::swap(front_, back_);
     blending_ = false;
     blend_pos_ = 0;
-    applied_revision_.store(blend_revision_, std::memory_order_relaxed);
+    front_revision_ = blend_revision_;
+    status_.publish({front_.coefficients(), front_revision_});
 }
 
 void HptfProcessor::process(float* interleaved, std::size_t frames) noexcept {
@@ -540,17 +694,14 @@ void HptfProcessor::process(float* interleaved, std::size_t frames) noexcept {
 
     // 取走待处理的发布。混合期间不接新的:同一时刻只允许一次 swap 在飞,于是绝不
     // 三方混合、绝不中途硬切;混合结束后下一次 process 自然接上排队的那份。
-    const std::uint32_t g = pending_.load(std::memory_order_acquire);
-    if (g != consumed_generation_ && !blending_) {
-        in_copy_.store(1U, std::memory_order_seq_cst);
-        const std::size_t slot = g & 1U;
-        back_.set_coefficients(slots_.at(slot));
-        blend_revision_ = slot_revisions_.at(slot);
-        in_copy_.store(0U, std::memory_order_seq_cst);
-        back_.reset(); // 切进来的那条从零状态起步;它的权重此刻正好是 0
-        consumed_generation_ = g;
-        blending_ = true;
-        blend_pos_ = 0;
+    if (!blending_) {
+        if (const auto target = pending_.consume()) {
+            back_.set_coefficients(target->coefficients);
+            blend_revision_ = target->revision;
+            back_.reset();
+            blending_ = true;
+            blend_pos_ = 0;
+        }
     }
 
     const std::size_t chunk = k_hptf_chunk_frames;

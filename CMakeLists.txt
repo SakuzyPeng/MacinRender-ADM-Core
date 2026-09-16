@@ -927,6 +927,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_tests)
     add_test(NAME mr_adm_hptf_tests COMMAND mr_adm_hptf_tests)
 
+    add_executable(mr_adm_hptf_regression_tests tests/unit/hptf_eq_regression_test.cpp)
+    target_link_libraries(mr_adm_hptf_regression_tests PRIVATE MacinRender::ADMRenderCommon Threads::Threads)
+    mr_adm_core_apply_warnings(mr_adm_hptf_regression_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_hptf_regression_tests)
+    add_test(NAME mr_adm_hptf_regression_tests COMMAND mr_adm_hptf_regression_tests)
+
     add_executable(mr_adm_speaker_layouts_tests tests/unit/speaker_layouts_test.cpp)
     target_link_libraries(mr_adm_speaker_layouts_tests PRIVATE MacinRender::ADMRenderCommon)
     mr_adm_core_apply_warnings(mr_adm_speaker_layouts_tests)
