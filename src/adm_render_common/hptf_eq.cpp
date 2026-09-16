@@ -222,6 +222,7 @@ constexpr double k_scan_high_hz = 20000.0;
 
 // ── 解析 ──────────────────────────────────────────────────────────────────────
 
+// NOLINTNEXTLINE(readability-function-size)
 Result<HptfProfile> parse_parametric_eq(std::string_view text) {
     HptfProfile profile;
     bool saw_any_line = false;
@@ -442,7 +443,7 @@ void HptfCascade::process(float* interleaved, std::size_t frames) noexcept {
         return;
     }
     const std::uint32_t bands = coeffs_.band_count;
-    const double preamp = static_cast<double>(coeffs_.preamp_gain);
+    const auto preamp = static_cast<double>(coeffs_.preamp_gain);
 
     for (std::uint32_t ch = 0; ch < channels_; ++ch) {
         double* st = state_.data() + (static_cast<std::size_t>(ch) * k_hptf_max_bands * 2U);
@@ -571,8 +572,8 @@ void HptfProcessor::process(float* interleaved, std::size_t frames) noexcept {
 
         // 线性混合。两条级联吃同一输入、输出强相关,等功率律会在中点鼓出约 +3 dB。
         for (std::size_t f = 0; f < n; ++f) {
-            const double pos = static_cast<double>(blend_pos_ + f);
-            const float t = static_cast<float>(std::min(1.0, pos / static_cast<double>(k_hptf_blend_frames)));
+            const auto pos = static_cast<double>(blend_pos_ + f);
+            const auto t = static_cast<float>(std::min(1.0, pos / static_cast<double>(k_hptf_blend_frames)));
             for (std::uint32_t c = 0; c < channels_; ++c) {
                 const std::size_t i = (f * channels_) + c;
                 p[i] = (p[i] * (1.0F - t)) + (scratch_[i] * t);
