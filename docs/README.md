@@ -10,6 +10,7 @@
 - [adm_windows：系统空间音频监听 sink（ISpatialAudioClient）](architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md)
 - [实时监听引擎](architecture/REALTIME_MONITORING.md)
 - [语义编辑器 GUI](architecture/SEMANTIC_EDITOR_GUI.md)
+- [头部追踪与 OSC 跨仓库设计（待实现）](architecture/HEAD_TRACKING_OSC.md)
 - [Rust 落地与 SAF 替换路线图](architecture/RUST_SAF_REPLACEMENT_ROADMAP.md)
 
 ## 架构决策记录
@@ -22,6 +23,7 @@
 - [ADR 0006：CLI 参数解析库采用 CLI11](adr/0006-cli-argument-library.md)
 - [ADR 0007：C ABI 稳定性承诺与版本策略](adr/0007-c-abi-stability-policy.md)
 - [ADR 0008：Rust 落地方向与 SAF 按模块替换](adr/0008-rust-entry-and-saf-replacement.md)
+- [ADR 0009：外置头部追踪的独立仓库与 OSC 接入边界](adr/0009-head-tracking-input-boundary.md)
 
 ## 使用指南
 
