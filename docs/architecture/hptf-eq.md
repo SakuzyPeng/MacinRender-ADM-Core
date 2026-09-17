@@ -295,3 +295,9 @@ and rapid memory-only updates through the headless Scene C ABI. A capture device
 verifies sample-identical PCM for file import, text import and direct C++ parameters.
 The Monitor C ABI fixture additionally verifies that memory parameters survive
 backend/device switching after the caller's buffers have gone away.
+
+### Scene 并发准备（C ABI v1.39）
+
+播放器使用 `adm_scene_output_set_hptf_ex` 在后台准备文件。它不占用 Scene 输出的控制/错误锁，
+仅在发布系数时使用 session 的短锁；文件慢读取和系数设计不会阻塞提交、状态、暂停或音量。
+错误字符串单次调用独占，由调用方释放；输出句柄必须活到调用结束，多个 profile setter 由调用方串行化。

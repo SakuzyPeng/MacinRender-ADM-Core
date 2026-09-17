@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.38）
-> 日期：2026-05-17（增量记录持续更新至 2026-09-16 的 v1.38）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.39）
+> 日期：2026-05-17（增量记录持续更新至 2026-09-16 的 v1.39）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -621,3 +621,10 @@ producer 的 changed-fields 与语义策略耦合引发的额外字段共同确�
 即使同一事件还携带位置/增益 ramp，也不等待 ramp 结束。双耳连续字段各自保留期限，
 VBAP 声像和内容电平分别渐变；跟踪字段在 VBAP 中仍中性，不重启其它渐变。
 此修正不增加或改变 C ABI 布局、函数或枚举数值，使用现有 Scene 状态字段。
+
+### v1.39.0（additive，向后二进制兼容）
+
+新增 `adm_scene_output_set_hptf_ex`：文件读取、解析与系数设计不持有输出控制/错误互斥锁，
+可与 Scene 提交、状态查询、暂停、音量、头追和 epoch reset 并发。调用方保持输出存活并串行化
+profile setter，以保留请求次序；错误通过 `out_error` 独立返回，用 `adm_free_string` 释放。
+既有 v1.37 setter 和结构体布局不变。

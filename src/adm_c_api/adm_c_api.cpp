@@ -2954,6 +2954,37 @@ adm_error_code_t adm_scene_output_set_hptf(adm_scene_output_t* output, const adm
     });
 }
 
+adm_error_code_t adm_scene_output_set_hptf_ex(const adm_scene_output_t* output,
+                                              const adm_hptf_config_t* config,
+                                              char** out_error) noexcept {
+    if (out_error == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    *out_error = nullptr;
+    if (output == nullptr || !output->session) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        HptfRequest request;
+        if (!read_hptf_config(config, request)) {
+            return ADM_ERROR_INVALID_ARGUMENT;
+        }
+        // The session owns its brief publication lock; I/O and coefficient design need
+        // neither the output error mutex nor the stream's producer/control locks.
+        auto result = output->session->set_hptf_profile(request.path, request.mode, request.revision);
+        if (result) {
+            return ADM_ERROR_OK;
+        }
+        const auto& message = result.error().message;
+        auto owned = std::make_unique<char[]>(message.size() + 1U);
+        std::memcpy(owned.get(), message.c_str(), message.size() + 1U);
+        *out_error = owned.release();
+        return map_error(result.error().code);
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
 adm_error_code_t adm_scene_output_get_hptf_info(adm_scene_output_t* output, adm_hptf_info_t* out) noexcept {
     if (!output_struct_valid(out)) {
         return ADM_ERROR_INVALID_ARGUMENT;
