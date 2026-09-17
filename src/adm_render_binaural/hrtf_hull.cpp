@@ -34,13 +34,20 @@
 #include <iterator>
 #include <limits>
 #include <numeric>
-#include <saf_externals.h>
 #include <saf_utilities.h>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "hrtf_grid.h"
+
+// Only BLAS is needed here. SAF's full OpenBLAS/LAPACKE wrapper pulls in
+// MSVC C-only complex types that are not defined by the C++ <complex> header.
+#if defined(SAF_USE_OPEN_BLAS_AND_LAPACKE)
+#include <cblas.h>
+#else
+#include <saf_externals.h>
+#endif
 
 namespace mradm::binaural_internal {
 namespace {
