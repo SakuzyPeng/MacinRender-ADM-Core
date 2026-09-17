@@ -370,6 +370,47 @@ std::vector<float> render_profile(const mradm::HptfProfile& profile, const std::
     return result;
 }
 
+void test_concurrent_file_api_owns_errors() {
+    ApiScene scene;
+    const auto serial = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto path = std::filesystem::temp_directory_path() / ("mradm-hptf-ex-" + std::to_string(serial) + ".txt");
+    const auto name = path.string();
+    {
+        std::ofstream file(path);
+        file << k_text;
+        require(static_cast<bool>(file), "write concurrent import fixture");
+    }
+    adm_hptf_config_t config{sizeof(adm_hptf_config_t), name.c_str(), ADM_HPTF_PREAMP_WARN_ONLY, 0, 71};
+    char* error = nullptr;
+    const auto code = adm_scene_output_set_hptf_ex(scene.output(), &config, &error);
+    std::filesystem::remove(path);
+    require(code == ADM_ERROR_OK && error == nullptr, "concurrent setter accepts a file");
+    scene.activate();
+    require(scene.info().applied_revision == 71 && scene.info().band_count == 2, "concurrent setter applies profile");
+    require(adm_scene_output_set_hptf_ex(scene.output(), &config, &error) == ADM_ERROR_IO && error != nullptr,
+            "missing file returns an owned error");
+    const std::unique_ptr<char, decltype(&adm_free_string)> owned(error, adm_free_string);
+    const std::string message{owned.get()};
+    adm_scene_output_status_t status{};
+    status.struct_size = sizeof(status);
+    require(adm_scene_output_get_status(scene.output(), &status) == ADM_ERROR_OK, "status clears borrowed error");
+    // Check the ABI ownership contract: a mistakenly borrowed error would be cleared by the call above.
+    // cppcheck-suppress knownConditionTrueFalse
+    require(message == owned.get(), "status queries cannot invalidate the setter's error");
+    require(scene.info().applied_revision == 71, "failed setter preserves the old profile");
+    require(adm_scene_output_set_hptf_ex(scene.output(), &config, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+            "owned error slot is required");
+    error = owned.get();
+    require(adm_scene_output_set_hptf_ex(nullptr, &config, &error) == ADM_ERROR_INVALID_ARGUMENT && error == nullptr,
+            "invalid handle clears the error slot");
+    config.profile_path = "";
+    config.revision = 72;
+    require(adm_scene_output_set_hptf_ex(scene.output(), &config, &error) == ADM_ERROR_OK && error == nullptr,
+            "concurrent setter accepts bypass");
+    scene.activate();
+    require(scene.info().applied_revision == 72 && scene.info().enabled == 0, "bypass is acknowledged");
+}
+
 void test_file_text_and_memory_equivalence() {
     const auto parsed = unwrap(mradm::parse_hptf_parametric_eq(k_text));
     mradm::HptfProfile editable;
@@ -401,6 +442,7 @@ int main() {
         test_future_layouts_and_validation();
         test_owned_snapshots_and_rapid_updates();
         test_file_text_and_memory_equivalence();
+        test_concurrent_file_api_owns_errors();
         std::cout << "HpTF memory parameter tests passed\n";
         return 0;
     } catch (const std::exception& error) {

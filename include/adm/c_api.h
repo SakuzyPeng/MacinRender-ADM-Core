@@ -191,12 +191,14 @@
  *
  * v1.38 新增：adm_hptf_band_t / adm_hptf_parameters_t、AutoEq 内存文本解析、Monitor/Scene
  *   结构化参数更新接口。实时编辑不需要临时文件；v1.37 文件接口和布局保持兼容。
+ *
+ * v1.39 新增：adm_scene_output_set_hptf_ex，准备补偿时不阻塞 Scene 输出控制，错误消息由调用方持有。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 38
+#define ADM_API_VERSION_MINOR 39
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -1720,6 +1722,14 @@ adm_error_code_t adm_scene_output_set_volume(adm_scene_output_t* output, float g
 adm_error_code_t adm_scene_output_set_hptf(adm_scene_output_t* output,
                                            const adm_hptf_config_t* config) ADM_API_NOEXCEPT;
 adm_error_code_t adm_scene_output_get_hptf_info(adm_scene_output_t* output, adm_hptf_info_t* out) ADM_API_NOEXCEPT;
+/* v1.39: prepare a profile without holding the output control/error mutex. The caller keeps
+ * output alive until this call returns. May run concurrently with submission, status, transport,
+ * listener updates and epoch resets. Serialize profile setters to preserve request order.
+ * out_error is required, set to NULL on entry, and owns any returned UTF-8 error string;
+ * free it with adm_free_string. This call does not change the borrowed last-error message. */
+adm_error_code_t adm_scene_output_set_hptf_ex(const adm_scene_output_t* output,
+                                              const adm_hptf_config_t* config,
+                                              char** out_error) ADM_API_NOEXCEPT;
 /* v1.38: same snapshot/ownership semantics as adm_monitor_set_hptf_parameters. Applicable to
  * device-bound stereo output only. Re-submit parameters when creating a NEW output session. */
 adm_error_code_t adm_scene_output_set_hptf_parameters(adm_scene_output_t* output,
