@@ -437,144 +437,6 @@ Result<HrtfDataset> load_hrtf_dataset(const RenderPlan& plan) {
     return built_in_kemar_dataset();
 }
 
-struct SafFree {
-    void operator()(void* ptr) const noexcept {
-        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
-        std::free(ptr);
-    }
-};
-using SafFloatPtr = std::unique_ptr<float, SafFree>;
-using SafIntPtr = std::unique_ptr<int, SafFree>;
-
-void compress_vbap_rows(
-    const float* rows, int row_stride, int num_dirs, std::size_t row_count, float* out_gains, int* out_dirs) {
-    for (std::size_t row = 0; row < row_count; ++row) {
-        std::array<float, 3> gains{};
-        std::array<int, 3> dirs{};
-        float gains_sum = 0.0F;
-        int nonzero = 0;
-        const float* row_data = rows + (row * static_cast<std::size_t>(row_stride));
-        for (int dir = 0; dir < num_dirs; ++dir) {
-            const float gain = row_data[dir];
-            if (gain > 0.0000001F && nonzero < 3) {
-                gains.at(static_cast<std::size_t>(nonzero)) = gain;
-                dirs.at(static_cast<std::size_t>(nonzero)) = dir;
-                gains_sum += gain;
-                ++nonzero;
-            }
-        }
-        for (int i = 0; i < nonzero; ++i) {
-            out_gains[(row * 3U) + static_cast<std::size_t>(i)] =
-                gains_sum > 0.0F ? std::max(gains.at(static_cast<std::size_t>(i)) / gains_sum, 0.0F) : 0.0F;
-            out_dirs[(row * 3U) + static_cast<std::size_t>(i)] = dirs.at(static_cast<std::size_t>(i));
-        }
-    }
-}
-
-[[nodiscard]] bool build_compressed_vbap_grid(BinauralState& bs) {
-    // SAF's generateVBAPgainTable3D() materialises the full grid x HRTF-dir table
-    // before compression. For the built-in 1-degree KEMAR grid that transient is
-    // 65,341 x 836 floats (about 208 MiB), which dominates max RSS. Build the same
-    // table in modest batches, compress each batch immediately, and keep only the
-    // 3-gain compressed representation used by compute_hrtf_into().
-    constexpr float k_add_dummy_limit_deg = 60.0F; // mirrors SAF ADD_DUMMY_LIMIT
-    constexpr std::size_t k_batch_grid_points = 2048U;
-
-    std::vector<float> triangulation_dirs = bs.grid_dirs_deg;
-    bool need_bottom_dummy = true;
-    bool need_top_dummy = true;
-    for (int i = 0; i < bs.num_dirs; ++i) {
-        const float el = bs.grid_dirs_deg[(static_cast<std::size_t>(i) * 2U) + 1U];
-        if (el <= -k_add_dummy_limit_deg) {
-            need_bottom_dummy = false;
-        }
-        if (el >= k_add_dummy_limit_deg) {
-            need_top_dummy = false;
-        }
-    }
-    if (need_bottom_dummy) {
-        triangulation_dirs.push_back(0.0F);
-        triangulation_dirs.push_back(-90.0F);
-    }
-    if (need_top_dummy) {
-        triangulation_dirs.push_back(0.0F);
-        triangulation_dirs.push_back(90.0F);
-    }
-
-    float* out_vertices = nullptr;
-    int* out_faces = nullptr;
-    int num_out_vertices = 0;
-    int num_out_faces = 0;
-    findLsTriplets(triangulation_dirs.data(),
-                   static_cast<int>(triangulation_dirs.size() / 2U),
-                   /*omitLargeTriangles=*/1,
-                   &out_vertices,
-                   &num_out_vertices,
-                   &out_faces,
-                   &num_out_faces);
-    SafFloatPtr out_vertices_guard{out_vertices};
-    SafIntPtr out_faces_guard{out_faces};
-    if (out_vertices == nullptr || out_faces == nullptr || num_out_faces <= 0) {
-        return false;
-    }
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    consistency::dump("binaural.02a-triangulation-vertices.f32",
-                      std::span<const float>(out_vertices, static_cast<std::size_t>(num_out_vertices) * 3U));
-    consistency::dump("binaural.02b-triangulation-faces.i32",
-                      std::span<const int>(out_faces, static_cast<std::size_t>(num_out_faces) * 3U));
-#endif
-
-    float* layout_inv_mtx = nullptr;
-    invertLsMtx3D(out_vertices, out_faces, num_out_faces, &layout_inv_mtx);
-    SafFloatPtr layout_inv_guard{layout_inv_mtx};
-    if (layout_inv_mtx == nullptr) {
-        return false;
-    }
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    consistency::dump("binaural.02c-inverse-matrices.f32",
-                      std::span<const float>(layout_inv_mtx, static_cast<std::size_t>(num_out_faces) * 9U));
-#endif
-
-    const std::size_t n_gtable = static_cast<std::size_t>(k_n_azi) * static_cast<std::size_t>(k_n_elev);
-    bs.vbap_gains.assign(n_gtable * 3U, 0.0F);
-    bs.vbap_dirs.assign(n_gtable * 3U, 0);
-
-    std::vector<float> batch_dirs;
-    batch_dirs.reserve(k_batch_grid_points * 2U);
-    for (std::size_t base = 0; base < n_gtable; base += k_batch_grid_points) {
-        const std::size_t count = std::min(k_batch_grid_points, n_gtable - base);
-        batch_dirs.resize(count * 2U);
-        for (std::size_t i = 0; i < count; ++i) {
-            const std::size_t grid = base + i;
-            const auto az_idx = static_cast<int>(grid % static_cast<std::size_t>(k_n_azi));
-            const auto el_idx = static_cast<int>(grid / static_cast<std::size_t>(k_n_azi));
-            batch_dirs[(i * 2U) + 0U] = -180.0F + static_cast<float>(az_idx);
-            batch_dirs[(i * 2U) + 1U] = -90.0F + static_cast<float>(el_idx);
-        }
-
-        float* batch_table = nullptr;
-        vbap3D(batch_dirs.data(),
-               static_cast<int>(count),
-               num_out_vertices,
-               out_faces,
-               num_out_faces,
-               /*spread=*/0.0F,
-               layout_inv_mtx,
-               &batch_table);
-        SafFloatPtr batch_table_guard{batch_table};
-        if (batch_table == nullptr) {
-            return false;
-        }
-        compress_vbap_rows(batch_table,
-                           num_out_vertices,
-                           bs.num_dirs,
-                           count,
-                           bs.vbap_gains.data() + (base * 3U),
-                           bs.vbap_dirs.data() + (base * 3U));
-    }
-    return true;
-}
-
 // Build BinauralState once.  Returns nullptr on VBAP triangulation failure.
 std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_t block_size) {
     auto bs = std::make_unique<BinauralState>();
@@ -598,12 +460,13 @@ std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_
 #endif
 
     // Build compressed VBAP gain table for the HRTF measurement directions as "loudspeakers".
-    if (!build_compressed_vbap_grid(*bs)) {
+    bs->grid = prepare_hrtf_grid(bs->grid_dirs_deg);
+    if (!bs->grid) {
         return nullptr; // triangulation failed
     }
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    consistency::dump("binaural.04-vbap-gains.f32", bs->vbap_gains);
-    consistency::dump("binaural.05-vbap-dirs.i32", bs->vbap_dirs);
+    consistency::dump("binaural.04-vbap-gains.f32", bs->grid->gains);
+    consistency::dump("binaural.05-vbap-dirs.i32", bs->grid->directions);
 #endif
 
     return bs;
@@ -644,8 +507,8 @@ interpolated_grid_bin(const BinauralState& bs, std::size_t grid, int band, std::
     float mag = 0.0F;
     float_complex cpx{0.0F, 0.0F};
     for (std::size_t k = 0; k < 3U; ++k) {
-        const float gain = bs.vbap_gains[gbase + k];
-        const auto dir = static_cast<std::size_t>(bs.vbap_dirs[gbase + k]);
+        const float gain = bs.grid->gains[gbase + k];
+        const auto dir = static_cast<std::size_t>(bs.grid->directions[gbase + k]);
         const auto index = (static_cast<std::size_t>(band) * k_n_ears * nd) + (ear * nd) + dir;
         const auto h = bs.hrtf_fd[index];
         const float magnitude = bs.hrtf_magnitudes.empty() ? std::abs(h) : bs.hrtf_magnitudes[index];

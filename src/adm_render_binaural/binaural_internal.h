@@ -19,6 +19,8 @@
 
 #include "adm/errors.h"
 
+#include "hrtf_grid.h"
+
 namespace mradm::binaural_internal {
 
 inline constexpr int k_n_ears = 2;
@@ -48,8 +50,7 @@ struct BinauralState {
     // Optional live-only magnitude cache, prepared off the render thread.
     std::vector<float> hrtf_magnitudes;
     // Compressed VBAP table: amplitude-normalised gains + direction indices per grid point.
-    std::vector<float> vbap_gains; // FLAT: [N_gtable × 3]
-    std::vector<int> vbap_dirs;    // FLAT: [N_gtable × 3]
+    std::shared_ptr<const HrtfGrid> grid;
     // Time-domain HRTFs and grid for saf_spreader mode.
     std::vector<float> hrtf_td;       // [num_dirs × k_n_ears × hrir_len]
     std::vector<float> grid_dirs_deg; // [num_dirs × 2]

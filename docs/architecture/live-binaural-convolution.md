@@ -50,3 +50,20 @@ geometry, and the batch renderer's HRTF invariants.
 Use Release builds for audio comparisons and timing. The pure-tone second-order
 residual in the continuity test detects discontinuities; it is not a loudness or
 perceptual noise measurement.
+
+
+## HRTF 准备与几何缓存
+
+`hrtf_hull.cpp` 保留 SAF 3D hull 的扰动、插入及面顺序，以边邻接表代替 horizon 的全表成员扫描，
+并复用分配缓冲。`hrtf_grid.cpp` 对完整 361 × 181 查询网格建立只读包围盒树，按原面顺序
+对候选点调用 SAF 点积判定，直接形成三个测量方向及权重；dummy 极点、截断阈值及两次
+归一化规则不变。失败的快速三角化可以回退原 SAF 路径。
+
+压缩网格由独立进程内 LRU 持有，最多八组且键与表合计不超过 16 MiB，按有序 float 位模式
+做哈希及完整比较。同一几何的并发 miss 通过单独构建锁合并，缓存锁不覆盖计算。
+`BinauralState` 共享不可变表；原有完整 HRTF 缓存仍为四组、64 MiB，不共享卷积或对象历史。
+超过完整缓存预算的大型 SOFA 仍可命中网格缓存，重新生成其频域及幅度数据。
+
+`mr_adm_hrtf_grid_tests` 在相同随机序列下对照原 SAF 三角化和密集 VBAP，实现全部 65,341 格的
+索引与权重比较，并验证并发命中、坐标顺序、LRU 预算和共享对象寿命。设置
+`MR_ADM_TEST_SOFA_PATH` 可对本地 SOFA 运行同样的完整对照。性能以 Release 构建测量。

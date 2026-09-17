@@ -321,12 +321,12 @@ class HrtfStateCache {
     }
 
     void insert(Key key, std::shared_ptr<const BinauralState> state) {
-        const auto bytes = sizeof(BinauralState) + state->dataset_name.capacity() +
-                           (state->hrtf_fd.capacity() * sizeof(float_complex)) +
-                           ((state->vbap_gains.capacity() + state->hrtf_td.capacity() +
-                             state->grid_dirs_deg.capacity() + state->hrtf_magnitudes.capacity()) *
-                            sizeof(float)) +
-                           (state->vbap_dirs.capacity() * sizeof(int));
+        const auto bytes =
+            sizeof(BinauralState) + state->dataset_name.capacity() +
+            (state->hrtf_fd.capacity() * sizeof(float_complex)) +
+            ((state->hrtf_td.capacity() + state->grid_dirs_deg.capacity() + state->hrtf_magnitudes.capacity()) *
+             sizeof(float)) +
+            state->grid->bytes();
         constexpr std::size_t k_byte_budget = std::size_t{64U} * 1024U * 1024U;
         if (bytes > k_byte_budget) {
             return;
