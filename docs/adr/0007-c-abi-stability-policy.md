@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.41）
-> 日期：2026-05-17（增量记录持续更新至 2026-09-19 的 v1.41）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.42）
+> 日期：2026-05-17（增量记录持续更新至 2026-09-19 的 v1.42）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -648,3 +648,14 @@ profile setter，以保留请求次序；错误通过 `out_error` 独立返回�
 - 同源拒绝重复／倒退序号、倒退接收时间、同代次不递增采样时间；新会话和时钟代次显式标记。
   迟到／重放包不能刷新 500 ms 活动状态；最多保留 16 个退出会话。v1 继续可用，GUI 和音频管线未适配或改动。
 - SOVERSION、既有函数签名和枚举数值不变；详见[原生接口](../architecture/OSC_HEAD_TRACKING_API.md)。
+
+### v1.42.0：维护者授权统一未发布的头追草案
+
+维护者明确确认 PoseBridge 为私有、无实际消费者，新增头追接口尚未作为正式接口交付；本轮允许对这部分草案同步重整。
+这是仅限头追草案的例外，不改变既有音频 C ABI 的稳定性规则或 SONAME。
+
+- 统一 current PoseBridge 协议 3；删除 /v1、/v2 地址兼容、旧 get_pose_v2 和旧头追布局。
+- 当前 config／pose／status 为 16／160／120 字节（支持的 64 位平台），新增来源过滤、发送包序号、参考／元数据版本、源停留时间与独立心跳统计。
+- 新增 adm_osc_head_tracking_snapshot_json：原子复制完整快照，char** 输出由 adm_free_string 释放，失败置 NULL。
+- 调用方同步升级头文件／库并检查 ABI；其余音频函数签名、结构、枚举和错误码均保持。
+- 实现与验收见[当前头追接口](../architecture/OSC_HEAD_TRACKING_API.md)。

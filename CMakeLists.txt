@@ -630,6 +630,10 @@ if(WIN32)
 endif()
 # libebur128 uses legacy include_directories() that does not propagate via the target.
 target_include_directories(mr_adm_realtime SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
+# PoseBridge telemetry JSON stays on the background/control threads.
+target_include_directories(mr_adm_realtime SYSTEM PRIVATE
+    "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
+)
 mr_adm_core_apply_warnings(mr_adm_realtime)
 mr_adm_core_apply_static_analysis(mr_adm_realtime)
 
@@ -770,12 +774,19 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_executable(mr_adm_osc_head_tracking_tests tests/unit/osc_head_tracking_test.cpp)
     target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE MacinRender::ADMCAPI MacinRender::ADMRealtime)
     target_include_directories(mr_adm_osc_head_tracking_tests PRIVATE src/adm_render_common)
+    target_include_directories(mr_adm_osc_head_tracking_tests SYSTEM PRIVATE
+        "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
+    )
     if(WIN32)
         target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE ws2_32)
     endif()
     mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_tests)
     mr_adm_core_apply_static_analysis(mr_adm_osc_head_tracking_tests)
     add_test(NAME mr_adm_osc_head_tracking_tests COMMAND mr_adm_osc_head_tracking_tests)
+
+    add_executable(mr_adm_osc_head_tracking_c_example EXCLUDE_FROM_ALL examples/head_tracking_consumer.c)
+    target_link_libraries(mr_adm_osc_head_tracking_c_example PRIVATE MacinRender::ADMCAPI)
+    mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_c_example)
 
     add_executable(mr_adm_osc_head_tracking_probe EXCLUDE_FROM_ALL tests/manual/osc_head_tracking_probe.cpp)
     target_link_libraries(mr_adm_osc_head_tracking_probe PRIVATE MacinRender::ADMRealtime)

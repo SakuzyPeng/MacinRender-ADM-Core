@@ -3,11 +3,15 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <mutex>
+#include <optional>
 #include <stop_token>
 #include <string>
 #include <thread>
 #include <utility>
+
+#include <nlohmann/json.hpp>
 
 #include "adm/head_tracking.h"
 
@@ -70,11 +74,12 @@ void close_socket(Socket value) noexcept {
 } // namespace
 
 struct OscHeadTrackingReceiver::Impl {
-    explicit Impl(std::uint16_t port) : requested_port(port) {}
+    explicit Impl(std::uint16_t port, std::string source) : requested_port(port), requested_source(std::move(source)) {}
 
   private:
     friend class OscHeadTrackingReceiver;
     std::uint16_t requested_port;
+    std::string requested_source;
     Socket socket{k_invalid_socket};
 #ifdef _WIN32
     bool winsock_started{false};
@@ -85,6 +90,14 @@ struct OscHeadTrackingReceiver::Impl {
     realtime::OscSourceOrder source_order;
     Clock::time_point started_at;
     Clock::time_point received_at;
+    Clock::time_point heartbeat_at;
+    bool source_allows_pose{true};
+    struct CachedTelemetry {
+        realtime::HeadTrackingMessage message;
+        Clock::time_point received_at;
+    };
+    std::optional<CachedTelemetry> info;
+    std::optional<CachedTelemetry> status;
     std::string error_message;
 
   public:
@@ -109,6 +122,114 @@ struct OscHeadTrackingReceiver::Impl {
         }
         error_message = std::move(message) + " (" + std::to_string(code) + ")";
         return make_error(error_code, error_message);
+    }
+
+    void update_metadata() {
+        const auto matches_instance = [this](const CachedTelemetry& cached) {
+            return (state.source_id.empty() || cached.message.source_id == state.source_id) &&
+                   (!state.has_pose || cached.message.timing.instance_id == state.timing.instance_id);
+        };
+        const auto matches_pose = [this](const realtime::HeadTrackingMessage& message) {
+            return state.has_pose && message.timing.instance_id == state.timing.instance_id &&
+                   message.timing.source_session_id == state.timing.source_session_id &&
+                   message.timing.metadata_revision == state.timing.metadata_revision &&
+                   message.timing.reference_epoch == state.timing.reference_epoch;
+        };
+        bool changed_reference = false;
+        if (info.has_value() && matches_instance(info.value())) {
+            const auto& message = info->message;
+            changed_reference = state.has_pose && message.timing.metadata_revision > state.timing.metadata_revision &&
+                                (message.timing.reference_epoch > state.timing.reference_epoch ||
+                                 message.timing.source_session_id != state.timing.source_session_id);
+            state.info_json = message.json;
+            state.info_matches_pose = matches_pose(message);
+        }
+        if (status.has_value() && matches_instance(status.value())) {
+            const auto& message = status->message;
+            state.status_json = message.json;
+            state.status_matches_pose = matches_pose(message);
+            state.has_heartbeat = true;
+            heartbeat_at = status->received_at;
+            if (state.has_pose && message.timing.metadata_revision >= state.timing.metadata_revision) {
+                if (message.timing.source_session_id == state.timing.source_session_id) {
+                    if (message.reported_samples >= state.timing.source_sequence) {
+                        source_allows_pose = message.source_active;
+                    }
+                } else {
+                    source_allows_pose = false;
+                }
+            }
+        }
+        if (changed_reference) {
+            source_allows_pose = false;
+        }
+    }
+
+    void accept_message(const realtime::HeadTrackingMessage& message, Clock::time_point now) {
+        using Kind = realtime::HeadTrackingMessageKind;
+        if (message.kind == Kind::incompatible) {
+            ++state.rejected_packets;
+            ++state.protocol_mismatches;
+            error_message = "PoseBridge protocol mismatch: receiver requires protocol 3";
+            return;
+        }
+        if ((!requested_source.empty() && message.source_id != requested_source) ||
+            (state.has_pose && message.source_id != state.source_id)) {
+            ++state.ignored_sources;
+            return;
+        }
+        if (message.kind != Kind::pose) {
+            auto& cached = message.kind == Kind::info ? info : status;
+            const auto& t = message.timing;
+            const bool old = source_order.retired(t.instance_id) ||
+                             (cached && cached->message.source_id == message.source_id &&
+                              cached->message.timing.instance_id == t.instance_id &&
+                              (message.message_sequence <= cached->message.message_sequence ||
+                               t.metadata_revision < cached->message.timing.metadata_revision ||
+                               t.reference_epoch < cached->message.timing.reference_epoch)) ||
+                             (state.has_pose && t.instance_id == state.timing.instance_id &&
+                              (t.metadata_revision < state.timing.metadata_revision ||
+                               t.reference_epoch < state.timing.reference_epoch ||
+                               (t.source_session_id != state.timing.source_session_id &&
+                                t.metadata_revision <= state.timing.metadata_revision)));
+            if (old) {
+                ++state.rejected_packets;
+                return;
+            }
+            cached = CachedTelemetry{message, now};
+            ++state.telemetry_packets;
+            update_metadata();
+            return;
+        }
+        if (!source_order.accept(message.timing)) {
+            ++state.rejected_packets;
+            return;
+        }
+        if (state.has_pose && now - received_at >= k_stale_after) {
+            ++state.recovery_count;
+        }
+        const bool changed_instance = !state.has_pose || state.timing.instance_id != message.timing.instance_id;
+        if (changed_instance) {
+            state.info_json.clear();
+            state.status_json.clear();
+            state.info_matches_pose = false;
+            state.status_matches_pose = false;
+            state.has_heartbeat = false;
+        }
+        state.source_id = message.source_id;
+        state.has_pose = true;
+        state.orientation = message.orientation;
+        state.timing = message.timing;
+        source_allows_pose = true;
+        received_at = now;
+        state.received_ns =
+            static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now - started_at).count());
+        state.missing_tx_packets +=
+            std::min(source_order.last_gap(), std::numeric_limits<std::uint64_t>::max() - state.missing_tx_packets);
+        ++state.sequence;
+        ++state.pose_packets;
+        state.state = OscHeadTrackingState::active;
+        update_metadata();
     }
 
     void receive(const std::stop_token& token) noexcept {
@@ -159,21 +280,11 @@ struct OscHeadTrackingReceiver::Impl {
                 const bool loopback = (ntohl(peer.sin_addr.s_addr) & 0xff000000U) == 0x7f000000U;
                 const std::lock_guard lock(mutex);
                 ++state.packets_received;
-                if (!loopback || !pose || !source_order.accept(pose->timing)) {
+                if (!loopback || !pose) {
                     ++state.rejected_packets;
                     continue;
                 }
-                if (state.has_pose && now - received_at >= k_stale_after) {
-                    ++state.recovery_count;
-                }
-                received_at = now;
-                state.received_ns = static_cast<std::uint64_t>(
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(now - started_at).count());
-                state.has_pose = true;
-                ++state.sequence;
-                state.orientation = pose->orientation;
-                state.timing = pose->timing;
-                state.state = OscHeadTrackingState::active;
+                accept_message(*pose, now);
             }
         } catch (...) {
             // No exceptions escape the worker, including allocation failures while
@@ -184,13 +295,17 @@ struct OscHeadTrackingReceiver::Impl {
     }
 };
 
-OscHeadTrackingReceiver::OscHeadTrackingReceiver(std::uint16_t port) : impl_(std::make_unique<Impl>(port)) {}
+OscHeadTrackingReceiver::OscHeadTrackingReceiver(std::uint16_t port, std::string source_id)
+    : impl_(std::make_unique<Impl>(port, std::move(source_id))) {}
 
 OscHeadTrackingReceiver::~OscHeadTrackingReceiver() {
     stop();
 }
 
 Result<void> OscHeadTrackingReceiver::start() {
+    if (!impl_->requested_source.empty() && !realtime::valid_source_id(impl_->requested_source)) {
+        return make_error(ErrorCode::invalid_argument, "source_id must be 1..256 valid UTF-8 bytes without controls");
+    }
     {
         const std::lock_guard lock(impl_->mutex);
         if (impl_->state.state == OscHeadTrackingState::waiting || impl_->state.state == OscHeadTrackingState::active) {
@@ -202,6 +317,10 @@ Result<void> OscHeadTrackingReceiver::start() {
         const std::lock_guard lock(impl_->mutex);
         impl_->state = {};
         impl_->source_order = {};
+        impl_->state.source_id = impl_->requested_source;
+        impl_->info.reset();
+        impl_->status.reset();
+        impl_->source_allows_pose = true;
         impl_->error_message.clear();
     }
 #ifdef _WIN32
@@ -292,12 +411,72 @@ OscHeadTrackingSnapshot OscHeadTrackingReceiver::snapshot() const {
     if (result.has_pose) {
         const auto age = Clock::now() - impl_->received_at;
         result.age_ms = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(age).count());
-        result.fresh = result.state == OscHeadTrackingState::active && age < k_stale_after;
+        result.fresh = result.state == OscHeadTrackingState::active && impl_->source_allows_pose &&
+                       age + std::chrono::nanoseconds{result.timing.source_age_at_send_ns} < k_stale_after;
         if (result.state == OscHeadTrackingState::active && !result.fresh) {
             result.state = OscHeadTrackingState::stale;
         }
     }
+    if (result.has_heartbeat) {
+        const auto age = Clock::now() - impl_->heartbeat_at;
+        result.heartbeat_age_ms =
+            static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(age).count());
+        result.heartbeat_alive =
+            (result.state == OscHeadTrackingState::waiting || result.state == OscHeadTrackingState::active ||
+             result.state == OscHeadTrackingState::stale) &&
+            age < std::chrono::seconds{3};
+    }
     return result;
+}
+
+std::string OscHeadTrackingReceiver::snapshot_json() const {
+    const auto s = snapshot();
+    const auto decimal = [](auto value) { return std::to_string(value); };
+    const auto& t = s.timing;
+    nlohmann::json result{
+        {"schema", realtime::k_posebridge_protocol},
+        {"state", static_cast<std::int32_t>(s.state)},
+        {"bound_port", s.bound_port},
+        {"source_id", s.source_id},
+        {"has_pose", s.has_pose},
+        {"fresh", s.fresh},
+        {"receiver_session_id", decimal(s.session_id)},
+        {"receiver_sequence", decimal(s.sequence)},
+        {"received_ns", decimal(s.received_ns)},
+        {"age_ms", decimal(s.age_ms)},
+        {"packets_received", decimal(s.packets_received)},
+        {"rejected_packets", decimal(s.rejected_packets)},
+        {"pose_packets", decimal(s.pose_packets)},
+        {"telemetry_packets", decimal(s.telemetry_packets)},
+        {"ignored_sources", decimal(s.ignored_sources)},
+        {"protocol_mismatches", decimal(s.protocol_mismatches)},
+        {"missing_tx_packets", decimal(s.missing_tx_packets)},
+        {"recovery_count", decimal(s.recovery_count)},
+        {"has_heartbeat", s.has_heartbeat},
+        {"heartbeat_alive", s.heartbeat_alive},
+        {"heartbeat_age_ms", decimal(s.heartbeat_age_ms)},
+        {"info_matches_pose", s.info_matches_pose},
+        {"status_matches_pose", s.status_matches_pose},
+        {"info", s.info_json.empty() ? nlohmann::json{} : nlohmann::json::parse(s.info_json)},
+        {"source_status", s.status_json.empty() ? nlohmann::json{} : nlohmann::json::parse(s.status_json)}};
+    if (s.has_pose) {
+        result["pose"] = {{"quaternion_xyzw", s.orientation.quaternion_xyzw},
+                          {"euler_deg", s.orientation.euler_deg},
+                          {"instance_id", decimal(t.instance_id)},
+                          {"session_id", decimal(t.source_session_id)},
+                          {"sequence", decimal(t.source_sequence)},
+                          {"tx_sequence", decimal(t.tx_sequence)},
+                          {"reference_epoch", decimal(t.reference_epoch)},
+                          {"metadata_revision", decimal(t.metadata_revision)},
+                          {"received_ns", decimal(t.source_received_ns)},
+                          {"age_at_send_ns", decimal(t.source_age_at_send_ns)},
+                          {"sample_time_kind", t.sample_time_kind},
+                          {"sample_time_ms", decimal(t.sample_time_ms)},
+                          {"sample_clock_epoch", decimal(t.sample_clock_epoch)}};
+    } else {
+        result["pose"] = nullptr;
+    }
+    return result.dump();
 }
 
 std::string OscHeadTrackingReceiver::last_error() const {
