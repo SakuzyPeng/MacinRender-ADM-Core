@@ -40,3 +40,6 @@ unusedStructMember:*/src/adm_realtime/monitor_engine.h
 # treating third-party C idioms as project C++ style issues.
 *:*/src/adm_render_binaural/spreader_mr.c
 unusedStructMember:*/src/adm_render_binaural/spreader_mr_internal.h
+
+// OSC protocol header is also analyzed alone; these fields are used by the parser, receiver and contract tests.
+unusedStructMember:*src/adm_realtime/osc_head_tracking_protocol.h

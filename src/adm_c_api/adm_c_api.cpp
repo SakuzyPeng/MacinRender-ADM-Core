@@ -644,6 +644,22 @@ adm_render_result_t* make_c_result(mradm::RenderResult&& cpp_result, std::vector
     return c.release();
 }
 
+adm_head_tracking_pose_t head_tracking_pose(const mradm::OscHeadTrackingSnapshot& snapshot) noexcept {
+    adm_head_tracking_pose_t result{};
+    result.struct_size = sizeof(result);
+    result.has_pose = snapshot.has_pose ? 1U : 0U;
+    result.fresh = snapshot.fresh ? 1U : 0U;
+    result.session_id = snapshot.session_id;
+    result.sequence = snapshot.sequence;
+    result.received_ns = snapshot.received_ns;
+    result.age_ms = snapshot.age_ms;
+    std::ranges::copy(snapshot.orientation.quaternion_xyzw, std::begin(result.quaternion_xyzw));
+    result.yaw_deg = snapshot.orientation.euler_deg[0];
+    result.pitch_deg = snapshot.orientation.euler_deg[1];
+    result.roll_deg = snapshot.orientation.euler_deg[2];
+    return result;
+}
+
 } // namespace
 
 struct adm_scene_info_t {
@@ -705,18 +721,31 @@ adm_error_code_t adm_osc_head_tracking_get_pose(const adm_osc_head_tracking_t* r
     }
     try {
         const auto snapshot = receiver->receiver.snapshot();
-        adm_head_tracking_pose_t result{};
+        const auto result = head_tracking_pose(snapshot);
+        std::memcpy(out, &result, sizeof(result));
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_osc_head_tracking_get_pose_v2(const adm_osc_head_tracking_t* receiver,
+                                                   adm_head_tracking_pose_v2_t* out) noexcept {
+    if (receiver == nullptr || out == nullptr || out->struct_size < sizeof(adm_head_tracking_pose_v2_t)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        const auto snapshot = receiver->receiver.snapshot();
+        adm_head_tracking_pose_v2_t result{};
         result.struct_size = sizeof(result);
-        result.has_pose = snapshot.has_pose ? 1U : 0U;
-        result.fresh = snapshot.fresh ? 1U : 0U;
-        result.session_id = snapshot.session_id;
-        result.sequence = snapshot.sequence;
-        result.received_ns = snapshot.received_ns;
-        result.age_ms = snapshot.age_ms;
-        std::ranges::copy(snapshot.orientation.quaternion_xyzw, std::begin(result.quaternion_xyzw));
-        result.yaw_deg = snapshot.orientation.euler_deg[0];
-        result.pitch_deg = snapshot.orientation.euler_deg[1];
-        result.roll_deg = snapshot.orientation.euler_deg[2];
+        result.protocol_version = snapshot.timing.protocol_version;
+        result.pose = head_tracking_pose(snapshot);
+        result.sample_time_kind = snapshot.timing.sample_time_kind;
+        result.source_session_id = snapshot.timing.source_session_id;
+        result.source_sequence = snapshot.timing.source_sequence;
+        result.source_received_ns = snapshot.timing.source_received_ns;
+        result.sample_time_ms = snapshot.timing.sample_time_ms;
+        result.sample_clock_epoch = snapshot.timing.sample_clock_epoch;
         std::memcpy(out, &result, sizeof(result));
         return ADM_ERROR_OK;
     } catch (...) {

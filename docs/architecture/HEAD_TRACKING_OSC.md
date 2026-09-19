@@ -64,7 +64,7 @@ flowchart LR
 
 MacinRender 首版通过 OSC 集成。PoseBridge C ABI 面向需要进程内采集的宿主，
 不作为当前 GUI 的新增原生依赖；CLI 和 C ABI 调用同一 Rust 核心逻辑。
-当前 `adm_*` C ABI 继续复用 listener orientation setter；v1.40 新增独立 OSC 接收句柄和快照，
+当前 `adm_*` C ABI 继续复用 listener orientation setter；v1.40 新增独立 OSC 接收句柄和快照，v1.41 新增时间戳查询，
 不增加蓝牙依赖或 PoseBridge 原生类型。接收线程不直接调用 Monitor／Scene 控制接口。
 
 ## 3. PoseBridge 实现组成
@@ -82,7 +82,7 @@ PoseBridge Cargo workspace 包含三个 crate：
 公开厂商示例作为协议依据；复制或再发行代码前须确认对应许可证。
 
 核心库保存最新完整姿态快照，包含本次采集会话标识、递增采样序号、主机单调接收时间、统一四元数及来源类型。
-主机接收时间不是传感器采样时间；重复读取同一快照不得产生新采样序号。
+主机接收时间不是传感器采样时间；v2 另保留同帧设备采样时间、时钟类型和代次。重复读取同一快照不得产生新采样序号。
 BLE 输入、OSC 输出和 C ABI 快照共用这一数据源，慢消费者不积累历史姿态队列。
 
 平台约束：
@@ -102,7 +102,7 @@ BLE 输入、OSC 输出和 C ABI 快照共用这一数据源，慢消费者不�
 
 | 项目 | 标称信息 | 接入时的处理 |
 |---|---|---|
-| 通信 | BLE 5.0；Type-C 图示包含供电与传输 | 首版支持 BLE 与 USB 串口，共用 20 字节解析器 |
+| 通信 | BLE 5.0；Type-C 图示包含供电与传输 | 首版支持 BLE 与 USB 串口，共用默认 20 字节及已验证的可变长度解析器 |
 | 输出 | 加速度、角速度、磁场、角度、四元数 | 姿态数据为主，原始量用于诊断 |
 | 回传 | 0.2–200 Hz，默认 10 Hz | 默认 OSC 上限目标 100 Hz；设备速率只经显式 configure 命令改变 |
 | 俯仰 / 横滚 | 0.2° | 不能推广为所有轴均有该精度 |
@@ -111,7 +111,7 @@ BLE 输入、OSC 输出和 C ABI 快照共用这一数据源，慢消费者不�
 | 重量 | 详情图约 18.88 g；参数栏另写 6 g | 整机佩戴重量待核实 |
 | 续航 | 宣传约 30 小时 | 高频连续传输时长待实测 |
 
-PoseBridge 的后续实验已确认本机固件可在 200 Hz 档主动上报原生四元数与设备时间戳，但 BLE 仍约 25 批/秒；正式桥接默认仍使用角度流。详见 [BLE 探索记录](https://github.com/SakuzyPeng/PoseBridge/blob/main/docs/measurements/2026-09-19-ble-exploration.md)。200 Hz 的内部时间戳步长不代表转头到声音的总延迟。
+PoseBridge 的后续实验已确认本机固件可在 200 Hz 档主动上报原生四元数与设备时间戳，但 BLE 仍约 25 批/秒；正式桥接已支持显式选择时间戳角度／原生四元数格式，默认仍保留设备角度流配置。详见 [BLE 探索记录](https://github.com/SakuzyPeng/PoseBridge/blob/main/docs/measurements/2026-09-19-ble-exploration.md)。200 Hz 的内部时间戳步长不代表转头到声音的总延迟。
 磁力计可能受到耳机单元磁铁或周围金属影响；安装使用非磁性固定件，并分别记录静止漂移与转动后回正误差。
 
 ### 4.2 GATT 与数据帧
@@ -386,3 +386,11 @@ BLE 解析以固定字节样例覆盖缩放、符号、拆包与粘包，不将 
 - [BWT901BLECL5.0 商品页面](https://detail.tmall.com/item.htm?id=598073228676)：参数为厂商标称，页面可能更新。
 - [btleplug 平台与权限说明](https://github.com/deviceplug/btleplug)、[rosc](https://github.com/klingtnet/rosc)、[OSC 1.0](https://opensoundcontrol.stanford.edu/spec-1_0.html)。
 - [实时监听引擎](REALTIME_MONITORING.md)、[实时双耳卷积](live-binaural-convolution.md)、[现有 C ABI](../../include/adm/c_api.h)。
+
+## 时间戳增量：OSC v2 与稳定 C ABI 1.41
+
+v1 地址和默认发送方式保留。显式 `--osc-version v2` 使用 `/posebridge/v2/quaternion`（`,hhhhihffff`）
+或 `/posebridge/v2/euler`（`,hhhhihfff`），前六个参数依次为源会话、源序号、源接收纳秒、采样毫秒、时钟类型、时钟代次。
+协议完整定义和新增 `adm_osc_head_tracking_get_pose_v2` 见[原生接口文档](OSC_HEAD_TRACKING_API.md#v2-时间戳与会话)。
+设备时间、PoseBridge 接收时间、Render 接收时间保持独立时钟域，不能直接相减推导音频延迟。
+本轮实现包含时间戳解析与上报、重复／乱序拒绝、时钟跳变识别；GUI、时钟同步、预测与补偿仍留待后续。
