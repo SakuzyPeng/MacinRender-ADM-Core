@@ -88,5 +88,11 @@ cmake --build --preset release --target mradm_capi_bundle mr_adm_osc_head_tracki
 python3 tests/manual/osc_posebridge_check.py --library build/release/libmradm_capi.dylib --posebridge /path/to/posebridge
 ```
 
-验证记录在交付时按平台补充。Windows 缺完整渲染依赖时，只报告头追源文件、C ABI 翻译单元和原生接收器检查，
-不将其记为完整 Windows Render DLL 运行验证。硬件安装、校准效果、GUI 与音频延迟始终单列。
+## 本轮验证
+
+- macOS Debug 三个针对性目标通过；Release 真动态库与实际 PoseBridge CLI 联调通过（515 份姿态、22 份元数据），C 下游示例另收 129 份姿态并正常释放。
+- macOS USB／BLE 的只读查询、可恢复配置与数据联调通过；窗口内分别收到 398／100 份姿态。设备结束恢复 10 Hz、默认输出、九轴模式。
+- Windows 原生 Rust、C ABI、协议与接收器编译／运行检查通过；两种模拟姿态格式各 125 包，Windows BLE 真实采集与控制通过。
+- Windows USB 尚未连接到测试机；物理拔插监听未观测到动作，均保留待补，不用旧版本或伪设备结果代替。
+- Windows 没有完整渲染依赖缓存，未运行完整 Render DLL。校准效果、GUI 与音频延迟单列。
+- clang-format／clang-tidy／cppcheck 与文档相对链接检查通过。详细记录在 PoseBridge 的 docs/measurements/2026-09-19-downstream.md。
