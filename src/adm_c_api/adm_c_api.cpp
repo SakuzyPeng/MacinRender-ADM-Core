@@ -23,6 +23,7 @@
 #include "adm/render.h"
 
 #include "../adm_engine/scene_output_session.h"
+#include "osc_head_tracking_protocol.h"
 #include "scene_stream_engine.h"
 
 namespace {
@@ -647,12 +648,25 @@ adm_render_result_t* make_c_result(mradm::RenderResult&& cpp_result, std::vector
 adm_head_tracking_pose_t head_tracking_pose(const mradm::OscHeadTrackingSnapshot& snapshot) noexcept {
     adm_head_tracking_pose_t result{};
     result.struct_size = sizeof(result);
+    result.protocol_version = snapshot.timing.protocol_version;
     result.has_pose = snapshot.has_pose ? 1U : 0U;
     result.fresh = snapshot.fresh ? 1U : 0U;
-    result.session_id = snapshot.session_id;
-    result.sequence = snapshot.sequence;
-    result.received_ns = snapshot.received_ns;
+    result.receiver_session_id = snapshot.session_id;
+    result.receiver_sequence = snapshot.sequence;
+    result.receiver_received_ns = snapshot.received_ns;
     result.age_ms = snapshot.age_ms;
+    const auto& t = snapshot.timing;
+    result.instance_id = t.instance_id;
+    result.source_session_id = t.source_session_id;
+    result.source_sequence = t.source_sequence;
+    result.tx_sequence = t.tx_sequence;
+    result.reference_epoch = t.reference_epoch;
+    result.metadata_revision = t.metadata_revision;
+    result.source_received_ns = t.source_received_ns;
+    result.source_age_at_send_ns = t.source_age_at_send_ns;
+    result.sample_time_kind = t.sample_time_kind;
+    result.sample_time_ms = t.sample_time_ms;
+    result.sample_clock_epoch = t.sample_clock_epoch;
     std::ranges::copy(snapshot.orientation.quaternion_xyzw, std::begin(result.quaternion_xyzw));
     result.yaw_deg = snapshot.orientation.euler_deg[0];
     result.pitch_deg = snapshot.orientation.euler_deg[1];
@@ -682,9 +696,14 @@ adm_error_code_t adm_create_osc_head_tracking(const adm_osc_head_tracking_config
         (config->struct_size < sizeof(adm_osc_head_tracking_config_t) || config->listen_port > 65535U)) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
+    if (config != nullptr && config->source_id != nullptr && !std::string_view{config->source_id}.empty() &&
+        !mradm::realtime::valid_source_id(config->source_id)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
     try {
         *out = new adm_osc_head_tracking_t{
-            mradm::OscHeadTrackingReceiver{static_cast<std::uint16_t>(config != nullptr ? config->listen_port : 9000U)},
+            mradm::OscHeadTrackingReceiver{static_cast<std::uint16_t>(config != nullptr ? config->listen_port : 9000U),
+                                           config != nullptr && config->source_id != nullptr ? config->source_id : ""},
             {}};
         return ADM_ERROR_OK;
     } catch (...) {
@@ -729,30 +748,6 @@ adm_error_code_t adm_osc_head_tracking_get_pose(const adm_osc_head_tracking_t* r
     }
 }
 
-adm_error_code_t adm_osc_head_tracking_get_pose_v2(const adm_osc_head_tracking_t* receiver,
-                                                   adm_head_tracking_pose_v2_t* out) noexcept {
-    if (receiver == nullptr || out == nullptr || out->struct_size < sizeof(adm_head_tracking_pose_v2_t)) {
-        return ADM_ERROR_INVALID_ARGUMENT;
-    }
-    try {
-        const auto snapshot = receiver->receiver.snapshot();
-        adm_head_tracking_pose_v2_t result{};
-        result.struct_size = sizeof(result);
-        result.protocol_version = snapshot.timing.protocol_version;
-        result.pose = head_tracking_pose(snapshot);
-        result.sample_time_kind = snapshot.timing.sample_time_kind;
-        result.source_session_id = snapshot.timing.source_session_id;
-        result.source_sequence = snapshot.timing.source_sequence;
-        result.source_received_ns = snapshot.timing.source_received_ns;
-        result.sample_time_ms = snapshot.timing.sample_time_ms;
-        result.sample_clock_epoch = snapshot.timing.sample_clock_epoch;
-        std::memcpy(out, &result, sizeof(result));
-        return ADM_ERROR_OK;
-    } catch (...) {
-        return ADM_ERROR_INTERNAL;
-    }
-}
-
 adm_error_code_t adm_osc_head_tracking_get_status(const adm_osc_head_tracking_t* receiver,
                                                   adm_osc_head_tracking_status_t* out) noexcept {
     if (receiver == nullptr || out == nullptr || out->struct_size < sizeof(adm_osc_head_tracking_status_t)) {
@@ -771,7 +766,39 @@ adm_error_code_t adm_osc_head_tracking_get_status(const adm_osc_head_tracking_t*
         result.rejected_packets = snapshot.rejected_packets;
         result.recovery_count = snapshot.recovery_count;
         result.age_ms = snapshot.age_ms;
+        result.pose_packets = snapshot.pose_packets;
+        result.telemetry_packets = snapshot.telemetry_packets;
+        result.ignored_sources = snapshot.ignored_sources;
+        result.protocol_mismatches = snapshot.protocol_mismatches;
+        result.missing_tx_packets = snapshot.missing_tx_packets;
+        result.has_heartbeat = snapshot.has_heartbeat ? 1U : 0U;
+        result.heartbeat_alive = snapshot.heartbeat_alive ? 1U : 0U;
+        result.heartbeat_age_ms = snapshot.heartbeat_age_ms;
         std::memcpy(out, &result, sizeof(result));
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_osc_head_tracking_snapshot_json(const adm_osc_head_tracking_t* receiver,
+                                                     char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (receiver == nullptr || out_json == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        const auto text = receiver->receiver.snapshot_json();
+        // C ABI ownership is transferred to adm_free_string, which uses free.
+        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
+        auto* buffer = static_cast<char*>(std::malloc(text.size() + 1U));
+        if (buffer == nullptr) {
+            return ADM_ERROR_INTERNAL;
+        }
+        std::memcpy(buffer, text.c_str(), text.size() + 1U);
+        *out_json = buffer;
         return ADM_ERROR_OK;
     } catch (...) {
         return ADM_ERROR_INTERNAL;

@@ -9,7 +9,7 @@
 
 namespace mradm {
 
-// PoseBridge v1/v2 / GUI convention: Hamilton x,y,z,w; q = q_y(yaw) q_x(pitch) q_z(roll).
+// PoseBridge current protocol / GUI convention: Hamilton x,y,z,w; q = q_y(yaw) q_x(pitch) q_z(roll).
 // These quaternion axes are NOT the renderer's scene-space axes. Submit euler_deg to
 // the existing listener-orientation APIs: yaw left, pitch up, roll right, in degrees.
 struct HeadTrackingOrientation {
@@ -28,8 +28,13 @@ enum class OscHeadTrackingState : std::int32_t {
 
 // Clock domains are independent; timestamps must not be subtracted across them.
 struct HeadTrackingTiming {
-    std::uint32_t protocol_version{0}; // 0 before data, 1 pose-only, 2 metadata
+    std::uint32_t protocol_version{0}; // 0 before data, 3 for the single current protocol
     std::uint32_t sample_time_kind{0}; // 0 absent, 1 device calendar (NOT UTC), 2 simulated elapsed
+    std::uint64_t instance_id{0};
+    std::uint64_t tx_sequence{0};
+    std::uint64_t reference_epoch{0};
+    std::uint64_t metadata_revision{0};
+    std::uint64_t source_age_at_send_ns{0}; // host holding time only; not total device sample age
     std::uint64_t source_session_id{0};
     std::uint64_t source_sequence{0};
     std::uint64_t source_received_ns{0}; // since PoseBridge source session start
@@ -49,6 +54,19 @@ struct OscHeadTrackingSnapshot {
     std::uint64_t packets_received{0};
     std::uint64_t rejected_packets{0};
     std::uint64_t recovery_count{0}; // valid input after >=500 ms silence; caller should check recenter
+    std::uint64_t pose_packets{0};
+    std::uint64_t telemetry_packets{0};
+    std::uint64_t ignored_sources{0};
+    std::uint64_t protocol_mismatches{0};
+    std::uint64_t missing_tx_packets{0};
+    bool has_heartbeat{false};
+    bool heartbeat_alive{false};
+    std::uint64_t heartbeat_age_ms{0};
+    std::string source_id; // bound by the first accepted pose, or specified at construction
+    std::string info_json;
+    std::string status_json;
+    bool info_matches_pose{false};
+    bool status_matches_pose{false};
     HeadTrackingOrientation orientation;
     HeadTrackingTiming timing;
 };
@@ -62,7 +80,7 @@ struct OscHeadTrackingSnapshot {
 class OscHeadTrackingReceiver {
   public:
     // port 0 requests an OS-assigned port for embedding/tests; default is 9000.
-    explicit OscHeadTrackingReceiver(std::uint16_t port = 9000);
+    explicit OscHeadTrackingReceiver(std::uint16_t port = 9000, std::string source_id = {});
     ~OscHeadTrackingReceiver();
     OscHeadTrackingReceiver(const OscHeadTrackingReceiver&) = delete;
     OscHeadTrackingReceiver& operator=(const OscHeadTrackingReceiver&) = delete;
@@ -73,6 +91,7 @@ class OscHeadTrackingReceiver {
     void stop() noexcept;               // idempotent; retains the last pose with fresh=false
     [[nodiscard]] OscHeadTrackingSnapshot snapshot() const;
     [[nodiscard]] std::string last_error() const;
+    [[nodiscard]] std::string snapshot_json() const;
 
   private:
     struct Impl;
