@@ -193,12 +193,14 @@
  *   结构化参数更新接口。实时编辑不需要临时文件；v1.37 文件接口和布局保持兼容。
  *
  * v1.39 新增：adm_scene_output_set_hptf_ex，准备补偿时不阻塞 Scene 输出控制，错误消息由调用方持有。
+ *
+ * v1.40 新增：独立 OSC 头部姿态接收器，回环 UDP、最新快照和状态轮询；不依赖 GUI 或音频设备。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 39
+#define ADM_API_VERSION_MINOR 40
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -997,6 +999,90 @@ adm_error_code_t adm_preview_render_window_v2(adm_preview_session_t* session,
                                               adm_progress_v2_cb progress,
                                               void* user_data,
                                               adm_render_result_t** result) ADM_API_NOEXCEPT;
+
+/* ── v1.40 Standalone OSC head tracking ─────────────────────────────────────
+ * Receives PoseBridge v1 on IPv4 loopback ONLY. One complete quaternion (x,y,z,w)
+ * or Euler (yaw,pitch,roll degrees) message per datagram. No OSC bundles or
+ * control commands. Unknown/malformed/nonfinite input is rejected without
+ * refreshing freshness; quaternion norms < 1e-6 are rejected, others normalized.
+ *
+ * A worker replaces one latest snapshot; there are no callbacks or pose queues.
+ * The receiver NEVER touches a monitor, Scene stream, audio device or GUI.
+ * The host polls on a control thread, checks has_pose/fresh, applies its own
+ * recenter/smoothing/source arbitration, then uses the existing listener setters.
+ * The quaternion convention is q_y(yaw)*q_x(pitch)*q_z(roll), matching the GUI
+ * and PoseBridge; it must not be passed as a raw scene-space quaternion.
+ *
+ * Serialize caller operations on each handle. Destroy must not overlap any
+ * access. stop/destroy join the worker and release the port; none of these calls
+ * belong in an audio callback. Independent handles may be used on different threads.
+ */
+typedef struct adm_osc_head_tracking_t adm_osc_head_tracking_t;
+
+typedef enum adm_osc_head_tracking_state_t {
+    ADM_OSC_HEAD_TRACKING_IDLE = 0,
+    ADM_OSC_HEAD_TRACKING_WAITING = 1,
+    ADM_OSC_HEAD_TRACKING_ACTIVE = 2,
+    ADM_OSC_HEAD_TRACKING_STALE = 3,
+    ADM_OSC_HEAD_TRACKING_STOPPED = 4,
+    ADM_OSC_HEAD_TRACKING_FAILED = 5
+} adm_osc_head_tracking_state_t;
+
+typedef struct adm_osc_head_tracking_config_t {
+    uint32_t struct_size;
+    uint32_t listen_port; /* 0 = OS-assigned ephemeral port; 1..65535 = exact port */
+} adm_osc_head_tracking_config_t;
+
+typedef struct adm_head_tracking_pose_t {
+    uint32_t struct_size;
+    uint32_t has_pose; /* 0 before first valid message; inspect this even when get_pose returns OK */
+    uint32_t fresh;    /* 1 only while listening and the last valid message is <500 ms old */
+    uint32_t reserved_v1_40;
+    uint64_t session_id;
+    uint64_t sequence;    /* increments for every valid message, including equal-valued samples */
+    uint64_t received_ns; /* receiver monotonic time since start; NOT a device/OSC timestamp */
+    uint64_t age_ms;      /* meaningful only when has_pose=1 */
+    float quaternion_xyzw[4];
+    float yaw_deg;   /* positive left */
+    float pitch_deg; /* positive up */
+    float roll_deg;  /* positive right tilt */
+    uint32_t reserved_tail_v1_40;
+} adm_head_tracking_pose_t;
+
+typedef struct adm_osc_head_tracking_status_t {
+    uint32_t struct_size;
+    int32_t state; /* adm_osc_head_tracking_state_t */
+    uint32_t bound_port;
+    uint32_t has_pose;
+    uint64_t session_id;
+    uint64_t sequence;
+    uint64_t packets_received;
+    uint64_t rejected_packets;
+    uint64_t recovery_count; /* valid message after >=500 ms silence; prompt host to check recenter */
+    uint64_t age_ms;         /* meaningful only when has_pose=1 */
+} adm_osc_head_tracking_status_t;
+
+/* config==NULL selects port 9000. Creation does not bind; start reports bind errors.
+ * Output structs must have struct_size >= the v1.40 size. Only known fields are
+ * written; larger caller buffers retain unknown trailing bytes. No-data/stale
+ * are valid snapshots, not error codes. A timeout retains the last orientation;
+ * the host must stop orientation keepalive while fresh=0. Recovery keeps this
+ * receiver session; start after stop/failure creates a new session and clears data.
+ * UDP v1 has no sender sequence/timestamp: source reset and packet reordering
+ * cannot be detected. Multiple local senders are not arbitrated by this receiver.
+ */
+adm_error_code_t adm_create_osc_head_tracking(const adm_osc_head_tracking_config_t* config,
+                                              adm_osc_head_tracking_t** out) ADM_API_NOEXCEPT;
+void adm_destroy_osc_head_tracking(adm_osc_head_tracking_t* receiver) ADM_API_NOEXCEPT;
+adm_error_code_t adm_osc_head_tracking_start(adm_osc_head_tracking_t* receiver) ADM_API_NOEXCEPT;
+void adm_osc_head_tracking_stop(adm_osc_head_tracking_t* receiver) ADM_API_NOEXCEPT;
+adm_error_code_t adm_osc_head_tracking_get_pose(const adm_osc_head_tracking_t* receiver,
+                                                adm_head_tracking_pose_t* out) ADM_API_NOEXCEPT;
+adm_error_code_t adm_osc_head_tracking_get_status(const adm_osc_head_tracking_t* receiver,
+                                                  adm_osc_head_tracking_status_t* out) ADM_API_NOEXCEPT;
+/* Receiver-owned copy, valid until the next error-message query or destruction.
+ * Fatal receive/bind errors are here; malformed packets only increase counters. */
+const char* adm_osc_head_tracking_last_error_message(adm_osc_head_tracking_t* receiver) ADM_API_NOEXCEPT;
 
 /* ── v1.15 Realtime monitor ───────────────────────────────────────────────── */
 /*

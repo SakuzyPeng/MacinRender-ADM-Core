@@ -148,6 +148,7 @@ target_sources(
             include/adm/capability.h
             include/adm/direct_speakers_matrix.h
             include/adm/errors.h
+            include/adm/head_tracking.h
             include/adm/hptf.h
             include/adm/live_override.h
             include/adm/logging.h
@@ -603,6 +604,8 @@ target_sources(mr_adm_realtime PRIVATE
     src/adm_realtime/miniaudio_device.cpp
     src/adm_realtime/scene_stream_engine.cpp
     src/adm_realtime/stereo_peak_guard.cpp
+    src/adm_realtime/osc_head_tracking.cpp
+    src/adm_realtime/osc_head_tracking_protocol.cpp
 )
 target_include_directories(mr_adm_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
 # miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
@@ -622,6 +625,9 @@ target_include_directories(mr_adm_realtime PRIVATE
     src/adm_render_vbap
     src/adm_render_binaural
 )
+if(WIN32)
+    target_link_libraries(mr_adm_realtime PRIVATE ws2_32)
+endif()
 # libebur128 uses legacy include_directories() that does not propagate via the target.
 target_include_directories(mr_adm_realtime SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
 mr_adm_core_apply_warnings(mr_adm_realtime)
@@ -760,6 +766,20 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_c_api_header_smoke)
     mr_adm_core_apply_static_analysis(mr_adm_c_api_header_smoke)
     add_test(NAME mr_adm_c_api_header_smoke COMMAND mr_adm_c_api_header_smoke)
+
+    add_executable(mr_adm_osc_head_tracking_tests tests/unit/osc_head_tracking_test.cpp)
+    target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE MacinRender::ADMCAPI MacinRender::ADMRealtime)
+    target_include_directories(mr_adm_osc_head_tracking_tests PRIVATE src/adm_render_common)
+    if(WIN32)
+        target_link_libraries(mr_adm_osc_head_tracking_tests PRIVATE ws2_32)
+    endif()
+    mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_osc_head_tracking_tests)
+    add_test(NAME mr_adm_osc_head_tracking_tests COMMAND mr_adm_osc_head_tracking_tests)
+
+    add_executable(mr_adm_osc_head_tracking_probe EXCLUDE_FROM_ALL tests/manual/osc_head_tracking_probe.cpp)
+    target_link_libraries(mr_adm_osc_head_tracking_probe PRIVATE MacinRender::ADMRealtime)
+    mr_adm_core_apply_warnings(mr_adm_osc_head_tracking_probe)
 
     add_executable(mr_adm_scene_stream_c_api_tests tests/unit/scene_stream_c_api_test.cpp)
     target_link_libraries(mr_adm_scene_stream_c_api_tests PRIVATE MacinRender::ADMCAPI)

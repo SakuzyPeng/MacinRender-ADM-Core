@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.39）
-> 日期：2026-05-17（增量记录持续更新至 2026-09-16 的 v1.39）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.40）
+> 日期：2026-05-17（增量记录持续更新至 2026-09-19 的 v1.40）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -628,3 +628,13 @@ VBAP 声像和内容电平分别渐变；跟踪字段在 VBAP 中仍中性，不
 可与 Scene 提交、状态查询、暂停、音量、头追和 epoch reset 并发。调用方保持输出存活并串行化
 profile setter，以保留请求次序；错误通过 `out_error` 独立返回，用 `adm_free_string` 释放。
 既有 v1.37 setter 和结构体布局不变。
+
+### v1.40.0（additive，向后二进制兼容）
+
+- 新增独立 opaque `adm_osc_head_tracking_t` 与 create/start/stop/destroy、姿态／状态轮询和错误查询。
+  接收器只绑定 IPv4 回环，默认 9000；不持有或调用 Monitor、Scene、音频设备或 GUI。
+- 新增以 `struct_size` 开头的配置、姿态和状态结构，固定宽度类型与显式对齐填充；v1.40 大小分别为 8／80／64 字节。
+  容量不足拒绝且不部分写入；只写已知字段，保留较大调用方结构的未知尾部。
+- UDP 解析与最新快照存储在后台完成，无调用方回调。500 ms 无有效包后保留朝向并标 stale，恢复增加计数。
+  宿主负责回正、平滑、来源仲裁及向既有 listener orientation 接口提交；已有函数、枚举数值、布局和 SONAME 不变。
+- 详见[原生 OSC 接收接口](../architecture/OSC_HEAD_TRACKING_API.md)。本轮接口实现独立于 GUI 适配。
