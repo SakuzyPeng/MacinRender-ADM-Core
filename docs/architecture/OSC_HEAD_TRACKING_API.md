@@ -205,4 +205,14 @@ python3 tests/manual/osc_posebridge_check.py --library build/release/libmradm_ca
 - macOS Debug：OSC v1/v2 契约、纯 C 头文件与既有 C ABI 回归 3 个目标通过。
 - macOS Release：动态库与实际 PoseBridge 0.2 模拟器联调通过，一轮 612 份有效姿态；
   两种版本／姿态格式、原子时间快照、源进程重启、缺失时间、失联恢复、±180° 和接收器重启均通过。
-- Windows 与物理设备的本轮结果见最终验证补充；以上数据不代替 GUI、音频整体延迟或时钟同步验收。
+- macOS 真机：USB／BLE 各验证 `0x81/0x84/0xA4`，共六组。PoseBridge C ABI 与 Render C ABI 同源序号匹配时，
+  源接收纳秒、设备毫秒与 epoch 一致；设备每采样推进 5 ms。无非法帧／拒绝包，结束恢复 10 Hz 默认输出。
+- Windows：17 项 Rust 测试、全目标 Clippy、真实 PoseBridge C ABI 调用和 CLI v1/v2 验证通过；
+  Render 原生接收器与完整 C ABI 翻译单元编译、C 头文件布局检查通过。最小 C++ 接收程序在 v1/v2 × 两种姿态格式中各收 100 份，
+  时间字段、stale 与端口释放通过。Windows 完整 Render DLL 未链接／运行，未以原生 C++ 检查代替该项。
+- Windows 真机：用户切换到 COM4 后，USB／BLE 的三种时间戳格式六组通过；设备每采样推进 5 ms，源与 Render 元数据一致。
+  USB 主机批量交付后约 45–47 OSC 包／秒，BLE 约 25 包／秒；均未冒充均匀 200 Hz 到达。
+  结束已在 Windows 回读恢复 10 Hz、默认输出。配置读回的过渡旧值现按有限只读重试核验，持续不匹配仍报错。
+- 最终 clang-format、clang-tidy、cppcheck 均通过，无新增诊断。完整数据见 PoseBridge 的
+  [时间戳验证记录](https://github.com/SakuzyPeng/PoseBridge/blob/main/docs/measurements/2026-09-19-timestamp-pipeline.md)。
+  以上不代替 GUI、音频整体延迟、安装校准或时钟同步验收。
