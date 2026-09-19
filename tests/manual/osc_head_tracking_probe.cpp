@@ -64,6 +64,13 @@ int main(int argc, char** argv) {
         std::cout << "{\"state\":" << static_cast<std::int32_t>(result.state) << ",\"samples\":" << result.sequence
                   << ",\"rejected\":" << result.rejected_packets << ",\"yaw\":" << angles[0]
                   << ",\"pitch\":" << angles[1] << ",\"roll\":" << angles[2]
+                  << ",\"protocol_version\":" << result.timing.protocol_version
+                  << ",\"sample_time_kind\":" << result.timing.sample_time_kind
+                  << ",\"source_session_id\":" << result.timing.source_session_id
+                  << ",\"source_sequence\":" << result.timing.source_sequence
+                  << ",\"source_received_ns\":" << result.timing.source_received_ns
+                  << ",\"sample_time_ms\":" << result.timing.sample_time_ms
+                  << ",\"sample_clock_epoch\":" << result.timing.sample_clock_epoch
                   << ",\"quaternion_norm_squared\":" << norm_squared << ",\"exclusive_bind_and_stop\":true}\n";
         return result.has_pose ? 0 : 2;
     } catch (const std::exception& error) {

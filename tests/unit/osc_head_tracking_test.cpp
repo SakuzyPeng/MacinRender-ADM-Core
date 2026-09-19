@@ -47,7 +47,8 @@ bool approximately_equal(double first, double second, double tolerance = 0.0005)
     return std::abs(first - second) < tolerance;
 }
 
-std::vector<std::byte> packet(std::string_view address, std::span<const float> values) {
+std::vector<std::byte>
+packet(std::string_view address, std::span<const float> values, const mradm::HeadTrackingTiming* timing = nullptr) {
     std::vector<std::byte> bytes;
     const auto text = [&bytes](std::string_view value) {
         std::ranges::transform(
@@ -58,7 +59,20 @@ std::vector<std::byte> packet(std::string_view address, std::span<const float> v
         }
     };
     text(address);
-    text("," + std::string(values.size(), 'f'));
+    text(std::string(timing != nullptr ? ",hhhhih" : ",") + std::string(values.size(), 'f'));
+    if (timing != nullptr) {
+        const auto integer = [&bytes](std::uint64_t value, int width) {
+            for (int shift = (width - 1) * 8; shift >= 0; shift -= 8) {
+                bytes.push_back(static_cast<std::byte>((value >> shift) & 255U));
+            }
+        };
+        integer(timing->source_session_id, 8);
+        integer(timing->source_sequence, 8);
+        integer(timing->source_received_ns, 8);
+        integer(timing->sample_time_ms, 8);
+        integer(timing->sample_time_kind, 4);
+        integer(timing->sample_clock_epoch, 8);
+    }
     for (const auto value : values) {
         const auto bits = std::bit_cast<std::uint32_t>(value);
         for (const int shift : {24, 16, 8, 0}) {
@@ -77,7 +91,7 @@ mradm::HeadTrackingOrientation decode_valid(std::span<const std::byte> bytes) {
     if (!decoded) {
         throw std::runtime_error("valid protocol vector was rejected");
     }
-    return *decoded;
+    return decoded->orientation;
 }
 
 void parser_contract() {
@@ -159,9 +173,114 @@ void parser_contract() {
     const float huge = std::numeric_limits<float>::max();
     const auto huge_quaternion = mradm::realtime::decode_head_tracking_osc(
         packet("/posebridge/v1/quaternion", std::array{huge, huge, huge, huge}));
-    require(huge_quaternion && approximately_equal(huge_quaternion->quaternion_xyzw[0], 0.5),
+    require(huge_quaternion && approximately_equal(huge_quaternion->orientation.quaternion_xyzw[0], 0.5),
             "double norm calculation avoids float overflow");
     require(mradm::realtime::decode_head_tracking_osc(euler(huge)).has_value(), "finite large Euler range reduction");
+}
+
+mradm::HeadTrackingTiming timing_fixture() {
+    return {2U, 1U, 0x123456789abcdefULL, (1ULL << 53U) + 1U, (1ULL << 54U) + 3U, 473398726930ULL, 1U};
+}
+
+std::vector<std::byte> timed_euler(const mradm::HeadTrackingTiming& timing, float yaw = 30.0F) {
+    return packet("/posebridge/v2/euler", std::array{yaw, 20.0F, 10.0F}, &timing);
+}
+
+void v2_parser_and_order_contract() {
+    auto time = timing_fixture();
+    for (const auto& bytes :
+         {timed_euler(time), packet("/posebridge/v2/quaternion", std::array{0.0F, 0.0F, 0.0F, 1.0F}, &time)}) {
+        const auto decoded = mradm::realtime::decode_head_tracking_osc(bytes);
+        require(decoded && decoded->timing.protocol_version == 2U &&
+                    decoded->timing.source_session_id == time.source_session_id &&
+                    decoded->timing.source_sequence == time.source_sequence &&
+                    decoded->timing.source_received_ns == time.source_received_ns &&
+                    decoded->timing.sample_time_ms == time.sample_time_ms && decoded->timing.sample_time_kind == 1U &&
+                    decoded->timing.sample_clock_epoch == 1U,
+                "v2 metadata preserves int64 precision");
+        for (std::size_t size = 0; size < bytes.size(); ++size) {
+            require(!mradm::realtime::decode_head_tracking_osc(std::span{bytes.data(), size}), "truncated v2 rejected");
+        }
+        auto trailing = bytes;
+        trailing.push_back(std::byte{0});
+        require(!mradm::realtime::decode_head_tracking_osc(trailing), "v2 extra fields rejected");
+    }
+    for (const auto field : {&mradm::HeadTrackingTiming::source_session_id,
+                             &mradm::HeadTrackingTiming::source_sequence,
+                             &mradm::HeadTrackingTiming::source_received_ns,
+                             &mradm::HeadTrackingTiming::sample_time_ms,
+                             &mradm::HeadTrackingTiming::sample_clock_epoch}) {
+        auto negative = time;
+        negative.*field = std::numeric_limits<std::uint64_t>::max();
+        require(!mradm::realtime::decode_head_tracking_osc(timed_euler(negative)), "negative OSC integer rejected");
+    }
+    for (const auto field : {&mradm::HeadTrackingTiming::source_session_id,
+                             &mradm::HeadTrackingTiming::source_sequence,
+                             &mradm::HeadTrackingTiming::sample_clock_epoch}) {
+        auto zero = time;
+        zero.*field = 0;
+        require(!mradm::realtime::decode_head_tracking_osc(timed_euler(zero)),
+                "required positive metadata rejected at zero");
+    }
+    time.sample_time_kind = 3;
+    require(!mradm::realtime::decode_head_tracking_osc(timed_euler(time)), "unknown clock kind rejected");
+    time.sample_time_kind = 0;
+    require(!mradm::realtime::decode_head_tracking_osc(timed_euler(time)), "absent time cannot have metadata");
+    time.sample_time_ms = 0;
+    time.sample_clock_epoch = 0;
+    require(mradm::realtime::decode_head_tracking_osc(timed_euler(time)).has_value(), "absent time is explicit");
+    time.sample_time_kind = 2;
+    time.sample_clock_epoch = 1;
+    require(mradm::realtime::decode_head_tracking_osc(timed_euler(time)).has_value(), "simulator time zero valid");
+    require(!mradm::realtime::decode_head_tracking_osc(packet("/posebridge/v2/euler", std::array{0.0F, 0.0F, 0.0F})),
+            "v2 cannot use v1 tags");
+    require(
+        !mradm::realtime::decode_head_tracking_osc(packet("/posebridge/v1/euler", std::array{0.0F, 0.0F, 0.0F}, &time)),
+        "v1 cannot use v2 tags");
+    require(!mradm::realtime::decode_head_tracking_osc(timed_euler(time, std::numeric_limits<float>::infinity())),
+            "nonfinite v2 pose rejected");
+
+    mradm::realtime::OscSourceOrder order;
+    time = timing_fixture();
+    require(order.accept(time) && !order.accept(time), "first source accepted, replay rejected");
+    ++time.source_sequence;
+    require(!order.accept(time), "new sequence cannot disguise duplicate device time");
+    ++time.sample_time_ms;
+    require(order.accept(time), "batch may share a source receive time");
+    auto backward = time;
+    ++backward.source_sequence;
+    --backward.source_received_ns;
+    ++backward.sample_time_ms;
+    require(!order.accept(backward), "decreasing host time rejected");
+    backward = time;
+    ++backward.source_sequence;
+    --backward.sample_time_ms;
+    require(!order.accept(backward), "device time regression requires a new epoch");
+    ++backward.sample_clock_epoch;
+    require(order.accept(backward), "explicit clock reset accepted");
+    auto absent = backward;
+    ++absent.source_sequence;
+    absent.sample_time_kind = 0;
+    absent.sample_time_ms = 0;
+    absent.sample_clock_epoch = 0;
+    require(order.accept(absent), "absent timestamp is supported");
+    time.source_sequence = absent.source_sequence + 1U;
+    require(!order.accept(time), "absent packet cannot erase clock epoch history");
+    time = backward;
+    time.source_sequence = absent.source_sequence + 1U;
+    time.sample_time_kind = 2;
+    ++time.sample_time_ms;
+    require(!order.accept(time), "clock kind change requires new epoch");
+    ++time.sample_clock_epoch;
+    require(order.accept(time), "new epoch permits kind change");
+    auto new_source = timing_fixture();
+    new_source.source_session_id = 42;
+    new_source.source_sequence = 1;
+    new_source.source_received_ns = 0;
+    require(order.accept(new_source) && !order.accept(time), "retired session packets rejected");
+    mradm::HeadTrackingTiming v1;
+    v1.protocol_version = 1;
+    require(order.accept(v1) && !order.accept(new_source), "v1 cannot clear v2 ordering memory");
 }
 
 using Receiver = std::unique_ptr<adm_osc_head_tracking_t, decltype(&adm_destroy_osc_head_tracking)>;
@@ -184,6 +303,13 @@ adm_head_tracking_pose_t pose(const Receiver& receiver) {
     adm_head_tracking_pose_t result{};
     result.struct_size = sizeof(result);
     require(adm_osc_head_tracking_get_pose(receiver.get(), &result) == ADM_ERROR_OK, "pose query");
+    return result;
+}
+
+adm_head_tracking_pose_v2_t pose_v2(const Receiver& receiver) {
+    adm_head_tracking_pose_v2_t result{};
+    result.struct_size = sizeof(result);
+    require(adm_osc_head_tracking_get_pose_v2(receiver.get(), &result) == ADM_ERROR_OK, "v2 pose query");
     return result;
 }
 
@@ -348,6 +474,66 @@ void receiver_contract() {
     require(adm_osc_head_tracking_start(reused.get()) == ADM_ERROR_OK, "destruction releases bound port");
 }
 
+void v2_receiver_contract() {
+    Sender sender;
+    auto receiver = create(0);
+    require(pose_v2(receiver).protocol_version == 0U && pose_v2(receiver).pose.has_pose == 0U, "v2 no-data output");
+    require(adm_osc_head_tracking_start(receiver.get()) == ADM_ERROR_OK, "v2 bind");
+    const auto port = status(receiver).bound_port;
+    auto time = timing_fixture();
+    sender.send(port, timed_euler(time));
+    wait_until([&] { return pose_v2(receiver).pose.sequence == 1U; });
+    const auto first = pose_v2(receiver);
+    require(first.protocol_version == 2U && first.source_sequence == time.source_sequence &&
+                first.source_received_ns == time.source_received_ns && first.sample_time_ms == time.sample_time_ms &&
+                first.pose.struct_size == sizeof(adm_head_tracking_pose_t) &&
+                approximately_equal(first.pose.yaw_deg, 30.0),
+            "atomic timing and orientation");
+    require(pose(receiver).received_ns == first.pose.received_ns && pose(receiver).sequence == first.pose.sequence,
+            "old getter preserves local clock and sequence semantics");
+    const auto expiry = std::chrono::steady_clock::now() + std::chrono::milliseconds{600};
+    while (std::chrono::steady_clock::now() < expiry) {
+        sender.send(port, timed_euler(time));
+        std::this_thread::sleep_for(std::chrono::milliseconds{30});
+    }
+    require(pose_v2(receiver).pose.fresh == 0U && pose_v2(receiver).pose.sequence == 1U &&
+                pose_v2(receiver).pose.received_ns == first.pose.received_ns,
+            "replayed v2 cannot keep input active");
+    ++time.source_sequence;
+    time.sample_time_ms = 5;
+    ++time.sample_clock_epoch;
+    sender.send(port, timed_euler(time));
+    wait_until([&] { return pose_v2(receiver).pose.sequence == 2U; });
+    require(pose_v2(receiver).sample_clock_epoch == 2U && status(receiver).recovery_count == 1U,
+            "clock reset resumes freshness");
+    struct FuturePose {
+        adm_head_tracking_pose_v2_t value;
+        std::uint64_t tail;
+    } extended{};
+    extended.value.struct_size = sizeof(extended);
+    extended.tail = 0x123456789abcdef0ULL;
+    require(adm_osc_head_tracking_get_pose_v2(receiver.get(), &extended.value) == ADM_ERROR_OK &&
+                extended.tail == 0x123456789abcdef0ULL,
+            "v2 unknown caller tail preserved");
+    extended.value.struct_size = 4;
+    require(adm_osc_head_tracking_get_pose_v2(receiver.get(), &extended.value) == ADM_ERROR_INVALID_ARGUMENT &&
+                extended.value.struct_size == 4U,
+            "undersized v2 output untouched");
+    sender.send(port, euler(45));
+    wait_until([&] { return pose_v2(receiver).pose.sequence == 3U; });
+    const auto legacy = pose_v2(receiver);
+    require(legacy.protocol_version == 1U && legacy.sample_time_kind == 0U && legacy.source_session_id == 0U &&
+                legacy.source_sequence == 0U && legacy.source_received_ns == 0U && legacy.sample_time_ms == 0U &&
+                legacy.sample_clock_epoch == 0U,
+            "v1 clears exposed metadata without inventing sample time");
+    const auto total = status(receiver).packets_received;
+    sender.send(port, timed_euler(time));
+    wait_until([&] { return status(receiver).packets_received > total; });
+    require(pose_v2(receiver).pose.sequence == 3U, "v2 replay rejected even after v1");
+    adm_osc_head_tracking_stop(receiver.get());
+    require(pose_v2(receiver).pose.fresh == 0U, "v2 stop clears freshness");
+}
+
 void invalid_abi_arguments() {
     adm_osc_head_tracking_t* handle = nullptr;
     adm_osc_head_tracking_config_t config{sizeof(config), 65536U};
@@ -362,6 +548,8 @@ void invalid_abi_arguments() {
     adm_destroy_osc_head_tracking(handle);
     require(adm_osc_head_tracking_start(nullptr) == ADM_ERROR_INVALID_ARGUMENT, "null start rejected");
     require(adm_osc_head_tracking_get_pose(nullptr, nullptr) == ADM_ERROR_INVALID_ARGUMENT, "null pose query rejected");
+    require(adm_osc_head_tracking_get_pose_v2(nullptr, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
+            "null v2 pose query rejected");
     require(adm_osc_head_tracking_get_status(nullptr, nullptr) == ADM_ERROR_INVALID_ARGUMENT,
             "null status query rejected");
     adm_osc_head_tracking_stop(nullptr);
@@ -373,8 +561,10 @@ void invalid_abi_arguments() {
 int main() {
     try {
         parser_contract();
+        v2_parser_and_order_contract();
         invalid_abi_arguments();
         receiver_contract();
+        v2_receiver_contract();
         std::cout << "OSC head tracking: protocol, coordinates, C ABI, UDP freshness and lifecycle PASS\n";
         return 0;
     } catch (const std::exception& error) {

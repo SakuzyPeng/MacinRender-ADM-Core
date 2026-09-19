@@ -6,13 +6,16 @@
 #error "unexpected C ABI major version"
 #endif
 
-#if ADM_API_VERSION_MINOR != 40
+#if ADM_API_VERSION_MINOR != 41
 #error "unexpected C ABI minor version"
 #endif
 
 _Static_assert(sizeof(adm_osc_head_tracking_state_t) == sizeof(int), "OSC state enum must remain int-sized");
 _Static_assert(sizeof(adm_osc_head_tracking_config_t) == 8, "v1.40 OSC config layout is frozen");
 _Static_assert(sizeof(adm_head_tracking_pose_t) == 80, "v1.40 pose layout is frozen");
+_Static_assert(sizeof(adm_head_tracking_pose_v2_t) == 136, "v1.41 pose layout is frozen");
+_Static_assert(offsetof(adm_head_tracking_pose_v2_t, pose) == 8, "nested pose is aligned");
+_Static_assert(offsetof(adm_head_tracking_pose_v2_t, source_session_id) == 96, "v2 timing alignment is explicit");
 _Static_assert(sizeof(adm_osc_head_tracking_status_t) == 64, "v1.40 status layout is frozen");
 _Static_assert(offsetof(adm_head_tracking_pose_t, session_id) == 16, "pose 64-bit alignment is explicit");
 _Static_assert(offsetof(adm_head_tracking_pose_t, quaternion_xyzw) == 48, "pose quaternion offset is frozen");

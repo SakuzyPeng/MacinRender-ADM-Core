@@ -195,12 +195,13 @@
  * v1.39 新增：adm_scene_output_set_hptf_ex，准备补偿时不阻塞 Scene 输出控制，错误消息由调用方持有。
  *
  * v1.40 新增：独立 OSC 头部姿态接收器，回环 UDP、最新快照和状态轮询；不依赖 GUI 或音频设备。
+ * v1.41 新增：OSC v2 时间元数据与 adm_osc_head_tracking_get_pose_v2，既有快照布局不变。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 40
+#define ADM_API_VERSION_MINOR 41
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -1001,7 +1002,7 @@ adm_error_code_t adm_preview_render_window_v2(adm_preview_session_t* session,
                                               adm_render_result_t** result) ADM_API_NOEXCEPT;
 
 /* ── v1.40 Standalone OSC head tracking ─────────────────────────────────────
- * Receives PoseBridge v1 on IPv4 loopback ONLY. One complete quaternion (x,y,z,w)
+ * Receives PoseBridge v1/v2 on IPv4 loopback ONLY. One complete quaternion (x,y,z,w)
  * or Euler (yaw,pitch,roll degrees) message per datagram. No OSC bundles or
  * control commands. Unknown/malformed/nonfinite input is rejected without
  * refreshing freshness; quaternion norms < 1e-6 are rejected, others normalized.
@@ -1049,6 +1050,28 @@ typedef struct adm_head_tracking_pose_t {
     uint32_t reserved_tail_v1_40;
 } adm_head_tracking_pose_t;
 
+/* v1.41 additive snapshot: initialize the outer struct_size; the getter fills
+ * the nested pose.struct_size. All fields come from ONE locked snapshot.
+ * protocol_version: 0 before data, 1 pose-only, 2 source timing metadata.
+ * kind: 0 absent (time/epoch=0), 1 device calendar ms since 2000-01-01 (NOT UTC),
+ * 2 synthetic elapsed ms. Present sample time has a nonzero clock epoch.
+ * Compare sample times only within the same source session, kind and epoch.
+ * Source receive, sample, and pose.received_ns clocks have unrelated origins;
+ * their difference is NOT transport or audio latency. v1 zeros source metadata.
+ */
+typedef struct adm_head_tracking_pose_v2_t {
+    uint32_t struct_size;
+    uint32_t protocol_version;
+    adm_head_tracking_pose_t pose;
+    uint32_t sample_time_kind;
+    uint32_t reserved_v1_41;
+    uint64_t source_session_id;
+    uint64_t source_sequence;
+    uint64_t source_received_ns;
+    uint64_t sample_time_ms;
+    uint64_t sample_clock_epoch;
+} adm_head_tracking_pose_v2_t;
+
 typedef struct adm_osc_head_tracking_status_t {
     uint32_t struct_size;
     int32_t state; /* adm_osc_head_tracking_state_t */
@@ -1069,7 +1092,11 @@ typedef struct adm_osc_head_tracking_status_t {
  * the host must stop orientation keepalive while fresh=0. Recovery keeps this
  * receiver session; start after stop/failure creates a new session and clears data.
  * UDP v1 has no sender sequence/timestamp: source reset and packet reordering
- * cannot be detected. Multiple local senders are not arbitrated by this receiver.
+ * cannot be detected. v2 rejects duplicate/decreasing source sequence, decreasing
+ * source receive time, and nonincreasing sample time within a clock epoch.
+ * Source session changes reset ordering; 16 retired sessions are remembered.
+ * Rejected packets never refresh freshness. Use one sender/version per port;
+ * these checks are not sender authentication or multi-source arbitration.
  */
 adm_error_code_t adm_create_osc_head_tracking(const adm_osc_head_tracking_config_t* config,
                                               adm_osc_head_tracking_t** out) ADM_API_NOEXCEPT;
@@ -1078,6 +1105,9 @@ adm_error_code_t adm_osc_head_tracking_start(adm_osc_head_tracking_t* receiver) 
 void adm_osc_head_tracking_stop(adm_osc_head_tracking_t* receiver) ADM_API_NOEXCEPT;
 adm_error_code_t adm_osc_head_tracking_get_pose(const adm_osc_head_tracking_t* receiver,
                                                 adm_head_tracking_pose_t* out) ADM_API_NOEXCEPT;
+/* Same lifecycle/output rules as get_pose; requires sizeof(adm_head_tracking_pose_v2_t). */
+adm_error_code_t adm_osc_head_tracking_get_pose_v2(const adm_osc_head_tracking_t* receiver,
+                                                   adm_head_tracking_pose_v2_t* out) ADM_API_NOEXCEPT;
 adm_error_code_t adm_osc_head_tracking_get_status(const adm_osc_head_tracking_t* receiver,
                                                   adm_osc_head_tracking_status_t* out) ADM_API_NOEXCEPT;
 /* Receiver-owned copy, valid until the next error-message query or destruction.

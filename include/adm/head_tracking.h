@@ -9,7 +9,7 @@
 
 namespace mradm {
 
-// PoseBridge v1 / GUI convention: Hamilton x,y,z,w; q = q_y(yaw) q_x(pitch) q_z(roll).
+// PoseBridge v1/v2 / GUI convention: Hamilton x,y,z,w; q = q_y(yaw) q_x(pitch) q_z(roll).
 // These quaternion axes are NOT the renderer's scene-space axes. Submit euler_deg to
 // the existing listener-orientation APIs: yaw left, pitch up, roll right, in degrees.
 struct HeadTrackingOrientation {
@@ -26,6 +26,17 @@ enum class OscHeadTrackingState : std::int32_t {
     failed = 5
 };
 
+// Clock domains are independent; timestamps must not be subtracted across them.
+struct HeadTrackingTiming {
+    std::uint32_t protocol_version{0}; // 0 before data, 1 pose-only, 2 metadata
+    std::uint32_t sample_time_kind{0}; // 0 absent, 1 device calendar (NOT UTC), 2 simulated elapsed
+    std::uint64_t source_session_id{0};
+    std::uint64_t source_sequence{0};
+    std::uint64_t source_received_ns{0}; // since PoseBridge source session start
+    std::uint64_t sample_time_ms{0};     // device clock since 2000-01-01, or simulated elapsed
+    std::uint64_t sample_clock_epoch{0}; // nonzero if sample time present; changes on clock discontinuity
+};
+
 struct OscHeadTrackingSnapshot {
     OscHeadTrackingState state{OscHeadTrackingState::idle};
     std::uint16_t bound_port{0};
@@ -39,6 +50,7 @@ struct OscHeadTrackingSnapshot {
     std::uint64_t rejected_packets{0};
     std::uint64_t recovery_count{0}; // valid input after >=500 ms silence; caller should check recenter
     HeadTrackingOrientation orientation;
+    HeadTrackingTiming timing;
 };
 
 // Independent, loopback-only UDP receiver. Implemented in ADMRealtime; no audio device,

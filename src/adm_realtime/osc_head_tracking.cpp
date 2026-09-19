@@ -82,6 +82,7 @@ struct OscHeadTrackingReceiver::Impl {
     std::jthread worker;
     mutable std::mutex mutex;
     OscHeadTrackingSnapshot state;
+    realtime::OscSourceOrder source_order;
     Clock::time_point started_at;
     Clock::time_point received_at;
     std::string error_message;
@@ -158,7 +159,7 @@ struct OscHeadTrackingReceiver::Impl {
                 const bool loopback = (ntohl(peer.sin_addr.s_addr) & 0xff000000U) == 0x7f000000U;
                 const std::lock_guard lock(mutex);
                 ++state.packets_received;
-                if (!loopback || !pose) {
+                if (!loopback || !pose || !source_order.accept(pose->timing)) {
                     ++state.rejected_packets;
                     continue;
                 }
@@ -170,7 +171,8 @@ struct OscHeadTrackingReceiver::Impl {
                     std::chrono::duration_cast<std::chrono::nanoseconds>(now - started_at).count());
                 state.has_pose = true;
                 ++state.sequence;
-                state.orientation = *pose;
+                state.orientation = pose->orientation;
+                state.timing = pose->timing;
                 state.state = OscHeadTrackingState::active;
             }
         } catch (...) {
@@ -199,6 +201,7 @@ Result<void> OscHeadTrackingReceiver::start() {
     {
         const std::lock_guard lock(impl_->mutex);
         impl_->state = {};
+        impl_->source_order = {};
         impl_->error_message.clear();
     }
 #ifdef _WIN32
