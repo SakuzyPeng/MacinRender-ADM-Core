@@ -644,7 +644,7 @@ target_sources(
             include/adm/c_api.h
 )
 
-target_link_libraries(mr_adm_c_api PUBLIC MacinRender::ADMEngine PRIVATE MacinRender::ADMRealtime)
+target_link_libraries(mr_adm_c_api PUBLIC MacinRender::ADMEngine PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon)
 set_target_properties(mr_adm_c_api PROPERTIES
     VERSION   ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
