@@ -133,3 +133,16 @@ python3 tests/manual/osc_posebridge_check.py --library build/release/libmradm_ca
 另有[最小 C++ 接收程序](../../tests/manual/osc_head_tracking_probe.cpp)，可独立检验平台 UDP 实现：
 `mr_adm_osc_head_tracking_probe [port] [seconds]`。端口 0 会打印系统分配的端口。
 本轮不以接口测试代替 GUI、物理安装方向、个人 SOFA 或音频整体延迟验收。
+
+### 2026-09-19 验证记录
+
+- macOS Debug：OSC 协议／生命周期测试、纯 C 头文件检查和既有 C ABI 回归测试均通过。
+- macOS Release：完整 `mradm_capi_bundle` 构建通过；真实 PoseBridge 模拟器经动态库 C ABI 的联调通过，
+  最终一轮收到 306 份有效姿态、拒绝 1 个故意构造的非法包，覆盖两种格式、失联恢复、±180° 与重启。
+- 改动范围内的 clang-format、clang-tidy、cppcheck 通过，无新增诊断。未改动 GUI 源码／绑定。
+- Windows x64／MSVC 14.51：原生接收器及完整 `adm_c_api.cpp` 翻译单元编译通过，纯 C 头文件布局检查通过。
+  最小 C++ 接收程序分别从本机 PoseBridge 收到 100 份四元数和 100 份 Euler 姿态，角度／范数、失联、独占绑定和端口释放通过。
+- Windows 当前没有完整渲染构建缓存；仅使用已有工具链和一个既有依赖头文件做轻量检查。
+  尝试单独链接 C ABI 契约程序时缺少已有 Scene／渲染实现符号，因此未把该程序或完整 Windows DLL 联调记为通过。
+  后续应在恢复 canonical 渲染依赖后运行完整 C ABI 目标。检查中修复了测试辅助函数名与 Windows `near` 宏冲突的问题。
+- PoseBridge 已推送至 `00211a8`，其 [macOS／Windows CI](https://github.com/SakuzyPeng/PoseBridge/actions/runs/35446435230) 通过。
