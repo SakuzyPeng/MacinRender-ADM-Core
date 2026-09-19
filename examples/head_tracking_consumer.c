@@ -40,6 +40,14 @@ int main(int argc, char** argv) {
     config.struct_size = sizeof(config);
     config.listen_port = 9000;
     config.source_id = argc > 1 ? argv[1] : NULL;
+    if (argc > 2) {
+        char* end = NULL;
+        const unsigned long port = strtoul(argv[2], &end, 10);
+        if (end == argv[2] || *end != '\0' || port > 65535UL) {
+            return 1;
+        }
+        config.listen_port = (uint32_t) port;
+    }
     adm_osc_head_tracking_t* receiver = NULL;
     if (adm_create_osc_head_tracking(&config, &receiver) != ADM_ERROR_OK) {
         return 1;
@@ -49,6 +57,14 @@ int main(int argc, char** argv) {
         adm_destroy_osc_head_tracking(receiver);
         return 1;
     }
+    adm_osc_head_tracking_status_t status = {0};
+    status.struct_size = sizeof(status);
+    if (adm_osc_head_tracking_get_status(receiver, &status) != ADM_ERROR_OK) {
+        adm_destroy_osc_head_tracking(receiver);
+        return 1;
+    }
+    printf("PORT %u\n", status.bound_port);
+    fflush(stdout);
     uint64_t last_instance = 0, last_reference = 0, last_sequence = 0, last_session = 0;
     unsigned updates = 0;
     int active = 0;
