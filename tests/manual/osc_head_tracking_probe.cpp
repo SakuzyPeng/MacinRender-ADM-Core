@@ -51,11 +51,12 @@ int main(int argc, char** argv) {
             std::this_thread::sleep_for(std::chrono::milliseconds{5});
         }
         const auto result = receiver.snapshot();
+        const auto report = receiver.snapshot_json();
         receiver.stop();
         if (receiver.snapshot().fresh || !occupied.start()) {
             throw std::runtime_error("stop did not clear activity and release the port");
         }
-        std::cout << receiver.snapshot_json() << '\n';
+        std::cout << report << '\n';
         return result.has_pose ? 0 : 2;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
