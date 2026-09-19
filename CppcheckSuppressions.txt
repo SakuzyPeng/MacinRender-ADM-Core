@@ -19,6 +19,7 @@ unusedStructMember:*/include/adm/scene.h
 unusedStructMember:*/include/adm/semantic_policy.h
 unusedStructMember:*/include/adm/monitor.h
 unusedStructMember:*/include/adm/hptf.h
+unusedStructMember:*/include/adm/head_tracking.h
 unusedStructMember:*/include/adm/live_override.h
 unusedStructMember:*/include/adm/c_api.h
 # Shared renderer internals return aggregate structs across translation units.

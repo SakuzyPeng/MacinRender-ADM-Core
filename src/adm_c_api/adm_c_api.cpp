@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "adm/c_api.h"
+#include "adm/head_tracking.h"
 #include "adm/hptf.h"
 #include "adm/monitor.h"
 #include "adm/render.h"
@@ -383,6 +384,18 @@ struct adm_monitor_t {
     std::string log_message;
 };
 
+struct adm_osc_head_tracking_t {
+    mradm::OscHeadTrackingReceiver receiver;
+    std::string error_copy;
+};
+
+static_assert(static_cast<int>(mradm::OscHeadTrackingState::idle) == ADM_OSC_HEAD_TRACKING_IDLE);
+static_assert(static_cast<int>(mradm::OscHeadTrackingState::waiting) == ADM_OSC_HEAD_TRACKING_WAITING);
+static_assert(static_cast<int>(mradm::OscHeadTrackingState::active) == ADM_OSC_HEAD_TRACKING_ACTIVE);
+static_assert(static_cast<int>(mradm::OscHeadTrackingState::stale) == ADM_OSC_HEAD_TRACKING_STALE);
+static_assert(static_cast<int>(mradm::OscHeadTrackingState::stopped) == ADM_OSC_HEAD_TRACKING_STOPPED);
+static_assert(static_cast<int>(mradm::OscHeadTrackingState::failed) == ADM_OSC_HEAD_TRACKING_FAILED);
+
 struct adm_scene_stream_t {
     std::shared_ptr<mradm::realtime::SceneStreamEngine> engine;
     mutable std::mutex message_mutex;
@@ -642,6 +655,111 @@ struct adm_scene_info_t {
 };
 
 /* ── Version ──────────────────────────────────────────────────────────────── */
+
+adm_error_code_t adm_create_osc_head_tracking(const adm_osc_head_tracking_config_t* config,
+                                              adm_osc_head_tracking_t** out) noexcept {
+    if (out == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    *out = nullptr;
+    if (config != nullptr &&
+        (config->struct_size < sizeof(adm_osc_head_tracking_config_t) || config->listen_port > 65535U)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        *out = new adm_osc_head_tracking_t{
+            mradm::OscHeadTrackingReceiver{static_cast<std::uint16_t>(config != nullptr ? config->listen_port : 9000U)},
+            {}};
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+void adm_destroy_osc_head_tracking(adm_osc_head_tracking_t* receiver) noexcept {
+    delete receiver;
+}
+
+adm_error_code_t adm_osc_head_tracking_start(adm_osc_head_tracking_t* receiver) noexcept {
+    if (receiver == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        const auto result = receiver->receiver.start();
+        return result ? ADM_ERROR_OK : map_error(result.error().code);
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+void adm_osc_head_tracking_stop(adm_osc_head_tracking_t* receiver) noexcept {
+    if (receiver != nullptr) {
+        receiver->receiver.stop();
+    }
+}
+
+adm_error_code_t adm_osc_head_tracking_get_pose(const adm_osc_head_tracking_t* receiver,
+                                                adm_head_tracking_pose_t* out) noexcept {
+    if (receiver == nullptr || out == nullptr || out->struct_size < sizeof(adm_head_tracking_pose_t)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        const auto snapshot = receiver->receiver.snapshot();
+        adm_head_tracking_pose_t result{};
+        result.struct_size = sizeof(result);
+        result.has_pose = snapshot.has_pose ? 1U : 0U;
+        result.fresh = snapshot.fresh ? 1U : 0U;
+        result.session_id = snapshot.session_id;
+        result.sequence = snapshot.sequence;
+        result.received_ns = snapshot.received_ns;
+        result.age_ms = snapshot.age_ms;
+        std::ranges::copy(snapshot.orientation.quaternion_xyzw, std::begin(result.quaternion_xyzw));
+        result.yaw_deg = snapshot.orientation.euler_deg[0];
+        result.pitch_deg = snapshot.orientation.euler_deg[1];
+        result.roll_deg = snapshot.orientation.euler_deg[2];
+        std::memcpy(out, &result, sizeof(result));
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+adm_error_code_t adm_osc_head_tracking_get_status(const adm_osc_head_tracking_t* receiver,
+                                                  adm_osc_head_tracking_status_t* out) noexcept {
+    if (receiver == nullptr || out == nullptr || out->struct_size < sizeof(adm_osc_head_tracking_status_t)) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        const auto snapshot = receiver->receiver.snapshot();
+        adm_osc_head_tracking_status_t result{};
+        result.struct_size = sizeof(result);
+        result.state = static_cast<std::int32_t>(snapshot.state);
+        result.bound_port = snapshot.bound_port;
+        result.has_pose = snapshot.has_pose ? 1U : 0U;
+        result.session_id = snapshot.session_id;
+        result.sequence = snapshot.sequence;
+        result.packets_received = snapshot.packets_received;
+        result.rejected_packets = snapshot.rejected_packets;
+        result.recovery_count = snapshot.recovery_count;
+        result.age_ms = snapshot.age_ms;
+        std::memcpy(out, &result, sizeof(result));
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+
+const char* adm_osc_head_tracking_last_error_message(adm_osc_head_tracking_t* receiver) noexcept {
+    if (receiver == nullptr) {
+        return "";
+    }
+    try {
+        receiver->error_copy = receiver->receiver.last_error();
+        return receiver->error_copy.c_str();
+    } catch (...) {
+        return "OSC 错误信息查询失败";
+    }
+}
 
 int adm_api_version_major(void) noexcept {
     return ADM_API_VERSION_MAJOR;

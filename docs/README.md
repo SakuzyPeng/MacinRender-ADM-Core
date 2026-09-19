@@ -10,7 +10,8 @@
 - [adm_windows：系统空间音频监听 sink（ISpatialAudioClient）](architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md)
 - [实时监听引擎](architecture/REALTIME_MONITORING.md)
 - [语义编辑器 GUI](architecture/SEMANTIC_EDITOR_GUI.md)
-- [头部追踪与 OSC 跨仓库设计（待实现）](architecture/HEAD_TRACKING_OSC.md)
+- [头部追踪与 OSC 跨仓库设计（原生接收接口／GUI 待适配）](architecture/HEAD_TRACKING_OSC.md)
+- [原生 OSC 头部姿态接收接口（C++／C ABI v1.40）](architecture/OSC_HEAD_TRACKING_API.md)
 - [Rust 落地与 SAF 替换路线图](architecture/RUST_SAF_REPLACEMENT_ROADMAP.md)
 
 ## 架构决策记录

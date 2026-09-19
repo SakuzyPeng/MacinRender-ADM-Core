@@ -1,9 +1,9 @@
 # 头部追踪与 OSC 跨仓库设计
 
-> 状态：架构方向已确定；MacinTrack、维特设备接入和 MacinRender OSC 输入尚未实现；性能尚未实测。
-> 日期：2026-09-17。
+> 状态：PoseBridge 与 MacinRender 原生 OSC 接收接口已实现；GUI 适配尚未实现。平台实测与音频验收分别记录。
+> 日期：2026-09-17；更新：2026-09-19。
 > 决策依据：[ADR 0009](../adr/0009-head-tracking-input-boundary.md)。
-> 本文是待实施规格；命令、消息和 C ABI 示例均不代表当前发行版已经提供这些功能。
+> 本文保留跨仓库设计；原生接收接口见 [OSC_HEAD_TRACKING_API](OSC_HEAD_TRACKING_API.md)。PoseBridge 的实际接口以独立仓库 README、docs/protocol.md 和 include/posebridge.h 为准。
 
 ## 1. 目标与当前基础
 
@@ -19,8 +19,8 @@ Mesh2HRTF 提前生成个人 SOFA；播放期间由本机更新头部朝向、�
 | 手动姿态、AirPods/CoreMotion 来源 | 已有实现 | 保留现有来源 |
 | 四元数回正、平滑、视觉与音频姿态更新 | 已有实现 | 复用头追踪管线 |
 | SAF 双耳加载个人 SOFA | 已有实现 | 使用兼容的双耳、48 kHz FIR SOFA |
-| 维特 BLE 采集、Rust CLI、C ABI | 待实现 | 独立 MacinTrack 仓库 |
-| 通用 OSC 姿态输入 | 待实现 | 当前仓库 GUI 层 |
+| 维特 BLE / USB 采集、Rust CLI、C ABI | Rust 初版已实现；实机验证按平台记录 | 独立 PoseBridge 仓库 |
+| 通用 OSC 姿态输入 | 原生 C++／C ABI 已实现；GUI 待适配 | 独立接收器，宿主轮询 |
 | 真机刷新率、磁干扰、整体延迟 | 待验证 | 两个平台分别记录实测结果 |
 
 当前代码入口：
@@ -31,52 +31,54 @@ Mesh2HRTF 提前生成个人 SOFA；播放期间由本机更新头部朝向、�
 - [SemanticEditorViewModel](../../gui/MacinRender.Gui/ViewModels/SemanticEditorViewModel.cs)：来源仲裁、16 ms 轮询和约 250 ms 音频保活。
 - [HeadRotation](../../src/adm_render_common/head_rotation.h)：渲染端世界坐标到头部坐标的旋转。
 
-上述基础的存在不等于维特或 OSC 已经通过验收。源码部分旧注释仍写约 33 Hz，当前 GUI 定时器实际配置为
+原生 OSC 协议／生命周期测试不代替维特安装或音频验收。源码部分旧注释仍写约 33 Hz，当前 GUI 定时器实际配置为
 16 ms；它也不代表音频回调频率或未来 BLE 输入频率。
 
 ## 2. 仓库与运行边界
 
-独立项目暂名 **MacinTrack**。当前仓库先保存设计与协议快照；独立仓库建立后承接设备实现和协议维护，
+独立项目名称为 **PoseBridge**，已建立本地 Rust 仓库。本仓库保存设计与协议快照，独立仓库承接设备实现和协议维护，
 MacinRender 按协议版本引用它，双方共享测试向量，不通过源码复制维持兼容。
 
 ```mermaid
 flowchart LR
-    device[维特 BLE 传感器] --> core[MacinTrack Rust 核心库]
-    core --> cli[MacinTrack CLI]
+    device[维特 BLE / USB 传感器] --> core[PoseBridge Rust 核心库]
+    core --> cli[PoseBridge CLI]
     cli --> osc[本机 OSC / UDP]
-    osc --> source[MacinRender OSC 来源]
-    source --> manager[既有回正与平滑管线]
+    osc --> source[MacinRender 原生 OSC 接收器]
+    source --> host[宿主轮询 / 后续 GUI 来源适配]
+    host --> manager[回正与平滑管线]
     manager --> renderer[实时双耳渲染]
     sofa[个人 SOFA] --> renderer
-    core --> abi[MacinTrack C ABI]
+    core --> abi[PoseBridge C ABI]
     abi --> host[需要进程内采集的宿主]
 ```
 
-| 责任 | MacinTrack | MacinRender |
+| 责任 | PoseBridge | MacinRender |
 |---|---|---|
-| BLE 权限、扫描、连接、重连 | 负责 | 消费 OSC，无需 BLE 权限 |
+| BLE 权限、USB 串口、扫描、连接、重连 | 负责 | 消费 OSC，无需 BLE 权限 |
 | 设备寄存器、校准、原始数据解析 | 负责 | 不接触设备协议 |
 | 安装方向与姿态约定转换 | 负责 | 校验统一姿态 |
 | OSC 发送、诊断与模拟输入 | 负责 | OSC 接收与状态展示 |
 | 听音正前方回正、用户侧平滑 | 不重复施加 | 复用现有管线 |
 | SOFA、ADM、音频设备与渲染 | 不参与 | 负责 |
 
-MacinRender 首版通过 OSC 集成。MacinTrack C ABI 面向需要进程内采集的宿主，
+MacinRender 首版通过 OSC 集成。PoseBridge C ABI 面向需要进程内采集的宿主，
 不作为当前 GUI 的新增原生依赖；CLI 和 C ABI 调用同一 Rust 核心逻辑。
-当前 `adm_*` C ABI 继续复用 listener orientation 接口，不增加蓝牙、OSC 或 MacinTrack 类型。
+当前 `adm_*` C ABI 继续复用 listener orientation setter；v1.40 新增独立 OSC 接收句柄和快照，
+不增加蓝牙依赖或 PoseBridge 原生类型。接收线程不直接调用 Monitor／Scene 控制接口。
 
-## 3. MacinTrack 实现组成
+## 3. PoseBridge 实现组成
 
-计划的 Cargo workspace 包含三个 crate：
+PoseBridge Cargo workspace 包含三个 crate：
 
 | crate | 职责 |
 |---|---|
-| `macintrack-core` | BLE、维特协议、安装配置、姿态快照、诊断、模拟来源和可选 OSC 输出 |
-| `macintrack-cli` | 参数、命令、输出与退出处理；直接调用核心库 |
-| `macintrack-capi` | C 类型、句柄、缓冲区、错误和线程边界；输出 `cdylib` 与 C 头文件 |
+| `posebridge-core` | BLE / USB、维特协议、安装配置、姿态快照、诊断、模拟来源和可选 OSC 输出 |
+| `posebridge-cli` | 参数、命令、输出与退出处理；直接调用核心库 |
+| `posebridge-capi` | C 类型、句柄、缓冲区、错误和线程边界；输出 `cdylib` 与 C 头文件 |
 
-选用 `btleplug` 访问 CoreBluetooth / Windows BLE，Tokio 管理异步任务，`rosc` 编码 OSC，
-`clap` 提供 CLI，`cbindgen` 生成头文件。首次实现时锁定依赖版本并提交 Cargo.lock，审查所选版本许可证。
+选用 `btleplug` 访问 CoreBluetooth / Windows BLE，`tokio-serial` 访问 USB 串口，Tokio 管理异步任务，`rosc` 编码 OSC，
+`clap` 提供 CLI，`cbindgen` 生成头文件。实际版本固定于 PoseBridge 的 Cargo.lock；发布时审查所选版本许可证。
 公开厂商示例作为协议依据；复制或再发行代码前须确认对应许可证。
 
 核心库保存最新完整姿态快照，包含本次采集会话标识、递增采样序号、主机单调接收时间、统一四元数及来源类型。
@@ -100,16 +102,16 @@ BLE 输入、OSC 输出和 C ABI 快照共用这一数据源，慢消费者不�
 
 | 项目 | 标称信息 | 接入时的处理 |
 |---|---|---|
-| 通信 | BLE 5.0；Type-C 图示包含供电与传输 | 首版走 BLE；USB 通信不纳入首版 |
+| 通信 | BLE 5.0；Type-C 图示包含供电与传输 | 首版支持 BLE 与 USB 串口，共用 20 字节解析器 |
 | 输出 | 加速度、角速度、磁场、角度、四元数 | 姿态数据为主，原始量用于诊断 |
-| 回传 | 0.2–200 Hz，默认 10 Hz | 默认目标 100 Hz，单列配置值与实际接收值 |
+| 回传 | 0.2–200 Hz，默认 10 Hz | 默认 OSC 上限目标 100 Hz；设备速率只经显式 configure 命令改变 |
 | 俯仰 / 横滚 | 0.2° | 不能推广为所有轴均有该精度 |
 | 航向 | 九轴静态约 1°，无磁干扰条件下 | 需在耳机安装位置测试 |
 | 六轴航向 | 静态约 0.5°，动态存在累计误差 | 不视作长期无漂移保证 |
 | 重量 | 详情图约 18.88 g；参数栏另写 6 g | 整机佩戴重量待核实 |
 | 续航 | 宣传约 30 小时 | 高频连续传输时长待实测 |
 
-**尚未确认四元数能否以 200 Hz 持续推送。** 200 Hz 的帧间隔为 5 ms，不是转头到声音变化的总延迟。
+PoseBridge 的后续实验已确认本机固件可在 200 Hz 档主动上报原生四元数与设备时间戳，但 BLE 仍约 25 批/秒；正式桥接默认仍使用角度流。详见 [BLE 探索记录](https://github.com/SakuzyPeng/PoseBridge/blob/main/docs/measurements/2026-09-19-ble-exploration.md)。200 Hz 的内部时间戳步长不代表转头到声音的总延迟。
 磁力计可能受到耳机单元磁铁或周围金属影响；安装使用非磁性固定件，并分别记录静止漂移与转动后回正误差。
 
 ### 4.2 GATT 与数据帧
@@ -224,11 +226,11 @@ SOFA 常用的 X 前、Y 左、Z 上是另一套坐标约定，SOFA 方向表也
 
 | 地址 | OSC 类型标签 | 参数 |
 |---|---|---|
-| `/macintrack/v1/quaternion` | `,ffff` | x、y、z、w，float32 |
-| `/macintrack/v1/euler` | `,fff` | yaw、pitch、roll，float32，单位度 |
+| `/posebridge/v1/quaternion` | `,ffff` | x、y、z、w，float32 |
+| `/posebridge/v1/euler` | `,fff` | yaw、pitch、roll，float32，单位度 |
 
 地址和类型标签按 OSC 字符串编码，浮点为网络字节序；不发送 JSON 或文本命令。
-MacinTrack 默认发送 quaternion；euler 用于兼容与诊断，同一会话选择一种格式，避免同一采样发送两次。
+PoseBridge 默认发送 quaternion；euler 用于兼容与诊断，同一会话选择一种格式，避免同一采样发送两次。
 其他软件的 OSC 地址或轴约定通过显式输出配置适配，不宣称所有 OSC 软件天然兼容此消息。
 
 接收端检查精确地址、类型、参数数量、报文长度及有限数值，丢弃非法消息。
@@ -241,7 +243,7 @@ v1 报文没有采样时间或序号，按有效报文到达顺序覆盖快照�
 
 ### 6.2 新采样、超时与恢复
 
-目标发送率默认 100 Hz。每个发送时隙只取最新、尚未发送过的采样，输入更快时合并中间帧，
+OSC 目标发送率默认 100 Hz；普通读取和桥接保留设备回传配置。每个发送时隙只取最新、尚未发送过的采样，输入更快时合并中间帧，
 输入更慢时维持实际新采样速率；数值相同的新传感器帧仍是新采样。
 不能用重发旧姿态伪装新数据，也不能把低频读取的四元数插值后宣称设备达到 100 Hz。
 
@@ -260,17 +262,25 @@ v1 报文没有采样时间或序号，按有效报文到达顺序覆盖快照�
 恢复后可以继续沿用最后姿态进入现有平滑路径；设备若在断线期间改变了自身参考，用户需重新回正，
 首版不保证这种情况下无跳变。没有新鲜采样时，“回正”不采纳陈旧原始姿态，应提示等待来源恢复。
 
-### 6.3 GUI 与渲染接入
+### 6.3 原生接收接口（已实现）
+
+本轮先完成原生 C++／C ABI 接口，不修改 GUI。`OscHeadTrackingReceiver` 独立绑定回环端口，
+通过 `adm_osc_head_tracking_get_pose`／`get_status` 向宿主提供最新快照，公开结构使用固定宽度字段与 `struct_size`。
+已有音频 setter、线程契约与结构布局不变；接收器不持有播放器指针。
+宿主在控制线程读取新鲜姿态，应用自己的回正／平滑后提交现有 listener orientation 入口。
+详情、生命周期及无界面验证见[原生 OSC 接收接口](OSC_HEAD_TRACKING_API.md)。
+
+### 6.4 GUI 与渲染接入（后续）
 
 计划新增 `OscHeadTrackingSource`，实现现有 `IHeadTrackingSource`。
-UDP 读取和解析在后台进行，只保留一个最新快照；UI 轮询消费该快照并触发姿态事件，不为每个 200 Hz 包排入一个 UI 任务。
+它将轮询原生接收器的最新快照并触发姿态事件，不为每个 200 Hz 包排入一个 UI 任务。
 来源启用时即维持 GUI 轮询，覆盖等待、活动和失联状态；仅用 `IsActive` 控制定时器会使首次接收和恢复无法生效。
 
 OSC 与 AirPods 互斥，手动模式保留现有优先级；切换时复用现有来源生命周期。
 来源实现与管理器共同保证：停止后排队回调不会重新激活来源；失联冻结实际呈现姿态，而不是继续向旧目标平滑。
 音频保活只依赖新鲜、有效的活动来源，静止的新数据可维持保活，失联旧数据不可。
 
-回正与用户侧平滑仍集中在 `HeadTrackingManager`。MacinTrack 仅保留设备本身的融合输出，不再默认叠加一层用户低通或预测。
+回正与用户侧平滑仍集中在 `HeadTrackingManager`。PoseBridge 仅保留设备本身的融合输出，不再默认叠加一层用户低通或预测。
 现有 GUI 约 60 Hz 更新和既有平滑参数不因 BLE 设置为 200 Hz 自动提升；其延迟贡献须在整体验证中记录。
 
 复用现有 `SetListenerOrientation` 和 `adm_monitor_set_listener_orientation` 提交音频姿态。
@@ -279,14 +289,14 @@ OSC 与 AirPods 互斥，手动模式保留现有优先级；切换时复用现�
 
 ## 7. Rust C ABI 的首版契约
 
-C ABI 标记为 **experimental**，使用独立 `mt_` 前缀和版本查询。
-MacinTrack ABI 版本与 OSC v1、当前稳定的 `adm_*` ABI 相互独立；不套用 ADM 的版本号或冒充其稳定承诺。
+C ABI 标记为 **experimental**，使用独立 `pb_` 前缀和版本查询。
+PoseBridge ABI 版本与 OSC v1、当前稳定的 `adm_*` ABI 相互独立；不套用 ADM 的版本号或冒充其稳定承诺。
 设计遵循 [ADR 0007 的所有权与版本边界](../adr/0007-c-abi-stability-policy.md)及
 [ADR 0005 的错误边界原则](../adr/0005-error-handling-model.md)。
 
 ### 7.1 表面与数据
 
-公开接口仅使用不透明 `mt_context_t`、固定宽度整数、float32/float64、C 字符串及显式容量缓冲区。
+公开接口仅使用不透明 `PbContext`、固定宽度整数、float32/float64、C 字符串及显式容量缓冲区。
 Rust `String`、`Vec`、future、Tokio 或 BLE 类型均不跨边界。
 
 | 接口组 | 计划能力与语义 |
@@ -322,16 +332,19 @@ Rust `String`、`Vec`、future、Tokio 或 BLE 类型均不跨边界。
 
 ## 8. CLI 使用与运行诊断
 
-计划命令如下，实际命令尚未实现：
+PoseBridge 初版命令如下；MacinRender 的接收与播放入口仍待实现：
 
 ```text
-macintrack scan --timeout-seconds 10
-macintrack diagnose --device <扫描返回的设备标识> --rate-hz 100
-macintrack bridge --device <设备标识> --rate-hz 100 --osc-target 127.0.0.1:9000
-macintrack simulate --yaw 30 --pitch 20 --roll 10 --rate-hz 100 --osc-target 127.0.0.1:9000
+posebridge scan --transport ble --timeout-seconds 10
+posebridge diagnose --transport ble --device "扫描返回的设备标识" --duration 10
+posebridge bridge --transport ble --device "设备标识" --mount=-y,+x,+z --osc-target 127.0.0.1:9000
+posebridge simulate --yaw 30 --pitch 20 --roll 10 --sample-rate-hz 100 --osc-target 127.0.0.1:9000
+posebridge scan --transport usb
+posebridge diagnose --transport usb --port /dev/cu.usbserial-110 --duration 10
+posebridge configure --transport ble --device "设备标识" rate --hz 100
 ```
 
-`scan` 列出名称和平台标识；`diagnose` 显示请求速率、有效姿态实际接收率、帧间隔统计、当前角度及错误；
+`scan` 列出名称和平台标识；`diagnose` 显示原始姿态、有效姿态实际接收率、帧间隔统计、当前角度及错误；
 `bridge` 默认用连续角度通知构造 quaternion 输出；`simulate` 按模拟时钟生成新采样，即使姿态值不变也有新序号。
 模拟器还需提供绕单轴转动、组合转动和跨 ±180° 的可复现轨迹，供两仓库联调。
 
@@ -343,7 +356,7 @@ macintrack simulate --yaw 30 --pitch 20 --roll 10 --rate-hz 100 --osc-target 127
 
 ## 9. 实施阶段与验收
 
-各阶段均为后续开发任务，本次文档变更不表示这些测试已经执行。
+下列是跨仓库验收清单。PoseBridge 已有独立解析、OSC、C ABI 与伪串口测试及 macOS BLE / USB 实物读取记录；具体结果以其 docs/validation.md 为准，不能代表 MacinRender 接收与音频闭环已通过。
 
 | 阶段 | 工作与验收场景 | 通过条件 |
 |---|---|---|
