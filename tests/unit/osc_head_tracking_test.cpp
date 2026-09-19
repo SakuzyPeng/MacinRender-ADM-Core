@@ -43,7 +43,7 @@ void require(bool value, std::string_view message) {
     }
 }
 
-bool near(double first, double second, double tolerance = 0.0005) {
+bool approximately_equal(double first, double second, double tolerance = 0.0005) {
     return std::abs(first - second) < tolerance;
 }
 
@@ -95,7 +95,7 @@ void parser_contract() {
     for (const auto& item : vectors) {
         const auto from_euler = decode_valid(packet("/posebridge/v1/euler", item.angles));
         for (std::size_t i = 0; i < 4U; ++i) {
-            require(near(from_euler.quaternion_xyzw.at(i), item.quaternion.at(i), 1.0e-6),
+            require(approximately_equal(from_euler.quaternion_xyzw.at(i), item.quaternion.at(i), 1.0e-6),
                     "YXZ quaternion test vector");
         }
         for (const float scale : {1.0F, -1.0F, 3.0F}) {
@@ -103,7 +103,7 @@ void parser_contract() {
             std::ranges::transform(scaled, scaled.begin(), [scale](float component) { return component * scale; });
             const auto pose = decode_valid(packet("/posebridge/v1/quaternion", scaled));
             for (std::size_t i = 0; i < 3U; ++i) {
-                require(near(pose.euler_deg.at(i), item.angles.at(i)),
+                require(approximately_equal(pose.euler_deg.at(i), item.angles.at(i)),
                         "Euler/quaternion conventions agree, including -q");
             }
         }
@@ -114,7 +114,8 @@ void parser_contract() {
     orientation.pitch_deg = left.euler_deg[1];
     orientation.roll_deg = left.euler_deg[2];
     const auto [azimuth, elevation] = mradm::render_common::HeadRotation{orientation}.rotate_az_el(0.0F, 0.0F);
-    require(near(azimuth, -90.0) && near(elevation, 0.0), "world-fixed front source moves right on left head turn");
+    require(approximately_equal(azimuth, -90.0) && approximately_equal(elevation, 0.0),
+            "world-fixed front source moves right on left head turn");
     const auto before = decode_valid(euler(179));
     const auto after = decode_valid(euler(-179));
     double dot = 0.0;
@@ -158,7 +159,7 @@ void parser_contract() {
     const float huge = std::numeric_limits<float>::max();
     const auto huge_quaternion = mradm::realtime::decode_head_tracking_osc(
         packet("/posebridge/v1/quaternion", std::array{huge, huge, huge, huge}));
-    require(huge_quaternion && near(huge_quaternion->quaternion_xyzw[0], 0.5),
+    require(huge_quaternion && approximately_equal(huge_quaternion->quaternion_xyzw[0], 0.5),
             "double norm calculation avoids float overflow");
     require(mradm::realtime::decode_head_tracking_osc(euler(huge)).has_value(), "finite large Euler range reduction");
 }
@@ -275,8 +276,8 @@ void receiver_contract() {
     sender.send(port, euler(30, 20, 10));
     wait_until([&] { return pose(receiver).sequence == 1U; });
     const auto first = pose(receiver);
-    require((first.fresh != 0U) && (first.has_pose != 0U) && near(first.yaw_deg, 30.0) && near(first.pitch_deg, 20.0) &&
-                near(first.roll_deg, 10.0),
+    require((first.fresh != 0U) && (first.has_pose != 0U) && approximately_equal(first.yaw_deg, 30.0) &&
+                approximately_equal(first.pitch_deg, 20.0) && approximately_equal(first.roll_deg, 10.0),
             "complete first pose");
     require(pose(receiver).sequence == first.sequence && pose(receiver).received_ns == first.received_ns,
             "polls do not manufacture samples");
@@ -290,7 +291,7 @@ void receiver_contract() {
     require(status(receiver).state == ADM_OSC_HEAD_TRACKING_STALE, "invalid packets cannot keep input alive");
     const auto stale = pose(receiver);
     require((stale.has_pose != 0U) && (stale.fresh == 0U) && stale.sequence == first.sequence &&
-                stale.received_ns == first.received_ns && near(stale.yaw_deg, first.yaw_deg),
+                stale.received_ns == first.received_ns && approximately_equal(stale.yaw_deg, first.yaw_deg),
             "stale snapshot freezes last valid orientation");
 
     auto oversized = euler(45);
@@ -309,7 +310,7 @@ void receiver_contract() {
     for (int index = 0; index < 32; ++index) {
         sender.send(port, euler(static_cast<float>(index)));
     }
-    wait_until([&] { return near(pose(receiver).yaw_deg, 31.0); });
+    wait_until([&] { return approximately_equal(pose(receiver).yaw_deg, 31.0); });
     const auto latest = pose(receiver);
     require(latest.sequence > first.sequence + 2U, "receiver continues collecting while consumer is idle");
 
@@ -331,7 +332,7 @@ void receiver_contract() {
     adm_osc_head_tracking_stop(receiver.get());
     adm_osc_head_tracking_stop(receiver.get());
     require(status(receiver).state == ADM_OSC_HEAD_TRACKING_STOPPED && (pose(receiver).fresh == 0U) &&
-                near(pose(receiver).yaw_deg, 31.0),
+                approximately_equal(pose(receiver).yaw_deg, 31.0),
             "stop preserves last pose and clears activity");
     require(adm_osc_head_tracking_start(occupied.get()) == ADM_ERROR_OK, "stop releases port, failed handle can retry");
     require(std::strlen(adm_osc_head_tracking_last_error_message(occupied.get())) == 0U,
