@@ -252,6 +252,39 @@ void parser_contract() {
         require(!mradm::realtime::decode_head_tracking_osc(telemetry(j, info)), "oversized JSON");
     }
 }
+void require_same_rotation(const std::array<float, 4>& a, const std::array<float, 4>& b) {
+    double same = 0.0;
+    double opposite = 0.0;
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        const double difference = static_cast<double>(a.at(i)) - b.at(i);
+        const double sum = static_cast<double>(a.at(i)) + b.at(i);
+        same += difference * difference;
+        opposite += sum * sum;
+    }
+    require(std::min(same, opposite) < 1e-11, "Euler output must preserve the input rotation, including at poles");
+}
+void orientation_poles() {
+    const std::array<float, 4> quarter_turn{0.5F, 0.5F, -0.5F, 0.5F};
+    const auto pole = decoded(packet("/posebridge/quaternion", quarter_turn)).orientation;
+    require_same_rotation(quarter_turn,
+                          decoded(packet("/posebridge/euler", pole.euler_deg)).orientation.quaternion_xyzw);
+    for (float pitch : {-90.001F, -90.0F, -89.99999F, -89.9999F, 89.9999F, 89.99999F, 90.0F, 90.001F}) {
+        for (float yaw : {-150.0F, 0.0F, 30.0F, 70.0F, 179.0F}) {
+            for (float roll : {-75.0F, 0.0F, 10.0F, 60.0F}) {
+                const auto source = decoded(packet("/posebridge/euler", std::array{yaw, pitch, roll})).orientation;
+                const auto round_trip = decoded(packet("/posebridge/euler", source.euler_deg)).orientation;
+                require_same_rotation(source.quaternion_xyzw, round_trip.quaternion_xyzw);
+                for (float scale : {1.0F, -1.0F, 3.0F}) {
+                    auto q = source.quaternion_xyzw;
+                    std::ranges::transform(q, q.begin(), [scale](float value) { return value * scale; });
+                    const auto result = decoded(packet("/posebridge/quaternion", q)).orientation;
+                    const auto restored = decoded(packet("/posebridge/euler", result.euler_deg)).orientation;
+                    require_same_rotation(source.quaternion_xyzw, restored.quaternion_xyzw);
+                }
+            }
+        }
+    }
+}
 void ordering_contract() {
     mradm::realtime::OscSourceOrder order;
     auto t = fixture();
@@ -380,6 +413,100 @@ class Sender {
     }
     Socket socket_;
 };
+void deliver(const Sender& sender, const Receiver& receiver, const std::vector<std::byte>& bytes) {
+    const auto before = status(receiver);
+    sender.send(before.bound_port, bytes);
+    wait_until([&] { return status(receiver).packets_received > before.packets_received; });
+}
+void telemetry_instance_ordering() {
+    Sender sender;
+    auto receiver = create(0, "head");
+    require(adm_osc_head_tracking_start(receiver.get()) == ADM_ERROR_OK, "telemetry ordering start");
+    auto t = fixture();
+    deliver(sender, receiver, euler(t));
+    auto stopped = t;
+    stopped.source_sequence += 2;
+    deliver(sender, receiver, telemetry(metadata(t, 10, true), true));
+    deliver(sender, receiver, telemetry(metadata(stopped, 10, false, "head", "stopped"), false));
+    require(pose(receiver).fresh == 0U, "confirmed stop invalidates pose");
+
+    // More candidates than the bounded cache can hold must not evict the current instance.
+    auto candidate = fixture();
+    for (std::uint64_t i = 1; i <= 20; ++i) {
+        candidate.instance_id = t.instance_id + i;
+        candidate.source_session_id = 0;
+        candidate.source_sequence = 0;
+        deliver(sender, receiver, telemetry(metadata(candidate, 1, true), true));
+        deliver(sender, receiver, telemetry(metadata(candidate, 1, false, "head", "connecting"), false));
+    }
+    auto all = snapshot(receiver);
+    require(all["info"]["message_seq"] == "10" && all["source_status"]["message_seq"] == "10",
+            "candidate telemetry cannot replace current metadata");
+    const auto before = status(receiver);
+    deliver(sender, receiver, telemetry(metadata(stopped, 9, false), false));
+    deliver(sender, receiver, telemetry(metadata(t, 9, true), true));
+    require(status(receiver).rejected_packets == before.rejected_packets + 2U && pose(receiver).fresh == 0U,
+            "candidate telemetry cannot erase current replay protection");
+    advance(t);
+    deliver(sender, receiver, euler(t));
+    require(pose(receiver).fresh == 0U, "cached stop still covers a delayed pose preceding the stop");
+    advance(t);
+    ++t.metadata_revision;
+    deliver(sender, receiver, euler(t));
+    all = snapshot(receiver);
+    require(all["info_matches_pose"] == false && all["status_matches_pose"] == false && pose(receiver).fresh != 0U,
+            "metadata association is recomputed after a pose revision changes");
+
+    candidate.source_session_id = fixture().source_session_id;
+    candidate.source_sequence = 1;
+    candidate.metadata_revision = 2;
+    deliver(sender, receiver, telemetry(metadata(candidate, 2, true), true));
+    deliver(sender, receiver, telemetry(metadata(candidate, 2, false), false));
+    require(pose(receiver).instance_id == t.instance_id, "telemetry cannot take over the pose binding");
+    deliver(sender, receiver, euler(candidate));
+    all = snapshot(receiver);
+    require(pose(receiver).instance_id == candidate.instance_id && all["info_matches_pose"] == true &&
+                all["status_matches_pose"] == true && all["source_status"]["message_seq"] == "2",
+            "new pose selects its previously cached telemetry");
+    const auto rejected = status(receiver).rejected_packets;
+    deliver(sender, receiver, telemetry(metadata(t, 11, false), false));
+    require(status(receiver).rejected_packets == rejected + 1U, "retired instance stays rejected");
+}
+void status_reference_changes() {
+    Sender sender;
+    for (bool with_info : {false, true}) {
+        auto receiver = create(0, "head");
+        require(adm_osc_head_tracking_start(receiver.get()) == ADM_ERROR_OK, "status reference start");
+        auto t = fixture();
+        deliver(sender, receiver, euler(t));
+        if (with_info) {
+            deliver(sender, receiver, telemetry(metadata(t, 1, true), true));
+        }
+        auto newer = t;
+        ++newer.metadata_revision;
+        deliver(sender, receiver, telemetry(metadata(newer, 1, false), false));
+        require(pose(receiver).fresh != 0U, "metadata-only change keeps the same reference valid");
+        ++newer.metadata_revision;
+        ++newer.reference_epoch;
+        deliver(sender, receiver, telemetry(metadata(newer, 2, false), false));
+        require(pose(receiver).fresh == 0U && status(receiver).heartbeat_alive != 0U,
+                "status reference change invalidates the pose independently of info");
+        advance(t);
+        deliver(sender, receiver, euler(t));
+        require(pose(receiver).fresh == 0U, "later sample in the old reference cannot undo invalidation");
+        advance(t);
+        t.metadata_revision = newer.metadata_revision;
+        t.reference_epoch = newer.reference_epoch;
+        deliver(sender, receiver, euler(t));
+        require(pose(receiver).fresh != 0U && snapshot(receiver)["status_matches_pose"] == true,
+                "matching new-reference pose restores freshness");
+        const auto rejected = status(receiver).rejected_packets;
+        --newer.reference_epoch;
+        deliver(sender, receiver, telemetry(metadata(newer, 3, false), false));
+        require(status(receiver).rejected_packets == rejected + 1U && pose(receiver).fresh != 0U,
+                "old reference cannot replace the recovered state");
+    }
+}
 // This integration scenario deliberately retains one receiver across lifecycle transitions.
 // NOLINTNEXTLINE(readability-function-size)
 void receiver_contract() {
@@ -518,8 +645,11 @@ void invalid_arguments() {
 int main() {
     try {
         parser_contract();
+        orientation_poles();
         ordering_contract();
         invalid_arguments();
+        telemetry_instance_ordering();
+        status_reference_changes();
         receiver_contract();
         automatic_binding();
         std::cout << "PoseBridge current protocol, identity, clocks, telemetry and C ABI PASS\n";

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -5,11 +6,11 @@
 #include <cstdint>
 #include <limits>
 #include <mutex>
-#include <optional>
 #include <stop_token>
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -96,8 +97,11 @@ struct OscHeadTrackingReceiver::Impl {
         realtime::HeadTrackingMessage message;
         Clock::time_point received_at;
     };
-    std::optional<CachedTelemetry> info;
-    std::optional<CachedTelemetry> status;
+    // One latest message per kind and source instance, bounded to 17 instances.
+    // Candidates never evict metadata belonging to the current pose instance.
+    using TelemetryCache = std::vector<CachedTelemetry>;
+    TelemetryCache info_cache;
+    TelemetryCache status_cache;
     std::string error_message;
 
   public:
@@ -124,31 +128,50 @@ struct OscHeadTrackingReceiver::Impl {
         return make_error(error_code, error_message);
     }
 
+    bool matches_current_instance(const CachedTelemetry& cached) const {
+        return state.has_pose && cached.message.source_id == state.source_id &&
+               cached.message.timing.instance_id == state.timing.instance_id;
+    }
+
+    const CachedTelemetry* current_telemetry(const TelemetryCache& cache) const {
+        if (cache.empty()) {
+            return nullptr;
+        }
+        if (!state.has_pose) {
+            return &cache.back();
+        }
+        const auto entry =
+            std::ranges::find_if(cache, [this](const auto& value) { return matches_current_instance(value); });
+        return entry == cache.end() ? nullptr : &*entry;
+    }
+
     void update_metadata() {
-        const auto matches_instance = [this](const CachedTelemetry& cached) {
-            return (state.source_id.empty() || cached.message.source_id == state.source_id) &&
-                   (!state.has_pose || cached.message.timing.instance_id == state.timing.instance_id);
-        };
+        const auto* info = current_telemetry(info_cache);
+        const auto* status = current_telemetry(status_cache);
         const auto matches_pose = [this](const realtime::HeadTrackingMessage& message) {
             return state.has_pose && message.timing.instance_id == state.timing.instance_id &&
                    message.timing.source_session_id == state.timing.source_session_id &&
                    message.timing.metadata_revision == state.timing.metadata_revision &&
                    message.timing.reference_epoch == state.timing.reference_epoch;
         };
+        const auto changes_reference = [this](const realtime::HeadTrackingMessage& message) {
+            return state.has_pose && message.timing.metadata_revision >= state.timing.metadata_revision &&
+                   (message.timing.reference_epoch > state.timing.reference_epoch ||
+                    message.timing.source_session_id != state.timing.source_session_id);
+        };
+        state.info_json = info != nullptr ? info->message.json : "";
+        state.status_json = status != nullptr ? status->message.json : "";
+        state.info_matches_pose = info != nullptr && matches_pose(info->message);
+        state.status_matches_pose = status != nullptr && matches_pose(status->message);
+        state.has_heartbeat = status != nullptr;
         bool changed_reference = false;
-        if (info.has_value() && matches_instance(info.value())) {
+        if (info != nullptr) {
             const auto& message = info->message;
-            changed_reference = state.has_pose && message.timing.metadata_revision > state.timing.metadata_revision &&
-                                (message.timing.reference_epoch > state.timing.reference_epoch ||
-                                 message.timing.source_session_id != state.timing.source_session_id);
-            state.info_json = message.json;
-            state.info_matches_pose = matches_pose(message);
+            changed_reference = changes_reference(message);
         }
-        if (status.has_value() && matches_instance(status.value())) {
+        if (status != nullptr) {
             const auto& message = status->message;
-            state.status_json = message.json;
-            state.status_matches_pose = matches_pose(message);
-            state.has_heartbeat = true;
+            changed_reference = changed_reference || changes_reference(message);
             heartbeat_at = status->received_at;
             if (state.has_pose && message.timing.metadata_revision >= state.timing.metadata_revision) {
                 if (message.timing.source_session_id == state.timing.source_session_id) {
@@ -165,6 +188,37 @@ struct OscHeadTrackingReceiver::Impl {
         }
     }
 
+    void accept_telemetry(const realtime::HeadTrackingMessage& message, Clock::time_point now) {
+        auto& cache = message.kind == realtime::HeadTrackingMessageKind::info ? info_cache : status_cache;
+        const auto& t = message.timing;
+        const auto cached = std::ranges::find_if(cache, [&](const auto& value) {
+            return value.message.source_id == message.source_id && value.message.timing.instance_id == t.instance_id;
+        });
+        const bool old = source_order.retired(t.instance_id) ||
+                         (cached != cache.end() && (message.message_sequence <= cached->message.message_sequence ||
+                                                    t.metadata_revision < cached->message.timing.metadata_revision ||
+                                                    t.reference_epoch < cached->message.timing.reference_epoch)) ||
+                         (state.has_pose && t.instance_id == state.timing.instance_id &&
+                          (t.metadata_revision < state.timing.metadata_revision ||
+                           t.reference_epoch < state.timing.reference_epoch ||
+                           (t.source_session_id != state.timing.source_session_id &&
+                            t.metadata_revision <= state.timing.metadata_revision)));
+        if (old) {
+            ++state.rejected_packets;
+            return;
+        }
+        if (cached != cache.end()) {
+            cache.erase(cached);
+        } else if (cache.size() >= 17U) {
+            const auto oldest_candidate =
+                std::ranges::find_if(cache, [this](const auto& value) { return !matches_current_instance(value); });
+            cache.erase(oldest_candidate);
+        }
+        cache.push_back(CachedTelemetry{message, now});
+        ++state.telemetry_packets;
+        update_metadata();
+    }
+
     void accept_message(const realtime::HeadTrackingMessage& message, Clock::time_point now) {
         using Kind = realtime::HeadTrackingMessageKind;
         if (message.kind == Kind::incompatible) {
@@ -179,26 +233,7 @@ struct OscHeadTrackingReceiver::Impl {
             return;
         }
         if (message.kind != Kind::pose) {
-            auto& cached = message.kind == Kind::info ? info : status;
-            const auto& t = message.timing;
-            const bool old = source_order.retired(t.instance_id) ||
-                             (cached && cached->message.source_id == message.source_id &&
-                              cached->message.timing.instance_id == t.instance_id &&
-                              (message.message_sequence <= cached->message.message_sequence ||
-                               t.metadata_revision < cached->message.timing.metadata_revision ||
-                               t.reference_epoch < cached->message.timing.reference_epoch)) ||
-                             (state.has_pose && t.instance_id == state.timing.instance_id &&
-                              (t.metadata_revision < state.timing.metadata_revision ||
-                               t.reference_epoch < state.timing.reference_epoch ||
-                               (t.source_session_id != state.timing.source_session_id &&
-                                t.metadata_revision <= state.timing.metadata_revision)));
-            if (old) {
-                ++state.rejected_packets;
-                return;
-            }
-            cached = CachedTelemetry{message, now};
-            ++state.telemetry_packets;
-            update_metadata();
+            accept_telemetry(message, now);
             return;
         }
         if (!source_order.accept(message.timing)) {
@@ -207,14 +242,6 @@ struct OscHeadTrackingReceiver::Impl {
         }
         if (state.has_pose && now - received_at >= k_stale_after) {
             ++state.recovery_count;
-        }
-        const bool changed_instance = !state.has_pose || state.timing.instance_id != message.timing.instance_id;
-        if (changed_instance) {
-            state.info_json.clear();
-            state.status_json.clear();
-            state.info_matches_pose = false;
-            state.status_matches_pose = false;
-            state.has_heartbeat = false;
         }
         state.source_id = message.source_id;
         state.has_pose = true;
@@ -318,8 +345,8 @@ Result<void> OscHeadTrackingReceiver::start() {
         impl_->state = {};
         impl_->source_order = {};
         impl_->state.source_id = impl_->requested_source;
-        impl_->info.reset();
-        impl_->status.reset();
+        impl_->info_cache.clear();
+        impl_->status_cache.clear();
         impl_->source_allows_pose = true;
         impl_->error_message.clear();
     }

@@ -92,10 +92,20 @@ orientation(std::span<const std::byte> data, std::size_t offset, bool quaternion
     HeadTrackingOrientation pose;
     std::ranges::transform(
         q, pose.quaternion_xyzw.begin(), [](double component) { return static_cast<float>(component); });
-    pose.euler_deg = {
-        static_cast<float>(std::atan2(2.0 * ((x * z) + (w * y)), 1.0 - (2.0 * ((x * x) + (y * y)))) * k_degrees),
-        static_cast<float>(std::asin(std::clamp(2.0 * ((w * x) - (y * z)), -1.0, 1.0)) * k_degrees),
-        static_cast<float>(std::atan2(2.0 * ((x * y) + (w * z)), 1.0 - (2.0 * ((x * x) + (z * z)))) * k_degrees)};
+    const double sin_pitch = std::clamp(2.0 * ((w * x) - (y * z)), -1.0, 1.0);
+    double yaw = 0.0;
+    double roll = 0.0;
+    if (std::abs(sin_pitch) >= 1.0 - 1e-12) {
+        // At either pole yaw and roll are coupled. Choose zero roll and retain
+        // their combined heading instead of evaluating two unstable atan2(0, 0).
+        yaw = std::atan2(2.0 * ((w * y) - (x * z)), 1.0 - (2.0 * ((y * y) + (z * z))));
+    } else {
+        yaw = std::atan2(2.0 * ((x * z) + (w * y)), 1.0 - (2.0 * ((x * x) + (y * y))));
+        roll = std::atan2(2.0 * ((x * y) + (w * z)), 1.0 - (2.0 * ((x * x) + (z * z))));
+    }
+    pose.euler_deg = {static_cast<float>(yaw * k_degrees),
+                      static_cast<float>(std::asin(sin_pitch) * k_degrees),
+                      static_cast<float>(roll * k_degrees)};
     return pose;
 }
 
