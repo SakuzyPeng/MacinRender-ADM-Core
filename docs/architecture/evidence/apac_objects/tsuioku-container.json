@@ -1,0 +1,14 @@
+[
+  {
+    "container": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/apac-object-experiments/tsuioku-12000kbps-no-diffuse/deliverables/Tsuioku_SS2RPV4_7.1.2BED_32Objects_pos-only_12000kbps.caf",
+    "packets_identical": true,
+    "cookie_identical": true,
+    "timing_matches": true
+  },
+  {
+    "container": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/apac-object-experiments/tsuioku-12000kbps-no-diffuse/deliverables/Tsuioku_SS2RPV4_7.1.2BED_32Objects_pos-only_12000kbps.mp4",
+    "packets_identical": true,
+    "cookie_identical": true,
+    "timing_matches": true
+  }
+]

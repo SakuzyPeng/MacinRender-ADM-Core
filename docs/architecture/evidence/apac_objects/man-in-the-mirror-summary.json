@@ -1,0 +1,170 @@
+{
+  "audio_passed": true,
+  "metadata_passed_for_encoded_fields": true,
+  "sample_rate": 48000,
+  "valid_frames": 15106832,
+  "seconds": 314.72566666666665,
+  "audio_channels": 36,
+  "objects": 26,
+  "objects_per_component": 7,
+  "component_groups": [
+    7,
+    7,
+    7,
+    5
+  ],
+  "target_bitrate_bps": 12000000,
+  "component_bitrates_bps": [
+    3097600,
+    2396800,
+    2396800,
+    2396800,
+    1712000
+  ],
+  "actual_packet_bitrate_bps": 11078716.359326694,
+  "packet_bytes": 435844549,
+  "packet_sha256": "09f4d41c47807ec1686df572ce8945771d10a4be24a3705194fc5c4a54a57fd5",
+  "actual_profile_level": [
+    5,
+    0
+  ],
+  "minimum_non_lfe_correlation": 0.9999951950495423,
+  "minimum_non_lfe_snr_db": 50.15079777549111,
+  "lfe": {
+    "channel": 3,
+    "object_id": "AO_1001",
+    "name": "Master",
+    "speaker_label": "RC_LFE",
+    "source_rms": 0.03575718988522232,
+    "decoded_rms": 0.03575680358753401,
+    "decoded_peak": 0.1892562210559845,
+    "correlation": 0.9999920771409403,
+    "gain_db": -9.383727366371754e-05,
+    "snr_db": 48.000895527237155,
+    "best_correlated_source_channel": 3,
+    "silent_at_source": false
+  },
+  "complete_adm_roundtrip": false,
+  "omitted_extent": [
+    {
+      "channel": 12,
+      "object_id": "AO_100D",
+      "name": "Michael Jackson - Man In the Mirror_drums_cymbals L",
+      "width": 0.1,
+      "height": 0.1,
+      "depth": 0.1
+    },
+    {
+      "channel": 13,
+      "object_id": "AO_100E",
+      "name": "Michael Jackson - Man In the Mirror_drums_cymbals R",
+      "width": 0.1,
+      "height": 0.1,
+      "depth": 0.1
+    },
+    {
+      "channel": 16,
+      "object_id": "AO_1011",
+      "name": "Michael Jackson - Man In the Mirror_drums_kick L",
+      "width": 0.1,
+      "height": 0.1,
+      "depth": 0.1
+    },
+    {
+      "channel": 17,
+      "object_id": "AO_1012",
+      "name": "Michael Jackson - Man In the Mirror_drums_kick R",
+      "width": 0.1,
+      "height": 0.1,
+      "depth": 0.1
+    },
+    {
+      "channel": 30,
+      "object_id": "AO_101F",
+      "name": "Michael Jackson - Man In the Mirror_piano L",
+      "width": 0.05,
+      "height": 0.05,
+      "depth": 0.05
+    },
+    {
+      "channel": 31,
+      "object_id": "AO_1020",
+      "name": "Michael Jackson - Man In the Mirror_piano R",
+      "width": 0.05,
+      "height": 0.05,
+      "depth": 0.05
+    }
+  ],
+  "discard_diffuse": true,
+  "discarded_diffuse": [
+    {
+      "channel": 12,
+      "object_id": "AO_100D",
+      "name": "Michael Jackson - Man In the Mirror_drums_cymbals L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 13,
+      "object_id": "AO_100E",
+      "name": "Michael Jackson - Man In the Mirror_drums_cymbals R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 16,
+      "object_id": "AO_1011",
+      "name": "Michael Jackson - Man In the Mirror_drums_kick L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 17,
+      "object_id": "AO_1012",
+      "name": "Michael Jackson - Man In the Mirror_drums_kick R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 30,
+      "object_id": "AO_101F",
+      "name": "Michael Jackson - Man In the Mirror_piano L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 31,
+      "object_id": "AO_1020",
+      "name": "Michael Jackson - Man In the Mirror_piano R",
+      "diffuse": 1.0
+    }
+  ],
+  "source_sha256": "a79fa5c6c306f81abdd2c8a60017a96f6f07c29cc91c45cd9d0647e1e50800eb",
+  "containers": [
+    {
+      "container": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/apac-object-experiments/man-in-the-mirror-12000kbps-no-diffuse/deliverables/Man In the Mirror - Michael Jackson ~ADM BWF~ L1_wm_7.1.2BED_26Objects_pos-only_12000kbps.caf",
+      "packets_identical": true,
+      "cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "container": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/apac-object-experiments/man-in-the-mirror-12000kbps-no-diffuse/deliverables/Man In the Mirror - Michael Jackson ~ADM BWF~ L1_wm_7.1.2BED_26Objects_pos-only_12000kbps.mp4",
+      "packets_identical": true,
+      "cookie_identical": true,
+      "timing_matches": true
+    }
+  ],
+  "decoder_modified": false,
+  "system_spatial_playback_verified": false,
+  "bed_channels": 10,
+  "bed_tag": "kAudioChannelLayoutTag_Atmos_7_1_2",
+  "source_silent_bed_channels": [
+    2,
+    8,
+    9
+  ],
+  "all_object_diffuse_zero": true,
+  "discarded_extent_count": 6,
+  "realtime_renderer_excerpt_checked": [
+    90,
+    96
+  ],
+  "realtime_renderer_excerpt_nonzero": true,
+  "playback_evidence": "playback-verification.json",
+  "user_listening_confirmed": false
+}

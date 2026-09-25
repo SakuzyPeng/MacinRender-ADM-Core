@@ -1,0 +1,18 @@
+{
+  "source_seconds": [
+    90,
+    96
+  ],
+  "frames_captured": 296856,
+  "sample_rate": 48000,
+  "rms": [
+    0.07955601278970564,
+    0.07929003410310446
+  ],
+  "peak": [
+    0.5167621970176697,
+    0.5486859083175659
+  ],
+  "audio_nonzero": true,
+  "observation": "copy after original AudioUnitRender; no playback settings or codec capabilities changed"
+}

@@ -1,0 +1,35 @@
+{
+  "start_seconds": 10,
+  "end_seconds": 58,
+  "duration_seconds": 48,
+  "valid_frames": 2304000,
+  "original_first_packet": 469,
+  "copied_packet_count": 2252,
+  "packets_bit_identical": true,
+  "magic_cookie_identical": true,
+  "sample_accurate_start_proven_from_packet_index_and_edit": true,
+  "timing": {
+    "valid_frames": 2304000,
+    "leading_frames": 1792,
+    "trailing_frames": 256
+  },
+  "file": "Tsuioku_SS2RPV4_7.1.2BED_32Objects_pos-only_12000kbps_10s-58s.mp4",
+  "file_bytes": 77364077,
+  "file_sha256": "66dd17f50b48af3d32668650e39dada765b76a351232c76ec0cb9a7d0c465c7a",
+  "reencoded": false,
+  "audio_channels": 42,
+  "bed": "7.1.2",
+  "objects": 32,
+  "diffuse": 0,
+  "native_audio_validation": true,
+  "metadata_validation": true,
+  "avassetreader_frames": 2304000,
+  "minimum_non_lfe_correlation_to_source_pcm": 0.9999463319617395,
+  "decoder_modified": false,
+  "user_acceptance": {
+    "status": "confirmed",
+    "date": "2026-09-24",
+    "scope": "current no-diffuse object variant",
+    "record": "../accepted-object-release.json"
+  }
+}

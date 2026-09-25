@@ -1,0 +1,621 @@
+{
+  "all_checks_passed": true,
+  "decoder_policy": "system default, read-only metadata observation",
+  "scope": "this component version, ASC dictionary and independently updated object metadata",
+  "verified_cases": [
+    {
+      "case": "bed12-obj1",
+      "bed_channels": 12,
+      "objects": 1,
+      "diagnostic_ceiling": null,
+      "passed": true,
+      "valid_frames": 8192,
+      "position_rows": 8,
+      "max_azimuth_error_degrees": 0.0,
+      "minimum_tone_energy_fraction": 0.9999697966499054
+    },
+    {
+      "case": "bed24split-obj1",
+      "bed_channels": 24,
+      "objects": 1,
+      "diagnostic_ceiling": null,
+      "passed": true,
+      "valid_frames": 8192,
+      "position_rows": 8,
+      "max_azimuth_error_degrees": 0.0,
+      "minimum_tone_energy_fraction": 0.9999697966499054
+    },
+    {
+      "case": "bed1-obj69",
+      "bed_channels": 1,
+      "objects": 69,
+      "diagnostic_ceiling": null,
+      "passed": true,
+      "valid_frames": 8192,
+      "position_rows": 552,
+      "max_azimuth_error_degrees": 0.34646739130437254,
+      "minimum_tone_energy_fraction": 0.9999912796502751
+    },
+    {
+      "case": "bed12-obj69",
+      "bed_channels": 12,
+      "objects": 69,
+      "diagnostic_ceiling": null,
+      "passed": true,
+      "valid_frames": 8192,
+      "position_rows": 552,
+      "max_azimuth_error_degrees": 0.34646739130437254,
+      "minimum_tone_energy_fraction": 0.9999697966499054
+    },
+    {
+      "case": "bed127split-obj1",
+      "bed_channels": 127,
+      "objects": 1,
+      "diagnostic_ceiling": null,
+      "passed": true,
+      "valid_frames": 8192,
+      "position_rows": 8,
+      "max_azimuth_error_degrees": 0.0,
+      "minimum_tone_energy_fraction": 0.9999017816145832
+    },
+    {
+      "case": "bed24split-obj69",
+      "bed_channels": 24,
+      "objects": 69,
+      "diagnostic_ceiling": null,
+      "passed": true,
+      "valid_frames": 8192,
+      "position_rows": 552,
+      "max_azimuth_error_degrees": 0.34646739130437254,
+      "minimum_tone_energy_fraction": 0.9999697966499054
+    },
+    {
+      "case": "bed61split-obj67",
+      "bed_channels": 61,
+      "objects": 67,
+      "diagnostic_ceiling": null,
+      "passed": true,
+      "valid_frames": 8192,
+      "position_rows": 536,
+      "max_azimuth_error_degrees": 0.3358208955223887,
+      "minimum_tone_energy_fraction": 0.9999491590590011
+    },
+    {
+      "case": "bed24-obj69-ceiling1",
+      "bed_channels": 24,
+      "objects": 69,
+      "diagnostic_ceiling": 1,
+      "passed": true,
+      "valid_frames": 8192,
+      "position_rows": 552,
+      "max_azimuth_error_degrees": 0.34646739130437254,
+      "minimum_tone_energy_fraction": 0.9999697966499054
+    },
+    {
+      "case": "bed64-obj69-ceiling2",
+      "bed_channels": 64,
+      "objects": 69,
+      "diagnostic_ceiling": 2,
+      "passed": true,
+      "valid_frames": 8192,
+      "position_rows": 552,
+      "max_azimuth_error_degrees": 0.34646739130437254,
+      "minimum_tone_energy_fraction": 0.9999865293325879
+    },
+    {
+      "case": "bed253split-obj1-ceiling2",
+      "bed_channels": 253,
+      "objects": 1,
+      "diagnostic_ceiling": 2,
+      "passed": true,
+      "valid_frames": 8192,
+      "position_rows": 8,
+      "max_azimuth_error_degrees": 0.0,
+      "minimum_tone_energy_fraction": 0.9998717424758946
+    },
+    {
+      "case": "bed128split-obj69-ceiling2",
+      "bed_channels": 128,
+      "objects": 69,
+      "diagnostic_ceiling": 2,
+      "passed": true,
+      "valid_frames": 8192,
+      "position_rows": 552,
+      "max_azimuth_error_degrees": 0.34646739130437254,
+      "minimum_tone_energy_fraction": 0.9998717424758946
+    },
+    {
+      "case": "bed62mono-obj1",
+      "bed_channels": 62,
+      "objects": 1,
+      "diagnostic_ceiling": null,
+      "passed": true,
+      "valid_frames": 8192,
+      "position_rows": 8,
+      "max_azimuth_error_degrees": 0.0,
+      "minimum_tone_energy_fraction": 0.9999912796502751
+    }
+  ],
+  "expected_failures": [
+    {
+      "case": "bed13-obj1",
+      "phase": "encode",
+      "stage": "initialize",
+      "status": 561214580
+    },
+    {
+      "case": "bed1-obj70",
+      "phase": "decode",
+      "stage": "decoder_produce",
+      "status": -50
+    },
+    {
+      "case": "bed128split-obj1",
+      "phase": "encode",
+      "stage": "initialize",
+      "status": 560226676
+    },
+    {
+      "case": "bed25split-obj69",
+      "phase": "decode",
+      "stage": "decoder_produce",
+      "status": -50
+    },
+    {
+      "case": "bed60split-obj68",
+      "phase": "decode",
+      "stage": "decoder_produce",
+      "status": -50
+    },
+    {
+      "case": "bed127mono-obj1",
+      "phase": "encode",
+      "stage": "cookie_info",
+      "status": 560226676
+    },
+    {
+      "case": "bed24-obj69-default",
+      "phase": "encode",
+      "stage": "initialize",
+      "status": 561214580
+    },
+    {
+      "case": "bed65-obj1-ceiling2",
+      "phase": "encode",
+      "stage": "initialize",
+      "status": 561214580
+    },
+    {
+      "case": "bed90mono-obj1",
+      "phase": "decode",
+      "stage": "decoder_initialize",
+      "status": 560226676
+    }
+  ],
+  "component_count_encoding": [
+    {
+      "case": "component-count-32-native",
+      "bed_components": 32,
+      "objects": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "encoded",
+          "input_frames": 8192,
+          "packets": 10,
+          "bytes": 127855,
+          "channels": 33,
+          "frames_per_packet": 1024
+        }
+      ],
+      "decode_returncode": 0,
+      "decode_timed_out": false,
+      "decode_last_event": [
+        {
+          "stage": "decoded",
+          "frames": 10240,
+          "channels": 33,
+          "rms": 0.0505961908337
+        }
+      ]
+    },
+    {
+      "case": "component-count-63-native",
+      "bed_components": 63,
+      "objects": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "encoded",
+          "input_frames": 8192,
+          "packets": 10,
+          "bytes": 308908,
+          "channels": 64,
+          "frames_per_packet": 1024
+        }
+      ],
+      "decode_returncode": 1,
+      "decode_timed_out": false,
+      "decode_last_event": [
+        {
+          "stage": "decoder_initialize",
+          "status": 560226676
+        }
+      ]
+    },
+    {
+      "case": "component-count-64-native",
+      "bed_components": 64,
+      "objects": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "encoded",
+          "input_frames": 8192,
+          "packets": 10,
+          "bytes": 312481,
+          "channels": 65,
+          "frames_per_packet": 1024
+        }
+      ],
+      "decode_returncode": 1,
+      "decode_timed_out": false,
+      "decode_last_event": [
+        {
+          "stage": "decoder_initialize",
+          "status": 560226676
+        }
+      ]
+    },
+    {
+      "case": "component-count-126-native",
+      "bed_components": 126,
+      "objects": 1,
+      "returncode": 1,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "cookie_info",
+          "status": 560226676
+        }
+      ]
+    },
+    {
+      "case": "component-count-95-native",
+      "bed_components": 95,
+      "objects": 1,
+      "returncode": 1,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "cookie_info",
+          "status": 560226676
+        }
+      ]
+    },
+    {
+      "case": "component-count-79-native",
+      "bed_components": 79,
+      "objects": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "encoded",
+          "input_frames": 8192,
+          "packets": 10,
+          "bytes": 413158,
+          "channels": 80,
+          "frames_per_packet": 1024
+        }
+      ],
+      "decode_returncode": 1,
+      "decode_timed_out": false,
+      "decode_last_event": [
+        {
+          "stage": "decoder_initialize",
+          "status": 560226676
+        }
+      ]
+    },
+    {
+      "case": "component-count-87-native",
+      "bed_components": 87,
+      "objects": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "encoded",
+          "input_frames": 8192,
+          "packets": 10,
+          "bytes": 464610,
+          "channels": 88,
+          "frames_per_packet": 1024
+        }
+      ],
+      "decode_returncode": 1,
+      "decode_timed_out": false,
+      "decode_last_event": [
+        {
+          "stage": "decoder_initialize",
+          "status": 560226676
+        }
+      ]
+    },
+    {
+      "case": "component-count-91-native",
+      "bed_components": 91,
+      "objects": 1,
+      "returncode": 1,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "cookie_info",
+          "status": 560226676
+        }
+      ]
+    },
+    {
+      "case": "component-count-89-native",
+      "bed_components": 89,
+      "objects": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "encoded",
+          "input_frames": 8192,
+          "packets": 10,
+          "bytes": 475177,
+          "channels": 90,
+          "frames_per_packet": 1024
+        }
+      ],
+      "decode_returncode": 1,
+      "decode_timed_out": false,
+      "decode_last_event": [
+        {
+          "stage": "decoder_initialize",
+          "status": 560226676
+        }
+      ]
+    },
+    {
+      "case": "component-count-90-native",
+      "bed_components": 90,
+      "objects": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "encoded",
+          "input_frames": 8192,
+          "packets": 10,
+          "bytes": 482899,
+          "channels": 91,
+          "frames_per_packet": 1024
+        }
+      ],
+      "decode_returncode": 1,
+      "decode_timed_out": false,
+      "decode_last_event": [
+        {
+          "stage": "decoder_initialize",
+          "status": 560226676
+        }
+      ]
+    },
+    {
+      "case": "component-count-47-native",
+      "bed_components": 47,
+      "objects": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "encoded",
+          "input_frames": 8192,
+          "packets": 10,
+          "bytes": 205413,
+          "channels": 48,
+          "frames_per_packet": 1024
+        }
+      ],
+      "decode_returncode": 0,
+      "decode_timed_out": false,
+      "decode_last_event": [
+        {
+          "stage": "decoded",
+          "frames": 10240,
+          "channels": 48,
+          "rms": 0.0505958824444
+        }
+      ]
+    },
+    {
+      "case": "component-count-55-native",
+      "bed_components": 55,
+      "objects": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "encoded",
+          "input_frames": 8192,
+          "packets": 10,
+          "bytes": 257086,
+          "channels": 56,
+          "frames_per_packet": 1024
+        }
+      ],
+      "decode_returncode": 0,
+      "decode_timed_out": false,
+      "decode_last_event": [
+        {
+          "stage": "decoded",
+          "frames": 10240,
+          "channels": 56,
+          "rms": 0.0505959638317
+        }
+      ]
+    },
+    {
+      "case": "component-count-59-native",
+      "bed_components": 59,
+      "objects": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "encoded",
+          "input_frames": 8192,
+          "packets": 10,
+          "bytes": 283047,
+          "channels": 60,
+          "frames_per_packet": 1024
+        }
+      ],
+      "decode_returncode": 0,
+      "decode_timed_out": false,
+      "decode_last_event": [
+        {
+          "stage": "decoded",
+          "frames": 10240,
+          "channels": 60,
+          "rms": 0.0505956226268
+        }
+      ]
+    },
+    {
+      "case": "component-count-61-native",
+      "bed_components": 61,
+      "objects": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "encoded",
+          "input_frames": 8192,
+          "packets": 10,
+          "bytes": 293806,
+          "channels": 62,
+          "frames_per_packet": 1024
+        }
+      ],
+      "decode_returncode": 0,
+      "decode_timed_out": false,
+      "decode_last_event": [
+        {
+          "stage": "decoded",
+          "frames": 10240,
+          "channels": 62,
+          "rms": 0.0505955580348
+        }
+      ]
+    },
+    {
+      "case": "component-count-62-native",
+      "bed_components": 62,
+      "objects": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "last_event": [
+        {
+          "stage": "encoded",
+          "input_frames": 8192,
+          "packets": 10,
+          "bytes": 301827,
+          "channels": 63,
+          "frames_per_packet": 1024
+        }
+      ],
+      "decode_returncode": 0,
+      "decode_timed_out": false,
+      "decode_last_event": [
+        {
+          "stage": "decoded",
+          "frames": 10240,
+          "channels": 63,
+          "rms": 0.0505955113814
+        }
+      ]
+    }
+  ],
+  "channel_map_index255_rejected": true,
+  "containers": [
+    {
+      "case": "bed24split-obj69",
+      "container": "caf",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "case": "bed24split-obj69",
+      "container": "mp4",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "case": "bed127split-obj1",
+      "container": "caf",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "case": "bed127split-obj1",
+      "container": "mp4",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "case": "bed253split-obj1-ceiling2",
+      "container": "caf",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "case": "bed253split-obj1-ceiling2",
+      "container": "mp4",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "case": "bed128split-obj69-ceiling2",
+      "container": "caf",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "case": "bed128split-obj69-ceiling2",
+      "container": "mp4",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    }
+  ],
+  "not_validated": [
+    "universal APAC format limits",
+    "a physical layout for repeated BED labels",
+    "system player spatial rendering",
+    "all BED component organizations"
+  ]
+}

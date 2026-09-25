@@ -1,0 +1,502 @@
+{
+  "audio_passed": true,
+  "metadata_passed_for_encoded_fields": true,
+  "sample_rate": 48000,
+  "valid_frames": 3679687,
+  "seconds": 76.66014583333333,
+  "audio_channels": 50,
+  "objects": 40,
+  "objects_per_component": 7,
+  "component_groups": [
+    7,
+    7,
+    7,
+    7,
+    7,
+    5
+  ],
+  "target_bitrate_bps": 12000000,
+  "component_bitrates_bps": [
+    2217143,
+    1712000,
+    1712000,
+    1712000,
+    1712000,
+    1712000,
+    1222857
+  ],
+  "actual_packet_bitrate_bps": 12091513.340129202,
+  "packet_bytes": 115867147,
+  "packet_sha256": "06e6ee2e4604b003bf1ada10fadb2e3dd6ebdd8bfff2add1cf04e359f03ed049",
+  "actual_profile_level": [
+    5,
+    0
+  ],
+  "minimum_non_lfe_correlation": 0.9995761421273991,
+  "minimum_non_lfe_snr_db": 30.635036724277917,
+  "lfe": {
+    "channel": 3,
+    "object_id": "AO_1001",
+    "name": "SSDX EDT2",
+    "speaker_label": "RC_LFE",
+    "source_rms": 0.0005048416581541524,
+    "decoded_rms": 0.0005047296240743814,
+    "decoded_peak": 0.002142063109204173,
+    "correlation": 0.9997958169079404,
+    "gain_db": -0.0019277799868470979,
+    "snr_db": 33.88994233584465,
+    "best_correlated_source_channel": 3,
+    "silent_at_source": false
+  },
+  "complete_adm_roundtrip": false,
+  "omitted_extent": [
+    {
+      "channel": 10,
+      "object_id": "AO_100B",
+      "name": "VOCAL ESS OBJ L",
+      "width": 0.1,
+      "height": 0.1,
+      "depth": 0.1
+    },
+    {
+      "channel": 11,
+      "object_id": "AO_100C",
+      "name": "VOCAL ESS OBJ R",
+      "width": 0.1,
+      "height": 0.1,
+      "depth": 0.1
+    },
+    {
+      "channel": 12,
+      "object_id": "AO_100D",
+      "name": "BV OBJ L",
+      "width": 0.21,
+      "height": 0.21,
+      "depth": 0.21
+    },
+    {
+      "channel": 13,
+      "object_id": "AO_100E",
+      "name": "BV OBJ R",
+      "width": 0.21,
+      "height": 0.21,
+      "depth": 0.21
+    },
+    {
+      "channel": 14,
+      "object_id": "AO_100F",
+      "name": "BV OBJTOP L",
+      "width": 0.2,
+      "height": 0.2,
+      "depth": 0.2
+    },
+    {
+      "channel": 15,
+      "object_id": "AO_1010",
+      "name": "BV OBJTOP R",
+      "width": 0.2,
+      "height": 0.2,
+      "depth": 0.2
+    },
+    {
+      "channel": 16,
+      "object_id": "AO_1011",
+      "name": "BV FRONT OBJ L",
+      "width": 0.11,
+      "height": 0.11,
+      "depth": 0.11
+    },
+    {
+      "channel": 17,
+      "object_id": "AO_1012",
+      "name": "BV FRONT OBJ R",
+      "width": 0.11,
+      "height": 0.11,
+      "depth": 0.11
+    },
+    {
+      "channel": 18,
+      "object_id": "AO_1013",
+      "name": "Guitar OVERDRIVEN L",
+      "width": 0.2,
+      "height": 0.2,
+      "depth": 0.2
+    },
+    {
+      "channel": 19,
+      "object_id": "AO_1014",
+      "name": "Guitar OVERDRIVEN R",
+      "width": 0.2,
+      "height": 0.2,
+      "depth": 0.2
+    },
+    {
+      "channel": 20,
+      "object_id": "AO_1015",
+      "name": "GTR ESS OBJ L",
+      "width": 0.15,
+      "height": 0.15,
+      "depth": 0.15
+    },
+    {
+      "channel": 21,
+      "object_id": "AO_1016",
+      "name": "GTR ESS OBJ R",
+      "width": 0.15,
+      "height": 0.15,
+      "depth": 0.15
+    },
+    {
+      "channel": 22,
+      "object_id": "AO_1017",
+      "name": "GTR ESS OBJ BACK L",
+      "width": 0.18,
+      "height": 0.18,
+      "depth": 0.18
+    },
+    {
+      "channel": 23,
+      "object_id": "AO_1018",
+      "name": "GTR ESS OBJ BACK R",
+      "width": 0.18,
+      "height": 0.18,
+      "depth": 0.18
+    },
+    {
+      "channel": 24,
+      "object_id": "AO_1019",
+      "name": "GTR ESSTOP OBJ L",
+      "width": 0.22,
+      "height": 0.22,
+      "depth": 0.22
+    },
+    {
+      "channel": 25,
+      "object_id": "AO_101A",
+      "name": "GTR ESSTOP OBJ R",
+      "width": 0.22,
+      "height": 0.22,
+      "depth": 0.22
+    },
+    {
+      "channel": 26,
+      "object_id": "AO_101B",
+      "name": "Harmonic L",
+      "width": 0.29,
+      "height": 0.29,
+      "depth": 0.29
+    },
+    {
+      "channel": 27,
+      "object_id": "AO_101C",
+      "name": "Harmonic R",
+      "width": 0.29,
+      "height": 0.29,
+      "depth": 0.29
+    },
+    {
+      "channel": 28,
+      "object_id": "AO_101D",
+      "name": "Harmonic OBJ BACK L",
+      "width": 0.24,
+      "height": 0.24,
+      "depth": 0.24
+    },
+    {
+      "channel": 29,
+      "object_id": "AO_101E",
+      "name": "Harmonic OBJ BACK R",
+      "width": 0.24,
+      "height": 0.24,
+      "depth": 0.24
+    },
+    {
+      "channel": 30,
+      "object_id": "AO_101F",
+      "name": "Harmonic Top L",
+      "width": 0.32,
+      "height": 0.32,
+      "depth": 0.32
+    },
+    {
+      "channel": 31,
+      "object_id": "AO_1020",
+      "name": "Harmonic Top R",
+      "width": 0.32,
+      "height": 0.32,
+      "depth": 0.32
+    },
+    {
+      "channel": 32,
+      "object_id": "AO_1021",
+      "name": "DRUMS L",
+      "width": 0.19,
+      "height": 0.19,
+      "depth": 0.19
+    },
+    {
+      "channel": 33,
+      "object_id": "AO_1022",
+      "name": "DRUMS R",
+      "width": 0.19,
+      "height": 0.19,
+      "depth": 0.19
+    },
+    {
+      "channel": 42,
+      "object_id": "AO_102B",
+      "name": "Sn OBJ L",
+      "width": 0.21,
+      "height": 0.21,
+      "depth": 0.21
+    },
+    {
+      "channel": 43,
+      "object_id": "AO_102C",
+      "name": "Sn OBJ R",
+      "width": 0.21,
+      "height": 0.21,
+      "depth": 0.21
+    },
+    {
+      "channel": 46,
+      "object_id": "AO_102F",
+      "name": "Bass L",
+      "width": 0.26,
+      "height": 0.26,
+      "depth": 0.26
+    },
+    {
+      "channel": 47,
+      "object_id": "AO_1030",
+      "name": "Bass R",
+      "width": 0.26,
+      "height": 0.26,
+      "depth": 0.26
+    },
+    {
+      "channel": 48,
+      "object_id": "AO_1031",
+      "name": "BASSTONE OBJ L",
+      "width": 0.69,
+      "height": 0.69,
+      "depth": 0.69
+    },
+    {
+      "channel": 49,
+      "object_id": "AO_1032",
+      "name": "BASSTONE OBJ R",
+      "width": 0.69,
+      "height": 0.69,
+      "depth": 0.69
+    }
+  ],
+  "discard_diffuse": true,
+  "discarded_diffuse": [
+    {
+      "channel": 10,
+      "object_id": "AO_100B",
+      "name": "VOCAL ESS OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 11,
+      "object_id": "AO_100C",
+      "name": "VOCAL ESS OBJ R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 12,
+      "object_id": "AO_100D",
+      "name": "BV OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 13,
+      "object_id": "AO_100E",
+      "name": "BV OBJ R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 14,
+      "object_id": "AO_100F",
+      "name": "BV OBJTOP L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 15,
+      "object_id": "AO_1010",
+      "name": "BV OBJTOP R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 16,
+      "object_id": "AO_1011",
+      "name": "BV FRONT OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 17,
+      "object_id": "AO_1012",
+      "name": "BV FRONT OBJ R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 18,
+      "object_id": "AO_1013",
+      "name": "Guitar OVERDRIVEN L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 19,
+      "object_id": "AO_1014",
+      "name": "Guitar OVERDRIVEN R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 20,
+      "object_id": "AO_1015",
+      "name": "GTR ESS OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 21,
+      "object_id": "AO_1016",
+      "name": "GTR ESS OBJ R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 22,
+      "object_id": "AO_1017",
+      "name": "GTR ESS OBJ BACK L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 23,
+      "object_id": "AO_1018",
+      "name": "GTR ESS OBJ BACK R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 24,
+      "object_id": "AO_1019",
+      "name": "GTR ESSTOP OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 25,
+      "object_id": "AO_101A",
+      "name": "GTR ESSTOP OBJ R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 26,
+      "object_id": "AO_101B",
+      "name": "Harmonic L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 27,
+      "object_id": "AO_101C",
+      "name": "Harmonic R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 28,
+      "object_id": "AO_101D",
+      "name": "Harmonic OBJ BACK L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 29,
+      "object_id": "AO_101E",
+      "name": "Harmonic OBJ BACK R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 30,
+      "object_id": "AO_101F",
+      "name": "Harmonic Top L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 31,
+      "object_id": "AO_1020",
+      "name": "Harmonic Top R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 32,
+      "object_id": "AO_1021",
+      "name": "DRUMS L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 33,
+      "object_id": "AO_1022",
+      "name": "DRUMS R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 42,
+      "object_id": "AO_102B",
+      "name": "Sn OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 43,
+      "object_id": "AO_102C",
+      "name": "Sn OBJ R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 46,
+      "object_id": "AO_102F",
+      "name": "Bass L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 47,
+      "object_id": "AO_1030",
+      "name": "Bass R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 48,
+      "object_id": "AO_1031",
+      "name": "BASSTONE OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 49,
+      "object_id": "AO_1032",
+      "name": "BASSTONE OBJ R",
+      "diffuse": 1.0
+    }
+  ],
+  "source_sha256": "8d7215264a0b9cc782db482281ee9f1b89667dac87ab631aa3e68826fe335e3d",
+  "containers": [
+    {
+      "container": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/apac-object-experiments/zenzenzense-12000kbps-no-diffuse/deliverables/ADMCUT - RADWIMPS - 前前前世_SSDX_7.1.2BED_40Objects_pos-only_12000kbps.caf",
+      "packets_identical": true,
+      "cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "container": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/apac-object-experiments/zenzenzense-12000kbps-no-diffuse/deliverables/ADMCUT - RADWIMPS - 前前前世_SSDX_7.1.2BED_40Objects_pos-only_12000kbps.mp4",
+      "packets_identical": true,
+      "cookie_identical": true,
+      "timing_matches": true
+    }
+  ],
+  "decoder_modified": false,
+  "system_spatial_playback_verified": false,
+  "bed_channels": 10,
+  "bed_tag": "kAudioChannelLayoutTag_Atmos_7_1_2",
+  "all_object_diffuse_zero": true,
+  "discarded_extent_count": 30,
+  "source_silent_channels": [],
+  "user_listening_confirmed": false,
+  "new_playback_testing_stopped_at_user_request": true,
+  "realtime_test_tones_completed_before_stop": "40-object-playback-probe/verification.json"
+}

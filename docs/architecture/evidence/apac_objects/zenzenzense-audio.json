@@ -1,0 +1,1158 @@
+{
+  "passed": true,
+  "sample_rate": 48000,
+  "valid_frames": 3679687,
+  "decoded_frames": 3682304,
+  "timing": {
+    "valid_frames": 3679687,
+    "leading_frames": 2048,
+    "trailing_frames": 569
+  },
+  "channels": 50,
+  "channel_results": [
+    {
+      "channel": 0,
+      "object_id": "AO_1001",
+      "name": "SSDX EDT2",
+      "speaker_label": "RC_L",
+      "source_rms": 0.011841288216688568,
+      "decoded_rms": 0.011840620739422544,
+      "decoded_peak": 0.046853579580783844,
+      "correlation": 0.9999976713578402,
+      "gain_db": -0.0004896255517990231,
+      "snr_db": 53.31595522846433,
+      "best_correlated_source_channel": 0,
+      "silent_at_source": false
+    },
+    {
+      "channel": 1,
+      "object_id": "AO_1001",
+      "name": "SSDX EDT2",
+      "speaker_label": "RC_R",
+      "source_rms": 0.011822296295267395,
+      "decoded_rms": 0.011821775628248644,
+      "decoded_peak": 0.04737410321831703,
+      "correlation": 0.999997688718589,
+      "gain_db": -0.000382544620775131,
+      "snr_db": 53.34954112230253,
+      "best_correlated_source_channel": 1,
+      "silent_at_source": false
+    },
+    {
+      "channel": 2,
+      "object_id": "AO_1001",
+      "name": "SSDX EDT2",
+      "speaker_label": "RC_C",
+      "source_rms": 0.07542732775349761,
+      "decoded_rms": 0.07540686397142106,
+      "decoded_peak": 0.4762849807739258,
+      "correlation": 0.9999836243595712,
+      "gain_db": -0.002356841665038956,
+      "snr_db": 44.83914328439815,
+      "best_correlated_source_channel": 2,
+      "silent_at_source": false
+    },
+    {
+      "channel": 3,
+      "object_id": "AO_1001",
+      "name": "SSDX EDT2",
+      "speaker_label": "RC_LFE",
+      "source_rms": 0.0005048416581541524,
+      "decoded_rms": 0.0005047296240743814,
+      "decoded_peak": 0.002142063109204173,
+      "correlation": 0.9997958169079404,
+      "gain_db": -0.0019277799868470979,
+      "snr_db": 33.88994233584465,
+      "best_correlated_source_channel": 3,
+      "silent_at_source": false
+    },
+    {
+      "channel": 4,
+      "object_id": "AO_1001",
+      "name": "SSDX EDT2",
+      "speaker_label": "RC_Lss",
+      "source_rms": 0.0016086212105243913,
+      "decoded_rms": 0.001607034842858829,
+      "decoded_peak": 0.009597844444215298,
+      "correlation": 0.9999312852739413,
+      "gain_db": -0.008569956088292923,
+      "snr_db": 38.592831959403775,
+      "best_correlated_source_channel": 4,
+      "silent_at_source": false
+    },
+    {
+      "channel": 5,
+      "object_id": "AO_1001",
+      "name": "SSDX EDT2",
+      "speaker_label": "RC_Rss",
+      "source_rms": 0.0016209065349731197,
+      "decoded_rms": 0.0016193353395145113,
+      "decoded_peak": 0.010098298080265522,
+      "correlation": 0.9999335455771569,
+      "gain_db": -0.008423588084810649,
+      "snr_db": 38.73804878843661,
+      "best_correlated_source_channel": 5,
+      "silent_at_source": false
+    },
+    {
+      "channel": 6,
+      "object_id": "AO_1001",
+      "name": "SSDX EDT2",
+      "speaker_label": "RC_Lrs",
+      "source_rms": 0.000750583156920205,
+      "decoded_rms": 0.0007498605703614517,
+      "decoded_peak": 0.0047743297182023525,
+      "correlation": 0.9999342089341426,
+      "gain_db": -0.008365935322150748,
+      "snr_db": 38.78170244445013,
+      "best_correlated_source_channel": 6,
+      "silent_at_source": false
+    },
+    {
+      "channel": 7,
+      "object_id": "AO_1001",
+      "name": "SSDX EDT2",
+      "speaker_label": "RC_Rrs",
+      "source_rms": 0.0007632434924503012,
+      "decoded_rms": 0.0007625226524089762,
+      "decoded_peak": 0.0052856942638754845,
+      "correlation": 0.9999366980767423,
+      "gain_db": -0.008207204665773671,
+      "snr_db": 38.94911544168727,
+      "best_correlated_source_channel": 7,
+      "silent_at_source": false
+    },
+    {
+      "channel": 8,
+      "object_id": "AO_1001",
+      "name": "SSDX EDT2",
+      "speaker_label": "RC_Lts",
+      "source_rms": 0.008527352462740737,
+      "decoded_rms": 0.008526696793115745,
+      "decoded_peak": 0.03722618892788887,
+      "correlation": 0.9999961828165135,
+      "gain_db": -0.0006678852534167876,
+      "snr_db": 51.169241494729896,
+      "best_correlated_source_channel": 8,
+      "silent_at_source": false
+    },
+    {
+      "channel": 9,
+      "object_id": "AO_1001",
+      "name": "SSDX EDT2",
+      "speaker_label": "RC_Rts",
+      "source_rms": 0.007172866989500283,
+      "decoded_rms": 0.007172145466849428,
+      "decoded_peak": 0.031331416219472885,
+      "correlation": 0.9999952481683829,
+      "gain_db": -0.0008737623813226555,
+      "snr_db": 50.21690462432582,
+      "best_correlated_source_channel": 9,
+      "silent_at_source": false
+    },
+    {
+      "channel": 10,
+      "object_id": "AO_100B",
+      "name": "VOCAL ESS OBJ L",
+      "speaker_label": null,
+      "source_rms": 0.04386974284598153,
+      "decoded_rms": 0.0438651352068309,
+      "decoded_peak": 0.26262205839157104,
+      "correlation": 0.9999951729122467,
+      "gain_db": -0.0009123269121571479,
+      "snr_db": 50.148343941285,
+      "best_correlated_source_channel": 10,
+      "silent_at_source": false
+    },
+    {
+      "channel": 11,
+      "object_id": "AO_100C",
+      "name": "VOCAL ESS OBJ R",
+      "speaker_label": null,
+      "source_rms": 0.04134301604405881,
+      "decoded_rms": 0.041338640104667895,
+      "decoded_peak": 0.2565545439720154,
+      "correlation": 0.999995105902407,
+      "gain_db": -0.0009194040956181837,
+      "snr_db": 50.088464979582184,
+      "best_correlated_source_channel": 11,
+      "silent_at_source": false
+    },
+    {
+      "channel": 12,
+      "object_id": "AO_100D",
+      "name": "BV OBJ L",
+      "speaker_label": null,
+      "source_rms": 0.009277667808626898,
+      "decoded_rms": 0.009276166684046011,
+      "decoded_peak": 0.12205769121646881,
+      "correlation": 0.9999947906161357,
+      "gain_db": -0.001405488711906,
+      "snr_db": 49.811638639066175,
+      "best_correlated_source_channel": 12,
+      "silent_at_source": false
+    },
+    {
+      "channel": 13,
+      "object_id": "AO_100E",
+      "name": "BV OBJ R",
+      "speaker_label": null,
+      "source_rms": 0.008231355502085834,
+      "decoded_rms": 0.00823020540291799,
+      "decoded_peak": 0.1054130494594574,
+      "correlation": 0.9999949558067635,
+      "gain_db": -0.001213692251740662,
+      "snr_db": 49.953992614615984,
+      "best_correlated_source_channel": 13,
+      "silent_at_source": false
+    },
+    {
+      "channel": 14,
+      "object_id": "AO_100F",
+      "name": "BV OBJTOP L",
+      "speaker_label": null,
+      "source_rms": 0.012230347579982325,
+      "decoded_rms": 0.012229273953285364,
+      "decoded_peak": 0.16120535135269165,
+      "correlation": 0.999994898523437,
+      "gain_db": -0.0007625140884201483,
+      "snr_db": 49.90984321104594,
+      "best_correlated_source_channel": 14,
+      "silent_at_source": false
+    },
+    {
+      "channel": 15,
+      "object_id": "AO_1010",
+      "name": "BV OBJTOP R",
+      "speaker_label": null,
+      "source_rms": 0.010851039451359809,
+      "decoded_rms": 0.010849928185881591,
+      "decoded_peak": 0.13905911147594452,
+      "correlation": 0.9999948939348806,
+      "gain_db": -0.0008895759370895549,
+      "snr_db": 49.904822921876146,
+      "best_correlated_source_channel": 15,
+      "silent_at_source": false
+    },
+    {
+      "channel": 16,
+      "object_id": "AO_1011",
+      "name": "BV FRONT OBJ L",
+      "speaker_label": null,
+      "source_rms": 0.005690465352694685,
+      "decoded_rms": 0.0056898271260409855,
+      "decoded_peak": 0.07481438666582108,
+      "correlation": 0.9999944140214532,
+      "gain_db": -0.000974239685714352,
+      "snr_db": 49.51430674189777,
+      "best_correlated_source_channel": 16,
+      "silent_at_source": false
+    },
+    {
+      "channel": 17,
+      "object_id": "AO_1012",
+      "name": "BV FRONT OBJ R",
+      "speaker_label": null,
+      "source_rms": 0.005223536831386881,
+      "decoded_rms": 0.005222942779368233,
+      "decoded_peak": 0.06974915415048599,
+      "correlation": 0.9999948124028661,
+      "gain_db": -0.0009878677738489286,
+      "snr_db": 49.835120466917346,
+      "best_correlated_source_channel": 17,
+      "silent_at_source": false
+    },
+    {
+      "channel": 18,
+      "object_id": "AO_1013",
+      "name": "Guitar OVERDRIVEN L",
+      "speaker_label": null,
+      "source_rms": 0.02380901123423228,
+      "decoded_rms": 0.023793917809250612,
+      "decoded_peak": 0.14049680531024933,
+      "correlation": 0.9999634609184783,
+      "gain_db": -0.005508057200628339,
+      "snr_db": 41.341045136315124,
+      "best_correlated_source_channel": 18,
+      "silent_at_source": false
+    },
+    {
+      "channel": 19,
+      "object_id": "AO_1014",
+      "name": "Guitar OVERDRIVEN R",
+      "speaker_label": null,
+      "source_rms": 0.024019837080515402,
+      "decoded_rms": 0.024005114635581144,
+      "decoded_peak": 0.13914968073368073,
+      "correlation": 0.9999645161672024,
+      "gain_db": -0.005325462341463113,
+      "snr_db": 41.469113905837446,
+      "best_correlated_source_channel": 19,
+      "silent_at_source": false
+    },
+    {
+      "channel": 20,
+      "object_id": "AO_1015",
+      "name": "GTR ESS OBJ L",
+      "speaker_label": null,
+      "source_rms": 0.030119618755576855,
+      "decoded_rms": 0.030100757234440563,
+      "decoded_peak": 0.1895235776901245,
+      "correlation": 0.9999636827193824,
+      "gain_db": -0.005440985502322134,
+      "snr_db": 41.36788833480232,
+      "best_correlated_source_channel": 20,
+      "silent_at_source": false
+    },
+    {
+      "channel": 21,
+      "object_id": "AO_1016",
+      "name": "GTR ESS OBJ R",
+      "speaker_label": null,
+      "source_rms": 0.030491580051885545,
+      "decoded_rms": 0.030472692847663053,
+      "decoded_peak": 0.18610772490501404,
+      "correlation": 0.9999642676080668,
+      "gain_db": -0.005381912024674388,
+      "snr_db": 41.43850137372921,
+      "best_correlated_source_channel": 21,
+      "silent_at_source": false
+    },
+    {
+      "channel": 22,
+      "object_id": "AO_1017",
+      "name": "GTR ESS OBJ BACK L",
+      "speaker_label": null,
+      "source_rms": 0.009618557771425904,
+      "decoded_rms": 0.009612678948013256,
+      "decoded_peak": 0.05766698345541954,
+      "correlation": 0.999965262567899,
+      "gain_db": -0.005310403454488169,
+      "snr_db": 41.56107484390441,
+      "best_correlated_source_channel": 22,
+      "silent_at_source": false
+    },
+    {
+      "channel": 23,
+      "object_id": "AO_1018",
+      "name": "GTR ESS OBJ BACK R",
+      "speaker_label": null,
+      "source_rms": 0.009927100300740682,
+      "decoded_rms": 0.009921456099592827,
+      "decoded_peak": 0.05183359980583191,
+      "correlation": 0.9999669839780286,
+      "gain_db": -0.004939896745932865,
+      "snr_db": 41.78370108947675,
+      "best_correlated_source_channel": 23,
+      "silent_at_source": false
+    },
+    {
+      "channel": 24,
+      "object_id": "AO_1019",
+      "name": "GTR ESSTOP OBJ L",
+      "speaker_label": null,
+      "source_rms": 0.007640293513827001,
+      "decoded_rms": 0.007640210280932486,
+      "decoded_peak": 0.0458698570728302,
+      "correlation": 0.9999999904934934,
+      "gain_db": -9.462407074194059e-05,
+      "snr_db": 77.182526011043,
+      "best_correlated_source_channel": 24,
+      "silent_at_source": false
+    },
+    {
+      "channel": 25,
+      "object_id": "AO_101A",
+      "name": "GTR ESSTOP OBJ R",
+      "speaker_label": null,
+      "source_rms": 0.007885377629238483,
+      "decoded_rms": 0.007885293949358912,
+      "decoded_peak": 0.041206829249858856,
+      "correlation": 0.9999999908560063,
+      "gain_db": -9.217542769310662e-05,
+      "snr_db": 77.35173807445035,
+      "best_correlated_source_channel": 25,
+      "silent_at_source": false
+    },
+    {
+      "channel": 26,
+      "object_id": "AO_101B",
+      "name": "Harmonic L",
+      "speaker_label": null,
+      "source_rms": 0.0034443552098879808,
+      "decoded_rms": 0.003444342790087794,
+      "decoded_peak": 0.0789828896522522,
+      "correlation": 0.9999999961605309,
+      "gain_db": -3.132000089084372e-05,
+      "snr_db": 81.13968569237818,
+      "best_correlated_source_channel": 26,
+      "silent_at_source": false
+    },
+    {
+      "channel": 27,
+      "object_id": "AO_101C",
+      "name": "Harmonic R",
+      "speaker_label": null,
+      "source_rms": 0.0034327759969977785,
+      "decoded_rms": 0.0034327744705541573,
+      "decoded_peak": 0.08789500594139099,
+      "correlation": 0.999999996182744,
+      "gain_db": -3.862332931289047e-06,
+      "snr_db": 81.17209886544863,
+      "best_correlated_source_channel": 27,
+      "silent_at_source": false
+    },
+    {
+      "channel": 28,
+      "object_id": "AO_101D",
+      "name": "Harmonic OBJ BACK L",
+      "speaker_label": null,
+      "source_rms": 0.0010737652355152826,
+      "decoded_rms": 0.0010737615586553376,
+      "decoded_peak": 0.02145450934767723,
+      "correlation": 0.9999999951445422,
+      "gain_db": -2.9742864939453137e-05,
+      "snr_db": 80.12219658414878,
+      "best_correlated_source_channel": 28,
+      "silent_at_source": false
+    },
+    {
+      "channel": 29,
+      "object_id": "AO_101E",
+      "name": "Harmonic OBJ BACK R",
+      "speaker_label": null,
+      "source_rms": 0.0010725198261809527,
+      "decoded_rms": 0.00107251460029065,
+      "decoded_peak": 0.023862218484282494,
+      "correlation": 0.9999999952880696,
+      "gain_db": -4.2322403659358074e-05,
+      "snr_db": 80.2468287852814,
+      "best_correlated_source_channel": 29,
+      "silent_at_source": false
+    },
+    {
+      "channel": 30,
+      "object_id": "AO_101F",
+      "name": "Harmonic Top L",
+      "speaker_label": null,
+      "source_rms": 0.0013210196460836745,
+      "decoded_rms": 0.0013210134429596167,
+      "decoded_peak": 0.02639562077820301,
+      "correlation": 0.9999999954872559,
+      "gain_db": -4.078650733180795e-05,
+      "snr_db": 80.43474437850227,
+      "best_correlated_source_channel": 30,
+      "silent_at_source": false
+    },
+    {
+      "channel": 31,
+      "object_id": "AO_1020",
+      "name": "Harmonic Top R",
+      "speaker_label": null,
+      "source_rms": 0.001319487382463609,
+      "decoded_rms": 0.0013194136904414093,
+      "decoded_peak": 0.029370142146945,
+      "correlation": 0.9999956359830697,
+      "gain_db": -0.000485111608594177,
+      "snr_db": 50.589526522770456,
+      "best_correlated_source_channel": 31,
+      "silent_at_source": false
+    },
+    {
+      "channel": 32,
+      "object_id": "AO_1021",
+      "name": "DRUMS L",
+      "speaker_label": null,
+      "source_rms": 0.03829298023000809,
+      "decoded_rms": 0.038273051574715146,
+      "decoded_peak": 0.3177875876426697,
+      "correlation": 0.9999683266869476,
+      "gain_db": -0.004521537823978633,
+      "snr_db": 41.96648725673774,
+      "best_correlated_source_channel": 32,
+      "silent_at_source": false
+    },
+    {
+      "channel": 33,
+      "object_id": "AO_1022",
+      "name": "DRUMS R",
+      "speaker_label": null,
+      "source_rms": 0.03679432576752226,
+      "decoded_rms": 0.03677410837411142,
+      "decoded_peak": 0.2972070276737213,
+      "correlation": 0.9999648931276044,
+      "gain_db": -0.004773951067611866,
+      "snr_db": 41.5195208419002,
+      "best_correlated_source_channel": 33,
+      "silent_at_source": false
+    },
+    {
+      "channel": 34,
+      "object_id": "AO_1023",
+      "name": "Crash OBJ L",
+      "speaker_label": null,
+      "source_rms": 0.002666991928366997,
+      "decoded_rms": 0.002660014310507509,
+      "decoded_peak": 0.04597463458776474,
+      "correlation": 0.9998562804340173,
+      "gain_db": -0.02275456442435559,
+      "snr_db": 35.323444439484796,
+      "best_correlated_source_channel": 34,
+      "silent_at_source": false
+    },
+    {
+      "channel": 35,
+      "object_id": "AO_1024",
+      "name": "Crash OBJ R",
+      "speaker_label": null,
+      "source_rms": 0.0023096448309439196,
+      "decoded_rms": 0.002303541928868804,
+      "decoded_peak": 0.052762437611818314,
+      "correlation": 0.9998482344544782,
+      "gain_db": -0.022981581965207228,
+      "snr_db": 35.0904323612539,
+      "best_correlated_source_channel": 35,
+      "silent_at_source": false
+    },
+    {
+      "channel": 36,
+      "object_id": "AO_1025",
+      "name": "Hh OBJ L",
+      "speaker_label": null,
+      "source_rms": 0.0015968403465108421,
+      "decoded_rms": 0.0015912279790841685,
+      "decoded_peak": 0.028859399259090424,
+      "correlation": 0.9997533950205842,
+      "gain_db": -0.030581812845079652,
+      "snr_db": 32.977164970696144,
+      "best_correlated_source_channel": 36,
+      "silent_at_source": false
+    },
+    {
+      "channel": 37,
+      "object_id": "AO_1026",
+      "name": "Hh OBJ R",
+      "speaker_label": null,
+      "source_rms": 0.0018110019858174526,
+      "decoded_rms": 0.0018043059031354184,
+      "decoded_peak": 0.02963191084563732,
+      "correlation": 0.9997338653536004,
+      "gain_db": -0.032175130570754065,
+      "snr_db": 32.64423162769565,
+      "best_correlated_source_channel": 37,
+      "silent_at_source": false
+    },
+    {
+      "channel": 38,
+      "object_id": "AO_1027",
+      "name": "Ki OBJ L",
+      "speaker_label": null,
+      "source_rms": 0.012554133841609538,
+      "decoded_rms": 0.012553771829588682,
+      "decoded_peak": 0.11003514379262924,
+      "correlation": 0.9999994034939358,
+      "gain_db": -0.0002504706288285689,
+      "snr_db": 59.23065068226742,
+      "best_correlated_source_channel": 38,
+      "silent_at_source": false
+    },
+    {
+      "channel": 39,
+      "object_id": "AO_1028",
+      "name": "Ki OBJ R",
+      "speaker_label": null,
+      "source_rms": 0.012371050360756954,
+      "decoded_rms": 0.012370916905491434,
+      "decoded_peak": 0.10974163562059402,
+      "correlation": 0.9999993698281907,
+      "gain_db": -9.370133712178585e-05,
+      "snr_db": 58.99475625834555,
+      "best_correlated_source_channel": 39,
+      "silent_at_source": false
+    },
+    {
+      "channel": 40,
+      "object_id": "AO_1029",
+      "name": "Ride OBJ L",
+      "speaker_label": null,
+      "source_rms": 0.0002669732080636678,
+      "decoded_rms": 0.00026577792606167485,
+      "decoded_peak": 0.011726995930075645,
+      "correlation": 0.9995761421273991,
+      "gain_db": -0.03897544016707082,
+      "snr_db": 30.635036724277917,
+      "best_correlated_source_channel": 40,
+      "silent_at_source": false
+    },
+    {
+      "channel": 41,
+      "object_id": "AO_102A",
+      "name": "Ride OBJ R",
+      "speaker_label": null,
+      "source_rms": 0.00023247967750430026,
+      "decoded_rms": 0.00023145712230000838,
+      "decoded_peak": 0.008325868286192417,
+      "correlation": 0.9995776906523983,
+      "gain_db": -0.038288905038962234,
+      "snr_db": 30.6537521048526,
+      "best_correlated_source_channel": 41,
+      "silent_at_source": false
+    },
+    {
+      "channel": 42,
+      "object_id": "AO_102B",
+      "name": "Sn OBJ L",
+      "speaker_label": null,
+      "source_rms": 0.028979731888026036,
+      "decoded_rms": 0.028957707892994657,
+      "decoded_peak": 0.388980895280838,
+      "correlation": 0.9999385498809794,
+      "gain_db": -0.006603605550028107,
+      "snr_db": 39.08739729017328,
+      "best_correlated_source_channel": 42,
+      "silent_at_source": false
+    },
+    {
+      "channel": 43,
+      "object_id": "AO_102C",
+      "name": "Sn OBJ R",
+      "speaker_label": null,
+      "source_rms": 0.028637049166457536,
+      "decoded_rms": 0.028616734344690833,
+      "decoded_peak": 0.37064555287361145,
+      "correlation": 0.9999404871288315,
+      "gain_db": -0.006163865389023677,
+      "snr_db": 39.22833696872495,
+      "best_correlated_source_channel": 43,
+      "silent_at_source": false
+    },
+    {
+      "channel": 44,
+      "object_id": "AO_102D",
+      "name": "T OBJ L",
+      "speaker_label": null,
+      "source_rms": 0.019699618272123576,
+      "decoded_rms": 0.019699212598089533,
+      "decoded_peak": 0.3872382342815399,
+      "correlation": 0.9999982462596202,
+      "gain_db": -0.0001788702766552363,
+      "snr_db": 54.549610664316276,
+      "best_correlated_source_channel": 44,
+      "silent_at_source": false
+    },
+    {
+      "channel": 45,
+      "object_id": "AO_102E",
+      "name": "T OBJ R",
+      "speaker_label": null,
+      "source_rms": 0.017279051527225524,
+      "decoded_rms": 0.017278934877428747,
+      "decoded_peak": 0.38347044587135315,
+      "correlation": 0.9999999747001049,
+      "gain_db": -5.863809593739165e-05,
+      "snr_db": 72.95458787288607,
+      "best_correlated_source_channel": 45,
+      "silent_at_source": false
+    },
+    {
+      "channel": 46,
+      "object_id": "AO_102F",
+      "name": "Bass L",
+      "speaker_label": null,
+      "source_rms": 0.00794634129020661,
+      "decoded_rms": 0.007946311009221198,
+      "decoded_peak": 0.030178813263773918,
+      "correlation": 0.9999999794179444,
+      "gain_db": -3.309923258563318e-05,
+      "snr_db": 73.85330322135358,
+      "best_correlated_source_channel": 46,
+      "silent_at_source": false
+    },
+    {
+      "channel": 47,
+      "object_id": "AO_1030",
+      "name": "Bass R",
+      "speaker_label": null,
+      "source_rms": 0.00767897603777646,
+      "decoded_rms": 0.007678940880067637,
+      "decoded_peak": 0.029626844450831413,
+      "correlation": 0.9999999796234972,
+      "gain_db": -3.976789044854134e-05,
+      "snr_db": 73.89619626030789,
+      "best_correlated_source_channel": 47,
+      "silent_at_source": false
+    },
+    {
+      "channel": 48,
+      "object_id": "AO_1031",
+      "name": "BASSTONE OBJ L",
+      "speaker_label": null,
+      "source_rms": 0.03163656858971407,
+      "decoded_rms": 0.031636486237942234,
+      "decoded_peak": 0.15719985961914062,
+      "correlation": 0.9999999800016004,
+      "gain_db": -2.260988990189379e-05,
+      "snr_db": 73.97902947502818,
+      "best_correlated_source_channel": 48,
+      "silent_at_source": false
+    },
+    {
+      "channel": 49,
+      "object_id": "AO_1032",
+      "name": "BASSTONE OBJ R",
+      "speaker_label": null,
+      "source_rms": 0.03073900520851883,
+      "decoded_rms": 0.03073890017053676,
+      "decoded_peak": 0.14790335297584534,
+      "correlation": 0.9999999800098862,
+      "gain_db": -2.9680527156008014e-05,
+      "snr_db": 73.98030034271287,
+      "best_correlated_source_channel": 49,
+      "silent_at_source": false
+    }
+  ],
+  "minimum_non_lfe_correlation": 0.9995761421273991,
+  "minimum_non_lfe_snr_db": 30.635036724277917,
+  "lfe": {
+    "channel": 3,
+    "object_id": "AO_1001",
+    "name": "SSDX EDT2",
+    "speaker_label": "RC_LFE",
+    "source_rms": 0.0005048416581541524,
+    "decoded_rms": 0.0005047296240743814,
+    "decoded_peak": 0.002142063109204173,
+    "correlation": 0.9997958169079404,
+    "gain_db": -0.0019277799868470979,
+    "snr_db": 33.88994233584465,
+    "best_correlated_source_channel": 3,
+    "silent_at_source": false
+  },
+  "complete_adm_metadata": false,
+  "omitted_extent": [
+    {
+      "channel": 10,
+      "object_id": "AO_100B",
+      "name": "VOCAL ESS OBJ L",
+      "width": 0.1,
+      "height": 0.1,
+      "depth": 0.1
+    },
+    {
+      "channel": 11,
+      "object_id": "AO_100C",
+      "name": "VOCAL ESS OBJ R",
+      "width": 0.1,
+      "height": 0.1,
+      "depth": 0.1
+    },
+    {
+      "channel": 12,
+      "object_id": "AO_100D",
+      "name": "BV OBJ L",
+      "width": 0.21,
+      "height": 0.21,
+      "depth": 0.21
+    },
+    {
+      "channel": 13,
+      "object_id": "AO_100E",
+      "name": "BV OBJ R",
+      "width": 0.21,
+      "height": 0.21,
+      "depth": 0.21
+    },
+    {
+      "channel": 14,
+      "object_id": "AO_100F",
+      "name": "BV OBJTOP L",
+      "width": 0.2,
+      "height": 0.2,
+      "depth": 0.2
+    },
+    {
+      "channel": 15,
+      "object_id": "AO_1010",
+      "name": "BV OBJTOP R",
+      "width": 0.2,
+      "height": 0.2,
+      "depth": 0.2
+    },
+    {
+      "channel": 16,
+      "object_id": "AO_1011",
+      "name": "BV FRONT OBJ L",
+      "width": 0.11,
+      "height": 0.11,
+      "depth": 0.11
+    },
+    {
+      "channel": 17,
+      "object_id": "AO_1012",
+      "name": "BV FRONT OBJ R",
+      "width": 0.11,
+      "height": 0.11,
+      "depth": 0.11
+    },
+    {
+      "channel": 18,
+      "object_id": "AO_1013",
+      "name": "Guitar OVERDRIVEN L",
+      "width": 0.2,
+      "height": 0.2,
+      "depth": 0.2
+    },
+    {
+      "channel": 19,
+      "object_id": "AO_1014",
+      "name": "Guitar OVERDRIVEN R",
+      "width": 0.2,
+      "height": 0.2,
+      "depth": 0.2
+    },
+    {
+      "channel": 20,
+      "object_id": "AO_1015",
+      "name": "GTR ESS OBJ L",
+      "width": 0.15,
+      "height": 0.15,
+      "depth": 0.15
+    },
+    {
+      "channel": 21,
+      "object_id": "AO_1016",
+      "name": "GTR ESS OBJ R",
+      "width": 0.15,
+      "height": 0.15,
+      "depth": 0.15
+    },
+    {
+      "channel": 22,
+      "object_id": "AO_1017",
+      "name": "GTR ESS OBJ BACK L",
+      "width": 0.18,
+      "height": 0.18,
+      "depth": 0.18
+    },
+    {
+      "channel": 23,
+      "object_id": "AO_1018",
+      "name": "GTR ESS OBJ BACK R",
+      "width": 0.18,
+      "height": 0.18,
+      "depth": 0.18
+    },
+    {
+      "channel": 24,
+      "object_id": "AO_1019",
+      "name": "GTR ESSTOP OBJ L",
+      "width": 0.22,
+      "height": 0.22,
+      "depth": 0.22
+    },
+    {
+      "channel": 25,
+      "object_id": "AO_101A",
+      "name": "GTR ESSTOP OBJ R",
+      "width": 0.22,
+      "height": 0.22,
+      "depth": 0.22
+    },
+    {
+      "channel": 26,
+      "object_id": "AO_101B",
+      "name": "Harmonic L",
+      "width": 0.29,
+      "height": 0.29,
+      "depth": 0.29
+    },
+    {
+      "channel": 27,
+      "object_id": "AO_101C",
+      "name": "Harmonic R",
+      "width": 0.29,
+      "height": 0.29,
+      "depth": 0.29
+    },
+    {
+      "channel": 28,
+      "object_id": "AO_101D",
+      "name": "Harmonic OBJ BACK L",
+      "width": 0.24,
+      "height": 0.24,
+      "depth": 0.24
+    },
+    {
+      "channel": 29,
+      "object_id": "AO_101E",
+      "name": "Harmonic OBJ BACK R",
+      "width": 0.24,
+      "height": 0.24,
+      "depth": 0.24
+    },
+    {
+      "channel": 30,
+      "object_id": "AO_101F",
+      "name": "Harmonic Top L",
+      "width": 0.32,
+      "height": 0.32,
+      "depth": 0.32
+    },
+    {
+      "channel": 31,
+      "object_id": "AO_1020",
+      "name": "Harmonic Top R",
+      "width": 0.32,
+      "height": 0.32,
+      "depth": 0.32
+    },
+    {
+      "channel": 32,
+      "object_id": "AO_1021",
+      "name": "DRUMS L",
+      "width": 0.19,
+      "height": 0.19,
+      "depth": 0.19
+    },
+    {
+      "channel": 33,
+      "object_id": "AO_1022",
+      "name": "DRUMS R",
+      "width": 0.19,
+      "height": 0.19,
+      "depth": 0.19
+    },
+    {
+      "channel": 42,
+      "object_id": "AO_102B",
+      "name": "Sn OBJ L",
+      "width": 0.21,
+      "height": 0.21,
+      "depth": 0.21
+    },
+    {
+      "channel": 43,
+      "object_id": "AO_102C",
+      "name": "Sn OBJ R",
+      "width": 0.21,
+      "height": 0.21,
+      "depth": 0.21
+    },
+    {
+      "channel": 46,
+      "object_id": "AO_102F",
+      "name": "Bass L",
+      "width": 0.26,
+      "height": 0.26,
+      "depth": 0.26
+    },
+    {
+      "channel": 47,
+      "object_id": "AO_1030",
+      "name": "Bass R",
+      "width": 0.26,
+      "height": 0.26,
+      "depth": 0.26
+    },
+    {
+      "channel": 48,
+      "object_id": "AO_1031",
+      "name": "BASSTONE OBJ L",
+      "width": 0.69,
+      "height": 0.69,
+      "depth": 0.69
+    },
+    {
+      "channel": 49,
+      "object_id": "AO_1032",
+      "name": "BASSTONE OBJ R",
+      "width": 0.69,
+      "height": 0.69,
+      "depth": 0.69
+    }
+  ],
+  "discarded_diffuse": [
+    {
+      "channel": 10,
+      "object_id": "AO_100B",
+      "name": "VOCAL ESS OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 11,
+      "object_id": "AO_100C",
+      "name": "VOCAL ESS OBJ R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 12,
+      "object_id": "AO_100D",
+      "name": "BV OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 13,
+      "object_id": "AO_100E",
+      "name": "BV OBJ R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 14,
+      "object_id": "AO_100F",
+      "name": "BV OBJTOP L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 15,
+      "object_id": "AO_1010",
+      "name": "BV OBJTOP R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 16,
+      "object_id": "AO_1011",
+      "name": "BV FRONT OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 17,
+      "object_id": "AO_1012",
+      "name": "BV FRONT OBJ R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 18,
+      "object_id": "AO_1013",
+      "name": "Guitar OVERDRIVEN L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 19,
+      "object_id": "AO_1014",
+      "name": "Guitar OVERDRIVEN R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 20,
+      "object_id": "AO_1015",
+      "name": "GTR ESS OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 21,
+      "object_id": "AO_1016",
+      "name": "GTR ESS OBJ R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 22,
+      "object_id": "AO_1017",
+      "name": "GTR ESS OBJ BACK L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 23,
+      "object_id": "AO_1018",
+      "name": "GTR ESS OBJ BACK R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 24,
+      "object_id": "AO_1019",
+      "name": "GTR ESSTOP OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 25,
+      "object_id": "AO_101A",
+      "name": "GTR ESSTOP OBJ R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 26,
+      "object_id": "AO_101B",
+      "name": "Harmonic L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 27,
+      "object_id": "AO_101C",
+      "name": "Harmonic R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 28,
+      "object_id": "AO_101D",
+      "name": "Harmonic OBJ BACK L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 29,
+      "object_id": "AO_101E",
+      "name": "Harmonic OBJ BACK R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 30,
+      "object_id": "AO_101F",
+      "name": "Harmonic Top L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 31,
+      "object_id": "AO_1020",
+      "name": "Harmonic Top R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 32,
+      "object_id": "AO_1021",
+      "name": "DRUMS L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 33,
+      "object_id": "AO_1022",
+      "name": "DRUMS R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 42,
+      "object_id": "AO_102B",
+      "name": "Sn OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 43,
+      "object_id": "AO_102C",
+      "name": "Sn OBJ R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 46,
+      "object_id": "AO_102F",
+      "name": "Bass L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 47,
+      "object_id": "AO_1030",
+      "name": "Bass R",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 48,
+      "object_id": "AO_1031",
+      "name": "BASSTONE OBJ L",
+      "diffuse": 1.0
+    },
+    {
+      "channel": 49,
+      "object_id": "AO_1032",
+      "name": "BASSTONE OBJ R",
+      "diffuse": 1.0
+    }
+  ],
+  "silent_source_channels": [],
+  "silent_channel_rms_tolerance": 2.0542694430840733e-05,
+  "note": "Audio fidelity/routing check only; no system spatial-playback equivalence claim."
+}

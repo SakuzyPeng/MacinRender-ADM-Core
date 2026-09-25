@@ -1,0 +1,183 @@
+{
+  "all_checks_passed": true,
+  "default_decoder": true,
+  "encoder_profile_table_modified": false,
+  "successful_cases": [
+    "global-0",
+    "global-1",
+    "global-6000",
+    "global-16000",
+    "global-31999",
+    "global-32000",
+    "global-48000",
+    "global-64000",
+    "global-128000",
+    "global-160000",
+    "global-160001",
+    "global-192000",
+    "global-256000",
+    "global-320000",
+    "global-512000",
+    "global-1000000",
+    "global-2000000",
+    "global-4294967295",
+    "object-0",
+    "object-6000",
+    "object-16000",
+    "object-31999",
+    "object-32000",
+    "object-48000",
+    "object-64000",
+    "object-128000",
+    "object-160000",
+    "object-160001",
+    "object-192000",
+    "object-256000",
+    "object-320000",
+    "object-512000",
+    "object-1000000",
+    "lfe-4000",
+    "lfe-7999",
+    "lfe-8000",
+    "lfe-12000",
+    "lfe-16000",
+    "lfe-24000",
+    "lfe-31999",
+    "lfe-32000",
+    "lfe-64000",
+    "lfe-128000",
+    "lfe-256000",
+    "mode-0",
+    "mode-1",
+    "mode-2",
+    "mode-3",
+    "vbr-quality-0",
+    "vbr-quality-32",
+    "vbr-quality-64",
+    "vbr-quality-96",
+    "vbr-quality-127",
+    "vbr-quality-128",
+    "noise-global32000-component0-mode1",
+    "noise-global128000-component0-mode1",
+    "noise-global256000-component0-mode1",
+    "noise-global128000-component64000-mode1",
+    "noise-global128000-component128000-mode1",
+    "noise-global128000-component256000-mode1",
+    "noise-global128000-component128000-mode0",
+    "noise-global128000-component128000-mode2",
+    "noise-global128000-component128000-mode3",
+    "lfe-2000",
+    "lfe-3000",
+    "mixed-fixed-global-1",
+    "mixed-fixed-global-64000",
+    "mixed-fixed-global-1000000",
+    "objects2-component-128000",
+    "objects2-component-256000",
+    "mixed-7obj-lfe-256k",
+    "bed12-object-128k"
+  ],
+  "expected_failures": [
+    {
+      "case": "object-1",
+      "failure": "produce",
+      "status": -50
+    },
+    {
+      "case": "object-2000000",
+      "failure": "30-second timeout during first output production"
+    },
+    {
+      "case": "object-4294967295",
+      "failure": "30-second timeout during first output production"
+    },
+    {
+      "case": "lfe-0",
+      "failure": "produce",
+      "status": -50
+    },
+    {
+      "case": "lfe-1",
+      "failure": "produce",
+      "status": -50
+    },
+    {
+      "case": "mode-4",
+      "failure": "initialize",
+      "status": 560226676
+    },
+    {
+      "case": "lfe-100",
+      "failure": "produce",
+      "status": -50
+    },
+    {
+      "case": "object-100",
+      "failure": "produce",
+      "status": -50
+    },
+    {
+      "case": "lfe-500",
+      "failure": "produce",
+      "status": -50
+    },
+    {
+      "case": "object-500",
+      "failure": "produce",
+      "status": -50
+    },
+    {
+      "case": "lfe-1000",
+      "failure": "produce",
+      "status": -50
+    },
+    {
+      "case": "object-1000",
+      "failure": "produce",
+      "status": -50
+    },
+    {
+      "case": "object-2000",
+      "failure": "produce",
+      "status": -50
+    },
+    {
+      "case": "object-3000",
+      "failure": "produce",
+      "status": -50
+    }
+  ],
+  "positions": [
+    {
+      "case": "object-6000",
+      "position_rows": 47,
+      "maximum_azimuth_error_degrees": 0.234375
+    },
+    {
+      "case": "mixed-7obj-lfe-256k",
+      "position_rows": 329,
+      "maximum_azimuth_error_degrees": 0.10044642857144481
+    }
+  ],
+  "containers": [
+    {
+      "container": "caf",
+      "returncode": 0,
+      ".packets": true,
+      ".cookie": true,
+      ".timing.json": true
+    },
+    {
+      "container": "mp4",
+      "returncode": 0,
+      ".packets": true,
+      ".cookie": true,
+      ".timing.json": true
+    }
+  ],
+  "not_claimed": [
+    "universal bitrate limits",
+    "music quality recommendations",
+    "lossless encoding",
+    "strict container bandwidth ceiling"
+  ]
+}

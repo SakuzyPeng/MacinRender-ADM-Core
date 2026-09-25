@@ -1,0 +1,10 @@
+{
+  "date_utc": "2026-09-25T08:40:53.939933+00:00",
+  "scope": "repository-local generated artifacts; original user media outside repository not touched",
+  "removed": [
+    "local/apac-object-experiments",
+    ".playwright-mcp"
+  ],
+  "retained_structured_evidence": "docs/architecture/evidence/apac_objects",
+  "audio_files_committed": false
+}

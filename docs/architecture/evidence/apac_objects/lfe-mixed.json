@@ -1,0 +1,311 @@
+{
+  "all_checks_passed": true,
+  "encoder_policy": "default profile ceilings; private ASC settings",
+  "decoder_policy": "system default capabilities and configuration",
+  "verified_cases": [
+    {
+      "case": "mixed-left",
+      "objects": 1,
+      "audio_channels": 3,
+      "valid_frames": 48000,
+      "native_layout_labels": [
+        3,
+        4,
+        262144
+      ],
+      "dedicated_lfe_codec_observed": true,
+      "object_position_rows": 47,
+      "max_azimuth_error_degrees": 0.234375,
+      "minimum_object_tone_energy_fraction": 0.9999011303016688,
+      "probe_60_hz_amplitude": 0.05000300432341915,
+      "probe_1000_hz_amplitude": 1.8698435689352368e-06,
+      "probe_60_hz_gain_db": 0.0005218887540454493,
+      "probe_1000_hz_gain_db": -88.54329458689902,
+      "passed": true
+    },
+    {
+      "case": "mixed-right",
+      "objects": 1,
+      "audio_channels": 3,
+      "valid_frames": 48000,
+      "native_layout_labels": [
+        3,
+        4,
+        262144
+      ],
+      "dedicated_lfe_codec_observed": true,
+      "object_position_rows": 47,
+      "max_azimuth_error_degrees": 0.234375,
+      "minimum_object_tone_energy_fraction": 0.9999011302988355,
+      "probe_60_hz_amplitude": 0.05000300432341915,
+      "probe_1000_hz_amplitude": 1.8698435689352368e-06,
+      "probe_60_hz_gain_db": 0.0005218887540454493,
+      "probe_1000_hz_gain_db": -88.54329458689902,
+      "passed": true
+    },
+    {
+      "case": "mixed-moving",
+      "objects": 1,
+      "audio_channels": 3,
+      "valid_frames": 144000,
+      "native_layout_labels": [
+        3,
+        4,
+        262144
+      ],
+      "dedicated_lfe_codec_observed": true,
+      "object_position_rows": 141,
+      "max_azimuth_error_degrees": 0.3474999999999966,
+      "minimum_object_tone_energy_fraction": 0.9999436039999178,
+      "probe_60_hz_amplitude": 0.05000300543496449,
+      "probe_1000_hz_amplitude": 1.869935289493888e-06,
+      "probe_60_hz_gain_db": 0.0005220818376454193,
+      "probe_1000_hz_gain_db": -88.54286853248226,
+      "passed": true
+    },
+    {
+      "case": "mixed-control",
+      "objects": 1,
+      "audio_channels": 3,
+      "valid_frames": 48000,
+      "native_layout_labels": [
+        3,
+        2,
+        262144
+      ],
+      "dedicated_lfe_codec_observed": false,
+      "object_position_rows": 47,
+      "max_azimuth_error_degrees": 0.234375,
+      "minimum_object_tone_energy_fraction": 0.9999011302886003,
+      "probe_60_hz_amplitude": 0.0499904550205512,
+      "probe_1000_hz_amplitude": 0.04999168711804396,
+      "probe_60_hz_gain_db": -0.0016582910503740078,
+      "probe_1000_hz_gain_db": -0.0014442155641506596,
+      "passed": true
+    },
+    {
+      "case": "mixed-24ch",
+      "objects": 22,
+      "audio_channels": 24,
+      "valid_frames": 48000,
+      "native_layout_labels": [
+        3,
+        4,
+        262144,
+        262145,
+        262146,
+        262147,
+        262148,
+        262149,
+        262150,
+        262144,
+        262145,
+        262146,
+        262147,
+        262148,
+        262149,
+        262150,
+        262144,
+        262145,
+        262146,
+        262147,
+        262148,
+        262149,
+        262150,
+        262144
+      ],
+      "dedicated_lfe_codec_observed": true,
+      "object_position_rows": 1034,
+      "max_azimuth_error_degrees": 0.3409090909090935,
+      "minimum_object_tone_energy_fraction": 0.9997652747338832,
+      "probe_60_hz_amplitude": 0.05000300432341915,
+      "probe_1000_hz_amplitude": 1.8698435689352368e-06,
+      "probe_60_hz_gain_db": 0.0005218887540454493,
+      "probe_1000_hz_gain_db": -88.54329458689902,
+      "passed": true
+    },
+    {
+      "case": "mixed-lfe-explicit",
+      "objects": 1,
+      "audio_channels": 2,
+      "valid_frames": 48000,
+      "native_layout_labels": [
+        4,
+        262144
+      ],
+      "dedicated_lfe_codec_observed": true,
+      "object_position_rows": 47,
+      "max_azimuth_error_degrees": 0.234375,
+      "minimum_object_tone_energy_fraction": 0.9999999863793996,
+      "probe_60_hz_amplitude": 0.0495022774206782,
+      "probe_1000_hz_amplitude": 1.5054866508810175e-06,
+      "probe_60_hz_gain_db": -0.08689649250097325,
+      "probe_1000_hz_gain_db": -90.42586190700705,
+      "passed": true
+    },
+    {
+      "case": "mixed-lfe-moving-explicit",
+      "objects": 1,
+      "audio_channels": 2,
+      "valid_frames": 144000,
+      "native_layout_labels": [
+        4,
+        262144
+      ],
+      "dedicated_lfe_codec_observed": true,
+      "object_position_rows": 141,
+      "max_azimuth_error_degrees": 0.3474999999999966,
+      "minimum_object_tone_energy_fraction": 0.999999990830848,
+      "probe_60_hz_amplitude": 0.0495022774206782,
+      "probe_1000_hz_amplitude": 1.5054866508810175e-06,
+      "probe_60_hz_gain_db": -0.08689649250097325,
+      "probe_1000_hz_gain_db": -90.42586190700705,
+      "passed": true
+    },
+    {
+      "case": "mixed-23obj-lfe",
+      "objects": 23,
+      "audio_channels": 24,
+      "valid_frames": 48000,
+      "native_layout_labels": [
+        4,
+        262144,
+        262145,
+        262146,
+        262147,
+        262148,
+        262149,
+        262150,
+        262144,
+        262145,
+        262146,
+        262147,
+        262148,
+        262149,
+        262150,
+        262144,
+        262145,
+        262146,
+        262147,
+        262148,
+        262149,
+        262150,
+        262144,
+        262145
+      ],
+      "dedicated_lfe_codec_observed": true,
+      "object_position_rows": 1081,
+      "max_azimuth_error_degrees": 0.34646739130437254,
+      "minimum_object_tone_energy_fraction": 0.9999984771935275,
+      "probe_60_hz_amplitude": 0.0495022774206782,
+      "probe_1000_hz_amplitude": 1.5054866508810175e-06,
+      "probe_60_hz_gain_db": -0.08689649250097325,
+      "probe_1000_hz_gain_db": -90.42586190700705,
+      "passed": true
+    }
+  ],
+  "containers": [
+    {
+      "case": "mixed-left",
+      "container": "caf",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "timing_matches": true,
+      "magic_cookie_identical": true
+    },
+    {
+      "case": "mixed-left",
+      "container": "mp4",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "timing_matches": true,
+      "magic_cookie_identical": true
+    },
+    {
+      "case": "mixed-moving",
+      "container": "caf",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "timing_matches": true,
+      "magic_cookie_identical": true
+    },
+    {
+      "case": "mixed-moving",
+      "container": "mp4",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "timing_matches": true,
+      "magic_cookie_identical": true
+    },
+    {
+      "case": "mixed-24ch",
+      "container": "caf",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "timing_matches": true,
+      "magic_cookie_identical": true
+    },
+    {
+      "case": "mixed-24ch",
+      "container": "mp4",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "timing_matches": true,
+      "magic_cookie_identical": true
+    },
+    {
+      "case": "mixed-lfe-explicit",
+      "container": "caf",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "case": "mixed-lfe-explicit",
+      "container": "mp4",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "case": "mixed-23obj-lfe",
+      "container": "caf",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "case": "mixed-23obj-lfe",
+      "container": "mp4",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "case": "mixed-lfe-moving-explicit",
+      "container": "caf",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    },
+    {
+      "case": "mixed-lfe-moving-explicit",
+      "container": "mp4",
+      "returncode": 0,
+      "compressed_packets_identical": true,
+      "magic_cookie_identical": true,
+      "timing_matches": true
+    }
+  ],
+  "lfe_only_component": "auto allocation failed; explicit per-component bitrates are verified separately",
+  "not_validated": [
+    "all possible LFE component bitrate choices",
+    "player spatial rendering and LFE calibration",
+    "a user-confirmed 17.1.6 coordinate map"
+  ]
+}

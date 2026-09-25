@@ -1,0 +1,35 @@
+{
+  "native_avplayer": {
+    "input_file": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/apac-object-experiments/tsuioku-12000kbps-no-diffuse/deliverables/Tsuioku_SS2RPV4_7.1.2BED_32Objects_pos-only_12000kbps.mp4",
+    "source_time_range_seconds": [
+      57,
+      63
+    ],
+    "frames_captured_including_output_padding": 295182,
+    "rms": [
+      0.08169182885897433,
+      0.08340723059746509
+    ],
+    "peak": [
+      0.595334529876709,
+      0.5623347759246826
+    ],
+    "continuous_output": true
+  },
+  "quicktime_usb": {
+    "capture_pcm_seconds": 24.144166666666667,
+    "rms": [
+      0.013219731298152309,
+      0.012360044970756816
+    ],
+    "peak": [
+      0.1766589879989624,
+      0.19594085216522217
+    ],
+    "observed_direct_playback": true,
+    "source_time_range": "capture made during later part of normal full-file playback; not precisely aligned",
+    "per_object_isolation_in_this_capture": false
+  },
+  "decoder_modified": false,
+  "quicktime_modified": false
+}

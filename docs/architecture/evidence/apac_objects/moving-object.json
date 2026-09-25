@@ -1,0 +1,61 @@
+{
+  "frames": 152334,
+  "trajectory": [
+    {
+      "capture_seconds": 0.2,
+      "object_amplitude": [
+        0.09625338627345466,
+        0.0426341497488944
+      ],
+      "left_right_db": 7.073168219970246
+    },
+    {
+      "capture_seconds": 0.55,
+      "object_amplitude": [
+        0.0951435039042835,
+        0.03575195810270313
+      ],
+      "left_right_db": 8.5015861736373
+    },
+    {
+      "capture_seconds": 1.0,
+      "object_amplitude": [
+        0.09682395514265685,
+        0.038530113714720725
+      ],
+      "left_right_db": 8.00365056639454
+    },
+    {
+      "capture_seconds": 1.5,
+      "object_amplitude": [
+        0.05884137423606343,
+        0.05853302923672308
+      ],
+      "left_right_db": 0.04563613047793625
+    },
+    {
+      "capture_seconds": 2.0,
+      "object_amplitude": [
+        0.02972051248399482,
+        0.09066345306403732
+      ],
+      "left_right_db": -9.68751923917424
+    },
+    {
+      "capture_seconds": 2.5,
+      "object_amplitude": [
+        0.04296748276722934,
+        0.09245113387704114
+      ],
+      "left_right_db": -6.655446610383247
+    },
+    {
+      "capture_seconds": 2.75,
+      "object_amplitude": [
+        0.04309055699819053,
+        0.0924843976176081
+      ],
+      "left_right_db": -6.633727285697621
+    }
+  ]
+}

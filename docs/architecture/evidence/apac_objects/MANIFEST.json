@@ -1,0 +1,155 @@
+{
+  "scope": "selected structured evidence; no audio or original media",
+  "files": [
+    {
+      "path": "initial-verification.json",
+      "from_historical_local_path": "local/apac-object-experiments/repro/verification.json",
+      "bytes": 15601,
+      "sha256": "70a2d652b596258eb56a80b042f92396bb3c9e068c510241f6ae78a48dbe9783"
+    },
+    {
+      "path": "object-boundaries.json",
+      "from_historical_local_path": "local/apac-object-experiments/boundaries/verification.json",
+      "bytes": 20825,
+      "sha256": "d1d780390efcc35d106440b79b3176ca14c5038c72d5cdbefedf8e724aa5e2bb"
+    },
+    {
+      "path": "lfe-mixed.json",
+      "from_historical_local_path": "local/apac-object-experiments/lfe/verification.json",
+      "bytes": 8635,
+      "sha256": "0c9219fe33e70a252a14959d7683024460a8918b5afe8cadb5f56b8fa829dc4d"
+    },
+    {
+      "path": "mixed-capacity.json",
+      "from_historical_local_path": "local/apac-object-experiments/mixed-capacity/verification.json",
+      "bytes": 15027,
+      "sha256": "a52c9a762d2f9d7e8e4d2aa3c79b574e5aeebd8cdbb5680779c75948ea4c7868"
+    },
+    {
+      "path": "bitrate-verification.json",
+      "from_historical_local_path": "local/apac-object-experiments/bitrates/verification.json",
+      "bytes": 3877,
+      "sha256": "c0c8aa9bc3dc244e0a9b298f8f6205a113d7bd65795618da3a050d9cd5f2eea4"
+    },
+    {
+      "path": "stereo-reader-controls.json",
+      "from_historical_local_path": "local/apac-object-experiments/quicktime-object-playback/controls712/verification.json",
+      "bytes": 6089,
+      "sha256": "89de9cf965c687a55c30e1d82e65469f1ec99a570f391e8ddc689ff183110a4f"
+    },
+    {
+      "path": "usb-playback.json",
+      "from_historical_local_path": "local/apac-object-experiments/playback-chain/usb-airpods/FINAL_VERIFICATION.json",
+      "bytes": 11789,
+      "sha256": "f2dc1316c919615d2d033c5c884435393bb3356d34bf0101e819f9fc34564db3"
+    },
+    {
+      "path": "moving-object.json",
+      "from_historical_local_path": "local/apac-object-experiments/playback-chain/continuous-moving/trajectory-verification.json",
+      "bytes": 1292,
+      "sha256": "bf5fd105e1e798f551e0b9db47b552d8c2a05cb1f8a4882b57f8359a9835010c"
+    },
+    {
+      "path": "tsuioku-summary.json",
+      "from_historical_local_path": "local/apac-object-experiments/tsuioku-12000kbps-no-diffuse/summary.json",
+      "bytes": 8459,
+      "sha256": "3cd73c60a98fc6797c7766ce10fb059ccf9bd81bae328d1ece4df3fa5978f566"
+    },
+    {
+      "path": "tsuioku-audio.json",
+      "from_historical_local_path": "local/apac-object-experiments/tsuioku-12000kbps-no-diffuse/audio-verification.json",
+      "bytes": 24135,
+      "sha256": "2f13acb2200dbbfe70453bdb144934909221a0e799b4081774a347801cfcd093"
+    },
+    {
+      "path": "tsuioku-metadata.json",
+      "from_historical_local_path": "local/apac-object-experiments/tsuioku-12000kbps-no-diffuse/metadata-verification.json",
+      "bytes": 1118,
+      "sha256": "a50fb39138578b88d4db5c579cd8d17198f5c4d76ba02d6fb5fcd2bed31bcf21"
+    },
+    {
+      "path": "tsuioku-container.json",
+      "from_historical_local_path": "local/apac-object-experiments/tsuioku-12000kbps-no-diffuse/container-verification.json",
+      "bytes": 585,
+      "sha256": "98ca12791da51f66cf8437e8e2603b68f4bd38c9f39e5f214e0768ee19cd5a61"
+    },
+    {
+      "path": "tsuioku-playback.json",
+      "from_historical_local_path": "local/apac-object-experiments/tsuioku-12000kbps-no-diffuse/playback-verification.json",
+      "bytes": 997,
+      "sha256": "5820f21488209efee282b03440afd36e5a733aff3d23cf1f506bd926695528dc"
+    },
+    {
+      "path": "tsuioku-48s-summary.json",
+      "from_historical_local_path": "local/apac-object-experiments/tsuioku-12000kbps-no-diffuse-10s-58s/summary.json",
+      "bytes": 1063,
+      "sha256": "62d2aedcd5d0e0b62b8702e5f91103693e241bb8c53a9f66760cabb4eda0737c"
+    },
+    {
+      "path": "tsuioku-48s-metadata.json",
+      "from_historical_local_path": "local/apac-object-experiments/tsuioku-12000kbps-no-diffuse-10s-58s/metadata-verification.json",
+      "bytes": 1088,
+      "sha256": "0bb915a424fc47db2a760d5de2138d4d83ff38ac0f7abe7e6b089e5701e0d41f"
+    },
+    {
+      "path": "man-in-the-mirror-summary.json",
+      "from_historical_local_path": "local/apac-object-experiments/man-in-the-mirror-12000kbps-no-diffuse/summary.json",
+      "bytes": 4584,
+      "sha256": "89b40fff63c69fcbb5b6909a19cf4a0708f8631d42b95b0c2e33cf73852654dc"
+    },
+    {
+      "path": "man-in-the-mirror-audio.json",
+      "from_historical_local_path": "local/apac-object-experiments/man-in-the-mirror-12000kbps-no-diffuse/audio-verification.json",
+      "bytes": 19289,
+      "sha256": "dd42e1a1d5b39f12416e57a9d979bedfa2e597dd1dca8023d4b0641f860d1268"
+    },
+    {
+      "path": "man-in-the-mirror-metadata.json",
+      "from_historical_local_path": "local/apac-object-experiments/man-in-the-mirror-12000kbps-no-diffuse/metadata-verification.json",
+      "bytes": 1048,
+      "sha256": "e3d615c342763e5e065fbd7a0307f29fb46d17bf157b79231966a30839da8e02"
+    },
+    {
+      "path": "man-in-the-mirror-container.json",
+      "from_historical_local_path": "local/apac-object-experiments/man-in-the-mirror-12000kbps-no-diffuse/container-verification.json",
+      "bytes": 677,
+      "sha256": "f329299e18c3228756d0c262af89436a5b2f269d24f18f3d0b3b40c12867f614"
+    },
+    {
+      "path": "man-in-the-mirror-playback.json",
+      "from_historical_local_path": "local/apac-object-experiments/man-in-the-mirror-12000kbps-no-diffuse/playback-verification.json",
+      "bytes": 360,
+      "sha256": "84655427eb250fd533efcc31630332fc6c83a97fa864b1c7a9b8d3d999bc5565"
+    },
+    {
+      "path": "zenzenzense-summary.json",
+      "from_historical_local_path": "local/apac-object-experiments/zenzenzense-12000kbps-no-diffuse/summary.json",
+      "bytes": 10701,
+      "sha256": "ebf6993548602aabcd5aedb5e93fe7a1ebcf789bc34d0eff7b727e52175c7626"
+    },
+    {
+      "path": "zenzenzense-audio.json",
+      "from_historical_local_path": "local/apac-object-experiments/zenzenzense-12000kbps-no-diffuse/audio-verification.json",
+      "bytes": 31404,
+      "sha256": "09bbfd0963737874f6b43a1cbdee5095bf341f56098493f4ddaeb0fc02b29254"
+    },
+    {
+      "path": "zenzenzense-metadata.json",
+      "from_historical_local_path": "local/apac-object-experiments/zenzenzense-12000kbps-no-diffuse/metadata-verification.json",
+      "bytes": 1215,
+      "sha256": "14fe90c051b388d3a6e782f73ca43594ff79ca1925cd50943c881f12089a9ffc"
+    },
+    {
+      "path": "zenzenzense-container.json",
+      "from_historical_local_path": "local/apac-object-experiments/zenzenzense-12000kbps-no-diffuse/container-verification.json",
+      "bytes": 637,
+      "sha256": "1a073e470a9432cb9fea2c257e013bb4dcb1c5d3ee58a627b3ecc63dcef20b4f"
+    },
+    {
+      "path": "zenzenzense-40-object-render.json",
+      "from_historical_local_path": "local/apac-object-experiments/zenzenzense-12000kbps-no-diffuse/40-object-playback-probe/verification.json",
+      "bytes": 4274,
+      "sha256": "58a57bf1bc6861468755094abac9a40d506ca2942144402906f7114c473bafd3"
+    }
+  ]
+}
