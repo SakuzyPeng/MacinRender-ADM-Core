@@ -787,12 +787,16 @@ void apply_object_override(SceneObject& object, const SemanticPolicyOverride& po
     if (policy.gain) {
         if (policy.gain->scale.has_value()) {
             object.gain *= *policy.gain->scale;
+            object.user_level.gain_multiplier *= *policy.gain->scale;
         }
         if (policy.gain->gain_db.has_value()) {
-            object.gain *= std::pow(10.0F, *policy.gain->gain_db / 20.0F);
+            const float multiplier = std::pow(10.0F, *policy.gain->gain_db / 20.0F);
+            object.gain *= multiplier;
+            object.user_level.gain_multiplier *= multiplier;
         }
         if (policy.gain->mute.has_value()) {
             object.mute = *policy.gain->mute;
+            object.user_level.mute = policy.gain->mute;
         }
     }
 }
@@ -950,8 +954,18 @@ void apply_ds_override(SceneDirectSpeakersBlock& ds, const DirectSpeakersPolicy&
                 ds.gain *= std::pow(10.0F, *policy.gain->gain_db / 20.0F);
             }
         }
+        if (policy.gain->mute.has_value()) {
+            ds.user_level.mute = policy.gain->mute;
+        }
+        if (policy.gain->scale.has_value()) {
+            ds.user_level.gain_multiplier *= *policy.gain->scale;
+        }
+        if (policy.gain->gain_db.has_value()) {
+            ds.user_level.gain_multiplier *= std::pow(10.0F, *policy.gain->gain_db / 20.0F);
+        }
     }
     if (policy.position && position_changes(*policy.position)) {
+        ds.user_position_override = true;
         compute_polar_position(ds.azimuth, ds.elevation, ds.distance, *policy.position);
         ds.has_position = true;
     }
@@ -1027,8 +1041,34 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     }
 }
 
+[[nodiscard]] Json source_gain_value(double value) {
+    if (std::isfinite(value)) {
+        return value;
+    }
+    return std::isnan(value) ? Json("NaN") : Json(std::signbit(value) ? "-Infinity" : "Infinity");
+}
+
 [[nodiscard]] Json block_json(const SceneObjectBlock& block) {
     Json out = Json::object();
+    out["gain"] = block.gain;
+    out["start_sample"] = block.start_sample;
+    out["end_sample"] = block.end_sample == std::numeric_limits<uint64_t>::max() ? Json{} : Json(block.end_sample);
+    out["cartesian"] = block.position.cartesian;
+    out["position"] = block.position.cartesian
+                          ? Json{{"X", block.position.x}, {"Y", block.position.y}, {"Z", block.position.z}}
+                          : Json{{"azimuth", block.position.azimuth},
+                                 {"elevation", block.position.elevation},
+                                 {"distance", block.position.distance}};
+    if (block.adm_source) {
+        const auto& source = *block.adm_source;
+        out["source"] = {{"gain_present", source.gain.present},
+                         {"gain_unit", source.gain.decibels ? "dB" : "linear"},
+                         {"gain_value", source_gain_value(source.gain.value)},
+                         {"gain_linear", source.gain.linear},
+                         {"rtime_present", source.rtime_present},
+                         {"rtime_samples", source.rtime_samples},
+                         {"duration_samples", source.duration_samples ? Json(*source.duration_samples) : Json{}}};
+    }
     out["diffuse"] = block.diffuse;
     out["head_locked"] = block.head_locked;
     out["width"] = block.width;
@@ -1066,6 +1106,25 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
     out["azimuth"] = ds.azimuth;
     out["elevation"] = ds.elevation;
     out["distance"] = ds.distance;
+    out["start_sample"] = ds.start_sample;
+    out["end_sample"] = ds.end_sample == std::numeric_limits<uint64_t>::max() ? Json(nullptr) : Json(ds.end_sample);
+    if (ds.adm_source) {
+        const auto& source = *ds.adm_source;
+        out["source"] = {
+            {"gain_present", source.gain.present},
+            {"gain_unit", source.gain.decibels ? "dB" : "linear"},
+            {"gain_value", source.gain.value},
+            {"gain_linear", source.gain.linear},
+            {"rtime_present", source.rtime_present},
+            {"rtime_samples", source.rtime_samples},
+            {"duration_samples", source.duration_samples ? Json(*source.duration_samples) : Json(nullptr)}};
+    }
+    if (ds.source_position) {
+        const auto& position = *ds.source_position;
+        out["source_position"] = {{"cartesian", position.cartesian},
+                                  {"xyz", Json::array({position.x, position.y, position.z})},
+                                  {"polar", Json::array({position.azimuth, position.elevation, position.distance})}};
+    }
     if (ds.low_pass_hz) {
         out["low_pass_hz"] = *ds.low_pass_hz;
     } else {
@@ -1177,7 +1236,7 @@ void apply_override(SceneObjectBlock& block, const SemanticPolicyOverride& polic
                 {"head_locked", block.head_locked},
                 {"start_sample", block.start_sample},
                 {"end_sample",
-                 block.end_sample == std::numeric_limits<uint64_t>::max() ? Json{nullptr} : Json{block.end_sample}}};
+                 block.end_sample == std::numeric_limits<uint64_t>::max() ? Json{nullptr} : Json(block.end_sample)}};
 }
 
 // HOA packs (separate from objects): report pack gain/mute plus every block's
@@ -1506,6 +1565,9 @@ std::string build_semantic_report(const AdmScene& original,
     doc["policy"] = options.policy_path.empty() ? nullptr : Json{options.policy_path};
     doc["capabilities"] = capability_json(options.capabilities);
     doc["warnings"] = warnings;
+    if (!options.renderer_effective_json.empty()) {
+        doc["renderer_effective"] = Json::parse(options.renderer_effective_json);
+    }
     doc["objects"] = Json::array();
 
     const auto membership = build_membership(original);
@@ -1529,6 +1591,23 @@ std::string build_semantic_report(const AdmScene& original,
         obj["effective_mute"] = eff_obj.mute;
         obj["original_head_locked"] = orig_obj.head_locked;
         obj["effective_head_locked"] = eff_obj.head_locked;
+        obj["end_sample"] =
+            eff_obj.end_sample == std::numeric_limits<uint64_t>::max() ? Json{} : Json(eff_obj.end_sample);
+        if (orig_obj.adm_source) {
+            const auto& source = *orig_obj.adm_source;
+            obj["source"] = {{"gain_present", source.gain.present},
+                             {"gain_unit", source.gain.decibels ? "dB" : "linear"},
+                             {"gain_value", source_gain_value(source.gain.value)},
+                             {"gain_linear", source.gain.linear},
+                             {"mute_present", source.mute_present},
+                             {"mute", source.mute},
+                             {"start_present", source.start_present},
+                             {"start_samples", source.start_samples},
+                             {"absolute_start_samples", source.absolute_start_samples},
+                             {"duration_samples", source.duration_samples ? Json(*source.duration_samples) : Json{}},
+                             {"child_objects", source.child_objects},
+                             {"has_parent", source.has_parent}};
+        }
         obj["blocks"] = Json::array();
 
         const std::size_t track_count = std::min(orig_obj.tracks.size(), eff_obj.tracks.size());
@@ -1540,6 +1619,7 @@ std::string build_semantic_report(const AdmScene& original,
                 Json block = Json::object();
                 block["kind"] = "objects";
                 block["track_uid"] = eff_track.track_uid;
+                block["pcm_channel"] = eff_track.channel_index ? Json(*eff_track.channel_index) : Json{};
                 block["block_index"] = bi;
                 block["original"] = block_json(orig_track.blocks.at(bi));
                 block["effective"] = block_json(eff_track.blocks.at(bi));

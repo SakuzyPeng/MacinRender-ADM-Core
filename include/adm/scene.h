@@ -39,6 +39,42 @@ struct SceneBlockPosition {
     float z{0.0f};
 };
 
+// Authored values survive normalization and semantic policies. Renderer-specific
+// adapters must not reconstruct relative time or authored gain from edited data.
+struct SceneGainSource {
+    bool present{false};
+    bool decibels{false};
+    double value{1.0};
+    float linear{1.0F};
+};
+
+struct SceneBlockSource {
+    SceneGainSource gain;
+    bool rtime_present{false};
+    uint64_t rtime_samples{0};
+    std::optional<uint64_t> duration_samples;
+};
+
+struct SceneObjectSource {
+    SceneGainSource gain;
+    bool mute_present{false};
+    bool mute{false};
+    bool start_present{false};
+    uint64_t start_samples{0};
+    uint64_t absolute_start_samples{0};
+    std::optional<uint64_t> duration_samples;
+    std::vector<std::string> child_objects;
+    bool has_parent{false};
+};
+
+// Explicit user level control, separate from the authored ADM values. Ordinary
+// backends keep using gain/mute after policy application. Compatibility adapters
+// use this provenance to honor user controls even when they ignore native gain.
+struct SceneUserLevel {
+    float gain_multiplier{1.0F};
+    std::optional<bool> mute;
+};
+
 // Rendering metadata from one AudioBlockFormatObjects.
 struct SceneObjectBlock {
     SceneBlockPosition position;
@@ -68,6 +104,7 @@ struct SceneObjectBlock {
     // owning AudioObject fallback. false = scene/world-relative. Kept last so
     // existing aggregate initializers retain their field mapping.
     bool head_locked{false};
+    std::optional<SceneBlockSource> adm_source{};
 };
 
 // Rendering metadata from one AudioBlockFormatDirectSpeakers.
@@ -94,6 +131,10 @@ struct SceneDirectSpeakersBlock {
     uint64_t end_sample{std::numeric_limits<uint64_t>::max()};
     // Effective ADM headLocked after block > AudioObject precedence.
     bool head_locked{false};
+    std::optional<SceneBlockSource> adm_source{};
+    std::optional<SceneBlockPosition> source_position{};
+    SceneUserLevel user_level{};
+    bool user_position_override{false};
 };
 
 // Reference from a SceneObject to a specific track in the BW64 file.
@@ -295,6 +336,8 @@ struct SceneObject {
     // AudioObject-level headLocked fallback (ADM default is false). Block
     // formats may explicitly override this value, including with false.
     bool head_locked{false};
+    std::optional<SceneObjectSource> adm_source{};
+    SceneUserLevel user_level{};
 };
 
 // Time-window and gain from one AudioBlockFormatHoa entry.

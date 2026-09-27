@@ -8,12 +8,15 @@
 
 namespace mradm::engine {
 
+enum class WavLayoutProfile { adm_semantics, speaker_rerender };
+
 // Add the machine-readable channel semantics required by the selected layout.
 // Mask-representable speaker layouts use WAVEFORMATEXTENSIBLE; binaural, HOA,
 // and speaker layouts that exceed the WAVE mask vocabulary use ADM AXML/CHNA.
 Result<void> finalize_rendered_wav(const std::string& path,
                                    const std::string& output_layout,
                                    const std::stop_token& cancel_token = {},
-                                   ProgressSink* progress = nullptr);
+                                   ProgressSink* progress = nullptr,
+                                   WavLayoutProfile profile = WavLayoutProfile::adm_semantics);
 
 } // namespace mradm::engine

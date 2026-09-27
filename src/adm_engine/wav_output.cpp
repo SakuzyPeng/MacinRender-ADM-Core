@@ -190,8 +190,23 @@ AdmOutputMetadata make_hoa3_adm() {
     return finish_adm_document(document, hoa_pack, tracks);
 }
 
-audio::WavLayoutFinalization make_wav_layout_finalization(std::string_view raw_layout) {
+audio::WavLayoutFinalization make_wav_layout_finalization(std::string_view raw_layout, WavLayoutProfile profile) {
     audio::WavLayoutFinalization output;
+    if (profile == WavLayoutProfile::speaker_rerender) {
+        if (raw_layout != "4+7+0" && raw_layout != "7.1.4" && raw_layout != "9.1.6") {
+            throw std::runtime_error("speaker re-render WAV profile requires 7.1.4 or 9.1.6");
+        }
+        output.force_extensible = true;
+        output.prefer_riff = true;
+        output.include_pcm_fact = true;
+        // The 9.1.6 compatibility profile omits the speaker mask and rendered ADM.
+        // CHNA would make CoreAudio expose an ADM/discrete 16.0 track instead.
+        // The samples remain in the verified 9.1.6 native order. CAF carries
+        // the explicit CoreAudio Atmos_9_1_6 tag for layout-aware playback.
+        if (raw_layout == "9.1.6") {
+            return output;
+        }
+    }
     if (raw_layout == "0+2+0") {
         output.channel_mask = 0x0003U;
     } else if (raw_layout == "0+5+0" || raw_layout == "5.1") {
@@ -238,9 +253,10 @@ audio::WavLayoutFinalization make_wav_layout_finalization(std::string_view raw_l
 Result<void> finalize_rendered_wav(const std::string& path,
                                    const std::string& output_layout,
                                    const std::stop_token& cancel_token,
-                                   ProgressSink* progress) {
+                                   ProgressSink* progress,
+                                   WavLayoutProfile profile) {
     try {
-        auto layout = make_wav_layout_finalization(output_layout);
+        auto layout = make_wav_layout_finalization(output_layout, profile);
         return audio::finalize_wav_layout(path, layout, cancel_token, progress, RenderOperation::write_metadata);
     } catch (const std::exception& error) {
         return make_error(ErrorCode::io_error,

@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -25,6 +26,7 @@
 #include "adm/io.h"
 #include "adm/render.h"
 #include "adm/render_vbap.h"
+#include "adm/semantic_policy.h"
 
 #ifdef _WIN32
 #include <process.h>
@@ -89,7 +91,8 @@ class CapturingLogSink final : public mradm::LogSink {
     std::vector<std::string> warnings_;
 };
 
-std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(ObjectPositionMode mode) {
+std::pair<std::shared_ptr<adm::Document>, std::string>
+make_objects_doc(ObjectPositionMode mode, float block_gain = 1.0F, float size = 0.0F) {
     auto doc = adm::Document::create();
 
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"VbapCF"}, adm::TypeDefinition::OBJECTS);
@@ -98,7 +101,10 @@ std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(ObjectPo
             (mode == ObjectPositionMode::cartesian_front)
                 ? adm::AudioBlockFormatObjects{adm::CartesianPosition{adm::X{0.0F}, adm::Y{1.0F}, adm::Z{0.0F}}}
                 : adm::AudioBlockFormatObjects{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
-        block.set(adm::Gain{1.0F});
+        block.set(adm::Gain{block_gain});
+        block.set(adm::Width{size});
+        block.set(adm::Height{size});
+        block.set(adm::Depth{size});
         cf->add(block);
     }
     doc->add(cf);
@@ -1535,6 +1541,214 @@ bool verify_audio_object_gain_scales_output() {
     return ok;
 }
 
+bool verify_room_compat_block_gain_reference() {
+    const auto render_gain = [](mradm::SpeakerPannerMode mode, float gain) -> double {
+        auto [doc, uid] = make_objects_doc(ObjectPositionMode::cartesian_front, gain);
+        const auto input = write_input_fixture(doc, uid);
+        FileGuard input_guard{input};
+        const auto output =
+            std::filesystem::temp_directory_path() /
+            ("mr_room_compat_gain_" + std::to_string(current_process_id()) + "_" +
+             std::to_string(static_cast<int>(gain * 100.0F)) + "_" + std::to_string(static_cast<int>(mode)) + ".wav");
+        FileGuard output_guard{output};
+        mradm::RenderRequest request;
+        request.input_path = input;
+        request.output_path = output;
+        request.options.output_layout = "4+7+0";
+        request.options.renderer = mradm::RendererSelection::saf;
+        request.options.speaker_panner_mode = mode;
+        request.options.peak_limit = false;
+        mradm::RenderService service;
+        mradm::NullProgressSink progress;
+        mradm::NullLogSink logs;
+        if (const auto result = service.render(request, progress, logs); !result.success()) {
+            std::cerr << "FAIL: gain fixture render: " << result.error.message << '\n';
+            return 0.0;
+        }
+        const auto sums = read_channel_sums(output, 12U);
+        return std::accumulate(sums.begin(), sums.end(), 0.0);
+    };
+
+    const double compat_one = render_gain(mradm::SpeakerPannerMode::room_compat, 1.0F);
+    const double compat_half = render_gain(mradm::SpeakerPannerMode::room_compat, 0.5F);
+    const double vbap_one = render_gain(mradm::SpeakerPannerMode::vbap, 1.0F);
+    const double vbap_half = render_gain(mradm::SpeakerPannerMode::vbap, 0.5F);
+    return check(compat_one > 0.0 && vbap_one > 0.0, "gain fixture renders have signal") &&
+           check(std::fabs((compat_half / compat_one) - 1.0) < 1.0e-5, "room-compat ignores source ADM block gain") &&
+           check(std::fabs((vbap_half / vbap_one) - 0.5) < 1.0e-5, "default VBAP still applies ADM block gain");
+}
+
+// NOLINTNEXTLINE(readability-function-size): single fixture for prepared state, windows and user controls.
+bool verify_room_compat_size_window_and_validation() {
+    auto [doc, uid] = make_objects_doc(ObjectPositionMode::cartesian_front, 1.0F, 0.25F);
+    const auto input = write_input_fixture(doc, uid, 48000U, 10037U);
+    FileGuard input_guard{input};
+    const auto scene = mradm::io::import_scene(input.string());
+    if (!check(scene.has_value(), "size fixture imports")) {
+        return false;
+    }
+    auto renderer = mradm::create_vbap_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    bool ok = true;
+    for (const auto* layout : {"4+7+0", "9.1.6"}) {
+        mradm::RenderPlan plan;
+        plan.input_path = input.string();
+        plan.scene = *scene;
+        plan.output_layout = layout;
+        plan.speaker_panner_mode = mradm::SpeakerPannerMode::room_compat;
+        auto prepared = renderer->prepare(plan, logs);
+        if (!check(prepared.has_value(), "equal-size offline input is supported")) {
+            return false;
+        }
+        const auto render = [&](std::optional<mradm::RenderWindow> window) -> std::vector<float> {
+            const auto output = std::filesystem::temp_directory_path() /
+                                ("mr_room_size_window_" + std::to_string(current_process_id()) + ".wav");
+            FileGuard output_guard{output};
+            auto request = plan;
+            request.output_path = output.string();
+            request.render_window = window;
+            if (!renderer->render_window(**prepared, request, progress, logs)) {
+                return {};
+            }
+            auto reader = mradm::audio::FloatWavReader::open(output.string());
+            if (!reader) {
+                return {};
+            }
+            std::vector<float> samples(reader->frame_count() * reader->channels());
+            reader->read(samples.data(), reader->frame_count());
+            return samples;
+        };
+        const auto whole = render(std::nullopt);
+        const auto crop = render(mradm::RenderWindow{4097, 4321});
+        const auto again = render(std::nullopt);
+        const std::size_t channels = plan.output_layout == "9.1.6" ? 16 : 12;
+        ok &= check(whole.size() == 10037U * channels && crop.size() == 4321U * channels,
+                    "size renderer retains EOF partial block and crop lengths");
+        if (whole.size() == 10037U * channels && crop.size() == 4321U * channels) {
+            ok &= check(
+                std::equal(crop.begin(), crop.end(), whole.begin() + static_cast<std::ptrdiff_t>(4097U * channels)),
+                "stateful crop equals full-render slice after warmup");
+        }
+        ok &= check(whole == again, "reusing prepared metadata starts a fresh size state");
+        ok &= check(!renderer->open_stream(**prepared, plan, logs), "size support remains offline only");
+        const auto unchanged_plan = plan;
+        for (auto& object : plan.scene.objects) {
+            object.gain = 0;
+            object.mute = true;
+            object.end_sample = 2000;
+            object.adm_source->gain = {true, false, 0, 0};
+            object.adm_source->mute = true;
+            object.adm_source->start_samples = 1000;
+            object.adm_source->absolute_start_samples = 1000;
+            for (auto& track : object.tracks) {
+                for (auto& block : track.blocks) {
+                    block.start_sample += 1000;
+                    block.end_sample = 1500;
+                }
+            }
+        }
+        prepared = renderer->prepare(plan, logs);
+        if (!check(prepared.has_value(), "measured native gain/mute/lifetime semantics are supported")) {
+            return false;
+        }
+        ok &=
+            check(render(std::nullopt) == whole, "native mute/zero gain/short lifetime match ignored reference fields");
+        mradm::SemanticPolicyOverride user;
+        user.gain = mradm::GainPolicy{.scale = 0.5F};
+        for (auto& object : plan.scene.objects) {
+            mradm::apply_resolved_semantic_object(object, user);
+        }
+        prepared = renderer->prepare(plan, logs);
+        if (!prepared) {
+            return false;
+        }
+        auto half = whole;
+        std::ranges::transform(whole, half.begin(), [](float sample) { return sample * 0.5F; });
+        ok &= check(render(std::nullopt) == half, "user volume scales combined dry/size output exactly once");
+        user.gain = mradm::GainPolicy{.mute = true};
+        for (auto& object : plan.scene.objects) {
+            mradm::apply_resolved_semantic_object(object, user);
+        }
+        prepared = renderer->prepare(plan, logs);
+        if (!prepared) {
+            return false;
+        }
+        const auto muted = render(std::nullopt);
+        ok &= check(muted.size() == whole.size() && std::ranges::all_of(muted, [](float value) { return value == 0; }),
+                    "explicit user mute overrides compatibility and includes filter tail");
+        plan = unchanged_plan;
+        auto invalid = plan;
+        invalid.scene.info.sample_rate = 44100;
+        ok &= check(!renderer->prepare(invalid, logs), "unverified size sample rate is rejected");
+        invalid = plan;
+        for (auto& object : invalid.scene.objects) {
+            for (auto& track : object.tracks) {
+                for (auto& block : track.blocks) {
+                    block.height = 0.5F;
+                }
+            }
+        }
+        ok &= check(!renderer->prepare(invalid, logs), "independent axis extent remains unsupported");
+        invalid.speaker_spread_mode = mradm::SpeakerSpreadMode::none;
+        ok &= check(renderer->prepare(invalid, logs).has_value(), "spread=none explicitly preserves point fallback");
+        invalid = plan;
+        invalid.speaker_spread_mode = mradm::SpeakerSpreadMode::mdap;
+        ok &= check(!renderer->prepare(invalid, logs), "room size and MDAP remain mutually exclusive");
+    }
+    return ok;
+}
+
+bool verify_room_compat_semantic_report() {
+    auto [doc, uid] = make_objects_doc(ObjectPositionMode::cartesian_front, 0.25F, 0.25F);
+    const auto input = write_input_fixture(doc, uid, 48000, 10037);
+    FileGuard input_guard{input};
+    const auto base =
+        std::filesystem::temp_directory_path() / ("mr_room_report_" + std::to_string(current_process_id()));
+    const auto output = std::filesystem::path(base.string() + ".wav");
+    const auto report = std::filesystem::path(base.string() + ".json");
+    FileGuard output_guard{output};
+    FileGuard report_guard{report};
+    mradm::RenderRequest request;
+    request.input_path = input;
+    request.output_path = output;
+    request.options.renderer = mradm::RendererSelection::saf;
+    request.options.output_layout = "9.1.6";
+    request.options.speaker_panner_mode = mradm::SpeakerPannerMode::room_compat;
+    request.options.peak_limit = false;
+    request.options.capture_semantic_report = true;
+    request.options.semantic_report_path = report;
+    request.options.semantic_policy_json =
+        R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":0.5,"mute":true}}})";
+    mradm::RenderService service;
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    const auto file_matches = [&](const mradm::RenderResult& result) {
+        std::ifstream stream(report);
+        const std::string contents{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+        return result.semantic_report_json && contents == *result.semantic_report_json + "\n";
+    };
+    auto result = service.render(request, progress, logs);
+    bool ok = check(result.success() && file_matches(result), "backend semantic file and memory reports are identical");
+    if (result.semantic_report_json) {
+        const auto& text = *result.semantic_report_json;
+        ok &= check(text.find("\"renderer_effective\"") != std::string::npos &&
+                        text.find("\"output_gain\": 0.0") != std::string::npos &&
+                        text.find("\"source_rtime_sample\"") != std::string::npos &&
+                        text.find("\"gain\": 0.25") != std::string::npos,
+                    "report separates original block gain, policy output and actual renderer semantics");
+    }
+    std::filesystem::remove(output);
+    request.options.speaker_spread_mode = mradm::SpeakerSpreadMode::mdap;
+    result = service.render(request, progress, logs);
+    ok &= check(result.error.code == mradm::ErrorCode::unsupported && file_matches(result),
+                "unsupported backend preparation still publishes identical semantic diagnostics");
+    ok &= check(result.semantic_report_json &&
+                    result.semantic_report_json->find(R"("status": "unsupported")") != std::string::npos,
+                "rejected capability is not reported as prepared");
+    return ok;
+}
+
 bool verify_vbap_channel_lock_routes_to_nearest_speaker() {
     auto [doc, uid_str] = make_object_semantics_doc(20.0F, true, std::nullopt, 0.0F, 45.0F);
     const auto out = std::filesystem::temp_directory_path() / "mr_vbap_channel_lock_out.wav";
@@ -2321,6 +2535,9 @@ int main() {
     ok &= verify_916_top_side_routing();
     ok &= verify_mdap_spread_fixture();
     ok &= verify_audio_object_gain_scales_output();
+    ok &= verify_room_compat_block_gain_reference();
+    ok &= verify_room_compat_size_window_and_validation();
+    ok &= verify_room_compat_semantic_report();
     ok &= verify_audio_object_mute_silences_output();
     ok &= verify_audio_object_duration_gates_output();
     ok &= verify_ds_time_window_gates_block();

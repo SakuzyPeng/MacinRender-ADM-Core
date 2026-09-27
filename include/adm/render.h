@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -91,6 +92,7 @@ struct RenderPlan {
     uint32_t object_smoothing_frames{0};
     // Effective output-speaker coordinates for software speaker renderers.
     SpeakerGeometry speaker_geometry{SpeakerGeometry::standard};
+    SpeakerPannerMode speaker_panner_mode{SpeakerPannerMode::vbap};
     DirectSpeakersRoutingMode direct_speakers_routing_mode{DirectSpeakersRoutingMode::automatic};
     // Parsed and scene-validated sparse routing matrix. Non-null exactly when
     // direct_speakers_routing_mode == matrix.
@@ -119,6 +121,9 @@ struct RenderPlan {
     // ErrorCode::cancelled when a stop is requested. A default-constructed token
     // never stops.
     std::stop_token cancel_token;
+    // Optional diagnostics from prepare(), including rejected combinations.
+    // Invoked synchronously; never retained in reusable prepared/DSP state.
+    std::function<void(std::string)> renderer_semantics_sink{};
 };
 
 // Immutable, reusable backend state produced by IRenderer::prepare() (gain matrices,

@@ -899,15 +899,16 @@ Result<void> finalize_wav_layout(const std::string& path,
     }
     const auto& chna_payload = *chna_res;
 
-    const bool extensible = layout.channel_mask != 0U;
+    const bool extensible = layout.channel_mask != 0U || layout.force_extensible;
+    const bool include_fact = source.is_float || layout.include_pcm_fact;
     const uint64_t fmt_payload_size = extensible ? 40U : 16U;
-    const uint64_t fact_disk_size = source.is_float ? riff_chunk_disk_size(4U) : 0U;
+    const uint64_t fact_disk_size = include_fact ? riff_chunk_disk_size(4U) : 0U;
     const uint64_t chna_disk_size = has_chna ? riff_chunk_disk_size(chna_payload.size()) : 0U;
     const uint64_t axml_disk_size = has_axml ? riff_chunk_disk_size(layout.axml.size()) : 0U;
     const uint64_t base_body_size = 4U + riff_chunk_disk_size(fmt_payload_size) + fact_disk_size + chna_disk_size +
                                     riff_chunk_disk_size(source.data.payload_size) + axml_disk_size;
     const bool use_bw64 = has_axml && source.is_pcm;
-    const bool preserve_64_bit_container = uses_ds64(source.riff);
+    const bool preserve_64_bit_container = !layout.prefer_riff && uses_ds64(source.riff);
     const bool use_64_bit_container =
         use_bw64 || preserve_64_bit_container || base_body_size > std::numeric_limits<uint32_t>::max();
     RiffContainer output_container = RiffContainer::riff;
@@ -966,7 +967,7 @@ Result<void> finalize_wav_layout(const std::string& path,
     if (has_chna && !write_payload_chunk(output.get(), "chna", chna_payload.data(), chna_payload.size())) {
         return make_error(ErrorCode::io_error, "failed to write WAV CHNA chunk", "path=" + path);
     }
-    if (source.is_float) {
+    if (include_fact) {
         const uint32_t fact_frames =
             static_cast<uint32_t>(std::min<uint64_t>(source.frames, std::numeric_limits<uint32_t>::max()));
         std::array<uint8_t, 4> fact{static_cast<uint8_t>(fact_frames),

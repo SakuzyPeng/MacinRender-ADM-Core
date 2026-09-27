@@ -25,11 +25,38 @@
 
 #include "consistency_trace.h"
 #include "render_common.h"
+#include "room_222.h"
+#include "room_compat_bed.h"
+#include "room_compat_panner.h"
+#include "room_compat_semantics.h"
+#include "room_compat_size_processor.h"
 #include "speaker_layouts.h"
 
 namespace mradm {
 
 namespace {
+
+// Frozen 48 kHz isotropic-size boundary and independent sets pass both layouts.
+constexpr bool k_room_compat_size_verified = true;
+// Self-defined 22.2 geometry and state validation.
+constexpr bool k_room_222_size_verified = true;
+
+bool uses_room_size(const SceneTrackRef& track, SpeakerSpreadMode spread_mode) {
+    return spread_mode != SpeakerSpreadMode::none && std::ranges::any_of(track.blocks, [](const auto& block) {
+               return block.width != 0 || block.height != 0 || block.depth != 0;
+           });
+}
+
+std::vector<room_compat::SizeEvent> size_events(const SceneTrackRef& track) {
+    std::vector<room_compat::SizeEvent> events;
+    events.reserve(track.blocks.size());
+    std::ranges::transform(track.blocks, std::back_inserter(events), [](const auto& block) {
+        return room_compat::SizeEvent{block.start_sample,
+                                      {(block.position.x + 1) * 0.5F, (1 - block.position.y) * 0.5F, block.position.z},
+                                      block.width};
+    });
+    return events;
+}
 
 // Internal layout alias so the rest of the renderer can use VbapSpeakerSpec directly.
 using SpeakerDirection = VbapSpeakerSpec;
@@ -75,6 +102,7 @@ struct ChannelGainInfo {
     std::string object_id;          // owning SceneObject::id, for live gain overrides
     std::string speaker_label_key;  // normalized DirectSpeakers label (empty for Objects); per-channel live gain key
     std::vector<BlockGains> blocks; // sorted by start_sample
+    float output_gain{1.0F};
 };
 
 struct AccumulateContext {
@@ -253,12 +281,87 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
     });
 }
 
+[[nodiscard]] Result<std::vector<BlockGains>> room_compat_motion_blocks(const SceneTrackRef& track,
+                                                                        const SceneObject& object,
+                                                                        std::string_view layout_id,
+                                                                        uint64_t file_frames) {
+    if (track.blocks.empty()) {
+        return std::vector<BlockGains>{};
+    }
+    constexpr uint64_t k_control_frames = 512;
+    constexpr float k_position_tau_frames = 1200.0F;
+    const float alpha = 1.0F - std::exp(-static_cast<float>(k_control_frames) / k_position_tau_frames);
+    const auto& first = track.blocks.front();
+    if (first.start_sample != 0 || object.end_sample < file_frames) {
+        return make_error(ErrorCode::unsupported,
+                          "room-compat requires an object present from frame 0 through the file end");
+    }
+    // The reference smooths float32 internal room coordinates. Double state
+    // eventually rounds across half-code boundaries (notably Z=0.5), while the
+    // real float state can remain one ULP below the target indefinitely.
+    std::array<float, 3> state{(first.position.x + 1) * 0.5F, (1 - first.position.y) * 0.5F, first.position.z};
+    std::array<float, 3> target = state;
+    // The compatibility profile ignores audioBlockFormat/gain for
+    // Objects. Static 0/-6/-12 dB probes and a changing-gain probe both retain
+    // unit gain in the exported speaker PCM. This is specific to this
+    // compatibility mode; the ordinary SAF path still applies ADM gain.
+    auto initial = room_compat::point_gains(first.position, 1.0F, layout_id);
+    if (!initial) {
+        return tl::unexpected{initial.error()};
+    }
+    std::vector<BlockGains> result;
+    result.push_back({std::move(*initial), 0, std::numeric_limits<uint64_t>::max(), true, true, std::nullopt});
+    if (track.blocks.size() == 1) {
+        return result;
+    }
+    std::size_t next_event = 1;
+    for (uint64_t control_start = k_control_frames; control_start < file_frames; control_start += k_control_frames) {
+        if (next_event < track.blocks.size() &&
+            track.blocks[next_event].start_sample < control_start + k_control_frames) {
+            const auto& event = track.blocks[next_event];
+            if (event.start_sample < control_start ||
+                (next_event + 1 < track.blocks.size() &&
+                 track.blocks[next_event + 1].start_sample < control_start + k_control_frames)) {
+                return make_error(ErrorCode::unsupported,
+                                  "room-compat supports at most one metadata update per 512-frame control block");
+            }
+            target = {(event.position.x + 1) * 0.5F, (1 - event.position.y) * 0.5F, event.position.z};
+            ++next_event;
+        }
+        state = {state[0] + (alpha * (target[0] - state[0])),
+                 state[1] + (alpha * (target[1] - state[1])),
+                 state[2] + (alpha * (target[2] - state[2]))};
+        SceneBlockPosition position;
+        position.cartesian = true;
+        position.x = (state[0] * 2) - 1;
+        position.y = 1 - (state[1] * 2);
+        position.z = state[2];
+        auto gains = room_compat::point_gains(position, 1.0F, layout_id);
+        if (!gains) {
+            return tl::unexpected{gains.error()};
+        }
+        if (*gains != result.back().gains) {
+            result.push_back({std::move(*gains),
+                              control_start,
+                              std::numeric_limits<uint64_t>::max(),
+                              false,
+                              true,
+                              k_control_frames});
+        }
+    }
+    if (next_event != track.blocks.size()) {
+        return make_error(ErrorCode::unsupported, "room-compat metadata update falls outside the audio timeline");
+    }
+    return result;
+}
+
 // NOLINTNEXTLINE(readability-function-size): linear scene-to-gain-table preparation keeps block precedence visible.
 [[nodiscard]] Result<std::vector<ChannelGainInfo>> build_gain_matrix(const AdmScene& scene,
                                                                      const LayoutSpec& layout,
                                                                      std::string_view layout_id,
                                                                      LogSink& logs,
                                                                      mradm::SpeakerSpreadMode spread_mode,
+                                                                     SpeakerPannerMode panner_mode,
                                                                      DirectSpeakersRoutingMode routing_mode,
                                                                      const DirectSpeakersMatrix* matrix,
                                                                      const render_common::LfeRoutingPlan& lfe_routing) {
@@ -301,6 +404,9 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
             auto& cg = by_channel[in_ch];
             cg.input_channel = in_ch;
             cg.object_id = obj.id;
+            if (panner_mode == SpeakerPannerMode::room_compat) {
+                cg.output_gain = room_compat::user_output_gain(obj);
+            }
             // Capture the channel's DirectSpeakers label so a per-channel live override can target
             // one bed channel (Objects tracks have no ds_blocks → key stays empty → whole-object).
             if (!track.ds_blocks.empty() && !track.ds_blocks.front().speaker_labels.empty()) {
@@ -308,31 +414,53 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
                     render_common::canonicalise_speaker_label(track.ds_blocks.front().speaker_labels.front());
             }
 
-            // Objects blocks → VBAP panning.
-            for (const auto& raw_block : track.blocks) {
-                const auto prepared = render_common::prepare_object_block(
-                    raw_block, obj, object_speakers, logs, "saf-vbap", screen_ref_warned);
-                std::vector<float> gains(num_out, 0.0F);
-                for (const auto& source : prepared.sources) {
-                    auto source_gains = calculate_one_vbap_gains(source, layout, spread_mode);
-                    if (!source_gains) {
-                        return make_error(source_gains.error().code,
-                                          source_gains.error().message,
-                                          fmt::format("track_uid={}", track.track_uid));
-                    }
-                    for (std::size_t i = 0; i < gains.size(); ++i) {
-                        gains[i] += (*source_gains)[i];
-                    }
+            if (panner_mode == SpeakerPannerMode::room_compat && !track.ds_blocks.empty()) {
+                auto gains = room_compat::bed_gains(track.ds_blocks.front(), layout_id, lfe_routing.mode);
+                if (!gains) {
+                    return tl::unexpected{gains.error()};
                 }
-                if (obj.gain != 1.0F) {
-                    std::ranges::transform(gains, gains.begin(), [g = obj.gain](float v) { return v * g; });
+                cg.output_gain *= room_compat::bed_user_gain(track.ds_blocks.front());
+                cg.blocks.push_back({std::move(*gains), 0, scene.info.num_frames, true, false, std::nullopt});
+                continue;
+            }
+
+            // Objects blocks → the selected speaker panner.
+            if (panner_mode == SpeakerPannerMode::room_compat && !track.blocks.empty()) {
+                if (!uses_room_size(track, spread_mode)) {
+                    auto motion = room_compat_motion_blocks(track, obj, layout_id, scene.info.num_frames);
+                    if (!motion) {
+                        return tl::unexpected{motion.error()};
+                    }
+                    cg.blocks.insert(cg.blocks.end(),
+                                     std::make_move_iterator(motion->begin()),
+                                     std::make_move_iterator(motion->end()));
                 }
-                cg.blocks.push_back({std::move(gains),
-                                     prepared.start_sample,
-                                     prepared.end_sample,
-                                     prepared.jump_position,
-                                     true,
-                                     prepared.interp_length_samples});
+            } else {
+                for (const auto& raw_block : track.blocks) {
+                    const auto prepared = render_common::prepare_object_block(
+                        raw_block, obj, object_speakers, logs, "saf-vbap", screen_ref_warned);
+                    std::vector<float> gains(num_out, 0.0F);
+                    for (const auto& source : prepared.sources) {
+                        auto source_gains = calculate_one_vbap_gains(source, layout, spread_mode);
+                        if (!source_gains) {
+                            return make_error(source_gains.error().code,
+                                              source_gains.error().message,
+                                              fmt::format("track_uid={}", track.track_uid));
+                        }
+                        for (std::size_t i = 0; i < gains.size(); ++i) {
+                            gains[i] += (*source_gains)[i];
+                        }
+                    }
+                    if (obj.gain != 1.0F) {
+                        std::ranges::transform(gains, gains.begin(), [g = obj.gain](float v) { return v * g; });
+                    }
+                    cg.blocks.push_back({std::move(gains),
+                                         prepared.start_sample,
+                                         prepared.end_sample,
+                                         prepared.jump_position,
+                                         true,
+                                         prepared.interp_length_samples});
+                }
             }
 
             // DirectSpeakers blocks use the selected label or position path. LFE
@@ -360,6 +488,9 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
                                              std::string{layout_id}));
                     }
                 } else if (routing_mode == DirectSpeakersRoutingMode::matrix) {
+                    if (!resolved_matrix) {
+                        return make_error(ErrorCode::render_failed, "resolved DirectSpeakers matrix is missing");
+                    }
                     auto route = render_common::direct_speakers_matrix_route_for_block(*resolved_matrix, ds);
                     if (!route) {
                         return tl::unexpected{route.error()};
@@ -454,7 +585,7 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
             gain = render_common::interpolated_scalar(
                 channel.blocks[block_index - 1].gains[out_ch], block.gains[out_ch], delta, interp_len);
         }
-        (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += in_sample * gain;
+        (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += (in_sample * gain) * channel.output_gain;
     }
 }
 
@@ -516,7 +647,7 @@ void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
             const float in_sample = ctx.input[(frame * ctx.num_in_ch) + channel.input_channel];
             for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
                 const float gain = (start_gains[out_ch] * (1.0F - alpha)) + (end_gains[out_ch] * alpha);
-                (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += in_sample * gain;
+                (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += (in_sample * gain) * channel.output_gain;
             }
         }
     }
@@ -525,9 +656,18 @@ void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
 // Immutable, reusable VBAP state: the resolved layout and the SAF VBAP gain matrix
 // (the expensive per-object gain-table computation). Reused across render_window()
 // calls (PreviewSession scrubbing); no per-output state.
+struct RoomSizeTrack {
+    uint16_t input_channel{};
+    std::vector<room_compat::SizeEvent> events;
+    float output_gain{1.0F};
+};
+
 struct VbapPrepared final : IPreparedRender {
     LayoutSpec layout;
     std::vector<ChannelGainInfo> gain_matrix;
+    SpeakerPannerMode panner_mode{SpeakerPannerMode::vbap};
+    // Immutable metadata only. Filter/delay state belongs to render_window().
+    std::vector<RoomSizeTrack> size_tracks;
 };
 
 // Realtime streaming VBAP session over the same prepared gain matrix as render_window.
@@ -669,6 +809,9 @@ class VbapRenderer final : public IRenderer {
             return make_error(
                 ErrorCode::internal_error, "saf-vbap: open_stream received an incompatible prepared state", {});
         }
+        if (prepared->panner_mode == SpeakerPannerMode::room_compat) {
+            return make_error(ErrorCode::unsupported, "room-compat is currently available only for offline rendering");
+        }
         auto stream = VbapStream::create(*prepared, plan, logs);
         if (!stream) {
             return tl::unexpected{stream.error()};
@@ -681,7 +824,121 @@ CapabilityReport VbapRenderer::capabilities() const {
     return vbap_capabilities();
 }
 
-Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan& plan, LogSink& logs) {
+[[nodiscard]] Result<void> validate_room_compat_input(const RenderPlan& plan) {
+    const bool extended = room_compat::is_room_222(plan.output_layout);
+    if (plan.output_layout != "4+7+0" && plan.output_layout != "9.1.6" && !extended) {
+        return make_error(ErrorCode::unsupported, "room renderer supports 7.1.4/9.1.6 and experimental 22.2");
+    }
+    if (extended && plan.scene.info.sample_rate != 48000) {
+        return make_error(ErrorCode::unsupported, "experimental room-222 requires 48 kHz");
+    }
+    if (plan.scene.info.source_kind != SceneSourceKind::adm || plan.speaker_geometry != SpeakerGeometry::standard ||
+        plan.speaker_spread_mode == SpeakerSpreadMode::mdap || plan.object_smoothing_frames != 0U ||
+        !plan.scene.hoa_tracks.empty()) {
+        return make_error(ErrorCode::unsupported,
+                          "room-compat requires ADM input, fixed room geometry, no MDAP/extra smoothing or HOA");
+    }
+    for (const auto& object : plan.scene.objects) {
+        if (object.mute) {
+            continue;
+        }
+        if (object.position_offset) {
+            return make_error(ErrorCode::unsupported,
+                              "room-compat does not yet support positionOffset",
+                              "object=" + object.id + "; field=positionOffset");
+        }
+        if (object.gain != 1.0F) {
+            return make_error(ErrorCode::unsupported,
+                              "room-compat has not verified native DirectSpeakers audioObject gain",
+                              "object=" + object.id + "; field=gain");
+        }
+        for (const auto& track : object.tracks) {
+            if (!track.channel_index) {
+                return make_error(ErrorCode::unsupported, "room-compat requires a PCM channel for each active track");
+            }
+            for (const auto& block : track.blocks) {
+                const bool has_extent = block.width != 0.0F || block.height != 0.0F || block.depth != 0.0F;
+                if (extended) {
+                    auto valid_position = room_compat::room_222_gains(block.position);
+                    if (!valid_position) {
+                        return make_error(valid_position.error().code,
+                                          valid_position.error().message,
+                                          fmt::format("object={}; track={}; sample={}; field=position",
+                                                      object.id,
+                                                      track.track_uid,
+                                                      block.start_sample));
+                    }
+                }
+                if (extended && has_extent && plan.speaker_spread_mode != SpeakerSpreadMode::none &&
+                    !k_room_222_size_verified) {
+                    return make_error(ErrorCode::unsupported,
+                                      "room-222 size awaits independent geometry/state checks",
+                                      "object=" + object.id + "; field=size");
+                }
+                const bool native_extent = k_room_compat_size_verified && has_extent &&
+                                           plan.scene.info.sample_rate == 48000 && std::isfinite(block.width) &&
+                                           block.width >= 0 && block.width <= 1 && block.width == block.height &&
+                                           block.width == block.depth && (block.diffuse == 0 || block.diffuse == 1);
+                if (!block.position.cartesian ||
+                    ((has_extent || block.diffuse != 0.0F) && plan.speaker_spread_mode != SpeakerSpreadMode::none &&
+                     !native_extent) ||
+                    block.divergence != 0.0F || block.channel_lock || block.screen_ref || block.head_locked) {
+                    return make_error(ErrorCode::unsupported,
+                                      "room-compat requires verified Cartesian point or 48 kHz equal-size Objects; "
+                                      "spread=none explicitly ignores extent/diffuse",
+                                      fmt::format("object={}; track={}; sample={}; field=position/extent/modifiers",
+                                                  object.id,
+                                                  track.track_uid,
+                                                  block.start_sample));
+                }
+            }
+            if (uses_room_size(track, plan.speaker_spread_mode)) {
+                if (object.end_sample < plan.scene.info.num_frames || track.blocks.empty() ||
+                    track.blocks.back().start_sample >= plan.scene.info.num_frames) {
+                    return make_error(ErrorCode::unsupported, "room-compat size requires an object spanning the file");
+                }
+                auto checked = room_compat::SizeObjectProcessor::create(
+                    size_events(track), plan.output_layout, plan.scene.info.sample_rate);
+                if (!checked) {
+                    return tl::unexpected{checked.error()};
+                }
+            }
+        }
+    }
+    return {};
+}
+
+Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan& source_plan, LogSink& logs) {
+    RenderPlan compatible_plan;
+    std::string semantics_report;
+    if (source_plan.speaker_panner_mode == SpeakerPannerMode::room_compat) {
+        auto compatible_scene = room_compat::prepare_semantics(source_plan, semantics_report);
+        if (!compatible_scene) {
+            room_compat::publish_semantics(source_plan, semantics_report, &compatible_scene.error());
+            return tl::unexpected{compatible_scene.error()};
+        }
+        compatible_plan = source_plan;
+        compatible_plan.scene = std::move(*compatible_scene);
+    }
+    const auto& plan =
+        source_plan.speaker_panner_mode == SpeakerPannerMode::room_compat ? compatible_plan : source_plan;
+    const auto fail = [&](const Error& error) -> Result<std::shared_ptr<IPreparedRender>> {
+        if (plan.speaker_panner_mode == SpeakerPannerMode::room_compat) {
+            room_compat::publish_semantics(plan, semantics_report, &error);
+        }
+        return tl::unexpected{error};
+    };
+    if (plan.speaker_panner_mode == SpeakerPannerMode::room_compat) {
+        auto valid = validate_room_compat_input(plan);
+        if (!valid) {
+            return fail(valid.error());
+        }
+        logs.log(LogLevel::info,
+                 "saf-vbap",
+                 room_compat::is_room_222(plan.output_layout)
+                     ? "experimental self-defined room-222 extension"
+                     : "experimental room-compat: Cartesian Objects and verified 7.1.2 bed");
+    }
     const std::string layout_id = plan.output_layout;
     auto layout = layout_spec(layout_id, plan.speaker_geometry);
     if (!layout.has_value()) {
@@ -699,24 +956,28 @@ Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan&
     const auto routing_mode = plan.direct_speakers_routing_mode == DirectSpeakersRoutingMode::automatic
                                   ? DirectSpeakersRoutingMode::label
                                   : plan.direct_speakers_routing_mode;
-    logs.log(LogLevel::info,
-             "saf-vbap",
-             fmt::format("DirectSpeakers routing: {}", render_common::direct_speakers_routing_mode_name(routing_mode)));
+    std::string routing_description{render_common::direct_speakers_routing_mode_name(routing_mode)};
+    if (plan.speaker_panner_mode == SpeakerPannerMode::room_compat) {
+        routing_description = room_compat::is_room_222(plan.output_layout) ? "fixed 7.1.2-to-22.2 semantic routes"
+                                                                           : "fixed reference bed routes";
+    }
+    logs.log(LogLevel::info, "saf-vbap", fmt::format("DirectSpeakers routing: {}", routing_description));
 
     auto lfe_routing = render_common::resolve_lfe_routing(plan, logs, "saf-vbap");
     if (!lfe_routing) {
-        return tl::unexpected{lfe_routing.error()};
+        return fail(lfe_routing.error());
     }
     auto gain_matrix = build_gain_matrix(plan.scene,
                                          *layout,
                                          layout_id,
                                          logs,
                                          plan.speaker_spread_mode,
+                                         plan.speaker_panner_mode,
                                          routing_mode,
                                          plan.direct_speakers_matrix.get(),
                                          *lfe_routing);
     if (!gain_matrix) {
-        return make_error(gain_matrix.error().code, gain_matrix.error().message, gain_matrix.error().context);
+        return fail(gain_matrix.error());
     }
     if (gain_matrix->empty()) {
         logs.log(LogLevel::warning, "saf-vbap", "no renderable tracks found (all muted?), writing silence");
@@ -736,6 +997,21 @@ Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan&
     auto prepared = std::make_shared<VbapPrepared>();
     prepared->layout = std::move(*layout);
     prepared->gain_matrix = std::move(*gain_matrix);
+    prepared->panner_mode = plan.speaker_panner_mode;
+    if (plan.speaker_panner_mode == SpeakerPannerMode::room_compat) {
+        for (const auto& object : plan.scene.objects) {
+            if (object.mute) {
+                continue;
+            }
+            for (const auto& track : object.tracks) {
+                if (track.channel_index && uses_room_size(track, plan.speaker_spread_mode)) {
+                    prepared->size_tracks.push_back(
+                        {*track.channel_index, size_events(track), room_compat::user_output_gain(object)});
+                }
+            }
+        }
+        room_compat::publish_semantics(plan, semantics_report);
+    }
     return std::static_pointer_cast<IPreparedRender>(prepared);
 }
 
@@ -798,6 +1074,22 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& prep,
         const uint64_t k_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
 
+        std::vector<room_compat::SizeObjectProcessor> size_processors;
+        size_processors.reserve(prepared->size_tracks.size());
+        for (const auto& track : prepared->size_tracks) {
+            auto processor =
+                room_compat::SizeObjectProcessor::create(track.events, plan.output_layout, info.sample_rate);
+            if (!processor) {
+                return tl::unexpected{processor.error()};
+            }
+            size_processors.push_back(std::move(*processor));
+        }
+        std::vector<float> size_input(size_processors.empty() ? 0 : k_block_size);
+        std::vector<float> size_output;
+        if (!size_processors.empty()) {
+            size_output.reserve(static_cast<std::size_t>(k_block_size) * num_out_ch);
+        }
+
         // Loudness / true-peak measurement dominates this renderer (≈70% at 22.2). Run it on a
         // background thread so it overlaps with the next block's read + mix. Double-buffer the output
         // so the next block can be mixed while the meter still reads the previous one; reuse of a
@@ -812,17 +1104,14 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& prep,
         render_common::SerialWorker meter;
         std::size_t buf_idx = 0;
 
-        // On-demand output window (RenderPlan::render_window). VBAP has no DSP state,
-        // but object smoothing samples gains at block edges, so windowed rendering
-        // still starts at the full-render block boundary containing win_start. Frames
-        // before win_start are processed for identical smoothing segmentation but not
-        // written. When not windowed, win_start=0 / win_end=num_frames reproduces the
-        // full render.
+        // The size processor carries filter and metadata history. A window must
+        // warm it from frame zero; only emitted frames enter the writer/meter.
+        // Stateless VBAP keeps its existing block-aligned seek optimization.
         const bool windowed = plan.render_window.has_value();
         const uint64_t win_start = windowed ? std::min(plan.render_window->start_frame, num_frames) : 0;
         const uint64_t win_end =
             windowed ? std::min(win_start + plan.render_window->frame_count, num_frames) : num_frames;
-        const uint64_t start_pos = windowed ? (win_start / k_block_size) * k_block_size : 0;
+        const uint64_t start_pos = windowed && size_processors.empty() ? (win_start / k_block_size) * k_block_size : 0;
         if (start_pos > 0) {
             render_common::seek_reader_abs(*reader, start_pos);
         }
@@ -843,7 +1132,9 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& prep,
             }
             std::vector<float>& out_block = out_buffers.at(buf_idx);
 
-            reader->read(in_block.data(), frames_now);
+            if (reader->read(in_block.data(), frames_now) != frames_now) {
+                return make_error(ErrorCode::io_error, "short input read while rendering speaker PCM");
+            }
             std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
             const AccumulateContext ctx{in_block.data(),
@@ -854,6 +1145,28 @@ Result<RenderMetrics> VbapRenderer::render_window(const IPreparedRender& prep,
                                         k_default_interp,
                                         plan.object_smoothing_frames};
             accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now);
+            for (std::size_t object = 0; object < size_processors.size(); ++object) {
+                const auto channel = prepared->size_tracks[object].input_channel;
+                for (std::size_t frame = 0; frame < frames_now; ++frame) {
+                    size_input[frame] = in_block[(frame * num_in_ch) + channel];
+                }
+                size_output.clear();
+                auto status = size_processors[object].push(
+                    std::span<const float>(size_input.data(), static_cast<std::size_t>(frames_now)), size_output);
+                if (status && frames_done + frames_now == num_frames) {
+                    status = size_processors[object].finish(size_output);
+                }
+                if (!status) {
+                    return tl::unexpected{status.error()};
+                }
+                if (size_output.size() != out_samples) {
+                    return make_error(ErrorCode::internal_error,
+                                      "room-compat size output lost its control-block alignment");
+                }
+                for (std::size_t sample = 0; sample < out_samples; ++sample) {
+                    out_block[sample] += size_output[sample] * prepared->size_tracks[object].output_gain;
+                }
+            }
 
             // Sub-range of this block inside the output window [win_start, win_end).
             const uint64_t w_lo = std::max(frames_done, win_start);

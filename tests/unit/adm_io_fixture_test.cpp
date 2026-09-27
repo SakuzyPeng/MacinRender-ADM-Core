@@ -445,6 +445,44 @@ bool verify_minimal_fixture() {
     return ok;
 }
 
+bool verify_object_semantic_provenance() {
+    using namespace std::chrono_literals;
+    auto [doc, uid] = make_objects_doc();
+    const auto object = *doc->getElements<adm::AudioObject>().begin();
+    object->set(adm::Gain::fromDb(-6.020599913279624));
+    object->set(adm::Mute{true});
+    object->set(adm::Start{adm::Time{1s}});
+    object->set(adm::Duration{adm::Time{2s}});
+    const auto channel = *doc->getElements<adm::AudioChannelFormat>().begin();
+    auto& block = *channel->getElements<adm::AudioBlockFormatObjects>().begin();
+    block.set(adm::Gain::fromDb(-12.041199826559248));
+    block.set(adm::Rtime{adm::Time{10ms}});
+    block.set(adm::Duration{adm::Time{20ms}});
+    const auto path = write_fixture(uid, serialize_doc(doc));
+    FileGuard guard{path};
+    const auto imported = mradm::io::import_scene(path.string());
+    if (!check(imported.has_value(), "semantic provenance fixture imports")) {
+        return false;
+    }
+    const auto& result = imported->objects.front();
+    const auto& event = result.tracks.front().blocks.front();
+    if (!result.adm_source || !event.adm_source) {
+        return check(false, "source provenance is retained");
+    }
+    bool ok = true;
+    ok &= check(result.adm_source->gain.present && result.adm_source->gain.decibels &&
+                    std::fabs(result.gain - .5F) < 1e-6F,
+                "object gain retains dB authorship and normalizes once");
+    ok &= check(result.adm_source->mute_present && result.adm_source->mute &&
+                    result.adm_source->start_samples == 48000 && result.end_sample == 144000,
+                "object authored mute/start/duration remain available");
+    ok &= check(event.start_sample == 48480 && event.end_sample == 49440 && event.adm_source->rtime_samples == 480 &&
+                    event.adm_source->duration_samples == 960 && event.adm_source->gain.decibels &&
+                    std::fabs(event.gain - .25F) < 1e-6F,
+                "relative source time survives canonical absolute timing");
+    return ok;
+}
+
 bool verify_objects_blocks_fixture() {
     bool ok = true;
     auto [doc2, uid2_str] = make_objects_doc();
@@ -1604,6 +1642,7 @@ bool verify_object_labels_importance_dialogue_imported() {
 int main() {
     bool ok = true;
     ok &= verify_minimal_fixture();
+    ok &= verify_object_semantic_provenance();
     ok &= verify_objects_blocks_fixture();
     ok &= verify_fractional_block_boundaries_are_contiguous();
     ok &= verify_direct_speakers_blocks_fixture();

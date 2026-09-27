@@ -258,6 +258,13 @@ target_sources(
     mr_adm_render_vbap
     PRIVATE
         src/adm_render_vbap/vbap_renderer.cpp
+        src/adm_render_vbap/room_compat_panner.cpp
+        src/adm_render_vbap/room_222.cpp
+        src/adm_render_vbap/room_compat_size_filter.cpp
+        src/adm_render_vbap/room_compat_size_panner.cpp
+        src/adm_render_vbap/room_compat_size_processor.cpp
+        src/adm_render_vbap/room_compat_semantics.cpp
+        src/adm_render_vbap/room_compat_bed.cpp
         src/adm_render_vbap/live_vbap_renderer.cpp
     PUBLIC
         FILE_SET HEADERS
@@ -268,11 +275,12 @@ target_sources(
 
 target_link_libraries(mr_adm_render_vbap
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon nlohmann_json::nlohmann_json
 )
 target_include_directories(mr_adm_render_vbap
     SYSTEM PRIVATE
         "${saf_SOURCE_DIR}/modules/saf_vbap"
+        "${saf_SOURCE_DIR}/modules/saf_utilities"
         "${EBUR128_INCLUDE_DIR}"
 )
 mr_adm_core_apply_warnings(mr_adm_render_vbap)
@@ -744,6 +752,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_core_unit_tests)
     add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
 
+    add_executable(mr_adm_wav_profile_tests tests/unit/wav_profile_test.cpp)
+    target_include_directories(mr_adm_wav_profile_tests PRIVATE src/adm_engine)
+    target_link_libraries(mr_adm_wav_profile_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio)
+    mr_adm_core_apply_warnings(mr_adm_wav_profile_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_wav_profile_tests)
+    add_test(NAME mr_adm_wav_profile_tests COMMAND mr_adm_wav_profile_tests)
+
     add_executable(mr_adm_io_smoke_tests tests/unit/adm_io_smoke_test.cpp)
     target_link_libraries(mr_adm_io_smoke_tests PRIVATE MacinRender::ADMIo MacinRender::ADMAudio)
     mr_adm_core_apply_warnings(mr_adm_io_smoke_tests)
@@ -948,6 +963,55 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_vbap_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_vbap_smoke_tests)
     add_test(NAME mr_adm_vbap_smoke_tests COMMAND mr_adm_vbap_smoke_tests)
+
+    add_executable(mr_adm_room_compat_point_tests tests/unit/room_compat_point_test.cpp)
+    add_executable(mr_adm_room_222_tests tests/unit/room_222_test.cpp)
+    target_include_directories(mr_adm_room_222_tests PRIVATE src/adm_render_vbap)
+    target_link_libraries(mr_adm_room_222_tests PRIVATE MacinRender::ADMRenderVBAP)
+    mr_adm_core_apply_warnings(mr_adm_room_222_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_room_222_tests)
+    add_test(NAME mr_adm_room_222_tests COMMAND mr_adm_room_222_tests)
+    add_executable(mr_adm_room_compat_bed_tests tests/unit/room_compat_bed_test.cpp)
+    target_include_directories(mr_adm_room_compat_bed_tests PRIVATE src/adm_render_vbap)
+    target_link_libraries(mr_adm_room_compat_bed_tests PRIVATE
+        MacinRender::ADMRenderVBAP nlohmann_json::nlohmann_json)
+    mr_adm_core_apply_warnings(mr_adm_room_compat_bed_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_room_compat_bed_tests)
+    add_test(NAME mr_adm_room_compat_bed_tests COMMAND mr_adm_room_compat_bed_tests
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room_compat_bed.json")
+    add_executable(mr_adm_room_compat_semantics_tests tests/unit/room_compat_semantics_test.cpp)
+    target_include_directories(mr_adm_room_compat_semantics_tests PRIVATE src/adm_render_vbap)
+    target_link_libraries(mr_adm_room_compat_semantics_tests PRIVATE
+        MacinRender::ADMRenderVBAP MacinRender::ADMAudio nlohmann_json::nlohmann_json)
+    mr_adm_core_apply_warnings(mr_adm_room_compat_semantics_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_room_compat_semantics_tests)
+    add_test(NAME mr_adm_room_compat_semantics_tests COMMAND mr_adm_room_compat_semantics_tests
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room_compat_semantics")
+    target_include_directories(mr_adm_room_compat_point_tests PRIVATE src/adm_render_vbap)
+    target_link_libraries(mr_adm_room_compat_point_tests PRIVATE MacinRender::ADMRenderVBAP)
+    mr_adm_core_apply_warnings(mr_adm_room_compat_point_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_room_compat_point_tests)
+    add_test(NAME mr_adm_room_compat_point_tests COMMAND mr_adm_room_compat_point_tests)
+
+    add_executable(mr_adm_room_compat_size_filter_tests tests/unit/room_compat_size_filter_test.cpp)
+    target_include_directories(mr_adm_room_compat_size_filter_tests PRIVATE src/adm_render_vbap)
+    target_link_libraries(mr_adm_room_compat_size_filter_tests PRIVATE MacinRender::ADMRenderVBAP)
+    mr_adm_core_apply_warnings(mr_adm_room_compat_size_filter_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_room_compat_size_filter_tests)
+    add_test(NAME mr_adm_room_compat_size_filter_tests COMMAND mr_adm_room_compat_size_filter_tests)
+
+    add_executable(mr_adm_room_compat_size_probe tests/unit/room_compat_size_probe.cpp)
+    target_include_directories(mr_adm_room_compat_size_probe PRIVATE src/adm_render_vbap)
+    target_link_libraries(mr_adm_room_compat_size_probe PRIVATE MacinRender::ADMRenderVBAP nlohmann_json::nlohmann_json)
+    mr_adm_core_apply_warnings(mr_adm_room_compat_size_probe)
+
+    add_executable(mr_adm_room_compat_size_processor_tests tests/unit/room_compat_size_processor_test.cpp)
+    target_include_directories(mr_adm_room_compat_size_processor_tests PRIVATE src/adm_render_vbap)
+    target_link_libraries(mr_adm_room_compat_size_processor_tests PRIVATE MacinRender::ADMRenderVBAP nlohmann_json::nlohmann_json)
+    mr_adm_core_apply_warnings(mr_adm_room_compat_size_processor_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_room_compat_size_processor_tests)
+    add_test(NAME mr_adm_room_compat_size_processor_tests COMMAND mr_adm_room_compat_size_processor_tests
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room_compat_size")
 
     add_executable(mr_adm_render_common_numeric_tests tests/unit/render_common_numeric_test.cpp)
     target_link_libraries(mr_adm_render_common_numeric_tests PRIVATE MacinRender::ADMRenderCommon)

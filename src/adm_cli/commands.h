@@ -31,6 +31,7 @@ struct RenderCliOptions {
     std::string semantic_policy_path;
     std::string semantic_report_path;
     std::string speaker_geometry_str{"standard"};
+    std::string speaker_panner_str{"vbap"};
     std::string direct_speakers_routing_str{"auto"};
     std::string direct_speakers_matrix_path;
     std::string speaker_spread_mode_str{"auto"};
