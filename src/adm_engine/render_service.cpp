@@ -781,6 +781,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     plan.default_interp_ms = request.options.default_interp_ms;
     plan.object_smoothing_frames = request.options.object_smoothing_frames;
     plan.speaker_geometry = request.options.speaker_geometry;
+    plan.speaker_panner_mode = request.options.speaker_panner_mode;
     plan.direct_speakers_routing_mode = request.options.direct_speakers_routing_mode;
     plan.direct_speakers_matrix = std::move(direct_speakers_matrix);
     plan.speaker_spread_mode = request.options.speaker_spread_mode;
@@ -802,6 +803,12 @@ RenderResult RenderService::render(const RenderRequest& request,
     }
     plan.cancel_token = request.options.cancel_token;
     plan.scene = std::move(*scene_result);
+    std::string renderer_semantics;
+    if (needs_semantic_report) {
+        plan.renderer_semantics_sink = [&renderer_semantics](std::string value) {
+            renderer_semantics = std::move(value);
+        };
+    }
 
     // Build (or reuse) the backend's immutable prepared state. A PreviewSession passes
     // a persistent cache slot so the gain matrices / HRTF are built once and reused
@@ -812,6 +819,36 @@ RenderResult RenderService::render(const RenderRequest& request,
         emit_progress(
             progress, RenderStage::planning, RenderOperation::prepare_backend, 0.15, 0.0, "preparing backend");
         auto prep_res = renderer->prepare(plan, logs);
+        // A rejected preparation still carries the same diagnostics to the file
+        // and in-memory reports. "effective" continues to mean policy output;
+        // the separately named section describes actual backend interpretation.
+        if (!renderer_semantics.empty()) {
+            const SemanticPolicyReportOptions report_options{
+                .renderer = renderer_name(sel),
+                .policy_path = request.options.semantic_policy_path ? request.options.semantic_policy_path->string()
+                                                                    : std::string{},
+                .capabilities = caps,
+                .renderer_effective_json = renderer_semantics,
+            };
+            if (request.options.capture_semantic_report) {
+                semantic_report_json = build_semantic_report(original_scene,
+                                                             plan.scene,
+                                                             semantic_policy ? &*semantic_policy : nullptr,
+                                                             report_options,
+                                                             semantic_warnings);
+            }
+            if (request.options.semantic_report_path) {
+                const auto written = write_semantic_report_file(*request.options.semantic_report_path,
+                                                                original_scene,
+                                                                plan.scene,
+                                                                semantic_policy ? &*semantic_policy : nullptr,
+                                                                report_options,
+                                                                semantic_warnings);
+                if (!written) {
+                    return fail_with_report(written.error());
+                }
+            }
+        }
         if (!prep_res) {
             return fail_with_report(prep_res.error());
         }
@@ -1119,14 +1156,23 @@ RenderResult RenderService::render(const RenderRequest& request,
     }
 
     if (final_ext == ".wav") {
+        const bool speaker_rerender = sel == RendererSelection::saf &&
+                                      plan.speaker_panner_mode == SpeakerPannerMode::room_compat &&
+                                      (output_layout == "4+7+0" || output_layout == "9.1.6");
         const bool uses_adm_layout_metadata = output_layout == "binaural" || output_layout == "4+5+4" ||
                                               output_layout == "9.1.6" || output_layout == "9+10+3" ||
                                               output_layout == "hoa3";
-        if (uses_adm_layout_metadata && request.options.output_bit_depth == OutputBitDepth::f32) {
+        if (uses_adm_layout_metadata && !speaker_rerender && request.options.output_bit_depth == OutputBitDepth::f32) {
             logs.log(LogLevel::warning,
                      "engine",
                      "float32 spatial WAV stores exact ADM AXML/CHNA semantics in RF64; use --output-bit-depth i24 "
                      "for normative PCM BW64 interoperability");
+        }
+        if (speaker_rerender && output_layout == "9.1.6") {
+            logs.log(LogLevel::info,
+                     "engine",
+                     "room-compat 9.1.6 WAV: native order, WAVEFORMATEXTENSIBLE mask 0, no ADM; "
+                     "CAF provides an explicit CoreAudio 9.1.6 layout");
         }
         logs.log(LogLevel::info, "engine", "finalizing machine-readable WAV channel layout");
         ProgressRangeSink wav_layout_progress(progress,
@@ -1135,8 +1181,12 @@ RenderResult RenderService::render(const RenderRequest& request,
                                               0.98,
                                               0.99,
                                               "finalizing WAV channel layout");
-        auto layout_res =
-            engine::finalize_rendered_wav(output_path, output_layout, plan.cancel_token, &wav_layout_progress);
+        auto layout_res = engine::finalize_rendered_wav(output_path,
+                                                        output_layout,
+                                                        plan.cancel_token,
+                                                        &wav_layout_progress,
+                                                        speaker_rerender ? engine::WavLayoutProfile::speaker_rerender
+                                                                         : engine::WavLayoutProfile::adm_semantics);
         if (!layout_res) {
             return fail_with_report(layout_res.error());
         }

@@ -1,0 +1,835 @@
+{
+  "records": [
+    {
+      "argument1": "0x0",
+      "argument2": "0x0",
+      "argument3": 0,
+      "detail": "adm_diffuse_boolean",
+      "kind": "adm_diffuse_value",
+      "name": "adm_diffuse_sink",
+      "regions": [
+        {
+          "address": "0x16f6316d8",
+          "bytes": 56,
+          "hex": "88ed1c060100000000000000000000000a00000000000707a4701d3f48e17a3ea470bd3e0100000000000000000000000000803e01000000",
+          "name": "block_consumer_state56"
+        }
+      ],
+      "sample_start": 0,
+      "self": "0x16f6316d8",
+      "sequence": 0,
+      "stack": [
+        {
+          "main_image_address": null,
+          "module": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/dar-batch-ai34nfvp/dar-batch-ai34nfvp.dylib",
+          "module_offset": "0x1b1c0",
+          "runtime": "0x141a571c0"
+        },
+        {
+          "main_image_address": "0x10237642c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x237642c",
+          "runtime": "0x10481242c"
+        },
+        {
+          "main_image_address": "0x102378e40",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2378e40",
+          "runtime": "0x104814e40"
+        },
+        {
+          "main_image_address": "0x1023b6c74",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x23b6c74",
+          "runtime": "0x104852c74"
+        },
+        {
+          "main_image_address": "0x1023a94d0",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x23a94d0",
+          "runtime": "0x1048454d0"
+        },
+        {
+          "main_image_address": "0x1023b4370",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x23b4370",
+          "runtime": "0x104850370"
+        },
+        {
+          "main_image_address": "0x10239b170",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x239b170",
+          "runtime": "0x104837170"
+        },
+        {
+          "main_image_address": "0x102372bb0",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2372bb0",
+          "runtime": "0x10480ebb0"
+        },
+        {
+          "main_image_address": "0x102373a2c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2373a2c",
+          "runtime": "0x10480fa2c"
+        },
+        {
+          "main_image_address": "0x102285cdc",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2285cdc",
+          "runtime": "0x104721cdc"
+        },
+        {
+          "main_image_address": "0x1024a5bfc",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x24a5bfc",
+          "runtime": "0x104941bfc"
+        },
+        {
+          "main_image_address": "0x10227f2f8",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x227f2f8",
+          "runtime": "0x10471b2f8"
+        },
+        {
+          "main_image_address": "0x10227c854",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x227c854",
+          "runtime": "0x104718854"
+        },
+        {
+          "main_image_address": "0x101997938",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1997938",
+          "runtime": "0x103e33938"
+        },
+        {
+          "main_image_address": "0x10199574c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x199574c",
+          "runtime": "0x103e3174c"
+        },
+        {
+          "main_image_address": "0x101858504",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1858504",
+          "runtime": "0x103cf4504"
+        },
+        {
+          "main_image_address": "0x101847440",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1847440",
+          "runtime": "0x103ce3440"
+        },
+        {
+          "main_image_address": "0x10183c374",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x183c374",
+          "runtime": "0x103cd8374"
+        },
+        {
+          "main_image_address": "0x101838e60",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1838e60",
+          "runtime": "0x103cd4e60"
+        },
+        {
+          "main_image_address": "0x101e20e24",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1e20e24",
+          "runtime": "0x1042bce24"
+        },
+        {
+          "main_image_address": "0x101e20c80",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1e20c80",
+          "runtime": "0x1042bcc80"
+        },
+        {
+          "main_image_address": "0x101e21030",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1e21030",
+          "runtime": "0x1042bd030"
+        },
+        {
+          "main_image_address": null,
+          "module": "/usr/lib/system/libsystem_pthread.dylib",
+          "module_offset": "0x6d00",
+          "runtime": "0x19ed39d00"
+        },
+        {
+          "main_image_address": null,
+          "module": "/usr/lib/system/libsystem_pthread.dylib",
+          "module_offset": "0x1cec",
+          "runtime": "0x19ed34cec"
+        }
+      ],
+      "thread_id": 36299223
+    },
+    {
+      "argument1": "0x0",
+      "argument2": "0x0",
+      "argument3": 1,
+      "detail": "adm_diffuse_boolean",
+      "kind": "adm_diffuse_value",
+      "name": "adm_diffuse_sink",
+      "regions": [
+        {
+          "address": "0x16f6316d8",
+          "bytes": 56,
+          "hex": "88ed1c0601000000c05d0000000000000a00000000000707a4701d3f48e17a3ea470bd3e0100000000000000010000000000803e01000000",
+          "name": "block_consumer_state56"
+        }
+      ],
+      "sample_start": 0,
+      "self": "0x16f6316d8",
+      "sequence": 1,
+      "stack": [
+        {
+          "main_image_address": null,
+          "module": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/dar-batch-ai34nfvp/dar-batch-ai34nfvp.dylib",
+          "module_offset": "0x1b1c0",
+          "runtime": "0x141a571c0"
+        },
+        {
+          "main_image_address": "0x10237642c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x237642c",
+          "runtime": "0x10481242c"
+        },
+        {
+          "main_image_address": "0x102378e40",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2378e40",
+          "runtime": "0x104814e40"
+        },
+        {
+          "main_image_address": "0x1023b6c74",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x23b6c74",
+          "runtime": "0x104852c74"
+        },
+        {
+          "main_image_address": "0x1023a94d0",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x23a94d0",
+          "runtime": "0x1048454d0"
+        },
+        {
+          "main_image_address": "0x1023b4370",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x23b4370",
+          "runtime": "0x104850370"
+        },
+        {
+          "main_image_address": "0x10239b170",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x239b170",
+          "runtime": "0x104837170"
+        },
+        {
+          "main_image_address": "0x102372bb0",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2372bb0",
+          "runtime": "0x10480ebb0"
+        },
+        {
+          "main_image_address": "0x102373a2c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2373a2c",
+          "runtime": "0x10480fa2c"
+        },
+        {
+          "main_image_address": "0x102285cdc",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2285cdc",
+          "runtime": "0x104721cdc"
+        },
+        {
+          "main_image_address": "0x1024a5bfc",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x24a5bfc",
+          "runtime": "0x104941bfc"
+        },
+        {
+          "main_image_address": "0x10227f2f8",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x227f2f8",
+          "runtime": "0x10471b2f8"
+        },
+        {
+          "main_image_address": "0x10227c854",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x227c854",
+          "runtime": "0x104718854"
+        },
+        {
+          "main_image_address": "0x101997938",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1997938",
+          "runtime": "0x103e33938"
+        },
+        {
+          "main_image_address": "0x10199574c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x199574c",
+          "runtime": "0x103e3174c"
+        },
+        {
+          "main_image_address": "0x101858504",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1858504",
+          "runtime": "0x103cf4504"
+        },
+        {
+          "main_image_address": "0x101847440",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1847440",
+          "runtime": "0x103ce3440"
+        },
+        {
+          "main_image_address": "0x10183c374",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x183c374",
+          "runtime": "0x103cd8374"
+        },
+        {
+          "main_image_address": "0x101838e60",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1838e60",
+          "runtime": "0x103cd4e60"
+        },
+        {
+          "main_image_address": "0x101e20e24",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1e20e24",
+          "runtime": "0x1042bce24"
+        },
+        {
+          "main_image_address": "0x101e20c80",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1e20c80",
+          "runtime": "0x1042bcc80"
+        },
+        {
+          "main_image_address": "0x101e21030",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1e21030",
+          "runtime": "0x1042bd030"
+        },
+        {
+          "main_image_address": null,
+          "module": "/usr/lib/system/libsystem_pthread.dylib",
+          "module_offset": "0x6d00",
+          "runtime": "0x19ed39d00"
+        },
+        {
+          "main_image_address": null,
+          "module": "/usr/lib/system/libsystem_pthread.dylib",
+          "module_offset": "0x1cec",
+          "runtime": "0x19ed34cec"
+        }
+      ],
+      "thread_id": 36299223
+    },
+    {
+      "argument1": "0x0",
+      "argument2": "0x0",
+      "argument3": 0,
+      "detail": "",
+      "kind": "omo_node",
+      "name": "omo_postprocess",
+      "regions": [
+        {
+          "address": "0x791c021880",
+          "bytes": 792,
+          "hex": "00000000000000000028f40c790000000000000000000000030000000000000001000000010000000000003f0000003f00000000000000000000000000000000000000000000000001000000000000000030f40c790000000000000000000000030000000000000001000000020000000000003f0000003f00000000000000000000000000000000000000000000000002000000000000000000f40c790000000000000000000000030000000000000001000000030000000000003f0000003f00000000000000000000000000000000000000000000000003000000000000000018f40c790000000000000000000000000000000100000001000000040000000000003f0000003f00000000000000000000000000000000000000000000000004000000000000000020f40c790000000000000000000000030000000000000001000000050000000000003f0000003f00000000000000000000000000000000000000000000000005000000000000000008f40c790000000000000000000000030000000000000001000000060000000000003f0000003f000000000000000000000000000000000000000000000000060000000000000000700219790000000000000000000000030000000000000001000000070000000000003f0000003f000000000000000000000000000000000000000000000000070000000000000000680219790000000000000000000000030000000000000001000000080000000000003f0000003f0000000000000000000000000000000000000000000000000800000000000000006002197900000000000000000000000300000000000000010000000b0000000000003f0000003f0000000000000000000000000000000000000000000000000900000000000000007802197900000000000000000000000300000000000000010000000c0000000000003f0000003f0000000000000000000000000000000000000000000000000a000000000000000058980d790000000000000000000000030000000000000000000000a4701d3f48e17a3ea470bd3e000000000000803e00000000000000000100000000000000",
+          "name": "input_events72"
+        },
+        {
+          "address": "0x791b856d80",
+          "bytes": 792,
+          "hex": "00000000000000000050980d79000000000000000000000003000000000000000100000001000000000000000000000000000000000000000000000000000000010000000100000001000000000000000048980d79000000000000000000000003000000000000000100000002000000000000000000000000000000000000000000000000000000010000000100000002000000000000000040980d79000000000000000000000003000000000000000100000003000000000000000000000000000000000000000000000000000000010000000100000003000000000000000070980d790000000000000000000000000000000000000001000000040000000000000000000000000000000000000000000000000000000100000001000000040000000000000000b80c18790000000000000000000000030000000000000001000000050000000000000000000000000000000000000000000000000000000100000001000000050000000000000000a80c18790000000000000000000000030000000000000001000000060000000000000000000000000000000000000000000000000000000100000001000000060000000000000000800c18790000000000000000000000030000000000000001000000070000000000000000000000000000000000000000000000000000000100000001000000070000000000000000c8950d790000000000000000000000030000000000000001000000080000000000000000000000000000000000000000000000000000000100000001000000080000000000000000d0950d7900000000000000000000000300000000000000010000000b0000000000000000000000000000000000000000000000000000000100000001000000090000000000000000e0950d7900000000000000000000000300000000000000010000000c00000000000000000000000000000000000000000000000000000001000000010000000a0000000000000000e8950d790000000000000000000000030000000000000000000000a4701d3f48e17a3ea470bd3e000000000000000000000000000000000000000000000000",
+          "name": "direct_events72"
+        }
+      ],
+      "sample_start": 0,
+      "self": "0x78f9f3c0f0",
+      "sequence": 0,
+      "stack": [
+        {
+          "main_image_address": null,
+          "module": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/dar-batch-ai34nfvp/dar-batch-ai34nfvp.dylib",
+          "module_offset": "0x12124",
+          "runtime": "0x141a4e124"
+        },
+        {
+          "main_image_address": "0x101ed38f8",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1ed38f8",
+          "runtime": "0x10436f8f8"
+        },
+        {
+          "main_image_address": "0x101ed33f4",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1ed33f4",
+          "runtime": "0x10436f3f4"
+        },
+        {
+          "main_image_address": "0x101ed3e84",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1ed3e84",
+          "runtime": "0x10436fe84"
+        },
+        {
+          "main_image_address": null,
+          "module": "/usr/lib/system/libsystem_pthread.dylib",
+          "module_offset": "0x6d00",
+          "runtime": "0x19ed39d00"
+        },
+        {
+          "main_image_address": null,
+          "module": "/usr/lib/system/libsystem_pthread.dylib",
+          "module_offset": "0x1cec",
+          "runtime": "0x19ed34cec"
+        }
+      ],
+      "thread_id": 38838043
+    },
+    {
+      "argument1": "0x16f630cb8",
+      "argument2": "0x0",
+      "argument3": 2,
+      "detail": "adm_block_element",
+      "kind": "adm_block_element",
+      "name": "adm_block_parser",
+      "regions": [
+        {
+          "address": "0x791b8675a0",
+          "bytes": 40,
+          "hex": "70231d0601000000002132fc7800000010edda1879000000020000000000000010edda1879000000",
+          "name": "parser_header"
+        },
+        {
+          "address": "0x16f630cc8",
+          "bytes": 7,
+          "hex": "64696666757365",
+          "name": "element_name_utf8"
+        },
+        {
+          "address": "0x16f6316d8",
+          "bytes": 56,
+          "hex": "88ed1c060100000000000000000000000a00000000000705a4701d3f48e17a3ea470bd3e0100000000000000000000000000803e01000000",
+          "name": "block_consumer_state56"
+        },
+        {
+          "address": "0x7918daed38",
+          "bytes": 24,
+          "hex": "d8251d0601000000a075861b79000000d816636f01000000",
+          "name": "active_value_converter"
+        }
+      ],
+      "sample_start": 0,
+      "self": "0x791b8675a0",
+      "sequence": 9,
+      "stack": [
+        {
+          "main_image_address": null,
+          "module": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/dar-batch-xlc6ym5g/dar-batch-xlc6ym5g.dylib",
+          "module_offset": "0x1a438",
+          "runtime": "0x141afe438"
+        },
+        {
+          "main_image_address": "0x10237be1c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x237be1c",
+          "runtime": "0x104817e1c"
+        },
+        {
+          "main_image_address": "0x1023b903c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x23b903c",
+          "runtime": "0x10485503c"
+        },
+        {
+          "main_image_address": "0x1023b4808",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x23b4808",
+          "runtime": "0x104850808"
+        },
+        {
+          "main_image_address": "0x10239b170",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x239b170",
+          "runtime": "0x104837170"
+        },
+        {
+          "main_image_address": "0x102372bb0",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2372bb0",
+          "runtime": "0x10480ebb0"
+        },
+        {
+          "main_image_address": "0x102373a2c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2373a2c",
+          "runtime": "0x10480fa2c"
+        },
+        {
+          "main_image_address": "0x102285cdc",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2285cdc",
+          "runtime": "0x104721cdc"
+        },
+        {
+          "main_image_address": "0x1024a5bfc",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x24a5bfc",
+          "runtime": "0x104941bfc"
+        },
+        {
+          "main_image_address": "0x10227f2f8",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x227f2f8",
+          "runtime": "0x10471b2f8"
+        },
+        {
+          "main_image_address": "0x10227c854",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x227c854",
+          "runtime": "0x104718854"
+        },
+        {
+          "main_image_address": "0x101997938",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1997938",
+          "runtime": "0x103e33938"
+        },
+        {
+          "main_image_address": "0x10199574c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x199574c",
+          "runtime": "0x103e3174c"
+        },
+        {
+          "main_image_address": "0x101858504",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1858504",
+          "runtime": "0x103cf4504"
+        },
+        {
+          "main_image_address": "0x101847440",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1847440",
+          "runtime": "0x103ce3440"
+        },
+        {
+          "main_image_address": "0x10183c374",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x183c374",
+          "runtime": "0x103cd8374"
+        },
+        {
+          "main_image_address": "0x101838e60",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1838e60",
+          "runtime": "0x103cd4e60"
+        },
+        {
+          "main_image_address": "0x101e20e24",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1e20e24",
+          "runtime": "0x1042bce24"
+        },
+        {
+          "main_image_address": "0x101e20c80",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1e20c80",
+          "runtime": "0x1042bcc80"
+        },
+        {
+          "main_image_address": "0x101e21030",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1e21030",
+          "runtime": "0x1042bd030"
+        },
+        {
+          "main_image_address": null,
+          "module": "/usr/lib/system/libsystem_pthread.dylib",
+          "module_offset": "0x6d00",
+          "runtime": "0x19ed39d00"
+        },
+        {
+          "main_image_address": null,
+          "module": "/usr/lib/system/libsystem_pthread.dylib",
+          "module_offset": "0x1cec",
+          "runtime": "0x19ed34cec"
+        }
+      ],
+      "thread_id": 36299223
+    },
+    {
+      "argument1": "0x16f630cb8",
+      "argument2": "0x0",
+      "argument3": 2,
+      "detail": "adm_block_element",
+      "kind": "adm_block_element",
+      "name": "adm_block_parser",
+      "regions": [
+        {
+          "address": "0x791b8675a0",
+          "bytes": 40,
+          "hex": "70231d0601000000002132fc78000000000000000000000002000000000000000000000000000000",
+          "name": "parser_header"
+        },
+        {
+          "address": "0x16f630cc8",
+          "bytes": 16,
+          "hex": "6f626a656374446976657267656e6365",
+          "name": "element_name_utf8"
+        },
+        {
+          "address": "0x16f6316d8",
+          "bytes": 56,
+          "hex": "88ed1c060100000000000000000000000a00000000000707a4701d3f48e17a3ea470bd3e0100000000000000000000000000803e01000000",
+          "name": "block_consumer_state56"
+        }
+      ],
+      "sample_start": 0,
+      "self": "0x791b8675a0",
+      "sequence": 10,
+      "stack": [
+        {
+          "main_image_address": null,
+          "module": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/dar-batch-xlc6ym5g/dar-batch-xlc6ym5g.dylib",
+          "module_offset": "0x1a438",
+          "runtime": "0x141afe438"
+        },
+        {
+          "main_image_address": "0x10237be1c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x237be1c",
+          "runtime": "0x104817e1c"
+        },
+        {
+          "main_image_address": "0x1023b903c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x23b903c",
+          "runtime": "0x10485503c"
+        },
+        {
+          "main_image_address": "0x1023b4808",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x23b4808",
+          "runtime": "0x104850808"
+        },
+        {
+          "main_image_address": "0x10239b170",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x239b170",
+          "runtime": "0x104837170"
+        },
+        {
+          "main_image_address": "0x102372bb0",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2372bb0",
+          "runtime": "0x10480ebb0"
+        },
+        {
+          "main_image_address": "0x102373a2c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2373a2c",
+          "runtime": "0x10480fa2c"
+        },
+        {
+          "main_image_address": "0x102285cdc",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x2285cdc",
+          "runtime": "0x104721cdc"
+        },
+        {
+          "main_image_address": "0x1024a5bfc",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x24a5bfc",
+          "runtime": "0x104941bfc"
+        },
+        {
+          "main_image_address": "0x10227f2f8",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x227f2f8",
+          "runtime": "0x10471b2f8"
+        },
+        {
+          "main_image_address": "0x10227c854",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x227c854",
+          "runtime": "0x104718854"
+        },
+        {
+          "main_image_address": "0x101997938",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1997938",
+          "runtime": "0x103e33938"
+        },
+        {
+          "main_image_address": "0x10199574c",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x199574c",
+          "runtime": "0x103e3174c"
+        },
+        {
+          "main_image_address": "0x101858504",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1858504",
+          "runtime": "0x103cf4504"
+        },
+        {
+          "main_image_address": "0x101847440",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1847440",
+          "runtime": "0x103ce3440"
+        },
+        {
+          "main_image_address": "0x10183c374",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x183c374",
+          "runtime": "0x103cd8374"
+        },
+        {
+          "main_image_address": "0x101838e60",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1838e60",
+          "runtime": "0x103cd4e60"
+        },
+        {
+          "main_image_address": "0x101e20e24",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1e20e24",
+          "runtime": "0x1042bce24"
+        },
+        {
+          "main_image_address": "0x101e20c80",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1e20c80",
+          "runtime": "0x1042bcc80"
+        },
+        {
+          "main_image_address": "0x101e21030",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1e21030",
+          "runtime": "0x1042bd030"
+        },
+        {
+          "main_image_address": null,
+          "module": "/usr/lib/system/libsystem_pthread.dylib",
+          "module_offset": "0x6d00",
+          "runtime": "0x19ed39d00"
+        },
+        {
+          "main_image_address": null,
+          "module": "/usr/lib/system/libsystem_pthread.dylib",
+          "module_offset": "0x1cec",
+          "runtime": "0x19ed34cec"
+        }
+      ],
+      "thread_id": 36299223
+    },
+    {
+      "argument1": "0x0",
+      "argument2": "0x0",
+      "argument3": 0,
+      "detail": "",
+      "kind": "omo_node",
+      "name": "omo_postprocess",
+      "regions": [
+        {
+          "address": "0x791c54b800",
+          "bytes": 792,
+          "hex": "00000000000000000048c20e790000000000000000000000030000000000000001000000010000000000003f0000003f00000000000000000000000000000000000000000000000001000000000000000058c20e790000000000000000000000030000000000000001000000020000000000003f0000003f00000000000000000000000000000000000000000000000002000000000000000040c20e790000000000000000000000030000000000000001000000030000000000003f0000003f000000000000000000000000000000000000000000000000030000000000000000385d12790000000000000000000000000000000100000001000000040000000000003f0000003f000000000000000000000000000000000000000000000000040000000000000000305d12790000000000000000000000030000000000000001000000050000000000003f0000003f000000000000000000000000000000000000000000000000050000000000000000205d12790000000000000000000000030000000000000001000000060000000000003f0000003f000000000000000000000000000000000000000000000000060000000000000000285d12790000000000000000000000030000000000000001000000070000000000003f0000003f00000000000000000000000000000000000000000000000007000000000000000058e909790000000000000000000000030000000000000001000000080000000000003f0000003f000000000000000000000000000000000000000000000000080000000000000000a800137900000000000000000000000300000000000000010000000b0000000000003f0000003f000000000000000000000000000000000000000000000000090000000000000000a000137900000000000000000000000300000000000000010000000c0000000000003f0000003f0000000000000000000000000000000000000000000000000a0000000000000000b80013790000000000000000000000030000000000000000000000a4701d3f48e17a3ea470bd3e000000000000803e00000000000000000100000000000000",
+          "name": "input_events72"
+        },
+        {
+          "address": "0x791b855c00",
+          "bytes": 792,
+          "hex": "00000000000000000098001379000000000000000000000003000000000000000100000001000000000000000000000000000000000000000000000000000000010000000100000001000000000000000080001379000000000000000000000003000000000000000100000002000000000000000000000000000000000000000000000000000000010000000100000002000000000000000088ba1879000000000000000000000003000000000000000100000003000000000000000000000000000000000000000000000000000000010000000100000003000000000000000090ba18790000000000000000000000000000000000000001000000040000000000000000000000000000000000000000000000000000000100000001000000040000000000000000b87212790000000000000000000000030000000000000001000000050000000000000000000000000000000000000000000000000000000100000001000000050000000000000000a87212790000000000000000000000030000000000000001000000060000000000000000000000000000000000000000000000000000000100000001000000060000000000000000a0721279000000000000000000000003000000000000000100000007000000000000000000000000000000000000000000000000000000010000000100000007000000000000000010f40c79000000000000000000000003000000000000000100000008000000000000000000000000000000000000000000000000000000010000000100000008000000000000000010c00e7900000000000000000000000300000000000000010000000b000000000000000000000000000000000000000000000000000000010000000100000009000000000000000038c00e7900000000000000000000000300000000000000010000000c00000000000000000000000000000000000000000000000000000001000000010000000a000000000000000008c00e790000000000000000000000030000000000000000000000a4701d3f48e17a3ea470bd3e000000000000000000000000000000000000000000000000",
+          "name": "direct_events72"
+        }
+      ],
+      "sample_start": 0,
+      "self": "0x78f9f3c190",
+      "sequence": 0,
+      "stack": [
+        {
+          "main_image_address": null,
+          "module": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/dar-batch-xlc6ym5g/dar-batch-xlc6ym5g.dylib",
+          "module_offset": "0x12124",
+          "runtime": "0x141af6124"
+        },
+        {
+          "main_image_address": "0x101ed38f8",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1ed38f8",
+          "runtime": "0x10436f8f8"
+        },
+        {
+          "main_image_address": "0x101ed33f4",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1ed33f4",
+          "runtime": "0x10436f3f4"
+        },
+        {
+          "main_image_address": "0x101ed3e84",
+          "module": "/Applications/Dolby/Dolby Atmos Renderer/Dolby Atmos Renderer.app/Contents/MacOS/Dolby Atmos Renderer",
+          "module_offset": "0x1ed3e84",
+          "runtime": "0x10436fe84"
+        },
+        {
+          "main_image_address": null,
+          "module": "/usr/lib/system/libsystem_pthread.dylib",
+          "module_offset": "0x6d00",
+          "runtime": "0x19ed39d00"
+        },
+        {
+          "main_image_address": null,
+          "module": "/usr/lib/system/libsystem_pthread.dylib",
+          "module_offset": "0x1cec",
+          "runtime": "0x19ed34cec"
+        }
+      ],
+      "thread_id": 38839250
+    }
+  ],
+  "sources": [
+    {
+      "path": "local/dar-spatial-semantics/traces/dynamic_0.25-combined-diffuse/trace.json",
+      "sha256": "e5a5feb1a6024cadedcd7b03e77c59a07d38fea3b619a9d2371074a51dac7748"
+    },
+    {
+      "path": "local/dar-spatial-semantics/traces/dynamic_0.25-combined-parser/trace.json",
+      "sha256": "41ae9f65ad1b0e9ea2f6a33dc7572b5f3c287a9a33c9c93717994e98cd31090a"
+    }
+  ],
+  "load_base": "0x10249c000",
+  "hooks": [
+    {
+      "calls": 4448,
+      "name": "sushi_oar_process",
+      "records": 62
+    },
+    {
+      "calls": 469,
+      "name": "omo_postprocess",
+      "records": 31
+    },
+    {
+      "calls": 5159,
+      "name": "omo_worker",
+      "records": 28
+    },
+    {
+      "calls": 88,
+      "name": "adm_block_parser",
+      "records": 88
+    }
+  ]
+}

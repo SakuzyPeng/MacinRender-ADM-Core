@@ -1,0 +1,44 @@
+{
+  "module_uuid": "F11646CF-9535-3815-8184-524335D4CC3A",
+  "binary_sha256": "ec9432d6af6679cfdf5cc668d37be0b3ac295ea9453b264ec84e0d1706bb2390",
+  "image_base": "0x100000000",
+  "transport": "resident",
+  "max_records": 2048,
+  "hooks": [
+    {
+      "name": "sushi_oar_process",
+      "kind": "oar_process",
+      "vtable_slot": "0x103d14ef0",
+      "function": "0x101e3ebcc"
+    },
+    {
+      "name": "omo_postprocess",
+      "kind": "omo_node",
+      "vtable_slot": "0x103d158e0",
+      "function": "0x101e54774"
+    },
+    {
+      "name": "omo_worker",
+      "kind": "omo_worker",
+      "vtable_slot": "0x103d15920",
+      "function": "0x101e54840"
+    }
+  ],
+  "record_stride": 16,
+  "size_dispatch": "0x101e6d374",
+  "scope": {
+    "sample_rate": 48000,
+    "layouts": [
+      "7.1.4",
+      "9.1.6"
+    ],
+    "objects": "Cartesian isotropic size [0,1]",
+    "entry": "normal_render_capture",
+    "independent_direct_entry": false
+  },
+  "evidence": {
+    "gain_callback": "0x101e6d374 -> 0x101e5f4dc -> 0x101e598b0",
+    "consumer": "0x101e6f0cc -> 0x101e6b824 -> 0x101e6dd60 -> OAR",
+    "runtime_text_snapshot_sha256": "15e818bed8310265883e5be06f2ceef43120762fa59db4be8095f2d4f6bfd8ee"
+  }
+}

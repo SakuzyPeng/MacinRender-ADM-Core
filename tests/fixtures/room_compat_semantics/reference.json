@@ -1,0 +1,35 @@
+{
+  "adm_sha256": "f825f7997f11c787b93c050e7eb121cfcd9146cab48f65f929fbd09ab79a3f32",
+  "pcm_sha256": "4ee6a34078186a07dca0c7f581edb4350fafd25137d8d9b59e2292d6b2ab6b97",
+  "source": "Renderer 5.5 direct ADM, same PCM with first block at 48000; input begins at file zero",
+  "output_start_sample": 47104,
+  "output_frames": 5120,
+  "reference_outputs": [
+    {
+      "layout": "9.1.6",
+      "path": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/dar-object-semantics/verified/block_start_s0p25/reference/input-dar-916_re-render 02.wav",
+      "bytes": 11520738,
+      "sha256": "b8dd5ceeb0d269c16c2fb2f0b1a8abaa62e9eb00ebbf7112ae675dbee4aea64b",
+      "codec": "pcm_s24le",
+      "channels": 16,
+      "sample_rate": 48000,
+      "duration_seconds": 5.0
+    },
+    {
+      "layout": "7.1.4",
+      "path": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/dar-object-semantics/verified/block_start_s0p25/reference/input-dar-714_re-render 02.wav",
+      "bytes": 8640738,
+      "sha256": "a28fcb95cc39ac1230bfbcbb0d0005d0303e727361d2c0b16465dab3967ebf64",
+      "codec": "pcm_s24le",
+      "channels": 12,
+      "sample_rate": 48000,
+      "duration_seconds": 5.0
+    }
+  ],
+  "files": {
+    "7.1.4.f32": "3fd0a3e8e2635b8cb7697a40cb5968db6ca7836f8b5db084614a09dfb1bdb52a",
+    "input.f32": "d0e5327e4b53ec15cd4fcbea967b6e8e45be2a7b28c82690a7971b0fe71146dc",
+    "9.1.6.f32": "feb98cdcd2ef2eb52058ea80a254bc80b88ac7d50c1ec8326fbc6813eedcfe5b"
+  },
+  "channel_order": "kernel/canonical frozen order; before WAVE channel-mask permutation"
+}

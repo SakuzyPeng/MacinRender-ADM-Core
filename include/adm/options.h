@@ -30,6 +30,13 @@ enum class SpeakerSpreadMode {
     mdap,      // always use MDAP (multi-directional amplitude panning) for 3D layouts
 };
 
+// Optional offline Cartesian room panner for the SAF speaker backend. The
+// existing spherical SAF VBAP remains the default.
+enum class SpeakerPannerMode {
+    vbap,
+    room_compat,
+};
+
 // Effective loudspeaker coordinates used by software speaker renderers. `standard`
 // preserves the existing project / ADM nominal geometry; `apple` uses the fixed
 // coordinates reported by CoreAudio for the matching standard layout tags. The
@@ -160,6 +167,7 @@ struct RenderOptions {
     // option and relies on SpatialMixer's internal parameter smoothing.
     uint32_t object_smoothing_frames{0};
     SpeakerGeometry speaker_geometry{SpeakerGeometry::standard};
+    SpeakerPannerMode speaker_panner_mode{SpeakerPannerMode::vbap};
     DirectSpeakersRoutingMode direct_speakers_routing_mode{DirectSpeakersRoutingMode::automatic};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};

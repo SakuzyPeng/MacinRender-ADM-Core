@@ -36,6 +36,11 @@ struct WavLayoutFinalization {
     // ITU-R BS.2088 does not define IEEE-float BW64 as a normative format.
     std::string axml;
     std::vector<WavChnaEntry> chna;
+    // An extensible header with mask=0 explicitly leaves speaker positions
+    // unspecified; it is distinct from attaching ADM channel assignments.
+    bool force_extensible{false};
+    bool prefer_riff{false};
+    bool include_pcm_fact{false};
 };
 
 Result<void> finalize_wav_layout(const std::string& path,

@@ -158,6 +158,8 @@ struct SemanticPolicyReportOptions {
     std::string renderer;
     std::string policy_path;
     CapabilityReport capabilities;
+    // Optional JSON object supplied by the backend's actual preparation path.
+    std::string renderer_effective_json{};
 };
 
 [[nodiscard]] Result<SemanticPolicy> load_semantic_policy_file(const std::filesystem::path& path);

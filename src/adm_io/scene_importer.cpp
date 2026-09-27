@@ -174,8 +174,7 @@ struct WaveAdmMetadata {
 // Convert an adm::Time to the nearest sample offset.  ADM authored by DAWs often
 // stores sample-aligned times as decimal seconds, so flooring each timestamp can
 // create one-sample holes at dense block boundaries.
-// NOTE: rtime is relative to AudioObject start; we assume start==0 (the
-// common case for single-programme documents).
+// rtime is relative to AudioObject start; callers add the resolved object offset.
 uint64_t time_to_samples(const adm::Time& t, uint32_t sample_rate) {
     const int64_t ns = t.asNanoseconds().count();
     if (ns <= 0 || sample_rate == 0) {
@@ -203,6 +202,14 @@ uint64_t saturating_add(uint64_t lhs, uint64_t rhs) {
         return max;
     }
     return lhs + rhs;
+}
+
+template <typename Element> SceneGainSource gain_source(const Element& element) {
+    const auto gain = element.template get<adm::Gain>();
+    return {!element.template isDefault<adm::Gain>(),
+            gain.isDb(),
+            gain.isDb() ? gain.asDb() : gain.asLinear(),
+            static_cast<float>(gain.asLinear())};
 }
 
 adm::InterpolationLength samples_to_interpolation_length(uint64_t samples, uint32_t sample_rate) {
@@ -263,9 +270,12 @@ void append_objects_blocks_from_cf(const std::shared_ptr<adm::AudioChannelFormat
         // rtime is DefaultParameter — always present, default 0.
         // Add AudioObject start offset so time is absolute within the file.
         const uint64_t rtime_samples = time_to_samples(raw.get<adm::Rtime>().get(), sample_rate);
+        block.adm_source =
+            SceneBlockSource{gain_source(raw), !raw.isDefault<adm::Rtime>(), rtime_samples, std::nullopt};
         block.start_sample = saturating_add(obj_start_sample, rtime_samples);
         if (raw.has<adm::Duration>()) {
             const uint64_t dur = time_to_samples(raw.get<adm::Duration>().get(), sample_rate);
+            block.adm_source->duration_samples = dur;
             block.end_sample = saturating_add(block.start_sample, dur);
         }
         // else: end_sample remains UINT64_MAX (extends to end of file)
@@ -349,12 +359,21 @@ void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChann
             if (pos.has<adm::DistanceMax>()) {
                 block.distance_max = pos.get<adm::DistanceMax>().get();
             }
+            block.source_position = SceneBlockPosition{};
+            block.source_position->azimuth = block.azimuth;
+            block.source_position->elevation = block.elevation;
+            block.source_position->distance = block.distance;
         } else if (raw.has<adm::CartesianSpeakerPosition>()) {
             const auto& pos = raw.get<adm::CartesianSpeakerPosition>();
             block.has_position = true;
             const auto cx = static_cast<double>(pos.has<adm::X>() ? pos.get<adm::X>().get() : 0.0F);
             const auto cy = static_cast<double>(pos.has<adm::Y>() ? pos.get<adm::Y>().get() : 0.0F);
             const auto cz = static_cast<double>(pos.has<adm::Z>() ? pos.get<adm::Z>().get() : 0.0F);
+            block.source_position = SceneBlockPosition{};
+            block.source_position->cartesian = true;
+            block.source_position->x = static_cast<float>(cx);
+            block.source_position->y = static_cast<float>(cy);
+            block.source_position->z = static_cast<float>(cz);
             block.azimuth = static_cast<float>(std::atan2(-cx, cy) * (180.0 / std::numbers::pi_v<double>) );
             block.elevation = static_cast<float>(std::atan2(cz, std::sqrt((cx * cx) + (cy * cy))) *
                                                  (180.0 / std::numbers::pi_v<double>) );
@@ -368,9 +387,11 @@ void append_direct_speakers_blocks_from_cf(const std::shared_ptr<adm::AudioChann
 
         // rtime is DefaultParameter — always present, default 0.
         const uint64_t rtime = time_to_samples(raw.get<adm::Rtime>().get(), sample_rate);
+        block.adm_source = SceneBlockSource{gain_source(raw), !raw.isDefault<adm::Rtime>(), rtime, std::nullopt};
         block.start_sample = saturating_add(obj_start_sample, rtime);
         if (raw.has<adm::Duration>()) {
             const uint64_t dur = time_to_samples(raw.get<adm::Duration>().get(), sample_rate);
+            block.adm_source->duration_samples = dur;
             block.end_sample = saturating_add(block.start_sample, dur);
         }
 
@@ -459,11 +480,44 @@ std::map<std::string, uint64_t> make_object_start_offsets(const std::shared_ptr<
     return offsets;
 }
 
+SceneObjectSource object_source(const std::shared_ptr<adm::AudioObject>& object,
+                                uint32_t sample_rate,
+                                uint64_t absolute_start,
+                                bool has_parent) {
+    SceneObjectSource source{gain_source(*object),
+                             !object->isDefault<adm::Mute>(),
+                             object->get<adm::Mute>().get(),
+                             !object->isDefault<adm::Start>(),
+                             audio_object_start_samples(object, sample_rate),
+                             absolute_start,
+                             std::nullopt,
+                             {},
+                             has_parent};
+    for (const auto& child : object->getReferences<adm::AudioObject>()) {
+        source.child_objects.push_back(adm::formatId(child->get<adm::AudioObjectId>()));
+    }
+    if (object->has<adm::Duration>()) {
+        source.duration_samples = time_to_samples(object->get<adm::Duration>().get(), sample_rate);
+    }
+    return source;
+}
+
+std::set<std::string> parent_object_ids(const std::shared_ptr<adm::Document>& doc) {
+    std::set<std::string> parented_objects;
+    for (const auto& parent : doc->getElements<adm::AudioObject>()) {
+        for (const auto& child : parent->getReferences<adm::AudioObject>()) {
+            parented_objects.insert(adm::formatId(child->get<adm::AudioObjectId>()));
+        }
+    }
+    return parented_objects;
+}
+
 std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& doc,
                                          const std::map<std::string, uint16_t>& uid_map,
                                          uint32_t sample_rate,
                                          std::set<std::string>& skipped_type_defs) {
     const auto object_start_offsets = make_object_start_offsets(doc, sample_rate);
+    const auto parented_objects = parent_object_ids(doc);
     std::vector<SceneObject> result;
     for (const auto& obj : doc->getElements<adm::AudioObject>()) {
         SceneObject out;
@@ -509,6 +563,7 @@ std::vector<SceneObject> extract_objects(const std::shared_ptr<adm::Document>& d
         }
         const auto start_it = object_start_offsets.find(out.id);
         const uint64_t obj_start = (start_it != object_start_offsets.end()) ? start_it->second : 0;
+        out.adm_source = object_source(obj, sample_rate, obj_start, parented_objects.contains(out.id));
         if (obj->has<adm::Duration>()) {
             const uint64_t dur = time_to_samples(obj->get<adm::Duration>().get(), sample_rate);
             out.end_sample = saturating_add(obj_start, dur);

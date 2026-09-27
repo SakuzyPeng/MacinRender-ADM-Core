@@ -25,6 +25,12 @@ unusedStructMember:*/include/adm/c_api.h
 # Shared renderer internals return aggregate structs across translation units.
 unusedStructMember:*/src/adm_render_common/render_common.h
 unusedStructMember:*/src/adm_render_common/speaker_layouts.h
+# Room geometry and per-object DSP state are consumed by their implementation
+# units; standalone header checks cannot see those uses.
+unusedStructMember:*/src/adm_render_vbap/room_222.h
+unusedStructMember:*/src/adm_render_vbap/room_compat_size_filter.h
+unusedStructMember:*/src/adm_render_vbap/room_compat_size_panner.h
+unusedStructMember:*/src/adm_render_vbap/room_compat_size_processor.h
 # HpTF coefficient/status aggregates and mailbox state cross translation units.
 unusedStructMember:*/src/adm_render_common/hptf_eq.h
 unusedStructMember:*/src/adm_cli/commands.h

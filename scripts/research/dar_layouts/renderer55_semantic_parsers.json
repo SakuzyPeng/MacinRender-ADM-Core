@@ -1,0 +1,22 @@
+{
+  "module_uuid": "F11646CF-9535-3815-8184-524335D4CC3A",
+  "binary_sha256": "ec9432d6af6679cfdf5cc668d37be0b3ac295ea9453b264ec84e0d1706bb2390",
+  "object": {
+    "name": "adm_object_parser",
+    "kind": "adm_object_element",
+    "vtable_slot": "0x103d36a70",
+    "function": "0x102379454"
+  },
+  "block": {
+    "name": "adm_block_parser",
+    "kind": "adm_block_element",
+    "vtable_slot": "0x103d36380",
+    "function": "0x102373eec"
+  },
+  "evidence": {
+    "object_constructor": "0x102379410",
+    "block_rtime_consumer": "0x102373eec",
+    "validation_only_object_time_checks": "0x10238615c",
+    "runtime_text_sha256": "15e818bed8310265883e5be06f2ceef43120762fa59db4be8095f2d4f6bfd8ee"
+  }
+}
