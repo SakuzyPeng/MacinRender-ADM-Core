@@ -1,4 +1,4 @@
-#include "room_compat_panner.h"
+#include "panner.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,9 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "room_222.h"
+#include "layout_222.h"
 
-namespace mradm::room_compat {
+namespace mradm::triple_balance {
 
 namespace {
 
@@ -122,12 +122,12 @@ Result<std::vector<float>> point_gains(const SceneBlockPosition& position, float
     const bool seven_one_four = layout_id == "4+7+0" || layout_id == "7.1.4";
     const bool nine_one_six = layout_id == "9.1.6";
     if (!seven_one_four && !nine_one_six) {
-        return make_error(ErrorCode::unsupported, "room-compat supports only 7.1.4 and 9.1.6");
+        return make_error(ErrorCode::unsupported, "triple-balance supports only 7.1.4 and 9.1.6");
     }
     if (!position.cartesian || !std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z) ||
         !std::isfinite(gain) || std::fabs(position.x) > 1.0F || std::fabs(position.y) > 1.0F || position.z < 0.0F ||
         position.z > 1.0F) {
-        return make_error(ErrorCode::unsupported, "room-compat requires finite Cartesian XYZ within the ADM room");
+        return make_error(ErrorCode::unsupported, "triple-balance requires finite Cartesian XYZ within the ADM room");
     }
 
     const std::size_t channels = nine_one_six ? 16U : 12U;
@@ -149,4 +149,4 @@ Result<std::vector<float>> point_gains(const SceneBlockPosition& position, float
     return result;
 }
 
-} // namespace mradm::room_compat
+} // namespace mradm::triple_balance

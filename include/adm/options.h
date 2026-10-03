@@ -21,20 +21,14 @@ enum class RendererSelection {
     hoa,
     apple,
     binaural,
-    saf_binaural, // SAF HRTF binaural backend
+    saf_binaural,   // SAF HRTF binaural backend
+    triple_balance, // Offline Cartesian room renderer
 };
 
 enum class SpeakerSpreadMode {
-    automatic, // mdap for 3D layouts, none for 2D
-    none,      // disable MDAP; Objects always use point VBAP regardless of extent
+    automatic, // Triple Balance size; otherwise MDAP for 3D layouts, none for 2D
+    none,      // ignore extent and use the selected renderer's point panner
     mdap,      // always use MDAP (multi-directional amplitude panning) for 3D layouts
-};
-
-// Optional offline Cartesian room panner for the SAF speaker backend. The
-// existing spherical SAF VBAP remains the default.
-enum class SpeakerPannerMode {
-    vbap,
-    room_compat,
 };
 
 // Effective loudspeaker coordinates used by software speaker renderers. `standard`
@@ -167,7 +161,6 @@ struct RenderOptions {
     // option and relies on SpatialMixer's internal parameter smoothing.
     uint32_t object_smoothing_frames{0};
     SpeakerGeometry speaker_geometry{SpeakerGeometry::standard};
-    SpeakerPannerMode speaker_panner_mode{SpeakerPannerMode::vbap};
     DirectSpeakersRoutingMode direct_speakers_routing_mode{DirectSpeakersRoutingMode::automatic};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};

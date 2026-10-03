@@ -6,21 +6,21 @@
 
 #include <nlohmann/json.hpp>
 
-#include "room_compat_size_panner.h"
-#include "room_compat_size_processor.h"
+#include "size_panner.h"
+#include "size_processor.h"
 
 int main(int argc, char** argv) {
     if (argc == 2) {
         std::ifstream configuration(argv[1]);
         const auto request = nlohmann::json::parse(configuration);
-        std::vector<mradm::room_compat::SizeEvent> events;
+        std::vector<mradm::triple_balance::SizeEvent> events;
         for (const auto& event : request.at("events")) {
             const auto& xyz = event.at("xyz");
             events.push_back({event.at("start_sample").get<uint64_t>(),
                               {xyz[0].get<float>(), xyz[1].get<float>(), xyz[2].get<float>()},
                               event.at("size").get<float>()});
         }
-        auto processor = mradm::room_compat::SizeObjectProcessor::create(events, request.at("layout"), 48000);
+        auto processor = mradm::triple_balance::SizeObjectProcessor::create(events, request.at("layout"), 48000);
         if (!processor) {
             std::cerr << processor.error().message << '\n';
             return 1;
@@ -53,10 +53,10 @@ int main(int argc, char** argv) {
                      static_cast<std::streamsize>(result.size() * sizeof(float)));
         return output.good() ? 0 : 1;
     }
-    mradm::room_compat::QuantizedSizeParameters parameters;
+    mradm::triple_balance::QuantizedSizeParameters parameters;
     std::cout << std::setprecision(10);
     while (std::cin >> parameters.xyz[0] >> parameters.xyz[1] >> parameters.xyz[2] >> parameters.size) {
-        const auto gains = mradm::room_compat::raw_size_gains(parameters);
+        const auto gains = mradm::triple_balance::raw_size_gains(parameters);
         if (!gains) {
             std::cerr << gains.error().message << '\n';
             return 1;

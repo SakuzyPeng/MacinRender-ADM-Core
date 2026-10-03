@@ -25,6 +25,7 @@
 #include "adm/audio_io.h"
 #include "adm/io.h"
 #include "adm/render.h"
+#include "adm/render_triple_balance.h"
 #include "adm/render_vbap.h"
 #include "adm/semantic_policy.h"
 
@@ -1541,22 +1542,21 @@ bool verify_audio_object_gain_scales_output() {
     return ok;
 }
 
-bool verify_room_compat_block_gain_reference() {
-    const auto render_gain = [](mradm::SpeakerPannerMode mode, float gain) -> double {
+bool verify_triple_balance_block_gain_reference() {
+    const auto render_gain = [](mradm::RendererSelection mode, float gain) -> double {
         auto [doc, uid] = make_objects_doc(ObjectPositionMode::cartesian_front, gain);
         const auto input = write_input_fixture(doc, uid);
         FileGuard input_guard{input};
         const auto output =
             std::filesystem::temp_directory_path() /
-            ("mr_room_compat_gain_" + std::to_string(current_process_id()) + "_" +
+            ("mr_triple_balance_gain_" + std::to_string(current_process_id()) + "_" +
              std::to_string(static_cast<int>(gain * 100.0F)) + "_" + std::to_string(static_cast<int>(mode)) + ".wav");
         FileGuard output_guard{output};
         mradm::RenderRequest request;
         request.input_path = input;
         request.output_path = output;
         request.options.output_layout = "4+7+0";
-        request.options.renderer = mradm::RendererSelection::saf;
-        request.options.speaker_panner_mode = mode;
+        request.options.renderer = mode;
         request.options.peak_limit = false;
         mradm::RenderService service;
         mradm::NullProgressSink progress;
@@ -1569,17 +1569,18 @@ bool verify_room_compat_block_gain_reference() {
         return std::accumulate(sums.begin(), sums.end(), 0.0);
     };
 
-    const double compat_one = render_gain(mradm::SpeakerPannerMode::room_compat, 1.0F);
-    const double compat_half = render_gain(mradm::SpeakerPannerMode::room_compat, 0.5F);
-    const double vbap_one = render_gain(mradm::SpeakerPannerMode::vbap, 1.0F);
-    const double vbap_half = render_gain(mradm::SpeakerPannerMode::vbap, 0.5F);
+    const double compat_one = render_gain(mradm::RendererSelection::triple_balance, 1.0F);
+    const double compat_half = render_gain(mradm::RendererSelection::triple_balance, 0.5F);
+    const double vbap_one = render_gain(mradm::RendererSelection::saf, 1.0F);
+    const double vbap_half = render_gain(mradm::RendererSelection::saf, 0.5F);
     return check(compat_one > 0.0 && vbap_one > 0.0, "gain fixture renders have signal") &&
-           check(std::fabs((compat_half / compat_one) - 1.0) < 1.0e-5, "room-compat ignores source ADM block gain") &&
+           check(std::fabs((compat_half / compat_one) - 1.0) < 1.0e-5,
+                 "triple-balance ignores source ADM block gain") &&
            check(std::fabs((vbap_half / vbap_one) - 0.5) < 1.0e-5, "default VBAP still applies ADM block gain");
 }
 
 // NOLINTNEXTLINE(readability-function-size): single fixture for prepared state, windows and user controls.
-bool verify_room_compat_size_window_and_validation() {
+bool verify_triple_balance_size_window_and_validation() {
     auto [doc, uid] = make_objects_doc(ObjectPositionMode::cartesian_front, 1.0F, 0.25F);
     const auto input = write_input_fixture(doc, uid, 48000U, 10037U);
     FileGuard input_guard{input};
@@ -1587,7 +1588,7 @@ bool verify_room_compat_size_window_and_validation() {
     if (!check(scene.has_value(), "size fixture imports")) {
         return false;
     }
-    auto renderer = mradm::create_vbap_renderer();
+    auto renderer = mradm::create_triple_balance_renderer();
     mradm::NullLogSink logs;
     mradm::NullProgressSink progress;
     bool ok = true;
@@ -1596,7 +1597,6 @@ bool verify_room_compat_size_window_and_validation() {
         plan.input_path = input.string();
         plan.scene = *scene;
         plan.output_layout = layout;
-        plan.speaker_panner_mode = mradm::SpeakerPannerMode::room_compat;
         auto prepared = renderer->prepare(plan, logs);
         if (!check(prepared.has_value(), "equal-size offline input is supported")) {
             return false;
@@ -1699,7 +1699,7 @@ bool verify_room_compat_size_window_and_validation() {
     return ok;
 }
 
-bool verify_room_compat_semantic_report() {
+bool verify_triple_balance_semantic_report() {
     auto [doc, uid] = make_objects_doc(ObjectPositionMode::cartesian_front, 0.25F, 0.25F);
     const auto input = write_input_fixture(doc, uid, 48000, 10037);
     FileGuard input_guard{input};
@@ -1712,9 +1712,8 @@ bool verify_room_compat_semantic_report() {
     mradm::RenderRequest request;
     request.input_path = input;
     request.output_path = output;
-    request.options.renderer = mradm::RendererSelection::saf;
+    request.options.renderer = mradm::RendererSelection::triple_balance;
     request.options.output_layout = "9.1.6";
-    request.options.speaker_panner_mode = mradm::SpeakerPannerMode::room_compat;
     request.options.peak_limit = false;
     request.options.capture_semantic_report = true;
     request.options.semantic_report_path = report;
@@ -2535,9 +2534,9 @@ int main() {
     ok &= verify_916_top_side_routing();
     ok &= verify_mdap_spread_fixture();
     ok &= verify_audio_object_gain_scales_output();
-    ok &= verify_room_compat_block_gain_reference();
-    ok &= verify_room_compat_size_window_and_validation();
-    ok &= verify_room_compat_semantic_report();
+    ok &= verify_triple_balance_block_gain_reference();
+    ok &= verify_triple_balance_size_window_and_validation();
+    ok &= verify_triple_balance_semantic_report();
     ok &= verify_audio_object_mute_silences_output();
     ok &= verify_audio_object_duration_gates_output();
     ok &= verify_ds_time_window_gates_block();

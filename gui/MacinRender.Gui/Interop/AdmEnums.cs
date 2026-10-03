@@ -23,6 +23,7 @@ public enum AdmRenderer
     Apple = 4,
     Binaural = 5,
     SafBinaural = 6,
+    TripleBalance = 7,
 }
 
 public enum AdmOutputBitDepth

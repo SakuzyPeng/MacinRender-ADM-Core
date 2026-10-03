@@ -27,10 +27,10 @@ unusedStructMember:*/src/adm_render_common/render_common.h
 unusedStructMember:*/src/adm_render_common/speaker_layouts.h
 # Room geometry and per-object DSP state are consumed by their implementation
 # units; standalone header checks cannot see those uses.
-unusedStructMember:*/src/adm_render_vbap/room_222.h
-unusedStructMember:*/src/adm_render_vbap/room_compat_size_filter.h
-unusedStructMember:*/src/adm_render_vbap/room_compat_size_panner.h
-unusedStructMember:*/src/adm_render_vbap/room_compat_size_processor.h
+unusedStructMember:*/src/adm_render_triple_balance/layout_222.h
+unusedStructMember:*/tests/support/triple_balance_size_filter.h
+unusedStructMember:*/src/adm_render_triple_balance/size_panner.h
+unusedStructMember:*/src/adm_render_triple_balance/size_processor.h
 # HpTF coefficient/status aggregates and mailbox state cross translation units.
 unusedStructMember:*/src/adm_render_common/hptf_eq.h
 unusedStructMember:*/src/adm_cli/commands.h
@@ -49,3 +49,6 @@ unusedStructMember:*/src/adm_render_binaural/spreader_mr_internal.h
 
 // OSC protocol header is also analyzed alone; these fields are used by the parser, receiver and contract tests.
 unusedStructMember:*src/adm_realtime/osc_head_tracking_protocol.h
+
+# Shared PCM timeline records are consumed by renderer and stream implementation units.
+unusedStructMember:*/src/adm_render_common/speaker_pcm.h

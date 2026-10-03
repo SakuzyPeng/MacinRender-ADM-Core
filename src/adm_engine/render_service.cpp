@@ -200,6 +200,8 @@ struct IamfLayerInfo {
         return "auto";
     case RendererSelection::ear:
         return "ear";
+    case RendererSelection::triple_balance:
+        return "triple-balance";
     case RendererSelection::saf:
         return "saf";
     case RendererSelection::hoa:
@@ -781,7 +783,6 @@ RenderResult RenderService::render(const RenderRequest& request,
     plan.default_interp_ms = request.options.default_interp_ms;
     plan.object_smoothing_frames = request.options.object_smoothing_frames;
     plan.speaker_geometry = request.options.speaker_geometry;
-    plan.speaker_panner_mode = request.options.speaker_panner_mode;
     plan.direct_speakers_routing_mode = request.options.direct_speakers_routing_mode;
     plan.direct_speakers_matrix = std::move(direct_speakers_matrix);
     plan.speaker_spread_mode = request.options.speaker_spread_mode;
@@ -1156,9 +1157,8 @@ RenderResult RenderService::render(const RenderRequest& request,
     }
 
     if (final_ext == ".wav") {
-        const bool speaker_rerender = sel == RendererSelection::saf &&
-                                      plan.speaker_panner_mode == SpeakerPannerMode::room_compat &&
-                                      (output_layout == "4+7+0" || output_layout == "9.1.6");
+        const bool speaker_rerender =
+            sel == RendererSelection::triple_balance && (output_layout == "4+7+0" || output_layout == "9.1.6");
         const bool uses_adm_layout_metadata = output_layout == "binaural" || output_layout == "4+5+4" ||
                                               output_layout == "9.1.6" || output_layout == "9+10+3" ||
                                               output_layout == "hoa3";
@@ -1171,7 +1171,7 @@ RenderResult RenderService::render(const RenderRequest& request,
         if (speaker_rerender && output_layout == "9.1.6") {
             logs.log(LogLevel::info,
                      "engine",
-                     "room-compat 9.1.6 WAV: native order, WAVEFORMATEXTENSIBLE mask 0, no ADM; "
+                     "triple-balance 9.1.6 WAV: native order, WAVEFORMATEXTENSIBLE mask 0, no ADM; "
                      "CAF provides an explicit CoreAudio 9.1.6 layout");
         }
         logs.log(LogLevel::info, "engine", "finalizing machine-readable WAV channel layout");

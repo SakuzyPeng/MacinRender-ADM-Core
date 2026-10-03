@@ -6,7 +6,7 @@
 
 ```sh
 ./build/release/mradm render -i input.wav -o output-222.caf \
-  --renderer saf --speaker-panner room-compat --output-layout 22.2 \
+  --renderer triple-balance --output-layout 22.2 \
   --no-peak-limit --write-semantic-report semantics.json
 ```
 

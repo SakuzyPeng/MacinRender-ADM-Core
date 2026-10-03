@@ -197,12 +197,13 @@
  * v1.40 新增：独立 OSC 头部姿态接收器，回环 UDP、最新快照和状态轮询；不依赖 GUI 或音频设备。
  * v1.41 新增：OSC 时间元数据草案。
  * v1.42：统一未发布头追接口与 PoseBridge 协议 3，来源过滤、状态心跳和 JSON 快照；其余音频 ABI 不变。
+ * v1.43：新增独立离线 ADM_RENDERER_TRIPLE_BALANCE（7）；既有枚举值和结构布局不变。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 42
+#define ADM_API_VERSION_MINOR 43
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -271,7 +272,8 @@ typedef enum adm_renderer_t {
     ADM_RENDERER_HOA = 3,
     ADM_RENDERER_APPLE = 4,
     ADM_RENDERER_BINAURAL = 5,
-    ADM_RENDERER_SAF_BINAURAL = 6
+    ADM_RENDERER_SAF_BINAURAL = 6,
+    ADM_RENDERER_TRIPLE_BALANCE = 7 /* offline Cartesian room renderer; since v1.43 */
 } adm_renderer_t;
 
 typedef enum adm_output_bit_depth_t {

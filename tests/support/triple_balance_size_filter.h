@@ -9,11 +9,11 @@
 
 #include "adm/errors.h"
 
-namespace mradm::room_compat {
+namespace mradm::triple_balance {
 
-// Four measured, layout-independent filter modes used by the experimental size
-// path. The caller supplies spatial gains separately. A SizeFilterBank belongs
-// to one object and retains its own convolution state across process() calls.
+// Historical measured FIR comparison; never linked into the production renderer.
+// Four layout-independent filter modes from the early size experiment. The caller supplies spatial gains separately. A
+// SizeFilterBank belongs to one object and retains its own convolution state across process() calls.
 class SizeFilterBank final {
   public:
     static constexpr std::size_t mode_count = 4;
@@ -47,4 +47,4 @@ class SizeFilterBank final {
     std::vector<float> next_overlap_;
 };
 
-} // namespace mradm::room_compat
+} // namespace mradm::triple_balance

@@ -10,6 +10,7 @@
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
+#include "adm/render_triple_balance.h"
 #include "adm/render_vbap.h"
 
 #include "commands.h"
@@ -85,6 +86,8 @@ void print_all_capabilities() {
     print_capabilities(mradm::ear_capabilities());
     fmt::print("\n");
     print_capabilities(mradm::vbap_capabilities());
+    fmt::print("\n");
+    print_capabilities(mradm::triple_balance_capabilities());
     fmt::print("\n");
     print_capabilities(mradm::hoa_capabilities());
     fmt::print("\n");

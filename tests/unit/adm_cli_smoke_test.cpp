@@ -231,6 +231,7 @@ int main() {
     {
         auto r = run_cmd(mradm_exe + " backends");
         ok &= check(r.code == 0, "backends: exit 0");
+        ok &= check(r.out.find("Backend: triple-balance") != std::string::npos, "backends: Triple Balance listed");
         ok &= check(r.out.find("libear") != std::string::npos, "backends: 'libear' in output");
         ok &= check(r.out.find("saf-binaural-hrtf") != std::string::npos, "backends: SAF binaural backend listed");
         ok &= check(r.out.find("stereo") == std::string::npos, "backends: speaker stereo layout not listed");
@@ -244,6 +245,29 @@ int main() {
                     "backends: SAF HRTF source capability listed");
         ok &= check(r.out.find("0+7+0") == std::string::npos, "backends: old 0+7+0 layout not listed");
         ok &= check(r.out.find("4+7+0") == std::string::npos, "backends: old 4+7+0 layout not listed");
+    }
+
+    // Triple Balance is independently selectable and reports only its fixed layouts.
+    {
+        auto r = run_cmd(mradm_exe + " layouts --format wav --renderer triple-balance");
+        ok &= check(r.code == 0 && r.out.find("triple-balance") != std::string::npos &&
+                        r.out.find("7.1.4") != std::string::npos && r.out.find("9.1.6") != std::string::npos &&
+                        r.out.find("22.2") != std::string::npos,
+                    "Triple Balance layout discovery covers the three supported layouts");
+        r = run_cmd(mradm_exe + " layouts --format wav --renderer triple-balance --layout 5.1");
+        ok &= check(r.code != 0, "Triple Balance does not inherit SAF's 5.1 capability");
+        r = run_cmd(mradm_exe +
+                    " render -i /nonexistent-triple-balance.wav --renderer triple-balance --output-layout 7.1.4");
+        ok &= check(r.code != 0 && r.out.find("expected one of") == std::string::npos &&
+                        r.out.find("not expected") == std::string::npos,
+                    "Triple Balance renderer argument passes parsing and reaches input validation");
+        r = run_cmd(mradm_exe +
+                    " render -i /nonexistent-triple-balance.wav --renderer saf --speaker-panner room-compat");
+        ok &= check(r.code != 0 && r.out.find("not expected") != std::string::npos,
+                    "removed speaker-panner argument has no compatibility alias");
+        r = run_cmd(mradm_exe + " render -i /nonexistent-triple-balance.wav --renderer room-compat");
+        ok &= check(r.code != 0 && r.out.find("expected one of") != std::string::npos,
+                    "room-compat is not a renderer alias");
     }
 
     // ── mradm formats lists output containers + constraints ──────────────────

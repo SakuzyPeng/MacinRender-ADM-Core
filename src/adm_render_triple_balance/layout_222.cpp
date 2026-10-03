@@ -1,4 +1,4 @@
-#include "room_222.h"
+#include "layout_222.h"
 
 #include <algorithm>
 #include <cmath>
@@ -7,7 +7,7 @@
 #include <span>
 #include <utility>
 
-namespace mradm::room_compat {
+namespace mradm::triple_balance {
 namespace {
 struct Row {
     double y{};
@@ -162,4 +162,4 @@ Room222Mix room_222_mix(const Room222Gains& spatial, float size) {
     }
     return result;
 }
-} // namespace mradm::room_compat
+} // namespace mradm::triple_balance
