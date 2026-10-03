@@ -1,0 +1,15 @@
+{
+  "version": "12.3.1",
+  "build": "6682",
+  "logic_sha256": "2f141e1a1f7b90a4fb0205ffec3dbe187baf601d20e9acb398acfadcdf050998",
+  "architecture": "arm64",
+  "constructor": "0xfc76f8",
+  "destructor": "0xfc8a8c",
+  "bounce": "0xfc8d44",
+  "output_channels": "0x2c8a10",
+  "framework_sha256": {
+    "MAAudioEngine": "536d378f7f336e394143d2739f9e525632a1e57ccba12f00c7a16034513ed76e",
+    "MAFiles": "abfbdac34aae2484c57eb62cd5bdaf51c580b17b497f279a662e423112d5204e",
+    "MACore": "76ab2a5f50b3ef120786369b5bf8b53dfc87a3b4107438e0894ab5f9b8095c52"
+  }
+}
