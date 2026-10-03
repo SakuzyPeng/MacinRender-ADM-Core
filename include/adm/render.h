@@ -92,7 +92,6 @@ struct RenderPlan {
     uint32_t object_smoothing_frames{0};
     // Effective output-speaker coordinates for software speaker renderers.
     SpeakerGeometry speaker_geometry{SpeakerGeometry::standard};
-    SpeakerPannerMode speaker_panner_mode{SpeakerPannerMode::vbap};
     DirectSpeakersRoutingMode direct_speakers_routing_mode{DirectSpeakersRoutingMode::automatic};
     // Parsed and scene-validated sparse routing matrix. Non-null exactly when
     // direct_speakers_routing_mode == matrix.

@@ -77,6 +77,13 @@ internal static class SelfTest
         }
 
         OutputModel.Initialize(matrix);
+        if (!OutputModel.BackendById.TryGetValue("triple-balance", out var tripleBalance) ||
+            tripleBalance.Renderer != AdmRenderer.TripleBalance || tripleBalance.Name != "Triple Balance" ||
+            !tripleBalance.LayoutIds.OrderBy(id => id).SequenceEqual(new[] { "22.2", "7.1.4", "9.1.6" }))
+        {
+            Console.Error.WriteLine("[失败] Triple Balance 后端选择或布局映射错误");
+            return 1;
+        }
         Console.WriteLine($"backends({OutputModel.Backends.Count}):");
         foreach (var b in OutputModel.Backends.Where(b => b.Id != "automatic"))
         {

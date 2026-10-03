@@ -18,6 +18,7 @@
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
+#include "adm/render_triple_balance.h"
 #include "adm/render_vbap.h"
 
 namespace mradm::engine {
@@ -64,9 +65,10 @@ constexpr std::array<LayoutInfo, 33> k_layout_infos{{
     {"wav",
      "9.1.6",
      16,
-     "PCM BW64 / float RF64 + ADM DirectSpeakers AXML/CHNA",
+     "ADM AXML/CHNA; Triple Balance: WAVE mask 0",
      "L R C LFE Ls Rs Rls Rrs Lw Rw Vhl Vhr Ltm Rtm Ltr Rtr",
-     "No WAVE mask can express the exact geometry."},
+     "No WAVE mask can express the exact geometry. Triple Balance writes WAVEFORMATEXTENSIBLE with mask 0, "
+     "in the same channel order, without ADM; use CAF for explicit 9.1.6 layout metadata."},
     {"wav",
      "22.2",
      24,
@@ -191,11 +193,13 @@ json row_to_json(const OutputLayoutRow& row) {
 std::vector<OutputLayoutRow> build_output_layouts() {
     static const auto ear = ear_capabilities();
     static const auto saf = vbap_capabilities();
+    static const auto triple_balance = triple_balance_capabilities();
     static const auto hoa = hoa_capabilities();
     static const auto binaural = binaural_capabilities();
     std::vector<std::pair<const char*, const CapabilityReport*>> backends{
         {"ear", &ear},
         {"saf", &saf},
+        {"triple-balance", &triple_balance},
         {"hoa", &hoa},
         {"saf-binaural", &binaural},
     };

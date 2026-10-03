@@ -16,9 +16,9 @@ from render_native_size_candidate import render
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-KERNEL_FILES = [ROOT / "src/adm_render_vbap" / name for name in
-                ("room_compat_size_panner.cpp", "room_compat_size_panner.h",
-                 "room_compat_size_processor.cpp", "room_compat_size_processor.h", "room_compat_panner.cpp")]
+KERNEL_FILES = [ROOT / "src/adm_render_triple_balance" / name for name in
+                ("size_panner.cpp", "size_panner.h",
+                 "size_processor.cpp", "size_processor.h", "panner.cpp")]
 
 
 def kernel_identity():
@@ -79,7 +79,7 @@ def main():
     args = parser.parse_args()
     root = args.output_dir.resolve()
     root.mkdir(parents=True, exist_ok=args.resume)
-    run(["cmake", "--build", "--preset", "release", "--target", "mr_adm_room_compat_size_probe"],
+    run(["cmake", "--build", "--preset", "release", "--target", "mr_adm_triple_balance_size_probe"],
         root / "release-build.log")
     identity = kernel_identity()
     if args.phase == "final":
@@ -98,7 +98,7 @@ def main():
     else:
         points = boundary_points()
     report = {"phase": args.phase, "kernel_sha256": identity, "seed": args.seed,
-              "release_driver_sha256": file_sha256(ROOT / "build/release/mr_adm_room_compat_size_probe"),
+              "release_driver_sha256": file_sha256(ROOT / "build/release/mr_adm_triple_balance_size_probe"),
               "source_coordinate_step": .0001 if args.phase == "final" else None,
               "points": points, "batches": [], "success": False}
     if args.resume:

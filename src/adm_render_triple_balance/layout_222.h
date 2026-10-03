@@ -8,7 +8,7 @@
 #include "adm/errors.h"
 #include "adm/scene.h"
 
-namespace mradm::room_compat {
+namespace mradm::triple_balance {
 inline constexpr std::size_t k_room_222_channels = 24;
 using Room222Gains = std::array<float, k_room_222_channels>;
 
@@ -31,4 +31,4 @@ struct Room222Mix {
     Room222Gains spread{};
 };
 [[nodiscard]] Room222Mix room_222_mix(const Room222Gains& spatial, float size);
-} // namespace mradm::room_compat
+} // namespace mradm::triple_balance

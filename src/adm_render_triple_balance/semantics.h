@@ -7,7 +7,7 @@
 
 namespace mradm {
 struct RenderPlan;
-namespace room_compat {
+namespace triple_balance {
 
 // Normalize only the private compatibility copy. Source/policy scenes and other
 // renderers retain their ADM semantics. report is populated on rejection too.
@@ -15,5 +15,5 @@ namespace room_compat {
 void publish_semantics(const RenderPlan& plan, const std::string& report, const Error* error = nullptr);
 [[nodiscard]] float user_output_gain(const SceneObject& object);
 
-} // namespace room_compat
+} // namespace triple_balance
 } // namespace mradm

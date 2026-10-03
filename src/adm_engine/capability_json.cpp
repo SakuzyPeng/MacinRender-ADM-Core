@@ -16,6 +16,7 @@
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
+#include "adm/render_triple_balance.h"
 #include "adm/render_vbap.h"
 
 namespace mradm::engine {
@@ -75,6 +76,7 @@ std::string capabilities_to_json() {
     // vbap_capabilities() backs RendererSelection::saf.
     backends.push_back(backend_to_json("ear", ear_capabilities()));
     backends.push_back(backend_to_json("saf", vbap_capabilities()));
+    backends.push_back(backend_to_json("triple-balance", triple_balance_capabilities()));
     backends.push_back(backend_to_json("hoa", hoa_capabilities()));
     backends.push_back(backend_to_json("saf-binaural", binaural_capabilities()));
 #ifdef __APPLE__

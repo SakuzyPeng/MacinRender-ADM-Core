@@ -87,7 +87,7 @@ def main():
                       "--layout", layout, "--profile", args.profile]
             run([*common, "--without-breakpoints", "--output-dir", base], root / (layout + "-baseline.log"))
             point = root / (layout + "-point.wav")
-            run([cli, "render", "-i", adm, "-o", point, "--renderer", "saf", "--speaker-panner", "room-compat",
+            run([cli, "render", "-i", adm, "-o", point, "--renderer", "triple-balance",
                  "--speaker-spread-mode", "none", "--output-layout", layout, "--no-peak-limit",
                  "--output-bit-depth", "f32"], root / (layout + "-point.log"))
             results = []

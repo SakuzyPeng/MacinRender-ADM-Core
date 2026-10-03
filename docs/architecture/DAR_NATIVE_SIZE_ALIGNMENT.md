@@ -8,7 +8,7 @@
 
 ```sh
 ./build/release/mradm render -i input.wav -o output.wav \
-  --renderer saf --speaker-panner room-compat --output-layout 9.1.6 \
+  --renderer triple-balance --output-layout 9.1.6 \
   --no-peak-limit --output-bit-depth f32
 ```
 
@@ -21,13 +21,13 @@
   positionOffset、divergence、channelLock、screenRef、headLocked、HOA 及未验证组合返回 unsupported。
 - 兼容语义层解释对象与块的时间；DSP 从文件第 0 帧推进。每个 512-frame 控制块最多一个元数据事件。
 - `spread=auto` 对含非零尺寸的轨道使用有状态内核；`spread=none` 明确忽略尺寸，继续原点源路径。
-  全片 size=0 不进入尺寸处理器；显式 MDAP 与 room-compat 互斥。
-- 接入仅限离线渲染；没有新增公共参数、GUI、实时接口或 C ABI。独立三轴尺寸仍不开放。
+  全片 size=0 不进入尺寸处理器；显式 MDAP 与 Triple Balance 互斥。
+- 当前通过独立 `triple-balance` 后端提供离线渲染，CLI、C ABI 和 GUI 批量渲染共用该入口；实时监听和独立三轴尺寸仍不开放。
   22.2 已作为独立的[自有几何扩展](ROOM_222_EXTENSION.md)接入，不属于本页的 Dolby 数值兼容范围。
 
 ## 空间规则
 
-`room_compat_size_panner` 将内部房间坐标与 Q15 参数分开，避免重复坐标转换。
+`adm_render_triple_balance/size_panner` 将内部房间坐标与 Q15 参数分开，避免重复坐标转换。
 内部左／前／地面为 `(0,0,0)`，对应 ADM 的 `((X+1)/2, (1-Y)/2, Z)`。
 位置和尺寸转换为 32768 尺度的整数，正上界为 32767。
 

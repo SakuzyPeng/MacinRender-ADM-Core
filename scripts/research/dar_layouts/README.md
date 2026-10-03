@@ -45,7 +45,7 @@ FFmpeg/FFprobe；批量脚本自身不依赖 NumPy。
 
 ## 7.1.4／9.1.6 兼容模式数值实验
 
-`mradm render --renderer saf --speaker-panner room-compat` 选用独立的 Cartesian 房间点源内核；
+`mradm render --renderer triple-balance` 选用独立的 Cartesian 房间点源内核；
 不指定时仍用原 SAF VBAP。当前只支持直接 ADM 输入的 7.1.4／9.1.6、固定 standard geometry、
 Cartesian Objects 和无声的普通 bed。48 kHz 等尺寸对象已接入独立有状态内核，覆盖静态尺寸和带尺寸运动；
 其他采样率的非零尺寸、独立三轴尺寸和未验证标志返回 unsupported。
@@ -212,7 +212,7 @@ python3 scripts/research/dar_layouts/verify_bed_integration.py \
 与 LFE 来源，保存评分、语义报告和恢复记录，压缩可再生中间音频。比较音频只使用 Release。
 
 真实音乐比较还要验证封装：`compare_real_916.py` 分别报告 PCM 指标和 WAVEFORMATEXTENSIBLE／mask／ADM
-chunk 行为，不能只因 16 路 PCM 的顺序正确就宣称播放器布局一致。`room-compat` 9.1.6 WAV 跟随参考的
+chunk 行为，不能只因 16 路 PCM 的顺序正确就宣称播放器布局一致。`triple-balance` 9.1.6 WAV 跟随参考的
 mask=0、无 AXML／CHNA；需要 CoreAudio 自动识别 9.1.6 的 A/B 使用带 Atmos_9_1_6 标签的 CAF，并验证其
 解码 PCM 哈希分别等于对应 WAV。
 

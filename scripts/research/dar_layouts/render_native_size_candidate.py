@@ -14,7 +14,7 @@ from measure_point_suite import file_sha256
 from measure_static_bank import read_multichannel_adm
 
 ROOT = Path(__file__).resolve().parents[3]
-DRIVER = ROOT / "build/release/mr_adm_room_compat_size_probe"
+DRIVER = ROOT / "build/release/mr_adm_triple_balance_size_probe"
 
 
 def render(adm_path, layout, output, block_frames=1024):

@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.42）
-> 日期：2026-05-17（增量记录持续更新至 2026-09-19 的 v1.42）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.43）
+> 日期：2026-05-17（增量记录持续更新至 2026-10-03 的 v1.43）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -659,3 +659,11 @@ profile setter，以保留请求次序；错误通过 `out_error` 独立返回�
 - 新增 adm_osc_head_tracking_snapshot_json：原子复制完整快照，char** 输出由 adm_free_string 释放，失败置 NULL。
 - 调用方同步升级头文件／库并检查 ABI；其余音频函数签名、结构、枚举和错误码均保持。
 - 实现与验收见[当前头追接口](../architecture/OSC_HEAD_TRACKING_API.md)。
+
+### v1.43.0：独立 Triple Balance 离线后端
+
+- 在 `adm_renderer_t` 末尾追加 `ADM_RENDERER_TRIPLE_BALANCE = 7`，既有枚举值、函数、结构布局和 SONAME 不变。
+- options setter、capabilities、layouts 和 render-support-matrix 统一识别 `triple-balance`；GUI 批量渲染映射到同一枚举。
+- 该后端仅支持已验证的 Cartesian / 7.1.2 bed 离线范围；不宣称实时流、HOA、channelLock 或 divergence 支持。
+- 删除原 C++ `SpeakerPannerMode` 和 CLI `--speaker-panner`。此前它们未进入稳定 C ABI，且维护者要求不保留旧入口。
+- 实现边界和命名来源见 [Triple Balance](../architecture/TRIPLE_BALANCE_RENDERER.md)。

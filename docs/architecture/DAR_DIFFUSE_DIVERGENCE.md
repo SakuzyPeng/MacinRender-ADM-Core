@@ -70,6 +70,6 @@ python3 scripts/research/dar_layouts/trace_spatial_semantics.py \
 `traces/*/gain-validation.json`、`candidate-diagnostics.json`。静态代码复用主要 IDA 数据库，
 局部导出保存在 `local/dar-gain-trace/spatial-semantics*/`。
 
-本轮只扩展研究入口与证据，生产 `room-compat` 的校验范围保持原状：中间 diffuse 值、纯 diffuse 点源和
+本轮只扩展研究入口与证据，生产 `triple-balance` 的校验范围保持原状：中间 diffuse 值、纯 diffuse 点源和
 非零 divergence 仍未自动开放。后续可把已确认的行为接入为明确的忽略规则，并在 renderer_effective 中报告。
 Polar、非等尺寸、其他 renderer／双耳路径及其他修饰字段组合没有由本批实验覆盖。

@@ -12,6 +12,7 @@
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
+#include "adm/render_triple_balance.h"
 #include "adm/render_vbap.h"
 
 #include "commands.h"
@@ -82,8 +83,8 @@ bool renderer_supports_row(const mradm::OutputLayoutRow& row, std::string_view r
 
 CLI::Validator renderer_validator() {
     return CLI::Validator{[](const std::string& value) {
-                              if (value == "ear" || value == "saf" || value == "hoa" || value == "saf-binaural" ||
-                                  value == "binaural"
+                              if (value == "triple-balance" || value == "ear" || value == "saf" || value == "hoa" ||
+                                  value == "saf-binaural" || value == "binaural"
 #ifdef __APPLE__
                                   || value == "apple"
 #endif
@@ -91,15 +92,15 @@ CLI::Validator renderer_validator() {
                                   return std::string{};
                               }
 #ifdef __APPLE__
-                              return std::string{"expected one of: ear, saf, hoa, saf-binaural, apple"};
+                              return std::string{"expected one of: ear, saf, triple-balance, hoa, saf-binaural, apple"};
 #else
-                              return std::string{"expected one of: ear, saf, hoa, saf-binaural"};
+                              return std::string{"expected one of: ear, saf, triple-balance, hoa, saf-binaural"};
 #endif
                           },
 #ifdef __APPLE__
-                          "ear,saf,hoa,saf-binaural,apple",
+                          "ear,saf,triple-balance,hoa,saf-binaural,apple",
 #else
-                          "ear,saf,hoa,saf-binaural",
+                          "ear,saf,triple-balance,hoa,saf-binaural",
 #endif
                           "renderer"};
 }
@@ -112,6 +113,9 @@ std::string backend_name_for(std::string_view renderer) {
     }
     if (renderer == "saf") {
         return mradm::vbap_capabilities().backend_name;
+    }
+    if (renderer == "triple-balance") {
+        return mradm::triple_balance_capabilities().backend_name;
     }
     if (renderer == "hoa") {
         return mradm::hoa_capabilities().backend_name;
@@ -193,7 +197,7 @@ CLI::App* add_layouts_command(CLI::App& app, LayoutCliOptions& opts) {
         ->required()
         ->check(CLI::IsMember({"wav", "wave", "caf", "flac", "apac", "m4a", "mp4", "iamf"}));
     layouts_cmd->add_option("--layout", opts.layout, "Optional layout filter, e.g. 7.1, 9.1.6, 22.2, binaural");
-    std::string renderer_help{"Optional renderer filter: ear, saf, hoa, saf-binaural"};
+    std::string renderer_help{"Optional renderer filter: ear, saf, triple-balance, hoa, saf-binaural"};
 #ifdef __APPLE__
     renderer_help += ", apple";
 #endif

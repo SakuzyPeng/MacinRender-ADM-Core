@@ -15,7 +15,7 @@ It reads ADM BWF / BW64 and ordinary channel-based WAVE / RF64 / BW64 input, the
 - ADM scene import: reads BW64 ADM metadata through libbw64 / libadm and converts it into the project's own domain model.
 - Channel-bed input: maps known WAVE channel masks or constrained custom labels into a DirectSpeakers scene with explicit geometry.
 - Desktop workbench: an Avalonia GUI for batch rendering, per-object semantic editing, and realtime spatial monitoring.
-- Render backends: libear, SAF VBAP, HOA encoder, HRTF binaural, and Apple AUSpatialMixer on macOS.
+- Render backends: libear, SAF VBAP, Triple Balance, HOA encoder, HRTF binaural, and Apple AUSpatialMixer on macOS.
 - Objects / DirectSpeakers: supports timed blocks, gain, interpolation, diffuse, channelLock, objectDivergence, and related ADM semantics.
 - Post-processing: loudness normalization, True Peak limiting, bit-depth conversion, and CAF / FLAC / Opus / APAC metadata. HOA output is measured through a 7.1.4 AllRAD reference decode; LUFS uses full-range channels and True Peak covers every channel.
 - Platform scope: core functionality targets macOS, Linux, and Windows; macOS also provides APAC encoding and the Apple AUSpatialMixer backend.
@@ -68,6 +68,7 @@ Render examples:
 ./build/release/mradm render -i input.wav -o out_binaural.wav --renderer saf-binaural
 ./build/release/mradm render -i input.wav -o out_714.flac --renderer ear --output-layout 7.1.4
 ./build/release/mradm render -i input.wav -o out_222.wav --renderer apple --output-layout 22.2
+./build/release/mradm render -i input.wav -o out_room.wav --renderer triple-balance --output-layout 9.1.6
 ./build/release/mradm render -i input.wav -o out_trim.wav --start 12.5 --end 45.0
 ./build/release/mradm render -i bed.wav -o bed_714.wav --input-layout 5.1 --renderer ear --output-layout 7.1.4
 ./build/release/mradm render -i custom.wav -o custom_binaural.wav --input-channels L,R,C,LFE,M+090,M-090 --renderer saf-binaural --sofa listener.sofa
@@ -88,7 +89,13 @@ labels produce errors. Custom `U±110` labels require `@30` or `@45` to select e
 `mradm input-layouts --format json`.
 
 Public two-channel output uses the `binaural` semantic, which is also the default. Backend and HRTF source are separate
-choices: `saf-binaural` offers built-in KEMAR and build-enabled `--sofa` user HRIRs; `apple` uses the Apple system HRTF.
+choices: `triple-balance` is an independent Cartesian room renderer. Point sources use successive equal-power
+panning along X/Y/Z, with verified 48 kHz isotropic-size processing. The existing 7.1.4 / 9.1.6 reference
+behavior is retained; 22.2 is a project-defined extension. See the [backend documentation](docs/architecture/TRIPLE_BALANCE_RENDERER.md)
+for input limits. Available through CLI, C ABI and GUI batch rendering; realtime streaming is unsupported.
+The former `--speaker-panner` option has been removed.
+
+`saf-binaural` offers built-in KEMAR and build-enabled `--sofa` user HRIRs; `apple` uses the Apple system HRTF.
 Current entry points are the CLI, C++ API, and C ABI v1.34.
 
 ## Release Packages
@@ -121,6 +128,7 @@ delivered through local developer distribution.
 |---|---|---|---|
 | libear | `--renderer auto` / `ear` | Objects / DirectSpeakers / HOA | Multichannel loudspeakers |
 | SAF VBAP | `--renderer saf` | Objects / DirectSpeakers | Multichannel loudspeakers |
+| Triple Balance | `--renderer triple-balance` | Cartesian Objects / standard 7.1.2 bed | Offline 7.1.4 / 9.1.6 / 22.2 |
 | HOA encoder | `--renderer hoa` | Objects / DirectSpeakers | HOA3 16ch (ACN/SN3D) |
 | SAF HRTF binaural | `--renderer saf-binaural` | Objects / DirectSpeakers | 2ch binaural |
 | Apple AUSpatialMixer | `--renderer apple` | Objects / DirectSpeakers | 2ch binaural / multichannel loudspeakers (macOS) |
@@ -247,7 +255,7 @@ Query full channel-order tables with:
 
 | Option | Description | Default |
 |---|---|---|
-| `--renderer auto\|ear\|saf\|hoa\|saf-binaural\|apple` | Select the render backend | `auto` |
+| `--renderer auto\|ear\|saf\|triple-balance\|hoa\|saf-binaural\|apple` | Select the render backend | `auto` |
 | `--input-layout auto\|5.1\|5.1.2\|7.1\|5.1.4\|7.1.4\|9.1.4\|9.1.6\|22.2` | Ordinary WAVE input layout; `auto` prefers ADM, then a recognised channel mask | `auto` |
 | `--input-channels <csv>` | Custom ordinary-input labels in exact file-channel order; choose this or an explicit `--input-layout` | Off |
 | `--output-layout <layout>` | Output semantic/layout: `binaural`, a multichannel layout, or `hoa3` | `binaural` |

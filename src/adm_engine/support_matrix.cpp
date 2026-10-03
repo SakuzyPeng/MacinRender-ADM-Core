@@ -18,6 +18,7 @@
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
+#include "adm/render_triple_balance.h"
 #include "adm/render_vbap.h"
 
 #include "format_table.h"
@@ -56,6 +57,7 @@ std::vector<BackendInfo> build_backends() {
     std::vector<BackendInfo> backends;
     backends.push_back({"ear", ear_capabilities()});
     backends.push_back({"saf", vbap_capabilities()});
+    backends.push_back({"triple-balance", triple_balance_capabilities()});
     backends.push_back({"hoa", hoa_capabilities()});
     backends.push_back({"saf-binaural", binaural_capabilities()});
 #ifdef __APPLE__

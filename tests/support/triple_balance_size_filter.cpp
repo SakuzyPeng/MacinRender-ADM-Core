@@ -1,11 +1,11 @@
-#include "room_compat_size_filter.h"
+#include "triple_balance_size_filter.h"
 
 #include <algorithm>
 #include <cmath>
 #include <ranges>
 #include <saf_utility_fft.h>
 
-namespace mradm::room_compat {
+namespace mradm::triple_balance {
 
 namespace {
 constexpr std::size_t k_fft_frames = 16'384;
@@ -46,8 +46,8 @@ SizeFilterBank::create(const std::array<std::vector<float>, mode_count>& filters
     }
     for (std::size_t mode = 0; mode < mode_count; ++mode) {
         std::ranges::fill(result->source_time_, 0.0F);
-        std::ranges::copy(filters[mode], result->source_time_.begin());
-        saf_rfft_forward(result->fft_, result->source_time_.data(), result->filter_fd_[mode].data());
+        std::ranges::copy(filters.at(mode), result->source_time_.begin());
+        saf_rfft_forward(result->fft_, result->source_time_.data(), result->filter_fd_.at(mode).data());
     }
     std::ranges::fill(result->source_time_, 0.0F);
     return result;
@@ -65,10 +65,10 @@ Result<void> SizeFilterBank::process(std::span<const float> input, std::span<flo
     saf_rfft_forward(fft_, source_time_.data(), source_fd_.data());
     for (std::size_t mode = 0; mode < mode_count; ++mode) {
         for (std::size_t band = 0; band < k_fft_bins; ++band) {
-            output_fd_[band] = source_fd_[band] * filter_fd_[mode][band];
+            output_fd_[band] = source_fd_[band] * filter_fd_.at(mode)[band];
         }
         saf_rfft_backward(fft_, output_fd_.data(), output_time_.data());
-        auto& history = overlap_[mode];
+        auto& history = overlap_.at(mode);
         for (std::size_t frame = 0; frame < input.size(); ++frame) {
             filtered[(frame * mode_count) + mode] =
                 output_time_[frame] + (frame < history.size() ? history[frame] : 0.0F);
@@ -88,4 +88,4 @@ void SizeFilterBank::reset() noexcept {
     }
 }
 
-} // namespace mradm::room_compat
+} // namespace mradm::triple_balance

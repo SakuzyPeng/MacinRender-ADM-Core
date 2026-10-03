@@ -9,7 +9,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "room_compat_size_processor.h"
+#include "size_processor.h"
 
 namespace {
 bool require(bool condition, const char* message) {
@@ -32,7 +32,7 @@ std::vector<float> read_floats(const std::filesystem::path& path) {
 }
 
 std::vector<float>
-render(mradm::room_compat::SizeObjectProcessor& processor, std::span<const float> input, std::size_t chunk) {
+render(mradm::triple_balance::SizeObjectProcessor& processor, std::span<const float> input, std::size_t chunk) {
     std::vector<float> output;
     for (std::size_t start = 0; start < input.size(); start += chunk) {
         if (!processor.push(input.subspan(start, std::min(chunk, input.size() - start)), output)) {
@@ -57,8 +57,8 @@ int main(int argc, char** argv) {
     bool ok = true;
     for (const auto& item : reference.at("gains")) {
         const auto& p = item.at("parameters");
-        const mradm::room_compat::QuantizedSizeParameters parameters{{p[0], p[1], p[2]}, p[3]};
-        const auto actual = mradm::room_compat::raw_size_gains(parameters);
+        const mradm::triple_balance::QuantizedSizeParameters parameters{{p[0], p[1], p[2]}, p[3]};
+        const auto actual = mradm::triple_balance::raw_size_gains(parameters);
         ok &= require(actual.has_value(), "captured quantized size parameters are supported");
         if (actual) {
             for (std::size_t i = 0; i < actual->size(); ++i) {
@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
             }
         }
     }
-    ok &= require(!mradm::room_compat::quantize_size_parameters({0, 0, 0}, std::numeric_limits<float>::quiet_NaN()),
+    ok &= require(!mradm::triple_balance::quantize_size_parameters({0, 0, 0}, std::numeric_limits<float>::quiet_NaN()),
                   "nonfinite extent is rejected");
     const auto input = read_floats(fixtures / "filter-input.f32");
     const auto expected = read_floats(fixtures / "filter-expected.f32");
@@ -75,10 +75,10 @@ int main(int argc, char** argv) {
     if (input.size() != 2048 || expected.size() != 2048) {
         return 1;
     }
-    mradm::room_compat::SizeDecorrelator filter;
+    mradm::triple_balance::SizeDecorrelator filter;
     std::vector<float> filtered;
     for (std::size_t start = 0; start < input.size(); start += 32) {
-        std::array<mradm::room_compat::SizeDecorrelator::FilteredFrame, 32> block{};
+        std::array<mradm::triple_balance::SizeDecorrelator::FilteredFrame, 32> block{};
         filter.process(std::span<const float, 32>(input.data() + start, 32), block);
         for (const auto& frame : block) {
             filtered.insert(filtered.end(), frame.begin(), frame.end());
@@ -93,15 +93,15 @@ int main(int argc, char** argv) {
 
     const auto rapid_input = read_floats(fixtures / "rapid-input.f32");
     const auto rapid_expected = read_floats(fixtures / "rapid-expected.f32");
-    const std::vector<mradm::room_compat::SizeEvent> rapid_events{{0, {0.625F, 0.375F, 0.75F}, 0.25F},
-                                                                  {24576, {0.625F, 0.375F, 0.75F}, 0},
-                                                                  {28672, {0.625F, 0.375F, 0.75F}, 0.25F}};
-    auto rapid = mradm::room_compat::SizeObjectProcessor::create(rapid_events, "9.1.6", 48000);
+    const std::vector<mradm::triple_balance::SizeEvent> rapid_events{{0, {0.625F, 0.375F, 0.75F}, 0.25F},
+                                                                     {24576, {0.625F, 0.375F, 0.75F}, 0},
+                                                                     {28672, {0.625F, 0.375F, 0.75F}, 0.25F}};
+    auto rapid = mradm::triple_balance::SizeObjectProcessor::create(rapid_events, "9.1.6", 48000);
     if (!rapid) {
         return 1;
     }
     const auto rapid_output = render(*rapid, rapid_input, 257);
-    if (!require(rapid_output.size() == 32000U * 16U && rapid_expected.size() == 2048U * 16U,
+    if (!require(rapid_output.size() == std::size_t{32000} * 16U && rapid_expected.size() == std::size_t{2048} * 16U,
                  "rapid-reset fixtures are complete")) {
         return 1;
     }
@@ -112,11 +112,11 @@ int main(int argc, char** argv) {
     ok &= require(rapid_error < 1e-4F,
                   "zero-size block completes its ramp then resets before immediate size restoration");
 
-    std::vector<mradm::room_compat::SizeEvent> events{{0, {0.5F, 0, 0}, 0.01F},
-                                                      {600, {0.25F, 0.6F, 0.5F}, 0.25F},
-                                                      {2111, {0.8F, 0.2F, 0.75F}, 1},
-                                                      {4096, {0.5F, 0.5F, 1}, 0},
-                                                      {6200, {0.5F, 0.5F, 0}, 0.1F}};
+    std::vector<mradm::triple_balance::SizeEvent> events{{0, {0.5F, 0, 0}, 0.01F},
+                                                         {600, {0.25F, 0.6F, 0.5F}, 0.25F},
+                                                         {2111, {0.8F, 0.2F, 0.75F}, 1},
+                                                         {4096, {0.5F, 0.5F, 1}, 0},
+                                                         {6200, {0.5F, 0.5F, 0}, 0.1F}};
     std::vector<float> signal(8457);
     uint32_t noise = 0x73697A65;
     for (std::size_t i = 0; i < signal.size(); ++i) {
@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
         signal[i] = i < 7600 ? static_cast<float>(static_cast<int32_t>(noise >> 8) - 8388608) / 67108864.0F : 0;
     }
     for (const auto* layout : {"7.1.4", "9.1.6"}) {
-        auto base = mradm::room_compat::SizeObjectProcessor::create(events, layout, 48000);
+        auto base = mradm::triple_balance::SizeObjectProcessor::create(events, layout, 48000);
         if (!base) {
             return 1;
         }
@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
             const auto observed = render(*base, signal, chunk);
             ok &= require(observed == wanted, "reset and arbitrary processing chunks are bit identical");
         }
-        auto second = mradm::room_compat::SizeObjectProcessor::create(events, layout, 48000);
+        auto second = mradm::triple_balance::SizeObjectProcessor::create(events, layout, 48000);
         base->reset();
         std::vector<float> first_output;
         std::vector<float> second_output;
@@ -155,11 +155,12 @@ int main(int argc, char** argv) {
         ok &= require(first_output == wanted && second_output == wanted, "interleaved instances do not share state");
         ok &= require(!base->push({}, first_output), "finished processor requires reset");
     }
-    ok &= require(!mradm::room_compat::SizeObjectProcessor::create(events, "9.1.6", 44100),
+    ok &= require(!mradm::triple_balance::SizeObjectProcessor::create(events, "9.1.6", 44100),
                   "unverified sample rate rejected");
-    ok &=
-        require(!mradm::room_compat::SizeObjectProcessor::create(events, "5.1.4", 48000), "unverified layout rejected");
+    ok &= require(!mradm::triple_balance::SizeObjectProcessor::create(events, "5.1.4", 48000),
+                  "unverified layout rejected");
     events[1].start_sample = 1;
-    ok &= require(!mradm::room_compat::SizeObjectProcessor::create(events, "7.1.4", 48000), "dense metadata rejected");
+    ok &=
+        require(!mradm::triple_balance::SizeObjectProcessor::create(events, "7.1.4", 48000), "dense metadata rejected");
     return ok ? 0 : 1;
 }

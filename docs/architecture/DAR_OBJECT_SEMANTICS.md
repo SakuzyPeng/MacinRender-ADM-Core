@@ -29,14 +29,14 @@
 ## 实现与报告
 
 导入器保存 gain 单位／是否省略、原生 mute、对象时间、相对 block 时间和对象引用关系。
-现有绝对采样时间继续供普通后端使用；私有 `room_compat_semantics` 只转换兼容模式的准备数据。
+现有绝对采样时间继续供普通后端使用；私有 `adm_render_triple_balance/semantics` 只转换兼容模式的准备数据。
 嵌套对象、共享 PCM 绑定、未验证采样率和其他修饰字段继续返回 unsupported。
 
 复用原有离线命令：
 
 ```sh
 ./build/release/mradm render -i input.wav -o output.wav \
-  --renderer saf --speaker-panner room-compat --output-layout 9.1.6 \
+  --renderer triple-balance --output-layout 9.1.6 \
   --no-peak-limit --output-bit-depth f32 --write-semantic-report semantics.json
 ```
 

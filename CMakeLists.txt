@@ -212,9 +212,12 @@ target_sources(
         src/adm_render_common/hptf_eq.cpp
         src/adm_render_common/render_common.cpp
         src/adm_render_common/speaker_layouts.cpp
+        src/adm_render_common/speaker_pcm.cpp
 )
 target_include_directories(mr_adm_render_common PUBLIC src/adm_render_common)
-target_link_libraries(mr_adm_render_common PUBLIC MacinRender::ADMCore Threads::Threads)
+target_link_libraries(mr_adm_render_common PUBLIC MacinRender::ADMCore Threads::Threads
+    PRIVATE MacinRender::ADMAudio ebur128)
+target_include_directories(mr_adm_render_common SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
 mr_adm_core_apply_warnings(mr_adm_render_common)
 mr_adm_core_apply_static_analysis(mr_adm_render_common)
 
@@ -258,13 +261,6 @@ target_sources(
     mr_adm_render_vbap
     PRIVATE
         src/adm_render_vbap/vbap_renderer.cpp
-        src/adm_render_vbap/room_compat_panner.cpp
-        src/adm_render_vbap/room_222.cpp
-        src/adm_render_vbap/room_compat_size_filter.cpp
-        src/adm_render_vbap/room_compat_size_panner.cpp
-        src/adm_render_vbap/room_compat_size_processor.cpp
-        src/adm_render_vbap/room_compat_semantics.cpp
-        src/adm_render_vbap/room_compat_bed.cpp
         src/adm_render_vbap/live_vbap_renderer.cpp
     PUBLIC
         FILE_SET HEADERS
@@ -275,7 +271,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_vbap
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon nlohmann_json::nlohmann_json
+    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
 )
 target_include_directories(mr_adm_render_vbap
     SYSTEM PRIVATE
@@ -285,6 +281,28 @@ target_include_directories(mr_adm_render_vbap
 )
 mr_adm_core_apply_warnings(mr_adm_render_vbap)
 mr_adm_core_apply_static_analysis(mr_adm_render_vbap)
+
+# ── adm_render_triple_balance ─────────────────────────────────────────────────
+# Project-owned Cartesian room renderer. No SAF or libear dependency.
+add_library(mr_adm_render_triple_balance)
+add_library(MacinRender::ADMRenderTripleBalance ALIAS mr_adm_render_triple_balance)
+target_sources(mr_adm_render_triple_balance
+    PRIVATE
+        src/adm_render_triple_balance/triple_balance_renderer.cpp
+        src/adm_render_triple_balance/panner.cpp
+        src/adm_render_triple_balance/layout_222.cpp
+        src/adm_render_triple_balance/size_panner.cpp
+        src/adm_render_triple_balance/size_processor.cpp
+        src/adm_render_triple_balance/semantics.cpp
+        src/adm_render_triple_balance/bed.cpp
+    PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/render_triple_balance.h
+)
+target_link_libraries(mr_adm_render_triple_balance
+    PUBLIC MacinRender::ADMCore
+    PRIVATE MacinRender::ADMRenderCommon nlohmann_json::nlohmann_json
+)
+mr_adm_core_apply_warnings(mr_adm_render_triple_balance)
+mr_adm_core_apply_static_analysis(mr_adm_render_triple_balance)
 
 # ── adm_render_hoa ────────────────────────────────────────────────────────────
 # HOA encode renderer: Objects → HOA bed (ACN/SN3D).
@@ -547,7 +565,7 @@ target_sources(mr_adm_renderer_factory PRIVATE src/adm_renderer_factory/renderer
 target_include_directories(mr_adm_renderer_factory PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_renderer_factory)
 target_link_libraries(mr_adm_renderer_factory
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural
+    PRIVATE MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural
             MacinRender::ADMRenderCommon
 )
 if(APPLE)
@@ -579,7 +597,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio adm
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio adm
 )
 if(APPLE)
     target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)
@@ -718,6 +736,7 @@ if(MR_ADM_CORE_BUILD_CLI)
             MacinRender::ADMIo
             MacinRender::ADMRenderEar
             MacinRender::ADMRenderVBAP
+            MacinRender::ADMRenderTripleBalance
             MacinRender::ADMRenderHOA
             MacinRender::ADMRenderBinaural
             MacinRender::ADMAudio
@@ -955,6 +974,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMRenderVBAP
+            MacinRender::ADMRenderTripleBalance
             MacinRender::ADMIo
             MacinRender::ADMAudio
             libbw64
@@ -964,53 +984,55 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_vbap_smoke_tests)
     add_test(NAME mr_adm_vbap_smoke_tests COMMAND mr_adm_vbap_smoke_tests)
 
-    add_executable(mr_adm_room_compat_point_tests tests/unit/room_compat_point_test.cpp)
-    add_executable(mr_adm_room_222_tests tests/unit/room_222_test.cpp)
-    target_include_directories(mr_adm_room_222_tests PRIVATE src/adm_render_vbap)
-    target_link_libraries(mr_adm_room_222_tests PRIVATE MacinRender::ADMRenderVBAP)
-    mr_adm_core_apply_warnings(mr_adm_room_222_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_room_222_tests)
-    add_test(NAME mr_adm_room_222_tests COMMAND mr_adm_room_222_tests)
-    add_executable(mr_adm_room_compat_bed_tests tests/unit/room_compat_bed_test.cpp)
-    target_include_directories(mr_adm_room_compat_bed_tests PRIVATE src/adm_render_vbap)
-    target_link_libraries(mr_adm_room_compat_bed_tests PRIVATE
-        MacinRender::ADMRenderVBAP nlohmann_json::nlohmann_json)
-    mr_adm_core_apply_warnings(mr_adm_room_compat_bed_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_room_compat_bed_tests)
-    add_test(NAME mr_adm_room_compat_bed_tests COMMAND mr_adm_room_compat_bed_tests
+    add_executable(mr_adm_triple_balance_point_tests tests/unit/triple_balance_point_test.cpp)
+    add_executable(mr_adm_triple_balance_222_tests tests/unit/triple_balance_222_test.cpp)
+    target_include_directories(mr_adm_triple_balance_222_tests PRIVATE src/adm_render_triple_balance)
+    target_link_libraries(mr_adm_triple_balance_222_tests PRIVATE MacinRender::ADMRenderTripleBalance)
+    mr_adm_core_apply_warnings(mr_adm_triple_balance_222_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_222_tests)
+    add_test(NAME mr_adm_triple_balance_222_tests COMMAND mr_adm_triple_balance_222_tests)
+    add_executable(mr_adm_triple_balance_bed_tests tests/unit/triple_balance_bed_test.cpp)
+    target_include_directories(mr_adm_triple_balance_bed_tests PRIVATE src/adm_render_triple_balance)
+    target_link_libraries(mr_adm_triple_balance_bed_tests PRIVATE
+        MacinRender::ADMRenderTripleBalance nlohmann_json::nlohmann_json)
+    mr_adm_core_apply_warnings(mr_adm_triple_balance_bed_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_bed_tests)
+    add_test(NAME mr_adm_triple_balance_bed_tests COMMAND mr_adm_triple_balance_bed_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room_compat_bed.json")
-    add_executable(mr_adm_room_compat_semantics_tests tests/unit/room_compat_semantics_test.cpp)
-    target_include_directories(mr_adm_room_compat_semantics_tests PRIVATE src/adm_render_vbap)
-    target_link_libraries(mr_adm_room_compat_semantics_tests PRIVATE
-        MacinRender::ADMRenderVBAP MacinRender::ADMAudio nlohmann_json::nlohmann_json)
-    mr_adm_core_apply_warnings(mr_adm_room_compat_semantics_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_room_compat_semantics_tests)
-    add_test(NAME mr_adm_room_compat_semantics_tests COMMAND mr_adm_room_compat_semantics_tests
+    add_executable(mr_adm_triple_balance_semantics_tests tests/unit/triple_balance_semantics_test.cpp)
+    target_include_directories(mr_adm_triple_balance_semantics_tests PRIVATE src/adm_render_triple_balance)
+    target_link_libraries(mr_adm_triple_balance_semantics_tests PRIVATE
+        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio nlohmann_json::nlohmann_json)
+    mr_adm_core_apply_warnings(mr_adm_triple_balance_semantics_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_semantics_tests)
+    add_test(NAME mr_adm_triple_balance_semantics_tests COMMAND mr_adm_triple_balance_semantics_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room_compat_semantics")
-    target_include_directories(mr_adm_room_compat_point_tests PRIVATE src/adm_render_vbap)
-    target_link_libraries(mr_adm_room_compat_point_tests PRIVATE MacinRender::ADMRenderVBAP)
-    mr_adm_core_apply_warnings(mr_adm_room_compat_point_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_room_compat_point_tests)
-    add_test(NAME mr_adm_room_compat_point_tests COMMAND mr_adm_room_compat_point_tests)
+    target_include_directories(mr_adm_triple_balance_point_tests PRIVATE src/adm_render_triple_balance)
+    target_link_libraries(mr_adm_triple_balance_point_tests PRIVATE MacinRender::ADMRenderTripleBalance)
+    mr_adm_core_apply_warnings(mr_adm_triple_balance_point_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_point_tests)
+    add_test(NAME mr_adm_triple_balance_point_tests COMMAND mr_adm_triple_balance_point_tests)
 
-    add_executable(mr_adm_room_compat_size_filter_tests tests/unit/room_compat_size_filter_test.cpp)
-    target_include_directories(mr_adm_room_compat_size_filter_tests PRIVATE src/adm_render_vbap)
-    target_link_libraries(mr_adm_room_compat_size_filter_tests PRIVATE MacinRender::ADMRenderVBAP)
-    mr_adm_core_apply_warnings(mr_adm_room_compat_size_filter_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_room_compat_size_filter_tests)
-    add_test(NAME mr_adm_room_compat_size_filter_tests COMMAND mr_adm_room_compat_size_filter_tests)
+    add_executable(mr_adm_triple_balance_size_filter_tests tests/unit/triple_balance_size_filter_test.cpp
+        tests/support/triple_balance_size_filter.cpp)
+    target_include_directories(mr_adm_triple_balance_size_filter_tests PRIVATE tests/support)
+    target_include_directories(mr_adm_triple_balance_size_filter_tests SYSTEM PRIVATE "${saf_SOURCE_DIR}/modules/saf_utilities")
+    target_link_libraries(mr_adm_triple_balance_size_filter_tests PRIVATE MacinRender::ADMCore saf)
+    mr_adm_core_apply_warnings(mr_adm_triple_balance_size_filter_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_size_filter_tests)
+    add_test(NAME mr_adm_triple_balance_size_filter_tests COMMAND mr_adm_triple_balance_size_filter_tests)
 
-    add_executable(mr_adm_room_compat_size_probe tests/unit/room_compat_size_probe.cpp)
-    target_include_directories(mr_adm_room_compat_size_probe PRIVATE src/adm_render_vbap)
-    target_link_libraries(mr_adm_room_compat_size_probe PRIVATE MacinRender::ADMRenderVBAP nlohmann_json::nlohmann_json)
-    mr_adm_core_apply_warnings(mr_adm_room_compat_size_probe)
+    add_executable(mr_adm_triple_balance_size_probe tests/unit/triple_balance_size_probe.cpp)
+    target_include_directories(mr_adm_triple_balance_size_probe PRIVATE src/adm_render_triple_balance)
+    target_link_libraries(mr_adm_triple_balance_size_probe PRIVATE MacinRender::ADMRenderTripleBalance nlohmann_json::nlohmann_json)
+    mr_adm_core_apply_warnings(mr_adm_triple_balance_size_probe)
 
-    add_executable(mr_adm_room_compat_size_processor_tests tests/unit/room_compat_size_processor_test.cpp)
-    target_include_directories(mr_adm_room_compat_size_processor_tests PRIVATE src/adm_render_vbap)
-    target_link_libraries(mr_adm_room_compat_size_processor_tests PRIVATE MacinRender::ADMRenderVBAP nlohmann_json::nlohmann_json)
-    mr_adm_core_apply_warnings(mr_adm_room_compat_size_processor_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_room_compat_size_processor_tests)
-    add_test(NAME mr_adm_room_compat_size_processor_tests COMMAND mr_adm_room_compat_size_processor_tests
+    add_executable(mr_adm_triple_balance_size_processor_tests tests/unit/triple_balance_size_processor_test.cpp)
+    target_include_directories(mr_adm_triple_balance_size_processor_tests PRIVATE src/adm_render_triple_balance)
+    target_link_libraries(mr_adm_triple_balance_size_processor_tests PRIVATE MacinRender::ADMRenderTripleBalance nlohmann_json::nlohmann_json)
+    mr_adm_core_apply_warnings(mr_adm_triple_balance_size_processor_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_size_processor_tests)
+    add_test(NAME mr_adm_triple_balance_size_processor_tests COMMAND mr_adm_triple_balance_size_processor_tests
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/room_compat_size")
 
     add_executable(mr_adm_render_common_numeric_tests tests/unit/render_common_numeric_test.cpp)
@@ -1060,6 +1082,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMRenderEar
             MacinRender::ADMRenderVBAP
+            MacinRender::ADMRenderTripleBalance
             MacinRender::ADMAudio
     )
     if(APPLE)
@@ -1333,6 +1356,7 @@ install(
         mr_adm_io
         mr_adm_render_ear
         mr_adm_render_vbap
+        mr_adm_render_triple_balance
         mr_adm_render_hoa
         mr_adm_render_binaural
         mr_adm_peak

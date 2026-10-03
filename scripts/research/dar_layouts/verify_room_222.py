@@ -98,8 +98,7 @@ def caf_pcm(path):
 def render(adm, directory, tag="full", extra=()):
     output = directory / (tag + ".caf")
     semantic = directory / (tag + "-semantic.json")
-    command = [str(BINARY), "render", "-i", str(adm), "-o", str(output), "--renderer", "saf", "--speaker-panner",
-               "room-compat", "--output-layout", "22.2", "--no-peak-limit", "--output-bit-depth", "f32",
+    command = [str(BINARY), "render", "-i", str(adm), "-o", str(output), "--renderer", "triple-balance", "--output-layout", "22.2", "--no-peak-limit", "--output-bit-depth", "f32",
                "--write-semantic-report", str(semantic), *map(str, extra)]
     with (directory / (tag + ".log")).open("w") as log:
         subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True)

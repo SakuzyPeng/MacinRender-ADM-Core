@@ -112,6 +112,9 @@ mradm::RendererSelection parse_renderer(const std::string& value) {
     if (value == "saf") {
         return mradm::RendererSelection::saf;
     }
+    if (value == "triple-balance") {
+        return mradm::RendererSelection::triple_balance;
+    }
     if (value == "hoa") {
         return mradm::RendererSelection::hoa;
     }
@@ -171,12 +174,13 @@ std::vector<std::string> parse_input_channel_csv(const std::string& csv) {
 CLI::Validator renderer_validator() {
     return CLI::Validator{[](const std::string& value) {
                               if (value == "auto" || value == "ear" || value == "saf" || value == "hoa" ||
-                                  value == "saf-binaural" || value == "apple") {
+                                  value == "saf-binaural" || value == "apple" || value == "triple-balance") {
                                   return std::string{};
                               }
-                              return std::string{"expected one of: auto, ear, saf, hoa, saf-binaural, apple"};
+                              return std::string{
+                                  "expected one of: auto, ear, saf, triple-balance, hoa, saf-binaural, apple"};
                           },
-                          "auto,ear,saf,hoa,saf-binaural,apple",
+                          "auto,ear,saf,triple-balance,hoa,saf-binaural,apple",
                           "renderer"};
 }
 
@@ -188,10 +192,6 @@ mradm::SpeakerSpreadMode parse_speaker_spread_mode(const std::string& value) {
         return mradm::SpeakerSpreadMode::mdap;
     }
     return mradm::SpeakerSpreadMode::automatic;
-}
-
-mradm::SpeakerPannerMode parse_speaker_panner_mode(const std::string& value) {
-    return value == "room-compat" ? mradm::SpeakerPannerMode::room_compat : mradm::SpeakerPannerMode::vbap;
 }
 
 mradm::SpeakerGeometry parse_speaker_geometry(const std::string& value) {
@@ -277,7 +277,9 @@ void add_output_selection_options(CLI::App& render_cmd, RenderCliOptions& opts) 
                           "Output semantic/layout: binaural (default) or a multichannel/HOA layout; spatial WAV "
                           "writes a WAVE mask or ADM AXML/CHNA; use 'mradm layouts --format <fmt>' for final "
                           "container channel order");
-    render_cmd.add_option("--renderer", opts.renderer, "Renderer backend: auto, ear, saf, hoa, saf-binaural, apple")
+    render_cmd
+        .add_option(
+            "--renderer", opts.renderer, "Renderer backend: auto, ear, saf, triple-balance, hoa, saf-binaural, apple")
         ->check(renderer_validator());
 }
 
@@ -363,12 +365,6 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                      "apple (CoreAudio fixed geometry); Apple renderer always uses apple")
         ->check(CLI::IsMember({"standard", "apple"}));
     render_cmd
-        ->add_option("--speaker-panner",
-                     opts.speaker_panner_str,
-                     "SAF speaker panner: vbap (default) or experimental room-compat "
-                     "(Cartesian Objects and 48 kHz 7.1.2 bed; 22.2 is a self-defined experimental extension)")
-        ->check(CLI::IsMember({"vbap", "room-compat"}));
-    render_cmd
         ->add_option("--direct-speakers-routing",
                      opts.direct_speakers_routing_str,
                      "DirectSpeakers routing: auto (label for SAF/Apple speakers, position for Apple binaural), "
@@ -382,7 +378,7 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
         ->add_option(
             "--speaker-spread-mode",
             opts.speaker_spread_mode_str,
-            "Speaker Objects extent: auto (room-compat size, otherwise MDAP for 3D), none (ignore extent), mdap")
+            "Speaker Objects extent: auto (Triple Balance size, otherwise MDAP for 3D), none (ignore extent), mdap")
         ->check(CLI::IsMember({"auto", "none", "mdap"}));
     render_cmd
         ->add_option("--binaural-spread-mode",
@@ -473,7 +469,6 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
         request.options.render_end_sec = opts.render_end;
     }
     request.options.speaker_geometry = parse_speaker_geometry(opts.speaker_geometry_str);
-    request.options.speaker_panner_mode = parse_speaker_panner_mode(opts.speaker_panner_str);
     request.options.direct_speakers_routing_mode = parse_direct_speakers_routing_mode(opts.direct_speakers_routing_str);
     if (!opts.direct_speakers_matrix_path.empty()) {
         request.options.direct_speakers_matrix_path = opts.direct_speakers_matrix_path;
@@ -499,14 +494,6 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
 }
 
 int run_render_impl(const RenderCliOptions& opts) {
-    if (opts.speaker_panner_str == "room-compat" &&
-        (opts.renderer != "saf" || (opts.layout != "7.1.4" && opts.layout != "9.1.6" && opts.layout != "22.2") ||
-         opts.speaker_geometry_str != "standard" || opts.speaker_spread_mode_str == "mdap" ||
-         opts.object_smoothing_frames != 0U)) {
-        spdlog::error("room-compat requires --renderer saf, --output-layout 7.1.4, 9.1.6 or experimental 22.2, "
-                      "standard geometry, no MDAP, and zero extra smoothing");
-        return EXIT_FAILURE;
-    }
     mradm::RenderService service;
     ConsoleProgressSink progress;
     SpdlogSink logs;

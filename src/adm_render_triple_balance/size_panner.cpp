@@ -1,4 +1,4 @@
-#include "room_compat_size_panner.h"
+#include "size_panner.h"
 
 #include <algorithm>
 #include <cmath>
@@ -7,7 +7,7 @@
 #include <numbers>
 #include <span>
 
-namespace mradm::room_compat {
+namespace mradm::triple_balance {
 // Indices below are bounded by the fixed geometry/array extents. Keep scalar
 // operation order visible because it is checked against float32 reference data.
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index, readability-math-missing-parentheses)
@@ -217,7 +217,7 @@ SizeGains axis_extent(unsigned axis, float coordinate, float radius) noexcept {
 Result<QuantizedSizeParameters> quantize_size_parameters(SizePosition position, float size) {
     const std::array<float, 4> values{position.x, position.y, position.z, size};
     if (!std::ranges::all_of(values, [](float value) { return std::isfinite(value) && value >= 0 && value <= 1; })) {
-        return make_error(ErrorCode::unsupported, "room-compat size requires finite internal XYZ and size in [0,1]");
+        return make_error(ErrorCode::unsupported, "triple-balance size requires finite internal XYZ and size in [0,1]");
     }
     const auto quantize = [](float value) {
         return std::min(static_cast<int32_t>(std::floor(value * 32768.0F + 0.5F)), 32767);
@@ -228,7 +228,7 @@ Result<QuantizedSizeParameters> quantize_size_parameters(SizePosition position, 
 Result<SizeGains> raw_size_gains(const QuantizedSizeParameters& parameters) {
     if (parameters.size < 0 || parameters.size > 32767 ||
         !std::ranges::all_of(parameters.xyz, [](int32_t value) { return value >= 0 && value <= 32767; })) {
-        return make_error(ErrorCode::unsupported, "room-compat size requires valid quantized room parameters");
+        return make_error(ErrorCode::unsupported, "triple-balance size requires valid quantized room parameters");
     }
     const float x = static_cast<float>(parameters.xyz[0]) / 32768.0F;
     const float y = static_cast<float>(parameters.xyz[1]) / 32768.0F;
@@ -309,4 +309,4 @@ SizeMixGains mix_size_gains(const SizeGains& raw, float effective_size) noexcept
     return result;
 }
 // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index, readability-math-missing-parentheses)
-} // namespace mradm::room_compat
+} // namespace mradm::triple_balance

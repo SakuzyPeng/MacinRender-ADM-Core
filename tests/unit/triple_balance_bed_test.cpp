@@ -8,8 +8,8 @@
 #include "adm/render.h"
 #include "adm/semantic_policy.h"
 
-#include "room_compat_bed.h"
-#include "room_compat_semantics.h"
+#include "bed.h"
+#include "semantics.h"
 
 namespace {
 bool check(bool condition, const char* message) {
@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
     std::string report;
     for (const auto* layout : {"7.1.4", "9.1.6"}) {
         plan.output_layout = layout;
-        const auto prepared = mradm::room_compat::prepare_semantics(plan, report);
+        const auto prepared = mradm::triple_balance::prepare_semantics(plan, report);
         if (!check(prepared.has_value(), "captured bed source fields prepare successfully")) {
             return 1;
         }
@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
             const auto& blocks = bed.tracks[index].ds_blocks;
             ok &= check(blocks.size() == 1 && blocks.front().start_sample == 0 && blocks.front().gain == 1,
                         "bed source blocks compile into a constant full-file route");
-            const auto gains = mradm::room_compat::bed_gains(blocks.front(), layout);
+            const auto gains = mradm::triple_balance::bed_gains(blocks.front(), layout);
             const auto reference = fixture["layouts"][layout][index].get<std::vector<float>>();
             ok &= check(gains && *gains == reference, "bed route exactly matches captured native OAR gains");
         }
@@ -95,15 +95,14 @@ int main(int argc, char** argv) {
             mradm::apply_resolved_semantic_direct_speaker(block, policies, {});
         }
     }
-    auto prepared = mradm::room_compat::prepare_semantics(plan, report);
-    ok &=
-        check(prepared &&
-                  std::fabs((mradm::room_compat::bed_user_gain(prepared->objects.front().tracks[8].ds_blocks.front()) *
-                             mradm::room_compat::user_output_gain(prepared->objects.front())) -
-                            .25F) < 1e-6F,
-              "user channel and object gain apply once after ignored native zero gain");
+    auto prepared = mradm::triple_balance::prepare_semantics(plan, report);
+    ok &= check(prepared && std::fabs((mradm::triple_balance::bed_user_gain(
+                                           prepared->objects.front().tracks[8].ds_blocks.front()) *
+                                       mradm::triple_balance::user_output_gain(prepared->objects.front())) -
+                                      .25F) < 1e-6F,
+                "user channel and object gain apply once after ignored native zero gain");
     const auto rejected = [&](const mradm::RenderPlan& invalid) {
-        const auto result = mradm::room_compat::prepare_semantics(invalid, report);
+        const auto result = mradm::triple_balance::prepare_semantics(invalid, report);
         return !result && result.error().code == mradm::ErrorCode::unsupported &&
                nlohmann::json::parse(report)["status"] == "unsupported";
     };

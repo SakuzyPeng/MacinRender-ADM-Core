@@ -36,8 +36,7 @@ def materialize(path):
 def render(adm, directory, layout, mapping, tag="full", policy=None, window=None):
     wav = directory / f"{layout}-{tag}.wav"
     semantic = directory / f"{layout}-{tag}-semantic.json"
-    command = [str(BINARY), "render", "-i", str(adm), "-o", str(wav), "--renderer", "saf",
-               "--speaker-panner", "room-compat", "--output-layout", layout, "--no-peak-limit",
+    command = [str(BINARY), "render", "-i", str(adm), "-o", str(wav), "--renderer", "triple-balance", "--output-layout", layout, "--no-peak-limit",
                "--output-bit-depth", "f32", "--write-semantic-report", str(semantic)]
     if policy is not None:
         policy_path = directory / f"{tag}-policy.json"
@@ -105,7 +104,7 @@ def main():
             adm.write_bytes(data)
             if not case["accepted"]:
                 command = [str(BINARY), "render", "-i", str(adm), "-o", str(directory / "rejected.wav"),
-                           "--renderer", "saf", "--speaker-panner", "room-compat", "--output-layout", "9.1.6",
+                           "--renderer", "triple-balance", "--output-layout", "9.1.6",
                            "--write-semantic-report", str(directory / "rejection.json")]
                 result = subprocess.run(command, capture_output=True, text=True)
                 rejected = read_json(directory / "rejection.json")

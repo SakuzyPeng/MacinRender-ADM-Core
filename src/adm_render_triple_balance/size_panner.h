@@ -5,7 +5,7 @@
 
 #include "adm/errors.h"
 
-namespace mradm::room_compat {
+namespace mradm::triple_balance {
 
 using SizeGains = std::array<float, 11>;
 
@@ -33,4 +33,4 @@ struct SizeMixGains {
 [[nodiscard]] Result<SizeGains> raw_size_gains(const QuantizedSizeParameters& parameters);
 [[nodiscard]] SizeMixGains mix_size_gains(const SizeGains& raw, float effective_size) noexcept;
 
-} // namespace mradm::room_compat
+} // namespace mradm::triple_balance

@@ -22,11 +22,12 @@ from score_semantic_pcm import score
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 MODEL_FILES = [ROOT / path for path in (
-    "src/adm_render_vbap/room_compat_semantics.cpp", "src/adm_render_vbap/room_compat_semantics.h",
-    "src/adm_render_vbap/room_compat_panner.cpp", "src/adm_render_vbap/room_compat_panner.h",
-    "src/adm_render_vbap/room_compat_size_panner.cpp", "src/adm_render_vbap/room_compat_size_panner.h",
-    "src/adm_render_vbap/room_compat_size_processor.cpp", "src/adm_render_vbap/room_compat_size_processor.h",
-    "src/adm_render_vbap/vbap_renderer.cpp",
+    "src/adm_render_triple_balance/semantics.cpp", "src/adm_render_triple_balance/semantics.h",
+    "src/adm_render_triple_balance/panner.cpp", "src/adm_render_triple_balance/panner.h",
+    "src/adm_render_triple_balance/size_panner.cpp", "src/adm_render_triple_balance/size_panner.h",
+    "src/adm_render_triple_balance/size_processor.cpp", "src/adm_render_triple_balance/size_processor.h",
+    "src/adm_render_triple_balance/triple_balance_renderer.cpp",
+    "src/adm_render_common/speaker_pcm.cpp", "src/adm_render_common/speaker_pcm.h",
     "src/adm_core/semantic_policy.cpp", "src/adm_io/scene_importer.cpp", "src/adm_engine/render_service.cpp",
     "include/adm/scene.h", "include/adm/semantic_policy.h", "include/adm/render.h", "CMakeLists.txt")]
 ANALYSIS_FILES = [HERE / name for name in ("score_semantic_pcm.py", "measure_size_field.py", "measure_size_motion.py",
@@ -198,7 +199,7 @@ def diagnostic(x, y):
 def render_check(directory, case, layout, mapping, channels, frames, label, extra):
     output = directory / f"check-{label}-{layout}.wav"
     status = execute([ROOT / "build/release/mradm", "render", "-i", case["adm"], "-o", output,
-                      "--renderer", "saf", "--speaker-panner", "room-compat", "--output-layout", layout,
+                      "--renderer", "triple-balance", "--output-layout", layout,
                       "--no-peak-limit", "--output-bit-depth", "f32", *extra],
                      directory / f"check-{label}-{layout}.log")
     if status:
@@ -392,7 +393,7 @@ def main():
                 candidate = directory / f"candidate-{layout}.wav"
                 report = directory / f"semantic-{layout}.json"
                 status = execute([ROOT / "build/release/mradm", "render", "-i", case["adm"], "-o", candidate,
-                                  "--renderer", "saf", "--speaker-panner", "room-compat", "--output-layout", layout,
+                                  "--renderer", "triple-balance", "--output-layout", layout,
                                   "--no-peak-limit", "--output-bit-depth", "f32", "--write-semantic-report", report],
                                  directory / f"candidate-{layout}.log")
                 metrics["candidate_exit_code"] = status

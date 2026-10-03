@@ -150,7 +150,7 @@ def main() -> None:
                 for layout, suffix in (("7.1.4", "714"), ("9.1.6", "916")):
                     wav = work / f"size-{suffix}.wav"
                     run(RENDER, "render", "--input", adm, "--output", wav, "--output-layout", layout,
-                        "--renderer", "saf", "--speaker-panner", "room-compat", "--no-peak-limit",
+                        "--renderer", "triple-balance", "--no-peak-limit",
                         "--output-bit-depth", "f32")
                     outputs[layout] = wav
                 measurement += ["--candidate-714", outputs["7.1.4"],
@@ -181,7 +181,7 @@ def main() -> None:
         for layout, suffix in (("7.1.4", "714"), ("9.1.6", "916")):
             output = work / f"room-{suffix}.wav"
             run(RENDER, "render", "--input", adm, "--output", output, "--output-layout", layout,
-                "--renderer", "saf", "--speaker-panner", "room-compat", "--speaker-spread-mode", "none",
+                "--renderer", "triple-balance", "--speaker-spread-mode", "none",
                 "--no-peak-limit", "--output-bit-depth", "f32")
             candidates[layout] = output
         if profile == "size-sequence":

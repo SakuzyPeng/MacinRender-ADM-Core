@@ -2,7 +2,7 @@
 
 本轮已测出标准 7.1.2 bed 到 7.1.4／9.1.6 的固定路由，并用实际 OMO／OAR 数据流和独立宽带 PCM 验证。
 默认 SAF 的主要差异来自 DirectSpeakers 标签匹配失败后的方向 VBAP 分配。研究阶段先用显式矩阵验证，
-随后已将专用 bed 路由、源语义与用户覆盖正式接入离线 `room-compat`，无需外部矩阵或 Dolby 进程。
+随后已将专用 bed 路由、源语义与用户覆盖正式接入离线 `triple-balance`，无需外部矩阵或 Dolby 进程。
 兼容模式整体仍为实验功能；本页下半部分保留研究阶段证据，并记录接入后的验收范围。
 
 22.2 的 bed／点源／等尺寸输出另见[自有房间扩展](ROOM_222_EXTENSION.md)，不属于本页 7.1.4／9.1.6 的 Dolby 数值参考范围。
@@ -11,7 +11,7 @@
 
 ```sh
 ./build/release/mradm render -i input.wav -o output.wav \
-  --renderer saf --speaker-panner room-compat --output-layout 9.1.6 \
+  --renderer triple-balance --output-layout 9.1.6 \
   --no-peak-limit --output-bit-depth f32 --write-semantic-report semantics.json
 ```
 
@@ -20,7 +20,7 @@ RoomCentric 标签。每个通道的标签及 pack 保持不变；可与已验�
 同时渲染。源 gain／mute／起止字段按本页参考规则解释，用户 object gain／mute 和逐 bed 通道 gain／mute
 作为额外输出控制独立生效，源零增益不会吞掉用户覆盖。
 
-`room-compat` 的 WAV 封装也跟随参考 re-render：使用 WAVEFORMATEXTENSIBLE，7.1.4 的掩码为 0x2D63F，
+`triple-balance` 的 WAV 封装也跟随参考 re-render：使用 WAVEFORMATEXTENSIBLE，7.1.4 的掩码为 0x2D63F，
 9.1.6 的掩码为 0，且不附加 AXML／CHNA。小文件为 RIFF，容量需要时才使用 RF64；采样位深仍由用户选择。
 这是独立的兼容写出分支，普通 SAF 的 ADM 布局元数据保持原样。9.1.6 WAV 与 Dolby 一样由 `afinfo` 显示
 `no channel layout`；播放器需要人工指定布局。macOS 自动识别布局的比较文件请输出 `.caf`，其
@@ -141,7 +141,7 @@ Release 实测：7.1.4 每个顶部 bed 向同侧环绕输出约 `0.337652`，�
 | 独立宽带、多路同时输入 | `1.210719347000122e-8` | 0，逐样本一致 |
 
 上表是接入前的基础路由诊断。显式矩阵仍沿用普通后端的 gain／时间处理，不能独自复现忽略源字段的规则；
-当前离线 `room-compat` 已使用独立语义准备和固定路由，无需这个诊断矩阵。默认 SAF 行为保持不变。
+当前离线 `triple-balance` 已使用独立语义准备和固定路由，无需这个诊断矩阵。默认 SAF 行为保持不变。
 
 ## 复现与保存
 
@@ -168,7 +168,7 @@ python3 scripts/research/dar_layouts/trace_bed_semantics.py \
 
 ## 接入验收
 
-新增私有 `room_compat_bed`；固定增益由准备层编译进入现有离线混音，准备配置不保存可变 DSP 状态。
+新增私有 `adm_render_triple_balance/bed`；固定增益由准备层编译进入现有离线混音，准备配置不保存可变 DSP 状态。
 bed 和对象各自施加用户输出增益，现有尺寸处理器从文件起点预热，裁剪只写出和计量请求窗口。
 
 ```sh

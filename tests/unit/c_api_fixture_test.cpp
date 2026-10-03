@@ -426,6 +426,12 @@ bool verify_options_invalid_values(adm_render_options_t* opts) {
     ok = check(adm_render_options_set_speaker_geometry(opts, ADM_SPEAKER_GEOMETRY_STANDARD) == ADM_ERROR_OK,
                "speaker geometry restored to standard after validation") &&
          ok;
+    ok = check(adm_render_options_set_renderer(opts, ADM_RENDERER_TRIPLE_BALANCE) == ADM_ERROR_OK,
+               "independent Triple Balance C ABI selector is accepted") &&
+         ok;
+    ok = check(adm_render_options_set_renderer(opts, ADM_RENDERER_AUTOMATIC) == ADM_ERROR_OK,
+               "renderer restored after selector validation") &&
+         ok;
     ok = verify_direct_speakers_matrix_option_setters(opts) && ok;
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     ok = check(adm_render_options_set_binaural_spread_mode(opts, static_cast<adm_binaural_spread_mode_t>(99)) ==
@@ -2147,6 +2153,7 @@ bool verify_capabilities_json(adm_context_t* ctx) {
         ok = check(has(R"("schema": "mradm.capabilities")") && has(R"("schema_version": 1)"),
                    "capabilities_json: should carry schema + schema_version") &&
              ok;
+        ok = check(has("triple-balance"), "capabilities_json: independent Triple Balance backend") && ok;
         ok = check(has("\"backends\""), "capabilities_json: should contain backends array") && ok;
         // Public renderer-selection backends should be present.
         ok = check(has(R"("renderer": "ear")") && has(R"("renderer": "saf")") && has(R"("renderer": "hoa")") &&

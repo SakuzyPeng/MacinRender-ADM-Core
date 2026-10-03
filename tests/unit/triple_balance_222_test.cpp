@@ -8,10 +8,10 @@
 #include <span>
 #include <vector>
 
-#include "room_222.h"
-#include "room_compat_bed.h"
-#include "room_compat_panner.h"
-#include "room_compat_size_processor.h"
+#include "bed.h"
+#include "layout_222.h"
+#include "panner.h"
+#include "size_processor.h"
 
 namespace {
 bool check(bool value, const char* message) {
@@ -36,7 +36,7 @@ float random_unit(uint32_t& state) {
 }
 
 bool geometry_checks() {
-    using namespace mradm::room_compat;
+    using namespace mradm::triple_balance;
     bool ok = true;
     std::set<std::size_t> channels;
     for (const auto& node : room_222_nodes()) {
@@ -99,7 +99,7 @@ bool geometry_checks() {
 }
 
 bool integral_checks() {
-    using namespace mradm::room_compat;
+    using namespace mradm::triple_balance;
     uint32_t random = 0x2220927U;
     double worst = 0;
     constexpr int k_steps = 24;
@@ -143,7 +143,7 @@ bool integral_checks() {
 }
 
 std::vector<float>
-run(mradm::room_compat::SizeObjectProcessor& processor, std::span<const float> input, std::size_t chunk) {
+run(mradm::triple_balance::SizeObjectProcessor& processor, std::span<const float> input, std::size_t chunk) {
     std::vector<float> output;
     for (std::size_t at = 0; at < input.size(); at += chunk) {
         if (!processor.push(input.subspan(at, std::min(chunk, input.size() - at)), output)) {
@@ -154,7 +154,7 @@ run(mradm::room_compat::SizeObjectProcessor& processor, std::span<const float> i
 }
 
 bool state_checks() {
-    using namespace mradm::room_compat;
+    using namespace mradm::triple_balance;
     const std::vector<SizeEvent> events{{0, {.5F, .5F, 0}, 0},
                                         {513, {.2F, .8F, -.7F}, .01F},
                                         {2048, {.5F, .5F, 1}, .2F},

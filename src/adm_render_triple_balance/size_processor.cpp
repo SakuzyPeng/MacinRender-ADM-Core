@@ -1,13 +1,13 @@
-#include "room_compat_size_processor.h"
+#include "size_processor.h"
 
 #include <algorithm>
 #include <cmath>
 #include <iterator>
 #include <utility>
 
-#include "room_compat_panner.h"
+#include "panner.h"
 
-namespace mradm::room_compat {
+namespace mradm::triple_balance {
 // Ring, mode and channel indices are bounded by their fixed extents. Preserve
 // the explicit scalar arithmetic order of the validated recursive structure.
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-constant-array-index, readability-math-missing-parentheses)
@@ -101,13 +101,14 @@ SizeObjectProcessor::create(std::span<const SizeEvent> events, std::string layou
         return make_error(ErrorCode::unsupported, "room size supports 48 kHz 7.1.4/9.1.6 and experimental 22.2");
     }
     if (events.empty() || events.front().start_sample != 0) {
-        return make_error(ErrorCode::unsupported, "room-compat size requires an event at frame zero");
+        return make_error(ErrorCode::unsupported, "triple-balance size requires an event at frame zero");
     }
     uint64_t previous = 0;
     bool initial = true;
     for (const auto& event : events) {
         if ((!initial && event.start_sample / 512 == previous / 512) || (!initial && event.start_sample <= previous)) {
-            return make_error(ErrorCode::unsupported, "room-compat size allows one ordered event per 512-frame block");
+            return make_error(ErrorCode::unsupported,
+                              "triple-balance size allows one ordered event per 512-frame block");
         }
         if (is_room_222(layout)) {
             SceneBlockPosition position;
@@ -377,4 +378,4 @@ Result<void> SizeObjectProcessor::process_extended_control(std::vector<float>& o
     return {};
 }
 // NOLINTEND(cppcoreguidelines-pro-bounds-constant-array-index, readability-math-missing-parentheses)
-} // namespace mradm::room_compat
+} // namespace mradm::triple_balance

@@ -9,10 +9,10 @@
 
 #include "adm/errors.h"
 
-#include "room_222.h"
-#include "room_compat_size_panner.h"
+#include "layout_222.h"
+#include "size_panner.h"
 
-namespace mradm::room_compat {
+namespace mradm::triple_balance {
 
 // Exact recursive structure used by the size candidate. The measured FIR
 // SizeFilterBank remains a separate research comparison.
@@ -86,4 +86,4 @@ class SizeObjectProcessor final {
     SizeDecorrelator decorrelator_;
 };
 
-} // namespace mradm::room_compat
+} // namespace mradm::triple_balance

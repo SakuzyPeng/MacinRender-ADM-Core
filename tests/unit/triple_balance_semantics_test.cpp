@@ -12,11 +12,11 @@
 
 #include "adm/audio_io.h"
 #include "adm/render.h"
-#include "adm/render_vbap.h"
+#include "adm/render_triple_balance.h"
 #include "adm/semantic_policy.h"
 
-#include "room_compat_semantics.h"
-#include "room_compat_size_processor.h"
+#include "semantics.h"
+#include "size_processor.h"
 
 namespace {
 class FileGuard {
@@ -45,7 +45,6 @@ bool check(bool condition, const char* message) {
 mradm::RenderPlan make_plan(uint64_t rtime) {
     mradm::RenderPlan plan;
     plan.output_layout = "9.1.6";
-    plan.speaker_panner_mode = mradm::SpeakerPannerMode::room_compat;
     plan.scene.info.sample_rate = 48000;
     plan.scene.info.num_channels = 1;
     plan.scene.info.num_frames = 52224;
@@ -125,7 +124,7 @@ bool point_half_code(const std::filesystem::path& fixtures) {
             return false;
         }
     }
-    auto renderer = mradm::create_vbap_renderer();
+    auto renderer = mradm::create_triple_balance_renderer();
     mradm::NullLogSink logs;
     mradm::NullProgressSink progress;
     const auto prepared = renderer->prepare(plan, logs);
@@ -159,7 +158,7 @@ int main(int argc, char** argv) {
     std::string report;
     for (const uint64_t first : {0U, 31U, 32U, 511U, 512U, 513U, 48000U}) {
         const auto original = make_plan(first);
-        auto scene = mradm::room_compat::prepare_semantics(original, report);
+        auto scene = mradm::triple_balance::prepare_semantics(original, report);
         if (!check(scene.has_value(), "measured initial event and native zero gain/mute are supported")) {
             return 1;
         }
@@ -180,27 +179,27 @@ int main(int argc, char** argv) {
     mradm::SemanticPolicyOverride user;
     user.gain = mradm::GainPolicy{.scale = .25F, .gain_db = 6.0206F, .mute = false};
     mradm::apply_resolved_semantic_object(plan.scene.objects.front(), user);
-    auto scene = mradm::room_compat::prepare_semantics(plan, report);
-    ok &= check(scene && std::fabs(mradm::room_compat::user_output_gain(scene->objects.front()) - .5F) < 1e-6F,
+    auto scene = mradm::triple_balance::prepare_semantics(plan, report);
+    ok &= check(scene && std::fabs(mradm::triple_balance::user_output_gain(scene->objects.front()) - .5F) < 1e-6F,
                 "user level is an independent multiplier even with authored gain zero");
     user.gain = mradm::GainPolicy{.mute = true};
     mradm::apply_resolved_semantic_object(plan.scene.objects.front(), user);
-    scene = mradm::room_compat::prepare_semantics(plan, report);
+    scene = mradm::triple_balance::prepare_semantics(plan, report);
     ok &= check(scene && !scene->objects.front().mute &&
-                    mradm::room_compat::user_output_gain(scene->objects.front()) == 0,
+                    mradm::triple_balance::user_output_gain(scene->objects.front()) == 0,
                 "user mute suppresses output without skipping object state");
     auto invalid = make_plan(0);
     mradm::SceneObjectSource nested_source;
     nested_source.has_parent = true;
     invalid.scene.objects.front().adm_source = nested_source;
-    ok &= check(!mradm::room_compat::prepare_semantics(invalid, report), "nested source objects remain unsupported");
+    ok &= check(!mradm::triple_balance::prepare_semantics(invalid, report), "nested source objects remain unsupported");
     invalid = make_plan(0);
     invalid.scene.objects.push_back(invalid.scene.objects.front());
-    ok &= check(!mradm::room_compat::prepare_semantics(invalid, report), "shared PCM bindings remain unsupported");
+    ok &= check(!mradm::triple_balance::prepare_semantics(invalid, report), "shared PCM bindings remain unsupported");
     invalid = make_plan(0);
     invalid.scene.info.sample_rate = 44100;
-    ok &=
-        check(!mradm::room_compat::prepare_semantics(invalid, report), "extended semantics require the verified rate");
+    ok &= check(!mradm::triple_balance::prepare_semantics(invalid, report),
+                "extended semantics require the verified rate");
 
     auto with_bed = make_plan(0);
     with_bed.scene.objects.front().tracks.front().channel_index = 10;
@@ -221,9 +220,9 @@ int main(int argc, char** argv) {
     mradm::apply_resolved_semantic_object(bed, user);
     with_bed.scene.objects.push_back(bed);
     with_bed.scene.info.num_channels = 11;
-    scene = mradm::room_compat::prepare_semantics(with_bed, report);
+    scene = mradm::triple_balance::prepare_semantics(with_bed, report);
     ok &= check(scene && scene->objects.back().gain == 1 &&
-                    mradm::room_compat::user_output_gain(scene->objects.back()) == .5F,
+                    mradm::triple_balance::user_output_gain(scene->objects.back()) == .5F,
                 "verified bed distinguishes ignored native gain from global user gain");
 
     const std::filesystem::path fixtures(argv[1]);
@@ -235,16 +234,16 @@ int main(int argc, char** argv) {
     for (const auto* layout : {"7.1.4", "9.1.6"}) {
         plan = make_plan(48000);
         plan.output_layout = layout;
-        scene = mradm::room_compat::prepare_semantics(plan, report);
-        std::vector<mradm::room_compat::SizeEvent> events;
+        scene = mradm::triple_balance::prepare_semantics(plan, report);
+        std::vector<mradm::triple_balance::SizeEvent> events;
         std::ranges::transform(
             scene->objects.front().tracks.front().blocks, std::back_inserter(events), [](const auto& block) {
-                return mradm::room_compat::SizeEvent{
+                return mradm::triple_balance::SizeEvent{
                     block.start_sample,
                     {(block.position.x + 1) * .5F, (1 - block.position.y) * .5F, block.position.z},
                     block.width};
             });
-        auto processor = mradm::room_compat::SizeObjectProcessor::create(events, layout, 48000);
+        auto processor = mradm::triple_balance::SizeObjectProcessor::create(events, layout, 48000);
         if (!check(processor.has_value(), "compiled semantic timeline initializes DSP")) {
             return 1;
         }

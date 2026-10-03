@@ -12,6 +12,7 @@
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
+#include "adm/render_triple_balance.h"
 #include "adm/render_vbap.h"
 
 #include "render_common.h"
@@ -86,6 +87,8 @@ resolve_renderer(RendererSelection requested, std::string requested_layout, bool
         backend = RendererSelection::ear;
     } else if (sel == RendererSelection::saf) {
         renderer = create_vbap_renderer();
+    } else if (sel == RendererSelection::triple_balance) {
+        renderer = create_triple_balance_renderer();
     } else if (sel == RendererSelection::hoa) {
         renderer = create_hoa_renderer();
     } else if (sel == RendererSelection::binaural || sel == RendererSelection::saf_binaural) {

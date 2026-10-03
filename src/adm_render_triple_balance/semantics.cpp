@@ -1,4 +1,4 @@
-#include "room_compat_semantics.h"
+#include "semantics.h"
 
 #include <algorithm>
 #include <cmath>
@@ -11,10 +11,10 @@
 
 #include "adm/render.h"
 
-#include "room_222.h"
-#include "room_compat_bed.h"
+#include "bed.h"
+#include "layout_222.h"
 
-namespace mradm::room_compat {
+namespace mradm::triple_balance {
 namespace {
 using Json = nlohmann::json;
 
@@ -30,7 +30,7 @@ float user_output_gain(const SceneObject& object) {
 // NOLINTNEXTLINE(readability-function-size): compile render data and its audit report in the same pass.
 Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) {
     AdmScene scene = plan.scene;
-    Json document = {{"profile", "room-compat-objects-v1"},
+    Json document = {{"profile", "triple-balance-objects-v1"},
                      {"profile_version", 1},
                      {"layout", plan.output_layout},
                      {"sample_rate", scene.info.sample_rate},
@@ -39,12 +39,12 @@ Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) 
                      {"control_frames", 512},
                      {"event_stage", "targets before existing room conversion, smoothing and quantization"},
                      {"objects", Json::array()},
-                     {"bed_profile", "room-compat-7.1.2-bed-v1"},
+                     {"bed_profile", "triple-balance-7.1.2-bed-v1"},
                      {"beds", Json::array()}};
     if (is_room_222(plan.output_layout)) {
         document["profile"] = "room-222-extension-v1";
         document["bed_profile"] = "source-7.1.2-to-room-222-v1";
-        document["source_semantics_profile"] = "room-compat-objects-v1";
+        document["source_semantics_profile"] = "triple-balance-objects-v1";
         document["spatial_reference"] = nullptr;
         document["spatial_model"] = "self-defined three-layer equal-power room";
         document["size_model"] = "exact mean point power over a clipped Cartesian cube of half-width=size";
@@ -77,14 +77,15 @@ Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) 
     };
     for (auto& object : scene.objects) {
         if (object.adm_source && (object.adm_source->has_parent || !object.adm_source->child_objects.empty())) {
-            return reject(object.id, "audioObjectIDRef", "room-compat has not verified nested object semantics");
+            return reject(object.id, "audioObjectIDRef", "triple-balance has not verified nested object semantics");
         }
         for (const auto& track : object.tracks) {
             if (track.blocks.empty() && track.ds_blocks.empty()) {
-                return reject(object.id, "audioBlockFormat", "room-compat requires renderable metadata for each track");
+                return reject(
+                    object.id, "audioBlockFormat", "triple-balance requires renderable metadata for each track");
             }
             if (track.channel_index && !input_channels.insert(*track.channel_index).second) {
-                return reject(object.id, "audioTrackUIDRef", "room-compat requires independently bound PCM tracks");
+                return reject(object.id, "audioTrackUIDRef", "triple-balance requires independently bound PCM tracks");
             }
         }
         const bool has_objects =
@@ -92,15 +93,15 @@ Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) 
         const bool has_bed =
             std::ranges::any_of(object.tracks, [](const auto& track) { return !track.ds_blocks.empty(); });
         if (has_objects && has_bed) {
-            return reject(object.id, "audioPackFormat", "room-compat requires separate bed and Objects owners");
+            return reject(object.id, "audioPackFormat", "triple-balance requires separate bed and Objects owners");
         }
         if (!has_objects) {
             if (++bed_count > 1) {
-                return reject(object.id, "audioPackFormat", "room-compat has not verified multiple beds");
+                return reject(object.id, "audioPackFormat", "triple-balance has not verified multiple beds");
             }
             if (plan.direct_speakers_routing_mode == DirectSpeakersRoutingMode::position ||
                 plan.direct_speakers_routing_mode == DirectSpeakersRoutingMode::matrix || plan.direct_speakers_matrix) {
-                return reject(object.id, "direct_speakers_routing", "room-compat bed uses fixed reference routing");
+                return reject(object.id, "direct_speakers_routing", "triple-balance bed uses fixed reference routing");
             }
             auto valid = validate_bed(object, scene.info);
             if (!valid) {
@@ -112,12 +113,12 @@ Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) 
         const uint64_t native_start = object.adm_source ? object.adm_source->start_samples : 0;
         if (!std::isfinite(native_gain) || native_gain < 0 || !std::isfinite(object.user_level.gain_multiplier) ||
             object.user_level.gain_multiplier < 0) {
-            return reject(object.id, "gain", "room-compat requires finite nonnegative gain");
+            return reject(object.id, "gain", "triple-balance requires finite nonnegative gain");
         }
         if (scene.info.sample_rate != 48000 &&
             (native_gain != 1 || native_mute || native_start != 0 || object.end_sample < scene.info.num_frames ||
              object.user_level.gain_multiplier != 1 || object.user_level.mute.has_value())) {
-            return reject(object.id, "sample_rate", "room-compat extended object semantics require 48 kHz");
+            return reject(object.id, "sample_rate", "triple-balance extended object semantics require 48 kHz");
         }
         Json row = {{"id", object.id},
                     {"native_gain", decision("ignored", native_gain, 1)},
@@ -179,13 +180,14 @@ Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) 
             for (auto& block : track.blocks) {
                 const uint64_t relative = block.adm_source ? block.adm_source->rtime_samples : block.start_sample;
                 if (!first && (relative <= previous || relative / 512 == previous / 512)) {
-                    return reject(object.id, "rtime", "room-compat requires one ordered update per 512-frame block");
+                    return reject(object.id, "rtime", "triple-balance requires one ordered update per 512-frame block");
                 }
                 if (relative >= scene.info.num_frames) {
-                    return reject(object.id, "rtime", "room-compat metadata update falls outside the audio timeline");
+                    return reject(
+                        object.id, "rtime", "triple-balance metadata update falls outside the audio timeline");
                 }
                 if (!std::isfinite(block.gain) || block.gain < 0) {
-                    return reject(object.id, "block.gain", "room-compat requires finite nonnegative block gain");
+                    return reject(object.id, "block.gain", "triple-balance requires finite nonnegative block gain");
                 }
                 events.push_back(
                     {{"source_absolute_start_sample", block.start_sample},
@@ -230,7 +232,8 @@ Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) 
             const auto initial_time = track.blocks.front().start_sample;
             if (initial_time > 0) {
                 if (scene.info.sample_rate != 48000) {
-                    return reject(object.id, "first.rtime", "room-compat has not verified this initial metadata block");
+                    return reject(
+                        object.id, "first.rtime", "triple-balance has not verified this initial metadata block");
                 }
                 if (initial_time < 512) {
                     track.blocks.front().start_sample = 0;
@@ -265,4 +268,4 @@ void publish_semantics(const RenderPlan& plan, const std::string& report, const 
     }
     plan.renderer_semantics_sink(document.dump());
 }
-} // namespace mradm::room_compat
+} // namespace mradm::triple_balance

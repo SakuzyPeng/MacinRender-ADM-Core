@@ -298,6 +298,7 @@ public static class OutputModel
     {
         "ear" => "EAR (BS.2127)",
         "saf" => "SAF VBAP",
+        "triple-balance" => "Triple Balance",
         "hoa" => "HOA",
         "saf-binaural" => "SAF Binaural",
         "apple" => "Apple SpatialMixer",
@@ -315,6 +316,7 @@ public static class OutputModel
     {
         "ear" => AdmRenderer.Ear,
         "saf" => AdmRenderer.Saf,
+        "triple-balance" => AdmRenderer.TripleBalance,
         "hoa" => AdmRenderer.Hoa,
         "saf-binaural" => AdmRenderer.SafBinaural,
         "apple" => AdmRenderer.Apple,
