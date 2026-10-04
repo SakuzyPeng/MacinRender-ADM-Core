@@ -23,6 +23,9 @@
 后续项目 DSP 迁移还包括 [HpTF 耳机补偿](RUST_HPTF_MIGRATION.md)：系数设计、频响与自动衰减、
 级联状态及热切换由 Rust 接管，参数导入、并发发布和状态查询继续由 C++ 管理。
 
+[输出保护与实时增益迁移](RUST_OUTPUT_DSP_MIGRATION.md)进一步将设备立体声峰值保护、
+单通道渐变和多通道增益状态迁入 Rust。六类后端使用批量处理，保留各自的控制及 seek/reset 语义。
+
 内置 KEMAR、原型和格型系数及 HOA 矩阵是约 1.7 MiB 的已提交二进制资源。`assets/manifest.json` 记录尺寸、来源和 SHA-256；`assets/NOTICE.txt` 保留 ISC/MIT 声明及数据提供者归属。正常构建不从 SAF 提取数据。
 
 ## 2. 行为边界

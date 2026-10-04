@@ -330,6 +330,8 @@ HRTF magnitude/phase interpolation, continuous live direction lookup and spectra
 
 HpTF headphone compensation also uses Rust for coefficient design, response and auto-trim calculation, cascades and transitions. C++ retains parameter import and publication between threads. See the [Rust HpTF migration](docs/architecture/RUST_HPTF_MIGRATION.md) for scope and validation.
 
+Stereo device peak protection and live gain ramps also keep their state in Rust. Backends generate envelopes or process PCM in batches, preserving latency, EOS and seek behavior. See the [Rust output DSP migration](docs/architecture/RUST_OUTPUT_DSP_MIGRATION.md) for scope and validation.
+
 System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
 
 ```bash

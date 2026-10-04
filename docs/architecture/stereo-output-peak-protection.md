@@ -11,6 +11,10 @@ that clip cannot restore the waveform.
 for offline callers. System-spatial output passes multichannel PCM to the system
 spatializer and does not use this stereo stage.
 
+The guard's buffers and gain envelope now live in Rust behind a private C boundary;
+the C++ session retains device, epoch and presentation accounting. See the
+[Rust output DSP migration](RUST_OUTPUT_DSP_MIGRATION.md) for compatibility and validation.
+
 The guard applies the current master volume before detecting overload. Signals
 that remain below its -1 dBFS sample-peak ceiling pass through exactly at that
 volume. Both ears share a gain envelope to preserve the stereo balance. Each

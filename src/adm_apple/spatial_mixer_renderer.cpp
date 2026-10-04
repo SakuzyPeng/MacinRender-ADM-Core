@@ -1232,9 +1232,7 @@ class AppleStream final : public IRenderStream {
             auto& gain_ramp = bus_gain_ramps_[i];
             gain_ramp.set_target(bus_gain_target_[i].load(std::memory_order_relaxed));
             float* gain_envelope = bus_gain_envelopes_.data() + (i * k_render_block);
-            for (UInt32 frame = 0; frame < frames_now; ++frame) {
-                gain_envelope[frame] = gain_ramp.next();
-            }
+            gain_ramp.fill(std::span{gain_envelope, frames_now});
             const BusEvent* ev = active_event(buses_[i], position, ev_cursor_[i]);
             float azimuth = ev != nullptr ? ev->azimuth : 0.0F;
             float elevation = ev != nullptr ? ev->elevation : 0.0F;
@@ -1295,9 +1293,7 @@ class AppleStream final : public IRenderStream {
             auto& gain_ramp = direct_gain_ramps_[i];
             gain_ramp.set_target(direct_gain_target_[i].load(std::memory_order_relaxed));
             float* gain_envelope = direct_gain_envelopes_.data() + (i * k_render_block);
-            for (UInt32 frame = 0; frame < frames_now; ++frame) {
-                gain_envelope[frame] = gain_ramp.next();
-            }
+            gain_ramp.fill(std::span{gain_envelope, frames_now});
         }
         mix_direct_side_buses(direct_buses_,
                               staging_.data(),
@@ -1313,9 +1309,7 @@ class AppleStream final : public IRenderStream {
             auto& gain_ramp = lfe_gain_ramps_[i];
             gain_ramp.set_target(lfe_gain_target_[i].load(std::memory_order_relaxed));
             float* gain_envelope = lfe_gain_envelopes_.data() + (i * k_render_block);
-            for (UInt32 frame = 0; frame < frames_now; ++frame) {
-                gain_envelope[frame] = gain_ramp.next();
-            }
+            gain_ramp.fill(std::span{gain_envelope, frames_now});
         }
         mix_lfe_side_buses(lfe_buses_,
                            lfe_routing_,

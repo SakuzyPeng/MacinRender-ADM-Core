@@ -115,9 +115,7 @@ class TripleBalanceStream final : public IRenderStream {
                 gain_targets_[channel.input_channel] = *gain;
             }
         }
-        for (std::size_t i = 0; i < ramps_.size(); ++i) {
-            ramps_[i].set_target(gain_targets_[i]);
-        }
+        ramps_.set_targets(gain_targets_);
         auto scales = scales_;
         std::ranges::fill(scales, 1.0F);
         for (std::size_t i = 0; i < prepared_.size_tracks.size(); ++i) {
@@ -226,7 +224,8 @@ class TripleBalanceStream final : public IRenderStream {
           layout_(plan.output_layout), default_interp_(uint64_t{sample_rate()} * plan.default_interp_ms / 1000),
           checkpoint_interval_(((uint64_t{sample_rate()} + k_block_frames - 1) / k_block_frames) * k_block_frames),
           input_(k_block_frames * input_channels_), envelopes_(input_.size()), indices_(prepared.gain_matrix.size(), 0),
-          gain_targets_(input_channels_, 1.0F), scales_(prepared.size_tracks.size(), 1.0F),
+          gain_targets_(input_channels_, 1.0F), ramps_(input_channels_, sample_rate()),
+          scales_(prepared.size_tracks.size(), 1.0F),
           checkpoint_budget_(std::min(checkpoint_budget, k_checkpoint_bytes)),
           size_by_channel_(input_channels_, prepared.size_tracks.size()) {
         for (std::size_t i = 0; i < prepared.size_tracks.size(); ++i) {
@@ -239,11 +238,8 @@ class TripleBalanceStream final : public IRenderStream {
     void configure_matrix() { mixer_.set_point_in_matrix(scales_); }
 
     void reset_ramps() {
-        ramps_.clear();
-        for (float gain : gain_targets_) {
-            ramps_.emplace_back(sample_rate());
-            ramps_.back().set_target(gain);
-        }
+        ramps_.reset();
+        ramps_.set_targets(gain_targets_);
     }
 
     void save_checkpoint(bool force = false) {
@@ -282,11 +278,7 @@ class TripleBalanceStream final : public IRenderStream {
         if (reader_->read(input_.data(), frames) != frames) {
             return make_error(ErrorCode::io_error, "short input read in Triple Balance stream");
         }
-        for (std::size_t frame = 0; frame < frames; ++frame) {
-            for (std::size_t channel = 0; channel < input_channels_; ++channel) {
-                envelopes_[(frame * input_channels_) + channel] = ramps_[channel].next();
-            }
-        }
+        ramps_.fill(std::span{envelopes_}.first(frames * input_channels_));
         fifo_.assign(frames * out_channels(), 0.0F);
         fifo_read_ = 0;
         const render_common::AccumulateContext context{input_.data(),
@@ -335,7 +327,7 @@ class TripleBalanceStream final : public IRenderStream {
     std::vector<float> envelopes_;
     std::vector<std::size_t> indices_;
     std::vector<float> gain_targets_;
-    std::vector<render_common::LiveGainRamp> ramps_;
+    render_common::InterleavedLiveGainSmoother ramps_;
     std::vector<float> scales_;
     std::vector<float> fifo_;
     std::size_t fifo_read_{};
