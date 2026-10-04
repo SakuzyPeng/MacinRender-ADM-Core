@@ -289,6 +289,8 @@ add_library(MacinRender::ADMRenderTripleBalance ALIAS mr_adm_render_triple_balan
 target_sources(mr_adm_render_triple_balance
     PRIVATE
         src/adm_render_triple_balance/triple_balance_renderer.cpp
+        src/adm_render_triple_balance/render_state.cpp
+        src/adm_render_triple_balance/triple_balance_stream.cpp
         src/adm_render_triple_balance/panner.cpp
         src/adm_render_triple_balance/layout_222.cpp
         src/adm_render_triple_balance/size_panner.cpp
@@ -983,6 +985,20 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_vbap_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_vbap_smoke_tests)
     add_test(NAME mr_adm_vbap_smoke_tests COMMAND mr_adm_vbap_smoke_tests)
+
+    add_executable(mr_adm_triple_balance_monitor_benchmark EXCLUDE_FROM_ALL
+        tests/manual/triple_balance_monitor_benchmark.cpp)
+    target_link_libraries(mr_adm_triple_balance_monitor_benchmark PRIVATE
+        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRealtime)
+    mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
+
+    add_executable(mr_adm_triple_balance_stream_tests tests/unit/triple_balance_stream_test.cpp)
+    target_link_libraries(mr_adm_triple_balance_stream_tests PRIVATE
+        MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRenderCommon)
+    target_include_directories(mr_adm_triple_balance_stream_tests PRIVATE src/adm_render_triple_balance)
+    mr_adm_core_apply_warnings(mr_adm_triple_balance_stream_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_triple_balance_stream_tests)
+    add_test(NAME mr_adm_triple_balance_stream_tests COMMAND mr_adm_triple_balance_stream_tests)
 
     add_executable(mr_adm_triple_balance_point_tests tests/unit/triple_balance_point_test.cpp)
     add_executable(mr_adm_triple_balance_222_tests tests/unit/triple_balance_222_test.cpp)

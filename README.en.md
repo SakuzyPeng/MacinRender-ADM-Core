@@ -92,7 +92,8 @@ Public two-channel output uses the `binaural` semantic, which is also the defaul
 choices: `triple-balance` is an independent Cartesian room renderer. Point sources use successive equal-power
 panning along X/Y/Z, with verified 48 kHz isotropic-size processing. The existing 7.1.4 / 9.1.6 reference
 behavior is retained; 22.2 is a project-defined extension. See the [backend documentation](docs/architecture/TRIPLE_BALANCE_RENDERER.md)
-for input limits. Available through CLI, C ABI and GUI batch rendering; realtime streaming is unsupported.
+for input limits. CLI, C ABI and GUI batch rendering are available. C API and GUI system-spatial monitoring also
+support realtime playback, exact seeks, gain/mute and linked isotropic extent multipliers.
 The former `--speaker-panner` option has been removed.
 
 `saf-binaural` offers built-in KEMAR and build-enabled `--sofa` user HRIRs; `apple` uses the Apple system HRTF.
@@ -128,7 +129,7 @@ delivered through local developer distribution.
 |---|---|---|---|
 | libear | `--renderer auto` / `ear` | Objects / DirectSpeakers / HOA | Multichannel loudspeakers |
 | SAF VBAP | `--renderer saf` | Objects / DirectSpeakers | Multichannel loudspeakers |
-| Triple Balance | `--renderer triple-balance` | Cartesian Objects / standard 7.1.2 bed | Offline 7.1.4 / 9.1.6 / 22.2 |
+| Triple Balance | `--renderer triple-balance` | Cartesian Objects / standard 7.1.2 bed | Offline and realtime 7.1.4 / 9.1.6 / 22.2 |
 | HOA encoder | `--renderer hoa` | Objects / DirectSpeakers | HOA3 16ch (ACN/SN3D) |
 | SAF HRTF binaural | `--renderer saf-binaural` | Objects / DirectSpeakers | 2ch binaural |
 | Apple AUSpatialMixer | `--renderer apple` | Objects / DirectSpeakers | 2ch binaural / multichannel loudspeakers (macOS) |

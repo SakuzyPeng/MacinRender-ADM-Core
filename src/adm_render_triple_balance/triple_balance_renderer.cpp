@@ -17,6 +17,7 @@
 #include "layout_222.h"
 #include "panner.h"
 #include "render_common.h"
+#include "render_state.h"
 #include "semantics.h"
 #include "size_processor.h"
 #include "speaker_layouts.h"
@@ -214,27 +215,26 @@ std::vector<triple_balance::SizeEvent> size_events(const SceneTrackRef& track) {
     return {};
 }
 
-struct SizeTrack {
-    uint16_t input_channel{};
-    std::vector<triple_balance::SizeEvent> events;
-    float output_gain{1.0F};
-};
-
-// Reusable metadata only. Each render owns fresh filter and delay state.
-struct TripleBalancePrepared final : IPreparedRender {
-    uint16_t output_channels{};
-    std::vector<ChannelGainInfo> gain_matrix;
-    std::vector<SizeTrack> size_tracks;
-};
+using TripleBalancePrepared = triple_balance::Prepared;
 
 class TripleBalanceRenderer final : public IRenderer {
   public:
     [[nodiscard]] CapabilityReport capabilities() const override { return triple_balance_capabilities(); }
     [[nodiscard]] Result<std::shared_ptr<IPreparedRender>> prepare(const RenderPlan& source, LogSink& logs) override;
+    [[nodiscard]] Result<std::unique_ptr<IRenderStream>>
+    open_stream(const IPreparedRender& state, const RenderPlan& plan, LogSink& logs) override {
+        (void) logs;
+        const auto* prepared = dynamic_cast<const TripleBalancePrepared*>(&state);
+        if (prepared == nullptr) {
+            return make_error(ErrorCode::internal_error, "triple-balance: incompatible prepared state");
+        }
+        return triple_balance::open_stream(*prepared, plan);
+    }
     [[nodiscard]] Result<RenderMetrics>
     render_window(const IPreparedRender& state, const RenderPlan& plan, ProgressSink& progress, LogSink& logs) override;
 };
 
+// NOLINTNEXTLINE(readability-function-size): validation, prepared metadata and semantics report share one transaction.
 Result<std::shared_ptr<IPreparedRender>> TripleBalanceRenderer::prepare(const RenderPlan& source, LogSink& logs) {
     std::string report;
     auto scene = triple_balance::prepare_semantics(source, report);
@@ -267,6 +267,8 @@ Result<std::shared_ptr<IPreparedRender>> TripleBalanceRenderer::prepare(const Re
     }
     auto prepared = std::make_shared<TripleBalancePrepared>();
     prepared->output_channels = static_cast<uint16_t>(layout->speakers.size());
+    prepared->sample_rate = plan.scene.info.sample_rate;
+    prepared->spread_mode = plan.speaker_spread_mode;
     std::map<uint16_t, ChannelGainInfo> by_channel;
     for (const auto& object : plan.scene.objects) {
         if (object.mute) {
@@ -290,10 +292,26 @@ Result<std::shared_ptr<IPreparedRender>> TripleBalanceRenderer::prepare(const Re
                 if (!bed) {
                     return fail(bed.error());
                 }
+                gains.speaker_label_key =
+                    render_common::canonicalise_speaker_label(track.ds_blocks.front().speaker_labels.front());
                 gains.output_gain *= triple_balance::bed_user_gain(track.ds_blocks.front());
                 gains.blocks.push_back({std::move(*bed), 0, plan.scene.info.num_frames, true, false, std::nullopt});
             } else if (uses_room_size(track, plan.speaker_spread_mode)) {
-                prepared->size_tracks.push_back({channel, size_events(track), gains.output_gain});
+                const bool diffuse =
+                    std::ranges::any_of(track.blocks, [](const auto& block) { return block.diffuse != 0; });
+                float minimum_diffuse_size = 1.0F;
+                for (const auto& block : track.blocks) {
+                    if (block.diffuse != 0) {
+                        minimum_diffuse_size = std::min(minimum_diffuse_size, block.width);
+                    }
+                }
+                prepared->size_tracks.push_back({channel,
+                                                 size_events(track),
+                                                 gains.output_gain,
+                                                 object.id,
+                                                 diffuse,
+                                                 minimum_diffuse_size,
+                                                 track.blocks.front().position});
             } else {
                 auto motion =
                     triple_balance_motion_blocks(track, object, plan.output_layout, plan.scene.info.num_frames);
@@ -323,53 +341,21 @@ Result<RenderMetrics> TripleBalanceRenderer::render_window(const IPreparedRender
     if (prepared == nullptr) {
         return make_error(ErrorCode::internal_error, "triple-balance: incompatible prepared state");
     }
-    std::vector<triple_balance::SizeObjectProcessor> processors;
-    processors.reserve(prepared->size_tracks.size());
-    for (const auto& track : prepared->size_tracks) {
-        auto processor =
-            triple_balance::SizeObjectProcessor::create(track.events, plan.output_layout, plan.scene.info.sample_rate);
-        if (!processor) {
-            return tl::unexpected{processor.error()};
-        }
-        processors.push_back(std::move(*processor));
-    }
-    if (processors.empty()) {
+    if (prepared->size_tracks.empty()) {
         return render_common::render_speaker_pcm(
             plan, prepared->gain_matrix, prepared->output_channels, "triple-balance", progress, logs);
     }
-    std::vector<float> input;
-    std::vector<float> output;
-    input.reserve(1024);
-    output.reserve(std::size_t{1024} * prepared->output_channels);
+    auto mixer = triple_balance::SizeMixer::create(*prepared, plan);
+    if (!mixer) {
+        return tl::unexpected{mixer.error()};
+    }
+    uint64_t position = 0;
     const render_common::SpeakerBlockProcessor process =
         [&](std::span<const float> source, std::span<float> mixed, bool final) -> Result<void> {
-        const auto channels = plan.scene.info.num_channels;
-        const auto frames = source.size() / channels;
-        input.resize(frames);
-        for (std::size_t object = 0; object < processors.size(); ++object) {
-            const auto& track = prepared->size_tracks[object];
-            for (std::size_t frame = 0; frame < frames; ++frame) {
-                input[frame] = source[(frame * channels) + track.input_channel];
-            }
-            output.clear();
-            auto status = processors[object].push(input, output);
-            if (status && final) {
-                status = processors[object].finish(output);
-            }
-            if (!status) {
-                return tl::unexpected{status.error()};
-            }
-            if (output.size() != mixed.size()) {
-                return make_error(ErrorCode::internal_error,
-                                  "triple-balance size output lost its control-block alignment");
-            }
-            for (std::size_t sample = 0; sample < output.size(); ++sample) {
-                mixed[sample] += output[sample] * track.output_gain;
-            }
-        }
-        return {};
+        auto status = mixer->process(source, mixed, position, final);
+        position += source.size() / plan.scene.info.num_channels;
+        return status;
     };
-
     return render_common::render_speaker_pcm(
         plan, prepared->gain_matrix, prepared->output_channels, "triple-balance", progress, logs, process);
 }

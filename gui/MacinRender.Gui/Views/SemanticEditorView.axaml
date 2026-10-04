@@ -237,6 +237,15 @@
                                 </Grid>
                             </Panel>
                         </ctrl:SquircleButton>
+                        <ctrl:SquircleButton Width="38" Height="32" Padding="0" VerticalAlignment="Center"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                Classes.accent="{Binding MonitorLoop}" IsEnabled="{Binding CanSeek}"
+                                Command="{Binding ToggleMonitorLoopCommand}" ToolTip.Tip="{DynamicResource SemMonLoop}">
+                            <Canvas Width="24" Height="24" IsHitTestVisible="False">
+                                <Path Classes="transporticon"
+                                      Data="M18 3 L21 6 L18 9 M3 11 V8 A2 2 0 0 1 5 6 H21 M6 21 L3 18 L6 15 M21 13 V16 A2 2 0 0 1 19 18 H3"/>
+                            </Canvas>
+                        </ctrl:SquircleButton>
                     </StackPanel>
 
                     <!-- 当前时间 -->

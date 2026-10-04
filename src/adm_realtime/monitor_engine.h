@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <future>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -59,6 +60,12 @@ struct MonitorLevels {
     float integrated_lufs{-std::numeric_limits<float>::infinity()}; // gated, since the last seek
 };
 
+enum class StreamSwitchState : uint8_t { pending, applied, rejected };
+
+struct StreamSwitchReceipt {
+    std::atomic<StreamSwitchState> state{StreamSwitchState::pending};
+};
+
 class MonitorEngine {
   public:
     // Open a stream via `factory` for (scene, opts) and start `device` pulling from it.
@@ -86,7 +93,7 @@ class MonitorEngine {
     void set_loop(uint64_t start_frame, uint64_t end_frame);
     // Queue live per-object targets; the worker publishes the newest snapshot at a stream boundary.
     // Streams own their sample ramps / topology transitions. The applied revision appears in status().
-    void set_overrides(const LiveOverrides& overrides);
+    Result<void> set_overrides(const LiveOverrides& overrides);
 
     // Queue a live listener head orientation (head tracking / free-look); the worker hands it
     // to the stream at the next block boundary. Cheap (Apple binaural: a live global AU param;
@@ -99,7 +106,7 @@ class MonitorEngine {
     // linear crossfade. `next` MUST report the same out_channels() and sample_rate() as the
     // current stream (the caller validates this). The worker seeks `next` to the current
     // playhead and crossfades; takes effect after the ring drains, like the other edits.
-    void switch_stream(std::unique_ptr<IRenderStream> next);
+    void switch_stream(std::unique_ptr<IRenderStream> next, std::shared_ptr<StreamSwitchReceipt> receipt = {});
 
     // Publish a headphone-compensation (HpTF) cascade, or bypass when `coeffs` is nullopt.
     // Unlike set_overrides() this does NOT go through the worker: the coefficients are consumed
@@ -135,22 +142,29 @@ class MonitorEngine {
     MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device, LogSink& logs);
 
     void worker_loop();
+    void poll_switch_locked();
+    void launch_switch_warmup(std::unique_ptr<IRenderStream> stream,
+                              uint64_t position,
+                              bool positioned,
+                              std::shared_ptr<StreamSwitchReceipt> receipt);
     [[nodiscard]] bool head_tracking_recent() const; // true within k_tracking_active_window of last orientation update
-    bool top_up_ring();                              // producer side; returns true if it produced
-    bool top_up_ring_output_stage();                 // producer side, output-stage: buffer intermediate
-    std::size_t pull(std::span<float> out, std::size_t frames);              // consumer side (audio thread)
+    bool restore_loop(uint64_t loop_start);
+    bool top_up_ring();                                         // producer side; returns true if it produced
+    bool top_up_ring_output_stage();                            // producer side, output-stage: buffer intermediate
+    std::size_t pull(std::span<float> out, std::size_t frames); // consumer side (audio thread)
     std::size_t pull_output_stage(std::span<float> out, std::size_t frames); // consumer side, render at output
     void apply_seek_transition(std::span<float> out,
                                std::size_t frames,
                                std::size_t produced_frames,
                                bool active); // callback side: smooth the old→new timeline boundary
     void drain_meter_ring();                 // worker side: feed the LUFS meter from the callback tap
-    [[nodiscard]] ListenerOrientation orientation_snapshot() const; // lock-free read of the live head pose
-    void apply_pending_seek_locked();                               // worker side, under control_mutex_
-    void apply_seek_locked(uint64_t frame);                         // worker/control side, under control_mutex_
-    void finalize_crossfade();                                      // worker side: snap to the incoming stream
-    void rebuild_meter();                                           // (re)create the LUFS meter for the current format
-    void feed_meter(const float* data, std::size_t frames); // worker side: add to meter + refresh LUFS snapshots
+    [[nodiscard]] ListenerOrientation orientation_snapshot() const;     // lock-free read of the live head pose
+    void apply_pending_seek_locked(std::unique_lock<std::mutex>& lock); // worker side, under control_mutex_
+    bool apply_seek_locked(uint64_t frame,
+                           std::unique_lock<std::mutex>& lock); // worker/control side, under control_mutex_
+    void finalize_crossfade();                                  // worker side: snap to the incoming stream
+    void rebuild_meter();                                       // (re)create the LUFS meter for the current format
+    void feed_meter(const float* data, std::size_t frames);     // worker side: add to meter + refresh LUFS snapshots
 
     std::unique_ptr<IRenderStream> stream_;
     IAudioOutputDevice& device_;
@@ -218,6 +232,8 @@ class MonitorEngine {
 
     // Pending user seek, applied by the worker. Guarded by control_mutex_.
     bool seek_pending_{false};
+    bool seek_in_progress_{false};
+    std::stop_source seek_cancel_;
     uint64_t seek_target_{0};
     // play() arriving before the worker has consumed a paused seek is held here. The worker first
     // applies the seek + deferred flush, then publishes playing and resumes the device.
@@ -247,8 +263,22 @@ class MonitorEngine {
     std::atomic<int64_t> last_orientation_update_ns_{0};
 
     // Pending backend hot-switch (control thread → worker), guarded by control_mutex_.
+    struct SwitchWarmup {
+        std::unique_ptr<IRenderStream> stream;
+        std::shared_ptr<StreamSwitchReceipt> receipt;
+        LiveOverrides overrides;
+        ListenerOrientation orientation;
+        std::stop_source cancel;
+        std::atomic<uint64_t> target{0};
+        uint64_t position{};
+        bool positioned{};
+        std::future<Result<void>> result;
+    };
+    std::shared_ptr<SwitchWarmup> switch_warmup_;
+    bool pending_stream_ready_{false};
     bool switch_pending_{false};
     std::unique_ptr<IRenderStream> pending_stream_;
+    std::shared_ptr<StreamSwitchReceipt> pending_switch_receipt_;
     // Crossfade state, worker-owned: while active, top_up_ring renders both stream_ (old)
     // and xfade_stream_ (incoming) and linearly blends across k_crossfade_frames.
     std::unique_ptr<IRenderStream> xfade_stream_;

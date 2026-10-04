@@ -94,7 +94,7 @@ WAVEFORMATEXTENSIBLE channel mask；无效 ADM 直接报错。也可显式选择
 `triple-balance` 是独立的房间坐标渲染后端，点源沿 X/Y/Z 三轴逐层进行等功率声像分配，
 并提供已验证的 48 kHz 等尺寸对象处理。7.1.4 / 9.1.6 保留现有参考对齐行为；22.2 为项目自有扩展。
 当前支持范围和输入限制见 [Triple Balance 渲染器](docs/architecture/TRIPLE_BALANCE_RENDERER.md)。
-CLI、C ABI 和 GUI 批量渲染可选，实时监听暂不支持。旧 `--speaker-panner` 参数已删除。
+CLI、C ABI 和 GUI 批量渲染可选；C API 和 GUI 系统空间音频监听支持实时播放、精确跳转、增益／静音与等尺寸倍率编辑。旧 `--speaker-panner` 参数已删除。
 
 `saf-binaural` 提供内置 KEMAR 与构建支持时的 `--sofa` 用户 HRIR；`apple` 使用 Apple 系统 HRTF。
 当前入口覆盖 CLI、C++ API 与 C ABI v1.34。
@@ -142,7 +142,7 @@ GUI 发行包包含 macOS `.app` 或 Windows `app/MacinRender.Gui.exe`，同样�
 |---|---|---|---|
 | libear | `--renderer auto` / `ear` | Objects / DirectSpeakers / HOA | 多声道扬声器 |
 | SAF VBAP | `--renderer saf` | Objects / DirectSpeakers | 多声道扬声器 |
-| Triple Balance | `--renderer triple-balance` | Cartesian Objects / 标准 7.1.2 bed | 7.1.4 / 9.1.6 / 22.2，离线 |
+| Triple Balance | `--renderer triple-balance` | Cartesian Objects / 标准 7.1.2 bed | 7.1.4 / 9.1.6 / 22.2，离线与实时监听 |
 | HOA 编码 | `--renderer hoa` | Objects / DirectSpeakers | HOA3 16ch（ACN/SN3D） |
 | SAF HRTF 双耳 | `--renderer saf-binaural` | Objects / DirectSpeakers | 2ch 双耳 |
 | Apple AUSpatialMixer | `--renderer apple` | Objects / DirectSpeakers | 2ch 双耳 / 多声道扬声器（macOS） |

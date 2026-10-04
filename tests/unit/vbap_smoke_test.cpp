@@ -1631,7 +1631,8 @@ bool verify_triple_balance_size_window_and_validation() {
                 "stateful crop equals full-render slice after warmup");
         }
         ok &= check(whole == again, "reusing prepared metadata starts a fresh size state");
-        ok &= check(!renderer->open_stream(**prepared, plan, logs), "size support remains offline only");
+        ok &= check(renderer->open_stream(**prepared, plan, logs).has_value(),
+                    "size supports persistent realtime stream");
         const auto unchanged_plan = plan;
         for (auto& object : plan.scene.objects) {
             object.gain = 0;

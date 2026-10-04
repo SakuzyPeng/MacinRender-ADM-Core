@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -162,6 +163,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         }
         MonitorSpatialRenderers.Add(new MonitorSpatialRenderer("EAR (BS.2127)", AdmRenderer.Ear));
         MonitorSpatialRenderers.Add(new MonitorSpatialRenderer("VBAP (SAF)", AdmRenderer.Saf));
+        MonitorSpatialRenderers.Add(new MonitorSpatialRenderer("Triple Balance", AdmRenderer.TripleBalance));
         _selectedSpatialRenderer = MonitorSpatialRenderers[0];
         _selectedSpatialLayout = MonitorSpatialLayouts.FirstOrDefault(l => l.Id == "7.1.4") ??
                                  MonitorSpatialLayouts.FirstOrDefault();
@@ -205,7 +207,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             return false;
         }
 
-        StopMonitor(); // 换文件先停掉旧监听
+        await StopMonitorAsync(); // 换文件先停掉旧监听
         IsLoading = true;
         SetStatus("SemLoading", Path.GetFileName(path));
         try
@@ -515,6 +517,58 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     // ── 实时监听(同一份行编辑既驱动 policy,也实时 SetOverrides;契约:monitor 非线程安全 → 全 UI 线程) ──
 
     private readonly MonitorService _monitor = new();
+    [ObservableProperty] private bool _monitorLoop;
+
+    partial void OnMonitorLoopChanged(bool value)
+    {
+        if (IsMonitoring && !IsMonitorBusy && !IsExporting)
+        {
+            _monitor.SetLoop(0, value ? DurationSeconds : 0);
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleMonitorLoop() => MonitorLoop = !MonitorLoop;
+
+    private readonly SemaphoreSlim _monitorOperations = new(1, 1);
+    private bool _refreshingMonitorLayouts;
+
+    // Long native calls run off the UI thread. Polling and short controls are parked
+    // while the operation owns the monitor; callers must never overlap a C ABI handle.
+    private async Task<T> RunMonitorOperationAsync<T>(Func<T> operation, Action<T>? commit = null)
+    {
+        await _monitorOperations.WaitAsync();
+        IsMonitorBusy = true;
+        try
+        {
+            var result = await Task.Run(operation);
+            commit?.Invoke(result);
+            return result;
+        }
+        finally
+        {
+            IsMonitorBusy = false;
+            _monitorOperations.Release();
+        }
+    }
+
+    private async Task ChangeMonitorDeviceAsync(string deviceId)
+    {
+        var loopEnd = MonitorLoop ? DurationSeconds : 0;
+        var rc = await RunMonitorOperationAsync(() =>
+        {
+            var result = _monitor.SetOutputDevice(deviceId);
+            if (result == AdmErrorCode.Ok)
+            {
+                _monitor.SetLoop(0, loopEnd);
+            }
+            return result;
+        });
+        if (rc != AdmErrorCode.Ok)
+        {
+            ReportMonitorFailure("SemMonSwitchFailed", rc, _monitor.LastOperationFailureDetails);
+        }
+    }
     private readonly DispatcherTimer _pollTimer;
     private bool _applyingPoll;   // 轮询写 PlayheadSeconds 时置位,避免被当成用户拖动 seek
     private bool _scrubbing;      // 用户正拖动进度条:拖动中只刷新画面、不动引擎,松手才真正 seek 一次
@@ -631,11 +685,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         SettingsStore.Update(s => s.MonitorDeviceId = value.Id);
         if (IsMonitoring)
         {
-            var rc = _monitor.SetOutputDevice(value.Id);
-            if (rc != AdmErrorCode.Ok)
-            {
-                ReportMonitorFailure("SemMonSwitchFailed", rc, _monitor.LastOperationFailureDetails);
-            }
+            _ = ChangeMonitorDeviceAsync(value.Id);
         }
     }
 
@@ -808,12 +858,12 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
         if (MonitorState == AdmMonitorState.Playing)
         {
-            _monitor.Pause();
+            await RunMonitorOperationAsync(() => _monitor.Pause());
             MonitorState = AdmMonitorState.Paused;
         }
         else
         {
-            _monitor.Play();
+            await RunMonitorOperationAsync(() => _monitor.Play());
             MonitorState = AdmMonitorState.Playing;
         }
     }
@@ -826,7 +876,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         }
 
         MonitorState = AdmMonitorState.Paused;
-        var rc = await Task.Run(() => _monitor.Pause());
+        var rc = await RunMonitorOperationAsync(() => _monitor.Pause());
         if (rc != AdmErrorCode.Ok)
         {
             ReportMonitorFailure("SemMonPauseFailed", rc, _monitor.LastOperationFailureDetails);
@@ -861,7 +911,6 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
         var path = LoadedPath!;
         var backend = SelectedMonitorBackend;
-        IsMonitorBusy = true;
         ClearMonitorStatus(); // 启动状态由播放键转圈体现,不占状态栏文字(避免挤压电平表)
 
         RefreshDevices(); // 设备可能已插拔 → 开始前刷新列表(保持当前选择)
@@ -869,14 +918,28 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
         // import + apply policy + 开设备可能略耗时 → 后台启动,await 后回 UI 线程(串行,无并发触 monitor)。
         var settings = MonitorRenderSettings(backend);
-        var (rc, sr, dur) = await Task.Run(() =>
+        var initialOverrides = Rows.SelectMany(row => row.BuildLiveOverrides()).ToArray();
+        var initialRevision = _overrideRevision + 1;
+        var yaw = _lastHeadYaw;
+        var pitch = _lastHeadPitch;
+        var roll = _lastHeadRoll;
+        var loop = MonitorLoop;
+        var (rc, editRc, editDetails, sr, dur) = await RunMonitorOperationAsync(() =>
         {
             var probe = ProbeDuration(path);
             var start = _monitor.Start(path, settings, deviceId);
-            return (start, probe.SampleRate, probe.Duration);
+            var edit = AdmErrorCode.Ok;
+            string? initialEditDetails = null;
+            if (start == AdmErrorCode.Ok)
+            {
+                edit = _monitor.SetOverrides(initialOverrides, initialRevision);
+                initialEditDetails = _monitor.LastOperationFailureDetails;
+                _monitor.SetListenerOrientation(yaw, pitch, roll);
+                _monitor.SetLoop(0, loop ? probe.Duration : 0);
+                _monitor.Play();
+            }
+            return (start, edit, initialEditDetails, probe.SampleRate, probe.Duration);
         });
-
-        IsMonitorBusy = false;
         if (rc != AdmErrorCode.Ok)
         {
             ReportMonitorFailure("SemMonStartFailed", rc, _monitor.LastStartFailureDetails);
@@ -888,13 +951,20 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         IsMonitoring = true;
         ClearMonitorStatus();
         _activeMonitorBackend = backend;
-        _activeLayout = EffectiveMonitorLayout; // 记录生效布局(系统空间音频含次级),供后续热切/重启判定
+        _activeMonitorSettings = settings;
+        _activeSpatialRenderer = SelectedSpatialRenderer;
+        _activeLayout = settings.Layout; // 记录生效布局(系统空间音频含次级),供后续热切/重启判定
         SetupChannelMeters(backend);            // 系统空间音频 → 多声道竖条阵列;双耳 → L/R 横条
         OnPropertyChanged(nameof(HeadTrackControlsEnabled)); // backend 决定头追踪开关是否可用
-        PushOverrides();          // 把当前编辑立即应用到新监听
-        // 常驻朝向:新监听从正前开始,把上次设定的头朝向重新应用一次(视觉+音频同步),跨监听重启保留。
-        ApplyHeadOrientation(_lastHeadYaw, _lastHeadPitch, _lastHeadRoll);
-        _monitor.Play();
+        if (editRc == AdmErrorCode.Ok)
+        {
+            _overrideRevision = initialRevision;
+            _acceptedMonitorOverrides = initialOverrides;
+        }
+        else
+        {
+            ReportMonitorFailure("SemMonEditFailed", editRc, editDetails);
+        }
         MonitorState = AdmMonitorState.Playing;
         UpdatePollTimer();
     }
@@ -905,7 +975,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     {
         ChannelMeters.Clear();
         var labels = (backend?.SystemSpatial ?? false)
-            ? Models.OutputModel.ChannelLabelsFor(EffectiveMonitorLayout)
+            ? Models.OutputModel.ChannelLabelsFor(_activeLayout ?? EffectiveMonitorLayout)
             : System.Array.Empty<string>();
         foreach (var label in labels)
         {
@@ -915,11 +985,17 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         IsMultichannelMeter = ChannelMeters.Count > 0;
     }
 
-    public void StopMonitor()
+    public void StopMonitor() => _ = StopMonitorAsync();
+
+    public async Task StopMonitorAsync()
     {
-        _monitor.Stop();
+        Interlocked.Increment(ref _monitorConfigGeneration);
+        await RunMonitorOperationAsync(() => { _monitor.Stop(); return true; });
         _scrubbing = false;
         IsMonitoring = false;
+        MonitorLoop = false;
+        _acceptedMonitorOverrides = Array.Empty<MonitorOverride>();
+        _activeMonitorSettings = null;
         MonitorState = AdmMonitorState.Stopped;
         PlayheadSeconds = 0;
         PeakLeft = 0;
@@ -987,7 +1063,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
         _lastHeadYaw = yawDeg;
         _lastHeadPitch = pitchDeg;
         _lastHeadRoll = rollDeg;
-        if (IsMonitoring && !IsExporting)
+        if (IsMonitoring && !IsExporting && !IsMonitorBusy)
         {
             _monitor.SetListenerOrientation(yawDeg, pitchDeg, rollDeg);
         }
@@ -1020,6 +1096,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     // 当前监听实际使用的后端:判断切换是热切(同布局换 renderer)还是重启(布局 / device 变,含 ↔ 系统空间音频)。
     private MonitorBackendOption? _activeMonitorBackend;
+    private RenderSettings? _activeMonitorSettings;
+    private MonitorSpatialRenderer? _activeSpatialRenderer;
+    private IReadOnlyList<MonitorOverride> _acceptedMonitorOverrides = Array.Empty<MonitorOverride>();
+    private bool _restoringMonitorSelection;
+    private long _monitorConfigGeneration;
     private string _activeLayout = ""; // 当前监听实际生效的布局(含系统空间音频次级),用于判热切 vs 重启
 
     // 系统空间化监听时,头追踪由 macOS 系统(ASBR)接管;头追 + per-object/声道的"参与头追踪"
@@ -1032,7 +1113,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     partial void OnSelectedSpatialLayoutChanged(Models.LayoutDef? value)
     {
         // 系统空间音频布局切换(7.1.4 ↔ 22.2)= 声道数 / device 变 → 走重启。
-        if (SelectedMonitorBackend?.SystemSpatial ?? false)
+        if (!_refreshingMonitorLayouts && (SelectedMonitorBackend?.SystemSpatial ?? false))
         {
             ReevaluateMonitorConfig(SelectedMonitorBackend);
         }
@@ -1051,8 +1132,24 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     partial void OnSelectedSpatialRendererChanged(MonitorSpatialRenderer value)
     {
-        // 渲染床后端切换(Apple ↔ EAR ↔ VBAP):布局/声道数/device 不变 → ReevaluateMonitorConfig
-        // 走热切换(同布局同 SystemSpatial),无缝换上游渲染器,系统空间化 sink 不动。
+        _refreshingMonitorLayouts = true;
+        try
+        {
+            var selected = SelectedSpatialLayout?.Id;
+            var layouts = Models.OutputModel.SystemSpatialLayoutsFor(value.Renderer);
+            MonitorSpatialLayouts.Clear();
+            foreach (var layout in layouts)
+            {
+                MonitorSpatialLayouts.Add(layout);
+            }
+            SelectedSpatialLayout = MonitorSpatialLayouts.FirstOrDefault(l => l.Id == selected) ??
+                                    MonitorSpatialLayouts.FirstOrDefault(l => l.Id == "7.1.4") ??
+                                    MonitorSpatialLayouts.FirstOrDefault();
+        }
+        finally
+        {
+            _refreshingMonitorLayouts = false;
+        }
         if (SelectedMonitorBackend?.SystemSpatial ?? false)
         {
             ReevaluateMonitorConfig(SelectedMonitorBackend);
@@ -1062,21 +1159,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     // 后端或布局变化后重评:同拓扑(后端类型、生效布局、device 不变)→ 热切换;否则重启监听。
     private void ReevaluateMonitorConfig(MonitorBackendOption? value)
     {
-        if (value is null || !IsMonitoring)
+        if (value is null || !IsMonitoring || _restoringMonitorSelection)
         {
             return;
         }
-        var newLayout = EffectiveMonitorLayout;
-        if (_activeMonitorBackend is { } active && _activeLayout == newLayout &&
-            active.SystemSpatial == value.SystemSpatial)
-        {
-            ApplyMonitorBackend(value);
-        }
-        else
-        {
-            StopMonitor();
-            _ = StartMonitorAsync();
-        }
+        ApplyMonitorBackend(value);
     }
 
     // 监听用 RenderSettings:SOFA 仅在 SAF 双耳后端带上(Apple 用自家 HRTF)。
@@ -1094,13 +1181,123 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             : null,
     };
 
-    // 热切换到指定后端(重载 HRIR / 换后端);失败回显状态。
     private void ApplyMonitorBackend(MonitorBackendOption backend)
     {
-        var rc = _monitor.SwitchBackend(MonitorRenderSettings(backend));
-        if (rc != AdmErrorCode.Ok)
+        if (!_restoringMonitorSelection)
         {
-            ReportMonitorFailure("SemMonSwitchFailed", rc, _monitor.LastOperationFailureDetails);
+            _ = SwitchMonitorBackendAsync(backend);
+        }
+    }
+
+    private sealed record MonitorSwitchOutcome(AdmErrorCode Code, string? Details, bool Active, bool Stale = false);
+
+    private async Task SwitchMonitorBackendAsync(MonitorBackendOption backend)
+    {
+        var request = Interlocked.Increment(ref _monitorConfigGeneration);
+        var settings = MonitorRenderSettings(backend);
+        var spatialRenderer = SelectedSpatialRenderer;
+        var path = LoadedPath;
+        var deviceId = SelectedMonitorDevice?.Id ?? "";
+        if (path is null)
+        {
+            return;
+        }
+        try
+        {
+            await RunMonitorOperationAsync(() =>
+            {
+                if (request != Volatile.Read(ref _monitorConfigGeneration) || !_monitor.IsActive)
+                {
+                    return new MonitorSwitchOutcome(AdmErrorCode.Ok, null, false, Stale: true);
+                }
+                var previous = _activeMonitorSettings;
+                if (previous is null || (previous.Layout == settings.Layout &&
+                                         previous.MonitorSystemSpatial == settings.MonitorSystemSpatial))
+                {
+                    var code = _monitor.SwitchBackend(settings);
+                    return new MonitorSwitchOutcome(code, _monitor.LastOperationFailureDetails, _monitor.IsActive);
+                }
+                var playback = _monitor.GetStatus();
+                var overrides = _acceptedMonitorOverrides;
+                var revision = _overrideRevision;
+                void RestorePlayback()
+                {
+                    _monitor.SetOverrides(overrides, revision);
+                    _monitor.SetLoop(0, MonitorLoop ? DurationSeconds : 0);
+                    _monitor.SetListenerOrientation(_lastHeadYaw, _lastHeadPitch, _lastHeadRoll);
+                    if (playback is not null && _sampleRate > 0)
+                    {
+                        _monitor.Seek(playback.PlayheadFrames / (double)_sampleRate);
+                        if (playback.State == AdmMonitorState.Playing)
+                        {
+                            _monitor.Play();
+                        }
+                    }
+                }
+                var started = _monitor.Start(path, settings, deviceId);
+                if (started == AdmErrorCode.Ok)
+                {
+                    var applied = _monitor.SetOverrides(overrides, revision);
+                    if (applied == AdmErrorCode.Ok)
+                    {
+                        RestorePlayback();
+                        return new MonitorSwitchOutcome(AdmErrorCode.Ok, null, true);
+                    }
+                    started = applied;
+                }
+                var details = _monitor.LastOperationFailureDetails ?? _monitor.LastStartFailureDetails;
+                var restored = _monitor.Start(path, previous, deviceId);
+                if (restored == AdmErrorCode.Ok)
+                {
+                    RestorePlayback();
+                }
+                return new MonitorSwitchOutcome(started, details, restored == AdmErrorCode.Ok);
+            }, outcome =>
+            {
+                if (outcome.Stale)
+                {
+                    return;
+                }
+                IsMonitoring = outcome.Active;
+                if (outcome.Code == AdmErrorCode.Ok)
+                {
+                    _activeMonitorBackend = backend;
+                    _activeMonitorSettings = settings;
+                    _activeSpatialRenderer = spatialRenderer;
+                    _activeLayout = settings.Layout;
+                    SetupChannelMeters(backend);
+                    ClearMonitorStatus();
+                }
+                else
+                {
+                    if (request == Volatile.Read(ref _monitorConfigGeneration))
+                    {
+                        _restoringMonitorSelection = true;
+                        try
+                        {
+                            if (_activeMonitorBackend is not null)
+                            {
+                                SelectedMonitorBackend = _activeMonitorBackend;
+                            }
+                            if (_activeSpatialRenderer is not null)
+                            {
+                                SelectedSpatialRenderer = _activeSpatialRenderer;
+                            }
+                            SelectedSpatialLayout = MonitorSpatialLayouts.FirstOrDefault(l => l.Id == _activeLayout);
+                        }
+                        finally
+                        {
+                            _restoringMonitorSelection = false;
+                        }
+                    }
+                    ReportMonitorFailure("SemMonSwitchFailed", outcome.Code, outcome.Details);
+                }
+                UpdatePollTimer();
+            });
+        }
+        catch (Exception error)
+        {
+            ReportMonitorFailure("SemMonSwitchFailed", AdmErrorCode.Internal, error.Message);
         }
     }
 
@@ -1136,7 +1333,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
     {
         _headTracking.Tick(); // 头追踪平滑 + 发射(无激活来源时空操作);先于监听守卫,故仅头视角(未监听)也刷新
 
-        if (IsExporting)
+        if (IsExporting || IsMonitorBusy)
         {
             return;
         }
@@ -1173,7 +1370,10 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             }
 
             MonitorState = st.State;                                  // 引擎为准
-            SetMonitorStatus(st.Ended ? "SemMonEnded" : st.Failed ? "SemMonFailed" : "");
+            if (st.Ended || st.Failed || _monitorStatusErrorCode is null)
+            {
+                SetMonitorStatus(st.Ended ? "SemMonEnded" : st.Failed ? "SemMonFailed" : "");
+            }
         }
 
         // 多声道(系统空间音频)按声道数取电平铺满竖条;双耳只取前两声道画 L/R 横条。
@@ -1210,7 +1410,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
 
     private void PushOverrides()
     {
-        if (!IsMonitoring)
+        if (!IsMonitoring || IsMonitorBusy)
         {
             return;
         }
@@ -1221,7 +1421,21 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             list.AddRange(row.BuildLiveOverrides());
         }
 
-        _monitor.SetOverrides(list, ++_overrideRevision);
+        var revision = _overrideRevision + 1;
+        var rc = _monitor.SetOverrides(list, revision);
+        if (rc == AdmErrorCode.Ok)
+        {
+            _overrideRevision = revision;
+            _acceptedMonitorOverrides = list.ToArray();
+            if (_monitorStatusKey == "SemMonEditFailed")
+            {
+                ClearMonitorStatus();
+            }
+        }
+        else
+        {
+            ReportMonitorFailure("SemMonEditFailed", rc, _monitor.LastOperationFailureDetails);
+        }
     }
 
     private static (uint SampleRate, double Duration) ProbeDuration(string path)

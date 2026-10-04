@@ -1485,6 +1485,149 @@ bool test_monitor_hptf_survives_switch() {
     return ok;
 }
 
+// A deliberately blocked pre-roll makes control-lock stalls and cancellation deterministic.
+struct WarmupProbe {
+    std::atomic<bool> started{false};
+    std::atomic<bool> release{false};
+    std::atomic<bool> saw_override{false};
+    std::atomic<unsigned> cancelled{0};
+    std::atomic<bool> fail{false};
+};
+class SlowSeekStream final : public mradm::IRenderStream {
+  public:
+    explicit SlowSeekStream(std::shared_ptr<WarmupProbe> probe) : probe_(std::move(probe)) {}
+    mradm::Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        std::fill_n(out.begin(), frames * 2, .75F);
+        return frames;
+    }
+    mradm::Result<void> seek(uint64_t frame) override { return seek_with_cancel(frame, {}); }
+    [[nodiscard]] bool seek_requires_preroll() const override { return true; }
+    mradm::Result<void> seek_with_cancel(uint64_t frame, std::stop_token cancel) override {
+        if (frame == 7) {
+            return {};
+        }
+        probe_->started.store(true);
+        while (!probe_->release.load()) {
+            if (cancel.stop_requested()) {
+                probe_->cancelled.fetch_add(1);
+                return mradm::make_error(mradm::ErrorCode::cancelled, "test pre-roll cancelled");
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        if (probe_->fail.load()) {
+            return mradm::make_error(mradm::ErrorCode::render_failed, "test incoming seek failure");
+        }
+        return {};
+    }
+    [[nodiscard]] mradm::Result<void> validate_overrides(const mradm::LiveOverrides& overrides) const override {
+        if (overrides.revision == 99) {
+            return mradm::make_error(mradm::ErrorCode::unsupported, "test invalid edit");
+        }
+        return {};
+    }
+    void set_overrides(const mradm::LiveOverrides& overrides) override {
+        probe_->saw_override.store(overrides.revision == 42);
+    }
+    [[nodiscard]] uint32_t out_channels() const override { return 2; }
+    [[nodiscard]] uint32_t sample_rate() const override { return 48000; }
+    [[nodiscard]] std::string_view output_layout() const override { return "binaural"; }
+
+  private:
+    std::shared_ptr<WarmupProbe> probe_;
+};
+class SlowSeekFactory final : public mradm::realtime::IRenderStreamFactory {
+  public:
+    explicit SlowSeekFactory(std::shared_ptr<WarmupProbe> probe) : probe_(std::move(probe)) {}
+    mradm::Result<std::unique_ptr<mradm::IRenderStream>>
+    open(const mradm::AdmScene& /*scene*/, const mradm::RenderOptions& /*options*/, mradm::LogSink& /*logs*/) override {
+        return std::make_unique<SlowSeekStream>(probe_);
+    }
+
+  private:
+    std::shared_ptr<WarmupProbe> probe_;
+};
+
+template <class Predicate> bool eventually(Predicate predicate) {
+    const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (!predicate() && std::chrono::steady_clock::now() < end) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return predicate();
+}
+
+bool test_cancellable_preroll() {
+    auto probe = std::make_shared<WarmupProbe>();
+    SlowSeekFactory factory(probe);
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    auto created = mradm::realtime::MonitorEngine::create(factory, sink, {}, {}, logs);
+    if (!created) {
+        return false;
+    }
+    auto engine = std::move(*created);
+    engine->seek(999999);
+    bool ok = check(eventually([&] { return probe->started.load(); }), "pre-roll starts");
+    const auto before = std::chrono::steady_clock::now();
+    engine->pause();
+    engine->seek(7);
+    ok &= check(std::chrono::steady_clock::now() - before < std::chrono::milliseconds(200),
+                "long pre-roll releases the control lock");
+    ok &= check(eventually([&] { return engine->status().playhead_frames == 7; }), "new seek cancels old pre-roll");
+    ok &= check(probe->cancelled.load() != 0 && !engine->status().failed, "cancel is not a render failure");
+    mradm::LiveOverrides invalid;
+    invalid.revision = 99;
+    ok &= check(!engine->set_overrides(invalid), "backend validation propagates rejection");
+    ok &= check(engine->status().override_revision != 99, "rejection does not acknowledge revision");
+    probe->started.store(false);
+    engine->seek(999999);
+    ok &= check(eventually([&] { return probe->started.load(); }), "second pre-roll starts");
+    const auto stopping = std::chrono::steady_clock::now();
+    engine.reset();
+    ok &= check(std::chrono::steady_clock::now() - stopping < std::chrono::milliseconds(200), "stop cancels pre-roll");
+    return ok;
+}
+
+bool test_background_backend_preroll() {
+    ConstStreamFactory factory(.25F);
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, {}, {}, logs);
+    if (!engine) {
+        return false;
+    }
+    (*engine)->play();
+    bool ok = drain_exact(**engine, sink, 3000);
+    mradm::LiveOverrides overrides;
+    overrides.revision = 42;
+    (*engine)->set_overrides(overrides);
+    auto probe = std::make_shared<WarmupProbe>();
+    auto receipt = std::make_shared<mradm::realtime::StreamSwitchReceipt>();
+    (*engine)->switch_stream(std::make_unique<SlowSeekStream>(probe), receipt);
+    ok &= check(eventually([&] { return probe->started.load(); }), "incoming backend warms in background");
+    ok &= check(probe->saw_override.load(), "overrides precede incoming seek");
+    ok &= check(drain_exact(**engine, sink, 40000), "old backend keeps producing during pre-roll");
+    ok &= check(near(sink.captured().back(), .25F), "pre-roll does not replace old audio early");
+    probe->release.store(true);
+    // Pause production briefly so the catch-up target is stable; playback resumes after handoff.
+    (*engine)->pause();
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    (*engine)->play();
+    ok &= check(drain_exact(**engine, sink, 40000), "warmed backend crossfades");
+    ok &= check(near(sink.captured().back(), .75F), "warmed backend reaches output");
+    ok &= check(receipt->state.load() == mradm::realtime::StreamSwitchState::applied,
+                "successful warmup acknowledges the applied backend");
+    auto rejected = std::make_shared<mradm::realtime::StreamSwitchReceipt>();
+    auto failure = std::make_shared<WarmupProbe>();
+    failure->release.store(true);
+    failure->fail.store(true);
+    (*engine)->switch_stream(std::make_unique<SlowSeekStream>(failure), rejected);
+    ok &= check(eventually([&] { return rejected->state.load() == mradm::realtime::StreamSwitchState::rejected; }),
+                "failed warmup rejects the pending configuration");
+    ok &= check(drain_exact(**engine, sink, 20000) && near(sink.captured().back(), .75F) && !(*engine)->status().failed,
+                "failed warmup preserves the active stream");
+    return ok;
+}
+
 int main() {
     bool ok = true;
     ok &= test_ring_basic();
@@ -1504,6 +1647,8 @@ int main() {
     ok &= test_monitor_worker_logs_errors();
     ok &= test_monitor_live_overrides();
     ok &= test_monitor_hot_switch();
+    ok &= test_cancellable_preroll();
+    ok &= test_background_backend_preroll();
     ok &= test_monitor_override_survives_switch();
     ok &= test_downmix_stream();
     ok &= test_monitor_miniaudio_null_device();

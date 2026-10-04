@@ -54,6 +54,13 @@ class DownmixStream final : public IRenderStream {
     }
 
     [[nodiscard]] Result<void> seek(uint64_t frame) override { return inner_->seek(frame); }
+    [[nodiscard]] bool seek_requires_preroll() const override { return inner_->seek_requires_preroll(); }
+    [[nodiscard]] Result<void> seek_with_cancel(uint64_t frame, std::stop_token cancel) override {
+        return inner_->seek_with_cancel(frame, cancel);
+    }
+    [[nodiscard]] Result<void> validate_overrides(const LiveOverrides& overrides) const override {
+        return inner_->validate_overrides(overrides);
+    }
     void set_overrides(const LiveOverrides& overrides) override { inner_->set_overrides(overrides); }
     void set_listener_orientation(const ListenerOrientation& orientation) override {
         inner_->set_listener_orientation(orientation);

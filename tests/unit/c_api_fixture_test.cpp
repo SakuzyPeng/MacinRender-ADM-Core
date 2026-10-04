@@ -63,12 +63,20 @@ std::filesystem::path unique_temp_wav_path(const char* stem) {
 }
 
 // Build a minimal single-Object ADM BW64 file with real audio samples.
-std::filesystem::path write_fixture(uint32_t sample_rate = 48000U) {
+std::filesystem::path write_fixture(uint32_t sample_rate = 48000U, bool cartesian = false) {
     auto doc = adm::Document::create();
 
     auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"TestCF"}, adm::TypeDefinition::OBJECTS);
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{10.0F}}};
+        auto block =
+            cartesian
+                ? adm::AudioBlockFormatObjects{adm::CartesianPosition{adm::X{0.0F}, adm::Y{1.0F}, adm::Z{.5F}}}
+                : adm::AudioBlockFormatObjects{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{10.0F}}};
+        if (cartesian) {
+            block.set(adm::Width{.3F});
+            block.set(adm::Height{.3F});
+            block.set(adm::Depth{.3F});
+        }
         block.set(adm::Gain{0.8F});
         cf->add(block);
     }
@@ -2480,6 +2488,43 @@ bool verify_monitor_hptf_memory_applied(adm_monitor_t* monitor) {
     return check(false, "monitor memory HpTF did not become active");
 }
 
+bool verify_triple_balance_monitor_abi(adm_context_t* ctx) {
+    const auto input = write_fixture(48000, true);
+    const FileGuard guard{input};
+    auto* options = adm_create_render_options();
+    if (options == nullptr) {
+        return false;
+    }
+    adm_render_options_set_renderer(options, ADM_RENDERER_TRIPLE_BALANCE);
+    adm_render_options_set_output_layout(options, "7.1.4");
+    adm_monitor_t* monitor = nullptr;
+    const auto created = adm_create_monitor(ctx, input.string().c_str(), options, &monitor);
+    adm_destroy_render_options(options);
+    if (created != ADM_ERROR_OK) {
+        const std::string message = adm_context_last_error_message(ctx);
+        std::cout << "Triple Balance monitor device unavailable: " << message << '\n';
+        return check(created != ADM_ERROR_UNSUPPORTED, "Triple Balance realtime stream is supported");
+    }
+    adm_monitor_override_t edit{};
+    edit.struct_size = sizeof(edit);
+    edit.object_id = "AO_1001";
+    edit.diffuse_scale = edit.divergence_scale = 1;
+    edit.extent_scale = .5F;
+    edit.extent_width_scale = edit.extent_height_scale = edit.extent_depth_scale = 1;
+    bool ok = check(adm_monitor_set_overrides(monitor, &edit, 1, 101) == ADM_ERROR_OK,
+                    "Triple Balance accepts linked size multiplier");
+    edit.extent_height_scale = 2;
+    ok &= check(adm_monitor_set_overrides(monitor, &edit, 1, 102) == ADM_ERROR_UNSUPPORTED,
+                "Triple Balance rejects unlinked size through C ABI");
+    ok &= check(std::strlen(adm_monitor_last_error_message(monitor)) > 0, "rejected live edit explains the error");
+    adm_monitor_status_t status{};
+    status.struct_size = sizeof(status);
+    adm_monitor_get_status(monitor, &status);
+    ok &= check(status.override_revision != 102, "rejected C ABI revision is not acknowledged");
+    adm_destroy_monitor(monitor);
+    return ok;
+}
+
 // v1.15: realtime monitor. Tolerant of headless CI with no audio output device — the
 // create may fail with a device error, in which case the playback assertions are skipped.
 // NOLINTNEXTLINE(readability-function-size): versioned ABI validation shares one session and cleanup.
@@ -2856,6 +2901,7 @@ int main() {
     ok = verify_version_114() && ok;
     ok = verify_iamf_layer_validation(ctx, fixture.path()) && ok;
     // v1.15 tests
+    ok = verify_triple_balance_monitor_abi(ctx) && ok;
     ok = verify_monitor_abi(ctx, fixture.path()) && ok;
 
     adm_destroy_context(ctx);

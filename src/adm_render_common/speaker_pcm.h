@@ -39,12 +39,21 @@ struct AccumulateContext {
     uint16_t num_out_ch{0};
     uint64_t default_interp{0};
     uint64_t object_smoothing_frames{0};
+    // Optional sample-domain output gain per input channel, after spatial/user gain.
+    std::span<const float> live_gains{};
 };
 
 void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
                             std::vector<std::size_t>& block_indices,
                             const AccumulateContext& ctx,
                             uint64_t frames_now);
+
+// One channel, without the optional extra object-smoothing stage. This preserves the
+// matrix mix's arithmetic and lets streaming backends interleave bounded live curves.
+void accumulate_speaker_channel(const ChannelGainInfo& channel,
+                                std::size_t& block_index,
+                                const AccumulateContext& ctx,
+                                uint64_t frames_now);
 
 // Optional per-render stateful DSP. Adds to interleaved output after the gain mix.
 // A non-empty processor requires warming from frame zero for cropped output.

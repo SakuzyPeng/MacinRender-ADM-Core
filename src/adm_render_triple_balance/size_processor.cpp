@@ -156,7 +156,16 @@ void SizeObjectProcessor::reset() noexcept {
     decorrelator_.reset();
     if (!events_.empty()) {
         position_ = target_position_ = events_[0].position;
-        size_ = target_size_ = events_[0].size;
+        source_size_ = events_[0].size;
+        size_ = target_size_ = std::clamp(source_size_ * size_scale_, 0.0F, 1.0F);
+    }
+}
+
+void SizeObjectProcessor::set_size_scale(float scale) noexcept {
+    size_scale_ = scale;
+    target_size_ = std::clamp(source_size_ * scale, 0.0F, 1.0F);
+    if (first_) {
+        size_ = target_size_;
     }
 }
 
@@ -207,7 +216,8 @@ Result<void> SizeObjectProcessor::process_control(std::vector<float>& output, st
     if (next_event_ < events_.size() && events_[next_event_].start_sample < control_start_ + 512) {
         const auto& event = events_[next_event_++];
         target_position_ = event.position;
-        target_size_ = event.size;
+        source_size_ = event.size;
+        target_size_ = std::clamp(source_size_ * size_scale_, 0.0F, 1.0F);
     }
     if (!first_) {
         const float position_alpha = 1 - std::exp(-512.0F / 1200.0F);
@@ -295,11 +305,13 @@ Result<void> SizeObjectProcessor::process_control(std::vector<float>& output, st
 // The reference layouts above retain their exact arithmetic and fixed native
 // branch mapping. This separate layout-driven extension shares filter state,
 // control timing and smoothing with its own 22.2 geometry.
+// NOLINTNEXTLINE(readability-function-size): preserve the verified recursive arithmetic and control ordering.
 Result<void> SizeObjectProcessor::process_extended_control(std::vector<float>& output, std::size_t valid_frames) {
     if (next_event_ < events_.size() && events_[next_event_].start_sample < control_start_ + 512) {
         const auto& event = events_[next_event_++];
         target_position_ = event.position;
-        target_size_ = event.size;
+        source_size_ = event.size;
+        target_size_ = std::clamp(source_size_ * size_scale_, 0.0F, 1.0F);
     }
     if (!first_) {
         const float position_alpha = 1 - std::exp(-512.0F / 1200.0F);

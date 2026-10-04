@@ -40,7 +40,11 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
             gain = render_common::interpolated_scalar(
                 channel.blocks[block_index - 1].gains[out_ch], block.gains[out_ch], delta, interp_len);
         }
-        (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += (in_sample * gain) * channel.output_gain;
+        float contribution = (in_sample * gain) * channel.output_gain;
+        if (!ctx.live_gains.empty()) {
+            contribution *= ctx.live_gains[(frame * ctx.num_in_ch) + channel.input_channel];
+        }
+        (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += contribution;
     }
 }
 
@@ -74,6 +78,18 @@ void accumulate_channel_block(const ChannelGainInfo& channel,
 
 } // namespace
 
+void accumulate_speaker_channel(const ChannelGainInfo& channel,
+                                std::size_t& block_index,
+                                const AccumulateContext& ctx,
+                                uint64_t frames_now) {
+    if (channel.blocks.empty()) {
+        return;
+    }
+    for (std::size_t frame = 0; frame < frames_now; ++frame) {
+        accumulate_channel_block(channel, block_index, ctx, frame);
+    }
+}
+
 void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
                             std::vector<std::size_t>& block_indices,
                             const AccumulateContext& ctx,
@@ -104,7 +120,11 @@ void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
             const float in_sample = ctx.input[(frame * ctx.num_in_ch) + channel.input_channel];
             for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
                 const float gain = (start_gains[out_ch] * (1.0F - alpha)) + (end_gains[out_ch] * alpha);
-                (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += (in_sample * gain) * channel.output_gain;
+                float contribution = (in_sample * gain) * channel.output_gain;
+                if (!ctx.live_gains.empty()) {
+                    contribution *= ctx.live_gains[(frame * ctx.num_in_ch) + channel.input_channel];
+                }
+                (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += contribution;
             }
         }
     }

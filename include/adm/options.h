@@ -22,7 +22,7 @@ enum class RendererSelection {
     apple,
     binaural,
     saf_binaural,   // SAF HRTF binaural backend
-    triple_balance, // Offline Cartesian room renderer
+    triple_balance, // Cartesian room renderer with offline and realtime monitoring
 };
 
 enum class SpeakerSpreadMode {

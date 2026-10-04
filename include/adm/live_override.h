@@ -12,6 +12,7 @@ namespace mradm {
 // mradm.semantic-policy.v1 object scope. Gain targets enter a short sample-domain ramp on
 // monitoring backends. SAF binaural coalesces diffuse / extent / divergence targets, rebuilds its
 // source graph with the prepared HRTF tables, and crossfades the old/new DSP states. See
+// Triple Balance applies linked isotropic extent multipliers and post-DSP gain/mute.
 // docs/architecture/REALTIME_MONITORING.md §5/§6.
 struct LiveObjectOverride {
     std::string object_id;        // SceneObject::id this override applies to

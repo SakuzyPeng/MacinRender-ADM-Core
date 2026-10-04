@@ -171,6 +171,23 @@ class IRenderStream {
     // loop-region wrap). Must reset / pre-roll backend state so output after the seek is
     // equivalent to the offline window render at the same position.
     [[nodiscard]] virtual Result<void> seek(uint64_t frame) = 0;
+    // A hint for preparing an incoming backend while the outgoing stream keeps playing.
+    [[nodiscard]] virtual bool seek_requires_preroll() const { return false; }
+
+    // Long state restoration stays on a worker and cooperatively yields to a newer request.
+    [[nodiscard]] virtual Result<void> seek_with_cancel(uint64_t frame, std::stop_token cancel) {
+        if (cancel.stop_requested()) {
+            return make_error(ErrorCode::cancelled, "stream seek cancelled");
+        }
+        return seek(frame);
+    }
+
+    // Read-only validation against immutable prepared metadata. May run on the control thread
+    // concurrently with process(); implementations must not inspect mutable DSP state.
+    [[nodiscard]] virtual Result<void> validate_overrides(const LiveOverrides& overrides) const {
+        (void) overrides;
+        return {};
+    }
 
     // Apply live per-object targets. Called on the worker thread at block boundaries. Implemented
     // streams de-zipper gain in the sample domain; SAF binaural coalesces topology targets and

@@ -84,6 +84,14 @@ public static class OutputModel
             ?? new Dictionary<AdmRenderer, bool>();
     }
 
+    internal static IReadOnlyList<LayoutDef> SystemSpatialLayoutsFor(AdmRenderer renderer)
+    {
+        var backend = Backends.FirstOrDefault(b => b.Renderer == renderer);
+        return SystemSpatialLayouts
+            .Where(id => LayoutById.ContainsKey(id) && (backend is null || backend.LayoutIds.Contains(id)))
+            .Select(id => LayoutById[id]).ToArray();
+    }
+
     /// <summary>所选渲染器是否支持 ADM diffuse；能力未知时返回 true（不作无依据的告警）。</summary>
     public static bool SupportsDiffuse(AdmRenderer renderer)
     {

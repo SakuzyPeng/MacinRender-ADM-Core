@@ -1803,7 +1803,11 @@ adm_error_code_t adm_monitor_set_overrides(adm_monitor_t* monitor,
             ov.mute = src.mute != 0;
             live.objects.push_back(std::move(ov));
         }
-        monitor->session->set_overrides(live);
+        auto applied = monitor->session->set_overrides(live);
+        if (!applied) {
+            monitor->last_error_message = applied.error().message + ": " + applied.error().context;
+            return static_cast<adm_error_code_t>(applied.error().code);
+        }
         return ADM_ERROR_OK;
     } catch (...) {
         monitor->last_error_message = "unexpected exception while applying realtime monitor overrides";
