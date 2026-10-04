@@ -287,12 +287,36 @@ class MonitorOutputFactory final : public realtime::IRenderStreamFactory {
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct MonitorSession::Impl {
     BufferingLogSink log_sink;
+    uint64_t loop_start{0};
+    uint64_t loop_end{0};
     std::unique_ptr<RealtimeStreamFactory> factory;
     std::unique_ptr<realtime::IAudioOutputDevice> device;
     std::unique_ptr<realtime::MonitorEngine> engine;
-    AdmScene scene;                  // policy-applied scene, reused when hot-switching the backend
-    RenderOptions current_options;   // last-used options (create / switch_backend), to rebuild on device switch
-    LiveOverrides current_overrides; // last-applied overrides, re-applied after a device switch
+    AdmScene scene;                // policy-applied scene, reused when hot-switching the backend
+    RenderOptions current_options; // last-used options (create / switch_backend), to rebuild on device switch
+    struct PendingOptions {
+        std::shared_ptr<realtime::StreamSwitchReceipt> receipt;
+        RenderOptions options;
+    };
+    std::vector<PendingOptions> pending_options;
+
+    void refresh_options() {
+        std::erase_if(pending_options, [&](const auto& pending) {
+            const auto state = pending.receipt->state.load();
+            if (state == realtime::StreamSwitchState::applied) {
+                current_options = pending.options;
+            }
+            return state != realtime::StreamSwitchState::pending;
+        });
+    }
+
+    void queue_stream(std::unique_ptr<IRenderStream> stream, const RenderOptions& options) {
+        auto receipt = std::make_shared<realtime::StreamSwitchReceipt>();
+        pending_options.push_back({receipt, options});
+        engine->switch_stream(std::move(stream), std::move(receipt));
+    }
+
+    LiveOverrides current_overrides;           // last-applied overrides, re-applied after a device switch
     ListenerOrientation current_orientation{}; // last-applied head orientation, re-applied after a device switch
     // HpTF: the PARSED PROFILE is kept, not the designed coefficients, because a rebuilt engine
     // may resolve a different sample rate — re-running design_cascade() there is cheap and removes
@@ -403,19 +427,24 @@ void MonitorSession::set_loop_seconds(double start_seconds, double end_seconds) 
     if (impl_->engine == nullptr) {
         return;
     }
-    impl_->engine->set_loop(clamp_frame(start_seconds, impl_->sample_rate, impl_->total_frames),
-                            clamp_frame(end_seconds, impl_->sample_rate, impl_->total_frames));
+    impl_->loop_start = clamp_frame(start_seconds, impl_->sample_rate, impl_->total_frames);
+    impl_->loop_end = clamp_frame(end_seconds, impl_->sample_rate, impl_->total_frames);
+    impl_->engine->set_loop(impl_->loop_start, impl_->loop_end);
 }
 
-void MonitorSession::set_overrides(const LiveOverrides& overrides) {
-    impl_->current_overrides = overrides; // kept so a device switch can re-apply the user's edits
+Result<void> MonitorSession::set_overrides(const LiveOverrides& overrides) {
     if (impl_->engine == nullptr) {
-        return;
+        return make_error(ErrorCode::internal_error, "monitor session is unavailable");
     }
-    impl_->engine->set_overrides(overrides);
+    auto applied = impl_->engine->set_overrides(overrides);
+    if (applied) {
+        impl_->current_overrides = overrides;
+    }
+    return applied;
 }
 
 void MonitorSession::set_listener_orientation(const ListenerOrientation& orientation) {
+    impl_->refresh_options();
     impl_->current_orientation = orientation; // kept so a device switch can re-apply the head pose
     if (impl_->engine == nullptr) {
         return;
@@ -496,7 +525,9 @@ HptfInfo MonitorSession::hptf_info() const {
     return info;
 }
 
+// NOLINTNEXTLINE(readability-function-size): keep backend rollback and keepalive lifetimes in one transaction.
 Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
+    impl_->refresh_options();
     if (impl_->engine == nullptr) {
         return make_error(ErrorCode::internal_error, "监听会话无效:后端重建失败");
     }
@@ -508,6 +539,12 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
     }
     if (*stream == nullptr) {
         return make_error(ErrorCode::internal_error, "monitor switch_backend produced a null stream");
+    }
+    auto valid_overrides = (*stream)->validate_overrides(impl_->current_overrides);
+    if (!valid_overrides) {
+        stream->reset();
+        impl_->factory->forget_last_backend();
+        return tl::unexpected{valid_overrides.error()};
     }
     const uint32_t monitor_channels = impl_->engine->out_channels();
     // No resampling across a switch: the monitor device runs at a fixed rate.
@@ -527,8 +564,9 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
         const realtime::MonitorStatus snap = impl_->engine->status();
         const uint64_t playhead = snap.playhead_frames;
         const bool was_playing = snap.state == realtime::MonitorState::playing;
-        const RenderOptions prev_options = impl_->current_options; // to restore the working backend on failure
-        impl_->engine.reset();                                     // stops the device (engine borrows it by reference)
+        impl_->engine.reset(); // stops the device (engine borrows it by reference)
+        impl_->refresh_options();
+        const RenderOptions prev_options = impl_->current_options; // restore the last applied backend on failure
         impl_->device.reset();
 
         // Build a fresh device + engine for `opts` on the same device id. Leaves engine/device null
@@ -560,8 +598,9 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
                 return tl::unexpected{built.error()};
             }
         }
-        impl_->engine->seek(playhead);
         impl_->engine->set_overrides(impl_->current_overrides);
+        impl_->engine->set_loop(impl_->loop_start, impl_->loop_end);
+        impl_->engine->seek(playhead);
         impl_->engine->set_listener_orientation(impl_->effective_orientation());
         impl_->republish_hptf(); // a rebuilt engine starts with an empty cascade
         if (was_playing) {
@@ -589,13 +628,12 @@ Result<void> MonitorSession::switch_backend(const RenderOptions& options) {
                               "monitor cannot fold this layout to the current monitor output "
                               "(only stereo-monitor downmix of speaker / HOA layouts is supported)");
         }
-        impl_->engine->switch_stream(
-            std::make_unique<realtime::DownmixStream>(std::move(*stream), std::move(*matrix), monitor_channels));
-        impl_->current_options = options; // remember the live backend so a device switch rebuilds it
+        impl_->queue_stream(
+            std::make_unique<realtime::DownmixStream>(std::move(*stream), std::move(*matrix), monitor_channels),
+            options);
         return {};
     }
-    impl_->engine->switch_stream(std::move(*stream));
-    impl_->current_options = options; // remember the live backend so a device switch rebuilds it
+    impl_->queue_stream(std::move(*stream), options);
     return {};
 }
 
@@ -617,6 +655,7 @@ Result<void> MonitorSession::set_output_device(const std::string& device_id) {
     // Stop the old engine + device first (engine borrows the device by reference), so two
     // devices never pull at once. Then open the new device and rebuild the engine on it.
     impl_->engine.reset();
+    impl_->refresh_options();
     impl_->device.reset();
 
     auto open_on = [&](const std::string& id) -> Result<void> {
@@ -645,8 +684,9 @@ Result<void> MonitorSession::set_output_device(const std::string& device_id) {
     }
 
     // Restore playhead + edits + play state on the freshly rebuilt engine.
-    impl_->engine->seek(playhead);
     impl_->engine->set_overrides(impl_->current_overrides);
+    impl_->engine->set_loop(impl_->loop_start, impl_->loop_end);
+    impl_->engine->seek(playhead);
     impl_->engine->set_listener_orientation(impl_->effective_orientation()); // 系统空间化→中立(见 setter)
     impl_->republish_hptf(); // a rebuilt engine starts with an empty cascade
     if (was_playing) {
@@ -656,6 +696,7 @@ Result<void> MonitorSession::set_output_device(const std::string& device_id) {
 }
 
 MonitorStatusSnapshot MonitorSession::status() const {
+    impl_->refresh_options();
     if (impl_->engine == nullptr) {
         MonitorStatusSnapshot out; // invalid session → report a stopped/failed snapshot
         out.state = MonitorPlaybackState::stopped;

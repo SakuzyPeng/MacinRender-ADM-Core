@@ -13,7 +13,8 @@
 沿用已有选项，`renderer_effective.profile` 明确区分为 `room-222-extension-v1`，`spatial_reference` 为 null。
 该报告记录实际使用的 22 个节点、房间坐标、滤波路及符号、尺寸规则、源字段解释和最终用户增益。
 每个事件还记录进入平滑前的目标空间增益及干／尺寸混合系数，静态案例可直接据此核对实际分支。
-默认 SAF、GUI、实时接口和 C ABI 未扩展；旧兼容布局保留独立的参考计算路径。
+本篇记录最初的离线几何扩展；当前 GUI、C ABI 与实时监听接入见 [Triple Balance](TRIPLE_BALANCE_RENDERER.md)。
+默认 SAF 行为不变，旧兼容布局保留独立的参考计算路径。
 
 ## 输入与输出范围
 

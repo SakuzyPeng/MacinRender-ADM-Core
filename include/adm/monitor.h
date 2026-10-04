@@ -99,7 +99,8 @@ class MonitorSession {
     // Apply live per-object overrides. Gain targets use a short sample-domain ramp. SAF binaural
     // coalesces diffuse/extent/divergence targets and crossfades rebuilt source-graph state. The
     // applied revision is reported via status().override_revision.
-    void set_overrides(const LiveOverrides& overrides);
+    // Backend-invalid edits fail atomically; the last accepted snapshot and revision survive.
+    Result<void> set_overrides(const LiveOverrides& overrides);
 
     // Set the live listener head orientation (head tracking / manual free-look). The Apple binaural
     // backend (HeadYaw/Pitch/Roll) and the SAF binaural backend (per-source HRTF direction rotation)

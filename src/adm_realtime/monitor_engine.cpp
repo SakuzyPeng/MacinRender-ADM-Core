@@ -4,7 +4,9 @@
 #include <chrono>
 #include <cmath>
 #include <ebur128.h>
+#include <exception>
 #include <limits>
+#include <utility>
 
 namespace mradm::realtime {
 
@@ -46,6 +48,12 @@ constexpr uint64_t k_crossfade_frames = 2048U;
 // enough that seeking still feels immediate, long enough to move the discontinuity below the
 // click/pop band. This is monitor-output conditioning only; offline renders remain untouched.
 constexpr uint64_t k_seek_transition_ms = 10U;
+void finish_switch(const std::shared_ptr<StreamSwitchReceipt>& receipt, StreamSwitchState state) {
+    if (receipt) {
+        receipt->state.store(state);
+    }
+}
+
 } // namespace
 
 MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutputDevice& device, LogSink& logs)
@@ -112,6 +120,16 @@ Result<std::unique_ptr<MonitorEngine>> MonitorEngine::create(IRenderStreamFactor
 }
 
 MonitorEngine::~MonitorEngine() {
+    quit_.store(true, std::memory_order_release);
+    {
+        const std::lock_guard<std::mutex> lock(control_mutex_);
+        seek_cancel_.request_stop();
+        finish_switch(pending_switch_receipt_, StreamSwitchState::rejected);
+        if (switch_warmup_) {
+            switch_warmup_->cancel.request_stop();
+            finish_switch(switch_warmup_->receipt, StreamSwitchState::rejected);
+        }
+    }
     device_.stop(); // stop pulls first so no pull() runs after teardown begins
     quit_.store(true, std::memory_order_release);
     wake_.notify_all();
@@ -194,7 +212,7 @@ void MonitorEngine::play() {
     bool flush_before_play = false;
     {
         const std::lock_guard<std::mutex> lock(control_mutex_);
-        if (state_.load(std::memory_order_seq_cst) != MonitorState::playing && seek_pending_) {
+        if (state_.load(std::memory_order_seq_cst) != MonitorState::playing && (seek_pending_ || seek_in_progress_)) {
             // Keep the engine/device paused until the worker has actually landed the queued seek.
             // Otherwise a rapid seek→play can briefly resume the stale device queue before the
             // worker gets to apply (and flush) the new position.
@@ -233,19 +251,47 @@ void MonitorEngine::pause() {
 void MonitorEngine::seek(uint64_t frame) {
     {
         const std::lock_guard<std::mutex> lock(control_mutex_);
+        seek_cancel_.request_stop();
+        if (switch_warmup_) {
+            switch_warmup_->cancel.request_stop();
+        }
         seek_pending_ = true;
         seek_target_ = frame;
     }
     wake_.notify_all();
 }
 
-void MonitorEngine::set_overrides(const LiveOverrides& overrides) {
+Result<void> MonitorEngine::set_overrides(const LiveOverrides& overrides) {
     {
         const std::lock_guard<std::mutex> lock(control_mutex_);
+        auto valid = stream_->validate_overrides(overrides);
+        if (valid && xfade_active_) {
+            valid = xfade_stream_->validate_overrides(overrides);
+        }
+        if (!valid) {
+            return valid;
+        }
+        if (pending_stream_) {
+            valid = pending_stream_->validate_overrides(overrides);
+        }
+        if (valid && switch_warmup_) {
+            valid = switch_warmup_->stream->validate_overrides(overrides);
+        }
+        if (!valid) {
+            return valid;
+        }
+        if (switch_warmup_) {
+            switch_warmup_->cancel.request_stop();
+        }
         pending_overrides_ = overrides;
         overrides_pending_ = true;
+        if (seek_in_progress_) {
+            seek_cancel_.request_stop();
+            seek_pending_ = true;
+        }
     }
     wake_.notify_all();
+    return {};
 }
 
 void MonitorEngine::set_hptf(const std::optional<render_common::HptfCoefficients>& coeffs, uint64_t revision) {
@@ -296,13 +342,127 @@ bool MonitorEngine::head_tracking_recent() const {
     return (std::chrono::steady_clock::now() - last) < k_tracking_active_window;
 }
 
-void MonitorEngine::switch_stream(std::unique_ptr<IRenderStream> next) {
+void MonitorEngine::switch_stream(std::unique_ptr<IRenderStream> next, std::shared_ptr<StreamSwitchReceipt> receipt) {
     {
         const std::lock_guard<std::mutex> lock(control_mutex_);
+        if (switch_warmup_) {
+            switch_warmup_->cancel.request_stop();
+        }
+        finish_switch(pending_switch_receipt_, StreamSwitchState::rejected);
+        pending_switch_receipt_ = std::move(receipt);
+        pending_stream_ready_ = false;
         pending_stream_ = std::move(next);
         switch_pending_ = true;
     }
     wake_.notify_all();
+}
+
+// Only the incoming stream is touched by this one background job. The playing stream
+// remains worker-owned, and the callback continues draining its normal ring.
+void MonitorEngine::launch_switch_warmup(std::unique_ptr<IRenderStream> stream,
+                                         uint64_t position,
+                                         bool positioned,
+                                         std::shared_ptr<StreamSwitchReceipt> receipt) {
+    auto job = std::make_shared<SwitchWarmup>();
+    job->stream = std::move(stream);
+    job->receipt = std::move(receipt);
+    job->overrides = current_overrides_;
+    job->orientation = current_orientation_;
+    job->target.store(output_stage_ ? frames_played_.load() : producer_pos_);
+    job->position = position;
+    job->positioned = positioned;
+    switch_warmup_ = job;
+    job->result = std::async(std::launch::async, [job = job.get()]() -> Result<void> {
+        try {
+            const auto cancel = job->cancel.get_token();
+            job->stream->set_overrides(job->overrides);
+            job->stream->set_listener_orientation(job->orientation);
+            std::vector<float> scratch(k_chunk_frames * job->stream->out_channels());
+            if (!job->positioned) {
+                const auto target = job->target.load();
+                auto status = job->stream->seek_with_cancel(target, cancel);
+                if (!status) {
+                    return status;
+                }
+                job->position = target;
+            }
+            while (!cancel.stop_requested()) {
+                const auto target = job->target.load();
+                if (job->position == target) {
+                    return {};
+                }
+                if (job->position > target) {
+                    auto status = job->stream->seek_with_cancel(target, cancel);
+                    if (!status) {
+                        return status;
+                    }
+                    job->position = target;
+                    continue;
+                }
+                const auto frames = std::min(k_chunk_frames, target - job->position);
+                auto got = job->stream->process(scratch, frames);
+                if (!got) {
+                    return tl::unexpected{got.error()};
+                }
+                if (*got == 0) {
+                    return make_error(ErrorCode::render_failed, "incoming monitor stream ended during warmup");
+                }
+                job->position += *got;
+            }
+            return make_error(ErrorCode::cancelled, "monitor backend warmup cancelled");
+        } catch (const std::exception& error) {
+            return make_error(ErrorCode::render_failed, error.what());
+        }
+    });
+}
+
+void MonitorEngine::poll_switch_locked() {
+    const auto target = output_stage_ ? frames_played_.load() : producer_pos_;
+    if (switch_warmup_) {
+        switch_warmup_->target.store(target);
+        if (switch_warmup_->result.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            return;
+        }
+        auto job = std::exchange(switch_warmup_, nullptr);
+        auto warm_result = job->result.get();
+        if (!switch_pending_) {
+            if (job->cancel.stop_requested()) {
+                pending_stream_ = std::move(job->stream);
+                pending_switch_receipt_ = std::move(job->receipt);
+                switch_pending_ = true;
+            } else if (!warm_result) {
+                finish_switch(job->receipt, StreamSwitchState::rejected);
+                logs_.log(LogLevel::error, "monitor", warm_result.error().message);
+            } else if (job->position != target) {
+                launch_switch_warmup(std::move(job->stream), job->position, true, std::move(job->receipt));
+            } else {
+                pending_stream_ = std::move(job->stream);
+                pending_switch_receipt_ = std::move(job->receipt);
+                pending_stream_ready_ = true;
+                switch_pending_ = true;
+            }
+        } else {
+            finish_switch(job->receipt, StreamSwitchState::rejected);
+        }
+    }
+    if (switch_pending_ && !pending_stream_ready_ && !switch_warmup_) {
+        if (!pending_stream_->seek_requires_preroll()) {
+            pending_stream_->set_overrides(current_overrides_);
+            auto warm_result = pending_stream_->seek(target);
+            if (!warm_result) {
+                finish_switch(pending_switch_receipt_, StreamSwitchState::rejected);
+                pending_switch_receipt_.reset();
+                logs_.log(LogLevel::error, "monitor", warm_result.error().message);
+                pending_stream_.reset();
+                switch_pending_ = false;
+                return;
+            }
+            pending_stream_ready_ = true;
+            return;
+        }
+        launch_switch_warmup(std::move(pending_stream_), 0, false, std::move(pending_switch_receipt_));
+        switch_pending_ = false;
+    }
 }
 
 void MonitorEngine::finalize_crossfade() {
@@ -326,12 +486,15 @@ void MonitorEngine::set_loop(uint64_t start_frame, uint64_t end_frame) {
     loop_end_.store(end_frame, std::memory_order_relaxed);
 }
 
-void MonitorEngine::apply_pending_seek_locked() {
+void MonitorEngine::apply_pending_seek_locked(std::unique_lock<std::mutex>& lock) {
     if (!seek_pending_) {
         return;
     }
-    apply_seek_locked(seek_target_);
+    const auto target = seek_target_;
     seek_pending_ = false;
+    if (!apply_seek_locked(target, lock)) {
+        return;
+    }
     if (!play_pending_after_seek_) {
         return;
     }
@@ -349,11 +512,11 @@ void MonitorEngine::apply_pending_seek_locked() {
     device_.resume();
 }
 
+// NOLINTNEXTLINE(readability-function-size): keep command ordering and callback handshakes in one worker transaction.
 void MonitorEngine::worker_loop() {
     while (!quit_.load(std::memory_order_acquire)) {
         {
             std::unique_lock<std::mutex> lock(control_mutex_);
-            apply_pending_seek_locked();
             if (overrides_pending_) {
                 // Hand the newest target snapshot to the stream. Streams publish gain targets and
                 // queue topology work here, then perform sample ramps / state crossfades in their
@@ -368,6 +531,10 @@ void MonitorEngine::worker_loop() {
                 applied_override_revision_.store(pending_overrides_.revision, std::memory_order_relaxed);
                 overrides_pending_ = false;
             }
+            apply_pending_seek_locked(lock);
+            if (seek_pending_ || quit_.load(std::memory_order_acquire)) {
+                continue;
+            }
             if (orientation_pending_) {
                 // Hand the latest head orientation to the stream(s). Cheap (a global AU param on
                 // the Apple binaural backend; ignored elsewhere). Apply even while paused so the
@@ -380,7 +547,8 @@ void MonitorEngine::worker_loop() {
                 current_orientation_ = pending_orientation_;
                 orientation_pending_ = false;
             }
-            if (switch_pending_) {
+            poll_switch_locked();
+            if (switch_pending_ && pending_stream_ready_) {
                 // Begin a crossfade to the incoming backend. Settle any in-flight fade
                 // first, then seek the incoming stream to the current playhead so it renders
                 // the same frames as the outgoing one, and re-apply the current overrides so
@@ -390,8 +558,8 @@ void MonitorEngine::worker_loop() {
                 // there starts the incoming stream at the playhead (not the read-ahead position).
                 const uint64_t switch_to =
                     output_stage_ ? frames_played_.load(std::memory_order_relaxed) : producer_pos_;
-                if (auto r = pending_stream_->seek(switch_to); r) {
-                    pending_stream_->set_overrides(current_overrides_);
+                pending_stream_->set_overrides(current_overrides_);
+                if (auto r = pending_stream_->validate_overrides(current_overrides_); r) {
                     pending_stream_->set_listener_orientation(current_orientation_);
                     if (output_stage_) {
                         // Hard cut: park the callback, swap the stream, drop the ring so it refills
@@ -426,11 +594,15 @@ void MonitorEngine::worker_loop() {
                         ended_.store(false, std::memory_order_relaxed); // incoming re-arms production
                         failed_.store(false, std::memory_order_relaxed);
                     }
+                    finish_switch(pending_switch_receipt_, StreamSwitchState::applied);
                 } else {
+                    finish_switch(pending_switch_receipt_, StreamSwitchState::rejected);
                     logs_.log(LogLevel::error, "monitor", r.error().message);
                     pending_stream_.reset();
                 }
+                pending_switch_receipt_.reset();
                 switch_pending_ = false;
+                pending_stream_ready_ = false;
             }
             const bool producer_done =
                 ended_.load(std::memory_order_relaxed) || failed_.load(std::memory_order_relaxed);
@@ -438,10 +610,10 @@ void MonitorEngine::worker_loop() {
             // failed. A seek re-arms production (clears ended_/failed_) and wakes us; a
             // pending override / switch wakes us too so it applies promptly even while paused.
             if (state_.load(std::memory_order_seq_cst) != MonitorState::playing || producer_done) {
-                wake_.wait(lock, [this] {
+                wake_.wait_for(lock, switch_warmup_ ? k_idle_nap : std::chrono::milliseconds(1000), [this] {
                     const bool done = ended_.load(std::memory_order_relaxed) || failed_.load(std::memory_order_relaxed);
                     return quit_.load(std::memory_order_acquire) || seek_pending_ || overrides_pending_ ||
-                           orientation_pending_ || switch_pending_ ||
+                           orientation_pending_ || (switch_pending_ && !switch_warmup_) ||
                            (state_.load(std::memory_order_seq_cst) == MonitorState::playing && !done);
                 });
                 continue;
@@ -492,6 +664,9 @@ bool MonitorEngine::top_up_ring_output_stage() {
         }
         ring_.push(scratch_.data(), got * ring_channels_);
         producer_pos_ += got;
+        if (switch_warmup_) {
+            switch_warmup_->target.store(producer_pos_);
+        }
         produced = true;
         if (looping && producer_pos_ >= loop_end) {
             // Stage A loop wrap: reposition ONLY the source read. The render cursors / AU state stay
@@ -509,6 +684,31 @@ bool MonitorEngine::top_up_ring_output_stage() {
         }
     }
     return produced;
+}
+
+bool MonitorEngine::restore_loop(uint64_t loop_start) {
+    std::unique_lock<std::mutex> lock(control_mutex_);
+    if (seek_pending_) {
+        return false;
+    }
+    seek_cancel_ = std::stop_source{};
+    const auto cancel = seek_cancel_.get_token();
+    seek_in_progress_ = true;
+    seek_target_ = loop_start;
+    lock.unlock();
+    auto seek_res = stream_->seek_with_cancel(loop_start, cancel);
+    lock.lock();
+    seek_in_progress_ = false;
+    if (cancel.stop_requested()) {
+        return false;
+    }
+    if (!seek_res) {
+        logs_.log(LogLevel::error, "monitor", seek_res.error().message);
+        failed_.store(true, std::memory_order_relaxed);
+        return false;
+    }
+    producer_pos_ = loop_start;
+    return true;
 }
 
 bool MonitorEngine::top_up_ring() {
@@ -570,6 +770,7 @@ bool MonitorEngine::top_up_ring() {
             xfade_pos_ += got;
             // Finalize when the ramp completes or either stream ran short (end of material).
             if (xfade_pos_ >= k_crossfade_frames || got < frames) {
+                const std::lock_guard<std::mutex> lock(control_mutex_);
                 finalize_crossfade();
             }
         }
@@ -581,17 +782,17 @@ bool MonitorEngine::top_up_ring() {
         feed_meter(scratch_.data(), got); // add the produced chunk to the LUFS meter + refresh snapshots (worker-only)
         ring_.push(scratch_.data(), got * channels_); // available_write checked: full push
         producer_pos_ += got;
+        if (switch_warmup_) {
+            switch_warmup_->target.store(producer_pos_);
+        }
         produced = true;
 
         if (looping && producer_pos_ >= loop_end) {
             // Producer-side wrap: ring stays valid, no flush needed. On failure, stop
             // producing rather than pretend the wrap happened.
-            if (auto seek_res = stream_->seek(loop_start); !seek_res) {
-                logs_.log(LogLevel::error, "monitor", seek_res.error().message);
-                failed_.store(true, std::memory_order_relaxed);
+            if (!restore_loop(loop_start)) {
                 return produced;
             }
-            producer_pos_ = loop_start;
         }
         if (got < frames) {
             return produced; // stream produced a short block (end)
@@ -805,7 +1006,7 @@ void MonitorEngine::drain_meter_ring() {
     }
 }
 
-void MonitorEngine::apply_seek_locked(uint64_t frame) {
+bool MonitorEngine::apply_seek_locked(uint64_t frame, std::unique_lock<std::mutex>& lock) {
     // Settle any in-flight crossfade to the incoming stream, so the seek targets the stream
     // that will actually be playing afterwards.
     finalize_crossfade();
@@ -820,7 +1021,18 @@ void MonitorEngine::apply_seek_locked(uint64_t frame) {
     }
     ring_.clear();
     meter_ring_.clear(); // output-stage tap (no-op buffer otherwise); consumer is parked, safe to reset
-    if (auto seek_res = stream_->seek(frame); seek_res) {
+    seek_cancel_ = std::stop_source{};
+    const auto cancel = seek_cancel_.get_token();
+    seek_in_progress_ = true;
+    lock.unlock();
+    auto seek_res = stream_->seek_with_cancel(frame, cancel);
+    lock.lock();
+    seek_in_progress_ = false;
+    if (cancel.stop_requested() || seek_pending_ || quit_.load(std::memory_order_acquire)) {
+        // Keep callbacks parked until the newest request has restored a complete state.
+        return false;
+    }
+    if (seek_res) {
         producer_pos_ = frame;
         consumer_src_pos_ = frame; // output-stage consumer position (callback parked during seek)
         frames_played_.store(frame, std::memory_order_relaxed);
@@ -854,6 +1066,7 @@ void MonitorEngine::apply_seek_locked(uint64_t frame) {
     // defeat the k_seek_transition_ms bridge.
     hptf_.reset_state();
     flushing_.store(false, std::memory_order_seq_cst);
+    return true;
 }
 
 MonitorStatus MonitorEngine::status() const {

@@ -46,24 +46,8 @@ struct SizeEvent {
     float size{};
 };
 
-// One state per object/track, owned by a render session. push() appends complete
-// control blocks; finish() emits the original-length final partial block. This
-// lets callers use arbitrary input chunks without changing the signal timeline.
-class SizeObjectProcessor final {
-  public:
-    [[nodiscard]] static Result<SizeObjectProcessor>
-    create(std::span<const SizeEvent> events, std::string layout, uint32_t sample_rate);
-    void reset() noexcept;
-    [[nodiscard]] Result<void> push(std::span<const float> input, std::vector<float>& output);
-    [[nodiscard]] Result<void> finish(std::vector<float>& output);
-    [[nodiscard]] std::size_t channel_count() const noexcept { return channels_; }
-
-  private:
-    [[nodiscard]] Result<void> process_control(std::vector<float>& output, std::size_t valid_frames);
-    [[nodiscard]] Result<void> process_extended_control(std::vector<float>& output, std::size_t valid_frames);
-    std::vector<SizeEvent> events_;
-    std::string layout_;
-    std::size_t channels_{};
+// Fixed-size state only: checkpoints never copy metadata or PCM from the file.
+struct SizeProcessorState {
     std::size_t next_event_{};
     uint64_t control_start_{};
     std::array<float, 512> pending_{};
@@ -84,6 +68,31 @@ class SizeObjectProcessor final {
     bool previous_filter_active_{};
     bool older_filter_active_{};
     SizeDecorrelator decorrelator_;
+    float size_scale_{1.0F};
+    float source_size_{};
+};
+
+// One state per object/track, owned by a render session. push() appends complete
+// control blocks; finish() emits the original-length final partial block. This
+// lets callers use arbitrary input chunks without changing the signal timeline.
+class SizeObjectProcessor final : private SizeProcessorState {
+  public:
+    [[nodiscard]] static Result<SizeObjectProcessor>
+    create(std::span<const SizeEvent> events, std::string layout, uint32_t sample_rate);
+    void reset() noexcept;
+    [[nodiscard]] Result<void> push(std::span<const float> input, std::vector<float>& output);
+    [[nodiscard]] Result<void> finish(std::vector<float>& output);
+    void set_size_scale(float scale) noexcept;
+    [[nodiscard]] SizeProcessorState snapshot() const noexcept { return *this; }
+    void restore(const SizeProcessorState& state) noexcept { static_cast<SizeProcessorState&>(*this) = state; }
+    [[nodiscard]] std::size_t channel_count() const noexcept { return channels_; }
+
+  private:
+    [[nodiscard]] Result<void> process_control(std::vector<float>& output, std::size_t valid_frames);
+    [[nodiscard]] Result<void> process_extended_control(std::vector<float>& output, std::size_t valid_frames);
+    std::vector<SizeEvent> events_;
+    std::string layout_;
+    std::size_t channels_{};
 };
 
 } // namespace mradm::triple_balance

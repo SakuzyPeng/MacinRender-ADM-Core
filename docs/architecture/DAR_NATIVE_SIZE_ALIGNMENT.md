@@ -22,7 +22,7 @@
 - 兼容语义层解释对象与块的时间；DSP 从文件第 0 帧推进。每个 512-frame 控制块最多一个元数据事件。
 - `spread=auto` 对含非零尺寸的轨道使用有状态内核；`spread=none` 明确忽略尺寸，继续原点源路径。
   全片 size=0 不进入尺寸处理器；显式 MDAP 与 Triple Balance 互斥。
-- 当前通过独立 `triple-balance` 后端提供离线渲染，CLI、C ABI 和 GUI 批量渲染共用该入口；实时监听和独立三轴尺寸仍不开放。
+- 当前通过独立 `triple-balance` 后端提供离线渲染与实时监听；实时编辑支持等尺寸倍率，独立三轴尺寸仍不开放。详见 [Triple Balance](TRIPLE_BALANCE_RENDERER.md)。
   22.2 已作为独立的[自有几何扩展](ROOM_222_EXTENSION.md)接入，不属于本页的 Dolby 数值兼容范围。
 
 ## 空间规则

@@ -194,13 +194,19 @@ public sealed class MonitorService : IDisposable
     public AdmErrorCode SetOverrides(IReadOnlyList<MonitorOverride> overrides, ulong revision)
     {
         ArgumentNullException.ThrowIfNull(overrides);
+        LastOperationFailureDetails = null;
         if (_monitor is not { IsInvalid: false } m)
         {
             return AdmErrorCode.InvalidArgument;
         }
         if (overrides.Count == 0)
         {
-            return NativeMethods.adm_monitor_set_overrides(m, IntPtr.Zero, 0, revision);
+            var result = NativeMethods.adm_monitor_set_overrides(m, IntPtr.Zero, 0, revision);
+            if (result != AdmErrorCode.Ok)
+            {
+                LastOperationFailureDetails = ReadLastError(m);
+            }
+            return result;
         }
 
         var stride = Marshal.SizeOf<AdmMonitorOverride>();
@@ -236,7 +242,12 @@ public sealed class MonitorService : IDisposable
                 Marshal.StructureToPtr(native, arr + (i * stride), false);
             }
 
-            return NativeMethods.adm_monitor_set_overrides(m, arr, (uint)overrides.Count, revision);
+            var result = NativeMethods.adm_monitor_set_overrides(m, arr, (uint)overrides.Count, revision);
+            if (result != AdmErrorCode.Ok)
+            {
+                LastOperationFailureDetails = ReadLastError(m);
+            }
+            return result;
         }
         finally
         {

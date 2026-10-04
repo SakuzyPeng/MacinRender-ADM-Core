@@ -102,6 +102,16 @@ internal static class SelfTest
         OutputModel.InitializeCapabilities(capabilities);
         Console.WriteLine($"系统空间音频布局({OutputModel.SystemSpatialLayouts.Count}): [{string.Join(", ", OutputModel.SystemSpatialLayouts)}]");
 
+        var tripleMonitorLayouts = OutputModel.SystemSpatialLayoutsFor(AdmRenderer.TripleBalance)
+            .Select(layout => layout.Id).OrderBy(id => id).ToArray();
+        var expectedTripleLayouts = new[] { "7.1.4", "9.1.6", "22.2" }
+            .Intersect(OutputModel.SystemSpatialLayouts).OrderBy(id => id).ToArray();
+        if (!tripleMonitorLayouts.SequenceEqual(expectedTripleLayouts))
+        {
+            Console.Error.WriteLine("[失败] Triple Balance 监听布局没有按设备与后端能力求交集");
+            return 1;
+        }
+
         bool diffuseCapabilitiesOk = OutputModel.SupportsDiffuse(AdmRenderer.Ear) &&
                                      !OutputModel.SupportsDiffuse(AdmRenderer.Saf) &&
                                      OutputModel.SupportsDiffuse(AdmRenderer.Hoa) &&

@@ -226,3 +226,14 @@ C ABI（ADR 0007，additive，新 minor）：`adm_monitor_t` opaque + `adm_creat
 4. **采样率不匹配**：monitor 优先把物理设备开成当前 stream/sample 的采样率；涉及 binaural 时优先 48 kHz（当前 binaural 后端要求 48 kHz）。若设备锁定到不同采样率，才在**输出边界**做一次重采样（设备层职责）；切片 1 可先只支持 48 kHz，非 48 kHz 明确返回 unsupported，后续补重采样。
 
 后续仍待定的工程细节（非阻塞，落地时定）：crossfade 时长 / 曲线、ring buffer 容量与欠载策略、loop region 边界回卷的 DSP 状态处理。
+
+## Triple Balance 接入
+
+Triple Balance 通过持久化流复用离线块内核，支持增益／静音与三轴联动尺寸倍率。
+与线性混音后端不同，其实时增益在每个对象的尺寸 DSP 之后应用，避免改变递归滤波输入。
+尺寸快照、精确跳转和输入限制见 [Triple Balance](TRIPLE_BALANCE_RENDERER.md#实时监听与编辑)。
+
+流接口增加默认兼容的覆盖校验与可取消跳转；下混包装层转发这些接口。
+覆盖通过校验后才排队并确认 revision。长预热释放控制锁，新请求或停止可取消它。
+需要预热的后端切换由单个后台任务准备新流，旧流继续填充 ring；应用当前编辑、追齐时间线后
+再启动交叉淡化。既有无预热后端保留短路径。GUI 的原生准备、设备重建和停止串行异步执行。
