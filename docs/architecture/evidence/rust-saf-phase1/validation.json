@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-04",
+  "tested_code_commit": "6ae10d5302aeeeb5dcef65c9048aff94e935176f",
+  "ci": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37194085996",
+  "ci_conclusion": "success",
+  "platforms": {
+    "macos_arm64": {
+      "debug_ctest_passed": 52,
+      "sofa_off_tests": "passed",
+      "public_abi_exports": 139
+    },
+    "windows_x64": {
+      "native_release_ctest_passed": 51,
+      "sofa_on": "passed",
+      "sofa_off": "passed",
+      "public_abi_exports": 139,
+      "ci_debug": "passed"
+    },
+    "linux_x64": {
+      "ci_debug_ctest_passed": 51
+    }
+  },
+  "quality": {
+    "changed_cpp_gate": "passed; existing function-size/default-member-init suggestions remain",
+    "cargo_clippy": "passed with -D warnings",
+    "cargo_fmt": "passed",
+    "licenses_and_asset_hashes": "passed",
+    "cargo_minsizerel_offline": "passed"
+  },
+  "reference": {
+    "fft_relative_error_max": 2.23068e-07,
+    "vbap_mdap_regular_geometry": "passed at 1e-4",
+    "kemar_samples": "bit-identical to bundled SAF v1.3.4 data",
+    "spreader_steady_noise_energy_delta_db": 0.018845
+  },
+  "repeatability": {
+    "single_track": "same-process bit-identical",
+    "multiple_tracks": "same-process bit-identical",
+    "cross_platform_bits": "deferred to phase 2"
+  },
+  "realtime_macos_release": {
+    "binaural": {
+      "seconds": 10,
+      "media_frames": 480000,
+      "underruns": 0,
+      "worker_p99_us": 180.75,
+      "pull_p99_us": 43.083
+    },
+    "vbap": {
+      "seconds": 10,
+      "media_frames": 480000,
+      "underruns": 0,
+      "worker_p99_us": 38.959,
+      "pull_p99_us": 31.25
+    },
+    "block_budget_us": 10000
+  },
+  "scope_notes": [
+    "Performance cases contain one second of synthetic ADM and include initialization; not a long-program throughput claim.",
+    "Legacy/new spreader waveforms differ because instance RNG replaces process-global rand.",
+    "Coplanar triangulation changes can alter VBAP/HRTF weights beyond rounding; old waveform identity is not an acceptance criterion.",
+    "Only default production dependency closures are claimed SAF-free; reference-test builds deliberately retain SAF."
+  ]
+}

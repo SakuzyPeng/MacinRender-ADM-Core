@@ -1,6 +1,6 @@
 # Rust SAF 子集替换与二期确定性路线
 
-> 2026-10-04：一期实现已落地，采用 Rust DSP 和纯 Rust SOFA 解析。跨平台逐位一致按用户决定留到二期。具体平台验证记录随下方验收更新。
+> 2026-10-04：一期实现及三平台验证已完成，采用 Rust DSP 和纯 Rust SOFA 解析。跨平台逐位一致按用户决定留到二期。
 
 ## 1. 一期范围
 
@@ -66,9 +66,13 @@ Rust 单元测试覆盖独立 double DFT、实际 FFT 长度、凸包/Voronoi、
 - 52 项 Debug CTest 全部通过，包括 Rust 单元/分配检查。
 - Release SAF 对照 FFT 相对误差约 1.1e-7～2.3e-7；规则布局 VBAP/MDAP 对照通过；内置 KEMAR 样本逐位保留。
 - OM 稳态噪声能量差约 0.019 dB；16 个 Release ADM 用例有效；单/多轨同进程重复输出一致。
-- 五轮交替执行的小型 fixture 中位耗时比（Rust/SAF）：EAR extent 0.981、VBAP 0.961、双耳 point 0.543、cloud 0.551、spreader 0.247；RSS 比值分别 1.018、0.981、1.014、1.030、0.545。
+- 五轮交替执行的小型 fixture 中位耗时比（Rust/SAF）：ear-extent 1.059, vbap-point 1.037, binaural-point 0.560, binaural-cloud 0.577, binaural-spreader 0.241；对应 RSS 比值 1.023, 1.010, 1.035, 1.029, 0.536。
 
-这些是包含初始化的小型合成 fixture 数据，不代表长节目吞吐或主观听感结论。Windows/Linux 结果由本轮 native/CI 验证补充，不以源码检查代替实测。
+这些是包含初始化的小型合成 fixture 数据，不代表长节目吞吐或主观听感结论。Windows canonical Release 在 SOFA ON/OFF 下各通过 51 项测试；Linux CI 通过 51 项，macOS/Windows Debug CI 同样通过。两台原生验证主机均保留全部 139 个公开 C ABI 入口，Rust 私有符号不外泄。
+
+[完整 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37194085996)验证代码提交 `6ae10d5`；[机器可读验收记录](evidence/rust-saf-phase1/validation.json)、[五轮性能明细](evidence/rust-saf-phase1/macos-release-performance.json)和[音频差异记录](evidence/rust-saf-phase1/macos-release-audio-comparison.json)保留测量范围。实时双耳/VBAP 各运行 10 秒均无欠载，worker p99 分别约 181/39 微秒，块预算为 10 毫秒。
+
+重复全量验证还复现了原 SceneStream 空闲关闭丢唤醒：析构更新 quit 时未持有 queue_mutex。现已在同一锁内发布退出谓词，并增加并发反复创建/销毁及超时回归。
 
 ## 5. 二期：跨平台逐位一致
 
