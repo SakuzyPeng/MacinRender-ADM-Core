@@ -98,17 +98,18 @@
       "cmake_key": "libebur128",
       "purl": "pkg:github/jiixyj/libebur128@v1.2.6",
       "license": "MIT",
-      "purpose": "LUFS/True Peak 测量",
-      "distribution": "available",
+      "purpose": "历史响度/True Peak 参考（测试专用）",
+      "distribution": "opt-in",
       "source": {
         "type": "fetchcontent",
         "deps_dir": "libebur128-src",
         "parent": null,
         "license_files": [
           "COPYING"
-        ]
+        ],
+        "cmake_option": "MR_ADM_BUILD_EBUR128_REFERENCE_TESTS"
       },
-      "notes": ""
+      "notes": "仅用于显式启用的 C 参考测试；生产计量由 Rust ebur128 实现。"
     },
     {
       "name": "dr_libs",
@@ -534,6 +535,26 @@
       "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
     },
     {
+      "name": "rust-bitflags-1.3.2",
+      "version": "1.3.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/bitflags@1.3.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust 响度/True Peak 计量的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "bitflags",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。"
+    },
+    {
       "name": "rust-bitflags-2.13.2",
       "version": "2.13.2",
       "cmake_key": null,
@@ -573,6 +594,69 @@
         ]
       },
       "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-dasp_frame-0.11.0",
+      "version": "0.11.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/dasp_frame@0.11.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust 响度/True Peak 计量的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "dasp_frame",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE-MIT",
+          "LICENSE-APACHE",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 crate 未附许可文本；从发布提交对应的 RustAudio/dasp 仓库补齐，来源见 NOTICE.txt。"
+    },
+    {
+      "name": "rust-dasp_sample-0.11.0",
+      "version": "0.11.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/dasp_sample@0.11.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust 响度/True Peak 计量的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "dasp_sample",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE-MIT",
+          "LICENSE-APACHE",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 crate 未附许可文本；从发布提交对应的 RustAudio/dasp 仓库补齐，来源见 NOTICE.txt。"
+    },
+    {
+      "name": "rust-ebur128-0.1.10",
+      "version": "0.1.10",
+      "cmake_key": null,
+      "purl": "pkg:cargo/ebur128@0.1.10",
+      "license": "MIT",
+      "purpose": "Rust 响度/True Peak 计量的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "ebur128",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。"
     },
     {
       "name": "rust-glam-0.30.10",
@@ -1016,6 +1100,26 @@
         ]
       },
       "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-smallvec-1.16.2",
+      "version": "1.16.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/smallvec@1.16.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust 响度/True Peak 计量的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "smallvec",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。"
     },
     {
       "name": "rust-sofar-0.3.0",

@@ -1083,7 +1083,7 @@ bool test_monitor_miniaudio_null_device() {
 } // namespace
 
 // Realtime loudness meter: silent before playback, then a finite, sane LUFS once a tone has
-// played through the 400 ms momentary / 3 s short-term windows. Locks in that the ebur128
+// played through the 400 ms momentary / 3 s short-term windows. Locks in that the Rust
 // meter is wired through engine → levels() (v1.18).
 bool test_monitor_lufs() {
     bool ok = true;
@@ -1114,6 +1114,25 @@ bool test_monitor_lufs() {
                 "lufs: momentary finite & sane for a sine");
     ok &= check(std::isfinite(lv.shortterm_lufs) && lv.shortterm_lufs > -40.0F, "lufs: shortterm finite");
     ok &= check(std::isfinite(lv.integrated_lufs) && lv.integrated_lufs > -40.0F, "lufs: integrated finite");
+    (*engine)->pause();
+    (*engine)->seek(0U);
+    bool reset = false;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (std::chrono::steady_clock::now() < deadline) {
+        const auto after = (*engine)->levels();
+        if ((*engine)->status().playhead_frames == 0U && !std::isfinite(after.momentary_lufs) &&
+            !std::isfinite(after.shortterm_lufs) && !std::isfinite(after.integrated_lufs)) {
+            reset = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(20));
+    }
+    ok &= check(reset, "lufs: paused seek clears all snapshots and integration history");
+    (*engine)->play();
+    ok &= check(drain_exact(**engine, sink, 160000), "lufs: replay after meter reset");
+    const auto replay = (*engine)->levels();
+    ok &= check(std::isfinite(replay.integrated_lufs) && std::abs(replay.integrated_lufs - lv.integrated_lufs) < 0.1F,
+                "lufs: reset meter resumes with the same tone level");
     return ok;
 }
 

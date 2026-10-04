@@ -320,6 +320,8 @@ ctest --test-dir build/debug --output-on-failure
 
 Native dependencies use `FetchContent`; Rust dependencies use the committed Cargo.lock. SOFA parsing is pure Rust. `MR_ADM_BUILD_SAF_REFERENCE_TESTS=ON` enables historical reference tools without changing production rendering.
 
+Loudness and True Peak metering use Rust `ebur128`, with live integration kept on the worker. The C `libebur128` library is only used by the default-off `MR_ADM_BUILD_EBUR128_REFERENCE_TESTS` comparison target and is not linked into production. See the [Rust Meter migration](docs/architecture/RUST_METER_MIGRATION.md) for the boundary and validation results.
+
 System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
 
 ```bash

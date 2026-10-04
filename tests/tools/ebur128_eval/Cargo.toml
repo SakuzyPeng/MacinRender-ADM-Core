@@ -1,0 +1,24 @@
+[package]
+name = "mradm-ebur128-eval"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+license = "MIT"
+
+# This opt-in evaluator is deliberately outside the production workspace. Reuse
+# its Cargo target directory when running it; see the accompanying runner.
+[dependencies]
+ebur128 = { version = "=0.1.10", default-features = false }
+
+[features]
+precision-true-peak = ["ebur128/precision-true-peak"]
+
+[profile.dev]
+opt-level = 1
+debug = 1
+incremental = false
+
+[profile.release]
+debug = 0
+incremental = false

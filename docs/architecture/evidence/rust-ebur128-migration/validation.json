@@ -1,0 +1,115 @@
+{
+  "date": "2026-10-04",
+  "base_commit": "20e9df87fa50c375a0c1a98add834748489af190",
+  "implementation": "Rust ebur128 0.1.10 through project Meter and private FFI; production C library removed",
+  "rust_version": "1.98.0",
+  "cargo_lock_sha256": "5066cc9281772403a3d31e919982b11498e57466165a755b9bc3b2ea81c6d32a",
+  "selected_ebur128_features": [],
+  "tests": [
+    {
+      "name": "macos-debug",
+      "passed": 53,
+      "failed": 0,
+      "c_reference_enabled": false,
+      "log_sha256": "9d0913f8d19844f2e40a39eb6e75b7f08aa501dc2bc465b3b530d60f63c51369"
+    },
+    {
+      "name": "macos-release-reference",
+      "passed": 54,
+      "failed": 0,
+      "c_reference_enabled": true,
+      "log_sha256": "e993c7e7c97e32e7758462d61fb4cd1eb56b1553fb3a87b205ef8568c798da59"
+    },
+    {
+      "name": "macos-release-production",
+      "passed": 53,
+      "failed": 0,
+      "c_reference_enabled": false,
+      "log_sha256": "59350fb84aab52a12c88f853ef61eb83c38e8c9c626a80e60e04e3ee0e699b4a"
+    },
+    {
+      "name": "windows-release-reference",
+      "passed": 53,
+      "failed": 0,
+      "c_reference_enabled": true,
+      "log_sha256": "1c37b93c697312f09f685cb2698f5463bad5b715542e7c3c3fa54a971c46517b"
+    },
+    {
+      "name": "windows-release-production",
+      "passed": 52,
+      "failed": 0,
+      "c_reference_enabled": false,
+      "log_sha256": "d3611a6aa1368011e7cd35652a63e163c2ad6a16d48b95a95ca94ce7083611be"
+    }
+  ],
+  "reference": {
+    "cpp_ffi_rust_comparisons": 48,
+    "loudness_tolerance_lu": 0.001,
+    "true_peak_tolerance_db": 0.01,
+    "wav_normalization_target_lufs": -23,
+    "wav_normalization_tolerance_lu": 0.01,
+    "wav_peak_target_dbtp": -35,
+    "wav_peak_tolerance_db": 0.001
+  },
+  "additional_checks": {
+    "final_debug_meter_realtime_postprocess_tests": 9,
+    "final_meter_test_macos": true,
+    "final_meter_test_windows": true,
+    "rust_fmt_and_clippy_deny_warnings": true,
+    "changed_cpp_quality_gate": true,
+    "license_manifest_sbom_and_cargo_lock": true
+  },
+  "abi": {
+    "macos": {
+      "public_functions": 139,
+      "private_exports": [],
+      "legacy_c_meter_symbols": []
+    },
+    "windows": {
+      "public_functions": 139,
+      "private_rust_or_c_meter_exports": [],
+      "native_c_meter_linked": false,
+      "incidental_cpp_exports": 1984,
+      "windows_export_policy": "Existing WINDOWS_EXPORT_ALL_SYMBOLS policy retained"
+    }
+  },
+  "final_reference_option": "OFF on macOS Debug/Release and Windows canonical Release",
+  "limits": [
+    "Linux CI was not run in this migration",
+    "Official EBU audio test set was not rerun",
+    "Full integration history can allocate; metering remains on the worker",
+    "Windows existing worktree differences in monitor_engine.cpp and realtime_stream_fixture_test.cpp were preserved through three-way merging"
+  ],
+  "source_sha256": {
+    "CMakeLists.txt": "ca49b546ac7b656cde15d0f8868fa68d8058bbd86e9894c8bbb18c72a6539f67",
+    "cmake/MRDependencies.cmake": "ea0ed0956ff6727eee485ca1a4010ef49c0b1111cf7bbc322114c66f3d0cfeff",
+    "include/adm/render.h": "747736528b787376e9a12c0e3402b6ee11841238f6cf015ebfc1e0821acc2f5f",
+    "rust/Cargo.lock": "5066cc9281772403a3d31e919982b11498e57466165a755b9bc3b2ea81c6d32a",
+    "rust/Cargo.toml": "4a293151d4b9e9e9a29a29c4db36067e7432d9673ee14afcae76b9fe4c3f5dd4",
+    "rust/crates/mradm-dsp/Cargo.toml": "ad6d70b79bb0297c9aa867804347beb15330fa8333aee4baa26e18a305c4f8e9",
+    "rust/crates/mradm-dsp/src/lib.rs": "1a52c16706e695b305a155c9d4dd0f8f7af3edc441e34da5a106f4fa4ad8a18b",
+    "rust/crates/mradm-dsp/src/meter.rs": "1a9ce5ba3fc9f5c7c989e602d452d9ccfe28dff82e7d7aadbdfcfc36a4c3db59",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "c3d6ea72d645cdff7661f4a754c0ec38e801069372e17b822b0e41a6e2575375",
+    "rust/crates/mradm-ffi/src/lib.rs": "098991a31dede7ce5eb2244756046e9c7fddfeb9fc4e8ae548462fa19d16213d",
+    "rust/crates/mradm-ffi/src/meter.rs": "80ae735ebd8ae97fe0ce77306d02e99281369cf3d628c429215ba477b382ddd7",
+    "scripts/consistency/build_info.py": "410e573a789d823d0aa6381d9bb04c7aa77c624884a5499f490d88ab9aa5fc6c",
+    "scripts/quality/check-changed.sh": "efae585d7b165695423c4c6d46c914e2869087a6663aeca56cd6162cf4000bbf",
+    "scripts/quality/clang-tidy.sh": "71c2b2f8341ddfdf4bef7e038492b44d52cb556c671398ba57e8d00a95eb12e3",
+    "scripts/quality/cppcheck.sh": "5b4ac355ba2fc91fe2f471b21a48253f23729b9d34c50e781ca5a7dcb068de8d",
+    "src/adm_apple/spatial_mixer_renderer.cpp": "01c265f7da080bae4ff11a39454c095d53971a2734963da3f7fd7fffe6a97d5a",
+    "src/adm_dsp/dsp_ffi.h": "552746010f8dbde7cbb2db33e55142b2b22ab92fa109a5c1e09775e80cc3b702",
+    "src/adm_dsp/meter.h": "d04681b8b85b74883782595853bfda48d05e88810408fd5135457ec70f060491",
+    "src/adm_loudness/loudness_normalizer.cpp": "278b8495a02907eab005abf05f4d9dbcdbad9a7ef0f3ff83918d293125795d46",
+    "src/adm_peak/peak_limiter.cpp": "18d4aa100bf0a5f2ebd01bb02a2eb30931e7404dc783b6f9ee4a2d3ddc1d2464",
+    "src/adm_realtime/monitor_engine.cpp": "cffc4e67694c67456d0ebf80599b738b433528b5339e5da827dc5bf088e87bad",
+    "src/adm_realtime/monitor_engine.h": "1a2766eaeab34eef177c80f7b6d6560e5b5bf9523d43e89f3639d8caf91e1146",
+    "src/adm_render_binaural/binaural_renderer.cpp": "1380999fabee1de3aa3aa4c8ce1cddaeafa23649d3868652bc19ed080517a885",
+    "src/adm_render_common/speaker_pcm.cpp": "dd1def701a9f05a35f97724e55c3a89422b49f356644bddc179d388befdc63c1",
+    "src/adm_render_ear/ear_renderer.cpp": "6c7d94bbda8a419106a47a36471404bd787b9a40e4be075ec5b1c216fae3c67b",
+    "src/adm_render_hoa/hoa_renderer.cpp": "196680c19e392229068ded2d93a972c9fc087b62f56c93e524430a446a5bf84a",
+    "tests/reference/ebur128_reference_test.cpp": "ddbfbdf5c373439656a9caf91be687226d9e823bd09230495013be5c9dcf61da",
+    "tests/unit/loudness_fixture_test.cpp": "0cf63f3549494a9e5bca17d4054062015a236e6b2e64669bd32d17218628302a",
+    "tests/unit/meter_test.cpp": "8e47dfffbd3484cb1ec96f09fef8332d41db1b98c4a0fea8389e582749e0b516",
+    "tests/unit/realtime_stream_fixture_test.cpp": "ab2cb9ca556a82796ccfd0e0ec5585c9a7b21a3d30776085f0e3893cc44337b0"
+  }
+}

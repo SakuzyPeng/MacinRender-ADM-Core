@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <ebur128.h>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -12,29 +11,26 @@
 #include "adm/audio_io.h"
 #include "adm/peak.h"
 
+#include "meter.h"
+
 namespace mradm {
 
 namespace {
 
-struct EburFree {
-    void operator()(ebur128_state* st) const noexcept { ebur128_destroy(&st); }
-};
-using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
-
-// Pass 1: feed all samples from path into a libebur128 state for True Peak.
+// Pass 1: feed all samples from path into a Rust meter for True Peak.
 // Returns the maximum True Peak in linear amplitude across all channels.
-[[nodiscard]] std::optional<double> measure_true_peak(const std::string& path) {
+[[nodiscard]] Result<double> measure_true_peak(const std::string& path) {
     auto reader_res = audio::FloatWavReader::open(path);
     if (!reader_res) {
-        return std::nullopt;
+        return tl::unexpected{reader_res.error()};
     }
     auto& reader = *reader_res;
     const auto num_ch = reader.channels();
     const auto sample_rate = reader.sample_rate();
 
-    EburStatePtr st{ebur128_init(num_ch, sample_rate, EBUR128_MODE_TRUE_PEAK)};
+    auto st = dsp::Meter::create(num_ch, sample_rate, dsp::MeterMode::true_peak);
     if (!st) {
-        return std::nullopt;
+        return tl::unexpected{st.error()};
     }
 
     constexpr std::size_t k_block = 4096;
@@ -45,20 +41,15 @@ using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
         const uint64_t n = std::min(static_cast<uint64_t>(k_block), frames_left);
         const uint64_t got = reader.read(buf.data(), n);
         if (got == 0) {
-            break;
+            return make_error(ErrorCode::io_error, "short read while measuring True Peak", "path=" + path);
         }
-        ebur128_add_frames_float(st.get(), buf.data(), static_cast<std::size_t>(got));
+        if (const auto result = st->add_frames(buf.data(), static_cast<std::size_t>(got)); !result) {
+            return tl::unexpected{result.error()};
+        }
         frames_left -= got;
     }
 
-    double max_peak = 0.0;
-    for (unsigned int ch = 0; ch < num_ch; ++ch) {
-        double ch_peak = 0.0;
-        if (ebur128_true_peak(st.get(), ch, &ch_peak) == EBUR128_SUCCESS) {
-            max_peak = std::max(max_peak, ch_peak);
-        }
-    }
-    return max_peak;
+    return st->max_true_peak();
 }
 
 // Pass 2: rewrite path with all samples scaled by gain.
@@ -115,8 +106,8 @@ using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
 
 Result<void> apply_peak_limit(const std::string& path, float target_dbtp, LogSink& logs) {
     const auto peak_linear = measure_true_peak(path);
-    if (!peak_linear.has_value()) {
-        return make_error(ErrorCode::io_error, "True Peak measurement failed", "path=" + path);
+    if (!peak_linear) {
+        return tl::unexpected{peak_linear.error()};
     }
 
     const double peak_dbtp = 20.0 * std::log10(std::max(1.0e-10, *peak_linear));

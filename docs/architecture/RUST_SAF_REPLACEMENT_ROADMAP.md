@@ -4,7 +4,7 @@
 
 ## 1. 一期范围
 
-生产路径不再链接 SAF、OpenBLAS/LAPACKE 或 libmysofa。现有 `saf`、`saf-binaural`、`saf-spreader` 参数、backend 标识和 C ABI 枚举值继续兼容。C++ 持有场景、编排、线程池及公开 C ABI；libear、libsamplerate、libebur128、ADM/BW64 和编解码职责不变。
+生产路径不再链接 SAF、OpenBLAS/LAPACKE 或 libmysofa。现有 `saf`、`saf-binaural`、`saf-spreader` 参数、backend 标识和 C ABI 枚举值继续兼容。C++ 持有场景、编排、线程池及公开 C ABI；libear、libsamplerate、ADM/BW64 和编解码职责不变。一期保留的 C 计量库已在后续 [Rust Meter 迁移](RUST_METER_MIGRATION.md)中替换。
 
 实现位于同仓库 Cargo workspace：`mradm-dsp` 是禁止 unsafe 的算法库，`mradm-ffi` 负责内部 C 边界。C++ 通过私有 `MacinRender::ADMDsp` target 使用它，不向公开头文件暴露 Rust 或第三方类型。FFI 使用显式长度、浮点数组、状态句柄和调用方错误缓冲；句柄由创建方释放，panic 不穿过 C ABI。C++ FFT 句柄采用 RAII。
 

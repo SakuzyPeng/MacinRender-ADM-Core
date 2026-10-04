@@ -4,12 +4,12 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <ebur128.h>
 #include <future>
 #include <iterator>
 #include <memory>
 #include <numbers>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -23,6 +23,7 @@
 #include "adm/scene.h"
 
 #include "apple_layouts.h"
+#include "meter.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
 
@@ -728,29 +729,16 @@ OSStatus input_render_callback(void* ref_con,
     return noErr;
 }
 
-struct EburDeleter {
-    void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); }
-};
-using EburPtr = std::unique_ptr<ebur128_state, EburDeleter>;
-
-[[nodiscard]] RenderMetrics collect_metrics(ebur128_state* state, uint16_t num_out_ch) {
+[[nodiscard]] RenderMetrics collect_metrics(const dsp::Meter* state) {
     RenderMetrics metrics;
     if (state == nullptr) {
         return metrics;
     }
-    double loudness = 0.0;
-    if (ebur128_loudness_global(state, &loudness) == EBUR128_SUCCESS && std::isfinite(loudness)) {
-        metrics.measured_lufs = loudness;
+    if (const auto loudness = state->integrated(); loudness && std::isfinite(*loudness)) {
+        metrics.measured_lufs = *loudness;
     }
-    double max_peak = 0.0;
-    for (unsigned int ch = 0; ch < num_out_ch; ++ch) {
-        double ch_peak = 0.0;
-        if (ebur128_true_peak(state, ch, &ch_peak) == EBUR128_SUCCESS) {
-            max_peak = std::max(max_peak, ch_peak);
-        }
-    }
-    if (max_peak > 0.0) {
-        metrics.measured_peak_dbtp = 20.0 * std::log10(max_peak);
+    if (const auto peak = state->max_true_peak(); peak && *peak > 0.0) {
+        metrics.measured_peak_dbtp = 20.0 * std::log10(*peak);
     }
     return metrics;
 }
@@ -1629,8 +1617,11 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     }
     auto& writer = *writer_res;
 
-    EburPtr lufs_st{
-        ebur128_init(num_out_ch, static_cast<unsigned long>(sample_rate), EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
+    auto lufs_st =
+        dsp::Meter::create(num_out_ch, static_cast<uint32_t>(sample_rate), dsp::MeterMode::integrated_true_peak);
+    if (!lufs_st) {
+        return tl::unexpected{lufs_st.error()};
+    }
 
     constexpr std::size_t k_num_buffers = 2;
     std::array<std::vector<float>, k_num_buffers> out_buffers;
@@ -1662,10 +1653,13 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                 return make_error(ErrorCode::io_error, "short write while rendering", "output=" + plan.output_path);
             }
             if (emit && lufs_st) {
-                ebur128_state* state = lufs_st.get();
+                auto* state = &*lufs_st;
                 const float* data = out_interleaved.data() + (emit_off * num_out_ch);
-                meter_pending.at(buf_idx) =
-                    meter.post([state, data, emit_count] { ebur128_add_frames_float(state, data, emit_count); });
+                meter_pending.at(buf_idx) = meter.post([state, data, emit_count] {
+                    if (const auto result = state->add_frames(data, emit_count); !result) {
+                        throw std::runtime_error(result.error().message);
+                    }
+                });
             }
             buf_idx = (buf_idx + 1U) % k_num_buffers;
             frames_done += frames_now;
@@ -1676,7 +1670,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
             }
         }
         progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
-        return collect_metrics(lufs_st.get(), num_out_ch);
+        return collect_metrics(&*lufs_st);
     }
 
     // Declare the callback backing storage BEFORE the AU so it is destroyed AFTER the AU's
@@ -1842,10 +1836,13 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
         }
 
         if (emit && lufs_st) {
-            ebur128_state* state = lufs_st.get();
+            auto* state = &*lufs_st;
             const float* data = out_interleaved.data() + (emit_off * num_out_ch);
-            meter_pending.at(buf_idx) =
-                meter.post([state, data, emit_count] { ebur128_add_frames_float(state, data, emit_count); });
+            meter_pending.at(buf_idx) = meter.post([state, data, emit_count] {
+                if (const auto result = state->add_frames(data, emit_count); !result) {
+                    throw std::runtime_error(result.error().message);
+                }
+            });
         }
 
         buf_idx = (buf_idx + 1U) % k_num_buffers;
@@ -1870,7 +1867,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
 
     progress.on_progress({RenderStage::finished, RenderOperation::finish, 1.0, 1.0, 0, 0, "done"});
     logs.log(LogLevel::info, "apple", fmt::format("wrote {} frames to {}", frames_to_write, plan.output_path));
-    return collect_metrics(lufs_st.get(), num_out_ch);
+    return collect_metrics(&*lufs_st);
 }
 
 // Render callback for the LFE-routing self-test: an 80 Hz sine on the (single) mono LFE bus.

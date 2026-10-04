@@ -3,17 +3,19 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <ebur128.h>
 #include <limits>
 #include <map>
 #include <memory>
 #include <numbers>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+
+#include "meter.h"
 // clang-format off
 #include "dsp.h"
 // clang-format on
@@ -768,7 +770,7 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
 
     // Build 7.1.4 AllRAD decode matrix for BS.1770 playback-domain measurement.
     // LFE is NOT a spatial speaker — it is excluded from the AllRAD matrix and its
-    // decoded slot is zeroed.  ebur128 is initialised for all 12 channels with explicit
+    // decoded slot is zeroed.  The meter is initialised for all 12 channels with explicit
     // channel-type assignments so that BS.1770 weighting is applied correctly.
     //
     // Committed AllRAD + max-rE matrix already uses the SN3D input basis.
@@ -810,46 +812,47 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
         std::vector<float> decoded_block(k_714_ch_sz * k_block_size);
         std::vector<std::array<DiffuseState, k_diffuse_slots>> diffuse_states(gain_matrix.size());
 
-        struct EburFree {
-            void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); }
-        };
-        using EburPtr = std::unique_ptr<ebur128_state, EburFree>;
-        EburPtr lufs_st{ebur128_init(static_cast<unsigned int>(k_714_ch),
-                                     static_cast<unsigned long>(sample_rate),
-                                     EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
-        if (lufs_st) {
-            // Explicit 7.1.4 channel map so BS.1770 weighting is applied correctly.
-            // Channels 6+ default to UNUSED in libebur128; set all 12 explicitly.
-            ebur128_set_channel(lufs_st.get(), 0U, EBUR128_Mp030);  // L
-            ebur128_set_channel(lufs_st.get(), 1U, EBUR128_Mm030);  // R
-            ebur128_set_channel(lufs_st.get(), 2U, EBUR128_Mp000);  // C
-            ebur128_set_channel(lufs_st.get(), 3U, EBUR128_UNUSED); // LFE (zeroed, excluded)
-            ebur128_set_channel(lufs_st.get(), 4U, EBUR128_Mp090);  // Ls
-            ebur128_set_channel(lufs_st.get(), 5U, EBUR128_Mm090);  // Rs
-            ebur128_set_channel(lufs_st.get(), 6U, EBUR128_Mp135);  // Lss
-            ebur128_set_channel(lufs_st.get(), 7U, EBUR128_Mm135);  // Rss
-            ebur128_set_channel(lufs_st.get(), 8U, EBUR128_Up045);  // Ltf
-            ebur128_set_channel(lufs_st.get(), 9U, EBUR128_Um045);  // Rtf
-            ebur128_set_channel(lufs_st.get(), 10U, EBUR128_Up135); // Ltr
-            ebur128_set_channel(lufs_st.get(), 11U, EBUR128_Um135); // Rtr
+        using Ch = dsp::MeterChannel;
+        constexpr std::array<Ch, 12> meter_map{Ch::left,
+                                               Ch::right,
+                                               Ch::center,
+                                               Ch::unused,
+                                               Ch::side_left,
+                                               Ch::side_right,
+                                               Ch::rear_left,
+                                               Ch::rear_right,
+                                               Ch::top_front_left,
+                                               Ch::top_front_right,
+                                               Ch::top_rear_left,
+                                               Ch::top_rear_right};
+        auto lufs_st = dsp::Meter::create(static_cast<uint32_t>(k_714_ch),
+                                          static_cast<uint32_t>(sample_rate),
+                                          dsp::MeterMode::integrated_true_peak,
+                                          meter_map);
+        if (!lufs_st) {
+            return tl::unexpected{lufs_st.error()};
         }
 
         // Separate TP tracker for LFE channels. LFE is still encoded W-only in the HOA
         // output, but it is subtracted from the HOA measurement buffer before the 7.1.4
         // decode so it cannot contribute to LUFS/spatial TP. Its peak is measured on this
         // mono TP-only state and merged with the spatial decode peak at the end.
-        EburPtr lfe_tp_st;
+        std::optional<dsp::Meter> lfe_tp_st;
         std::vector<float> lfe_mix_block;
         const bool has_lfe = std::ranges::any_of(gain_matrix, [](const auto& cg) { return cg.has_lfe_block; });
         if (has_lfe) {
-            lfe_tp_st.reset(ebur128_init(1U, static_cast<unsigned long>(sample_rate), EBUR128_MODE_TRUE_PEAK));
+            auto made = dsp::Meter::create(1U, static_cast<uint32_t>(sample_rate), dsp::MeterMode::true_peak);
+            if (!made) {
+                return tl::unexpected{made.error()};
+            }
+            lfe_tp_st.emplace(std::move(*made));
             lfe_mix_block.resize(k_block_size, 0.F);
         }
 
-        // Loudness / true-peak measurement (LFE TP + 7.1.4 decode + two ebur128 states) is run on a
+        // Loudness / true-peak measurement (LFE TP + 7.1.4 decode + two Rust meters) is run on a
         // background thread so it overlaps the next block's HOA encode. The measurement only reads the
         // input and output buffers (both double-buffered below) plus const scene data; its scratch and
-        // ebur128 states are touched solely by the worker. Running blocks in FIFO order keeps the
+        // meter states are touched solely by the worker. Running blocks in FIFO order keeps the
         // measured loudness / true peak bit-identical to the inline version.
         const auto measure_block = [&](const float* in_data, const float* out_data, uint64_t fd, uint64_t fn) {
             const std::size_t measure_samples = static_cast<std::size_t>(k_num_out) * fn;
@@ -874,7 +877,10 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
                         }
                     }
                 }
-                ebur128_add_frames_float(lfe_tp_st.get(), lfe_mix_block.data(), static_cast<std::size_t>(fn));
+                if (const auto result = lfe_tp_st->add_frames(lfe_mix_block.data(), static_cast<std::size_t>(fn));
+                    !result) {
+                    throw std::runtime_error(result.error().message);
+                }
             }
             if (lufs_st) {
                 // Decode 16ch HOA → 12ch 7.1.4 for BS.1770 playback-domain measurement.
@@ -900,7 +906,10 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
                         dec[ls + 1] = s; // +1 to skip LFE slot at ch3
                     }
                 }
-                ebur128_add_frames_float(lufs_st.get(), decoded_block.data(), static_cast<std::size_t>(fn));
+                if (const auto result = lufs_st->add_frames(decoded_block.data(), static_cast<std::size_t>(fn));
+                    !result) {
+                    throw std::runtime_error(result.error().message);
+                }
             }
         };
 
@@ -1046,21 +1055,16 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
 
         RenderMetrics metrics;
         if (lufs_st) {
-            double loudness = 0.0;
-            if (ebur128_loudness_global(lufs_st.get(), &loudness) == EBUR128_SUCCESS && std::isfinite(loudness)) {
-                metrics.measured_lufs = loudness;
+            if (const auto loudness = lufs_st->integrated(); loudness && std::isfinite(*loudness)) {
+                metrics.measured_lufs = *loudness;
             }
             double max_peak = 0.0;
-            for (unsigned int ch = 0; ch < static_cast<unsigned int>(k_714_ch); ++ch) {
-                double ch_peak = 0.0;
-                if (ebur128_true_peak(lufs_st.get(), ch, &ch_peak) == EBUR128_SUCCESS) {
-                    max_peak = std::max(max_peak, ch_peak);
-                }
+            if (const auto peak = lufs_st->max_true_peak(); peak) {
+                max_peak = *peak;
             }
             if (lfe_tp_st) {
-                double lfe_peak = 0.0;
-                if (ebur128_true_peak(lfe_tp_st.get(), 0U, &lfe_peak) == EBUR128_SUCCESS) {
-                    max_peak = std::max(max_peak, lfe_peak);
+                if (const auto peak = lfe_tp_st->max_true_peak(); peak) {
+                    max_peak = std::max(max_peak, *peak);
                 }
             }
             if (max_peak > 0.0) {

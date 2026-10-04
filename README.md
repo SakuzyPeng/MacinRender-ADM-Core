@@ -344,6 +344,8 @@ ctest --test-dir build/debug --output-on-failure
 
 C/C++ 依赖默认通过 `FetchContent` 获取；Rust 使用提交的 Cargo.lock。SOFA 由纯 Rust 解析器处理。`MR_ADM_BUILD_SAF_REFERENCE_TESTS=ON` 仅启用历史 SAF 参考工具，不改变生产实现。
 
+响度与 True Peak 计量统一使用 Rust `ebur128`，实时积分在 worker 上执行。C 版 `libebur128` 仅用于默认关闭的 `MR_ADM_BUILD_EBUR128_REFERENCE_TESTS` 对照测试，不进入生产链接。接入边界和验收见 [Rust Meter 迁移](docs/architecture/RUST_METER_MIGRATION.md)。
+
 系统依赖构建需要另备 Corrosion 0.6.1、Rust 工具链和锁定的 Cargo 依赖缓存：
 
 ```bash

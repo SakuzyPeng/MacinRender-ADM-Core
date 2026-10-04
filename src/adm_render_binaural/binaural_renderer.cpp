@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
-#include <ebur128.h>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -19,6 +18,7 @@
 #include <optional>
 #include <ranges>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -37,6 +37,7 @@
 #include "consistency_trace.h"
 #include "dsp.h"
 #include "head_rotation.h"
+#include "meter.h"
 #include "render_common.h"
 
 namespace mradm {
@@ -2030,12 +2031,11 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
     auto& writer = *writer_res;
 
     // Inline loudness + true-peak measurement.
-    struct EburFree {
-        void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); }
-    };
-    using EburPtr = std::unique_ptr<ebur128_state, EburFree>;
-    EburPtr lufs_st{
-        ebur128_init(2U, static_cast<unsigned long>(info.sample_rate), EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
+    auto lufs_st =
+        dsp::Meter::create(2U, static_cast<uint32_t>(info.sample_rate), dsp::MeterMode::integrated_true_peak);
+    if (!lufs_st) {
+        return tl::unexpected{lufs_st.error()};
+    }
 
     // Per-source OLA state.
     std::vector<OLAState> ola;
@@ -2176,7 +2176,9 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
             out_block[(f * 2U) + 1U] = rb[src_off + f];
         }
         if (lufs_st) {
-            ebur128_add_frames_float(lufs_st.get(), out_block.data(), want);
+            if (const auto result = lufs_st->add_frames(out_block.data(), want); !result) {
+                throw std::runtime_error(result.error().message);
+            }
         }
         if (writer.write(out_block.data(), want) != want) {
             return false;
@@ -2413,16 +2415,12 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
 
     RenderMetrics metrics;
     if (lufs_st) {
-        double loudness = 0.0;
-        if (ebur128_loudness_global(lufs_st.get(), &loudness) == EBUR128_SUCCESS && std::isfinite(loudness)) {
-            metrics.measured_lufs = loudness;
+        if (const auto loudness = lufs_st->integrated(); loudness && std::isfinite(*loudness)) {
+            metrics.measured_lufs = *loudness;
         }
-        for (unsigned int ch = 0; ch < 2U; ++ch) {
-            double ch_peak = 0.0;
-            if (ebur128_true_peak(lufs_st.get(), ch, &ch_peak) == EBUR128_SUCCESS) {
-                metrics.measured_peak_dbtp =
-                    std::max(metrics.measured_peak_dbtp.value_or(-200.0), 20.0 * std::log10(std::max(ch_peak, 1e-10)));
-            }
+        if (const auto peak = lufs_st->max_true_peak(); peak) {
+            // Preserve the binaural backend's established -200 dB silent floor.
+            metrics.measured_peak_dbtp = 20.0 * std::log10(std::max(*peak, 1e-10));
         }
     }
     return metrics;

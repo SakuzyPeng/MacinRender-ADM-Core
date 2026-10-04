@@ -8,6 +8,7 @@ pub mod fft;
 pub mod filterbank;
 pub mod geometry;
 pub mod hrtf;
+pub mod meter;
 pub mod mixing;
 pub mod rng;
 pub mod spreader;

@@ -3,14 +3,15 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <ebur128.h>
 #include <future>
 #include <memory>
+#include <stdexcept>
 
 #include <fmt/format.h>
 
 #include "adm/audio_io.h"
 
+#include "meter.h"
 #include "render_common.h"
 
 namespace mradm::render_common {
@@ -170,12 +171,11 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
         // Current block index per channel — advanced monotonically as frames_done increases.
         std::vector<std::size_t> blk_idx(gain_matrix.size(), 0);
 
-        struct EburFree {
-            void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); }
-        };
-        using EburPtr = std::unique_ptr<ebur128_state, EburFree>;
-        EburPtr lufs_st{
-            ebur128_init(num_out_ch, static_cast<unsigned long>(sample_rate), EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK)};
+        auto lufs_st =
+            dsp::Meter::create(num_out_ch, static_cast<uint32_t>(sample_rate), dsp::MeterMode::integrated_true_peak);
+        if (!lufs_st) {
+            return tl::unexpected{lufs_st.error()};
+        }
 
         constexpr uint64_t k_min_block_size = 1024;
         const uint64_t k_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
@@ -269,11 +269,14 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
                     meter_count = static_cast<std::size_t>(chunk.frame_count);
                 }
                 if (meter_count > 0) {
-                    ebur128_state* state = lufs_st.get();
+                    auto* state = &*lufs_st;
                     const float* data = out_block.data() + (meter_off * num_out_ch);
                     const auto frame_count = meter_count;
-                    meter_pending.at(buf_idx) =
-                        meter.post([state, data, frame_count] { ebur128_add_frames_float(state, data, frame_count); });
+                    meter_pending.at(buf_idx) = meter.post([state, data, frame_count] {
+                        if (const auto result = state->add_frames(data, frame_count); !result) {
+                            throw std::runtime_error(result.error().message);
+                        }
+                    });
                 }
             }
 
@@ -310,19 +313,11 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
 
         RenderMetrics metrics;
         if (lufs_st) {
-            double loudness = 0.0;
-            if (ebur128_loudness_global(lufs_st.get(), &loudness) == EBUR128_SUCCESS && std::isfinite(loudness)) {
-                metrics.measured_lufs = loudness;
+            if (const auto loudness = lufs_st->integrated(); loudness && std::isfinite(*loudness)) {
+                metrics.measured_lufs = *loudness;
             }
-            double max_peak = 0.0;
-            for (unsigned int ch = 0; ch < num_out_ch; ++ch) {
-                double ch_peak = 0.0;
-                if (ebur128_true_peak(lufs_st.get(), ch, &ch_peak) == EBUR128_SUCCESS) {
-                    max_peak = std::max(max_peak, ch_peak);
-                }
-            }
-            if (max_peak > 0.0) {
-                metrics.measured_peak_dbtp = 20.0 * std::log10(max_peak);
+            if (const auto peak = lufs_st->max_true_peak(); peak && *peak > 0.0) {
+                metrics.measured_peak_dbtp = 20.0 * std::log10(*peak);
             }
         }
         return metrics;

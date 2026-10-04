@@ -12,6 +12,7 @@ license = "MIT"
 realfft = "=3.5.0"
 rustfft = "=6.4.1"
 nalgebra = { version = "=0.35.0", default-features = false, features = ["std"] }
+ebur128 = { version = "=0.1.10", default-features = false }
 
 [profile.dev]
 opt-level = 1
