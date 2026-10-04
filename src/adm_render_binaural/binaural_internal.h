@@ -42,12 +42,9 @@ struct BinauralState {
     int n_bands{0};
     int overlap_len{0};
     std::string dataset_name;
-    // HRTFs in frequency domain; FLAT: [n_bands × k_n_ears × num_dirs]. compute_hrtf_into()
-    // interpolates magnitude and phase from these separately (see there) to avoid the ITD-comb of
-    // direct complex weighting at off-grid directions.
-    std::vector<dsp::Complex> hrtf_fd;
-    // Optional live-only magnitude cache, prepared off the render thread.
-    std::vector<float> hrtf_magnitudes;
+    // Immutable Rust spectra and optional live magnitude cache. Each bank
+    // shares the Rust geometry allocation with the bounded C++ grid cache.
+    dsp::HrtfFilters filters;
     // Compressed VBAP table: amplitude-normalised gains + direction indices per grid point.
     std::shared_ptr<const HrtfGrid> grid;
     // Time-domain HRTFs and grid for saf_spreader mode.
@@ -70,8 +67,9 @@ HrtfDataset built_in_kemar_dataset();
 Result<HrtfDataset> load_sofa_dataset(const std::filesystem::path& path, std::uint32_t input_sample_rate);
 
 // Build the pre-computed state (frequency-domain HRTFs + compressed VBAP grid) once.
-// Returns nullptr on VBAP triangulation failure.
-std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, std::uint64_t block_size);
+// Geometry/filter preparation errors retain their Result error code.
+Result<std::unique_ptr<BinauralState>>
+build_binaural_state(HrtfDataset dataset, std::uint64_t block_size, bool cache_magnitudes = false);
 
 // Quantised (az,el) → flat grid index into the compressed VBAP table.
 int vbap_grid_idx(float az_deg, float el_deg);

@@ -20,6 +20,10 @@ C++ 内部沿用 `dsp::check` 及现有 renderer/worker 异常边界，不增加
 C++ 继续负责 ADM/Scene 语义、方向与 extent 解析、HRTF 幅度/相位插值和缓存、线程调度、声源求和及 I/O。
 设备回调和公开 C ABI 的职责不变。此次未迁移重采样、HPTF、通用监听 gain ramp 或后端拓扑切换。
 
+后续进展：[重采样迁移](RUST_RESAMPLER_MIGRATION.md)已接管 Scene 输出和实时 HRIR 转换；
+[HRTF 迁移](RUST_HRTF_MIGRATION.md)已接管幅度/相位插值、连续方向查询及相关频域状态。
+上文保留本轮卷积迁移时的边界，当前所有权以这两份后续记录为准。
+
 ## 保留的两种卷积契约
 
 | 路径 | 历史与过渡 |

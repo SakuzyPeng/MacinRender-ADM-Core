@@ -22,13 +22,17 @@ void require(bool value, std::string_view message) {
 }
 void compare(const std::vector<float>& directions, std::string_view name) {
     const auto start = std::chrono::steady_clock::now();
-    const auto actual = build_hrtf_grid(directions);
-    require(actual != nullptr, "Rust HRTF grid preparation failed");
+    const auto owner = build_hrtf_grid(directions);
+    require(owner != nullptr, "Rust HRTF grid preparation failed");
+    const auto actual = owner->snapshot();
+    require(actual.has_value(), "grid snapshot failed");
     std::srand(7123);
     // NOLINTNEXTLINE(clang-analyzer-security.insecureAPI.rand): verify independence from legacy process RNG.
     (void) std::rand();
-    const auto repeat = build_hrtf_grid(directions);
-    require(repeat != nullptr && repeat->directions == actual->directions && repeat->gains == actual->gains,
+    const auto repeated_owner = build_hrtf_grid(directions);
+    require(repeated_owner != nullptr, "repeated grid preparation failed");
+    const auto repeat = repeated_owner->snapshot();
+    require(repeat.has_value() && repeat->directions == actual->directions && repeat->gains == actual->gains,
             "grid depends on process RNG history");
     require(actual->gains.size() == std::size_t{361} * 181U * 3U && actual->directions.size() == actual->gains.size(),
             "grid dimensions changed");
@@ -66,7 +70,9 @@ void caching(std::vector<float> directions) {
         require(prepare_hrtf_grid(directions) != nullptr, "cache eviction build failed");
     }
     require(hrtf_grid_cache_bytes() <= std::size_t{16} * 1024U * 1024U, "geometry cache exceeded byte budget");
-    require(std::ranges::all_of(first->gains, [](float value) { return std::isfinite(value); }),
+    const auto retained = first->snapshot();
+    require(retained.has_value(), "retained grid snapshot failed");
+    require(std::ranges::all_of(retained->gains, [](float value) { return std::isfinite(value); }),
             "eviction damaged retained table");
     directions[0] = std::numeric_limits<float>::quiet_NaN();
     require(!prepare_hrtf_grid(directions), "nonfinite directions must be rejected");

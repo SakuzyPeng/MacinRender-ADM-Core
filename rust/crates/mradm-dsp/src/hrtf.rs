@@ -7,6 +7,48 @@ use std::sync::OnceLock;
 pub const AZIMUTHS: usize = 361;
 pub const ELEVATIONS: usize = 181;
 pub const GRID_POINTS: usize = AZIMUTHS * ELEVATIONS;
+
+/// Immutable geometry shared by prepared filter banks of different FFT sizes
+/// and sample rates. No query borrows the caller's direction array.
+pub struct Grid {
+    directions: usize,
+    weights: Vec<f32>,
+    indices: Vec<i32>,
+}
+
+impl Grid {
+    pub fn new(directions: &[f32]) -> Result<Self> {
+        if !(8..=200_000).contains(&directions.len()) || !directions.len().is_multiple_of(2) {
+            return Err(Error::InvalidArgument("Invalid HRTF direction count"));
+        }
+        let mut weights = vec![0.0; GRID_POINTS * 3];
+        let mut indices = vec![0; GRID_POINTS * 3];
+        grid_into(directions, &mut weights, &mut indices)?;
+        Ok(Self {
+            directions: directions.len() / 2,
+            weights,
+            indices,
+        })
+    }
+
+    pub fn direction_count(&self) -> usize {
+        self.directions
+    }
+    pub fn weights(&self) -> &[f32] {
+        &self.weights
+    }
+    pub fn indices(&self) -> &[i32] {
+        &self.indices
+    }
+
+    /// Retained payload, excluding allocator and Arc control-block overhead.
+    pub fn storage_bytes(&self) -> usize {
+        size_of::<Self>()
+            + self.weights.capacity() * size_of::<f32>()
+            + self.indices.capacity() * size_of::<i32>()
+    }
+}
+
 #[derive(Clone)]
 struct Query {
     direction: Vec3,
