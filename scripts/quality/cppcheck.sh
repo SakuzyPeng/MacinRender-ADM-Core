@@ -13,9 +13,12 @@ fi
 # Windows COM TUs on the macOS quality host; the windows-debug CI build verifies it instead.
 reference_excludes=()
 if ! grep -q '^MR_ADM_BUILD_SAF_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
-    for file in tests/reference tests/tools/export_saf_hoa_matrix.cpp tests/tools/numeric_probe.cpp tests/tools/vbap_probe.cpp tests/tools/vbap_probe_backend.c tests/tools/fft_lifecycle_probe.cpp; do
+    for file in tests/reference/saf_reference_test.cpp tests/reference/spreader_mr.c tests/reference/spreader_mr.h tests/reference/spreader_mr_internal.h tests/tools/export_saf_hoa_matrix.cpp tests/tools/numeric_probe.cpp tests/tools/vbap_probe.cpp tests/tools/vbap_probe_backend.c tests/tools/fft_lifecycle_probe.cpp; do
         reference_excludes+=(-i "$repo_root/$file")
     done
+fi
+if ! grep -q '^MR_ADM_BUILD_EBUR128_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
+    reference_excludes+=(-i "$repo_root/tests/reference/ebur128_reference_test.cpp")
 fi
 cppcheck \
     --enable=warning,style,performance,portability \

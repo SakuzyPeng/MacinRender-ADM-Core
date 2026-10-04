@@ -1,0 +1,8 @@
+dasp_frame 0.11.0 declares MIT OR Apache-2.0.
+The crates.io archive omits license files. Its .cargo_vcs_info.json identifies
+commit 221b81038c528bf3fc364a8ab5cc4b2e52f7dbfc in the RustAudio/dasp repository.
+The original license notices are retained verbatim from:
+https://github.com/RustAudio/dasp/blob/221b81038c528bf3fc364a8ab5cc4b2e52f7dbfc/LICENSE-MIT
+https://github.com/RustAudio/dasp/blob/221b81038c528bf3fc364a8ab5cc4b2e52f7dbfc/LICENSE-APACHE
+
+The MIT license option is used for this distribution.

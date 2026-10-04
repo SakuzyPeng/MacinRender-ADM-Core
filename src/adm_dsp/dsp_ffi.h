@@ -10,6 +10,25 @@
 extern "C" {
 #endif
 
+// Private meter modes: 0=I, 1=TP, 2=I+TP, 3=M+S+I. Empty channel map
+// preserves the legacy default mapping. Nonempty maps have one position per
+// channel, using MeterChannel values from meter.h. Handles are worker-owned.
+int32_t mradm_dsp_meter_create(uint32_t channels,
+                               uint32_t sample_rate,
+                               uint32_t mode,
+                               const uint32_t* channel_map,
+                               size_t map_length,
+                               void** output,
+                               char* message,
+                               size_t capacity);
+void mradm_dsp_meter_destroy(void* handle);
+int32_t mradm_dsp_meter_add(void* handle, const float* input, size_t length, char* message, size_t capacity);
+int32_t mradm_dsp_meter_reset(void* handle, char* message, size_t capacity);
+// Queries: 0=I, 1=M, 2=S, 3=channel TP, 4=max TP. Silence/insufficient
+// integrated history is successful -infinity; a silent peak is zero.
+int32_t mradm_dsp_meter_query(
+    const void* handle, uint32_t query, uint32_t channel, double* output, char* message, size_t capacity);
+
 int32_t mradm_dsp_fft_create(size_t length, void** output, char* message, size_t capacity);
 void mradm_dsp_fft_destroy(void* handle);
 int32_t mradm_dsp_fft_forward(void* handle,

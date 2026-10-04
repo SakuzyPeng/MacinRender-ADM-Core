@@ -27,8 +27,12 @@
 | rust-approx-0.5.1 | 0.5.1 | Apache-2.0 | `LICENSE` |
 | rust-arrayvec-0.7.8 | 0.7.8 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-autocfg-1.5.1 | 1.5.1 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-bitflags-1.3.2 | 1.3.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-bitflags-2.13.2 | 2.13.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-bytemuck-1.25.2 | 1.25.2 | Zlib OR Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-ZLIB` |
+| rust-dasp_frame-0.11.0 | 0.11.0 | MIT OR Apache-2.0 | `LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE.txt` |
+| rust-dasp_sample-0.11.0 | 0.11.0 | MIT OR Apache-2.0 | `LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE.txt` |
+| rust-ebur128-0.1.10 | 0.1.10 | MIT | `LICENSE` |
 | rust-glam-0.30.10 | 0.30.10 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-glam-0.31.1 | 0.31.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-glam-0.32.1 | 0.32.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
@@ -51,6 +55,7 @@
 | rust-rustfft-6.4.1 | 6.4.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-safe_arch-1.2.0 | 1.2.0 | Zlib OR Apache-2.0 OR MIT | `LICENSE-APACHE.md`, `LICENSE-MIT.md`, `LICENSE-ZLIB.md` |
 | rust-simba-0.10.2 | 0.10.2 | Apache-2.0 | `LICENSE` |
+| rust-smallvec-1.16.2 | 1.16.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-sofar-0.3.0 | 0.3.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE` |
 | rust-strength_reduce-0.2.4 | 0.2.4 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-syn-3.0.6 | 3.0.6 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |

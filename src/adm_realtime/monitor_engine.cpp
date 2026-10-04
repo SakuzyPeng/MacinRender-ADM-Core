@@ -3,10 +3,11 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <ebur128.h>
 #include <exception>
 #include <limits>
 #include <utility>
+
+#include "meter.h"
 
 namespace mradm::realtime {
 
@@ -137,73 +138,73 @@ MonitorEngine::~MonitorEngine() {
         worker_.join();
     }
     // Worker is joined and the device stopped, so no thread touches the meter anymore.
-    if (meter_ != nullptr) {
-        auto* st = static_cast<ebur128_state*>(meter_);
-        ebur128_destroy(&st);
-        meter_ = nullptr;
-    }
+    meter_.reset(nullptr);
 }
 
 void MonitorEngine::rebuild_meter() {
-    // (Re)create the libebur128 state for the current monitor format. Called at construction
-    // and on every seek (so integrated loudness restarts from the new position). MODE_S
-    // implies MODE_M, MODE_I implies MODE_M — so momentary / short-term / integrated are all
-    // available. Worker-only (construction runs before the worker starts) — no mutex.
-    if (meter_ != nullptr) {
-        auto* old = static_cast<ebur128_state*>(meter_);
-        ebur128_destroy(&old);
-        meter_ = nullptr;
-    }
-    // Reset the loudness snapshots: a new integration window starts here.
+    // The output format is fixed. A seek clears integration/filter state in place
+    // and retains prepared storage; construction happens before the worker starts.
     constexpr float k_silence = -std::numeric_limits<float>::infinity();
     momentary_lufs_.store(k_silence, std::memory_order_relaxed);
     shortterm_lufs_.store(k_silence, std::memory_order_relaxed);
     integrated_lufs_.store(k_silence, std::memory_order_relaxed);
     lufs_meter_counter_ = 0;
     integrated_throttle_ = 0;
+    if (meter_) {
+        const auto result = (*meter_).reset();
+        if (result) {
+            return;
+        }
+        logs_.log(LogLevel::warning, "meter", result.error().message);
+        meter_.reset(nullptr);
+    }
     if (channels_ == 0 || sample_rate_ == 0) {
         return;
     }
-    ebur128_state* st = ebur128_init(channels_, sample_rate_, EBUR128_MODE_S | EBUR128_MODE_I);
-    meter_ = st;
-    if (st != nullptr && channels_ == 2) {
-        ebur128_set_channel(st, 0, EBUR128_LEFT);
-        ebur128_set_channel(st, 1, EBUR128_RIGHT);
+    constexpr std::array stereo_map{dsp::MeterChannel::left, dsp::MeterChannel::right};
+    const std::span<const dsp::MeterChannel> channel_map =
+        channels_ == 2U ? std::span<const dsp::MeterChannel>{stereo_map} : std::span<const dsp::MeterChannel>{};
+    auto made = dsp::Meter::create(channels_, sample_rate_, dsp::MeterMode::monitor, channel_map);
+    if (!made) {
+        logs_.log(LogLevel::warning, "meter", made.error().message);
+        return;
     }
+    meter_ = std::make_unique<dsp::Meter>(std::move(*made));
 }
 
 void MonitorEngine::feed_meter(const float* data, std::size_t frames) {
-    // Worker-only: add `frames` of the monitored output signal (`data`, channels_ interleaved) to the
-    // meter, and at ~10 Hz refresh the lock-free LUFS snapshots that levels() reads — integrated
-    // loudness walks history, so don't recompute it every chunk. In single-stage mode `data` is the
-    // worker's scratch_; in output-stage it is the callback's rendered-output tap (meter_scratch_).
-    if (meter_ == nullptr) {
+    // Worker-only, including the output-stage callback tap. Full-history I can
+    // allocate and scans history, so keep it off the audio callback and at ~1 Hz.
+    if (!meter_) {
         return;
     }
-    auto* st = static_cast<ebur128_state*>(meter_);
-    ebur128_add_frames_float(st, data, frames);
+    if (const auto result = meter_->add_frames(data, frames); !result) {
+        logs_.log(LogLevel::warning, "meter", result.error().message);
+        meter_.reset(nullptr);
+        constexpr float k_silence = -std::numeric_limits<float>::infinity();
+        momentary_lufs_.store(k_silence, std::memory_order_relaxed);
+        shortterm_lufs_.store(k_silence, std::memory_order_relaxed);
+        integrated_lufs_.store(k_silence, std::memory_order_relaxed);
+        return;
+    }
     lufs_meter_counter_ += frames;
     if (lufs_meter_counter_ < sample_rate_ / 10) {
         return;
     }
     lufs_meter_counter_ = 0;
-    const auto to_lufs = [](double v) {
-        return std::isfinite(v) ? static_cast<float>(v) : -std::numeric_limits<float>::infinity();
+    const auto to_lufs = [](double value) {
+        return std::isfinite(value) ? static_cast<float>(value) : -std::numeric_limits<float>::infinity();
     };
-    double v = 0.0;
-    // momentary (400 ms) / short-term (3 s) are cheap — refresh at ~10 Hz.
-    if (ebur128_loudness_momentary(st, &v) == EBUR128_SUCCESS) {
-        momentary_lufs_.store(to_lufs(v), std::memory_order_relaxed);
+    if (const auto value = meter_->momentary(); value) {
+        momentary_lufs_.store(to_lufs(*value), std::memory_order_relaxed);
     }
-    if (ebur128_loudness_shortterm(st, &v) == EBUR128_SUCCESS) {
-        shortterm_lufs_.store(to_lufs(v), std::memory_order_relaxed);
+    if (const auto value = meter_->shortterm(); value) {
+        shortterm_lufs_.store(to_lufs(*value), std::memory_order_relaxed);
     }
-    // integrated (gated, walks the whole history) is the heavy one — refresh at ~1 Hz to keep the
-    // worker light during long playback (1 Hz is plenty for the UI integrated-loudness readout).
     if (++integrated_throttle_ >= 10) {
         integrated_throttle_ = 0;
-        if (ebur128_loudness_global(st, &v) == EBUR128_SUCCESS) {
-            integrated_lufs_.store(to_lufs(v), std::memory_order_relaxed);
+        if (const auto value = meter_->integrated(); value) {
+            integrated_lufs_.store(to_lufs(*value), std::memory_order_relaxed);
         }
     }
 }

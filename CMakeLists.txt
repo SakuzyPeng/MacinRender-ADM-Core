@@ -13,6 +13,7 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/adm_core/version.cpp.in" "${MR_A
 option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
 option(MR_ADM_BUILD_SAF_REFERENCE_TESTS "Build optional legacy SAF numerical reference tools" OFF)
+option(MR_ADM_BUILD_EBUR128_REFERENCE_TESTS "Build optional C libebur128 meter reference tests" OFF)
 option(MR_ADM_CONSISTENCY_DIAGNOSTICS "Enable private numerical checkpoints and worker controls (measurement only)" OFF)
 option(MR_ADM_DIAGNOSTIC_PORTABLE_RNG "Replace SAF's C RNG for a numerical attribution experiment only" OFF)
 option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
@@ -219,8 +220,7 @@ target_sources(
 )
 target_include_directories(mr_adm_render_common PUBLIC src/adm_render_common)
 target_link_libraries(mr_adm_render_common PUBLIC MacinRender::ADMCore Threads::Threads
-    PRIVATE MacinRender::ADMAudio ebur128)
-target_include_directories(mr_adm_render_common SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
+    PRIVATE MacinRender::ADMAudio MacinRender::ADMDsp)
 mr_adm_core_apply_warnings(mr_adm_render_common)
 mr_adm_core_apply_static_analysis(mr_adm_render_common)
 
@@ -243,12 +243,8 @@ target_sources(
 
 target_link_libraries(mr_adm_render_ear
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 adm ear ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE libbw64 adm ear  MacinRender::ADMAudio MacinRender::ADMRenderCommon
     PRIVATE MacinRender::ADMDsp
-)
-target_include_directories(mr_adm_render_ear
-    SYSTEM PRIVATE
-        "${EBUR128_INCLUDE_DIR}"
 )
 mr_adm_core_apply_warnings(mr_adm_render_ear)
 mr_adm_core_apply_static_analysis(mr_adm_render_ear)
@@ -274,12 +270,8 @@ target_sources(
 
 target_link_libraries(mr_adm_render_vbap
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE libbw64  MacinRender::ADMAudio MacinRender::ADMRenderCommon
     PRIVATE MacinRender::ADMDsp
-)
-target_include_directories(mr_adm_render_vbap
-    SYSTEM PRIVATE
-        "${EBUR128_INCLUDE_DIR}"
 )
 mr_adm_core_apply_warnings(mr_adm_render_vbap)
 mr_adm_core_apply_static_analysis(mr_adm_render_vbap)
@@ -328,12 +320,8 @@ target_sources(
 
 target_link_libraries(mr_adm_render_hoa
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE libbw64  MacinRender::ADMAudio MacinRender::ADMRenderCommon
     PRIVATE MacinRender::ADMDsp
-)
-target_include_directories(mr_adm_render_hoa
-    SYSTEM PRIVATE
-        "${EBUR128_INCLUDE_DIR}"
 )
 mr_adm_core_apply_warnings(mr_adm_render_hoa)
 mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
@@ -362,12 +350,8 @@ target_sources(
 
 target_link_libraries(mr_adm_render_binaural
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 ebur128 SampleRate::samplerate MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE libbw64  SampleRate::samplerate MacinRender::ADMAudio MacinRender::ADMRenderCommon
     PRIVATE MacinRender::ADMDsp
-)
-target_include_directories(mr_adm_render_binaural
-    SYSTEM PRIVATE
-        "${EBUR128_INCLUDE_DIR}"
 )
 target_compile_definitions(mr_adm_render_binaural PRIVATE MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
 mr_adm_core_apply_warnings(mr_adm_render_binaural)
@@ -467,14 +451,13 @@ if(APPLE)
 
     target_link_libraries(mr_adm_apple
         PUBLIC MacinRender::ADMCore
-        PRIVATE libbw64 ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+        PRIVATE libbw64 MacinRender::ADMDsp MacinRender::ADMAudio MacinRender::ADMRenderCommon
                 ${MR_ADM_AUDIOTOOLBOX_FW} ${MR_ADM_AVFOUNDATION_FW} ${MR_ADM_COREMEDIA_FW} ${MR_ADM_FOUNDATION_FW}
     )
     # adm_apple consumes the realtime IAudioOutputDevice interface (third-party-free header) to
     # provide the AVSampleBufferAudioRenderer monitor sink. Include-only, no link dependency —
     # the device implements the pure interface; this keeps Apple frameworks confined here.
     target_include_directories(mr_adm_apple PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
-    target_include_directories(mr_adm_apple SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
     mr_adm_core_apply_warnings(mr_adm_apple)
     mr_adm_core_apply_static_analysis(mr_adm_apple)
 endif()
@@ -503,7 +486,7 @@ if(WIN32)
 endif()
 
 # ── adm_peak ──────────────────────────────────────────────────────────────────
-# True Peak measurement (ITU-R BS.1770-4) via libebur128 + global gain rewrite.
+# True Peak measurement (ITU-R BS.1770-4) via Rust Meter + global gain rewrite.
 
 add_library(mr_adm_peak)
 add_library(MacinRender::ADMPeak ALIAS mr_adm_peak)
@@ -521,11 +504,8 @@ target_sources(
 
 target_link_libraries(mr_adm_peak
     PUBLIC MacinRender::ADMCore
-    PRIVATE ebur128 MacinRender::ADMAudio
+    PRIVATE MacinRender::ADMDsp MacinRender::ADMAudio
 )
-# libebur128 uses legacy include_directories() that does not propagate via the
-# target; use the EBUR128_INCLUDE_DIR cache variable it exports instead.
-target_include_directories(mr_adm_peak SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
 mr_adm_core_apply_warnings(mr_adm_peak)
 mr_adm_core_apply_static_analysis(mr_adm_peak)
 
@@ -548,9 +528,8 @@ target_sources(
 
 target_link_libraries(mr_adm_loudness
     PUBLIC MacinRender::ADMCore
-    PRIVATE ebur128 MacinRender::ADMAudio
+    PRIVATE MacinRender::ADMDsp MacinRender::ADMAudio
 )
-target_include_directories(mr_adm_loudness SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
 mr_adm_core_apply_warnings(mr_adm_loudness)
 mr_adm_core_apply_static_analysis(mr_adm_loudness)
 
@@ -636,13 +615,13 @@ target_sources(mr_adm_realtime PRIVATE
 )
 target_include_directories(mr_adm_realtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_realtime)
 # miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
-# ebur128 is PRIVATE too: the realtime LUFS meter lives inside monitor_engine.cpp only.
+# The Rust meter is PRIVATE too: its worker-owned state stays in monitor_engine.cpp.
 target_link_libraries(mr_adm_realtime
     PUBLIC MacinRender::ADMCore
     PRIVATE
         Threads::Threads
         miniaudio
-        ebur128
+        MacinRender::ADMDsp
         SampleRate::samplerate
         MacinRender::ADMRenderCommon
         MacinRender::ADMRenderVBAP
@@ -655,8 +634,6 @@ target_include_directories(mr_adm_realtime PRIVATE
 if(WIN32)
     target_link_libraries(mr_adm_realtime PRIVATE ws2_32)
 endif()
-# libebur128 uses legacy include_directories() that does not propagate via the target.
-target_include_directories(mr_adm_realtime SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
 # PoseBridge telemetry JSON stays on the background/control threads.
 target_include_directories(mr_adm_realtime SYSTEM PRIVATE
     "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
@@ -1280,15 +1257,31 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_live_binaural_continuity_tests)
     add_test(NAME mr_adm_live_binaural_continuity_tests COMMAND mr_adm_live_binaural_continuity_tests)
 
+    add_executable(mr_adm_meter_tests tests/unit/meter_test.cpp)
+    target_link_libraries(mr_adm_meter_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp)
+    mr_adm_core_apply_warnings(mr_adm_meter_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_meter_tests)
+    add_test(NAME mr_adm_meter_tests COMMAND mr_adm_meter_tests)
+
+    if(MR_ADM_BUILD_EBUR128_REFERENCE_TESTS)
+        add_executable(mr_adm_ebur128_reference_tests tests/reference/ebur128_reference_test.cpp)
+        target_link_libraries(mr_adm_ebur128_reference_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp
+            MacinRender::ADMAudio MacinRender::ADMLoudness MacinRender::ADMPeak ebur128)
+        target_include_directories(mr_adm_ebur128_reference_tests SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
+        mr_adm_core_apply_warnings(mr_adm_ebur128_reference_tests)
+        mr_adm_core_apply_static_analysis(mr_adm_ebur128_reference_tests)
+        add_test(NAME mr_adm_ebur128_reference_tests COMMAND mr_adm_ebur128_reference_tests)
+        set_tests_properties(mr_adm_ebur128_reference_tests PROPERTIES TIMEOUT 120)
+    endif()
+
     # Fixture test: integrated loudness normalization — loud sine wave → -23 LUFS target.
     add_executable(mr_adm_loudness_fixture_tests tests/unit/loudness_fixture_test.cpp)
     target_link_libraries(mr_adm_loudness_fixture_tests
         PRIVATE
             MacinRender::ADMLoudness
             MacinRender::ADMAudio
-            ebur128
+            MacinRender::ADMDsp
     )
-    target_include_directories(mr_adm_loudness_fixture_tests SYSTEM PRIVATE "${EBUR128_INCLUDE_DIR}")
     mr_adm_core_apply_warnings(mr_adm_loudness_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_loudness_fixture_tests)
     add_test(NAME mr_adm_loudness_fixture_tests COMMAND mr_adm_loudness_fixture_tests)

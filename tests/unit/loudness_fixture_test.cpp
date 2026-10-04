@@ -1,6 +1,5 @@
 #include <cmath>
 #include <cstdlib>
-#include <ebur128.h>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -11,6 +10,8 @@
 #include "adm/audio_io.h"
 #include "adm/logging.h"
 #include "adm/loudness.h"
+
+#include "meter.h"
 
 namespace {
 
@@ -63,10 +64,7 @@ double measure_lufs(const std::string& path) {
     }
     auto& reader = *reader_res;
 
-    struct Free {
-        void operator()(ebur128_state* s) const noexcept { ebur128_destroy(&s); }
-    };
-    std::unique_ptr<ebur128_state, Free> st{ebur128_init(reader.channels(), reader.sample_rate(), EBUR128_MODE_I)};
+    auto st = mradm::dsp::Meter::create(reader.channels(), reader.sample_rate(), mradm::dsp::MeterMode::integrated);
     if (!st) {
         return std::numeric_limits<double>::quiet_NaN();
     }
@@ -80,15 +78,14 @@ double measure_lufs(const std::string& path) {
         if (got == 0) {
             break;
         }
-        ebur128_add_frames_float(st.get(), buf.data(), static_cast<std::size_t>(got));
+        if (!st->add_frames(buf.data(), static_cast<std::size_t>(got))) {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
         left -= got;
     }
 
-    double loudness = 0.0;
-    if (ebur128_loudness_global(st.get(), &loudness) != EBUR128_SUCCESS) {
-        return std::numeric_limits<double>::quiet_NaN();
-    }
-    return loudness;
+    const auto loudness = st->integrated();
+    return loudness.value_or(std::numeric_limits<double>::quiet_NaN());
 }
 
 } // namespace

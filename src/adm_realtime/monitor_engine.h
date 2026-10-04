@@ -30,6 +30,10 @@
 // device rate. Decoupling the (allocating, thread-pooled) DSP from the audio callback via
 // the ring is what lets the batch backends run in realtime without becoming lock-free.
 // See docs/architecture/REALTIME_MONITORING.md §4 / REALTIME_MONITORING_SLICE1.md §4.
+namespace mradm::dsp {
+class Meter;
+}
+
 namespace mradm::realtime {
 
 // Internal state; the C ABI maps it to its own int32_t status field.
@@ -298,11 +302,10 @@ class MonitorEngine {
     std::uint64_t lufs_meter_counter_{0};  // worker-only: frames since the last M/S snapshot
     std::uint32_t integrated_throttle_{0}; // worker-only: M/S ticks since the last integrated calc
 
-    // Realtime LUFS meter (libebur128) over the produced monitor signal. Held as void* so
-    // ebur128.h stays out of this header (ADR 0003: third-party types confined to the .cpp).
-    // Worker-only: created at construction, fed + queried + rebuilt only on the worker thread,
-    // destroyed after the worker joins — no mutex (levels() reads the atomics above).
-    void* meter_{nullptr};
+    // Project-owned Rust LUFS meter over the produced monitor signal.
+    // Worker-only: created at construction, fed/queried/reset only on the worker,
+    // destroyed after it joins. The callback never touches its growing history.
+    std::unique_ptr<dsp::Meter> meter_;
 };
 
 } // namespace mradm::realtime

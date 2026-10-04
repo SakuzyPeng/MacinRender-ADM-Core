@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <ebur128.h>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -16,14 +15,11 @@
 #include "adm/logging.h"
 #include "adm/loudness.h"
 
+#include "meter.h"
+
 namespace mradm {
 
 namespace {
-
-struct EburFree {
-    void operator()(ebur128_state* st) const noexcept { ebur128_destroy(&st); }
-};
-using EburStatePtr = std::unique_ptr<ebur128_state, EburFree>;
 
 // Pass 1: measure integrated loudness (BS.1770-4 gated) in LUFS.
 // Returns nullopt for silence or files too short for gating.
@@ -37,9 +33,9 @@ Result<std::optional<double>> measure_lufs(const std::string& path) {
     const auto num_ch = reader.channels();
     const auto sample_rate = reader.sample_rate();
 
-    EburStatePtr st{ebur128_init(num_ch, sample_rate, EBUR128_MODE_I)};
+    auto st = dsp::Meter::create(num_ch, sample_rate, dsp::MeterMode::integrated);
     if (!st) {
-        return make_error(ErrorCode::internal_error, "failed to initialise loudness meter", "path=" + path);
+        return tl::unexpected{st.error()};
     }
 
     constexpr std::size_t k_block = 4096;
@@ -52,20 +48,20 @@ Result<std::optional<double>> measure_lufs(const std::string& path) {
         if (got == 0) {
             return make_error(ErrorCode::io_error, "short read while measuring integrated loudness", "path=" + path);
         }
-        if (ebur128_add_frames_float(st.get(), buf.data(), static_cast<std::size_t>(got)) != EBUR128_SUCCESS) {
-            return make_error(ErrorCode::internal_error, "failed to feed loudness meter", "path=" + path);
+        if (const auto result = st->add_frames(buf.data(), static_cast<std::size_t>(got)); !result) {
+            return tl::unexpected{result.error()};
         }
         left -= got;
     }
 
-    double loudness = 0.0;
-    if (ebur128_loudness_global(st.get(), &loudness) != EBUR128_SUCCESS) {
-        return std::nullopt;
+    const auto loudness = st->integrated();
+    if (!loudness) {
+        return tl::unexpected{loudness.error()};
     }
-    if (!std::isfinite(loudness)) {
+    if (!std::isfinite(*loudness)) {
         return std::nullopt; // silence or fully gated out
     }
-    return loudness;
+    return *loudness;
 }
 
 // Pass 2: rewrite path with all samples scaled by gain (float32 → float32).

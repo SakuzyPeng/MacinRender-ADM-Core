@@ -1,4 +1,5 @@
 //! The allocator instrumentation belongs to the test executable, not the safe DSP crate.
+use mradm_dsp::meter::{Meter, MeterMode};
 use mradm_dsp::{fft::RealFft, spreader::Spreader};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
@@ -29,6 +30,29 @@ unsafe impl GlobalAlloc for Counting {
 }
 #[global_allocator]
 static ALLOCATOR: Counting = Counting;
+
+#[test]
+fn prepared_meter_short_windows_and_seek_do_not_allocate() {
+    // Full-history I can grow after ~500 s. This contract covers prepared short
+    // windows and resets, not an unbounded no-allocation audio callback promise.
+    let mut monitor = Meter::new(2, 48_000, MeterMode::Monitor, &[]).unwrap();
+    let mut offline = Meter::new(12, 48_000, MeterMode::IntegratedTruePeak, &[]).unwrap();
+    let stereo = [0.01; 1024];
+    let surround = [0.01; 6144];
+    COUNT.with(|c| c.set(Some(0)));
+    for _ in 0..100 {
+        monitor.add_frames(&stereo).unwrap();
+        monitor.integrated().unwrap();
+        monitor.momentary().unwrap();
+        monitor.shortterm().unwrap();
+        offline.add_frames(&surround).unwrap();
+        offline.max_true_peak().unwrap();
+    }
+    monitor.reset();
+    offline.reset();
+    let count = COUNT.with(|c| c.replace(None).unwrap());
+    assert_eq!(count, 0, "allocation in prepared meter processing or seek");
+}
 
 #[test]
 fn prepared_fft_and_moving_spreader_do_not_allocate() {
