@@ -105,7 +105,48 @@
         "Windows debug"
       ]
     },
-    "migration": null
+    "migration": {
+      "run_id": 37228025183,
+      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37228025183",
+      "commit": "496e108550db9b8ec7b2d7091b8bc0348de32713",
+      "conclusion": "success",
+      "attempt": 2,
+      "jobs": [
+        {
+          "name": "Windows debug",
+          "conclusion": "success",
+          "job_id": 111513425539,
+          "ctest_passed": 56,
+          "ctest_total": 56
+        },
+        {
+          "name": "Linux debug",
+          "conclusion": "success",
+          "job_id": 111513426745,
+          "ctest_passed": 56,
+          "ctest_total": 56
+        },
+        {
+          "name": "macOS debug",
+          "conclusion": "success",
+          "job_id": 111513454776,
+          "ctest_passed": 57,
+          "ctest_total": 57
+        },
+        {
+          "name": "Version metadata",
+          "conclusion": "success",
+          "job_id": 111513456201
+        }
+      ],
+      "first_attempt_failure": {
+        "job": "Windows debug",
+        "step": "Build",
+        "reason": "The test executable link/dependency-deployment command reported that a file was in use by another process.",
+        "failed_target": "mr_adm_lfe_routing_tests.exe",
+        "resolution": "Reran the failed Windows job on the same commit; build and all 56 tests passed without source changes."
+      }
+    }
   },
   "not_claimed": [
     "Cross-platform bit identity",
@@ -142,6 +183,10 @@
     "out/rust-output-dsp/build-debug.log": "6c5e811195f6acb9c438601e9f58a4cfa1082a25188caa71758102b408db2d07",
     "out/rust-output-dsp/build-probe-final.log": "57c6d5def09f945e5264af4615bc9f4183e5b32dc1d469495eeac575b112673d",
     "out/rust-output-dsp/build-release.log": "c7ec6368392b7168c52ea799e0e1cdb87374f85ae14f27b79999a18c3899f239",
+    "out/rust-output-dsp/ci-failure.log": "36cbbcf07d618f249049924ab0390d3949843d495b0f069af4d052f36bf833e6",
+    "out/rust-output-dsp/ci-linux.log": "782435676e113bb5036984bd4993dcfb9ca583b11b1f1fd64b1dc046aacd0772",
+    "out/rust-output-dsp/ci-macos.log": "d702266d325c57d656c900f471e065fc78a1875f60a420afc1ecd6109664a07a",
+    "out/rust-output-dsp/ci-windows.log": "059f52d7fd50a74da124345099e9cb2e9d9e6ea12a2ca4d1c066406e4793a38f",
     "out/rust-output-dsp/licenses.log": "563d708e768fbd978b5167c96bd260c4c885955d83e00114ee5b1de139da319c",
     "out/rust-output-dsp/quality-cpp.log": "4ac45b9764604a3e8d102484ca3c1db4b6dcbde6ff9f201f5586f40b4dd625bf",
     "out/rust-output-dsp/quality-probe-cppcheck.log": "f6476564cc2abd46df57bfd4c61d150ecd3510c4d44360f40c18e89639fb3ea1",

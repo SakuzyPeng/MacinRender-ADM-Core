@@ -52,13 +52,16 @@ Rust 独立断言另检查渐变端点、连续性、分块一致性、双耳比
 短 EOS、错误调用的原子性及准备后分配计数。既有设备捕获测试继续验证暂停、epoch、
 呈现计数及 HpTF 增强后的保护；既有后端回归覆盖实时覆盖参数、seek 和头部跟踪。
 
-- macOS Debug 全套 57/57；Release 受影响回归 16/16。
+- macOS Debug 全套 57/57；Release 受影响回归 16/16，Rust 独立输出测试 4/4、分配测试 7/7。
 - Windows canonical Release 全套 56/56；SOFA ON，三个旧库参考开关均 OFF。
 - 测试探针增加重定向覆盖及整理后，两端分别定向复查该 Release 对照，macOS 同时复查 Debug 对照。
 - Rust fmt、Clippy `-D warnings`，C++ 改动检查、许可证/SBOM 检查通过；Apple 既有静态检查建议保留。
 - 两端保留同一组 139 个公开 `adm_*` 入口，私有 Rust 入口不外泄。Windows 仍有附带的 C++ 导出。
 - 基线 `53cc36e` 的 [CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37226615086)
-  已通过 macOS/Linux/Windows Debug；最终提交的 CI 标识和结果记录在下方机器可读记录中。
+  已通过 macOS/Linux/Windows Debug。实现提交 `496e108` 的
+  [最终 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37228025183)
+  通过 macOS 57/57、Linux 56/56、Windows 56/56。Windows 首次在测试程序链接/依赖部署时
+  遇到文件占用，仅重跑失败任务后通过，期间没有修改源代码。
 
 Windows 使用既有 canonical 工作树，并保留其原有修改；本次同步前核对全部相关文件，
 四个已有 C++ 文件的差异仅为 CRLF，备份原字节后随同步转为 LF。验收不代表干净的 Git 检出。
