@@ -10,6 +10,7 @@ realfft.workspace = true
 rustfft.workspace = true
 nalgebra.workspace = true
 ebur128.workspace = true
+rubato.workspace = true
 
 sofar = { version = "=0.3.0", default-features = false, optional = true }
 

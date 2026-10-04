@@ -10,6 +10,29 @@
 extern "C" {
 #endif
 
+// Fixed-rate, interleaved resampling. Lengths count floats; progress counts
+// whole frames. end=1 requires empty input and drains to the rational duration.
+// A completed stream requires reset before accepting more input.
+// cppcheck-suppress-begin unusedStructMember
+typedef struct MradmDspResampleProgress {
+    size_t input_frames;
+    size_t output_frames;
+} MradmDspResampleProgress;
+// cppcheck-suppress-end unusedStructMember
+int32_t mradm_dsp_resampler_create(
+    size_t channels, uint32_t input_rate, uint32_t output_rate, void** output, char* message, size_t capacity);
+void mradm_dsp_resampler_destroy(void* handle);
+int32_t mradm_dsp_resampler_reset(void* handle, char* message, size_t capacity);
+int32_t mradm_dsp_resampler_process(void* handle,
+                                    const float* input,
+                                    size_t input_length,
+                                    float* output,
+                                    size_t output_length,
+                                    uint32_t end,
+                                    MradmDspResampleProgress* progress,
+                                    char* message,
+                                    size_t capacity);
+
 // Binaural spectra contain [L.re, L.im, R.re, R.im] per bin. Live outputs
 // are overwritten; OLA outputs are accumulated. All lengths count floats.
 int32_t mradm_dsp_live_convolver_create(

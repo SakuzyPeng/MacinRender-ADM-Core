@@ -14,7 +14,6 @@
 #include <mutex>
 #include <optional>
 #include <ranges>
-#include <samplerate.h>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -31,6 +30,7 @@
 
 #include "live_binaural_renderer.h"
 #include "live_vbap_renderer.h"
+#include "resampler.h"
 #include "ring_buffer.h"
 
 namespace mradm::realtime {
@@ -88,16 +88,6 @@ class DiagnosticStore {
     std::vector<live_scene::Diagnostic> entries_;
     std::atomic<std::uint64_t> semantic_degradations_{0U};
 };
-
-struct SrcDeleter {
-    void operator()(SRC_STATE* state) const noexcept {
-        if (state != nullptr) {
-            src_delete(state);
-        }
-    }
-};
-
-using SrcPtr = std::unique_ptr<SRC_STATE, SrcDeleter>;
 
 [[nodiscard]] Result<std::unique_ptr<live_scene::ILiveSceneRenderer>>
 create_live_renderer(const live_scene::RendererConfig& config, const live_scene::DiagnosticSink& diagnostics) {
@@ -411,11 +401,11 @@ struct SceneStreamEngine::Impl {
           zero_output(static_cast<std::size_t>(k_resampler_output_frames) * channels, 0.0F),
           last_output_frame(channels, 0.0F), transition_anchor(channels, 0.0F) {
         if (config.renderer.sample_rate != config.output_sample_rate) {
-            int error = 0;
-            resampler.reset(src_new(SRC_SINC_MEDIUM_QUALITY, static_cast<int>(channels), &error));
-            if (resampler == nullptr) {
-                throw std::runtime_error(src_strerror(error));
+            auto prepared = dsp::Resampler::create(channels, config.renderer.sample_rate, config.output_sample_rate);
+            if (!prepared) {
+                throw std::runtime_error(prepared.error().message);
             }
+            resampler.emplace(std::move(*prepared));
         }
     }
 
@@ -887,8 +877,11 @@ struct SceneStreamEngine::Impl {
         incoming_needs_initial_state = false;
         (*renderer).reset();
         renderer->set_listener_orientation(current_orientation);
-        if (resampler != nullptr) {
-            src_reset(resampler.get());
+        if (resampler) {
+            auto reset = resampler->reset();
+            if (!reset) {
+                throw std::runtime_error(reset.error().message);
+            }
         }
         player_output.clear();
         pending_output.clear();
@@ -1372,7 +1365,7 @@ struct SceneStreamEngine::Impl {
             return;
         }
         const auto boundary = preroll_output_boundary + (preroll_rational_remainder != 0U ? 1U : 0U);
-        // libsamplerate may emit the final pre-target frames only after audible input arrives.
+        // Sinc lookahead can defer the final pre-target frames until audible input arrives.
         output_frames_to_skip =
             boundary > preroll_output_frames_generated ? boundary - preroll_output_frames_generated : 0U;
         target_reached = true;
@@ -1515,7 +1508,7 @@ struct SceneStreamEngine::Impl {
         if (count_timeline) {
             add_timeline_samples(frames);
         }
-        if (resampler == nullptr) {
+        if (!resampler) {
             std::uint32_t offset = 0U;
             while (offset < frames) {
                 const auto count = std::min<std::uint32_t>(frames - offset, k_resampler_output_frames);
@@ -1532,34 +1525,27 @@ struct SceneStreamEngine::Impl {
             return {};
         }
 
-        long remaining = frames;
+        auto& converter = resampler.value();
+        std::size_t remaining = frames;
         const float* input = samples;
-        while (remaining > 0) {
-            SRC_DATA request{};
-            request.data_in = input;
-            request.data_out = resample_output.data();
-            request.input_frames = remaining;
-            request.output_frames = k_resampler_output_frames;
-            request.src_ratio =
-                static_cast<double>(config.output_sample_rate) / static_cast<double>(config.renderer.sample_rate);
-            request.end_of_input = 0;
-            const int error = src_process(resampler.get(), &request);
-            if (error != 0) {
-                return make_error(ErrorCode::render_failed,
-                                  std::string{"live Scene output resampling failed: "} + src_strerror(error));
+        while (true) {
+            auto progress = converter.process({input, remaining * channels}, resample_output);
+            if (!progress) {
+                return tl::unexpected{progress.error()};
             }
-            auto accepted = accept_resampled(resample_output.data(),
-                                             static_cast<std::size_t>(request.output_frames_gen),
-                                             collect_output,
-                                             force_silence,
-                                             before_target,
-                                             serial);
+            auto accepted = accept_resampled(
+                resample_output.data(), progress->output_frames, collect_output, force_silence, before_target, serial);
             if (!accepted) {
                 return tl::unexpected{accepted.error()};
             }
-            input += static_cast<std::size_t>(request.input_frames_used) * channels;
-            remaining -= request.input_frames_used;
-            if (request.input_frames_used == 0 && request.output_frames_gen == 0) {
+            input += progress->input_frames * channels;
+            remaining -= progress->input_frames;
+            // Drain this slice's buffered output with the same preroll/silence
+            // flags, even after all input has been accepted by the Rust owner.
+            if (remaining == 0U && progress->output_frames == 0U) {
+                break;
+            }
+            if (progress->input_frames == 0U && progress->output_frames == 0U) {
                 return make_error(ErrorCode::render_failed, "live Scene resampler made no progress");
             }
         }
@@ -1567,30 +1553,17 @@ struct SceneStreamEngine::Impl {
     }
 
     [[nodiscard]] Result<void> flush_resampler(std::uint64_t serial) {
-        if (resampler != nullptr) {
+        if (resampler) {
+            auto& converter = resampler.value();
             while (true) {
-                SRC_DATA request{};
-                request.data_in = nullptr;
-                request.data_out = resample_output.data();
-                request.input_frames = 0;
-                request.output_frames = k_resampler_output_frames;
-                request.src_ratio =
-                    static_cast<double>(config.output_sample_rate) / static_cast<double>(config.renderer.sample_rate);
-                request.end_of_input = 1;
-                const int error = src_process(resampler.get(), &request);
-                if (error != 0) {
-                    return make_error(ErrorCode::render_failed,
-                                      std::string{"live Scene resampler flush failed: "} + src_strerror(error));
+                auto generated = converter.finish(resample_output);
+                if (!generated) {
+                    return tl::unexpected{generated.error()};
                 }
-                if (request.output_frames_gen == 0) {
+                if (*generated == 0U) {
                     break;
                 }
-                auto accepted = accept_resampled(resample_output.data(),
-                                                 static_cast<std::size_t>(request.output_frames_gen),
-                                                 true,
-                                                 false,
-                                                 false,
-                                                 serial);
+                auto accepted = accept_resampled(resample_output.data(), *generated, true, false, false, serial);
                 if (!accepted) {
                     return tl::unexpected{accepted.error()};
                 }
@@ -1675,7 +1648,7 @@ struct SceneStreamEngine::Impl {
     std::shared_ptr<DiagnosticStore> diagnostics;
     std::size_t channels{0U};
     PlayerOutputEngine player_output;
-    SrcPtr resampler;
+    std::optional<dsp::Resampler> resampler;
 
     std::thread worker;
     std::atomic<bool> quit{false};

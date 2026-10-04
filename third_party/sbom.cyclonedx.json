@@ -209,7 +209,7 @@
       "type": "library",
       "name": "libsamplerate",
       "version": "0.2.2",
-      "description": "实时 Scene 空间渲染后的输出采样率转换",
+      "description": "历史采样率转换参考（测试专用）",
       "licenses": [
         {
           "license": {
@@ -221,7 +221,7 @@
       "properties": [
         {
           "name": "mradm:distribution",
-          "value": "available"
+          "value": "opt-in"
         },
         {
           "name": "mradm:source-type",
@@ -1556,6 +1556,184 @@
         }
       ],
       "purl": "pkg:cargo/winnow@0.7.15",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-audio-codec-algorithms-0.8.1",
+      "version": "0.8.1",
+      "description": "Rust 重采样的锁定依赖",
+      "licenses": [
+        {
+          "expression": "0BSD OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/audio-codec-algorithms@0.8.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-audioadapter-5.0.0",
+      "version": "5.0.0",
+      "description": "Rust 重采样的锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/audioadapter@5.0.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-audioadapter-buffers-5.2.0",
+      "version": "5.2.0",
+      "description": "Rust 重采样的锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/audioadapter-buffers@5.2.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-audioadapter-sample-5.2.0",
+      "version": "5.2.0",
+      "description": "Rust 重采样的锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/audioadapter-sample@5.2.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-rubato-5.0.1",
+      "version": "5.0.1",
+      "description": "Rust 重采样的锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/rubato@5.0.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-syn-2.0.119",
+      "version": "2.0.119",
+      "description": "Rust 重采样的锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/syn@2.0.119",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-visibility-0.1.1",
+      "version": "0.1.1",
+      "description": "Rust 重采样的锁定依赖",
+      "licenses": [
+        {
+          "expression": "Zlib OR MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/visibility@0.1.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windowfunctions-0.1.1",
+      "version": "0.1.1",
+      "description": "Rust 重采样的锁定依赖",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/windowfunctions@0.1.1",
       "properties": [
         {
           "name": "mradm:distribution",

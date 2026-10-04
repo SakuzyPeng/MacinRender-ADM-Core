@@ -153,17 +153,18 @@
       "cmake_key": "SampleRate",
       "purl": "pkg:github/libsndfile/libsamplerate@0.2.2",
       "license": "BSD-2-Clause",
-      "purpose": "实时 Scene 空间渲染后的输出采样率转换",
-      "distribution": "available",
+      "purpose": "历史采样率转换参考（测试专用）",
+      "distribution": "opt-in",
       "source": {
         "type": "fetchcontent",
         "deps_dir": "samplerate-src",
         "parent": null,
         "license_files": [
           "COPYING"
-        ]
+        ],
+        "cmake_option": "MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS"
       },
-      "notes": "固定 SRC_SINC_MEDIUM_QUALITY；仅作为 PRIVATE 实现依赖"
+      "notes": "仅用于显式开启的参考测试；生产重采样使用纯 Rust rubato。"
     },
     {
       "name": "libFLAC",
@@ -1323,6 +1324,171 @@
         ]
       },
       "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-audio-codec-algorithms-0.8.1",
+      "version": "0.8.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/audio-codec-algorithms@0.8.1",
+      "license": "0BSD OR Apache-2.0",
+      "purpose": "Rust 重采样的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "audio-codec-algorithms",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-0BSD",
+          "LICENSE-APACHE"
+        ]
+      },
+      "notes": "由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-audioadapter-5.0.0",
+      "version": "5.0.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/audioadapter@5.0.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust 重采样的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "audioadapter",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "LICENSE.txt"
+        ]
+      },
+      "notes": "由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-audioadapter-buffers-5.2.0",
+      "version": "5.2.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/audioadapter-buffers@5.2.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust 重采样的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "audioadapter-buffers",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "LICENSE.txt"
+        ]
+      },
+      "notes": "由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-audioadapter-sample-5.2.0",
+      "version": "5.2.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/audioadapter-sample@5.2.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust 重采样的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "audioadapter-sample",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "LICENSE.txt"
+        ]
+      },
+      "notes": "由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-rubato-5.0.1",
+      "version": "5.0.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/rubato@5.0.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust 重采样的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "rubato",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "LICENSE.txt"
+        ]
+      },
+      "notes": "由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-syn-2.0.119",
+      "version": "2.0.119",
+      "cmake_key": null,
+      "purl": "pkg:cargo/syn@2.0.119",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust 重采样的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "syn",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-visibility-0.1.1",
+      "version": "0.1.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/visibility@0.1.1",
+      "license": "Zlib OR MIT OR Apache-2.0",
+      "purpose": "Rust 重采样的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "visibility",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE",
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "LICENSE-ZLIB"
+        ]
+      },
+      "notes": "由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-windowfunctions-0.1.1",
+      "version": "0.1.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windowfunctions@0.1.1",
+      "license": "MIT",
+      "purpose": "Rust 重采样的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "windowfunctions",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE.txt"
+        ]
+      },
+      "notes": "由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。"
     }
   ]
 }

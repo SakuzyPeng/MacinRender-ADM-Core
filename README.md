@@ -348,6 +348,8 @@ C/C++ 依赖默认通过 `FetchContent` 获取；Rust 使用提交的 Cargo.lock
 
 双耳卷积、滤波器过渡和 diffuse 延迟/输入混合也已迁入 Rust。实时 Scene 与离线/旧流式接口保留各自的历史及尾音语义，内核准备后的处理和重置无分配。范围与验收见 [Rust 双耳 DSP 迁移](docs/architecture/RUST_BINAURAL_DSP_MIGRATION.md)。
 
+Scene 输出和实时 HRTF 重采样使用 Rust `rubato`，保留精确的有理数时长、preroll 与 reset 语义。`libsamplerate` 仅用于默认关闭的 `MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS`。滤波器及相位差异、参考测量见 [Rust 重采样迁移](docs/architecture/RUST_RESAMPLER_MIGRATION.md)。
+
 系统依赖构建需要另备 Corrosion 0.6.1、Rust 工具链和锁定的 Cargo 依赖缓存：
 
 ```bash

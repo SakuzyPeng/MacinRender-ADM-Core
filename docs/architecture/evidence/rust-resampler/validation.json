@@ -1,0 +1,293 @@
+{
+  "date": "2026-10-04",
+  "baseline_commit": "8aa50401c7d108a75b76938fcf7eafb404fc760b",
+  "rust_version": "1.98.0",
+  "resampler": "rubato 5.0.1",
+  "default_features": false,
+  "parameters": {
+    "base_taps": 256,
+    "downsampling_tap_extension": true,
+    "relative_cutoff": 0.94,
+    "phase_table_size": 128,
+    "interpolation": "Cubic",
+    "window": "BlackmanHarris2",
+    "max_input_chunk_frames": 1024,
+    "ratio_bounds": [
+      0.00390625,
+      256
+    ]
+  },
+  "public_abi_changed": false,
+  "native_samplerate_production_dependency": false,
+  "native_reference_default_enabled": false,
+  "platforms": {
+    "macos": {
+      "architecture": "arm64",
+      "os": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "debug_tests_passed": 54,
+      "final_debug_focused_passed": 2,
+      "release_reference_tests_passed": 55,
+      "release_production_tests_passed": 54,
+      "sofa_enabled": true,
+      "abi": {
+        "public_functions": 139,
+        "missing": [],
+        "unexpected_public": [],
+        "private_exports": [],
+        "legacy_c_resampler_symbols": []
+      }
+    },
+    "windows": {
+      "architecture": "x64",
+      "build": "canonical MSVC/Ninja Release",
+      "reference_tests_passed": 54,
+      "production_tests_passed": 53,
+      "final_config": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "MR_ADM_BUILD_EBUR128_REFERENCE_TESTS": "OFF",
+        "MR_ADM_BUILD_SAF_REFERENCE_TESTS": "OFF",
+        "MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS": "OFF",
+        "MR_ADM_ENABLE_SOFA": "ON"
+      },
+      "abi": {
+        "public_functions": 139,
+        "missing": [],
+        "unexpected_public": [],
+        "rust_private_exports": [],
+        "incidental_cpp_exports": 1980,
+        "native_samplerate_in_production_link": false,
+        "source_hashes_verified": 49
+      },
+      "clean_checkout": false,
+      "worktree_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "synchronized_files": 49,
+      "before_and_after_hashes_checked": true,
+      "original_bytes_backed_up": true,
+      "other_existing_changes_preserved": true,
+      "local_differences": {
+        "docs/THIRD_PARTY_LICENSES.md": "Preserved pre-existing prose date; generated dependency table matches synchronized manifest."
+      },
+      "source_sha256": {
+        "CMakeLists.txt": "84c6fac93c23ac2151e9f6f4cf91d2dcff40917ece3289b52cef576575d6c8b8",
+        "cmake/MRDependencies.cmake": "67ce88e10875eb1e83e1d274b0e324808484726450a9541b42ccb8b77403f491",
+        "docs/THIRD_PARTY_LICENSES.md": "9bbae848fad89c32b1e351e450247e96d980b32115a62a1a34a80e517cb44e05",
+        "rust/Cargo.lock": "1245da124cb7acc2f436683d9122d936b12b2d6c044fc322ae12aaa2b5c9df9f",
+        "rust/Cargo.toml": "820a90093a4a17ea280d622f32ccadbbaf7bf2bc267a48cf2a91129f95043042",
+        "rust/crates/mradm-dsp/Cargo.toml": "75955eb2113fe165b41f7581fc16869277f73ec8de620f707ed180e8ab27af28",
+        "rust/crates/mradm-dsp/src/lib.rs": "62a0bc2739c0d43fbd7e4fac2021d4326b6c99af9a124bffeef3066fc3fd7c33",
+        "rust/crates/mradm-dsp/src/resampler.rs": "5fc42bad03dbf2b76c2c5df8e23c4c63cfca055fca449920b94832a287769bc3",
+        "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "fc163a8e4dbe1e9a1bc3ee8c2e62184693d473249113046dc7d1c4761af9759e",
+        "rust/crates/mradm-dsp/tests/resampler.rs": "7e814b5012d0ee65ba760bf5f74d733a345a007d86475fb6b85f761907e889b2",
+        "rust/crates/mradm-ffi/src/lib.rs": "21aa821025d8ce27b23ddb7a13bd4acc5f00bbfbfb889ac9c318e731fedab9c6",
+        "rust/crates/mradm-ffi/src/resampler.rs": "824b419c11148e2cdda124e2feeae1ad74cea985a4a8f4bc4113e7af1441b875",
+        "scripts/consistency/build_info.py": "289536bd9d0bed620a9b714b66f696157476f1b2f90c63d08dda8e2ea00cb346",
+        "scripts/quality/check-changed.sh": "2d647b9dc67541179b5a355ea422b9d9b70961c6de970b3dce36bb6e4b5418c8",
+        "scripts/quality/clang-tidy.sh": "bdc2c0c285e8003c263e01039e6be78d4925fff90840d26feb3da9109b6f0576",
+        "scripts/quality/cppcheck.sh": "08ac0fece1fa50a5c32d1c5b305d2a083ef6a633f0bd1aacad91a5b1542d0cdd",
+        "src/adm_dsp/dsp_ffi.h": "5b9352db6d44c9511f33c712431b2356fcea3522f7aa31e1a2a5dd49b8c990ea",
+        "src/adm_dsp/resampler.h": "a7ba2d67a0774894059b77d2220f07c11c4068c65a4650a7fa024bcc805c1c02",
+        "src/adm_realtime/scene_stream_engine.cpp": "c97e747185e88e387fd6b28766260aeac9001ce45a95e9930e70fc70f12cd894",
+        "src/adm_render_binaural/live_binaural_renderer.cpp": "440479a2fd56d6884094c05b96093f1f964e42df6de6face6c805b832c69e07f",
+        "tests/reference/resampler_reference_test.cpp": "4754ded44efc08632050b6941810b8ae2918a3bd0f2291585503f2d2980ad1fd",
+        "tests/unit/consistency_build_test.py": "14d74810a165a747df5e9e781d065bfbcbddaba296e2c7576a6b7d1567e8669a",
+        "tests/unit/resampler_test.cpp": "5c5615adc5860f97b1bee5ca18f9aeeca10a4ca6aa03c4b899d141a8457288f7",
+        "tests/unit/scene_stream_c_api_test.cpp": "5077de2254d3769358b7eba921da1e3bf19a757238fdf84416e4afc1c52f41d2",
+        "third_party/licenses/rust-audio-codec-algorithms-0.8.1/LICENSE-0BSD": "39741fbd828e4f94222ddba0aa2133bffd41247713ff2fb41005b28001425a06",
+        "third_party/licenses/rust-audio-codec-algorithms-0.8.1/LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+        "third_party/licenses/rust-audioadapter-5.0.0/LICENSE-APACHE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "third_party/licenses/rust-audioadapter-5.0.0/LICENSE-MIT": "eea1d5a8dddb0f3f9a705b580296308cd34810daa1dd8c10bf93e5806fc1069c",
+        "third_party/licenses/rust-audioadapter-5.0.0/LICENSE.txt": "dcc4b6f1193e531c9158487bc5fef24ea6457ee17a436004c0ff70d23dd5ff6b",
+        "third_party/licenses/rust-audioadapter-buffers-5.2.0/LICENSE-APACHE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "third_party/licenses/rust-audioadapter-buffers-5.2.0/LICENSE-MIT": "eea1d5a8dddb0f3f9a705b580296308cd34810daa1dd8c10bf93e5806fc1069c",
+        "third_party/licenses/rust-audioadapter-buffers-5.2.0/LICENSE.txt": "dcc4b6f1193e531c9158487bc5fef24ea6457ee17a436004c0ff70d23dd5ff6b",
+        "third_party/licenses/rust-audioadapter-sample-5.2.0/LICENSE-APACHE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "third_party/licenses/rust-audioadapter-sample-5.2.0/LICENSE-MIT": "eea1d5a8dddb0f3f9a705b580296308cd34810daa1dd8c10bf93e5806fc1069c",
+        "third_party/licenses/rust-audioadapter-sample-5.2.0/LICENSE.txt": "dcc4b6f1193e531c9158487bc5fef24ea6457ee17a436004c0ff70d23dd5ff6b",
+        "third_party/licenses/rust-rubato-5.0.1/LICENSE-APACHE": "db7332814a00615b025608278dc1cc53148209baaa4d71073e5f67cac82f979e",
+        "third_party/licenses/rust-rubato-5.0.1/LICENSE-MIT": "36dbd32f27adb0d2477b3d3f6ecbde9ca9ad8d72e24766bebe3ea631d235a7ef",
+        "third_party/licenses/rust-rubato-5.0.1/LICENSE.txt": "0a0f8b42d28c6aaee4f5aff8f684af2bd58ba39ccb75c46f04de726dfe772f10",
+        "third_party/licenses/rust-syn-2.0.119/LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+        "third_party/licenses/rust-syn-2.0.119/LICENSE-MIT": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+        "third_party/licenses/rust-visibility-0.1.1/LICENSE": "b72b2d40a984de67680d4b874dea846f5e389599bbe495b22f63e87c6f1d5f0c",
+        "third_party/licenses/rust-visibility-0.1.1/LICENSE-APACHE": "50d26cd90660ea5dfca5db399824028bca4eda4ee5be5d50a1b0be573936cabe",
+        "third_party/licenses/rust-visibility-0.1.1/LICENSE-MIT": "b405b5dbae5d4473f5f932af2b5d47df6114036a0b1382d9f6c411a62b71a547",
+        "third_party/licenses/rust-visibility-0.1.1/LICENSE-ZLIB": "23f99ac423f5950bbd814d05e77e5e7be5183903133f3938be2a313cb8070205",
+        "third_party/licenses/rust-windowfunctions-0.1.1/LICENSE.txt": "5d17998baf4c4d77cbf52abe694cb428ac7e3858f87e31fa59f61bcb7d3bb0f6",
+        "third_party/manifest.json": "822a090641b540c474cc683c3a952cb5ca1abca6e01021ec58c8db913ca76be3",
+        "third_party/sbom.cyclonedx.json": "a20637ac59f2abb6019cda9ac8346ef88f6c893edf45ddd6ffeed7e6c985772c",
+        "scripts/licenses/sync_license_texts.py": "d20fc9aa73a98cde89d6a97661c95f6c5131f8e8c8fac34cada30c20f6f901d5",
+        "third_party/licenses/INDEX.md": "f49ad6ef5f6a55a9bfdb2cf9818f78b197f44c126c96a95e18a79157aaf4a1d4"
+      }
+    },
+    "linux": {
+      "run": false
+    }
+  },
+  "quality": {
+    "rust_fmt": true,
+    "clippy_deny_warnings": true,
+    "changed_cpp_format_tidy_cppcheck": true,
+    "new_cpp_tidy_and_cppcheck": true,
+    "existing_scene_test_style_warnings_retained": true,
+    "license_manifest_sbom_and_all_51_cargo_packages_checked": true,
+    "license_check_normalizes_only_crlf_lf": true
+  },
+  "numeric_reference": {
+    "macos": {
+      "cases": 40,
+      "passband_cases": 24,
+      "stopband_cases": 4,
+      "short_hrir_cases": 8,
+      "channel_isolation_cases": 4,
+      "max_passband_abs_db": 0.0023471,
+      "least_tested_stopband_rejection_db": 137.269,
+      "max_short_hrir_peak_difference_frames": 1,
+      "max_short_hrir_area_relative_difference": 0.04227499999999995
+    },
+    "windows": {
+      "cases": 40,
+      "passband_cases": 24,
+      "stopband_cases": 4,
+      "short_hrir_cases": 8,
+      "channel_isolation_cases": 4,
+      "max_passband_abs_db": 0.00234708,
+      "least_tested_stopband_rejection_db": 137.358,
+      "max_short_hrir_peak_difference_frames": 1,
+      "max_short_hrir_area_relative_difference": 0.04227499999999995
+    }
+  },
+  "independent_phase_measurements": [
+    {
+      "input_rate": 48000,
+      "output_rate": 44100,
+      "offset_output_samples": 0.3821776339179517
+    },
+    {
+      "input_rate": 44100,
+      "output_rate": 48000,
+      "offset_output_samples": -0.3112243688275087
+    },
+    {
+      "input_rate": 48000,
+      "output_rate": 44101,
+      "offset_output_samples": 0.3792612218970952
+    },
+    {
+      "input_rate": 47999,
+      "output_rate": 48000,
+      "offset_output_samples": 0.005145991991049393
+    },
+    {
+      "input_rate": 96000,
+      "output_rate": 48000,
+      "offset_output_samples": 0.003906391833861081
+    },
+    {
+      "input_rate": 192000,
+      "output_rate": 8000,
+      "offset_output_samples": 0.00032559554808770996
+    },
+    {
+      "input_rate": 8000,
+      "output_rate": 192000,
+      "offset_output_samples": 0.1875003511894505
+    }
+  ],
+  "independent_checks": [
+    "tone passband and stopband",
+    "full-support impulse timing and DC area",
+    "tap-zero preservation",
+    "arbitrary partitions and small output buffers",
+    "rational output duration",
+    "reset and terminal state",
+    "FFI invalid pointers/lengths/flags",
+    "channel isolation",
+    "nonfinite rejection before state mutation",
+    "live HRTF and output conversion at four rates",
+    "Scene preroll and long rational timeline"
+  ],
+  "allocations": {
+    "after_preparation": 0,
+    "includes": [
+      "first processing call",
+      "buffered output drainage",
+      "finish",
+      "reset"
+    ],
+    "whole_scene_no_allocation_claim": false
+  },
+  "limitations": [
+    "Different low-pass kernel and a residual fraction of an output sample; no C waveform or cross-platform bit identity promise.",
+    "Short cropped HRTFs omit part of the sinc ringing; recorded area differences are not a unity-gain normalization measurement.",
+    "Synthetic sampled frequencies, not a full-band worst-case or subjective listening assessment.",
+    "Throughput and RSS not benchmarked in this migration.",
+    "Miniaudio internal device resampling is outside the direct libsamplerate replacement."
+  ],
+  "source_sha256": {
+    "CMakeLists.txt": "84c6fac93c23ac2151e9f6f4cf91d2dcff40917ece3289b52cef576575d6c8b8",
+    "cmake/MRDependencies.cmake": "67ce88e10875eb1e83e1d274b0e324808484726450a9541b42ccb8b77403f491",
+    "rust/Cargo.lock": "1245da124cb7acc2f436683d9122d936b12b2d6c044fc322ae12aaa2b5c9df9f",
+    "rust/Cargo.toml": "820a90093a4a17ea280d622f32ccadbbaf7bf2bc267a48cf2a91129f95043042",
+    "rust/crates/mradm-dsp/Cargo.toml": "75955eb2113fe165b41f7581fc16869277f73ec8de620f707ed180e8ab27af28",
+    "rust/crates/mradm-dsp/src/lib.rs": "62a0bc2739c0d43fbd7e4fac2021d4326b6c99af9a124bffeef3066fc3fd7c33",
+    "rust/crates/mradm-dsp/src/resampler.rs": "5fc42bad03dbf2b76c2c5df8e23c4c63cfca055fca449920b94832a287769bc3",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "fc163a8e4dbe1e9a1bc3ee8c2e62184693d473249113046dc7d1c4761af9759e",
+    "rust/crates/mradm-dsp/tests/resampler.rs": "7e814b5012d0ee65ba760bf5f74d733a345a007d86475fb6b85f761907e889b2",
+    "rust/crates/mradm-ffi/src/lib.rs": "21aa821025d8ce27b23ddb7a13bd4acc5f00bbfbfb889ac9c318e731fedab9c6",
+    "rust/crates/mradm-ffi/src/resampler.rs": "824b419c11148e2cdda124e2feeae1ad74cea985a4a8f4bc4113e7af1441b875",
+    "scripts/consistency/build_info.py": "289536bd9d0bed620a9b714b66f696157476f1b2f90c63d08dda8e2ea00cb346",
+    "scripts/licenses/sync_license_texts.py": "d20fc9aa73a98cde89d6a97661c95f6c5131f8e8c8fac34cada30c20f6f901d5",
+    "scripts/quality/check-changed.sh": "2d647b9dc67541179b5a355ea422b9d9b70961c6de970b3dce36bb6e4b5418c8",
+    "scripts/quality/clang-tidy.sh": "bdc2c0c285e8003c263e01039e6be78d4925fff90840d26feb3da9109b6f0576",
+    "scripts/quality/cppcheck.sh": "08ac0fece1fa50a5c32d1c5b305d2a083ef6a633f0bd1aacad91a5b1542d0cdd",
+    "src/adm_dsp/dsp_ffi.h": "5b9352db6d44c9511f33c712431b2356fcea3522f7aa31e1a2a5dd49b8c990ea",
+    "src/adm_dsp/resampler.h": "a7ba2d67a0774894059b77d2220f07c11c4068c65a4650a7fa024bcc805c1c02",
+    "src/adm_realtime/scene_stream_engine.cpp": "c97e747185e88e387fd6b28766260aeac9001ce45a95e9930e70fc70f12cd894",
+    "src/adm_render_binaural/live_binaural_renderer.cpp": "440479a2fd56d6884094c05b96093f1f964e42df6de6face6c805b832c69e07f",
+    "tests/reference/resampler_reference_test.cpp": "4754ded44efc08632050b6941810b8ae2918a3bd0f2291585503f2d2980ad1fd",
+    "tests/unit/consistency_build_test.py": "14d74810a165a747df5e9e781d065bfbcbddaba296e2c7576a6b7d1567e8669a",
+    "tests/unit/resampler_test.cpp": "5c5615adc5860f97b1bee5ca18f9aeeca10a4ca6aa03c4b899d141a8457288f7",
+    "tests/unit/scene_stream_c_api_test.cpp": "5077de2254d3769358b7eba921da1e3bf19a757238fdf84416e4afc1c52f41d2",
+    "third_party/licenses/INDEX.md": "f49ad6ef5f6a55a9bfdb2cf9818f78b197f44c126c96a95e18a79157aaf4a1d4",
+    "third_party/licenses/rust-audio-codec-algorithms-0.8.1/LICENSE-0BSD": "39741fbd828e4f94222ddba0aa2133bffd41247713ff2fb41005b28001425a06",
+    "third_party/licenses/rust-audio-codec-algorithms-0.8.1/LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third_party/licenses/rust-audioadapter-5.0.0/LICENSE-APACHE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "third_party/licenses/rust-audioadapter-5.0.0/LICENSE-MIT": "eea1d5a8dddb0f3f9a705b580296308cd34810daa1dd8c10bf93e5806fc1069c",
+    "third_party/licenses/rust-audioadapter-5.0.0/LICENSE.txt": "dcc4b6f1193e531c9158487bc5fef24ea6457ee17a436004c0ff70d23dd5ff6b",
+    "third_party/licenses/rust-audioadapter-buffers-5.2.0/LICENSE-APACHE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "third_party/licenses/rust-audioadapter-buffers-5.2.0/LICENSE-MIT": "eea1d5a8dddb0f3f9a705b580296308cd34810daa1dd8c10bf93e5806fc1069c",
+    "third_party/licenses/rust-audioadapter-buffers-5.2.0/LICENSE.txt": "dcc4b6f1193e531c9158487bc5fef24ea6457ee17a436004c0ff70d23dd5ff6b",
+    "third_party/licenses/rust-audioadapter-sample-5.2.0/LICENSE-APACHE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "third_party/licenses/rust-audioadapter-sample-5.2.0/LICENSE-MIT": "eea1d5a8dddb0f3f9a705b580296308cd34810daa1dd8c10bf93e5806fc1069c",
+    "third_party/licenses/rust-audioadapter-sample-5.2.0/LICENSE.txt": "dcc4b6f1193e531c9158487bc5fef24ea6457ee17a436004c0ff70d23dd5ff6b",
+    "third_party/licenses/rust-rubato-5.0.1/LICENSE-APACHE": "db7332814a00615b025608278dc1cc53148209baaa4d71073e5f67cac82f979e",
+    "third_party/licenses/rust-rubato-5.0.1/LICENSE-MIT": "36dbd32f27adb0d2477b3d3f6ecbde9ca9ad8d72e24766bebe3ea631d235a7ef",
+    "third_party/licenses/rust-rubato-5.0.1/LICENSE.txt": "0a0f8b42d28c6aaee4f5aff8f684af2bd58ba39ccb75c46f04de726dfe772f10",
+    "third_party/licenses/rust-syn-2.0.119/LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "third_party/licenses/rust-syn-2.0.119/LICENSE-MIT": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+    "third_party/licenses/rust-visibility-0.1.1/LICENSE": "b72b2d40a984de67680d4b874dea846f5e389599bbe495b22f63e87c6f1d5f0c",
+    "third_party/licenses/rust-visibility-0.1.1/LICENSE-APACHE": "50d26cd90660ea5dfca5db399824028bca4eda4ee5be5d50a1b0be573936cabe",
+    "third_party/licenses/rust-visibility-0.1.1/LICENSE-MIT": "b405b5dbae5d4473f5f932af2b5d47df6114036a0b1382d9f6c411a62b71a547",
+    "third_party/licenses/rust-visibility-0.1.1/LICENSE-ZLIB": "23f99ac423f5950bbd814d05e77e5e7be5183903133f3938be2a313cb8070205",
+    "third_party/licenses/rust-windowfunctions-0.1.1/LICENSE.txt": "5d17998baf4c4d77cbf52abe694cb428ac7e3858f87e31fa59f61bcb7d3bb0f6",
+    "third_party/manifest.json": "822a090641b540c474cc683c3a952cb5ca1abca6e01021ec58c8db913ca76be3",
+    "third_party/sbom.cyclonedx.json": "a20637ac59f2abb6019cda9ac8346ef88f6c893edf45ddd6ffeed7e6c985772c"
+  },
+  "log_sha256": {
+    "build-debug.log": "8f917bc5e8e01d772ee0294e91a46e6d9c2f7f77e76a4d560e148f58b4ca4757",
+    "tests-debug.log": "b5312c7dc426a7e1ebe24ac461edef40eca08278949f858d798fd68d931cf39a",
+    "tests-debug-final.log": "5afe7379319b32924c832904f03fb49d9cc106aa8b3418f56aa5773c48c81abd",
+    "evaluation-rust.log": "5f5dc862a3003a3a41e517f51b993d53e8601a03c11b2108c3a6956167474152",
+    "quality-rust.log": "b8619788687dd5989dc8db2e3d6dc69e33ec360a12690b1bccf37da71cc27a55",
+    "quality-cpp-final.log": "1e755be2264ad8628726a87a1b862e79f5e4fee5fc8f1ea1d03e67ef5ab107c4",
+    "quality-new-unit.log": "a709218f99b90abbdd310c327686a057f02f160343f8c1583c1f18db6d5fb9ac",
+    "quality-reference-final.log": "1793ad418bf53fcc57f7a214652c8e47ec13d0f849dc52da5572ab45d628ec57",
+    "quality-new-cppcheck-final.log": "48b49c3f7aaf01eda09ba0b8abc1fcb2eb1ee1c014e92e79b3fcd818c0eb43ab",
+    "tests-release-reference.log": "48f99aa1bc30df063f3918718c88cac2cd62fd04b592e9e745a9c5b8fc796859",
+    "tests-release-production.log": "70337fc330a299d42b5909fa60fe99c7a34d5640b4dc95b2f154cd2da609fa15",
+    "tests-windows-reference.log": "8c21b7a94b56954aac2272e99314e6d6176983c671c567628fbb77f6188a646b",
+    "tests-windows-production.log": "3e1efbd0b882dc7f9edbd986b4025daea1f7d1b978b1e3771599c3837d5e95d5",
+    "licenses-release.log": "2270d6df47c0eca35af402f7bb233f512fc796adccadaa0373d26b62fae81549",
+    "licenses-windows.log": "d4b13114d190fbff1afe42139c4cc1c72e9cec3be7a520d2663bdc4e773878f0"
+  }
+}

@@ -61,7 +61,7 @@ class CMakeTests(Harness):
             # Stub unrelated packages so the real MRDependencies libear branch can run offline.
             targets = ('fmt::fmt spdlog::spdlog CLI11::CLI11 nlohmann_json::nlohmann_json '
                        'tl::expected ebur128 dr_wav::dr_wav FLAC::FLAC libbw64 adm saf '
-                       'Opus::opus miniaudio SampleRate::samplerate')
+                       'Opus::opus miniaudio')
             if flac:
                 targets = targets.replace(' FLAC::FLAC', '')
                 flac_dir = source / 'flac fixture'
