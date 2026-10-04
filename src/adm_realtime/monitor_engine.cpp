@@ -688,7 +688,7 @@ bool MonitorEngine::top_up_ring_output_stage() {
 
 bool MonitorEngine::restore_loop(uint64_t loop_start) {
     std::unique_lock<std::mutex> lock(control_mutex_);
-    if (seek_pending_) {
+    if (quit_.load(std::memory_order_acquire) || seek_pending_) {
         return false;
     }
     seek_cancel_ = std::stop_source{};

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -1489,6 +1490,8 @@ bool test_monitor_hptf_survives_switch() {
 struct WarmupProbe {
     std::atomic<bool> started{false};
     std::atomic<bool> release{false};
+    std::atomic<bool> hold_process{false};
+    std::atomic<bool> process_started{false};
     std::atomic<bool> saw_override{false};
     std::atomic<unsigned> cancelled{0};
     std::atomic<bool> fail{false};
@@ -1497,6 +1500,10 @@ class SlowSeekStream final : public mradm::IRenderStream {
   public:
     explicit SlowSeekStream(std::shared_ptr<WarmupProbe> probe) : probe_(std::move(probe)) {}
     mradm::Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        probe_->process_started.store(true);
+        while (probe_->hold_process.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
         std::fill_n(out.begin(), frames * 2, .75F);
         return frames;
     }
@@ -1547,12 +1554,52 @@ class SlowSeekFactory final : public mradm::realtime::IRenderStreamFactory {
     std::shared_ptr<WarmupProbe> probe_;
 };
 
+// Complete the loop's last process() only after teardown has requested cancellation.
+class StopReleaseSink final : public mradm::realtime::IAudioOutputDevice {
+  public:
+    explicit StopReleaseSink(std::shared_ptr<WarmupProbe> probe) : probe_(std::move(probe)) {}
+    mradm::Result<void> start(uint32_t /*channels*/, uint32_t /*sample_rate*/, PullFn /*pull*/) override { return {}; }
+    void stop() override { probe_->hold_process.store(false); }
+    [[nodiscard]] uint32_t actual_sample_rate() const override { return 48000; }
+
+  private:
+    std::shared_ptr<WarmupProbe> probe_;
+};
+
 template <class Predicate> bool eventually(Predicate predicate) {
     const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(2);
     while (!predicate() && std::chrono::steady_clock::now() < end) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     return predicate();
+}
+
+bool test_stop_before_loop_preroll() {
+    auto probe = std::make_shared<WarmupProbe>();
+    probe->hold_process.store(true);
+    SlowSeekFactory factory(probe);
+    StopReleaseSink sink(probe);
+    mradm::NullLogSink logs;
+    auto created = mradm::realtime::MonitorEngine::create(factory, sink, {}, {}, logs);
+    if (!created) {
+        return false;
+    }
+    auto engine = std::move(*created);
+    engine->set_loop(8, 1031);
+    engine->seek(7); // This seek is immediate; only the later loop restoration may block.
+    engine->play();
+    bool ok = check(eventually([&] { return probe->process_started.load(); }), "loop's last block starts");
+    auto stopping = std::async(std::launch::async, [&engine] { engine.reset(); });
+    ok &= check(eventually([&] {
+                    return probe->started.load() ||
+                           stopping.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+                }),
+                "teardown finishes or exposes the loop pre-roll race");
+    const bool loop_seek_started = probe->started.load();
+    probe->release.store(true); // A regression must fail the assertion without hanging teardown.
+    stopping.get();
+    ok &= check(!loop_seek_started, "stop does not start a new loop pre-roll after cancellation");
+    return ok;
 }
 
 bool test_cancellable_preroll() {
@@ -1647,6 +1694,7 @@ int main() {
     ok &= test_monitor_worker_logs_errors();
     ok &= test_monitor_live_overrides();
     ok &= test_monitor_hot_switch();
+    ok &= test_stop_before_loop_preroll();
     ok &= test_cancellable_preroll();
     ok &= test_background_backend_preroll();
     ok &= test_monitor_override_survives_switch();

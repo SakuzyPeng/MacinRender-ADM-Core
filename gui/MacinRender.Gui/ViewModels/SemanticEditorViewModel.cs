@@ -207,11 +207,11 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
             return false;
         }
 
-        await StopMonitorAsync(); // 换文件先停掉旧监听
         IsLoading = true;
-        SetStatus("SemLoading", Path.GetFileName(path));
         try
         {
+            SetStatus("SemLoading", Path.GetFileName(path));
+            await StopMonitorAsync(); // 换文件先停掉旧监听，等待期间也禁止重入加载
             var load = await Task.Run<(InspectDoc? Document, string? FailureDetails)>(() =>
             {
                 using var ctx = NativeMethods.adm_create_context();
@@ -1265,6 +1265,7 @@ public sealed partial class SemanticEditorViewModel : ObservableObject
                     _activeMonitorSettings = settings;
                     _activeSpatialRenderer = spatialRenderer;
                     _activeLayout = settings.Layout;
+                    OnPropertyChanged(nameof(HeadTrackControlsEnabled));
                     SetupChannelMeters(backend);
                     ClearMonitorStatus();
                 }
