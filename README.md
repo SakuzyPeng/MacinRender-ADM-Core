@@ -354,6 +354,8 @@ HRTF 幅度/相位插值、实时连续方向查询和频域状态也由 Rust �
 
 HpTF 耳机补偿的系数设计、频响、自动预衰减、级联处理与热切换也已迁入 Rust；参数导入和线程间发布保留在 C++。范围与验收见 [Rust HpTF 迁移](docs/architecture/RUST_HPTF_MIGRATION.md)。
 
+设备立体声峰值保护和实时增益渐变由 Rust 持有状态，各后端批量生成包络或处理 PCM，保留现有延迟、EOS 和 seek 行为。范围与验收见 [Rust 输出 DSP 迁移](docs/architecture/RUST_OUTPUT_DSP_MIGRATION.md)。
+
 系统依赖构建需要另备 Corrosion 0.6.1、Rust 工具链和锁定的 Cargo 依赖缓存：
 
 ```bash

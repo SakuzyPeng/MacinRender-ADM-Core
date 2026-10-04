@@ -1,0 +1,8 @@
+{
+  "baseline_commit": "53cc36e",
+  "gain_samples": 11642376,
+  "gain_bit_mismatches": 0,
+  "peak_samples": 440120,
+  "peak_max_absolute_error": 0,
+  "peak_tolerance": 2e-05
+}

@@ -10,6 +10,34 @@
 extern "C" {
 #endif
 
+// Live gain banks and stereo device protection. Lengths count floats; empty buffers may be null.
+int mradm_dsp_gain_create(
+    size_t channels, uint32_t rate, uint32_t ramp_ms, void** output, char* message, size_t capacity);
+void mradm_dsp_gain_destroy(void* handle);
+int mradm_dsp_gain_reset(void* handle, char* message, size_t capacity);
+int mradm_dsp_gain_set_targets(void* handle, const float* targets, size_t length, char* message, size_t capacity);
+// mode 0 fills gain envelopes, mode 1 multiplies PCM in place.
+int mradm_dsp_gain_process(void* handle, float* data, size_t length, uint32_t mode, char* message, size_t capacity);
+// cppcheck-suppress-begin unusedStructMember
+typedef struct MradmDspPeakStatus {
+    size_t lookahead, buffered, writable, readable;
+} MradmDspPeakStatus;
+// cppcheck-suppress-end unusedStructMember
+int mradm_dsp_peak_guard_create(uint32_t rate, void** output, char* message, size_t capacity);
+void mradm_dsp_peak_guard_destroy(void* handle);
+int mradm_dsp_peak_guard_reset(void* handle, char* message, size_t capacity);
+int mradm_dsp_peak_guard_status(
+    const void* handle, uint32_t ended, MradmDspPeakStatus* status, char* message, size_t capacity);
+int mradm_dsp_peak_guard_push(void* handle, const float* data, size_t length, char* message, size_t capacity);
+int mradm_dsp_peak_guard_pop(void* handle,
+                             float* data,
+                             size_t length,
+                             float volume,
+                             uint32_t ended,
+                             size_t* frames,
+                             char* message,
+                             size_t capacity);
+
 // HpTF control-thread design and prepared realtime kernels. Coefficients are
 // copied explicitly; these private PODs do not alter the public C ABI.
 // All audio lengths count interleaved floats. Empty audio may be null.

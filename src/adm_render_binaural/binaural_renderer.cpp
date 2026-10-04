@@ -1404,9 +1404,7 @@ class BinauralStream final : public IRenderStream {
 
     void prepare_live_gain_envelopes(std::size_t frames) {
         for (auto& slot : live_gain_slots_) {
-            for (std::size_t frame = 0; frame < frames; ++frame) {
-                slot.gain_envelope()[frame] = slot.gain_ramp().next();
-            }
+            slot.gain_ramp().fill(std::span{slot.gain_envelope()}.first(frames));
         }
     }
 

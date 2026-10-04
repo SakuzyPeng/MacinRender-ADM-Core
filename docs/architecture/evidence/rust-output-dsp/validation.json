@@ -1,0 +1,159 @@
+{
+  "schema": "mradm.rust-output-dsp-migration.v1",
+  "date": "2026-10-04",
+  "baseline_commit": "53cc36e226ae7ec1494327a8c167278454e003bc",
+  "scope": [
+    "Stereo sample-peak protection",
+    "Single-channel live gain ramps",
+    "Interleaved gain envelopes and in-place gain",
+    "EAR/VBAP/HOA/binaural/Triple Balance/Apple call sites"
+  ],
+  "new_third_party_dependencies": [],
+  "public_c_abi_changed": false,
+  "contracts": {
+    "ramp_default_ms": 20,
+    "lookahead_frames": "max(1, sample_rate / 200)",
+    "release_ms": 100,
+    "sample_peak_ceiling": 0.89125094,
+    "preparation_only_allocation": true,
+    "runtime_locks_or_io": false,
+    "per_sample_production_ffi": false,
+    "invalid_calls_preserve_state_and_output": true
+  },
+  "validation": {
+    "macos_debug_ctest": {
+      "passed": 57,
+      "total": 57
+    },
+    "macos_release_focused_ctest": {
+      "passed": 16,
+      "total": 16
+    },
+    "macos_final_debug_probe": true,
+    "macos_final_release_probe": true,
+    "macos_release_rust_output_tests": 4,
+    "macos_release_rust_allocation_tests": 7,
+    "windows_release_ctest": {
+      "passed": 56,
+      "total": 56
+    },
+    "windows_final_release_probe": true,
+    "rust_fmt": true,
+    "rust_clippy_deny_warnings": true,
+    "changed_cpp_format_tidy_cppcheck": true,
+    "new_probe_and_frozen_reference_checks": true,
+    "licenses_sbom": true,
+    "existing_apple_tidy_advisories_retained": true
+  },
+  "release_comparison": {
+    "macos": {
+      "baseline_commit": "53cc36e",
+      "gain_samples": 11642376,
+      "gain_bit_mismatches": 0,
+      "peak_samples": 440120,
+      "peak_max_absolute_error": 2.384185791015625e-07,
+      "peak_tolerance": 2e-05
+    },
+    "windows": {
+      "baseline_commit": "53cc36e",
+      "gain_samples": 11642376,
+      "gain_bit_mismatches": 0,
+      "peak_samples": 440120,
+      "peak_max_absolute_error": 0,
+      "peak_tolerance": 2e-05
+    }
+  },
+  "abi": {
+    "macos": {
+      "public_adm_exports": 139,
+      "private_rust_exports": []
+    },
+    "windows": {
+      "public_adm_exports": 139,
+      "private_rust_exports": [],
+      "incidental_cpp_exports": 1984
+    },
+    "public_symbol_sets_equal": true,
+    "public_symbol_sets_equal_hptf_baseline": true
+  },
+  "windows": {
+    "configuration": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "MR_ADM_ENABLE_SOFA": "ON",
+      "legacy_reference_switches": "OFF"
+    },
+    "workspace": "Existing dirty canonical checkout preserved; not a clean Git checkout",
+    "original_bytes_backed_up": true,
+    "synchronized_source_files": 19,
+    "synchronized_sources_equal_local": true,
+    "crlf_only_before_sync": [
+      "src/adm_realtime/stereo_peak_guard.cpp",
+      "src/adm_realtime/stereo_peak_guard.h",
+      "src/adm_render_common/render_common.cpp",
+      "src/adm_render_common/render_common.h"
+    ]
+  },
+  "ci": {
+    "baseline": {
+      "run_id": 37226615086,
+      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37226615086",
+      "commit": "53cc36e226ae7ec1494327a8c167278454e003bc",
+      "conclusion": "success",
+      "platforms": [
+        "macOS debug",
+        "Linux debug",
+        "Windows debug"
+      ]
+    },
+    "migration": null
+  },
+  "not_claimed": [
+    "Cross-platform bit identity",
+    "Throughput or RSS improvement",
+    "Subjective listening"
+  ],
+  "source_sha256": {
+    "CMakeLists.txt": "ac4e5fa76ce2491fb6578b23f9701ce8a996ce493a4372a921271eefc59779f1",
+    "include/adm/c_api.h": "66c54334b318b4201ec557521c31981f316661c5f47c43882d54c422d38d66ad",
+    "rust/Cargo.lock": "1245da124cb7acc2f436683d9122d936b12b2d6c044fc322ae12aaa2b5c9df9f",
+    "rust/crates/mradm-dsp/src/gain.rs": "ac03b05e4cc2227ad9b67318f8aa0ddb62f9c05648640b5cb51f06b8ca629a42",
+    "rust/crates/mradm-dsp/src/lib.rs": "6a47335985d7e95ff0ffb38ae90b011e1d126cb8dbdcc1c4467a262e09a6e16f",
+    "rust/crates/mradm-dsp/src/peak_guard.rs": "8adc99c2d923517d5e5429b213e3ecebf34b3b163b3a53e407f7b347e08e3bb9",
+    "rust/crates/mradm-dsp/tests/output_dsp.rs": "f6f248a238a2c48256f3e285a1f1793a31f3e9cf44b9fc63a16e1e96b7cfd50a",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "ffc6abe55bf7981c15b3407f5be43100fa89cedb85fea2634fb312288b861d9d",
+    "rust/crates/mradm-ffi/src/lib.rs": "dd9d0eb45793ede6f831348be3523157c010ba60daef2b2bc8375e3c49f30b2d",
+    "rust/crates/mradm-ffi/src/output_dsp.rs": "0782f03e1f543f1b893c6d408fbd86ae2d1b9dd56256873d3b3fbc78147a816e",
+    "rust/rust-toolchain.toml": "e879701472a698533f43f54989bbf5f3101eb0503472159d32633f3bb8a13fdf",
+    "src/adm_apple/spatial_mixer_renderer.cpp": "e56cabb45520c31eba5e176b5bf4c6f4be9ee74348885046440c1f0cc6e78849",
+    "src/adm_dsp/dsp_ffi.h": "14be5cf0140f803b008b7ea6dc61cb9eb2961a9db6d2fc0242b40c69b5a317d3",
+    "src/adm_dsp/gain.h": "17ff9c764432eb7601d79c11e24dd349c1f168c1aa33c233c481de2edabf680d",
+    "src/adm_realtime/stereo_peak_guard.cpp": "889f47c0fda546f0d6bc5c693ad5c3ba52933e0d2bb09d740653f56669831170",
+    "src/adm_realtime/stereo_peak_guard.h": "c5950ed0d076dea11213e5ddf31509e896a6dcd69d37c5c59292e5284e04c139",
+    "src/adm_render_binaural/binaural_renderer.cpp": "1b34fa3d10f48c185ed0a11a6d8cd8672a525952d5fead9b93ca050196ee7bff",
+    "src/adm_render_common/render_common.cpp": "657a9b6634bf298f1e2b25584ea0036ae885a7e7e6ab1a7aa7cf7bda2e3b16da",
+    "src/adm_render_common/render_common.h": "b2ee09363c406be5616bead1b5f020bc4df20c436ba582a4b057bf33bcb2b840",
+    "src/adm_render_triple_balance/triple_balance_stream.cpp": "f0b1931895a115a7aca04cbacda3a85c1746179668dafd65748e8276fdca1802",
+    "tests/reference/output_dsp_legacy.h": "5c7aa022f6e0e41f859b075dbfdcf2f7abd28351dcefd66901f69ce19d19d843",
+    "tests/unit/output_dsp_test.cpp": "4d4800c3f2896ede663b54b9e4e098e3f3d2551af6d5a1258a04f70e7ffbd83d"
+  },
+  "log_sha256": {
+    "out/rust-output-dsp/build-debug-final.log": "eea273ac5fcae69abf43b30b561c5676acafd9e9419c6817f30eb70ee86f807d",
+    "out/rust-output-dsp/build-debug-probe-final.log": "e8dfb7087eb8c1732b93e8b9e05c9d7a290d9934d4a8c91eddaaedbb00d777cf",
+    "out/rust-output-dsp/build-debug.log": "6c5e811195f6acb9c438601e9f58a4cfa1082a25188caa71758102b408db2d07",
+    "out/rust-output-dsp/build-probe-final.log": "57c6d5def09f945e5264af4615bc9f4183e5b32dc1d469495eeac575b112673d",
+    "out/rust-output-dsp/build-release.log": "c7ec6368392b7168c52ea799e0e1cdb87374f85ae14f27b79999a18c3899f239",
+    "out/rust-output-dsp/licenses.log": "563d708e768fbd978b5167c96bd260c4c885955d83e00114ee5b1de139da319c",
+    "out/rust-output-dsp/quality-cpp.log": "4ac45b9764604a3e8d102484ca3c1db4b6dcbde6ff9f201f5586f40b4dd625bf",
+    "out/rust-output-dsp/quality-probe-cppcheck.log": "f6476564cc2abd46df57bfd4c61d150ecd3510c4d44360f40c18e89639fb3ea1",
+    "out/rust-output-dsp/quality-probe-final.log": "53bb23ed2386aeb19c9aa4bd1fc31a9aa9fb980649778c3d7d8f96695e372fd9",
+    "out/rust-output-dsp/quality-rust.log": "1672c4314ed65cd3c7c2e7936488639cb7ae8bef680d4bed4f48e3a0607508c9",
+    "out/rust-output-dsp/tests-debug-probe-final.log": "d21477f569d6e2ed9c015972e682e0d7a362e49989335aeafb6642299cd04988",
+    "out/rust-output-dsp/tests-debug.log": "725b89b5279295f3fb8e09d115f415c9bc0ef4cc500f1b59203465ceb3c18fa2",
+    "out/rust-output-dsp/tests-focused.log": "26bd12e2eac6fd59c8dcd91452b9bda38053c42bfb0cfeaf52a0b0f9b698fbf6",
+    "out/rust-output-dsp/tests-release.log": "08636bde710380aa4e955d6cac0e9bb52489aaca3d148b16df7aa99169d059ad",
+    "out/rust-output-dsp/tests-rust-release.log": "c3b59c6a12672d2ba36067d33872ad8cea9ee6969fddc78667eda2e65f789be6",
+    "out/rust-output-dsp/windows-ctest.log": "da461e24462c9e38d6d1f57a12fd41645723bf549a0b5fe1fa05d9fe8bc54e90",
+    "out/rust-output-dsp/windows-final.log": "3c56fdd83fa1f3ed62779425f6b3b7828bd207cfb69ce0bcc2bf527b334a9db1",
+    "out/rust-output-dsp/windows-run.log": "0f5fe3cda37735089e595bbab0dd69292ecea0354927a3857621988b9165768c"
+  }
+}

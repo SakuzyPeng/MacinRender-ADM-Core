@@ -348,72 +348,42 @@ std::optional<bool> resolve_live_head_locked(const LiveOverrides& overrides,
     return pick != nullptr ? pick->head_locked : std::nullopt;
 }
 
-LiveGainRamp::LiveGainRamp(uint32_t sample_rate, uint32_t ramp_ms) noexcept
-    : ramp_frames_(std::max<std::size_t>(
-          1U, (static_cast<std::size_t>(sample_rate) * static_cast<std::size_t>(ramp_ms)) / 1000U)) {}
+LiveGainRamp::LiveGainRamp(uint32_t sample_rate, uint32_t ramp_ms) : bank_(1U, sample_rate, ramp_ms) {}
 
 void LiveGainRamp::set_target(float target) noexcept {
-    if (target == target_) {
-        return;
-    }
-    target_ = target;
-    if (!started_) {
-        return;
-    }
-    if (ramp_frames_ <= 1U || current_ == target_) {
-        current_ = target_;
-        remaining_frames_ = 0U;
-        step_ = 0.0F;
-        return;
-    }
-    remaining_frames_ = ramp_frames_;
-    step_ = (target_ - current_) / static_cast<float>(ramp_frames_ - 1U);
+    bank_.set_targets(std::span{&target, 1U});
 }
 
 float LiveGainRamp::next() noexcept {
-    if (!started_) {
-        started_ = true;
-        current_ = target_;
-        remaining_frames_ = 0U;
-        return current_;
-    }
-
-    const float value = current_;
-    if (remaining_frames_ > 1U) {
-        current_ += step_;
-        --remaining_frames_;
-    } else if (remaining_frames_ == 1U) {
-        current_ = target_;
-        remaining_frames_ = 0U;
-        step_ = 0.0F;
-    }
+    float value = 0.0F;
+    fill(std::span{&value, 1U});
     return value;
 }
 
-InterleavedLiveGainSmoother::InterleavedLiveGainSmoother(std::size_t channels, uint32_t sample_rate) {
-    ramps_.reserve(channels);
-    for (std::size_t channel = 0; channel < channels; ++channel) {
-        ramps_.emplace_back(sample_rate);
-    }
+void LiveGainRamp::fill(std::span<float> output) noexcept {
+    bank_.fill(output);
 }
 
+InterleavedLiveGainSmoother::InterleavedLiveGainSmoother(std::size_t channels, uint32_t sample_rate)
+    : channels_(channels), bank_(channels, sample_rate, LiveGainRamp::k_default_ramp_ms) {}
+
 void InterleavedLiveGainSmoother::set_targets(std::span<const float> targets) noexcept {
-    const std::size_t count = std::min(ramps_.size(), targets.size());
-    for (std::size_t channel = 0; channel < count; ++channel) {
-        ramps_[channel].set_target(targets[channel]);
-    }
-    for (std::size_t channel = count; channel < ramps_.size(); ++channel) {
-        ramps_[channel].set_target(1.0F);
-    }
+    bank_.set_targets(targets);
 }
 
 void InterleavedLiveGainSmoother::apply(float* interleaved, std::size_t frames) noexcept {
-    const std::size_t channels = ramps_.size();
-    for (std::size_t frame = 0; frame < frames; ++frame) {
-        for (std::size_t channel = 0; channel < channels; ++channel) {
-            interleaved[(frame * channels) + channel] *= ramps_[channel].next();
-        }
+    if (frames > std::numeric_limits<std::size_t>::max() / channels_) {
+        std::terminate();
     }
+    bank_.apply(std::span{interleaved, frames * channels_});
+}
+
+void InterleavedLiveGainSmoother::fill(std::span<float> output) noexcept {
+    bank_.fill(output);
+}
+
+void InterleavedLiveGainSmoother::reset() noexcept {
+    bank_.reset();
 }
 
 bool is_lfe_label(std::string_view raw) noexcept {

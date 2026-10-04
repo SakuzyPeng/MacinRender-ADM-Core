@@ -12,6 +12,7 @@ mod convolution;
 mod hptf;
 mod hrtf;
 mod meter;
+mod output_dsp;
 mod resampler;
 mod spatial;
 mod spreader;

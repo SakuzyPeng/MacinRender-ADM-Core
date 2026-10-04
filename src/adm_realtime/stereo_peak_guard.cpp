@@ -1,87 +1,65 @@
 #include "stereo_peak_guard.h"
 
-#include <algorithm>
-#include <cassert>
-#include <cmath>
+#include <array>
+#include <exception>
+#include <stdexcept>
+#include <utility>
+
+#include "dsp_ffi.h"
 
 namespace mradm::realtime {
-
-StereoPeakGuard::StereoPeakGuard(std::uint32_t sample_rate)
-    : attack_weights_(std::max(1U, sample_rate / 200U) + 1U),
-      release_(1.0F - std::exp(-1.0F / (0.1F * static_cast<float>(sample_rate)))) {
-    const auto capacity = k_pull_frames + lookahead_frames();
-    samples_.resize(capacity * 2U);
-    peaks_.resize(capacity);
-    for (std::size_t index = 0U; index < attack_weights_.size(); ++index) {
-        attack_weights_[index] = 1.0F - (static_cast<float>(index) / static_cast<float>(lookahead_frames()));
+namespace {
+void check(int status) noexcept {
+    if (status != 0) {
+        std::terminate();
     }
 }
-
-void StereoPeakGuard::reset() noexcept {
-    read_ = 0U;
-    size_ = 0U;
-    gain_ = 1.0F;
+MradmDspPeakStatus status(const void* handle, bool ended = false) noexcept {
+    MradmDspPeakStatus result{};
+    check(mradm_dsp_peak_guard_status(handle, ended ? 1U : 0U, &result, nullptr, 0U));
+    return result;
 }
+} // namespace
 
+StereoPeakGuard::StereoPeakGuard(std::uint32_t sample_rate) {
+    std::array<char, 256> error{};
+    if (mradm_dsp_peak_guard_create(sample_rate, &handle_, error.data(), error.size()) != 0) {
+        throw std::runtime_error(error.data());
+    }
+}
+StereoPeakGuard::~StereoPeakGuard() {
+    mradm_dsp_peak_guard_destroy(handle_);
+}
+StereoPeakGuard::StereoPeakGuard(StereoPeakGuard&& other) noexcept : handle_(std::exchange(other.handle_, nullptr)) {}
+StereoPeakGuard& StereoPeakGuard::operator=(StereoPeakGuard&& other) noexcept {
+    if (this != &other) {
+        mradm_dsp_peak_guard_destroy(handle_);
+        handle_ = std::exchange(other.handle_, nullptr);
+    }
+    return *this;
+}
+void StereoPeakGuard::reset() noexcept {
+    check(mradm_dsp_peak_guard_reset(handle_, nullptr, 0U));
+}
 std::size_t StereoPeakGuard::lookahead_frames() const noexcept {
-    return attack_weights_.size() - 1U;
+    return status(handle_).lookahead;
 }
 std::size_t StereoPeakGuard::buffered_frames() const noexcept {
-    return size_;
+    return status(handle_).buffered;
 }
 std::size_t StereoPeakGuard::writable_frames() const noexcept {
-    return peaks_.size() - size_;
+    return status(handle_).writable;
 }
 std::size_t StereoPeakGuard::readable_frames(bool ended) const noexcept {
-    return ended ? size_ : size_ - std::min(size_, lookahead_frames());
+    return status(handle_, ended).readable;
 }
-
 void StereoPeakGuard::push(std::span<const float> stereo) noexcept {
-    assert(stereo.size() % 2U == 0U && stereo.size() / 2U <= writable_frames());
-    auto write = (read_ + size_) % peaks_.size();
-    for (std::size_t index = 0U; index < stereo.size(); index += 2U) {
-        const float left = std::isfinite(stereo[index]) ? stereo[index] : 0.0F;
-        const float right = std::isfinite(stereo[index + 1U]) ? stereo[index + 1U] : 0.0F;
-        samples_[write * 2U] = left;
-        samples_[(write * 2U) + 1U] = right;
-        peaks_[write] = std::max(std::abs(left), std::abs(right));
-        write = (write + 1U) % peaks_.size();
-    }
-    size_ += stereo.size() / 2U;
+    check(mradm_dsp_peak_guard_push(handle_, stereo.data(), stereo.size(), nullptr, 0U));
 }
-
-float StereoPeakGuard::next_gain(float volume) noexcept {
-    float gain = gain_ + ((1.0F - gain_) * release_);
-    const auto count = std::min(size_, attack_weights_.size());
-    auto sample = read_;
-    for (std::size_t ahead = 0U; ahead < count; ++ahead) {
-        const float peak = peaks_[sample] * volume;
-        if (peak > k_ceiling) {
-            const float required = k_ceiling / peak;
-            // Each future peak imposes a linear attack ending at its sample.
-            // The minimum of these ramps is continuous and reaches the ceiling
-            // in time, unlike an instantaneous block-peak gain change.
-            gain = std::min(gain, 1.0F - ((1.0F - required) * attack_weights_[ahead]));
-        }
-        ++sample;
-        if (sample == peaks_.size()) {
-            sample = 0U;
-        }
-    }
-    gain_ = gain;
-    return gain;
-}
-
 std::size_t StereoPeakGuard::pop(std::span<float> output, float volume, bool ended) noexcept {
-    const auto frames = std::min(output.size() / 2U, readable_frames(ended));
-    for (std::size_t frame = 0U; frame < frames; ++frame) {
-        const float gain = volume * next_gain(volume);
-        output[frame * 2U] = samples_[read_ * 2U] * gain;
-        output[(frame * 2U) + 1U] = samples_[(read_ * 2U) + 1U] * gain;
-        read_ = (read_ + 1U) % peaks_.size();
-        --size_;
-    }
+    std::size_t frames = 0;
+    check(
+        mradm_dsp_peak_guard_pop(handle_, output.data(), output.size(), volume, ended ? 1U : 0U, &frames, nullptr, 0U));
     return frames;
 }
-
 } // namespace mradm::realtime

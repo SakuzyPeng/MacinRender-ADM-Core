@@ -25,6 +25,8 @@
 #include "adm/render.h"
 #include "adm/scene.h"
 
+#include "../adm_dsp/gain.h"
+
 namespace mradm::render_common {
 
 // 方向归一化的规范长度计算；用于替代各标准库算法不同的三参数 std::hypot。
@@ -141,18 +143,14 @@ class LiveGainRamp {
   public:
     static constexpr uint32_t k_default_ramp_ms = 20U;
 
-    explicit LiveGainRamp(uint32_t sample_rate, uint32_t ramp_ms = k_default_ramp_ms) noexcept;
+    explicit LiveGainRamp(uint32_t sample_rate, uint32_t ramp_ms = k_default_ramp_ms);
 
     void set_target(float target) noexcept;
     [[nodiscard]] float next() noexcept;
+    void fill(std::span<float> output) noexcept;
 
   private:
-    std::size_t ramp_frames_{1U};
-    std::size_t remaining_frames_{0U};
-    float current_{1.0F};
-    float target_{1.0F};
-    float step_{0.0F};
-    bool started_{false};
+    dsp::GainBank bank_;
 };
 
 // Applies one LiveGainRamp per channel to interleaved PCM. Render streams use this before their
@@ -163,9 +161,12 @@ class InterleavedLiveGainSmoother {
 
     void set_targets(std::span<const float> targets) noexcept;
     void apply(float* interleaved, std::size_t frames) noexcept;
+    void fill(std::span<float> output) noexcept;
+    void reset() noexcept;
 
   private:
-    std::vector<LiveGainRamp> ramps_;
+    std::size_t channels_;
+    dsp::GainBank bank_;
 };
 
 // ADM producers are inconsistent: some LFE DirectSpeakers channels carry

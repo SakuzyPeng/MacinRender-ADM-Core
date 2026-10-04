@@ -36,6 +36,36 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOCATOR: Counting = Counting;
 
 #[test]
+fn prepared_output_gains_and_peak_protection_do_not_allocate() {
+    use mradm_dsp::{gain::GainBank, peak_guard::StereoPeakGuard};
+    let mut gains = GainBank::new(2, 48000, 20).unwrap();
+    let mut guard = StereoPeakGuard::new(48000).unwrap();
+    let mut block = [0.25; 74];
+    COUNT.with(|c| c.set(Some(0)));
+    for index in 0..80 {
+        gains.set_targets(&[index as f32 * 0.01, 0.5]).unwrap();
+        gains.fill(&mut block).unwrap();
+        gains.apply(&mut block).unwrap();
+        guard.push(&block).unwrap();
+        guard.pop(&mut block, 0.8, false).unwrap();
+        assert!(gains.set_targets(&[f32::NAN]).is_err());
+        assert!(guard.pop(&mut block, f32::NAN, true).is_err());
+        if index % 13 == 0 {
+            gains.reset();
+            guard.reset();
+        }
+    }
+    while guard.pop(&mut block, 0.8, true).unwrap() != 0 {}
+    gains.reset();
+    guard.reset();
+    let count = COUNT.with(|c| c.replace(None).unwrap());
+    assert_eq!(
+        count, 0,
+        "allocation in prepared live gains / peak protection"
+    );
+}
+
+#[test]
 fn prepared_hptf_updates_processing_and_seek_do_not_allocate() {
     use mradm_dsp::hptf::{Band, BandKind, Cascade, PreampMode, Processor, Snapshot, design};
     let coefficients = design(

@@ -833,6 +833,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_stereo_peak_guard_tests COMMAND mr_adm_stereo_peak_guard_tests)
     set_tests_properties(mr_adm_stereo_peak_guard_tests PROPERTIES TIMEOUT 30)
 
+    add_executable(mr_adm_output_dsp_tests tests/unit/output_dsp_test.cpp)
+    target_link_libraries(mr_adm_output_dsp_tests PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon)
+    mr_adm_core_apply_warnings(mr_adm_output_dsp_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_output_dsp_tests)
+    add_test(NAME mr_adm_output_dsp_tests COMMAND mr_adm_output_dsp_tests)
+    set_tests_properties(mr_adm_output_dsp_tests PROPERTIES TIMEOUT 60)
+
     # Release-only/manual acceptance tool. It is deliberately excluded from the default build and
     # CTest because its normal invocation runs for ten wall-clock minutes.
     add_executable(mr_adm_scene_stream_stress EXCLUDE_FROM_ALL tests/manual/scene_stream_stress.cpp)
