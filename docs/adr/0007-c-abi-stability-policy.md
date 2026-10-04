@@ -485,7 +485,8 @@ IAMF 需 `MR_ADM_ENABLE_IAMF=ON`、bitrate 区间）只在 README 文档里，GU
 - **播放器 pull**：输出固定为 interleaved normalized `f32`。`pull` 始终填满缓冲并把短缺尾部补零；
   buffering/underrun 的零不推进媒体位置。pull 路径不加锁、不分配、不做 I/O，也不写日志或错误字符串。
 - **渲染与采样率**：metadata 在输入 sample domain 生效，动态 SAF backend 完成空间渲染后再经 PRIVATE
-  libsamplerate 0.2.2（`SRC_SINC_MEDIUM_QUALITY`）转换；同采样率旁路。持续有理数 accumulator 保证
+  libsamplerate 0.2.2（`SRC_SINC_MEDIUM_QUALITY`）转换（初始实现；后续按 [ADR 0011](0011-rust-fixed-rate-resampling.md)
+  迁入 Rust rubato）；同采样率旁路。持续有理数 accumulator 保证
   EOS 总长为 `ceil((end-target) * output_rate / input_rate)`，不按 SceneFrame 独立取整。
 - **线程模型**：同一 handle 允许 producer、audio-pull、status/log 轮询，以及 backend/policy/pose
   control 调用并发；控制值由 worker 在 slice 边界合并，连续更新采用最新值。create/destroy 不得与

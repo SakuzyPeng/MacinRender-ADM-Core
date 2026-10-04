@@ -7,7 +7,7 @@ FetchContent _deps 树同步而来。vendored/system 组件的 NOTICE.txt 为手
 模式：
   --refresh --build-dir DIR   从 <DIR>/_deps 把各依赖 license 原文同步进 bundle，并重写 INDEX.md
   --check                     （无需构建）校验 bundle 中每个组件声明的文件都存在
-  --check --build-dir DIR     额外：对 _deps 中存在的依赖，校验 bundle 字节与新鲜 _deps 一致（防漂移）
+  --check --build-dir DIR     额外：对 _deps 中存在的依赖，校验许可文本一致（仅统一 CRLF/LF）
 
 退出码：0 通过；1 校验失败；2 用法错误。
 """
@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import sys
 from pathlib import Path
 
@@ -24,6 +23,12 @@ import _common
 
 # 这些 source.type 的 license 原文从 _deps 同步；其余（vendored/system）为手写 NOTICE。
 HARVESTABLE = {"fetchcontent", "nested", "cargo", "local"}
+
+
+def license_text_bytes(path: Path) -> bytes:
+    # Git may check out the same upstream LICENSE with CRLF on Windows. Ignore
+    # only that distinction, preserving all other whitespace and content.
+    return path.read_bytes().replace(b"\r\n", b"\n")
 
 
 def component_root(component: dict, build_dir: Path) -> Path | None:
@@ -99,7 +104,10 @@ def refresh(components: list[dict], build_dir: Path) -> int:
             if not src_file.is_file():
                 missing_sources.append(f"{c['name']}: _deps 中缺 {lf}")
                 continue
-            shutil.copyfile(src_file, dest_dir / Path(lf).name)
+            destination = dest_dir / Path(lf).name
+            content = license_text_bytes(src_file)
+            if not destination.is_file() or license_text_bytes(destination) != content:
+                destination.write_bytes(content)
 
     if missing_sources:
         print("[ERROR] refresh 未完整：", file=sys.stderr)
@@ -172,7 +180,7 @@ def check(components: list[dict], build_dir: Path | None, require_full: bool) ->
                     continue
                 if not dest_file.is_file():
                     continue  # 已在齐全性检查里报过
-                if src_file.read_bytes() != dest_file.read_bytes():
+                if license_text_bytes(src_file) != license_text_bytes(dest_file):
                     errors.append(
                         f"{c['name']}: bundle 与 _deps 漂移 {Path(lf).name}"
                         f"（依赖升级后请运行 --refresh）"

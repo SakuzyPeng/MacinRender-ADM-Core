@@ -14,6 +14,7 @@ option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
 option(MR_ADM_BUILD_SAF_REFERENCE_TESTS "Build optional legacy SAF numerical reference tools" OFF)
 option(MR_ADM_BUILD_EBUR128_REFERENCE_TESTS "Build optional C libebur128 meter reference tests" OFF)
+option(MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS "Build optional C libsamplerate reference tests" OFF)
 option(MR_ADM_CONSISTENCY_DIAGNOSTICS "Enable private numerical checkpoints and worker controls (measurement only)" OFF)
 option(MR_ADM_DIAGNOSTIC_PORTABLE_RNG "Replace SAF's C RNG for a numerical attribution experiment only" OFF)
 option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
@@ -349,7 +350,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_binaural
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64  SampleRate::samplerate MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE libbw64 MacinRender::ADMAudio MacinRender::ADMRenderCommon
     PRIVATE MacinRender::ADMDsp
 )
 target_compile_definitions(mr_adm_render_binaural PRIVATE MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
@@ -621,7 +622,6 @@ target_link_libraries(mr_adm_realtime
         Threads::Threads
         miniaudio
         MacinRender::ADMDsp
-        SampleRate::samplerate
         MacinRender::ADMRenderCommon
         MacinRender::ADMRenderVBAP
         MacinRender::ADMRenderBinaural
@@ -1255,6 +1255,21 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_live_binaural_continuity_tests)
     mr_adm_core_apply_static_analysis(mr_adm_live_binaural_continuity_tests)
     add_test(NAME mr_adm_live_binaural_continuity_tests COMMAND mr_adm_live_binaural_continuity_tests)
+
+    add_executable(mr_adm_resampler_tests tests/unit/resampler_test.cpp)
+    target_link_libraries(mr_adm_resampler_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp)
+    mr_adm_core_apply_warnings(mr_adm_resampler_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_resampler_tests)
+    add_test(NAME mr_adm_resampler_tests COMMAND mr_adm_resampler_tests)
+
+    if(MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS)
+        add_executable(mr_adm_resampler_reference_tests tests/reference/resampler_reference_test.cpp)
+        target_link_libraries(mr_adm_resampler_reference_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp SampleRate::samplerate)
+        mr_adm_core_apply_warnings(mr_adm_resampler_reference_tests)
+        mr_adm_core_apply_static_analysis(mr_adm_resampler_reference_tests)
+        add_test(NAME mr_adm_resampler_reference_tests COMMAND mr_adm_resampler_reference_tests)
+        set_tests_properties(mr_adm_resampler_reference_tests PROPERTIES TIMEOUT 120)
+    endif()
 
     add_executable(mr_adm_meter_tests tests/unit/meter_test.cpp)
     target_link_libraries(mr_adm_meter_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp)

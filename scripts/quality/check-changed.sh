@@ -70,6 +70,12 @@ done < <(
 is_platform_excluded() {
     case "$1" in
         src/adm_windows/*) return 0 ;;
+        tests/reference/resampler_reference_test.cpp)
+            if ! grep -q '^MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
+                return 0
+            fi
+            return 1
+            ;;
         tests/reference/ebur128_reference_test.cpp)
             if ! grep -q '^MR_ADM_BUILD_EBUR128_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
                 return 0

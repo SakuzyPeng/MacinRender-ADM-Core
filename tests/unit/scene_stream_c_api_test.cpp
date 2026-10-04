@@ -487,6 +487,40 @@ bool test_resampling_length(adm_context_t* context) {
     return ok;
 }
 
+bool test_binaural_resampled_hrtf_and_output(adm_context_t* context) {
+    bool ok = true;
+    for (const auto input_rate : {8000U, 44100U, 96000U, 192000U}) {
+        StreamGuard stream;
+        auto config = stream_config(input_rate, 48000U);
+        config.rendering.renderer = ADM_RENDERER_SAF_BINAURAL;
+        config.rendering.output_layout = "binaural";
+        if (!create_stream(context, config, stream)) {
+            return false;
+        }
+        ok &= check(adm_scene_stream_begin_epoch(stream.value, 50U, 0) == ADM_ERROR_OK,
+                    "begin HRTF and output resampling epoch");
+        ok &= configure_object(stream.value, 50U, 1U);
+        std::vector<float> samples(1025U, 0.01F);
+        adm_scene_pcm_plane_t plane{};
+        adm_scene_initial_state_t initial{};
+        auto frame = object_frame(50U, 1U, 0, samples, plane, initial);
+        int32_t submit = -1;
+        ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 0U, &submit) == ADM_ERROR_OK &&
+                        submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                    "submit binaural audio at a non-native HRTF sample rate");
+        ok &= check(adm_scene_stream_signal_end(stream.value, 50U, 1025) == ADM_ERROR_OK,
+                    "signal HRTF/output resampling EOS");
+        bool saw_signal = false;
+        std::vector<float> output;
+        const auto expected = (1025ULL * 48000U + input_rate - 1U) / input_rate;
+        ok &= wait_for_output(stream.value, 2U, expected, saw_signal, &output);
+        ok &= check(saw_signal && output.size() == expected * 2U &&
+                        std::ranges::all_of(output, [](float sample) { return std::isfinite(sample); }),
+                    "resampled HRTFs and output preserve finite signal and exact duration");
+    }
+    return ok;
+}
+
 bool test_resampling_preroll_boundary(adm_context_t* context) {
     StreamGuard stream;
     auto config = stream_config(48000U, 44100U);
@@ -2294,6 +2328,7 @@ int main() {
         ok &= test_deep_copy_and_timeline(context);
         ok &= test_validation_and_backpressure(context);
         ok &= test_resampling_length(context);
+        ok &= test_binaural_resampled_hrtf_and_output(context);
         ok &= test_resampling_preroll_boundary(context);
         ok &= test_rational_accumulator_many_frames(context);
         ok &= test_generation_topology_contract(context);

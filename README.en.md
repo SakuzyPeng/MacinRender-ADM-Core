@@ -324,6 +324,8 @@ Loudness and True Peak metering use Rust `ebur128`, with live integration kept o
 
 Binaural convolution, filter transitions, diffuse delay and live input mixing also run in Rust. Live Scene and batch/legacy streaming retain their respective history and tail semantics; prepared kernel processing and reset allocate no memory. See the [Rust binaural DSP migration](docs/architecture/RUST_BINAURAL_DSP_MIGRATION.md) for scope and validation.
 
+Scene output and live HRTF resampling use Rust `rubato`, retaining rational duration, preroll and reset semantics. `libsamplerate` is only used by the default-off `MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS` target. See the [Rust resampler migration](docs/architecture/RUST_RESAMPLER_MIGRATION.md) for filter/phase differences and reference measurements.
+
 System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
 
 ```bash

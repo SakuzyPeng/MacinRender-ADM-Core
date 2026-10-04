@@ -17,6 +17,9 @@ if ! grep -q '^MR_ADM_BUILD_SAF_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCach
         reference_excludes+=(-i "$repo_root/$file")
     done
 fi
+if ! grep -q '^MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
+    reference_excludes+=(-i "$repo_root/tests/reference/resampler_reference_test.cpp")
+fi
 if ! grep -q '^MR_ADM_BUILD_EBUR128_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
     reference_excludes+=(-i "$repo_root/tests/reference/ebur128_reference_test.cpp")
 fi

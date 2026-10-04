@@ -10,6 +10,7 @@ use std::{
 };
 mod convolution;
 mod meter;
+mod resampler;
 mod spatial;
 mod spreader;
 

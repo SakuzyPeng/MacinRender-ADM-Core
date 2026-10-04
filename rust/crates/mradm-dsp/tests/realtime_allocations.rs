@@ -36,6 +36,28 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOCATOR: Counting = Counting;
 
 #[test]
+fn prepared_resampler_and_finish_reset_do_not_allocate() {
+    use mradm_dsp::resampler::Resampler;
+    for (from, to) in [(48000, 44100), (8000, 192000), (192000, 8000)] {
+        let mut r = Resampler::new(2, from, to).unwrap();
+        let input = [0.01; 1024];
+        let mut output = [0.0; 34];
+        COUNT.with(|c| c.set(Some(0)));
+        for _ in 0..2 {
+            let mut offset = 0;
+            while offset < input.len() {
+                let p = r.process(&input[offset..], &mut output).unwrap();
+                offset += p.input_frames * 2;
+            }
+            while r.finish(&mut output).unwrap() != 0 {}
+            r.reset();
+        }
+        let count = COUNT.with(|c| c.replace(None).unwrap());
+        assert_eq!(count, 0, "allocation in prepared resampling / EOS / reset");
+    }
+}
+
+#[test]
 fn prepared_binaural_motion_fades_diffuse_and_resets_do_not_allocate() {
     let mut live = LiveConvolver::new(64, 64, 48000).unwrap();
     let mut state = live.make_state();

@@ -4,7 +4,7 @@
 
 ## 1. 一期范围
 
-生产路径不再链接 SAF、OpenBLAS/LAPACKE 或 libmysofa。现有 `saf`、`saf-binaural`、`saf-spreader` 参数、backend 标识和 C ABI 枚举值继续兼容。C++ 持有场景、编排、线程池及公开 C ABI；libear、libsamplerate、ADM/BW64 和编解码职责不变。一期保留的 C 计量库已在后续 [Rust Meter 迁移](RUST_METER_MIGRATION.md)中替换。
+生产路径不再链接 SAF、OpenBLAS/LAPACKE 或 libmysofa。现有 `saf`、`saf-binaural`、`saf-spreader` 参数、backend 标识和 C ABI 枚举值继续兼容。C++ 持有场景、编排、线程池及公开 C ABI；libear、ADM/BW64 和编解码职责不变。一期保留的 C 计量库和 libsamplerate 已分别在后续 [Rust Meter 迁移](RUST_METER_MIGRATION.md)与 [Rust 重采样迁移](RUST_RESAMPLER_MIGRATION.md)中替换。
 
 实现位于同仓库 Cargo workspace：`mradm-dsp` 是禁止 unsafe 的算法库，`mradm-ffi` 负责内部 C 边界。C++ 通过私有 `MacinRender::ADMDsp` target 使用它，不向公开头文件暴露 Rust 或第三方类型。FFI 使用显式长度、浮点数组、状态句柄和调用方错误缓冲；句柄由创建方释放，panic 不穿过 C ABI。C++ FFT 句柄采用 RAII。
 
@@ -29,7 +29,7 @@
 - 三维共面布局的三角化可以改变，测试约束方向、功率、有效权重及连续性，不再约束旧三角形索引。旧输出与新输出的差异不应全部解释为舍入误差。
 - spreader 的随机序列改变，因此波形对照采用能量/协方差和状态验收；不能以低波形相关度直接判断算法错误。
 - 保留 512 样本适配缓冲，spreader 总补偿延迟仍为 2048 样本。实时 Scene 原有 cloud 路径和 spreader 使用限制保持不变。
-- SOFA 支持 SimpleFreeFieldHRIR、GeneralFIR，要求两耳及现有坐标单位。原始 HRIR 不被归一化或隐式重采样；离线采样率限制和实时 libsamplerate 转换保持原行为。
+- SOFA 支持 SimpleFreeFieldHRIR、GeneralFIR，要求两耳及现有坐标单位。原始 HRIR 不被归一化或隐式重采样；离线采样率限制保持原样。实时转换随后迁入 Rust，数值边界见重采样迁移记录。
 - 滤波器频率按实际采样率计算，不沿用 SAF 在空 STFT handle 下对非 44.1 kHz 输入回退到 48 kHz 频率表的细节。
 
 ## 3. 构建与发布
@@ -80,7 +80,7 @@ Rust 单元测试覆盖独立 double DFT、实际 FFT 长度、凸包/Voronoi、
 
 - 建立确定性 FFT/数学参考路径，控制 SIMD/FMA、三角函数及系数生成。
 - 明确 SVD 简并子空间、排序与停止条件；固定 worker 分组及累加拓扑。
-- 覆盖保留的 libear 系数、增益、libsamplerate 和计量/归一化反馈链路。
+- 覆盖保留的 libear 系数、增益、Rust 重采样和计量/归一化反馈链路。
 - 按 renderer/布局/语义/后处理组合恢复位相等门禁。
 
 一致性 CI 继续保存 A/B C++ 数值控制下的 PCM 和构建记录，使用一期专用的空跨平台门禁清单；同进程重复性仍是硬门禁。历史 SAF 清单和实验不改写：见 [原始定位](CONSISTENCY_LOCALIZATION.md)、[3D VBAP 定位](CONSISTENCY_VBAP_LOCALIZATION.md)。旧 run-localization.py 只适用于那些记录的 SAF 源码版本，会拒绝对当前 Rust 构建执行旧归因实验。

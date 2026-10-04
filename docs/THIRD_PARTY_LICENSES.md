@@ -39,7 +39,7 @@
 | `libebur128` @ v1.2.6 | 历史响度/True Peak 参考（测试专用） | MIT | opt-in（默认关闭） | 仅用于显式启用的 C 参考测试；生产计量由 Rust ebur128 实现。 |
 | `dr_libs` @ 47a4f08e777faddf59a8955c4ea84f69f41020d5 | WAV/FLAC 轻量读写（dr_wav / dr_flac） | Unlicense OR MIT-0 | 可用 | header-only；本项目按 MIT-0/Unlicense 宽松使用 |
 | `miniaudio` @ 0.11.21 | 实时音频设备输出（监听引擎） | Unlicense OR MIT-0 | 可用 | header-only；实现仅在 src/adm_realtime/miniaudio_device.cpp；Linux dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox |
-| `libsamplerate` @ 0.2.2 | 实时 Scene 空间渲染后的输出采样率转换 | BSD-2-Clause | 可用 | 固定 SRC_SINC_MEDIUM_QUALITY；仅作为 PRIVATE 实现依赖 |
+| `libsamplerate` @ 0.2.2 | 历史采样率转换参考（测试专用） | BSD-2-Clause | opt-in（默认关闭） | 仅用于显式开启的参考测试；生产重采样使用纯 Rust rubato。 |
 | `libFLAC` @ 1.5.0 | FLAC 编码与 metadata | BSD-3-Clause | 可用 | 默认仅链接 libFLAC（Xiph BSD-like）；源码包内 COPYING.GPL/LGPL/FDL 覆盖未链接的 C++ libs/programs/docs，默认发行不涉及 |
 | `libbw64` @ 0.10.0 | BW64/ADM BWF 读写 | Apache-2.0 | 可用 |  |
 | `libadm` @ 0.14.0 | ADM XML 建模/解析 | Apache-2.0 | 可用 | 内含 RapidXML（Boost Software License 或 MIT） |
@@ -99,6 +99,14 @@
 | `rust-unicode-ident-1.0.26` @ 1.0.26 | Rust DSP 的锁定依赖 | (MIT OR Apache-2.0) AND Unicode-3.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-wide-1.7.1` @ 1.7.1 | Rust DSP 的锁定依赖 | Zlib OR Apache-2.0 OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-winnow-0.7.15` @ 0.7.15 | Rust DSP 的锁定依赖 | MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-audio-codec-algorithms-0.8.1` @ 0.8.1 | Rust 重采样的锁定依赖 | 0BSD OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
+| `rust-audioadapter-5.0.0` @ 5.0.0 | Rust 重采样的锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
+| `rust-audioadapter-buffers-5.2.0` @ 5.2.0 | Rust 重采样的锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
+| `rust-audioadapter-sample-5.2.0` @ 5.2.0 | Rust 重采样的锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
+| `rust-rubato-5.0.1` @ 5.0.1 | Rust 重采样的锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
+| `rust-syn-2.0.119` @ 2.0.119 | Rust 重采样的锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
+| `rust-visibility-0.1.1` @ 0.1.1 | Rust 重采样的锁定依赖 | Zlib OR MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
+| `rust-windowfunctions-0.1.1` @ 0.1.1 | Rust 重采样的锁定依赖 | MIT | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
 
 <!-- END GENERATED DEPS -->
 

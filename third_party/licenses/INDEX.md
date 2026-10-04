@@ -26,6 +26,10 @@
 | rust-adler2-2.0.1 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | `LICENSE-0BSD`, `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-approx-0.5.1 | 0.5.1 | Apache-2.0 | `LICENSE` |
 | rust-arrayvec-0.7.8 | 0.7.8 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-audio-codec-algorithms-0.8.1 | 0.8.1 | 0BSD OR Apache-2.0 | `LICENSE-0BSD`, `LICENSE-APACHE` |
+| rust-audioadapter-5.0.0 | 5.0.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE.txt` |
+| rust-audioadapter-buffers-5.2.0 | 5.2.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE.txt` |
+| rust-audioadapter-sample-5.2.0 | 5.2.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE.txt` |
 | rust-autocfg-1.5.1 | 1.5.1 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-bitflags-1.3.2 | 1.3.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-bitflags-2.13.2 | 2.13.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
@@ -52,19 +56,23 @@
 | rust-quote-1.0.47 | 1.0.47 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-rawpointer-0.2.1 | 0.2.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-realfft-3.5.0 | 3.5.0 | MIT | `README.md`, `NOTICE.txt` |
+| rust-rubato-5.0.1 | 5.0.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE.txt` |
 | rust-rustfft-6.4.1 | 6.4.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-safe_arch-1.2.0 | 1.2.0 | Zlib OR Apache-2.0 OR MIT | `LICENSE-APACHE.md`, `LICENSE-MIT.md`, `LICENSE-ZLIB.md` |
 | rust-simba-0.10.2 | 0.10.2 | Apache-2.0 | `LICENSE` |
 | rust-smallvec-1.16.2 | 1.16.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-sofar-0.3.0 | 0.3.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE` |
 | rust-strength_reduce-0.2.4 | 0.2.4 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-syn-2.0.119 | 2.0.119 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-syn-3.0.6 | 3.0.6 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-thiserror-2.0.21 | 2.0.21 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-thiserror-impl-2.0.21 | 2.0.21 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-transpose-0.2.3 | 0.2.3 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-typenum-1.20.1 | 1.20.1 | MIT OR Apache-2.0 | `LICENSE`, `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-unicode-ident-1.0.26 | 1.0.26 | (MIT OR Apache-2.0) AND Unicode-3.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-UNICODE` |
+| rust-visibility-0.1.1 | 0.1.1 | Zlib OR MIT OR Apache-2.0 | `LICENSE`, `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-ZLIB` |
 | rust-wide-1.7.1 | 1.7.1 | Zlib OR Apache-2.0 OR MIT | `LICENSE-APACHE.txt`, `LICENSE-MIT.txt`, `LICENSE-ZLIB.txt` |
+| rust-windowfunctions-0.1.1 | 0.1.1 | MIT | `LICENSE.txt` |
 | rust-winnow-0.7.15 | 0.7.15 | MIT | `LICENSE-MIT` |
 | saf-derived-rust-dsp | v1.3.4-subset | ISC AND MIT | `NOTICE.txt` |
 | Spatial_Audio_Framework | v1.3.4 | ISC | `LICENSE.md` |

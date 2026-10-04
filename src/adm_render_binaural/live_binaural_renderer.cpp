@@ -23,7 +23,6 @@
 #include <vector>
 
 // Private project DSP complex type.
-#include <samplerate.h>
 
 #include <fmt/format.h>
 
@@ -33,6 +32,7 @@
 #include "dsp.h"
 #include "head_rotation.h"
 #include "live_binaural_convolver.h"
+#include "resampler.h"
 
 namespace mradm::live_scene {
 
@@ -228,37 +228,54 @@ channel_locked_direction(float azimuth, float elevation, const ObjectState& obje
         return make_error(ErrorCode::render_failed, "live binaural HRTF dataset has an invalid sample rate");
     }
 
-    const double ratio = static_cast<double>(sample_rate) / static_cast<double>(dataset.sample_rate);
-    const auto output_length = static_cast<int>(std::ceil(static_cast<double>(dataset.hrir_len) * ratio));
-    std::vector<float> output(static_cast<std::size_t>(dataset.num_dirs) * k_n_ears *
-                              static_cast<std::size_t>(output_length));
-    std::vector<float> scratch(static_cast<std::size_t>(output_length) + 64U, 0.0F);
-    for (int direction = 0; direction < dataset.num_dirs; ++direction) {
-        for (int ear = 0; ear < k_n_ears; ++ear) {
-            const auto input_offset = (static_cast<std::size_t>(direction) * k_n_ears + static_cast<std::size_t>(ear)) *
-                                      static_cast<std::size_t>(dataset.hrir_len);
-            SRC_DATA request{};
-            request.data_in = dataset.hrirs.data() + input_offset;
-            request.data_out = scratch.data();
-            request.input_frames = dataset.hrir_len;
-            request.output_frames = static_cast<long>(scratch.size());
-            request.src_ratio = ratio;
-            request.end_of_input = 1;
-            const int error = src_simple(&request, SRC_SINC_MEDIUM_QUALITY, 1);
-            if (error != 0) {
-                return make_error(ErrorCode::render_failed,
-                                  fmt::format("failed to resample live binaural HRTF: {}", src_strerror(error)));
+    const auto input_length = static_cast<std::size_t>(dataset.hrir_len);
+    const auto numerator = static_cast<std::uint64_t>(dataset.hrir_len) * sample_rate;
+    const auto output_frames = (numerator + static_cast<std::uint64_t>(dataset.sample_rate) - 1U) /
+                               static_cast<std::uint64_t>(dataset.sample_rate);
+    const auto filters = static_cast<std::size_t>(dataset.num_dirs) * k_n_ears;
+    if (output_frames > static_cast<std::uint64_t>(std::numeric_limits<int>::max()) || filters == 0U ||
+        output_frames > std::numeric_limits<std::size_t>::max() / filters) {
+        return make_error(ErrorCode::unsupported, "resampled HRTF dataset is too large");
+    }
+    const auto output_length = static_cast<std::size_t>(output_frames);
+    auto resampler = dsp::Resampler::create(1U, static_cast<std::uint32_t>(dataset.sample_rate), sample_rate);
+    if (!resampler) {
+        return tl::unexpected{resampler.error()};
+    }
+    std::vector<float> output(filters * output_length);
+    for (std::size_t filter = 0U; filter < filters; ++filter) {
+        auto reset = resampler->reset();
+        if (!reset) {
+            return tl::unexpected{reset.error()};
+        }
+        const auto source = std::span{dataset.hrirs}.subspan(filter * input_length, input_length);
+        const auto destination = std::span{output}.subspan(filter * output_length, output_length);
+        std::size_t consumed = 0U;
+        std::size_t written = 0U;
+        while (consumed < input_length) {
+            auto progress = resampler->process(source.subspan(consumed), destination.subspan(written));
+            if (!progress) {
+                return tl::unexpected{progress.error()};
             }
-            const auto copy_count = std::min<std::size_t>(static_cast<std::size_t>(output_length),
-                                                          static_cast<std::size_t>(request.output_frames_gen));
-            const auto output_offset =
-                (static_cast<std::size_t>(direction) * k_n_ears + static_cast<std::size_t>(ear)) *
-                static_cast<std::size_t>(output_length);
-            std::copy_n(scratch.data(), copy_count, output.data() + output_offset);
+            consumed += progress->input_frames;
+            written += progress->output_frames;
+            if (progress->input_frames == 0U && progress->output_frames == 0U) {
+                return make_error(ErrorCode::render_failed, "HRTF resampler made no progress");
+            }
+        }
+        while (written < output_length) {
+            auto generated = resampler->finish(destination.subspan(written));
+            if (!generated) {
+                return tl::unexpected{generated.error()};
+            }
+            if (*generated == 0U) {
+                return make_error(ErrorCode::render_failed, "HRTF resampler returned a short filter");
+            }
+            written += *generated;
         }
     }
     dataset.sample_rate = static_cast<int>(sample_rate);
-    dataset.hrir_len = output_length;
+    dataset.hrir_len = static_cast<int>(output_length);
     dataset.hrirs = std::move(output);
     return dataset;
 }

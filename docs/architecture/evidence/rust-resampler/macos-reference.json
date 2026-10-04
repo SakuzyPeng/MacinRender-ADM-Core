@@ -1,0 +1,334 @@
+{
+  "build": "Release",
+  "reference": "libsamplerate 0.2.2 SRC_SINC_MEDIUM_QUALITY src_simple",
+  "candidate": "rubato 5.0.1 project fixed-rate wrapper",
+  "summary": {
+    "cases": 40,
+    "passband_cases": 24,
+    "stopband_cases": 4,
+    "short_hrir_cases": 8,
+    "channel_isolation_cases": 4,
+    "max_passband_abs_db": 0.0023471,
+    "least_tested_stopband_rejection_db": 137.269,
+    "max_short_hrir_peak_difference_frames": 1,
+    "max_short_hrir_area_relative_difference": 0.04227499999999995
+  },
+  "cases": [
+    {
+      "kind": "passband",
+      "from": 48000,
+      "to": 44100,
+      "frequency": 4410,
+      "rust_db": 9.52465e-06,
+      "c_db": 4.0414e-05
+    },
+    {
+      "kind": "passband",
+      "from": 48000,
+      "to": 44100,
+      "frequency": 17640,
+      "rust_db": 9.36784e-06,
+      "c_db": 1.62436e-05
+    },
+    {
+      "kind": "passband",
+      "from": 48000,
+      "to": 44100,
+      "frequency": 19845,
+      "rust_db": -0.00154063,
+      "c_db": -2.13727
+    },
+    {
+      "kind": "stopband",
+      "from": 48000,
+      "to": 44100,
+      "frequency": 23025,
+      "rust_db": -137.269,
+      "c_db": -118.309
+    },
+    {
+      "kind": "short_hrir",
+      "from": 48000,
+      "to": 44100,
+      "rust_frames": 236,
+      "c_frames": 235,
+      "peak_delta": -1,
+      "area_ratio": 1.00101
+    },
+    {
+      "kind": "passband",
+      "from": 44100,
+      "to": 48000,
+      "frequency": 4410,
+      "rust_db": 2.85913e-06,
+      "c_db": 1.5372e-06
+    },
+    {
+      "kind": "passband",
+      "from": 44100,
+      "to": 48000,
+      "frequency": 17640,
+      "rust_db": 2.83445e-06,
+      "c_db": -2.26486e-05
+    },
+    {
+      "kind": "passband",
+      "from": 44100,
+      "to": 48000,
+      "frequency": 19845,
+      "rust_db": -0.00167251,
+      "c_db": -2.13735
+    },
+    {
+      "kind": "short_hrir",
+      "from": 44100,
+      "to": 48000,
+      "rust_frames": 279,
+      "c_frames": 278,
+      "peak_delta": 0,
+      "area_ratio": 0.999165
+    },
+    {
+      "kind": "passband",
+      "from": 48000,
+      "to": 96000,
+      "frequency": 4800,
+      "rust_db": 2.6732e-06,
+      "c_db": 2.13652e-06
+    },
+    {
+      "kind": "passband",
+      "from": 48000,
+      "to": 96000,
+      "frequency": 19200,
+      "rust_db": 3.41572e-06,
+      "c_db": -1.80636e-05
+    },
+    {
+      "kind": "passband",
+      "from": 48000,
+      "to": 96000,
+      "frequency": 21600,
+      "rust_db": -0.00167152,
+      "c_db": -2.13735
+    },
+    {
+      "kind": "short_hrir",
+      "from": 48000,
+      "to": 96000,
+      "rust_frames": 512,
+      "c_frames": 512,
+      "peak_delta": 0,
+      "area_ratio": 0.999024
+    },
+    {
+      "kind": "passband",
+      "from": 96000,
+      "to": 48000,
+      "frequency": 4800,
+      "rust_db": -1.99027e-05,
+      "c_db": 1.79142e-06
+    },
+    {
+      "kind": "passband",
+      "from": 96000,
+      "to": 48000,
+      "frequency": 19200,
+      "rust_db": -1.93869e-05,
+      "c_db": -1.7745e-05
+    },
+    {
+      "kind": "passband",
+      "from": 96000,
+      "to": 48000,
+      "frequency": 21600,
+      "rust_db": -0.00169621,
+      "c_db": -2.13735
+    },
+    {
+      "kind": "stopband",
+      "from": 96000,
+      "to": 48000,
+      "frequency": 25440,
+      "rust_db": -142.76,
+      "c_db": -134.429
+    },
+    {
+      "kind": "short_hrir",
+      "from": 96000,
+      "to": 48000,
+      "rust_frames": 128,
+      "c_frames": 128,
+      "peak_delta": 0,
+      "area_ratio": 1.00266
+    },
+    {
+      "kind": "passband",
+      "from": 192000,
+      "to": 44100,
+      "frequency": 4410,
+      "rust_db": -2.55558e-05,
+      "c_db": 3.56589e-05
+    },
+    {
+      "kind": "passband",
+      "from": 192000,
+      "to": 44100,
+      "frequency": 17640,
+      "rust_db": -2.55333e-05,
+      "c_db": 1.14718e-05
+    },
+    {
+      "kind": "passband",
+      "from": 192000,
+      "to": 44100,
+      "frequency": 19845,
+      "rust_db": -0.00157553,
+      "c_db": -2.13721
+    },
+    {
+      "kind": "stopband",
+      "from": 192000,
+      "to": 44100,
+      "frequency": 23373,
+      "rust_db": -141.349,
+      "c_db": -120.198
+    },
+    {
+      "kind": "short_hrir",
+      "from": 192000,
+      "to": 44100,
+      "rust_frames": 59,
+      "c_frames": 58,
+      "peak_delta": 0,
+      "area_ratio": 1.00033
+    },
+    {
+      "kind": "passband",
+      "from": 32000,
+      "to": 48000,
+      "frequency": 3200,
+      "rust_db": 2.21479e-06,
+      "c_db": 1.60223e-06
+    },
+    {
+      "kind": "passband",
+      "from": 32000,
+      "to": 48000,
+      "frequency": 12800,
+      "rust_db": 3.06378e-06,
+      "c_db": -2.06621e-05
+    },
+    {
+      "kind": "passband",
+      "from": 32000,
+      "to": 48000,
+      "frequency": 14400,
+      "rust_db": -0.00167172,
+      "c_db": -2.13735
+    },
+    {
+      "kind": "short_hrir",
+      "from": 32000,
+      "to": 48000,
+      "rust_frames": 384,
+      "c_frames": 384,
+      "peak_delta": 0,
+      "area_ratio": 0.998826
+    },
+    {
+      "kind": "passband",
+      "from": 192000,
+      "to": 8000,
+      "frequency": 800,
+      "rust_db": -0.000671062,
+      "c_db": 3.61017e-05
+    },
+    {
+      "kind": "passband",
+      "from": 192000,
+      "to": 8000,
+      "frequency": 3200,
+      "rust_db": -0.000671281,
+      "c_db": 1.1803e-05
+    },
+    {
+      "kind": "passband",
+      "from": 192000,
+      "to": 8000,
+      "frequency": 3600,
+      "rust_db": -0.0023471,
+      "c_db": -2.1378
+    },
+    {
+      "kind": "stopband",
+      "from": 192000,
+      "to": 8000,
+      "frequency": 4240,
+      "rust_db": -149.982,
+      "c_db": -124.131
+    },
+    {
+      "kind": "short_hrir",
+      "from": 192000,
+      "to": 8000,
+      "rust_frames": 11,
+      "c_frames": 10,
+      "peak_delta": 0,
+      "area_ratio": 0.957725
+    },
+    {
+      "kind": "passband",
+      "from": 8000,
+      "to": 192000,
+      "frequency": 800,
+      "rust_db": 2.86613e-06,
+      "c_db": 1.55323e-06
+    },
+    {
+      "kind": "passband",
+      "from": 8000,
+      "to": 192000,
+      "frequency": 3200,
+      "rust_db": 2.88704e-06,
+      "c_db": -2.26164e-05
+    },
+    {
+      "kind": "passband",
+      "from": 8000,
+      "to": 192000,
+      "frequency": 3600,
+      "rust_db": -0.00167247,
+      "c_db": -2.13735
+    },
+    {
+      "kind": "short_hrir",
+      "from": 8000,
+      "to": 192000,
+      "rust_frames": 6144,
+      "c_frames": 6144,
+      "peak_delta": 0,
+      "area_ratio": 0.999656
+    },
+    {
+      "kind": "channels",
+      "channels": 2,
+      "frames": 942
+    },
+    {
+      "kind": "channels",
+      "channels": 12,
+      "frames": 942
+    },
+    {
+      "kind": "channels",
+      "channels": 24,
+      "frames": 942
+    },
+    {
+      "kind": "channels",
+      "channels": 64,
+      "frames": 942
+    }
+  ]
+}
