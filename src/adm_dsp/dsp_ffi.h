@@ -10,6 +10,71 @@
 extern "C" {
 #endif
 
+// HpTF control-thread design and prepared realtime kernels. Coefficients are
+// copied explicitly; these private PODs do not alter the public C ABI.
+// All audio lengths count interleaved floats. Empty audio may be null.
+// cppcheck-suppress-begin unusedStructMember
+typedef struct MradmDspHptfBand {
+    uint32_t kind;
+    uint32_t enabled;
+    double frequency;
+    double gain_db;
+    double q;
+} MradmDspHptfBand;
+typedef struct MradmDspHptfBiquad {
+    float b0, b1, b2, a1, a2;
+} MradmDspHptfBiquad;
+typedef struct MradmDspHptfCoefficients {
+    uint32_t sample_rate;
+    uint32_t band_count;
+    float preamp_gain;
+    MradmDspHptfBiquad sections[32];
+    float max_response_db;
+    float auto_trim_db;
+    float preamp_db;
+} MradmDspHptfCoefficients;
+typedef struct MradmDspHptfSnapshot {
+    MradmDspHptfCoefficients coefficients;
+    uint64_t revision;
+} MradmDspHptfSnapshot;
+typedef struct MradmDspHptfUpdate {
+    MradmDspHptfSnapshot snapshot;
+    uint32_t blending;
+    uint32_t applied;
+} MradmDspHptfUpdate;
+// cppcheck-suppress-end unusedStructMember
+int32_t mradm_dsp_hptf_design(const MradmDspHptfBand* bands,
+                              size_t length,
+                              double preamp_db,
+                              uint32_t rate,
+                              uint32_t mode,
+                              MradmDspHptfCoefficients* output,
+                              char* message,
+                              size_t capacity);
+int32_t mradm_dsp_hptf_magnitude(
+    const MradmDspHptfCoefficients* coefficients, double hz, double* output, char* message, size_t capacity);
+int32_t mradm_dsp_hptf_cascade_create(size_t channels, void** output, char* message, size_t capacity);
+int32_t mradm_dsp_hptf_cascade_clone(const void* handle, void** output, char* message, size_t capacity);
+void mradm_dsp_hptf_cascade_destroy(void* handle);
+int32_t
+mradm_dsp_hptf_cascade_set(void* handle, const MradmDspHptfCoefficients* coefficients, char* message, size_t capacity);
+int32_t mradm_dsp_hptf_cascade_reset(void* handle, char* message, size_t capacity);
+int32_t mradm_dsp_hptf_cascade_process(void* handle, float* samples, size_t length, char* message, size_t capacity);
+int32_t mradm_dsp_hptf_processor_create(size_t channels, uint32_t rate, void** output, char* message, size_t capacity);
+void mradm_dsp_hptf_processor_destroy(void* handle);
+// A process target is accepted only when not blending. C++ retains/coalesces
+// pending publication during a fade; reset always accepts the newest target.
+// Failure preserves audio, kernel state and the output update.
+int32_t mradm_dsp_hptf_processor_reset(
+    void* handle, const MradmDspHptfSnapshot* target, MradmDspHptfUpdate* output, char* message, size_t capacity);
+int32_t mradm_dsp_hptf_processor_process(void* handle,
+                                         float* samples,
+                                         size_t length,
+                                         const MradmDspHptfSnapshot* target,
+                                         MradmDspHptfUpdate* output,
+                                         char* message,
+                                         size_t capacity);
+
 // Fixed-rate, interleaved resampling. Lengths count floats; progress counts
 // whole frames. end=1 requires empty input and drains to the rational duration.
 // A completed stream requires reset before accepting more input.

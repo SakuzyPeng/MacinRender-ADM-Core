@@ -10,6 +10,10 @@ The core supports **editable PEQ parameter snapshots**, with optional AutoEq
 `ParametricEQ.txt` / in-memory text import, on the **two realtime paths**.
 Offline rendering, FIR and the GUI are deliberately out of scope.
 
+The design, cascade and transition kernels now run in Rust. C++ retains import,
+control publication and applied-state queries. See the [Rust HpTF migration](RUST_HPTF_MIGRATION.md)
+for ownership, numerical comparisons and validation.
+
 ## Scope: HpTF is device-bound
 
 HpTF applies only to the final two-channel PCM handed to headphones. It is the
@@ -38,11 +42,11 @@ not better (the error is low-frequency truncation, not edge ripple). Past tap
 2048 the file is 16-bit quantisation noise at −77 dB.
 
 So the shortest usable length is around 2048 taps, which needs partitioned FFT
-convolution on the audio callback. `mr_adm_render_common` has zero third-party
-dependencies and ADR 0003 confines SAF to the vbap/hoa/binaural modules, so that
-path forces an architectural decision. A stereo 10-biquad cascade uses about 182
-scalar arithmetic operations per frame, including preamp,
-with no dependencies at all. The two are not in the same class, hence the split.
+convolution on the audio callback. The original PEQ implementation used only the
+standard library. Its Rust replacement reuses the project's private DSP boundary
+without adding dependencies. A stereo 10-biquad cascade uses about 182 scalar
+arithmetic operations per frame, including preamp; FIR would require a separate
+decision about filter support, latency and callback cost.
 
 Note for whoever picks the FIR path up: the two formats are **not the same
 curve**. The FIR and the 10-biquad cascade (with its −4.1 dB preamp) differ by

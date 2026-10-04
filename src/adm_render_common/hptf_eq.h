@@ -7,7 +7,7 @@
 // 多声道扬声器馈送、交给 OS 做 HRTF 的 system-spatial 床、以及调用方自取 PCM 的
 // 裸 pull 路径都**不施加**——那些路径上"最终耳机信号"要么不存在,要么不归我们生成。
 //
-// 本模块只依赖标准库(ADR 0003:mr_adm_render_common 零第三方依赖)。
+// C++ 负责参数导入与发布；设计和处理走私有 Rust DSP 边界。
 //
 // 位精确性:HpTF 只走实时监听、永不进入离线母版,因此**不要求跨平台位精确**,
 // 一致性工具无需为它建立检查点(参见 docs/architecture/CONSISTENCY_LOCALIZATION.md)。
@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -127,10 +128,16 @@ design_cascade(const HptfProfile& profile, std::uint32_t sample_rate, HptfPreamp
 // 会丢精度并可能在大正增益下累积直流;10 段 × 2 声道的 double 状态只有 320 字节。
 class HptfCascade {
   public:
+    HptfCascade();
+    ~HptfCascade();
+    HptfCascade(const HptfCascade& other);
+    HptfCascade& operator=(const HptfCascade& other);
+    HptfCascade(HptfCascade&& other) noexcept;
+    HptfCascade& operator=(HptfCascade&& other) noexcept;
     // 控制线程:一次性分配状态。之后 set_coefficients / process 都不再分配。
     void prepare(std::uint32_t channel_count);
 
-    // 纯字节拷贝,回调安全。
+    // 复制并检查已设计系数,不分配、不清滤波历史,回调安全。
     void set_coefficients(const HptfCoefficients& coeffs) noexcept;
 
     void reset() noexcept;
@@ -146,7 +153,8 @@ class HptfCascade {
   private:
     HptfCoefficients coeffs_{};
     std::uint32_t channels_{0};
-    std::vector<double> state_; // [channels × k_hptf_max_bands × 2]
+    struct State;
+    std::unique_ptr<State> state_; // Rust owns the double state; copies clone history.
 };
 
 // 可热切换的 HpTF 处理器:控制线程发布系数,音频回调消费,切换时两条级联并行跑一段
@@ -161,6 +169,8 @@ class HptfCascade {
 // 中点鼓出约 +3 dB。这与"两路不相关信号交叉淡化"的常规相反。
 class HptfProcessor {
   public:
+    HptfProcessor();
+    ~HptfProcessor();
     // 控制线程,构造期调用一次。channels 是**输出**宽度。
     void prepare(std::uint32_t channel_count, std::uint32_t rate);
 
@@ -189,22 +199,15 @@ class HptfProcessor {
     void process(float* interleaved, std::size_t frames) noexcept;
 
   private:
-    void finish_blend() noexcept;
-
     std::mutex publication_mutex_; // control producers only
     HptfMailbox pending_;
     mutable std::mutex status_mutex_; // control readers only
     mutable HptfMailbox status_;
     mutable HptfSnapshot observed_;
 
-    // 回调私有状态。
-    HptfCascade front_;
-    HptfCascade back_;
-    std::uint64_t front_revision_{0};
-    bool blending_{false};
-    std::uint64_t blend_pos_{0};
-    std::uint64_t blend_revision_{0};
-    std::vector<float> scratch_;
+    // 回调私有 Rust 双级联、淡化和 scratch；C++ 只保留 mailbox 接线。
+    struct State;
+    std::unique_ptr<State> state_;
 
     std::uint32_t channels_{0};
     std::uint32_t sample_rate_{0};

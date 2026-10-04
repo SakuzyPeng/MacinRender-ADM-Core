@@ -1,0 +1,197 @@
+{
+  "schema": "mradm.rust-hptf-migration.v1",
+  "date": "2026-10-04",
+  "baseline_commit": "18da74fd7c73531def04dce7ad0160192518d312",
+  "scope": [
+    "RBJ coefficient design and quantized stability checks",
+    "Frequency response and bounded audible-band auto-trim",
+    "Double-state cascades and independent cloning",
+    "Two-cascade linear transitions and seek/reset",
+    "Private FFI and complete UTF-8 error prefixes"
+  ],
+  "unchanged_public_headers": {
+    "include/adm/c_api.h": true,
+    "include/adm/hptf.h": true,
+    "include/adm/options.h": true
+  },
+  "new_third_party_dependencies": [],
+  "contracts": {
+    "maximum_enabled_bands": 32,
+    "coefficient_precision": "float32",
+    "state_precision": "float64",
+    "fade_frames": 2048,
+    "maximum_processing_chunk": 1024,
+    "control_publication": "Existing C++ triple-buffer mailboxes; new targets coalesce during a fade",
+    "applied_status": "Published after process returns; formerly published at the completing internal chunk",
+    "runtime_allocation_test_passed": true,
+    "runtime_locks_or_io": false
+  },
+  "validation": {
+    "macos_debug_ctest": {
+      "passed": 56,
+      "total": 56
+    },
+    "macos_release_ctest": {
+      "passed": 56,
+      "total": 56
+    },
+    "windows_release_ctest": {
+      "passed": 55,
+      "total": 55
+    },
+    "final_macos_debug_focused": {
+      "passed": 11,
+      "total": 11
+    },
+    "final_macos_release_focused": {
+      "passed": 10,
+      "total": 10
+    },
+    "final_windows_release_focused": {
+      "passed": 11,
+      "total": 11
+    },
+    "rust_fmt": true,
+    "rust_clippy_deny_warnings": true,
+    "changed_and_new_cpp_format_tidy_cppcheck": true,
+    "licenses_sbom": true,
+    "independent_direct_form_one_reference": true,
+    "existing_independent_impulse_dft_and_low_frequency_peak_tests": true,
+    "mailbox_concurrency_tests": true,
+    "ffi_rejection_and_utf8_truncation_tests": true
+  },
+  "release_comparison": {
+    "macos": {
+      "coefficients": {
+        "records": 84,
+        "max_absolute_error": 0.0,
+        "tolerance": 2e-06
+      },
+      "response_db": {
+        "records": 84,
+        "max_absolute_error": 8.526512829121202e-13,
+        "tolerance": 0.002
+      },
+      "pcm": {
+        "records": 89,
+        "max_absolute_error": 9.313225746154785e-10,
+        "tolerance": 2e-05
+      }
+    },
+    "windows": {
+      "coefficients": {
+        "records": 84,
+        "max_absolute_error": 0.0,
+        "tolerance": 2e-06
+      },
+      "response_db": {
+        "records": 84,
+        "max_absolute_error": 8.526512829121202e-13,
+        "tolerance": 0.002
+      },
+      "pcm": {
+        "records": 89,
+        "max_absolute_error": 0.0,
+        "tolerance": 2e-05
+      }
+    }
+  },
+  "abi": {
+    "macos": {
+      "public_adm_exports": 139,
+      "private_rust_exports": []
+    },
+    "windows": {
+      "public_adm_exports": 139,
+      "private_rust_exports": [],
+      "incidental_cpp_exports": 1984
+    },
+    "public_symbol_sets_equal": true
+  },
+  "windows": {
+    "configuration": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "MR_ADM_ENABLE_SOFA": "ON",
+      "MR_ADM_BUILD_SAF_REFERENCE_TESTS": "OFF",
+      "MR_ADM_BUILD_EBUR128_REFERENCE_TESTS": "OFF",
+      "MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS": "OFF"
+    },
+    "workspace": "Existing dirty canonical checkout preserved, not a clean byte-identical Git checkout",
+    "synchronized_source_files": 12,
+    "synchronized_sources_equal_local": true,
+    "preexisting_differences": [
+      "src/adm_render_common/hptf_eq.cpp: CRLF only",
+      "src/adm_render_common/hptf_eq.h: CRLF only"
+    ],
+    "original_bytes_backed_up": true,
+    "source_sha256": {
+      "CMakeLists.txt": "b4cbaa02868b75dbda9197f0395b8b17ad8ef799732936c3fdb51a15aec8f482",
+      "tests/unit/hptf_dsp_test.cpp": "2ee30e9bb35fdd66684b2ded70f958db3f7198f465b2c31a2f9803502ca4a0aa",
+      "src/adm_render_common/hptf_eq.cpp": "cbc527b31308981529fa06489b33867626d024a73591399852c01d8764052f18",
+      "src/adm_render_common/hptf_eq.h": "ef3026f4b56bc293e58112aa198540c38e209aede3f3a4cfa89122a5f7ca4959",
+      "src/adm_dsp/dsp_ffi.h": "5d2705cba42cf3cc6e9f0f72b27d6c76c91ff8a5553479e48aad815672288d0d",
+      "rust/crates/mradm-dsp/src/lib.rs": "b75bcf5cd56e7a6cf8c2c945b024f41849d0a0fba7ea268e821142c973a51570",
+      "rust/crates/mradm-dsp/src/hptf.rs": "141dda90b5902f0aecef887558d16d604a3288bb8ee2c40e42c4144a67fedd96",
+      "rust/crates/mradm-dsp/src/hptf/design.rs": "7b23619f14bd4979c0d04bf3ccb96a11e4adaa1c2b71220c8955a0ec8e5c1f4a",
+      "rust/crates/mradm-dsp/tests/hptf.rs": "468076dd48e6166c07837d0dc089e7f5ab4630c9e14782465746de6dc1f1aa62",
+      "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "7df2b4f366c232063c7e8437890c9c86434ffa7b9dd2facdca45256eadfe8f32",
+      "rust/crates/mradm-ffi/src/lib.rs": "3fa8e00a8feb032d4a04e7df4b5b427f43f5b8923717fcf1fa291cb2274ccb05",
+      "rust/crates/mradm-ffi/src/hptf.rs": "137b36e90eaf1a567f74d47aaef62cffe19938d38235f6a5fb6e971bfcdab5c4"
+    }
+  },
+  "not_validated": [
+    "Linux CI",
+    "ThreadSanitizer",
+    "Throughput/RSS benchmark",
+    "Subjective listening",
+    "Cross-platform bit identity"
+  ],
+  "source_sha256": {
+    "CMakeLists.txt": "b4cbaa02868b75dbda9197f0395b8b17ad8ef799732936c3fdb51a15aec8f482",
+    "README.en.md": "6626c433bb417c0177d4362485bdff1162b9a9db072ead57de206269df2a9831",
+    "README.md": "092919d276352e5248381d6b65979e10e37ef1c57cc6bf2a63cca8b6f002062f",
+    "docs/architecture/RUST_HPTF_MIGRATION.md": "d62f4e12ec51ac7a9985422600727efdca0cddfaee48f59e1d99be18701e81b7",
+    "docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md": "1b5196df34c5467c88d0bae1c94da3abd38d1baa7c34b0691c559eba9d7a3d9f",
+    "docs/architecture/hptf-eq.md": "fa0f6b5d5bf80441cda06c96f4f137b67d1544253568457be330f98da4728961",
+    "include/adm/c_api.h": "66c54334b318b4201ec557521c31981f316661c5f47c43882d54c422d38d66ad",
+    "include/adm/hptf.h": "af7287ab39b38fecc9a21315ffd2789205b3f1c9172e35078db4509934586d5d",
+    "include/adm/options.h": "8a201149c906cdc03d966c27b5e430874ee83175667159f1a54608b87ef2b7a6",
+    "rust/Cargo.lock": "1245da124cb7acc2f436683d9122d936b12b2d6c044fc322ae12aaa2b5c9df9f",
+    "rust/crates/mradm-dsp/src/hptf.rs": "141dda90b5902f0aecef887558d16d604a3288bb8ee2c40e42c4144a67fedd96",
+    "rust/crates/mradm-dsp/src/hptf/design.rs": "7b23619f14bd4979c0d04bf3ccb96a11e4adaa1c2b71220c8955a0ec8e5c1f4a",
+    "rust/crates/mradm-dsp/src/lib.rs": "b75bcf5cd56e7a6cf8c2c945b024f41849d0a0fba7ea268e821142c973a51570",
+    "rust/crates/mradm-dsp/tests/hptf.rs": "468076dd48e6166c07837d0dc089e7f5ab4630c9e14782465746de6dc1f1aa62",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "7df2b4f366c232063c7e8437890c9c86434ffa7b9dd2facdca45256eadfe8f32",
+    "rust/crates/mradm-ffi/src/hptf.rs": "137b36e90eaf1a567f74d47aaef62cffe19938d38235f6a5fb6e971bfcdab5c4",
+    "rust/crates/mradm-ffi/src/lib.rs": "3fa8e00a8feb032d4a04e7df4b5b427f43f5b8923717fcf1fa291cb2274ccb05",
+    "rust/rust-toolchain.toml": "e879701472a698533f43f54989bbf5f3101eb0503472159d32633f3bb8a13fdf",
+    "scripts/consistency/compare-hptf-dsp.py": "c6be428a1785e6656f7c12188af38686b53c6e25f8414d0c0dcc8cc044590eba",
+    "src/adm_dsp/dsp_ffi.h": "5d2705cba42cf3cc6e9f0f72b27d6c76c91ff8a5553479e48aad815672288d0d",
+    "src/adm_render_common/hptf_eq.cpp": "cbc527b31308981529fa06489b33867626d024a73591399852c01d8764052f18",
+    "src/adm_render_common/hptf_eq.h": "ef3026f4b56bc293e58112aa198540c38e209aede3f3a4cfa89122a5f7ca4959",
+    "tests/unit/hptf_dsp_test.cpp": "2ee30e9bb35fdd66684b2ded70f958db3f7198f465b2c31a2f9803502ca4a0aa"
+  },
+  "log_sha256": {
+    "out/rust-hptf/build-baseline.log": "ac495b7c304274ceae982ebf70727bbb292d525288016d75a03b51bf75f9151c",
+    "out/rust-hptf/baseline.log": "42c8a2758011613cb3a2d71490c49cd9e3e11e3dd6183c9f043f3d34467512e9",
+    "out/rust-hptf/build-debug-final.log": "b4aef7c838fe93e91bb676e047456f17983139ef5dea71fbc04ce742d7c1f6a8",
+    "out/rust-hptf/build-release-final.log": "f2afbb658921624e109d9d4940d55e7118491225d4a30cd60660bc3989f9e5b4",
+    "out/rust-hptf/tests-debug.log": "d17570e56a07f083ad7f867a0cda7bd93f93a448cfe8ba59df47feddab838d09",
+    "out/rust-hptf/tests-release.log": "ca500326349047ef656e0a170a7cbf34753e4f11736bdb8abf9172c64869999b",
+    "out/rust-hptf/tests-debug-final.log": "f567d0cff1b7619589c0ec5688db1972fc2fad14033f5db9e75220543eff54bc",
+    "out/rust-hptf/tests-release-final.log": "e944b4fdb1ab9fc78d85a0b8e63c8a880db0e1da38315ef40c812ef070537fce",
+    "out/rust-hptf/tests-rust-final.log": "5da04f5b9da8305de654120a96bde8a113022a47069f595498e8340acdee34f4",
+    "out/rust-hptf/quality-rust-final.log": "118bf16114fcdb305fbb30fbace120fa1cf9f29c57bb7b420e2698ae29df0bf3",
+    "out/rust-hptf/quality-cpp-final.log": "9bb86004420991ff1f677021a2b40f825b84d05eb21cb7d519c1bb0ab22dd8f7",
+    "out/rust-hptf/quality-new-cpp.log": "b985ede4054e46ff5f21df8a865d11a96c2eb67cc52afc1cecf813115ca2db33",
+    "out/rust-hptf/licenses.log": "2270d6df47c0eca35af402f7bb233f512fc796adccadaa0373d26b62fae81549",
+    "out/rust-hptf/candidate-final.log": "42c8a2758011613cb3a2d71490c49cd9e3e11e3dd6183c9f043f3d34467512e9",
+    "out/rust-hptf/macos-comparison.log": "01503a3825919d45cc4ff27f8dfcb7e9b7df1fa2c6fa6b02f05c41044b47df13",
+    "out/rust-hptf/windows-comparison.log": "48edfb5a8eb710c354a09eb3c8f1cb7be12032d1503b66262ffda217a69d2d7e",
+    "out/rust-hptf/windows-build.log": "352e323dbcab68308bb30a1c20bedf3794de62f9cc315f88c2b9f71230ec0a88",
+    "out/rust-hptf/windows-ctest.log": "07c9528089ae0683cfeb8dac7f7f2bc0d0043084359bc06df728868ab8c654e5",
+    "out/rust-hptf/windows-build-final.log": "9bd551f42a448f256fd8b7b28a6902aed2b834ba4e9f1ea6277347b264708303",
+    "out/rust-hptf/windows-ctest-final.log": "63b05543bfa290ecd99292be314329208e8967299b061ad3ff592185c35eb7d7",
+    "out/rust-hptf/windows-capture-final.log": "87e2e0fd12120f14b4a45488afe9411b7bdfc6f942c13b74b6895a27a33d9b05"
+  }
+}

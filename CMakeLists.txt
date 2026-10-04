@@ -1071,6 +1071,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_hptf_regression_tests)
     add_test(NAME mr_adm_hptf_regression_tests COMMAND mr_adm_hptf_regression_tests)
 
+    add_executable(mr_adm_hptf_dsp_tests tests/unit/hptf_dsp_test.cpp)
+    target_link_libraries(mr_adm_hptf_dsp_tests PRIVATE MacinRender::ADMRenderCommon)
+    mr_adm_core_apply_warnings(mr_adm_hptf_dsp_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_hptf_dsp_tests)
+    add_test(NAME mr_adm_hptf_dsp_tests COMMAND mr_adm_hptf_dsp_tests)
+
     add_executable(mr_adm_hptf_parameters_tests tests/unit/hptf_parameters_test.cpp)
     target_link_libraries(mr_adm_hptf_parameters_tests
         PRIVATE MacinRender::ADMCAPI MacinRender::ADMEngine MacinRender::ADMRealtime

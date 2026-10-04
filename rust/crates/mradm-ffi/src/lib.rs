@@ -9,6 +9,7 @@ use std::{
     ptr, slice,
 };
 mod convolution;
+mod hptf;
 mod hrtf;
 mod meter;
 mod resampler;
@@ -28,7 +29,10 @@ fn boundary(message: *mut u8, capacity: usize, f: impl FnOnce() -> Result<()>) -
         Err(_) => (6, "Rust DSP panic"),
     };
     if !message.is_null() && capacity != 0 {
-        let length = detail.len().min(capacity - 1);
+        let mut length = detail.len().min(capacity - 1);
+        while !detail.is_char_boundary(length) {
+            length -= 1;
+        }
         unsafe {
             ptr::copy_nonoverlapping(detail.as_ptr(), message, length);
             *message.add(length) = 0;
@@ -148,5 +152,23 @@ mod tests {
     #[test]
     fn panics_do_not_cross_the_boundary() {
         assert_eq!(boundary(ptr::null_mut(), 0, || panic!("test panic")), 6);
+    }
+
+    #[test]
+    fn truncated_error_buffers_preserve_utf8_and_termination() {
+        let detail = "HpTF:系数无效";
+        for capacity in 1..24 {
+            let mut message = [42u8; 24];
+            assert_eq!(
+                boundary(message.as_mut_ptr(), capacity, || Err(
+                    Error::InvalidArgument(detail)
+                )),
+                1
+            );
+            let end = message[..capacity].iter().position(|&b| b == 0).unwrap();
+            let prefix = std::str::from_utf8(&message[..end]).unwrap();
+            assert!(detail.starts_with(prefix));
+            assert!(message[capacity..].iter().all(|&b| b == 42));
+        }
     }
 }
