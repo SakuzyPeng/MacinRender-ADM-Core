@@ -1,0 +1,130 @@
+[
+  {
+    "case": "binaural-cartesian-cloud",
+    "samples": 96000,
+    "changed": 96000,
+    "normalized_rms_error": 0.03929417956553135,
+    "energy_delta_db": 0.03242510490390986,
+    "max_abs_error": 0.01804894208908081
+  },
+  {
+    "case": "binaural-extent-cloud",
+    "samples": 96000,
+    "changed": 95999,
+    "normalized_rms_error": 0.023244359321700093,
+    "energy_delta_db": -0.005508648796325691,
+    "max_abs_error": 0.01806650310754776
+  },
+  {
+    "case": "binaural-extent-spreader-multi",
+    "samples": 96000,
+    "changed": 96000,
+    "normalized_rms_error": 0.40159718071501616,
+    "energy_delta_db": 0.04144262780673299,
+    "max_abs_error": 1.1431594491004944
+  },
+  {
+    "case": "binaural-extent-spreader",
+    "samples": 96000,
+    "changed": 96000,
+    "normalized_rms_error": 0.4090324337119445,
+    "energy_delta_db": 0.09594207629165946,
+    "max_abs_error": 0.5424319505691528
+  },
+  {
+    "case": "binaural-point",
+    "samples": 96000,
+    "changed": 85648,
+    "normalized_rms_error": 2.5122371266809355e-07,
+    "energy_delta_db": 1.3982401084626067e-08,
+    "max_abs_error": 7.152557373046875e-07
+  },
+  {
+    "case": "ear-5_1-directspeakers",
+    "samples": 288000,
+    "changed": 0,
+    "normalized_rms_error": 0.0,
+    "energy_delta_db": 0.0,
+    "max_abs_error": 0.0
+  },
+  {
+    "case": "ear-5_1-extent",
+    "samples": 288000,
+    "changed": 118354,
+    "normalized_rms_error": 2.0869470547176013e-07,
+    "energy_delta_db": 3.78829776941702e-09,
+    "max_abs_error": 5.960464477539062e-07
+  },
+  {
+    "case": "ear-5_1-hoa-input",
+    "samples": 288000,
+    "changed": 0,
+    "normalized_rms_error": 0.0,
+    "energy_delta_db": 0.0,
+    "max_abs_error": 0.0
+  },
+  {
+    "case": "ear-5_1-point-postproc",
+    "samples": 288000,
+    "changed": 0,
+    "normalized_rms_error": 0.0,
+    "energy_delta_db": 0.0,
+    "max_abs_error": 0.0
+  },
+  {
+    "case": "ear-5_1-point",
+    "samples": 288000,
+    "changed": 0,
+    "normalized_rms_error": 0.0,
+    "energy_delta_db": 0.0,
+    "max_abs_error": 0.0
+  },
+  {
+    "case": "hoa-hoa3-cartesian",
+    "samples": 768000,
+    "changed": 0,
+    "normalized_rms_error": 0.0,
+    "energy_delta_db": 0.0,
+    "max_abs_error": 0.0
+  },
+  {
+    "case": "hoa-hoa3-point",
+    "samples": 768000,
+    "changed": 0,
+    "normalized_rms_error": 0.0,
+    "energy_delta_db": 0.0,
+    "max_abs_error": 0.0
+  },
+  {
+    "case": "saf-5_1-extent",
+    "samples": 288000,
+    "changed": 0,
+    "normalized_rms_error": 0.0,
+    "energy_delta_db": 0.0,
+    "max_abs_error": 0.0
+  },
+  {
+    "case": "saf-5_1-point",
+    "samples": 288000,
+    "changed": 0,
+    "normalized_rms_error": 0.0,
+    "energy_delta_db": 0.0,
+    "max_abs_error": 0.0
+  },
+  {
+    "case": "saf-5_1_4-cartesian",
+    "samples": 480000,
+    "changed": 288000,
+    "normalized_rms_error": 0.058390770681957256,
+    "energy_delta_db": -0.000317619776865444,
+    "max_abs_error": 0.03546382952481508
+  },
+  {
+    "case": "saf-5_1_4-extent",
+    "samples": 480000,
+    "changed": 321500,
+    "normalized_rms_error": 1.4676502282617138e-07,
+    "energy_delta_db": 4.016755093931801e-07,
+    "max_abs_error": 5.960464477539063e-08
+  }
+]
