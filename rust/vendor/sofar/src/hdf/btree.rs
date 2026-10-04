@@ -56,18 +56,26 @@ pub(crate) fn tree(
         let elements = data_layout
             .iter()
             .take(dimensionality)
-            .fold(1, |acc, x| u32::saturating_mul(acc, *x));
+            .try_fold(1usize, |acc, &x| acc.checked_mul(x as usize))
+            .ok_or_else(|| ErrMode::Cut(winnow::error::ContextError::new()))?;
 
         let size = data_layout
             .get(dimensionality)
             .copied()
-            .ok_or_else(|| ErrMode::assert(input, "Data layout size index out of bounds"))?;
+            .ok_or_else(|| ErrMode::assert(input, "Data layout size index out of bounds"))?
+            as usize;
 
         info!("Tree elements: {elements}, size: {size}");
 
-        if elements == 0 || size == 0 || elements >= 0x130000 || size > 0x10 {
-            return Err(ErrMode::assert(input, "Invalid tree elements or size"));
+        if elements == 0 || size == 0 || size > 0x10 {
+            return Err(ErrMode::Cut(winnow::error::ContextError::new()));
         }
+        // A legal chunk may cover the entire HRTF dataset. Bound its decoded
+        // bytes, independently of how the writer partitions the measurements.
+        let chunk_bytes = elements
+            .checked_mul(size)
+            .filter(|&bytes| bytes <= MAX_DATA_LEN)
+            .ok_or_else(|| ErrMode::Cut(winnow::error::ContextError::new()))?;
 
         let mut data = vec![0; data_len];
 
@@ -104,7 +112,7 @@ pub(crate) fn tree(
 
                 let _skip = take(child_pointer as usize).parse_next(input)?;
                 let chunk = take(size_of_chunk).parse_next(input)?;
-                let olen = (elements * size) as usize;
+                let olen = chunk_bytes;
 
                 let output = decompress_to_vec_zlib_with_limit(chunk, olen)
                     .map_err(|_err| ErrMode::assert(input, "Failed to inflate btree data"))?;

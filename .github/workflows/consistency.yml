@@ -262,7 +262,7 @@ jobs:
             -DMR_ADM_FLAC_PROVIDER=VENDORED ^
             -DMR_ADM_OPUS_PROVIDER=VENDORED ^
             -DMR_ADM_ENABLE_IAMF=OFF ^
-            -DMR_ADM_ENABLE_SOFA=ON
+            -DMR_ADM_ENABLE_SOFA=ON ^
             %NUMERIC_FLAGS%
 
       - name: Build

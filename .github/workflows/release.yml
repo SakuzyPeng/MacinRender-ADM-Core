@@ -81,7 +81,7 @@ jobs:
         run: cmake --build --preset release --target mradm_exe mradm_capi_bundle
 
       - name: License full-coverage check
-        run: scripts/quality/check-licenses.sh --build-dir "$FC_CACHE_DIR" --require-full
+        run: scripts/quality/check-licenses.sh --build-dir build/release --require-full
 
       - name: Smoke
         run: |
@@ -174,7 +174,7 @@ jobs:
         run: cmake --build --preset release --target mradm_exe mradm_capi_bundle
 
       - name: License full-coverage check
-        run: scripts/quality/check-licenses.sh --build-dir "$FC_CACHE_DIR" --require-full
+        run: scripts/quality/check-licenses.sh --build-dir build/release --require-full
 
       - name: Smoke
         run: |

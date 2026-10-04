@@ -162,4 +162,71 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    #[cfg(feature = "sofa")]
+    fn large_compressed_ir_is_independent_of_chunk_partition() {
+        let single = Dataset::sofa(include_bytes!(
+            "../../../../tests/fixtures/sofa/large-single-chunk.sofa"
+        ))
+        .unwrap();
+        let split = Dataset::sofa(include_bytes!(
+            "../../../../tests/fixtures/sofa/large-split-chunks.sofa"
+        ))
+        .unwrap();
+        assert_eq!(
+            (single.num_dirs, single.ir_len, single.sample_rate),
+            (836, 1024, 48000)
+        );
+        assert_eq!(
+            (split.num_dirs, split.ir_len, split.sample_rate),
+            (836, 1024, 48000)
+        );
+        assert_eq!(single.directions, split.directions);
+        assert_eq!(single.impulses, split.impulses);
+        for dir in 0..single.num_dirs {
+            for tap in 0..single.ir_len {
+                assert_eq!(
+                    single.impulses[(dir * 2) * single.ir_len + tap],
+                    if tap == 2 { 0.125 } else { 0. }
+                );
+                assert_eq!(
+                    single.impulses[(dir * 2 + 1) * single.ir_len + tap],
+                    if tap == 4 { 0.75 } else { 0. }
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "sofa")]
+    fn invalid_chunk_dimensions_are_rejected_without_panicking() {
+        let fixture = include_bytes!("../../../../tests/fixtures/sofa/large-single-chunk.sofa");
+        // HDF5 v3 chunk layout stores M, R, N and the element size as little-endian u32s.
+        let shape: Vec<u8> = [836_u32, 2, 1024, 8]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let offset = fixture
+            .windows(shape.len())
+            .position(|bytes| bytes == shape)
+            .expect("fixture contains its chunk layout");
+        for invalid in [
+            [0, 2, 1024, 8],
+            [836, 2, 1024, 0],
+            [836, 2, 1 << 20, 8],              // Decoded chunk exceeds 256 MiB.
+            [u32::MAX, u32::MAX, u32::MAX, 8], // Dimension product overflows.
+        ] {
+            let mut bytes = fixture.to_vec();
+            for (slot, value) in bytes[offset..offset + shape.len()]
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(invalid)
+            {
+                slot.copy_from_slice(&value.to_le_bytes());
+            }
+            assert!(Dataset::sofa(&bytes).is_err(), "chunk layout={invalid:?}");
+        }
+    }
 }
