@@ -59,7 +59,9 @@ impl Panner {
         }
         output.fill(0.0);
         let mut dummy = [0.0f32; 2];
-        let center = direction(az, el);
+        // Planar layouts discard height. Keep a unit horizontal direction even
+        // at the poles so the pair-selection tolerance is independent of elevation.
+        let center = direction(az, if self.is_3d { el } else { 0. });
         if !self.is_3d {
             for (ids, inverse) in &self.pairs {
                 let g = inverse.map(|row| row[0] * center[0] + row[1] * center[1]);
@@ -151,6 +153,26 @@ mod tests {
             p.gains(angle as f32, 0., 0., &mut g).unwrap();
             assert!((g.iter().map(|x| x * x).sum::<f32>() - 1.0).abs() < 1e-5);
         }
+    }
+    #[test]
+    fn planar_layout_projects_elevated_sources_without_changing_gains() {
+        let p = Panner::new(&[30., 0., -30., 0., 0., 0., 110., 0., -110., 0.], false).unwrap();
+        let mut horizontal = [0.; 5];
+        let mut elevated = [0.; 5];
+        for azimuth in -180..=180 {
+            p.gains(azimuth as f32, 0., 0., &mut horizontal).unwrap();
+            for elevation in [-90., -89.99, -60., 60., 89.99, 90.] {
+                p.gains(azimuth as f32, elevation, 0., &mut elevated)
+                    .unwrap();
+                assert_eq!(
+                    elevated, horizontal,
+                    "azimuth={azimuth}, elevation={elevation}"
+                );
+                assert!((elevated.iter().map(|g| g * g).sum::<f32>() - 1.).abs() < 1e-5);
+            }
+        }
+        p.gains(0., 90., 0., &mut elevated).unwrap();
+        assert_eq!(elevated, [0., 0., 1., 0., 0.]);
     }
     #[test]
     fn three_dimensional_spread_is_finite_and_uses_height() {
