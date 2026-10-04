@@ -331,15 +331,20 @@ Semantic policy 应用于本次渲染，原始 AXML 保持原样。`inspect --wr
 
 ## 构建选项
 
+构建需要 C++20、CMake 3.24+ 和 Rust 1.98.0。SAF 的已用 DSP 功能已由 Rust 实现，默认构建不再需要 SAF/OpenBLAS/LAPACKE；`saf` 等选择名称继续兼容。
+
 推荐使用 CMake preset：
 
 ```bash
+rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
 cmake --preset debug
 cmake --build --preset debug
 ctest --test-dir build/debug --output-on-failure
 ```
 
-默认会通过 `FetchContent` 拉取依赖。系统依赖构建使用：
+C/C++ 依赖默认通过 `FetchContent` 获取；Rust 使用提交的 Cargo.lock。SOFA 由纯 Rust 解析器处理。`MR_ADM_BUILD_SAF_REFERENCE_TESTS=ON` 仅启用历史 SAF 参考工具，不改变生产实现。
+
+系统依赖构建需要另备 Corrosion 0.6.1、Rust 工具链和锁定的 Cargo 依赖缓存：
 
 ```bash
 cmake -S . -B build -DMR_ADM_CORE_FETCH_DEPS=OFF
@@ -381,4 +386,4 @@ cmake -S . -B build -DMR_ADM_ENABLE_SOFA=ON
 
 本项目源码采用 **MIT License**，以仓库根目录 [LICENSE](LICENSE) 为准。
 
-当前默认构建依赖与 MIT 源码许可证兼容；二进制发行包附带第三方依赖的 notice/license 文本。默认构建启用本项目渲染路径所需的 SAF 组件；额外 SAF 模块和替代 DSP 依赖在发行前进入独立许可证确认流程。
+当前默认构建依赖与 MIT 源码许可证兼容；二进制发行包附带第三方依赖的 notice/license 文本。默认构建使用 Rust DSP；SAF 仅作为可选参考测试依赖。派生算法、内置 KEMAR 和滤波器数据保留原始许可及来源，新 Rust 依赖纳入同一清单。

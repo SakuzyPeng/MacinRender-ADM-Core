@@ -8,6 +8,7 @@
 #include <ebur128.h>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iterator>
 #include <limits>
@@ -23,16 +24,6 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
-// clang-format off
-// saf_utility_complex.h must precede saf_hrir.h: saf_hrir.h opens extern "C" and
-// re-includes saf_utility_complex.h inside that block, causing std::complex<float>
-// template instantiation in C linkage if the include guard hasn't fired yet.
-#include <saf_utility_complex.h>
-#include <saf_utility_fft.h>
-#include <saf_hrir.h>
-#include <saf_sofa_reader.h>
-#include <saf_vbap.h>
-// clang-format on
 
 #include <bw64/bw64.hpp>
 #include <fmt/format.h>
@@ -44,6 +35,7 @@
 #include "binaural_internal.h"
 #include "binaural_spreader.h"
 #include "consistency_trace.h"
+#include "dsp.h"
 #include "head_rotation.h"
 #include "render_common.h"
 
@@ -289,146 +281,90 @@ int vbap_grid_idx(float az_deg, float el_deg) {
 // the listener's right when they turn their head left.
 using render_common::HeadRotation;
 
-#ifdef SAF_ENABLE_SOFA_READER_MODULE
-// SOFA Cartesian (front=+X, left=+Y, up=+Z) → polar az/el in degrees.
-std::pair<float, float> sofa_cart_to_polar(float x, float y, float z) {
-    const double az = std::atan2(static_cast<double>(y), static_cast<double>(x)) * (180.0 / std::numbers::pi_v<double>);
-    const auto cx = static_cast<double>(x);
-    const auto cy = static_cast<double>(y);
-    const double el =
-        std::atan2(static_cast<double>(z), std::sqrt((cx * cx) + (cy * cy))) * (180.0 / std::numbers::pi_v<double>);
-    return {static_cast<float>(az), static_cast<float>(el)};
-}
-
-[[nodiscard]] bool string_is(const char* value, std::string_view expected) {
-    return value != nullptr && expected == std::string_view{value};
-}
-
-[[nodiscard]] bool contains_token(const char* value, std::string_view token) {
-    return value != nullptr && std::string_view{value}.find(token) != std::string_view::npos;
-}
-
-[[nodiscard]] std::string sofa_error_name(int code) {
-    switch (code) {
-    case SAF_SOFA_OK:
-        return "OK";
-    case SAF_SOFA_ERROR_INVALID_FILE_OR_FILE_PATH:
-        return "invalid file or path";
-    case SAF_SOFA_ERROR_DIMENSIONS_UNEXPECTED:
-        return "unexpected dimensions";
-    case SAF_SOFA_ERROR_FORMAT_UNEXPECTED:
-        return "unexpected format";
-    case SAF_SOFA_ERROR_NETCDF_IN_USE:
-        return "NetCDF reader already in use";
-    default:
-        return fmt::format("unknown ({})", code);
+// Both built-in and user HRTFs enter through the Rust-owned dataset boundary.
+Result<HrtfDataset> read_rust_dataset(std::span<const std::uint8_t> bytes, bool builtin) {
+    void* raw = nullptr;
+    std::array<char, 256> error{};
+    auto status =
+        mradm_dsp_dataset_create(bytes.data(), bytes.size(), builtin ? 1 : 0, &raw, error.data(), error.size());
+    if (status != 0) {
+        return make_error(static_cast<ErrorCode>(status), error.data());
     }
+    const std::unique_ptr<void, decltype(&mradm_dsp_dataset_destroy)> owner(raw, mradm_dsp_dataset_destroy);
+    MradmDspDatasetInfo info{};
+    status = mradm_dsp_dataset_info(raw, &info, error.data(), error.size());
+    if (status != 0) {
+        return make_error(static_cast<ErrorCode>(status), error.data());
+    }
+    if (info.num_dirs > static_cast<std::size_t>(std::numeric_limits<int>::max()) ||
+        info.ir_len > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return make_error(ErrorCode::unsupported, "HRTF dataset exceeds renderer dimensions");
+    }
+    HrtfDataset result;
+    result.sample_rate = static_cast<int>(info.sample_rate);
+    result.num_dirs = static_cast<int>(info.num_dirs);
+    result.hrir_len = static_cast<int>(info.ir_len);
+    result.dirs_deg.resize(info.num_dirs * 2U);
+    result.hrirs.resize(info.num_dirs * 2U * info.ir_len);
+    std::array<char, 256> name{};
+    status = mradm_dsp_dataset_copy(raw,
+                                    result.dirs_deg.data(),
+                                    result.dirs_deg.size(),
+                                    result.hrirs.data(),
+                                    result.hrirs.size(),
+                                    name.data(),
+                                    name.size(),
+                                    error.data(),
+                                    error.size());
+    if (status != 0) {
+        return make_error(static_cast<ErrorCode>(status), error.data());
+    }
+    result.name = name.data();
+    return result;
 }
-#endif
-
-// ── HRTF dataset and pre-computed state ───────────────────────────────────────
-// HrtfDataset and BinauralState are declared in binaural_internal.h (shared with the test probe).
 
 HrtfDataset built_in_kemar_dataset() {
-    HrtfDataset ds;
-    ds.name = "built-in KEMAR";
-    ds.sample_rate = __default_hrir_fs;
-    ds.hrir_len = __default_hrir_len;
-    ds.num_dirs = __default_N_hrir_dirs;
-    ds.dirs_deg.assign(&__default_hrir_dirs_deg[0][0],
-                       &__default_hrir_dirs_deg[0][0] + (static_cast<std::ptrdiff_t>(ds.num_dirs) * 2));
-    ds.hrirs.assign(&__default_hrirs[0][0][0],
-                    &__default_hrirs[0][0][0] + (static_cast<std::ptrdiff_t>(ds.num_dirs) * k_n_ears * ds.hrir_len));
-    return ds;
+    auto result = read_rust_dataset({}, true);
+    if (!result) {
+        throw std::runtime_error(result.error().message);
+    }
+    return std::move(*result);
 }
 
-#ifdef SAF_ENABLE_SOFA_READER_MODULE
-Result<HrtfDataset> load_sofa_dataset(const std::filesystem::path& path, uint32_t input_sample_rate) {
-    std::string sofa_path = path.string();
-    saf_sofa_container sofa{};
-    const auto sofa_err = saf_sofa_open(&sofa, sofa_path.data(), SAF_SOFA_READER_OPTION_LIBMYSOFA);
-    if (sofa_err != SAF_SOFA_OK) {
-        return make_error(
-            ErrorCode::io_error, fmt::format("SOFA load failed: {}", sofa_error_name(sofa_err)), "path=" + sofa_path);
+Result<HrtfDataset> load_sofa_dataset(const std::filesystem::path& path, std::uint32_t input_sample_rate) {
+#if MR_ADM_ENABLE_SOFA
+    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    if (!input) {
+        return make_error(ErrorCode::io_error, "SOFA file could not be opened", "path=" + path.string());
     }
-
-    class SofaGuard {
-      public:
-        explicit SofaGuard(saf_sofa_container* container) : sofa_(container) {}
-        SofaGuard(const SofaGuard&) = delete;
-        SofaGuard& operator=(const SofaGuard&) = delete;
-        SofaGuard(SofaGuard&&) = delete;
-        SofaGuard& operator=(SofaGuard&&) = delete;
-        ~SofaGuard() { saf_sofa_close(sofa_); }
-
-      private:
-        saf_sofa_container* sofa_;
-    } sofa_guard{&sofa};
-
-    if (!string_is(sofa.SOFAConventions, "SimpleFreeFieldHRIR") && !string_is(sofa.SOFAConventions, "GeneralFIR")) {
-        return make_error(ErrorCode::unsupported,
-                          "SOFA: only SimpleFreeFieldHRIR and GeneralFIR conventions are supported",
-                          "path=" + sofa_path);
+    const std::streamoff length = input.tellg();
+    if (length <= 0) {
+        return make_error(ErrorCode::io_error, "SOFA file is empty or unreadable");
     }
-    if (!string_is(sofa.DataType, "FIR")) {
-        return make_error(ErrorCode::unsupported, "SOFA: only FIR data is supported", "path=" + sofa_path);
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(length));
+    input.seekg(0);
+    if (!input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(length))) {
+        return make_error(ErrorCode::io_error, "SOFA file could not be read completely");
     }
-    if (sofa.nReceivers != k_n_ears) {
-        return make_error(ErrorCode::unsupported,
-                          fmt::format("SOFA: expected 2 receivers, got {}", sofa.nReceivers),
-                          "path=" + sofa_path);
+    auto result = read_rust_dataset(bytes, false);
+    if (!result) {
+        return result;
     }
-    if (input_sample_rate != 0U && std::lround(sofa.DataSamplingRate) != static_cast<long>(input_sample_rate)) {
+    if (input_sample_rate != 0U && !std::cmp_equal(input_sample_rate, result->sample_rate)) {
         return make_error(
             ErrorCode::unsupported,
-            fmt::format("SOFA: sample rate {} Hz does not match input {} Hz", sofa.DataSamplingRate, input_sample_rate),
-            "path=" + sofa_path);
+            fmt::format("SOFA: sample rate {} Hz does not match input {} Hz", result->sample_rate, input_sample_rate),
+            "path=" + path.string());
     }
-    if (sofa.DataLengthIR <= 0 || sofa.nSources < 4 || sofa.DataIR == nullptr || sofa.SourcePosition == nullptr) {
-        return make_error(ErrorCode::unsupported, "SOFA: missing usable FIR directions", "path=" + sofa_path);
-    }
-
-    const bool spherical = string_is(sofa.SourcePositionType, "spherical");
-    const bool cartesian = string_is(sofa.SourcePositionType, "cartesian");
-    if (!spherical && !cartesian) {
-        return make_error(ErrorCode::unsupported, "SOFA: unsupported SourcePosition Type", "path=" + sofa_path);
-    }
-    if (spherical &&
-        (!contains_token(sofa.SourcePositionUnits, "degree") || !contains_token(sofa.SourcePositionUnits, "met"))) {
-        return make_error(
-            ErrorCode::unsupported, "SOFA: spherical SourcePosition units must be degrees/metres", "path=" + sofa_path);
-    }
-    if (cartesian && !contains_token(sofa.SourcePositionUnits, "met")) {
-        return make_error(
-            ErrorCode::unsupported, "SOFA: cartesian SourcePosition units must be metres", "path=" + sofa_path);
-    }
-
-    HrtfDataset ds;
-    ds.name = sofa.ListenerShortName != nullptr ? fmt::format("SOFA {}", sofa.ListenerShortName)
-                                                : fmt::format("SOFA {}", path.filename().string());
-    ds.sample_rate = static_cast<int>(std::lround(sofa.DataSamplingRate));
-    ds.hrir_len = sofa.DataLengthIR;
-    ds.num_dirs = sofa.nSources;
-    ds.hrirs.assign(sofa.DataIR, sofa.DataIR + (static_cast<std::ptrdiff_t>(ds.num_dirs) * k_n_ears * ds.hrir_len));
-    ds.dirs_deg.resize(static_cast<std::size_t>(ds.num_dirs) * 2U);
-    for (int i = 0; i < ds.num_dirs; ++i) {
-        const float a = sofa.SourcePosition[(static_cast<std::size_t>(i) * 3U) + 0U];
-        const float b = sofa.SourcePosition[(static_cast<std::size_t>(i) * 3U) + 1U];
-        const float c = sofa.SourcePosition[(static_cast<std::size_t>(i) * 3U) + 2U];
-        auto [az, el] = spherical ? std::pair<float, float>{a, b} : sofa_cart_to_polar(a, b, c);
-        ds.dirs_deg[(static_cast<std::size_t>(i) * 2U) + 0U] = az;
-        ds.dirs_deg[(static_cast<std::size_t>(i) * 2U) + 1U] = el;
-    }
-    return ds;
-}
+    result->name = fmt::format("SOFA {}", result->name.empty() ? path.filename().string() : result->name);
+    return result;
 #else
-Result<HrtfDataset> load_sofa_dataset(const std::filesystem::path& path, uint32_t input_sample_rate) {
     (void) input_sample_rate;
     return make_error(ErrorCode::unsupported,
                       "SOFA loading is disabled in this build (MR_ADM_ENABLE_SOFA=OFF)",
                       "path=" + path.string());
-}
 #endif
+}
 
 Result<HrtfDataset> load_hrtf_dataset(const RenderPlan& plan) {
     if (plan.sofa_path.has_value()) {
@@ -452,7 +388,17 @@ std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_
 
     // Convert HRIRs to frequency-domain HRTFs.
     bs->hrtf_fd.resize(static_cast<std::size_t>(bs->n_bands) * k_n_ears * static_cast<std::size_t>(bs->num_dirs));
-    HRIRs2HRTFs(bs->hrtf_td.data(), bs->num_dirs, bs->hrir_len, bs->fft_size, bs->hrtf_fd.data());
+    std::array<char, 256> transform_error{};
+    dsp::check(mradm_dsp_hrir_transform(bs->hrtf_td.data(),
+                                        bs->hrtf_td.size(),
+                                        static_cast<std::size_t>(bs->num_dirs),
+                                        static_cast<std::size_t>(bs->hrir_len),
+                                        static_cast<std::size_t>(bs->fft_size),
+                                        reinterpret_cast<float*>(bs->hrtf_fd.data()),
+                                        bs->hrtf_fd.size() * 2U,
+                                        transform_error.data(),
+                                        transform_error.size()),
+               transform_error.data());
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
     consistency::dump("binaural.01-hrir.f32", bs->hrtf_td);
     consistency::dump("binaural.02-grid.f32", bs->grid_dirs_deg);
@@ -490,10 +436,10 @@ std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_
 // off-grid far-ear improvement without lateral regression).
 namespace {
 struct GridBinInterpolation {
-    float_complex value{0.0F, 0.0F};
+    dsp::Complex value{0.0F, 0.0F};
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
     std::array<float, 3U> magnitudes{};
-    float_complex complex_sum{0.0F, 0.0F};
+    dsp::Complex complex_sum{0.0F, 0.0F};
     float magnitude{0.0F};
     float complex_magnitude{0.0F};
 #endif
@@ -505,7 +451,7 @@ interpolated_grid_bin(const BinauralState& bs, std::size_t grid, int band, std::
     const auto gbase = grid * 3U;
     const auto nd = static_cast<std::size_t>(bs.num_dirs);
     float mag = 0.0F;
-    float_complex cpx{0.0F, 0.0F};
+    dsp::Complex cpx{0.0F, 0.0F};
     for (std::size_t k = 0; k < 3U; ++k) {
         const float gain = bs.grid->gains[gbase + k];
         const auto dir = static_cast<std::size_t>(bs.grid->directions[gbase + k]);
@@ -519,7 +465,7 @@ interpolated_grid_bin(const BinauralState& bs, std::size_t grid, int band, std::
         cpx += gain * h;
     }
     const float acpx = std::abs(cpx);
-    result.value = acpx > 1e-9F ? cpx * (mag / acpx) : float_complex{mag, 0.0F};
+    result.value = acpx > 1e-9F ? cpx * (mag / acpx) : dsp::Complex{mag, 0.0F};
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
     result.complex_sum = cpx;
     result.magnitude = mag;
@@ -530,13 +476,13 @@ interpolated_grid_bin(const BinauralState& bs, std::size_t grid, int band, std::
 
 } // namespace
 
-void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<float_complex>& out) {
+void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<dsp::Complex>& out) {
     const auto g = static_cast<std::size_t>(vbap_grid_idx(az_deg, el_deg));
     out.resize(static_cast<std::size_t>(bs.n_bands) * k_n_ears);
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
     std::vector<float> trace_magnitudes(out.size() * 3U);
     std::vector<float> trace_scale(out.size() * 2U);
-    std::vector<float_complex> trace_sum(out.size());
+    std::vector<dsp::Complex> trace_sum(out.size());
 #endif
     for (int b = 0; b < bs.n_bands; ++b) {
         for (std::size_t ear = 0; ear < k_n_ears; ++ear) {
@@ -561,10 +507,7 @@ void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std:
 #endif
 }
 
-void compute_continuous_hrtf_into(const BinauralState& bs,
-                                  float az_deg,
-                                  float el_deg,
-                                  std::vector<float_complex>& out) {
+void compute_continuous_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<dsp::Complex>& out) {
     float azimuth = std::fmod(az_deg + 180.0F, 360.0F);
     if (azimuth < 0.0F) {
         azimuth += 360.0F;
@@ -582,7 +525,7 @@ void compute_continuous_hrtf_into(const BinauralState& bs,
                                         az_fraction * (1.0F - el_fraction),
                                         (1.0F - az_fraction) * el_fraction,
                                         az_fraction * el_fraction};
-    out.assign(static_cast<std::size_t>(bs.n_bands) * k_n_ears, float_complex{0.0F, 0.0F});
+    out.assign(static_cast<std::size_t>(bs.n_bands) * k_n_ears, dsp::Complex{0.0F, 0.0F});
     for (std::size_t corner = 0U; corner < grids.size(); ++corner) {
         if (weights.at(corner) == 0.0F) {
             continue;
@@ -597,8 +540,8 @@ void compute_continuous_hrtf_into(const BinauralState& bs,
     }
 }
 
-std::vector<float_complex> hrtf_for_dir(const BinauralState& bs, float az_deg, float el_deg) {
-    std::vector<float_complex> out;
+std::vector<dsp::Complex> hrtf_for_dir(const BinauralState& bs, float az_deg, float el_deg) {
+    std::vector<dsp::Complex> out;
     compute_hrtf_into(bs, az_deg, el_deg, out);
     return out;
 }
@@ -606,7 +549,7 @@ std::vector<float_complex> hrtf_for_dir(const BinauralState& bs, float az_deg, f
 struct HrtfCache {
     float cached_az{std::numeric_limits<float>::quiet_NaN()};
     float cached_el{std::numeric_limits<float>::quiet_NaN()};
-    std::vector<float_complex> hrtf;
+    std::vector<dsp::Complex> hrtf;
 };
 
 // Per-source memory of the last head-rotated direction, so a moving listener head crossfades the
@@ -618,7 +561,7 @@ struct HeadSmoothState {
     bool valid{false};
 };
 
-const std::vector<float_complex>& get_cached_hrtf(const BinauralState& bs, float az, float el, HrtfCache& cache) {
+const std::vector<dsp::Complex>& get_cached_hrtf(const BinauralState& bs, float az, float el, HrtfCache& cache) {
     if (cache.hrtf.empty() || az != cache.cached_az || el != cache.cached_el) {
         compute_hrtf_into(bs, az, el, cache.hrtf);
         cache.cached_az = az;
@@ -669,8 +612,8 @@ void decorrelate_diffuse_mono(DiffuseDelayState& state, const float* in, uint64_
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct ConvolutionScratch {
     std::vector<float> buf;
-    std::vector<float_complex> src_fd;
-    std::vector<float_complex> out_fd;
+    std::vector<dsp::Complex> src_fd;
+    std::vector<dsp::Complex> out_fd;
     std::vector<float> y;
     std::vector<float> l_cf0; // crossfade start arm
     std::vector<float> r_cf0;
@@ -694,7 +637,7 @@ struct ConvolutionScratch {
 // scratch buffers, and output accumulators so workers never alias each other).
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct PerSourceConvState {
-    void* hfft{nullptr};
+    dsp::FftHandle hfft{nullptr};
     ConvolutionScratch scratch;
     std::vector<float> l_out;
     std::vector<float> r_out;
@@ -705,14 +648,14 @@ struct PerSourceConvState {
 
 // OLA convolution: convolve src[frames_now] with hrtf[n_bands × k_n_ears],
 // accumulate into l_out/r_out (both [frames_now]), update state.overlap.
-// Uses saf_rfft (KissFFT backend).
+// Uses a preallocated RustFFT plan through the private DSP boundary.
 // NOLINTNEXTLINE(readability-function-size)
-void convolve_and_accumulate(void* hfft,
+void convolve_and_accumulate(const dsp::FftHandle& hfft,
                              const BinauralState& bs,
                              const float* src,
                              uint64_t frames_now,
                              float gain,
-                             const std::vector<float_complex>& hrtf,
+                             const std::vector<dsp::Complex>& hrtf,
                              OLAState& state,
                              float* l_out,
                              float* r_out,
@@ -722,7 +665,7 @@ void convolve_and_accumulate(void* hfft,
     // Zero-pad source block into FFT buffer and transform.
     std::ranges::fill(scratch.buf, 0.0F);
     std::copy_n(src, fn, scratch.buf.begin());
-    saf_rfft_forward(hfft, scratch.buf.data(), scratch.src_fd.data());
+    dsp::fft_forward(hfft, scratch.buf.data(), scratch.src_fd.data());
 
     for (int ear = 0; ear < k_n_ears; ++ear) {
         // Frequency-domain multiply: src_fd × hrtf[:][ear].
@@ -731,7 +674,7 @@ void convolve_and_accumulate(void* hfft,
                 gain * scratch.src_fd[static_cast<std::size_t>(band)] *
                 hrtf[(static_cast<std::size_t>(band) * k_n_ears) + static_cast<std::size_t>(ear)];
         }
-        saf_rfft_backward(hfft, scratch.out_fd.data(), scratch.y.data());
+        dsp::fft_inverse(hfft, scratch.out_fd.data(), scratch.y.data());
 
         auto& overlap_vec = (ear == 0) ? state.left() : state.right();
         float* overlap = overlap_vec.data();
@@ -858,6 +801,7 @@ struct SpreaderBlock {
 };
 
 struct SpreaderTrack {
+    std::uint64_t seed{0};
     uint16_t channel_index{0};
     float object_gain{1.0F};
     std::vector<SpreaderBlock> blocks;
@@ -957,6 +901,12 @@ std::vector<SpreaderTrack> build_spreader_tracks(const AdmScene& scene, LogSink&
             const auto channel_index = *track.channel_index;
             SpreaderTrack st;
             st.channel_index = channel_index;
+            st.seed = 14695981039346656037ULL;
+            const auto identity = obj.id + ":" + track.track_uid + ":" + std::to_string(channel_index);
+            for (const char value : identity) {
+                st.seed ^= static_cast<unsigned char>(value);
+                st.seed *= 1099511628211ULL;
+            }
             st.object_gain = obj.gain;
             for (const auto& blk : track.blocks) {
                 const auto prepared =
@@ -1300,14 +1250,14 @@ void copy_windowed_object_input(const BinauralSource& src,
 }
 
 // NOLINTNEXTLINE(readability-function-size)
-void convolve_crossfaded_object_block(void* hfft,
+void convolve_crossfaded_object_block(const dsp::FftHandle& hfft,
                                       const BinauralState& bs,
                                       const float* src,
                                       uint64_t frames_now,
                                       float start_gain,
                                       float end_gain,
-                                      const std::vector<float_complex>& start_hrtf,
-                                      const std::vector<float_complex>& end_hrtf,
+                                      const std::vector<dsp::Complex>& start_hrtf,
+                                      const std::vector<dsp::Complex>& end_hrtf,
                                       OLAState& state,
                                       float* l_out,
                                       float* r_out,
@@ -1746,7 +1696,7 @@ class BinauralStream final : public IRenderStream {
         src_cs_.clear();
         src_cs_.resize(sources_.size());
         for (auto& cs : src_cs_) {
-            saf_rfft_create(&cs.hfft, bs.fft_size);
+            dsp::fft_create(&cs.hfft, bs.fft_size);
             cs.scratch.resize(bs, static_cast<std::size_t>(render_block_size_));
             cs.l_out.resize(static_cast<std::size_t>(render_block_size_));
             cs.r_out.resize(static_cast<std::size_t>(render_block_size_));
@@ -1801,7 +1751,7 @@ class BinauralStream final : public IRenderStream {
     void destroy_fft() {
         for (auto& cs : src_cs_) {
             if (cs.hfft != nullptr) {
-                saf_rfft_destroy(&cs.hfft);
+                dsp::fft_destroy(&cs.hfft);
             }
         }
     }
@@ -2045,12 +1995,19 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
     if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
         spreader_adapters.reserve(spreader_groups.size());
         std::ranges::transform(spreader_groups, std::back_inserter(spreader_adapters), [&](const SpreaderGroup& group) {
+            std::vector<std::uint64_t> seeds;
+            seeds.reserve(group.lanes.size());
+            for (const auto& lane : group.lanes) {
+                const auto& track = spreader_tracks[group.track_indices[lane.track_slot]];
+                seeds.push_back(track.seed ^ ((lane.source_index + 1U) * 0x9e3779b97f4a7c15ULL));
+            }
             return BinauralSpreaderAdapter{bs->hrtf_td.data(),
                                            bs->grid_dirs_deg.data(),
                                            bs->num_dirs,
                                            bs->hrir_len,
                                            bs->sample_rate,
-                                           static_cast<int>(group.lanes.size())};
+                                           static_cast<int>(group.lanes.size()),
+                                           seeds};
         });
         // Prime each adapter: pre-fill the output ring with one frame so process_chunk
         // drains exactly n_frames (constant total_latency(), no gaps).
@@ -2093,7 +2050,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
     // Per-source FFT handles, scratch, and output buffers for parallel OLA processing.
     std::vector<PerSourceConvState> src_cs(sources.size());
     for (auto& cs : src_cs) {
-        saf_rfft_create(&cs.hfft, bs->fft_size);
+        dsp::fft_create(&cs.hfft, bs->fft_size);
         cs.scratch.resize(*bs, static_cast<std::size_t>(render_block_size));
         cs.l_out.resize(static_cast<std::size_t>(render_block_size));
         cs.r_out.resize(static_cast<std::size_t>(render_block_size));
@@ -2109,7 +2066,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
         ~SrcCsGuard() {
             for (auto& cs : data) {
                 if (cs.hfft != nullptr) {
-                    saf_rfft_destroy(&cs.hfft);
+                    dsp::fft_destroy(&cs.hfft);
                 }
             }
         }
@@ -2484,7 +2441,7 @@ CapabilityReport binaural_capabilities() {
     r.supports_object_divergence = true;
     r.supports_diffuse = true;
     r.hrtf_sources = {"built-in"};
-#ifdef SAF_ENABLE_SOFA_READER_MODULE
+#if MR_ADM_ENABLE_SOFA
     r.hrtf_sources.emplace_back("user-sofa");
 #endif
     // Default (cloud/none) path windows via seek + aligned pre-roll; the experimental
@@ -2503,7 +2460,7 @@ std::unique_ptr<IRenderer> create_binaural_renderer() {
 }
 
 bool binaural_sofa_supported() {
-#ifdef SAF_ENABLE_SOFA_READER_MODULE
+#if MR_ADM_ENABLE_SOFA
     return true;
 #else
     return false;

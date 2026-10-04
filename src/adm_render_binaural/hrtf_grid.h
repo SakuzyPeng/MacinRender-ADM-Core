@@ -17,13 +17,11 @@ struct HrtfGrid {
 };
 // cppcheck-suppress-end unusedStructMember
 
-// Fixed one-degree grid, preserving SAF's face order and first-containing-face rule.
+// Fixed one-degree grid with amplitude-normalized sparse Rust VBAP weights.
 [[nodiscard]] std::shared_ptr<const HrtfGrid> prepare_hrtf_grid(std::span<const float> directions);
 [[nodiscard]] std::shared_ptr<const HrtfGrid> build_hrtf_grid(std::span<const float> directions);
 
-// Internal geometry entry point, also used by the SAF-reference regression test.
-[[nodiscard]] bool
-triangulate_hrtf(std::span<const float> directions, std::vector<float>& vertices, std::vector<int>& faces);
-[[nodiscard]] std::size_t hrtf_grid_cache_bytes();
+// Current memory retained by the geometry cache.
+std::size_t hrtf_grid_cache_bytes();
 
 } // namespace mradm::binaural_internal

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -344,6 +345,32 @@ bool test_scene_hptf_snapshot_on_epoch() {
     return ok;
 }
 
+bool test_idle_stream_destruction() {
+    std::atomic<bool> valid{true};
+    std::vector<std::thread> controllers;
+    for (int controller = 0; controller < 4; ++controller) {
+        controllers.emplace_back([&valid] {
+            for (int iteration = 0; iteration < 128; ++iteration) {
+                SceneStreamConfig config;
+                config.renderer.renderer = mradm::RendererSelection::saf;
+                config.renderer.output_layout = "0+2+0";
+                auto stream = SceneStreamEngine::create(config);
+                if (!stream) {
+                    valid.store(false);
+                    return;
+                }
+                std::this_thread::yield();
+                // No epoch/work was submitted: destruction must wake the idle worker.
+                stream->reset();
+            }
+        });
+    }
+    for (auto& controller : controllers) {
+        controller.join();
+    }
+    return check(valid.load(), "idle streams can be created and destroyed concurrently");
+}
+
 int main() {
     try {
         bool ok = test_transparency_and_volume();
@@ -354,6 +381,7 @@ int main() {
         ok &= test_scene_hptf_respects_ceiling();
         ok &= test_scene_hptf_unsupported_without_stereo_guard();
         ok &= test_scene_hptf_snapshot_on_epoch();
+        ok &= test_idle_stream_destruction();
         return ok ? 0 : 1;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

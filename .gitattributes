@@ -1,0 +1,6 @@
+# Preserve upstream license/source bytes (including original CRLF and Markdown
+# line breaks). License drift checks compare them with the published packages.
+/third_party/licenses/rust-*/** -text -whitespace
+/rust/vendor/sofar/** -text -whitespace
+*.f32le binary
+*.sofa binary

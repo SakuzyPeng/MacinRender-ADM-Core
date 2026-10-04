@@ -9,6 +9,8 @@
 
 #include "adm/errors.h"
 
+#include "dsp.h"
+
 namespace mradm::triple_balance {
 
 // Historical measured FIR comparison; never linked into the production renderer.
@@ -37,7 +39,7 @@ class SizeFilterBank final {
   private:
     SizeFilterBank();
 
-    void* fft_{nullptr};
+    dsp::FftHandle fft_{nullptr};
     std::array<std::vector<std::complex<float>>, mode_count> filter_fd_;
     std::array<std::vector<float>, mode_count> overlap_;
     std::vector<float> source_time_;

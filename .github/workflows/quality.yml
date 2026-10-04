@@ -36,6 +36,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
+
       - name: Install dependencies
         run: brew install cmake ninja boost llvm cppcheck ccache
 
@@ -68,6 +71,9 @@ jobs:
           -DMR_ADM_ENABLE_IAMF=OFF
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Rust format and lint
+        run: cmake --build build/debug --target mr_adm_rust_quality
 
       - name: Changed quality checks
         if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'changed')

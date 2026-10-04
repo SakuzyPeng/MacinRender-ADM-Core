@@ -242,17 +242,18 @@
       "cmake_key": "Spatial_Audio_Framework",
       "purl": "pkg:github/leomccormack/Spatial_Audio_Framework@v1.3.4",
       "license": "ISC",
-      "purpose": "VBAP/MDAP/HRTF/FFT 等 DSP",
-      "distribution": "available",
+      "purpose": "历史 DSP 数值参考（测试专用）",
+      "distribution": "opt-in",
       "source": {
         "type": "fetchcontent",
         "deps_dir": "spatial_audio_framework-src",
         "parent": null,
         "license_files": [
           "LICENSE.md"
-        ]
+        ],
+        "cmake_option": "MR_ADM_BUILD_SAF_REFERENCE_TESTS"
       },
-      "notes": "仅在禁用 GPL 模块（tracker/HADES/FFTW/NETCDF/IPP）的配置下；内嵌 libmysofa/zlib（SOFA reader）单列于下"
+      "notes": "仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。"
     },
     {
       "name": "libopus",
@@ -334,16 +335,17 @@
       "purl": "pkg:generic/libmysofa",
       "license": "BSD-3-Clause",
       "purpose": "SOFA 解析（SAF saf_sofa_reader 内嵌）",
-      "distribution": "available",
+      "distribution": "opt-in",
       "source": {
         "type": "nested",
         "deps_dir": "spatial_audio_framework-src",
         "parent": "Spatial_Audio_Framework",
         "license_files": [
           "framework/modules/saf_sofa_reader/libmysofa/LICENSE"
-        ]
+        ],
+        "cmake_option": "MR_ADM_BUILD_SAF_REFERENCE_TESTS"
       },
-      "notes": "仅当 MR_ADM_ENABLE_SOFA=ON（默认）随包"
+      "notes": "仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。"
     },
     {
       "name": "zlib",
@@ -352,16 +354,17 @@
       "purl": "pkg:generic/zlib",
       "license": "Zlib",
       "purpose": "压缩支持（SAF SOFA reader 内嵌）",
-      "distribution": "available",
+      "distribution": "opt-in",
       "source": {
         "type": "nested",
         "deps_dir": "spatial_audio_framework-src",
         "parent": "Spatial_Audio_Framework",
         "license_files": [
           "framework/resources/zlib/zlib.h"
-        ]
+        ],
+        "cmake_option": "MR_ADM_BUILD_SAF_REFERENCE_TESTS"
       },
-      "notes": "zlib 许可证文本在 zlib.h 头部注释；仅当 SOFA 启用随包"
+      "notes": "仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。"
     },
     {
       "name": "spreader_mr",
@@ -370,15 +373,16 @@
       "purl": "pkg:generic/spreader_mr",
       "license": "ISC",
       "purpose": "saf_spreader 双耳扩散渲染（实验性 fork）",
-      "distribution": "available",
+      "distribution": "opt-in",
       "source": {
         "type": "vendored",
         "repo_path": "src/adm_render_binaural/spreader_mr.h",
         "license_files": [
           "NOTICE.txt"
-        ]
+        ],
+        "cmake_option": "MR_ADM_BUILD_SAF_REFERENCE_TESTS"
       },
-      "notes": "fork 自 SAF examples spreader（版权 2021 Leo McCormack）；最小改动：spreader_init_from_hrtf_grid() + 修复 SOFA Q 未赋值。bundle NOTICE.txt 为手写声明"
+      "notes": "仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。"
     },
     {
       "name": "aom-iamf-tools-bridge",
@@ -411,6 +415,810 @@
         ]
       },
       "notes": "macOS-only；Apple 平台 framework 不随本项目二进制再分发。bundle NOTICE.txt 为手写声明"
+    },
+    {
+      "name": "Corrosion",
+      "version": "v0.6.1",
+      "cmake_key": "Corrosion",
+      "purl": "pkg:github/corrosion-rs/corrosion@v0.6.1",
+      "license": "MIT",
+      "purpose": "CMake/Cargo 构建集成",
+      "distribution": "available",
+      "source": {
+        "type": "fetchcontent",
+        "deps_dir": "corrosion-src",
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "仅构建时使用。"
+    },
+    {
+      "name": "saf-derived-rust-dsp",
+      "version": "v1.3.4-subset",
+      "cmake_key": null,
+      "purl": "pkg:generic/mradm-saf-derived-dsp@1.3.4",
+      "license": "ISC AND MIT",
+      "purpose": "Rust afSTFT、去相关/OM 算法及 KEMAR/滤波器/HOA 数据来源",
+      "distribution": "available",
+      "source": {
+        "type": "local",
+        "repo_dir": "rust/crates/mradm-dsp/assets",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "保留原作者及许可证；不链接 SAF。资源哈希由 check_cargo.py 校验。"
+    },
+    {
+      "name": "rust-adler2-2.0.1",
+      "version": "2.0.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/adler2@2.0.1",
+      "license": "0BSD OR MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "adler2",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-0BSD",
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-approx-0.5.1",
+      "version": "0.5.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/approx@0.5.1",
+      "license": "Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "approx",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-arrayvec-0.7.8",
+      "version": "0.7.8",
+      "cmake_key": null,
+      "purl": "pkg:cargo/arrayvec@0.7.8",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "arrayvec",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-autocfg-1.5.1",
+      "version": "1.5.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/autocfg@1.5.1",
+      "license": "Apache-2.0 OR MIT",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "autocfg",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-bitflags-2.13.2",
+      "version": "2.13.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/bitflags@2.13.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "bitflags",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-bytemuck-1.25.2",
+      "version": "1.25.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/bytemuck@1.25.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "bytemuck",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "LICENSE-ZLIB"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-glam-0.30.10",
+      "version": "0.30.10",
+      "cmake_key": null,
+      "purl": "pkg:cargo/glam@0.30.10",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "glam",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-glam-0.31.1",
+      "version": "0.31.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/glam@0.31.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "glam",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-glam-0.32.1",
+      "version": "0.32.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/glam@0.32.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "glam",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-glam-0.33.12",
+      "version": "0.33.12",
+      "cmake_key": null,
+      "purl": "pkg:cargo/glam@0.33.12",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "glam",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-log-0.4.34",
+      "version": "0.4.34",
+      "cmake_key": null,
+      "purl": "pkg:cargo/log@0.4.34",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "log",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-matrixmultiply-0.3.11",
+      "version": "0.3.11",
+      "cmake_key": null,
+      "purl": "pkg:cargo/matrixmultiply@0.3.11",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "matrixmultiply",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-memchr-2.8.3",
+      "version": "2.8.3",
+      "cmake_key": null,
+      "purl": "pkg:cargo/memchr@2.8.3",
+      "license": "Unlicense OR MIT",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "memchr",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "COPYING",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-miniz_oxide-0.8.9",
+      "version": "0.8.9",
+      "cmake_key": null,
+      "purl": "pkg:cargo/miniz_oxide@0.8.9",
+      "license": "MIT OR Zlib OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "miniz_oxide",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE",
+          "LICENSE-APACHE.md",
+          "LICENSE-MIT.md",
+          "LICENSE-ZLIB.md"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-nalgebra-0.35.0",
+      "version": "0.35.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/nalgebra@0.35.0",
+      "license": "Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "nalgebra",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-num-bigint-0.4.8",
+      "version": "0.4.8",
+      "cmake_key": null,
+      "purl": "pkg:cargo/num-bigint@0.4.8",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "num-bigint",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-num-complex-0.4.6",
+      "version": "0.4.6",
+      "cmake_key": null,
+      "purl": "pkg:cargo/num-complex@0.4.6",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "num-complex",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-num-integer-0.1.47",
+      "version": "0.1.47",
+      "cmake_key": null,
+      "purl": "pkg:cargo/num-integer@0.1.47",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "num-integer",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-num-rational-0.4.2",
+      "version": "0.4.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/num-rational@0.4.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "num-rational",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-num-traits-0.2.19",
+      "version": "0.2.19",
+      "cmake_key": null,
+      "purl": "pkg:cargo/num-traits@0.2.19",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "num-traits",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-primal-check-0.3.4",
+      "version": "0.3.4",
+      "cmake_key": null,
+      "purl": "pkg:cargo/primal-check@0.3.4",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "primal-check",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-proc-macro2-1.0.107",
+      "version": "1.0.107",
+      "cmake_key": null,
+      "purl": "pkg:cargo/proc-macro2@1.0.107",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "proc-macro2",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-quote-1.0.47",
+      "version": "1.0.47",
+      "cmake_key": null,
+      "purl": "pkg:cargo/quote@1.0.47",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "quote",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-rawpointer-0.2.1",
+      "version": "0.2.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/rawpointer@0.2.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "rawpointer",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-realfft-3.5.0",
+      "version": "3.5.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/realfft@3.5.0",
+      "license": "MIT",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "realfft",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "README.md"
+        ],
+        "manual_notices": [
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "上游发布包在 README 声明 MIT；随包保留声明、作者归属和标准 MIT 许可文本。"
+    },
+    {
+      "name": "rust-rustfft-6.4.1",
+      "version": "6.4.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/rustfft@6.4.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "rustfft",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-safe_arch-1.2.0",
+      "version": "1.2.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/safe_arch@1.2.0",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "safe_arch",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE.md",
+          "LICENSE-MIT.md",
+          "LICENSE-ZLIB.md"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-simba-0.10.2",
+      "version": "0.10.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/simba@0.10.2",
+      "license": "Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "simba",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-sofar-0.3.0",
+      "version": "0.3.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/sofar@0.3.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "sofar",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "NOTICE"
+        ]
+      },
+      "notes": "0.3.0 最小本地补丁公开 RawHrtf；关闭 DSP/重采样 features；保留上游 NOTICE。"
+    },
+    {
+      "name": "rust-strength_reduce-0.2.4",
+      "version": "0.2.4",
+      "cmake_key": null,
+      "purl": "pkg:cargo/strength_reduce@0.2.4",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "strength_reduce",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-syn-3.0.6",
+      "version": "3.0.6",
+      "cmake_key": null,
+      "purl": "pkg:cargo/syn@3.0.6",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "syn",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-thiserror-2.0.21",
+      "version": "2.0.21",
+      "cmake_key": null,
+      "purl": "pkg:cargo/thiserror@2.0.21",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "thiserror",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-thiserror-impl-2.0.21",
+      "version": "2.0.21",
+      "cmake_key": null,
+      "purl": "pkg:cargo/thiserror-impl@2.0.21",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "thiserror-impl",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-transpose-0.2.3",
+      "version": "0.2.3",
+      "cmake_key": null,
+      "purl": "pkg:cargo/transpose@0.2.3",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "transpose",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-typenum-1.20.1",
+      "version": "1.20.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/typenum@1.20.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "typenum",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE",
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-unicode-ident-1.0.26",
+      "version": "1.0.26",
+      "cmake_key": null,
+      "purl": "pkg:cargo/unicode-ident@1.0.26",
+      "license": "(MIT OR Apache-2.0) AND Unicode-3.0",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "unicode-ident",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "LICENSE-UNICODE"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-wide-1.7.1",
+      "version": "1.7.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/wide@1.7.1",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "wide",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE.txt",
+          "LICENSE-MIT.txt",
+          "LICENSE-ZLIB.txt"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-winnow-0.7.15",
+      "version": "0.7.15",
+      "cmake_key": null,
+      "purl": "pkg:cargo/winnow@0.7.15",
+      "license": "MIT",
+      "purpose": "Rust DSP 的锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "winnow",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
     }
   ]
 }

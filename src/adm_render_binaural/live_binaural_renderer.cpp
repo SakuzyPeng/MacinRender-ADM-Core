@@ -22,8 +22,7 @@
 #include <utility>
 #include <vector>
 
-// Keep SAF's complex declaration outside the C linkage opened by some SAF headers.
-#include <saf_utility_complex.h>
+// Private project DSP complex type.
 #include <samplerate.h>
 
 #include <fmt/format.h>
@@ -31,6 +30,7 @@
 #include "adm/scene.h"
 
 #include "binaural_internal.h"
+#include "dsp.h"
 #include "head_rotation.h"
 #include "live_binaural_convolver.h"
 
@@ -71,8 +71,8 @@ struct ConvolutionScratch {
     std::vector<float> diffuse;
     std::vector<float> left;
     std::vector<float> right;
-    std::vector<float_complex> hrtf_target;
-    std::vector<float_complex> hrtf_temp;
+    std::vector<dsp::Complex> hrtf_target;
+    std::vector<dsp::Complex> hrtf_temp;
 
     void resize() {
         source.resize(k_convolution_block);
@@ -323,7 +323,7 @@ class HrtfStateCache {
     void insert(Key key, std::shared_ptr<const BinauralState> state) {
         const auto bytes =
             sizeof(BinauralState) + state->dataset_name.capacity() +
-            (state->hrtf_fd.capacity() * sizeof(float_complex)) +
+            (state->hrtf_fd.capacity() * sizeof(dsp::Complex)) +
             ((state->hrtf_td.capacity() + state->grid_dirs_deg.capacity() + state->hrtf_magnitudes.capacity()) *
              sizeof(float)) +
             state->grid->bytes();
@@ -379,7 +379,7 @@ class HrtfStateCache {
     }
     prepared->hrtf_magnitudes.resize(prepared->hrtf_fd.size());
     std::ranges::transform(
-        prepared->hrtf_fd, prepared->hrtf_magnitudes.begin(), [](float_complex value) { return std::abs(value); });
+        prepared->hrtf_fd, prepared->hrtf_magnitudes.begin(), [](dsp::Complex value) { return std::abs(value); });
     // Live convolution and extent rendering use only the frequency-domain HRTFs
     // and compressed interpolation grid. The original HRIRs and measurement
     // directions are needed during preparation (and by the offline SAF spreader),
@@ -686,7 +686,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
     hrtf_for(const RuntimeElement& element,
              const ObjectState& object_state,
              const Frame& frame,
-             std::vector<float_complex>& output,
+             std::vector<dsp::Complex>& output,
              const std::optional<std::pair<float, float>>& direction_override = std::nullopt) {
         std::pair<float, float> direction;
         if (direction_override) {
@@ -768,7 +768,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             std::accumulate(directions.begin(), directions.end(), 0.0F, [](float sum, const DirectionWeight& item) {
                 return sum + item.weight;
             });
-        output.assign(static_cast<std::size_t>(state_->n_bands) * k_n_ears, float_complex{0.0F, 0.0F});
+        output.assign(static_cast<std::size_t>(state_->n_bands) * k_n_ears, dsp::Complex{0.0F, 0.0F});
         const bool rotate_to_head_space = !listener_orientation_.is_identity() && !object_state.head_locked;
         const render_common::HeadRotation rotation{listener_orientation_};
         for (const auto& item : directions) {

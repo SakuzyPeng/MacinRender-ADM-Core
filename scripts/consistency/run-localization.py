@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run diagnostic variants after recording the unmodified A/B baseline build."""
 import argparse
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -15,6 +16,10 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     build = args.build_dir.resolve()
+    record = build / 'consistency-dependencies.json'
+    if record.exists() and json.loads(record.read_text()).get('dsp_implementation') == 'rust':
+        parser.error('These attribution experiments target the historical SAF renderer. '
+                     'Use its recorded source revision; current Rust builds use module tests and the PCM matrix.')
     out = args.out_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
     variants = [("native", False, []), ("portable-rng", True, [])]

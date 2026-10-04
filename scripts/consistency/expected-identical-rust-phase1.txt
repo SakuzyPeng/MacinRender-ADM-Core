@@ -1,0 +1,3 @@
+# Rust DSP phase 1 intentionally has no cross-platform bit-equality gate.
+# Keep recording every difference; same-process repeatability is mandatory.
+# Historical SAF A/B gate lists remain unchanged for their original evidence.

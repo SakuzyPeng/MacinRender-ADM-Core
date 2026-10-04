@@ -420,8 +420,14 @@ struct SceneStreamEngine::Impl {
     }
 
     ~Impl() {
-        reset_gate.store(true, std::memory_order_release);
-        quit.store(true, std::memory_order_release);
+        {
+            // Publish the terminal predicate under the same mutex used by
+            // queue_cv.wait: otherwise an idle worker can miss this wakeup
+            // between testing quit and entering the condition-variable wait.
+            const std::lock_guard<std::mutex> lock(queue_mutex);
+            reset_gate.store(true, std::memory_order_release);
+            quit.store(true, std::memory_order_release);
+        }
         queue_cv.notify_all();
         if (worker.joinable()) {
             worker.join();

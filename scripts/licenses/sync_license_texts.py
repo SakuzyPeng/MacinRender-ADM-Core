@@ -15,6 +15,7 @@ FetchContent _deps 树同步而来。vendored/system 组件的 NOTICE.txt 为手
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -22,7 +23,41 @@ from pathlib import Path
 import _common
 
 # 这些 source.type 的 license 原文从 _deps 同步；其余（vendored/system）为手写 NOTICE。
-HARVESTABLE = {"fetchcontent", "nested"}
+HARVESTABLE = {"fetchcontent", "nested", "cargo", "local"}
+
+
+def component_root(component: dict, build_dir: Path) -> Path | None:
+    source = component['source']
+    if source['type'] == 'local':
+        return _common.repo_root() / source['repo_dir']
+    if source['type'] == 'cargo':
+        metadata_file = build_dir / 'rust-dependencies.json'
+        if not metadata_file.exists():
+            return None
+        metadata = json.loads(metadata_file.read_text(encoding='utf-8'))
+        for package in metadata['packages']:
+            if package['name'] == source['package'] and package['version'] == component['version']:
+                return Path(package['manifest_path']).parent
+        return None
+    record_file = build_dir / 'consistency-dependencies.json'
+    if record_file.exists():
+        records = json.loads(record_file.read_text(encoding='utf-8'))['dependencies']
+        key = component.get('cmake_key') or source.get('parent')
+        for record in records:
+            if record['name'] == key and record.get('source_dir'):
+                return Path(record['source_dir'])
+    return find_deps_root(build_dir, source['deps_dir'])
+
+
+def optional_disabled(component: dict, build_dir: Path) -> bool:
+    option = component['source'].get('cmake_option')
+    if not option:
+        return False
+    cache = build_dir / 'CMakeCache.txt'
+    if not cache.exists():
+        return False
+    return any(line.startswith(option + ':') and line.partition('=')[2].strip().upper() in {'OFF', '0', 'FALSE'}
+               for line in cache.read_text(encoding='utf-8').splitlines())
 
 
 def find_deps_root(build_dir: Path, deps_dir: str) -> Path | None:
@@ -37,7 +72,8 @@ def bundle_files(component: dict) -> list[Path]:
     """该组件在 bundle 中应存在的目标文件路径列表。"""
     name = component["name"]
     dest_dir = _common.licenses_dir() / name
-    return [dest_dir / Path(lf).name for lf in component["source"]["license_files"]]
+    names = component["source"]["license_files"] + component["source"].get("manual_notices", [])
+    return [dest_dir / Path(lf).name for lf in names]
 
 
 def refresh(components: list[dict], build_dir: Path) -> int:
@@ -50,9 +86,11 @@ def refresh(components: list[dict], build_dir: Path) -> int:
                 if not dest.exists():
                     missing_sources.append(f"{c['name']}: 缺手写 {dest.relative_to(_common.repo_root())}")
             continue
-        deps_root = find_deps_root(build_dir, src["deps_dir"])
+        if optional_disabled(c, build_dir):
+            continue
+        deps_root = component_root(c, build_dir)
         if deps_root is None:
-            missing_sources.append(f"{c['name']}: 构建目录无 _deps/{src['deps_dir']}（请用含全部依赖的构建）")
+            missing_sources.append(f"{c['name']}: 构建记录中缺依赖源码（请先配置并获取依赖）")
             continue
         dest_dir = _common.licenses_dir() / c["name"]
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -85,7 +123,8 @@ def write_index(components: list[dict]) -> None:
         "|---|---|---|---|",
     ]
     for c in sorted(components, key=lambda x: x["name"].lower()):
-        files = ", ".join(f"`{Path(lf).name}`" for lf in c["source"]["license_files"])
+        names = c["source"]["license_files"] + c["source"].get("manual_notices", [])
+        files = ", ".join(f"`{Path(lf).name}`" for lf in names)
         lines.append(f"| {c['name']} | {c['version']} | {c['license']} | {files} |")
     lines.append("")
     (_common.licenses_dir() / "INDEX.md").write_text("\n".join(lines), encoding="utf-8")
@@ -112,11 +151,13 @@ def check(components: list[dict], build_dir: Path | None, require_full: bool) ->
             src = c["source"]
             if src["type"] not in HARVESTABLE:
                 continue
-            deps_root = find_deps_root(build_dir, src["deps_dir"])
+            if optional_disabled(c, build_dir):
+                continue
+            deps_root = component_root(c, build_dir)
             if deps_root is None:
                 if require_full:
                     errors.append(
-                        f"{c['name']}: 构建目录无 _deps/{src['deps_dir']}"
+                        f"{c['name']}: 构建记录中缺依赖源码"
                         f"（--require-full 要求全量覆盖；请用全 FetchContent 构建）"
                     )
                 else:

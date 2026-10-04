@@ -12,6 +12,7 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/adm_core/version.cpp.in" "${MR_A
 
 option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
+option(MR_ADM_BUILD_SAF_REFERENCE_TESTS "Build optional legacy SAF numerical reference tools" OFF)
 option(MR_ADM_CONSISTENCY_DIAGNOSTICS "Enable private numerical checkpoints and worker controls (measurement only)" OFF)
 option(MR_ADM_DIAGNOSTIC_PORTABLE_RNG "Replace SAF's C RNG for a numerical attribution experiment only" OFF)
 option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
@@ -121,6 +122,8 @@ include(MRWarnings)
 # 拉下来的第三方目录拿不到（路线图 §5.1 第 3 项）。
 include(MRStrictFp)
 include(MRDependencies)
+include(MRRust)
+mr_adm_core_write_dependency_record()
 include(MRStaticAnalysis)
 find_package(Threads REQUIRED)
 if(MR_ADM_ENABLE_IAMF)
@@ -240,19 +243,19 @@ target_sources(
 
 target_link_libraries(mr_adm_render_ear
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 adm ear saf ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE libbw64 adm ear ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE MacinRender::ADMDsp
 )
 target_include_directories(mr_adm_render_ear
     SYSTEM PRIVATE
-        "${saf_SOURCE_DIR}/modules/saf_utilities"
         "${EBUR128_INCLUDE_DIR}"
 )
 mr_adm_core_apply_warnings(mr_adm_render_ear)
 mr_adm_core_apply_static_analysis(mr_adm_render_ear)
 
 # ── adm_render_vbap ───────────────────────────────────────────────────────────
-# SAF-backed VBAP renderer. SAF types are confined to this target.
-# M7 scope: Objects-to-loudspeaker rendering through SAF VBAP/MDAP.
+# Rust-backed VBAP renderer. Legacy renderer selection names stay compatible.
+# Objects-to-loudspeaker rendering through project-owned VBAP/MDAP.
 
 add_library(mr_adm_render_vbap)
 add_library(MacinRender::ADMRenderVBAP ALIAS mr_adm_render_vbap)
@@ -271,12 +274,11 @@ target_sources(
 
 target_link_libraries(mr_adm_render_vbap
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE libbw64 ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE MacinRender::ADMDsp
 )
 target_include_directories(mr_adm_render_vbap
     SYSTEM PRIVATE
-        "${saf_SOURCE_DIR}/modules/saf_vbap"
-        "${saf_SOURCE_DIR}/modules/saf_utilities"
         "${EBUR128_INCLUDE_DIR}"
 )
 mr_adm_core_apply_warnings(mr_adm_render_vbap)
@@ -326,19 +328,18 @@ target_sources(
 
 target_link_libraries(mr_adm_render_hoa
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 saf ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE libbw64 ebur128 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE MacinRender::ADMDsp
 )
 target_include_directories(mr_adm_render_hoa
     SYSTEM PRIVATE
-        "${saf_SOURCE_DIR}/modules/saf_hoa"
-        "${saf_SOURCE_DIR}/modules/saf_utilities"
         "${EBUR128_INCLUDE_DIR}"
 )
 mr_adm_core_apply_warnings(mr_adm_render_hoa)
 mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
 
 # ── adm_render_binaural ───────────────────────────────────────────────────────
-# SAF HRTF binaural renderer: Objects/DirectSpeakers → 2ch via VBAP-interpolated
+# Rust HRTF binaural renderer: Objects/DirectSpeakers → 2ch via VBAP-interpolated
 # KEMAR or user SOFA HRTF convolution.  HOA not supported.
 
 add_library(mr_adm_render_binaural)
@@ -348,12 +349,10 @@ target_sources(
     mr_adm_render_binaural
     PRIVATE
         src/adm_render_binaural/binaural_renderer.cpp
-        src/adm_render_binaural/hrtf_hull.cpp
         src/adm_render_binaural/hrtf_grid.cpp
         src/adm_render_binaural/binaural_spreader.cpp
         src/adm_render_binaural/live_binaural_convolver.cpp
         src/adm_render_binaural/live_binaural_renderer.cpp
-        src/adm_render_binaural/spreader_mr.c
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS include
@@ -363,17 +362,14 @@ target_sources(
 
 target_link_libraries(mr_adm_render_binaural
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 saf ebur128 SampleRate::samplerate MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE libbw64 ebur128 SampleRate::samplerate MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE MacinRender::ADMDsp
 )
 target_include_directories(mr_adm_render_binaural
     SYSTEM PRIVATE
-        "${saf_SOURCE_DIR}/modules/saf_hrir"
-        "${saf_SOURCE_DIR}/modules/saf_sofa_reader"
-        "${saf_SOURCE_DIR}/modules/saf_vbap"
-        "${saf_SOURCE_DIR}/modules/saf_utilities"
         "${EBUR128_INCLUDE_DIR}"
-        "${saf_SOURCE_DIR}/../examples/include"
 )
+target_compile_definitions(mr_adm_render_binaural PRIVATE MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
 mr_adm_core_apply_warnings(mr_adm_render_binaural)
 mr_adm_core_apply_static_analysis(mr_adm_render_binaural)
 
@@ -384,6 +380,9 @@ if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
     endforeach()
 endif()
 if(MR_ADM_DIAGNOSTIC_PORTABLE_RNG)
+    if(NOT MR_ADM_BUILD_SAF_REFERENCE_TESTS)
+        message(FATAL_ERROR "MR_ADM_DIAGNOSTIC_PORTABLE_RNG requires MR_ADM_BUILD_SAF_REFERENCE_TESTS")
+    endif()
     if(NOT MR_ADM_CONSISTENCY_DIAGNOSTICS)
         message(FATAL_ERROR "MR_ADM_DIAGNOSTIC_PORTABLE_RNG requires MR_ADM_CONSISTENCY_DIAGNOSTICS=ON")
     endif()
@@ -705,6 +704,15 @@ if(MR_ADM_BUILD_CAPI_BUNDLE)
         WINDOWS_EXPORT_ALL_SYMBOLS ON
     )
     target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime)
+    # Keep Rust's allocator/panic machinery and every private DSP symbol inside
+    # this DSO. Consumers continue to see only the established adm_* C boundary.
+    if(APPLE)
+        target_link_options(mradm_capi_bundle PRIVATE
+            "LINKER:-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/cmake/mradm-capi.exports")
+    elseif(UNIX)
+        target_link_options(mradm_capi_bundle PRIVATE
+            "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/mradm-capi.map")
+    endif()
 endif()
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -847,6 +855,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_stereo_peak_guard_tests)
     mr_adm_core_apply_static_analysis(mr_adm_stereo_peak_guard_tests)
     add_test(NAME mr_adm_stereo_peak_guard_tests COMMAND mr_adm_stereo_peak_guard_tests)
+    set_tests_properties(mr_adm_stereo_peak_guard_tests PROPERTIES TIMEOUT 30)
 
     # Release-only/manual acceptance tool. It is deliberately excluded from the default build and
     # CTest because its normal invocation runs for ten wall-clock minutes.
@@ -876,6 +885,22 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_repeat_render)
     mr_adm_core_apply_static_analysis(mr_adm_repeat_render)
 
+    if(MR_ADM_BUILD_SAF_REFERENCE_TESTS)
+    add_executable(mr_adm_export_saf_hoa_matrix EXCLUDE_FROM_ALL tests/tools/export_saf_hoa_matrix.cpp)
+    target_link_libraries(mr_adm_export_saf_hoa_matrix PRIVATE saf)
+    target_include_directories(mr_adm_export_saf_hoa_matrix SYSTEM PRIVATE
+        "${saf_SOURCE_DIR}/modules/saf_utilities" "${saf_SOURCE_DIR}/modules/saf_hoa")
+    add_library(mr_adm_saf_spreader_reference STATIC tests/reference/spreader_mr.c)
+    target_link_libraries(mr_adm_saf_spreader_reference PRIVATE saf)
+    target_include_directories(mr_adm_saf_spreader_reference PRIVATE
+        "${saf_SOURCE_DIR}/../examples/include")
+    add_executable(mr_adm_saf_reference_tests tests/reference/saf_reference_test.cpp)
+    target_link_libraries(mr_adm_saf_reference_tests PRIVATE MacinRender::ADMDsp saf mr_adm_saf_spreader_reference)
+    target_include_directories(mr_adm_saf_reference_tests SYSTEM PRIVATE
+        "${saf_SOURCE_DIR}/modules/saf_utilities" "${saf_SOURCE_DIR}/modules/saf_vbap"
+        "${saf_SOURCE_DIR}/modules/saf_hrir" "${saf_SOURCE_DIR}/../examples/include")
+    add_test(NAME mr_adm_saf_reference_tests COMMAND mr_adm_saf_reference_tests)
+
     add_executable(mr_adm_numeric_probe EXCLUDE_FROM_ALL tests/tools/numeric_probe.cpp)
     target_link_libraries(mr_adm_numeric_probe PRIVATE saf)
     target_include_directories(mr_adm_numeric_probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")
@@ -902,6 +927,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
         target_compile_definitions(mr_adm_numeric_probe PRIVATE MR_ADM_DIAGNOSTIC_PORTABLE_RNG=1)
         target_compile_definitions(mr_adm_vbap_probe PRIVATE MR_ADM_DIAGNOSTIC_PORTABLE_RNG=1)
         target_link_libraries(mr_adm_repeat_render PRIVATE saf)
+    endif()
+
     endif()
 
     # Standard-library-only Python tests exercise the actual executable and shell exit codes.
@@ -1032,8 +1059,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_executable(mr_adm_triple_balance_size_filter_tests tests/unit/triple_balance_size_filter_test.cpp
         tests/support/triple_balance_size_filter.cpp)
     target_include_directories(mr_adm_triple_balance_size_filter_tests PRIVATE tests/support)
-    target_include_directories(mr_adm_triple_balance_size_filter_tests SYSTEM PRIVATE "${saf_SOURCE_DIR}/modules/saf_utilities")
-    target_link_libraries(mr_adm_triple_balance_size_filter_tests PRIVATE MacinRender::ADMCore saf)
+    target_link_libraries(mr_adm_triple_balance_size_filter_tests PRIVATE MacinRender::ADMCore MacinRender::ADMDsp)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_size_filter_tests)
     mr_adm_core_apply_static_analysis(mr_adm_triple_balance_size_filter_tests)
     add_test(NAME mr_adm_triple_balance_size_filter_tests COMMAND mr_adm_triple_balance_size_filter_tests)
@@ -1195,7 +1221,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_hoa_decode_fixture_tests)
     add_test(NAME mr_adm_hoa_decode_fixture_tests COMMAND mr_adm_hoa_decode_fixture_tests)
 
-    # Fixture test: SAF KEMAR HRTF binaural renderer timing and fixed stereo output layout.
+    # Fixture test: Rust KEMAR HRTF binaural renderer timing and fixed stereo output layout.
     # The interpolation invariant probe is its own test-only translation unit (binaural_test_probe.cpp),
     # compiled here and NOT into the production ADMRenderBinaural library.
     add_executable(mr_adm_binaural_fixture_tests
@@ -1209,31 +1235,47 @@ if(MR_ADM_CORE_BUILD_TESTS)
             MacinRender::ADMAudio
             libbw64
             adm
-    )
-    # Test-only access to the non-installed binaural internal/probe headers + SAF's float_complex.
-    target_include_directories(mr_adm_binaural_fixture_tests SYSTEM PRIVATE
-        "${saf_SOURCE_DIR}/modules/saf_utilities")
+     MacinRender::ADMDsp)
+    # Test-only access to the non-installed binaural internal/probe headers.
+
     target_include_directories(mr_adm_binaural_fixture_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural")
     mr_adm_core_apply_warnings(mr_adm_binaural_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_binaural_fixture_tests)
     add_test(NAME mr_adm_binaural_fixture_tests COMMAND mr_adm_binaural_fixture_tests)
 
+    add_executable(mr_adm_sofa_fixture_tests tests/unit/sofa_fixture_test.cpp)
+    target_link_libraries(mr_adm_sofa_fixture_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMDsp)
+    target_include_directories(mr_adm_sofa_fixture_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural")
+    target_compile_definitions(mr_adm_sofa_fixture_tests PRIVATE MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
+    mr_adm_core_apply_warnings(mr_adm_sofa_fixture_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_sofa_fixture_tests)
+    add_test(NAME mr_adm_sofa_fixture_tests COMMAND mr_adm_sofa_fixture_tests "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sofa")
+
+    set(_mr_rust_test_features --no-default-features)
+    if(MR_ADM_ENABLE_SOFA)
+        list(APPEND _mr_rust_test_features --features sofa)
+    endif()
+    add_test(NAME mr_adm_rust_unit_tests
+        COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+            "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" test --locked --workspace
+            --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
+            --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}" ${_mr_rust_test_features})
+    set_tests_properties(mr_adm_rust_unit_tests PROPERTIES TIMEOUT 300)
+
     add_executable(mr_adm_hrtf_grid_tests tests/unit/hrtf_grid_test.cpp)
-    target_link_libraries(mr_adm_hrtf_grid_tests PRIVATE MacinRender::ADMRenderBinaural)
+    target_link_libraries(mr_adm_hrtf_grid_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMDsp)
     target_include_directories(mr_adm_hrtf_grid_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural")
-    target_include_directories(mr_adm_hrtf_grid_tests SYSTEM PRIVATE
-        "${saf_SOURCE_DIR}/modules/saf_utilities" "${saf_SOURCE_DIR}/modules/saf_vbap")
+
     mr_adm_core_apply_warnings(mr_adm_hrtf_grid_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hrtf_grid_tests)
     add_test(NAME mr_adm_hrtf_grid_tests COMMAND mr_adm_hrtf_grid_tests)
 
     add_executable(mr_adm_live_binaural_continuity_tests tests/unit/live_binaural_continuity_test.cpp)
-    target_link_libraries(mr_adm_live_binaural_continuity_tests PRIVATE MacinRender::ADMRenderBinaural)
+    target_link_libraries(mr_adm_live_binaural_continuity_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMDsp)
     target_include_directories(mr_adm_live_binaural_continuity_tests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_common")
-    target_include_directories(mr_adm_live_binaural_continuity_tests SYSTEM PRIVATE
-        "${saf_SOURCE_DIR}/modules/saf_utilities")
+
     mr_adm_core_apply_warnings(mr_adm_live_binaural_continuity_tests)
     mr_adm_core_apply_static_analysis(mr_adm_live_binaural_continuity_tests)
     add_test(NAME mr_adm_live_binaural_continuity_tests COMMAND mr_adm_live_binaural_continuity_tests)

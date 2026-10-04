@@ -6,19 +6,18 @@
 // test-only translation unit — keeping probe_hrtf_interpolation() out of the production library
 // and the shipped mradm binary entirely (no macro gating, no per-platform release tweaks needed).
 //
-// This header carries SAF's float_complex, which is allowed here: it lives under
-// src/adm_render_binaural/ and is never installed, so it does not cross the ADR-0003 target
-// boundary (SAF types stay inside the binaural module).
+// Complex samples and owned FFT handles use the private project DSP boundary.
+// This header is not installed and no Rust/third-party type enters the public ABI.
 
 #include <cstdint>
 #include <filesystem>
 #include <memory>
-#include <saf_utility_complex.h>
 #include <string>
 #include <vector>
 
 #include "adm/errors.h"
 
+#include "dsp.h"
 #include "hrtf_grid.h"
 
 namespace mradm::binaural_internal {
@@ -46,7 +45,7 @@ struct BinauralState {
     // HRTFs in frequency domain; FLAT: [n_bands × k_n_ears × num_dirs]. compute_hrtf_into()
     // interpolates magnitude and phase from these separately (see there) to avoid the ITD-comb of
     // direct complex weighting at off-grid directions.
-    std::vector<float_complex> hrtf_fd;
+    std::vector<dsp::Complex> hrtf_fd;
     // Optional live-only magnitude cache, prepared off the render thread.
     std::vector<float> hrtf_magnitudes;
     // Compressed VBAP table: amplitude-normalised gains + direction indices per grid point.
@@ -63,7 +62,7 @@ struct BinauralState {
 // NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
 // cppcheck-suppress-end unusedStructMember
 
-// Built-in SAF KEMAR HRTF dataset.
+// Built-in KEMAR HRTF dataset (attributed immutable data, independent of SAF).
 HrtfDataset built_in_kemar_dataset();
 
 // Load a user SOFA dataset. This remains module-private; live Scene rendering uses the
@@ -78,11 +77,11 @@ std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, std::ui
 int vbap_grid_idx(float az_deg, float el_deg);
 
 // Interpolate the HRTF at (az,el) into out (magnitude/phase split; see definition).
-void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<float_complex>& out);
+void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<dsp::Complex>& out);
 
 // Live motion interpolates the complex responses of adjacent one-degree cells.
 // Integer directions retain the existing magnitude-preserving response; moving
 // within or across a cell is continuous, including the +/-180 degree seam.
-void compute_continuous_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<float_complex>& out);
+void compute_continuous_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<dsp::Complex>& out);
 
 } // namespace mradm::binaural_internal

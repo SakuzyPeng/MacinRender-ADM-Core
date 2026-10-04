@@ -33,8 +33,8 @@ template <typename T> void require(const T& result) {
     }
 }
 
-std::vector<float_complex> response(std::span<const float> impulse) {
-    std::vector<float_complex> result((impulse.size() + 2U), float_complex{0.0F, 0.0F});
+std::vector<mradm::dsp::Complex> response(std::span<const float> impulse) {
+    std::vector<mradm::dsp::Complex> result((impulse.size() + 2U), mradm::dsp::Complex{0.0F, 0.0F});
     for (std::size_t band = 0U; band <= impulse.size() / 2U; ++band) {
         std::complex<double> value{0.0, 0.0};
         for (std::size_t tap = 0U; tap < impulse.size(); ++tap) {
@@ -42,7 +42,7 @@ std::vector<float_complex> response(std::span<const float> impulse) {
                 -2.0 * std::numbers::pi * static_cast<double>(band * tap) / static_cast<double>(impulse.size());
             value += static_cast<double>(impulse[tap]) * std::polar(1.0, phase);
         }
-        result[band * 2U] = float_complex{static_cast<float>(value.real()), static_cast<float>(value.imag())};
+        result[band * 2U] = mradm::dsp::Complex{static_cast<float>(value.real()), static_cast<float>(value.imag())};
         result[(band * 2U) + 1U] = result[band * 2U];
     }
     return result;
@@ -254,9 +254,9 @@ bool test_continuous_lookup() {
     if (!check(state != nullptr, "prepare interpolation state")) {
         return false;
     }
-    std::vector<float_complex> left;
-    std::vector<float_complex> middle;
-    std::vector<float_complex> right;
+    std::vector<mradm::dsp::Complex> left;
+    std::vector<mradm::dsp::Complex> middle;
+    std::vector<mradm::dsp::Complex> right;
     compute_continuous_hrtf_into(*state, 0.49F, 0.0F, left);
     compute_continuous_hrtf_into(*state, 0.50F, 0.0F, middle);
     compute_continuous_hrtf_into(*state, 0.51F, 0.0F, right);

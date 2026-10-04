@@ -46,7 +46,7 @@ HrtfInterpProbe probe_hrtf_interpolation(float az_deg, float el_deg, int ear) {
     const auto dom_dir = static_cast<std::size_t>(bs.grid->directions[gbase + best_k]);
 
     // Run the real interpolation path.
-    std::vector<float_complex> hrtf;
+    std::vector<mradm::dsp::Complex> hrtf;
     compute_hrtf_into(bs, az_deg, el_deg, hrtf);
 
     const auto n_bands = static_cast<std::size_t>(bs.n_bands);

@@ -15,11 +15,7 @@
 #include <unordered_map>
 #include <vector>
 // clang-format off
-// saf_utility_complex.h must precede saf_hoa.h: saf_hoa.h opens extern "C" and
-// re-includes saf_utility_complex.h inside that block, causing std::complex<float>
-// template instantiation in C linkage if the include guard hasn't fired yet.
-#include <saf_utility_complex.h>
-#include <saf_hoa.h>
+#include "dsp.h"
 // clang-format on
 
 #include <bw64/bw64.hpp>
@@ -775,47 +771,15 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
     // decoded slot is zeroed.  ebur128 is initialised for all 12 channels with explicit
     // channel-type assignments so that BS.1770 weighting is applied correctly.
     //
-    // SAF getLoudspeakerDecoderMtx uses N3D internally; our HOA output is SN3D.
-    // Each column of the decode matrix is scaled by sqrt(2n+1) to compensate.
-    constexpr int k_714_nls = 11; // non-LFE spatial speakers for AllRAD
-    constexpr int k_714_ch = 12;  // ebur128 channel count (11 spatial + LFE slot)
+    // Committed AllRAD + max-rE matrix already uses the SN3D input basis.
+    constexpr int k_714_nls = 11;
+    constexpr int k_714_ch = 12;
     constexpr auto k_714_nls_sz = static_cast<std::size_t>(k_714_nls);
     constexpr auto k_714_ch_sz = static_cast<std::size_t>(k_714_ch);
-    // clang-format off
-    // 11 non-LFE speakers; LFE (az=45, el=-30) deliberately omitted.
-    constexpr std::array<float, k_714_nls_sz * 2> k_714_dirs = {
-         30.F,   0.F,   // row 0 → ch0  L
-        -30.F,   0.F,   // row 1 → ch1  R
-          0.F,   0.F,   // row 2 → ch2  C
-         90.F,   0.F,   // row 3 → ch4  Ls   (ch3 = LFE slot, zeroed)
-        -90.F,   0.F,   // row 4 → ch5  Rs
-        135.F,   0.F,   // row 5 → ch6  Lss
-       -135.F,   0.F,   // row 6 → ch7  Rss
-         45.F,  30.F,   // row 7 → ch8  Ltf
-        -45.F,  30.F,   // row 8 → ch9  Rtf
-        135.F,  30.F,   // row 9 → ch10 Ltr
-       -135.F,  30.F,   // row10 → ch11 Rtr
-    };
-    constexpr float k_sqrt5 = 2.2360679774997896F;
-    constexpr float k_sqrt7 = 2.6457513110645905F;
-    constexpr std::array<float, k_hoa3_channels> k_sn3d_to_n3d = {
-        1.F,                                                                                     // n=0 (√1)
-        std::numbers::sqrt3_v<float>, std::numbers::sqrt3_v<float>, std::numbers::sqrt3_v<float>, // n=1 (√3)
-        k_sqrt5, k_sqrt5, k_sqrt5, k_sqrt5, k_sqrt5,                                            // n=2 (√5)
-        k_sqrt7, k_sqrt7, k_sqrt7, k_sqrt7, k_sqrt7, k_sqrt7, k_sqrt7,                          // n=3 (√7)
-    };
-    // clang-format on
     std::array<float, k_714_nls_sz * k_hoa3_channels> dec_mtx{};
-    {
-        // getLoudspeakerDecoderMtx takes a non-const pointer; copy to a local mutable array.
-        std::array<float, k_714_nls_sz * 2> dirs_buf = k_714_dirs;
-        getLoudspeakerDecoderMtx(dirs_buf.data(), k_714_nls, LOUDSPEAKER_DECODER_ALLRAD, 3, 1, dec_mtx.data());
-        for (int ls = 0; ls < k_714_nls; ++ls) {
-            for (std::size_t sh = 0; sh < k_hoa3_channels; ++sh) {
-                dec_mtx.at((static_cast<std::size_t>(ls) * k_hoa3_channels) + sh) *= k_sn3d_to_n3d.at(sh);
-            }
-        }
-    }
+    std::array<char, 256> matrix_error{};
+    dsp::check(mradm_dsp_hoa_matrix(dec_mtx.data(), dec_mtx.size(), matrix_error.data(), matrix_error.size()),
+               matrix_error.data());
 
     try {
         logs.log(LogLevel::info,

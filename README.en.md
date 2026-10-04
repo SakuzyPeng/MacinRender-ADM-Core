@@ -307,15 +307,20 @@ More options:
 
 ## Build Options
 
+Builds require C++20, CMake 3.24+, and Rust 1.98.0. The used SAF DSP subset now runs in Rust; default builds need no SAF, OpenBLAS, or LAPACKE. Existing renderer names such as `saf` remain compatible.
+
 Recommended local workflow:
 
 ```bash
+rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
 cmake --preset debug
 cmake --build --preset debug
 ctest --test-dir build/debug --output-on-failure
 ```
 
-Dependencies are fetched through `FetchContent` by default. A system-dependency build uses:
+Native dependencies use `FetchContent`; Rust dependencies use the committed Cargo.lock. SOFA parsing is pure Rust. `MR_ADM_BUILD_SAF_REFERENCE_TESTS=ON` enables historical reference tools without changing production rendering.
+
+System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
 
 ```bash
 cmake -S . -B build -DMR_ADM_CORE_FETCH_DEPS=OFF
