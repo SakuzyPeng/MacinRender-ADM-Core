@@ -1,0 +1,143 @@
+{
+  "date": "2026-10-04",
+  "baseline_commit": "56f4b56b548281e40a2eab851a25b05b49c10b69",
+  "scope": [
+    "Live Scene overlap-save and input history",
+    "batch/legacy stream overlap-add and crossfades",
+    "diffuse delay and live gain/diffuse mixing"
+  ],
+  "rust_version": "1.98.0",
+  "new_dependencies": [],
+  "public_header_changed": false,
+  "platforms": {
+    "macos": {
+      "architecture": "arm64",
+      "os": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "debug_ctest_passed": 53,
+      "debug_ctest_total": 53,
+      "final_debug_focused_passed": 5,
+      "release_ctest_passed": 53,
+      "release_ctest_total": 53,
+      "cargo_release_convolution_and_allocation_tests_passed": 8,
+      "sofa_enabled": true,
+      "saf_reference_enabled": false,
+      "ebur128_reference_enabled": false
+    },
+    "windows": {
+      "architecture": "x64",
+      "build": "canonical MSVC/Ninja Release",
+      "ctest_passed": 52,
+      "ctest_total": 52,
+      "sofa_enabled": true,
+      "saf_reference_enabled": false,
+      "ebur128_reference_enabled": false,
+      "worktree_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "clean_checkout": false,
+      "synchronized_files": 15,
+      "before_and_after_sha256_checked": true,
+      "original_bytes_backed_up": true,
+      "other_preexisting_changes_preserved": true,
+      "source_hashes": {
+        "CMakeLists.txt": "1cfb40e936c6e880f7064447650971c5a9e91c5b8cd3621ad7ba67bf7651c430",
+        "rust/crates/mradm-dsp/src/convolution.rs": "2614043d11d2d385cda8f187e7f10e4fa3b9dd0757de1416af754a9f31bb37f6",
+        "rust/crates/mradm-dsp/src/diffuse.rs": "1e22d94fed6c5ad568039936ba1a0f05986b1a283abba23a9cc88680c66f7111",
+        "rust/crates/mradm-dsp/src/lib.rs": "82c76fbdfa8ec698a6094f09f40a3d7fec8d2f73d695598a6623ade5004a9bb4",
+        "rust/crates/mradm-dsp/tests/binaural_convolution.rs": "82eac17dc69c5d66230ee6e0d622453977f76c4e7840da01c80882b122287e60",
+        "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "240d61d5660e90ce6f4e5d3f7289ee334bdf3039f68c8d1099d0bc4466c84991",
+        "rust/crates/mradm-ffi/src/convolution.rs": "4bba09ea41b1906c1bdb343c4297c5c245036f3d2efffa481bec0671e8cba745",
+        "rust/crates/mradm-ffi/src/lib.rs": "83711f1a4750dd95ab376e0b4efd3dd0e329de3b0d5acf8930003b2cf7e9341c",
+        "src/adm_dsp/binaural_dsp.h": "45005a245144216b0ebb9e22502ecd1ec0a95a327b7d3debed1ec0654914f559",
+        "src/adm_dsp/dsp_ffi.h": "5c40f273f9cdccd350ee930dd9b100fb4287d400ebbeb5f9e89752ed08ffdd68",
+        "src/adm_render_binaural/binaural_renderer.cpp": "58f1a9c920e34f173df3dbe7d77e1b1dba19bd189f534a97395fe5c9186dc26b",
+        "src/adm_render_binaural/live_binaural_convolver.cpp": null,
+        "src/adm_render_binaural/live_binaural_convolver.h": "9f9641b32841bde1c8c42e46d394e36bf7b99d11341e860c7fc12dea42f14083",
+        "src/adm_render_binaural/live_binaural_renderer.cpp": "d61787efed4a60ee46faf9718e1770cd6675d165291197287d31a8dbedba9b34",
+        "tests/unit/live_binaural_continuity_test.cpp": "af49e09eb7473f18631256b62fda07ca007a4512922d16b718ddc7333cb585c9"
+      }
+    },
+    "linux": {
+      "run": false
+    }
+  },
+  "quality": {
+    "rust_fmt": true,
+    "clippy_deny_warnings": true,
+    "changed_cpp_format_tidy_cppcheck": true,
+    "new_header_format_cppcheck": true
+  },
+  "abi": {
+    "macos": {
+      "public_functions": 139,
+      "missing": [],
+      "unexpected_public": [],
+      "private_exports": []
+    },
+    "windows": {
+      "public_functions": 139,
+      "missing": [],
+      "unexpected_public": [],
+      "rust_private_exports": [],
+      "incidental_cpp_exports": 1980
+    }
+  },
+  "audio_comparison": {
+    "build": "Release",
+    "cases": 8,
+    "bit_identical_on_test_host": 8,
+    "max_absolute_error": 0.0,
+    "cross_platform_bit_identity_promised": false,
+    "details": "macos-release-audio.json",
+    "independent_time_domain_tolerance": 1.5e-06
+  },
+  "allocation_probe": {
+    "counts_from_first_prepared_call": true,
+    "allocations_and_reallocations": 0,
+    "includes": [
+      "live filter expansion",
+      "retarget and explicit ramps",
+      "multiple live states",
+      "OLA crossfade",
+      "silence",
+      "diffuse",
+      "reset"
+    ],
+    "whole_renderer_zero_allocation_claim": false
+  },
+  "performance": {
+    "details": "macos-release-performance.json",
+    "measured_repeats": 5,
+    "warmup_repeats": 1,
+    "scope": "One-second synthetic fixtures including process startup and preparation; does not establish sustained throughput improvement."
+  },
+  "source_sha256": {
+    "CMakeLists.txt": "1cfb40e936c6e880f7064447650971c5a9e91c5b8cd3621ad7ba67bf7651c430",
+    "rust/crates/mradm-dsp/src/convolution.rs": "2614043d11d2d385cda8f187e7f10e4fa3b9dd0757de1416af754a9f31bb37f6",
+    "rust/crates/mradm-dsp/src/diffuse.rs": "1e22d94fed6c5ad568039936ba1a0f05986b1a283abba23a9cc88680c66f7111",
+    "rust/crates/mradm-dsp/src/lib.rs": "82c76fbdfa8ec698a6094f09f40a3d7fec8d2f73d695598a6623ade5004a9bb4",
+    "rust/crates/mradm-dsp/tests/binaural_convolution.rs": "82eac17dc69c5d66230ee6e0d622453977f76c4e7840da01c80882b122287e60",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "240d61d5660e90ce6f4e5d3f7289ee334bdf3039f68c8d1099d0bc4466c84991",
+    "rust/crates/mradm-ffi/src/convolution.rs": "4bba09ea41b1906c1bdb343c4297c5c245036f3d2efffa481bec0671e8cba745",
+    "rust/crates/mradm-ffi/src/lib.rs": "83711f1a4750dd95ab376e0b4efd3dd0e329de3b0d5acf8930003b2cf7e9341c",
+    "src/adm_dsp/binaural_dsp.h": "45005a245144216b0ebb9e22502ecd1ec0a95a327b7d3debed1ec0654914f559",
+    "src/adm_dsp/dsp_ffi.h": "5c40f273f9cdccd350ee930dd9b100fb4287d400ebbeb5f9e89752ed08ffdd68",
+    "src/adm_render_binaural/binaural_renderer.cpp": "58f1a9c920e34f173df3dbe7d77e1b1dba19bd189f534a97395fe5c9186dc26b",
+    "src/adm_render_binaural/live_binaural_convolver.cpp": null,
+    "src/adm_render_binaural/live_binaural_convolver.h": "9f9641b32841bde1c8c42e46d394e36bf7b99d11341e860c7fc12dea42f14083",
+    "src/adm_render_binaural/live_binaural_renderer.cpp": "d61787efed4a60ee46faf9718e1770cd6675d165291197287d31a8dbedba9b34",
+    "tests/unit/live_binaural_continuity_test.cpp": "af49e09eb7473f18631256b62fda07ca007a4512922d16b718ddc7333cb585c9",
+    "scripts/consistency/compare-binaural-dsp.py": "79769d9df5cc921785a4452822f64122fda777d45767601ac728e127c661d599"
+  },
+  "log_sha256": {
+    "build-debug.log": "d02d09261f2a2f0c311079d7d43dd8ff177e48ff194a6be25aee49da1ea51842",
+    "tests-debug.log": "0a93ff0c936877431f39a4712c4f67e9a451cddfa390b0ae0038b3b0d29674a4",
+    "build-debug-final.log": "128ef3f50b398718690559b9edf9b36cd5f198e3501155548558b439f5507f3f",
+    "tests-debug-final.log": "63d5c196d51451a8c07e5f525577d70966daa6466dab07d169d22c53d0d911b4",
+    "build-release-final.log": "37f9fc33c05463cfb5b566e690c93355d632ca574b7ecfde84de7f4e548c8de5",
+    "tests-release.log": "b0151039354d0b146c8c7092d43882c82e1b25ea877e34918eefead453f3ea36",
+    "tests-rust-release.log": "22c182f7e0554b1d44d99d70a62b56175cb7664176e4b42e27e5b6c86e78c9e6",
+    "quality-rust.log": "4e4b1f5ab98f5f47922f43901c131ea05afa49add99dd8c64cdb2d0b332f2bec",
+    "quality-cpp-final.log": "2481937f65d9e45612a14af087d9ce1c6960e5ac583fd472fc3fed746f89c8c0",
+    "quality-header.log": "1849a52372a3adb35da32d356b7e2d13cbe55241d4243dbcba8762291b74c931",
+    "tests-windows.log": "56ff9101b4128bad4dfaaeade3ecd9ce5923766797d4eaa54a6f2c90c301b6d3"
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "maximum_absolute_tolerance": 2e-06,
+  "binary_sha256": {
+    "reference": "f064b2c4a75941c7af391c78d30683b7a8122a3a12e30db4bc9dba16cb23d5eb",
+    "candidate": "2247ef051d63baaa3b24da0ce748ca6ef34b3b3896010538208ec835e34a55d3"
+  },
+  "cases": [
+    {
+      "case": "point",
+      "fixture": "objects-point",
+      "arguments": [],
+      "fixture_sha256": "f36ca37662b0de94d5a6fb4b2ce48743373467df576775594e6d15d291991bdf",
+      "channels": 2,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "4fd38026b94ac8edba4b598f4a4264e767f8c942071a2fbb9a9e21e8bda8a56e",
+      "candidate_pcm_sha256": "4fd38026b94ac8edba4b598f4a4264e767f8c942071a2fbb9a9e21e8bda8a56e",
+      "passed": true
+    },
+    {
+      "case": "point-head-pose",
+      "fixture": "objects-point",
+      "arguments": [
+        "--listener-yaw",
+        "37",
+        "--listener-pitch",
+        "12"
+      ],
+      "fixture_sha256": "f36ca37662b0de94d5a6fb4b2ce48743373467df576775594e6d15d291991bdf",
+      "channels": 2,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "2548d3cf5eb9cd9dbaec5ca0dc38c23315f7359647576134f9a1b8094f2edbdf",
+      "candidate_pcm_sha256": "2548d3cf5eb9cd9dbaec5ca0dc38c23315f7359647576134f9a1b8094f2edbdf",
+      "passed": true
+    },
+    {
+      "case": "cloud-diffuse",
+      "fixture": "objects-extent",
+      "arguments": [
+        "--binaural-spread-mode",
+        "cloud"
+      ],
+      "fixture_sha256": "b4e11bcd7629d7be0a452b9ab6cca27bc18fcead083dc03b65f1d9a66525239b",
+      "channels": 2,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "2b1cda72ef7f2629edee418754d97a780eebc7d632da1d70f96136f2ce7853a3",
+      "candidate_pcm_sha256": "2b1cda72ef7f2629edee418754d97a780eebc7d632da1d70f96136f2ce7853a3",
+      "passed": true
+    },
+    {
+      "case": "multi-cloud-diffuse",
+      "fixture": "objects-extent-multi",
+      "arguments": [
+        "--binaural-spread-mode",
+        "cloud"
+      ],
+      "fixture_sha256": "6d8f3e51062ac5bc720677b4552418950bd3f22e520419612be026f437166af2",
+      "channels": 2,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "c0940dd3f74badd9d3f29726b6e016ce2d8ac4c085c4cb8726bb37d8b8f6a698",
+      "candidate_pcm_sha256": "c0940dd3f74badd9d3f29726b6e016ce2d8ac4c085c4cb8726bb37d8b8f6a698",
+      "passed": true
+    },
+    {
+      "case": "multi-spreader-diffuse",
+      "fixture": "objects-extent-multi",
+      "arguments": [
+        "--binaural-spread-mode",
+        "saf-spreader"
+      ],
+      "fixture_sha256": "6d8f3e51062ac5bc720677b4552418950bd3f22e520419612be026f437166af2",
+      "channels": 2,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "bda04ddb5175ea6b88a7d611ad4df73dbd812579184fa64ddf480f015b72976a",
+      "candidate_pcm_sha256": "bda04ddb5175ea6b88a7d611ad4df73dbd812579184fa64ddf480f015b72976a",
+      "passed": true
+    },
+    {
+      "case": "cartesian-cloud",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--binaural-spread-mode",
+        "cloud"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 2,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "7e718439729b6b3c7548f98f888f28405dc2f9cea988394bbaf495116e4ac836",
+      "candidate_pcm_sha256": "7e718439729b6b3c7548f98f888f28405dc2f9cea988394bbaf495116e4ac836",
+      "passed": true
+    },
+    {
+      "case": "direct-speakers",
+      "fixture": "directspeakers",
+      "arguments": [],
+      "fixture_sha256": "261ce80821837a5ef510343173e3550aa53c59e294cedf67ac29a99c964b3030",
+      "channels": 2,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "31ee880d61034ece5316d0ce0fc978b901f31d0dfcbff301a4d22ae0c6a12d1d",
+      "candidate_pcm_sha256": "31ee880d61034ece5316d0ce0fc978b901f31d0dfcbff301a4d22ae0c6a12d1d",
+      "passed": true
+    },
+    {
+      "case": "cloud-window",
+      "fixture": "objects-extent",
+      "arguments": [
+        "--binaural-spread-mode",
+        "cloud",
+        "--start",
+        "0.037",
+        "--end",
+        "0.193"
+      ],
+      "fixture_sha256": "b4e11bcd7629d7be0a452b9ab6cca27bc18fcead083dc03b65f1d9a66525239b",
+      "channels": 2,
+      "sample_rate": 48000,
+      "frames": 7488,
+      "max_absolute_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "d995c1290230c3c3a01c14ae38c9342c2cc3b9a88345231e9122a0de0d2af54c",
+      "candidate_pcm_sha256": "d995c1290230c3c3a01c14ae38c9342c2cc3b9a88345231e9122a0de0d2af54c",
+      "passed": true
+    }
+  ],
+  "passed": true
+}

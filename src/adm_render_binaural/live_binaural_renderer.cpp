@@ -49,11 +49,6 @@ constexpr std::size_t k_diffuse_delay_len = 32U;
 // These private renderer-local aggregate workspaces intentionally expose their storage to the
 // convolution helpers in this translation unit.
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
-struct DiffuseState {
-    std::array<float, k_diffuse_delay_len> delay{};
-    std::size_t write_pos{0U};
-};
-
 struct RuntimeElement {
     ElementDescriptor descriptor;
     ObjectState current;
@@ -63,12 +58,11 @@ struct RuntimeElement {
     std::array<std::uint32_t, 11U> ramp_remaining{};
     bool initialized{false};
     BinauralConvolutionState convolution;
-    DiffuseState diffuse;
+    dsp::DiffuseDelay diffuse;
 };
 
 struct ConvolutionScratch {
     std::vector<float> source;
-    std::vector<float> diffuse;
     std::vector<float> left;
     std::vector<float> right;
     std::vector<dsp::Complex> hrtf_target;
@@ -76,7 +70,6 @@ struct ConvolutionScratch {
 
     void resize() {
         source.resize(k_convolution_block);
-        diffuse.resize(k_convolution_block);
         left.resize(k_convolution_block);
         right.resize(k_convolution_block);
     }
@@ -391,22 +384,6 @@ class HrtfStateCache {
         cache.insert(*key, state);
     }
     return state;
-}
-
-void decorrelate(DiffuseState& state, const float* input, std::size_t frames, float* output) noexcept {
-    constexpr std::array<std::size_t, 8U> k_offsets{3U, 7U, 11U, 17U, 19U, 23U, 29U, 31U};
-    constexpr std::array<float, 8U> k_polarity{1.0F, -1.0F, 1.0F, 1.0F, -1.0F, 1.0F, -1.0F, -1.0F};
-    constexpr float k_normalization = 0.35355339F;
-    for (std::size_t frame = 0; frame < frames; ++frame) {
-        state.delay.at(state.write_pos) = input[frame];
-        float sum = 0.0F;
-        for (std::size_t tap = 0; tap < k_offsets.size(); ++tap) {
-            const auto read = (state.write_pos + k_diffuse_delay_len - k_offsets.at(tap)) % k_diffuse_delay_len;
-            sum += state.delay.at(read) * k_polarity.at(tap);
-        }
-        output[frame] = sum * k_normalization;
-        state.write_pos = (state.write_pos + 1U) % k_diffuse_delay_len;
-    }
 }
 
 class LiveBinauralRenderer final : public ILiveSceneRenderer {
@@ -817,28 +794,20 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         // Gain and diffuse belong to the input timeline. Preserve their already
         // mixed samples in history instead of reapplying today's controls to an
         // old, filtered output tail.
-        if (start_gain == 0.0F && end_gain == 0.0F) {
-            std::fill_n(scratch_.source.begin(), frame_count, 0.0F);
-        }
-        decorrelate(element.diffuse, scratch_.source.data(), frame_count, scratch_.diffuse.data());
-        const float start_diffuse = std::clamp(start.diffuse, 0.0F, 1.0F);
-        const float end_diffuse = std::clamp(end.diffuse, 0.0F, 1.0F);
-        for (std::size_t index = 0U; index < frame_count; ++index) {
-            const float alpha = static_cast<float>(index) / static_cast<float>(frame_count);
-            const float gain = start_gain + ((end_gain - start_gain) * alpha);
-            const float diffuse = start_diffuse + ((end_diffuse - start_diffuse) * alpha);
-            scratch_.source[index] =
-                gain * ((scratch_.source[index] * (1.0F - diffuse)) + (scratch_.diffuse[index] * diffuse));
-        }
-        if (element.convolution.tail_remaining == 0U &&
+        element.diffuse.mix(
+            std::span{scratch_.source}.first(frame_count), start_gain, end_gain, start.diffuse, end.diffuse);
+        const auto convolution_info = element.convolution.info();
+        if (convolution_info.tail_remaining == 0U &&
             std::ranges::none_of(std::span{scratch_.source}.first(frame_count),
                                  [](float sample) { return sample != 0.0F; })) {
             // Inactive sources need no FFT or HRTF lookup after their history
             // drains. Re-entry initializes at the then-current direction.
-            element.convolution.initialized = false;
+            if (convolution_info.initialized != 0U) {
+                element.convolution.reset();
+            }
             return {};
         }
-        if (!element.convolution.initialized) {
+        if (convolution_info.initialized == 0U) {
             auto initial = hrtf_for(element, start, frame, scratch_.hrtf_target, element.current_direction);
             if (!initial) {
                 return tl::unexpected{initial.error()};

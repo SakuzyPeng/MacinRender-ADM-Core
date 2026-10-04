@@ -346,6 +346,8 @@ C/C++ 依赖默认通过 `FetchContent` 获取；Rust 使用提交的 Cargo.lock
 
 响度与 True Peak 计量统一使用 Rust `ebur128`，实时积分在 worker 上执行。C 版 `libebur128` 仅用于默认关闭的 `MR_ADM_BUILD_EBUR128_REFERENCE_TESTS` 对照测试，不进入生产链接。接入边界和验收见 [Rust Meter 迁移](docs/architecture/RUST_METER_MIGRATION.md)。
 
+双耳卷积、滤波器过渡和 diffuse 延迟/输入混合也已迁入 Rust。实时 Scene 与离线/旧流式接口保留各自的历史及尾音语义，内核准备后的处理和重置无分配。范围与验收见 [Rust 双耳 DSP 迁移](docs/architecture/RUST_BINAURAL_DSP_MIGRATION.md)。
+
 系统依赖构建需要另备 Corrosion 0.6.1、Rust 工具链和锁定的 Cargo 依赖缓存：
 
 ```bash

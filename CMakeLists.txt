@@ -339,7 +339,6 @@ target_sources(
         src/adm_render_binaural/binaural_renderer.cpp
         src/adm_render_binaural/hrtf_grid.cpp
         src/adm_render_binaural/binaural_spreader.cpp
-        src/adm_render_binaural/live_binaural_convolver.cpp
         src/adm_render_binaural/live_binaural_renderer.cpp
     PUBLIC
         FILE_SET HEADERS

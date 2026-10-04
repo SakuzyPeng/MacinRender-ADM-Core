@@ -4,6 +4,11 @@ The producer-neutral Scene renderer uses the same dynamic HRTF path for listener
 rotation and object motion. Its convolution state is private to each element;
 only immutable HRTF preparation is shared between renderers.
 
+Convolution, filter transitions and diffuse input mixing now run in the safe
+Rust DSP crate through private RAII handles. C++ retains scene controls and
+HRTF lookup. See [the migration record](RUST_BINAURAL_DSP_MIGRATION.md) for the
+separate Live overlap-save and batch overlap-add contracts and validation.
+
 ## Direction interpolation
 
 The magnitude-preserving HRTF response at each integer angular grid point is

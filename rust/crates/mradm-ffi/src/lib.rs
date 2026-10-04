@@ -8,6 +8,7 @@ use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice,
 };
+mod convolution;
 mod meter;
 mod spatial;
 mod spreader;
