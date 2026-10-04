@@ -352,6 +352,8 @@ Scene 输出和实时 HRTF 重采样使用 Rust `rubato`，保留精确的有理
 
 HRTF 幅度/相位插值、实时连续方向查询和频域状态也由 Rust 持有，多个滤波器组共享只读网格。离线与实时查询保留各自语义，准备后的查询无分配。范围与验收见 [Rust HRTF 迁移](docs/architecture/RUST_HRTF_MIGRATION.md)。
 
+HpTF 耳机补偿的系数设计、频响、自动预衰减、级联处理与热切换也已迁入 Rust；参数导入和线程间发布保留在 C++。范围与验收见 [Rust HpTF 迁移](docs/architecture/RUST_HPTF_MIGRATION.md)。
+
 系统依赖构建需要另备 Corrosion 0.6.1、Rust 工具链和锁定的 Cargo 依赖缓存：
 
 ```bash

@@ -9,6 +9,7 @@ pub mod diffuse;
 pub mod fft;
 pub mod filterbank;
 pub mod geometry;
+pub mod hptf;
 pub mod hrtf;
 pub mod hrtf_filters;
 pub mod meter;

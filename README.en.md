@@ -328,6 +328,8 @@ Scene output and live HRTF resampling use Rust `rubato`, retaining rational dura
 
 HRTF magnitude/phase interpolation, continuous live direction lookup and spectral state are now owned by Rust, with immutable geometry shared across filter banks. Offline and live lookups retain their respective semantics and allocate no memory after preparation. See the [Rust HRTF migration](docs/architecture/RUST_HRTF_MIGRATION.md) for scope and validation.
 
+HpTF headphone compensation also uses Rust for coefficient design, response and auto-trim calculation, cascades and transitions. C++ retains parameter import and publication between threads. See the [Rust HpTF migration](docs/architecture/RUST_HPTF_MIGRATION.md) for scope and validation.
+
 System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
 
 ```bash

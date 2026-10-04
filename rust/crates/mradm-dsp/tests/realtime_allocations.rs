@@ -36,6 +36,48 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOCATOR: Counting = Counting;
 
 #[test]
+fn prepared_hptf_updates_processing_and_seek_do_not_allocate() {
+    use mradm_dsp::hptf::{Band, BandKind, Cascade, PreampMode, Processor, Snapshot, design};
+    let coefficients = design(
+        &[Band {
+            kind: BandKind::Peaking,
+            enabled: true,
+            frequency: 46.3,
+            gain_db: 6.0,
+            q: 8.0,
+        }],
+        -2.,
+        48000,
+        PreampMode::AutoTrim,
+    )
+    .unwrap();
+    let mut cascade = Cascade::new(2).unwrap();
+    let mut processor = Processor::new(2, 48000).unwrap();
+    let mut input = [0.01; 274];
+    let mut blending = false;
+    COUNT.with(|c| c.set(Some(0)));
+    cascade.set_coefficients(coefficients).unwrap();
+    for revision in 1..100 {
+        cascade.process(&mut input).unwrap();
+        let target = Snapshot {
+            coefficients,
+            revision,
+        };
+        let update = processor
+            .process(&mut input, (!blending).then_some(target))
+            .unwrap();
+        blending = update.blending;
+        if revision % 13 == 0 {
+            blending = processor.reset(Some(target)).unwrap().blending;
+            cascade.reset();
+        }
+    }
+    processor.reset(None).unwrap();
+    let count = COUNT.with(|c| c.replace(None).unwrap());
+    assert_eq!(count, 0, "allocation in prepared HpTF DSP");
+}
+
+#[test]
 fn prepared_hrtf_queries_never_allocate_including_first_motion_and_errors() {
     use mradm_dsp::{
         hrtf::Grid,
