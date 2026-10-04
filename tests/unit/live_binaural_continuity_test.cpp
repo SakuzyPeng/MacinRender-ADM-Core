@@ -89,6 +89,60 @@ bool test_full_fir_and_partitioning() {
     return ok;
 }
 
+bool test_rust_ola_and_diffuse_owners() {
+    std::array<float, 64U> impulse{};
+    impulse[0U] = 1.0F;
+    impulse[31U] = 0.5F;
+    auto start = response(impulse);
+    for (std::size_t band = 0U; band < start.size() / 2U; ++band) {
+        start[(band * 2U) + 1U] *= -0.5F;
+    }
+    impulse[0U] = 0.25F;
+    impulse[31U] = -0.3F;
+    const auto end = response(impulse);
+    mradm::dsp::OlaConvolver original(64U, 31U, 32U);
+    const std::array<float, 1U> input{1.0F};
+    std::array<float, 1U> left{0.1F};
+    std::array<float, 1U> right{0.2F};
+    original.process(input, start, 1.0F, left, right);
+    bool ok = check(std::abs(left[0] - 1.1F) < 1.0e-6F && std::abs(right[0] + 0.3F) < 1.0e-6F,
+                    "Rust OLA preserves stereo spectrum order and accumulates output");
+    auto moved = std::move(original);
+    left.fill(0.0F);
+    right.fill(0.0F);
+    moved.crossfade(input, start, 0.8F, end, 0.4F, left, right);
+    ok &= check(std::abs(left[0] - 0.8F) < 1.0e-6F && std::abs(right[0] + 0.4F) < 1.0e-6F,
+                "one-frame OLA crossfade emits the start arm");
+    std::array<float, 32U> tail_l{};
+    std::array<float, 32U> tail_r{};
+    moved.advance_silence(tail_l, tail_r);
+    std::array<float, 32U> expected_l{};
+    std::array<float, 32U> expected_r{};
+    expected_l[29U] = 0.5F;
+    expected_r[29U] = -0.25F;
+    expected_l[30U] = -0.12F;
+    expected_r[30U] = -0.12F;
+    for (std::size_t i = 0U; i < tail_l.size(); ++i) {
+        ok &= check(std::abs(tail_l.at(i) - expected_l.at(i)) < 1.0e-6F &&
+                        std::abs(tail_r.at(i) - expected_r.at(i)) < 1.0e-6F,
+                    "moved OLA owner retains old overlap and the crossfade end tail");
+    }
+    moved.reset();
+    mradm::dsp::DiffuseDelay diffuse;
+    std::array<float, 32U> samples{};
+    samples[0U] = 1.0F;
+    diffuse.mix(samples, 1.0F, 1.0F, 1.0F, 1.0F);
+    ok &= check(samples[0U] == 0.0F && std::abs(samples[3U] - 0.35355339F) < 1.0e-7F &&
+                    std::abs(samples[7U] + 0.35355339F) < 1.0e-7F,
+                "Rust diffuse FFI supports in-place input mixing");
+    auto moved_diffuse = std::move(diffuse);
+    moved_diffuse.reset();
+    samples.fill(0.0F);
+    moved_diffuse.process(samples, tail_l);
+    ok &= check(std::ranges::all_of(tail_l, [](float v) { return v == 0.0F; }), "diffuse reset clears history");
+    return ok;
+}
+
 bool test_retarget_uses_input_history() {
     std::array<float, 64U> impulse{};
     impulse[63U] = 1.0F;
@@ -281,6 +335,7 @@ bool test_continuous_lookup() {
 int main() {
     try {
         bool ok = test_full_fir_and_partitioning();
+        ok &= test_rust_ola_and_diffuse_owners();
         ok &= test_retarget_uses_input_history();
         ok &= test_continuous_lookup();
         ok &= test_real_hrtf_motion({});

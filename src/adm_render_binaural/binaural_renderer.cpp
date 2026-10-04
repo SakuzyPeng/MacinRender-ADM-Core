@@ -32,6 +32,7 @@
 #include "adm/render.h"
 #include "adm/render_binaural.h"
 
+#include "binaural_dsp.h"
 #include "binaural_internal.h"
 #include "binaural_spreader.h"
 #include "consistency_trace.h"
@@ -571,159 +572,16 @@ const std::vector<dsp::Complex>& get_cached_hrtf(const BinauralState& bs, float 
     return cache.hrtf;
 }
 
-// ── Per-channel OLA convolution state ─────────────────────────────────────────
-
-class OLAState {
-  public:
-    explicit OLAState(int overlap_len)
-        : overlap_l(static_cast<std::size_t>(overlap_len), 0.0F),
-          overlap_r(static_cast<std::size_t>(overlap_len), 0.0F) {}
-
-    [[nodiscard]] std::vector<float>& left() noexcept { return overlap_l; }
-    [[nodiscard]] std::vector<float>& right() noexcept { return overlap_r; }
-
-  private:
-    std::vector<float> overlap_l;
-    std::vector<float> overlap_r;
-};
-
-struct DiffuseDelayState {
-    std::array<float, k_diffuse_delay_len> delay_line{};
-    std::size_t write_pos{0};
-};
-
-void decorrelate_diffuse_mono(DiffuseDelayState& state, const float* in, uint64_t frames_now, float* out) {
-    constexpr std::array<std::size_t, 8U> k_offsets{3U, 7U, 11U, 17U, 19U, 23U, 29U, 31U};
-    constexpr std::array<float, 8U> k_polarity{1.0F, -1.0F, 1.0F, 1.0F, -1.0F, 1.0F, -1.0F, -1.0F};
-    constexpr float k_norm = 0.35355339F; // 1/sqrt(8)
-
-    for (std::size_t f = 0; f < static_cast<std::size_t>(frames_now); ++f) {
-        state.delay_line.at(state.write_pos) = in[f];
-        float sum = 0.0F;
-        for (std::size_t i = 0; i < k_offsets.size(); ++i) {
-            const std::size_t read_pos =
-                (state.write_pos + k_diffuse_delay_len - k_offsets.at(i)) % k_diffuse_delay_len;
-            sum += state.delay_line.at(read_pos) * k_polarity.at(i);
-        }
-        out[f] = sum * k_norm;
-        state.write_pos = (state.write_pos + 1U) % k_diffuse_delay_len;
-    }
-}
-
-// NOLINTBEGIN(misc-non-private-member-variables-in-classes)
-struct ConvolutionScratch {
-    std::vector<float> buf;
-    std::vector<dsp::Complex> src_fd;
-    std::vector<dsp::Complex> out_fd;
-    std::vector<float> y;
-    std::vector<float> l_cf0; // crossfade start arm
-    std::vector<float> r_cf0;
-    std::vector<float> l_cf1; // crossfade end arm
-    std::vector<float> r_cf1;
-
-    void resize(const BinauralState& bs, std::size_t max_block) {
-        buf.resize(static_cast<std::size_t>(bs.fft_size));
-        src_fd.resize(static_cast<std::size_t>(bs.n_bands));
-        out_fd.resize(static_cast<std::size_t>(bs.n_bands));
-        y.resize(static_cast<std::size_t>(bs.fft_size));
-        l_cf0.resize(max_block);
-        r_cf0.resize(max_block);
-        l_cf1.resize(max_block);
-        r_cf1.resize(max_block);
-    }
-};
-// NOLINTEND(misc-non-private-member-variables-in-classes)
-
-// Per-source resources for parallel OLA processing (each source owns its own FFT handle,
-// scratch buffers, and output accumulators so workers never alias each other).
+// Each worker owns one Rust OLA workspace and its C++ source/output buffers.
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct PerSourceConvState {
-    dsp::FftHandle hfft{nullptr};
-    ConvolutionScratch scratch;
+    dsp::OlaConvolver convolver;
     std::vector<float> l_out;
     std::vector<float> r_out;
     std::vector<float> ch_in;
     std::vector<float> diffuse_in;
 };
 // NOLINTEND(misc-non-private-member-variables-in-classes)
-
-// OLA convolution: convolve src[frames_now] with hrtf[n_bands × k_n_ears],
-// accumulate into l_out/r_out (both [frames_now]), update state.overlap.
-// Uses a preallocated RustFFT plan through the private DSP boundary.
-// NOLINTNEXTLINE(readability-function-size)
-void convolve_and_accumulate(const dsp::FftHandle& hfft,
-                             const BinauralState& bs,
-                             const float* src,
-                             uint64_t frames_now,
-                             float gain,
-                             const std::vector<dsp::Complex>& hrtf,
-                             OLAState& state,
-                             float* l_out,
-                             float* r_out,
-                             ConvolutionScratch& scratch) {
-    const auto fn = static_cast<std::size_t>(frames_now);
-
-    // Zero-pad source block into FFT buffer and transform.
-    std::ranges::fill(scratch.buf, 0.0F);
-    std::copy_n(src, fn, scratch.buf.begin());
-    dsp::fft_forward(hfft, scratch.buf.data(), scratch.src_fd.data());
-
-    for (int ear = 0; ear < k_n_ears; ++ear) {
-        // Frequency-domain multiply: src_fd × hrtf[:][ear].
-        for (int band = 0; band < bs.n_bands; ++band) {
-            scratch.out_fd[static_cast<std::size_t>(band)] =
-                gain * scratch.src_fd[static_cast<std::size_t>(band)] *
-                hrtf[(static_cast<std::size_t>(band) * k_n_ears) + static_cast<std::size_t>(ear)];
-        }
-        dsp::fft_inverse(hfft, scratch.out_fd.data(), scratch.y.data());
-
-        auto& overlap_vec = (ear == 0) ? state.left() : state.right();
-        float* overlap = overlap_vec.data();
-        float* dst = (ear == 0) ? l_out : r_out;
-        const auto overlap_len = static_cast<std::size_t>(bs.overlap_len);
-
-        // Overlap-add: accumulated output = y[0..fn-1] + saved overlap.
-        for (std::size_t f = 0; f < fn; ++f) {
-            dst[f] += scratch.y[f] + (f < overlap_len ? overlap[f] : 0.0F);
-        }
-        // Save new overlap: y[fn..fn+overlap_len-1] plus any unemitted residual from the
-        // old overlap.  When fn < overlap_len, overlap[fn..overlap_len-1] was never written
-        // to dst; those samples belong at output positions [fn..overlap_len-1] relative to
-        // this segment and must be carried forward.  Processing i in ascending order is safe:
-        // the read index (fn+i) exceeds the write index (i) for all i < fn, so no aliasing.
-        for (std::size_t i = 0; i < overlap_len; ++i) {
-            const float residual = (fn + i < overlap_len) ? overlap[fn + i] : 0.0F;
-            overlap[i] = scratch.y[fn + i] + residual;
-        }
-    }
-}
-
-// Advance a source's FIR overlap through a silent interval.  This emits the tail
-// from a previous active segment at the correct absolute time instead of carrying
-// it forward to the next non-silent ADM block.
-void advance_silence(OLAState& state, uint64_t frames_now, float* l_out, float* r_out) {
-    const auto fn = static_cast<std::size_t>(frames_now);
-    auto& overlap_l = state.left();
-    auto& overlap_r = state.right();
-    const auto overlap_len = overlap_l.size();
-    const auto emit = std::min(fn, overlap_len);
-    for (std::size_t f = 0; f < emit; ++f) {
-        l_out[f] += overlap_l[f];
-        r_out[f] += overlap_r[f];
-    }
-
-    if (fn >= overlap_len) {
-        std::ranges::fill(overlap_l, 0.0F);
-        std::ranges::fill(overlap_r, 0.0F);
-        return;
-    }
-
-    const auto remain = overlap_len - fn;
-    std::move(overlap_l.begin() + static_cast<std::ptrdiff_t>(fn), overlap_l.end(), overlap_l.begin());
-    std::move(overlap_r.begin() + static_cast<std::ptrdiff_t>(fn), overlap_r.end(), overlap_r.begin());
-    std::fill(overlap_l.begin() + static_cast<std::ptrdiff_t>(remain), overlap_l.end(), 0.0F);
-    std::fill(overlap_r.begin() + static_cast<std::ptrdiff_t>(remain), overlap_r.end(), 0.0F);
-}
 
 // ── Source descriptor ─────────────────────────────────────────────────────────
 
@@ -1250,60 +1108,17 @@ void copy_windowed_object_input(const BinauralSource& src,
     }
 }
 
-// NOLINTNEXTLINE(readability-function-size)
-void convolve_crossfaded_object_block(const dsp::FftHandle& hfft,
-                                      const BinauralState& bs,
-                                      const float* src,
-                                      uint64_t frames_now,
-                                      float start_gain,
-                                      float end_gain,
-                                      const std::vector<dsp::Complex>& start_hrtf,
-                                      const std::vector<dsp::Complex>& end_hrtf,
-                                      OLAState& state,
-                                      float* l_out,
-                                      float* r_out,
-                                      ConvolutionScratch& scratch) {
-    OLAState start_state = state;
-    OLAState end_state = state;
-    const auto fn = static_cast<std::size_t>(frames_now);
-    std::fill_n(scratch.l_cf0.begin(), fn, 0.0F);
-    std::fill_n(scratch.r_cf0.begin(), fn, 0.0F);
-    std::fill_n(scratch.l_cf1.begin(), fn, 0.0F);
-    std::fill_n(scratch.r_cf1.begin(), fn, 0.0F);
-
-    convolve_and_accumulate(hfft,
-                            bs,
-                            src,
-                            frames_now,
-                            start_gain,
-                            start_hrtf,
-                            start_state,
-                            scratch.l_cf0.data(),
-                            scratch.r_cf0.data(),
-                            scratch);
-    convolve_and_accumulate(
-        hfft, bs, src, frames_now, end_gain, end_hrtf, end_state, scratch.l_cf1.data(), scratch.r_cf1.data(), scratch);
-
-    for (std::size_t f = 0; f < fn; ++f) {
-        const float alpha = fn > 1U ? static_cast<float>(f) / static_cast<float>(fn - 1U) : 0.0F;
-        l_out[f] += (scratch.l_cf0[f] * (1.0F - alpha)) + (scratch.l_cf1[f] * alpha);
-        r_out[f] += (scratch.r_cf0[f] * (1.0F - alpha)) + (scratch.r_cf1[f] * alpha);
-    }
-    state = std::move(end_state);
-}
-
 // Render one source's OLA (point / diffuse / LFE-bypass) contribution for the chunk
 // [chunk_start, chunk_start + frames_now) into cs.l_out / cs.r_out (zeroed here for
 // non-empty sources; empty-block sources leave the buffers untouched — they stay zero
-// from construction). Carries ola / diffuse / hrtf_cache across calls. Extracted verbatim
-// from render_window's per-source loop so the offline batch path and the realtime
-// BinauralStream share one implementation and cannot drift (bit-exactness contract).
+// from construction). Carries Rust convolution / diffuse state and the HRTF cache
+// across calls. The offline batch path and the realtime BinauralStream share this
+// implementation and cannot drift (bit-exactness contract).
 // NOLINTNEXTLINE(readability-function-size)
 void render_source_ola_block(const BinauralSource& src,
                              const BinauralState& bs,
                              PerSourceConvState& cs,
-                             OLAState& ola,
-                             DiffuseDelayState& diffuse,
+                             dsp::DiffuseDelay& diffuse,
                              HrtfCache& hrtf_cache,
                              const float* in_block,
                              uint16_t num_in_ch,
@@ -1344,18 +1159,17 @@ void render_source_ola_block(const BinauralSource& src,
         copy_windowed_object_input(src, in_block, num_in_ch, chunk_start, frames_now, cs.ch_in.data());
         const float* conv_in = cs.ch_in.data();
         if (src.diffuse_bus) {
-            decorrelate_diffuse_mono(diffuse, cs.ch_in.data(), frames_now, cs.diffuse_in.data());
+            diffuse.process(std::span{cs.ch_in}.first(fn), std::span{cs.diffuse_in}.first(fn));
             conv_in = cs.diffuse_in.data();
         }
         const float gain = src.gain * steady->block_gain;
         if (head_prev->valid && (cur_az != head_prev->az || cur_el != head_prev->el)) {
             const auto& start_hrtf = get_cached_hrtf(bs, head_prev->az, head_prev->el, hrtf_cache);
             const auto end_hrtf = hrtf_for_dir(bs, cur_az, cur_el);
-            convolve_crossfaded_object_block(
-                cs.hfft, bs, conv_in, frames_now, gain, gain, start_hrtf, end_hrtf, ola, src_l, src_r, cs.scratch);
+            cs.convolver.crossfade({conv_in, fn}, start_hrtf, gain, end_hrtf, gain, {src_l, fn}, {src_r, fn});
         } else {
             const auto& hrtf = get_cached_hrtf(bs, cur_az, cur_el, hrtf_cache);
-            convolve_and_accumulate(cs.hfft, bs, conv_in, frames_now, gain, hrtf, ola, src_l, src_r, cs.scratch);
+            cs.convolver.process({conv_in, fn}, hrtf, gain, {src_l, fn}, {src_r, fn});
         }
         head_prev->az = cur_az;
         head_prev->el = cur_el;
@@ -1377,25 +1191,20 @@ void render_source_ola_block(const BinauralSource& src,
                 copy_windowed_object_input(src, in_block, num_in_ch, chunk_start, frames_now, cs.ch_in.data());
                 const float* conv_in = cs.ch_in.data();
                 if (src.diffuse_bus) {
-                    decorrelate_diffuse_mono(diffuse, cs.ch_in.data(), frames_now, cs.diffuse_in.data());
+                    diffuse.process(std::span{cs.ch_in}.first(fn), std::span{cs.diffuse_in}.first(fn));
                     conv_in = cs.diffuse_in.data();
                 }
                 const auto [s_az, s_el] = hrtf_dir(*start_block, start_block->az, start_block->el);
                 const auto [e_az, e_el] = hrtf_dir(*end_block, end_block->az, end_block->el);
                 const auto& start_hrtf = get_cached_hrtf(bs, s_az, s_el, hrtf_cache);
                 const auto end_hrtf = hrtf_for_dir(bs, e_az, e_el);
-                convolve_crossfaded_object_block(cs.hfft,
-                                                 bs,
-                                                 conv_in,
-                                                 frames_now,
-                                                 src.gain * start_block->block_gain,
-                                                 src.gain * end_block->block_gain,
-                                                 start_hrtf,
-                                                 end_hrtf,
-                                                 ola,
-                                                 src_l,
-                                                 src_r,
-                                                 cs.scratch);
+                cs.convolver.crossfade({conv_in, fn},
+                                       start_hrtf,
+                                       src.gain * start_block->block_gain,
+                                       end_hrtf,
+                                       src.gain * end_block->block_gain,
+                                       {src_l, fn},
+                                       {src_r, fn});
                 return;
             }
         }
@@ -1411,7 +1220,8 @@ void render_source_ola_block(const BinauralSource& src,
 
         if (bi >= src.blocks.size() || src.blocks[bi].start_sample >= chunk_end) {
             const auto off = static_cast<std::size_t>(cursor - chunk_start);
-            advance_silence(ola, chunk_end - cursor, src_l + off, src_r + off);
+            cs.convolver.advance_silence({src_l + off, static_cast<std::size_t>(chunk_end - cursor)},
+                                         {src_r + off, static_cast<std::size_t>(chunk_end - cursor)});
             break;
         }
 
@@ -1419,7 +1229,8 @@ void render_source_ola_block(const BinauralSource& src,
         if (cursor < blk.start_sample) {
             const uint64_t silent_end = std::min<uint64_t>(blk.start_sample, chunk_end);
             const auto off = static_cast<std::size_t>(cursor - chunk_start);
-            advance_silence(ola, silent_end - cursor, src_l + off, src_r + off);
+            cs.convolver.advance_silence({src_l + off, static_cast<std::size_t>(silent_end - cursor)},
+                                         {src_r + off, static_cast<std::size_t>(silent_end - cursor)});
             cursor = silent_end;
             continue;
         }
@@ -1449,13 +1260,12 @@ void render_source_ola_block(const BinauralSource& src,
         } else {
             const float* conv_in = cs.ch_in.data();
             if (src.diffuse_bus) {
-                decorrelate_diffuse_mono(diffuse, cs.ch_in.data(), seg_frames, cs.diffuse_in.data());
+                diffuse.process(std::span{cs.ch_in}.first(seg_fn), std::span{cs.diffuse_in}.first(seg_fn));
                 conv_in = cs.diffuse_in.data();
             }
             const auto [h_az, h_el] = hrtf_dir(blk, blk.az, blk.el);
             const auto& hrtf = get_cached_hrtf(bs, h_az, h_el, hrtf_cache);
-            convolve_and_accumulate(
-                cs.hfft, bs, conv_in, seg_frames, gain, hrtf, ola, src_l + off, src_r + off, cs.scratch);
+            cs.convolver.process({conv_in, seg_fn}, hrtf, gain, {src_l + off, seg_fn}, {src_r + off, seg_fn});
         }
 
         cursor = seg_end;
@@ -1520,7 +1330,7 @@ class BinauralStream final : public IRenderStream {
                                                                   plan.object_smoothing_frames)};
     }
 
-    ~BinauralStream() override { destroy_fft(); }
+    ~BinauralStream() override = default;
     BinauralStream(const BinauralStream&) = delete;
     BinauralStream& operator=(const BinauralStream&) = delete;
     BinauralStream(BinauralStream&&) = delete;
@@ -1692,13 +1502,13 @@ class BinauralStream final : public IRenderStream {
     // (Re)create the per-source FFT plans + scratch sized to sources_, then reset the
     // cross-call DSP state. Used at construction and after a topology rebuild.
     void init_per_source_state() {
-        destroy_fft();
         const auto& bs = *prepared_.bs;
         src_cs_.clear();
         src_cs_.resize(sources_.size());
         for (auto& cs : src_cs_) {
-            dsp::fft_create(&cs.hfft, bs.fft_size);
-            cs.scratch.resize(bs, static_cast<std::size_t>(render_block_size_));
+            cs.convolver = dsp::OlaConvolver(static_cast<std::size_t>(bs.fft_size),
+                                             static_cast<std::size_t>(bs.overlap_len),
+                                             static_cast<std::size_t>(render_block_size_));
             cs.l_out.resize(static_cast<std::size_t>(render_block_size_));
             cs.r_out.resize(static_cast<std::size_t>(render_block_size_));
             cs.ch_in.resize(static_cast<std::size_t>(render_block_size_));
@@ -1708,16 +1518,17 @@ class BinauralStream final : public IRenderStream {
         assign_live_gain_slots();
     }
 
-    // Re-initialise the cross-call DSP state (the FFT plans in src_cs_ are stateless and
-    // kept). Used at construction, on seek, and after a topology rebuild.
+    // Reset Rust signal history while retaining FFT plans and prepared storage.
+    // Used at construction, on seek, and after a topology rebuild.
     void reset_dsp_state() {
         const std::size_t n = sources_.size();
-        ola_.clear();
-        ola_.reserve(n);
-        for (std::size_t i = 0; i < n; ++i) {
-            ola_.emplace_back(prepared_.bs->overlap_len);
+        for (auto& cs : src_cs_) {
+            cs.convolver.reset();
         }
-        diffuse_delay_.assign(n, DiffuseDelayState{});
+        diffuse_delay_.resize(n);
+        for (auto& delay : diffuse_delay_) {
+            delay.reset();
+        }
         hrtf_cache_.assign(n, HrtfCache{});
         head_smooth_.assign(n, HeadSmoothState{});
     }
@@ -1749,14 +1560,6 @@ class BinauralStream final : public IRenderStream {
         init_per_source_state();
     }
 
-    void destroy_fft() {
-        for (auto& cs : src_cs_) {
-            if (cs.hfft != nullptr) {
-                dsp::fft_destroy(&cs.hfft);
-            }
-        }
-    }
-
     void render_current_sources(std::vector<float>& output, uint64_t frames_now) {
         const auto fn = static_cast<std::size_t>(frames_now);
         const auto& sources = sources_;
@@ -1772,7 +1575,6 @@ class BinauralStream final : public IRenderStream {
             render_source_ola_block(sources[si],
                                     *prepared_.bs,
                                     src_cs_[si],
-                                    ola_[si],
                                     diffuse_delay_[si],
                                     hrtf_cache_[si],
                                     in_block_.data(),
@@ -1847,8 +1649,7 @@ class BinauralStream final : public IRenderStream {
     uint32_t object_smoothing_frames_;
     uint64_t render_block_size_;
 
-    std::vector<OLAState> ola_;
-    std::vector<DiffuseDelayState> diffuse_delay_;
+    std::vector<dsp::DiffuseDelay> diffuse_delay_;
     std::vector<HrtfCache> hrtf_cache_;
     std::vector<HeadSmoothState> head_smooth_; // per-source last head-rotated dir (head-tracking zipper guard)
     std::vector<PerSourceConvState> src_cs_;
@@ -2037,44 +1838,21 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
         return tl::unexpected{lufs_st.error()};
     }
 
-    // Per-source OLA state.
-    std::vector<OLAState> ola;
-    ola.reserve(sources.size());
-    for (std::size_t i = 0; i < sources.size(); ++i) {
-        ola.emplace_back(bs->overlap_len);
-    }
-    std::vector<DiffuseDelayState> diffuse_delay(sources.size());
+    std::vector<dsp::DiffuseDelay> diffuse_delay(sources.size());
     std::vector<HrtfCache> hrtf_cache(sources.size());
     std::vector<HeadSmoothState> head_smooth(sources.size());
 
     // Per-source FFT handles, scratch, and output buffers for parallel OLA processing.
     std::vector<PerSourceConvState> src_cs(sources.size());
     for (auto& cs : src_cs) {
-        dsp::fft_create(&cs.hfft, bs->fft_size);
-        cs.scratch.resize(*bs, static_cast<std::size_t>(render_block_size));
+        cs.convolver = dsp::OlaConvolver(static_cast<std::size_t>(bs->fft_size),
+                                         static_cast<std::size_t>(bs->overlap_len),
+                                         static_cast<std::size_t>(render_block_size));
         cs.l_out.resize(static_cast<std::size_t>(render_block_size));
         cs.r_out.resize(static_cast<std::size_t>(render_block_size));
         cs.ch_in.resize(static_cast<std::size_t>(render_block_size));
         cs.diffuse_in.resize(static_cast<std::size_t>(render_block_size));
     }
-    struct SrcCsGuard {
-        explicit SrcCsGuard(std::vector<PerSourceConvState>& d) : data(d) {}
-        SrcCsGuard(const SrcCsGuard&) = delete;
-        SrcCsGuard& operator=(const SrcCsGuard&) = delete;
-        SrcCsGuard(SrcCsGuard&&) = delete;
-        SrcCsGuard& operator=(SrcCsGuard&&) = delete;
-        ~SrcCsGuard() {
-            for (auto& cs : data) {
-                if (cs.hfft != nullptr) {
-                    dsp::fft_destroy(&cs.hfft);
-                }
-            }
-        }
-
-      private:
-        std::vector<PerSourceConvState>& data;
-    } src_cs_guard{src_cs};
-
     const uint64_t num_frames = info.num_frames;
     const uint16_t num_in_ch = info.num_channels;
 
@@ -2230,7 +2008,6 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
             render_source_ola_block(sources[si],
                                     *bs,
                                     src_cs[si],
-                                    ola[si],
                                     diffuse_delay[si],
                                     hrtf_cache[si],
                                     in_block.data(),

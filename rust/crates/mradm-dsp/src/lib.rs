@@ -1,9 +1,11 @@
 //! Project-owned spatial DSP. No ADM model, C ABI, device I/O or native BLAS.
 #![forbid(unsafe_code)]
 
+pub mod convolution;
 pub mod data;
 pub mod dataset;
 pub mod decorrelator;
+pub mod diffuse;
 pub mod fft;
 pub mod filterbank;
 pub mod geometry;

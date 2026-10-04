@@ -1,5 +1,9 @@
 //! The allocator instrumentation belongs to the test executable, not the safe DSP crate.
 use mradm_dsp::meter::{Meter, MeterMode};
+use mradm_dsp::{
+    convolution::{LiveConvolver, OlaConvolver},
+    diffuse::DiffuseDelay,
+};
 use mradm_dsp::{fft::RealFft, spreader::Spreader};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
@@ -30,6 +34,68 @@ unsafe impl GlobalAlloc for Counting {
 }
 #[global_allocator]
 static ALLOCATOR: Counting = Counting;
+
+#[test]
+fn prepared_binaural_motion_fades_diffuse_and_resets_do_not_allocate() {
+    let mut live = LiveConvolver::new(64, 64, 48000).unwrap();
+    let mut state = live.make_state();
+    let mut second_state = live.make_state();
+    let mut ola = OlaConvolver::new(64, 31, 32).unwrap();
+    let mut diffuse = DiffuseDelay::default();
+    let mut hrtf = [0.0; 132];
+    let mut target = hrtf;
+    for band in 0..33 {
+        hrtf[band * 4] = 1.0;
+        hrtf[band * 4 + 2] = 0.5;
+        target[band * 4] = -0.4;
+        target[band * 4 + 2] = 0.7;
+    }
+    let mut samples = [0.01; 32];
+    let (mut left, mut right) = ([0.0; 32], [0.0; 32]);
+    COUNT.with(|c| c.set(Some(0)));
+    // Count from the first prepared call, including filter expansion and every
+    // retarget. A warm-up must not hide lazy allocations.
+    for i in 0..40 {
+        let filter = if i % 2 == 0 { &hrtf } else { &target };
+        live.process(
+            &mut state,
+            filter,
+            &samples,
+            &mut left,
+            &mut right,
+            i % 3 == 0,
+        )
+        .unwrap();
+        live.process(
+            &mut second_state,
+            filter,
+            &samples,
+            &mut left,
+            &mut right,
+            false,
+        )
+        .unwrap();
+        ola.process(
+            &samples,
+            &hrtf,
+            0.8,
+            Some((&target, 0.4)),
+            &mut left,
+            &mut right,
+        )
+        .unwrap();
+        ola.advance_silence(&mut left, &mut right).unwrap();
+        diffuse.process(&samples, &mut left).unwrap();
+        diffuse.mix(&mut samples, [0.5, 0.9], [0.0, 1.0]).unwrap();
+        if i % 5 == 0 {
+            state.reset();
+            ola.reset();
+            diffuse.reset();
+        }
+    }
+    let count = COUNT.with(|c| c.replace(None).unwrap());
+    assert_eq!(count, 0, "allocation in prepared binaural DSP");
+}
 
 #[test]
 fn prepared_meter_short_windows_and_seek_do_not_allocate() {

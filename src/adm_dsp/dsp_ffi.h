@@ -10,6 +10,80 @@
 extern "C" {
 #endif
 
+// Binaural spectra contain [L.re, L.im, R.re, R.im] per bin. Live outputs
+// are overwritten; OLA outputs are accumulated. All lengths count floats.
+int32_t mradm_dsp_live_convolver_create(
+    size_t hrtf_length, size_t maximum_frames, uint32_t sample_rate, void** output, char* message, size_t capacity);
+void mradm_dsp_live_convolver_destroy(void* handle);
+int32_t mradm_dsp_live_state_create(const void* convolver, void** output, char* message, size_t capacity);
+void mradm_dsp_live_state_destroy(void* state);
+int32_t mradm_dsp_live_state_reset(void* state, char* message, size_t capacity);
+// cppcheck-suppress-begin unusedStructMember
+typedef struct MradmDspLiveInfo {
+    uint32_t initialized;
+    uint32_t tail_remaining;
+} MradmDspLiveInfo;
+// cppcheck-suppress-end unusedStructMember
+int32_t mradm_dsp_live_state_info(const void* state, MradmDspLiveInfo* output, char* message, size_t capacity);
+int32_t mradm_dsp_live_initialize(
+    void* convolver, void* state, const float* hrtf, size_t hrtf_length, char* message, size_t capacity);
+int32_t mradm_dsp_live_process(void* convolver,
+                               void* state,
+                               const float* hrtf,
+                               size_t hrtf_length,
+                               const float* input,
+                               size_t frames,
+                               float* left,
+                               size_t left_length,
+                               float* right,
+                               size_t right_length,
+                               uint32_t follows_ramp,
+                               char* message,
+                               size_t capacity);
+int32_t mradm_dsp_ola_create(
+    size_t fft_length, size_t overlap, size_t maximum_frames, void** output, char* message, size_t capacity);
+void mradm_dsp_ola_destroy(void* handle);
+int32_t mradm_dsp_ola_reset(void* handle, char* message, size_t capacity);
+// Null end_hrtf with zero length selects a steady filter. Non-null selects a
+// block crossfade with the end arm's tail retained, including one-frame blocks.
+int32_t mradm_dsp_ola_process(void* handle,
+                              const float* input,
+                              size_t frames,
+                              const float* start_hrtf,
+                              size_t start_length,
+                              float start_gain,
+                              const float* end_hrtf,
+                              size_t end_length,
+                              float end_gain,
+                              float* left,
+                              size_t left_length,
+                              float* right,
+                              size_t right_length,
+                              char* message,
+                              size_t capacity);
+int32_t mradm_dsp_ola_silence(
+    void* handle, float* left, size_t left_length, float* right, size_t right_length, char* message, size_t capacity);
+int32_t mradm_dsp_diffuse_create(void** output, char* message, size_t capacity);
+void mradm_dsp_diffuse_destroy(void* handle);
+int32_t mradm_dsp_diffuse_reset(void* handle, char* message, size_t capacity);
+int32_t mradm_dsp_diffuse_process(void* handle,
+                                  const float* input,
+                                  size_t frames,
+                                  float* output,
+                                  size_t output_length,
+                                  char* message,
+                                  size_t capacity);
+// This entry point alone intentionally edits its sample buffer in place.
+int32_t mradm_dsp_diffuse_mix(void* handle,
+                              float* samples,
+                              size_t frames,
+                              float start_gain,
+                              float end_gain,
+                              float start_diffuse,
+                              float end_diffuse,
+                              char* message,
+                              size_t capacity);
+
 // Private meter modes: 0=I, 1=TP, 2=I+TP, 3=M+S+I. Empty channel map
 // preserves the legacy default mapping. Nonempty maps have one position per
 // channel, using MeterChannel values from meter.h. Handles are worker-owned.

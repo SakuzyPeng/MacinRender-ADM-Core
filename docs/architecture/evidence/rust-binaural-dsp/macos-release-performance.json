@@ -1,0 +1,345 @@
+{
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "repeats": 5,
+  "binaries": {
+    "legacy": "f064b2c4a75941c7af391c78d30683b7a8122a3a12e30db4bc9dba16cb23d5eb",
+    "candidate": "2247ef051d63baaa3b24da0ce748ca6ef34b3b3896010538208ec835e34a55d3"
+  },
+  "cases": [
+    {
+      "case": "ear-extent",
+      "fixture_sha256": "b4e11bcd7629d7be0a452b9ab6cca27bc18fcead083dc03b65f1d9a66525239b",
+      "arguments": [
+        "--renderer",
+        "ear",
+        "--output-layout",
+        "5.1"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.03666333295404911,
+            "rss_bytes": 15351808
+          },
+          {
+            "seconds": 0.03985012508928776,
+            "rss_bytes": 15433728
+          },
+          {
+            "seconds": 0.03561883303336799,
+            "rss_bytes": 15482880
+          },
+          {
+            "seconds": 0.03809129190631211,
+            "rss_bytes": 15450112
+          },
+          {
+            "seconds": 0.03974274988286197,
+            "rss_bytes": 15269888
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.037059541093185544,
+            "rss_bytes": 15400960
+          },
+          {
+            "seconds": 0.038686917163431644,
+            "rss_bytes": 15368192
+          },
+          {
+            "seconds": 0.03648600005544722,
+            "rss_bytes": 16023552
+          },
+          {
+            "seconds": 0.03957262495532632,
+            "rss_bytes": 15433728
+          },
+          {
+            "seconds": 0.03942570905201137,
+            "rss_bytes": 16072704
+          }
+        ]
+      },
+      "legacy": {
+        "seconds": 0.03809129190631211,
+        "rss_bytes": 15433728
+      },
+      "candidate": {
+        "seconds": 0.038686917163431644,
+        "rss_bytes": 15433728
+      },
+      "time_ratio": 1.0156367827739872,
+      "rss_ratio": 1.0
+    },
+    {
+      "case": "vbap-point",
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "arguments": [
+        "--renderer",
+        "saf",
+        "--output-layout",
+        "5.1.4"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.03704349999316037,
+            "rss_bytes": 13877248
+          },
+          {
+            "seconds": 0.03696579090319574,
+            "rss_bytes": 14024704
+          },
+          {
+            "seconds": 0.03928029187954962,
+            "rss_bytes": 13828096
+          },
+          {
+            "seconds": 0.037892583990469575,
+            "rss_bytes": 14041088
+          },
+          {
+            "seconds": 0.035973082995042205,
+            "rss_bytes": 13926400
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.03648054203949869,
+            "rss_bytes": 13910016
+          },
+          {
+            "seconds": 0.03937316592782736,
+            "rss_bytes": 14041088
+          },
+          {
+            "seconds": 0.0408674159552902,
+            "rss_bytes": 13910016
+          },
+          {
+            "seconds": 0.03936941595748067,
+            "rss_bytes": 14057472
+          },
+          {
+            "seconds": 0.03976995893754065,
+            "rss_bytes": 14106624
+          }
+        ]
+      },
+      "legacy": {
+        "seconds": 0.03704349999316037,
+        "rss_bytes": 13926400
+      },
+      "candidate": {
+        "seconds": 0.03937316592782736,
+        "rss_bytes": 14041088
+      },
+      "time_ratio": 1.0628900059415858,
+      "rss_ratio": 1.0082352941176471
+    },
+    {
+      "case": "binaural-point",
+      "fixture_sha256": "f36ca37662b0de94d5a6fb4b2ce48743373467df576775594e6d15d291991bdf",
+      "arguments": [
+        "--renderer",
+        "saf-binaural",
+        "--output-layout",
+        "binaural"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.036392040783539414,
+            "rss_bytes": 37060608
+          },
+          {
+            "seconds": 0.03594687511213124,
+            "rss_bytes": 35291136
+          },
+          {
+            "seconds": 0.035327792167663574,
+            "rss_bytes": 35356672
+          },
+          {
+            "seconds": 0.03844137489795685,
+            "rss_bytes": 35471360
+          },
+          {
+            "seconds": 0.04055704199708998,
+            "rss_bytes": 35323904
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.039172583958134055,
+            "rss_bytes": 36077568
+          },
+          {
+            "seconds": 0.03903995803557336,
+            "rss_bytes": 35340288
+          },
+          {
+            "seconds": 0.04034866695292294,
+            "rss_bytes": 35291136
+          },
+          {
+            "seconds": 0.03954975004307926,
+            "rss_bytes": 35553280
+          },
+          {
+            "seconds": 0.03797741699963808,
+            "rss_bytes": 36356096
+          }
+        ]
+      },
+      "legacy": {
+        "seconds": 0.036392040783539414,
+        "rss_bytes": 35356672
+      },
+      "candidate": {
+        "seconds": 0.039172583958134055,
+        "rss_bytes": 35553280
+      },
+      "time_ratio": 1.0764052555099441,
+      "rss_ratio": 1.0055607043558852
+    },
+    {
+      "case": "binaural-cloud",
+      "fixture_sha256": "b4e11bcd7629d7be0a452b9ab6cca27bc18fcead083dc03b65f1d9a66525239b",
+      "arguments": [
+        "--renderer",
+        "saf-binaural",
+        "--output-layout",
+        "binaural",
+        "--binaural-spread-mode",
+        "cloud"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.038437250070273876,
+            "rss_bytes": 39747584
+          },
+          {
+            "seconds": 0.06647212477400899,
+            "rss_bytes": 39682048
+          },
+          {
+            "seconds": 0.04122854210436344,
+            "rss_bytes": 41631744
+          },
+          {
+            "seconds": 0.03753658290952444,
+            "rss_bytes": 41385984
+          },
+          {
+            "seconds": 0.03907670802436769,
+            "rss_bytes": 41566208
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.040980958146974444,
+            "rss_bytes": 41107456
+          },
+          {
+            "seconds": 0.04067162494175136,
+            "rss_bytes": 39321600
+          },
+          {
+            "seconds": 0.042007458163425326,
+            "rss_bytes": 39370752
+          },
+          {
+            "seconds": 0.03751537506468594,
+            "rss_bytes": 39337984
+          },
+          {
+            "seconds": 0.037441750057041645,
+            "rss_bytes": 41041920
+          }
+        ]
+      },
+      "legacy": {
+        "seconds": 0.03907670802436769,
+        "rss_bytes": 41385984
+      },
+      "candidate": {
+        "seconds": 0.04067162494175136,
+        "rss_bytes": 39370752
+      },
+      "time_ratio": 1.0408150276218022,
+      "rss_ratio": 0.9513064133016627
+    },
+    {
+      "case": "binaural-spreader",
+      "fixture_sha256": "6d8f3e51062ac5bc720677b4552418950bd3f22e520419612be026f437166af2",
+      "arguments": [
+        "--renderer",
+        "saf-binaural",
+        "--output-layout",
+        "binaural",
+        "--binaural-spread-mode",
+        "saf-spreader"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.09346937504597008,
+            "rss_bytes": 44761088
+          },
+          {
+            "seconds": 0.0982195409014821,
+            "rss_bytes": 43040768
+          },
+          {
+            "seconds": 0.09816333302296698,
+            "rss_bytes": 43794432
+          },
+          {
+            "seconds": 0.09811379201710224,
+            "rss_bytes": 43171840
+          },
+          {
+            "seconds": 0.0924607920460403,
+            "rss_bytes": 43220992
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.096776292193681,
+            "rss_bytes": 42942464
+          },
+          {
+            "seconds": 0.09196658316068351,
+            "rss_bytes": 43220992
+          },
+          {
+            "seconds": 0.09624837501905859,
+            "rss_bytes": 43384832
+          },
+          {
+            "seconds": 0.09899133397266269,
+            "rss_bytes": 43679744
+          },
+          {
+            "seconds": 0.09365179110318422,
+            "rss_bytes": 43237376
+          }
+        ]
+      },
+      "legacy": {
+        "seconds": 0.09811379201710224,
+        "rss_bytes": 43220992
+      },
+      "candidate": {
+        "seconds": 0.09624837501905859,
+        "rss_bytes": 43237376
+      },
+      "time_ratio": 0.9809872092425242,
+      "rss_ratio": 1.0003790750568613
+    }
+  ]
+}
