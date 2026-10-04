@@ -1,0 +1,4 @@
+{
+    global: adm_*;
+    local: *;
+};

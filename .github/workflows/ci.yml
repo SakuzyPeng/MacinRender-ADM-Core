@@ -39,7 +39,7 @@ jobs:
             runner: ubuntu-24.04
             install: |
               sudo apt-get update
-              sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache libboost-all-dev libopenblas-dev liblapacke-dev
+              sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache libboost-all-dev
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -50,6 +50,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
 
       - name: Install dependencies
         run: ${{ matrix.install }}
@@ -86,7 +89,7 @@ jobs:
         run: cmake --build --preset debug
 
       - name: Test
-        run: ctest --preset debug
+        run: ctest --preset debug --parallel "$(getconf _NPROCESSORS_ONLN)" --output-on-failure
 
       - name: ccache stats
         if: always()
@@ -101,13 +104,14 @@ jobs:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-bincache
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\.vcpkg-bincache,readwrite
       VCPKG_FEATURE_FLAGS: binarycaching
-      OPENBLAS_VERSION: 0.3.33
-      OPENBLAS_ROOT: ${{ github.workspace }}\.openblas
       SCCACHE_DIR: ${{ github.workspace }}\.sccache
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
 
       - name: Validate PowerShell syntax
         shell: pwsh
@@ -150,14 +154,6 @@ jobs:
             vcpkg-ci-windows-boost-
             vcpkg-windows-boost-
 
-      - name: Restore OpenBLAS cache
-        uses: actions/cache@v5
-        with:
-          path: .openblas
-          key: openblas-windows-x64-${{ env.OPENBLAS_VERSION }}
-
-      # sccache 用本地目录缓存（经 actions/cache 持久化），避开 GHA 缓存后端的
-      # 版本兼容问题，与 mac/Linux 的 ccache 方案一致。
       - name: Restore sccache cache
         uses: actions/cache@v5
         with:
@@ -184,24 +180,6 @@ jobs:
             boost-variant `
             --triplet x64-windows
 
-      - name: Install prebuilt OpenBLAS
-        shell: pwsh
-        run: |
-          $lib = Join-Path $env:OPENBLAS_ROOT "lib\libopenblas.lib"
-          if (!(Test-Path $lib)) {
-            New-Item -ItemType Directory -Force -Path "$env:OPENBLAS_ROOT" | Out-Null
-            $zip = Join-Path $env:RUNNER_TEMP "OpenBLAS-$env:OPENBLAS_VERSION-x64.zip"
-            $url = "https://github.com/OpenMathLib/OpenBLAS/releases/download/v$env:OPENBLAS_VERSION/OpenBLAS-$env:OPENBLAS_VERSION-x64.zip"
-            Invoke-WebRequest -Uri $url -OutFile $zip
-            Expand-Archive -Path $zip -DestinationPath "$env:OPENBLAS_ROOT" -Force
-          }
-          "OPENBLAS_LIBRARY=$lib" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "LAPACKE_LIBRARY=$lib" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "OPENBLAS_HEADER_PATH=$(Join-Path $env:OPENBLAS_ROOT 'include')" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "LAPACKE_HEADER_PATH=$(Join-Path $env:OPENBLAS_ROOT 'include')" | Out-File -FilePath $env:GITHUB_ENV -Append
-          # OpenBLAS DLL must be on PATH so SAF-linked test executables load it at runtime.
-          "$(Join-Path $env:OPENBLAS_ROOT 'bin')" | Out-File -FilePath $env:GITHUB_PATH -Append
-
       - name: Locate MSVC environment
         shell: pwsh
         run: |
@@ -216,10 +194,7 @@ jobs:
           }
           "VCVARS64=$vcvars" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      # Boost 经 vcpkg toolchain；OpenBLAS/LAPACKE 经 SAF 的 OPENBLAS_HEADER_PATH/
-      # LAPACKE_HEADER_PATH 变量（SAF 借此在 MSVC 下自配复数宏）。SOFA 打开以匹配 mac/linux
-      # debug（默认 ON）与发行 GUI（默认 ON）—— SAF saf_sofa_reader + libmysofa 在 Windows 编译通过，
-      # 否则 SOFA-on-Windows 只在罕跑的 release.yml 验证，易静默回归。
+      # SOFA stays enabled to cover the pure Rust reader on Windows.
       - name: Configure
         shell: cmd
         run: |
@@ -237,12 +212,7 @@ jobs:
             -DMR_ADM_OPUS_PROVIDER=VENDORED ^
             -DMR_ADM_ENABLE_IAMF=OFF ^
             -DMR_ADM_BUILD_CAPI_BUNDLE=ON ^
-            -DMR_ADM_ENABLE_SOFA=ON ^
-            -DSAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE ^
-            -DOPENBLAS_LIBRARY="%OPENBLAS_LIBRARY%" ^
-            -DLAPACKE_LIBRARY="%LAPACKE_LIBRARY%" ^
-            -DOPENBLAS_HEADER_PATH="%OPENBLAS_HEADER_PATH%" ^
-            -DLAPACKE_HEADER_PATH="%LAPACKE_HEADER_PATH%"
+            -DMR_ADM_ENABLE_SOFA=ON
 
       - name: Build
         shell: cmd

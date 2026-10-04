@@ -2,11 +2,13 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <span>
 #include <vector>
 
 namespace mradm {
 
-// Per-ADM-Object SAF spreader adapter.
+// Per-ADM-Object Rust OM spreader adapter.
 // Wraps one spreader instance and provides ring-buffered processing
 // compatible with the binaural renderer's variable-size render blocks.
 // Output accumulates into caller-provided l_out/r_out (non-interleaved).
@@ -25,8 +27,13 @@ class BinauralSpreaderAdapter {
     // hrtf_td:       FLAT [num_dirs × 2 × hrir_len]
     // grid_dirs_deg: FLAT [num_dirs × 2] az/el in degrees (0..360 convention)
     // n_sources:     1 for normal objects, 3 for diverged objects
-    BinauralSpreaderAdapter(
-        const float* hrtf_td, const float* grid_dirs_deg, int num_dirs, int hrir_len, int sample_rate, int n_sources);
+    BinauralSpreaderAdapter(const float* hrtf_td,
+                            const float* grid_dirs_deg,
+                            int num_dirs,
+                            int hrir_len,
+                            int sample_rate,
+                            int n_sources,
+                            std::span<const std::uint64_t> seeds = {});
     ~BinauralSpreaderAdapter();
     BinauralSpreaderAdapter(const BinauralSpreaderAdapter&) = delete;
     BinauralSpreaderAdapter& operator=(const BinauralSpreaderAdapter&) = delete;
@@ -43,10 +50,10 @@ class BinauralSpreaderAdapter {
     void
     process_chunk(const float* const* mono_ins, int n_sources_in, std::size_t n_frames, float* l_out, float* r_out);
 
-    // SAF STFT processing delay in samples (constant: 12 × HOP_SIZE = 1536).
+    // Rust STFT processing delay in samples (constant: 12 × HOP_SIZE = 1536).
     [[nodiscard]] static int processing_delay();
 
-    // Maximum number of source lanes supported by one SAF spreader instance.
+    // Maximum number of source lanes supported by one Rust OM spreader instance.
     [[nodiscard]] static int max_sources();
 
     // Total constant input→output latency after prime(): processing_delay() plus the

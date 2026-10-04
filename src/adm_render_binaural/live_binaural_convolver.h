@@ -2,9 +2,10 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <saf_utility_complex.h>
 #include <span>
 #include <vector>
+
+#include "dsp.h"
 
 namespace mradm::live_scene {
 
@@ -14,9 +15,9 @@ namespace mradm::live_scene {
 // the same samples, including samples preceding the current render segment.
 struct BinauralConvolutionState {
     std::vector<float> history;
-    std::vector<float_complex> current_filter;
-    std::vector<float_complex> target_filter;
-    std::vector<float_complex> target_hrtf;
+    std::vector<dsp::Complex> current_filter;
+    std::vector<dsp::Complex> target_filter;
+    std::vector<dsp::Complex> target_hrtf;
     std::uint32_t fade_remaining{0U};
     std::uint32_t tail_remaining{0U};
     bool initialized{false};
@@ -33,32 +34,32 @@ class LiveBinauralConvolver {
 
     [[nodiscard]] BinauralConvolutionState make_state() const;
     [[nodiscard]] std::uint32_t tail_frames() const noexcept;
-    void initialize(BinauralConvolutionState& state, std::span<const float_complex> hrtf);
+    void initialize(BinauralConvolutionState& state, std::span<const dsp::Complex> hrtf);
 
     // HRTF bins are interleaved L/R. Explicit metadata ramps reach their segment
     // endpoint; discontinuous controls use a persistent 10 ms filter crossfade.
     void process(BinauralConvolutionState& state,
-                 std::span<const float_complex> hrtf,
+                 std::span<const dsp::Complex> hrtf,
                  std::span<const float> input,
                  std::span<float> left,
                  std::span<float> right,
                  bool follows_ramp);
 
   private:
-    void expand_filter(std::span<const float_complex> hrtf, std::vector<float_complex>& output);
-    void filter_ear(std::span<const float_complex> filter, std::size_t ear);
+    void expand_filter(std::span<const dsp::Complex> hrtf, std::vector<dsp::Complex>& output);
+    void filter_ear(std::span<const dsp::Complex> filter, std::size_t ear);
 
     int hrtf_fft_size_;
     int fft_size_;
     std::size_t bands_;
     std::uint32_t fade_frames_;
-    void* hrtf_fft_{nullptr};
-    void* fft_{nullptr};
-    std::vector<float_complex> hrtf_ear_;
+    dsp::FftHandle hrtf_fft_{nullptr};
+    dsp::FftHandle fft_{nullptr};
+    std::vector<dsp::Complex> hrtf_ear_;
     std::vector<float> impulse_;
     std::vector<float> input_;
-    std::vector<float_complex> source_fd_;
-    std::vector<float_complex> output_fd_;
+    std::vector<dsp::Complex> source_fd_;
+    std::vector<dsp::Complex> output_fd_;
     std::vector<float> output_;
 };
 

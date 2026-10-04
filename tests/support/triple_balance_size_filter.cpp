@@ -3,7 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <ranges>
-#include <saf_utility_fft.h>
+
+#include "dsp.h"
 
 namespace mradm::triple_balance {
 
@@ -26,7 +27,7 @@ SizeFilterBank::SizeFilterBank()
 
 SizeFilterBank::~SizeFilterBank() {
     if (fft_ != nullptr) {
-        saf_rfft_destroy(&fft_);
+        dsp::fft_destroy(&fft_);
     }
 }
 
@@ -40,14 +41,14 @@ SizeFilterBank::create(const std::array<std::vector<float>, mode_count>& filters
                           "size filter modes must contain 1..8192 finite FIR coefficients");
     }
     auto result = std::unique_ptr<SizeFilterBank>(new SizeFilterBank());
-    saf_rfft_create(&result->fft_, static_cast<int>(k_fft_frames));
+    dsp::fft_create(&result->fft_, static_cast<int>(k_fft_frames));
     if (result->fft_ == nullptr) {
         return make_error(ErrorCode::render_failed, "could not create size filter FFT");
     }
     for (std::size_t mode = 0; mode < mode_count; ++mode) {
         std::ranges::fill(result->source_time_, 0.0F);
         std::ranges::copy(filters.at(mode), result->source_time_.begin());
-        saf_rfft_forward(result->fft_, result->source_time_.data(), result->filter_fd_.at(mode).data());
+        dsp::fft_forward(result->fft_, result->source_time_.data(), result->filter_fd_.at(mode).data());
     }
     std::ranges::fill(result->source_time_, 0.0F);
     return result;
@@ -62,12 +63,12 @@ Result<void> SizeFilterBank::process(std::span<const float> input, std::span<flo
     }
     std::ranges::fill(source_time_, 0.0F);
     std::ranges::copy(input, source_time_.begin());
-    saf_rfft_forward(fft_, source_time_.data(), source_fd_.data());
+    dsp::fft_forward(fft_, source_time_.data(), source_fd_.data());
     for (std::size_t mode = 0; mode < mode_count; ++mode) {
         for (std::size_t band = 0; band < k_fft_bins; ++band) {
             output_fd_[band] = source_fd_[band] * filter_fd_.at(mode)[band];
         }
-        saf_rfft_backward(fft_, output_fd_.data(), output_time_.data());
+        dsp::fft_inverse(fft_, output_fd_.data(), output_time_.data());
         auto& history = overlap_.at(mode);
         for (std::size_t frame = 0; frame < input.size(); ++frame) {
             filtered[(frame * mode_count) + mode] =

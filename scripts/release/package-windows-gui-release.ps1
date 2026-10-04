@@ -202,7 +202,7 @@ if (!$SkipNative) {
         "-DMR_ADM_FLAC_PROVIDER=VENDORED",
         "-DMR_ADM_OPUS_PROVIDER=VENDORED",
         "-DMR_ADM_ENABLE_IAMF=OFF",
-        "-DSAF_PERFORMANCE_LIB=SAF_USE_OPEN_BLAS_AND_LAPACKE"
+        "-DMR_ADM_BUILD_SAF_REFERENCE_TESTS=OFF"
     )
 
     $toolchainFile = ""
@@ -218,12 +218,6 @@ if (!$SkipNative) {
     if ($env:FC_CACHE_DIR) {
         New-Item -ItemType Directory -Force -Path $env:FC_CACHE_DIR | Out-Null
         $cmakeArgs += "-DFETCHCONTENT_BASE_DIR=$env:FC_CACHE_DIR"
-    }
-    foreach ($varName in @("OPENBLAS_LIBRARY", "LAPACKE_LIBRARY", "OPENBLAS_HEADER_PATH", "LAPACKE_HEADER_PATH")) {
-        $value = [Environment]::GetEnvironmentVariable($varName)
-        if (![string]::IsNullOrWhiteSpace($value)) {
-            $cmakeArgs += "-D$varName=$value"
-        }
     }
 
     $configure = "cmake " + (($cmakeArgs | ForEach-Object { Quote-CmdArg $_ }) -join " ")

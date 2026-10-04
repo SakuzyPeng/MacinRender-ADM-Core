@@ -9,7 +9,6 @@
 #include <numbers>
 #include <optional>
 #include <ranges>
-#include <saf_vbap.h>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -21,6 +20,7 @@
 
 #include "adm/scene.h"
 
+#include "dsp.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
 
@@ -28,12 +28,6 @@ namespace mradm::live_scene {
 
 namespace {
 
-struct SafFree {
-    void operator()(float* ptr) const noexcept {
-        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
-        std::free(ptr);
-    }
-};
 
 struct RuntimeElement {
     ElementDescriptor descriptor;
@@ -292,40 +286,18 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
             return make_error(ErrorCode::unsupported, "live VBAP layout has fewer than two non-LFE speakers");
         }
 
-        std::vector<float> source{azimuth, elevation};
-        float* raw_table = nullptr;
-        int table_size = 0;
-        int simplex_count = 0;
-        if (is_2d()) {
-            generateVBAPgainTable2D_srcs(source.data(),
-                                         1,
-                                         speakers.data(),
-                                         static_cast<int>(speakers.size() / 2U),
-                                         &raw_table,
-                                         &table_size,
-                                         &simplex_count);
-        } else {
-            generateVBAPgainTable3D_srcs(source.data(),
-                                         1,
-                                         speakers.data(),
-                                         static_cast<int>(speakers.size() / 2U),
-                                         1,
-                                         1,
-                                         spread_deg,
-                                         &raw_table,
-                                         &table_size,
-                                         &simplex_count);
-        }
-        std::unique_ptr<float, SafFree> table{raw_table};
-        if (table == nullptr || table_size != 1) {
-            return make_error(ErrorCode::render_failed, "SAF live VBAP gain calculation failed");
+        std::vector<float> table;
+        try {
+            table = dsp::panner_for(speakers, !is_2d())->gains(azimuth, elevation, spread_deg);
+        } catch (const std::exception& error) {
+            return make_error(ErrorCode::render_failed, error.what());
         }
 
         std::vector<float> gains(layout_.speakers.size(), 0.0F);
         std::size_t source_index = 0;
         for (std::size_t channel = 0; channel < layout_.speakers.size(); ++channel) {
             if (!layout_.speakers[channel].is_lfe) {
-                gains[channel] = table.get()[source_index++] * gain;
+                gains[channel] = table[source_index++] * gain;
             }
         }
         return gains;

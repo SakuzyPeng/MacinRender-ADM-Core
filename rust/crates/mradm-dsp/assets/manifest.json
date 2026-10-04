@@ -1,0 +1,76 @@
+{
+  "source_version": "Spatial_Audio_Framework v1.3.4",
+  "format": "IEEE754 binary32 little endian",
+  "kemar_sample_rate": 48000,
+  "assets": [
+    {
+      "file": "kemar_hrirs.f32le",
+      "shape": [
+        836,
+        2,
+        256
+      ],
+      "source": "modules/saf_hrir/saf_default_hrirs.c",
+      "symbol": "__default_hrirs",
+      "sha256": "bd56382c7d8fd8f932a202c55de68d80e6bdd76bb10f4e60246898f1b1d768c7"
+    },
+    {
+      "file": "kemar_directions.f32le",
+      "shape": [
+        836,
+        2
+      ],
+      "source": "modules/saf_hrir/saf_default_hrirs.c",
+      "symbol": "__default_hrir_dirs_deg",
+      "sha256": "09df5199b1a08dd4fff1b8f1c7356b66ab983fd7977500956fb6c0c45db14fe7"
+    },
+    {
+      "file": "afstft_prototype.f32le",
+      "shape": [
+        10240
+      ],
+      "source": "resources/afSTFT/afSTFT_protoFilter.h",
+      "symbol": "__afSTFT_protoFilter1024",
+      "sha256": "31240777fde042fb7496bbd910abd80ae430f8aa0f97d92376f824c9f4be05dd"
+    },
+    {
+      "file": "lattice_o20.f32le",
+      "shape": [
+        2,
+        20
+      ],
+      "source": "modules/saf_utilities/saf_utility_latticeCoeffs.c",
+      "symbol": "__lattice_coeffs_o20",
+      "sha256": "1ba3a2f340b33094db0deb67a96d326c4fe30b02f25988a02aed112be4dc1700"
+    },
+    {
+      "file": "lattice_o15.f32le",
+      "shape": [
+        2,
+        15
+      ],
+      "source": "modules/saf_utilities/saf_utility_latticeCoeffs.c",
+      "symbol": "__lattice_coeffs_o15",
+      "sha256": "427ff1d799f1975014b69c947d3621450a0e2837e140579f7b28005328998888"
+    },
+    {
+      "file": "lattice_o6.f32le",
+      "shape": [
+        2,
+        6
+      ],
+      "source": "modules/saf_utilities/saf_utility_latticeCoeffs.c",
+      "symbol": "__lattice_coeffs_o6",
+      "sha256": "28199f03a9cdf3a9381fbc889b6eb5ed2e13cf09341bb68d0afce85f7f74261d"
+    },
+    {
+      "file": "hoa3_714_sn3d.f32le",
+      "shape": [
+        11,
+        16
+      ],
+      "source": "tests/tools/export_saf_hoa_matrix.cpp",
+      "sha256": "241f5f527bc9d98d820a7ab0c22f1169f0f573355939b8a8a49afe3dbc773793"
+    }
+  ]
+}

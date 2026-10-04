@@ -137,6 +137,7 @@ for kind in objects-extent objects-extent-multi; do
         status=$?
         cat "${prefix}.comparison.txt"
         [ "$status" -eq 1 ] || exit "$status"
-        echo "same-process $kind: differs (phase 0 measurement)"
+        echo "error: Rust same-process repeatability failed: $kind" >&2
+        exit 1
     fi
 done

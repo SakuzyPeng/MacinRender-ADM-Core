@@ -1,0 +1,33 @@
+[workspace]
+members = ["crates/mradm-dsp", "crates/mradm-ffi"]
+resolver = "2"
+exclude = ["vendor/sofar"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+
+[workspace.dependencies]
+realfft = "=3.5.0"
+rustfft = "=6.4.1"
+nalgebra = { version = "=0.35.0", default-features = false, features = ["std"] }
+
+[profile.dev]
+opt-level = 1
+debug = 1
+incremental = false
+
+[profile.release]
+debug = 0
+incremental = false
+panic = "unwind"
+
+[profile.minsizerel]
+inherits = "release"
+opt-level = "s"
+lto = "thin"
+
+
+[patch.crates-io]
+sofar = { path = "vendor/sofar" }

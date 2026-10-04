@@ -47,6 +47,11 @@ fi
 # as a TU on the macOS quality host; the windows-debug CI build verifies it instead.
 files=()
 while IFS= read -r -d '' file; do
+    if ! grep -q '^MR_ADM_BUILD_SAF_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
+        case "$file" in
+            */tests/reference/*|*/tests/tools/export_saf_hoa_matrix.cpp|*/tests/tools/numeric_probe.cpp|*/tests/tools/vbap_probe.cpp|*/tests/tools/fft_lifecycle_probe.cpp) continue ;;
+        esac
+    fi
     files+=("$file")
 done < <(
     find "$repo_root/src" "$repo_root/tests" \

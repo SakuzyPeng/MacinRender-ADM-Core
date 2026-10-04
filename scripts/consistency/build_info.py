@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Record CMake's actual dependency sources and audit exported compile commands."""
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -22,6 +23,7 @@ CACHE_KEYS = (
     'CMAKE_OSX_ARCHITECTURES', 'MR_ADM_STRICT_FP', 'MR_ADM_EAR_SCALAR_REFERENCE',
     'MR_ADM_EAR_SIMD_EFFECTIVE', 'MR_ADM_HAVE_MSVC_FP_CONTRACT_OFF',
     'MR_ADM_CONSISTENCY_DIAGNOSTICS', 'MR_ADM_DIAGNOSTIC_PORTABLE_RNG',
+    'MR_ADM_BUILD_SAF_REFERENCE_TESTS', 'Rust_TOOLCHAIN', 'Rust_CARGO_TARGET_CACHED',
     'MR_ADM_CORE_USE_INSTALLED_DEPS', 'MR_ADM_FLAC_PROVIDER', 'MR_ADM_OPUS_PROVIDER',
     'MR_ADM_ENABLE_SOFA', 'MR_ADM_ENABLE_IAMF', 'EAR_SIMD', 'SAF_PERFORMANCE_LIB',
     'SAF_ENABLE_SIMD', 'SAF_USE_FAST_MATH_FLAG', 'SAF_ENABLE_FAST_MATH_FLAG', 'FETCHCONTENT_BASE_DIR',
@@ -139,6 +141,18 @@ def collect(build):
         'platform.system': platform.system(), 'platform.machine': platform.machine(),
         'platform.release': platform.release(),
     }
+    record['dsp.implementation'] = manifest.get('dsp_implementation', 'legacy-saf')
+    rust_metadata = build / 'rust-dependencies.json'
+    if rust_metadata.exists() and record['dsp.implementation'] == 'rust':
+        metadata = json.loads(rust_metadata.read_text(encoding='utf-8'))
+        workspace = Path(metadata['workspace_root'])
+        record['rust.cargo_lock_sha256'] = hashlib.sha256((workspace / 'Cargo.lock').read_bytes()).hexdigest()
+        record['rust.toolchain_config_sha256'] = hashlib.sha256((workspace / 'rust-toolchain.toml').read_bytes()).hexdigest()
+        record['rust.fft_dispatch'] = 'RustFFT automatic SIMD (phase 1)'
+        record['rust.sofa_enabled'] = str(enabled(cache.get('MR_ADM_ENABLE_SOFA', 'OFF')))
+        for package in metadata['packages']:
+            if package['name'] in {'rustfft', 'realfft', 'nalgebra', 'sofar'}:
+                record['rust.package.' + package['name']] = package['version']
     for lang in ('C', 'CXX'):
         for prop in ('COMPILER_ID', 'COMPILER_VERSION'):
             record[f'compiler.{lang}.{prop}'] = compiler_property(build, cache, lang, prop)

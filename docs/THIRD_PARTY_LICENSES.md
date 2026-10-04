@@ -43,16 +43,56 @@
 | `libbw64` @ 0.10.0 | BW64/ADM BWF 读写 | Apache-2.0 | 可用 |  |
 | `libadm` @ 0.14.0 | ADM XML 建模/解析 | Apache-2.0 | 可用 | 内含 RapidXML（Boost Software License 或 MIT） |
 | `libear` @ 2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15 | BS.2127/EAR 增益计算 | Apache-2.0 | 可用 | 内嵌 vendored Eigen/xsimd/kissfft，单列于下 |
-| `Spatial_Audio_Framework` @ v1.3.4 | VBAP/MDAP/HRTF/FFT 等 DSP | ISC | 可用 | 仅在禁用 GPL 模块（tracker/HADES/FFTW/NETCDF/IPP）的配置下；内嵌 libmysofa/zlib（SOFA reader）单列于下 |
+| `Spatial_Audio_Framework` @ v1.3.4 | 历史 DSP 数值参考（测试专用） | ISC | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
 | `libopus` @ v1.5.2 | Opus MKA 编码 | BSD-3-Clause | 可用 | 发行文档需保留专利 IPR 链接说明（LICENSE_PLEASE_READ.txt） |
 | `Eigen` @ bundled-in-libear@2db69f8f | 线性代数（libear 内嵌子模块） | MPL-2.0 | 可用 | libear 以 EIGEN_MPL2_ONLY 编译，避免 LGPL-only 模块；源码树含 COPYING.GPL/LGPL/BSD 等其他文件不代表默认使用 |
 | `xsimd` @ bundled-in-libear@2db69f8f | SIMD 抽象（libear 内嵌子模块） | BSD-3-Clause | 可用 |  |
 | `kissfft` @ bundled-in-libear@2db69f8f | FFT（libear/SAF 内嵌子模块） | BSD-3-Clause | 可用 |  |
-| `libmysofa` @ bundled-in-SAF@v1.3.4 | SOFA 解析（SAF saf_sofa_reader 内嵌） | BSD-3-Clause | 可用 | 仅当 MR_ADM_ENABLE_SOFA=ON（默认）随包 |
-| `zlib` @ bundled-in-SAF@v1.3.4 | 压缩支持（SAF SOFA reader 内嵌） | Zlib | 可用 | zlib 许可证文本在 zlib.h 头部注释；仅当 SOFA 启用随包 |
-| `spreader_mr` @ fork-of-SAF-examples@v1.3.4 | saf_spreader 双耳扩散渲染（实验性 fork） | ISC | 可用 | fork 自 SAF examples spreader（版权 2021 Leo McCormack）；最小改动：spreader_init_from_hrtf_grid() + 修复 SOFA Q 未赋值。bundle NOTICE.txt 为手写声明 |
+| `libmysofa` @ bundled-in-SAF@v1.3.4 | SOFA 解析（SAF saf_sofa_reader 内嵌） | BSD-3-Clause | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
+| `zlib` @ bundled-in-SAF@v1.3.4 | 压缩支持（SAF SOFA reader 内嵌） | Zlib | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
+| `spreader_mr` @ fork-of-SAF-examples@v1.3.4 | saf_spreader 双耳扩散渲染（实验性 fork） | ISC | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
 | `aom-iamf-tools-bridge` @ external-sdk | IAMF raw OBU 编码（opt-in，MR_ADM_ENABLE_IAMF） | BSD-3-Clause-Clear AND AOM-PL-1.0 | opt-in（默认关闭） | 预构建 SDK 形式接入；启用时发行包须随实际 SDK 记录其内部依赖许可证。bundle NOTICE.txt 为手写声明，实际包须补全文本 |
 | `apple-system-frameworks` @ platform-sdk | APAC/CAF layout/Accelerate（AudioToolbox/CoreFoundation/Accelerate） | LicenseRef-Apple-SDK | 平台 SDK（不再分发） | macOS-only；Apple 平台 framework 不随本项目二进制再分发。bundle NOTICE.txt 为手写声明 |
+| `Corrosion` @ v0.6.1 | CMake/Cargo 构建集成 | MIT | 可用 | 仅构建时使用。 |
+| `saf-derived-rust-dsp` @ v1.3.4-subset | Rust afSTFT、去相关/OM 算法及 KEMAR/滤波器/HOA 数据来源 | ISC AND MIT | 可用 | 保留原作者及许可证；不链接 SAF。资源哈希由 check_cargo.py 校验。 |
+| `rust-adler2-2.0.1` @ 2.0.1 | Rust DSP 的锁定依赖 | 0BSD OR MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-approx-0.5.1` @ 0.5.1 | Rust DSP 的锁定依赖 | Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-arrayvec-0.7.8` @ 0.7.8 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-autocfg-1.5.1` @ 1.5.1 | Rust DSP 的锁定依赖 | Apache-2.0 OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-bitflags-2.13.2` @ 2.13.2 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-bytemuck-1.25.2` @ 1.25.2 | Rust DSP 的锁定依赖 | Zlib OR Apache-2.0 OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-glam-0.30.10` @ 0.30.10 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-glam-0.31.1` @ 0.31.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-glam-0.32.1` @ 0.32.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-glam-0.33.12` @ 0.33.12 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-log-0.4.34` @ 0.4.34 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-matrixmultiply-0.3.11` @ 0.3.11 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-memchr-2.8.3` @ 2.8.3 | Rust DSP 的锁定依赖 | Unlicense OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-miniz_oxide-0.8.9` @ 0.8.9 | Rust DSP 的锁定依赖 | MIT OR Zlib OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-nalgebra-0.35.0` @ 0.35.0 | Rust DSP 的锁定依赖 | Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-num-bigint-0.4.8` @ 0.4.8 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-num-complex-0.4.6` @ 0.4.6 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-num-integer-0.1.47` @ 0.1.47 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-num-rational-0.4.2` @ 0.4.2 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-num-traits-0.2.19` @ 0.2.19 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-primal-check-0.3.4` @ 0.3.4 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-proc-macro2-1.0.107` @ 1.0.107 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-quote-1.0.47` @ 1.0.47 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-rawpointer-0.2.1` @ 0.2.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-realfft-3.5.0` @ 3.5.0 | Rust DSP 的锁定依赖 | MIT | 可用 | 上游发布包在 README 声明 MIT；随包保留声明、作者归属和标准 MIT 许可文本。 |
+| `rust-rustfft-6.4.1` @ 6.4.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-safe_arch-1.2.0` @ 1.2.0 | Rust DSP 的锁定依赖 | Zlib OR Apache-2.0 OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-simba-0.10.2` @ 0.10.2 | Rust DSP 的锁定依赖 | Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-sofar-0.3.0` @ 0.3.0 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 0.3.0 最小本地补丁公开 RawHrtf；关闭 DSP/重采样 features；保留上游 NOTICE。 |
+| `rust-strength_reduce-0.2.4` @ 0.2.4 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-syn-3.0.6` @ 3.0.6 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-thiserror-2.0.21` @ 2.0.21 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-thiserror-impl-2.0.21` @ 2.0.21 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-transpose-0.2.3` @ 0.2.3 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-typenum-1.20.1` @ 1.20.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-unicode-ident-1.0.26` @ 1.0.26 | Rust DSP 的锁定依赖 | (MIT OR Apache-2.0) AND Unicode-3.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-wide-1.7.1` @ 1.7.1 | Rust DSP 的锁定依赖 | Zlib OR Apache-2.0 OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-winnow-0.7.15` @ 0.7.15 | Rust DSP 的锁定依赖 | MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 
 <!-- END GENERATED DEPS -->
 

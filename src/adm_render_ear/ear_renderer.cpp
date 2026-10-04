@@ -10,8 +10,6 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <saf_utility_complex.h>
-#include <saf_utility_fft.h>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -27,6 +25,7 @@
 #include "adm/render_ear.h"
 
 #include "consistency_trace.h"
+#include "dsp.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
 
@@ -92,20 +91,14 @@ struct AccumulateContext {
 };
 
 // FIR decorrelator state for the diffuse bus (BS.2127).
-// Uses overlap-add FFT convolution via saf_rfft. NOTE: saf_rfft is NOT
-// platform-agnostic — its backend follows SAF_PERFORMANCE_LIB. We pass
-// SAF_USE_APPLE_ACCELERATE_ILP64 on macOS, which SAF's CMake matches into
-// SAF_USE_APPLE_ACCELERATE, selecting vDSP; Windows/Linux build against
-// OpenBLAS and fall through to KissFFT. This split does not guarantee identical
-// rounding across platforms. Unifying this FFT alone is insufficient: libear's
-// FIR design and gain calculations also require a numerical audit. See
-// docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md §5.2.
+// Uses the private Rust FFT boundary. In phase 1 SIMD dispatch is allowed;
+// neither this FFT nor libear coefficient design promises cross-platform bits.
 // FFT size L=2048 (next power-of-2 >= block_size(1024) + filter_len(512) - 1).
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct DecorrState {
-    void* hFFT{nullptr};                               // saf_rfft handle, L=2048
-    std::vector<std::vector<float_complex>> filter_fd; // [num_out_ch][L/2+1=1025]
-    std::vector<std::vector<float>> overlap;           // [num_out_ch][K-1=511]
+    dsp::FftHandle hFFT{nullptr};                     // Rust FFT plan, L=2048
+    std::vector<std::vector<dsp::Complex>> filter_fd; // [num_out_ch][L/2+1=1025]
+    std::vector<std::vector<float>> overlap;          // [num_out_ch][K-1=511]
     std::size_t fft_len{0};
     std::size_t bins{0};
     std::size_t overlap_len{0};
@@ -114,7 +107,7 @@ struct DecorrState {
 
     ~DecorrState() {
         if (hFFT != nullptr) {
-            saf_rfft_destroy(&hFFT);
+            dsp::fft_destroy(&hFFT);
         }
     }
     DecorrState() = default;
@@ -696,7 +689,7 @@ void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
     }
 }
 
-// Apply 512-tap FIR decorrelator via overlap-add FFT convolution (saf_rfft; the
+// Apply 512-tap FIR decorrelator via overlap-add FFT convolution (Rust FFT; the
 // backend is vDSP on macOS and KissFFT elsewhere — see DecorrState above).
 // diffuse_in:  [frames_now × num_out_ch] interleaved, float
 // diffuse_out: [frames_now × num_out_ch] interleaved, float  (written)
@@ -707,8 +700,8 @@ void apply_decorrelator(DecorrState& state,
                         std::size_t num_out_ch) {
     // Per-call scratch — small fixed size, stack-friendly via vector.
     std::vector<float> buf(state.fft_len);
-    std::vector<float_complex> x_fd(state.bins);
-    std::vector<float_complex> y_fd(state.bins);
+    std::vector<dsp::Complex> x_fd(state.bins);
+    std::vector<dsp::Complex> y_fd(state.bins);
     std::vector<float> y(state.fft_len);
 
     for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
@@ -718,14 +711,14 @@ void apply_decorrelator(DecorrState& state,
             buf[f] = diffuse_in[(f * num_out_ch) + ch];
         }
 
-        saf_rfft_forward(state.hFFT, buf.data(), x_fd.data());
+        dsp::fft_forward(state.hFFT, buf.data(), x_fd.data());
 
         for (std::size_t b = 0; b < state.bins; ++b) {
             y_fd[b] = x_fd[b] * state.filter_fd[ch][b];
         }
 
-        // saf_rfft_backward scales by 1/N internally — no extra scaling needed.
-        saf_rfft_backward(state.hFFT, y_fd.data(), y.data());
+        // dsp::fft_inverse scales by 1/N internally — no extra scaling needed.
+        dsp::fft_inverse(state.hFFT, y_fd.data(), y.data());
 
         // Overlap-add: accumulate saved tail into this block's output.
         auto& ovl = state.overlap[ch];
@@ -865,7 +858,7 @@ void init_decorr_state(DecorrState& decorr, const ear::Layout& layout, uint16_t 
     const std::size_t k_fft_len = next_power_of_two(static_cast<std::size_t>(k_block_size) + k_fir_len - 1U);
     const std::size_t k_bins = (k_fft_len / 2U) + 1U;
 
-    saf_rfft_create(&decorr.hFFT, static_cast<int>(k_fft_len));
+    dsp::fft_create(&decorr.hFFT, static_cast<int>(k_fft_len));
     decorr.fft_len = k_fft_len;
     decorr.bins = k_bins;
     decorr.overlap_len = k_fir_len - 1U;
@@ -874,13 +867,13 @@ void init_decorr_state(DecorrState& decorr, const ear::Layout& layout, uint16_t 
     decorr.dir_delay.assign(num_out_ch, std::vector<float>(static_cast<std::size_t>(decorr.comp_delay), 0.0F));
 
     const auto raw_filters = ear::designDecorrelators<float>(layout);
-    decorr.filter_fd.resize(num_out_ch, std::vector<float_complex>(k_bins));
+    decorr.filter_fd.resize(num_out_ch, std::vector<dsp::Complex>(k_bins));
     std::vector<float> fir_buf(k_fft_len, 0.0F);
     for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
         std::ranges::fill(fir_buf, 0.0F);
         const auto& fir = raw_filters[ch];
         std::ranges::copy(fir, fir_buf.begin());
-        saf_rfft_forward(decorr.hFFT, fir_buf.data(), decorr.filter_fd[ch].data());
+        dsp::fft_forward(decorr.hFFT, fir_buf.data(), decorr.filter_fd[ch].data());
     }
 }
 

@@ -1,0 +1,17 @@
+[package]
+name = "mradm-dsp"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+realfft.workspace = true
+rustfft.workspace = true
+nalgebra.workspace = true
+
+sofar = { version = "=0.3.0", default-features = false, optional = true }
+
+[features]
+default = ["sofa"]
+sofa = ["dep:sofar"]

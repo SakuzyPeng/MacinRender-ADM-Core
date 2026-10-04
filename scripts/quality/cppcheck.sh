@@ -11,6 +11,12 @@ fi
 
 # -i src/adm_windows: Windows-only sink (windows.h / spatialaudioclient.h) — cppcheck can't parse the
 # Windows COM TUs on the macOS quality host; the windows-debug CI build verifies it instead.
+reference_excludes=()
+if ! grep -q '^MR_ADM_BUILD_SAF_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
+    for file in tests/reference tests/tools/export_saf_hoa_matrix.cpp tests/tools/numeric_probe.cpp tests/tools/vbap_probe.cpp tests/tools/vbap_probe_backend.c tests/tools/fft_lifecycle_probe.cpp; do
+        reference_excludes+=(-i "$repo_root/$file")
+    done
+fi
 cppcheck \
     --enable=warning,style,performance,portability \
     --std=c++20 \
@@ -19,4 +25,5 @@ cppcheck \
     --suppressions-list="$repo_root/CppcheckSuppressions.txt" \
     -I "$repo_root/include" \
     -i "$repo_root/src/adm_windows" \
+    "${reference_excludes[@]}" \
     "$repo_root/include" "$repo_root/src" "$repo_root/tests"

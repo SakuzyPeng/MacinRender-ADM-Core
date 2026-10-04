@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <bit>
 #include <ranges>
-#include <saf_utility_fft.h>
+
+#include "dsp.h"
+
 
 namespace mradm::live_scene {
 
@@ -14,13 +16,13 @@ LiveBinauralConvolver::LiveBinauralConvolver(int hrtf_fft_size, std::uint32_t ma
       hrtf_ear_(static_cast<std::size_t>((hrtf_fft_size / 2) + 1)), impulse_(static_cast<std::size_t>(fft_size_), 0.0F),
       input_(static_cast<std::size_t>(fft_size_), 0.0F), source_fd_(bands_), output_fd_(bands_),
       output_(static_cast<std::size_t>(fft_size_)) {
-    saf_rfft_create(&hrtf_fft_, hrtf_fft_size_);
-    saf_rfft_create(&fft_, fft_size_);
+    dsp::fft_create(&hrtf_fft_, hrtf_fft_size_);
+    dsp::fft_create(&fft_, fft_size_);
 }
 
 LiveBinauralConvolver::~LiveBinauralConvolver() {
-    saf_rfft_destroy(&hrtf_fft_);
-    saf_rfft_destroy(&fft_);
+    dsp::fft_destroy(&hrtf_fft_);
+    dsp::fft_destroy(&fft_);
 }
 
 BinauralConvolutionState LiveBinauralConvolver::make_state() const {
@@ -36,7 +38,7 @@ std::uint32_t LiveBinauralConvolver::tail_frames() const noexcept {
     return static_cast<std::uint32_t>(hrtf_fft_size_ - 1);
 }
 
-void LiveBinauralConvolver::initialize(BinauralConvolutionState& state, std::span<const float_complex> hrtf) {
+void LiveBinauralConvolver::initialize(BinauralConvolutionState& state, std::span<const dsp::Complex> hrtf) {
     expand_filter(hrtf, state.target_filter);
     std::ranges::copy(hrtf, state.target_hrtf.begin());
     state.current_filter = state.target_filter;
@@ -44,7 +46,7 @@ void LiveBinauralConvolver::initialize(BinauralConvolutionState& state, std::spa
     state.initialized = true;
 }
 
-void LiveBinauralConvolver::expand_filter(std::span<const float_complex> hrtf, std::vector<float_complex>& output) {
+void LiveBinauralConvolver::expand_filter(std::span<const dsp::Complex> hrtf, std::vector<dsp::Complex>& output) {
     // Magnitude/phase interpolation is nonlinear: its inverse FFT can occupy
     // every tap, even when the measured HRIR is much shorter. Retain the entire
     // resulting FIR and zero-pad it for LINEAR convolution; using the HRIR length
@@ -54,23 +56,23 @@ void LiveBinauralConvolver::expand_filter(std::span<const float_complex> hrtf, s
             hrtf_ear_[band] = hrtf[(band * 2U) + ear];
         }
         std::ranges::fill(impulse_, 0.0F);
-        saf_rfft_backward(hrtf_fft_, hrtf_ear_.data(), impulse_.data());
-        saf_rfft_forward(fft_, impulse_.data(), output_fd_.data());
+        dsp::fft_inverse(hrtf_fft_, hrtf_ear_.data(), impulse_.data());
+        dsp::fft_forward(fft_, impulse_.data(), output_fd_.data());
         for (std::size_t band = 0U; band < bands_; ++band) {
             output[(band * 2U) + ear] = output_fd_[band];
         }
     }
 }
 
-void LiveBinauralConvolver::filter_ear(std::span<const float_complex> filter, std::size_t ear) {
+void LiveBinauralConvolver::filter_ear(std::span<const dsp::Complex> filter, std::size_t ear) {
     for (std::size_t band = 0U; band < bands_; ++band) {
         output_fd_[band] = source_fd_[band] * filter[(band * 2U) + ear];
     }
-    saf_rfft_backward(fft_, output_fd_.data(), output_.data());
+    dsp::fft_inverse(fft_, output_fd_.data(), output_.data());
 }
 
 void LiveBinauralConvolver::process(BinauralConvolutionState& state,
-                                    std::span<const float_complex> hrtf,
+                                    std::span<const dsp::Complex> hrtf,
                                     std::span<const float> input,
                                     std::span<float> left,
                                     std::span<float> right,
@@ -87,7 +89,7 @@ void LiveBinauralConvolver::process(BinauralConvolutionState& state,
     std::ranges::fill(input_, 0.0F);
     std::ranges::copy(state.history, input_.begin());
     std::ranges::copy(input, input_.begin() + static_cast<std::ptrdiff_t>(history));
-    saf_rfft_forward(fft_, input_.data(), source_fd_.data());
+    dsp::fft_forward(fft_, input_.data(), source_fd_.data());
     for (std::size_t ear = 0U; ear < 2U; ++ear) {
         const auto destination = ear == 0U ? left : right;
         filter_ear(state.current_filter, ear);

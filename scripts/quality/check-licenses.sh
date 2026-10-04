@@ -56,6 +56,7 @@ lic_dir="$repo_root/scripts/licenses"
 
 echo "[INFO] license: 校验 manifest 与 MRDependencies.cmake 一致"
 "$python_bin" "$lic_dir/check_manifest.py"
+"$python_bin" "$lic_dir/check_cargo.py"
 
 echo "[INFO] license: 校验 SBOM 与 docs 依赖表未 stale"
 "$python_bin" "$lic_dir/generate.py" --check

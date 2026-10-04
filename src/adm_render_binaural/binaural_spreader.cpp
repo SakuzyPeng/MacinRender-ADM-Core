@@ -2,25 +2,42 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 #include <utility>
 
-extern "C" {
-#include "spreader_mr.h"
-}
+#include "dsp.h"
 
 namespace mradm {
 
-BinauralSpreaderAdapter::BinauralSpreaderAdapter(
-    const float* hrtf_td, const float* grid_dirs_deg, int num_dirs, int hrir_len, int sample_rate, int n_sources)
+BinauralSpreaderAdapter::BinauralSpreaderAdapter(const float* hrtf_td,
+                                                 const float* grid_dirs_deg,
+                                                 int num_dirs,
+                                                 int hrir_len,
+                                                 int sample_rate,
+                                                 int n_sources,
+                                                 std::span<const std::uint64_t> seeds)
     : n_sources_(std::min(n_sources, k_max_sources)) {
-    spreader_create(&handle_);
-    spreader_init(handle_, sample_rate);
-    spreader_setNumSources(handle_, n_sources_);
-    spreader_setSpreadingMode(handle_, SPREADER_MODE_OM);
-    spreader_setAveragingCoeff(handle_, 0.9F);
-
-    spreader_init_from_hrtf_grid(handle_, hrtf_td, grid_dirs_deg, num_dirs, k_n_ears, hrir_len, sample_rate);
-    spreader_initCodec(handle_);
+    std::array<std::uint64_t, k_max_sources> lane_seeds{};
+    for (int i = 0; i < n_sources_; ++i) {
+        const auto lane = static_cast<std::size_t>(i);
+        lane_seeds.at(lane) = lane < seeds.size() ? seeds[lane] : 0x4d5241444dULL + lane;
+    }
+    void* raw = nullptr;
+    std::array<char, 256> error{};
+    dsp::check(
+        mradm_dsp_spreader_create(hrtf_td,
+                                  static_cast<std::size_t>(num_dirs) * k_n_ears * static_cast<std::size_t>(hrir_len),
+                                  grid_dirs_deg,
+                                  static_cast<std::size_t>(num_dirs) * 2U,
+                                  static_cast<std::size_t>(hrir_len),
+                                  static_cast<std::uint32_t>(sample_rate),
+                                  lane_seeds.data(),
+                                  static_cast<std::size_t>(n_sources_),
+                                  &raw,
+                                  error.data(),
+                                  error.size()),
+        error.data());
+    std::unique_ptr<void, decltype(&mradm_dsp_spreader_destroy)> pending(raw, mradm_dsp_spreader_destroy);
 
     carry_.assign(static_cast<std::size_t>(n_sources_),
                   std::vector<float>(static_cast<std::size_t>(k_frame_size), 0.0F));
@@ -37,11 +54,13 @@ BinauralSpreaderAdapter::BinauralSpreaderAdapter(
 
     out_ring_l_.assign(k_ring_cap, 0.0F);
     out_ring_r_.assign(k_ring_cap, 0.0F);
+    handle_ = pending.release();
 }
 
 BinauralSpreaderAdapter::~BinauralSpreaderAdapter() {
     if (handle_ != nullptr) {
-        spreader_destroy(&handle_);
+        mradm_dsp_spreader_destroy(handle_);
+        handle_ = nullptr;
     }
 }
 
@@ -61,7 +80,8 @@ BinauralSpreaderAdapter::BinauralSpreaderAdapter(BinauralSpreaderAdapter&& other
 BinauralSpreaderAdapter& BinauralSpreaderAdapter::operator=(BinauralSpreaderAdapter&& other) noexcept {
     if (this != &other) {
         if (handle_ != nullptr) {
-            spreader_destroy(&handle_);
+            mradm_dsp_spreader_destroy(handle_);
+            handle_ = nullptr;
         }
         handle_ = std::exchange(other.handle_, nullptr);
         n_sources_ = other.n_sources_;
@@ -89,9 +109,10 @@ void BinauralSpreaderAdapter::set_source(int idx, float az_deg, float el_deg, fl
     if (idx < 0 || idx >= n_sources_) {
         return;
     }
-    spreader_setSourceAzi_deg(handle_, idx, az_deg);
-    spreader_setSourceElev_deg(handle_, idx, el_deg);
-    spreader_setSourceSpread_deg(handle_, idx, spread_deg);
+    std::array<char, 256> error{};
+    dsp::check(mradm_dsp_spreader_set_source(
+                   handle_, static_cast<std::size_t>(idx), az_deg, el_deg, spread_deg, error.data(), error.size()),
+               error.data());
     gains_.at(static_cast<std::size_t>(idx)) = gain;
 }
 
@@ -107,7 +128,16 @@ void BinauralSpreaderAdapter::push_batch() {
     std::ranges::fill(out_scratch_l_, 0.0F);
     std::ranges::fill(out_scratch_r_, 0.0F);
 
-    spreader_process(handle_, in_ptrs_.data(), out_ptrs_.data(), n_sources_, k_n_ears, k_frame_size);
+    std::array<char, 256> error{};
+    dsp::check(mradm_dsp_spreader_process(handle_,
+                                          in_ptrs_.data(),
+                                          static_cast<std::size_t>(n_sources_),
+                                          out_scratch_l_.data(),
+                                          out_scratch_r_.data(),
+                                          k_frame_size,
+                                          error.data(),
+                                          error.size()),
+               error.data());
 
     // Write 512 samples into the ring (wrapping).
     for (int f = 0; f < k_frame_size; ++f) {
@@ -174,7 +204,7 @@ void BinauralSpreaderAdapter::process_chunk(
 }
 
 int BinauralSpreaderAdapter::processing_delay() {
-    return spreader_getProcessingDelay();
+    return static_cast<int>(mradm_dsp_spreader_delay());
 }
 
 int BinauralSpreaderAdapter::max_sources() {

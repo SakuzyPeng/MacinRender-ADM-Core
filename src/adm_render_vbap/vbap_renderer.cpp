@@ -8,7 +8,6 @@
 #include <memory>
 #include <numbers>
 #include <optional>
-#include <saf_vbap.h>
 #include <span>
 #include <string>
 #include <string_view>
@@ -21,6 +20,7 @@
 #include "adm/render_vbap.h"
 
 #include "consistency_trace.h"
+#include "dsp.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
 #include "speaker_pcm.h"
@@ -63,13 +63,6 @@ using render_common::AccumulateContext;
 using render_common::BlockGains;
 using render_common::ChannelGainInfo;
 
-struct SafFree {
-    // SAF allocates gain tables through its C API; ownership transfers to caller.
-    void operator()(float* ptr) const noexcept {
-        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
-        std::free(ptr);
-    }
-};
 
 [[nodiscard]] std::optional<LayoutSpec> layout_spec(std::string_view layout_id, SpeakerGeometry geometry) {
     if (const auto* shared = render_layouts::find_speaker_layout(layout_id, geometry); shared != nullptr) {
@@ -146,42 +139,20 @@ struct SafFree {
 [[nodiscard]] Result<std::vector<float>>
 calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spread_deg, const LayoutSpec& layout) {
     auto speakers = flatten_layout(layout); // non-LFE only
-    std::vector<float> source{azimuth, elevation};
 
-    const auto num_non_lfe = static_cast<int>(speakers.size() / 2U);
     const bool use_3d = !is_2d_layout(layout);
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
     consistency::dump("vbap.01-source.f32", {azimuth, elevation, gain, spread_deg});
     consistency::dump("vbap.02-speakers.f32", speakers);
 #endif
-    int table_size = 0;
-    int simplex_count = 0;
-    float* raw_table = nullptr;
-
-    if (!use_3d) {
-        generateVBAPgainTable2D_srcs(
-            source.data(), 1, speakers.data(), num_non_lfe, &raw_table, &table_size, &simplex_count);
-    } else {
-        constexpr int k_omit_large_triangles = 1;
-        constexpr int k_enable_dummies = 1;
-        generateVBAPgainTable3D_srcs(source.data(),
-                                     1,
-                                     speakers.data(),
-                                     num_non_lfe,
-                                     k_omit_large_triangles,
-                                     k_enable_dummies,
-                                     spread_deg,
-                                     &raw_table,
-                                     &table_size,
-                                     &simplex_count);
-    }
-
-    std::unique_ptr<float, SafFree> table{raw_table};
-    if (table == nullptr || table_size != 1) {
-        return make_error(ErrorCode::render_failed, "SAF VBAP gain calculation failed", {});
+    std::vector<float> table;
+    try {
+        table = dsp::panner_for(speakers, use_3d)->gains(azimuth, elevation, spread_deg);
+    } catch (const std::exception& error) {
+        return make_error(ErrorCode::render_failed, error.what());
     }
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    consistency::dump("vbap.03-gains.f32", std::span<const float>(table.get(), speakers.size() / 2U));
+    consistency::dump("vbap.03-gains.f32", std::span<const float>(table));
 #endif
 
     // Expand VBAP gains (non-LFE only) to full output channel count.
@@ -190,7 +161,7 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
     std::size_t vbap_idx = 0;
     for (std::size_t i = 0; i < layout.speakers.size(); ++i) {
         if (!layout.speakers[i].is_lfe) {
-            gains[i] = table.get()[vbap_idx++] * gain;
+            gains[i] = table[vbap_idx++] * gain;
         }
     }
     return gains;
