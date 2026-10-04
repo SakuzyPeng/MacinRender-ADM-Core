@@ -305,15 +305,15 @@ bool test_real_hrtf_motion(const std::filesystem::path& sofa) {
 bool test_continuous_lookup() {
     using namespace mradm::binaural_internal;
     auto state = build_binaural_state(built_in_kemar_dataset(), 1024U);
-    if (!check(state != nullptr, "prepare interpolation state")) {
+    if (!check(state.has_value(), "prepare interpolation state")) {
         return false;
     }
     std::vector<mradm::dsp::Complex> left;
     std::vector<mradm::dsp::Complex> middle;
     std::vector<mradm::dsp::Complex> right;
-    compute_continuous_hrtf_into(*state, 0.49F, 0.0F, left);
-    compute_continuous_hrtf_into(*state, 0.50F, 0.0F, middle);
-    compute_continuous_hrtf_into(*state, 0.51F, 0.0F, right);
+    compute_continuous_hrtf_into(**state, 0.49F, 0.0F, left);
+    compute_continuous_hrtf_into(**state, 0.50F, 0.0F, middle);
+    compute_continuous_hrtf_into(**state, 0.51F, 0.0F, right);
     float error = 0.0F;
     float movement = 0.0F;
     for (std::size_t index = 0U; index < middle.size(); ++index) {
@@ -322,11 +322,11 @@ bool test_continuous_lookup() {
     }
     bool ok =
         check(error < 2.0e-6F && movement > 1.0e-5F, "sub-degree directions interpolate through former rounding edges");
-    compute_continuous_hrtf_into(*state, -180.0F, 20.0F, left);
-    compute_continuous_hrtf_into(*state, 180.0F, 20.0F, right);
+    compute_continuous_hrtf_into(**state, -180.0F, 20.0F, left);
+    compute_continuous_hrtf_into(**state, 180.0F, 20.0F, right);
     ok &= check(left == right, "azimuth seam is periodic");
-    compute_continuous_hrtf_into(*state, 37.0F, 0.0F, left);
-    compute_hrtf_into(*state, 37.0F, 0.0F, right);
+    compute_continuous_hrtf_into(**state, 37.0F, 0.0F, left);
+    compute_hrtf_into(**state, 37.0F, 0.0F, right);
     ok &= check(left == right, "integer directions retain magnitude-preserving HRTF interpolation");
     return ok;
 }

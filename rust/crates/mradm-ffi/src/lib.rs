@@ -9,6 +9,7 @@ use std::{
     ptr, slice,
 };
 mod convolution;
+mod hrtf;
 mod meter;
 mod resampler;
 mod spatial;

@@ -331,12 +331,9 @@ class HrtfStateCache {
     }
 
     void insert(Key key, std::shared_ptr<const BinauralState> state) {
-        const auto bytes =
-            sizeof(BinauralState) + state->dataset_name.capacity() +
-            (state->hrtf_fd.capacity() * sizeof(dsp::Complex)) +
-            ((state->hrtf_td.capacity() + state->grid_dirs_deg.capacity() + state->hrtf_magnitudes.capacity()) *
-             sizeof(float)) +
-            state->grid->bytes();
+        const auto bytes = sizeof(BinauralState) + state->dataset_name.capacity() + state->filters.bytes() +
+                           ((state->hrtf_td.capacity() + state->grid_dirs_deg.capacity()) * sizeof(float)) +
+                           sizeof(binaural_internal::HrtfGrid);
         constexpr std::size_t k_byte_budget = std::size_t{64U} * 1024U * 1024U;
         if (bytes > k_byte_budget) {
             return;
@@ -383,20 +380,18 @@ class HrtfStateCache {
     if (!resampled) {
         return tl::unexpected{resampled.error()};
     }
-    auto prepared = binaural_internal::build_binaural_state(std::move(*resampled), k_convolution_block);
+    auto prepared = binaural_internal::build_binaural_state(std::move(*resampled), k_convolution_block, true);
     if (!prepared) {
-        return make_error(ErrorCode::render_failed, "failed to build live binaural HRTF interpolation state");
+        return tl::unexpected{prepared.error()};
     }
-    prepared->hrtf_magnitudes.resize(prepared->hrtf_fd.size());
-    std::ranges::transform(
-        prepared->hrtf_fd, prepared->hrtf_magnitudes.begin(), [](dsp::Complex value) { return std::abs(value); });
+    auto state_owner = std::move(*prepared);
     // Live convolution and extent rendering use only the frequency-domain HRTFs
     // and compressed interpolation grid. The original HRIRs and measurement
     // directions are needed during preparation (and by the offline SAF spreader),
     // but retaining them in this live-only cache wastes a full dataset per entry.
-    std::vector<float>{}.swap(prepared->hrtf_td);
-    std::vector<float>{}.swap(prepared->grid_dirs_deg);
-    std::shared_ptr<const BinauralState> state = std::move(prepared);
+    std::vector<float>{}.swap(state_owner->hrtf_td);
+    std::vector<float>{}.swap(state_owner->grid_dirs_deg);
+    std::shared_ptr<const BinauralState> state = std::move(state_owner);
     if (key && key == HrtfStateCache::make_key(config)) {
         cache.insert(*key, state);
     }

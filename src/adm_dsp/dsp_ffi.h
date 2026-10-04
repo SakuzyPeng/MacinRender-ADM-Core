@@ -154,22 +154,59 @@ int32_t mradm_dsp_panner_gains(const void* handle,
                                size_t length,
                                char* message,
                                size_t capacity);
-int32_t mradm_dsp_hrtf_grid(const float* directions,
-                            size_t length,
-                            float* weights,
-                            int32_t* indices,
-                            size_t output_length,
-                            char* message,
-                            size_t capacity);
-int32_t mradm_dsp_hrir_transform(const float* input,
-                                 size_t input_length,
-                                 size_t directions,
-                                 size_t taps,
-                                 size_t fft_length,
-                                 float* output,
-                                 size_t output_length,
-                                 char* message,
-                                 size_t capacity);
+// Immutable HRTF geometry and filters. Shared read-only queries require
+// disjoint caller outputs; owners must outlive all queries. Lengths count
+// floats except grid entries (one weight and index each).
+// cppcheck-suppress-begin unusedStructMember
+typedef struct MradmDspHrtfGridInfo {
+    size_t directions;
+    size_t entries;
+    size_t storage_bytes;
+} MradmDspHrtfGridInfo;
+typedef struct MradmDspHrtfFilterInfo {
+    size_t output_length;
+    size_t spectrum_length;
+    size_t storage_bytes;
+} MradmDspHrtfFilterInfo;
+typedef struct MradmDspHrtfTrace {
+    float* magnitudes;
+    size_t magnitudes_length;
+    float* complex_sum;
+    size_t complex_sum_length;
+    float* scales;
+    size_t scales_length;
+} MradmDspHrtfTrace;
+// cppcheck-suppress-end unusedStructMember
+int32_t
+mradm_dsp_hrtf_grid_create(const float* directions, size_t length, void** output, char* message, size_t capacity);
+void mradm_dsp_hrtf_grid_destroy(void* handle);
+int32_t mradm_dsp_hrtf_grid_info(const void* handle, MradmDspHrtfGridInfo* output, char* message, size_t capacity);
+int32_t mradm_dsp_hrtf_grid_copy(
+    const void* handle, float* weights, int32_t* indices, size_t length, char* message, size_t capacity);
+int32_t mradm_dsp_hrtf_grid_index(float azimuth, float elevation, size_t* output, char* message, size_t capacity);
+int32_t mradm_dsp_hrtf_filters_create(const void* grid,
+                                      const float* impulses,
+                                      size_t input_length,
+                                      size_t taps,
+                                      size_t fft_length,
+                                      uint32_t cache_magnitudes,
+                                      void** output,
+                                      char* message,
+                                      size_t capacity);
+void mradm_dsp_hrtf_filters_destroy(void* handle);
+int32_t mradm_dsp_hrtf_filters_info(const void* handle, MradmDspHrtfFilterInfo* output, char* message, size_t capacity);
+int32_t mradm_dsp_hrtf_spectra_copy(const void* handle, float* output, size_t length, char* message, size_t capacity);
+// mode=0: quantized offline lookup; mode=1: continuous live lookup.
+// Optional trace is accepted only for mode=0. Spectra use re/im floats.
+int32_t mradm_dsp_hrtf_query(const void* handle,
+                             float azimuth,
+                             float elevation,
+                             uint32_t mode,
+                             float* output,
+                             size_t length,
+                             const MradmDspHrtfTrace* trace,
+                             char* message,
+                             size_t capacity);
 // Filled by Rust and consumed by other translation units; keep a C-compatible POD.
 // cppcheck-suppress-begin unusedStructMember
 typedef struct MradmDspDatasetInfo {

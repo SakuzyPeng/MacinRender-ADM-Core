@@ -350,6 +350,8 @@ C/C++ 依赖默认通过 `FetchContent` 获取；Rust 使用提交的 Cargo.lock
 
 Scene 输出和实时 HRTF 重采样使用 Rust `rubato`，保留精确的有理数时长、preroll 与 reset 语义。`libsamplerate` 仅用于默认关闭的 `MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS`。滤波器及相位差异、参考测量见 [Rust 重采样迁移](docs/architecture/RUST_RESAMPLER_MIGRATION.md)。
 
+HRTF 幅度/相位插值、实时连续方向查询和频域状态也由 Rust 持有，多个滤波器组共享只读网格。离线与实时查询保留各自语义，准备后的查询无分配。范围与验收见 [Rust HRTF 迁移](docs/architecture/RUST_HRTF_MIGRATION.md)。
+
 系统依赖构建需要另备 Corrosion 0.6.1、Rust 工具链和锁定的 Cargo 依赖缓存：
 
 ```bash

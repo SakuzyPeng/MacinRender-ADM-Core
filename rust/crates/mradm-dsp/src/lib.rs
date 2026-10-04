@@ -10,6 +10,7 @@ pub mod fft;
 pub mod filterbank;
 pub mod geometry;
 pub mod hrtf;
+pub mod hrtf_filters;
 pub mod meter;
 pub mod mixing;
 pub mod resampler;

@@ -326,6 +326,8 @@ Binaural convolution, filter transitions, diffuse delay and live input mixing al
 
 Scene output and live HRTF resampling use Rust `rubato`, retaining rational duration, preroll and reset semantics. `libsamplerate` is only used by the default-off `MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS` target. See the [Rust resampler migration](docs/architecture/RUST_RESAMPLER_MIGRATION.md) for filter/phase differences and reference measurements.
 
+HRTF magnitude/phase interpolation, continuous live direction lookup and spectral state are now owned by Rust, with immutable geometry shared across filter banks. Offline and live lookups retain their respective semantics and allocate no memory after preparation. See the [Rust HRTF migration](docs/architecture/RUST_HRTF_MIGRATION.md) for scope and validation.
+
 System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
 
 ```bash

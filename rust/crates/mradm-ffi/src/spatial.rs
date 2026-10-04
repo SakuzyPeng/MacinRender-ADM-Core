@@ -1,5 +1,5 @@
 use super::boundary;
-use mradm_dsp::{Complex32, Error, data, dataset::Dataset, fft::RealFft, hrtf, vbap::Panner};
+use mradm_dsp::{Error, data, dataset::Dataset, vbap::Panner};
 use std::{ptr, slice};
 
 #[unsafe(no_mangle)]
@@ -60,82 +60,6 @@ pub unsafe extern "C" fn mradm_dsp_panner_gains(
         })
     })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_hrtf_grid(
-    dirs: *const f32,
-    length: usize,
-    weights: *mut f32,
-    indices: *mut i32,
-    output_length: usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        if dirs.is_null()
-            || weights.is_null()
-            || indices.is_null()
-            || !(8..=200_000).contains(&length)
-            || output_length != hrtf::GRID_POINTS * 3
-        {
-            return Err(Error::InvalidArgument("Invalid HRTF grid arguments"));
-        }
-        hrtf::grid_into(
-            unsafe { slice::from_raw_parts(dirs, length) },
-            unsafe { slice::from_raw_parts_mut(weights, output_length) },
-            unsafe { slice::from_raw_parts_mut(indices, output_length) },
-        )
-    })
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_hrir_transform(
-    input: *const f32,
-    input_length: usize,
-    directions: usize,
-    taps: usize,
-    fft_length: usize,
-    output: *mut f32,
-    output_length: usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        let count = directions.checked_mul(2).and_then(|v| v.checked_mul(taps));
-        let out_count = directions
-            .checked_mul(4)
-            .and_then(|v| v.checked_mul(fft_length / 2 + 1));
-        if input.is_null()
-            || output.is_null()
-            || directions == 0
-            || taps == 0
-            || taps > fft_length
-            || count != Some(input_length)
-            || out_count != Some(output_length)
-            || input_length > isize::MAX as usize / 4
-            || output_length > isize::MAX as usize / 4
-        {
-            return Err(Error::InvalidArgument("Invalid HRIR transform buffers"));
-        }
-        let mut fft = RealFft::new(fft_length)?;
-        let input = unsafe { slice::from_raw_parts(input, input_length) };
-        let output = unsafe { slice::from_raw_parts_mut(output, output_length) };
-        let mut signal = vec![0.; fft_length];
-        let mut spectrum = vec![Complex32::default(); fft.bins()];
-        for dir in 0..directions {
-            for ear in 0..2 {
-                signal[..taps]
-                    .copy_from_slice(&input[(dir * 2 + ear) * taps..(dir * 2 + ear + 1) * taps]);
-                fft.forward(&signal, &mut spectrum)?;
-                for (band, value) in spectrum.iter().enumerate() {
-                    let index = ((band * 2 + ear) * directions + dir) * 2;
-                    output[index] = value.re;
-                    output[index + 1] = value.im;
-                }
-            }
-        }
-        Ok(())
-    })
-}
-
 #[repr(C)]
 pub struct DatasetInfo {
     sample_rate: u32,

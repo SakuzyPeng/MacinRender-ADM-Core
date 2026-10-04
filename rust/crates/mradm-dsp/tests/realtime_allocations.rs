@@ -36,6 +36,40 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOCATOR: Counting = Counting;
 
 #[test]
+fn prepared_hrtf_queries_never_allocate_including_first_motion_and_errors() {
+    use mradm_dsp::{
+        hrtf::Grid,
+        hrtf_filters::{Filters, Lookup},
+    };
+    use std::sync::Arc;
+    let directions = [0., 0., 90., 0., 180., 0., -90., 0., 0., 90., 0., -90.];
+    let grid = Arc::new(Grid::new(&directions).unwrap());
+    for cache in [false, true] {
+        let f = Filters::new(Arc::clone(&grid), &[0.25; 192], 16, 64, cache).unwrap();
+        let mut out = vec![0.; f.output_len()];
+        COUNT.with(|c| c.set(Some(0)));
+        for n in 0..100 {
+            for mode in [Lookup::Quantized, Lookup::Continuous] {
+                f.query(
+                    n as f32 * 7.31 - 180.,
+                    n as f32 * 1.29 - 90.,
+                    mode,
+                    &mut out,
+                    None,
+                )
+                .unwrap();
+            }
+        }
+        assert!(
+            f.query(f32::NAN, 0., Lookup::Continuous, &mut out, None)
+                .is_err()
+        );
+        let count = COUNT.with(|c| c.replace(None).unwrap());
+        assert_eq!(count, 0, "allocation in HRTF lookup");
+    }
+}
+
+#[test]
 fn prepared_resampler_and_finish_reset_do_not_allocate() {
     use mradm_dsp::resampler::Resampler;
     for (from, to) in [(48000, 44100), (8000, 192000), (192000, 8000)] {

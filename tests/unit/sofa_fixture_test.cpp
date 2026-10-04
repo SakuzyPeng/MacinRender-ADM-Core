@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
                         "right HRIR is not normalized");
         }
         auto state = mradm::binaural_internal::build_binaural_state(std::move(*data), 512);
-        ok &= check(state != nullptr, "SOFA data reaches HRTF preparation");
+        ok &= check(state.has_value(), "SOFA data reaches HRTF preparation");
         auto mismatch = load_sofa_dataset(root / filename, 96000);
         ok &= check(!mismatch && mismatch.error().code == mradm::ErrorCode::unsupported,
                     "offline sample-rate mismatch stays unsupported");

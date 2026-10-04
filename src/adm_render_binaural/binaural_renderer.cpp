@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <condition_variable>
 #include <cstddef>
@@ -57,8 +58,6 @@ namespace binaural_internal {
 
 constexpr uint64_t k_min_block_size = 1024U;
 constexpr float k_spreader_extent_threshold_deg = 1.0F; // min extent to route via saf_spreader
-constexpr int k_n_azi = 361;                            // (int)(360/1 + 0.5) + 1
-constexpr int k_n_elev = 181;                           // (int)(180/1 + 0.5) + 1
 constexpr std::size_t k_binaural_divergence_slots = 3U;
 constexpr std::size_t k_binaural_center_slot = 1U;
 constexpr std::size_t k_binaural_extent_slots = 17U;
@@ -195,13 +194,6 @@ std::pair<float, float> label_to_polar(const std::string& label) {
     return it != k_tab.end() ? it->second : std::pair<float, float>{std::numeric_limits<float>::quiet_NaN(), 0.0F};
 }
 
-int next_pow2_int(int value) {
-    int out = 1;
-    while (out < value) {
-        out <<= 1U;
-    }
-    return out;
-}
 
 struct Vec3 {
     float x{0.0F};
@@ -235,13 +227,10 @@ struct Vec3 {
 
 // Grid index into the pre-computed VBAP table (az_res=1°, el_res=1°).
 int vbap_grid_idx(float az_deg, float el_deg) {
-    float az_norm = fmodf(az_deg + 180.0F, 360.0F);
-    if (az_norm < 0.0F) {
-        az_norm += 360.0F;
-    }
-    const int az_idx = std::min(static_cast<int>(std::lround(az_norm)), k_n_azi - 1);
-    const int el_idx = std::clamp(static_cast<int>(std::lround(el_deg + 90.0F)), 0, k_n_elev - 1);
-    return (el_idx * k_n_azi) + az_idx;
+    std::size_t index = 0U;
+    std::array<char, 256> message{};
+    dsp::check(mradm_dsp_hrtf_grid_index(az_deg, el_deg, &index, message.data(), message.size()), message.data());
+    return static_cast<int>(index);
 }
 
 [[nodiscard]] Vec3 direction_from_position(const SceneBlockPosition& pos) noexcept {
@@ -375,133 +364,80 @@ Result<HrtfDataset> load_hrtf_dataset(const RenderPlan& plan) {
     return built_in_kemar_dataset();
 }
 
-// Build BinauralState once.  Returns nullptr on VBAP triangulation failure.
-std::unique_ptr<BinauralState> build_binaural_state(HrtfDataset dataset, uint64_t block_size) {
+// Preparation publishes only fully validated, immutable Rust interpolation data.
+Result<std::unique_ptr<BinauralState>>
+build_binaural_state(HrtfDataset dataset, uint64_t block_size, bool cache_magnitudes) {
+    constexpr std::size_t k_max_fft = std::size_t{1U} << 24U;
+    if (dataset.num_dirs <= 0 || dataset.hrir_len <= 0 || block_size == 0U || block_size > k_max_fft ||
+        static_cast<std::size_t>(dataset.hrir_len) > k_max_fft - block_size + 1U ||
+        dataset.dirs_deg.size() != static_cast<std::size_t>(dataset.num_dirs) * 2U) {
+        return make_error(ErrorCode::invalid_argument, "invalid HRTF preparation dimensions");
+    }
     auto bs = std::make_unique<BinauralState>();
     bs->num_dirs = dataset.num_dirs;
     bs->hrir_len = dataset.hrir_len;
-    bs->fft_size = next_pow2_int(static_cast<int>(block_size) + dataset.hrir_len - 1);
+    bs->fft_size = static_cast<int>(
+        std::bit_ceil(static_cast<std::size_t>(block_size) + static_cast<std::size_t>(dataset.hrir_len) - 1U));
     bs->n_bands = (bs->fft_size / 2) + 1;
     bs->overlap_len = dataset.hrir_len - 1;
     bs->dataset_name = std::move(dataset.name);
     bs->hrtf_td = std::move(dataset.hrirs);
     bs->grid_dirs_deg = std::move(dataset.dirs_deg);
     bs->sample_rate = dataset.sample_rate;
-
-    // Convert HRIRs to frequency-domain HRTFs.
-    bs->hrtf_fd.resize(static_cast<std::size_t>(bs->n_bands) * k_n_ears * static_cast<std::size_t>(bs->num_dirs));
-    std::array<char, 256> transform_error{};
-    dsp::check(mradm_dsp_hrir_transform(bs->hrtf_td.data(),
-                                        bs->hrtf_td.size(),
-                                        static_cast<std::size_t>(bs->num_dirs),
-                                        static_cast<std::size_t>(bs->hrir_len),
-                                        static_cast<std::size_t>(bs->fft_size),
-                                        reinterpret_cast<float*>(bs->hrtf_fd.data()),
-                                        bs->hrtf_fd.size() * 2U,
-                                        transform_error.data(),
-                                        transform_error.size()),
-               transform_error.data());
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    consistency::dump("binaural.01-hrir.f32", bs->hrtf_td);
-    consistency::dump("binaural.02-grid.f32", bs->grid_dirs_deg);
-    consistency::dump("binaural.03-hrtf.c32", bs->hrtf_fd);
-#endif
-
-    // Build compressed VBAP gain table for the HRTF measurement directions as "loudspeakers".
     bs->grid = prepare_hrtf_grid(bs->grid_dirs_deg);
     if (!bs->grid) {
-        return nullptr; // triangulation failed
+        return make_error(ErrorCode::render_failed, "HRTF direction triangulation failed");
     }
+    auto filters = dsp::HrtfFilters::create(*bs->grid,
+                                            bs->hrtf_td,
+                                            static_cast<std::size_t>(bs->hrir_len),
+                                            static_cast<std::size_t>(bs->fft_size),
+                                            cache_magnitudes);
+    if (!filters) {
+        return tl::unexpected{filters.error()};
+    }
+    bs->filters = std::move(*filters);
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    consistency::dump("binaural.04-vbap-gains.f32", bs->grid->gains);
-    consistency::dump("binaural.05-vbap-dirs.i32", bs->grid->directions);
+    const auto spectrum = bs->filters.spectrum_snapshot();
+    const auto grid = bs->grid->snapshot();
+    if (!spectrum) {
+        return tl::unexpected{spectrum.error()};
+    }
+    if (!grid) {
+        return tl::unexpected{grid.error()};
+    }
+    consistency::dump("binaural.01-hrir.f32", bs->hrtf_td);
+    consistency::dump("binaural.02-grid.f32", bs->grid_dirs_deg);
+    consistency::dump("binaural.03-hrtf.c32", *spectrum);
+    consistency::dump("binaural.04-vbap-gains.f32", grid->gains);
+    consistency::dump("binaural.05-vbap-dirs.i32", grid->directions);
 #endif
-
     return bs;
 }
 
-// Interpolate HRTF at (az_deg, el_deg) into an existing buffer (no allocation after first call).
-//
-// Magnitude-preserving, phase-from-complex interpolation. Direct complex VBAP weighting combs the
-// far-ear high frequencies at off-grid directions (neighbouring HRTFs have different ITDs, so their
-// complex spectra cancel where the phases misalign). To suppress that comb we take the MAGNITUDE
-// from a weighted sum of |H| (real, non-negative → cannot comb) and the PHASE from the weighted sum
-// of the complex spectra: out = (Σ wₖ|Hₖ|) · (Σ wₖHₖ)/|Σ wₖHₖ|.
-//
-// At a grid point exactly one VBAP gain is 1, so out == the raw measured HRTF (verified by the
-// fixture test). Caveats — this is a comb-suppression heuristic, NOT a physically rigorous ITD /
-// group-delay model: (1) |H| summation replaces every phase-driven cancellation with the average
-// magnitude, so it also fills in genuine inter-direction notches, not just interpolation comb; it
-// must not be tuned past the point where lateral grid points or real-content regressions appear.
-// (2) The phase is unstable where |Σ wₖHₖ| → 0 and falls back to 0; it does not reconstruct true
-// interpolated group delay. Constrained by the binaural fixture invariants (grid-point identity +
-// off-grid far-ear improvement without lateral regression).
-namespace {
-struct GridBinInterpolation {
-    dsp::Complex value{0.0F, 0.0F};
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    std::array<float, 3U> magnitudes{};
-    dsp::Complex complex_sum{0.0F, 0.0F};
-    float magnitude{0.0F};
-    float complex_magnitude{0.0F};
-#endif
-};
-
-[[nodiscard]] GridBinInterpolation
-interpolated_grid_bin(const BinauralState& bs, std::size_t grid, int band, std::size_t ear) {
-    GridBinInterpolation result;
-    const auto gbase = grid * 3U;
-    const auto nd = static_cast<std::size_t>(bs.num_dirs);
-    float mag = 0.0F;
-    dsp::Complex cpx{0.0F, 0.0F};
-    for (std::size_t k = 0; k < 3U; ++k) {
-        const float gain = bs.grid->gains[gbase + k];
-        const auto dir = static_cast<std::size_t>(bs.grid->directions[gbase + k]);
-        const auto index = (static_cast<std::size_t>(band) * k_n_ears * nd) + (ear * nd) + dir;
-        const auto h = bs.hrtf_fd[index];
-        const float magnitude = bs.hrtf_magnitudes.empty() ? std::abs(h) : bs.hrtf_magnitudes[index];
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-        result.magnitudes[k] = magnitude;
-#endif
-        mag += gain * magnitude;
-        cpx += gain * h;
-    }
-    const float acpx = std::abs(cpx);
-    result.value = acpx > 1e-9F ? cpx * (mag / acpx) : dsp::Complex{mag, 0.0F};
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-    result.complex_sum = cpx;
-    result.magnitude = mag;
-    result.complex_magnitude = acpx;
-#endif
-    return result;
-}
-
-} // namespace
-
+// Private renderer adapters reuse caller buffers; interpolation and all
+// frequency-domain state are owned by Rust. Diagnostics use that same kernel.
 void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<dsp::Complex>& out) {
-    const auto g = static_cast<std::size_t>(vbap_grid_idx(az_deg, el_deg));
-    out.resize(static_cast<std::size_t>(bs.n_bands) * k_n_ears);
+    out.resize(bs.filters.output_size());
+    const MradmDspHrtfTrace* trace = nullptr;
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
     std::vector<float> trace_magnitudes(out.size() * 3U);
     std::vector<float> trace_scale(out.size() * 2U);
     std::vector<dsp::Complex> trace_sum(out.size());
+    const MradmDspHrtfTrace buffers{trace_magnitudes.data(),
+                                    trace_magnitudes.size(),
+                                    reinterpret_cast<float*>(trace_sum.data()),
+                                    trace_sum.size() * 2U,
+                                    trace_scale.data(),
+                                    trace_scale.size()};
+    trace = &buffers;
 #endif
-    for (int b = 0; b < bs.n_bands; ++b) {
-        for (std::size_t ear = 0; ear < k_n_ears; ++ear) {
-            const auto interpolated = interpolated_grid_bin(bs, g, b, ear);
-            const auto index = (static_cast<std::size_t>(b) * k_n_ears) + ear;
-            out[index] = interpolated.value;
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-            for (std::size_t k = 0; k < 3U; ++k) {
-                trace_magnitudes[(index * 3U) + k] = interpolated.magnitudes[k];
-            }
-            trace_sum[index] = interpolated.complex_sum;
-            trace_scale[index * 2U] = interpolated.magnitude;
-            trace_scale[(index * 2U) + 1U] = interpolated.complex_magnitude;
-#endif
-        }
+    const auto result = bs.filters.query(az_deg, el_deg, dsp::HrtfLookup::quantized, out, trace);
+    if (!result) {
+        throw std::runtime_error(result.error().message);
     }
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    const auto g = vbap_grid_idx(az_deg, el_deg);
     consistency::dump("hrtf-grid-" + std::to_string(g) + ".c32", out);
     consistency::dump("hrtf-grid-" + std::to_string(g) + "-magnitudes.f32", trace_magnitudes);
     consistency::dump("hrtf-grid-" + std::to_string(g) + "-complex-sum.c32", trace_sum);
@@ -510,35 +446,10 @@ void compute_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std:
 }
 
 void compute_continuous_hrtf_into(const BinauralState& bs, float az_deg, float el_deg, std::vector<dsp::Complex>& out) {
-    float azimuth = std::fmod(az_deg + 180.0F, 360.0F);
-    if (azimuth < 0.0F) {
-        azimuth += 360.0F;
-    }
-    const float elevation = std::clamp(el_deg + 90.0F, 0.0F, 180.0F);
-    const int az0 = static_cast<int>(std::floor(azimuth));
-    const int el0 = static_cast<int>(std::floor(elevation));
-    const int az1 = (az0 + 1) % 360;
-    const int el1 = std::min(el0 + 1, 180);
-    const float az_fraction = azimuth - static_cast<float>(az0);
-    const float el_fraction = elevation - static_cast<float>(el0);
-    const std::array<int, 4U> grids{
-        (el0 * k_n_azi) + az0, (el0 * k_n_azi) + az1, (el1 * k_n_azi) + az0, (el1 * k_n_azi) + az1};
-    const std::array<float, 4U> weights{(1.0F - az_fraction) * (1.0F - el_fraction),
-                                        az_fraction * (1.0F - el_fraction),
-                                        (1.0F - az_fraction) * el_fraction,
-                                        az_fraction * el_fraction};
-    out.assign(static_cast<std::size_t>(bs.n_bands) * k_n_ears, dsp::Complex{0.0F, 0.0F});
-    for (std::size_t corner = 0U; corner < grids.size(); ++corner) {
-        if (weights.at(corner) == 0.0F) {
-            continue;
-        }
-        for (int band = 0; band < bs.n_bands; ++band) {
-            for (std::size_t ear = 0U; ear < k_n_ears; ++ear) {
-                out[(static_cast<std::size_t>(band) * k_n_ears) + ear] +=
-                    weights.at(corner) *
-                    interpolated_grid_bin(bs, static_cast<std::size_t>(grids.at(corner)), band, ear).value;
-            }
-        }
+    out.resize(bs.filters.output_size());
+    const auto result = bs.filters.query(az_deg, el_deg, dsp::HrtfLookup::continuous, out);
+    if (!result) {
+        throw std::runtime_error(result.error().message);
     }
 }
 
@@ -1727,10 +1638,11 @@ Result<std::shared_ptr<IPreparedRender>> BinauralRenderer::prepare(const RenderP
     if (!dataset_res) {
         return tl::unexpected{dataset_res.error()};
     }
-    auto bs = build_binaural_state(std::move(*dataset_res), render_block_size);
-    if (!bs) {
-        return make_error(ErrorCode::internal_error, "binaural: VBAP triangulation of HRTF directions failed", {});
+    auto state_result = build_binaural_state(std::move(*dataset_res), render_block_size);
+    if (!state_result) {
+        return tl::unexpected{state_result.error()};
     }
+    auto bs = std::move(*state_result);
     logs.log(LogLevel::info,
              "binaural",
              fmt::format("HRTF source: {} ({} dirs, {} taps @ {} Hz)",

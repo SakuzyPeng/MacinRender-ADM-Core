@@ -13,7 +13,7 @@
 | FFT | RealFFT 3.5.0 / RustFFT 6.4.1；保留 N/2+1 频谱和逆变换 1/N 缩放，scratch 在准备期分配 |
 | VBAP / MDAP | Rust 二维/三维增益、虚拟扬声器、九点 MDAP；不可变布局几何复用，保留现有 ADM extent 映射 |
 | HRTF 几何 | Rust 增量凸包、小矩阵求逆、稀疏一度网格及球面 Voronoi 权重；几何扰动使用实例 PCG32 |
-| HRTF 准备 | Rust 批量 HRIR FFT；幅度/相位插值继续复用 C++。后续[双耳 DSP 迁移](RUST_BINAURAL_DSP_MIGRATION.md)已将卷积、滤波过渡和 diffuse 输入混合迁入 Rust |
+| HRTF 准备 | Rust 批量 HRIR FFT；后续[HRTF 迁移](RUST_HRTF_MIGRATION.md)已接管幅度/相位插值、连续方向查询、频谱及共享网格所有权。[双耳 DSP 迁移](RUST_BINAURAL_DSP_MIGRATION.md)已将卷积、滤波过渡和 diffuse 输入混合迁入 Rust |
 | afSTFT | 实际使用的 128 hop、512 frame、133 hybrid bands 配置，滤波器组延迟 1536 样本 |
 | 去相关 | 两耳格型全通滤波器、频带延迟、能量补偿；种子按音轨身份及 lane 派生，不依赖全局 rand |
 | OM spreader | nalgebra 固定 2×2 实数/复数 SVD、正则化、协方差平滑、残差混合和系数插值；仅移植已用 OM 模式 |

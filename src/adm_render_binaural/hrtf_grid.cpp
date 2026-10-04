@@ -1,15 +1,12 @@
 #include "hrtf_grid.h"
 
 #include <algorithm>
-#include <array>
 #include <bit>
 #include <cstdint>
 #include <cstring>
 #include <list>
 #include <mutex>
 
-#include "consistency_trace.h"
-#include "dsp.h"
 
 namespace mradm::binaural_internal {
 namespace {
@@ -51,28 +48,12 @@ Cache& cache() {
 }
 } // namespace
 
-std::size_t HrtfGrid::bytes() const noexcept {
-    return sizeof(*this) + (gains.capacity() * sizeof(float)) + (directions.capacity() * sizeof(int));
-}
-
 std::shared_ptr<const HrtfGrid> build_hrtf_grid(std::span<const float> directions) {
-    auto result = std::make_shared<HrtfGrid>();
-    constexpr std::size_t entries = std::size_t{361} * 181U * 3U;
-    result->gains.resize(entries);
-    result->directions.resize(entries);
-    static_assert(sizeof(int) == sizeof(std::int32_t));
-    std::array<char, 256> error{};
-    const auto status = mradm_dsp_hrtf_grid(directions.data(),
-                                            directions.size(),
-                                            result->gains.data(),
-                                            result->directions.data(),
-                                            entries,
-                                            error.data(),
-                                            error.size());
-    if (status != 0) {
+    auto result = HrtfGrid::create(directions);
+    if (!result) {
         return {};
     }
-    return result;
+    return std::make_shared<HrtfGrid>(std::move(*result));
 }
 
 std::shared_ptr<const HrtfGrid> prepare_hrtf_grid(std::span<const float> directions) {

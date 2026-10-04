@@ -1246,6 +1246,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_hrtf_grid_tests)
     add_test(NAME mr_adm_hrtf_grid_tests COMMAND mr_adm_hrtf_grid_tests)
 
+    add_executable(mr_adm_hrtf_interpolation_tests tests/unit/hrtf_interpolation_test.cpp)
+    target_link_libraries(mr_adm_hrtf_interpolation_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMDsp)
+    target_include_directories(mr_adm_hrtf_interpolation_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_render_binaural")
+    mr_adm_core_apply_warnings(mr_adm_hrtf_interpolation_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_hrtf_interpolation_tests)
+    add_test(NAME mr_adm_hrtf_interpolation_tests COMMAND mr_adm_hrtf_interpolation_tests)
+    set_tests_properties(mr_adm_hrtf_interpolation_tests PROPERTIES TIMEOUT 120)
+
     add_executable(mr_adm_live_binaural_continuity_tests tests/unit/live_binaural_continuity_test.cpp)
     target_link_libraries(mr_adm_live_binaural_continuity_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMDsp)
     target_include_directories(mr_adm_live_binaural_continuity_tests PRIVATE
