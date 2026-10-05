@@ -477,3 +477,79 @@ fn triple_balance_first_process_controls_and_existing_snapshots_do_not_allocate(
         assert_eq!(allocations, 0);
     }
 }
+
+#[test]
+fn prepared_hoa_encoder_meter_resets_and_rejections_do_not_allocate() {
+    use mradm_dsp::hoa::{BlockInput, Encoder, MeterPreprocessor, Plan, RowInput, Source};
+    use std::sync::Arc;
+    let sources = [
+        Source {
+            position: [30., 15., 1.],
+            cartesian: 0,
+            width: 0.5,
+            height: 0.25,
+            depth: 0.1,
+            gain: 0.5,
+            diffuse: 0.8,
+        },
+        Source {
+            gain: 0.75,
+            ..Source::default()
+        },
+    ];
+    let rows = [
+        RowInput {
+            input: 0,
+            block_offset: 0,
+            block_count: 1,
+        },
+        RowInput {
+            input: 1,
+            block_offset: 1,
+            block_count: 1,
+        },
+    ];
+    let blocks = [
+        BlockInput {
+            end: u64::MAX,
+            source_count: 1,
+            object_gain: 1.,
+            ..BlockInput::default()
+        },
+        BlockInput {
+            end: u64::MAX,
+            source_offset: 1,
+            source_count: 1,
+            object_gain: 1.,
+            kind: 2,
+            flags: 1,
+            ..BlockInput::default()
+        },
+    ];
+    let plan = Arc::new(Plan::new(2, &rows, &blocks, &[0, 1], &sources).unwrap().0);
+    for smoothing in [false, true] {
+        let mut encoder = Encoder::new(Arc::clone(&plan), 2048, 240, smoothing).unwrap();
+        let mut meter = MeterPreprocessor::new(Arc::clone(&plan), 2048, 240).unwrap();
+        let input = [0.125; 4096];
+        let mut encoded = [0.; 2048 * 16];
+        let mut decoded = [0.; 2048 * 12];
+        let mut lfe = [0.; 2048];
+        COUNT.with(|c| c.set(Some(0)));
+        for frames in [0, 1, 7, 37, 809, 1023, 1024, 1537, 2048] {
+            encoder.process(&input, &mut encoded, 0, frames).unwrap();
+            meter
+                .process(&input, &encoded, &mut decoded, &mut lfe, 0, frames)
+                .unwrap();
+            assert!(encoder.process(&input, &mut encoded[..15], 0, 1).is_err());
+            assert!(
+                meter
+                    .process(&input, &encoded, &mut decoded[..11], &mut lfe, 0, 1)
+                    .is_err()
+            );
+            encoder.reset(1137);
+            meter.reset(1137);
+        }
+        let allocations = COUNT.with(|c| c.replace(None).unwrap());
+        assert_eq!(allocations, 0);
+    }
+}

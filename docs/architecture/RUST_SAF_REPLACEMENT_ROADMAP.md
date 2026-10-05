@@ -35,6 +35,9 @@
 [Triple Balance 完整数值状态迁移](RUST_TRIPLE_BALANCE_MIGRATION.md)接管固定房间几何、
 点源/尺寸空间算法、四路去相关、运动与过渡状态及数值快照；C++ 保留语义、I/O、调度和 LRU。
 
+[HOA 编码与计量前处理迁移](RUST_HOA_MIGRATION.md)接管三阶系数、插值、PCM 累加、
+diffuse 历史及 LFE 分离/计量解码；C++ 保留语义和调度，并补齐容量检查及异常短读错误处理。
+
 内置 KEMAR、原型和格型系数及 HOA 矩阵是约 1.7 MiB 的已提交二进制资源。`assets/manifest.json` 记录尺寸、来源和 SHA-256；`assets/NOTICE.txt` 保留 ISC/MIT 声明及数据提供者归属。正常构建不从 SAF 提取数据。
 
 ## 2. 行为边界

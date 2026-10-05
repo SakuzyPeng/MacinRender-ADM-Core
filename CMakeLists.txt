@@ -1209,6 +1209,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_peak_fixture_tests COMMAND mr_adm_peak_fixture_tests)
 
     # Fixture test: Objects ADM → HOA3 (16ch, ACN/SN3D) encode.
+    add_executable(mr_adm_hoa_rust_tests tests/unit/hoa_rust_test.cpp)
+    target_link_libraries(mr_adm_hoa_rust_tests PRIVATE MacinRender::ADMRenderHOA MacinRender::ADMRenderCommon
+        MacinRender::ADMDsp nlohmann_json::nlohmann_json libbw64)
+    target_include_directories(mr_adm_hoa_rust_tests PRIVATE src/adm_render_common)
+    mr_adm_core_apply_warnings(mr_adm_hoa_rust_tests)
+    add_test(NAME mr_adm_hoa_rust_tests COMMAND mr_adm_hoa_rust_tests)
+    set_tests_properties(mr_adm_hoa_rust_tests PROPERTIES TIMEOUT 120)
+
     add_executable(mr_adm_hoa_encode_fixture_tests tests/unit/hoa_encode_fixture_test.cpp)
     target_link_libraries(mr_adm_hoa_encode_fixture_tests
         PRIVATE

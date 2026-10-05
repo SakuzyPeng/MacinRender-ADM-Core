@@ -11,6 +11,7 @@ pub mod fft;
 pub mod filterbank;
 pub mod gain;
 pub mod geometry;
+pub mod hoa;
 pub mod hptf;
 pub mod hrtf;
 pub mod hrtf_filters;

@@ -56,3 +56,6 @@ unusedStructMember:*/src/adm_render_common/speaker_pcm.h
 # Private Rust transport PODs and renderer control mappings are read across the FFI / translation units.
 unusedStructMember:*/src/adm_dsp/triple_balance_ffi.h
 unusedStructMember:*/src/adm_render_triple_balance/render_state.h
+
+# HOA transport POD fields are consumed by Rust across the private FFI.
+unusedStructMember:*/src/adm_dsp/hoa_ffi.h
