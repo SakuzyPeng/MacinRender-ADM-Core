@@ -1,5 +1,5 @@
-#include "live_vbap_renderer.h"
-
+// Frozen test-only implementation from 577fe2d; see provenance.json.
+#pragma once
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -21,11 +21,12 @@
 #include "adm/scene.h"
 
 #include "dsp.h"
-#include "live_vbap.h"
+#include "live_vbap_renderer.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
 
-namespace mradm::live_scene {
+namespace mradm::live_vbap_legacy {
+using namespace mradm::live_scene;
 
 namespace {
 
@@ -33,6 +34,14 @@ namespace {
 struct RuntimeElement {
     ElementDescriptor descriptor;
     ObjectState target_state;
+    std::vector<float> current_gains;
+    std::vector<float> target_gains;
+    std::vector<float> gain_steps;
+    std::uint32_t ramp_remaining{0};
+    float current_level{1.0F};
+    float target_level{1.0F};
+    float level_step{0.0F};
+    std::uint32_t level_remaining{0};
     bool initialized{false};
 };
 
@@ -109,48 +118,6 @@ void copy_state_fields(ObjectState& destination, const ObjectState& source, std:
     destination.valid_fields |= fields;
 }
 
-// Producer ranges are validated upstream. Policy-expanded coordinates/extents may exceed them;
-// this numerical boundary checks finiteness without narrowing the policy domain.
-[[nodiscard]] bool valid_state(const ObjectState& state) noexcept {
-    const auto coordinate = [](float v) { return std::isfinite(v); };
-    const auto finite = [](float v) { return std::isfinite(v); };
-    if ((state.valid_fields & ~k_known_state_fields) != 0U) {
-        return false;
-    }
-    if ((state.valid_fields & state_linear_gain) != 0U &&
-        (!std::isfinite(state.linear_gain) || state.linear_gain < 0)) {
-        return false;
-    }
-    if ((state.valid_fields & state_position) != 0U &&
-        (!coordinate(state.x) || !coordinate(state.y) || !coordinate(state.z))) {
-        return false;
-    }
-    if ((state.valid_fields & state_extent) != 0U &&
-        (!finite(state.width) || !finite(state.height) || !finite(state.depth))) {
-        return false;
-    }
-    if ((state.valid_fields & state_diffuse) != 0U && !finite(state.diffuse)) {
-        return false;
-    }
-    if ((state.valid_fields & state_divergence) != 0U && !finite(state.divergence)) {
-        return false;
-    }
-    if ((state.valid_fields & state_divergence_range) != 0U &&
-        (!std::isfinite(state.divergence_azimuth_range) || state.divergence_azimuth_range < 0 ||
-         !std::isfinite(state.divergence_position_range) || state.divergence_position_range < 0)) {
-        return false;
-    }
-    return (state.valid_fields & state_channel_lock_max_distance) == 0U || !state.channel_lock_max_distance ||
-           (std::isfinite(*state.channel_lock_max_distance) && *state.channel_lock_max_distance >= 0);
-}
-
-struct StagedControl {
-    ObjectState target;
-    bool initialized{false};
-    bool seen_initial{false};
-    bool seen_pcm{false};
-};
-
 class LiveVbapRenderer final : public ILiveSceneRenderer {
   public:
     LiveVbapRenderer(RendererConfig config, render_layouts::SpeakerLayout layout, DiagnosticSink diagnostics)
@@ -164,167 +131,132 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
 
     [[nodiscard]] Result<void> configure_generation(std::uint64_t generation_id,
                                                     std::span<const ElementDescriptor> elements) override {
-        if (elements.size() > std::numeric_limits<std::uint32_t>::max()) {
-            return make_error(ErrorCode::invalid_argument, "Live VBAP element count overflows numerical indices");
-        }
-        std::vector<RuntimeElement> next;
-        std::unordered_map<std::uint64_t, std::size_t> indices;
-        next.reserve(elements.size());
-        indices.reserve(elements.size());
-        for (const auto& descriptor : elements) {
-            if ((descriptor.role != ElementRole::object && descriptor.role != ElementRole::direct_speaker &&
-                 descriptor.role != ElementRole::lfe) ||
-                !indices.emplace(descriptor.element_id, next.size()).second) {
-                return make_error(ErrorCode::invalid_argument, "Live VBAP has an invalid or duplicate element");
-            }
-            auto defaults = default_state(descriptor);
-            if (descriptor.has_position) {
-                auto position = defaults;
-                position.valid_fields |= state_position;
-                if (!valid_state(position)) {
-                    return make_error(ErrorCode::invalid_argument, "Live VBAP element position is invalid");
-                }
-            }
-            next.push_back({descriptor, defaults, false});
-        }
-        auto mixer = dsp::LiveVbapMixer::create(static_cast<std::uint32_t>(next.size()), output_channels());
-        if (!mixer) {
-            return tl::unexpected{mixer.error()};
-        }
-        mixer_.emplace(std::move(*mixer));
-        elements_.swap(next);
-        element_index_.swap(indices);
         generation_id_ = generation_id;
+        elements_.clear();
+        element_index_.clear();
         warned_fields_.clear();
+        elements_.reserve(elements.size());
+        for (const auto& descriptor : elements) {
+            RuntimeElement runtime;
+            runtime.descriptor = descriptor;
+            runtime.target_state = default_state(descriptor);
+            runtime.current_gains.assign(layout_.speakers.size(), 0.0F);
+            runtime.target_gains.assign(layout_.speakers.size(), 0.0F);
+            runtime.gain_steps.assign(layout_.speakers.size(), 0.0F);
+            element_index_.emplace(descriptor.element_id, elements_.size());
+            elements_.push_back(std::move(runtime));
+        }
         return {};
     }
 
     void reset() override {
-        if (mixer_) {
-            mixer_->reset();
-        }
-        mixer_.reset();
         generation_id_ = 0;
         elements_.clear();
         element_index_.clear();
         warned_fields_.clear();
-        staged_.clear();
-        pending_diagnostics_.clear();
-        pending_warned_fields_.clear();
-        planes_.clear();
-        initial_.clear();
-        events_.clear();
-        coefficients_.clear();
     }
 
-    // Prepare the whole frame before committing either numeric or semantic state.
+    // Rendering is kept as one sample loop so metadata retargets and gain ramps share an exact ordering point.
     // NOLINTNEXTLINE(readability-function-size)
     [[nodiscard]] Result<void> render(const Frame& frame, std::span<float> output) override {
-        const auto channels = layout_.speakers.size();
-        if (frame.duration_samples > std::numeric_limits<std::size_t>::max() / channels ||
-            output.size() < static_cast<std::size_t>(frame.duration_samples) * channels) {
+        const std::size_t required = static_cast<std::size_t>(frame.duration_samples) * layout_.speakers.size();
+        if (output.size() < required) {
             return make_error(ErrorCode::invalid_argument, "live VBAP output buffer is too small");
         }
-        if (!mixer_ || frame.generation_id != generation_id_) {
+        if (frame.generation_id != generation_id_) {
             return make_error(ErrorCode::invalid_argument, "live VBAP frame uses an unconfigured generation");
         }
-        auto& mixer = mixer_.value();
-        const auto required = static_cast<std::size_t>(frame.duration_samples) * channels;
-        staged_.resize(elements_.size());
-        planes_.assign(elements_.size(), MradmLiveVbapPlane{});
-        initial_.clear();
-        events_.clear();
-        coefficients_.clear();
-        pending_diagnostics_.clear();
-        pending_warned_fields_ = warned_fields_;
-        for (std::size_t i = 0; i < elements_.size(); ++i) {
-            staged_[i] = {elements_[i].target_state, elements_[i].initialized, false, false};
+        std::ranges::fill(output.first(required), 0.0F);
+
+        for (const auto& initial : frame.initial_states) {
+            const auto found = element_index_.find(initial.element_id);
+            if (found == element_index_.end()) {
+                return make_error(ErrorCode::invalid_argument, "initial state references an unknown element");
+            }
+            auto& element = elements_[found->second];
+            ObjectState state = default_state(element.descriptor);
+            copy_state_fields(state, initial.state, initial.state.valid_fields);
+            element.target_state = state;
+            set_level(element, level_for(state), 0U);
+            auto gains = gains_for(element, state, frame);
+            if (!gains) {
+                return tl::unexpected{gains.error()};
+            }
+            element.current_gains = *gains;
+            element.target_gains = std::move(*gains);
+            std::ranges::fill(element.gain_steps, 0.0F);
+            element.ramp_remaining = 0;
+            element.initialized = true;
         }
-        for (const auto& plane : frame.pcm) {
-            const auto found = element_index_.find(plane.element_id);
-            if (found == element_index_.end() || staged_[found->second].seen_pcm ||
-                (plane.has_signal && plane.samples.size() < frame.duration_samples)) {
-                return make_error(ErrorCode::invalid_argument, "Live VBAP PCM plane has an invalid ID or length");
-            }
-            staged_[found->second].seen_pcm = true;
-            if (plane.has_signal) {
-                planes_[found->second] = {plane.samples.data(), plane.samples.size(), 1U, 0U};
-            }
-        }
-        for (const auto& state : frame.initial_states) {
-            const auto found = element_index_.find(state.element_id);
-            if (found == element_index_.end() || staged_[found->second].seen_initial || !valid_state(state.state)) {
-                return make_error(ErrorCode::invalid_argument, "Live VBAP initial state is invalid");
-            }
-            auto& staged = staged_[found->second];
-            staged.seen_initial = true;
-            staged.target = default_state(elements_[found->second].descriptor);
-            copy_state_fields(staged.target, state.state, state.state.valid_fields);
-            auto prepared = prepare_initial(found->second, frame);
-            if (!prepared) {
-                return prepared;
-            }
-        }
-        for (std::size_t i = 0; i < staged_.size(); ++i) {
-            if (!staged_[i].initialized) {
-                auto prepared = prepare_initial(i, frame);
-                if (!prepared) {
-                    return prepared;
-                }
-            }
-        }
-        std::uint32_t previous = 0;
-        for (const auto& update : frame.updates) {
-            const auto found = element_index_.find(update.element_id);
-            const auto changed = update.changed_fields | update.cleared_fields;
-            if (found == element_index_.end() || update.offset_samples >= frame.duration_samples ||
-                update.offset_samples < previous || (changed & ~k_known_state_fields) != 0U ||
-                (update.changed_fields & ~update.state.valid_fields) != 0U || !valid_state(update.state)) {
-                return make_error(ErrorCode::invalid_argument, "Live VBAP metadata update is invalid");
-            }
-            previous = update.offset_samples;
-            auto& target = staged_[found->second].target;
-            target.valid_fields &= ~update.cleared_fields;
-            copy_state_fields(target, update.state, update.changed_fields);
-            std::uint32_t ramp = config_.object_smoothing_frames;
-            if (update.jump_position) {
-                ramp = 0;
-            } else if (update.ramp_duration_samples != 0) {
-                ramp = update.ramp_duration_samples;
-            }
-            MradmLiveVbapCommand command{};
-            command.element = static_cast<std::uint32_t>(found->second);
-            command.offset = update.offset_samples;
-            command.duration = ramp;
-            if ((changed & (state_active | state_linear_gain)) != 0U) {
-                command.fields |= 2U;
-                command.level = level_for(target);
-            }
-            if ((changed & ~(state_active | state_linear_gain | state_head_locked)) != 0U) {
-                auto gains = gains_for(elements_[found->second], target, frame);
+
+        for (auto& element : elements_) {
+            if (!element.initialized) {
+                const ObjectState defaults = default_state(element.descriptor);
+                element.target_state = defaults;
+                set_level(element, level_for(defaults), 0U);
+                auto gains = gains_for(element, defaults, frame);
                 if (!gains) {
                     return tl::unexpected{gains.error()};
                 }
-                command.fields |= 1U;
-                command.coefficient_offset = coefficients_.size();
-                coefficients_.insert(coefficients_.end(), gains->begin(), gains->end());
-            }
-            if (command.fields != 0U) {
-                events_.push_back(command);
+                element.current_gains = *gains;
+                element.target_gains = std::move(*gains);
+                element.initialized = true;
             }
         }
-        auto rendered =
-            mixer.process(frame.duration_samples, planes_, initial_, events_, coefficients_, output.first(required));
-        if (!rendered) {
-            return rendered;
+
+        std::unordered_map<std::uint64_t, const PcmPlane*> pcm;
+        pcm.reserve(frame.pcm.size());
+        for (const auto& plane : frame.pcm) {
+            pcm.emplace(plane.element_id, &plane);
         }
-        for (std::size_t i = 0; i < elements_.size(); ++i) {
-            elements_[i].target_state = staged_[i].target;
-            elements_[i].initialized = staged_[i].initialized;
-        }
-        warned_fields_.swap(pending_warned_fields_);
-        for (auto& diagnostic : pending_diagnostics_) {
-            diagnostics_(std::move(diagnostic));
+
+        std::size_t update_index = 0;
+        for (std::uint32_t sample = 0; sample < frame.duration_samples; ++sample) {
+            while (update_index < frame.updates.size() && frame.updates[update_index].offset_samples == sample) {
+                const auto& update = frame.updates[update_index++];
+                const auto found = element_index_.find(update.element_id);
+                if (found == element_index_.end()) {
+                    return make_error(ErrorCode::invalid_argument, "metadata update references an unknown element");
+                }
+                auto& element = elements_[found->second];
+                ObjectState target = element.target_state;
+                target.valid_fields &= ~update.cleared_fields;
+                copy_state_fields(target, update.state, update.changed_fields);
+                element.target_state = target;
+                std::uint32_t ramp = config_.object_smoothing_frames;
+                if (update.jump_position) {
+                    ramp = 0U;
+                } else if (update.ramp_duration_samples != 0U) {
+                    ramp = update.ramp_duration_samples;
+                }
+                const auto changed = update.changed_fields | update.cleared_fields;
+                if ((changed & (state_active | state_linear_gain)) != 0U) {
+                    set_level(element, level_for(target), ramp);
+                }
+                // Speaker beds retain reference-frame metadata but have no
+                // orientation stage. Level and panning also own separate ramps.
+                if ((changed & ~(state_active | state_linear_gain | state_head_locked)) != 0U) {
+                    auto gains = gains_for(element, target, frame);
+                    if (!gains) {
+                        return tl::unexpected{gains.error()};
+                    }
+                    set_target(element, std::move(*gains), ramp);
+                }
+            }
+
+            for (auto& element : elements_) {
+                const auto plane_it = pcm.find(element.descriptor.element_id);
+                if (plane_it == pcm.end() || !plane_it->second->has_signal) {
+                    advance_ramp(element);
+                    continue;
+                }
+                const float input = plane_it->second->samples[sample];
+                for (std::size_t channel = 0; channel < layout_.speakers.size(); ++channel) {
+                    output[(static_cast<std::size_t>(sample) * layout_.speakers.size()) + channel] +=
+                        input * element.current_gains[channel] * element.current_level;
+                }
+                advance_ramp(element);
+            }
         }
         return {};
     }
@@ -336,22 +268,6 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
     [[nodiscard]] std::uint32_t tail_input_frames() const noexcept override { return 0U; }
 
   private:
-    Result<void> prepare_initial(std::size_t index, const Frame& frame) {
-        auto gains = gains_for(elements_[index], staged_[index].target, frame);
-        if (!gains) {
-            return tl::unexpected{gains.error()};
-        }
-        initial_.push_back({static_cast<std::uint32_t>(index),
-                            0U,
-                            0U,
-                            3U,
-                            coefficients_.size(),
-                            level_for(staged_[index].target),
-                            0U});
-        coefficients_.insert(coefficients_.end(), gains->begin(), gains->end());
-        staged_[index].initialized = true;
-        return {};
-    }
     [[nodiscard]] bool is_2d() const {
         return std::ranges::all_of(layout_.speakers, [](const auto& speaker) {
             return speaker.is_lfe || std::fabs(speaker.elevation) < 1.0e-6F;
@@ -540,16 +456,60 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
         return gains;
     }
 
+    void set_target(RuntimeElement& element, std::vector<float> gains, std::uint32_t ramp_samples) {
+        element.target_gains = std::move(gains);
+        if (ramp_samples == 0U) {
+            element.current_gains = element.target_gains;
+            std::ranges::fill(element.gain_steps, 0.0F);
+            element.ramp_remaining = 0;
+            return;
+        }
+        element.ramp_remaining = ramp_samples;
+        for (std::size_t channel = 0; channel < element.gain_steps.size(); ++channel) {
+            element.gain_steps[channel] =
+                (element.target_gains[channel] - element.current_gains[channel]) / static_cast<float>(ramp_samples);
+        }
+    }
+
+    static void set_level(RuntimeElement& element, float target, std::uint32_t frames) {
+        element.target_level = target;
+        element.level_remaining = frames;
+        element.level_step = frames == 0U ? 0.0F : (target - element.current_level) / static_cast<float>(frames);
+        if (frames == 0U) {
+            element.current_level = target;
+        }
+    }
+
+    static void advance_ramp(RuntimeElement& element) {
+        if (element.level_remaining != 0U) {
+            element.current_level += element.level_step;
+            --element.level_remaining;
+            if (element.level_remaining == 0U) {
+                element.current_level = element.target_level;
+            }
+        }
+        if (element.ramp_remaining == 0U) {
+            return;
+        }
+        for (std::size_t channel = 0; channel < element.current_gains.size(); ++channel) {
+            element.current_gains[channel] += element.gain_steps[channel];
+        }
+        --element.ramp_remaining;
+        if (element.ramp_remaining == 0U) {
+            element.current_gains = element.target_gains;
+        }
+    }
+
     void warn_once(const Frame& frame,
                    std::uint64_t element_id,
                    std::uint64_t field,
                    std::string message,
                    DiagnosticCode code = DiagnosticCode::semantic_degraded) {
         const std::uint64_t key = (field << 8U) ^ static_cast<std::uint64_t>(code);
-        if (!pending_warned_fields_.insert(key).second || !diagnostics_) {
+        if (!warned_fields_.insert(key).second || !diagnostics_) {
             return;
         }
-        pending_diagnostics_.push_back(
+        diagnostics_(
             {LogLevel::warning, code, frame.epoch_id, frame.generation_id, element_id, field, std::move(message)});
     }
 
@@ -561,14 +521,6 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
     std::vector<RuntimeElement> elements_;
     std::unordered_map<std::uint64_t, std::size_t> element_index_;
     std::unordered_set<std::uint64_t> warned_fields_;
-    std::optional<dsp::LiveVbapMixer> mixer_;
-    std::vector<StagedControl> staged_;
-    std::vector<MradmLiveVbapPlane> planes_;
-    std::vector<MradmLiveVbapCommand> initial_;
-    std::vector<MradmLiveVbapCommand> events_;
-    std::vector<float> coefficients_;
-    std::unordered_set<std::uint64_t> pending_warned_fields_;
-    std::vector<Diagnostic> pending_diagnostics_;
 };
 
 } // namespace
@@ -587,4 +539,4 @@ Result<std::unique_ptr<ILiveSceneRenderer>> create_live_vbap_renderer(const Rend
         std::make_unique<LiveVbapRenderer>(config, *layout, std::move(diagnostics))};
 }
 
-} // namespace mradm::live_scene
+} // namespace mradm::live_vbap_legacy

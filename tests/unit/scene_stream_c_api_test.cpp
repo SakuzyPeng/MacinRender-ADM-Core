@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -689,6 +690,19 @@ bool test_zero_generation_id(adm_context_t* context) {
     return ok;
 }
 
+bool exact_sample_accurate_envelope(const std::vector<float>& output) {
+    bool ok = true;
+    constexpr std::array<float, 9> envelope{1.0F, 1.0F, 1.0F, 0.75F, 0.5F, 0.25F, 0.0F, 0.0F, 0.5F};
+    for (std::size_t f = 0; f < envelope.size(); ++f) {
+        for (std::size_t c = 0; c < 2; ++c) {
+            const float expected = output.at(c) * envelope.at(f);
+            ok &= check(std::bit_cast<std::uint32_t>(output.at((f * 2) + c)) == std::bit_cast<std::uint32_t>(expected),
+                        "Live VBAP keeps the exact gain-ramp samples through the public Scene API");
+        }
+    }
+    return ok;
+}
+
 bool test_sample_accurate_ramp(adm_context_t* context) {
     StreamGuard stream;
     auto config = stream_config();
@@ -782,6 +796,7 @@ bool test_sample_accurate_ramp(adm_context_t* context) {
                     "four-sample gain ramp is continuous across the SceneFrame boundary");
         ok &= check(close(channel(8U), base * 0.5F),
                     "same-offset updates execute in array order and the final target wins");
+        ok &= exact_sample_accurate_envelope(output);
     }
     return ok;
 }
