@@ -43,7 +43,7 @@ Rust 计量器并组装报告。双缓冲、future 回收与写文件顺序保�
   不修改该调用的输出或历史。音频非有限值继续传播，不做隐式清洗；reset 可清除被污染的历史。
 - Rust 内核、FFI、reset 和参数拒绝从首次处理开始无分配、无锁、无 I/O。
   准备/销毁、C++ 读取、控制发布和线程调度不在此承诺中。指针存活、对齐及可变句柄独占
-  仍由调用方保证；FFI 拒绝处理缓冲别名，panic 不越过 C 边界。
+  仍由调用方保证；FFI 拒绝可写缓冲彼此及其与输入的别名，panic 不越过 C 边界。
 
 原 `hoa.01-polar`、`hoa.02-direction`、`hoa.03-normalized`、`hoa.04-coefficients`
 诊断检查点保留。Rust 返回原始遍历顺序中的首个阶段值，既有诊断开关下由 C++ 写文件；
@@ -74,6 +74,29 @@ Rust 测试另覆盖独立延迟冲激、环形回绕、任意分块、zero/rese
 原生 fixture 强化为 float32 离线/流式逐位相同，并覆盖正常短末块、异常短读、容量拒绝、
 非对齐 seek、格式不匹配和超长窗口等于整段切片。
 
+2026-10-05 原生验收：
+
+| 项目 | macOS arm64 | Windows x64 |
+|---|---:|---:|
+| CTest | Debug 61/61；Release 定向 10/10 | canonical Release 60/60 |
+| 系数最大绝对差 | `2.980232238769531e-7` | 0 |
+| 编码 PCM 最大绝对差 | `7.450580596923828e-8` | 0 |
+| 计量解码 PCM 最大绝对差 | `1.7881393432617188e-7` | 0 |
+| LFE PCM 最大绝对差 | 0 | 0 |
+| LUFS 差 | `1.1716336700828833e-7 LU` | 0 |
+| TP 差 | 0 dB | 0 dB |
+
+共对照 1,502,812 个数值，全部满足门限；Windows 同平台对照全部逐位相同。
+21 组 macOS Release CLI 对照全部通过：13 组未修改后端控制用例逐位相同，8 组 HOA 用例
+最大 PCM 绝对差为 `7.152557373046875e-7`。
+Rust Release workspace 共 98 项测试通过，其中 HOA 6 项、分配探针 11 项、FFI 17 项。
+Rust fmt/Clippy、改动 C++ 格式/clang-tidy/cppcheck、冻结参考及许可证/SBOM 检查通过。
+两个原生平台均保留原有 139 个公开 `adm_*` 入口，没有私有 Rust 入口外泄。
+
+[最终三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37295043944)
+验证实现提交 `52bf106`：macOS Debug 61/61、Linux Debug 60/60、Windows Debug 60/60，
+首轮全部通过。最终验收提交只更新文档及证据。
+
 ```sh
 cmake --build --preset debug
 ctest --preset debug --parallel "$(getconf _NPROCESSORS_ONLN)" --output-on-failure
@@ -89,5 +112,9 @@ scripts/quality/check-licenses.sh --build-dir build/debug
 
 复用原工作区、Debug/Release 构建及共享 Cargo 缓存。Windows 使用既有 canonical Release，
 同步前核验相关文件与基线/上次上传指纹并备份原始字节，保留其余修改；不把该原生验证描述为
-干净 Git 检出。平台结果、数值摘要、源文件指纹和 CI 提交在配套机器可读验收记录中保存。
+干净 Git 检出。平台结果、源文件指纹及 CI 提交见[机器可读验收记录](evidence/rust-hoa/validation.json)。
+数值明细：[macOS](evidence/rust-hoa/macos-comparison.json)、
+[Windows](evidence/rust-hoa/windows-comparison.json)、
+[Release CLI](evidence/rust-hoa/macos-audio.json)、
+[诊断检查点](evidence/rust-hoa/diagnostics.json)。
 跨平台逐位一致继续留到二期，性能改进不由本次迁移推断。
