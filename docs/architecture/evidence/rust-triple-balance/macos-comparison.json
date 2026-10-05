@@ -1,0 +1,23 @@
+{
+  "baseline": "19728179608c4cfe550dc11ff2b3b4425db37963",
+  "control_blocks_with_exact_decisions": 480,
+  "motion_and_mix": {
+    "differing_samples": 91559,
+    "max_absolute_error": 1.2665987014770508e-07,
+    "max_normalized_error": 0.05938874587457824,
+    "samples": 960648
+  },
+  "objects_and_filter": {
+    "differing_samples": 10227149,
+    "max_absolute_error": 1.3113021850585938e-06,
+    "max_normalized_error": 0.4959069871768626,
+    "samples": 16787368
+  },
+  "passed": true,
+  "spatial": {
+    "differing_samples": 9830,
+    "max_absolute_error": 1.7881393432617188e-07,
+    "max_normalized_error": 0.07408641357784665,
+    "samples": 35151
+  }
+}

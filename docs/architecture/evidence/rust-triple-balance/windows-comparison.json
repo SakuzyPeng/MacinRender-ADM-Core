@@ -1,0 +1,23 @@
+{
+  "baseline": "19728179608c4cfe550dc11ff2b3b4425db37963",
+  "control_blocks_with_exact_decisions": 480,
+  "motion_and_mix": {
+    "differing_samples": 0,
+    "max_absolute_error": 0.0,
+    "max_normalized_error": 0.0,
+    "samples": 960648
+  },
+  "objects_and_filter": {
+    "differing_samples": 0,
+    "max_absolute_error": 0.0,
+    "max_normalized_error": 0.0,
+    "samples": 16787368
+  },
+  "passed": true,
+  "spatial": {
+    "differing_samples": 0,
+    "max_absolute_error": 0.0,
+    "max_normalized_error": 0.0,
+    "samples": 35151
+  }
+}

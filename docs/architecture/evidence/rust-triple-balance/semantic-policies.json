@@ -1,0 +1,170 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "case": "triple-size-0.01-7.1.4",
+      "effective_extents": [
+        [
+          0.009999999776482582,
+          0.009999999776482582,
+          0.009999999776482582
+        ]
+      ],
+      "normalized_semantic_report_sha256": "d38fe8b68253e21eac779d3d27f3be1bb6a2b9d53640183757d0be41982667a7"
+    },
+    {
+      "case": "triple-size-0.01-9.1.6",
+      "effective_extents": [
+        [
+          0.009999999776482582,
+          0.009999999776482582,
+          0.009999999776482582
+        ]
+      ],
+      "normalized_semantic_report_sha256": "eae54ff4eeda112771adc88a35c11dabc281cf98116cb382fff816ba6bcc8d38"
+    },
+    {
+      "case": "triple-size-0.01-22.2",
+      "effective_extents": [
+        [
+          0.009999999776482582,
+          0.009999999776482582,
+          0.009999999776482582
+        ]
+      ],
+      "normalized_semantic_report_sha256": "8bc4c4ea7bf04d45d1576781a0751a19ae324adc605f0fc04715184542469e97"
+    },
+    {
+      "case": "triple-size-0.2-7.1.4",
+      "effective_extents": [
+        [
+          0.20000000298023224,
+          0.20000000298023224,
+          0.20000000298023224
+        ]
+      ],
+      "normalized_semantic_report_sha256": "bdf6c6c2bd454eecf1c123494a7f13d5fe76d3d973745544f18affa12efcd49d"
+    },
+    {
+      "case": "triple-size-0.2-9.1.6",
+      "effective_extents": [
+        [
+          0.20000000298023224,
+          0.20000000298023224,
+          0.20000000298023224
+        ]
+      ],
+      "normalized_semantic_report_sha256": "01a5c2f36ffd147f2db8c587eb250f8dbfd251ac6f8ac93e588130487c81ece0"
+    },
+    {
+      "case": "triple-size-0.2-22.2",
+      "effective_extents": [
+        [
+          0.20000000298023224,
+          0.20000000298023224,
+          0.20000000298023224
+        ]
+      ],
+      "normalized_semantic_report_sha256": "e0ecae844dc10ff905f5db38526a8211a9bcae0d2a29f8abfcfe3420027e3e25"
+    },
+    {
+      "case": "triple-size-0.5-7.1.4",
+      "effective_extents": [
+        [
+          0.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "normalized_semantic_report_sha256": "8f612954066d13104099fc07490916f83b8612280ddcc68949aa33dc78441be4"
+    },
+    {
+      "case": "triple-size-window-7.1.4",
+      "effective_extents": [
+        [
+          0.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "normalized_semantic_report_sha256": "8f612954066d13104099fc07490916f83b8612280ddcc68949aa33dc78441be4"
+    },
+    {
+      "case": "triple-size-0.5-9.1.6",
+      "effective_extents": [
+        [
+          0.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "normalized_semantic_report_sha256": "6e55b03d922229e546788a53c8985a1e3fdbe8be7fa3960575fa5471dad57145"
+    },
+    {
+      "case": "triple-size-window-9.1.6",
+      "effective_extents": [
+        [
+          0.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "normalized_semantic_report_sha256": "6e55b03d922229e546788a53c8985a1e3fdbe8be7fa3960575fa5471dad57145"
+    },
+    {
+      "case": "triple-size-0.5-22.2",
+      "effective_extents": [
+        [
+          0.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "normalized_semantic_report_sha256": "a5c58ea942eea7da786f411c280c6944f6acec0533ace6e2bc413d46d0e9905f"
+    },
+    {
+      "case": "triple-size-window-22.2",
+      "effective_extents": [
+        [
+          0.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "normalized_semantic_report_sha256": "a5c58ea942eea7da786f411c280c6944f6acec0533ace6e2bc413d46d0e9905f"
+    },
+    {
+      "case": "triple-size-1.0-7.1.4",
+      "effective_extents": [
+        [
+          1.0,
+          1.0,
+          1.0
+        ]
+      ],
+      "normalized_semantic_report_sha256": "bfcda1a8a84ffdd74244a777409f0c7dcaf5b9ec6c56cb7bd2a7a2e2e99db9d6"
+    },
+    {
+      "case": "triple-size-1.0-9.1.6",
+      "effective_extents": [
+        [
+          1.0,
+          1.0,
+          1.0
+        ]
+      ],
+      "normalized_semantic_report_sha256": "4e6d220cf4a611f52459f670730b651dfbf6f6ae4594065aa0a30779a83d1460"
+    },
+    {
+      "case": "triple-size-1.0-22.2",
+      "effective_extents": [
+        [
+          1.0,
+          1.0,
+          1.0
+        ]
+      ],
+      "normalized_semantic_report_sha256": "066e5301138faf4f0a3a6e9deea65b3d1c5244d4e58f63a6280cbb13d40e44c3"
+    }
+  ]
+}
