@@ -11,15 +11,14 @@
 #include <string>
 #include <vector>
 
-#include <adm/adm.hpp>
-#include <adm/utilities/id_assignment.hpp>
-#include <adm/write.hpp>
 #include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
 #include "adm/logging.h"
 #include "adm/peak.h"
 #include "adm/render.h"
+
+#include "../support/adm_fixture.h"
 
 namespace {
 
@@ -67,41 +66,46 @@ void write_objects_sine_wav(float amplitude, const std::filesystem::path& path) 
     constexpr uint32_t k_frames = k_sr; // 1 second
     constexpr float k_freq = 440.0F;
 
-    auto doc = adm::Document::create();
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"PeakCF"}, adm::TypeDefinition::OBJECTS);
+    auto doc = fixture::Document::create();
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"PeakCF"},
+                                                  fixture::TypeDefinition::objects);
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}};
         cf->add(block);
     }
     doc->add(cf);
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"PeakPF"}, adm::TypeDefinition::OBJECTS);
-    pf->addReference(cf);
+    auto pf =
+        fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"PeakPF"}, fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
     doc->add(pf);
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"PeakSF"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    auto sf =
+        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"PeakSF"}, fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"PeakTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf =
+        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"PeakTF"}, fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{"PeakObj"});
-    obj->addReference(uid);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"PeakObj"});
+    obj->add_reference(uid);
     doc->add(obj);
-    auto content = adm::AudioContent::create(adm::AudioContentName{"PeakContent"});
-    content->addReference(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"PeakContent"});
+    content->add_reference(obj);
     doc->add(content);
-    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"PeakProgramme"});
-    programme->addReference(content);
+    auto programme = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"PeakProgramme"});
+    programme->add_reference(content);
     doc->add(programme);
-    adm::reassignIds(doc);
+    fixture::reassign_ids(doc);
 
     std::ostringstream xml_buf;
-    adm::writeXml(xml_buf, doc);
-    const std::string uid_str = adm::formatId(uid->get<adm::AudioTrackUidId>());
+    fixture::write_xml(xml_buf, doc);
+    const std::string uid_str = fixture::format_id(uid->get<fixture::AudioTrackUidId>());
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
     auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);

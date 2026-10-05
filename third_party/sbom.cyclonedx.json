@@ -281,7 +281,7 @@
       "type": "library",
       "name": "libadm",
       "version": "0.14.0",
-      "description": "ADM XML 建模/解析",
+      "description": "历史 ADM 元数据参考（测试专用）",
       "licenses": [
         {
           "license": {
@@ -293,7 +293,7 @@
       "properties": [
         {
           "name": "mradm:distribution",
-          "value": "available"
+          "value": "opt-in"
         },
         {
           "name": "mradm:source-type",
@@ -1742,6 +1742,54 @@
         {
           "name": "mradm:source-type",
           "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-quick-xml-0.41.0",
+      "version": "0.41.0",
+      "description": "Rust ADM XML 解析和转义",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/quick-xml@0.41.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libadm-common-definitions",
+      "version": "0.14.0",
+      "description": "嵌入 Rust 的 ADM common definitions 标准引用数据",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:generic/mradm-adm-common-definitions@0.14.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "local"
         }
       ]
     }

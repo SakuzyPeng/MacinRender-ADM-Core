@@ -1,0 +1,6 @@
+ADM common definitions
+Source: https://github.com/ebu/libadm/blob/0.14.0/resources/common_definitions.xml
+Unmodified data from libadm 0.14.0.
+Copyright 2018-2020 The libadm Authors.
+Licensed under Apache License 2.0; see LICENSE.
+The source SHA-256 is recorded in manifest.json.

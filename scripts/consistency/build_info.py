@@ -24,7 +24,7 @@ CACHE_KEYS = (
     'MR_ADM_EAR_SIMD_EFFECTIVE', 'MR_ADM_HAVE_MSVC_FP_CONTRACT_OFF',
     'MR_ADM_CONSISTENCY_DIAGNOSTICS', 'MR_ADM_DIAGNOSTIC_PORTABLE_RNG',
     'MR_ADM_BUILD_SAF_REFERENCE_TESTS', 'MR_ADM_BUILD_EBUR128_REFERENCE_TESTS',
-    'MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS',
+    'MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS', 'MR_ADM_BUILD_LIBADM_REFERENCE_TESTS',
     'Rust_TOOLCHAIN', 'Rust_CARGO_TARGET_CACHED',
     'MR_ADM_CORE_USE_INSTALLED_DEPS', 'MR_ADM_FLAC_PROVIDER', 'MR_ADM_OPUS_PROVIDER',
     'MR_ADM_ENABLE_SOFA', 'MR_ADM_ENABLE_IAMF', 'EAR_SIMD', 'SAF_PERFORMANCE_LIB',
@@ -144,6 +144,7 @@ def collect(build):
         'platform.release': platform.release(),
     }
     record['dsp.implementation'] = manifest.get('dsp_implementation', 'legacy-saf')
+    record['adm.implementation'] = manifest.get('adm_implementation', 'libadm')
     rust_metadata = build / 'rust-dependencies.json'
     if rust_metadata.exists() and record['dsp.implementation'] == 'rust':
         metadata = json.loads(rust_metadata.read_text(encoding='utf-8'))

@@ -54,13 +54,13 @@ Result<std::vector<InputChannelDefinition>> resolve_input_channel_labels(const s
 // Return the raw AXML chunk content as a UTF-8 string without parsing.
 Result<std::string> get_axml(const std::string& path);
 
-// Write a new ADM BW64 file at dst_path by re-serializing the source document
+// Write a new ADM BW64 file at dst_path by patching the original source XML
 // with the semantic differences between original and effective applied.
 //
 // PCM and the chna chunk are copied byte-for-byte from src_path via a chunk-level
 // RIFF/BW64 rewrite (no sample decode/encode), so the audio is bit-exact and the
 // sample rate / bit depth are irrelevant. Only the ADM metadata fields that differ
-// between original and effective are patched into the regenerated axml, keeping
+// between original and effective are patched into the axml, keeping
 // every ADM element the domain model does not capture intact instead of rebuilding
 // a lossy document.
 //
@@ -73,6 +73,8 @@ Result<std::string> get_axml(const std::string& path);
 // DirectSpeakers block gain/headLocked, and HOA block headLocked. AudioObject
 // headLocked is deliberately not rewritten: an authored edit is projected to
 // blocks so explicit false can override an object-level true without ambiguity.
+// Conflicting edits to shared XML nodes and edits requiring changes to CHNA
+// (including common-definition blocks) return unsupported without writing a file.
 // Position and HOA pack gain/mute are not written back yet; differences there
 // are ignored.
 Result<void> write_scene(const std::string& src_path,

@@ -9,6 +9,7 @@ license.workspace = true
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+mradm-adm = { path = "../mradm-adm" }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 
 [features]

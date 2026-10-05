@@ -331,7 +331,7 @@ struct SceneObject {
     std::vector<std::string> labels; // audioObjectLabel values
     std::optional<int> importance;   // 0–10; absent when not specified
     // dialogue / dialogueId: 0=non-dialogue, 1=dialogue, 2=mixed; absent when unset.
-    // Note: BS.2076-2 defines a default of 2, but libadm treats it as optional.
+    // Note: BS.2076-2 defines a default of 2, but this scene preserves omission.
     std::optional<unsigned int> dialogue_id;
     // AudioObject-level headLocked fallback (ADM default is false). Block
     // formats may explicitly override this value, including with false.
@@ -418,8 +418,7 @@ struct SceneProgramme {
     // First LoudnessMetadata entry from the programme, if any.
     std::optional<SceneLoudnessMetadata> loudness;
     // True when the ADM document includes an audioProgrammeReferenceScreen element.
-    // libadm parses only the element's presence, not its inner geometry (screenCentrePosition,
-    // screenWidth, aspectRatio), so no further detail is available here.
+    // The scene records presence only; its geometry is retained in the source XML.
     bool has_reference_screen{false};
 };
 

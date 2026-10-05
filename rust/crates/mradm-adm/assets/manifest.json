@@ -1,0 +1,7 @@
+{
+  "source": "https://github.com/ebu/libadm/blob/0.14.0/resources/common_definitions.xml",
+  "version": "0.14.0",
+  "license": "Apache-2.0",
+  "file": "common_definitions.xml",
+  "sha256": "0e621e68f21b3f29edc0028be26b975eee74b82a643f3b13799b38b18245dafa"
+}

@@ -1,3 +1,4 @@
+#include "../support/adm_fixture.h"
 // Deterministic ADM BWF fixture generator for the cross-platform numerical baseline.
 //
 // The baseline compares final float32 PCM across macOS / Linux / Windows. That is only
@@ -39,9 +40,6 @@
 #include <string_view>
 #include <vector>
 
-#include <adm/adm.hpp>
-#include <adm/utilities/id_assignment.hpp>
-#include <adm/write.hpp>
 #include <bw64/bw64.hpp>
 
 namespace {
@@ -72,74 +70,76 @@ constexpr uint16_t k_bit_depth = 24;
 }
 
 struct BuiltDoc {
-    std::shared_ptr<adm::Document> doc;
+    std::shared_ptr<fixture::Document> doc;
     std::vector<std::string> uids; // one per audio channel, in track order
 };
 
 // Wire one channel format into the pack/stream/track/uid chain and return the uid.
 // Templated on the pack type: HOA packs are AudioPackFormatHoa, and libadm resolves
-// setReference() on the concrete type, so passing the base pointer would be wrong.
+// set_reference() on the concrete type, so passing the base pointer would be wrong.
 template <typename PackPtr>
-std::shared_ptr<adm::AudioTrackUid> wire_channel(const std::shared_ptr<adm::Document>& doc,
-                                                 const std::shared_ptr<adm::AudioChannelFormat>& cf,
-                                                 const PackPtr& pf,
-                                                 const std::string& suffix) {
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"SF_" + suffix}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+std::shared_ptr<fixture::AudioTrackUid> wire_channel(const std::shared_ptr<fixture::Document>& doc,
+                                                     const std::shared_ptr<fixture::AudioChannelFormat>& cf,
+                                                     const PackPtr& pf,
+                                                     const std::string& suffix) {
+    auto sf = fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"SF_" + suffix},
+                                                 fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
 
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"TF_" + suffix}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf = fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"TF_" + suffix},
+                                                fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
 
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
     return uid;
 }
 
-void finish_doc(const std::shared_ptr<adm::Document>& doc,
-                const std::vector<std::shared_ptr<adm::AudioTrackUid>>& uids,
+void finish_doc(const std::shared_ptr<fixture::Document>& doc,
+                const std::vector<std::shared_ptr<fixture::AudioTrackUid>>& uids,
                 const std::string& name) {
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{name + "Object"});
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{name + "Object"});
     for (const auto& uid : uids) {
-        obj->addReference(uid);
+        obj->add_reference(uid);
     }
     doc->add(obj);
 
-    auto content = adm::AudioContent::create(adm::AudioContentName{name + "Content"});
-    content->addReference(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{name + "Content"});
+    content->add_reference(obj);
     doc->add(content);
 
-    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{name + "Programme"});
-    prog->addReference(content);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{name + "Programme"});
+    prog->add_reference(content);
     doc->add(prog);
 
-    adm::reassignIds(doc);
+    fixture::reassign_ids(doc);
 }
 
 [[nodiscard]] BuiltDoc build_objects(bool with_extent, int track_count = 1) {
-    auto doc = adm::Document::create();
-    std::vector<std::shared_ptr<adm::AudioTrackUid>> uids;
+    auto doc = fixture::Document::create();
+    std::vector<std::shared_ptr<fixture::AudioTrackUid>> uids;
     for (int i = 0; i < track_count; ++i) {
         const std::string suffix = track_count == 1 ? "" : std::to_string(i);
-        auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"ObjCF" + suffix},
-                                                  adm::TypeDefinition::OBJECTS);
-        adm::AudioBlockFormatObjects block{
-            adm::SphericalPosition{adm::Azimuth{30.0F - (static_cast<float>(i) * 60.0F)}, adm::Elevation{0.0F}}};
+        auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"ObjCF" + suffix},
+                                                      fixture::TypeDefinition::objects);
+        fixture::AudioBlockFormatObjects block{fixture::SphericalPosition{
+            fixture::Azimuth{30.0F - (static_cast<float>(i) * 60.0F)}, fixture::Elevation{0.0F}}};
         if (with_extent) {
             // Width exceeds the spreader gate; diffuse keeps the OLA bus active as well.
-            block.set(adm::Width{30.0F});
-            block.set(adm::Height{10.0F});
-            block.set(adm::Diffuse{0.5F});
+            block.set(fixture::Width{30.0F});
+            block.set(fixture::Height{10.0F});
+            block.set(fixture::Diffuse{0.5F});
         }
         cf->add(block);
         doc->add(cf);
-        auto pf =
-            adm::AudioPackFormat::create(adm::AudioPackFormatName{"ObjPF" + suffix}, adm::TypeDefinition::OBJECTS);
-        pf->addReference(cf);
+        auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"ObjPF" + suffix},
+                                                   fixture::TypeDefinition::objects);
+        pf->add_reference(cf);
         doc->add(pf);
         uids.push_back(wire_channel(doc, cf, pf, "Obj" + suffix));
     }
@@ -148,7 +148,7 @@ void finish_doc(const std::shared_ptr<adm::Document>& doc,
     std::vector<std::string> uid_strs;
     uid_strs.reserve(uids.size());
     std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
-        return adm::formatId(uid->template get<adm::AudioTrackUidId>());
+        return fixture::format_id(uid->template get<fixture::AudioTrackUidId>());
     });
     return {doc, uid_strs};
 }
@@ -158,10 +158,12 @@ void finish_doc(const std::shared_ptr<adm::Document>& doc,
 // therefore returns exactly 0x3F600000; glibc's three-argument std::hypot returns 0x3F600001.
 // The case is a decidable correctness probe, not an arbitrary tie-break between implementations.
 [[nodiscard]] BuiltDoc build_objects_cartesian() {
-    auto doc = adm::Document::create();
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"ObjCartCF"}, adm::TypeDefinition::OBJECTS);
-    adm::AudioBlockFormatObjects block{adm::CartesianPosition{adm::X{0.25F}, adm::Y{0.75F}, adm::Z{0.375F}}};
-    block.set(adm::Cartesian{true});
+    auto doc = fixture::Document::create();
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"ObjCartCF"},
+                                                  fixture::TypeDefinition::objects);
+    fixture::AudioBlockFormatObjects block{
+        fixture::CartesianPosition{fixture::X{0.25F}, fixture::Y{0.75F}, fixture::Z{0.375F}}};
+    block.set(fixture::Cartesian{true});
     // Extent is required at all: distance_from_position is reached from the extent path, so a
     // point source would leave it dead even with cartesian coordinates.
     //
@@ -170,24 +172,25 @@ void finish_doc(const std::shared_ptr<adm::Document>& doc,
     // fixture carries degrees (Width 30), so there the same expression yields 1800 and
     // std::min(180, ...) saturates — the spread numerics are inert in that case. Keeping this
     // fixture normalised is what makes the VBAP spread path measurable at all.
-    block.set(adm::Width{0.5F});
-    block.set(adm::Height{0.25F});
-    block.set(adm::Depth{0.125F});
-    block.set(adm::Diffuse{0.5F});
+    block.set(fixture::Width{0.5F});
+    block.set(fixture::Height{0.25F});
+    block.set(fixture::Depth{0.125F});
+    block.set(fixture::Diffuse{0.5F});
     cf->add(block);
     doc->add(cf);
 
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"ObjCartPF"}, adm::TypeDefinition::OBJECTS);
-    pf->addReference(cf);
+    auto pf =
+        fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"ObjCartPF"}, fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
     doc->add(pf);
 
-    std::vector<std::shared_ptr<adm::AudioTrackUid>> uids{wire_channel(doc, cf, pf, "ObjCart")};
+    std::vector<std::shared_ptr<fixture::AudioTrackUid>> uids{wire_channel(doc, cf, pf, "ObjCart")};
     finish_doc(doc, uids, "ObjectsCartesian");
 
     std::vector<std::string> uid_strs;
     uid_strs.reserve(uids.size());
     std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
-        return adm::formatId(uid->template get<adm::AudioTrackUidId>());
+        return fixture::format_id(uid->template get<fixture::AudioTrackUidId>());
     });
     return {doc, uid_strs};
 }
@@ -206,30 +209,31 @@ void finish_doc(const std::shared_ptr<adm::Document>& doc,
                                                  {"M+110", 110.0F, 0.0F},
                                                  {"M-110", -110.0F, 0.0F}}};
 
-    auto doc = adm::Document::create();
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"DsPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    auto doc = fixture::Document::create();
+    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"DsPF"},
+                                               fixture::TypeDefinition::direct_speakers);
     doc->add(pf);
 
-    std::vector<std::shared_ptr<adm::AudioTrackUid>> uids;
+    std::vector<std::shared_ptr<fixture::AudioTrackUid>> uids;
     std::vector<std::string> uid_strs;
     for (std::size_t i = 0; i < k_speakers.size(); ++i) {
         const auto& sp = k_speakers.at(i);
         const std::string suffix = "Ds" + std::to_string(i);
-        auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"CF_" + suffix},
-                                                  adm::TypeDefinition::DIRECT_SPEAKERS);
-        adm::AudioBlockFormatDirectSpeakers block{
-            adm::SphericalSpeakerPosition{adm::Azimuth{sp.azimuth}, adm::Elevation{sp.elevation}, adm::Distance{1.0F}}};
-        block.add(adm::SpeakerLabel{sp.label});
+        auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"CF_" + suffix},
+                                                      fixture::TypeDefinition::direct_speakers);
+        fixture::AudioBlockFormatDirectSpeakers block{fixture::SphericalSpeakerPosition{
+            fixture::Azimuth{sp.azimuth}, fixture::Elevation{sp.elevation}, fixture::Distance{1.0F}}};
+        block.add(fixture::SpeakerLabel{sp.label});
         cf->add(block);
         doc->add(cf);
-        pf->addReference(cf);
+        pf->add_reference(cf);
         uids.push_back(wire_channel(doc, cf, pf, suffix));
     }
 
     finish_doc(doc, uids, "DirectSpeakers");
     uid_strs.reserve(uids.size());
     std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
-        return adm::formatId(uid->template get<adm::AudioTrackUidId>());
+        return fixture::format_id(uid->template get<fixture::AudioTrackUidId>());
     });
     return {doc, uid_strs};
 }
@@ -242,29 +246,29 @@ void finish_doc(const std::shared_ptr<adm::Document>& doc,
     };
     constexpr std::array<Component, 4> k_components{{{0, 0}, {1, -1}, {1, 0}, {1, 1}}};
 
-    auto doc = adm::Document::create();
+    auto doc = fixture::Document::create();
     // HOA packs must be created through the dedicated factory; the generic
-    // AudioPackFormat::create() rejects TypeDefinition::HOA.
-    auto pf = adm::AudioPackFormatHoa::create(adm::AudioPackFormatName{"HoaPF"});
+    // AudioPackFormat::create() rejects TypeDefinition::hoa.
+    auto pf = fixture::AudioPackFormatHoa::create(fixture::AudioPackFormatName{"HoaPF"});
     doc->add(pf);
 
-    std::vector<std::shared_ptr<adm::AudioTrackUid>> uids;
+    std::vector<std::shared_ptr<fixture::AudioTrackUid>> uids;
     std::vector<std::string> uid_strs;
     for (std::size_t i = 0; i < k_components.size(); ++i) {
         const auto& c = k_components.at(i);
         const std::string suffix = "Hoa" + std::to_string(i);
-        auto cf =
-            adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"CF_" + suffix}, adm::TypeDefinition::HOA);
-        cf->add(adm::AudioBlockFormatHoa{adm::Order{c.order}, adm::Degree{c.degree}});
+        auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"CF_" + suffix},
+                                                      fixture::TypeDefinition::hoa);
+        cf->add(fixture::AudioBlockFormatHoa{fixture::Order{c.order}, fixture::Degree{c.degree}});
         doc->add(cf);
-        pf->addReference(cf);
+        pf->add_reference(cf);
         uids.push_back(wire_channel(doc, cf, pf, suffix));
     }
 
     finish_doc(doc, uids, "Hoa1");
     uid_strs.reserve(uids.size());
     std::ranges::transform(uids, std::back_inserter(uid_strs), [](const auto& uid) {
-        return adm::formatId(uid->template get<adm::AudioTrackUidId>());
+        return fixture::format_id(uid->template get<fixture::AudioTrackUidId>());
     });
     return {doc, uid_strs};
 }
@@ -273,7 +277,7 @@ void finish_doc(const std::shared_ptr<adm::Document>& doc,
     const auto channels = static_cast<uint16_t>(built.uids.size());
 
     std::ostringstream xml_buf;
-    adm::writeXml(xml_buf, built.doc);
+    fixture::write_xml(xml_buf, built.doc);
 
     std::vector<bw64::AudioId> ids;
     ids.reserve(built.uids.size());

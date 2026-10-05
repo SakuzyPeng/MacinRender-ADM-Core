@@ -18,9 +18,6 @@
 #include <utility>
 #include <vector>
 
-#include <adm/adm.hpp>
-#include <adm/utilities/id_assignment.hpp>
-#include <adm/write.hpp>
 #include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
@@ -28,6 +25,7 @@
 #include "adm/render.h"
 #include "adm/render_binaural.h"
 
+#include "../support/adm_fixture.h"
 #include "binaural_test_probe.h"
 
 #ifdef _WIN32
@@ -121,248 +119,259 @@ struct ObjectFixtureOptions {
     std::optional<bool> block_head_locked;
 };
 
-std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc(const ObjectFixtureOptions& opts) {
-    auto doc = adm::Document::create();
+std::pair<std::shared_ptr<fixture::Document>, std::string> make_objects_doc(const ObjectFixtureOptions& opts) {
+    auto doc = fixture::Document::create();
 
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"BinauralCF"}, adm::TypeDefinition::OBJECTS);
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"BinauralCF"},
+                                                  fixture::TypeDefinition::objects);
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{opts.azimuth}, adm::Elevation{0.0F}}};
-        block.set(adm::Gain{1.0F});
-        block.set(adm::Rtime{adm::Time{opts.rtime}});
-        block.set(adm::Duration{adm::Time{opts.duration}});
-        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{opts.azimuth}, fixture::Elevation{0.0F}}};
+        block.set(fixture::Gain{1.0F});
+        block.set(fixture::Rtime{fixture::Time{opts.rtime}});
+        block.set(fixture::Duration{fixture::Time{opts.duration}});
+        block.set(fixture::JumpPosition{fixture::JumpPositionFlag{true}});
         if (opts.diffuse > 0.0F) {
-            block.set(adm::Diffuse{opts.diffuse});
+            block.set(fixture::Diffuse{opts.diffuse});
         }
         if (opts.width > 0.0F) {
-            block.set(adm::Width{opts.width});
+            block.set(fixture::Width{opts.width});
         }
         if (opts.height > 0.0F) {
-            block.set(adm::Height{opts.height});
+            block.set(fixture::Height{opts.height});
         }
         if (opts.depth > 0.0F) {
-            block.set(adm::Depth{opts.depth});
+            block.set(fixture::Depth{opts.depth});
         }
         if (opts.block_head_locked.has_value()) {
-            block.set(adm::HeadLocked{*opts.block_head_locked});
+            block.set(fixture::HeadLocked{*opts.block_head_locked});
         }
         if (opts.channel_lock) {
-            adm::ChannelLock lock;
-            lock.set(adm::ChannelLockFlag{true});
+            fixture::ChannelLock lock;
+            lock.set(fixture::ChannelLockFlag{true});
             block.set(lock);
         }
         if (opts.divergence > 0.0F) {
-            adm::ObjectDivergence od;
-            od.set(adm::Divergence{opts.divergence});
-            od.set(adm::AzimuthRange{opts.divergence_range});
+            fixture::ObjectDivergence od;
+            od.set(fixture::Divergence{opts.divergence});
+            od.set(fixture::AzimuthRange{opts.divergence_range});
             block.set(od);
         }
         cf->add(block);
     }
     doc->add(cf);
 
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"BinauralPF"}, adm::TypeDefinition::OBJECTS);
-    pf->addReference(cf);
+    auto pf =
+        fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"BinauralPF"}, fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
     doc->add(pf);
 
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"BinauralSF"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    auto sf = fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"BinauralSF"},
+                                                 fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
 
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"BinauralTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf =
+        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"BinauralTF"}, fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
 
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
 
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{"BinauralObject"});
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"BinauralObject"});
     if (opts.object_head_locked.has_value()) {
-        obj->set(adm::HeadLocked{*opts.object_head_locked});
+        obj->set(fixture::HeadLocked{*opts.object_head_locked});
     }
-    obj->addReference(uid);
+    obj->add_reference(uid);
     doc->add(obj);
 
-    auto content = adm::AudioContent::create(adm::AudioContentName{"BinauralContent"});
-    content->addReference(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"BinauralContent"});
+    content->add_reference(obj);
     doc->add(content);
 
-    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"BinauralProgramme"});
-    prog->addReference(content);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"BinauralProgramme"});
+    prog->add_reference(content);
     doc->add(prog);
 
-    adm::reassignIds(doc);
-    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+    fixture::reassign_ids(doc);
+    return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
 }
 
-std::pair<std::shared_ptr<adm::Document>, std::string> make_head_locked_timeline_doc() {
-    auto doc = adm::Document::create();
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"BinauralHeadTimelineCF"},
-                                              adm::TypeDefinition::OBJECTS);
+std::pair<std::shared_ptr<fixture::Document>, std::string> make_head_locked_timeline_doc() {
+    auto doc = fixture::Document::create();
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"BinauralHeadTimelineCF"},
+                                                  fixture::TypeDefinition::objects);
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
-        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
-        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{200}}});
-        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
-        block.set(adm::HeadLocked{false});
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}};
+        block.set(fixture::Rtime{fixture::Time{std::chrono::milliseconds{0}}});
+        block.set(fixture::Duration{fixture::Time{std::chrono::milliseconds{200}}});
+        block.set(fixture::JumpPosition{fixture::JumpPositionFlag{true}});
+        block.set(fixture::HeadLocked{false});
         cf->add(block);
     }
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
-        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{200}}});
-        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{200}}});
-        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
-        block.set(adm::HeadLocked{true});
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}};
+        block.set(fixture::Rtime{fixture::Time{std::chrono::milliseconds{200}}});
+        block.set(fixture::Duration{fixture::Time{std::chrono::milliseconds{200}}});
+        block.set(fixture::JumpPosition{fixture::JumpPositionFlag{true}});
+        block.set(fixture::HeadLocked{true});
         cf->add(block);
     }
     doc->add(cf);
-    auto pf =
-        adm::AudioPackFormat::create(adm::AudioPackFormatName{"BinauralHeadTimelinePF"}, adm::TypeDefinition::OBJECTS);
-    pf->addReference(cf);
+    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"BinauralHeadTimelinePF"},
+                                               fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
     doc->add(pf);
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"BinauralHeadTimelineSF"},
-                                             adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    auto sf = fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"BinauralHeadTimelineSF"},
+                                                 fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
-    auto tf =
-        adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"BinauralHeadTimelineTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf = fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"BinauralHeadTimelineTF"},
+                                                fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{"BinauralHeadTimelineObject"});
-    obj->addReference(uid);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"BinauralHeadTimelineObject"});
+    obj->add_reference(uid);
     doc->add(obj);
-    auto content = adm::AudioContent::create(adm::AudioContentName{"BinauralHeadTimelineContent"});
-    content->addReference(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"BinauralHeadTimelineContent"});
+    content->add_reference(obj);
     doc->add(content);
-    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"BinauralHeadTimelineProgramme"});
-    programme->addReference(content);
+    auto programme = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"BinauralHeadTimelineProgramme"});
+    programme->add_reference(content);
     doc->add(programme);
-    adm::reassignIds(doc);
-    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+    fixture::reassign_ids(doc);
+    return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
 }
 
-std::pair<std::shared_ptr<adm::Document>, std::string> make_mixed_divergence_doc() {
-    auto doc = adm::Document::create();
+std::pair<std::shared_ptr<fixture::Document>, std::string> make_mixed_divergence_doc() {
+    auto doc = fixture::Document::create();
 
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"BinauralMixedDivCF"},
-                                              adm::TypeDefinition::OBJECTS);
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"BinauralMixedDivCF"},
+                                                  fixture::TypeDefinition::objects);
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
-        block.set(adm::Gain{1.0F});
-        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
-        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{40}}});
-        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}};
+        block.set(fixture::Gain{1.0F});
+        block.set(fixture::Rtime{fixture::Time{std::chrono::milliseconds{0}}});
+        block.set(fixture::Duration{fixture::Time{std::chrono::milliseconds{40}}});
+        block.set(fixture::JumpPosition{fixture::JumpPositionFlag{true}});
         cf->add(block);
     }
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
-        block.set(adm::Gain{1.0F});
-        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{40}}});
-        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{40}}});
-        block.set(adm::JumpPosition{adm::JumpPositionFlag{false}});
-        adm::ObjectDivergence od;
-        od.set(adm::Divergence{1.0F});
-        od.set(adm::AzimuthRange{60.0F});
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}};
+        block.set(fixture::Gain{1.0F});
+        block.set(fixture::Rtime{fixture::Time{std::chrono::milliseconds{40}}});
+        block.set(fixture::Duration{fixture::Time{std::chrono::milliseconds{40}}});
+        block.set(fixture::JumpPosition{fixture::JumpPositionFlag{false}});
+        fixture::ObjectDivergence od;
+        od.set(fixture::Divergence{1.0F});
+        od.set(fixture::AzimuthRange{60.0F});
         block.set(od);
         cf->add(block);
     }
     doc->add(cf);
 
-    auto pf =
-        adm::AudioPackFormat::create(adm::AudioPackFormatName{"BinauralMixedDivPF"}, adm::TypeDefinition::OBJECTS);
-    pf->addReference(cf);
+    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"BinauralMixedDivPF"},
+                                               fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
     doc->add(pf);
 
-    auto sf =
-        adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"BinauralMixedDivSF"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    auto sf = fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"BinauralMixedDivSF"},
+                                                 fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
 
-    auto tf =
-        adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"BinauralMixedDivTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf = fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"BinauralMixedDivTF"},
+                                                fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
 
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
 
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{"BinauralMixedDivObject"});
-    obj->addReference(uid);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"BinauralMixedDivObject"});
+    obj->add_reference(uid);
     doc->add(obj);
 
-    auto content = adm::AudioContent::create(adm::AudioContentName{"BinauralMixedDivContent"});
-    content->addReference(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"BinauralMixedDivContent"});
+    content->add_reference(obj);
     doc->add(content);
 
-    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"BinauralMixedDivProgramme"});
-    prog->addReference(content);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"BinauralMixedDivProgramme"});
+    prog->add_reference(content);
     doc->add(prog);
 
-    adm::reassignIds(doc);
-    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+    fixture::reassign_ids(doc);
+    return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
 }
 
-std::pair<std::shared_ptr<adm::Document>, std::string>
+std::pair<std::shared_ptr<fixture::Document>, std::string>
 make_lfe_direct_speakers_doc(std::chrono::milliseconds rtime, std::chrono::milliseconds duration) {
-    auto doc = adm::Document::create();
+    auto doc = fixture::Document::create();
 
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"BinauralLfeCF"},
-                                              adm::TypeDefinition::DIRECT_SPEAKERS);
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"BinauralLfeCF"},
+                                                  fixture::TypeDefinition::direct_speakers);
     {
-        adm::AudioBlockFormatDirectSpeakers block{
-            adm::SphericalSpeakerPosition{adm::Azimuth{45.0F}, adm::Elevation{-35.0F}, adm::Distance{1.0F}}};
-        block.add(adm::SpeakerLabel{"RC_LFE"});
-        block.set(adm::Gain{1.0F});
-        block.set(adm::Rtime{adm::Time{rtime}});
-        block.set(adm::Duration{adm::Time{duration}});
+        fixture::AudioBlockFormatDirectSpeakers block{fixture::SphericalSpeakerPosition{
+            fixture::Azimuth{45.0F}, fixture::Elevation{-35.0F}, fixture::Distance{1.0F}}};
+        block.add(fixture::SpeakerLabel{"RC_LFE"});
+        block.set(fixture::Gain{1.0F});
+        block.set(fixture::Rtime{fixture::Time{rtime}});
+        block.set(fixture::Duration{fixture::Time{duration}});
         cf->add(block);
     }
     doc->add(cf);
 
-    auto pf =
-        adm::AudioPackFormat::create(adm::AudioPackFormatName{"BinauralLfePF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
-    pf->addReference(cf);
+    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"BinauralLfePF"},
+                                               fixture::TypeDefinition::direct_speakers);
+    pf->add_reference(cf);
     doc->add(pf);
 
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"BinauralLfeSF"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    auto sf = fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"BinauralLfeSF"},
+                                                 fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
 
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"BinauralLfeTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf = fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"BinauralLfeTF"},
+                                                fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
 
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
 
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{"BinauralLfeObject"});
-    obj->addReference(uid);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"BinauralLfeObject"});
+    obj->add_reference(uid);
     doc->add(obj);
 
-    auto content = adm::AudioContent::create(adm::AudioContentName{"BinauralLfeContent"});
-    content->addReference(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"BinauralLfeContent"});
+    content->add_reference(obj);
     doc->add(content);
 
-    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"BinauralLfeProgramme"});
-    prog->addReference(content);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"BinauralLfeProgramme"});
+    prog->add_reference(content);
     doc->add(prog);
 
-    adm::reassignIds(doc);
-    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+    fixture::reassign_ids(doc);
+    return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
 }
 
 std::filesystem::path write_fixture(const ObjectFixtureOptions& opts, uint32_t frames) {
@@ -373,7 +382,7 @@ std::filesystem::path write_fixture(const ObjectFixtureOptions& opts, uint32_t f
     auto path = temp_path("mr_binaural_input", ".wav");
 
     std::ostringstream xml_buf;
-    adm::writeXml(xml_buf, doc);
+    fixture::write_xml(xml_buf, doc);
 
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
@@ -393,7 +402,7 @@ std::filesystem::path write_head_locked_timeline_fixture(uint32_t frames) {
     const auto [doc, uid] = make_head_locked_timeline_doc();
     auto path = temp_path("mr_binaural_head_timeline", ".wav");
     std::ostringstream xml_buf;
-    adm::writeXml(xml_buf, doc);
+    fixture::write_xml(xml_buf, doc);
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
     auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);
@@ -419,7 +428,7 @@ std::filesystem::path write_mixed_divergence_fixture(uint32_t frames) {
     auto path = temp_path("mr_binaural_mixed_divergence_input", ".wav");
 
     std::ostringstream xml_buf;
-    adm::writeXml(xml_buf, doc);
+    fixture::write_xml(xml_buf, doc);
 
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
@@ -443,7 +452,7 @@ write_lfe_fixture(std::chrono::milliseconds rtime, std::chrono::milliseconds dur
     auto path = temp_path("mr_binaural_lfe_input", ".wav");
 
     std::ostringstream xml_buf;
-    adm::writeXml(xml_buf, doc);
+    fixture::write_xml(xml_buf, doc);
 
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());

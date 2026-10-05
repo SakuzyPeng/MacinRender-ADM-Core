@@ -14,6 +14,7 @@
 | fmt | 11.2.0 | MIT | `LICENSE` |
 | kissfft | bundled-in-libear@2db69f8f | BSD-3-Clause | `COPYING` |
 | libadm | 0.14.0 | Apache-2.0 | `LICENSE` |
+| libadm-common-definitions | 0.14.0 | Apache-2.0 | `LICENSE`, `NOTICE.txt` |
 | libbw64 | 0.10.0 | Apache-2.0 | `LICENSE` |
 | libear | 2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15 | Apache-2.0 | `LICENSE` |
 | libebur128 | v1.2.6 | MIT | `COPYING` |
@@ -53,6 +54,7 @@
 | rust-num-traits-0.2.19 | 0.2.19 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-primal-check-0.3.4 | 0.3.4 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-proc-macro2-1.0.107 | 1.0.107 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-quick-xml-0.41.0 | 0.41.0 | MIT | `LICENSE-MIT.md` |
 | rust-quote-1.0.47 | 1.0.47 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-rawpointer-0.2.1 | 0.2.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-realfft-3.5.0 | 3.5.0 | MIT | `README.md`, `NOTICE.txt` |

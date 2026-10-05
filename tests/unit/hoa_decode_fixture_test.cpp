@@ -13,14 +13,13 @@
 #include <tuple>
 #include <vector>
 
-#include <adm/adm.hpp>
-#include <adm/utilities/id_assignment.hpp>
-#include <adm/write.hpp>
 #include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
 #include "adm/options.h"
 #include "adm/render.h"
+
+#include "../support/adm_fixture.h"
 
 namespace {
 
@@ -60,69 +59,70 @@ bool check(bool condition, const char* msg) {
 // Build a first-order Ambisonics (HOA1) ADM document with 4 channels.
 // Returns (document, uid_strings[4]) where uid_strings[i] is the ATU ID for
 // HOA channel i (ACN order: 0=W, 1=Y, 2=Z, 3=X).
-std::pair<std::shared_ptr<adm::Document>, std::vector<std::string>> make_hoa1_doc() {
-    auto doc = adm::Document::create();
+std::pair<std::shared_ptr<fixture::Document>, std::vector<std::string>> make_hoa1_doc() {
+    auto doc = fixture::Document::create();
 
-    auto pf = adm::AudioPackFormatHoa::create(adm::AudioPackFormatName{"HOA1PF"});
+    auto pf = fixture::AudioPackFormatHoa::create(fixture::AudioPackFormatName{"HOA1PF"});
     doc->add(pf);
 
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{"HOA1Obj"});
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"HOA1Obj"});
     doc->add(obj);
 
     std::size_t idx = 0;
     for (const auto& spec : k_hoa1_spec) {
         const std::string suffix = std::to_string(idx);
-        auto cf =
-            adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"HOA1CF_" + suffix}, adm::TypeDefinition::HOA);
-        adm::AudioBlockFormatHoa block{adm::Order{spec.order}, adm::Degree{spec.degree}};
+        auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"HOA1CF_" + suffix},
+                                                      fixture::TypeDefinition::hoa);
+        fixture::AudioBlockFormatHoa block{fixture::Order{spec.order}, fixture::Degree{spec.degree}};
         cf->add(block);
         doc->add(cf);
-        pf->addReference(cf);
+        pf->add_reference(cf);
 
-        auto sf =
-            adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"HOA1SF_" + suffix}, adm::FormatDefinition::PCM);
-        sf->setReference(cf);
+        auto sf = fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"HOA1SF_" + suffix},
+                                                     fixture::FormatDefinition::pcm);
+        sf->set_reference(cf);
         doc->add(sf);
 
-        auto tf =
-            adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"HOA1TF_" + suffix}, adm::FormatDefinition::PCM);
-        tf->setReference(sf);
-        sf->addReference(tf);
+        auto tf = fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"HOA1TF_" + suffix},
+                                                    fixture::FormatDefinition::pcm);
+        tf->set_reference(sf);
+        sf->add_reference(tf);
         doc->add(tf);
 
-        auto uid = adm::AudioTrackUid::create();
-        uid->setReference(tf);
-        uid->setReference(pf);
+        auto uid = fixture::AudioTrackUid::create();
+        uid->set_reference(tf);
+        uid->set_reference(pf);
         doc->add(uid);
 
-        obj->addReference(uid);
+        obj->add_reference(uid);
         ++idx;
     }
 
-    auto content = adm::AudioContent::create(adm::AudioContentName{"HOA1Content"});
-    content->addReference(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"HOA1Content"});
+    content->add_reference(obj);
     doc->add(content);
 
-    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"HOA1Prog"});
-    prog->addReference(content);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"HOA1Prog"});
+    prog->add_reference(content);
     doc->add(prog);
 
-    adm::reassignIds(doc);
+    fixture::reassign_ids(doc);
 
     // Collect UID strings in AudioObject reference order after ID assignment.
-    const auto uid_refs = obj->getReferences<adm::AudioTrackUid>();
+    const auto uid_refs = obj->get_references<fixture::AudioTrackUid>();
     std::vector<std::string> uid_strs;
     uid_strs.reserve(uid_refs.size());
-    std::ranges::transform(uid_refs, std::back_inserter(uid_strs), [](const std::shared_ptr<adm::AudioTrackUid>& u) {
-        return adm::formatId(u->get<adm::AudioTrackUidId>());
-    });
+    std::ranges::transform(
+        uid_refs, std::back_inserter(uid_strs), [](const std::shared_ptr<fixture::AudioTrackUid>& u) {
+            return fixture::format_id(u->get<fixture::AudioTrackUidId>());
+        });
 
     return {doc, uid_strs};
 }
 
 // Write a 4-channel HOA1 BW64 file.
 // signal_ch: which channel carries k_amplitude signal; all others are silent.
-std::filesystem::path write_hoa1_fixture(const std::shared_ptr<adm::Document>& doc,
+std::filesystem::path write_hoa1_fixture(const std::shared_ptr<fixture::Document>& doc,
                                          const std::vector<std::string>& uid_strs,
                                          std::size_t signal_ch,
                                          const std::string& suffix) {
@@ -136,7 +136,7 @@ std::filesystem::path write_hoa1_fixture(const std::shared_ptr<adm::Document>& d
     auto chna = std::make_shared<bw64::ChnaChunk>(audio_ids);
 
     std::ostringstream xml_buf;
-    adm::writeXml(xml_buf, doc);
+    fixture::write_xml(xml_buf, doc);
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
 
     auto writer =
@@ -199,104 +199,110 @@ double rms_channel_slice(const std::filesystem::path& path,
 
 // Add a CF→SF→TF→UID chain to doc/pf/obj; returns the UID.
 // blocks is the list of AudioBlockFormatHoa to add to the CF.
-std::shared_ptr<adm::AudioTrackUid> add_hoa1_channel_chain(adm::Document& doc,
-                                                           const std::shared_ptr<adm::AudioPackFormatHoa>& pf,
-                                                           const std::shared_ptr<adm::AudioObject>& obj,
-                                                           const std::string& sfx,
-                                                           const std::vector<adm::AudioBlockFormatHoa>& blocks) {
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"HOA1CF_" + sfx}, adm::TypeDefinition::HOA);
+std::shared_ptr<fixture::AudioTrackUid>
+add_hoa1_channel_chain(fixture::Document& doc,
+                       const std::shared_ptr<fixture::AudioPackFormatHoa>& pf,
+                       const std::shared_ptr<fixture::AudioObject>& obj,
+                       const std::string& sfx,
+                       const std::vector<fixture::AudioBlockFormatHoa>& blocks) {
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"HOA1CF_" + sfx},
+                                                  fixture::TypeDefinition::hoa);
     for (const auto& blk : blocks) {
         cf->add(blk);
     }
     doc.add(cf);
-    pf->addReference(cf);
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"HOA1SF_" + sfx}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    pf->add_reference(cf);
+    auto sf = fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"HOA1SF_" + sfx},
+                                                 fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc.add(sf);
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"HOA1TF_" + sfx}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf = fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"HOA1TF_" + sfx},
+                                                fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc.add(tf);
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc.add(uid);
-    obj->addReference(uid);
+    obj->add_reference(uid);
     return uid;
 }
 
 // Build a HOA1 doc where each channel has two AudioBlockFormatHoa blocks:
 //   block 0: rtime=0, duration=split_ns, gain=1.0
 //   block 1: rtime=split_ns, no explicit duration, gain=0.0
-std::pair<std::shared_ptr<adm::Document>, std::vector<std::string>> make_hoa1_doc_two_blocks(int64_t split_ns) {
-    auto doc = adm::Document::create();
-    auto pf = adm::AudioPackFormatHoa::create(adm::AudioPackFormatName{"HOA1PF"});
+std::pair<std::shared_ptr<fixture::Document>, std::vector<std::string>> make_hoa1_doc_two_blocks(int64_t split_ns) {
+    auto doc = fixture::Document::create();
+    auto pf = fixture::AudioPackFormatHoa::create(fixture::AudioPackFormatName{"HOA1PF"});
     doc->add(pf);
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{"HOA1Obj"});
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"HOA1Obj"});
     doc->add(obj);
 
     std::size_t idx = 0;
     for (const auto& spec : k_hoa1_spec) {
-        const adm::Time split{std::chrono::nanoseconds{split_ns}};
-        adm::AudioBlockFormatHoa blk1{adm::Order{spec.order}, adm::Degree{spec.degree}, adm::Duration{split}};
-        adm::AudioBlockFormatHoa blk2{
-            adm::Order{spec.order}, adm::Degree{spec.degree}, adm::Rtime{split}, adm::Gain{0.0}};
+        const fixture::Time split{std::chrono::nanoseconds{split_ns}};
+        fixture::AudioBlockFormatHoa blk1{
+            fixture::Order{spec.order}, fixture::Degree{spec.degree}, fixture::Duration{split}};
+        fixture::AudioBlockFormatHoa blk2{
+            fixture::Order{spec.order}, fixture::Degree{spec.degree}, fixture::Rtime{split}, fixture::Gain{0.0}};
         add_hoa1_channel_chain(*doc, pf, obj, std::to_string(idx++), {blk1, blk2});
     }
-    auto content = adm::AudioContent::create(adm::AudioContentName{"HOA1Content"});
-    content->addReference(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"HOA1Content"});
+    content->add_reference(obj);
     doc->add(content);
-    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"HOA1Prog"});
-    prog->addReference(content);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"HOA1Prog"});
+    prog->add_reference(content);
     doc->add(prog);
-    adm::reassignIds(doc);
+    fixture::reassign_ids(doc);
 
-    const auto uid_refs = obj->getReferences<adm::AudioTrackUid>();
+    const auto uid_refs = obj->get_references<fixture::AudioTrackUid>();
     std::vector<std::string> uid_strs;
     uid_strs.reserve(uid_refs.size());
-    std::ranges::transform(uid_refs, std::back_inserter(uid_strs), [](const std::shared_ptr<adm::AudioTrackUid>& u) {
-        return adm::formatId(u->get<adm::AudioTrackUidId>());
-    });
+    std::ranges::transform(
+        uid_refs, std::back_inserter(uid_strs), [](const std::shared_ptr<fixture::AudioTrackUid>& u) {
+            return fixture::format_id(u->get<fixture::AudioTrackUidId>());
+        });
     return {doc, uid_strs};
 }
 
 // Build a HOA1 doc with 4 proper channels plus one phantom UID (no AudioTrackFormat
 // → channel_format_from_uid returns nullptr → importer must skip it).
 // Returns {doc, proper_uid_strs[4], phantom_uid_str}.
-std::tuple<std::shared_ptr<adm::Document>, std::vector<std::string>, std::string> make_hoa1_doc_with_phantom() {
-    auto doc = adm::Document::create();
-    auto pf = adm::AudioPackFormatHoa::create(adm::AudioPackFormatName{"HOA1PF"});
+std::tuple<std::shared_ptr<fixture::Document>, std::vector<std::string>, std::string> make_hoa1_doc_with_phantom() {
+    auto doc = fixture::Document::create();
+    auto pf = fixture::AudioPackFormatHoa::create(fixture::AudioPackFormatName{"HOA1PF"});
     doc->add(pf);
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{"HOA1Obj"});
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"HOA1Obj"});
     doc->add(obj);
 
     std::size_t idx = 0;
     for (const auto& spec : k_hoa1_spec) {
-        adm::AudioBlockFormatHoa blk{adm::Order{spec.order}, adm::Degree{spec.degree}};
+        fixture::AudioBlockFormatHoa blk{fixture::Order{spec.order}, fixture::Degree{spec.degree}};
         add_hoa1_channel_chain(*doc, pf, obj, std::to_string(idx++), {blk});
     }
 
     // Phantom UID: references the HOA pack format but has no AudioTrackFormat chain.
     // channel_format_from_uid() returns nullptr → no HOA blocks → channel is skipped.
-    auto phantom_uid = adm::AudioTrackUid::create();
-    phantom_uid->setReference(pf);
+    auto phantom_uid = fixture::AudioTrackUid::create();
+    phantom_uid->set_reference(pf);
     doc->add(phantom_uid);
-    obj->addReference(phantom_uid);
+    obj->add_reference(phantom_uid);
 
-    auto content = adm::AudioContent::create(adm::AudioContentName{"HOA1Content"});
-    content->addReference(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"HOA1Content"});
+    content->add_reference(obj);
     doc->add(content);
-    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"HOA1Prog"});
-    prog->addReference(content);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"HOA1Prog"});
+    prog->add_reference(content);
     doc->add(prog);
-    adm::reassignIds(doc);
+    fixture::reassign_ids(doc);
 
-    const auto uid_refs = obj->getReferences<adm::AudioTrackUid>();
-    const std::string phantom_str = adm::formatId(phantom_uid->get<adm::AudioTrackUidId>());
+    const auto uid_refs = obj->get_references<fixture::AudioTrackUid>();
+    const std::string phantom_str = fixture::format_id(phantom_uid->get<fixture::AudioTrackUidId>());
     std::vector<std::string> proper_uids;
     proper_uids.reserve(k_hoa1_channels);
     for (const auto& u : uid_refs) {
-        const auto s = adm::formatId(u->get<adm::AudioTrackUidId>());
+        const auto s = fixture::format_id(u->get<fixture::AudioTrackUidId>());
         if (s != phantom_str) {
             proper_uids.push_back(s);
         }
@@ -398,8 +404,8 @@ bool verify_hoa1_w_decodes_to_916() {
 // Muted AudioObject: HOA decode must produce silence, not fail.
 bool verify_hoa1_mute_produces_silence() {
     auto [doc, uid_strs] = make_hoa1_doc();
-    for (const auto& ao : doc->getElements<adm::AudioObject>()) {
-        ao->set(adm::Mute{true});
+    for (const auto& ao : doc->get_elements<fixture::AudioObject>()) {
+        ao->set(fixture::Mute{true});
     }
     const auto in_path = write_hoa1_fixture(doc, uid_strs, 0U, "mute_in");
     FileGuard in_guard{in_path};
@@ -435,8 +441,8 @@ bool verify_hoa1_mute_produces_silence() {
 bool verify_hoa1_obj_gain_scales_output() {
     auto [doc1, uid_strs1] = make_hoa1_doc();
     auto [doc2, uid_strs2] = make_hoa1_doc();
-    for (const auto& ao : doc2->getElements<adm::AudioObject>()) {
-        ao->set(adm::Gain{0.5});
+    for (const auto& ao : doc2->get_elements<fixture::AudioObject>()) {
+        ao->set(fixture::Gain{0.5});
     }
 
     const auto in1 = write_hoa1_fixture(doc1, uid_strs1, 0U, "gain1_in");
@@ -543,7 +549,7 @@ bool verify_hoa1_no_phantom_w_from_broken_uid() {
         }
         auto chna = std::make_shared<bw64::ChnaChunk>(audio_ids);
         std::ostringstream xml_buf;
-        adm::writeXml(xml_buf, doc);
+        fixture::write_xml(xml_buf, doc);
         auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
         auto writer =
             bw64::writeFile(in_path.string(), static_cast<uint16_t>(k_total_ch), k_sample_rate, 24U, chna, axml);
