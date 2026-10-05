@@ -381,12 +381,13 @@ impl Snapshot {
             }
         }
         for (id, (pack, uids)) in packs {
+            let pack_node = doc.node(pack);
             let mut item = Hoa {
                 object_id: self.string(doc.id(object)),
                 pack_id: self.string(id),
-                normalization: self.string(doc.text(pack, "normalization").unwrap_or("SN3D")),
-                nfc_ref_dist: num_element(doc, pack, "nfcRefDist", 0.0)?,
-                screen_ref: bool_element(doc, pack, "screenRef", 0)?,
+                normalization: self.string(pack_node.attr("normalization").unwrap_or("SN3D")),
+                nfc_ref_dist: pack_node.attr("nfcRefDist").map_or(Ok(0.0), number)?,
+                screen_ref: pack_node.attr("screenRef").map_or(Ok(0), boolean)?,
                 gain: gain(doc, object)?.linear,
                 mute: bool_element(doc, object, "mute", 0)?,
                 head_locked: locked,
@@ -476,9 +477,6 @@ fn float(text: &str) -> Result<f32> {
 }
 fn float_element(doc: &Document, key: u32, name: &str, default: f32) -> Result<f32> {
     doc.text(key, name).map_or(Ok(default), float)
-}
-fn num_element(doc: &Document, key: u32, name: &str, default: f64) -> Result<f64> {
-    doc.text(key, name).map_or(Ok(default), number)
 }
 fn bool_element(doc: &Document, key: u32, name: &str, default: u32) -> Result<u32> {
     doc.text(key, name).map_or(Ok(default), boolean)

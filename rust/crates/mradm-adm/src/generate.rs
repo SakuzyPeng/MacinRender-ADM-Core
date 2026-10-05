@@ -43,10 +43,11 @@ pub fn generate(kind: u32, name: &str, speakers: &[Speaker]) -> Result<Generated
         ));
     }
     xml.push_str("</audioObject>\n");
-    xml.push_str(&format!("<audioPackFormat audioPackFormatID=\"{pack}\" audioPackFormatName=\"{}\" typeLabel=\"{kind:04x}\" typeDefinition=\"{definition}\">",escape(name)));
+    xml.push_str(&format!("<audioPackFormat audioPackFormatID=\"{pack}\" audioPackFormatName=\"{}\" typeLabel=\"{kind:04x}\" typeDefinition=\"{definition}\"",escape(name)));
     if kind == 4 {
-        xml.push_str("<normalization>SN3D</normalization>");
+        xml.push_str(" normalization=\"SN3D\"");
     }
+    xml.push('>');
     for i in 0..count {
         xml.push_str(&format!(
             "<audioChannelFormatIDRef>AC_{kind:04x}{:04x}</audioChannelFormatIDRef>",

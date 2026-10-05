@@ -13,6 +13,7 @@ pub struct Document {
     pub(crate) common: &'static Tree,
     pub(crate) ids: HashMap<String, u32>,
     pub(crate) elements: Vec<u32>,
+    track_streams: HashMap<u32, u32>,
 }
 
 pub(crate) fn canonical_id(value: &str) -> String {
@@ -93,6 +94,7 @@ impl Document {
             common,
             ids: HashMap::new(),
             elements: Vec::new(),
+            track_streams: HashMap::new(),
         };
         for (tree, parent, flag) in [(common, common_afe, COMMON), (&doc.xml, local_afe, 0)] {
             for &index in &tree.nodes[parent].children {
@@ -144,6 +146,7 @@ impl Document {
                 doc.type_of(key)?;
             }
         }
+        doc.resolve_track_streams()?;
         for &key in doc.ids.values() {
             doc.validate_ranges(key)?;
         }
@@ -210,6 +213,13 @@ impl Document {
     }
     pub(crate) fn type_of(&self, key: u32) -> Result<u32> {
         let node = self.node(key);
+        let id = self.id(key);
+        let descriptor = id
+            .split_once('_')
+            .and_then(|(_, suffix)| suffix.get(..4))
+            .and_then(|value| u32::from_str_radix(value, 16).ok())
+            .filter(|value| (1..=5).contains(value))
+            .ok_or_else(|| Error::xml("ADM ID 缺少有效类型"))?;
         let label = node
             .attr("typeLabel")
             .map(|v| u32::from_str_radix(v, 16).map_err(|_| Error::xml("无效 typeLabel")))
@@ -228,15 +238,40 @@ impl Document {
         if label.is_some() && definition.is_some() && label != definition {
             return Err(Error::xml("typeLabel 与 typeDefinition 不一致"));
         }
-        label
-            .or(definition)
-            .filter(|v| (1..=5).contains(v))
-            .ok_or_else(|| Error::xml("ADM 元素缺少有效类型"))
+        if label.is_some_and(|value| value != descriptor)
+            || definition.is_some_and(|value| value != descriptor)
+        {
+            return Err(Error::xml("typeLabel 或 typeDefinition 与 ADM ID 不一致"));
+        }
+        Ok(descriptor)
+    }
+    // libadm synchronizes TrackFormat <-> StreamFormat even when the XML only
+    // declares one direction. Keep that relation separate from the lossless XML.
+    fn resolve_track_streams(&mut self) -> Result<()> {
+        let mut links = HashMap::new();
+        for &key in self.ids.values() {
+            let (reference, reverse) = match self.node(key).local.as_str() {
+                "audioTrackFormat" => ("audioStreamFormatIDRef", false),
+                "audioStreamFormat" => ("audioTrackFormatIDRef", true),
+                _ => continue,
+            };
+            for other in self.refs(key, reference) {
+                let (track, stream) = if reverse { (other, key) } else { (key, other) };
+                if links.insert(track, stream).is_some_and(|old| old != stream) {
+                    return Err(Error::xml(format!(
+                        "{} 引用了相互矛盾的 audioStreamFormat",
+                        self.id(track)
+                    )));
+                }
+            }
+        }
+        self.track_streams = links;
+        Ok(())
     }
     /// Deliberately retains the existing TrackFormat -> StreamFormat chain and pack fallback.
     pub(crate) fn channel(&self, uid: u32) -> Option<u32> {
         let tf = self.reference(uid, "audioTrackFormatIDRef")?;
-        let sf = self.reference(tf, "audioStreamFormatIDRef")?;
+        let sf = *self.track_streams.get(&tf)?;
         self.reference(sf, "audioChannelFormatIDRef")
     }
     // Match the range-checked parameters consumed from libadm. In particular,

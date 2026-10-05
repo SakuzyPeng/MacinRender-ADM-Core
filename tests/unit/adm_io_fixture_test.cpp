@@ -416,6 +416,29 @@ bool check(bool condition, const char* msg) {
     return condition;
 }
 
+bool verify_hoa_pack_metadata() {
+    auto [doc, uid] = make_head_locked_doc(fixture::TypeDefinition::hoa, std::nullopt, std::nullopt);
+    for (const auto& pack : doc->get_elements<fixture::AudioPackFormatHoa>()) {
+        pack->set(fixture::Normalization{"N3D"});
+        pack->set(fixture::NfcRefDist{2.0F});
+        pack->set(fixture::ScreenRef{true});
+    }
+    const auto path = write_fixture(uid, serialize_doc(doc));
+    const FileGuard guard{path};
+    const auto scene = mradm::io::import_scene(path.string());
+    if (!scene) {
+        std::cerr << "FAIL: HOA pack metadata import: " << scene.error().message << '\n';
+        return false;
+    }
+    if (!check(scene->hoa_tracks.size() == 1U, "HOA pack metadata: one pack")) {
+        return false;
+    }
+    const auto& pack = scene->hoa_tracks.front();
+    return check(pack.normalization == "N3D", "HOA pack normalization attribute") &&
+           check(pack.nfc_ref_dist == 2.0, "HOA pack nfcRefDist attribute") &&
+           check(pack.screen_ref, "HOA pack screenRef attribute");
+}
+
 bool verify_minimal_fixture() {
     auto [doc, uid_str] = make_minimal_doc();
     std::string xml_str = serialize_doc(doc);
@@ -1700,6 +1723,7 @@ int main() {
     ok &= verify_fractional_block_boundaries_are_contiguous();
     ok &= verify_direct_speakers_blocks_fixture();
     ok &= verify_head_locked_precedence();
+    ok &= verify_hoa_pack_metadata();
     ok &= verify_mixed_blocks_fixture();
     ok &= verify_direct_speakers_pack_channels_are_track_scoped();
     ok &= verify_binaural_skipped_produces_import_warning();

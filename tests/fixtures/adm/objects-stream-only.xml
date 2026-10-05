@@ -1,0 +1,53 @@
+<?xml version="1.0" ?>
+<ebuCoreMain>
+  <coreMetadata>
+    <format>
+      <audioFormatExtended>
+        <audioProgramme audioProgrammeID="APR_1001" audioProgrammeName="P">
+          <audioContentIDRef>ACO_1001</audioContentIDRef>
+        </audioProgramme>
+        <audioContent audioContentID="ACO_1001" audioContentName="C">
+          <audioObjectIDRef>AO_1001</audioObjectIDRef>
+        </audioContent>
+        <audioObject audioObjectID="AO_1001" audioObjectName="O">
+          <audioTrackUIDRef>ATU_00000001</audioTrackUIDRef>
+          <audioTrackUIDRef>ATU_00000002</audioTrackUIDRef>
+        </audioObject>
+        <audioPackFormat audioPackFormatID="AP_00031001" audioPackFormatName="Pack" typeDefinition="Objects" typeLabel="0003">
+          <audioChannelFormatIDRef>AC_00031001</audioChannelFormatIDRef>
+          <audioChannelFormatIDRef>AC_00031002</audioChannelFormatIDRef>
+        </audioPackFormat>
+        <audioChannelFormat audioChannelFormatID="AC_00031001" audioChannelFormatName="C0" typeDefinition="Objects" typeLabel="0003">
+          <audioBlockFormat>
+            <position coordinate="azimuth">30</position>
+            <position coordinate="elevation">0</position>
+          </audioBlockFormat>
+        </audioChannelFormat>
+        <audioStreamFormat audioStreamFormatID="AS_00031001" audioStreamFormatName="S0" formatDefinition="PCM">
+          <audioChannelFormatIDRef>AC_00031001</audioChannelFormatIDRef>
+          <audioTrackFormatIDRef>AT_00031001_01</audioTrackFormatIDRef>
+        </audioStreamFormat>
+        <audioTrackFormat audioTrackFormatID="AT_00031001_01" audioTrackFormatName="T0" formatDefinition="PCM"/>
+        <audioTrackUID UID="ATU_00000001">
+          <audioTrackFormatIDRef>AT_00031001_01</audioTrackFormatIDRef>
+          <audioPackFormatIDRef>AP_00031001</audioPackFormatIDRef>
+        </audioTrackUID>
+        <audioChannelFormat audioChannelFormatID="AC_00031002" audioChannelFormatName="C1" typeDefinition="Objects" typeLabel="0003">
+          <audioBlockFormat>
+            <position coordinate="azimuth">-30</position>
+            <position coordinate="elevation">0</position>
+          </audioBlockFormat>
+        </audioChannelFormat>
+        <audioStreamFormat audioStreamFormatID="AS_00031002" audioStreamFormatName="S1" formatDefinition="PCM">
+          <audioChannelFormatIDRef>AC_00031002</audioChannelFormatIDRef>
+          <audioTrackFormatIDRef>AT_00031002_01</audioTrackFormatIDRef>
+        </audioStreamFormat>
+        <audioTrackFormat audioTrackFormatID="AT_00031002_01" audioTrackFormatName="T1" formatDefinition="PCM"/>
+        <audioTrackUID UID="ATU_00000002">
+          <audioTrackFormatIDRef>AT_00031002_01</audioTrackFormatIDRef>
+          <audioPackFormatIDRef>AP_00031001</audioPackFormatIDRef>
+        </audioTrackUID>
+      </audioFormatExtended>
+    </format>
+  </coreMetadata>
+</ebuCoreMain>

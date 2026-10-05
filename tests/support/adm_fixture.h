@@ -563,8 +563,13 @@ struct AudioTrackUid : Entity {
     }
 };
 struct AudioPackFormatHoa : AudioPackFormat {
-    template <class... T> explicit AudioPackFormatHoa(const T&... values) : AudioPackFormat(values...) {
+    using AudioPackFormat::set;
+    void set(const Normalization& value) { attributes["normalization"] = value.text; }
+    void set(const NfcRefDist& value) { attributes["nfcRefDist"] = value.text; }
+    void set(const ScreenRef& value) { attributes["screenRef"] = value.text; }
+    template <class... T> explicit AudioPackFormatHoa(const T&... values) {
         type = TypeDefinition::hoa;
+        (set(values), ...);
     }
     template <class... T> static std::shared_ptr<AudioPackFormatHoa> create(const T&... values) {
         return std::make_shared<AudioPackFormatHoa>(values...);
