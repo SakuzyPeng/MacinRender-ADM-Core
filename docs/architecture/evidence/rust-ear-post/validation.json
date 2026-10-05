@@ -1,0 +1,189 @@
+{
+  "schema": "mradm.rust-ear-post-migration.v1",
+  "date": "2026-10-04",
+  "baseline_commit": "e12332bd8b60d2c9ad3de797454218e7c90dd70b",
+  "scope": [
+    "Rust-owned immutable shared raw FIR bank",
+    "Per-instance FFT spectra, overlap, direct delay and scratch",
+    "Batch direct/diffuse summation",
+    "Complete unconsumed tails across consecutive short blocks"
+  ],
+  "new_third_party_dependencies": [],
+  "public_c_abi_changed": false,
+  "duration_clipped_timeline_fix_preserved": true,
+  "contracts": {
+    "fir_taps": 512,
+    "overlap_frames": 511,
+    "direct_delay_frames": 255,
+    "fft_length": "next_power_of_two(max_frames + 511)",
+    "filter_design": "libear float design during C++ prepare",
+    "normal_render_grid_unchanged": true,
+    "eof_adds_frames": false,
+    "zero_frames_advance_state": false,
+    "short_tail_update": "y[frames+i] + old_overlap[frames+i] when the old index exists; otherwise y[frames+i]",
+    "prepared_kernel_and_ffi_allocation_test": true,
+    "runtime_locks_or_io": false,
+    "parameter_rejection_preserves_output_and_history": true
+  },
+  "validation": {
+    "macos_debug_ctest": {
+      "passed": 59,
+      "total": 59
+    },
+    "macos_release_focused_ctest": {
+      "passed": 10,
+      "total": 10
+    },
+    "windows_release_ctest": {
+      "passed": 58,
+      "total": 58
+    },
+    "rust_release_ear_post_tests": 5,
+    "rust_release_allocation_tests": 9,
+    "ffi_parameter_and_lifetime_tests": true,
+    "float32_offline_stream_exact_test": true,
+    "varied_stream_pull_bit_identity": true,
+    "window_full_slice_bit_identity": true,
+    "rust_fmt": true,
+    "rust_clippy_deny_warnings": true,
+    "changed_cpp_format_tidy_cppcheck": true,
+    "frozen_reference_cppcheck": true,
+    "licenses_sbom": true
+  },
+  "numerical_comparison": {
+    "canonical_tolerance": "2e-6 + 2e-6 * abs(reference)",
+    "time_domain_tolerance": "2e-5 + 2e-5 * abs(reference)",
+    "macos": {
+      "baseline_commit": "e12332b",
+      "canonical_samples": 4520868,
+      "differing_samples": 0,
+      "max_absolute_error": 0,
+      "max_normalized_error": 0,
+      "time_domain_max_error": 9.610994311515242e-08,
+      "legacy_short_tail": [
+        1,
+        0.5,
+        0
+      ],
+      "fixed_short_tail": [
+        1,
+        0.5,
+        0.25
+      ]
+    },
+    "windows": {
+      "baseline_commit": "e12332b",
+      "canonical_samples": 4520868,
+      "differing_samples": 0,
+      "max_absolute_error": 0,
+      "max_normalized_error": 0,
+      "time_domain_max_error": 9.535415301797912e-08,
+      "legacy_short_tail": [
+        1,
+        0.5,
+        0
+      ],
+      "fixed_short_tail": [
+        1,
+        0.5,
+        0.25
+      ]
+    }
+  },
+  "release_cli": {
+    "cases": 13,
+    "bit_identical": 13,
+    "all_passed": true,
+    "ear_cases": 6,
+    "unchanged_backend_controls": 7
+  },
+  "abi": {
+    "public_adm_exports": 139,
+    "public_symbol_sets_equal": true,
+    "unchanged_from_previous_phase": true,
+    "macos_private_rust_exports": [],
+    "windows_private_rust_exports": [],
+    "windows_incidental_cpp_exports": 1984
+  },
+  "windows": {
+    "configuration": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "MR_ADM_ENABLE_SOFA": "ON",
+      "legacy_reference_switches": "OFF"
+    },
+    "workspace": "Existing dirty canonical checkout preserved, not a clean Git checkout",
+    "original_bytes_backed_up": true,
+    "synchronized_files": 15,
+    "synchronized_source_files_equal_local": true,
+    "baseline_duration_clipping_fix_included": true,
+    "source_sha256": {
+      "CMakeLists.txt": "d0b021e2a39143da467c5869e2fc416d447e8a3de34a0b779692774da0e970a8",
+      "rust/crates/mradm-dsp/src/ear_post.rs": "0a64c64f150efbcdc48083eb1c3a477a43d3e78d037f2897e4d82948cee06c02",
+      "rust/crates/mradm-dsp/src/lib.rs": "bc465b20b8616f295ff0b732e7c27e762f2d73f38f3aa1516b59e7553b99d2c1",
+      "rust/crates/mradm-dsp/tests/ear_post.rs": "683f791705dc703749723181166094226c301c83674696b94854cf1655481c56",
+      "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "7281684522813b4ec7296f05d7833ba3822def4d965dbfa5cf2d29bde2594f7f",
+      "rust/crates/mradm-ffi/src/ear_post.rs": "ecd055d3624f62b02edd1ba2ae1444f0786c36c8beb81eda672dfac062c3d4c0",
+      "rust/crates/mradm-ffi/src/lib.rs": "0d4250d0502954202079c1dab80f3d2cbb7f0be67f04efb550535d30d309d39b",
+      "src/adm_dsp/dsp_ffi.h": "ef53a4d2f6719b0d26f87eb54cdd954c75d261985cba16dfd4656c36630d97df",
+      "src/adm_dsp/ear_post.h": "9b929e71763b1a24e26d99472bc86aff7395399d209b3962e156f6f035482f9a",
+      "src/adm_render_common/speaker_pcm.cpp": "2c99d1fbc72773e0f0e242305dbd42927f3dd3116c1840e8e60aaa92642e738d",
+      "src/adm_render_ear/ear_renderer.cpp": "49def5410ef597a440179c649b4c4bd861d97c089020dc24afce5f191c942f5e",
+      "tests/reference/ear_post_legacy.h": "79c6f6bfe510c4b9cb8fd214c7827fa76bf94990fce0a2c4400a4a3f529d145f",
+      "tests/unit/ear_post_test.cpp": "4b00bb9af5b1c9d1beea1df22854b06f294d125330b37dec64e47d7e4477fac5",
+      "tests/unit/ear_render_fixture_test.cpp": "c053952804df660ca50516c82ac2cb7e99e73a9541ad1dfc00c78d39e15297c0",
+      "tests/unit/pcm_mix_test.cpp": "c9b8329035f5adb8a0fb9d3ba1cfa842c7bc68d8b3b4eeef77e50f249404ce4f"
+    }
+  },
+  "ci": null,
+  "not_claimed": [
+    "Cross-platform bit identity",
+    "Bit identity between different inner FFT chunkings",
+    "Throughput/RSS improvement",
+    "Subjective listening",
+    "Allocation-free whole EAR renderer"
+  ],
+  "source_sha256": {
+    "CMakeLists.txt": "d0b021e2a39143da467c5869e2fc416d447e8a3de34a0b779692774da0e970a8",
+    "include/adm/c_api.h": "06bc8e73dfb3e06ba645ec95b7f97f26943209b77a6a7dce3fd886a1a0c31659",
+    "rust/Cargo.lock": "1245da124cb7acc2f436683d9122d936b12b2d6c044fc322ae12aaa2b5c9df9f",
+    "rust/crates/mradm-dsp/src/ear_post.rs": "0a64c64f150efbcdc48083eb1c3a477a43d3e78d037f2897e4d82948cee06c02",
+    "rust/crates/mradm-dsp/src/lib.rs": "bc465b20b8616f295ff0b732e7c27e762f2d73f38f3aa1516b59e7553b99d2c1",
+    "rust/crates/mradm-dsp/tests/ear_post.rs": "683f791705dc703749723181166094226c301c83674696b94854cf1655481c56",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "7281684522813b4ec7296f05d7833ba3822def4d965dbfa5cf2d29bde2594f7f",
+    "rust/crates/mradm-ffi/src/ear_post.rs": "ecd055d3624f62b02edd1ba2ae1444f0786c36c8beb81eda672dfac062c3d4c0",
+    "rust/crates/mradm-ffi/src/lib.rs": "0d4250d0502954202079c1dab80f3d2cbb7f0be67f04efb550535d30d309d39b",
+    "rust/rust-toolchain.toml": "e879701472a698533f43f54989bbf5f3101eb0503472159d32633f3bb8a13fdf",
+    "src/adm_dsp/dsp_ffi.h": "ef53a4d2f6719b0d26f87eb54cdd954c75d261985cba16dfd4656c36630d97df",
+    "src/adm_dsp/ear_post.h": "9b929e71763b1a24e26d99472bc86aff7395399d209b3962e156f6f035482f9a",
+    "src/adm_render_common/speaker_pcm.cpp": "2c99d1fbc72773e0f0e242305dbd42927f3dd3116c1840e8e60aaa92642e738d",
+    "src/adm_render_ear/ear_renderer.cpp": "49def5410ef597a440179c649b4c4bd861d97c089020dc24afce5f191c942f5e",
+    "tests/reference/ear_post_legacy.h": "79c6f6bfe510c4b9cb8fd214c7827fa76bf94990fce0a2c4400a4a3f529d145f",
+    "tests/unit/ear_post_test.cpp": "4b00bb9af5b1c9d1beea1df22854b06f294d125330b37dec64e47d7e4477fac5",
+    "tests/unit/ear_render_fixture_test.cpp": "c053952804df660ca50516c82ac2cb7e99e73a9541ad1dfc00c78d39e15297c0",
+    "tests/unit/pcm_mix_test.cpp": "c9b8329035f5adb8a0fb9d3ba1cfa842c7bc68d8b3b4eeef77e50f249404ce4f"
+  },
+  "log_sha256": {
+    "out/rust-ear-post/audio-comparison.log": "3dfab7ed78b35983953ca3b2b4d5566846d13dfd695bd335b9f11648ee8566e6",
+    "out/rust-ear-post/build-baseline.log": "8c16c7666acda6873406094c310222feda1767aa86d1c7106236425502470d21",
+    "out/rust-ear-post/build-debug-final.log": "37a0b74b9a816c9272a1150947739ade2bea080e1ca3faf1544b848a0bf32ba9",
+    "out/rust-ear-post/build-debug.log": "dd25105039f11522a90f46a03fa0a5253af3cb7e7981efabeeda56a1bfc3e7f6",
+    "out/rust-ear-post/build-probe-final-debug.log": "95ce37788463a02ab27891d5b43e574e1ab24cad26e5ad3139dd6d52c9e70a4c",
+    "out/rust-ear-post/build-probe-final-release.log": "227636c4dd09c16e1d85448f562469ae606be02428f1b96a8c6ba7d56210c115",
+    "out/rust-ear-post/build-release-final.log": "ab6ab395aef4f6d296e188c48d2e352da721bb67d777d75d044c684286481162",
+    "out/rust-ear-post/build-release.log": "9325ee767351adaad299a1746f77b16184f31de7f3b65eee7452043f02eb5118",
+    "out/rust-ear-post/licenses.log": "7fc81fb03cf503a1b10d8c641b0da14081f41a961c3f51de3b8ba31f1df82fbd",
+    "out/rust-ear-post/probe-release.log": "11b8318d3eeebf5181e4aa6d45f08d1512f0d8ea66512b02cdfa3d7358575655",
+    "out/rust-ear-post/quality-cpp.log": "83339985a4b3c2cf517870e2c99a421ae616c707809b96805e6b387528e64f6d",
+    "out/rust-ear-post/quality-probe.log": "112436d5df501554ef307d832ddf0bee12bb8ad144e8d1f714d3d546787363b4",
+    "out/rust-ear-post/quality-reference.log": "f5eb50ebbcc69c763a00b6e9e24b4674328a974a8cb6b9b94dfa925cb0223611",
+    "out/rust-ear-post/quality-rust.log": "f2e4a79d66f451107446ca161c7b6e7c6106ab6b764a80c745e21e8da838a101",
+    "out/rust-ear-post/tests-debug-focused.log": "7d29c6f3f961046fcd803aa3d4c58c0793a9640451b4d5040c0b850594309fbc",
+    "out/rust-ear-post/tests-debug.log": "9b17ceb2c0fdc376489c25d8386aef966949be1557e11999182088275beef3f3",
+    "out/rust-ear-post/tests-probe-final.log": "c0ea2376579a2bcb162eed3d8a94aca117d36712ebd572f893e4e49805e288c7",
+    "out/rust-ear-post/tests-release.log": "f2238cc9d0728724f561cd6ac56b14b203f42bf084ff7c946bcf4ca921475c87",
+    "out/rust-ear-post/tests-rust-release.log": "861c0cd375317514d2418d3994d5ce9fdc92d935cacb540c93cfdd54dc451f7a",
+    "out/rust-ear-post/tests-rust.log": "6280c4bdf6c47b7a4106f3368f2047bdd7f605cba0a416038c81f6a0991f6119",
+    "out/rust-ear-post/windows-ctest.log": "3d8249457ac1a4999b352f370381b756c8b230791c7c5d5247bfd18eb3052048",
+    "out/rust-ear-post/windows-run.log": "0c9f71d0e25e60356dfd3d3b015a393f07e993794c402c2cbec4ebd8f3b146dd"
+  }
+}

@@ -16,6 +16,7 @@
 - VBAP 与 Triple Balance 的通用路径通过整表/单轨操作累加到现有交错输出；元数据选择、插值和游标由 Rust 完成。
 - EAR 的分离声道输入、列式 direct/diffuse 缓冲及端点暂存由 Rust 持有，再输出交错双总线。
   C++ 保留 FIR 去相关、补偿延迟、wav71 顺序转换、文件 I/O、计量和线程调度。
+  FIR、补偿延迟及双总线求和随后在 [EAR 后处理迁移](RUST_EAR_POST_MIGRATION.md) 中迁入 Rust。
 - Triple Balance 保留点声源递推、panner、size DSP 和 checkpoint。动态表按 1024 帧块预留 3 个事件，
   C++ 传输缓冲同样预留容量。更新完整验证后原地替换；处理每条动态曲线时重新定位，保留原来
   单次调用使用局部游标的规则，因此同一窗口可重复用于不同增益的干声分支。

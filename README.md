@@ -358,6 +358,8 @@ HpTF 耳机补偿的系数设计、频响、自动预衰减、级联处理与热
 
 通用扬声器与 EAR 双总线混音的数值表、时间线游标和工作缓冲，以及监听固定矩阵也由 Rust 持有；C++ 保留布局/ADM 算法和调度。范围与验收见 [Rust 共享 PCM 混音迁移](docs/architecture/RUST_PCM_MIX_MIGRATION.md)。
 
+EAR 的去相关卷积、补偿延迟和双总线求和也已迁入 Rust，支持保留连续短块的完整尾音；滤波器设计继续使用 libear。范围与验收见 [Rust EAR 后处理迁移](docs/architecture/RUST_EAR_POST_MIGRATION.md)。
+
 系统依赖构建需要另备 Corrosion 0.6.1、Rust 工具链和锁定的 Cargo 依赖缓存：
 
 ```bash

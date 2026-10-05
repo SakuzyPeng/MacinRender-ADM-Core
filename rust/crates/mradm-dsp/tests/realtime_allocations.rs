@@ -36,6 +36,32 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOCATOR: Counting = Counting;
 
 #[test]
+fn prepared_ear_post_short_blocks_reset_and_rejections_do_not_allocate() {
+    use mradm_dsp::ear_post::{DELAY, FilterBank, Processor, TAPS};
+    use std::sync::Arc;
+    let bank = Arc::new(FilterBank::new(2, &[0.01; TAPS * 2], DELAY).unwrap());
+    let mut processor = Processor::new(bank, 1024).unwrap();
+    let mut direct = [0.25; 2048];
+    let diffuse = [0.125; 2048];
+    COUNT.with(|c| c.set(Some(0)));
+    for _ in 0..4 {
+        for frames in [0, 1, 7, 255, 511, 512, 1024] {
+            direct.fill(0.25);
+            processor
+                .process(&mut direct[..frames * 2], &diffuse[..frames * 2], frames)
+                .unwrap();
+            assert!(processor.process(&mut direct[..1], &diffuse, 1).is_err());
+            assert!(processor.process(&mut direct, &diffuse, 1025).is_err());
+        }
+    }
+    processor.reset();
+    processor.process(&mut direct, &diffuse, 1024).unwrap();
+    processor.reset();
+    let count = COUNT.with(|c| c.replace(None).unwrap());
+    assert_eq!(count, 0);
+}
+
+#[test]
 fn prepared_pcm_tables_cursors_and_dynamic_updates_do_not_allocate() {
     use mradm_dsp::pcm_mix::{Block, Coefficients, Matrix, Mixer, Plan, Row};
     use std::sync::Arc;

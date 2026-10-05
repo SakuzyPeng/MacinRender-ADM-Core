@@ -1642,12 +1642,9 @@ bool verify_ear_stream_matches_window() {
 
     bool ok = check(uniform.size() == ref.size(), "ear stream output frame count matches render_window");
     ok &= check(uniform == varied, "ear stream output is identical regardless of pull chunk size");
-    double max_diff = 0.0;
-    const std::size_t n = std::min(uniform.size(), ref.size());
-    for (std::size_t i = 0; i < n; ++i) {
-        max_diff = std::max(max_diff, std::fabs(static_cast<double>(uniform[i]) - static_cast<double>(ref[i])));
-    }
-    ok &= check(max_diff < 1.0e-4, "ear stream output matches the offline render_window render");
+    ok &= check(reader->is_ieee_float() && reader->bits_per_sample() == 32U,
+                "ear stream comparison uses a float32 intermediate without file quantization");
+    ok &= check(uniform == ref, "ear stream output is bit-identical to float32 render_window output");
     return ok;
 }
 

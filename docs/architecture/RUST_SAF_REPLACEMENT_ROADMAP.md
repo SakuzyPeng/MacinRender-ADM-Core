@@ -29,6 +29,9 @@
 [共享 PCM 混音迁移](RUST_PCM_MIX_MIGRATION.md)将通用/EAR 数值增益表、插值游标和工作缓冲，
 以及监听固定矩阵迁入 Rust；准备表可共享，渲染实例独立，C++ 保留元数据/布局算法与调度。
 
+[EAR 后处理迁移](RUST_EAR_POST_MIGRATION.md)进一步接管去相关 FIR、补偿延迟和双总线求和，
+并修复连续短块丢失未输出尾音的问题；libear 继续负责滤波器设计。
+
 内置 KEMAR、原型和格型系数及 HOA 矩阵是约 1.7 MiB 的已提交二进制资源。`assets/manifest.json` 记录尺寸、来源和 SHA-256；`assets/NOTICE.txt` 保留 ISC/MIT 声明及数据提供者归属。正常构建不从 SAF 提取数据。
 
 ## 2. 行为边界

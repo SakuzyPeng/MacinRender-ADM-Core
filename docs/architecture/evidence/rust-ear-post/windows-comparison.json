@@ -1,0 +1,18 @@
+{
+  "baseline_commit": "e12332b",
+  "canonical_samples": 4520868,
+  "differing_samples": 0,
+  "max_absolute_error": 0,
+  "max_normalized_error": 0,
+  "time_domain_max_error": 9.535415301797912e-08,
+  "legacy_short_tail": [
+    1,
+    0.5,
+    0
+  ],
+  "fixed_short_tail": [
+    1,
+    0.5,
+    0.25
+  ]
+}
