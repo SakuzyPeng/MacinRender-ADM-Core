@@ -178,7 +178,7 @@
     "src/adm_realtime/monitor_engine.h": "1d0ba1a10bdd7f9e664bb7688d7465a5c91655ea88c3ac6f08f96c6b4afd2a35",
     "tests/reference/monitor/legacy.h": "5c009553bd8cf4b818f5ffd3d6826eac2587330f94cfe62ea906b0ecd463c764",
     "tests/reference/monitor/provenance.json": "f2f9a521b40da3541d9923115a5b05c49c1ae9c096d7964af47db4ce9445ec1f",
-    "tests/unit/monitor_dsp_test.cpp": "6e049a7e357cbe41afc6a80b3383ed7c45d27644b0021276c9f8598a55bd62c0",
+    "tests/unit/monitor_dsp_test.cpp": "247a04f72c6d40528bc5ef4ad82583b7239c3666dd4fad60b8957ef1821fb403",
     "tests/unit/realtime_stream_fixture_test.cpp": "0c436a52e672216183a727097ef694e3cab76a80e91640651b452a8d2830c80a"
   },
   "windows_overlay_sha256": {
@@ -195,7 +195,7 @@
     "src/adm_realtime/monitor_engine.h": "1d0ba1a10bdd7f9e664bb7688d7465a5c91655ea88c3ac6f08f96c6b4afd2a35",
     "tests/reference/monitor/legacy.h": "5c009553bd8cf4b818f5ffd3d6826eac2587330f94cfe62ea906b0ecd463c764",
     "tests/reference/monitor/provenance.json": "f2f9a521b40da3541d9923115a5b05c49c1ae9c096d7964af47db4ce9445ec1f",
-    "tests/unit/monitor_dsp_test.cpp": "6e049a7e357cbe41afc6a80b3383ed7c45d27644b0021276c9f8598a55bd62c0",
+    "tests/unit/monitor_dsp_test.cpp": "247a04f72c6d40528bc5ef4ad82583b7239c3666dd4fad60b8957ef1821fb403",
     "tests/unit/realtime_stream_fixture_test.cpp": "aa01e235b01a65eaa4a202edc96056961ef8c9ddaa52c8e47f7e920295995c75"
   },
   "reference_provenance": {
