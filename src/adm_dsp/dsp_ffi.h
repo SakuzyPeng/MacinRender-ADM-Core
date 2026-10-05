@@ -10,6 +10,98 @@
 extern "C" {
 #endif
 
+// Prepared PCM timelines; fields contain only project-owned scalar data.
+// cppcheck-suppress-begin unusedStructMember
+typedef struct MradmDspMixRow {
+    size_t input_channel, block_offset, block_count;
+    float output_gain;
+} MradmDspMixRow;
+typedef struct MradmDspMixBlock {
+    uint64_t start, end, interpolation;
+    uint32_t flags; // jump=1, object smoothing=2, explicit interpolation=4
+} MradmDspMixBlock;
+// cppcheck-suppress-end unusedStructMember
+int mradm_dsp_mix_plan_create(size_t inputs,
+                              size_t outputs,
+                              const MradmDspMixRow* rows,
+                              size_t row_count,
+                              const MradmDspMixBlock* blocks,
+                              size_t block_count,
+                              const float* gains_f32,
+                              size_t len_f32,
+                              const double* gains_f64,
+                              size_t len_f64,
+                              uint32_t kind,
+                              void** out,
+                              char* message,
+                              size_t capacity);
+void mradm_dsp_mix_plan_destroy(void* plan);
+int mradm_dsp_mix_create(const void* plan,
+                         size_t max_frames,
+                         uint64_t interpolation,
+                         uint32_t smoothing,
+                         void** out,
+                         char* message,
+                         size_t capacity);
+int mradm_dsp_mix_dynamic_create(size_t inputs,
+                                 size_t outputs,
+                                 const size_t* channels,
+                                 size_t rows,
+                                 size_t block_capacity,
+                                 size_t max_frames,
+                                 uint64_t interpolation,
+                                 void** out,
+                                 char* message,
+                                 size_t capacity);
+void mradm_dsp_mix_destroy(void* mixer);
+int mradm_dsp_mix_reset(void* mixer, char* message, size_t capacity);
+int mradm_dsp_mix_update(void* mixer,
+                         size_t row,
+                         const MradmDspMixBlock* blocks,
+                         size_t block_count,
+                         const float* gains,
+                         size_t gain_count,
+                         float output_gain,
+                         char* message,
+                         size_t capacity);
+// SIZE_MAX selects all rows (with configured object smoothing); a single row has no extra smoothing.
+int mradm_dsp_mix_speaker(void* mixer,
+                          size_t row,
+                          const float* pcm,
+                          size_t pcm_len,
+                          float* out,
+                          size_t out_len,
+                          const float* live,
+                          size_t live_len,
+                          uint64_t start,
+                          size_t frames,
+                          uint32_t override_gain,
+                          float gain,
+                          char* message,
+                          size_t capacity);
+int mradm_dsp_mix_ear(void* mixer,
+                      const float* pcm,
+                      size_t pcm_len,
+                      float* direct,
+                      size_t direct_len,
+                      float* diffuse,
+                      size_t diffuse_len,
+                      uint64_t start,
+                      size_t frames,
+                      char* message,
+                      size_t capacity);
+int mradm_dsp_matrix_create(
+    size_t inputs, size_t outputs, const float* gains, size_t length, void** out, char* message, size_t capacity);
+void mradm_dsp_matrix_destroy(void* matrix);
+int mradm_dsp_matrix_process(const void* matrix,
+                             const float* pcm,
+                             size_t pcm_len,
+                             float* out,
+                             size_t out_len,
+                             size_t frames,
+                             char* message,
+                             size_t capacity);
+
 // Live gain banks and stereo device protection. Lengths count floats; empty buffers may be null.
 int mradm_dsp_gain_create(
     size_t channels, uint32_t rate, uint32_t ramp_ms, void** output, char* message, size_t capacity);

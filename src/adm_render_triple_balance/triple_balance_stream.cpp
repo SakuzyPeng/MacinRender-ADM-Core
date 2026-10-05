@@ -159,7 +159,7 @@ class TripleBalanceStream final : public IRenderStream {
             configure_matrix();
             mixer_.reset();
             mixer_.set_scales(scales_, true);
-            std::ranges::fill(indices_, 0U);
+            gain_mix_.reset();
             position_ = prepared_.size_tracks.empty() ? boundary : 0;
             auto best = checkpoints_.end();
             for (auto it = checkpoints_.begin(); it != checkpoints_.end(); ++it) {
@@ -223,7 +223,8 @@ class TripleBalanceStream final : public IRenderStream {
           input_channels_(plan.scene.info.num_channels), total_(plan.scene.info.num_frames),
           layout_(plan.output_layout), default_interp_(uint64_t{sample_rate()} * plan.default_interp_ms / 1000),
           checkpoint_interval_(((uint64_t{sample_rate()} + k_block_frames - 1) / k_block_frames) * k_block_frames),
-          input_(k_block_frames * input_channels_), envelopes_(input_.size()), indices_(prepared.gain_matrix.size(), 0),
+          input_(k_block_frames * input_channels_), envelopes_(input_.size()),
+          gain_mix_(prepared.gain_matrix.plan, k_block_frames, default_interp_, false),
           gain_targets_(input_channels_, 1.0F), ramps_(input_channels_, sample_rate()),
           scales_(prepared.size_tracks.size(), 1.0F),
           checkpoint_budget_(std::min(checkpoint_budget, k_checkpoint_bytes)),
@@ -299,7 +300,8 @@ class TripleBalanceStream final : public IRenderStream {
             if (canonical_ && size_track < scales_.size() && scales_[size_track] == 0) {
                 mixer_.accumulate_point(size_track, context, frames, true);
             } else {
-                render_common::accumulate_speaker_channel(channel, indices_[i], context, frames);
+                gain_mix_.speaker(
+                    std::span{input_}.first(frames * input_channels_), fifo_, envelopes_, position_, frames, i);
             }
         }
         auto status = mixer_.process(std::span<const float>(input_.data(), frames * input_channels_),
@@ -325,7 +327,7 @@ class TripleBalanceStream final : public IRenderStream {
     uint64_t checkpoint_interval_{};
     std::vector<float> input_;
     std::vector<float> envelopes_;
-    std::vector<std::size_t> indices_;
+    dsp::PcmMixer gain_mix_;
     std::vector<float> gain_targets_;
     render_common::InterleavedLiveGainSmoother ramps_;
     std::vector<float> scales_;

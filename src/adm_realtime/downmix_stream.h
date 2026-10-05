@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <span>
 #include <string_view>
@@ -9,6 +10,8 @@
 #include <vector>
 
 #include "adm/render.h"
+
+#include "../adm_dsp/pcm_mix.h"
 
 namespace mradm::realtime {
 
@@ -25,10 +28,14 @@ class DownmixStream final : public IRenderStream {
     // `matrix` is row-major [monitor_channels][inner->out_channels()]:
     // out[frame*monitor + d] = sum_s matrix[d*src + s] * inner_out[frame*src + s].
     DownmixStream(std::unique_ptr<IRenderStream> inner, std::vector<float> matrix, uint32_t monitor_channels)
-        : inner_(std::move(inner)), matrix_(std::move(matrix)), src_channels_(inner_->out_channels()),
-          monitor_channels_(monitor_channels) {}
+        : inner_(std::move(inner)), matrix_(inner_->out_channels(), monitor_channels, matrix),
+          src_channels_(inner_->out_channels()), monitor_channels_(monitor_channels) {}
 
     [[nodiscard]] Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        if (out.size() % monitor_channels_ != 0U || frames > out.size() / monitor_channels_ ||
+            frames > std::numeric_limits<std::size_t>::max() / src_channels_) {
+            return make_error(ErrorCode::invalid_argument, "downmix: invalid frame count or output size");
+        }
         const std::size_t src_floats = frames * src_channels_;
         if (scratch_.size() < src_floats) {
             scratch_.assign(src_floats, 0.0F);
@@ -38,17 +45,12 @@ class DownmixStream final : public IRenderStream {
             return tl::unexpected{produced.error()};
         }
         const std::size_t got = *produced;
-        for (std::size_t f = 0; f < got; ++f) {
-            const float* in = scratch_.data() + (f * src_channels_);
-            float* dst = out.data() + (f * monitor_channels_);
-            for (uint32_t d = 0; d < monitor_channels_; ++d) {
-                const float* row = matrix_.data() + (static_cast<std::size_t>(d) * src_channels_);
-                float acc = 0.0F;
-                for (uint32_t s = 0; s < src_channels_; ++s) {
-                    acc += row[s] * in[s];
-                }
-                dst[d] = acc;
-            }
+        if (got > frames) {
+            return make_error(ErrorCode::internal_error, "downmix: source produced too many frames");
+        }
+        auto mixed = matrix_.process(std::span{scratch_}.first(got * src_channels_), out, got);
+        if (!mixed) {
+            return tl::unexpected{mixed.error()};
         }
         return got;
     }
@@ -72,7 +74,7 @@ class DownmixStream final : public IRenderStream {
 
   private:
     std::unique_ptr<IRenderStream> inner_;
-    std::vector<float> matrix_;  // monitor_channels_ × src_channels_, row-major
+    dsp::PcmMatrix matrix_;      // Rust-owned monitor × source coefficients
     std::vector<float> scratch_; // inner output staging (src_channels_ × frames)
     uint32_t src_channels_;
     uint32_t monitor_channels_;

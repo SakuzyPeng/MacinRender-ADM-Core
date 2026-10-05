@@ -36,6 +36,82 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOCATOR: Counting = Counting;
 
 #[test]
+fn prepared_pcm_tables_cursors_and_dynamic_updates_do_not_allocate() {
+    use mradm_dsp::pcm_mix::{Block, Coefficients, Matrix, Mixer, Plan, Row};
+    use std::sync::Arc;
+    let blocks = vec![
+        Block {
+            start: 0,
+            end: 8,
+            interpolation: 0,
+            flags: 3,
+        },
+        Block {
+            start: 8,
+            end: u64::MAX,
+            interpolation: 5,
+            flags: 6,
+        },
+    ];
+    let rows = vec![Row {
+        input_channel: 0,
+        block_offset: 0,
+        block_count: 2,
+        output_gain: 1.,
+    }];
+    let common = Arc::new(
+        Plan::new(
+            1,
+            2,
+            rows.clone(),
+            blocks.clone(),
+            Coefficients::Speaker(vec![1., 0., 0., 1.]),
+        )
+        .unwrap(),
+    );
+    let ear = Arc::new(
+        Plan::new(
+            1,
+            2,
+            rows,
+            blocks.clone(),
+            Coefficients::Ear(vec![1., 0., 0., 1., 0., 1., 1., 0.]),
+        )
+        .unwrap(),
+    );
+    let mut a = Mixer::new(common, 32, 3, true).unwrap();
+    let mut b = Mixer::new(ear, 32, 3, true).unwrap();
+    let mut dynamic = Mixer::dynamic(1, 2, &[0], 3, 32, 3).unwrap();
+    let matrix = Matrix::new(1, 2, &[0.5, 1.]).unwrap();
+    let input = [0.5; 32];
+    let mut direct = [0.; 64];
+    let mut diffuse = [0.; 64];
+    COUNT.with(|c| c.set(Some(0)));
+    for _ in 0..20 {
+        a.speaker(&input, &mut direct, &[], 0, 32, None, None)
+            .unwrap();
+        b.ear(&input, &mut direct, &mut diffuse, 0, 32).unwrap();
+        dynamic
+            .update(0, blocks.iter().copied(), &[1., 0., 0., 1.], 1.)
+            .unwrap();
+        dynamic
+            .speaker(&input, &mut direct, &[], 0, 32, Some(0), None)
+            .unwrap();
+        matrix.process(&input, &mut diffuse, 32).unwrap();
+        assert!(
+            dynamic
+                .update(0, blocks.iter().copied(), &[f32::NAN; 4], 1.)
+                .is_err()
+        );
+        a.reset();
+        b.reset();
+        dynamic.reset();
+    }
+    let count = COUNT.with(|c| c.replace(None).unwrap());
+    assert_eq!(count, 0);
+}
+
+#[test]
 fn prepared_output_gains_and_peak_protection_do_not_allocate() {
     use mradm_dsp::{gain::GainBank, peak_guard::StereoPeakGuard};
     let mut gains = GainBank::new(2, 48000, 20).unwrap();

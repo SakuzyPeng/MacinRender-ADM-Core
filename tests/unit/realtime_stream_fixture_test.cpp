@@ -1018,6 +1018,62 @@ bool test_downmix_stream() {
     return ok;
 }
 
+// Check that the matrix adapter preserves the inner request size and short reads.
+class FiniteMatrixStream final : public mradm::IRenderStream {
+  public:
+    mradm::Result<std::size_t> process(std::span<float> out, std::size_t requested) override {
+        ++calls_;
+        requested_ = requested;
+        const auto count = std::min(requested, remaining_);
+        for (std::size_t frame = 0; frame < count; ++frame) {
+            for (std::size_t channel = 0; channel < 4U; ++channel) {
+                out[(frame * 4U) + channel] = static_cast<float>(channel + 1U);
+            }
+        }
+        remaining_ -= count;
+        return count;
+    }
+    mradm::Result<void> seek(std::uint64_t frame) override {
+        seek_frame_ = frame;
+        return {};
+    }
+    [[nodiscard]] std::uint32_t out_channels() const override { return 4U; }
+    [[nodiscard]] std::uint32_t sample_rate() const override { return 48000U; }
+    [[nodiscard]] std::string_view output_layout() const override { return "test"; }
+    [[nodiscard]] std::size_t calls() const { return calls_; }
+    [[nodiscard]] std::size_t requested() const { return requested_; }
+    [[nodiscard]] std::uint64_t seek_frame() const { return seek_frame_; }
+
+  private:
+    std::size_t remaining_{2U};
+    std::size_t calls_{0U};
+    std::size_t requested_{0U};
+    std::uint64_t seek_frame_{0U};
+};
+
+bool test_downmix_short_reads_and_validation() {
+    auto inner = std::make_unique<FiniteMatrixStream>();
+    auto* probe = inner.get();
+    mradm::realtime::DownmixStream stream(std::move(inner), {1, 0, 1, 0, 0, 1, 0, 1}, 2U);
+    std::array<float, 14> out{};
+    out.fill(42.0F);
+    bool ok = check(!stream.process(std::span{out}.first(3U), 1U) && probe->calls() == 0U,
+                    "downmix: incomplete output frame is rejected before reading");
+    ok &= check(!stream.process(std::span{out}.first(2U), 2U) && probe->calls() == 0U,
+                "downmix: short output is rejected before reading");
+    const auto count = stream.process(out, 7U);
+    ok &= check(count && *count == 2U && probe->calls() == 1U && probe->requested() == 7U,
+                "downmix: one original-size input request preserves short reads");
+    ok &= check(out.at(0) == 4.0F && out.at(1) == 6.0F && out.at(2) == 4.0F && out.at(3) == 6.0F &&
+                    std::ranges::all_of(std::span{out}.subspan(4U), [](float value) { return value == 42.0F; }),
+                "downmix: only produced frames are overwritten");
+    const auto saved = out;
+    const auto eos = stream.process(out, 7U);
+    ok &= check(eos && *eos == 0U && out == saved, "downmix: EOS does not add padding");
+    ok &= check(stream.seek(13U).has_value() && probe->seek_frame() == 13U, "downmix: seek delegates to inner stream");
+    return ok;
+}
+
 // Hot-switch with crossfade: starting on a 0.25 stream, switching to a 0.75 stream must
 // (after the ring drains + the fade completes) land the output on the new stream's value,
 // while the earliest captured audio still reflects the old stream.
@@ -1764,6 +1820,7 @@ int main() {
     ok &= test_background_backend_preroll();
     ok &= test_monitor_override_survives_switch();
     ok &= test_downmix_stream();
+    ok &= test_downmix_short_reads_and_validation();
     ok &= test_monitor_miniaudio_null_device();
     ok &= test_monitor_lufs();
     ok &= test_monitor_hptf_applies();

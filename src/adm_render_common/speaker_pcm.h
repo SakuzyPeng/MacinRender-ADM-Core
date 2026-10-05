@@ -11,6 +11,8 @@
 
 #include "adm/render.h"
 
+#include "../adm_dsp/pcm_mix.h"
+
 namespace mradm::render_common {
 
 struct BlockGains {
@@ -31,6 +33,25 @@ struct ChannelGainInfo {
     float output_gain{1.0F};
 };
 
+struct ChannelBinding {
+    uint16_t input_channel{0};
+    std::string object_id;
+    std::string speaker_label_key;
+};
+
+struct PreparedPcmMix {
+    std::vector<ChannelBinding> channels;
+    dsp::PcmMixPlan plan;
+    [[nodiscard]] auto begin() const { return channels.begin(); }
+    [[nodiscard]] auto end() const { return channels.end(); }
+    [[nodiscard]] auto size() const { return channels.size(); }
+    [[nodiscard]] bool empty() const { return channels.empty(); }
+    [[nodiscard]] const ChannelBinding& operator[](std::size_t index) const { return channels[index]; }
+};
+
+[[nodiscard]] Result<PreparedPcmMix>
+prepare_speaker_mix(std::vector<ChannelGainInfo> channels, std::size_t inputs, std::size_t outputs);
+
 struct AccumulateContext {
     const float* input{nullptr};
     std::vector<float>* output{nullptr};
@@ -43,25 +64,13 @@ struct AccumulateContext {
     std::span<const float> live_gains{};
 };
 
-void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
-                            std::vector<std::size_t>& block_indices,
-                            const AccumulateContext& ctx,
-                            uint64_t frames_now);
-
-// One channel, without the optional extra object-smoothing stage. This preserves the
-// matrix mix's arithmetic and lets streaming backends interleave bounded live curves.
-void accumulate_speaker_channel(const ChannelGainInfo& channel,
-                                std::size_t& block_index,
-                                const AccumulateContext& ctx,
-                                uint64_t frames_now);
-
 // Optional per-render stateful DSP. Adds to interleaved output after the gain mix.
 // A non-empty processor requires warming from frame zero for cropped output.
 using SpeakerBlockProcessor =
     std::function<Result<void>(std::span<const float> input, std::span<float> output, bool end_of_input)>;
 
 [[nodiscard]] Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
-                                                       const std::vector<ChannelGainInfo>& gain_matrix,
+                                                       const PreparedPcmMix& gain_matrix,
                                                        uint16_t num_out_ch,
                                                        std::string_view backend,
                                                        ProgressSink& progress,

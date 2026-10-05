@@ -322,10 +322,17 @@ Result<std::shared_ptr<IPreparedRender>> TripleBalanceRenderer::prepare(const Re
             }
         }
     }
+    std::vector<ChannelGainInfo> matrix;
     for (auto& [channel, gains] : by_channel) {
         std::ranges::sort(gains.blocks, {}, &BlockGains::start_sample);
-        prepared->gain_matrix.push_back(std::move(gains));
+        matrix.push_back(std::move(gains));
     }
+    auto compiled =
+        render_common::prepare_speaker_mix(std::move(matrix), plan.scene.info.num_channels, prepared->output_channels);
+    if (!compiled) {
+        return fail(compiled.error());
+    }
+    prepared->gain_matrix = std::move(*compiled);
     if (prepared->gain_matrix.empty()) {
         logs.log(LogLevel::warning, "triple-balance", "no renderable tracks found, writing silence");
     }

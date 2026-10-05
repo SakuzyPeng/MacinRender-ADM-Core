@@ -15,6 +15,7 @@ pub mod hrtf;
 pub mod hrtf_filters;
 pub mod meter;
 pub mod mixing;
+pub mod pcm_mix;
 pub mod peak_guard;
 pub mod resampler;
 pub mod rng;

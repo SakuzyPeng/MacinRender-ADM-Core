@@ -26,6 +26,9 @@
 [输出保护与实时增益迁移](RUST_OUTPUT_DSP_MIGRATION.md)进一步将设备立体声峰值保护、
 单通道渐变和多通道增益状态迁入 Rust。六类后端使用批量处理，保留各自的控制及 seek/reset 语义。
 
+[共享 PCM 混音迁移](RUST_PCM_MIX_MIGRATION.md)将通用/EAR 数值增益表、插值游标和工作缓冲，
+以及监听固定矩阵迁入 Rust；准备表可共享，渲染实例独立，C++ 保留元数据/布局算法与调度。
+
 内置 KEMAR、原型和格型系数及 HOA 矩阵是约 1.7 MiB 的已提交二进制资源。`assets/manifest.json` 记录尺寸、来源和 SHA-256；`assets/NOTICE.txt` 保留 ISC/MIT 声明及数据提供者归属。正常构建不从 SAF 提取数据。
 
 ## 2. 行为边界

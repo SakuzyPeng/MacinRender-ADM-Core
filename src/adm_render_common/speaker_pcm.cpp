@@ -15,125 +15,40 @@
 #include "render_common.h"
 
 namespace mradm::render_common {
-namespace {
-void accumulate_channel_block(const ChannelGainInfo& channel,
-                              std::size_t& block_index,
-                              const AccumulateContext& ctx,
-                              std::size_t frame) {
-    const uint64_t abs_frame = ctx.frames_done + frame;
-    while (block_index + 1 < channel.blocks.size() && abs_frame >= channel.blocks[block_index + 1].start_sample) {
-        ++block_index;
-    }
-
-    const auto& block = channel.blocks[block_index];
-    if (abs_frame < block.start_sample || abs_frame >= block.end_sample) {
-        return;
-    }
-
-    const float in_sample = ctx.input[(frame * ctx.num_in_ch) + channel.input_channel];
-    const uint64_t interp_len = render_common::interpolation_length(channel, block_index, ctx.default_interp);
-    const uint64_t delta = abs_frame - block.start_sample;
-    const bool ramping = interp_len > 0 && delta < interp_len;
-
-    for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
-        float gain = block.gains[out_ch];
-        if (ramping) {
-            gain = render_common::interpolated_scalar(
-                channel.blocks[block_index - 1].gains[out_ch], block.gains[out_ch], delta, interp_len);
-        }
-        float contribution = (in_sample * gain) * channel.output_gain;
-        if (!ctx.live_gains.empty()) {
-            contribution *= ctx.live_gains[(frame * ctx.num_in_ch) + channel.input_channel];
-        }
-        (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += contribution;
-    }
-}
-
-[[nodiscard]] bool gains_at_frame(const ChannelGainInfo& channel,
-                                  std::size_t& block_index,
-                                  const AccumulateContext& ctx,
-                                  uint64_t abs_frame,
-                                  std::vector<float>& gains) {
-    std::ranges::fill(gains, 0.0F);
-    while (block_index + 1 < channel.blocks.size() && abs_frame >= channel.blocks[block_index + 1].start_sample) {
-        ++block_index;
-    }
-
-    const auto& block = channel.blocks[block_index];
-    if (abs_frame < block.start_sample || abs_frame >= block.end_sample) {
-        return false;
-    }
-
-    const uint64_t interp_len = render_common::interpolation_length(channel, block_index, ctx.default_interp);
-    const uint64_t delta = abs_frame - block.start_sample;
-    const bool ramping = interp_len > 0 && delta < interp_len;
-    for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
-        gains[out_ch] = block.gains[out_ch];
-        if (ramping) {
-            gains[out_ch] = render_common::interpolated_scalar(
-                channel.blocks[block_index - 1].gains[out_ch], block.gains[out_ch], delta, interp_len);
-        }
-    }
-    return block.smoothable_object;
-}
-
-} // namespace
-
-void accumulate_speaker_channel(const ChannelGainInfo& channel,
-                                std::size_t& block_index,
-                                const AccumulateContext& ctx,
-                                uint64_t frames_now) {
-    if (channel.blocks.empty()) {
-        return;
-    }
-    for (std::size_t frame = 0; frame < frames_now; ++frame) {
-        accumulate_channel_block(channel, block_index, ctx, frame);
-    }
-}
-
-void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
-                            std::vector<std::size_t>& block_indices,
-                            const AccumulateContext& ctx,
-                            uint64_t frames_now) {
-    std::vector<float> start_gains(ctx.num_out_ch);
-    std::vector<float> end_gains(ctx.num_out_ch);
-    for (std::size_t ci = 0; ci < gain_matrix.size(); ++ci) {
-        const auto& channel = gain_matrix[ci];
-        if (channel.blocks.empty()) {
-            continue;
-        }
-        auto start_index = block_indices[ci];
-        auto end_index = start_index;
-        const bool smooth_start =
-            ctx.object_smoothing_frames > 0 && gains_at_frame(channel, start_index, ctx, ctx.frames_done, start_gains);
-        const bool smooth_end = ctx.object_smoothing_frames > 0 &&
-                                gains_at_frame(channel, end_index, ctx, ctx.frames_done + frames_now - 1, end_gains);
-        if (!smooth_start || !smooth_end) {
-            for (std::size_t frame = 0; frame < frames_now; ++frame) {
-                accumulate_channel_block(channel, block_indices[ci], ctx, frame);
+Result<PreparedPcmMix>
+prepare_speaker_mix(std::vector<ChannelGainInfo> channels, std::size_t inputs, std::size_t outputs) {
+    PreparedPcmMix result;
+    std::vector<MradmDspMixRow> rows;
+    std::vector<MradmDspMixBlock> blocks;
+    std::vector<float> gains;
+    for (auto& channel : channels) {
+        result.channels.push_back(
+            {channel.input_channel, std::move(channel.object_id), std::move(channel.speaker_label_key)});
+        rows.push_back({channel.input_channel, blocks.size(), channel.blocks.size(), channel.output_gain});
+        for (auto& block : channel.blocks) {
+            if (block.gains.size() != outputs) {
+                return make_error(ErrorCode::invalid_argument, "PCM gain width mismatch");
             }
-            continue;
+            blocks.push_back({block.start_sample,
+                              block.end_sample,
+                              block.interp_length_samples.value_or(0),
+                              (block.jump_position ? 1U : 0U) | (block.smoothable_object ? 2U : 0U) |
+                                  (block.interp_length_samples ? 4U : 0U)});
+            gains.insert(gains.end(), block.gains.begin(), block.gains.end());
         }
-        block_indices[ci] = start_index;
-
-        for (std::size_t frame = 0; frame < frames_now; ++frame) {
-            const float alpha = frames_now > 1 ? static_cast<float>(frame) / static_cast<float>(frames_now - 1) : 0.0F;
-            const float in_sample = ctx.input[(frame * ctx.num_in_ch) + channel.input_channel];
-            for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
-                const float gain = (start_gains[out_ch] * (1.0F - alpha)) + (end_gains[out_ch] * alpha);
-                float contribution = (in_sample * gain) * channel.output_gain;
-                if (!ctx.live_gains.empty()) {
-                    contribution *= ctx.live_gains[(frame * ctx.num_in_ch) + channel.input_channel];
-                }
-                (*ctx.output)[(frame * ctx.num_out_ch) + out_ch] += contribution;
-            }
-        }
+        std::vector<BlockGains>{}.swap(channel.blocks);
     }
+    auto prepared = dsp::PcmMixPlan::create(inputs, outputs, rows, blocks, gains);
+    if (!prepared) {
+        return tl::unexpected{prepared.error()};
+    }
+    result.plan = std::move(*prepared);
+    return result;
 }
 
 // NOLINTNEXTLINE(readability-function-size): keep writer and asynchronous meter buffer lifetimes in one scope.
 Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
-                                         const std::vector<ChannelGainInfo>& gain_matrix,
+                                         const PreparedPcmMix& gain_matrix,
                                          uint16_t num_out_ch,
                                          std::string_view backend,
                                          ProgressSink& progress,
@@ -168,8 +83,6 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
 
         const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
 
-        // Current block index per channel — advanced monotonically as frames_done increases.
-        std::vector<std::size_t> blk_idx(gain_matrix.size(), 0);
 
         auto lufs_st =
             dsp::Meter::create(num_out_ch, static_cast<uint32_t>(sample_rate), dsp::MeterMode::integrated_true_peak);
@@ -179,6 +92,10 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
 
         constexpr uint64_t k_min_block_size = 1024;
         const uint64_t k_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
+        dsp::PcmMixer mix(gain_matrix.plan,
+                          static_cast<std::size_t>(k_block_size),
+                          k_default_interp,
+                          plan.object_smoothing_frames > 0);
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
 
         // Loudness / true-peak measurement dominates this renderer (≈70% at 22.2). Run it on a
@@ -227,14 +144,11 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
             }
             std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);
 
-            const AccumulateContext ctx{in_block.data(),
-                                        &out_block,
-                                        frames_done,
-                                        num_in_ch,
-                                        num_out_ch,
-                                        k_default_interp,
-                                        plan.object_smoothing_frames};
-            accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now);
+            mix.speaker(std::span{in_block}.first(static_cast<std::size_t>(frames_now) * num_in_ch),
+                        out_block,
+                        {},
+                        frames_done,
+                        static_cast<std::size_t>(frames_now));
             if (process) {
                 auto status =
                     process(std::span<const float>(in_block.data(), static_cast<std::size_t>(num_in_ch) * frames_now),

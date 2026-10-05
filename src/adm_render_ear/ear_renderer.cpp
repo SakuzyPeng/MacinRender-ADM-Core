@@ -28,6 +28,7 @@
 #include "meter.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
+#include "speaker_pcm.h"
 
 namespace mradm {
 
@@ -74,21 +75,6 @@ struct ChannelGainInfo {
     }
     return ds.speaker_labels;
 }
-
-// Accumulation uses non-interleaved (channel-major) temporary buffers so the
-// innermost loop over frames is a plain saxpy — SIMD-vectorisable by the compiler.
-// Layout: col_buf[out_ch * frames_cap + frame], contiguous per output channel.
-struct AccumulateContext {
-    const float* input{nullptr};
-    float* col_direct{nullptr};  // [num_out_ch × frames_cap] column-major, float
-    float* col_diffuse{nullptr}; // [num_out_ch × frames_cap] column-major, float
-    uint64_t frames_done{0};
-    uint16_t num_in_ch{0};
-    uint16_t num_out_ch{0};
-    uint64_t default_interp{0};
-    uint64_t object_smoothing_frames{0};
-    uint64_t frames_cap{0}; // stride between columns (= k_block_size)
-};
 
 // FIR decorrelator state for the diffuse bus (BS.2127).
 // Uses the private Rust FFT boundary. In phase 1 SIMD dispatch is allowed;
@@ -495,202 +481,40 @@ Result<std::vector<ChannelGainInfo>> build_gain_matrix(const AdmScene& scene,
     return result;
 }
 
-void accumulate_channel_segment(const ChannelGainInfo& channel,
-                                std::size_t block_index,
-                                const AccumulateContext& ctx,
-                                const float* ch_in,
-                                std::size_t f0,
-                                std::size_t f1) {
-    const auto& block = channel.blocks[block_index];
-    const uint64_t abs_start = ctx.frames_done;
-
-    const uint64_t interp_len = render_common::interpolation_length(channel, block_index, ctx.default_interp);
-    const uint64_t delta0 = (abs_start + f0) - block.start_sample;
-    const bool any_ramp = interp_len > 0 && delta0 < interp_len;
-
-    const std::size_t num_out = ctx.num_out_ch;
-
-    const uint64_t stride = ctx.frames_cap;
-
-    if (!any_ramp) {
-        // Fast path: gains constant over this window → saxpy per output channel.
-        for (std::size_t out_ch = 0; out_ch < num_out; ++out_ch) {
-            const auto gd = static_cast<float>(block.gains[out_ch]);
-            const auto gf = static_cast<float>(block.diffuse_gains[out_ch]);
-            if (gd == 0.0F && gf == 0.0F) {
-                continue; // skip sparse zeros (common for VBAP panning)
+Result<render_common::PreparedPcmMix>
+prepare_ear_mix(std::vector<ChannelGainInfo> channels, std::size_t inputs, std::size_t outputs) {
+    render_common::PreparedPcmMix result;
+    std::vector<MradmDspMixRow> rows;
+    std::vector<MradmDspMixBlock> blocks;
+    std::vector<double> gains;
+    for (auto& channel : channels) {
+        result.channels.push_back(
+            {channel.input_channel, std::move(channel.object_id), std::move(channel.speaker_label_key)});
+        rows.push_back({channel.input_channel, blocks.size(), channel.blocks.size(), 1.0F});
+        for (const auto& block : channel.blocks) {
+            if (block.gains.size() != outputs || block.diffuse_gains.size() != outputs) {
+                return make_error(ErrorCode::invalid_argument, "EAR gain width mismatch");
             }
-            float* MRADM_RESTRICT col_d = ctx.col_direct + (out_ch * stride);
-            float* MRADM_RESTRICT col_f = ctx.col_diffuse + (out_ch * stride);
-            if (gd != 0.0F) {
-                for (std::size_t f = f0; f < f1; ++f) {
-                    col_d[f] += ch_in[f] * gd;
-                }
-            }
-            if (gf != 0.0F) {
-                for (std::size_t f = f0; f < f1; ++f) {
-                    col_f[f] += ch_in[f] * gf;
-                }
-            }
+            blocks.push_back({block.start_sample,
+                              block.end_sample,
+                              block.interp_length_samples.value_or(0),
+                              (block.jump_position ? 1U : 0U) | (block.smoothable_object ? 2U : 0U) |
+                                  (block.interp_length_samples ? 4U : 0U)});
+            gains.insert(gains.end(), block.gains.begin(), block.gains.end());
+            gains.insert(gains.end(), block.diffuse_gains.begin(), block.diffuse_gains.end());
         }
-    } else {
-        // Slow path: interpolating — per-frame scalar fallback.
-        for (std::size_t f = f0; f < f1; ++f) {
-            const uint64_t delta = (abs_start + f) - block.start_sample;
-            const bool ramping = delta < interp_len;
-            const float in = ch_in[f];
-            for (std::size_t out_ch = 0; out_ch < num_out; ++out_ch) {
-                const auto gd = static_cast<float>(
-                    ramping ? render_common::interpolated_scalar(
-                                  channel.blocks[block_index - 1].gains[out_ch], block.gains[out_ch], delta, interp_len)
-                            : block.gains[out_ch]);
-                const auto gf = static_cast<float>(
-                    ramping ? render_common::interpolated_scalar(channel.blocks[block_index - 1].diffuse_gains[out_ch],
-                                                                 block.diffuse_gains[out_ch],
-                                                                 delta,
-                                                                 interp_len)
-                            : block.diffuse_gains[out_ch]);
-                ctx.col_direct[(out_ch * stride) + f] += in * gd;
-                ctx.col_diffuse[(out_ch * stride) + f] += in * gf;
-            }
-        }
+        std::vector<BlockGains>{}.swap(channel.blocks);
     }
-}
-
-// Accumulate one input channel into the column-major direct/diffuse buffers.
-// Fast path (static gains): inner loop is a plain saxpy -> auto-vectorised.
-// Slow path (ramping): per-frame scalar fallback.
-void accumulate_channel_block(const ChannelGainInfo& channel,
-                              std::size_t& block_index,
-                              const AccumulateContext& ctx,
-                              const float* ch_in, // deinterleaved, [frames_now]
-                              uint64_t frames_now) {
-    const uint64_t abs_start = ctx.frames_done;
-    const uint64_t win_end = abs_start + frames_now;
-    std::size_t f0 = 0;
-
-    while (f0 < frames_now) {
-        const uint64_t abs_frame = abs_start + f0;
-        while (block_index + 1 < channel.blocks.size() && abs_frame >= channel.blocks[block_index + 1].start_sample) {
-            ++block_index;
-        }
-
-        const auto& block = channel.blocks[block_index];
-        if (abs_frame < block.start_sample) {
-            f0 = static_cast<std::size_t>(std::min(block.start_sample - abs_start, win_end - abs_start));
-            continue;
-        }
-        if (abs_frame >= block.end_sample) {
-            if (block_index + 1 >= channel.blocks.size()) {
-                return;
-            }
-            const uint64_t next_start = channel.blocks[block_index + 1].start_sample;
-            f0 = static_cast<std::size_t>(std::min(std::max(abs_frame, next_start) - abs_start, frames_now));
-            ++block_index;
-            continue;
-        }
-
-        uint64_t segment_end = std::min(block.end_sample, win_end);
-        if (block_index + 1 < channel.blocks.size()) {
-            segment_end = std::min(segment_end, channel.blocks[block_index + 1].start_sample);
-        }
-        if (segment_end <= abs_frame) {
-            ++block_index;
-            continue;
-        }
-
-        const auto f1 = static_cast<std::size_t>(segment_end - abs_start);
-        accumulate_channel_segment(channel, block_index, ctx, ch_in, f0, f1);
-        f0 = f1;
+    auto plan = dsp::PcmMixPlan::create(inputs, outputs, rows, blocks, {}, gains, true);
+    if (!plan) {
+        return tl::unexpected{plan.error()};
     }
-}
-
-[[nodiscard]] bool gains_at_frame(const ChannelGainInfo& channel,
-                                  std::size_t& block_index,
-                                  const AccumulateContext& ctx,
-                                  uint64_t abs_frame,
-                                  std::vector<float>& direct,
-                                  std::vector<float>& diffuse) {
-    std::ranges::fill(direct, 0.0F);
-    std::ranges::fill(diffuse, 0.0F);
-    while (block_index + 1 < channel.blocks.size() && abs_frame >= channel.blocks[block_index + 1].start_sample) {
-        ++block_index;
-    }
-
-    const auto& block = channel.blocks[block_index];
-    if (abs_frame < block.start_sample || abs_frame >= block.end_sample) {
-        return false;
-    }
-
-    const uint64_t interp_len = render_common::interpolation_length(channel, block_index, ctx.default_interp);
-    const uint64_t delta = abs_frame - block.start_sample;
-    const bool ramping = interp_len > 0 && delta < interp_len;
-    for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
-        direct[out_ch] = static_cast<float>(block.gains[out_ch]);
-        diffuse[out_ch] = static_cast<float>(block.diffuse_gains[out_ch]);
-        if (ramping) {
-            direct[out_ch] = render_common::interpolated_scalar(
-                static_cast<float>(channel.blocks[block_index - 1].gains[out_ch]), direct[out_ch], delta, interp_len);
-            diffuse[out_ch] = render_common::interpolated_scalar(
-                static_cast<float>(channel.blocks[block_index - 1].diffuse_gains[out_ch]),
-                diffuse[out_ch],
-                delta,
-                interp_len);
-        }
-    }
-    return block.smoothable_object;
-}
-
-void accumulate_gain_matrix(const std::vector<ChannelGainInfo>& gain_matrix,
-                            std::vector<std::size_t>& block_indices,
-                            const AccumulateContext& ctx,
-                            uint64_t frames_now,
-                            std::vector<float>& ch_in_buf) {
-    std::vector<float> start_direct(ctx.num_out_ch);
-    std::vector<float> end_direct(ctx.num_out_ch);
-    std::vector<float> start_diffuse(ctx.num_out_ch);
-    std::vector<float> end_diffuse(ctx.num_out_ch);
-    for (std::size_t ci = 0; ci < gain_matrix.size(); ++ci) {
-        const auto& channel = gain_matrix[ci];
-        if (channel.blocks.empty()) {
-            continue;
-        }
-        // Deinterleave this input channel into a contiguous buffer.
-        const uint16_t ic = channel.input_channel;
-        const uint16_t num_in = ctx.num_in_ch;
-        for (std::size_t f = 0; f < frames_now; ++f) {
-            ch_in_buf[f] = ctx.input[(f * num_in) + ic];
-        }
-        auto start_index = block_indices[ci];
-        auto end_index = start_index;
-        const bool smooth_start =
-            ctx.object_smoothing_frames > 0 &&
-            gains_at_frame(channel, start_index, ctx, ctx.frames_done, start_direct, start_diffuse);
-        const bool smooth_end =
-            ctx.object_smoothing_frames > 0 &&
-            gains_at_frame(channel, end_index, ctx, ctx.frames_done + frames_now - 1, end_direct, end_diffuse);
-        if (!smooth_start || !smooth_end) {
-            accumulate_channel_block(channel, block_indices[ci], ctx, ch_in_buf.data(), frames_now);
-            continue;
-        }
-        block_indices[ci] = start_index;
-        const uint64_t stride = ctx.frames_cap;
-        for (std::size_t out_ch = 0; out_ch < ctx.num_out_ch; ++out_ch) {
-            float* MRADM_RESTRICT col_d = ctx.col_direct + (out_ch * stride);
-            float* MRADM_RESTRICT col_f = ctx.col_diffuse + (out_ch * stride);
-            for (std::size_t f = 0; f < frames_now; ++f) {
-                const float alpha = frames_now > 1 ? static_cast<float>(f) / static_cast<float>(frames_now - 1) : 0.0F;
-                const float gd = (start_direct[out_ch] * (1.0F - alpha)) + (end_direct[out_ch] * alpha);
-                const float gf = (start_diffuse[out_ch] * (1.0F - alpha)) + (end_diffuse[out_ch] * alpha);
-                col_d[f] += ch_in_buf[f] * gd;
-                col_f[f] += ch_in_buf[f] * gf;
-            }
-        }
-    }
+    result.plan = std::move(*plan);
+    return result;
 }
 
 // Apply 512-tap FIR decorrelator via overlap-add FFT convolution (Rust FFT; the
-// backend is vDSP on macOS and KissFFT elsewhere — see DecorrState above).
+// numeric backend follows the Rust FFT implementation).
 // diffuse_in:  [frames_now × num_out_ch] interleaved, float
 // diffuse_out: [frames_now × num_out_ch] interleaved, float  (written)
 void apply_decorrelator(DecorrState& state,
@@ -788,57 +612,23 @@ void remap_wav71_to_wave_order(std::vector<float>& block, std::size_t frames_now
 // the column-major direct/diffuse scratch, transpose to interleaved, run the FIR
 // decorrelator on the diffuse bus + the compensation delay on the direct bus, mix, and
 // (for wav71) remap to WAVE order — writing num_out_ch×frames_now interleaved into
-// out_block ([0, out_samples) only; caller sizes it). `decorr` + `blk_idx` carry the
+// out_block ([0, out_samples) only; caller sizes it). `decorr` + Rust mix state carry the
 // decorrelator overlap / compensation-delay / block cursors across calls; the scratch
 // vectors are caller-owned and reused. Extracted verbatim from render_window's loop so the
 // offline batch path and the realtime EarStream share one implementation and cannot drift.
-void render_ear_block(const std::vector<ChannelGainInfo>& gain_matrix,
-                      std::vector<std::size_t>& blk_idx,
+// NOLINTNEXTLINE(readability-function-size): retain the existing EAR post-processing buffer boundaries.
+void render_ear_block(dsp::PcmMixer& mix,
                       DecorrState& decorr,
                       const std::vector<float>& in_block,
                       std::vector<float>& out_block,
-                      std::vector<float>& col_direct,
-                      std::vector<float>& col_diffuse,
                       std::vector<float>& diffuse_in,
                       std::vector<float>& diffuse_out,
-                      std::vector<float>& ch_in_buf,
-                      std::size_t col_stride,
                       uint64_t frames_done,
                       uint64_t frames_now,
-                      uint16_t num_in_ch,
                       uint16_t num_out_ch,
-                      uint64_t default_interp,
-                      uint64_t object_smoothing_frames,
                       const std::string& output_layout) {
     const std::size_t out_samples = num_out_ch * static_cast<std::size_t>(frames_now);
-
-    // Zero the live region of the column-major accumulation buffers (per channel).
-    for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-        std::fill_n(col_direct.data() + (ch * col_stride), frames_now, 0.0F);
-        std::fill_n(col_diffuse.data() + (ch * col_stride), frames_now, 0.0F);
-    }
-
-    AccumulateContext ctx;
-    ctx.input = in_block.data();
-    ctx.col_direct = col_direct.data();
-    ctx.col_diffuse = col_diffuse.data();
-    ctx.frames_done = frames_done;
-    ctx.num_in_ch = num_in_ch;
-    ctx.num_out_ch = num_out_ch;
-    ctx.default_interp = default_interp;
-    ctx.object_smoothing_frames = object_smoothing_frames;
-    ctx.frames_cap = col_stride;
-    accumulate_gain_matrix(gain_matrix, blk_idx, ctx, frames_now, ch_in_buf);
-
-    // Transpose column-major → interleaved for the decorrelator and delay.
-    for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-        const float* src_d = col_direct.data() + (ch * col_stride);
-        const float* src_f = col_diffuse.data() + (ch * col_stride);
-        for (std::size_t f = 0; f < frames_now; ++f) {
-            out_block[(f * num_out_ch) + ch] = src_d[f];
-            diffuse_in[(f * num_out_ch) + ch] = src_f[f];
-        }
-    }
+    mix.ear(in_block, out_block, diffuse_in, frames_done, static_cast<std::size_t>(frames_now));
 
     apply_decorrelator(decorr, diffuse_in, diffuse_out, frames_now, num_out_ch);
     apply_direct_delay(decorr, out_block, frames_now, num_out_ch);
@@ -883,7 +673,7 @@ void init_decorr_state(DecorrState& decorr, const ear::Layout& layout, uint16_t 
 // so it stays in render_window. ear::Layout never leaves this TU (ADR 0003).
 struct EarPrepared final : IPreparedRender {
     ear::Layout layout;
-    std::vector<ChannelGainInfo> gain_matrix;
+    render_common::PreparedPcmMix gain_matrix;
 };
 
 // Realtime streaming EAR session over the same prepared libear layout + gain matrix as
@@ -940,7 +730,7 @@ class EarStream final : public IRenderStream {
         for (auto& dl : decorr_.dir_delay) {
             std::ranges::fill(dl, 0.0F);
         }
-        std::ranges::fill(blk_idx_, std::size_t{0});
+        mix_.reset();
         frames_done_ = std::min(frame, total_frames_);
         render_common::seek_reader_abs(*reader_, frames_done_);
         fifo_.clear();
@@ -976,13 +766,13 @@ class EarStream final : public IRenderStream {
           sample_rate_(plan.scene.info.sample_rate), total_frames_(plan.scene.info.num_frames),
           output_layout_(plan.output_layout), object_smoothing_frames_(plan.object_smoothing_frames),
           k_block_size_(std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
-          default_interp_(static_cast<uint64_t>(plan.scene.info.sample_rate) * plan.default_interp_ms / 1000U),
           col_stride_(static_cast<std::size_t>(std::max<uint64_t>(1024U, plan.object_smoothing_frames))),
-          blk_idx_(prepared.gain_matrix.size(), 0),
-          col_direct_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F),
-          col_diffuse_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F),
+          mix_(prepared.gain_matrix.plan,
+               col_stride_,
+               static_cast<uint64_t>(plan.scene.info.sample_rate) * plan.default_interp_ms / 1000U,
+               object_smoothing_frames_ > 0),
           diffuse_in_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F),
-          diffuse_out_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F), ch_in_buf_(col_stride_, 0.0F),
+          diffuse_out_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F),
           in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) * col_stride_, 0.0F),
           live_gain_targets_(plan.scene.info.num_channels, 1.0F),
           live_gain_smoother_(plan.scene.info.num_channels, plan.scene.info.sample_rate) {
@@ -999,23 +789,15 @@ class EarStream final : public IRenderStream {
         apply_live_gain(frames_now);
         fifo_.assign(static_cast<std::size_t>(num_out_ch_) * frames_now, 0.0F);
         fifo_read_ = 0;
-        render_ear_block(prepared_.gain_matrix,
-                         blk_idx_,
+        render_ear_block(mix_,
                          decorr_,
                          in_block_,
                          fifo_,
-                         col_direct_,
-                         col_diffuse_,
                          diffuse_in_,
                          diffuse_out_,
-                         ch_in_buf_,
-                         col_stride_,
                          frames_done_,
                          frames_now,
-                         num_in_ch_,
                          num_out_ch_,
-                         default_interp_,
-                         object_smoothing_frames_,
                          output_layout_);
         frames_done_ += frames_now;
     }
@@ -1029,15 +811,11 @@ class EarStream final : public IRenderStream {
     std::string output_layout_;
     uint64_t object_smoothing_frames_;
     uint64_t k_block_size_;
-    uint64_t default_interp_;
     std::size_t col_stride_;
-    std::vector<std::size_t> blk_idx_;
+    dsp::PcmMixer mix_;
     DecorrState decorr_;
-    std::vector<float> col_direct_;
-    std::vector<float> col_diffuse_;
     std::vector<float> diffuse_in_;
     std::vector<float> diffuse_out_;
-    std::vector<float> ch_in_buf_;
     std::vector<float> in_block_;
     std::vector<float> live_gain_targets_; // per-input-channel target multiplier (1.0 = neutral)
     render_common::InterleavedLiveGainSmoother live_gain_smoother_;
@@ -1128,7 +906,11 @@ Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& 
 
         auto prepared = std::make_shared<EarPrepared>();
         prepared->layout = std::move(layout);
-        prepared->gain_matrix = std::move(*gain_matrix);
+        auto compiled = prepare_ear_mix(std::move(*gain_matrix), num_in_ch, prepared->layout.channels().size());
+        if (!compiled) {
+            return tl::unexpected{compiled.error()};
+        }
+        prepared->gain_matrix = std::move(*compiled);
         return std::static_pointer_cast<IPreparedRender>(prepared);
     } catch (const std::invalid_argument& e) {
         return make_error(ErrorCode::unsupported,
@@ -1191,7 +973,10 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
         auto& writer = *writer_res;
 
         const uint64_t k_default_interp = static_cast<uint64_t>(sample_rate) * plan.default_interp_ms / 1000;
-        std::vector<std::size_t> blk_idx(gain_matrix.size(), 0);
+        dsp::PcmMixer mix(gain_matrix.plan,
+                          static_cast<std::size_t>(k_block_size),
+                          k_default_interp,
+                          plan.object_smoothing_frames > 0);
 
         // Inline loudness + true-peak measurement (BS.1770-4 / EBU R128).
         auto lufs_st =
@@ -1200,18 +985,10 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
             return tl::unexpected{lufs_st.error()};
         }
 
-        const std::size_t col_stride = k_block_size; // frames_cap
-
-        // Column-major accumulation buffers [num_out_ch × k_block_size].
-        // col_direct[out_ch * col_stride + frame], col_diffuse likewise.
-        std::vector<float> col_direct(num_out_ch * col_stride, 0.0F);
-        std::vector<float> col_diffuse(num_out_ch * col_stride, 0.0F);
-
         // Interleaved buffers used for I/O and the decorrelator.
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
         std::vector<float> diffuse_in(num_out_ch * k_block_size); // interleaved diffuse
         std::vector<float> diffuse_out(num_out_ch * k_block_size);
-        std::vector<float> ch_in_buf(k_block_size); // deinterleaved input scratch
 
         // Loudness / true-peak measurement runs on a background thread (SerialWorker) so it overlaps
         // the next block's mix + decorrelation. Double-buffer the interleaved output so the next block
@@ -1269,23 +1046,15 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
 
             reader->read(in_block.data(), frames_now);
 
-            render_ear_block(gain_matrix,
-                             blk_idx,
+            render_ear_block(mix,
                              decorr,
                              in_block,
                              out_block,
-                             col_direct,
-                             col_diffuse,
                              diffuse_in,
                              diffuse_out,
-                             ch_in_buf,
-                             col_stride,
                              frames_done,
                              frames_now,
-                             num_in_ch,
                              num_out_ch,
-                             k_default_interp,
-                             plan.object_smoothing_frames,
                              plan.output_layout);
 
             // Write only the in-window frames. Pre-roll blocks (emit == false) are
