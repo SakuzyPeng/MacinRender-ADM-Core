@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <exception>
 #include <limits>
 
 #include "panner.h"
@@ -29,11 +30,18 @@ Result<SizeMixer> SizeMixer::create(const Prepared& prepared, const RenderPlan& 
             point.position = point.target = track.events.front().position;
             std::copy(gains->begin(), gains->end(), point.gains.begin());
             result.initial_points_.push_back(point);
-            render_common::ChannelGainInfo channel;
-            channel.input_channel = track.input_channel;
-            channel.blocks.reserve(3);
-            result.point_channels_.push_back(std::move(channel));
         }
+    }
+    if (live_points) {
+        std::vector<std::size_t> channels;
+        channels.reserve(prepared.size_tracks.size());
+        for (const auto& track : prepared.size_tracks) {
+            channels.push_back(track.input_channel);
+        }
+        result.point_mix_.emplace(dsp::PcmMixer::dynamic(
+            result.input_channels_, prepared.output_channels, channels, 3U, 1024U, result.default_interp_));
+        result.point_blocks_.reserve(3U);
+        result.point_gains_.reserve(std::size_t{3U} * prepared.output_channels);
     }
     result.points_ = result.initial_points_;
     result.weights_.assign(result.processors_.size(), 1.0F);
@@ -61,6 +69,9 @@ void SizeMixer::reset() {
     }
     weights_ = targets_;
     points_ = initial_points_;
+    if (point_mix_) {
+        point_mix_->reset();
+    }
 }
 
 void SizeMixer::set_point_in_matrix(std::span<const float> scales) {
@@ -79,6 +90,9 @@ std::vector<SizeTrackState> SizeMixer::snapshot() const {
 }
 
 void SizeMixer::restore(std::span<const SizeTrackState> states) {
+    if (point_mix_) {
+        point_mix_->reset();
+    }
     for (std::size_t i = 0; i < processors_.size(); ++i) {
         processors_[i].restore(states[i].size);
         if (!points_.empty()) {
@@ -91,22 +105,23 @@ void SizeMixer::restore(std::span<const SizeTrackState> states) {
 // Advance the same float-coordinate recurrence as triple_balance_motion_blocks, but
 // retain only this block's gain changes. No curve grows with the file duration.
 Result<void> SizeMixer::prepare_points(uint64_t start_frame, std::size_t frames) {
+    if (points_.empty()) {
+        return {};
+    }
+    if (!point_mix_) {
+        return make_error(ErrorCode::internal_error, "Unprepared point mixer");
+    }
     const float alpha = 1.0F - std::exp(-512.0F / 1200.0F);
     for (std::size_t i = 0; i < points_.size(); ++i) {
         auto& state = points_[i];
-        auto& channel = point_channels_[i];
         const auto& events = prepared_->size_tracks[i].events;
         if (state.control_start != start_frame) {
             return make_error(ErrorCode::internal_error, "Triple Balance point state lost block alignment");
         }
-        channel.blocks.clear();
-        channel.blocks.push_back(
-            {std::vector<float>(state.gains.begin(), state.gains.begin() + prepared_->output_channels),
-             0,
-             std::numeric_limits<uint64_t>::max(),
-             true,
-             true,
-             std::nullopt});
+        point_blocks_.clear();
+        point_gains_.clear();
+        point_blocks_.push_back({0, std::numeric_limits<uint64_t>::max(), 0, 3U});
+        point_gains_.insert(point_gains_.end(), state.gains.begin(), state.gains.begin() + prepared_->output_channels);
         for (std::size_t offset = 0; offset < frames; offset += 512) {
             // A single static event preserves its original coordinates, exactly as the
             // offline point fast path (including half-code quantization boundaries).
@@ -129,16 +144,13 @@ Result<void> SizeMixer::prepare_points(uint64_t start_frame, std::size_t frames)
                 }
                 if (!std::equal(gains->begin(), gains->end(), state.gains.begin())) {
                     std::copy(gains->begin(), gains->end(), state.gains.begin());
-                    channel.blocks.push_back({std::move(*gains),
-                                              state.control_start,
-                                              std::numeric_limits<uint64_t>::max(),
-                                              false,
-                                              true,
-                                              uint64_t{512}});
+                    point_blocks_.push_back({state.control_start, std::numeric_limits<uint64_t>::max(), 512, 6U});
+                    point_gains_.insert(point_gains_.end(), gains->begin(), gains->end());
                 }
             }
             state.control_start += 512;
         }
+        point_mix_->update(i, point_blocks_, point_gains_, prepared_->size_tracks[i].output_gain);
     }
     return {};
 }
@@ -147,10 +159,16 @@ void SizeMixer::accumulate_point(std::size_t track,
                                  const render_common::AccumulateContext& context,
                                  std::size_t frames,
                                  bool user_gain) {
-    auto& channel = point_channels_[track];
-    channel.output_gain = user_gain ? prepared_->size_tracks[track].output_gain : 1.0F;
-    std::size_t index = 0;
-    render_common::accumulate_speaker_channel(channel, index, context, frames);
+    if (!point_mix_) {
+        std::terminate();
+    }
+    point_mix_->speaker(std::span{context.input, frames * context.num_in_ch},
+                        *context.output,
+                        context.live_gains,
+                        context.frames_done,
+                        frames,
+                        track,
+                        user_gain ? std::nullopt : std::optional<float>{1.0F});
 }
 
 Result<void> SizeMixer::process(std::span<const float> source,

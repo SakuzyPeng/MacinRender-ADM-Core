@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -38,7 +39,7 @@ struct Prepared final : IPreparedRender {
     uint16_t output_channels{};
     uint32_t sample_rate{};
     SpeakerSpreadMode spread_mode{};
-    std::vector<render_common::ChannelGainInfo> gain_matrix;
+    render_common::PreparedPcmMix gain_matrix;
     std::vector<SizeTrack> size_tracks;
 };
 
@@ -76,7 +77,9 @@ class SizeMixer {
     std::string layout_;
     std::vector<PointMotionState> initial_points_;
     std::vector<PointMotionState> points_;
-    std::vector<render_common::ChannelGainInfo> point_channels_;
+    std::optional<dsp::PcmMixer> point_mix_;
+    std::vector<MradmDspMixBlock> point_blocks_;
+    std::vector<float> point_gains_;
 };
 
 Result<std::unique_ptr<IRenderStream>> open_stream(const Prepared& prepared,

@@ -58,8 +58,6 @@ std::vector<RegistryEntry>& custom_layout_registry() {
     return spec;
 }
 
-using render_common::accumulate_gain_matrix;
-using render_common::AccumulateContext;
 using render_common::BlockGains;
 using render_common::ChannelGainInfo;
 
@@ -385,13 +383,13 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
 // calls (PreviewSession scrubbing); no per-output state.
 struct VbapPrepared final : IPreparedRender {
     LayoutSpec layout;
-    std::vector<ChannelGainInfo> gain_matrix;
+    render_common::PreparedPcmMix gain_matrix;
 };
 
 // Realtime streaming VBAP session over the same prepared gain matrix as render_window.
 // VBAP carries no DSP state across blocks (just a monotonic per-channel block cursor), so
 // streaming is a thin loop: render k_block_size-aligned blocks via the SAME
-// accumulate_gain_matrix the offline path uses, into a FIFO that process() serves at any
+// Rust timeline mixer the offline path uses, into a FIFO that process() serves at any
 // requested frame count — bit-identical to render_window for a gap-free run from frame 0.
 // seek() resets the per-channel block cursors (the accumulators re-find the right block)
 // and repositions the reader. set_overrides applies live per-object gain by pre-scaling the
@@ -432,7 +430,7 @@ class VbapStream final : public IRenderStream {
     }
 
     [[nodiscard]] Result<void> seek(uint64_t frame) override {
-        std::ranges::fill(blk_idx_, std::size_t{0}); // accumulators advance forward; rewind to re-find
+        mix_.reset();
         frames_done_ = std::min(frame, total_frames_);
         render_common::seek_reader_abs(*reader_, frames_done_);
         fifo_.clear();
@@ -468,9 +466,12 @@ class VbapStream final : public IRenderStream {
           sample_rate_(plan.scene.info.sample_rate), total_frames_(plan.scene.info.num_frames),
           output_layout_(plan.output_layout), object_smoothing_frames_(plan.object_smoothing_frames),
           k_block_size_(std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
-          default_interp_(static_cast<uint64_t>(plan.scene.info.sample_rate) * plan.default_interp_ms / 1000U),
-          blk_idx_(prepared.gain_matrix.size(), 0), in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) *
-                                                              std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
+          mix_(prepared.gain_matrix.plan,
+               k_block_size_,
+               static_cast<uint64_t>(plan.scene.info.sample_rate) * plan.default_interp_ms / 1000U,
+               object_smoothing_frames_ > 0),
+          in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) *
+                    std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
           live_gain_targets_(plan.scene.info.num_channels, 1.0F),
           live_gain_smoother_(plan.scene.info.num_channels, plan.scene.info.sample_rate) {}
 
@@ -486,9 +487,11 @@ class VbapStream final : public IRenderStream {
         apply_live_gain(frames_now);
         fifo_.assign(static_cast<std::size_t>(num_out_ch_) * frames_now, 0.0F);
         fifo_read_ = 0;
-        const AccumulateContext ctx{
-            in_block_.data(), &fifo_, frames_done_, num_in_ch_, num_out_ch_, default_interp_, object_smoothing_frames_};
-        accumulate_gain_matrix(prepared_.gain_matrix, blk_idx_, ctx, frames_now);
+        mix_.speaker(std::span{in_block_}.first(static_cast<std::size_t>(frames_now) * num_in_ch_),
+                     fifo_,
+                     {},
+                     frames_done_,
+                     frames_now);
         frames_done_ += frames_now;
     }
 
@@ -501,8 +504,7 @@ class VbapStream final : public IRenderStream {
     std::string output_layout_;
     uint64_t object_smoothing_frames_;
     uint64_t k_block_size_;
-    uint64_t default_interp_;
-    std::vector<std::size_t> blk_idx_; // per-channel monotonic block cursor
+    dsp::PcmMixer mix_;
     std::vector<float> in_block_;
     std::vector<float> live_gain_targets_; // per-input-channel target multiplier (1.0 = neutral)
     render_common::InterleavedLiveGainSmoother live_gain_smoother_;
@@ -592,7 +594,12 @@ Result<std::shared_ptr<IPreparedRender>> VbapRenderer::prepare(const RenderPlan&
 
     auto prepared = std::make_shared<VbapPrepared>();
     prepared->layout = std::move(*layout);
-    prepared->gain_matrix = std::move(*gain_matrix);
+    auto compiled =
+        render_common::prepare_speaker_mix(std::move(*gain_matrix), num_in_ch, prepared->layout.speakers.size());
+    if (!compiled) {
+        return tl::unexpected{compiled.error()};
+    }
+    prepared->gain_matrix = std::move(*compiled);
     return std::static_pointer_cast<IPreparedRender>(prepared);
 }
 

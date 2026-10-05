@@ -332,6 +332,8 @@ HpTF headphone compensation also uses Rust for coefficient design, response and 
 
 Stereo device peak protection and live gain ramps also keep their state in Rust. Backends generate envelopes or process PCM in batches, preserving latency, EOS and seek behavior. See the [Rust output DSP migration](docs/architecture/RUST_OUTPUT_DSP_MIGRATION.md) for scope and validation.
 
+Rust also owns the numerical tables, timeline cursors and scratch buffers for shared speaker and EAR direct/diffuse mixing, plus fixed monitor matrices. C++ retains layout/ADM algorithms and scheduling. See the [Rust PCM mixing migration](docs/architecture/RUST_PCM_MIX_MIGRATION.md) for scope and validation.
+
 System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
 
 ```bash

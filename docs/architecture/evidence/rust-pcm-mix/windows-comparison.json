@@ -1,0 +1,34 @@
+{
+  "baseline_commit": "4286f3e",
+  "tolerance": "2e-6 + 2e-6 * abs(reference)",
+  "cases": [
+    {
+      "kind": "speaker",
+      "samples": 394560,
+      "differing_samples": 0,
+      "max_absolute_error": 0,
+      "max_normalized_error": 0
+    },
+    {
+      "kind": "ear",
+      "samples": 394560,
+      "differing_samples": 0,
+      "max_absolute_error": 0,
+      "max_normalized_error": 0
+    },
+    {
+      "kind": "dynamic",
+      "samples": 1536,
+      "differing_samples": 0,
+      "max_absolute_error": 0,
+      "max_normalized_error": 0
+    },
+    {
+      "kind": "matrix",
+      "samples": 18084,
+      "differing_samples": 0,
+      "max_absolute_error": 0,
+      "max_normalized_error": 0
+    }
+  ]
+}

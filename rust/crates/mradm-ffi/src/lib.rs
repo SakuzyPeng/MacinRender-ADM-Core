@@ -13,6 +13,7 @@ mod hptf;
 mod hrtf;
 mod meter;
 mod output_dsp;
+mod pcm_mix;
 mod resampler;
 mod spatial;
 mod spreader;
