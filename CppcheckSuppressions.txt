@@ -59,3 +59,7 @@ unusedStructMember:*/src/adm_render_triple_balance/render_state.h
 
 # HOA transport POD fields are consumed by Rust across the private FFI.
 unusedStructMember:*/src/adm_dsp/hoa_ffi.h
+
+# Private ADM records are populated by Rust and copied across implementation units.
+unusedStructMember:*/src/adm_metadata/adm_ffi.h
+unusedStructMember:*/src/adm_metadata/metadata.h

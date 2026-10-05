@@ -1,6 +1,8 @@
 #include "metadata.h"
 
+#include <algorithm>
 #include <array>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <span>
@@ -72,13 +74,17 @@ struct Parsed {
     }
     template <class T> static std::span<const T> subset(const T* values, std::size_t count, MradmAdmSpan span) {
         require(span.offset <= count && span.len <= count - span.offset, "无效 ADM 记录范围");
+        if (span.len == 0) {
+            return {};
+        }
         return {values + span.offset, span.len};
     }
     [[nodiscard]] std::vector<std::string> strings(MradmAdmSpan span) const {
         std::vector<std::string> output;
-        for (auto id : subset(view.indices, view.indices_len, span)) {
-            output.push_back(string(id));
-        }
+        output.reserve(span.len);
+        std::ranges::transform(subset(view.indices, view.indices_len, span),
+                               std::back_inserter(output),
+                               [this](uint32_t id) { return string(id); });
         return output;
     }
 };
