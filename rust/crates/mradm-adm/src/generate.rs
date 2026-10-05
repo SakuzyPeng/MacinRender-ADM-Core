@@ -82,14 +82,24 @@ pub fn generate(kind: u32, name: &str, speakers: &[Speaker]) -> Result<Generated
                     ("elevation", speaker.elevation, speaker.elevation_range),
                     ("distance", 1.0, None),
                 ] {
-                    if !value.is_finite() {
+                    let bounds = match coordinate {
+                        "azimuth" => (-180.0, 180.0),
+                        "elevation" => (-90.0, 90.0),
+                        _ => (0.0, f32::MAX),
+                    };
+                    if !value.is_finite() || !(bounds.0..=bounds.1).contains(&value) {
                         return Err(Error::invalid("扬声器坐标必须有限"));
                     }
                     xml.push_str(&format!(
                         "<position coordinate=\"{coordinate}\">{value}</position>"
                     ));
                     if let Some((lo, hi)) = range {
-                        if !lo.is_finite() || !hi.is_finite() || lo > hi {
+                        if !lo.is_finite()
+                            || !hi.is_finite()
+                            || lo > hi
+                            || lo < bounds.0
+                            || hi > bounds.1
+                        {
                             return Err(Error::invalid("扬声器范围无效"));
                         }
                         xml.push_str(&format!("<position coordinate=\"{coordinate}\" bound=\"min\">{lo}</position><position coordinate=\"{coordinate}\" bound=\"max\">{hi}</position>"));

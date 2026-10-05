@@ -144,6 +144,9 @@ impl Document {
                 doc.type_of(key)?;
             }
         }
+        for &key in doc.ids.values() {
+            doc.validate_ranges(key)?;
+        }
         doc.check_cycles("audioObject", "audioObjectIDRef")?;
         doc.check_cycles("audioPackFormat", "audioPackFormatIDRef")?;
         Ok(doc)
@@ -235,6 +238,85 @@ impl Document {
         let tf = self.reference(uid, "audioTrackFormatIDRef")?;
         let sf = self.reference(tf, "audioStreamFormatIDRef")?;
         self.reference(sf, "audioChannelFormatIDRef")
+    }
+    // Match the range-checked parameters consumed from libadm. In particular,
+    // accepting a huge finite azimuth could stall downstream angle wrapping.
+    fn validate_ranges(&self, key: u32) -> Result<()> {
+        let node = self.node(key);
+        if node.local == "audioObject" {
+            for (name, maximum) in [("importance", 10.0), ("dialogue", 2.0)] {
+                if let Some(value) = node.attr(name) {
+                    validate_float_range(value, 0.0, maximum, name)?;
+                }
+            }
+            for child in self.children(key, "positionOffset") {
+                self.validate_position(child, true)?;
+            }
+        }
+        if node.local == "audioChannelFormat" {
+            let channel_type = self.type_of(key)?;
+            for block in self.children(key, "audioBlockFormat") {
+                for child in self.all_children(block) {
+                    let value = self.node(child);
+                    match value.local.as_str() {
+                        "position" if matches!(channel_type, 1 | 3) => {
+                            self.validate_position(child, false)?
+                        }
+                        "diffuse" | "objectDivergence" if channel_type == 3 => {
+                            validate_float_range(&value.text, 0.0, 1.0, &value.local)?
+                        }
+                        "importance" => validate_float_range(&value.text, 0.0, 10.0, "importance")?,
+                        _ => {}
+                    }
+                    let attributes: &[(&str, f32)] = match value.local.as_str() {
+                        "objectDivergence" if channel_type == 3 => {
+                            &[("azimuthRange", 180.0), ("positionRange", 1.0)]
+                        }
+                        "channelLock" if channel_type == 3 => &[("maxDistance", 2.0)],
+                        _ => &[],
+                    };
+                    for &(name, maximum) in attributes {
+                        if let Some(text) = value.attr(name) {
+                            validate_float_range(text, 0.0, maximum, name)?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    fn validate_position(&self, key: u32, offset: bool) -> Result<()> {
+        let node = self.node(key);
+        let coordinate = node
+            .attr("coordinate")
+            .ok_or_else(|| Error::xml("position 缺少 coordinate"))?;
+        let (minimum, maximum) = match coordinate {
+            "azimuth" => {
+                if offset {
+                    (-360.0, 360.0)
+                } else {
+                    (-180.0, 180.0)
+                }
+            }
+            "elevation" => {
+                if offset {
+                    (-180.0, 180.0)
+                } else {
+                    (-90.0, 90.0)
+                }
+            }
+            "distance" if !offset => (
+                0.0,
+                if node.attr("bound").is_some() {
+                    1.0
+                } else {
+                    f32::MAX
+                },
+            ),
+            "distance" | "X" | "Y" | "Z" => (-f32::MAX, f32::MAX),
+            _ => return Err(Error::xml("无效 position coordinate")),
+        };
+        validate_float_range(&node.text, minimum, maximum, coordinate)
     }
     fn check_cycles(&self, kind: &str, edge: &str) -> Result<()> {
         let mut marks = HashMap::<u32, u8>::new();
@@ -330,4 +412,19 @@ pub(crate) fn samples(time: &str, rate: u32) -> Result<u64> {
         .ok_or_else(|| Error::xml("ADM 时间溢出"))?
         / 1_000_000_000;
     Ok(value.min(u128::from(u64::MAX)) as u64)
+}
+
+pub(crate) fn validate_float_range(
+    text: &str,
+    minimum: f32,
+    maximum: f32,
+    name: &str,
+) -> Result<()> {
+    let value = number(text)? as f32;
+    if !value.is_finite() || !(minimum..=maximum).contains(&value) {
+        return Err(Error::xml(format!(
+            "ADM {name} 超出范围 [{minimum}, {maximum}]"
+        )));
+    }
+    Ok(())
 }
