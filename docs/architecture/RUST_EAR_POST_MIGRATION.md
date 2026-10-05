@@ -67,7 +67,8 @@ Rust 测试另覆盖最大容量 1/37/1024/2048、单帧及不规则分块、255
   既有窗口/整段切片逐位检查、seek、C API 和时长裁剪块回归继续通过。
 - Rust fmt/Clippy、改动 C++ 格式/clang-tidy/cppcheck、冻结参考检查及许可证/SBOM 校验通过。
 - macOS/Windows 保留同一组 139 个公开 `adm_*` 导出，无私有 Rust 入口外泄；Windows 附带 C++ 导出不属于稳定 ABI。
-- 最终三平台 CI 的提交、链接及结果记录在机器可读验收文件中。
+- [最终三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37267613687)
+  验证实现提交 `e5836e9`：macOS Debug 59/59、Linux Debug 58/58、Windows Debug 58/58，首轮全部通过。
 
 Windows 继续使用既有 canonical 工作区，原有修改和原始字节均保留。
 本轮同步包含 `e12332b` 的时长裁剪修复；涉及文件在同步前核对基线，之后核验源码指纹。
