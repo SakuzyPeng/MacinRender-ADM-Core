@@ -72,7 +72,8 @@ Triple Balance 点声源使用 `--speaker-spread-mode none`；专有 bed/size、
 - Windows canonical Release：57/57，SOFA ON，三个旧库参考开关 OFF。
 - Rust fmt/Clippy、改动 C++ 格式/clang-tidy/cppcheck、参考头检查及许可证/SBOM 检查通过。
 - 两端保留同一组 139 个公开 `adm_*` 导出；私有 Rust 入口不外泄。Windows 附带 C++ 导出不属于稳定 ABI。
-- 最终三平台 CI 的提交、运行链接和结果记录在机器可读验收文件中。
+- [最终三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37260335033)
+  验证实现提交 `4970ed4`：macOS Debug 58/58、Linux Debug 57/57、Windows Debug 57/57，首轮全部通过。
 
 Windows 原工作区的改动和原始字节保留。同步时额外合入 `4286f3e` 的增益发布修复，
 Monitor 和 realtime fixture 的两份既有 Windows 差异通过三方合并保留；测试源码与本地并非完全相同的干净检出。

@@ -175,7 +175,41 @@
       "tests/unit/realtime_stream_fixture_test.cpp": "3c48fdd6718afdd37facb23e7ff8b67232f758c9d333fb2a73d5a31b695ca157"
     }
   },
-  "ci": null,
+  "ci": {
+    "run_id": 37260335033,
+    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37260335033",
+    "commit": "4970ed4f6a4de084e88cb428617a8dd83fea6345",
+    "conclusion": "success",
+    "attempt": 1,
+    "jobs": [
+      {
+        "name": "Windows debug",
+        "conclusion": "success",
+        "job_id": 111606032715,
+        "ctest_passed": 57,
+        "ctest_total": 57
+      },
+      {
+        "name": "macOS debug",
+        "conclusion": "success",
+        "job_id": 111606032853,
+        "ctest_passed": 58,
+        "ctest_total": 58
+      },
+      {
+        "name": "Version metadata",
+        "conclusion": "success",
+        "job_id": 111606032863
+      },
+      {
+        "name": "Linux debug",
+        "conclusion": "success",
+        "job_id": 111606032916,
+        "ctest_passed": 57,
+        "ctest_total": 57
+      }
+    ]
+  },
   "not_claimed": [
     "Cross-platform bit identity",
     "Throughput or RSS improvement",
@@ -220,6 +254,9 @@
     "out/rust-pcm-mix/build-probe.log": "c0e6e3aa2bd6564cac168ce996777e963361fb5aa76299e6b6ee2e6bc62e3b45",
     "out/rust-pcm-mix/build-release-final.log": "ff920e249b8d9154defce1450349392d24d860be01f0eaffc476242cea359dc1",
     "out/rust-pcm-mix/build-release.log": "38af1418b68cd86d7badc64aa4c66d660e1bb670fafbde7d32e3978e32a16c2c",
+    "out/rust-pcm-mix/ci-linux.log": "7e9018c90d360dd82c0457f47b22921e523a6a601bf5d87584e626ec856d5c63",
+    "out/rust-pcm-mix/ci-macos.log": "9c87fd948f5b7ecb4ca09fe2f75bb5aa77aef7fcf8da1820cc1eac285211a6bd",
+    "out/rust-pcm-mix/ci-windows.log": "e82a13993eff261fb7926b494dacb1b4508316bc8879799b3f7dae8889a754d0",
     "out/rust-pcm-mix/clippy.log": "9aa1054dca7bd7cf533216d0e7131b89f1ca3e90fdf4c298f53fe0ade2fdddea",
     "out/rust-pcm-mix/configure-debug.log": "96f5664aea1eb1d273026ff072fb4a13795d1a8b84d92c4e45aa4d0e8192bb56",
     "out/rust-pcm-mix/configure-release.log": "413d5249b2508aacaa49bd63db411e6e7ccd022a8f44de0ed88276994722f1bd",
