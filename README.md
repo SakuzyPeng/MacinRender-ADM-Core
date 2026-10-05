@@ -364,6 +364,8 @@ Triple Balance 的点源/尺寸声像、22.2 几何、去相关、运动/过渡�
 
 HOA 三阶编码的系数、插值、diffuse 状态，以及 LFE 分离和计量解码也已迁入 Rust；保留原有 seek/窗口行为，并补齐输出容量与短读检查。见 [Rust HOA 迁移](docs/architecture/RUST_HOA_MIGRATION.md)。
 
+Monitor 后端切换淡化、seek 过渡及 Peak/RMS 的数值状态也由 Rust 持有，worker 与回调实例独立；C++ 保留设备、队列和控制调度。详见 [Rust Monitor DSP 迁移](docs/architecture/RUST_MONITOR_DSP_MIGRATION.md)。
+
 系统依赖构建需要另备 Corrosion 0.6.1、Rust 工具链和锁定的 Cargo 依赖缓存：
 
 ```bash

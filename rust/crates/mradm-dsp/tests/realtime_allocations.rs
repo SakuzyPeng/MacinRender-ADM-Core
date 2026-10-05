@@ -553,3 +553,50 @@ fn prepared_hoa_encoder_meter_resets_and_rejections_do_not_allocate() {
         assert_eq!(allocations, 0);
     }
 }
+
+#[test]
+fn prepared_monitor_first_process_reset_and_rejection_do_not_allocate() {
+    use mradm_dsp::monitor::{Callback, Crossfade, Output};
+    let mut fade = Crossfade::new(2, 2048).unwrap();
+    let mut output = Output::new(2, 48000, true).unwrap();
+    let mut pcm = [0.25; 2048];
+    let incoming = [0.75; 2048];
+    let mut peaks = [0.0; 64];
+    let mut rms = [0.0; 64];
+    COUNT.with(|c| c.set(Some(0)));
+    for frames in [1, 0, 37, 511, 1024] {
+        fade.process(&mut pcm, &incoming, frames).unwrap();
+        output
+            .process(
+                &mut pcm,
+                Callback {
+                    frames,
+                    produced_frames: frames,
+                    active: true,
+                    generation: 1,
+                },
+                &mut peaks,
+                &mut rms,
+            )
+            .unwrap();
+        assert!(fade.process(&mut pcm[..1], &incoming, 1).is_err());
+        assert!(
+            output
+                .process(
+                    &mut pcm[..1],
+                    Callback {
+                        frames: 1,
+                        produced_frames: 1,
+                        active: false,
+                        generation: 2
+                    },
+                    &mut peaks,
+                    &mut rms
+                )
+                .is_err()
+        );
+        fade.reset();
+        output.reset();
+    }
+    assert_eq!(COUNT.with(|c| c.replace(None).unwrap()), 0);
+}

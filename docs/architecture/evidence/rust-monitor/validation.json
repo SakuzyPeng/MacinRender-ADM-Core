@@ -1,0 +1,221 @@
+{
+  "schema": "mradm.rust-monitor-migration.v1",
+  "date": "2026-10-05",
+  "baseline_commit": "a54fdc32fda2ef6ffa864778b1e3296eae95c1bc",
+  "implementation_commit": null,
+  "scope": [
+    "Worker-owned backend crossfade position and PCM blend",
+    "Callback-owned seek anchors, generation and transition state",
+    "Callback Peak/RMS after HpTF and seek conditioning",
+    "Pre-consumption callback buffer checks"
+  ],
+  "public_c_abi_changed": false,
+  "new_third_party_dependencies": [],
+  "contracts": {
+    "crossfade_frames": 2048,
+    "seek_ms": 10,
+    "maximum_level_channels": 64,
+    "callback_frame_cap": null,
+    "instance_ownership": "Separate worker and callback owners; no mutable state shared across threads",
+    "zero_frames": "No numeric history advance; Peak/RMS published as zero",
+    "level_frame_basis": "Whole requested callback including padding",
+    "hptf_order": "HpTF -> seek transition -> Peak/RMS; existing LUFS taps unchanged",
+    "realtime_short_read": "Remember last emitted frame and cancel incomplete transition",
+    "buffered_short_read": "Advance only over produced frames; retain pending transition",
+    "first_kernel_and_ffi_call_allocations": 0,
+    "runtime_locks_or_io": false,
+    "invalid_call_preserves_output_and_history": true,
+    "nonfinite_audio_propagation_retained": true,
+    "error_buffer": "Caller-owned valid disjoint storage",
+    "realtime_precondition_violation": "ADR 0005 terminate; no callback error allocation or logging"
+  },
+  "validation": {
+    "macos_debug_ctest": {
+      "passed": 62,
+      "total": 62
+    },
+    "macos_release_focused_ctest": {
+      "passed": 16,
+      "total": 16
+    },
+    "macos_refined_debug_and_release": {
+      "passed": 2,
+      "total": 2
+    },
+    "windows_canonical_release_ctest": {
+      "passed": 61,
+      "total": 61
+    },
+    "rust_release_workspace_tests": 106,
+    "rust_monitor_tests": 6,
+    "rust_allocation_tests": 12,
+    "rust_ffi_tests": 18,
+    "crossfade_halfway_switch_and_seek": true,
+    "crossfade_short_incoming_eos_exact_length": true,
+    "callback_short_and_zero_levels": true,
+    "kernel_chunk_identity_without_underruns": true,
+    "prepared_instance_isolation_and_raii_moves": true,
+    "hptf_paused_seek_output_stage_and_lufs_regressions": true,
+    "rust_fmt": true,
+    "rust_clippy_deny_warnings": true,
+    "changed_cpp_format_tidy_cppcheck": true,
+    "frozen_reference_cppcheck": true,
+    "licenses_sbom": true
+  },
+  "numerical_comparison": {
+    "values_per_platform": 233435903,
+    "general_pcm_tolerance": "2e-6 + 2e-6 * abs(reference)",
+    "identical_input_peak_rms": "bit identical; nonfinite classification compared",
+    "exact_cases": "Representable endpoints, passthrough, simple blends, untouched tails",
+    "macos": {
+      "baseline": "a54fdc3",
+      "passed": true,
+      "crossfade": {
+        "samples": 9365825,
+        "differing_samples": 596251,
+        "max_absolute_error": 5.960464477539063e-08,
+        "max_tolerance_ratio": 0.02179508885160282
+      },
+      "seek_pcm": {
+        "samples": 223756050,
+        "differing_samples": 1922024,
+        "max_absolute_error": 1.1920928955078125e-07,
+        "max_tolerance_ratio": 0.039728514402261855
+      },
+      "combined_levels": {
+        "samples": 308308,
+        "differing_samples": 2334,
+        "max_absolute_error": 1.1920928955078125e-07,
+        "max_tolerance_ratio": 0.034823124644151195
+      },
+      "identical_input_levels": {
+        "samples": 5720,
+        "differing_samples": 0,
+        "max_absolute_error": 0,
+        "max_tolerance_ratio": 0
+      }
+    },
+    "windows": {
+      "baseline": "a54fdc3",
+      "passed": true,
+      "crossfade": {
+        "samples": 9365825,
+        "differing_samples": 0,
+        "max_absolute_error": 0,
+        "max_tolerance_ratio": 0
+      },
+      "seek_pcm": {
+        "samples": 223756050,
+        "differing_samples": 0,
+        "max_absolute_error": 0,
+        "max_tolerance_ratio": 0
+      },
+      "combined_levels": {
+        "samples": 308308,
+        "differing_samples": 0,
+        "max_absolute_error": 0,
+        "max_tolerance_ratio": 0
+      },
+      "identical_input_levels": {
+        "samples": 5720,
+        "differing_samples": 0,
+        "max_absolute_error": 0,
+        "max_tolerance_ratio": 0
+      }
+    }
+  },
+  "configuration": {
+    "rust": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "cargo_lock_sha256": "1245da124cb7acc2f436683d9122d936b12b2d6c044fc322ae12aaa2b5c9df9f",
+    "macos": {
+      "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "compiler": "Homebrew clang version 21.1.8",
+      "profiles": [
+        "Debug",
+        "Release"
+      ],
+      "MR_ADM_STRICT_FP": false,
+      "MR_ADM_ENABLE_SOFA": true
+    },
+    "windows": {
+      "profile": "canonical Release",
+      "compiler": "MSVC 19.51.36257 x64",
+      "git_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "MR_ADM_STRICT_FP": false,
+      "MR_ADM_ENABLE_SOFA": true,
+      "legacy_reference_switches": false,
+      "workspace": "Existing dirty checkout retained; verified overlays and original-byte backups",
+      "synchronized_files": 15,
+      "preserved_differences": [
+        "src/adm_realtime/monitor_engine.cpp",
+        "tests/unit/realtime_stream_fixture_test.cpp"
+      ],
+      "source_overlay_commit": null
+    }
+  },
+  "abi": {
+    "public_adm_exports": 139,
+    "native_symbol_sets_equal": true,
+    "unchanged_from_baseline": true,
+    "macos_private_rust_exports": [],
+    "windows_private_rust_exports": [],
+    "windows_incidental_cpp_exports": 1984
+  },
+  "ci": {
+    "status": "pending"
+  },
+  "source_sha256": {
+    "CMakeLists.txt": "c49b756eb1bbf006460131f99eb61cd3a26de98009a519632be6d851b75085b6",
+    "rust/crates/mradm-dsp/src/lib.rs": "1527f7ab8f9aab359e54cf31ec96f4ed17657bf174164ff4ab82bbd0e728c743",
+    "rust/crates/mradm-dsp/src/monitor.rs": "fca93095880f4b9fc71b5c1f8054aaec689fb54d0f95ca1f2352ff41e48091f0",
+    "rust/crates/mradm-dsp/tests/monitor.rs": "d58d2bd6e10ac7d885105feb9f28e4206ab4551d2fc7bbf45b792c9d696caa97",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "c5efb0461c86d5c1b81c668dac7edc11eae3c2781e1c5dd512bd46d02ea64bcb",
+    "rust/crates/mradm-ffi/src/lib.rs": "fcc5620a72d451b52ede8a41fc6544434ca850d3568a2a5f6e028cc9c213b2b0",
+    "rust/crates/mradm-ffi/src/monitor.rs": "05ba4eedd72c4eb67d1631328a9bc8c1ea3f812c3fe00ed87aaae62457499686",
+    "src/adm_dsp/monitor.h": "4f270bf86483a21f4b4f335361972946013ceec697976ee91fe74cd51f5f2439",
+    "src/adm_dsp/monitor_ffi.h": "99e2a11e5494a0473aaed9942f1039558d7c37976cec2e76bfa902f129cfbf6b",
+    "src/adm_realtime/monitor_engine.cpp": "82379ca9d1ffee0cef72a583426e2ee03a22b25ff782bcf4f2e4bcd98e7eb2d3",
+    "src/adm_realtime/monitor_engine.h": "1d0ba1a10bdd7f9e664bb7688d7465a5c91655ea88c3ac6f08f96c6b4afd2a35",
+    "tests/reference/monitor/legacy.h": "5c009553bd8cf4b818f5ffd3d6826eac2587330f94cfe62ea906b0ecd463c764",
+    "tests/reference/monitor/provenance.json": "f2f9a521b40da3541d9923115a5b05c49c1ae9c096d7964af47db4ce9445ec1f",
+    "tests/unit/monitor_dsp_test.cpp": "6e049a7e357cbe41afc6a80b3383ed7c45d27644b0021276c9f8598a55bd62c0",
+    "tests/unit/realtime_stream_fixture_test.cpp": "0c436a52e672216183a727097ef694e3cab76a80e91640651b452a8d2830c80a"
+  },
+  "windows_overlay_sha256": {
+    "CMakeLists.txt": "c49b756eb1bbf006460131f99eb61cd3a26de98009a519632be6d851b75085b6",
+    "rust/crates/mradm-dsp/src/lib.rs": "1527f7ab8f9aab359e54cf31ec96f4ed17657bf174164ff4ab82bbd0e728c743",
+    "rust/crates/mradm-dsp/src/monitor.rs": "fca93095880f4b9fc71b5c1f8054aaec689fb54d0f95ca1f2352ff41e48091f0",
+    "rust/crates/mradm-dsp/tests/monitor.rs": "d58d2bd6e10ac7d885105feb9f28e4206ab4551d2fc7bbf45b792c9d696caa97",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "c5efb0461c86d5c1b81c668dac7edc11eae3c2781e1c5dd512bd46d02ea64bcb",
+    "rust/crates/mradm-ffi/src/lib.rs": "fcc5620a72d451b52ede8a41fc6544434ca850d3568a2a5f6e028cc9c213b2b0",
+    "rust/crates/mradm-ffi/src/monitor.rs": "05ba4eedd72c4eb67d1631328a9bc8c1ea3f812c3fe00ed87aaae62457499686",
+    "src/adm_dsp/monitor.h": "4f270bf86483a21f4b4f335361972946013ceec697976ee91fe74cd51f5f2439",
+    "src/adm_dsp/monitor_ffi.h": "99e2a11e5494a0473aaed9942f1039558d7c37976cec2e76bfa902f129cfbf6b",
+    "src/adm_realtime/monitor_engine.cpp": "fd9791fb0e817a5abcd962b477156f20652a2aae4d98fa4da02111acc5a9fa37",
+    "src/adm_realtime/monitor_engine.h": "1d0ba1a10bdd7f9e664bb7688d7465a5c91655ea88c3ac6f08f96c6b4afd2a35",
+    "tests/reference/monitor/legacy.h": "5c009553bd8cf4b818f5ffd3d6826eac2587330f94cfe62ea906b0ecd463c764",
+    "tests/reference/monitor/provenance.json": "f2f9a521b40da3541d9923115a5b05c49c1ae9c096d7964af47db4ce9445ec1f",
+    "tests/unit/monitor_dsp_test.cpp": "6e049a7e357cbe41afc6a80b3383ed7c45d27644b0021276c9f8598a55bd62c0",
+    "tests/unit/realtime_stream_fixture_test.cpp": "aa01e235b01a65eaa4a202edc96056961ef8c9ddaa52c8e47f7e920295995c75"
+  },
+  "reference_provenance": {
+    "baseline_commit": "a54fdc32fda2ef6ffa864778b1e3296eae95c1bc",
+    "source_sha256": {
+      "src/adm_realtime/monitor_engine.cpp": "403c8eb6edf8160e951c9d8c2ac6b79d481930fa7e20a33303dda066dacf14fb",
+      "src/adm_realtime/monitor_engine.h": "1a2766eaeab34eef177c80f7b6d6560e5b5bf9523d43e89f3639d8caf91e1146"
+    },
+    "adaptations": [
+      "Extract numerical loops and state into a test-only type",
+      "Replace atomic generation read with an explicit input",
+      "Replace atomic level publication with output spans",
+      "Rename crossfade scratch buffers to caller spans",
+      "Formatting only; no production helpers referenced"
+    ],
+    "reference_sha256": "5c009553bd8cf4b818f5ffd3d6826eac2587330f94cfe62ea906b0ecd463c764"
+  },
+  "limitations": [
+    "Cross-platform bit identity remains deferred",
+    "No performance or RSS claim",
+    "No whole-renderer allocation guarantee"
+  ]
+}

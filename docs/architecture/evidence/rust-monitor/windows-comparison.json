@@ -1,0 +1,28 @@
+{
+  "baseline": "a54fdc3",
+  "passed": true,
+  "crossfade": {
+    "samples": 9365825,
+    "differing_samples": 0,
+    "max_absolute_error": 0,
+    "max_tolerance_ratio": 0
+  },
+  "seek_pcm": {
+    "samples": 223756050,
+    "differing_samples": 0,
+    "max_absolute_error": 0,
+    "max_tolerance_ratio": 0
+  },
+  "combined_levels": {
+    "samples": 308308,
+    "differing_samples": 0,
+    "max_absolute_error": 0,
+    "max_tolerance_ratio": 0
+  },
+  "identical_input_levels": {
+    "samples": 5720,
+    "differing_samples": 0,
+    "max_absolute_error": 0,
+    "max_tolerance_ratio": 0
+  }
+}

@@ -340,6 +340,8 @@ Triple Balance point/size panning, 22.2 geometry, decorrelation, motion/transiti
 
 HOA3 coefficient generation, interpolation, diffuse state, LFE separation and metering decode also run in Rust. Existing seek/window behavior is retained, with output-capacity and short-read checks added. See the [Rust HOA migration](docs/architecture/RUST_HOA_MIGRATION.md).
 
+Monitor backend crossfades, seek transitions and Peak/RMS also keep their numerical state in Rust. Worker and callback instances remain independent; C++ retains device, queue and control scheduling. See the [Rust Monitor DSP migration](docs/architecture/RUST_MONITOR_DSP_MIGRATION.md).
+
 System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
 
 ```bash

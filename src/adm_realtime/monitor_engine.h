@@ -20,6 +20,7 @@
 #include "adm/options.h"
 #include "adm/scene.h"
 
+#include "../adm_dsp/monitor.h"
 #include "../adm_render_common/hptf_eq.h"
 #include "audio_output_device.h"
 #include "render_stream_factory.h"
@@ -157,11 +158,7 @@ class MonitorEngine {
     bool top_up_ring_output_stage();                            // producer side, output-stage: buffer intermediate
     std::size_t pull(std::span<float> out, std::size_t frames); // consumer side (audio thread)
     std::size_t pull_output_stage(std::span<float> out, std::size_t frames); // consumer side, render at output
-    void apply_seek_transition(std::span<float> out,
-                               std::size_t frames,
-                               std::size_t produced_frames,
-                               bool active); // callback side: smooth the old→new timeline boundary
-    void drain_meter_ring();                 // worker side: feed the LUFS meter from the callback tap
+    void drain_meter_ring(); // worker side: feed the LUFS meter from the callback tap
     [[nodiscard]] ListenerOrientation orientation_snapshot() const;     // lock-free read of the live head pose
     void apply_pending_seek_locked(std::unique_lock<std::mutex>& lock); // worker side, under control_mutex_
     bool apply_seek_locked(uint64_t frame,
@@ -201,11 +198,7 @@ class MonitorEngine {
     // every other field is owned exclusively by the device callback. Realtime sinks bridge from
     // the last emitted sample, while buffered push sinks fade the fresh queue in from silence.
     std::atomic<uint64_t> seek_generation_{0};
-    uint64_t observed_seek_generation_{0};
-    std::vector<float> last_output_frame_;
-    std::vector<float> seek_transition_anchor_;
-    std::size_t seek_transition_total_frames_{0};
-    std::size_t seek_transition_remaining_frames_{0};
+    dsp::MonitorOutput output_dsp_;
     std::atomic<float> snap_yaw_{0.0F};
     std::atomic<float> snap_pitch_{0.0F};
     std::atomic<float> snap_roll_{0.0F};
@@ -287,7 +280,7 @@ class MonitorEngine {
     // and xfade_stream_ (incoming) and linearly blends across k_crossfade_frames.
     std::unique_ptr<IRenderStream> xfade_stream_;
     bool xfade_active_{false};
-    uint64_t xfade_pos_{0};
+    dsp::MonitorCrossfade crossfade_dsp_;
 
     // Levels, written by the audio thread, read by status pollers.
     std::array<std::atomic<float>, k_max_level_channels> peak_{};
