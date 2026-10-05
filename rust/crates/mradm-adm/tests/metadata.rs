@@ -288,3 +288,52 @@ fn namespace_extensions_do_not_override_adm_fields() {
     assert!(changed.contains("<x:gain xmlns:x='urn:vendor'>99</x:gain>"));
     assert_eq!(snapshot(&changed).object_blocks[0].gain, 0.25);
 }
+
+#[test]
+fn legacy_parameter_bounds_reject_coordinates_before_rendering() {
+    let valid = objects("", "");
+    for (from, to) in [
+        ("coordinate=\"azimuth\">30", "coordinate=\"azimuth\">1e30"),
+        ("coordinate=\"elevation\">10", "coordinate=\"elevation\">91"),
+        ("coordinate=\"azimuth\">30", "coordinate=\"azimuth\">-181"),
+    ] {
+        assert_eq!(
+            Document::parse(&valid.replace(from, to)).unwrap_err().code,
+            3
+        );
+    }
+    for block in [
+        "<diffuse>1.1</diffuse>",
+        "<objectDivergence azimuthRange='181'>0</objectDivergence>",
+        "<objectDivergence positionRange='1.1'>0</objectDivergence>",
+        "<channelLock maxDistance='2.1'>1</channelLock>",
+        "<position coordinate='distance'>-0.1</position>",
+    ] {
+        assert!(Document::parse(&objects("", block)).is_err());
+    }
+    assert!(
+        Document::parse(&objects(
+            "<positionOffset coordinate='azimuth'>361</positionOffset>",
+            ""
+        ))
+        .is_err()
+    );
+    assert!(
+        Document::parse(&valid.replace(
+            "audioObjectName=\"Object\"",
+            "audioObjectName=\"Object\" importance=\"11\""
+        ))
+        .is_err()
+    );
+    assert!(
+        Document::parse(&valid.replace("coordinate=\"azimuth\">30", "coordinate=\"azimuth\">180"))
+            .is_ok()
+    );
+    assert!(
+        Document::parse(&objects(
+            "<positionOffset coordinate='azimuth'>360</positionOffset>",
+            ""
+        ))
+        .is_ok()
+    );
+}
