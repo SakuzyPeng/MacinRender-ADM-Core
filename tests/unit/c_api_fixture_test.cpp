@@ -2740,6 +2740,22 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
                "monitor set_overrides rejects NaN gain") &&
          ok;
     bad = ov;
+    bad.gain_db = 800.0F;
+    bad.speaker_label = nullptr;
+    bad.mute = 0;
+    ok = check(adm_monitor_set_overrides(monitor, &bad, 1, 9) == ADM_ERROR_INVALID_ARGUMENT,
+               "monitor set_overrides rejects finite dB that overflows linear gain") &&
+         ok;
+    ok = check(std::strlen(adm_monitor_last_error_message(monitor)) > 0,
+               "monitor gain overflow rejection includes a diagnostic") &&
+         ok;
+    // Legacy callers have no mute field; trailing caller bytes must not bypass validation.
+    bad.struct_size = static_cast<uint32_t>(offsetof(adm_monitor_override_t, mute));
+    bad.mute = 1;
+    ok = check(adm_monitor_set_overrides(monitor, &bad, 1, 9) == ADM_ERROR_INVALID_ARGUMENT,
+               "monitor set_overrides rejects overflowing gain from callers without mute") &&
+         ok;
+    bad = ov;
     bad.extent_width_scale = std::numeric_limits<float>::quiet_NaN();
     ok = check(adm_monitor_set_overrides(monitor, &bad, 1, 10) == ADM_ERROR_INVALID_ARGUMENT,
                "monitor set_overrides rejects NaN extent width scale") &&

@@ -1202,8 +1202,9 @@ typedef struct adm_monitor_override_t {
  * Replace the full set of live overrides (objects not listed render at their prepared
  * values). `overrides` may be NULL when count == 0 to clear all overrides. Each element's
  * struct_size must cover at least through divergence_scale; the first element's struct_size
- * is the array stride. Non-finite gain_db / *_scale values are rejected with
- * ADM_ERROR_INVALID_ARGUMENT. `revision` is echoed back through
+ * is the array stride. Non-finite gain_db / *_scale values and unmuted gains whose
+ * float linear value overflows are rejected with ADM_ERROR_INVALID_ARGUMENT before
+ * publication, preserving the previous overrides and revision. `revision` is echoed back through
  * adm_monitor_status_t.override_revision once the worker applies the snapshot, so a UI can
  * confirm its edit landed without a callback.
  */

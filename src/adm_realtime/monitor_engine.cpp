@@ -263,6 +263,15 @@ void MonitorEngine::seek(uint64_t frame) {
 }
 
 Result<void> MonitorEngine::set_overrides(const LiveOverrides& overrides) {
+    // A finite dB value can still overflow the float gain used by every backend.
+    // Reject it on the control thread before replacing a snapshot or calling noexcept DSP.
+    const auto invalid = std::ranges::find_if(overrides.objects, [](const auto& item) {
+        return !std::isfinite(item.gain_db) || (!item.mute && !std::isfinite(std::pow(10.0F, item.gain_db / 20.0F)));
+    });
+    if (invalid != overrides.objects.end()) {
+        return make_error(
+            ErrorCode::invalid_argument, "实时增益必须为有限值,且未静音时转换为线性增益不得溢出", invalid->object_id);
+    }
     {
         const std::lock_guard<std::mutex> lock(control_mutex_);
         auto valid = stream_->validate_overrides(overrides);

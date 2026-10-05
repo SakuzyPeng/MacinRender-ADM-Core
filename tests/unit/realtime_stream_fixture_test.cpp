@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <future>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <numeric>
@@ -818,6 +819,50 @@ mradm::LiveOverrides gain_override(const std::string& object_id, float gain_db, 
     ov.revision = revision;
     ov.objects.push_back({object_id, gain_db, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, 1.0F, "", false, mute});
     return ov;
+}
+
+bool test_monitor_rejects_invalid_gains() {
+    GainStreamFactory factory;
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, {}, {}, logs);
+    if (!check(engine.has_value(), "gain validation: engine creates")) {
+        return false;
+    }
+    bool ok = check((*engine)->set_overrides(gain_override("obj0", -6.0206F, 1)).has_value(),
+                    "gain validation: normal target accepted");
+    for (const float gain : {800.0F,
+                             std::numeric_limits<float>::infinity(),
+                             -std::numeric_limits<float>::infinity(),
+                             std::numeric_limits<float>::quiet_NaN()}) {
+        const auto rejected = (*engine)->set_overrides(gain_override("obj0", gain, 2));
+        if (!check(!rejected, "gain validation: nonfinite or overflowing target rejected before publication")) {
+            return false;
+        }
+        ok &= check(rejected.error().code == mradm::ErrorCode::invalid_argument && rejected.error().context == "obj0",
+                    "gain validation: rejection identifies the invalid object");
+    }
+    auto mixed = gain_override("obj0", -20.0F, 2);
+    mixed.objects.push_back(gain_override("obj1", 800.0F, 2).objects.front());
+    ok &= check(!(*engine)->set_overrides(mixed), "gain validation: invalid later entry rejects the whole snapshot");
+    (*engine)->play();
+    ok &= check(drain_exact(**engine, sink, 20000U), "gain validation: accepted audio still drains");
+    ok &= check((*engine)->status().override_revision == 1U,
+                "gain validation: rejection preserves the accepted revision");
+    ok &= check(std::ranges::all_of(sink.captured(), [](float value) { return near(value, 0.5F); }),
+                "gain validation: rejection preserves the accepted gain");
+
+    ok &= check((*engine)->set_overrides(gain_override("obj0", 800.0F, 3, true)).has_value(),
+                "gain validation: mute ignores a finite overflowing dB target");
+    ok &= check(drain_exact(**engine, sink, 30000U), "gain validation: mute audio drains");
+    ok &= check((*engine)->status().override_revision == 3U && sink.captured().back() == 0.0F,
+                "gain validation: muted target reaches exact silence");
+    ok &= check((*engine)->set_overrides(gain_override("obj0", -1000.0F, 4)).has_value(),
+                "gain validation: underflow to zero is a valid unmuted gain");
+    ok &= check(drain_exact(**engine, sink, 30000U), "gain validation: underflow audio drains");
+    ok &= check((*engine)->status().override_revision == 4U && sink.captured().back() == 0.0F,
+                "gain validation: underflow target is applied");
+    return ok;
 }
 
 // Live gain overrides: applied before play take effect from the first block; applied
@@ -1711,6 +1756,7 @@ int main() {
     ok &= test_monitor_eof();
     ok &= test_monitor_malformed_stream();
     ok &= test_monitor_worker_logs_errors();
+    ok &= test_monitor_rejects_invalid_gains();
     ok &= test_monitor_live_overrides();
     ok &= test_monitor_hot_switch();
     ok &= test_stop_before_loop_preroll();
