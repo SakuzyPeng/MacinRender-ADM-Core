@@ -1,0 +1,858 @@
+{
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "tolerance": "2e-6 + 2e-6 * abs(reference)",
+  "binary_sha256": {
+    "reference": "7e11b4832e623d344d54c0d7535bd09ff9b89ea0438f995d01cf51de58c2e0ae",
+    "candidate": "185f9a4cebd713d42831f600f198e777541543a7ed98e7dbeb134e5d43ea551f"
+  },
+  "cases": [
+    {
+      "case": "ear-point",
+      "fixture": "objects-point",
+      "arguments": [
+        "--renderer",
+        "ear",
+        "--output-layout",
+        "7.1.4"
+      ],
+      "fixture_sha256": "f36ca37662b0de94d5a6fb4b2ce48743373467df576775594e6d15d291991bdf",
+      "channels": 12,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "9d691259c8d358fe0fef6911d6f9e7f3871e54536623b642baa6e9974fbb6a62",
+      "candidate_pcm_sha256": "9d691259c8d358fe0fef6911d6f9e7f3871e54536623b642baa6e9974fbb6a62",
+      "passed": true
+    },
+    {
+      "case": "ear-extent",
+      "fixture": "objects-extent-multi",
+      "arguments": [
+        "--renderer",
+        "ear",
+        "--output-layout",
+        "9.1.6"
+      ],
+      "fixture_sha256": "6d8f3e51062ac5bc720677b4552418950bd3f22e520419612be026f437166af2",
+      "channels": 16,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "302d801e554dcd869d11a76b33f35cdbf6e0b9aa386d545f6f9a2e6896869c39",
+      "candidate_pcm_sha256": "302d801e554dcd869d11a76b33f35cdbf6e0b9aa386d545f6f9a2e6896869c39",
+      "passed": true
+    },
+    {
+      "case": "ear-cartesian",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "ear",
+        "--output-layout",
+        "5.1"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 6,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "62b05c4488d728a0a5c2b1bb1f82bef3fe8c2fe77b48edffdadf8b48d841d0af",
+      "candidate_pcm_sha256": "62b05c4488d728a0a5c2b1bb1f82bef3fe8c2fe77b48edffdadf8b48d841d0af",
+      "passed": true
+    },
+    {
+      "case": "ear-bed",
+      "fixture": "directspeakers",
+      "arguments": [
+        "--renderer",
+        "ear",
+        "--output-layout",
+        "7.1.4"
+      ],
+      "fixture_sha256": "261ce80821837a5ef510343173e3550aa53c59e294cedf67ac29a99c964b3030",
+      "channels": 12,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "7b110df2e9b6e0677ec3b56029ce9e6b77baa1213b12c971a35bcdd13fdaeb36",
+      "candidate_pcm_sha256": "7b110df2e9b6e0677ec3b56029ce9e6b77baa1213b12c971a35bcdd13fdaeb36",
+      "passed": true
+    },
+    {
+      "case": "ear-hoa",
+      "fixture": "hoa",
+      "arguments": [
+        "--renderer",
+        "ear",
+        "--output-layout",
+        "7.1.4"
+      ],
+      "fixture_sha256": "435f747f59258ef93ebf0c789718e3c5f245c62e9704314b687a9ad7172e757c",
+      "channels": 12,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "54b79753e7495f9a3e9bfdbe0a023dbc8a57a5fd226424a3411591d1373ad626",
+      "candidate_pcm_sha256": "54b79753e7495f9a3e9bfdbe0a023dbc8a57a5fd226424a3411591d1373ad626",
+      "passed": true
+    },
+    {
+      "case": "ear-window",
+      "fixture": "objects-extent",
+      "arguments": [
+        "--renderer",
+        "ear",
+        "--output-layout",
+        "7.1.4",
+        "--object-smoothing-frames",
+        "2048",
+        "--start",
+        "0.037",
+        "--end",
+        "0.193"
+      ],
+      "fixture_sha256": "b4e11bcd7629d7be0a452b9ab6cca27bc18fcead083dc03b65f1d9a66525239b",
+      "channels": 12,
+      "sample_rate": 48000,
+      "frames": 7488,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "e2e14793005ad99a5afa1c5fd19fcd408b5e9da929e3e7ac44c49eaa602ee659",
+      "candidate_pcm_sha256": "e2e14793005ad99a5afa1c5fd19fcd408b5e9da929e3e7ac44c49eaa602ee659",
+      "passed": true
+    },
+    {
+      "case": "vbap-point",
+      "fixture": "objects-point",
+      "arguments": [
+        "--renderer",
+        "saf",
+        "--output-layout",
+        "7.1.4"
+      ],
+      "fixture_sha256": "f36ca37662b0de94d5a6fb4b2ce48743373467df576775594e6d15d291991bdf",
+      "channels": 12,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "61ab06beb1b39e89a0daff8bead4c0bcc2afc7a178b19ef07549d0279856f05c",
+      "candidate_pcm_sha256": "61ab06beb1b39e89a0daff8bead4c0bcc2afc7a178b19ef07549d0279856f05c",
+      "passed": true
+    },
+    {
+      "case": "vbap-extent",
+      "fixture": "objects-extent-multi",
+      "arguments": [
+        "--renderer",
+        "saf",
+        "--output-layout",
+        "9.1.6"
+      ],
+      "fixture_sha256": "6d8f3e51062ac5bc720677b4552418950bd3f22e520419612be026f437166af2",
+      "channels": 16,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "157c864b7184c17b96d33d1bf83c7b2f17e2579ad557c18742790a5fd74fde9b",
+      "candidate_pcm_sha256": "157c864b7184c17b96d33d1bf83c7b2f17e2579ad557c18742790a5fd74fde9b",
+      "passed": true
+    },
+    {
+      "case": "vbap-bed",
+      "fixture": "directspeakers",
+      "arguments": [
+        "--renderer",
+        "saf",
+        "--output-layout",
+        "22.2"
+      ],
+      "fixture_sha256": "261ce80821837a5ef510343173e3550aa53c59e294cedf67ac29a99c964b3030",
+      "channels": 24,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "bc57ded4a91c7dc03f75ef275a9c438374d17494c0172c6dbe2a8de25a21acdd",
+      "candidate_pcm_sha256": "bc57ded4a91c7dc03f75ef275a9c438374d17494c0172c6dbe2a8de25a21acdd",
+      "passed": true
+    },
+    {
+      "case": "vbap-window",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "saf",
+        "--output-layout",
+        "5.1",
+        "--start",
+        "0.037",
+        "--end",
+        "0.193"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 6,
+      "sample_rate": 48000,
+      "frames": 7488,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "a2cc9017d3ce25768622aa7cc97925d512b833f9f13db8916e738abad074adec",
+      "candidate_pcm_sha256": "a2cc9017d3ce25768622aa7cc97925d512b833f9f13db8916e738abad074adec",
+      "passed": true
+    },
+    {
+      "case": "triple-point",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "7.1.4",
+        "--speaker-spread-mode",
+        "none"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 12,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "67688ca82e3c049a346fe9f0c7ed996591340d7948742d255ca71a9de50b70ff",
+      "candidate_pcm_sha256": "67688ca82e3c049a346fe9f0c7ed996591340d7948742d255ca71a9de50b70ff",
+      "passed": true
+    },
+    {
+      "case": "triple-window",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "9.1.6",
+        "--speaker-spread-mode",
+        "none",
+        "--start",
+        "0.037",
+        "--end",
+        "0.193"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 16,
+      "sample_rate": 48000,
+      "frames": 7488,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "c688065a4ecc3f6fe6e60849815d89ab7bfbcbc648b5ea3db3dd1a8e68a5a212",
+      "candidate_pcm_sha256": "c688065a4ecc3f6fe6e60849815d89ab7bfbcbc648b5ea3db3dd1a8e68a5a212",
+      "passed": true
+    },
+    {
+      "case": "triple-222",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "22.2",
+        "--speaker-spread-mode",
+        "none"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 24,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 0.0,
+      "max_normalized_error": 0.0,
+      "rms_error": 0.0,
+      "bit_identical": true,
+      "reference_pcm_sha256": "24530fa81fdf6d331f0022e0339d30c7a6a09346d052b6fddea3ce6c7bc98991",
+      "candidate_pcm_sha256": "24530fa81fdf6d331f0022e0339d30c7a6a09346d052b6fddea3ce6c7bc98991",
+      "passed": true
+    },
+    {
+      "case": "triple-size-0.01-7.1.4",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "7.1.4",
+        "--semantic-policy",
+        "<generated-semantic-policy>"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 12,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 1.1920928955078125e-07,
+      "max_normalized_error": 7.84612801428623e-08,
+      "rms_error": 7.218150724348794e-09,
+      "bit_identical": false,
+      "reference_pcm_sha256": "7c07f65a24eb31130d5692e98587718b77cd5338029e68a2080437e9839c5047",
+      "candidate_pcm_sha256": "d7e2c1b12fc0da28bac263a543d0ae4c3ddf005f2d22b059f2fc4a604af7e1f5",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 0.02,
+            "height_scale": 0.04,
+            "depth_scale": 0.08
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-0.01-9.1.6",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "9.1.6",
+        "--semantic-policy",
+        "<generated-semantic-policy>"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 16,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 5.960464477539063e-08,
+      "max_normalized_error": 4.7633423840014194e-08,
+      "rms_error": 6.812790828144934e-09,
+      "bit_identical": false,
+      "reference_pcm_sha256": "c2c9ac8d6075fbb4b642f675df6406e8a4159bc52a8d4edd9e91b1058889efea",
+      "candidate_pcm_sha256": "5db0fedbe16cac0012f68b2196f8204cfb4a340305c0af2a84b1cebeef4c5c51",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 0.02,
+            "height_scale": 0.04,
+            "depth_scale": 0.08
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-0.01-22.2",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "22.2",
+        "--semantic-policy",
+        "<generated-semantic-policy>"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 24,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 1.1920928955078125e-07,
+      "max_normalized_error": 7.901017007057623e-08,
+      "rms_error": 7.422182839652451e-09,
+      "bit_identical": false,
+      "reference_pcm_sha256": "722c51b866908c9a64f329125cb0c4e721ccbf0928bedb9de55e47e69becf635",
+      "candidate_pcm_sha256": "82d56dd65ed72bc45c6a2a2f85fbe426b226ce1fdc6330fdf22addfde9a8d8e8",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 0.02,
+            "height_scale": 0.04,
+            "depth_scale": 0.08
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-0.2-7.1.4",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "7.1.4",
+        "--semantic-policy",
+        "<generated-semantic-policy>"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 12,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 6.556510925292969e-07,
+      "max_normalized_error": 4.4462107253480484e-07,
+      "rms_error": 3.1655508830976615e-08,
+      "bit_identical": false,
+      "reference_pcm_sha256": "55b1833f2ff8aec322bbba17a36d27d9a8f3c8015925493da87ab332ec4e2a82",
+      "candidate_pcm_sha256": "4ac55973cd45ccc13d57df9d8a42bdd1ec80997cb8ed3a0e5637054fbd3bad4b",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 0.4,
+            "height_scale": 0.8,
+            "depth_scale": 1.6
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-0.2-9.1.6",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "9.1.6",
+        "--semantic-policy",
+        "<generated-semantic-policy>"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 16,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 6.556510925292969e-07,
+      "max_normalized_error": 4.4462107253480484e-07,
+      "rms_error": 2.7414474817348385e-08,
+      "bit_identical": false,
+      "reference_pcm_sha256": "ec758555dc5df1a82ca8772c5b39e18bbe10088c0b5d008bd30d1e2bd9753175",
+      "candidate_pcm_sha256": "6e9c62aa459b74a243629f29c5f73729886230896c39ee81a6e15c952536f2b4",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 0.4,
+            "height_scale": 0.8,
+            "depth_scale": 1.6
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-0.2-22.2",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "22.2",
+        "--semantic-policy",
+        "<generated-semantic-policy>"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 24,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 8.344650268554688e-07,
+      "max_normalized_error": 6.213876258739328e-07,
+      "rms_error": 1.662439428364067e-08,
+      "bit_identical": false,
+      "reference_pcm_sha256": "d1805bbe4af9d0980b40b308c508c24a00488f42b1191ead966e1683aa8cdffd",
+      "candidate_pcm_sha256": "390674f90e031d0ee60fc36ca105e179df4c2dea2f2b06f93f1031f83501d38c",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 0.4,
+            "height_scale": 0.8,
+            "depth_scale": 1.6
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-0.5-7.1.4",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "7.1.4",
+        "--semantic-policy",
+        "<generated-semantic-policy>"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 12,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 6.556510925292969e-07,
+      "max_normalized_error": 5.171510507453941e-07,
+      "rms_error": 2.4232140957270983e-08,
+      "bit_identical": false,
+      "reference_pcm_sha256": "4dd20afa96db2db060998e16065ae10dae9972315258b12922f0785d0c78e30e",
+      "candidate_pcm_sha256": "2a12b242a29fedabd4966913ed6578c782eb59a2b48de9fd25ba3e46ee8597a3",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 1.0,
+            "height_scale": 2.0,
+            "depth_scale": 4.0
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-window-7.1.4",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "7.1.4",
+        "--semantic-policy",
+        "<generated-semantic-policy>",
+        "--start",
+        "0.037",
+        "--end",
+        "0.193"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 12,
+      "sample_rate": 48000,
+      "frames": 7488,
+      "max_absolute_error": 6.556510925292969e-07,
+      "max_normalized_error": 5.171510507453941e-07,
+      "rms_error": 5.092131459409101e-08,
+      "bit_identical": false,
+      "reference_pcm_sha256": "fc7cf66377d2287bb1d2b8d99d2f6557b753107ac46d4b3bb6235da4f8613e49",
+      "candidate_pcm_sha256": "b3473c67cf208353874017393c707b24d3471d4b47824fcc61d851a61af3e3c7",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 1.0,
+            "height_scale": 2.0,
+            "depth_scale": 4.0
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-0.5-9.1.6",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "9.1.6",
+        "--semantic-policy",
+        "<generated-semantic-policy>"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 16,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 6.556510925292969e-07,
+      "max_normalized_error": 5.171510507453941e-07,
+      "rms_error": 2.0985649657082038e-08,
+      "bit_identical": false,
+      "reference_pcm_sha256": "fbf9f7f001d6ab36173da318320f7f75a7eae4d44de978e48e055817d8133d13",
+      "candidate_pcm_sha256": "2a8a2fd8e584e4411a43153fd401d2b2479fc164502290a54b4efcdba03b7a25",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 1.0,
+            "height_scale": 2.0,
+            "depth_scale": 4.0
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-window-9.1.6",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "9.1.6",
+        "--semantic-policy",
+        "<generated-semantic-policy>",
+        "--start",
+        "0.037",
+        "--end",
+        "0.193"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 16,
+      "sample_rate": 48000,
+      "frames": 7488,
+      "max_absolute_error": 6.556510925292969e-07,
+      "max_normalized_error": 5.171510507453941e-07,
+      "rms_error": 4.4099152032582094e-08,
+      "bit_identical": false,
+      "reference_pcm_sha256": "56af57ae55285c029a71ce2ab4f5d7ec11484edb4ed126fefc4f94157fe5612f",
+      "candidate_pcm_sha256": "a93fd2a0f620a8a0a4d5158e3d4f69ad6de9eddb47961c76fe150b8b839d2f79",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 1.0,
+            "height_scale": 2.0,
+            "depth_scale": 4.0
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-0.5-22.2",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "22.2",
+        "--semantic-policy",
+        "<generated-semantic-policy>"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 24,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 6.556510925292969e-07,
+      "max_normalized_error": 5.426557857463029e-07,
+      "rms_error": 1.814277827927411e-08,
+      "bit_identical": false,
+      "reference_pcm_sha256": "f31dd262f29a112128d4dd5977fac6c18257b241115a16bdde35b76b76983ed3",
+      "candidate_pcm_sha256": "b62a0fb1123c851866886b57116d1b47a0f0c828be9ed8326059324c16bb6cba",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 1.0,
+            "height_scale": 2.0,
+            "depth_scale": 4.0
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-window-22.2",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "22.2",
+        "--semantic-policy",
+        "<generated-semantic-policy>",
+        "--start",
+        "0.037",
+        "--end",
+        "0.193"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 24,
+      "sample_rate": 48000,
+      "frames": 7488,
+      "max_absolute_error": 6.556510925292969e-07,
+      "max_normalized_error": 5.426557857463029e-07,
+      "rms_error": 3.598802662576547e-08,
+      "bit_identical": false,
+      "reference_pcm_sha256": "ef9805e84f7212a5cd2b38e7c56f425cf01faabd067c017949355ea1ccd9ccb6",
+      "candidate_pcm_sha256": "3b14f79095db1aab1b0696ed0f83fdb490af5e3e4f96803201cdf7c49943d20e",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 1.0,
+            "height_scale": 2.0,
+            "depth_scale": 4.0
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-1.0-7.1.4",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "7.1.4",
+        "--semantic-policy",
+        "<generated-semantic-policy>"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 12,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 4.470348358154297e-07,
+      "max_normalized_error": 3.759787824311465e-07,
+      "rms_error": 3.758329344165469e-08,
+      "bit_identical": false,
+      "reference_pcm_sha256": "ec3c1b3c4fd3d423d4727446254bb30d7fe216ebaae757e74b4f0a905ecfbf71",
+      "candidate_pcm_sha256": "10f400813aeea9c124892d84d9fcb44459e229aad1e15c04ecad20e13179cf7d",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 2.0,
+            "height_scale": 4.0,
+            "depth_scale": 8.0
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-1.0-9.1.6",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "9.1.6",
+        "--semantic-policy",
+        "<generated-semantic-policy>"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 16,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 4.470348358154297e-07,
+      "max_normalized_error": 3.759787824311465e-07,
+      "rms_error": 3.254808687835805e-08,
+      "bit_identical": false,
+      "reference_pcm_sha256": "4c394fc07a351ae77e40d2ce2b701113a95f7e3e144a4ce40f871469df9aef92",
+      "candidate_pcm_sha256": "8306dba450aa2014631379b28c5be134bf179bebbd0d7e8c4e6fbb4f230dbef6",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 2.0,
+            "height_scale": 4.0,
+            "depth_scale": 8.0
+          }
+        }
+      }
+    },
+    {
+      "case": "triple-size-1.0-22.2",
+      "fixture": "objects-cartesian",
+      "arguments": [
+        "--renderer",
+        "triple-balance",
+        "--output-layout",
+        "22.2",
+        "--semantic-policy",
+        "<generated-semantic-policy>"
+      ],
+      "fixture_sha256": "7887b6e054ef0bc6a8d6e9f61b39b3ba77cef35f69c0df5a25df66d1ecc98882",
+      "channels": 24,
+      "sample_rate": 48000,
+      "frames": 48000,
+      "max_absolute_error": 4.470348358154297e-07,
+      "max_normalized_error": 4.0179916643872787e-07,
+      "rms_error": 1.785379879764379e-08,
+      "bit_identical": false,
+      "reference_pcm_sha256": "b32f04ec32010a90a6fc0cfa1e67fa17a088c42a794aaa8ec504d0bac95e5dc6",
+      "candidate_pcm_sha256": "275d25b87c77050b26811f7573472c52c2dc8ff9df2815f687ce5d9396f80fe9",
+      "passed": true,
+      "semantic_policy": {
+        "schema": "mradm.semantic-policy.v1",
+        "global": {
+          "diffuse": {
+            "enabled": false
+          },
+          "extent": {
+            "width_scale": 2.0,
+            "height_scale": 4.0,
+            "depth_scale": 8.0
+          }
+        }
+      }
+    }
+  ],
+  "passed": true,
+  "baseline_commit": "19728179608c4cfe550dc11ff2b3b4425db37963"
+}

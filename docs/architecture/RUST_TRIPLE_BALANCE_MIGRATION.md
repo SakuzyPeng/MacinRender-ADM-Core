@@ -68,6 +68,29 @@ Release 同平台一般有限值采用 `2e-6 + 2e-6 * abs(old)`；精确路由/�
 快速归零恢复、共享表独立实例、pending/动态曲线快照及错误原子性。
 独立内核与 FFI 分配器从首次调用开始计数。
 
+2026-10-05 原生验收：
+
+| 项目 | macOS arm64 | Windows x64 |
+|---|---:|---:|
+| CTest | Debug 60/60；Release 定向 15/15 | canonical Release 59/59 |
+| 17,783,167 个旧/新数值对照 | 最大 PCM 绝对差 `1.3113021850585938e-6` | 全部逐位相同 |
+| 480 个控制块的事件与生命周期决策 | 精确一致 | 精确一致 |
+| 公开 `adm_*` 符号 | 139，集合保持 | 139，集合保持 |
+| 私有 Rust 符号外泄 | 无 | 无 |
+
+其中 7.1.4/9.1.6 的 320 个控制块同时精确核对 Q15 码；22.2 保留连续、无量化的几何规则。
+
+Rust Release workspace 共 90 项测试通过，其中 Triple Balance 7 项、分配探针 10 项、FFI 16 项。
+28 组 macOS Release CLI 对照全部通过：13 组逐位相同，15 组尺寸/窗口用例最大 PCM
+绝对差为 `8.344650268554688e-7`。这 15 组的 semantic report 同时确认有效三轴尺寸相等、
+diffuse 为零且 extent 实际参与渲染。不是主观试听或跨平台位一致结果。
+Rust fmt/Clippy、改动 C++ clang-format/clang-tidy/cppcheck、冻结参考检查和许可证/SBOM 检查通过。
+
+实现提交 `31ec95c`，数值探针的逐帧访问修订为 `28a607c`。
+[最终三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37278478106)
+验证 `28a607c`：macOS Debug 60/60、Linux Debug 59/59、Windows Debug 59/59，全部通过。
+此前实现提交的首轮三平台 CI 也全部通过。最终验收提交只更新文档与证据。
+
 ```sh
 cmake --build --preset debug
 ctest --preset debug --parallel "$(getconf _NPROCESSORS_ONLN)" --output-on-failure
@@ -86,5 +109,9 @@ ADM/WAV。覆盖 13 个既有后端控制用例和 15 个新增尺寸/窗口用�
 构建目录、Cargo 产物和依赖缓存均复用。Windows 使用既有 canonical Release 工作区，
 同步前校验并备份原始字节；其余已有修改保留，原生结果不描述为干净 Git 检出。
 
-实际平台结果、实现提交及 CI 提交收录于同目录 evidence/rust-triple-balance 验收记录。
+实际结果和源码指纹见[机器可读验收](evidence/rust-triple-balance/validation.json)、
+[macOS 数值](evidence/rust-triple-balance/macos-comparison.json)、
+[Windows 数值](evidence/rust-triple-balance/windows-comparison.json)、
+[CLI 对照](evidence/rust-triple-balance/macos-audio.json)及
+[有效语义核对](evidence/rust-triple-balance/semantic-policies.json)。
 性能和跨平台位一致不由本次语言迁移结果推断。

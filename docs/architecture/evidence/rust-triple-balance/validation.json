@@ -1,0 +1,308 @@
+{
+  "schema": "mradm.rust-triple-balance-migration.v1",
+  "date": "2026-10-05",
+  "baseline_commit": "19728179608c4cfe550dc11ff2b3b4425db37963",
+  "implementation_commit": "31ec95cf64df98276930305875f51a218a08f52c",
+  "scope": [
+    "Rust immutable shared numeric preparation and point timeline compilation",
+    "Fixed point, size and 22.2 geometry",
+    "Per-instance recursive decorrelation, control state, dry/wet transitions and mixing scratch",
+    "Rust-owned snapshots with existing C++ bounded LRU scheduling"
+  ],
+  "public_c_abi_changed": false,
+  "new_third_party_dependencies": [],
+  "contracts": {
+    "filter_subblock_frames": 32,
+    "control_frames": 512,
+    "production_render_frames": 1024,
+    "dynamic_curve_blocks_per_track": 3,
+    "snapshot_budget_bytes": 33554432,
+    "snapshot_creation": "on demand; allocations allowed",
+    "existing_snapshot_capture_restore_allocations": 0,
+    "kernel_and_ffi_first_call_allocations": 0,
+    "runtime_locks_or_io": false,
+    "parameter_rejection_preserves_output_and_history": true,
+    "eof_adds_frames": false,
+    "original_nonfinite_pcm_policies_preserved": true,
+    "dynamic_curve_rebuilt_on_snapshot_restore": true,
+    "control_blocks_with_exact_event_and_lifecycle_checks": 480,
+    "control_blocks_with_exact_q15_checks": 320
+  },
+  "validation": {
+    "macos_debug_ctest": {
+      "passed": 60,
+      "total": 60
+    },
+    "macos_release_focused_ctest": {
+      "passed": 15,
+      "total": 15
+    },
+    "windows_release_ctest": {
+      "passed": 59,
+      "total": 59
+    },
+    "rust_release_workspace_tests": 90,
+    "rust_release_triple_balance_tests": 7,
+    "rust_release_allocation_tests": 10,
+    "rust_release_ffi_tests": 16,
+    "float32_offline_stream_exact": true,
+    "window_full_slice_exact": true,
+    "varied_pull_and_object_chunks_exact": true,
+    "rust_fmt": true,
+    "rust_clippy_deny_warnings": true,
+    "changed_cpp_format_tidy_cppcheck": true,
+    "frozen_reference_cppcheck": true,
+    "licenses_sbom": true
+  },
+  "numerical_comparison": {
+    "tolerance": "2e-6 + 2e-6 * abs(reference)",
+    "macos": {
+      "baseline": "19728179608c4cfe550dc11ff2b3b4425db37963",
+      "control_blocks_with_exact_decisions": 480,
+      "motion_and_mix": {
+        "differing_samples": 91559,
+        "max_absolute_error": 1.2665987014770508e-07,
+        "max_normalized_error": 0.05938874587457824,
+        "samples": 960648
+      },
+      "objects_and_filter": {
+        "differing_samples": 10227149,
+        "max_absolute_error": 1.3113021850585938e-06,
+        "max_normalized_error": 0.4959069871768626,
+        "samples": 16787368
+      },
+      "passed": true,
+      "spatial": {
+        "differing_samples": 9830,
+        "max_absolute_error": 1.7881393432617188e-07,
+        "max_normalized_error": 0.07408641357784665,
+        "samples": 35151
+      }
+    },
+    "windows": {
+      "baseline": "19728179608c4cfe550dc11ff2b3b4425db37963",
+      "control_blocks_with_exact_decisions": 480,
+      "motion_and_mix": {
+        "differing_samples": 0,
+        "max_absolute_error": 0.0,
+        "max_normalized_error": 0.0,
+        "samples": 960648
+      },
+      "objects_and_filter": {
+        "differing_samples": 0,
+        "max_absolute_error": 0.0,
+        "max_normalized_error": 0.0,
+        "samples": 16787368
+      },
+      "passed": true,
+      "spatial": {
+        "differing_samples": 0,
+        "max_absolute_error": 0.0,
+        "max_normalized_error": 0.0,
+        "samples": 35151
+      }
+    },
+    "normalized_error_definition": "Native probe: abs(error)/(2e-6+2e-6*abs(reference)); CLI: abs(error)/(1+abs(reference))."
+  },
+  "release_cli": {
+    "cases": 28,
+    "passed": true,
+    "bit_identical": 13,
+    "max_absolute_error": 8.344650268554688e-07,
+    "semantic_policy_used": true,
+    "effective_policy_metadata_checked": 15
+  },
+  "configuration": {
+    "rust": "1.98.0 (88d9e12ae 2026-08-18)",
+    "macos": {
+      "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "cpp_compiler": "Apple clang 21.0.0 (clang-2100.3.34.2)",
+      "profiles": [
+        "Debug",
+        "Release"
+      ],
+      "MR_ADM_STRICT_FP": false,
+      "MR_ADM_ENABLE_SOFA": true
+    },
+    "windows": {
+      "cpp_compiler": "MSVC 19.51.36257 x64",
+      "profile": "canonical Release",
+      "MR_ADM_ENABLE_SOFA": true,
+      "legacy_reference_switches": false,
+      "workspace": "Existing dirty checkout preserved; synchronized files matched baseline before the first update and prior uploads before the final update",
+      "original_bytes_backed_up": true,
+      "synchronized_source_files": 36,
+      "synchronized_source_hashes_match_local": true,
+      "git_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "source_overlay_commit": "28a607c93a6e0b30249b1ae43990b216c993e38d",
+      "unrelated_differences_retained": true
+    }
+  },
+  "abi": {
+    "public_adm_exports": 139,
+    "native_platform_symbol_sets_equal": true,
+    "unchanged_from_baseline": true,
+    "macos_private_rust_exports": [],
+    "windows_private_rust_exports": [],
+    "windows_incidental_cpp_exports": 1984
+  },
+  "ci": {
+    "run_id": 37278478106,
+    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37278478106",
+    "commit": "28a607c93a6e0b30249b1ae43990b216c993e38d",
+    "status": "completed",
+    "prior_implementation_run": {
+      "id": 37277169476,
+      "commit": "31ec95cf64df98276930305875f51a218a08f52c",
+      "conclusion": "success"
+    },
+    "conclusion": "success",
+    "attempt": 1,
+    "jobs": [
+      {
+        "name": "Version metadata",
+        "job_id": 111660760532,
+        "conclusion": "success"
+      },
+      {
+        "name": "Linux debug",
+        "job_id": 111660760735,
+        "conclusion": "success",
+        "ctest_passed": 59,
+        "ctest_total": 59
+      },
+      {
+        "name": "Windows debug",
+        "job_id": 111660760848,
+        "conclusion": "success",
+        "ctest_passed": 59,
+        "ctest_total": 59
+      },
+      {
+        "name": "macOS debug",
+        "job_id": 111660761132,
+        "conclusion": "success",
+        "ctest_passed": 60,
+        "ctest_total": 60
+      }
+    ]
+  },
+  "source_sha256": {
+    "CMakeLists.txt": "b2bb4a329276e5f5c71b26a513bb393a547b69150a5fd2de9bd1322f6d4461d2",
+    "CppcheckSuppressions.txt": "1325a5a96dbc33164d01bd7c824720490c1582dc7093948b7b572862638a8fe4",
+    "include/adm/c_api.h": "06bc8e73dfb3e06ba645ec95b7f97f26943209b77a6a7dce3fd886a1a0c31659",
+    "rust/Cargo.lock": "1245da124cb7acc2f436683d9122d936b12b2d6c044fc322ae12aaa2b5c9df9f",
+    "rust/crates/mradm-dsp/src/lib.rs": "a398ef439f402a54d5f03feb12c55ce391e623ed3bc694d6fbfa5d59a7aa49e6",
+    "rust/crates/mradm-dsp/src/triple_balance/mod.rs": "2a45fd6f5c2d10b9d05928c15f23b706d711ef7c35f489afda40f3e89014fa27",
+    "rust/crates/mradm-dsp/src/triple_balance/panner.rs": "9177ac12af6c06c75b96459ac9cf7de71cf1854d45eadf915a1053680eb5fc73",
+    "rust/crates/mradm-dsp/src/triple_balance/processor.rs": "b80b50b4b30ca0f58c8ae966d3307e4cf62115ee25ed9ed48c9f74d5e8be9ea5",
+    "rust/crates/mradm-dsp/src/triple_balance/session.rs": "3aea71308707cd9475df3de7e21137ba9730a6c1897844e5f6a9197805f45673",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "308cc6f5051efb5255b2b0a5b0c770da6415148a37761bbb1754822457b97647",
+    "rust/crates/mradm-dsp/tests/triple_balance.rs": "913f4250fb0e27c2686fae3d2326be44b2b5792953181c7314c15c2c62f1871d",
+    "rust/crates/mradm-ffi/src/lib.rs": "705d3e2b7d5e5bc35f8d60dabcccd0a7887fd478ffcb070559f34ae4668697e6",
+    "rust/crates/mradm-ffi/src/triple_balance.rs": "806b7ccdc236866b21fae0af6731fb15f7199dea35b93fa3faf7ad974ffadb8e",
+    "rust/rust-toolchain.toml": "e879701472a698533f43f54989bbf5f3101eb0503472159d32633f3bb8a13fdf",
+    "scripts/consistency/compare-triple-balance.py": "7c3431695a4ac4f0105ffd13a5cf5940d5c73dac4b3c4dc2622e0edfb4e147a4",
+    "src/adm_dsp/pcm_mix.h": "93ecc18c7a856d8d43b038479c93f9e6d9b3dad55c0dde94f9081e06b0aa67f8",
+    "src/adm_dsp/triple_balance.h": "64882cb1c6649fe26736ef7c7cac79a6ea571ea6c7bcb8999023049cd0a5889f",
+    "src/adm_dsp/triple_balance_ffi.h": "b7a7fd0946457510d7e2f2aacdbb60badfd14f4d2c24072fa33d1b95c97331f6",
+    "src/adm_render_triple_balance/layout_222.cpp": "947fe02ea27f361ae906a3e0a4fa6366f3ef190bfecf5a25aa7ae1c07522af21",
+    "src/adm_render_triple_balance/panner.cpp": "8885e8f56ad8669bed87daec46bff4abdd39bed660b2a08fa9d1cdd1dffc2a6a",
+    "src/adm_render_triple_balance/render_state.cpp": "d9a6953c4e88bf72e0ea96d74d98f0fb27993a5c8114262afccc4072e65f2a53",
+    "src/adm_render_triple_balance/render_state.h": "0a95ebb3cd3e2ac1f26662ba1f7682ac53a7d3e5a48338e2bfb2a168d0515256",
+    "src/adm_render_triple_balance/size_panner.cpp": "432e84f56bcde6a86b7d04c40e0be0573c7c012d6392141a7da048cef0add9a3",
+    "src/adm_render_triple_balance/size_processor.cpp": "e659045ed3d85ea8fa769a68a64d611eb23d579a1d415a80311f6cde4b3929e2",
+    "src/adm_render_triple_balance/size_processor.h": "f68111308297759ab191f265a6a4b1a07ee05724d4867b88d61c628f17889f7d",
+    "src/adm_render_triple_balance/triple_balance_renderer.cpp": "915f7c51562dcdbcbf6f423498dbdb5b1ce01a6220d972bdaed67159336befa4",
+    "src/adm_render_triple_balance/triple_balance_stream.cpp": "6c283eb7d008183f4c0f3fdb66118621fe75682cb10f1a3fea01d25420b20515",
+    "tests/fixtures/room_compat_size/filter-expected.f32": "708a8175c293d95a9958a9d47bfe21009e1af37f87a95b88c3cf6eac0c64e8f7",
+    "tests/fixtures/room_compat_size/filter-input.f32": "b133683ecef6e83ab908c92a1a477bafbbfd7051c376823590cce1a24e5419dd",
+    "tests/fixtures/room_compat_size/rapid-expected.f32": "7571bc6b8969f3f933f6d9acea55316b43413931901888d3e82ba01d3d38962a",
+    "tests/fixtures/room_compat_size/rapid-input.f32": "027d61ddaf4a4c0ae9a053b636e9a55cdc4adee5510d1469933caaf05f811c6e",
+    "tests/fixtures/room_compat_size/reference.json": "6fd10ffaa0065adbc94bde54320789ec9a2b5b6bd6760d8757d9d3319d840d30",
+    "tests/reference/triple_balance/layout_222.cpp": "463962fa1f189c82e32e108f87b96aeb188f4cae1578c8318aee538d7119e0bb",
+    "tests/reference/triple_balance/layout_222.h": "8b2ef0246cabd0fbef895328e0893f12cc26a330cc5f1668c6c32da762a38d54",
+    "tests/reference/triple_balance/motion.h": "ef63fdd02c922ee3b60dc54e4e5c4e235118c66f7e91f67b6a86e8043da818a4",
+    "tests/reference/triple_balance/panner.cpp": "70aeb68bd338351bb0820713c070c327a81cea3010d1b27f725b03cdeebd01b0",
+    "tests/reference/triple_balance/panner.h": "e3ca69fb0dcaf67ae92e0851457aa57cae03404596f72e382dec31330d7f511b",
+    "tests/reference/triple_balance/provenance.json": "f71cf8966415e1203f5535e63c6e3aebe4a1826b4929b36819a4f5b616981bf3",
+    "tests/reference/triple_balance/render_state.cpp": "5489d2ebec86bca6779c114f31cd7c85e4ed5a6d5eb468559a3769ccfd253e36",
+    "tests/reference/triple_balance/render_state.h": "3e78caee5cec4d47b2d04d755e06a5a1ef39f72a86f47eb0fad82511fb441afa",
+    "tests/reference/triple_balance/size_panner.cpp": "3fe883eafa1e1532ba11ead8cb0932d6b52b22afb1c7d48613306ccdd95153c6",
+    "tests/reference/triple_balance/size_panner.h": "6227a8a52d894285cb60483c582ef7bcbcd06f6c67461600bc5e69a75d5a1747",
+    "tests/reference/triple_balance/size_processor.cpp": "b6c36d4e37bd702bf86d279d099339b4d7c19d022f3658c1c62752e7906699b5",
+    "tests/reference/triple_balance/size_processor.h": "676b22f86a383a03044fc2123d09cd1f87531044d04aec890bda07297945b262",
+    "tests/unit/triple_balance_rust_test.cpp": "996ebbb8e9c6fa470f199ea846f565413c776f25361eb3cc914b471849177515",
+    "tests/unit/triple_balance_stream_test.cpp": "f654becdf62135564ba1e4dff4383d3b84e772a677e2fcf467100ae2dfd001a5"
+  },
+  "windows_source_sha256": {
+    "CMakeLists.txt": "b2bb4a329276e5f5c71b26a513bb393a547b69150a5fd2de9bd1322f6d4461d2",
+    "rust/crates/mradm-dsp/src/lib.rs": "a398ef439f402a54d5f03feb12c55ce391e623ed3bc694d6fbfa5d59a7aa49e6",
+    "rust/crates/mradm-dsp/src/triple_balance/mod.rs": "2a45fd6f5c2d10b9d05928c15f23b706d711ef7c35f489afda40f3e89014fa27",
+    "rust/crates/mradm-dsp/src/triple_balance/panner.rs": "9177ac12af6c06c75b96459ac9cf7de71cf1854d45eadf915a1053680eb5fc73",
+    "rust/crates/mradm-dsp/src/triple_balance/processor.rs": "b80b50b4b30ca0f58c8ae966d3307e4cf62115ee25ed9ed48c9f74d5e8be9ea5",
+    "rust/crates/mradm-dsp/src/triple_balance/session.rs": "3aea71308707cd9475df3de7e21137ba9730a6c1897844e5f6a9197805f45673",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "308cc6f5051efb5255b2b0a5b0c770da6415148a37761bbb1754822457b97647",
+    "rust/crates/mradm-dsp/tests/triple_balance.rs": "913f4250fb0e27c2686fae3d2326be44b2b5792953181c7314c15c2c62f1871d",
+    "rust/crates/mradm-ffi/src/lib.rs": "705d3e2b7d5e5bc35f8d60dabcccd0a7887fd478ffcb070559f34ae4668697e6",
+    "rust/crates/mradm-ffi/src/triple_balance.rs": "806b7ccdc236866b21fae0af6731fb15f7199dea35b93fa3faf7ad974ffadb8e",
+    "src/adm_dsp/pcm_mix.h": "93ecc18c7a856d8d43b038479c93f9e6d9b3dad55c0dde94f9081e06b0aa67f8",
+    "src/adm_dsp/triple_balance.h": "64882cb1c6649fe26736ef7c7cac79a6ea571ea6c7bcb8999023049cd0a5889f",
+    "src/adm_dsp/triple_balance_ffi.h": "b7a7fd0946457510d7e2f2aacdbb60badfd14f4d2c24072fa33d1b95c97331f6",
+    "src/adm_render_triple_balance/layout_222.cpp": "947fe02ea27f361ae906a3e0a4fa6366f3ef190bfecf5a25aa7ae1c07522af21",
+    "src/adm_render_triple_balance/panner.cpp": "8885e8f56ad8669bed87daec46bff4abdd39bed660b2a08fa9d1cdd1dffc2a6a",
+    "src/adm_render_triple_balance/render_state.cpp": "d9a6953c4e88bf72e0ea96d74d98f0fb27993a5c8114262afccc4072e65f2a53",
+    "src/adm_render_triple_balance/render_state.h": "0a95ebb3cd3e2ac1f26662ba1f7682ac53a7d3e5a48338e2bfb2a168d0515256",
+    "src/adm_render_triple_balance/size_panner.cpp": "432e84f56bcde6a86b7d04c40e0be0573c7c012d6392141a7da048cef0add9a3",
+    "src/adm_render_triple_balance/size_processor.cpp": "e659045ed3d85ea8fa769a68a64d611eb23d579a1d415a80311f6cde4b3929e2",
+    "src/adm_render_triple_balance/size_processor.h": "f68111308297759ab191f265a6a4b1a07ee05724d4867b88d61c628f17889f7d",
+    "src/adm_render_triple_balance/triple_balance_renderer.cpp": "915f7c51562dcdbcbf6f423498dbdb5b1ce01a6220d972bdaed67159336befa4",
+    "src/adm_render_triple_balance/triple_balance_stream.cpp": "6c283eb7d008183f4c0f3fdb66118621fe75682cb10f1a3fea01d25420b20515",
+    "tests/reference/triple_balance/layout_222.cpp": "463962fa1f189c82e32e108f87b96aeb188f4cae1578c8318aee538d7119e0bb",
+    "tests/reference/triple_balance/layout_222.h": "8b2ef0246cabd0fbef895328e0893f12cc26a330cc5f1668c6c32da762a38d54",
+    "tests/reference/triple_balance/motion.h": "ef63fdd02c922ee3b60dc54e4e5c4e235118c66f7e91f67b6a86e8043da818a4",
+    "tests/reference/triple_balance/panner.cpp": "70aeb68bd338351bb0820713c070c327a81cea3010d1b27f725b03cdeebd01b0",
+    "tests/reference/triple_balance/panner.h": "e3ca69fb0dcaf67ae92e0851457aa57cae03404596f72e382dec31330d7f511b",
+    "tests/reference/triple_balance/provenance.json": "f71cf8966415e1203f5535e63c6e3aebe4a1826b4929b36819a4f5b616981bf3",
+    "tests/reference/triple_balance/render_state.cpp": "5489d2ebec86bca6779c114f31cd7c85e4ed5a6d5eb468559a3769ccfd253e36",
+    "tests/reference/triple_balance/render_state.h": "3e78caee5cec4d47b2d04d755e06a5a1ef39f72a86f47eb0fad82511fb441afa",
+    "tests/reference/triple_balance/size_panner.cpp": "3fe883eafa1e1532ba11ead8cb0932d6b52b22afb1c7d48613306ccdd95153c6",
+    "tests/reference/triple_balance/size_panner.h": "6227a8a52d894285cb60483c582ef7bcbcd06f6c67461600bc5e69a75d5a1747",
+    "tests/reference/triple_balance/size_processor.cpp": "b6c36d4e37bd702bf86d279d099339b4d7c19d022f3658c1c62752e7906699b5",
+    "tests/reference/triple_balance/size_processor.h": "676b22f86a383a03044fc2123d09cd1f87531044d04aec890bda07297945b262",
+    "tests/unit/triple_balance_rust_test.cpp": "996ebbb8e9c6fa470f199ea846f565413c776f25361eb3cc914b471849177515",
+    "tests/unit/triple_balance_stream_test.cpp": "f654becdf62135564ba1e4dff4383d3b84e772a677e2fcf467100ae2dfd001a5"
+  },
+  "log_sha256": {
+    "out/rust-triple-balance/audio-comparison.log": "2eba9c0009cc5f82dfdded0674bbffdcc0ae760fe3aaaf17bc9fb97429b13a50",
+    "out/rust-triple-balance/build-debug.log": "e2a108efd4f27a23b777a208d1856e699ef44fa8a17a95f136b10ba0f3e4fcf2",
+    "out/rust-triple-balance/build-release.log": "8e44f26b7e434c9a6b916e3a26a5393a2b55bd3bc28b6fc8810bb9bb5de94374",
+    "out/rust-triple-balance/ci-linux.log": "331ff2776f763f9560c9a4abe329dfba8c28f2808cba259f3fbc31b83140419b",
+    "out/rust-triple-balance/ci-macos.log": "228872268c66cb28281680108c5db52f4910b92a75d6634283a6a3dacbec7c72",
+    "out/rust-triple-balance/ci-windows.log": "499b88e59ee076c01d53f70d8c15f0ed34835a18177148b372cb3f27521d2369",
+    "out/rust-triple-balance/clippy.log": "445b3df44eef81e29d7fcef24a39a0b36c75be648dc1a7a3125097d017086e5a",
+    "out/rust-triple-balance/cpp-quality.log": "8672cea0160bd644b5f6c0d708b79413ff9365b26d19235395707d2ec32eac58",
+    "out/rust-triple-balance/debug-ctest.log": "dc1c6419af94f7f0c20730db4704ec765353a335f1e3cf2fb668f7ad731c392f",
+    "out/rust-triple-balance/final-debug-probe-build.log": "0dccbabc0cb9ce025f4b34d86929ae79fd8e6f84f88d1f2f97efdb2ba5f3d2c8",
+    "out/rust-triple-balance/final-probe-build.log": "f1aa7ed60752ec910b5fd8cd939cd6306b46431e4ab19920f0a3cbfa2ad6b4d1",
+    "out/rust-triple-balance/licenses.log": "7fc81fb03cf503a1b10d8c641b0da14081f41a961c3f51de3b8ba31f1df82fbd",
+    "out/rust-triple-balance/numeric-comparison.log": "5fd2f1cf542a5cc802c06950be3ef9c5528dcedbf9dd5bfe7671b88a2010b431",
+    "out/rust-triple-balance/reference-quality.log": "df74b8bcea8fc59a1815394b9c46a521377ada5c6b9387e926a2b62f71f6de1c",
+    "out/rust-triple-balance/release-focused.log": "9d740c9036604ca6f0a89bacb7d1e56328a52f1cc1d7347d8d81d365691e330b",
+    "out/rust-triple-balance/rust-quality.log": "637787741743dab032778c5a65436ffcf72b44bd39632d12fbb7382bc2a2b646",
+    "out/rust-triple-balance/rust-release.log": "11ccdc58df03cfd9d4b801fe6e59a689554209f607ff180cf115394d16ae67ee",
+    "out/rust-triple-balance/rust-tests.log": "017970289085ff395a6dac347aebf09914e62101d086847008925b35b3aabe43",
+    "out/rust-triple-balance/tidy-fixes.log": "07cd54901b8ef9519b599badff73b3a4af7209e5fc6e41f19d281674182f71be",
+    "out/rust-triple-balance/windows-ctest.log": "851f43822b5f40eb3f2e6b4ffda0f8d39357f421af0f268a426c5b9e626592a7",
+    "out/rust-triple-balance/windows-final-run.log": "d85aa6bbfc1e6e889fff9593a38bca9d871ad5a78c7388326b62fff1b3f8be1c",
+    "out/rust-triple-balance/windows-probe-fix.log": "4b1ef395cbf5ee64ccae204f1e5a3794ff15a6d8251f27493bdb968ddae4a0e5",
+    "out/rust-triple-balance/windows-run.log": "889b61ee99b380dd7e010ab800ee6ca4061dd760010932e10d730072de112459"
+  },
+  "not_claimed": [
+    "Cross-platform bit identity",
+    "Throughput or RSS improvement",
+    "Allocation-free whole renderer",
+    "Subjective listening equivalence"
+  ],
+  "tested_source_commit": "28a607c93a6e0b30249b1ae43990b216c993e38d"
+}
