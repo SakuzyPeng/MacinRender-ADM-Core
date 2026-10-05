@@ -1,3 +1,4 @@
+#include "../support/adm_fixture.h"
 // Contract test for the stable C ABI (include/adm/c_api.h).
 //
 // Exercises the ABI exactly as an external consumer would: version queries,
@@ -24,9 +25,6 @@
 #include "adm/c_api.h"
 
 // libadm / libbw64 — used here only to construct the fixture, never via the ABI.
-#include <adm/adm.hpp>
-#include <adm/utilities/id_assignment.hpp>
-#include <adm/write.hpp>
 #include <bw64/bw64.hpp>
 
 namespace {
@@ -64,59 +62,63 @@ std::filesystem::path unique_temp_wav_path(const char* stem) {
 
 // Build a minimal single-Object ADM BW64 file with real audio samples.
 std::filesystem::path write_fixture(uint32_t sample_rate = 48000U, bool cartesian = false) {
-    auto doc = adm::Document::create();
+    auto doc = fixture::Document::create();
 
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"TestCF"}, adm::TypeDefinition::OBJECTS);
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"TestCF"},
+                                                  fixture::TypeDefinition::objects);
     {
-        auto block =
-            cartesian
-                ? adm::AudioBlockFormatObjects{adm::CartesianPosition{adm::X{0.0F}, adm::Y{1.0F}, adm::Z{.5F}}}
-                : adm::AudioBlockFormatObjects{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{10.0F}}};
+        auto block = cartesian ? fixture::AudioBlockFormatObjects{fixture::CartesianPosition{
+                                     fixture::X{0.0F}, fixture::Y{1.0F}, fixture::Z{.5F}}}
+                               : fixture::AudioBlockFormatObjects{
+                                     fixture::SphericalPosition{fixture::Azimuth{30.0F}, fixture::Elevation{10.0F}}};
         if (cartesian) {
-            block.set(adm::Width{.3F});
-            block.set(adm::Height{.3F});
-            block.set(adm::Depth{.3F});
+            block.set(fixture::Width{.3F});
+            block.set(fixture::Height{.3F});
+            block.set(fixture::Depth{.3F});
         }
-        block.set(adm::Gain{0.8F});
+        block.set(fixture::Gain{0.8F});
         cf->add(block);
     }
     doc->add(cf);
 
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"TestPF"}, adm::TypeDefinition::OBJECTS);
-    pf->addReference(cf);
+    auto pf =
+        fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"TestPF"}, fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
     doc->add(pf);
 
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"TestSF"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    auto sf =
+        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"TestSF"}, fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
 
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"TestTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf =
+        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"TestTF"}, fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
 
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
 
-    auto object = adm::AudioObject::create(adm::AudioObjectName{"TestObject"});
-    object->addReference(uid);
+    auto object = fixture::AudioObject::create(fixture::AudioObjectName{"TestObject"});
+    object->add_reference(uid);
     doc->add(object);
 
-    auto content = adm::AudioContent::create(adm::AudioContentName{"TestContent"});
-    content->addReference(object);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"TestContent"});
+    content->add_reference(object);
     doc->add(content);
 
-    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"TestProgramme"});
-    programme->addReference(content);
+    auto programme = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"TestProgramme"});
+    programme->add_reference(content);
     doc->add(programme);
 
-    adm::reassignIds(doc);
-    const std::string uid_str = adm::formatId(uid->get<adm::AudioTrackUidId>());
+    fixture::reassign_ids(doc);
+    const std::string uid_str = fixture::format_id(uid->get<fixture::AudioTrackUidId>());
 
     std::ostringstream buf;
-    adm::writeXml(buf, doc);
+    fixture::write_xml(buf, doc);
 
     auto path = unique_temp_wav_path("mr_c_api_fixture");
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
@@ -129,45 +131,48 @@ std::filesystem::path write_fixture(uint32_t sample_rate = 48000U, bool cartesia
 }
 
 std::filesystem::path write_direct_speakers_fixture() {
-    auto doc = adm::Document::create();
+    auto doc = fixture::Document::create();
 
-    auto cf =
-        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"MatrixCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
-    adm::AudioBlockFormatDirectSpeakers block{
-        adm::SphericalSpeakerPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
-    block.add(adm::SpeakerLabel{"M+000"});
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"MatrixCF"},
+                                                  fixture::TypeDefinition::direct_speakers);
+    fixture::AudioBlockFormatDirectSpeakers block{
+        fixture::SphericalSpeakerPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}, fixture::Distance{1.0F}}};
+    block.add(fixture::SpeakerLabel{"M+000"});
     cf->add(block);
     doc->add(cf);
 
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"MatrixPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
-    pf->addReference(cf);
+    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"MatrixPF"},
+                                               fixture::TypeDefinition::direct_speakers);
+    pf->add_reference(cf);
     doc->add(pf);
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"MatrixSF"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    auto sf =
+        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"MatrixSF"}, fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"MatrixTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf =
+        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"MatrixTF"}, fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
 
-    auto object = adm::AudioObject::create(adm::AudioObjectName{"MatrixObject"});
-    object->addReference(uid);
+    auto object = fixture::AudioObject::create(fixture::AudioObjectName{"MatrixObject"});
+    object->add_reference(uid);
     doc->add(object);
-    auto content = adm::AudioContent::create(adm::AudioContentName{"MatrixContent"});
-    content->addReference(object);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"MatrixContent"});
+    content->add_reference(object);
     doc->add(content);
-    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"MatrixProgramme"});
-    programme->addReference(content);
+    auto programme = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"MatrixProgramme"});
+    programme->add_reference(content);
     doc->add(programme);
 
-    adm::reassignIds(doc);
+    fixture::reassign_ids(doc);
     std::ostringstream xml;
-    adm::writeXml(xml, doc);
-    const std::string uid_string = adm::formatId(uid->get<adm::AudioTrackUidId>());
+    fixture::write_xml(xml, doc);
+    const std::string uid_string = fixture::format_id(uid->get<fixture::AudioTrackUidId>());
 
     const auto path = unique_temp_wav_path("mr_c_api_matrix_fixture");
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_string, "", "")});
@@ -817,41 +822,46 @@ bool verify_render_file_ex_compat(adm_context_t* ctx, const std::filesystem::pat
 // Larger fixture for loudness tests: 1 second of signal to satisfy EBU R128
 // integrated loudness gating (requires at least one complete 400ms window).
 std::filesystem::path write_fixture_1s() {
-    auto doc = adm::Document::create();
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"TestCF2"}, adm::TypeDefinition::OBJECTS);
+    auto doc = fixture::Document::create();
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"TestCF2"},
+                                                  fixture::TypeDefinition::objects);
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
-        block.set(adm::Gain{1.0F});
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}};
+        block.set(fixture::Gain{1.0F});
         cf->add(block);
     }
     doc->add(cf);
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"TestPF2"}, adm::TypeDefinition::OBJECTS);
-    pf->addReference(cf);
+    auto pf =
+        fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"TestPF2"}, fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
     doc->add(pf);
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"TestSF2"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    auto sf =
+        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"TestSF2"}, fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"TestTF2"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf =
+        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"TestTF2"}, fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
-    auto object = adm::AudioObject::create(adm::AudioObjectName{"TestObject2"});
-    object->addReference(uid);
+    auto object = fixture::AudioObject::create(fixture::AudioObjectName{"TestObject2"});
+    object->add_reference(uid);
     doc->add(object);
-    auto content = adm::AudioContent::create(adm::AudioContentName{"TestContent2"});
-    content->addReference(object);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"TestContent2"});
+    content->add_reference(object);
     doc->add(content);
-    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"TestProgramme2"});
-    programme->addReference(content);
+    auto programme = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"TestProgramme2"});
+    programme->add_reference(content);
     doc->add(programme);
-    adm::reassignIds(doc);
-    const std::string uid_str = adm::formatId(uid->get<adm::AudioTrackUidId>());
+    fixture::reassign_ids(doc);
+    const std::string uid_str = fixture::format_id(uid->get<fixture::AudioTrackUidId>());
     std::ostringstream buf;
-    adm::writeXml(buf, doc);
+    fixture::write_xml(buf, doc);
     auto path = unique_temp_wav_path("mr_c_api_fixture_1s");
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(buf.str());

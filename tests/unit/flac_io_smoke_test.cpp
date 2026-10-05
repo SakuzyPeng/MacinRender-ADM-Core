@@ -12,6 +12,8 @@
 #include <string_view>
 #include <vector>
 
+#include "../support/adm_fixture.h"
+
 #ifdef _WIN32
 #include <process.h>
 #else
@@ -20,9 +22,6 @@
 
 #include <FLAC/callback.h>
 #include <FLAC/metadata.h>
-#include <adm/adm.hpp>
-#include <adm/utilities/id_assignment.hpp>
-#include <adm/write.hpp>
 #include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
@@ -66,49 +65,54 @@ std::filesystem::path temp_path(std::string_view stem, std::string_view ext) {
     return std::filesystem::temp_directory_path() / name;
 }
 
-std::pair<std::shared_ptr<adm::Document>, std::string> make_render_doc() {
-    auto doc = adm::Document::create();
+std::pair<std::shared_ptr<fixture::Document>, std::string> make_render_doc() {
+    auto doc = fixture::Document::create();
 
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"FlacCF"}, adm::TypeDefinition::OBJECTS);
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"FlacCF"},
+                                                  fixture::TypeDefinition::objects);
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
-        block.set(adm::Gain{1.0F});
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}};
+        block.set(fixture::Gain{1.0F});
         cf->add(block);
     }
     doc->add(cf);
 
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"FlacPF"}, adm::TypeDefinition::OBJECTS);
-    pf->addReference(cf);
+    auto pf =
+        fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"FlacPF"}, fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
     doc->add(pf);
 
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"FlacSF"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    auto sf =
+        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"FlacSF"}, fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
 
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"FlacTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf =
+        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"FlacTF"}, fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
 
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
 
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{"FlacRenderObject"});
-    obj->addReference(uid);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"FlacRenderObject"});
+    obj->add_reference(uid);
     doc->add(obj);
 
-    auto content = adm::AudioContent::create(adm::AudioContentName{"FlacRenderContent"});
-    content->addReference(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"FlacRenderContent"});
+    content->add_reference(obj);
     doc->add(content);
 
-    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"FlacRenderProgramme"});
-    prog->addReference(content);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"FlacRenderProgramme"});
+    prog->add_reference(content);
     doc->add(prog);
 
-    adm::reassignIds(doc);
-    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+    fixture::reassign_ids(doc);
+    return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
 }
 
 std::filesystem::path write_render_fixture() {
@@ -120,7 +124,7 @@ std::filesystem::path write_render_fixture() {
     auto path = temp_path("mr_flac_engine_input", ".wav");
 
     std::ostringstream xml_buf;
-    adm::writeXml(xml_buf, doc);
+    fixture::write_xml(xml_buf, doc);
 
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());

@@ -12,15 +12,13 @@
 #include <utility>
 #include <vector>
 
+#include "../support/adm_fixture.h"
+
 // Our library (mradm namespace)
 #include "adm/io.h"
 #include "adm/scene.h"
 
 // libadm / libbw64 — used here only to construct and inspect the fixture file.
-#include <adm/adm.hpp>
-#include <adm/parse.hpp>
-#include <adm/utilities/id_assignment.hpp>
-#include <adm/write.hpp>
 #include <bw64/bw64.hpp>
 
 namespace {
@@ -48,111 +46,118 @@ bool check(bool condition, const char* msg) {
 // One Objects-chain document with several non-default block parameters so we can
 // confirm that fields the override does NOT touch survive the write-back.
 // az=30 el=10 gain=0.8 diffuse=0.3 width=20.
-std::pair<std::shared_ptr<adm::Document>, std::string> make_objects_doc() {
-    auto doc = adm::Document::create();
+std::pair<std::shared_ptr<fixture::Document>, std::string> make_objects_doc() {
+    auto doc = fixture::Document::create();
 
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"ExpCF"}, adm::TypeDefinition::OBJECTS);
+    auto cf =
+        fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"ExpCF"}, fixture::TypeDefinition::objects);
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{30.0F}, adm::Elevation{10.0F}}};
-        block.set(adm::Gain{0.8F});
-        block.set(adm::Diffuse{0.3F});
-        block.set(adm::Width{20.0F});
-        block.set(adm::JumpPosition{adm::JumpPositionFlag{false}, adm::InterpolationLength{std::chrono::seconds{1}}});
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{30.0F}, fixture::Elevation{10.0F}}};
+        block.set(fixture::Gain{0.8F});
+        block.set(fixture::Diffuse{0.3F});
+        block.set(fixture::Width{20.0F});
+        block.set(fixture::JumpPosition{fixture::JumpPositionFlag{false},
+                                        fixture::InterpolationLength{std::chrono::seconds{1}}});
         cf->add(block);
     }
     doc->add(cf);
 
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"ExpPF"}, adm::TypeDefinition::OBJECTS);
-    pf->addReference(cf);
+    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"ExpPF"}, fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
     doc->add(pf);
 
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"ExpSF"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    auto sf =
+        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"ExpSF"}, fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
 
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"ExpTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf = fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"ExpTF"}, fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
 
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
 
-    auto object = adm::AudioObject::create(adm::AudioObjectName{"ExpObject"});
-    object->set(adm::Gain{1.0F});
-    object->addReference(uid);
+    auto object = fixture::AudioObject::create(fixture::AudioObjectName{"ExpObject"});
+    object->set(fixture::Gain{1.0F});
+    object->add_reference(uid);
     doc->add(object);
 
-    auto content = adm::AudioContent::create(adm::AudioContentName{"ExpContent"});
-    content->addReference(object);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"ExpContent"});
+    content->add_reference(object);
     doc->add(content);
 
-    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"ExpProgramme"});
-    programme->addReference(content);
+    auto programme = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"ExpProgramme"});
+    programme->add_reference(content);
     doc->add(programme);
 
-    adm::reassignIds(doc);
-    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+    fixture::reassign_ids(doc);
+    return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
 }
 
 // Source for headLocked write-back tests: the AudioObject is explicitly locked,
 // while the single block omits headLocked and therefore inherits true.
-std::pair<std::shared_ptr<adm::Document>, std::string> make_head_locked_doc(adm::TypeDescriptor type) {
-    auto doc = adm::Document::create();
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"HeadLockedCF"}, type);
-    if (type == adm::TypeDefinition::OBJECTS) {
-        cf->add(adm::AudioBlockFormatObjects{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}});
-    } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
-        adm::AudioBlockFormatDirectSpeakers block{
-            adm::SphericalSpeakerPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}, adm::Distance{1.0F}}};
-        block.add(adm::SpeakerLabel{"M+000"});
+std::pair<std::shared_ptr<fixture::Document>, std::string> make_head_locked_doc(fixture::TypeDescriptor type) {
+    auto doc = fixture::Document::create();
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"HeadLockedCF"}, type);
+    if (type == fixture::TypeDefinition::objects) {
+        cf->add(fixture::AudioBlockFormatObjects{
+            fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}});
+    } else if (type == fixture::TypeDefinition::direct_speakers) {
+        fixture::AudioBlockFormatDirectSpeakers block{fixture::SphericalSpeakerPosition{
+            fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}, fixture::Distance{1.0F}}};
+        block.add(fixture::SpeakerLabel{"M+000"});
         cf->add(block);
     } else {
-        cf->add(adm::AudioBlockFormatHoa{adm::Order{0}, adm::Degree{0}});
+        cf->add(fixture::AudioBlockFormatHoa{fixture::Order{0}, fixture::Degree{0}});
     }
     doc->add(cf);
 
-    std::shared_ptr<adm::AudioPackFormat> pf;
-    if (type == adm::TypeDefinition::HOA) {
-        pf = adm::AudioPackFormatHoa::create(adm::AudioPackFormatName{"HeadLockedPF"});
+    std::shared_ptr<fixture::AudioPackFormat> pf;
+    if (type == fixture::TypeDefinition::hoa) {
+        pf = fixture::AudioPackFormatHoa::create(fixture::AudioPackFormatName{"HeadLockedPF"});
     } else {
-        pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"HeadLockedPF"}, type);
+        pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"HeadLockedPF"}, type);
     }
-    pf->addReference(cf);
+    pf->add_reference(cf);
     doc->add(pf);
 
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"HeadLockedSF"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    auto sf = fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"HeadLockedSF"},
+                                                 fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"HeadLockedTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf = fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"HeadLockedTF"},
+                                                fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
 
-    auto object = adm::AudioObject::create(adm::AudioObjectName{"HeadLockedObject"});
-    object->set(adm::HeadLocked{true});
-    object->addReference(uid);
+    auto object = fixture::AudioObject::create(fixture::AudioObjectName{"HeadLockedObject"});
+    object->set(fixture::HeadLocked{true});
+    object->add_reference(uid);
     doc->add(object);
-    auto content = adm::AudioContent::create(adm::AudioContentName{"HeadLockedContent"});
-    content->addReference(object);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"HeadLockedContent"});
+    content->add_reference(object);
     doc->add(content);
-    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"HeadLockedProgramme"});
-    programme->addReference(content);
+    auto programme = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"HeadLockedProgramme"});
+    programme->add_reference(content);
     doc->add(programme);
 
-    adm::reassignIds(doc);
-    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+    fixture::reassign_ids(doc);
+    return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
 }
 
-std::string serialize_doc(const std::shared_ptr<adm::Document>& doc) {
+std::string serialize_doc(const std::shared_ptr<fixture::Document>& doc) {
     std::ostringstream buf;
-    adm::writeXml(buf, doc);
+    fixture::write_xml(buf, doc);
     return buf.str();
 }
 
@@ -451,13 +456,13 @@ bool verify_export_position_override_deferred() {
 
 bool verify_export_head_locked_block_override() {
     const std::array types{
-        adm::TypeDefinition::OBJECTS, adm::TypeDefinition::DIRECT_SPEAKERS, adm::TypeDefinition::HOA};
+        fixture::TypeDefinition::objects, fixture::TypeDefinition::direct_speakers, fixture::TypeDefinition::hoa};
     bool ok = true;
     for (const auto type : types) {
         const char* type_name = "hoa";
-        if (type == adm::TypeDefinition::OBJECTS) {
+        if (type == fixture::TypeDefinition::objects) {
             type_name = "objects";
-        } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
+        } else if (type == fixture::TypeDefinition::direct_speakers) {
             type_name = "direct_speakers";
         }
         auto [doc, uid] = make_head_locked_doc(type);
@@ -471,9 +476,9 @@ bool verify_export_head_locked_block_override() {
         }
 
         auto effective = *original;
-        if (type == adm::TypeDefinition::OBJECTS) {
+        if (type == fixture::TypeDefinition::objects) {
             effective.objects.at(0).tracks.at(0).blocks.at(0).head_locked = false;
-        } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
+        } else if (type == fixture::TypeDefinition::direct_speakers) {
             effective.objects.at(0).tracks.at(0).ds_blocks.at(0).head_locked = false;
         } else {
             effective.hoa_tracks.at(0).channels.at(0).blocks.at(0).head_locked = false;
@@ -496,9 +501,9 @@ bool verify_export_head_locked_block_override() {
             continue;
         }
         bool effective_locked = false;
-        if (type == adm::TypeDefinition::OBJECTS) {
+        if (type == fixture::TypeDefinition::objects) {
             effective_locked = reimported->objects.at(0).tracks.at(0).blocks.at(0).head_locked;
-        } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
+        } else if (type == fixture::TypeDefinition::direct_speakers) {
             effective_locked = reimported->objects.at(0).tracks.at(0).ds_blocks.at(0).head_locked;
         } else {
             effective_locked = reimported->hoa_tracks.at(0).channels.at(0).blocks.at(0).head_locked;
@@ -516,30 +521,15 @@ bool verify_export_head_locked_block_override() {
             ok = false;
             continue;
         }
-        std::istringstream stream{*axml};
-        const auto written_doc = adm::parseXml(stream);
-        const auto raw_objects = written_doc->getElements<adm::AudioObject>();
-        const auto raw_object = *raw_objects.begin();
-        bool explicit_false = false;
-        const auto raw_uids = raw_object->getReferences<adm::AudioTrackUid>();
-        const auto raw_uid = *raw_uids.begin();
-        const auto raw_tf = raw_uid->getReference<adm::AudioTrackFormat>();
-        const auto raw_sf = raw_tf->getReference<adm::AudioStreamFormat>();
-        const auto raw_cf = raw_sf->getReference<adm::AudioChannelFormat>();
-        if (type == adm::TypeDefinition::OBJECTS) {
-            const auto raw_blocks = raw_cf->getElements<adm::AudioBlockFormatObjects>();
-            const auto raw = *raw_blocks.begin();
-            explicit_false = !raw.isDefault<adm::HeadLocked>() && !raw.get<adm::HeadLocked>().get();
-        } else if (type == adm::TypeDefinition::DIRECT_SPEAKERS) {
-            const auto raw_blocks = raw_cf->getElements<adm::AudioBlockFormatDirectSpeakers>();
-            const auto raw = *raw_blocks.begin();
-            explicit_false = !raw.isDefault<adm::HeadLocked>() && !raw.get<adm::HeadLocked>().get();
-        } else {
-            const auto raw_blocks = raw_cf->getElements<adm::AudioBlockFormatHoa>();
-            const auto raw = *raw_blocks.begin();
-            explicit_false = !raw.isDefault<adm::HeadLocked>() && !raw.get<adm::HeadLocked>().get();
-        }
-        if (raw_object->isDefault<adm::HeadLocked>() || !raw_object->get<adm::HeadLocked>().get() || !explicit_false) {
+        // Inspect the emitted XML independently of the production parser.
+        const auto object_begin = axml->find("<audioObject ");
+        const auto object_end = axml->find("</audioObject>", object_begin);
+        const auto block_begin = axml->find("<audioBlockFormat ");
+        const auto block_end = axml->find("</audioBlockFormat>", block_begin);
+        const auto object_xml = axml->substr(object_begin, object_end - object_begin);
+        const auto block_xml = axml->substr(block_begin, block_end - block_begin);
+        const bool explicit_false = block_xml.find("<headLocked>0</headLocked>") != std::string::npos;
+        if (object_xml.find("<headLocked>1</headLocked>") == std::string::npos || !explicit_false) {
             std::cerr << "FAIL: headLocked " << type_name << " output did not explicitly write block 0\n";
             ok = false;
         }

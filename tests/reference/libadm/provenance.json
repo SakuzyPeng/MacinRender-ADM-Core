@@ -1,0 +1,6 @@
+{
+  "baseline_commit": "577fe2d",
+  "libadm_version": "0.14.0",
+  "source": "src/adm_io/scene_importer.cpp",
+  "sha256": "822c361ff033c95dee9dc23a3545287ed2f95df8578545371d653de3537a32cc"
+}

@@ -20,9 +20,6 @@
 #include <vector>
 
 #include <AudioToolbox/AudioToolbox.h>
-#include <adm/adm.hpp>
-#include <adm/utilities/id_assignment.hpp>
-#include <adm/write.hpp>
 #include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
@@ -30,6 +27,7 @@
 #include "adm/render.h"
 #include "adm/render_apple.h"
 
+#include "../support/adm_fixture.h"
 #include "render_common.h"
 
 namespace {
@@ -429,7 +427,7 @@ double rms_difference(const std::vector<float>& lhs, const std::vector<float>& r
 
 // Single OBJECTS object at a fixed azimuth (ADM convention: +ve = left), linear gain,
 // optional ADM width (0..1) for extent spreading, and optional channelLock.
-std::pair<std::shared_ptr<adm::Document>, std::string>
+std::pair<std::shared_ptr<fixture::Document>, std::string>
 make_object_doc(float azimuth,
                 float gain,
                 float width,
@@ -437,108 +435,115 @@ make_object_doc(float azimuth,
                 bool mute = false,
                 std::optional<bool> object_head_locked = std::nullopt,
                 std::optional<bool> block_head_locked = std::nullopt) {
-    auto doc = adm::Document::create();
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"AppleCF"}, adm::TypeDefinition::OBJECTS);
+    auto doc = fixture::Document::create();
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"AppleCF"},
+                                                  fixture::TypeDefinition::objects);
     {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{azimuth}, adm::Elevation{0.0F}}};
-        block.set(adm::Gain{gain});
-        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{azimuth}, fixture::Elevation{0.0F}}};
+        block.set(fixture::Gain{gain});
+        block.set(fixture::JumpPosition{fixture::JumpPositionFlag{true}});
         if (width > 0.0F) {
-            block.set(adm::Width{width});
+            block.set(fixture::Width{width});
         }
         if (channel_lock) {
-            adm::ChannelLock lock;
-            lock.set(adm::ChannelLockFlag{true});
+            fixture::ChannelLock lock;
+            lock.set(fixture::ChannelLockFlag{true});
             block.set(lock);
         }
         if (block_head_locked.has_value()) {
-            block.set(adm::HeadLocked{*block_head_locked});
+            block.set(fixture::HeadLocked{*block_head_locked});
         }
-        cf->add(block);
-    }
-    doc->add(cf);
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"ApplePF"}, adm::TypeDefinition::OBJECTS);
-    pf->addReference(cf);
-    doc->add(pf);
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"AppleSF"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
-    doc->add(sf);
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"AppleTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
-    doc->add(tf);
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
-    doc->add(uid);
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{"AppleObject"});
-    obj->addReference(uid);
-    if (mute) {
-        obj->set(adm::Mute{true});
-    }
-    if (object_head_locked.has_value()) {
-        obj->set(adm::HeadLocked{*object_head_locked});
-    }
-    doc->add(obj);
-    auto content = adm::AudioContent::create(adm::AudioContentName{"AppleContent"});
-    content->addReference(obj);
-    doc->add(content);
-    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"AppleProgramme"});
-    prog->addReference(content);
-    doc->add(prog);
-    adm::reassignIds(doc);
-    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
-}
-
-std::pair<std::shared_ptr<adm::Document>, std::string> make_head_locked_timeline_doc() {
-    auto doc = adm::Document::create();
-    auto cf = adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"AppleHeadTimelineCF"},
-                                              adm::TypeDefinition::OBJECTS);
-    {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
-        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{0}}});
-        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{200}}});
-        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
-        block.set(adm::HeadLocked{false});
-        cf->add(block);
-    }
-    {
-        adm::AudioBlockFormatObjects block{adm::SphericalPosition{adm::Azimuth{0.0F}, adm::Elevation{0.0F}}};
-        block.set(adm::Rtime{adm::Time{std::chrono::milliseconds{200}}});
-        block.set(adm::Duration{adm::Time{std::chrono::milliseconds{200}}});
-        block.set(adm::JumpPosition{adm::JumpPositionFlag{true}});
-        block.set(adm::HeadLocked{true});
         cf->add(block);
     }
     doc->add(cf);
     auto pf =
-        adm::AudioPackFormat::create(adm::AudioPackFormatName{"AppleHeadTimelinePF"}, adm::TypeDefinition::OBJECTS);
-    pf->addReference(cf);
+        fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"ApplePF"}, fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
     doc->add(pf);
     auto sf =
-        adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"AppleHeadTimelineSF"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"AppleSF"}, fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
     auto tf =
-        adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"AppleHeadTimelineTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"AppleTF"}, fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{"AppleHeadTimelineObject"});
-    obj->addReference(uid);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"AppleObject"});
+    obj->add_reference(uid);
+    if (mute) {
+        obj->set(fixture::Mute{true});
+    }
+    if (object_head_locked.has_value()) {
+        obj->set(fixture::HeadLocked{*object_head_locked});
+    }
     doc->add(obj);
-    auto content = adm::AudioContent::create(adm::AudioContentName{"AppleHeadTimelineContent"});
-    content->addReference(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"AppleContent"});
+    content->add_reference(obj);
     doc->add(content);
-    auto programme = adm::AudioProgramme::create(adm::AudioProgrammeName{"AppleHeadTimelineProgramme"});
-    programme->addReference(content);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"AppleProgramme"});
+    prog->add_reference(content);
+    doc->add(prog);
+    fixture::reassign_ids(doc);
+    return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
+}
+
+std::pair<std::shared_ptr<fixture::Document>, std::string> make_head_locked_timeline_doc() {
+    auto doc = fixture::Document::create();
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"AppleHeadTimelineCF"},
+                                                  fixture::TypeDefinition::objects);
+    {
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}};
+        block.set(fixture::Rtime{fixture::Time{std::chrono::milliseconds{0}}});
+        block.set(fixture::Duration{fixture::Time{std::chrono::milliseconds{200}}});
+        block.set(fixture::JumpPosition{fixture::JumpPositionFlag{true}});
+        block.set(fixture::HeadLocked{false});
+        cf->add(block);
+    }
+    {
+        fixture::AudioBlockFormatObjects block{
+            fixture::SphericalPosition{fixture::Azimuth{0.0F}, fixture::Elevation{0.0F}}};
+        block.set(fixture::Rtime{fixture::Time{std::chrono::milliseconds{200}}});
+        block.set(fixture::Duration{fixture::Time{std::chrono::milliseconds{200}}});
+        block.set(fixture::JumpPosition{fixture::JumpPositionFlag{true}});
+        block.set(fixture::HeadLocked{true});
+        cf->add(block);
+    }
+    doc->add(cf);
+    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"AppleHeadTimelinePF"},
+                                               fixture::TypeDefinition::objects);
+    pf->add_reference(cf);
+    doc->add(pf);
+    auto sf = fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"AppleHeadTimelineSF"},
+                                                 fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
+    doc->add(sf);
+    auto tf = fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"AppleHeadTimelineTF"},
+                                                fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
+    doc->add(tf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
+    doc->add(uid);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"AppleHeadTimelineObject"});
+    obj->add_reference(uid);
+    doc->add(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"AppleHeadTimelineContent"});
+    content->add_reference(obj);
+    doc->add(content);
+    auto programme = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"AppleHeadTimelineProgramme"});
+    programme->add_reference(content);
     doc->add(programme);
-    adm::reassignIds(doc);
-    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+    fixture::reassign_ids(doc);
+    return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
 }
 
 std::filesystem::path write_fixture(float azimuth,
@@ -556,7 +561,7 @@ std::filesystem::path write_fixture(float azimuth,
     auto path = temp_path("mr_apple_input", ".wav");
 
     std::ostringstream xml_buf;
-    adm::writeXml(xml_buf, doc);
+    fixture::write_xml(xml_buf, doc);
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
     auto writer = bw64::writeFile(path.string(), k_ch, k_sr, 24U, chna, axml);
@@ -574,7 +579,7 @@ std::filesystem::path write_head_locked_timeline_fixture(uint32_t frames) {
     const auto [doc, uid] = make_head_locked_timeline_doc();
     auto path = temp_path("mr_apple_head_timeline", ".wav");
     std::ostringstream xml_buf;
-    adm::writeXml(xml_buf, doc);
+    fixture::write_xml(xml_buf, doc);
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
     auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);
@@ -1028,44 +1033,47 @@ bool verify_channel_lock_snaps() {
 }
 
 // Single DirectSpeakers (bed) channel at a fixed speaker position and label.
-std::pair<std::shared_ptr<adm::Document>, std::string>
+std::pair<std::shared_ptr<fixture::Document>, std::string>
 make_ds_doc(float azimuth, float elevation, const std::string& label) {
-    auto doc = adm::Document::create();
-    auto cf =
-        adm::AudioChannelFormat::create(adm::AudioChannelFormatName{"AppleDsCF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
+    auto doc = fixture::Document::create();
+    auto cf = fixture::AudioChannelFormat::create(fixture::AudioChannelFormatName{"AppleDsCF"},
+                                                  fixture::TypeDefinition::direct_speakers);
     {
-        adm::AudioBlockFormatDirectSpeakers block{
-            adm::SphericalSpeakerPosition{adm::Azimuth{azimuth}, adm::Elevation{elevation}, adm::Distance{1.0F}}};
-        block.add(adm::SpeakerLabel{label});
-        block.set(adm::Gain{1.0F});
+        fixture::AudioBlockFormatDirectSpeakers block{fixture::SphericalSpeakerPosition{
+            fixture::Azimuth{azimuth}, fixture::Elevation{elevation}, fixture::Distance{1.0F}}};
+        block.add(fixture::SpeakerLabel{label});
+        block.set(fixture::Gain{1.0F});
         cf->add(block);
     }
     doc->add(cf);
-    auto pf = adm::AudioPackFormat::create(adm::AudioPackFormatName{"AppleDsPF"}, adm::TypeDefinition::DIRECT_SPEAKERS);
-    pf->addReference(cf);
+    auto pf = fixture::AudioPackFormat::create(fixture::AudioPackFormatName{"AppleDsPF"},
+                                               fixture::TypeDefinition::direct_speakers);
+    pf->add_reference(cf);
     doc->add(pf);
-    auto sf = adm::AudioStreamFormat::create(adm::AudioStreamFormatName{"AppleDsSF"}, adm::FormatDefinition::PCM);
-    sf->setReference(cf);
+    auto sf =
+        fixture::AudioStreamFormat::create(fixture::AudioStreamFormatName{"AppleDsSF"}, fixture::FormatDefinition::pcm);
+    sf->set_reference(cf);
     doc->add(sf);
-    auto tf = adm::AudioTrackFormat::create(adm::AudioTrackFormatName{"AppleDsTF"}, adm::FormatDefinition::PCM);
-    tf->setReference(sf);
-    sf->addReference(tf);
+    auto tf =
+        fixture::AudioTrackFormat::create(fixture::AudioTrackFormatName{"AppleDsTF"}, fixture::FormatDefinition::pcm);
+    tf->set_reference(sf);
+    sf->add_reference(tf);
     doc->add(tf);
-    auto uid = adm::AudioTrackUid::create();
-    uid->setReference(tf);
-    uid->setReference(pf);
+    auto uid = fixture::AudioTrackUid::create();
+    uid->set_reference(tf);
+    uid->set_reference(pf);
     doc->add(uid);
-    auto obj = adm::AudioObject::create(adm::AudioObjectName{"AppleDsObject"});
-    obj->addReference(uid);
+    auto obj = fixture::AudioObject::create(fixture::AudioObjectName{"AppleDsObject"});
+    obj->add_reference(uid);
     doc->add(obj);
-    auto content = adm::AudioContent::create(adm::AudioContentName{"AppleDsContent"});
-    content->addReference(obj);
+    auto content = fixture::AudioContent::create(fixture::AudioContentName{"AppleDsContent"});
+    content->add_reference(obj);
     doc->add(content);
-    auto prog = adm::AudioProgramme::create(adm::AudioProgrammeName{"AppleDsProgramme"});
-    prog->addReference(content);
+    auto prog = fixture::AudioProgramme::create(fixture::AudioProgrammeName{"AppleDsProgramme"});
+    prog->add_reference(content);
     doc->add(prog);
-    adm::reassignIds(doc);
-    return {doc, adm::formatId(uid->get<adm::AudioTrackUidId>())};
+    fixture::reassign_ids(doc);
+    return {doc, fixture::format_id(uid->get<fixture::AudioTrackUidId>())};
 }
 
 std::filesystem::path
@@ -1074,7 +1082,7 @@ write_ds_fixture(float azimuth, float elevation, const std::string& label, uint3
     const auto [doc, uid_str] = make_ds_doc(azimuth, elevation, label);
     const auto in = temp_path("mr_apple_ds_input", ".wav");
     std::ostringstream xml_buf;
-    adm::writeXml(xml_buf, doc);
+    fixture::write_xml(xml_buf, doc);
     auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
     auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
     auto writer = bw64::writeFile(in.string(), 1U, k_sr, 24U, chna, axml);

@@ -8,6 +8,7 @@ use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice,
 };
+mod adm;
 mod convolution;
 mod ear_post;
 mod hoa;

@@ -42,7 +42,7 @@
 | `libsamplerate` @ 0.2.2 | 历史采样率转换参考（测试专用） | BSD-2-Clause | opt-in（默认关闭） | 仅用于显式开启的参考测试；生产重采样使用纯 Rust rubato。 |
 | `libFLAC` @ 1.5.0 | FLAC 编码与 metadata | BSD-3-Clause | 可用 | 默认仅链接 libFLAC（Xiph BSD-like）；源码包内 COPYING.GPL/LGPL/FDL 覆盖未链接的 C++ libs/programs/docs，默认发行不涉及 |
 | `libbw64` @ 0.10.0 | BW64/ADM BWF 读写 | Apache-2.0 | 可用 |  |
-| `libadm` @ 0.14.0 | ADM XML 建模/解析 | Apache-2.0 | 可用 | 内含 RapidXML（Boost Software License 或 MIT） |
+| `libadm` @ 0.14.0 | 历史 ADM 元数据参考（测试专用） | Apache-2.0 | opt-in（默认关闭） | 仅用于显式启用的对照工具；生产 ADM 读写由 Rust mradm-adm 实现。 |
 | `libear` @ 2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15 | BS.2127/EAR 增益计算 | Apache-2.0 | 可用 | 内嵌 vendored Eigen/xsimd/kissfft，单列于下 |
 | `Spatial_Audio_Framework` @ v1.3.4 | 历史 DSP 数值参考（测试专用） | ISC | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
 | `libopus` @ v1.5.2 | Opus MKA 编码 | BSD-3-Clause | 可用 | 发行文档需保留专利 IPR 链接说明（LICENSE_PLEASE_READ.txt） |
@@ -107,6 +107,8 @@
 | `rust-syn-2.0.119` @ 2.0.119 | Rust 重采样的锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
 | `rust-visibility-0.1.1` @ 0.1.1 | Rust 重采样的锁定依赖 | Zlib OR MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
 | `rust-windowfunctions-0.1.1` @ 0.1.1 | Rust 重采样的锁定依赖 | MIT | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
+| `rust-quick-xml-0.41.0` @ 0.41.0 | Rust ADM XML 解析和转义 | MIT | 可用 | 关闭所有可选 features，复用 memchr；不解析 DTD 或外部实体。 |
+| `libadm-common-definitions` @ 0.14.0 | 嵌入 Rust 的 ADM common definitions 标准引用数据 | Apache-2.0 | 可用 | 资源来自 libadm 0.14.0；保留来源、版权与哈希。仅复用数据，不链接 libadm。 |
 
 <!-- END GENERATED DEPS -->
 

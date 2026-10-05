@@ -72,7 +72,7 @@ void print_programmes(const std::vector<mradm::SceneProgramme>& programmes) {
             fmt::print("    end:   {} samples\n", end_sample.value());
         }
         if (p.has_reference_screen) {
-            fmt::print("    reference screen: present (geometry not parsed by libadm)\n");
+            fmt::print("    reference screen: present (geometry not represented in scene)\n");
         }
         if (const auto loudness = p.loudness; loudness.has_value()) {
             print_loudness(loudness.value());

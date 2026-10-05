@@ -20,7 +20,7 @@ def main():
     for block in re.split(r'^\[\[package\]\]\s*$', lock, flags=re.M)[1:]:
         name = re.search(r'^name = "([^"]+)"$', block, re.M).group(1)
         version = re.search(r'^version = "([^"]+)"$', block, re.M).group(1)
-        if name not in {'mradm-dsp', 'mradm-ffi'}:
+        if name not in {'mradm-dsp', 'mradm-adm', 'mradm-ffi'}:
             expected.add((name, version))
     actual = {(c['source']['package'], c['version']) for c in _common.load_components()
               if c['source']['type'] == 'cargo'}
@@ -36,10 +36,14 @@ def main():
             count *= dimension
         if len(data) != count * 4 or hashlib.sha256(data).hexdigest() != entry['sha256']:
             errors.append('DSP asset size/hash mismatch: ' + entry['file'])
+    adm_assets = root / 'rust/crates/mradm-adm/assets'
+    adm_manifest = json.loads((adm_assets / 'manifest.json').read_text())
+    if hashlib.sha256((adm_assets / adm_manifest['file']).read_bytes()).hexdigest() != adm_manifest['sha256']:
+        errors.append('ADM common definitions hash mismatch')
     if errors:
         print('\n'.join(errors), file=sys.stderr)
         return 1
-    print(f'[INFO] Cargo.lock 覆盖完整（{len(expected)} 项）；DSP 资源哈希正确')
+    print(f'[INFO] Cargo.lock 覆盖完整（{len(expected)} 项）；DSP 与 ADM 资源哈希正确')
     return 0
 
 

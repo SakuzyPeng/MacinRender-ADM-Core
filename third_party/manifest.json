@@ -208,17 +208,18 @@
       "cmake_key": "libadm",
       "purl": "pkg:github/ebu/libadm@0.14.0",
       "license": "Apache-2.0",
-      "purpose": "ADM XML 建模/解析",
-      "distribution": "available",
+      "purpose": "历史 ADM 元数据参考（测试专用）",
+      "distribution": "opt-in",
       "source": {
         "type": "fetchcontent",
         "deps_dir": "libadm-src",
         "parent": null,
         "license_files": [
           "LICENSE"
-        ]
+        ],
+        "cmake_option": "MR_ADM_BUILD_LIBADM_REFERENCE_TESTS"
       },
-      "notes": "内含 RapidXML（Boost Software License 或 MIT）"
+      "notes": "仅用于显式启用的对照工具；生产 ADM 读写由 Rust mradm-adm 实现。"
     },
     {
       "name": "libear",
@@ -1489,6 +1490,45 @@
         ]
       },
       "notes": "由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-quick-xml-0.41.0",
+      "version": "0.41.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/quick-xml@0.41.0",
+      "license": "MIT",
+      "purpose": "Rust ADM XML 解析和转义",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "quick-xml",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-MIT.md"
+        ]
+      },
+      "notes": "关闭所有可选 features，复用 memchr；不解析 DTD 或外部实体。"
+    },
+    {
+      "name": "libadm-common-definitions",
+      "version": "0.14.0",
+      "cmake_key": null,
+      "purl": "pkg:generic/mradm-adm-common-definitions@0.14.0",
+      "license": "Apache-2.0",
+      "purpose": "嵌入 Rust 的 ADM common definitions 标准引用数据",
+      "distribution": "available",
+      "source": {
+        "type": "local",
+        "repo_dir": "rust/crates/mradm-adm/assets",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "资源来自 libadm 0.14.0；保留来源、版权与哈希。仅复用数据，不链接 libadm。"
     }
   ]
 }
