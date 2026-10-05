@@ -1,0 +1,295 @@
+{
+  "schema": "mradm.rust-hoa-migration.v1",
+  "date": "2026-10-05",
+  "baseline_commit": "ba96baca607d32e336727976669b06f83c426355",
+  "implementation_commit": "52bf10626a01c587eb1fb445c52a98a8840119e5",
+  "scope": [
+    "Rust-owned immutable HOA coefficients and timeline tables",
+    "Per-instance interpolation, encoding and three-slot diffuse state",
+    "Independent LFE separation and playback-domain metering decode",
+    "Stream buffer capacity and format checks, explicit short-read I/O errors, overflow-safe windows"
+  ],
+  "new_third_party_dependencies": [],
+  "public_c_abi_changed": false,
+  "contracts": {
+    "hoa_channels": 16,
+    "normalization": "SN3D",
+    "channel_order": "ACN",
+    "diffuse_slots": 3,
+    "diffuse_delay_frames": 1024,
+    "diffuse_taps": 32,
+    "block_capacity": "max(1024, object_smoothing_frames)",
+    "live_gain_stage": "input before encoding and diffuse history",
+    "seek": "cold reset seeded at target % 1024, new block starts at target, gain ramp retained",
+    "offline_window": "original grid with one aligned pre-roll block",
+    "eof_adds_frames": false,
+    "first_kernel_and_ffi_call_allocations": 0,
+    "runtime_locks_or_io": false,
+    "invalid_call_preserves_output_and_history": true,
+    "nonfinite_audio_propagation_retained": true,
+    "short_read": "io_error before encoding the incomplete block",
+    "source_and_output_disjoint": true
+  },
+  "validation": {
+    "macos_debug_ctest": {
+      "passed": 61,
+      "total": 61
+    },
+    "macos_release_focused_ctest": {
+      "passed": 10,
+      "total": 10
+    },
+    "windows_release_ctest": {
+      "passed": 60,
+      "total": 60
+    },
+    "rust_release_workspace_tests": 98,
+    "rust_release_hoa_tests": 6,
+    "rust_release_allocation_tests": 11,
+    "rust_release_ffi_tests": 17,
+    "float32_offline_stream_exact": true,
+    "pull_size_identity": true,
+    "window_full_slice_identity": true,
+    "cold_seek": true,
+    "short_read_and_capacity_regressions": true,
+    "window_integer_overflow_regression": true,
+    "concurrent_encoder_meter": true,
+    "rust_fmt": true,
+    "rust_clippy_deny_warnings": true,
+    "changed_cpp_format_tidy_cppcheck": true,
+    "frozen_reference_cppcheck": true,
+    "licenses_sbom": true,
+    "existing_hoa_diagnostic_checkpoints": 4
+  },
+  "numerical_comparison": {
+    "pcm_tolerance": "2e-6 + 2e-6 * abs(reference)",
+    "metric_tolerance_lu_db": 0.0001,
+    "macos": {
+      "baseline": "ba96bac",
+      "coefficients": {
+        "differing_samples": 9174,
+        "max_absolute_error": 2.980232238769531e-07,
+        "max_tolerance_ratio": 0.09380384340611511,
+        "samples": 27286
+      },
+      "decoded_pcm": {
+        "differing_samples": 353765,
+        "max_absolute_error": 1.7881393432617188e-07,
+        "max_tolerance_ratio": 0.056077812376126454,
+        "samples": 590184
+      },
+      "encoded_pcm": {
+        "differing_samples": 117313,
+        "max_absolute_error": 7.450580596923828e-08,
+        "max_tolerance_ratio": 0.03293617054465043,
+        "samples": 836160
+      },
+      "lfe_pcm": {
+        "differing_samples": 0,
+        "max_absolute_error": 0.0,
+        "max_tolerance_ratio": 0.0,
+        "samples": 49182
+      },
+      "metrics": {
+        "dbtp_difference": 0.0,
+        "has_loudness": true,
+        "lufs_difference": 1.1716336700828833e-07
+      },
+      "passed": true
+    },
+    "windows": {
+      "baseline": "ba96bac",
+      "coefficients": {
+        "differing_samples": 0,
+        "max_absolute_error": 0.0,
+        "max_tolerance_ratio": 0.0,
+        "samples": 27286
+      },
+      "decoded_pcm": {
+        "differing_samples": 0,
+        "max_absolute_error": 0.0,
+        "max_tolerance_ratio": 0.0,
+        "samples": 590184
+      },
+      "encoded_pcm": {
+        "differing_samples": 0,
+        "max_absolute_error": 0.0,
+        "max_tolerance_ratio": 0.0,
+        "samples": 836160
+      },
+      "lfe_pcm": {
+        "differing_samples": 0,
+        "max_absolute_error": 0.0,
+        "max_tolerance_ratio": 0.0,
+        "samples": 49182
+      },
+      "metrics": {
+        "dbtp_difference": 0.0,
+        "has_loudness": true,
+        "lufs_difference": 0.0
+      },
+      "passed": true
+    }
+  },
+  "release_cli": {
+    "cases": 21,
+    "hoa_cases": 8,
+    "control_cases": 13,
+    "passed": true,
+    "bit_identical": 13,
+    "max_absolute_error": 7.152557373046875e-07
+  },
+  "configuration": {
+    "rust": "1.98.0 (88d9e12ae 2026-08-18)",
+    "macos": {
+      "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "compiler": "Apple clang 21.0.0 (clang-2100.3.34.2)",
+      "profiles": [
+        "Debug",
+        "Release"
+      ],
+      "MR_ADM_ENABLE_SOFA": true,
+      "MR_ADM_STRICT_FP": false,
+      "MR_ADM_CONSISTENCY_DIAGNOSTICS": "ON verified, restored OFF for final numerical comparison"
+    },
+    "windows": {
+      "compiler": "MSVC 19.51.36257 x64",
+      "profile": "canonical Release",
+      "MR_ADM_ENABLE_SOFA": true,
+      "legacy_reference_switches": false,
+      "git_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "workspace": "Existing dirty checkout retained; only verified relevant sources synchronized",
+      "original_bytes_backed_up": true,
+      "synchronized_files": 17,
+      "synchronized_source_hashes_match_local": true,
+      "unrelated_differences_retained": true,
+      "source_overlay_commit": "52bf10626a01c587eb1fb445c52a98a8840119e5"
+    }
+  },
+  "abi": {
+    "public_adm_exports": 139,
+    "native_symbol_sets_equal": true,
+    "unchanged_from_baseline": true,
+    "macos_private_rust_exports": [],
+    "windows_private_rust_exports": [],
+    "windows_incidental_cpp_exports": 1984
+  },
+  "ci": {
+    "run_id": 37295043944,
+    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37295043944",
+    "commit": "52bf10626a01c587eb1fb445c52a98a8840119e5",
+    "status": "completed",
+    "conclusion": "success",
+    "attempt": 1,
+    "jobs": [
+      {
+        "name": "Version metadata",
+        "job_id": 111714162940,
+        "conclusion": "success"
+      },
+      {
+        "name": "Linux debug",
+        "job_id": 111714163126,
+        "conclusion": "success",
+        "ctest_passed": 60,
+        "ctest_total": 60
+      },
+      {
+        "name": "Windows debug",
+        "job_id": 111714163135,
+        "conclusion": "success",
+        "ctest_passed": 60,
+        "ctest_total": 60
+      },
+      {
+        "name": "macOS debug",
+        "job_id": 111714163303,
+        "conclusion": "success",
+        "ctest_passed": 61,
+        "ctest_total": 61
+      }
+    ]
+  },
+  "source_sha256": {
+    "CMakeLists.txt": "9850beb9363aee8db783168df2df25336092a38b59cfd645df615fbd4f974991",
+    "CppcheckSuppressions.txt": "1fedf89d109d70c5a6028eb8eb8da971f6ddfdb3d53709435822f13979411b51",
+    "include/adm/c_api.h": "06bc8e73dfb3e06ba645ec95b7f97f26943209b77a6a7dce3fd886a1a0c31659",
+    "include/adm/scene.h": "513dd6d645bc5e1d067620221d29d7608fb1c48cea7f99a52cfdc6d4bc98e8cd",
+    "rust/Cargo.lock": "1245da124cb7acc2f436683d9122d936b12b2d6c044fc322ae12aaa2b5c9df9f",
+    "rust/crates/mradm-dsp/assets/hoa3_714_sn3d.f32le": "241f5f527bc9d98d820a7ab0c22f1169f0f573355939b8a8a49afe3dbc773793",
+    "rust/crates/mradm-dsp/src/hoa/coefficients.rs": "d909b8faf917cddd70c599b4577b5def8e5cb7befa8b70a45c454abcf869a144",
+    "rust/crates/mradm-dsp/src/hoa/mod.rs": "bcad3aa4b90f5593ac4910c3bf387295d5a3d2cbcb9393f9d200ea5875f22bec",
+    "rust/crates/mradm-dsp/src/lib.rs": "78d5cd70abbe21840ef098f7662e95ace38e22179a3b9daa3827fdf12385756f",
+    "rust/crates/mradm-dsp/tests/hoa.rs": "51f146b3bbd9c4f8396fe8f344fabeaa3d1ca6abedaa4ea0f9718d54c054c1b4",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "38fc21004bea1258966d998c5caaaa3a658459c54e8d5eeb2fb488539baccfd9",
+    "rust/crates/mradm-ffi/src/hoa.rs": "8f7a871e6d9127e28f997fc64ba2007cb3add060568e884905f3e9112fecf66b",
+    "rust/crates/mradm-ffi/src/lib.rs": "cd3c5bfd33cf95b8b63760a809183ce140a003eba28e66ee185bdf01aba4bfc8",
+    "rust/crates/mradm-ffi/src/test_alloc.rs": "6fd9e2b5b3a14ddb4a58d03599e34089d9b9a9626a487d0d2bd50563e5234065",
+    "rust/crates/mradm-ffi/src/triple_balance.rs": "c256ce063029d2c72c08d908dbebb2acbc81bc48f6fe56df35834cd672da9ae8",
+    "rust/rust-toolchain.toml": "e879701472a698533f43f54989bbf5f3101eb0503472159d32633f3bb8a13fdf",
+    "scripts/consistency/compare-hoa.py": "1f25d8858dd3c638d95e02290ce54bffedbd4634dba9795f569710d74010e999",
+    "scripts/consistency/compare-pcm-mix.py": "d24cefe3f6381e70997b80b15eee67be1538a9fb55c826edf28574a0f304897d",
+    "src/adm_dsp/hoa.h": "08d725b2f814ff5f3ab0296c5841872f26924e1e472fa3aa8aefe18aa7daa720",
+    "src/adm_dsp/hoa_ffi.h": "7ba374f224f4fcba98e01cf227d89d38f7ab7c6cda51deae46d8d00e6e1e5c64",
+    "src/adm_render_common/render_common.cpp": "657a9b6634bf298f1e2b25584ea0036ae885a7e7e6ab1a7aa7cf7bda2e3b16da",
+    "src/adm_render_common/render_common.h": "b2ee09363c406be5616bead1b5f020bc4df20c436ba582a4b057bf33bcb2b840",
+    "src/adm_render_hoa/hoa_renderer.cpp": "b6398ef06901e02d2089973aac0dffd20154c95574e1d8a9922001d412a5e8b1",
+    "tests/reference/hoa/legacy.h": "0d350fb31959c051df3399a470489b7dc74e5b1f7e4672c2e80688b78577f903",
+    "tests/reference/hoa/provenance.json": "a74c8d044a4a6d81779b2c04f2062440de2d2639713dcd870f6c0445e2c4f9dd",
+    "tests/unit/hoa_encode_fixture_test.cpp": "e9c7cda4270acee8f5e4a127e0fb6374c2ecb01eec75e6cbaf3a997946e68d86",
+    "tests/unit/hoa_rust_test.cpp": "088397a3335e259ed3946139a28beda4aeb4dc43b11e4be7330bf1a8b41b065d"
+  },
+  "windows_source_sha256": {
+    "CMakeLists.txt": "9850beb9363aee8db783168df2df25336092a38b59cfd645df615fbd4f974991",
+    "rust/crates/mradm-dsp/src/hoa/coefficients.rs": "d909b8faf917cddd70c599b4577b5def8e5cb7befa8b70a45c454abcf869a144",
+    "rust/crates/mradm-dsp/src/hoa/mod.rs": "bcad3aa4b90f5593ac4910c3bf387295d5a3d2cbcb9393f9d200ea5875f22bec",
+    "rust/crates/mradm-dsp/src/lib.rs": "78d5cd70abbe21840ef098f7662e95ace38e22179a3b9daa3827fdf12385756f",
+    "rust/crates/mradm-dsp/tests/hoa.rs": "51f146b3bbd9c4f8396fe8f344fabeaa3d1ca6abedaa4ea0f9718d54c054c1b4",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "38fc21004bea1258966d998c5caaaa3a658459c54e8d5eeb2fb488539baccfd9",
+    "rust/crates/mradm-ffi/src/hoa.rs": "8f7a871e6d9127e28f997fc64ba2007cb3add060568e884905f3e9112fecf66b",
+    "rust/crates/mradm-ffi/src/lib.rs": "cd3c5bfd33cf95b8b63760a809183ce140a003eba28e66ee185bdf01aba4bfc8",
+    "rust/crates/mradm-ffi/src/test_alloc.rs": "6fd9e2b5b3a14ddb4a58d03599e34089d9b9a9626a487d0d2bd50563e5234065",
+    "rust/crates/mradm-ffi/src/triple_balance.rs": "c256ce063029d2c72c08d908dbebb2acbc81bc48f6fe56df35834cd672da9ae8",
+    "src/adm_dsp/hoa.h": "08d725b2f814ff5f3ab0296c5841872f26924e1e472fa3aa8aefe18aa7daa720",
+    "src/adm_dsp/hoa_ffi.h": "7ba374f224f4fcba98e01cf227d89d38f7ab7c6cda51deae46d8d00e6e1e5c64",
+    "src/adm_render_hoa/hoa_renderer.cpp": "b6398ef06901e02d2089973aac0dffd20154c95574e1d8a9922001d412a5e8b1",
+    "tests/reference/hoa/legacy.h": "0d350fb31959c051df3399a470489b7dc74e5b1f7e4672c2e80688b78577f903",
+    "tests/reference/hoa/provenance.json": "a74c8d044a4a6d81779b2c04f2062440de2d2639713dcd870f6c0445e2c4f9dd",
+    "tests/unit/hoa_encode_fixture_test.cpp": "e9c7cda4270acee8f5e4a127e0fb6374c2ecb01eec75e6cbaf3a997946e68d86",
+    "tests/unit/hoa_rust_test.cpp": "088397a3335e259ed3946139a28beda4aeb4dc43b11e4be7330bf1a8b41b065d"
+  },
+  "log_sha256": {
+    "out/rust-hoa/audio-comparison.log": "a5c0dfd712cfa93465ed30f931f2c7c9736d6b077a7daf3681fd27b70932ae8c",
+    "out/rust-hoa/build-debug.log": "19e6681c50c27599c6fbafff7b3c80f7b0cb8ed979df2ec772a0f2d68dc4fe05",
+    "out/rust-hoa/build-release.log": "19961ad35b937d9822e15492f03ab1981c7aa4caeff23ae7bc317074adb3123d",
+    "out/rust-hoa/ci-linux.log": "95aa9bf6c09a90b1dcc6c294ca8d40fb70deb069fc769102baca10b7efd667b4",
+    "out/rust-hoa/ci-macos.log": "a078991fa2e81c8ed0d18251d8971d9cc2dd373ed91ad66b674604c3b872f9e6",
+    "out/rust-hoa/ci-watch.log": "36c6161dbcb44131b533b6601fff6e19de5bbb1c744449e0439d5fe48af15cf4",
+    "out/rust-hoa/ci-windows.log": "53588ad509f053cd1100d9ca99b88b8c279ec35d531d1c083efad7c5ab31abfc",
+    "out/rust-hoa/cpp-quality.log": "5c7aee9a45bf3b9128529d352c5ad5b71c676443e3c24a94a0ea08412fc26926",
+    "out/rust-hoa/debug-ctest.log": "40eb9af0637c6f8e7686c9eac77bd82fb52547a1ac41f16f30390e6d63f955d8",
+    "out/rust-hoa/diagnostic-render.log": "41b826e4114ffb2b8e8dc1c65f7c84a5ec162f9bfcc4629a8c01a6164ba9380c",
+    "out/rust-hoa/diagnostics-build.log": "80684c57d34cd1647546937423767f706e070b22d2ca3019601dc5d35ebe1761",
+    "out/rust-hoa/diagnostics-configure.log": "63965b5cd78df6db6d66a08fa1e83f24fb0d20bc45ef4a214c3e246344a6ce25",
+    "out/rust-hoa/licenses.log": "7fc81fb03cf503a1b10d8c641b0da14081f41a961c3f51de3b8ba31f1df82fbd",
+    "out/rust-hoa/numeric-comparison.log": "fe31b8f86e3fe46284157037d77ef39c27ab81f31269a77cc285c708825c2e2d",
+    "out/rust-hoa/reference-quality.log": "5d7d8204ba8d32e133036a28eeef858385eb0694408447cfe0294b33269a7151",
+    "out/rust-hoa/release-focused.log": "7937838cbaf7034a04bd1d68b322fc10784eeac39a463ddf7433bcb08b0d8019",
+    "out/rust-hoa/release-initial.log": "df2d18fcae823bd19d61e55d52289d63d17f7201e2d0bcbe88c55cd88ca3648a",
+    "out/rust-hoa/restore-release-configure.log": "19e93f5ea0db20eeed6bea8b4e98369d1ef334c55c752d4c8e3570bd3b90d692",
+    "out/rust-hoa/rust-quality.log": "8fde8d3defb5ee68800dda54e2733f2cba44ba11be50425c33ec475a67d13626",
+    "out/rust-hoa/rust-release.log": "ba08c5dc77c0d4e97410bc1eeaa6125b4919104b37e6c8943b02a719b34e39a2",
+    "out/rust-hoa/rust-tests.log": "4edde44c9520b58a81e43c6b87de6dedc74488eec08960a9b645b4667f62a1e1",
+    "out/rust-hoa/tidy-fixes.log": "8c460264bfc6f6278505b8e5a87e2bf71ee6016b837cfc7af32ca3eca3aad510",
+    "out/rust-hoa/windows-build.log": "f30997385b1fdcf3366f988e9b39b9238c56af0f1780955fee8f0f2dec14f63b",
+    "out/rust-hoa/windows-ctest.log": "f6c666a8f0afcb4e88e2d723c3aba658a92c5383972a483ce51c5d482de4a28d",
+    "out/rust-hoa/windows-final-run.log": "305eff5106beed396ea8e5672501d112e9dd3c7ef1137ec4dc284430ca1e1d79",
+    "out/rust-hoa/windows-run.log": "2cd5354c232b1a310124605ad2fab04c2a7346088d0678d67fcc5368104375b3"
+  },
+  "not_claimed": [
+    "Cross-platform bit identity",
+    "Throughput or RSS improvement",
+    "Allocation-free whole renderer",
+    "Subjective listening equivalence"
+  ]
+}

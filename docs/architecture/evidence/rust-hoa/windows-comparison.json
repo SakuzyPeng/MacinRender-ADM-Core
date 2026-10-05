@@ -1,0 +1,33 @@
+{
+  "baseline": "ba96bac",
+  "coefficients": {
+    "differing_samples": 0,
+    "max_absolute_error": 0.0,
+    "max_tolerance_ratio": 0.0,
+    "samples": 27286
+  },
+  "decoded_pcm": {
+    "differing_samples": 0,
+    "max_absolute_error": 0.0,
+    "max_tolerance_ratio": 0.0,
+    "samples": 590184
+  },
+  "encoded_pcm": {
+    "differing_samples": 0,
+    "max_absolute_error": 0.0,
+    "max_tolerance_ratio": 0.0,
+    "samples": 836160
+  },
+  "lfe_pcm": {
+    "differing_samples": 0,
+    "max_absolute_error": 0.0,
+    "max_tolerance_ratio": 0.0,
+    "samples": 49182
+  },
+  "metrics": {
+    "dbtp_difference": 0.0,
+    "has_loudness": true,
+    "lufs_difference": 0.0
+  },
+  "passed": true
+}
