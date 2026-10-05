@@ -14,6 +14,9 @@
 #include <utility>
 #include <vector>
 
+#include "adm/render_ear.h"
+#include "adm/render_vbap.h"
+
 #include "../reference/pcm_mix_legacy.h"
 #include "pcm_mix.h"
 #include "speaker_pcm.h"
@@ -74,6 +77,70 @@ std::vector<float> signal(std::size_t floats) {
         result[i] = static_cast<float>(static_cast<int>((i * 7U) % 31U) - 15) / 16.0F;
     }
     return result;
+}
+
+void check_clipped_object_preparation() {
+    mradm::NullLogSink logs;
+    for (const bool ear : {false, true}) {
+        auto renderer = ear ? mradm::create_ear_renderer() : mradm::create_vbap_renderer();
+        for (const bool direct_speakers : {false, true}) {
+            for (const std::uint64_t end : {0U, 48000U, 144000U}) {
+                mradm::RenderPlan plan;
+                plan.output_layout = "0+2+0";
+                plan.scene.info.sample_rate = 48000U;
+                plan.scene.info.num_channels = 1U;
+                plan.scene.info.num_frames = 144000U;
+                mradm::SceneObject object;
+                object.id = "AO_1001";
+                object.end_sample = end;
+                mradm::SceneTrackRef track;
+                track.channel_index = 0U;
+                track.track_uid = "ATU_00000001";
+                for (const std::uint64_t start : {0U, 96000U}) {
+                    if (direct_speakers) {
+                        mradm::SceneDirectSpeakersBlock block;
+                        block.speaker_labels = {"M+030"};
+                        block.start_sample = start;
+                        block.end_sample = start == 0U ? 96000U : 144000U;
+                        track.ds_blocks.push_back(std::move(block));
+                    } else {
+                        mradm::SceneObjectBlock block;
+                        block.position.azimuth = 30.0F;
+                        block.start_sample = start;
+                        block.end_sample = start == 0U ? 96000U : 144000U;
+                        track.blocks.push_back(block);
+                    }
+                }
+                object.tracks.push_back(std::move(track));
+                plan.scene.objects.push_back(std::move(object));
+                require(renderer->prepare(plan, logs).has_value(),
+                        ear ? "EAR rejects blocks clipped by object duration"
+                            : "VBAP rejects blocks clipped by object duration");
+            }
+        }
+    }
+}
+
+void check_clipped_timeline() {
+    mradm::render_common::ChannelGainInfo channel;
+    // Keep clipped blocks as interpolation predecessors when another object uses the same input channel.
+    channel.blocks = {{{1.0F}, 0U, 2U, true, true, std::nullopt},
+                      {{0.5F}, 4U, 2U, true, true, std::nullopt},
+                      {{2.0F}, 6U, 10U, false, true, 4U},
+                      {{3.0F}, 12U, 2U, true, true, std::nullopt}};
+    auto compiled = take(mradm::render_common::prepare_speaker_mix({channel}, 1U, 1U));
+    const std::array<float, 16> expected{
+        1.0F, 1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.5F, 0.875F, 1.25F, 1.625F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
+    for (const std::size_t chunk : {1U, 3U, 16U}) {
+        mradm::dsp::PcmMixer mix(compiled.plan, chunk, 0U, false);
+        const std::vector<float> input(chunk, 1.0F);
+        std::array<float, 16> output{};
+        for (std::size_t start = 0; start < output.size(); start += chunk) {
+            const auto frames = std::min(chunk, output.size() - start);
+            mix.speaker(input, std::span{output}.subspan(start, frames), {}, start, frames);
+        }
+        require(output == expected, "clipped blocks must stay silent and retain interpolation history");
+    }
 }
 
 void compare_common(std::uint16_t inputs, std::uint16_t outputs, std::size_t chunk, bool smoothing, Stats& stats) {
@@ -244,6 +311,8 @@ void compare_matrix(Stats& stats) {
 
 int main(int argc, char** argv) {
     try {
+        check_clipped_object_preparation();
+        check_clipped_timeline();
         Stats speaker;
         Stats ear;
         Stats dynamic;

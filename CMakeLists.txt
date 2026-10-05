@@ -841,7 +841,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     set_tests_properties(mr_adm_output_dsp_tests PROPERTIES TIMEOUT 60)
 
     add_executable(mr_adm_pcm_mix_tests tests/unit/pcm_mix_test.cpp)
-    target_link_libraries(mr_adm_pcm_mix_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+    target_link_libraries(mr_adm_pcm_mix_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp
+        MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP)
     mr_adm_core_apply_warnings(mr_adm_pcm_mix_tests)
     mr_adm_core_apply_static_analysis(mr_adm_pcm_mix_tests)
     add_test(NAME mr_adm_pcm_mix_tests COMMAND mr_adm_pcm_mix_tests)

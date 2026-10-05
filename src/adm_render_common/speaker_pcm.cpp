@@ -29,8 +29,10 @@ prepare_speaker_mix(std::vector<ChannelGainInfo> channels, std::size_t inputs, s
             if (block.gains.size() != outputs) {
                 return make_error(ErrorCode::invalid_argument, "PCM gain width mismatch");
             }
+            // Object-duration clipping can put the end before the start. Preserve an empty block
+            // (and its gains) so later blocks retain the legacy interpolation predecessor.
             blocks.push_back({block.start_sample,
-                              block.end_sample,
+                              std::max(block.start_sample, block.end_sample),
                               block.interp_length_samples.value_or(0),
                               (block.jump_position ? 1U : 0U) | (block.smoothable_object ? 2U : 0U) |
                                   (block.interp_length_samples ? 4U : 0U)});
