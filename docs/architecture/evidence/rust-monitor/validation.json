@@ -2,7 +2,7 @@
   "schema": "mradm.rust-monitor-migration.v1",
   "date": "2026-10-05",
   "baseline_commit": "a54fdc32fda2ef6ffa864778b1e3296eae95c1bc",
-  "implementation_commit": null,
+  "implementation_commit": "d70ac2e1c2b45ce71595e30b621cde1dcba5ae62",
   "scope": [
     "Worker-owned backend crossfade position and PCM blend",
     "Callback-owned seek anchors, generation and transition state",
@@ -60,7 +60,8 @@
     "rust_clippy_deny_warnings": true,
     "changed_cpp_format_tidy_cppcheck": true,
     "frozen_reference_cppcheck": true,
-    "licenses_sbom": true
+    "licenses_sbom": true,
+    "final_comparator_style_refinement_retested_on_both_native_release_platforms": true
   },
   "numerical_comparison": {
     "values_per_platform": 233435903,
@@ -150,7 +151,7 @@
         "src/adm_realtime/monitor_engine.cpp",
         "tests/unit/realtime_stream_fixture_test.cpp"
       ],
-      "source_overlay_commit": null
+      "source_overlay_commit": "04e4e81016eb28bd83ea2d682e39bee6afe4ae29"
     }
   },
   "abi": {
@@ -162,7 +163,47 @@
     "windows_incidental_cpp_exports": 1984
   },
   "ci": {
-    "status": "pending"
+    "run_id": 37309535034,
+    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37309535034",
+    "commit": "04e4e81016eb28bd83ea2d682e39bee6afe4ae29",
+    "status": "completed",
+    "conclusion": "success",
+    "attempt": 1,
+    "jobs": [
+      {
+        "name": "macOS debug",
+        "job_id": 111761269225,
+        "conclusion": "success",
+        "ctest_passed": 62,
+        "ctest_total": 62
+      },
+      {
+        "name": "Windows debug",
+        "job_id": 111761269393,
+        "conclusion": "success",
+        "ctest_passed": 61,
+        "ctest_total": 61
+      },
+      {
+        "name": "Version metadata",
+        "job_id": 111761269409,
+        "conclusion": "success"
+      },
+      {
+        "name": "Linux debug",
+        "job_id": 111761269819,
+        "conclusion": "success",
+        "ctest_passed": 61,
+        "ctest_total": 61
+      }
+    ],
+    "superseded_runs": [
+      {
+        "run_id": 37309114936,
+        "commit": "d70ac2e1c2b45ce71595e30b621cde1dcba5ae62",
+        "reason": "Cancelled before completion to validate the final comparator parenthesization and source fingerprints"
+      }
+    ]
   },
   "source_sha256": {
     "CMakeLists.txt": "c49b756eb1bbf006460131f99eb61cd3a26de98009a519632be6d851b75085b6",
@@ -217,5 +258,6 @@
     "Cross-platform bit identity remains deferred",
     "No performance or RSS claim",
     "No whole-renderer allocation guarantee"
-  ]
+  ],
+  "final_source_commit": "04e4e81016eb28bd83ea2d682e39bee6afe4ae29"
 }
