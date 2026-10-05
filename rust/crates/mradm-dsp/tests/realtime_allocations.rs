@@ -375,3 +375,105 @@ fn prepared_fft_and_moving_spreader_do_not_allocate() {
     let count = COUNT.with(|c| c.replace(None).unwrap());
     assert_eq!(count, 0, "allocation in prepared DSP processing");
 }
+
+#[test]
+fn triple_balance_first_process_controls_and_existing_snapshots_do_not_allocate() {
+    use mradm_dsp::triple_balance::{
+        Event, Layout, Position,
+        processor::{Processor, Track},
+        session::{Plan, RowInput, Session},
+    };
+    use std::sync::Arc;
+    let events = [
+        Event {
+            start: 0,
+            position: Position {
+                x: 0.25,
+                y: 0.4,
+                z: 0.5,
+            },
+            size: 0.25,
+        },
+        Event {
+            start: 600,
+            position: Position {
+                x: -0.4,
+                y: 0.2,
+                z: 0.3,
+            },
+            size: 0.,
+        },
+    ];
+    let row = RowInput {
+        input: 0,
+        event_offset: 0,
+        event_count: 2,
+        bed_offset: 0,
+        size_index: 0,
+        kind: 2,
+        gain: 0.75,
+    };
+    for layout in [Layout::Seven, Layout::Nine, Layout::Room222] {
+        let plan = Arc::new(Plan::new(1, layout, 48000, 10000, &[row], &events, &[]).unwrap());
+        let mut session = Session::new(plan, 1024, 960, true).unwrap();
+        let mut snapshot = session.snapshot();
+        let mut out = vec![0.125; 1024 * layout.channels()];
+        let input = [0.25; 1024];
+        let internal = events
+            .iter()
+            .map(|e| Event {
+                position: e.position.internal(),
+                ..*e
+            })
+            .collect();
+        let mut object = Processor::new(Arc::new(Track::new(internal, layout, 48000).unwrap()));
+        let mut object_snapshot = object.snapshot();
+        COUNT.with(|c| c.set(Some(0)));
+        session.prepare_points(0, 1024).unwrap();
+        session
+            .process(&input, &mut out, &[], 0, 1024, false)
+            .unwrap();
+        session.capture(&mut snapshot).unwrap();
+        for scale in [0., 0.5, 4., 1.] {
+            session.set_scales(&[scale], false).unwrap();
+            session.set_matrix(&[1.]).unwrap();
+            session.prepare_points(1024, 1024).unwrap();
+            session
+                .point(0, &input, &mut out, &[], 1024, 1024, true)
+                .unwrap();
+            session
+                .process(&input, &mut out, &[], 1024, 1024, false)
+                .unwrap();
+            session.restore(&snapshot).unwrap();
+        }
+        assert!(
+            session
+                .process(&input, &mut out[..1], &[], 1024, 1024, false)
+                .is_err()
+        );
+        assert!(session.set_scales(&[f32::INFINITY], false).is_err());
+        session.reset();
+        session.prepare_points(0, 31).unwrap();
+        session
+            .process(
+                &input[..31],
+                &mut out[..31 * layout.channels()],
+                &[],
+                0,
+                31,
+                true,
+            )
+            .unwrap();
+        object.process(&input[..257], &mut [], false).unwrap();
+        object.capture(&mut object_snapshot).unwrap();
+        object.process(&input, &mut out, false).unwrap();
+        object.restore(&object_snapshot).unwrap();
+        object.reset();
+        object
+            .process(&input[..31], &mut out[..31 * layout.channels()], true)
+            .unwrap();
+        object.reset();
+        let allocations = COUNT.with(|c| c.replace(None).unwrap());
+        assert_eq!(allocations, 0);
+    }
+}

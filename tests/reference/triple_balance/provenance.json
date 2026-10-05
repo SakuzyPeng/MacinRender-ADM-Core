@@ -1,0 +1,16 @@
+{
+  "baseline": "19728179608c4cfe550dc11ff2b3b4425db37963",
+  "sources": {
+    "src/adm_render_triple_balance/panner.h": "5c5e7bc1a860896191a25d5309fc7b81788ed63f1fa0f28eaccbd12920fc8dc9",
+    "src/adm_render_triple_balance/panner.cpp": "0dd53fc951c1e280c0584712670cf0bfea90a7b85fed51b4fbf6b9fcfc3ae475",
+    "src/adm_render_triple_balance/layout_222.h": "339f34837cd0a3c2fbe38eca375dcdbe248f600419bb823652e459bc0e6e92a6",
+    "src/adm_render_triple_balance/layout_222.cpp": "2fe0d2034bad30f23187a9a5d3f49a327368f5add590a8d076e4dd959979e4f3",
+    "src/adm_render_triple_balance/size_panner.h": "020b4910b0a4022fdf4a0c61d3305d6d239608acbd42e31ce547c2a4f9726a3e",
+    "src/adm_render_triple_balance/size_panner.cpp": "98e842588a73eff6aaeb5685d3c6c3e20d90bfdfae93bee7a7fef14f90feee5d",
+    "src/adm_render_triple_balance/size_processor.h": "0620b3d166dbc9b22491be8150eb2d3efb6e11fd5f005c9d2242d6086dde3674",
+    "src/adm_render_triple_balance/size_processor.cpp": "37c4f52487d28aa881d11339b2c6375bf9e0923038288bc95fb3faba95f2235b",
+    "src/adm_render_triple_balance/render_state.h": "e521606d20f8cfc27660e7dedb25fc4f692d44568130b1d88582017220eb5ded",
+    "src/adm_render_triple_balance/render_state.cpp": "39897c0b6501bd567adf8fa94b924e2527e879954e43b4a33c7fc09c0846a680",
+    "src/adm_render_triple_balance/triple_balance_renderer.cpp": "3ec7ae8b6cab683e71d54b993f842804152fff13b36d64d2c8096fd63f5e6680"
+  }
+}

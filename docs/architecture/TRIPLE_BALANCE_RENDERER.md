@@ -63,16 +63,15 @@ Release 的 `mr_adm_triple_balance_monitor_benchmark [9.1.6|9+10+3]` 使用 13 �
 
 ## 模块边界
 
-`src/adm_render_triple_balance/` 和 `MacinRender::ADMRenderTripleBalance` 独立拥有：
+`MacinRender::ADMRenderTripleBalance` 通过私有适配层使用 Rust 数值内核：
 
-- 点源房间几何、位置量化与运动平滑；
-- 对象和 bed 语义适配及 effective report；
-- 尺寸空间增益、四路有状态去相关处理及生命周期；
-- 22.2 自有几何。
+- Rust 持有点源/尺寸/22.2 几何、编译事件表、运动/过渡状态、四路去相关和数值快照；
+- C++ 保留对象与 bed 语义、effective report、覆盖发布、文件读写、窗口调度及快照 LRU；
+- 与 VBAP 共享的 PCM 增益时间线已由 Rust 持有，C++ 继续复用读取、取消和异步计量编排。
 
-生产目标不依赖 SAF 或 libear。与 VBAP 共享的增益时间线、文件读写、窗口裁剪、
-取消与异步计量位于 `adm_render_common/speaker_pcm.*`，接口仅使用项目类型。
-历史测量 FIR 对照工具移至 `tests/support/triple_balance_size_filter.*`，仅其测试使用 SAF FFT。
+生产目标不依赖 SAF 或 libear；详细所有权、错误边界和验收见
+[Rust Triple Balance 迁移](RUST_TRIPLE_BALANCE_MIGRATION.md)。
+历史测量 FIR 对照工具保留在 `tests/support/triple_balance_size_filter.*`，不用于生产渲染。
 
 ## 名称与公开资料
 

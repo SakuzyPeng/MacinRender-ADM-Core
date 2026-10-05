@@ -122,8 +122,9 @@ class TripleBalanceStream final : public IRenderStream {
             for (const auto& item : overrides.objects) {
                 if (item.object_id == prepared_.size_tracks[i].object_id && item.speaker_label.empty()) {
                     scales[i] = item.extent_scale * item.extent_width_scale;
-                    if (std::ranges::all_of(prepared_.size_tracks[i].events,
-                                            [&](const auto& event) { return event.size * scales[i] == 0; })) {
+                    // Nonnegative multiplication is monotonic, including underflow: this summary
+                    // preserves the old all-events-zero test without retaining the event table.
+                    if (prepared_.size_tracks[i].maximum_source_size * scales[i] == 0) {
                         scales[i] = 0;
                     }
                 }
@@ -211,7 +212,7 @@ class TripleBalanceStream final : public IRenderStream {
   private:
     struct Checkpoint {
         uint64_t frame{};
-        std::vector<SizeTrackState> states;
+        dsp::TbSnapshot states{nullptr, mradm_dsp_tb_snapshot_destroy};
     };
 
     TripleBalanceStream(const Prepared& prepared,
@@ -248,8 +249,7 @@ class TripleBalanceStream final : public IRenderStream {
             (!force && position_ % checkpoint_interval_ != 0)) {
             return;
         }
-        const auto bytes =
-            sizeof(Checkpoint) + (2 * sizeof(void*)) + (sizeof(SizeTrackState) * prepared_.size_tracks.size());
+        const auto bytes = sizeof(Checkpoint) + (2 * sizeof(void*)) + mixer_.snapshot_bytes();
         const auto capacity = checkpoint_budget_ / bytes;
         if (capacity == 0) {
             return;

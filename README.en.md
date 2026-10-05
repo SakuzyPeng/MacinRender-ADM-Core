@@ -336,6 +336,8 @@ Rust also owns the numerical tables, timeline cursors and scratch buffers for sh
 
 EAR decorrelation, compensation delay and bus summation also run in Rust, retaining complete FIR tails across consecutive short blocks. Filter design remains in libear. See the [Rust EAR post-processing migration](docs/architecture/RUST_EAR_POST_MIGRATION.md) for scope and validation.
 
+Triple Balance point/size panning, 22.2 geometry, decorrelation, motion/transitions and numerical snapshots also run in Rust. C++ retains semantics, I/O, scheduling and snapshot LRU management. See the [Rust Triple Balance migration](docs/architecture/RUST_TRIPLE_BALANCE_MIGRATION.md).
+
 System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
 
 ```bash
