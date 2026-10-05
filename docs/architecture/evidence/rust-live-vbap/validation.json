@@ -2,7 +2,7 @@
   "schema": "mradm.rust-live-vbap-migration.v1",
   "date": "2026-10-05",
   "baseline_commit": "577fe2d107b7004933597484aec1a6696b9a5da4",
-  "implementation_commit": null,
+  "implementation_commit": "41cf469b64e8c90e8f79ac07953115d35974033d",
   "scope": [
     "Rust-owned spatial and level ramp state in generation order",
     "One batched render call over borrowed PCM planes and ordered numerical commands",
@@ -61,7 +61,8 @@
       "macos_debug": true,
       "macos_release": true,
       "windows_release": true
-    }
+    },
+    "final_source_fingerprints_verified_in_commit": true
   },
   "numerical_comparison": {
     "float_values_per_platform": 3971688,
@@ -136,7 +137,7 @@
       "workspace": "Existing dirty checkout retained; fresh shared-source inspection matched all relevant files; no resynchronization needed",
       "source_hashes_verified_before_and_after_build": 42,
       "sources_match_shared_workspace": true,
-      "source_overlay_commit": null
+      "source_overlay_commit": "de573007c3c3beb0459493a1c16b4154b2886920"
     },
     "cargo_lock_sha256": "d9a1297de208cfd794e64299a3ca95cc8b966d9e085effec1b770702973560a6"
   },
@@ -149,7 +150,40 @@
     "windows_incidental_cpp_exports": 1984
   },
   "ci": {
-    "status": "pending",
+    "run_id": 37342603203,
+    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37342603203",
+    "commit": "de573007c3c3beb0459493a1c16b4154b2886920",
+    "status": "completed",
+    "conclusion": "success",
+    "attempt": 1,
+    "jobs": [
+      {
+        "name": "Windows debug",
+        "job_id": 111873165905,
+        "conclusion": "success",
+        "ctest_passed": 62,
+        "ctest_total": 62
+      },
+      {
+        "name": "Version metadata",
+        "job_id": 111873166211,
+        "conclusion": "success"
+      },
+      {
+        "name": "macOS debug",
+        "job_id": 111873166320,
+        "conclusion": "success",
+        "ctest_passed": 63,
+        "ctest_total": 63
+      },
+      {
+        "name": "Linux debug",
+        "job_id": 111873166416,
+        "conclusion": "success",
+        "ctest_passed": 62,
+        "ctest_total": 62
+      }
+    ],
     "previous_runs": [
       {
         "run_id": 37341099280,
@@ -196,7 +230,7 @@
     "No performance/RSS claim",
     "C++ semantic preparation can allocate; OOM/panic rollback not promised"
   ],
-  "phase": "final_validation",
+  "phase": "accepted",
   "integration_base_commit": "283c54dda9714ef0c053845086740bd0ca44e6d9",
   "integration_source_sha256": {
     "cmake/MRDependencies.cmake": "971841145a64d9c7c02aac618e819b2360362214856b9a03adf826fa689fe308",
@@ -250,5 +284,6 @@
     "c-api-include-release-test.log": "751a8f48622319697fb69e9e3c55825f0f1ea301cc843b29521044478e22dbde",
     "c-api-include-windows.log": "b13b477a890233f6847bd4b5d0903d5f08c754f0c2829c373af4b01dc5e366c7",
     "c-api-include-quality.log": "7a51e7bf90f98ed1d7f76058554344fe9f0ff0f229dd13bcb48ba6b5802ef702"
-  }
+  },
+  "final_source_commit": "de573007c3c3beb0459493a1c16b4154b2886920"
 }
