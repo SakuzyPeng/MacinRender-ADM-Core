@@ -66,8 +66,12 @@ channel lock、active、head_locked、诊断去重、移动所有权及整帧失
 
 libadm 更新完成后，重新使用标准构建验证共享工作区：macOS Debug 全套 63/63、Release 定向
 9/9、Rust Release workspace 128 项，Windows canonical Release 全套 62/62。
-最终源码/测试指纹、Rust 测试、质量、ABI 和 CI 结果由
-[机器可读验收记录](evidence/rust-live-vbap/validation.json)记录。
+[最终三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37342603203)
+验证源码提交 `de57300`：macOS Debug 63/63、Linux Debug 62/62、Windows Debug 62/62。
+实现提交为 `41cf469`；首次 Linux 构建发现 C API fixture 依赖已移除的间接 `<cmath>`，
+`de57300` 补齐直接包含，并在两端原生配置复查 C API 后重新通过三平台 CI。
+最终验收提交只更新文档和证据。源码/测试指纹、配置及完整结果见
+[机器可读验收记录](evidence/rust-live-vbap/validation.json)。
 C++ 质量检查保留 Scene 测试中未修改函数的两条既有可读性建议。
 
 ## 复现与工作区记录
