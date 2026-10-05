@@ -10,6 +10,23 @@
 extern "C" {
 #endif
 
+// Channel-major 512-tap EAR FIRs; production compensation is 255 samples.
+int mradm_dsp_ear_filters_create(
+    size_t channels, const float* firs, size_t length, size_t delay, void** out, char* message, size_t capacity);
+void mradm_dsp_ear_filters_destroy(void* bank);
+int mradm_dsp_ear_post_create(const void* bank, size_t max_frames, void** out, char* message, size_t capacity);
+void mradm_dsp_ear_post_destroy(void* processor);
+int mradm_dsp_ear_post_reset(void* processor, char* message, size_t capacity);
+// Lengths count floats. Direct is replaced in place; diffuse must be disjoint. Empty buffers may be null.
+int mradm_dsp_ear_post_process(void* processor,
+                               float* direct,
+                               size_t direct_len,
+                               const float* diffuse,
+                               size_t diffuse_len,
+                               size_t frames,
+                               char* message,
+                               size_t capacity);
+
 // Prepared PCM timelines; fields contain only project-owned scalar data.
 // cppcheck-suppress-begin unusedStructMember
 typedef struct MradmDspMixRow {

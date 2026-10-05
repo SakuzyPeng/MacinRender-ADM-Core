@@ -6,6 +6,7 @@ pub mod data;
 pub mod dataset;
 pub mod decorrelator;
 pub mod diffuse;
+pub mod ear_post;
 pub mod fft;
 pub mod filterbank;
 pub mod gain;

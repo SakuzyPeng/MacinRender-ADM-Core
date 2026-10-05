@@ -24,7 +24,7 @@
 #include "adm/render_ear.h"
 
 #include "consistency_trace.h"
-#include "dsp.h"
+#include "ear_post.h"
 #include "meter.h"
 #include "render_common.h"
 #include "speaker_layouts.h"
@@ -33,14 +33,6 @@
 namespace mradm {
 
 namespace {
-
-#ifdef _MSC_VER
-#define MRADM_RESTRICT __restrict
-#elif defined(__GNUC__) || defined(__clang__)
-#define MRADM_RESTRICT __restrict__
-#else
-#define MRADM_RESTRICT
-#endif
 
 struct BlockGains {
     std::vector<double> gains;
@@ -75,34 +67,6 @@ struct ChannelGainInfo {
     }
     return ds.speaker_labels;
 }
-
-// FIR decorrelator state for the diffuse bus (BS.2127).
-// Uses the private Rust FFT boundary. In phase 1 SIMD dispatch is allowed;
-// neither this FFT nor libear coefficient design promises cross-platform bits.
-// FFT size L=2048 (next power-of-2 >= block_size(1024) + filter_len(512) - 1).
-// NOLINTBEGIN(misc-non-private-member-variables-in-classes)
-struct DecorrState {
-    dsp::FftHandle hFFT{nullptr};                     // Rust FFT plan, L=2048
-    std::vector<std::vector<dsp::Complex>> filter_fd; // [num_out_ch][L/2+1=1025]
-    std::vector<std::vector<float>> overlap;          // [num_out_ch][K-1=511]
-    std::size_t fft_len{0};
-    std::size_t bins{0};
-    std::size_t overlap_len{0};
-    int comp_delay{0};                         // decorrelatorCompensationDelay()=255
-    std::vector<std::vector<float>> dir_delay; // [num_out_ch][comp_delay]
-
-    ~DecorrState() {
-        if (hFFT != nullptr) {
-            dsp::fft_destroy(&hFFT);
-        }
-    }
-    DecorrState() = default;
-    DecorrState(const DecorrState&) = delete;
-    DecorrState& operator=(const DecorrState&) = delete;
-    DecorrState(DecorrState&&) = delete;
-    DecorrState& operator=(DecorrState&&) = delete;
-};
-// NOLINTEND(misc-non-private-member-variables-in-classes)
 
 [[nodiscard]] std::vector<SceneOutputSpeaker> output_speakers(const ear::Layout& layout) {
     std::vector<SceneOutputSpeaker> result;
@@ -205,14 +169,6 @@ to_ear_range(const std::optional<std::pair<float, float>>& range) {
         }
     }
     return ear::getLayout(std::string{layout_id});
-}
-
-[[nodiscard]] std::size_t next_power_of_two(std::size_t value) {
-    std::size_t out = 1;
-    while (out < value) {
-        out <<= 1U;
-    }
-    return out;
 }
 
 [[nodiscard]] ear::ObjectsTypeMetadata object_metadata_from_block(const SceneObjectBlock& block,
@@ -515,88 +471,6 @@ prepare_ear_mix(std::vector<ChannelGainInfo> channels, std::size_t inputs, std::
     return result;
 }
 
-// Apply 512-tap FIR decorrelator via overlap-add FFT convolution (Rust FFT; the
-// numeric backend follows the Rust FFT implementation).
-// diffuse_in:  [frames_now × num_out_ch] interleaved, float
-// diffuse_out: [frames_now × num_out_ch] interleaved, float  (written)
-void apply_decorrelator(DecorrState& state,
-                        const std::vector<float>& diffuse_in,
-                        std::vector<float>& diffuse_out,
-                        std::size_t frames_now,
-                        std::size_t num_out_ch) {
-    // Per-call scratch — small fixed size, stack-friendly via vector.
-    std::vector<float> buf(state.fft_len);
-    std::vector<dsp::Complex> x_fd(state.bins);
-    std::vector<dsp::Complex> y_fd(state.bins);
-    std::vector<float> y(state.fft_len);
-
-    for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-        // Deinterleave, zero-pad remainder.
-        std::ranges::fill(buf, 0.0F);
-        for (std::size_t f = 0; f < frames_now; ++f) {
-            buf[f] = diffuse_in[(f * num_out_ch) + ch];
-        }
-
-        dsp::fft_forward(state.hFFT, buf.data(), x_fd.data());
-
-        for (std::size_t b = 0; b < state.bins; ++b) {
-            y_fd[b] = x_fd[b] * state.filter_fd[ch][b];
-        }
-
-        // dsp::fft_inverse scales by 1/N internally — no extra scaling needed.
-        dsp::fft_inverse(state.hFFT, y_fd.data(), y.data());
-
-        // Overlap-add: accumulate saved tail into this block's output.
-        auto& ovl = state.overlap[ch];
-        for (std::size_t f = 0; f < frames_now; ++f) {
-            diffuse_out[(f * num_out_ch) + ch] = y[f] + (f < state.overlap_len ? ovl[f] : 0.0F);
-        }
-
-        // Save new tail (y[frames_now .. frames_now + k_overlap_len - 1]).
-        for (std::size_t i = 0; i < state.overlap_len; ++i) {
-            ovl[i] = y[frames_now + i];
-        }
-    }
-}
-
-// Delay the direct bus by comp_delay samples using a circular history buffer.
-// Operates in-place on direct_block [frames_now × num_out_ch].
-void apply_direct_delay(DecorrState& state,
-                        std::vector<float>& direct_block,
-                        std::size_t frames_now,
-                        std::size_t num_out_ch) {
-    const auto delay = static_cast<std::size_t>(state.comp_delay); // 255
-
-    for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-        auto& buf = state.dir_delay[ch]; // [delay]
-
-        // Snapshot the new samples before in-place modification.
-        std::vector<float> new_in(frames_now);
-        for (std::size_t f = 0; f < frames_now; ++f) {
-            new_in[f] = direct_block[(f * num_out_ch) + ch];
-        }
-
-        // Output: up to D samples from the delay buffer, then new_in offset by D.
-        // Works for any frames_now, including short tail blocks < D.
-        const std::size_t from_buf = std::min(delay, frames_now);
-        for (std::size_t f = 0; f < from_buf; ++f) {
-            direct_block[(f * num_out_ch) + ch] = buf[f];
-        }
-        for (std::size_t f = from_buf; f < frames_now; ++f) {
-            direct_block[(f * num_out_ch) + ch] = new_in[f - delay];
-        }
-
-        // Update delay buffer: evict consumed samples, append new_in.
-        if (frames_now >= delay) {
-            std::ranges::copy(new_in.end() - static_cast<std::ptrdiff_t>(delay), new_in.end(), buf.begin());
-        } else {
-            // Shift remaining delay left by frames_now, then append new_in at end.
-            std::ranges::copy(buf.begin() + static_cast<std::ptrdiff_t>(frames_now), buf.end(), buf.begin());
-            std::ranges::copy(new_in, buf.end() - static_cast<std::ptrdiff_t>(frames_now));
-        }
-    }
-}
-
 void remap_wav71_to_wave_order(std::vector<float>& block, std::size_t frames_now, std::size_t num_out_ch) {
     if (num_out_ch != 8U) {
         return;
@@ -610,72 +484,51 @@ void remap_wav71_to_wave_order(std::vector<float>& block, std::size_t frames_now
     }
 }
 
-// Render one block [frames_done, frames_done+frames_now): accumulate the gain matrix into
-// the column-major direct/diffuse scratch, transpose to interleaved, run the FIR
-// decorrelator on the diffuse bus + the compensation delay on the direct bus, mix, and
-// (for wav71) remap to WAVE order — writing num_out_ch×frames_now interleaved into
-// out_block ([0, out_samples) only; caller sizes it). `decorr` + Rust mix state carry the
-// decorrelator overlap / compensation-delay / block cursors across calls; the scratch
-// vectors are caller-owned and reused. Extracted verbatim from render_window's loop so the
-// offline batch path and the realtime EarStream share one implementation and cannot drift.
+// The offline and streaming paths share Rust mixing and post-processing. Caller-owned
+// interleaved buffers feed metering/I/O; Rust owns all convolution, delay and cursor state.
 // NOLINTNEXTLINE(readability-function-size): retain the existing EAR post-processing buffer boundaries.
 void render_ear_block(dsp::PcmMixer& mix,
-                      DecorrState& decorr,
+                      dsp::EarPostProcessor& post,
                       const std::vector<float>& in_block,
                       std::vector<float>& out_block,
                       std::vector<float>& diffuse_in,
-                      std::vector<float>& diffuse_out,
                       uint64_t frames_done,
                       uint64_t frames_now,
                       uint16_t num_out_ch,
                       const std::string& output_layout) {
-    const std::size_t out_samples = num_out_ch * static_cast<std::size_t>(frames_now);
     mix.ear(in_block, out_block, diffuse_in, frames_done, static_cast<std::size_t>(frames_now));
 
-    apply_decorrelator(decorr, diffuse_in, diffuse_out, frames_now, num_out_ch);
-    apply_direct_delay(decorr, out_block, frames_now, num_out_ch);
-    for (std::size_t s = 0; s < out_samples; ++s) {
-        out_block[s] += diffuse_out[s];
-    }
+    post.process(out_block, diffuse_in, static_cast<std::size_t>(frames_now));
     if (output_layout == "wav71") {
         remap_wav71_to_wave_order(out_block, frames_now, num_out_ch);
     }
 }
 
-// Build the FIR decorrelator state (FFT plan + per-channel frequency-domain filters +
-// zeroed overlap / compensation-delay buffers) for a layout. Shared by the offline
-// render_window and the realtime EarStream so the two never drift.
-void init_decorr_state(DecorrState& decorr, const ear::Layout& layout, uint16_t num_out_ch, uint64_t k_block_size) {
-    constexpr std::size_t k_fir_len = 512;
-    const std::size_t k_fft_len = next_power_of_two(static_cast<std::size_t>(k_block_size) + k_fir_len - 1U);
-    const std::size_t k_bins = (k_fft_len / 2U) + 1U;
-
-    dsp::fft_create(&decorr.hFFT, static_cast<int>(k_fft_len));
-    decorr.fft_len = k_fft_len;
-    decorr.bins = k_bins;
-    decorr.overlap_len = k_fir_len - 1U;
-    decorr.comp_delay = ear::decorrelatorCompensationDelay(); // 255
-    decorr.overlap.assign(num_out_ch, std::vector<float>(decorr.overlap_len, 0.0F));
-    decorr.dir_delay.assign(num_out_ch, std::vector<float>(static_cast<std::size_t>(decorr.comp_delay), 0.0F));
-
-    const auto raw_filters = ear::designDecorrelators<float>(layout);
-    decorr.filter_fd.resize(num_out_ch, std::vector<dsp::Complex>(k_bins));
-    std::vector<float> fir_buf(k_fft_len, 0.0F);
-    for (std::size_t ch = 0; ch < num_out_ch; ++ch) {
-        std::ranges::fill(fir_buf, 0.0F);
-        const auto& fir = raw_filters[ch];
-        std::ranges::copy(fir, fir_buf.begin());
-        dsp::fft_forward(decorr.hFFT, fir_buf.data(), decorr.filter_fd[ch].data());
+// libear owns filter design; Rust retains the raw FIRs for independent output instances.
+Result<dsp::EarFilters> prepare_ear_filters(const ear::Layout& layout) {
+    const auto raw = ear::designDecorrelators<float>(layout);
+    if (raw.size() != layout.channels().size() ||
+        raw.size() > std::numeric_limits<std::size_t>::max() / dsp::EarFilters::k_taps) {
+        return make_error(ErrorCode::render_failed, "Unexpected EAR filter count");
     }
+    std::vector<float> firs;
+    firs.reserve(raw.size() * dsp::EarFilters::k_taps);
+    for (const auto& filter : raw) {
+        if (filter.size() != dsp::EarFilters::k_taps) {
+            return make_error(ErrorCode::render_failed, "Unexpected EAR filter length");
+        }
+        firs.insert(firs.end(), filter.begin(), filter.end());
+    }
+    return dsp::EarFilters::create(raw.size(), firs, static_cast<std::size_t>(ear::decorrelatorCompensationDelay()));
 }
 
 // Immutable, reusable EAR state: the resolved libear layout and the per-object gain
-// matrix (the expensive libear GainCalculator work). Reused across render_window()
-// calls (PreviewSession scrubbing). The decorrelator FFT state is cheap and per-output,
-// so it stays in render_window. ear::Layout never leaves this TU (ADR 0003).
+// matrix and raw FIR bank. FFT spectra/history remain per output instance so the same
+// prepared metadata supports different block capacities. ear::Layout stays in this TU.
 struct EarPrepared final : IPreparedRender {
     ear::Layout layout;
     render_common::PreparedPcmMix gain_matrix;
+    dsp::EarFilters filters;
 };
 
 // Realtime streaming EAR session over the same prepared libear layout + gain matrix as
@@ -726,12 +579,7 @@ class EarStream final : public IRenderStream {
     }
 
     [[nodiscard]] Result<void> seek(uint64_t frame) override {
-        for (auto& ov : decorr_.overlap) {
-            std::ranges::fill(ov, 0.0F);
-        }
-        for (auto& dl : decorr_.dir_delay) {
-            std::ranges::fill(dl, 0.0F);
-        }
+        post_.reset();
         mix_.reset();
         frames_done_ = std::min(frame, total_frames_);
         render_common::seek_reader_abs(*reader_, frames_done_);
@@ -773,13 +621,11 @@ class EarStream final : public IRenderStream {
                col_stride_,
                static_cast<uint64_t>(plan.scene.info.sample_rate) * plan.default_interp_ms / 1000U,
                object_smoothing_frames_ > 0),
+          post_(prepared.filters, k_block_size_),
           diffuse_in_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F),
-          diffuse_out_(static_cast<std::size_t>(num_out_ch_) * col_stride_, 0.0F),
           in_block_(static_cast<std::size_t>(plan.scene.info.num_channels) * col_stride_, 0.0F),
           live_gain_targets_(plan.scene.info.num_channels, 1.0F),
-          live_gain_smoother_(plan.scene.info.num_channels, plan.scene.info.sample_rate) {
-        init_decorr_state(decorr_, prepared.layout, num_out_ch_, k_block_size_);
-    }
+          live_gain_smoother_(plan.scene.info.num_channels, plan.scene.info.sample_rate) {}
 
     void apply_live_gain(uint64_t frames_now) {
         live_gain_smoother_.apply(in_block_.data(), static_cast<std::size_t>(frames_now));
@@ -791,16 +637,8 @@ class EarStream final : public IRenderStream {
         apply_live_gain(frames_now);
         fifo_.assign(static_cast<std::size_t>(num_out_ch_) * frames_now, 0.0F);
         fifo_read_ = 0;
-        render_ear_block(mix_,
-                         decorr_,
-                         in_block_,
-                         fifo_,
-                         diffuse_in_,
-                         diffuse_out_,
-                         frames_done_,
-                         frames_now,
-                         num_out_ch_,
-                         output_layout_);
+        render_ear_block(
+            mix_, post_, in_block_, fifo_, diffuse_in_, frames_done_, frames_now, num_out_ch_, output_layout_);
         frames_done_ += frames_now;
     }
 
@@ -815,9 +653,8 @@ class EarStream final : public IRenderStream {
     uint64_t k_block_size_;
     std::size_t col_stride_;
     dsp::PcmMixer mix_;
-    DecorrState decorr_;
+    dsp::EarPostProcessor post_;
     std::vector<float> diffuse_in_;
-    std::vector<float> diffuse_out_;
     std::vector<float> in_block_;
     std::vector<float> live_gain_targets_; // per-input-channel target multiplier (1.0 = neutral)
     render_common::InterleavedLiveGainSmoother live_gain_smoother_;
@@ -913,6 +750,11 @@ Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& 
             return tl::unexpected{compiled.error()};
         }
         prepared->gain_matrix = std::move(*compiled);
+        auto filters = prepare_ear_filters(prepared->layout);
+        if (!filters) {
+            return tl::unexpected{filters.error()};
+        }
+        prepared->filters = std::move(*filters);
         return std::static_pointer_cast<IPreparedRender>(prepared);
     } catch (const std::invalid_argument& e) {
         return make_error(ErrorCode::unsupported,
@@ -956,9 +798,7 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
         constexpr uint64_t k_min_block_size = 1024;
         const uint64_t k_block_size = std::max<uint64_t>(k_min_block_size, plan.object_smoothing_frames);
 
-        // Initialise the FIR decorrelator state for the diffuse bus (shared with EarStream).
-        DecorrState decorr;
-        init_decorr_state(decorr, layout, num_out_ch, k_block_size);
+        dsp::EarPostProcessor post(prepared->filters, static_cast<std::size_t>(k_block_size));
 
         // Open file for audio only — ADM metadata comes from plan.scene.
         auto reader_res = audio::RenderInputReader::open(plan.input_path,
@@ -990,7 +830,6 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
         // Interleaved buffers used for I/O and the decorrelator.
         std::vector<float> in_block(static_cast<std::size_t>(num_in_ch) * k_block_size);
         std::vector<float> diffuse_in(num_out_ch * k_block_size); // interleaved diffuse
-        std::vector<float> diffuse_out(num_out_ch * k_block_size);
 
         // Loudness / true-peak measurement runs on a background thread (SerialWorker) so it overlaps
         // the next block's mix + decorrelation. Double-buffer the interleaved output so the next block
@@ -1048,16 +887,8 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
 
             reader->read(in_block.data(), frames_now);
 
-            render_ear_block(mix,
-                             decorr,
-                             in_block,
-                             out_block,
-                             diffuse_in,
-                             diffuse_out,
-                             frames_done,
-                             frames_now,
-                             num_out_ch,
-                             plan.output_layout);
+            render_ear_block(
+                mix, post, in_block, out_block, diffuse_in, frames_done, frames_now, num_out_ch, plan.output_layout);
 
             // Write only the in-window frames. Pre-roll blocks (emit == false) are
             // processed for state warm-up but not written.

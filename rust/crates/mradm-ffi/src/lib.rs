@@ -9,6 +9,7 @@ use std::{
     ptr, slice,
 };
 mod convolution;
+mod ear_post;
 mod hptf;
 mod hrtf;
 mod meter;

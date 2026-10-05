@@ -848,6 +848,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_pcm_mix_tests COMMAND mr_adm_pcm_mix_tests)
     set_tests_properties(mr_adm_pcm_mix_tests PROPERTIES TIMEOUT 60)
 
+    add_executable(mr_adm_ear_post_tests tests/unit/ear_post_test.cpp)
+    target_link_libraries(mr_adm_ear_post_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp ear)
+    mr_adm_core_apply_warnings(mr_adm_ear_post_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_ear_post_tests)
+    add_test(NAME mr_adm_ear_post_tests COMMAND mr_adm_ear_post_tests)
+    set_tests_properties(mr_adm_ear_post_tests PROPERTIES TIMEOUT 60)
+
     # Release-only/manual acceptance tool. It is deliberately excluded from the default build and
     # CTest because its normal invocation runs for ten wall-clock minutes.
     add_executable(mr_adm_scene_stream_stress EXCLUDE_FROM_ALL tests/manual/scene_stream_stress.cpp)
