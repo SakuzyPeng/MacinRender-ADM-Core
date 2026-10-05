@@ -134,7 +134,41 @@
       "tests/unit/pcm_mix_test.cpp": "c9b8329035f5adb8a0fb9d3ba1cfa842c7bc68d8b3b4eeef77e50f249404ce4f"
     }
   },
-  "ci": null,
+  "ci": {
+    "run_id": 37267613687,
+    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37267613687",
+    "commit": "e5836e9cfbd752599b227b3007ca2e6b0f9ee913",
+    "conclusion": "success",
+    "attempt": 1,
+    "jobs": [
+      {
+        "name": "Linux debug",
+        "conclusion": "success",
+        "job_id": 111627633012,
+        "ctest_passed": 58,
+        "ctest_total": 58
+      },
+      {
+        "name": "macOS debug",
+        "conclusion": "success",
+        "job_id": 111627633114,
+        "ctest_passed": 59,
+        "ctest_total": 59
+      },
+      {
+        "name": "Version metadata",
+        "conclusion": "success",
+        "job_id": 111627633123
+      },
+      {
+        "name": "Windows debug",
+        "conclusion": "success",
+        "job_id": 111627633163,
+        "ctest_passed": 58,
+        "ctest_total": 58
+      }
+    ]
+  },
   "not_claimed": [
     "Cross-platform bit identity",
     "Bit identity between different inner FFT chunkings",
@@ -171,6 +205,9 @@
     "out/rust-ear-post/build-probe-final-release.log": "227636c4dd09c16e1d85448f562469ae606be02428f1b96a8c6ba7d56210c115",
     "out/rust-ear-post/build-release-final.log": "ab6ab395aef4f6d296e188c48d2e352da721bb67d777d75d044c684286481162",
     "out/rust-ear-post/build-release.log": "9325ee767351adaad299a1746f77b16184f31de7f3b65eee7452043f02eb5118",
+    "out/rust-ear-post/ci-linux.log": "cf547a4eec70b0dc5c214707f42a08e2365f4d8768faab8f9973f28fc0000a55",
+    "out/rust-ear-post/ci-macos.log": "ef1d15cf5959f52779a9e5d5a3ed4209a7212ab2a5928a0885b583280623d074",
+    "out/rust-ear-post/ci-windows.log": "754402d9758f0d6a9dfea0dcddafc026a96e47faeac0eb5729f49a57542cc0d8",
     "out/rust-ear-post/licenses.log": "7fc81fb03cf503a1b10d8c641b0da14081f41a961c3f51de3b8ba31f1df82fbd",
     "out/rust-ear-post/probe-release.log": "11b8318d3eeebf5181e4aa6d45f08d1512f0d8ea66512b02cdfa3d7358575655",
     "out/rust-ear-post/quality-cpp.log": "83339985a4b3c2cf517870e2c99a421ae616c707809b96805e6b387528e64f6d",
