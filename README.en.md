@@ -338,6 +338,8 @@ EAR decorrelation, compensation delay and bus summation also run in Rust, retain
 
 Triple Balance point/size panning, 22.2 geometry, decorrelation, motion/transitions and numerical snapshots also run in Rust. C++ retains semantics, I/O, scheduling and snapshot LRU management. See the [Rust Triple Balance migration](docs/architecture/RUST_TRIPLE_BALANCE_MIGRATION.md).
 
+HOA3 coefficient generation, interpolation, diffuse state, LFE separation and metering decode also run in Rust. Existing seek/window behavior is retained, with output-capacity and short-read checks added. See the [Rust HOA migration](docs/architecture/RUST_HOA_MIGRATION.md).
+
 System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
 
 ```bash

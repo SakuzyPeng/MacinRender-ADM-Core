@@ -595,36 +595,7 @@ pub unsafe extern "C" fn mradm_dsp_tb_object_status(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        alloc::{GlobalAlloc, Layout as AllocLayout, System},
-        cell::Cell,
-    };
-    thread_local! {static COUNT:Cell<Option<usize>>=const{Cell::new(None)};}
-    struct Counting;
-    unsafe impl GlobalAlloc for Counting {
-        unsafe fn alloc(&self, l: AllocLayout) -> *mut u8 {
-            let _ = COUNT.try_with(|c| {
-                if let Some(n) = c.get() {
-                    c.set(Some(n + 1))
-                }
-            });
-            unsafe { System.alloc(l) }
-        }
-        unsafe fn dealloc(&self, p: *mut u8, l: AllocLayout) {
-            unsafe { System.dealloc(p, l) }
-        }
-        unsafe fn realloc(&self, p: *mut u8, l: AllocLayout, n: usize) -> *mut u8 {
-            let _ = COUNT.try_with(|c| {
-                if let Some(n) = c.get() {
-                    c.set(Some(n + 1))
-                }
-            });
-            unsafe { System.realloc(p, l, n) }
-        }
-    }
-    // FFI unit tests did not previously install an allocator. Count only this thread's guarded calls.
-    #[global_allocator]
-    static ALLOCATOR: Counting = Counting;
+    use crate::test_alloc::COUNT;
     #[test]
     fn ffi_lengths_aliasing_atomicity_lifetime_and_first_call_allocations() {
         unsafe {

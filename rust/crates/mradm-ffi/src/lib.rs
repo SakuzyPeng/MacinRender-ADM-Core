@@ -10,6 +10,7 @@ use std::{
 };
 mod convolution;
 mod ear_post;
+mod hoa;
 mod hptf;
 mod hrtf;
 mod meter;
@@ -18,6 +19,8 @@ mod pcm_mix;
 mod resampler;
 mod spatial;
 mod spreader;
+#[cfg(test)]
+mod test_alloc;
 mod triple_balance;
 
 /// Error codes follow the project's public ErrorCode values. Messages belong to

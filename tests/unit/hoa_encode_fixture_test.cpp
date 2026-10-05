@@ -1,13 +1,16 @@
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -1000,13 +1003,65 @@ bool verify_ds_off_axis_position() {
     return ok;
 }
 
+bool verify_hoa_stream_boundaries(mradm::IRenderer& renderer,
+                                  const mradm::IPreparedRender& prepared,
+                                  const mradm::RenderPlan& plan,
+                                  mradm::LogSink& logs,
+                                  mradm::ProgressSink& progress) {
+    bool ok = true;
+    auto stream = renderer.open_stream(prepared, plan, logs);
+    auto fresh = renderer.open_stream(prepared, plan, logs);
+    if (!stream || !fresh) {
+        return false;
+    }
+    std::array<float, 17> sentinel{};
+    sentinel.fill(.125F);
+    const auto before = sentinel;
+    ok &= check(!(*stream)->process(sentinel, 2), "HOA rejects undersized output before consuming audio");
+    ok &= check(sentinel == before, "HOA rejected output remains untouched");
+    ok &= check((*stream)->process({}, 0).value_or(1) == 0, "HOA zero frames do not consume audio");
+    for (uint64_t target : {0U, 37U, 809U, 1023U, 1024U, 2049U}) {
+        ok &= check((*stream)->seek(target).has_value() && (*fresh)->seek(target).has_value(), "HOA cold seek");
+        std::vector<float> a(std::size_t{733} * 16);
+        std::vector<float> b(a.size());
+        const auto got = (*stream)->process(a, 733);
+        const auto wanted = (*fresh)->process(b, 733);
+        ok &= check(got && wanted && *got == *wanted && a == b, "HOA cold seek resets all diffuse history");
+    }
+    auto mismatched_plan = plan;
+    ++mismatched_plan.scene.info.num_channels;
+    ok &= check(!renderer.open_stream(prepared, mismatched_plan, logs), "HOA rejects prepared/input format mismatch");
+    auto truncated_plan = plan;
+    truncated_plan.scene.info.num_frames = 8192;
+    auto truncated = renderer.open_stream(prepared, truncated_plan, logs);
+    if (!truncated) {
+        return false;
+    }
+    std::vector<float> block(std::size_t{1024} * 16);
+    for (int i = 0; i < 4; ++i) {
+        ok &= check((*truncated)->process(block, 1024).value_or(0) == 1024, "HOA short-read prefix");
+    }
+    block.assign(block.size(), .125F);
+    const auto failed = (*truncated)->process(block, 1024);
+    ok &= check(!failed && failed.error().code == mradm::ErrorCode::io_error, "HOA premature EOF is an I/O error");
+    ok &= check(std::ranges::all_of(block, [](float x) { return x == .125F; }), "HOA short-read block is not encoded");
+    auto short_offline = truncated_plan;
+    const auto short_path = std::filesystem::temp_directory_path() / "mr_hoa_stream_short_error.wav";
+    FileGuard short_guard{short_path};
+    short_offline.output_path = short_path.string();
+    const auto short_result = renderer.render_window(prepared, short_offline, progress, logs);
+    ok &= check(!short_result && short_result.error().code == mradm::ErrorCode::io_error,
+                "HOA offline premature EOF is an I/O error");
+    return ok;
+}
+
 // HoaStream (realtime) reproduces the offline render_window encode and is independent of
 // the caller's pull chunk size (canonical block + FIFO). Uses the two-block diffuse fixture
 // + noise so the cross-block decorrelation delay line is exercised; > k_block_size frames
 // give multiple blocks. Drives the renderer directly (no RenderService post-processing).
 bool verify_hoa_stream_matches_window() {
     auto [doc, uid] = make_two_block_diffuse_doc();
-    const auto noise = make_noise_samples(4096);
+    const auto noise = make_noise_samples(4103);
     const auto in_path = write_fixture_samples(doc, uid, "stream_in", noise);
     FileGuard in_guard{in_path};
 
@@ -1071,12 +1126,26 @@ bool verify_hoa_stream_matches_window() {
 
     bool ok = check(uniform.size() == ref.size(), "hoa stream output frame count matches render_window");
     ok &= check(uniform == varied, "hoa stream output is identical regardless of pull chunk size");
-    double max_diff = 0.0;
-    const std::size_t n = std::min(uniform.size(), ref.size());
-    for (std::size_t i = 0; i < n; ++i) {
-        max_diff = std::max(max_diff, std::fabs(static_cast<double>(uniform[i]) - static_cast<double>(ref[i])));
+    ok &= check(reader->is_ieee_float(), "HOA comparison uses float32 output");
+    ok &= check(uniform == ref, "HOA stream is bit-identical to float32 offline output");
+    const auto tail_path = std::filesystem::temp_directory_path() / "mr_hoa_stream_overflow_window.wav";
+    FileGuard tail_guard{tail_path};
+    auto tail_plan = plan;
+    tail_plan.output_path = tail_path.string();
+    tail_plan.render_window = mradm::RenderWindow{1023, std::numeric_limits<uint64_t>::max()};
+    const auto rendered_tail = renderer->render_window(**prepared, tail_plan, progress, logs);
+    ok &= check(rendered_tail.has_value(), "HOA window count clamps without integer overflow");
+    if (rendered_tail) {
+        auto tail = mradm::audio::FloatWavReader::open(tail_path.string());
+        if (!tail) {
+            return false;
+        }
+        std::vector<float> actual(tail->frame_count() * tail->channels());
+        ok &= check(tail->read(actual.data(), tail->frame_count()) == tail->frame_count(), "HOA window tail read");
+        ok &= check(actual == std::vector<float>(ref.begin() + std::ptrdiff_t(1023 * ch), ref.end()),
+                    "HOA overflow-clamped window equals full slice");
     }
-    ok &= check(max_diff < 1.0e-4, "hoa stream output matches the offline render_window encode");
+    ok &= verify_hoa_stream_boundaries(*renderer, **prepared, plan, logs, progress);
     return ok;
 }
 
