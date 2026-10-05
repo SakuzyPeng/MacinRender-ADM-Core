@@ -178,7 +178,9 @@ void objects(Stats& stats) {
         const auto in = std::span<const float, 32>{pcm.data() + i, 32};
         a.process(in, x);
         b.process(in, y);
-        stats.compare({x.front().data(), 128}, {y.front().data(), 128});
+        for (std::size_t frame = 0; frame < x.size(); ++frame) {
+            stats.compare(x.at(frame), y.at(frame));
+        }
     }
 }
 void state_decisions() {
