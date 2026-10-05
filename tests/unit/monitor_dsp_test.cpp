@@ -41,7 +41,7 @@ void compare(float actual, float expected, Summary& summary, bool exact = false)
     const bool same = std::bit_cast<uint32_t>(actual) == std::bit_cast<uint32_t>(expected);
     summary.different += same ? 0U : 1U;
     const double error = std::abs(static_cast<double>(actual) - expected);
-    const double tolerance = 2e-6 + 2e-6 * std::abs(static_cast<double>(expected));
+    const double tolerance = 2e-6 + (2e-6 * std::abs(static_cast<double>(expected)));
     summary.max_error = std::max(summary.max_error, error);
     summary.max_ratio = std::max(summary.max_ratio, error / tolerance);
     require(exact ? same : error <= tolerance, exact ? "bitwise comparison failed" : "migration tolerance exceeded");
