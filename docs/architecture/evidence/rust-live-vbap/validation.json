@@ -56,7 +56,12 @@
     "existing_cpp_advisories": [
       "Unmodified render_reference_frame_ramp function size",
       "Unmodified nested conditional in render_reference_frame_ramp"
-    ]
+    ],
+    "c_api_after_portability_fix": {
+      "macos_debug": true,
+      "macos_release": true,
+      "windows_release": true
+    }
   },
   "numerical_comparison": {
     "float_values_per_platform": 3971688,
@@ -144,7 +149,14 @@
     "windows_incidental_cpp_exports": 1984
   },
   "ci": {
-    "status": "pending"
+    "status": "pending",
+    "previous_runs": [
+      {
+        "run_id": 37341099280,
+        "commit": "41cf469b64e8c90e8f79ac07953115d35974033d",
+        "linux_failure": "C API fixture relied on a transitive <cmath> include removed by the ADM migration; added the direct include"
+      }
+    ]
   },
   "source_sha256": {
     "CMakeLists.txt": "f6ccc710993a902bbe28da928356f4b6f0273de9a4590959454466b50627b2b0",
@@ -161,7 +173,8 @@
     "tests/reference/live_vbap/provenance.json": "8a2f3c50cb6e232c90bb44e7d93e46b9c3383d700c4ee3ae73cb063bac5b16bd",
     "tests/reference/live_vbap/ramps.h": "80bad4f99cfa886ff1de00863b20f245e656796316526165a7a2d5ef217a06fc",
     "tests/unit/live_vbap_rust_test.cpp": "aeb834ff7fca942a5004beede34b39f1894087b1f5bedb38eaa65f35a0d2a0d3",
-    "tests/unit/scene_stream_c_api_test.cpp": "fc05078ff567abfd6434e8a0b60799397723f9e6440610c0ec51d26f06cb2975"
+    "tests/unit/scene_stream_c_api_test.cpp": "fc05078ff567abfd6434e8a0b60799397723f9e6440610c0ec51d26f06cb2975",
+    "tests/unit/c_api_fixture_test.cpp": "97a93c4c42a211207c9b47bc09cf44c686b9c76cf04637be8ad831fbde0bb8f3"
   },
   "reference_provenance": {
     "baseline_commit": "577fe2d107b7004933597484aec1a6696b9a5da4",
@@ -232,6 +245,10 @@
     "shared-cpp-quality.log": "6d52e7abe316ad4b4ec510ca9aa2c5691bc593e6695882cc0d32b0f6bff28727",
     "shared-licenses.log": "8d7c4116bccdc21ebfaf0c7a649ec5eb60ed36ab5cd0e90bdbdc7b03172b39fa",
     "reference-quality.log": "4e2d733737ea54ad4b7da07d31078f970e4e9856509062728b8b5e78f2b31e6e",
-    "shared-windows-run.log": "fc1ca8681e249d1ffd8741264257a1267aad8634967ffcf13a32f0248f913108"
+    "shared-windows-run.log": "fc1ca8681e249d1ffd8741264257a1267aad8634967ffcf13a32f0248f913108",
+    "c-api-include-debug-test.log": "8a56ec8ce672ad1a340d5449b81706edd5a45d50fd0df04c7515e748ed4ff46a",
+    "c-api-include-release-test.log": "751a8f48622319697fb69e9e3c55825f0f1ea301cc843b29521044478e22dbde",
+    "c-api-include-windows.log": "b13b477a890233f6847bd4b5d0903d5f08c754f0c2829c373af4b01dc5e366c7",
+    "c-api-include-quality.log": "7a51e7bf90f98ed1d7f76058554344fe9f0ff0f229dd13bcb48ba6b5802ef702"
   }
 }
