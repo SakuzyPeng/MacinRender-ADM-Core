@@ -1,0 +1,68 @@
+{
+  "schema": "mradm.rust-adm-metadata-comparison.v1",
+  "reference_version": "libadm 0.14.0",
+  "cases": [
+    {
+      "equivalent": true,
+      "input": "generated-binaural.wav",
+      "libadm_ms": 1.750041,
+      "rust_ms": 3.648125
+    },
+    {
+      "equivalent": true,
+      "input": "generated-hoa3.wav",
+      "libadm_ms": 1.627125,
+      "rust_ms": 0.804083
+    },
+    {
+      "equivalent": true,
+      "input": "generated-7.1.4.wav",
+      "libadm_ms": 1.482375,
+      "rust_ms": 0.675792
+    },
+    {
+      "equivalent": true,
+      "input": "generated-9.1.6.wav",
+      "libadm_ms": 1.776875,
+      "rust_ms": 0.843833
+    },
+    {
+      "equivalent": true,
+      "input": "objects-point.wav",
+      "libadm_ms": 1.361167,
+      "rust_ms": 0.50175
+    },
+    {
+      "equivalent": true,
+      "input": "objects-extent.wav",
+      "libadm_ms": 1.336792,
+      "rust_ms": 0.490625
+    },
+    {
+      "equivalent": true,
+      "input": "objects-extent-multi.wav",
+      "libadm_ms": 1.553666,
+      "rust_ms": 0.677417
+    },
+    {
+      "equivalent": true,
+      "input": "objects-cartesian.wav",
+      "libadm_ms": 1.4465,
+      "rust_ms": 0.556666
+    },
+    {
+      "equivalent": true,
+      "input": "directspeakers.wav",
+      "libadm_ms": 1.441958,
+      "rust_ms": 0.58425
+    },
+    {
+      "equivalent": true,
+      "input": "hoa.wav",
+      "libadm_ms": 1.566166,
+      "rust_ms": 0.765209
+    }
+  ],
+  "passed": true,
+  "timing_note": "Single probe observations, including a cold Rust common-definition cache; not a performance benchmark."
+}
