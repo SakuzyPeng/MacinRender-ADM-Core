@@ -1,7 +1,7 @@
 # 48 kHz 等尺寸对象：自有内核与离线接入
 
 本实现按 Renderer 5.5 已命中的处理路径重建尺寸空间增益、四路滤波和时间状态。
-生产代码只使用本项目 C++ 内核；运行时不读取研究记录，不附加调试器，也不加载 Dolby 进程或私有库。
+生产代码使用本项目内核（数值状态现已[迁入 Rust](RUST_TRIPLE_BALANCE_MIGRATION.md)）；运行时不读取研究记录，不附加调试器，也不加载 Dolby 进程或私有库。
 调用链来源见 [DAR_GAIN_CALL_CHAIN.md](DAR_GAIN_CALL_CHAIN.md)。
 
 ## 使用与支持范围

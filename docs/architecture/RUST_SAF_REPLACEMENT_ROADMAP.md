@@ -32,6 +32,9 @@
 [EAR 后处理迁移](RUST_EAR_POST_MIGRATION.md)进一步接管去相关 FIR、补偿延迟和双总线求和，
 并修复连续短块丢失未输出尾音的问题；libear 继续负责滤波器设计。
 
+[Triple Balance 完整数值状态迁移](RUST_TRIPLE_BALANCE_MIGRATION.md)接管固定房间几何、
+点源/尺寸空间算法、四路去相关、运动与过渡状态及数值快照；C++ 保留语义、I/O、调度和 LRU。
+
 内置 KEMAR、原型和格型系数及 HOA 矩阵是约 1.7 MiB 的已提交二进制资源。`assets/manifest.json` 记录尺寸、来源和 SHA-256；`assets/NOTICE.txt` 保留 ISC/MIT 声明及数据提供者归属。正常构建不从 SAF 提取数据。
 
 ## 2. 行为边界

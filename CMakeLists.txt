@@ -1017,6 +1017,17 @@ if(MR_ADM_CORE_BUILD_TESTS)
         MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRealtime)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_monitor_benchmark)
 
+    add_executable(mr_adm_triple_balance_rust_tests tests/unit/triple_balance_rust_test.cpp
+        tests/reference/triple_balance/panner.cpp tests/reference/triple_balance/layout_222.cpp
+        tests/reference/triple_balance/size_panner.cpp tests/reference/triple_balance/size_processor.cpp
+        tests/reference/triple_balance/render_state.cpp)
+    target_link_libraries(mr_adm_triple_balance_rust_tests PRIVATE MacinRender::ADMRenderTripleBalance
+        MacinRender::ADMRenderCommon MacinRender::ADMDsp nlohmann_json::nlohmann_json)
+    target_include_directories(mr_adm_triple_balance_rust_tests PRIVATE src/adm_render_triple_balance src/adm_render_common)
+    mr_adm_core_apply_warnings(mr_adm_triple_balance_rust_tests)
+    add_test(NAME mr_adm_triple_balance_rust_tests COMMAND mr_adm_triple_balance_rust_tests)
+    set_tests_properties(mr_adm_triple_balance_rust_tests PROPERTIES TIMEOUT 120)
+
     add_executable(mr_adm_triple_balance_stream_tests tests/unit/triple_balance_stream_test.cpp)
     target_link_libraries(mr_adm_triple_balance_stream_tests PRIVATE
         MacinRender::ADMRenderTripleBalance MacinRender::ADMAudio MacinRender::ADMRenderCommon)

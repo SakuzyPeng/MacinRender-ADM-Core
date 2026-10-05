@@ -1,5 +1,4 @@
 #pragma once
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -9,90 +8,43 @@
 
 #include "adm/errors.h"
 
-#include "layout_222.h"
+#include "../adm_dsp/triple_balance.h"
 #include "size_panner.h"
-
 namespace mradm::triple_balance {
-
-// Exact recursive structure used by the size candidate. The measured FIR
-// SizeFilterBank remains a separate research comparison.
+// Low-level adapters retained for tests/tools; production processes whole render blocks in Rust.
 class SizeDecorrelator final {
   public:
     using FilteredFrame = std::array<float, 4>;
     static constexpr std::size_t subblock_frames = 32;
     SizeDecorrelator();
     void reset() noexcept;
-    void process(std::span<const float, subblock_frames> input,
-                 std::span<FilteredFrame, subblock_frames> output) noexcept;
+    void process(std::span<const float, 32> input, std::span<FilteredFrame, 32> output) noexcept;
 
   private:
-    void reset_dsp() noexcept;
-    std::array<std::array<FilteredFrame, 346>, 4> delays_{};
-    std::array<std::size_t, 4> indices_{};
-    std::array<float, 96> input_delay_{};
-    std::size_t input_index_{};
-    float pre_gain_{1};
-    float post_gain_{1};
-    float slow_level_{};
-    float fast_level_{};
-    float prefilter_state_{};
-    bool initial_{true};
-    unsigned silent_blocks_{};
+    dsp::TbHandle<mradm_dsp_tb_filter_destroy> handle_{nullptr, mradm_dsp_tb_filter_destroy};
 };
-
 struct SizeEvent {
     uint64_t start_sample{};
     SizePosition position;
     float size{};
 };
-
-// Fixed-size state only: checkpoints never copy metadata or PCM from the file.
-struct SizeProcessorState {
-    std::size_t next_event_{};
-    uint64_t control_start_{};
-    std::array<float, 512> pending_{};
-    std::size_t pending_frames_{};
-    bool finished_{};
-    bool first_{true};
-    SizePosition position_;
-    SizePosition target_position_;
-    float size_{};
-    float target_size_{};
-    SizeMixGains previous_mix_;
-    std::array<float, 24> previous_point_{};
-    Room222Mix previous_extended_mix_;
-    Room222Mix cached_extended_mix_;
-    Room222Gains cached_extended_point_{};
-    SizePosition cached_position_;
-    float cached_size_{-1};
-    bool previous_filter_active_{};
-    bool older_filter_active_{};
-    SizeDecorrelator decorrelator_;
-    float size_scale_{1.0F};
-    float source_size_{};
-};
-
-// One state per object/track, owned by a render session. push() appends complete
-// control blocks; finish() emits the original-length final partial block. This
-// lets callers use arbitrary input chunks without changing the signal timeline.
-class SizeObjectProcessor final : private SizeProcessorState {
+using SizeProcessorState = dsp::TbHandle<mradm_dsp_tb_object_snapshot_destroy>;
+class SizeObjectProcessor final {
   public:
-    [[nodiscard]] static Result<SizeObjectProcessor>
-    create(std::span<const SizeEvent> events, std::string layout, uint32_t sample_rate);
+    static Result<SizeObjectProcessor>
+    create(std::span<const SizeEvent> events, const std::string& layout, uint32_t rate);
     void reset() noexcept;
-    [[nodiscard]] Result<void> push(std::span<const float> input, std::vector<float>& output);
-    [[nodiscard]] Result<void> finish(std::vector<float>& output);
+    Result<void> push(std::span<const float> input, std::vector<float>& output);
+    Result<void> finish(std::vector<float>& output);
     void set_size_scale(float scale) noexcept;
-    [[nodiscard]] SizeProcessorState snapshot() const noexcept { return *this; }
-    void restore(const SizeProcessorState& state) noexcept { static_cast<SizeProcessorState&>(*this) = state; }
-    [[nodiscard]] std::size_t channel_count() const noexcept { return channels_; }
+    SizeProcessorState snapshot() const;
+    MradmTbObjectStatus state_info() const;
+    void restore(const SizeProcessorState& state) noexcept;
+    std::size_t channel_count() const noexcept { return channels_; }
 
   private:
-    [[nodiscard]] Result<void> process_control(std::vector<float>& output, std::size_t valid_frames);
-    [[nodiscard]] Result<void> process_extended_control(std::vector<float>& output, std::size_t valid_frames);
-    std::vector<SizeEvent> events_;
-    std::string layout_;
+    Result<void> append(std::span<const float> input, std::vector<float>& output, bool final_block);
+    dsp::TbHandle<mradm_dsp_tb_object_destroy> handle_{nullptr, mradm_dsp_tb_object_destroy};
     std::size_t channels_{};
 };
-
 } // namespace mradm::triple_balance

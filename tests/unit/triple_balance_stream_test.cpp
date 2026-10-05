@@ -247,7 +247,9 @@ void run(const Files& files, const std::string& layout) {
     expect_equal(pull(*stream, plan.scene.info.num_frames, chunks), reference, "clear restores baseline");
     // Exercise eviction and the no-cache fallback without allocating a large fixture.
     const auto& metadata = dynamic_cast<const mradm::triple_balance::Prepared&>(*prepared);
-    for (const std::size_t budget : {std::size_t{0}, sizeof(mradm::triple_balance::SizeTrackState) * 3}) {
+    for (const std::size_t budget :
+         {std::size_t{0},
+          take(mradm::triple_balance::SizeMixer::create(metadata, plan, true)).snapshot_bytes() * 3 / 2}) {
         auto limited = take(mradm::triple_balance::open_stream(metadata, plan, budget));
         pull(*limited, plan.scene.info.num_frames, chunks);
         for (uint64_t frame : {66050U, 1025U, 90001U, 66050U}) {

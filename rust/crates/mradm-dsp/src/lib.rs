@@ -21,6 +21,7 @@ pub mod peak_guard;
 pub mod resampler;
 pub mod rng;
 pub mod spreader;
+pub mod triple_balance;
 pub mod vbap;
 
 pub use rustfft::num_complex::Complex32;

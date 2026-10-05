@@ -360,6 +360,8 @@ HpTF 耳机补偿的系数设计、频响、自动预衰减、级联处理与热
 
 EAR 的去相关卷积、补偿延迟和双总线求和也已迁入 Rust，支持保留连续短块的完整尾音；滤波器设计继续使用 libear。范围与验收见 [Rust EAR 后处理迁移](docs/architecture/RUST_EAR_POST_MIGRATION.md)。
 
+Triple Balance 的点源/尺寸声像、22.2 几何、去相关、运动/过渡状态和数值快照也已迁入 Rust；C++ 保留语义、I/O、调度及快照 LRU。见 [Rust Triple Balance 迁移](docs/architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)。
+
 系统依赖构建需要另备 Corrosion 0.6.1、Rust 工具链和锁定的 Cargo 依赖缓存：
 
 ```bash

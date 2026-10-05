@@ -52,3 +52,7 @@ unusedStructMember:*src/adm_realtime/osc_head_tracking_protocol.h
 
 # Shared PCM timeline records are consumed by renderer and stream implementation units.
 unusedStructMember:*/src/adm_render_common/speaker_pcm.h
+
+# Private Rust transport PODs and renderer control mappings are read across the FFI / translation units.
+unusedStructMember:*/src/adm_dsp/triple_balance_ffi.h
+unusedStructMember:*/src/adm_render_triple_balance/render_state.h

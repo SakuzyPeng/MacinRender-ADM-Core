@@ -23,6 +23,12 @@ inline void check_mix(int status, const char* message) {
 
 class PcmMixPlan {
   public:
+    // Adopt a private Rust Arc<Plan> allocated by the same FFI crate.
+    static PcmMixPlan adopt(void* raw) {
+        PcmMixPlan result;
+        result.handle_.reset(raw);
+        return result;
+    }
     [[nodiscard]] static Result<PcmMixPlan> create(std::size_t inputs,
                                                    std::size_t outputs,
                                                    std::span<const MradmDspMixRow> rows,
