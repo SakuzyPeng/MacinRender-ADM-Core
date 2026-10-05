@@ -429,6 +429,54 @@ bool test_monitor_playback() {
     return ok;
 }
 
+// Levels describe the whole requested block, including the unproduced EOS padding.
+bool test_monitor_levels_short_and_zero_pull() {
+    bool ok = true;
+    for (bool realtime : {false, true}) {
+        PatternStreamFactory factory(37);
+        ManualSink sink{realtime};
+        mradm::NullLogSink logs;
+        mradm::AdmScene scene;
+        mradm::RenderOptions opts;
+        auto engine = mradm::realtime::MonitorEngine::create(factory, sink, scene, opts, logs);
+        if (!check(engine.has_value(), "levels: engine creates")) {
+            return false;
+        }
+        (*engine)->play();
+        bool ready = false;
+        for (int spin = 0; spin < 200000; ++spin) {
+            if ((*engine)->status().ended) {
+                ready = true;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::microseconds(20));
+        }
+        if (!check(ready, "levels: finite stream fully produced")) {
+            return false;
+        }
+        sink.pump(64);
+        const auto levels = (*engine)->levels();
+        for (std::size_t c = 0; c < 2; ++c) {
+            float peak = 0.0F;
+            double sum = 0.0;
+            for (std::size_t f = 0; f < 64; ++f) {
+                const float v = sink.captured()[(f * 2) + c];
+                peak = std::max(peak, std::fabs(v));
+                sum += static_cast<double>(v) * static_cast<double>(v);
+            }
+            ok &= check(levels.peak.at(c) == peak && levels.rms.at(c) == static_cast<float>(std::sqrt(sum / 64.0)),
+                        "levels: exact whole-callback Peak/RMS including EOS padding");
+        }
+        const auto position = (*engine)->status().playhead_frames;
+        sink.pump(0);
+        const auto empty = (*engine)->levels();
+        ok &= check(empty.peak.at(0) == 0.0F && empty.rms.at(0) == 0.0F && empty.peak.at(1) == 0.0F &&
+                        empty.rms.at(1) == 0.0F && (*engine)->status().playhead_frames == position,
+                    "levels: zero pull clears levels without consuming media");
+    }
+    return ok;
+}
+
 bool test_monitor_loop() {
     bool ok = true;
     PatternStreamFactory factory;
@@ -1113,6 +1161,22 @@ bool test_monitor_hot_switch() {
         }
     }
     ok &= check(saw_blend, "hot-switch: a linear crossfade is present between the two streams");
+    // The first non-old sample is frame 1 of the 2048-frame ramp. Check every weight,
+    // independently of where the asynchronous worker began the switch in the capture.
+    std::size_t first = 0;
+    while (first < cap.size() / 2U && cap[first * 2U] == 0.25F) {
+        ++first;
+    }
+    if (first > 0 && first + 2048 < cap.size() / 2U) {
+        for (std::size_t f = 0; f <= 2048; ++f) {
+            const float expected = 0.25F + (static_cast<float>(f) / 4096.0F);
+            const auto index = ((first - 1U) + f) * 2U;
+            ok &= check(cap[index] == expected && cap[index + 1U] == expected,
+                        "hot-switch: exact 2048-frame endpoint and weight sequence");
+        }
+    } else {
+        ok &= check(false, "hot-switch: full ramp is present in capture");
+    }
     return ok;
 }
 
@@ -1795,6 +1859,122 @@ bool test_background_backend_preroll() {
     return ok;
 }
 
+// Fill the ring, then free exactly one worker chunk: the fade is deterministically
+// half-complete while control changes are submitted, without sleeps racing production.
+bool test_monitor_interrupt_crossfade() {
+    bool ok = true;
+    for (bool seek : {false, true}) {
+        ConstStreamFactory factory{0.25F};
+        ManualSink sink;
+        mradm::NullLogSink logs;
+        auto engine = mradm::realtime::MonitorEngine::create(factory, sink, {}, {}, logs);
+        if (!check(engine.has_value(), "interrupted fade: engine creates")) {
+            return false;
+        }
+        (*engine)->play();
+        if (!check(eventually([&] { return (*engine)->status().buffered_frames == 8192; }),
+                   "interrupted fade: original ring filled")) {
+            return false;
+        }
+        auto first = std::make_shared<mradm::realtime::StreamSwitchReceipt>();
+        (*engine)->switch_stream(std::make_unique<ConstStream>(2U, 0.75F), first);
+        if (!check(eventually([&] { return first->state.load() == mradm::realtime::StreamSwitchState::applied; }),
+                   "interrupted fade: first switch applied")) {
+            return false;
+        }
+        sink.pump(1024);
+        if (!check(eventually([&] { return (*engine)->status().buffered_frames == 8192; }),
+                   "interrupted fade: exactly one blended chunk buffered")) {
+            return false;
+        }
+        if (seek) {
+            (*engine)->seek(7777);
+            if (!check(eventually([&] { return (*engine)->status().playhead_frames == 7777; }),
+                       "interrupted fade: seek lands on incoming stream")) {
+                return false;
+            }
+            ok &= check(drain_exact(**engine, sink, 500), "interrupted fade: sought frames drain");
+            ok &= check(sink.captured()[2048] == 0.25F && sink.captured().back() == 0.75F,
+                        "interrupted fade: seek bridges to incoming stream from last emitted output");
+        } else {
+            auto second = std::make_shared<mradm::realtime::StreamSwitchReceipt>();
+            (*engine)->switch_stream(std::make_unique<ConstStream>(2U, 0.5F), second);
+            if (!check(eventually([&] { return second->state.load() == mradm::realtime::StreamSwitchState::applied; }),
+                       "interrupted fade: second switch applied")) {
+                return false;
+            }
+            ok &= check(drain_exact(**engine, sink, 8192 + 2049), "interrupted fade: replacement ramp drains");
+            const auto& cap = sink.captured();
+            for (std::size_t f = 0; f <= 2048; ++f) {
+                const float expected = 0.75F - (static_cast<float>(f) / 8192.0F);
+                const auto index = (9216 + f) * 2;
+                ok &= check(cap[index] == expected && cap[index + 1] == expected,
+                            "interrupted fade: replacement restarts from the incoming stream at weight zero");
+            }
+        }
+    }
+    return ok;
+}
+
+class ShortSwitchStream final : public mradm::IRenderStream {
+  public:
+    mradm::Result<std::size_t> process(std::span<float> out, std::size_t frames) override {
+        const auto count = std::min(frames, remaining_);
+        std::fill_n(out.begin(), count * 2, 0.75F);
+        remaining_ -= count;
+        return count;
+    }
+    mradm::Result<void> seek(uint64_t /*frame*/) override {
+        remaining_ = 37;
+        return {};
+    }
+    [[nodiscard]] uint32_t out_channels() const override { return 2; }
+    [[nodiscard]] uint32_t sample_rate() const override { return 48000; }
+    [[nodiscard]] std::string_view output_layout() const override { return "binaural"; }
+
+  private:
+    std::size_t remaining_{37};
+};
+bool test_monitor_crossfade_short_eos() {
+    ConstStreamFactory factory{0.25F};
+    ManualSink sink;
+    mradm::NullLogSink logs;
+    auto engine = mradm::realtime::MonitorEngine::create(factory, sink, {}, {}, logs);
+    if (!check(engine.has_value(), "short switch: engine creates")) {
+        return false;
+    }
+    (*engine)->play();
+    if (!check(eventually([&] { return (*engine)->status().buffered_frames == 8192; }), "short switch: ring filled")) {
+        return false;
+    }
+    auto receipt = std::make_shared<mradm::realtime::StreamSwitchReceipt>();
+    (*engine)->switch_stream(std::make_unique<ShortSwitchStream>(), receipt);
+    if (!check(eventually([&] { return receipt->state.load() == mradm::realtime::StreamSwitchState::applied; }),
+               "short switch: applied")) {
+        return false;
+    }
+    sink.pump(1024);
+    if (!check(eventually([&] { return (*engine)->status().buffered_frames == 7168 + 37; }),
+               "short switch: only the common frames enter ring")) {
+        return false;
+    }
+    // Free one complete worker chunk before asking the producer to discover EOS.
+    sink.pump(37);
+    if (!check(eventually([&] { return (*engine)->status().ended; }),
+               "short switch: incoming EOS finishes production")) {
+        return false;
+    }
+    bool ok = check((*engine)->status().buffered_frames == 7168, "short switch: remaining queue length");
+    sink.pump(7168);
+    for (std::size_t f = 0; f < 37; ++f) {
+        ok &= check(sink.captured()[(8192 + f) * 2] == 0.25F + (static_cast<float>(f) / 4096.0F),
+                    "short switch: partial ramp preserves original weights");
+    }
+    ok &= check((*engine)->status().playhead_frames == 8192 + 37 && (*engine)->status().underruns == 0,
+                "short switch: exact output length and clean EOS");
+    return ok;
+}
+
 int main() {
     bool ok = true;
     ok &= test_ring_basic();
@@ -1804,6 +1984,7 @@ int main() {
     ok &= test_capture_sink_path();
     ok &= test_stream_factory();
     ok &= test_monitor_playback();
+    ok &= test_monitor_levels_short_and_zero_pull();
     ok &= test_monitor_loop();
     ok &= test_monitor_output_stage_loop();
     ok &= test_monitor_pause();
@@ -1815,6 +1996,8 @@ int main() {
     ok &= test_monitor_rejects_invalid_gains();
     ok &= test_monitor_live_overrides();
     ok &= test_monitor_hot_switch();
+    ok &= test_monitor_interrupt_crossfade();
+    ok &= test_monitor_crossfade_short_eos();
     ok &= test_stop_before_loop_preroll();
     ok &= test_cancellable_preroll();
     ok &= test_background_backend_preroll();

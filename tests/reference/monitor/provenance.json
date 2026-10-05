@@ -1,0 +1,15 @@
+{
+  "baseline_commit": "a54fdc32fda2ef6ffa864778b1e3296eae95c1bc",
+  "source_sha256": {
+    "src/adm_realtime/monitor_engine.cpp": "403c8eb6edf8160e951c9d8c2ac6b79d481930fa7e20a33303dda066dacf14fb",
+    "src/adm_realtime/monitor_engine.h": "1a2766eaeab34eef177c80f7b6d6560e5b5bf9523d43e89f3639d8caf91e1146"
+  },
+  "adaptations": [
+    "Extract numerical loops and state into a test-only type",
+    "Replace atomic generation read with an explicit input",
+    "Replace atomic level publication with output spans",
+    "Rename crossfade scratch buffers to caller spans",
+    "Formatting only; no production helpers referenced"
+  ],
+  "reference_sha256": "5c009553bd8cf4b818f5ffd3d6826eac2587330f94cfe62ea906b0ecd463c764"
+}

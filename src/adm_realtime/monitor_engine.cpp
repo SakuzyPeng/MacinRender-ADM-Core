@@ -45,10 +45,6 @@ constexpr auto k_idle_nap = std::chrono::milliseconds(1);
 // Linear crossfade length for a backend hot-switch (~43 ms at 48 kHz): long enough to mask
 // the discontinuity between two renderers, short enough to feel immediate.
 constexpr uint64_t k_crossfade_frames = 2048U;
-// A timeline jump can connect two unrelated sample values. Smooth that boundary over 10 ms: short
-// enough that seeking still feels immediate, long enough to move the discontinuity below the
-// click/pop band. This is monitor-output conditioning only; offline renders remain untouched.
-constexpr uint64_t k_seek_transition_ms = 10U;
 void finish_switch(const std::shared_ptr<StreamSwitchReceipt>& receipt, StreamSwitchState state) {
     if (receipt) {
         receipt->state.store(state);
@@ -67,9 +63,7 @@ MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutput
       scratch_(static_cast<std::size_t>(k_chunk_frames) * ring_channels_, 0.0F),
       scratch_b_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F),
       meter_ring_(output_stage_ ? static_cast<std::size_t>(k_ring_frames) * channels_ : 0U),
-      last_output_frame_(channels_, 0.0F), seek_transition_anchor_(channels_, 0.0F),
-      seek_transition_total_frames_(
-          std::max<std::size_t>(1U, (static_cast<std::size_t>(sample_rate_) * k_seek_transition_ms) / 1000U)) {
+      output_dsp_(channels_, sample_rate_, pull_is_realtime_playback_), crossfade_dsp_(channels_, k_crossfade_frames) {
     if (output_stage_) {
         // pull_scratch_ holds one callback's worth of intermediate before render_output; sized for a
         // generous max block (the callback loops if it ever asks for more). meter_scratch_ is the
@@ -481,7 +475,7 @@ void MonitorEngine::finalize_crossfade() {
     if (xfade_active_) {
         stream_ = std::move(xfade_stream_);
         xfade_active_ = false;
-        xfade_pos_ = 0;
+        crossfade_dsp_.reset();
     }
 }
 
@@ -587,10 +581,10 @@ void MonitorEngine::worker_loop() {
                         failed_.store(false, std::memory_order_relaxed);
                         // The hard cut is a real waveform discontinuity, and until now nothing
                         // bridged it: this branch never bumped seek_generation_, so
-                        // apply_seek_transition left it alone. On its own that is a small step;
+                        // the Rust seek transition left it alone. On its own that is a small step;
                         // downstream of an HpTF cascade the IIR smears it and the outgoing
                         // ring-out crosses the cut. Bumping the generation makes the existing
-                        // k_seek_transition_ms bridge cover the splice, and resetting the
+                        // 10 ms bridge cover the splice, and resetting the
                         // cascade stops the pre-cut tail bleeding into the new stream. Both are
                         // safe here: the callback is parked by the flushing_/in_pop_ handshake
                         // above, exactly as for ring_.clear().
@@ -600,7 +594,7 @@ void MonitorEngine::worker_loop() {
                     } else {
                         xfade_stream_ = std::move(pending_stream_);
                         xfade_active_ = true;
-                        xfade_pos_ = 0;
+                        crossfade_dsp_.reset();
                         ended_.store(false, std::memory_order_relaxed); // incoming re-arms production
                         failed_.store(false, std::memory_order_relaxed);
                     }
@@ -759,6 +753,9 @@ bool MonitorEngine::top_up_ring() {
             return produced;
         }
         std::size_t got = *result;
+        if (got > frames) {
+            std::terminate(); // IRenderStream must not return more frames than requested.
+        }
 
         if (xfade_active_) {
             // Render the incoming stream over the same frames and linearly blend old→new.
@@ -768,18 +765,14 @@ bool MonitorEngine::top_up_ring() {
                 logs_.log(LogLevel::error, "monitor", in_res.error().message);
                 return produced;
             }
-            got = std::min(got, *in_res);
-            for (std::size_t f = 0; f < got; ++f) {
-                const auto p = static_cast<double>(xfade_pos_ + f);
-                const float t = static_cast<float>(std::min(1.0, p / static_cast<double>(k_crossfade_frames)));
-                for (uint32_t c = 0; c < channels_; ++c) {
-                    const std::size_t i = (f * channels_) + c;
-                    scratch_[i] = (scratch_[i] * (1.0F - t)) + (scratch_b_[i] * t);
-                }
+            if (*in_res > frames) {
+                std::terminate();
             }
-            xfade_pos_ += got;
+            got = std::min(got, *in_res);
+            const bool complete = crossfade_dsp_.process(
+                std::span{scratch_}.first(got * channels_), std::span{scratch_b_}.first(got * channels_), got);
             // Finalize when the ramp completes or either stream ran short (end of material).
-            if (xfade_pos_ >= k_crossfade_frames || got < frames) {
+            if (complete || got < frames) {
                 const std::lock_guard<std::mutex> lock(control_mutex_);
                 finalize_crossfade();
             }
@@ -812,6 +805,9 @@ bool MonitorEngine::top_up_ring() {
 }
 
 std::size_t MonitorEngine::pull(std::span<float> out, std::size_t frames) {
+    if (frames > std::numeric_limits<std::size_t>::max() / channels_ || frames * channels_ > out.size()) {
+        std::terminate(); // Device callback contract; reject before consuming the ring (ADR 0005).
+    }
     const std::size_t floats = frames * channels_;
     in_pop_.store(true, std::memory_order_seq_cst);
 
@@ -849,7 +845,7 @@ std::size_t MonitorEngine::pull(std::span<float> out, std::size_t frames) {
 
     // Headphone compensation (HpTF). Position matters in three independent ways:
     //
-    //  * BEFORE apply_seek_transition: that bridge anchors on last_output_frame_, which it
+    //  * BEFORE the Rust seek transition: that bridge anchors on the last emitted frame, which it
     //    captures from `out` itself. Filtering afterwards would leave the anchor holding
     //    pre-HpTF audio while post-HpTF audio is what actually plays, so every seek would step
     //    by the cascade's instantaneous response (several dB on a typical AutoEq profile).
@@ -865,88 +861,30 @@ std::size_t MonitorEngine::pull(std::span<float> out, std::size_t frames) {
     // sample after resume is the immediate successor of the last filtered one and the filter
     // must stay continuous across it. (Seek is the case that does reset; see apply_seek_locked.)
     if (active) {
-        // Mirror apply_seek_transition's own rule: a realtime sink plays the zero-padded
+        // Mirror the Rust seek transition's own rule: a realtime sink plays the zero-padded
         // underrun tail, so the cascade should ring out into it; a push sink enqueues only the
         // produced portion, so the cascade must not advance over frames that are never emitted.
         const std::size_t hptf_frames = pull_is_realtime_playback_ ? frames : std::min(frames, produced_frames);
         hptf_.process(out.data(), hptf_frames);
     }
 
-    apply_seek_transition(out, frames, produced_frames, active);
-
-    // Per-channel peak / RMS over the block (silence included), for the UI meters.
+    std::array<float, k_max_level_channels> peaks{};
+    std::array<float, k_max_level_channels> rms{};
+    output_dsp_.process(out.first(floats),
+                        frames,
+                        produced_frames,
+                        active,
+                        seek_generation_.load(std::memory_order_acquire),
+                        peaks,
+                        rms);
     const std::size_t meter_ch = std::min<std::size_t>(channels_, k_max_level_channels);
     for (std::size_t c = 0; c < meter_ch; ++c) {
-        float peak = 0.0F;
-        double sumsq = 0.0;
-        for (std::size_t f = 0; f < frames; ++f) {
-            const float v = out[(f * channels_) + c];
-            peak = std::max(peak, std::fabs(v));
-            sumsq += static_cast<double>(v) * static_cast<double>(v);
-        }
-        peak_.at(c).store(peak, std::memory_order_relaxed);
-        rms_.at(c).store(frames > 0 ? static_cast<float>(std::sqrt(sumsq / static_cast<double>(frames))) : 0.0F,
-                         std::memory_order_relaxed);
+        peak_.at(c).store(peaks.at(c), std::memory_order_relaxed);
+        rms_.at(c).store(rms.at(c), std::memory_order_relaxed);
     }
 
     in_pop_.store(false, std::memory_order_seq_cst);
     return produced_frames;
-}
-
-void MonitorEngine::apply_seek_transition(std::span<float> out,
-                                          std::size_t frames,
-                                          std::size_t produced_frames,
-                                          bool active) {
-    if (frames == 0 || channels_ == 0) {
-        return;
-    }
-
-    const std::size_t real_frames = std::min(frames, produced_frames);
-    if (!active) {
-        // Paused/flushing callback output is exact silence. Keep the generation unobserved so the
-        // first real post-seek samples still receive a fade-in when playback resumes.
-        std::ranges::fill(last_output_frame_, 0.0F);
-        seek_transition_remaining_frames_ = 0;
-        return;
-    }
-
-    const uint64_t generation = seek_generation_.load(std::memory_order_acquire);
-    if (real_frames > 0 && generation != observed_seek_generation_) {
-        observed_seek_generation_ = generation;
-        seek_transition_remaining_frames_ = seek_transition_total_frames_;
-        if (pull_is_realtime_playback_) {
-            seek_transition_anchor_ = last_output_frame_;
-        } else {
-            // A push sink discards/mutes its old system queue on seek, so its new queue starts from
-            // silence rather than from the last frame that happened to be enqueued far ahead.
-            std::ranges::fill(seek_transition_anchor_, 0.0F);
-        }
-    }
-
-    for (std::size_t frame = 0; frame < real_frames && seek_transition_remaining_frames_ > 0; ++frame) {
-        const std::size_t elapsed = seek_transition_total_frames_ - seek_transition_remaining_frames_;
-        const float mix = seek_transition_total_frames_ <= 1
-                              ? 1.0F
-                              : static_cast<float>(elapsed) / static_cast<float>(seek_transition_total_frames_ - 1U);
-        for (std::size_t channel = 0; channel < channels_; ++channel) {
-            const std::size_t index = (frame * channels_) + channel;
-            out[index] = (seek_transition_anchor_[channel] * (1.0F - mix)) + (out[index] * mix);
-        }
-        --seek_transition_remaining_frames_;
-    }
-
-    // Realtime devices play the silence-padded tail of a short read; push devices enqueue only the
-    // produced portion. Remember the last sample that actually reaches each kind of sink.
-    const std::size_t emitted_frames = pull_is_realtime_playback_ ? frames : real_frames;
-    if (emitted_frames > 0) {
-        const std::size_t last = (emitted_frames - 1U) * channels_;
-        std::copy_n(out.data() + last, channels_, last_output_frame_.data());
-    }
-    if (pull_is_realtime_playback_ && real_frames < frames) {
-        // The device emitted a zero-padded underrun tail, so a partially completed bridge can no
-        // longer continue from its old anchor without creating a second discontinuity.
-        seek_transition_remaining_frames_ = 0;
-    }
 }
 
 std::size_t MonitorEngine::pull_output_stage(std::span<float> out, std::size_t frames) {
@@ -1073,7 +1011,7 @@ bool MonitorEngine::apply_seek_locked(uint64_t frame, std::unique_lock<std::mute
     // Same reasoning, and race-free for the same reason ring_.clear() above is: flushing_ plus the
     // in_pop_ spin has parked the callback, so the worker is the only thread touching this state.
     // Without the reset the pre-seek ring-out would splice across the timeline jump and partially
-    // defeat the k_seek_transition_ms bridge.
+    // defeat the 10 ms bridge.
     hptf_.reset_state();
     flushing_.store(false, std::memory_order_seq_cst);
     return true;

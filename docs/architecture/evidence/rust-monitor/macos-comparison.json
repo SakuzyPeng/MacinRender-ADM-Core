@@ -1,0 +1,28 @@
+{
+  "baseline": "a54fdc3",
+  "passed": true,
+  "crossfade": {
+    "samples": 9365825,
+    "differing_samples": 596251,
+    "max_absolute_error": 5.960464477539063e-08,
+    "max_tolerance_ratio": 0.02179508885160282
+  },
+  "seek_pcm": {
+    "samples": 223756050,
+    "differing_samples": 1922024,
+    "max_absolute_error": 1.1920928955078125e-07,
+    "max_tolerance_ratio": 0.039728514402261855
+  },
+  "combined_levels": {
+    "samples": 308308,
+    "differing_samples": 2334,
+    "max_absolute_error": 1.1920928955078125e-07,
+    "max_tolerance_ratio": 0.034823124644151195
+  },
+  "identical_input_levels": {
+    "samples": 5720,
+    "differing_samples": 0,
+    "max_absolute_error": 0,
+    "max_tolerance_ratio": 0
+  }
+}

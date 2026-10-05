@@ -14,6 +14,7 @@ mod hoa;
 mod hptf;
 mod hrtf;
 mod meter;
+mod monitor;
 mod output_dsp;
 mod pcm_mix;
 mod resampler;
