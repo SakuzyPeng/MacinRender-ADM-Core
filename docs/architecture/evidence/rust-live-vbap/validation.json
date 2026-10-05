@@ -1,0 +1,237 @@
+{
+  "schema": "mradm.rust-live-vbap-migration.v1",
+  "date": "2026-10-05",
+  "baseline_commit": "577fe2d107b7004933597484aec1a6696b9a5da4",
+  "implementation_commit": null,
+  "scope": [
+    "Rust-owned spatial and level ramp state in generation order",
+    "One batched render call over borrowed PCM planes and ordered numerical commands",
+    "Whole-frame validation before PCM/state/control commit; deferred successful diagnostics"
+  ],
+  "public_c_abi_changed": false,
+  "new_third_party_dependencies": [],
+  "contracts": {
+    "ramp": "float (target-current)/N; emit before step; snap after N steps; repeat targets restart",
+    "independent_deadlines": true,
+    "same_offset_order_preserved": true,
+    "source_accumulation_order_preserved": true,
+    "pcm_product_order": "(input * spatial_gain) * level",
+    "output_mode": "Clear requested span then accumulate; leave trailing capacity untouched",
+    "no_signal": "Skip multiply but advance both ramps sample by sample",
+    "zero_frames": "No ramp advance; explicit internal initialization still applies",
+    "eof_tail_frames": 0,
+    "recoverable_errors_preserve_output_and_numeric_and_control_state": true,
+    "failed_frame_does_not_consume_diagnostics": true,
+    "policy_expanded_coordinates_not_restricted_to_producer_cube": true,
+    "private_nonfinite_pcm_propagation_retained": true,
+    "first_kernel_and_ffi_call_allocations": 0,
+    "runtime_kernel_locks_or_io": false,
+    "cpp_worker_preparation_allocation": "Allowed to grow/reuse temporary commands, coefficients, semantics and diagnostics; no whole-renderer allocation guarantee"
+  },
+  "validation": {
+    "macos_debug_full": {
+      "passed": 63,
+      "total": 63
+    },
+    "macos_release_focused": {
+      "passed": 9,
+      "total": 9
+    },
+    "windows_canonical_release_full": {
+      "passed": 62,
+      "total": 62
+    },
+    "rust_release_workspace_tests": 128,
+    "live_vbap_kernel_tests": 6,
+    "allocation_tests": 13,
+    "ffi_tests": 22,
+    "sample_accurate_public_api_bit_comparison": true,
+    "late_invalid_route_and_configuration_recovery": true,
+    "generation_zero_empty_reset_isolation_and_moves": true,
+    "rust_fmt": true,
+    "rust_clippy_deny_warnings": true,
+    "changed_cpp_format_tidy_cppcheck": true,
+    "reference_cppcheck": true,
+    "licenses_sbom": true,
+    "existing_cpp_advisories": [
+      "Unmodified render_reference_frame_ramp function size",
+      "Unmodified nested conditional in render_reference_frame_ramp"
+    ]
+  },
+  "numerical_comparison": {
+    "float_values_per_platform": 3971688,
+    "exact_counters_per_platform": 6760,
+    "pcm_tolerance": "2e-6 + 2e-6 * abs(reference)",
+    "states_and_representable_routes": "bit identical",
+    "macos": {
+      "baseline": "577fe2d",
+      "passed": true,
+      "numerical_pcm": {
+        "values": 3493448,
+        "differing_values": 5981,
+        "max_absolute_error": 2.384185791015625e-07
+      },
+      "exact_state": {
+        "values": 101400,
+        "differing_values": 0,
+        "max_absolute_error": 0
+      },
+      "renderer_pcm": {
+        "values": 376840,
+        "differing_values": 0,
+        "max_absolute_error": 0
+      },
+      "exact_counters": 6760
+    },
+    "windows": {
+      "baseline": "577fe2d",
+      "passed": true,
+      "numerical_pcm": {
+        "values": 3493448,
+        "differing_values": 0,
+        "max_absolute_error": 0
+      },
+      "exact_state": {
+        "values": 101400,
+        "differing_values": 0,
+        "max_absolute_error": 0
+      },
+      "renderer_pcm": {
+        "values": 376840,
+        "differing_values": 0,
+        "max_absolute_error": 0
+      },
+      "exact_counters": 6760
+    }
+  },
+  "configuration": {
+    "rust": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "macos": {
+      "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+      "profiles": [
+        "Debug",
+        "Release"
+      ],
+      "MR_ADM_STRICT_FP": false,
+      "MR_ADM_ENABLE_SOFA": true,
+      "legacy_reference_switches": false,
+      "build_method": "Standard existing CMake Debug/Release builds after libadm commit 283c54d; no source overlays or manual artifact replay",
+      "shared_workspace_validated_after_libadm_completion": true
+    },
+    "windows": {
+      "profile": "canonical Release",
+      "platform": "Windows-10-10.0.26100-SP0",
+      "compiler": "MSVC 19.51.36257 x64",
+      "git_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "MR_ADM_ENABLE_SOFA": false,
+      "MR_ADM_ENABLE_IAMF": false,
+      "MR_ADM_STRICT_FP": false,
+      "legacy_reference_switches": false,
+      "workspace": "Existing dirty checkout retained; fresh shared-source inspection matched all relevant files; no resynchronization needed",
+      "source_hashes_verified_before_and_after_build": 42,
+      "sources_match_shared_workspace": true,
+      "source_overlay_commit": null
+    },
+    "cargo_lock_sha256": "d9a1297de208cfd794e64299a3ca95cc8b966d9e085effec1b770702973560a6"
+  },
+  "abi": {
+    "public_adm_exports": 139,
+    "native_symbol_sets_equal": true,
+    "unchanged_from_baseline": true,
+    "macos_private_rust_exports": [],
+    "windows_private_rust_exports": [],
+    "windows_incidental_cpp_exports": 1984
+  },
+  "ci": {
+    "status": "pending"
+  },
+  "source_sha256": {
+    "CMakeLists.txt": "f6ccc710993a902bbe28da928356f4b6f0273de9a4590959454466b50627b2b0",
+    "rust/crates/mradm-dsp/src/lib.rs": "b287faffe64198e5ccfd69240f7a9d07a0571debf02d1a9325d97b0a888b54a1",
+    "rust/crates/mradm-dsp/src/live_vbap.rs": "8e248b83ed2ee280fedbf85250b6f078bb1740e9dbdd9f0d8feedd4260b83a9d",
+    "rust/crates/mradm-dsp/tests/live_vbap.rs": "1fc0991af484c46db3922e9238bd255c189f4481680291240b0b752fb4230a87",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "ec56b62d99b0613322930cfd2dac4aa9f7a3d902d7decad557acf6cf5528db8b",
+    "rust/crates/mradm-ffi/src/lib.rs": "be4dbc6dacd12e826cf981b1f2f85f7f1c4101efd4121e14be45b65fda2ab293",
+    "rust/crates/mradm-ffi/src/live_vbap.rs": "73cac0495b0dd3e9ed4bdfba3b74788e54a9cc7125a4159e1abebd062af64285",
+    "src/adm_dsp/live_vbap.h": "6f8e81f329cc73c009300b491329e747f625c04625b30de86f0bfb868563c0cf",
+    "src/adm_dsp/live_vbap_ffi.h": "f922032e20276f2c6ed1b87953b4d9b2cf80abf9b09a23713aab84fd647dfc8e",
+    "src/adm_render_vbap/live_vbap_renderer.cpp": "432e30b03356a58cd76b385c0930344ff6d956fc33eac8830958c760e961d9c3",
+    "tests/reference/live_vbap/legacy.h": "6fabdfb1c6673ea0c5042f8cb483f9c002787d64b29f05369408b4ad0a504a05",
+    "tests/reference/live_vbap/provenance.json": "8a2f3c50cb6e232c90bb44e7d93e46b9c3383d700c4ee3ae73cb063bac5b16bd",
+    "tests/reference/live_vbap/ramps.h": "80bad4f99cfa886ff1de00863b20f245e656796316526165a7a2d5ef217a06fc",
+    "tests/unit/live_vbap_rust_test.cpp": "aeb834ff7fca942a5004beede34b39f1894087b1f5bedb38eaa65f35a0d2a0d3",
+    "tests/unit/scene_stream_c_api_test.cpp": "fc05078ff567abfd6434e8a0b60799397723f9e6440610c0ec51d26f06cb2975"
+  },
+  "reference_provenance": {
+    "baseline_commit": "577fe2d107b7004933597484aec1a6696b9a5da4",
+    "source_sha256": {
+      "src/adm_render_vbap/live_vbap_renderer.cpp": "8d36741c667bfedfe4002e8fa794931e7c4ed5605da17a3ba395498cb246153b"
+    },
+    "adaptations": [
+      "Isolate renderer in mradm::live_vbap_legacy for test-only compilation",
+      "Retain existing unmigrated semantic/panner helpers",
+      "Extract numeric ramps separately for exact state comparison"
+    ],
+    "reference_sha256": {
+      "legacy.h": "6fabdfb1c6673ea0c5042f8cb483f9c002787d64b29f05369408b4ad0a504a05",
+      "ramps.h": "80bad4f99cfa886ff1de00863b20f245e656796316526165a7a2d5ef217a06fc"
+    }
+  },
+  "limitations": [
+    "No cross-platform bit-identity claim",
+    "No performance/RSS claim",
+    "C++ semantic preparation can allocate; OOM/panic rollback not promised"
+  ],
+  "phase": "final_validation",
+  "integration_base_commit": "283c54dda9714ef0c053845086740bd0ca44e6d9",
+  "integration_source_sha256": {
+    "cmake/MRDependencies.cmake": "971841145a64d9c7c02aac618e819b2360362214856b9a03adf826fa689fe308",
+    "cmake/MRDependencyRecord.cmake": "c10197e74b097c3d6dd593f2b4bb3eab76cfd46ee1bd3e63808ee700aba1dbd1",
+    "include/adm/io.h": "ba4a4d0681cf942f860016e986659b62c019f5e4091fe96194de79374749d15c",
+    "include/adm/scene.h": "cf029a2335610afb28b313490cd7fdeba1fae5f8a2d97099c67bf70003db61a4",
+    "rust/Cargo.lock": "d9a1297de208cfd794e64299a3ca95cc8b966d9e085effec1b770702973560a6",
+    "rust/Cargo.toml": "699e5483db8e4c2d62e3b15c560a31ba35354bea49a727e1a15f3d545ee403b5",
+    "rust/crates/mradm-adm/Cargo.toml": "18c7b2315f7cd79d74dc9c259ac25e6d64f9d8c24d724a8061ded3738199499b",
+    "rust/crates/mradm-adm/assets/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "rust/crates/mradm-adm/assets/NOTICE.txt": "48894dd975190fb7c8e8f7dfde0e09ec094ee38c86ede49327ee6de7cab88da7",
+    "rust/crates/mradm-adm/assets/common_definitions.xml": "0e621e68f21b3f29edc0028be26b975eee74b82a643f3b13799b38b18245dafa",
+    "rust/crates/mradm-adm/assets/manifest.json": "139cf6384a6e7166b97addc46e597dad8ad91f9816071e2d7bd76151ad641083",
+    "rust/crates/mradm-adm/src/document.rs": "3651891c85a570ac161d5d99563f3fbd6cb2047228a915b78b1dc05a9d526160",
+    "rust/crates/mradm-adm/src/generate.rs": "98683983e8cebc0f5ec305cba7e762713844b38128ac0e08d065f2203bf529b4",
+    "rust/crates/mradm-adm/src/lib.rs": "9c77aba0e19b4475400d63be641aa2fb08f1cfe298b7a908176356ad693f06b2",
+    "rust/crates/mradm-adm/src/patch.rs": "997a45209a6c42a2b10e62395a4e57b3d0fb94656f64352fc01611f9bbdbb129",
+    "rust/crates/mradm-adm/src/project.rs": "91ff6ccb1d09641f6c786b9bb9f1f2e0741c68705da7850af78e899379f83d50",
+    "rust/crates/mradm-adm/src/records.rs": "a8e65fe729673b698b9e9942833ff6a86440dcb661d183c7bfa696352551f99b",
+    "rust/crates/mradm-adm/src/xml.rs": "68797e37c80085a4c797f7de08d54db7ac6d423eee06dceedeebcb00edf16ae2",
+    "rust/crates/mradm-adm/tests/metadata.rs": "846d9fac15ad0eac92c9efbc35c882e3348285b2d3d1e2d45f2732bb1a72fffb",
+    "rust/crates/mradm-ffi/Cargo.toml": "03d581bf180df6cc924adca0790a30a20cf8fb341cfa2a455797a77a157278bf",
+    "rust/crates/mradm-ffi/src/adm.rs": "262d7f8a4a007ea8602759730f29bf004477dc6aef76f0a613adda0e543ed78c",
+    "src/adm_cli/inspect_command.cpp": "4e58734ae436f837252b959a8c429f26de9081f14f9256b88ec02cff3d85e35c",
+    "src/adm_engine/wav_output.cpp": "a908da65ee02c3af27e20b6de3a3d046a47adc97fdf30e9df532d4bd58006007",
+    "src/adm_io/scene_importer.cpp": "00c6e40e6c2130d2f16d9bf931e0478f0495ff3d7909c946093d58e880c43b33",
+    "src/adm_metadata/adm_ffi.h": "7def5360af2bf1a3b85b25abbc32dc24e1c0fd1f3d198ab20283d782a7077639",
+    "src/adm_metadata/metadata.cpp": "c5e4b3a459e8f74fe6be3956a40715f31d487d1917fe24062c3300f0c0a84b35",
+    "src/adm_metadata/metadata.h": "d8bff73b251c87ff8646745088eb600015d4aa4337870966c41da14ee2909b31"
+  },
+  "interim_validation_notes": {
+    "superseded_by_shared_workspace_validation": true,
+    "details": [
+      "Concurrent libadm manifest edits temporarily broke --locked checks until their lockfile update",
+      "One Windows resync accidentally included the concurrent mod adm declaration; restored only that transferred line to the migration snapshot, then rebuilt and passed the full suite"
+    ]
+  },
+  "local_log_sha256": {
+    "shared-build-debug.log": "c59bbad3f2a85a233c7eabf1f34203e2ddc4e7d6161077d46f8b773c4b894bc2",
+    "shared-debug-ctest.log": "beb074f69932a99a180ae5ee4dc6a566fb93c51e12752b5ccbb0a9f0323e79c7",
+    "shared-build-release.log": "c7d5baf8c44ab3d96bab4e4657f82e16a22d8c239e1d82a5a0702ec1b696180f",
+    "shared-numerical.log": "699ad65fe2367ce341c2f1c3ec2da8ec2ac275cc60a9556d7a41588335ae14fd",
+    "shared-release-focused.log": "055e5c391e10bb29d43ef96674cf1071e00d90845cf8489d0066a72ea41e6a5a",
+    "shared-rust-release.log": "f9fcdc856a2a09a7cc5e00888e2bf98c62975073515189be73e0e4932482c612",
+    "shared-rust-quality.log": "4247910e580c71712483cfbe32bc1963074086f47261e26d6dde1b1d54a712a4",
+    "shared-cpp-quality.log": "6d52e7abe316ad4b4ec510ca9aa2c5691bc593e6695882cc0d32b0f6bff28727",
+    "shared-licenses.log": "8d7c4116bccdc21ebfaf0c7a649ec5eb60ed36ab5cd0e90bdbdc7b03172b39fa",
+    "reference-quality.log": "4e2d733737ea54ad4b7da07d31078f970e4e9856509062728b8b5e78f2b31e6e",
+    "shared-windows-run.log": "fc1ca8681e249d1ffd8741264257a1267aad8634967ffcf13a32f0248f913108"
+  }
+}

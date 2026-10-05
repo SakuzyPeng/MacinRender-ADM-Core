@@ -41,6 +41,9 @@ diffuse 历史及 LFE 分离/计量解码；C++ 保留语义和调度，并补�
 [Monitor DSP 迁移](RUST_MONITOR_DSP_MIGRATION.md)接管后端切换淡化、seek 消点击过渡及
 Peak/RMS；worker 与回调分别独占数值实例，C++ 保留队列、设备和控制调度。
 
+[Live VBAP 迁移](RUST_LIVE_VBAP_MIGRATION.md)接管 Live Scene 的声像/电平独立渐变与 PCM 混音，
+按整帧提交数值命令，C++ 保留语义与路由并补齐可恢复错误的事务边界。
+
 内置 KEMAR、原型和格型系数及 HOA 矩阵是约 1.7 MiB 的已提交二进制资源。`assets/manifest.json` 记录尺寸、来源和 SHA-256；`assets/NOTICE.txt` 保留 ISC/MIT 声明及数据提供者归属。正常构建不从 SAF 提取数据。
 
 ## 2. 行为边界
