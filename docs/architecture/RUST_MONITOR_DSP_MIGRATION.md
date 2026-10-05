@@ -70,7 +70,11 @@ Monitor 捕获回归增加整次回调计量、零帧计量、完整 2048 帧权
 本地 macOS Debug 全套 62/62、Release 相关回归 16/16，Windows canonical Release 全套 61/61；
 Rust Release workspace 106 项通过。Rust fmt/Clippy、改动 C++ 格式/clang-tidy/cppcheck、
 冻结参考及许可证/SBOM 检查通过。两个原生平台保留原有 139 个公开 `adm_*` 入口，私有 Rust 符号不外泄。
-最终提交和 CI 状态由[机器可读验收记录](evidence/rust-monitor/validation.json)记录。
+[最终三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37309535034)
+验证 `04e4e81`：macOS Debug 62/62、Linux Debug 61/61、Windows Debug 61/61，全部通过。
+生产实现提交为 `d70ac2e`；`04e4e81` 仅补齐比较测试的括号及指纹，两端 Release 比较已复查。
+先前启动的 CI 主动取消，以最终测试源码重新验收。最终验收提交仅更新文档和证据。
+完整记录见[机器可读验收记录](evidence/rust-monitor/validation.json)。
 
 Windows 复用既有 dirty 工作树和 canonical Release（SOFA ON，旧库参考开关 OFF）。同步前核验
 文件指纹并备份原字节，Monitor/realtime fixture 的两份已有差异通过三方合并保留；该原生
