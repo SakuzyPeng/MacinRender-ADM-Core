@@ -342,6 +342,8 @@ HOA3 coefficient generation, interpolation, diffuse state, LFE separation and me
 
 Monitor backend crossfades, seek transitions and Peak/RMS also keep their numerical state in Rust. Worker and callback instances remain independent; C++ retains device, queue and control scheduling. See the [Rust Monitor DSP migration](docs/architecture/RUST_MONITOR_DSP_MIGRATION.md).
 
+Live Scene VBAP mixing and independent spatial/level ramp state also run in Rust. C++ prepares each complete frame before committing, preserving state and output on recoverable errors. See the [Rust Live VBAP migration](docs/architecture/RUST_LIVE_VBAP_MIGRATION.md).
+
 System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
 
 ```bash

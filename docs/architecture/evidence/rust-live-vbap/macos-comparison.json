@@ -1,0 +1,20 @@
+{
+  "baseline": "577fe2d",
+  "passed": true,
+  "numerical_pcm": {
+    "values": 3493448,
+    "differing_values": 5981,
+    "max_absolute_error": 2.384185791015625e-07
+  },
+  "exact_state": {
+    "values": 101400,
+    "differing_values": 0,
+    "max_absolute_error": 0
+  },
+  "renderer_pcm": {
+    "values": 376840,
+    "differing_values": 0,
+    "max_absolute_error": 0
+  },
+  "exact_counters": 6760
+}

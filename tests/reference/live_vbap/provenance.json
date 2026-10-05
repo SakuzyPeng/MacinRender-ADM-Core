@@ -1,0 +1,15 @@
+{
+  "baseline_commit": "577fe2d107b7004933597484aec1a6696b9a5da4",
+  "source_sha256": {
+    "src/adm_render_vbap/live_vbap_renderer.cpp": "8d36741c667bfedfe4002e8fa794931e7c4ed5605da17a3ba395498cb246153b"
+  },
+  "adaptations": [
+    "Isolate renderer in mradm::live_vbap_legacy for test-only compilation",
+    "Retain existing unmigrated semantic/panner helpers",
+    "Extract numeric ramps separately for exact state comparison"
+  ],
+  "reference_sha256": {
+    "legacy.h": "6fabdfb1c6673ea0c5042f8cb483f9c002787d64b29f05369408b4ad0a504a05",
+    "ramps.h": "80bad4f99cfa886ff1de00863b20f245e656796316526165a7a2d5ef217a06fc"
+  }
+}
