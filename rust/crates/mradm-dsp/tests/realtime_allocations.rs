@@ -600,3 +600,59 @@ fn prepared_monitor_first_process_reset_and_rejection_do_not_allocate() {
     }
     assert_eq!(COUNT.with(|c| c.replace(None).unwrap()), 0);
 }
+
+#[test]
+fn prepared_live_vbap_events_first_call_reset_and_rejections_do_not_allocate() {
+    use mradm_dsp::live_vbap::{Command, Mixer};
+    let mut m = Mixer::new(2, 2).unwrap();
+    let initial = [
+        Command {
+            element: 0,
+            fields: 3,
+            level: 1.,
+            ..Command::default()
+        },
+        Command {
+            element: 1,
+            fields: 3,
+            level: 0.5,
+            ..Command::default()
+        },
+    ];
+    let events = [Command {
+        offset: 1,
+        duration: 20,
+        fields: 3,
+        level: 0.25,
+        ..Command::default()
+    }];
+    let input = [0.25; 32];
+    let mut output = [0.; 64];
+    let mut snapshot = [0.; 6];
+    COUNT.with(|c| c.set(Some(0)));
+    for _ in 0..4 {
+        m.process(
+            32,
+            [Some(input.as_slice()), None].into_iter(),
+            &initial,
+            &events,
+            &[1., 0.],
+            &mut output,
+        )
+        .unwrap();
+        m.snapshot(0, &mut snapshot).unwrap();
+        assert!(
+            m.process(
+                1,
+                [None, None].into_iter(),
+                &initial,
+                &events,
+                &[1., 0.],
+                &mut output
+            )
+            .is_err()
+        );
+        m.reset();
+    }
+    assert_eq!(COUNT.with(|c| c.replace(None).unwrap()), 0);
+}
