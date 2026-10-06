@@ -83,6 +83,9 @@ jobs:
       - name: License full-coverage check
         run: scripts/quality/check-licenses.sh --build-dir build/release --require-full
 
+      - name: C ABI exports
+        run: python3 scripts/quality/check-capi-exports.py "build/release/libmradm_capi.$([ "$RUNNER_OS" = macOS ] && echo dylib || echo so)"
+
       - name: Smoke
         run: |
           "${{ matrix.binary }}" --version
@@ -175,6 +178,9 @@ jobs:
 
       - name: License full-coverage check
         run: scripts/quality/check-licenses.sh --build-dir build/release --require-full
+
+      - name: C ABI exports
+        run: python3 scripts/quality/check-capi-exports.py "build/release/libmradm_capi.$([ "$RUNNER_OS" = macOS ] && echo dylib || echo so)"
 
       - name: Smoke
         run: |
@@ -298,6 +304,10 @@ jobs:
             mr_adm_flac_io_smoke_tests mr_adm_opus_mka_smoke_tests mr_adm_cli_smoke_tests ^
             mr_adm_ear_fixture_tests mr_adm_vbap_smoke_tests mr_adm_hoa_encode_fixture_tests ^
             mr_adm_binaural_fixture_tests mr_adm_sofa_fixture_tests mr_adm_loudness_fixture_tests
+
+      - name: C ABI exports
+        shell: pwsh
+        run: python scripts/quality/check-capi-exports.py build/windows/mradm_capi.dll
 
       - name: Smoke
         shell: pwsh

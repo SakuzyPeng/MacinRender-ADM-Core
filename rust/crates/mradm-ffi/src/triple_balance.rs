@@ -67,24 +67,38 @@ unsafe fn create<T>(out: *mut *mut T, make: impl FnOnce() -> Result<T>) -> Resul
     }
     Ok(())
 }
-macro_rules! destroy {
-    ($name:ident,$ty:ty) => {
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $name(p: *mut $ty) {
-            if !p.is_null() {
-                unsafe {
-                    drop(Box::from_raw(p));
-                }
-            }
+/// 释放 `Box::into_raw` 交出的句柄；空指针是无操作。
+unsafe fn release<T>(p: *mut T) {
+    if !p.is_null() {
+        unsafe {
+            drop(Box::from_raw(p));
         }
-    };
+    }
 }
-destroy!(mradm_dsp_tb_plan_destroy, Arc<session::Plan>);
-destroy!(mradm_dsp_tb_destroy, session::Session);
-destroy!(mradm_dsp_tb_snapshot_destroy, session::Snapshot);
-destroy!(mradm_dsp_tb_object_destroy, processor::Processor);
-destroy!(mradm_dsp_tb_object_snapshot_destroy, processor::Snapshot);
-destroy!(mradm_dsp_tb_filter_destroy, processor::Decorrelator);
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_tb_plan_destroy(p: *mut Arc<session::Plan>) {
+    unsafe { release(p) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_tb_destroy(p: *mut session::Session) {
+    unsafe { release(p) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_tb_snapshot_destroy(p: *mut session::Snapshot) {
+    unsafe { release(p) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_tb_object_destroy(p: *mut processor::Processor) {
+    unsafe { release(p) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_tb_object_snapshot_destroy(p: *mut processor::Snapshot) {
+    unsafe { release(p) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_tb_filter_destroy(p: *mut processor::Decorrelator) {
+    unsafe { release(p) }
+}
 #[repr(C)]
 pub struct Query {
     position: Position,
@@ -234,7 +248,7 @@ pub unsafe extern "C" fn mradm_dsp_tb_plan_create(
     layout: u32,
     rate: u32,
     total: u64,
-    rows: *const session::RowInput,
+    rows: *const session::TbRowInput,
     n: usize,
     events: *const Event,
     en: usize,
@@ -581,7 +595,7 @@ pub unsafe extern "C" fn mradm_dsp_tb_filter_process(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_tb_object_status(
     p: *const processor::Processor,
-    out: *mut processor::Status,
+    out: *mut processor::TbStatus,
     message: *mut u8,
     capacity: usize,
 ) -> i32 {
@@ -611,7 +625,7 @@ mod tests {
                 },
                 size: 0.25,
             }];
-            let row = session::RowInput {
+            let row = session::TbRowInput {
                 input: 0,
                 event_offset: 0,
                 event_count: 1,

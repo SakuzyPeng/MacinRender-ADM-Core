@@ -221,7 +221,7 @@ impl Default for State {
 /// Private diagnostic query used to verify event, quantization and lifecycle decisions.
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Status {
+pub struct TbStatus {
     pub control: u64,
     pub next_event: usize,
     pub pending: usize,
@@ -476,9 +476,9 @@ impl Processor {
         s.previous_point = point;
         s.control += 512;
     }
-    pub fn status(&self) -> Status {
+    pub fn status(&self) -> TbStatus {
         let s = &self.state;
-        Status {
+        TbStatus {
             control: s.control,
             next_event: s.next,
             pending: s.pending_frames,

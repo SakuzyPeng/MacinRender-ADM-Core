@@ -689,12 +689,25 @@ if(MR_ADM_BUILD_CAPI_BUNDLE)
         OUTPUT_NAME mradm_capi
         VERSION   ${PROJECT_VERSION}
         SOVERSION ${PROJECT_VERSION_MAJOR}
-        WINDOWS_EXPORT_ALL_SYMBOLS ON
     )
     target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderCommon)
     # Keep Rust's allocator/panic machinery and every private DSP symbol inside
     # this DSO. Consumers continue to see only the established adm_* C boundary.
-    if(APPLE)
+    # scripts/quality/check-capi-exports.py verifies the result on every platform.
+    if(WIN32)
+        find_package(Python3 REQUIRED COMPONENTS Interpreter)
+        set(_mr_capi_def "${CMAKE_CURRENT_BINARY_DIR}/generated/mradm_capi.def")
+        add_custom_command(
+            OUTPUT "${_mr_capi_def}"
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality/check-capi-exports.py"
+                --write-def "${_mr_capi_def}"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/adm/c_api.h"
+                "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality/check-capi-exports.py"
+            COMMENT "Generating mradm_capi.def from c_api.h"
+            VERBATIM
+        )
+        target_sources(mradm_capi_bundle PRIVATE "${_mr_capi_def}")
+    elseif(APPLE)
         target_link_options(mradm_capi_bundle PRIVATE
             "LINKER:-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/cmake/mradm-capi.exports")
     elseif(UNIX)

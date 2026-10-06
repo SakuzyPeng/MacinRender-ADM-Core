@@ -209,8 +209,8 @@ Rust/C++ 边界规则：
 
 - 方向是 **C++ 调 Rust**（ADR 0008 决策三）；Rust 不实现 `IRenderer` / `IRenderStream` 等 STL 接口
 - FFI 用显式长度缓冲、opaque 句柄、调用方提供的错误消息缓冲；状态码对应 `adm::ErrorCode`；句柄由分配侧配对销毁；panic 不穿过 C 边界
-- C++ 侧的私有 FFI 头（`src/adm_dsp/*.h`、`src/adm_metadata/adm_ffi.h`、`src/adm_audio/wav_ffi.h`）是**手写**的，改 Rust 签名必须同步修改；Rust 类型与这些头不得出现在 `include/adm/*`
-- 共享 C ABI bundle 只导出 `adm_*`（当前 139 个）；Rust 分配器、panic 入口与私有 `mradm_*` 符号不得外泄
+- C++ 侧的私有 FFI 头（`src/adm_dsp/*_ffi.h`、`src/adm_metadata/adm_ffi.h`、`src/adm_audio/wav_ffi.h`，纯 C、`extern "C"` 由 `__cplusplus` 守护；C++ 包装另放 `scene_math.h` 等）是**手写**的，改 Rust 签名必须同步修改，并跑 `cmake --build build/debug --target mr_adm_ffi_header_check`（需 `cargo install cbindgen --locked --version 0.29.2`；比较导出符号、签名与 `#[repr(C)]` 字段，quality CI 同样执行）。被签名引用的 `#[repr(C)]` 类型名在 workspace 内必须唯一（cbindgen 按名字合并）。Rust 类型与这些头不得出现在 `include/adm/*`
+- 共享 C ABI bundle 只导出 `c_api.h` 声明的 `adm_*`（当前 139 个；Windows 用从 `c_api.h` 生成的 `.def`）；Rust 分配器、panic 入口与私有 `mradm_*` 符号不得外泄，`scripts/quality/check-capi-exports.py <lib>` 在 ci/release 校验
 - 新的 Rust 依赖必须锁定精确版本、关闭不需要的 features，并登记到许可证清单/SBOM（`scripts/quality/check-licenses.sh` 会校验 Cargo 依赖）
 - 迁移批次的惯例：先保留旧 C++ 实现作对照（`tests/reference/*` + `provenance.json`，或 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关），记录验收到 `docs/architecture/RUST_*_MIGRATION.md` 与 `evidence/`；**禁止**把旧实现当运行时静默回退
 
@@ -294,7 +294,7 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 
 - `.github/workflows/ci.yml` — PR/push main：macOS + Linux + Windows debug（均安装 Rust 1.98.0，带 Cargo 缓存），FLAC/Opus 均 vendored；Windows job 用 vcpkg Boost（libear 依赖）；macOS/Linux 构建后跑 `check-licenses.sh --build-dir build/debug`，新增依赖未登记会让 PR 失败
 - `.github/workflows/consistency.yml` — push main / manual：记录跨平台 PCM 差异，门禁输入完整性与同进程重复性（逐位一致属二期）
-- `.github/workflows/quality.yml` — PR 跑 `check-changed.sh`；push main / manual full 跑 `check-all.sh`；只在 macOS
+- `.github/workflows/quality.yml` — 所有触发跑 Rust fmt/clippy 与 FFI 头校验；PR 跑 `check-changed.sh`；push main / manual full 跑 `check-all.sh`；只在 macOS
 - `.github/workflows/windows-bringup.yml` — 手动触发的 Windows MSVC Release 探针构建（vcpkg Boost）
 - `.github/workflows/release.yml` — tag `v*` 或手动触发：macOS CLI `.tar.gz`、Linux CLI `.AppImage`、Windows CLI `.zip`，外加 macOS/Windows GUI 包（`MacinRender-Gui-*`，经 `scripts/release/package-*.sh` + smoke 脚本）
 - `.github/workflows/iamf-bridge-prebuild.yml` — 预构建 AOM iamf-tools bridge SDK；`cache-maintenance.yml` — FetchContent/ccache 缓存维护

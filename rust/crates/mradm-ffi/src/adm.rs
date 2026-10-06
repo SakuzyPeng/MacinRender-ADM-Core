@@ -248,7 +248,7 @@ pub unsafe extern "C" fn mradm_adm_patch(
 pub unsafe extern "C" fn mradm_adm_generate(
     kind: u32,
     name: Text,
-    speakers: *const Speaker,
+    speakers: *const AdmSpeaker,
     labels: *const Text,
     count: usize,
     output: *mut *mut Buffer,

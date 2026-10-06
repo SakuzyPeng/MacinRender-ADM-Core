@@ -6,7 +6,7 @@ pub const LEVEL: u32 = 2;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
-pub struct Command {
+pub struct VbapCommand {
     pub element: u32,
     pub offset: u32,
     pub duration: u32,
@@ -18,14 +18,14 @@ pub struct Command {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Status {
+pub struct VbapStatus {
     pub current_level: f32,
     pub target_level: f32,
     pub level_step: f32,
     pub level_remaining: u32,
     pub pan_remaining: u32,
 }
-impl Default for Status {
+impl Default for VbapStatus {
     fn default() -> Self {
         Self {
             current_level: 1.,
@@ -46,7 +46,7 @@ pub struct Mixer {
     current: Vec<f32>,
     target: Vec<f32>,
     steps: Vec<f32>,
-    states: Vec<Status>,
+    states: Vec<VbapStatus>,
 }
 impl Mixer {
     pub fn new(elements: u32, channels: u32) -> Result<Self> {
@@ -55,7 +55,7 @@ impl Mixer {
         let count = elements.checked_mul(channels).ok_or_else(invalid)?;
         if channels == 0
             || count > isize::MAX as usize / size_of::<f32>()
-            || elements > isize::MAX as usize / size_of::<Status>()
+            || elements > isize::MAX as usize / size_of::<VbapStatus>()
         {
             return Err(invalid());
         }
@@ -64,17 +64,17 @@ impl Mixer {
             current: vec![0.; count],
             target: vec![0.; count],
             steps: vec![0.; count],
-            states: vec![Status::default(); elements],
+            states: vec![VbapStatus::default(); elements],
         })
     }
     pub fn reset(&mut self) {
         self.current.fill(0.);
         self.target.fill(0.);
         self.steps.fill(0.);
-        self.states.fill(Status::default());
+        self.states.fill(VbapStatus::default());
     }
     /// Private diagnostic copy used to compare exact ramp states, never called per sample in production.
-    pub fn snapshot(&self, element: u32, gains: &mut [f32]) -> Result<Status> {
+    pub fn snapshot(&self, element: u32, gains: &mut [f32]) -> Result<VbapStatus> {
         let element = element as usize;
         if element >= self.states.len()
             || gains.len() != self.channels.checked_mul(3).ok_or_else(invalid)?
@@ -93,7 +93,7 @@ impl Mixer {
     }
     fn validate_command(
         &self,
-        c: &Command,
+        c: &VbapCommand,
         coefficients: &[f32],
         frames: u32,
         initial: bool,
@@ -121,8 +121,8 @@ impl Mixer {
         &mut self,
         frames: u32,
         planes: I,
-        initial: &[Command],
-        events: &[Command],
+        initial: &[VbapCommand],
+        events: &[VbapCommand],
         coefficients: &[f32],
         output: &mut [f32],
     ) -> Result<()>
@@ -170,7 +170,7 @@ impl Mixer {
         self.mix(planes, start, frames_usize, output);
         Ok(())
     }
-    fn apply(&mut self, c: &Command, coefficients: &[f32]) {
+    fn apply(&mut self, c: &VbapCommand, coefficients: &[f32]) {
         let element = c.element as usize;
         let state = &mut self.states[element];
         if c.fields & LEVEL != 0 {

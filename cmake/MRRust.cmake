@@ -73,3 +73,15 @@ add_custom_target(mr_adm_rust_quality
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/rust"
     USES_TERMINAL
 )
+
+# Hand-written private FFI headers vs. the Rust exports, via a throwaway cbindgen header.
+# Requires the pinned cbindgen (see scripts/quality/check-ffi-headers.py).
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_custom_target(mr_adm_ffi_header_check
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality/check-ffi-headers.py"
+            --output "${CMAKE_CURRENT_BINARY_DIR}/ffi-check/mradm_ffi.h"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        USES_TERMINAL
+    )
+endif()

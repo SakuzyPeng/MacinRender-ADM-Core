@@ -494,7 +494,7 @@ fn triple_balance_first_process_controls_and_existing_snapshots_do_not_allocate(
     use mradm_dsp::triple_balance::{
         Event, Layout, Position,
         processor::{Processor, Track},
-        session::{Plan, RowInput, Session},
+        session::{Plan, Session, TbRowInput},
     };
     use std::sync::Arc;
     let events = [
@@ -517,7 +517,7 @@ fn triple_balance_first_process_controls_and_existing_snapshots_do_not_allocate(
             size: 0.,
         },
     ];
-    let row = RowInput {
+    let row = TbRowInput {
         input: 0,
         event_offset: 0,
         event_count: 2,
@@ -716,28 +716,28 @@ fn prepared_monitor_first_process_reset_and_rejection_do_not_allocate() {
 
 #[test]
 fn prepared_live_vbap_events_first_call_reset_and_rejections_do_not_allocate() {
-    use mradm_dsp::live_vbap::{Command, Mixer};
+    use mradm_dsp::live_vbap::{Mixer, VbapCommand};
     let mut m = Mixer::new(2, 2).unwrap();
     let initial = [
-        Command {
+        VbapCommand {
             element: 0,
             fields: 3,
             level: 1.,
-            ..Command::default()
+            ..VbapCommand::default()
         },
-        Command {
+        VbapCommand {
             element: 1,
             fields: 3,
             level: 0.5,
-            ..Command::default()
+            ..VbapCommand::default()
         },
     ];
-    let events = [Command {
+    let events = [VbapCommand {
         offset: 1,
         duration: 20,
         fields: 3,
         level: 0.25,
-        ..Command::default()
+        ..VbapCommand::default()
     }];
     let input = [0.25; 32];
     let mut output = [0.; 64];

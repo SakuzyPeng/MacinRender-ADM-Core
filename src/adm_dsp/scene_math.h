@@ -7,33 +7,8 @@
 #include <span>
 #include <utility>
 
-// POD fields cross the private Rust boundary.
-// cppcheck-suppress-begin unusedStructMember
-extern "C" {
-struct MradmSceneCloudPoint {
-    float azimuth;
-    float elevation;
-    float weight;
-    uint32_t slot;
-};
-struct MradmSceneSpeaker {
-    float azimuth;
-    float elevation;
-    uint32_t is_lfe;
-};
-int mradm_dsp_scene_math(uint32_t, const float*, size_t, float*, size_t);
-int mradm_dsp_scene_cloud(
-    const float*, size_t, uint32_t, uint32_t, MradmSceneCloudPoint*, size_t, size_t*, float*, size_t);
-int mradm_dsp_scene_divergence(const float*, size_t, uint32_t, MradmSceneCloudPoint*, size_t, size_t*);
-int mradm_dsp_scene_nearest(const float*, size_t, uint32_t, const MradmSceneSpeaker*, size_t, size_t*, float*);
-int mradm_dsp_scene_rotation_create(const float*, size_t, uint32_t, void**);
-void mradm_dsp_scene_rotation_destroy(void*);
-int mradm_dsp_scene_rotation_update(void*, const float*, size_t);
-int mradm_dsp_scene_rotation_apply(const void*, const float*, size_t, float*, size_t, uint32_t);
-int mradm_dsp_scene_rotate_pose(const float*, size_t, float*, size_t, uint32_t);
-int mradm_dsp_scene_pose(const float*, size_t, float*, size_t, uint32_t);
-}
-// cppcheck-suppress-end unusedStructMember
+#include "scene_math_ffi.h"
+
 
 namespace mradm::dsp {
 #if defined(__aarch64__) && defined(__APPLE__) && !defined(MRADM_SCENE_STRICT_FP)

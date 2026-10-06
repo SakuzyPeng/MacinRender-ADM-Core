@@ -87,6 +87,21 @@ jobs:
       - name: Rust format and lint
         run: cmake --build build/debug --target mr_adm_rust_quality
 
+      - name: Restore cbindgen
+        id: cbindgen
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/cbindgen
+          key: cbindgen-${{ runner.os }}-0.29.2
+
+      - name: Install cbindgen
+        if: steps.cbindgen.outputs.cache-hit != 'true'
+        run: cargo install cbindgen --locked --version 0.29.2
+
+      # Hand-written private FFI headers must match the Rust exports (symbols, signatures, struct fields).
+      - name: FFI header check
+        run: cmake --build build/debug --target mr_adm_ffi_header_check
+
       - name: Changed quality checks
         if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'changed')
         run: scripts/quality/check-changed.sh --base origin/main --build-dir build/debug
