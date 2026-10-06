@@ -198,6 +198,10 @@
         "parent": null,
         "license_files": [
           "LICENSE"
+        ],
+        "cmake_option": [
+          "MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS",
+          "MR_ADM_BUILD_LIBADM_REFERENCE_TESTS"
         ]
       },
       "notes": "仅用于显式启用的 libbw64/libadm 对照测试；生产整数 PCM 读写由 Rust mradm-wav 实现。"
