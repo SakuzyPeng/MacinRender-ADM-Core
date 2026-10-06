@@ -15,6 +15,7 @@ pub struct Reader<R> {
     source: R,
     info: Info,
     chunks: Vec<Chunk>,
+    end: u64,
     start: u64,
     position: u64,
     scratch: Vec<u8>,
@@ -141,6 +142,7 @@ impl<R: Read + Seek> Reader<R> {
                 data_bytes,
             },
             chunks,
+            end,
             start,
             position: 0,
             scratch: Vec::new(),
@@ -152,6 +154,13 @@ impl<R: Read + Seek> Reader<R> {
     }
     pub fn chunks(&self) -> &[Chunk] {
         &self.chunks
+    }
+    /// Declared container end (top-level size + 8); never beyond the physical end.
+    pub fn end(&self) -> u64 {
+        self.end
+    }
+    pub fn into_inner(self) -> R {
+        self.source
     }
     pub fn position(&self) -> u64 {
         self.position
@@ -168,6 +177,18 @@ impl<R: Read + Seek> Reader<R> {
         self.source.seek(SeekFrom::Start(chunk.offset))?;
         self.source.read_exact(&mut data)?;
         Ok(Some(data))
+    }
+    /// Copy the first chunk with this id into `output`, which must hold exactly its payload.
+    pub fn read_chunk(&mut self, id: [u8; 4], output: &mut [u8]) -> Result<bool> {
+        let Some(chunk) = self.chunks.iter().find(|chunk| chunk.id == id).copied() else {
+            return Ok(false);
+        };
+        if chunk.size != output.len() as u64 {
+            return Err(Error::invalid("WAVE chunk 缓冲区长度不匹配"));
+        }
+        self.source.seek(SeekFrom::Start(chunk.offset))?;
+        self.source.read_exact(output)?;
+        Ok(true)
     }
     pub fn chna(&mut self) -> Result<Option<Chna>> {
         self.metadata(*b"chna", 4 + u64::from(u16::MAX) * 40)?

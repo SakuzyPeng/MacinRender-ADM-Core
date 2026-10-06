@@ -4,9 +4,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
-#include <fstream>
 #include <iterator>
-#include <limits>
 #include <optional>
 #include <ranges>
 #include <set>
@@ -110,82 +108,14 @@ enum class AxmlState : uint8_t {
     return catalog;
 }
 
-[[nodiscard]] uint32_t read_u32_le(std::istream& input) {
-    std::array<unsigned char, 4> bytes{};
-    input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-    if (!input) {
-        return 0;
-    }
-    return static_cast<uint32_t>(bytes[0]) | (static_cast<uint32_t>(bytes[1]) << 8U) |
-           (static_cast<uint32_t>(bytes[2]) << 16U) | (static_cast<uint32_t>(bytes[3]) << 24U);
-}
-
-[[nodiscard]] uint64_t read_u64_le(std::istream& input) {
-    std::array<unsigned char, 8> bytes{};
-    input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-    if (!input) {
-        return 0;
-    }
-    uint64_t value = 0;
-    unsigned int shift = 0;
-    for (const auto byte : bytes) {
-        value |= static_cast<uint64_t>(byte) << shift;
-        shift += 8U;
-    }
-    return value;
-}
-
+// Routing probe only: tolerant of trailing garbage and unsupported sample formats, which the
+// channel-bed path reports with its own messages.
 [[nodiscard]] AxmlState scan_axml(const std::string& path) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
+    const auto present = audio::wav_has_chunk(path, "axml");
+    if (!present) {
         return AxmlState::invalid_wave;
     }
-
-    std::array<char, 4> container{};
-    std::array<char, 4> wave{};
-    input.read(container.data(), 4);
-    (void) read_u32_le(input);
-    input.read(wave.data(), 4);
-    if (!input || std::string_view{wave.data(), wave.size()} != "WAVE") {
-        return AxmlState::invalid_wave;
-    }
-    const std::string_view kind{container.data(), container.size()};
-    if (kind != "RIFF" && kind != "RF64" && kind != "BW64") {
-        return AxmlState::invalid_wave;
-    }
-
-    uint64_t data_size64 = 0;
-    input.seekg(0, std::ios::end);
-    const auto end_pos = input.tellg();
-    input.seekg(12, std::ios::beg);
-    while (input && input.tellg() >= 0 && input.tellg() + std::streamoff{8} <= end_pos) {
-        std::array<char, 4> id{};
-        input.read(id.data(), 4);
-        const uint32_t size32 = read_u32_le(input);
-        if (!input) {
-            break;
-        }
-        const std::string_view chunk_id{id.data(), id.size()};
-        if (chunk_id == "axml") {
-            return AxmlState::present;
-        }
-
-        const auto payload_pos = input.tellg();
-        uint64_t payload_size = size32;
-        if (chunk_id == "ds64" && size32 >= 24U) {
-            (void) read_u64_le(input); // RIFF size
-            data_size64 = read_u64_le(input);
-            input.seekg(payload_pos, std::ios::beg);
-        } else if (chunk_id == "data" && size32 == std::numeric_limits<uint32_t>::max() && data_size64 > 0) {
-            payload_size = data_size64;
-        }
-        const uint64_t padded_size = payload_size + (payload_size & 1U);
-        if (padded_size > static_cast<uint64_t>(std::numeric_limits<std::streamoff>::max())) {
-            break;
-        }
-        input.seekg(payload_pos + static_cast<std::streamoff>(padded_size), std::ios::beg);
-    }
-    return AxmlState::absent;
+    return *present ? AxmlState::present : AxmlState::absent;
 }
 
 [[nodiscard]] const InputLayoutDefinition* find_input_layout(std::string_view raw) {

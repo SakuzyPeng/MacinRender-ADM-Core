@@ -5,7 +5,7 @@
 - `FloatWavReader`：把 WAVE 解码为 float32，供 ADM/channel-bed 导入、probe、后处理和各编码器读取中间文件；
 - `FloatWavWriter`：写出 float32 RF64，供渲染输出、峰值限制、响度归一化、trim/gain 改写使用。
 
-至此，生产路径上的 WAVE 样本读写全部经过 Rust。以下部分保持原有职责，不在本轮范围内：C++ 的容器元数据读取与改写（`finalize_wav_layout`、`write_wav_metadata`、chunk 扫描）、ADM XML 语义和渲染算法。dr_libs 仍随 dr_flac 获取，用于 FLAC 解码。
+至此，生产路径上的 WAVE 样本读写全部经过 Rust。以下部分保持原有职责，不在本轮范围内：C++ 的容器元数据读取与改写（`finalize_wav_layout`、`write_wav_metadata`、chunk 扫描；后续已迁移，见 [Rust WAVE 容器元数据迁移](RUST_WAV_CONTAINER_MIGRATION.md)）、ADM XML 语义和渲染算法。dr_libs 仍随 dr_flac 获取，用于 FLAC 解码。
 
 ## 边界与数值契约
 

@@ -12,7 +12,7 @@ BS.2076）空间音频渲染核心，使用 C++20 实现，提供桌面 GUI、�
 
 ## 功能概览
 
-- ADM scene import：由项目自有 Rust `mradm-adm` 解析 ADM 元数据，整数 BW64 音频由 `mradm-wav` 流式读取；容器元数据编排与领域模型保留在 C++。
+- ADM scene import：由项目自有 Rust `mradm-adm` 解析 ADM 元数据，WAVE/RF64/BW64 样本与容器 chunk（AXML/CHNA 读取、bext/ambi、布局重写、export 写回）由 `mradm-wav` 处理；文件替换编排与领域模型保留在 C++。
 - 普通多声道输入：支持预设 WAVE channel mask 与受控自定义声道标签，合成为精确几何的 DirectSpeakers 场景。
 - 桌面工作台：基于 Avalonia 的批量渲染、逐对象语义编辑与实时空间监听 GUI。
 - 多后端渲染：EAR（BS.2127，Rust 移植自 libear）、SAF VBAP、Triple Balance、HOA encoder、HRTF binaural，以及 macOS 上的 Apple AUSpatialMixer。

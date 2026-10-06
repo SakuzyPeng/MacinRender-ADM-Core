@@ -14,6 +14,7 @@
 - [原生 OSC 头部姿态接收接口（C++／C ABI v1.40）](architecture/OSC_HEAD_TRACKING_API.md)
 - [Scene 算术规则统一](architecture/SCENE_ARITHMETIC_POLICY.md)
 - [Rust EAR 算法迁移](architecture/RUST_EAR_MIGRATION.md)
+- [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [Rust 落地与 SAF 替换路线图](architecture/RUST_SAF_REPLACEMENT_ROADMAP.md)
 
 ## 架构决策记录

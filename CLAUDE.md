@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 项目长期方向是平台化重构（不是简单的 CLI 重写）：见 `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md`。
 
-**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）和 WAVE/RF64/BW64 样本读写（原 libbw64 / dr_wav）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度、容器元数据收尾与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。跨平台 PCM 逐位一致是二期目标，当前只把同平台重复性作为硬门禁（见 `RUST_SAF_REPLACEMENT_ROADMAP.md` §5）；二期第一个切片是 Scene 统一乘加舍入规则 `scene-separate-v1`（ADR 0014）。
+**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）和 WAVE/RF64/BW64 样本读写与容器元数据（原 libbw64 / dr_wav / C++ chunk 改写）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度、输出文件的临时文件/替换编排与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。跨平台 PCM 逐位一致是二期目标，当前只把同平台重复性作为硬门禁（见 `RUST_SAF_REPLACEMENT_ROADMAP.md` §5）；二期第一个切片是 Scene 统一乘加舍入规则 `scene-separate-v1`（ADR 0014）。
 
 ## 常用构建与测试命令
 
@@ -178,7 +178,7 @@ ADMRenderBinaural   PRIVATE: ADMDsp + ADMAudio + ADMRenderCommon（HRTF/SOFA/卷
 ADMRenderApple      macOS-only（if(APPLE)）PRIVATE: AudioToolbox/AVFoundation/CoreMedia/Foundation
                     + ADMDsp + ADMAudio + ADMRenderCommon（AUSpatialMixer 后端 + ASBR 系统空间监听 sink）
 ADMRenderWindows    Windows-only（if(WIN32)）PRIVATE: Ole32 + ADMRenderCommon（ISpatialAudioClient sink）
-ADMAudio            PRIVATE: dr_flac, FLAC, Opus, mradm-ffi（mradm-wav：全部 WAVE 样本读写）
+ADMAudio            PRIVATE: dr_flac, FLAC, Opus, mradm-ffi（mradm-wav：全部 WAVE 样本读写与容器元数据）
                     macOS: AudioToolbox + CoreFoundation（APAC / CAF metadata）
                     可选: IamfAomBridge（MR_ADM_ENABLE_IAMF）；IAMF 编码 + MP4 打包
 ADMPeak / ADMLoudness  PRIVATE: ADMDsp（Rust Meter）+ ADMAudio
@@ -202,7 +202,8 @@ mradm-dsp   #![forbid(unsafe_code)]；FFT、VBAP/MDAP、HRTF/SOFA(sofar 本地�
             卷积、HpTF、Meter(ebur128 crate)、重采样(rubato)、PCM 混音、EAR 后处理、Triple Balance、HOA、
             Monitor、Live VBAP/双耳、scene_math / scene_transition
 mradm-adm   #![forbid(unsafe_code)]；ADM XML（quick-xml）、内嵌 BS.2094 common definitions、场景投影与语义回写
-mradm-wav   #![forbid(unsafe_code)]；只依赖 std，RIFF/RF64/BW64 读写、u64 帧定位
+mradm-wav   #![forbid(unsafe_code)]；只依赖 std，RIFF/RF64/BW64 读写、u64 帧定位；容器编辑（bext/ambi 追加、
+            布局重写 LayoutRewriter、chunk 替换、容错 chunk 探测）
 mradm-ear   #![forbid(unsafe_code)]；移植自 libear 2db69f8f：标准布局、nominal/effective 拓扑、Objects extent、
             DirectSpeakers、HOA AllRAD、512-tap FIR 设计（MT19937）；实现版本 rust-ear-0.1.0
 mradm-ffi   staticlib；唯一含 unsafe 的私有 C 边界，聚合 mradm_dsp_* / mradm_adm_* / mradm_wav_* / mradm_ear_* 等入口
@@ -226,7 +227,7 @@ Rust/C++ 边界规则：
 - Apple 框架（AudioToolbox、CoreAudio、CoreFoundation、AVFoundation）只允许出现在 `src/adm_audio/` 与 `src/adm_apple/`（`if(APPLE)` 门控）
 - Windows COM / SpatialAudio（`spatialaudioclient.h`、`mmdeviceapi.h`、WRL）只允许出现在 `src/adm_windows/`（Windows-only 系统空间监听 sink，`if(WIN32)` 门控）；工厂返回第三方无关的 `IAudioOutputDevice`
 
-输入路径：WAVE 容器（`mradm-wav` / C++ 容器元数据）+ AXML（`mradm-adm`）→ `adm_metadata` / `adm_io` 适配 → `adm::AdmScene` → `RenderPlan` → `IRenderer` 后端。`RenderPlan::scene` 由 `RenderService` 填好；**后端不得自行重新解析 ADM**，渲染循环中也不持有 Rust ADM 句柄。
+输入路径：WAVE 容器与 ADM chunk（`mradm-wav`）+ AXML 语义（`mradm-adm`）→ `adm_metadata` / `adm_io` 适配 → `adm::AdmScene` → `RenderPlan` → `IRenderer` 后端。`RenderPlan::scene` 由 `RenderService` 填好；**后端不得自行重新解析 ADM**，渲染循环中也不持有 Rust ADM 句柄。
 
 ## 错误处理（ADR 0005）
 
@@ -256,7 +257,7 @@ GUI 新接入进度条优先使用 `adm_render_file_ex2` / `adm_preview_render_w
 - `--renderer apple`：**macOS-only** AUSpatialMixer 后端（`src/adm_apple/`），能力见 `apple_capabilities()`，在 Linux 不编译；`mr_adm_apple_smoke_tests` 在非 macOS 跳过
 - 系统空间音频监听（`monitor_system_spatial`，仅实时监听非离线）：把多声道床交 OS 做 HRTF。**macOS** 经 `AVSampleBufferAudioRenderer`（`src/adm_apple/avsamplebuffer_device.mm`，含动态头追踪）；**Windows** 经 `ISpatialAudioClient`（`src/adm_windows/spatialaudioclient_device.cpp`，Windows Sonic / Dolby Atmos / DTS 头戴，**静态空间化无 OS 头追**，需声音设置启用某空间格式否则返回 `unsupported`）。布局白名单各自由 `apple_layouts` / `windows_layouts` 定义，经 capabilities JSON 的 `system_spatial_layouts` 字段统一暴露给 GUI（**唯一权威源，勿在 GUI 硬编码**）。sink 选择在 `monitor_session.cpp::make_monitor_device`
 - FLAC 解码在 `flac_io.cpp` 中定义 `DR_FLAC_IMPLEMENTATION`（dr_flac），编码用 `libFLAC`；dr_wav 只在 `MR_ADM_BUILD_DRWAV_REFERENCE_TESTS` 对照中使用
-- WAV / BW64 IO 是 64-bit clean（支持 >4GB 母版与输出）：**所有 WAV 样本读写经 Rust `mradm-wav`**（C++ 包装在 `src/adm_audio/wav_backend.h`；`FloatWavReader`/`FloatWavWriter`/`RenderInputReader` 均基于它，只接受 PCM16/24/32 与 float32）：**f32 WAV 固定写 RF64**（流式写无法预知总大小，统一用 `ds64` 承载真实大小，小文件也是 RF64），`FloatWavWriter` 覆盖已有文件，析构尽力收尾、先写后改名的路径须显式 `finish()`；整数输出默认先写 RIFF、需要 64 位长度时升级 BW64，整数转换写排他临时文件、成功 `finish()` 后才安装，失败/取消保留原文件；reader 以 u64 帧 `seek_frame` 定位（不再有 libbw64 的 2^31 帧上限）。`write_wav_metadata`（bext/ambi 追加）仍在 C++，用 `_fseeki64`/`fseeko` + uint64 全程 64-bit，按 RIFF/RF64/BW64 分别更新顶层 size 或 `ds64.bw64Size`。Windows 私有 FFI 路径先按当前进程代码页把原生窄路径转 UTF-8，**不要**靠字节是否为合法 UTF-8 猜编码。回归守卫用稀疏文件造 >4GB / 跨 2^31 帧 fixture（`core_smoke_test` / `render_trim_fixture_test`，不真烧盘）；真实 >4GiB 写入测试默认忽略，需设 `MRADM_WAV_LARGE_TEST_DIR`
+- WAV / BW64 IO 是 64-bit clean（支持 >4GB 母版与输出）：**所有 WAV 样本读写经 Rust `mradm-wav`**（C++ 包装在 `src/adm_audio/wav_backend.h`；`FloatWavReader`/`FloatWavWriter`/`RenderInputReader` 均基于它，只接受 PCM16/24/32 与 float32）：**f32 WAV 固定写 RF64**（流式写无法预知总大小，统一用 `ds64` 承载真实大小，小文件也是 RF64），`FloatWavWriter` 覆盖已有文件，析构尽力收尾、先写后改名的路径须显式 `finish()`；整数输出默认先写 RIFF、需要 64 位长度时升级 BW64，整数转换写排他临时文件、成功 `finish()` 后才安装，失败/取消保留原文件；reader 以 u64 帧 `seek_frame` 定位（不再有 libbw64 的 2^31 帧上限）。容器元数据也全部经 `mradm-wav`（见 `RUST_WAV_CONTAINER_MIGRATION.md`）：`write_wav_metadata`（bext/ambi 追加，按 RIFF/RF64/BW64 更新顶层 size 或 `ds64.bw64Size`）、`finalize_wav_layout`（声道置换/掩码/ADM chunk/容器选择，C++ 按 2048 帧驱动 `step` 并负责取消、进度与备份替换）、ADM 导入的 AXML/CHNA 读取、export 的 axml 替换和 channel-bed 路由探测；C++ 不再手写 RIFF chunk 解析，冻结的旧实现在 `tests/reference/wav_container/` 由 `mr_adm_wav_container_tests` 逐字节对照。Windows 私有 FFI 路径先按当前进程代码页把原生窄路径转 UTF-8，**不要**靠字节是否为合法 UTF-8 猜编码。回归守卫用稀疏文件造 >4GB / 跨 2^31 帧 fixture（`core_smoke_test` / `render_trim_fixture_test`，不真烧盘）；真实 >4GiB 写入测试默认忽略，需设 `MRADM_WAV_LARGE_TEST_DIR`
 
 ## GUI（gui/MacinRender.Gui）
 
