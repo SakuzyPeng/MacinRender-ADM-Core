@@ -1040,6 +1040,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
                 --cxx-compiler "${CMAKE_CXX_COMPILER}")
         add_test(NAME mr_adm_consistency_checkpoint_tests
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/consistency_checkpoints_test.py")
+        add_test(NAME mr_adm_quality_scripts_tests
+            COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/quality_scripts_test.py")
     endif()
 
     add_executable(mr_adm_semantic_policy_tests tests/unit/semantic_policy_test.cpp)

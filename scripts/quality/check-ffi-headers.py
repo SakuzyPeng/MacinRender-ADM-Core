@@ -37,11 +37,11 @@ FFI_HEADERS = [
     "src/adm_audio/wav_ffi.h",
 ]
 
-# (function, parameter index) pairs whose C spelling deliberately differs from Rust while staying
-# ABI-identical. Keep each entry justified.
+# (function, zero-based parameter index, Rust spelling, C spelling) -> required array element/length.
+# These pointer spellings are compatible only while the underlying array keeps this exact shape.
 KNOWN_PARAMETER_DIFFERENCES = {
     # Rust takes `*mut [f32; 4]` (one filtered frame); C++ passes the first element of float[4].
-    ("mradm_dsp_tb_filter_process", "FilteredFrame*", "f32*"),
+    ("mradm_dsp_tb_filter_process", 3, "FilteredFrame*", "f32*"): ("f32", 4),
 }
 
 SCALARS = {
@@ -264,7 +264,16 @@ class Checker:
                 self.error(f"{where}: 参数个数 C++ {len(hand_params)} / Rust {len(gen_params)}")
                 continue
             for index, (h, g) in enumerate(zip(hand_params, gen_params)):
-                if (name, str(g).replace(" ", ""), str(h).replace(" ", "")) in KNOWN_PARAMETER_DIFFERENCES:
+                expected_array = KNOWN_PARAMETER_DIFFERENCES.get(
+                    (name, index, str(g).replace(" ", ""), str(h).replace(" ", ""))
+                )
+                if expected_array is not None:
+                    actual_array = self.gen.arrays.get(g.base)
+                    if actual_array != expected_array:
+                        self.error(
+                            f"{where}: 第 {index + 1} 个参数的数组别名 {g.base} "
+                            f"应为 {expected_array}，实际为 {actual_array}"
+                        )
                     continue
                 if not self.same(h, g, where):
                     self.error(f"{where}: 第 {index + 1} 个参数 C++ `{h}` / Rust `{g}`")

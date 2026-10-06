@@ -51,7 +51,10 @@ def main() -> int:
             errors.append(f"{where}: status 必须是 {sorted(STATUSES)}")
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", unit.get("accepted") or ""):
             errors.append(f"{where}: accepted 必须是 YYYY-MM-DD")
-        for key in ("migration_doc", "provenance"):
+        # Retired units keep provenance as a historical path in the removal commit's parent;
+        # their registered reference files have been deleted, while migration evidence remains.
+        required_paths = ("migration_doc", "provenance") if unit.get("status") == "retained" else ("migration_doc",)
+        for key in required_paths:
             if unit.get(key) and not (REPO_ROOT / unit[key]).is_file():
                 errors.append(f"{where}: {key} {unit[key]} 不存在")
         if not unit.get("migration_doc"):

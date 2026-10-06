@@ -45,7 +45,7 @@
    - `cmake/MRDependencies.cmake` 中的获取；
    - `third_party/manifest.json` 条目、`third_party/licenses/<name>/`、SBOM；
    - 质量脚本里的排除项。
-2. 登记表保留该单元：`status` 改为 `retired`，填写 `retired_in`（删除提交），清空 `files` 和 `open_conditions`。
+2. 登记表保留该单元：`status` 改为 `retired`，填写 `retired_in`（删除提交），清空 `files` 和 `open_conditions`。`provenance` 保留历史路径，可从删除提交的父提交查阅；退役后不再要求该文件存在。`migration_doc` 仍须保留。
 3. 在对应 `RUST_*_MIGRATION.md` 的"参考实现退出"小节记录删除提交、满足条件的证据（发布 tag、独立回归测试名、二期结论）。`evidence/` 保持不动。
 
 ## 当前状态
