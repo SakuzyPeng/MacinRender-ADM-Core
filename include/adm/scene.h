@@ -162,18 +162,7 @@ struct ScenePositionOffset {
 };
 
 // Apply a ScenePositionOffset to a block position.  Returns the modified copy.
-[[nodiscard]] inline SceneBlockPosition apply_position_offset(SceneBlockPosition pos, const ScenePositionOffset& off) {
-    if (!pos.cartesian && !off.cartesian) {
-        pos.azimuth += off.azimuth;
-        pos.elevation = std::clamp(pos.elevation + off.elevation, -90.0F, 90.0F);
-        pos.distance = std::max(0.0F, pos.distance + off.distance);
-    } else if (pos.cartesian && off.cartesian) {
-        pos.x += off.x;
-        pos.y += off.y;
-        pos.z += off.z;
-    }
-    return pos;
-}
+[[nodiscard]] SceneBlockPosition apply_position_offset(SceneBlockPosition pos, const ScenePositionOffset& off);
 
 struct SceneDirectionVector {
     float x{0.0f};
@@ -187,138 +176,23 @@ struct SceneOutputSpeaker {
     bool is_lfe{false};
 };
 
-[[nodiscard]] inline float wrap_azimuth(float azimuth) {
-    while (azimuth > 180.0F) {
-        azimuth -= 360.0F;
-    }
-    while (azimuth <= -180.0F) {
-        azimuth += 360.0F;
-    }
-    return azimuth;
-}
+[[nodiscard]] float wrap_azimuth(float azimuth);
 
-[[nodiscard]] inline SceneBlockPosition scene_position_to_polar(const SceneBlockPosition& pos) {
-    if (!pos.cartesian) {
-        return pos;
-    }
+[[nodiscard]] SceneBlockPosition scene_position_to_polar(const SceneBlockPosition& pos);
 
-    const auto x = static_cast<double>(pos.x);
-    const auto y = static_cast<double>(pos.y);
-    const auto z = static_cast<double>(pos.z);
-    const double xy = std::hypot(x, y);
+[[nodiscard]] SceneDirectionVector direction_vector_from_polar(float azimuth, float elevation);
 
-    SceneBlockPosition polar;
-    polar.cartesian = false;
-    polar.azimuth = static_cast<float>(std::atan2(-x, y) * (180.0 / std::numbers::pi_v<double>) );
-    polar.elevation = static_cast<float>(std::atan2(z, xy) * (180.0 / std::numbers::pi_v<double>) );
-    polar.distance = static_cast<float>(std::sqrt((x * x) + (y * y) + (z * z)));
-    return polar;
-}
+[[nodiscard]] SceneDirectionVector direction_vector_from_position(const SceneBlockPosition& pos);
 
-[[nodiscard]] inline SceneDirectionVector direction_vector_from_polar(float azimuth, float elevation) {
-    const double az = static_cast<double>(azimuth) * (std::numbers::pi_v<double> / 180.0);
-    const double el = static_cast<double>(elevation) * (std::numbers::pi_v<double> / 180.0);
-    const double cos_el = std::cos(el);
-    return {
-        static_cast<float>(-std::sin(az) * cos_el),
-        static_cast<float>(std::cos(az) * cos_el),
-        static_cast<float>(std::sin(el)),
-    };
-}
+[[nodiscard]] float direction_distance(const SceneDirectionVector& lhs, const SceneDirectionVector& rhs);
 
-[[nodiscard]] inline SceneDirectionVector direction_vector_from_position(const SceneBlockPosition& pos) {
-    const auto polar = scene_position_to_polar(pos);
-    return direction_vector_from_polar(polar.azimuth, polar.elevation);
-}
+[[nodiscard]] std::optional<std::size_t> nearest_non_lfe_speaker_index(const SceneBlockPosition& pos,
+                                                                       const std::vector<SceneOutputSpeaker>& speakers);
 
-[[nodiscard]] inline float direction_distance(const SceneDirectionVector& lhs, const SceneDirectionVector& rhs) {
-    const float dx = lhs.x - rhs.x;
-    const float dy = lhs.y - rhs.y;
-    const float dz = lhs.z - rhs.z;
-    return std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
-}
+[[nodiscard]] SceneObjectBlock apply_channel_lock(const SceneObjectBlock& block,
+                                                  const std::vector<SceneOutputSpeaker>& speakers);
 
-[[nodiscard]] inline std::optional<std::size_t>
-nearest_non_lfe_speaker_index(const SceneBlockPosition& pos, const std::vector<SceneOutputSpeaker>& speakers) {
-    std::optional<std::size_t> best_index;
-    float best_distance = std::numeric_limits<float>::max();
-    const auto src = direction_vector_from_position(pos);
-
-    for (std::size_t i = 0; i < speakers.size(); ++i) {
-        if (speakers[i].is_lfe) {
-            continue;
-        }
-        const auto spk = direction_vector_from_polar(speakers[i].azimuth, speakers[i].elevation);
-        const float dist = direction_distance(src, spk);
-        if (dist < best_distance) {
-            best_distance = dist;
-            best_index = i;
-        }
-    }
-    return best_index;
-}
-
-[[nodiscard]] inline SceneObjectBlock apply_channel_lock(const SceneObjectBlock& block,
-                                                         const std::vector<SceneOutputSpeaker>& speakers) {
-    if (!block.channel_lock) {
-        return block;
-    }
-    const auto best_index = nearest_non_lfe_speaker_index(block.position, speakers);
-    if (!best_index.has_value()) {
-        return block;
-    }
-
-    const auto src = direction_vector_from_position(block.position);
-    const auto& speaker = speakers[*best_index];
-    const auto spk = direction_vector_from_polar(speaker.azimuth, speaker.elevation);
-    if (block.channel_lock_max_distance &&
-        direction_distance(src, spk) > (*block.channel_lock_max_distance + 1.0e-4F)) {
-        return block;
-    }
-
-    SceneObjectBlock locked = block;
-    const auto polar = scene_position_to_polar(block.position);
-    locked.position.cartesian = false;
-    locked.position.azimuth = speaker.azimuth;
-    locked.position.elevation = speaker.elevation;
-    locked.position.distance = polar.distance;
-    return locked;
-}
-
-[[nodiscard]] inline std::vector<SceneObjectBlock> expand_object_divergence(const SceneObjectBlock& block) {
-    const float divergence = std::clamp(block.divergence, 0.0F, 1.0F);
-    if (divergence <= 1.0e-4F) {
-        return {block};
-    }
-
-    SceneObjectBlock base = block;
-    base.position = scene_position_to_polar(block.position);
-
-    float divergence_angle = base.divergence_azimuth_range;
-    if (block.position.cartesian && base.divergence_position_range > 0.0F) {
-        divergence_angle =
-            static_cast<float>(std::atan2(static_cast<double>(base.divergence_position_range),
-                                          std::max(1.0e-6, static_cast<double>(base.position.distance))) *
-                               (180.0 / std::numbers::pi_v<double>) );
-    }
-    divergence_angle = std::clamp(divergence_angle, 0.0F, 120.0F);
-
-    const float side_weight = divergence / (divergence + 1.0F);
-    const float center_weight = (1.0F - divergence) / (divergence + 1.0F);
-
-    auto make_source = [&](float offset, float weight) {
-        SceneObjectBlock out = base;
-        out.position.azimuth = wrap_azimuth(base.position.azimuth + offset);
-        out.gain *= weight;
-        return out;
-    };
-
-    return {
-        make_source(-divergence_angle, side_weight),
-        make_source(0.0F, center_weight),
-        make_source(divergence_angle, side_weight),
-    };
-}
+[[nodiscard]] std::vector<SceneObjectBlock> expand_object_divergence(const SceneObjectBlock& block);
 
 struct SceneObject {
     std::string id;

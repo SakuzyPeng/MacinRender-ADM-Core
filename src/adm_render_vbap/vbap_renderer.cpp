@@ -22,6 +22,7 @@
 #include "consistency_trace.h"
 #include "dsp.h"
 #include "render_common.h"
+#include "scene_math.h"
 #include "speaker_layouts.h"
 #include "speaker_pcm.h"
 
@@ -125,13 +126,8 @@ using render_common::ChannelGainInfo;
         block.position.cartesian
             ? render_common::canonical_vector_length(block.position.x, block.position.y, block.position.z)
             : block.position.distance;
-    const float spread_scale = std::clamp(1.0F / std::max(0.4F, distance), 0.5F, 2.5F);
-    const float w = std::max(0.0F, block.width) * 60.0F * spread_scale;
-    const float w_with_divergence =
-        block.divergence > 1.0e-4F ? std::max(w, std::max(0.0F, block.divergence_azimuth_range) * 0.5F) : w;
-    const float h = std::max(0.0F, block.height) * 45.0F * spread_scale;
-    const float d = std::max(0.0F, block.depth) * 20.0F * spread_scale;
-    return std::min(180.0F, render_common::canonical_vector_length(w_with_divergence, h, d));
+    return dsp::scene_math<6, 1>(
+        6U, {block.width, block.height, block.depth, distance, block.divergence, block.divergence_azimuth_range})[0];
 }
 
 [[nodiscard]] Result<std::vector<float>>

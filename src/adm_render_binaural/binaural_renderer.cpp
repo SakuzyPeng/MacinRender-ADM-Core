@@ -194,36 +194,6 @@ std::pair<float, float> label_to_polar(const std::string& label) {
 }
 
 
-struct Vec3 {
-    float x{0.0F};
-    float y{0.0F};
-    float z{0.0F};
-};
-
-[[nodiscard]] Vec3 add(Vec3 lhs, Vec3 rhs) noexcept {
-    return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z};
-}
-
-[[nodiscard]] Vec3 scale(Vec3 v, float s) noexcept {
-    return {v.x * s, v.y * s, v.z * s};
-}
-
-[[nodiscard]] Vec3 cross(Vec3 lhs, Vec3 rhs) noexcept {
-    return {
-        (lhs.y * rhs.z) - (lhs.z * rhs.y),
-        (lhs.z * rhs.x) - (lhs.x * rhs.z),
-        (lhs.x * rhs.y) - (lhs.y * rhs.x),
-    };
-}
-
-[[nodiscard]] Vec3 normalize(Vec3 v) noexcept {
-    const float n = render_common::canonical_vector_length(v.x, v.y, v.z);
-    if (n <= 1.0e-8F) {
-        return {0.0F, 1.0F, 0.0F};
-    }
-    return {v.x / n, v.y / n, v.z / n};
-}
-
 // Grid index into the pre-computed VBAP table (az_res=1°, el_res=1°).
 int vbap_grid_idx(float az_deg, float el_deg) {
     std::size_t index = 0U;
@@ -232,31 +202,6 @@ int vbap_grid_idx(float az_deg, float el_deg) {
     return static_cast<int>(index);
 }
 
-[[nodiscard]] Vec3 direction_from_position(const SceneBlockPosition& pos) noexcept {
-    const auto polar = scene_position_to_polar(pos);
-    const double az = static_cast<double>(polar.azimuth) * (std::numbers::pi_v<double> / 180.0);
-    const double el = static_cast<double>(polar.elevation) * (std::numbers::pi_v<double> / 180.0);
-    const double cos_el = std::cos(el);
-    return normalize({
-        static_cast<float>(-std::sin(az) * cos_el),
-        static_cast<float>(std::cos(az) * cos_el),
-        static_cast<float>(std::sin(el)),
-    });
-}
-
-[[nodiscard]] float distance_from_position(const SceneBlockPosition& pos) noexcept {
-    return pos.cartesian ? render_common::canonical_vector_length(pos.x, pos.y, pos.z) : pos.distance;
-}
-
-[[nodiscard]] std::pair<float, float> polar_from_direction(Vec3 dir) noexcept {
-    const Vec3 n = normalize(dir);
-    const double az =
-        std::atan2(static_cast<double>(-n.x), static_cast<double>(n.y)) * (180.0 / std::numbers::pi_v<double>);
-    const double el =
-        std::atan2(static_cast<double>(n.z), std::hypot(static_cast<double>(n.x), static_cast<double>(n.y))) *
-        (180.0 / std::numbers::pi_v<double>);
-    return {static_cast<float>(az), static_cast<float>(el)};
-}
 
 // ── Listener head rotation (head tracking / free-look) ──────────────────────────
 // SAF binaural has no global field-rotation param like the Apple AUSpatialMixer; instead we
@@ -710,63 +655,49 @@ std::vector<SpreaderTrack> build_spreader_tracks(const AdmScene& scene, LogSink&
 [[nodiscard]] std::vector<ExtentSource>
 expand_binaural_extent(const SceneObjectBlock& block, float source_gain, BinauralSpreadMode spread_mode) {
     if (spread_mode == BinauralSpreadMode::none || spread_mode == BinauralSpreadMode::saf_spreader) {
-        auto [az, el] = block_position(block);
+        const auto [az, el] = block_position(block);
         return {{az, el, source_gain, k_binaural_extent_center_slot}};
     }
-    const float distance = distance_from_position(block.position);
-    const auto [width_radius, height_radius] =
-        render_common::extent_disk_radii(block.width, block.height, block.depth, distance);
-    if (width_radius <= 1.0e-4F && height_radius <= 1.0e-4F) {
-        auto [az, el] = block_position(block);
-        return {{az, el, source_gain, k_binaural_extent_center_slot}};
-    }
-
-    // Shared 17-point disk cloud (render_common); the per-backend geometry below
-    // (direction_from_position / normalize / polar_from_direction in double precision)
-    // stays local and unchanged so the binaural output remains bit-identical.
-    constexpr float k_deg2rad = static_cast<float>(std::numbers::pi) / 180.0F;
-    const auto& k_samples = render_common::k_extent_disk_samples;
-
-    const Vec3 center = direction_from_position(block.position);
-    Vec3 horizontal = cross({0.0F, 0.0F, 1.0F}, center);
-    if (render_common::canonical_vector_length(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
-        horizontal = {1.0F, 0.0F, 0.0F};
-    } else {
-        horizontal = normalize(horizontal);
-    }
-    const Vec3 vertical = normalize(cross(center, horizontal));
-
-    std::vector<ExtentSource> sources;
-    sources.reserve(k_binaural_extent_slots - 1U);
-    std::size_t slot = 0;
-    for (const auto& sample : k_samples) {
-        if (sample.weight <= 0.0F) {
-            ++slot;
-            continue;
-        }
-        const float h = std::tan(sample.x * width_radius * k_deg2rad);
-        const float v = std::tan(sample.y * height_radius * k_deg2rad);
-        auto [az, el] = polar_from_direction(normalize(add(add(center, scale(horizontal, h)), scale(vertical, v))));
+    const auto& p = block.position;
+    const std::array input{p.cartesian ? p.x : p.azimuth,
+                           p.cartesian ? p.y : p.elevation,
+                           p.cartesian ? p.z : p.distance,
+                           block.width,
+                           block.height,
+                           block.depth,
+                           source_gain};
+    std::array<MradmSceneCloudPoint, 17> points{};
+    size_t count = 0;
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-        consistency::dump("cloud.01-slot-" + std::to_string(slot) + ".f32",
-                          {center.x,
-                           center.y,
-                           center.z,
-                           horizontal.x,
-                           horizontal.y,
-                           horizontal.z,
-                           vertical.x,
-                           vertical.y,
-                           vertical.z,
-                           h,
-                           v,
-                           az,
-                           el,
-                           source_gain * sample.weight});
-        consistency::dump("cloud.02-grid-" + std::to_string(slot) + ".i32", {vbap_grid_idx(az, el)});
+    std::array<float, 238> trace{};
+    float* trace_data = trace.data();
+    const size_t trace_size = trace.size();
+#else
+    float* trace_data = nullptr;
+    const size_t trace_size = 0;
 #endif
-        sources.push_back({az, el, source_gain * sample.weight, slot});
-        ++slot;
+    dsp::scene_check(mradm_dsp_scene_cloud(input.data(),
+                                           input.size(),
+                                           p.cartesian ? 1U : 0U,
+                                           1U | dsp::scene_cpp_contract,
+                                           points.data(),
+                                           points.size(),
+                                           &count,
+                                           trace_data,
+                                           trace_size));
+    std::vector<ExtentSource> sources;
+    sources.reserve(count);
+    for (size_t index = 0; index < count; ++index) {
+        const auto& point = points[index];
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        if (count > 1) {
+            consistency::dump("cloud.01-slot-" + std::to_string(point.slot) + ".f32",
+                              std::span<const float>{trace}.subspan(index * 14, 14));
+            consistency::dump("cloud.02-grid-" + std::to_string(point.slot) + ".i32",
+                              {vbap_grid_idx(point.azimuth, point.elevation)});
+        }
+#endif
+        sources.push_back({point.azimuth, point.elevation, point.weight, point.slot});
     }
     return sources;
 }
@@ -1479,11 +1410,11 @@ class BinauralStream final : public IRenderStream {
         // stage). Built once per block; head-locked sources (per-object override) keep their raw
         // direction. Identity pose ⇒ no rotation object, output stays bit-identical to no-tracking.
         const bool head_active = !listener_orientation_.is_identity();
-        const HeadRotation head_rot{listener_orientation_};
+        head_rotation_.update(listener_orientation_);
         ola_pool_.parallel_for(sources.size(), [&](std::size_t si) {
             const auto live_head_locked = render_common::resolve_live_head_locked(
                 live_overrides_, sources[si].object_id, sources[si].speaker_label_key);
-            const HeadRotation* head = head_active ? &head_rot : nullptr;
+            const HeadRotation* head = head_active ? &head_rotation_ : nullptr;
             render_source_ola_block(sources[si],
                                     *prepared_.bs,
                                     src_cs_[si],
@@ -1578,6 +1509,7 @@ class BinauralStream final : public IRenderStream {
     std::unordered_map<std::string, std::size_t> gain_slot_by_key_;
     std::vector<LiveGainSlot> live_gain_slots_;
     std::vector<std::size_t> source_gain_slots_; // sources_ index → live_gain_slots_ index
+    HeadRotation head_rotation_{ListenerOrientation{}};
     ListenerOrientation listener_orientation_{}; // live head pose (worker-only; identity = no tracking)
     // object_id → non-unity topology scales; only non-unity entries.
     // The last applied topology, so set_overrides rebuilds only when it actually changes.

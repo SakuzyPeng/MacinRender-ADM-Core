@@ -12,6 +12,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "scene_math.h"
+
 namespace mradm::realtime {
 namespace {
 
@@ -55,57 +57,18 @@ bool signed_range(std::uint64_t value) noexcept {
 
 std::optional<HeadTrackingOrientation>
 orientation(std::span<const std::byte> data, std::size_t offset, bool quaternion) noexcept {
-    const std::size_t count = quaternion ? 4U : 3U;
-    std::array<double, 4> q{};
-    for (std::size_t i = 0; i < count; ++i) {
-        q.at(i) = read_float(data, offset + (i * 4U));
-        if (!std::isfinite(q.at(i))) {
-            return std::nullopt;
-        }
+    const size_t count = quaternion ? 4U : 3U;
+    std::array<float, 4> input{};
+    for (size_t i = 0; i < count; ++i) {
+        input[i] = static_cast<float>(read_float(data, offset + i * 4U));
     }
-    if (!quaternion) {
-        // Fold before trig so finite but very large float32 angles do not lose all
-        // useful range reduction precision or overflow an intermediate conversion.
-        constexpr double k_half_radians = std::numbers::pi_v<double> / 360.0;
-        const double yaw = std::remainder(q[0], 360.0) * k_half_radians;
-        const double pitch = std::remainder(q[1], 360.0) * k_half_radians;
-        const double roll = std::remainder(q[2], 360.0) * k_half_radians;
-        const double cy = std::cos(yaw);
-        const double sy = std::sin(yaw);
-        const double cp = std::cos(pitch);
-        const double sp = std::sin(pitch);
-        const double cr = std::cos(roll);
-        const double sr = std::sin(roll);
-        q = {(cy * sp * cr) + (sy * cp * sr),
-             (sy * cp * cr) - (cy * sp * sr),
-             (cy * cp * sr) - (sy * sp * cr),
-             (cy * cp * cr) + (sy * sp * sr)};
-    }
-    const double norm_squared = (q[0] * q[0]) + (q[1] * q[1]) + (q[2] * q[2]) + (q[3] * q[3]);
-    if (norm_squared < 1.0e-12) {
+    std::array<float, 7> result{};
+    if (mradm_dsp_scene_pose(input.data(), count, result.data(), result.size(), quaternion ? 1U : 0U) != 0) {
         return std::nullopt;
     }
-    const double norm = std::sqrt(norm_squared);
-    std::ranges::transform(q, q.begin(), [norm](double component) { return component / norm; });
-    const auto [x, y, z, w] = q;
-    constexpr double k_degrees = 180.0 / std::numbers::pi_v<double>;
     HeadTrackingOrientation pose;
-    std::ranges::transform(
-        q, pose.quaternion_xyzw.begin(), [](double component) { return static_cast<float>(component); });
-    const double sin_pitch = std::clamp(2.0 * ((w * x) - (y * z)), -1.0, 1.0);
-    double yaw = 0.0;
-    double roll = 0.0;
-    if (std::abs(sin_pitch) >= 1.0 - 1e-12) {
-        // At either pole yaw and roll are coupled. Choose zero roll and retain
-        // their combined heading instead of evaluating two unstable atan2(0, 0).
-        yaw = std::atan2(2.0 * ((w * y) - (x * z)), 1.0 - (2.0 * ((y * y) + (z * z))));
-    } else {
-        yaw = std::atan2(2.0 * ((x * z) + (w * y)), 1.0 - (2.0 * ((x * x) + (y * y))));
-        roll = std::atan2(2.0 * ((x * y) + (w * z)), 1.0 - (2.0 * ((x * x) + (z * z))));
-    }
-    pose.euler_deg = {static_cast<float>(yaw * k_degrees),
-                      static_cast<float>(std::asin(sin_pitch) * k_degrees),
-                      static_cast<float>(roll * k_degrees)};
+    std::copy_n(result.begin(), 4U, pose.quaternion_xyzw.begin());
+    std::copy_n(result.begin() + 4, 3U, pose.euler_deg.begin());
     return pose;
 }
 

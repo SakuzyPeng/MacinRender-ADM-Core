@@ -1,0 +1,13 @@
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(fmt CONFIG)
+find_dependency(tl-expected CONFIG)
+find_dependency(Threads)
+if(NOT TARGET MacinRender::RustDSP)
+    add_library(MacinRender::RustDSP STATIC IMPORTED)
+    set_target_properties(MacinRender::RustDSP PROPERTIES
+        IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@/@MR_ADM_INSTALLED_RUST_ARCHIVE@"
+        INTERFACE_LINK_LIBRARIES "@Rust_CARGO_TARGET_LINK_NATIVE_LIBS@"
+    )
+endif()
+include("${CMAKE_CURRENT_LIST_DIR}/MacinRenderADMCoreTargets.cmake")

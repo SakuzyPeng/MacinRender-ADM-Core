@@ -12,6 +12,8 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
+#include "scene_math.h"
+
 namespace mradm::render_common {
 
 namespace {
@@ -42,24 +44,6 @@ constexpr std::array<DsLabelAlias, 34> k_ds_aliases = {{
     {"LTM",   "U+090"}, {"RTM",   "U-090"},
 }};
 // clang-format on
-
-[[nodiscard]] SceneDirectionVector vec_cross(const SceneDirectionVector& a, const SceneDirectionVector& b) noexcept {
-    return {(a.y * b.z) - (a.z * b.y), (a.z * b.x) - (a.x * b.z), (a.x * b.y) - (a.y * b.x)};
-}
-
-[[nodiscard]] SceneDirectionVector vec_normalize(const SceneDirectionVector& v) noexcept {
-    const float len = std::max(1.0e-6F, canonical_vector_length(v.x, v.y, v.z));
-    return {v.x / len, v.y / len, v.z / len};
-}
-
-// Inverse of direction_vector_from_polar: recover (azimuth, elevation) in degrees,
-// project convention (azimuth +ve = left).
-[[nodiscard]] std::pair<float, float> polar_from_direction(const SceneDirectionVector& dir) noexcept {
-    constexpr float k_rad2deg = 180.0F / std::numbers::pi_v<float>;
-    const float azimuth = std::atan2(-dir.x, dir.y) * k_rad2deg;
-    const float elevation = std::atan2(dir.z, std::hypot(dir.x, dir.y)) * k_rad2deg;
-    return {azimuth, elevation};
-}
 
 [[nodiscard]] std::optional<DirectSpeakerPosition> bs2051_label_position(std::string_view label) noexcept {
     if (label.size() != 5U || (label[1] != '+' && label[1] != '-')) {
@@ -544,50 +528,41 @@ PreparedObjectBlock prepare_object_block(const SceneObjectBlock& raw_block,
     };
 }
 
+float canonical_vector_length(float x, float y, float z) noexcept {
+    return dsp::scene_math<3, 1>(2U, {x, y, z})[0];
+}
+
 ExtentRadii extent_disk_radii(float width, float height, float depth, float distance) {
-    // Distance-dependent spread scaling: nearer objects subtend a wider angle.
-    const float spread_scale = std::clamp(1.0F / std::max(0.4F, distance), 0.5F, 2.5F);
-    const float depth_radius = std::max(0.0F, depth) * 20.0F * spread_scale;
-    const float width_radius = (std::max(0.0F, width) * 60.0F * spread_scale) + depth_radius;
-    const float height_radius = (std::max(0.0F, height) * 45.0F * spread_scale) + depth_radius;
-    return {width_radius, height_radius};
+    const auto result = dsp::scene_math<4, 2>(5U, {width, height, depth, distance});
+    return {result[0], result[1]};
 }
 
 std::vector<ExtentDirection>
 extent_disk_cloud(const SceneBlockPosition& position, float width, float height, float depth) {
-    const auto polar = scene_position_to_polar(position);
-    const auto [width_radius, height_radius] = extent_disk_radii(width, height, depth, polar.distance);
-
-    if (width_radius <= 1.0e-4F && height_radius <= 1.0e-4F) {
-        return {{polar.azimuth, polar.elevation, 1.0F}};
+    const std::array input{position.cartesian ? position.x : position.azimuth,
+                           position.cartesian ? position.y : position.elevation,
+                           position.cartesian ? position.z : position.distance,
+                           width,
+                           height,
+                           depth,
+                           1.0F};
+    std::array<MradmSceneCloudPoint, 17> points{};
+    size_t count = 0;
+    dsp::scene_check(mradm_dsp_scene_cloud(input.data(),
+                                           input.size(),
+                                           position.cartesian ? 1U : 0U,
+                                           dsp::scene_cpp_contract,
+                                           points.data(),
+                                           points.size(),
+                                           &count,
+                                           nullptr,
+                                           0));
+    std::vector<ExtentDirection> result;
+    result.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        result.push_back({points[i].azimuth, points[i].elevation, points[i].weight});
     }
-
-    constexpr float k_deg2rad = std::numbers::pi_v<float> / 180.0F;
-
-    const SceneDirectionVector center = direction_vector_from_position(position);
-    SceneDirectionVector horizontal = vec_cross({0.0F, 0.0F, 1.0F}, center);
-    if (canonical_vector_length(horizontal.x, horizontal.y, horizontal.z) < 1.0e-4F) {
-        horizontal = {1.0F, 0.0F, 0.0F};
-    } else {
-        horizontal = vec_normalize(horizontal);
-    }
-    const SceneDirectionVector vertical = vec_normalize(vec_cross(center, horizontal));
-
-    std::vector<ExtentDirection> cloud;
-    cloud.reserve(k_extent_disk_samples.size() - 1U);
-    for (const auto& sample : k_extent_disk_samples) {
-        if (sample.weight <= 0.0F) {
-            continue;
-        }
-        const float h = std::tan(sample.x * width_radius * k_deg2rad);
-        const float v = std::tan(sample.y * height_radius * k_deg2rad);
-        const SceneDirectionVector dir = vec_normalize({(center.x + (horizontal.x * h)) + (vertical.x * v),
-                                                        (center.y + (horizontal.y * h)) + (vertical.y * v),
-                                                        (center.z + (horizontal.z * h)) + (vertical.z * v)});
-        const auto [azimuth, elevation] = polar_from_direction(dir);
-        cloud.push_back({azimuth, elevation, sample.weight});
-    }
-    return cloud;
+    return result;
 }
 
 } // namespace mradm::render_common

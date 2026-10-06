@@ -1,3 +1,4 @@
+#include "../scene_numeric/spatial.h"
 #pragma once
 // Frozen ba96bac numerical reference; tests only.
 #include <algorithm>
@@ -438,12 +439,12 @@ std::vector<ChannelGainInfo> build_gain_matrix(const AdmScene& scene, LogSink& l
                 const auto& off = obj.position_offset;
                 SceneObjectBlock base = raw_block;
                 if (off) {
-                    base.position = apply_position_offset(base.position, *off);
+                    base.position = scene_numeric_reference::legacy_apply_position_offset(base.position, *off);
                 }
 
                 Hoa3Coeffs sh{};
                 DiffuseSlots diffuse_gains{};
-                const auto sources = expand_object_divergence(base);
+                const auto sources = scene_numeric_reference::legacy_expand_object_divergence(base);
                 for (std::size_t source_index = 0; source_index < sources.size(); ++source_index) {
                     const auto& source = sources.at(source_index);
                     const Hoa3Coeffs source_sh = encode_extent(source.position, source);

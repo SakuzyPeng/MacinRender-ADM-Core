@@ -146,6 +146,7 @@ target_sources(
     mr_adm_core
     PRIVATE
         src/adm_core/direct_speakers_matrix.cpp
+        src/adm_core/scene_math.cpp
         src/adm_core/semantic_policy.cpp
         "${MR_ADM_GENERATED_VERSION_CPP}"
     PUBLIC
@@ -174,7 +175,8 @@ target_include_directories(
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_link_libraries(mr_adm_core PUBLIC tl::expected fmt::fmt)
+target_link_libraries(mr_adm_core PUBLIC tl::expected fmt::fmt PRIVATE
+    $<BUILD_INTERFACE:MacinRender::ADMDsp> $<INSTALL_INTERFACE:MacinRender::RustDSP>)
 target_include_directories(mr_adm_core SYSTEM PRIVATE
     "$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>"
 )
@@ -855,6 +857,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_stereo_peak_guard_tests COMMAND mr_adm_stereo_peak_guard_tests)
     set_tests_properties(mr_adm_stereo_peak_guard_tests PROPERTIES TIMEOUT 30)
 
+    add_executable(mr_adm_scene_numeric_rust_tests tests/unit/scene_numeric_rust_test.cpp)
+    target_link_libraries(mr_adm_scene_numeric_rust_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+    mr_adm_core_apply_warnings(mr_adm_scene_numeric_rust_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_scene_numeric_rust_tests)
+    add_test(NAME mr_adm_scene_numeric_rust_tests COMMAND mr_adm_scene_numeric_rust_tests)
+
     add_executable(mr_adm_live_vbap_rust_tests tests/unit/live_vbap_rust_test.cpp)
     target_link_libraries(mr_adm_live_vbap_rust_tests PRIVATE MacinRender::ADMRenderVBAP
         MacinRender::ADMRenderCommon MacinRender::ADMDsp fmt::fmt)
@@ -1491,8 +1499,20 @@ endif()
 
 # ── Install ───────────────────────────────────────────────────────────────────
 
-# Only mr_adm_core is export-safe: its public deps (fmt, tl::expected) have
-# installed CMake configs; it does not directly link FetchContent ADM targets.
+# Core's private Rust archive and native link requirements also travel with the package.
+include(CMakePackageConfigHelpers)
+if(WIN32)
+    set(MR_ADM_INSTALLED_RUST_ARCHIVE "mradm_ffi.lib")
+else()
+    set(MR_ADM_INSTALLED_RUST_ARCHIVE "libmradm_ffi.a")
+endif()
+configure_package_config_file(cmake/MacinRenderADMCoreConfig.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/MacinRenderADMCoreConfig.cmake"
+    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/MacinRenderADMCore")
+install(FILES "$<TARGET_FILE:mradm_ffi-static>" DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    RENAME "${MR_ADM_INSTALLED_RUST_ARCHIVE}")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/MacinRenderADMCoreConfig.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/MacinRenderADMCore")
 install(
     TARGETS mr_adm_core
     EXPORT MacinRenderADMCoreTargets

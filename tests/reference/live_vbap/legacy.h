@@ -1,3 +1,4 @@
+#include "../scene_numeric/spatial.h"
 // Frozen test-only implementation from 577fe2d; see provenance.json.
 #pragma once
 #include <algorithm>
@@ -337,12 +338,12 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
             std::ranges::transform(layout_.speakers, std::back_inserter(speakers), [](const auto& speaker) {
                 return SceneOutputSpeaker{speaker.azimuth, speaker.elevation, speaker.is_lfe};
             });
-            block = apply_channel_lock(block, speakers);
+            block = scene_numeric_reference::legacy_apply_channel_lock(block, speakers);
         }
 
         std::vector<float> result(layout_.speakers.size(), 0.0F);
-        for (const auto& source : expand_object_divergence(block)) {
-            const auto position = scene_position_to_polar(source.position);
+        for (const auto& source : scene_numeric_reference::legacy_expand_object_divergence(block)) {
+            const auto position = scene_numeric_reference::legacy_scene_position_to_polar(source.position);
             const float distance = std::max(0.4F, position.distance);
             float spread = 0.0F;
             if (!is_2d() && config_.speaker_spread_mode != SpeakerSpreadMode::none) {
@@ -350,7 +351,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
                 const float width = source.width * 60.0F * scale;
                 const float height = source.height * 45.0F * scale;
                 const float depth = source.depth * 20.0F * scale;
-                spread = std::min(180.0F, render_common::canonical_vector_length(width, height, depth));
+                spread = std::min(180.0F, scene_numeric_reference::canonical_vector_length(width, height, depth));
             }
             auto source_gains = point_gains(position.azimuth, position.elevation, source.gain, spread);
             if (!source_gains) {
@@ -411,7 +412,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
                               fmt::format("DirectSpeakers element {} has neither a routable label nor position",
                                           descriptor.element_id));
         }
-        const auto polar = scene_position_to_polar(position);
+        const auto polar = scene_numeric_reference::legacy_scene_position_to_polar(position);
         warn_once(frame,
                   descriptor.element_id,
                   0,

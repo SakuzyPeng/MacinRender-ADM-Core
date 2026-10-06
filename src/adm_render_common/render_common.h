@@ -35,12 +35,7 @@ namespace mradm::render_common {
 // 精确的乘积使 FP contraction 不改变这条路径，但两次加法仍会舍入：不能重排求和，
 // 也不能保证任意置换分量后长度的位模式相同。括号表达运算顺序，不覆盖 fast-math 等重排选项。
 // 三平台 PCM 验收及此约束的边界见 docs/architecture/CONSISTENCY_LOCALIZATION.md。
-[[nodiscard]] inline float canonical_vector_length(float x, float y, float z) noexcept {
-    const double dx = x;
-    const double dy = y;
-    const double dz = z;
-    return static_cast<float>(std::sqrt(((dx * dx) + (dy * dy)) + (dz * dz)));
-}
+[[nodiscard]] float canonical_vector_length(float x, float y, float z) noexcept;
 
 // Alphanumeric-only speaker-label key (uppercased; '+', '-' and separators dropped). Used for
 // LFE keyword detection where the sign / position digits do not matter (LFE / LFE1 / SUB …).

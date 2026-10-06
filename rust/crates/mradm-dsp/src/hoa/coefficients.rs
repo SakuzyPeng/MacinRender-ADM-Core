@@ -4,33 +4,7 @@ use super::{Coefficients, Source, Trace, invalid};
 use crate::Result;
 type Vec3 = [f32; 3];
 const RAD: f32 = std::f32::consts::PI / 180.;
-const OUTER: f32 = 1. / 12.;
-const INNER: f32 = 1. / 24.;
-// Keep the exact decimal binary32 samples shared by the existing C++ backends.
-#[allow(clippy::approx_constant)]
-pub const DISK: [[f32; 3]; 17] = [
-    [0., 0., 0.],
-    [1., 0., OUTER],
-    [-1., 0., OUTER],
-    [0., 1., OUTER],
-    [0., -1., OUTER],
-    [0.70710678, 0.70710678, OUTER],
-    [-0.70710678, 0.70710678, OUTER],
-    [0.70710678, -0.70710678, OUTER],
-    [-0.70710678, -0.70710678, OUTER],
-    [0.5, 0., INNER],
-    [-0.5, 0., INNER],
-    [0., 0.5, INNER],
-    [0., -0.5, INNER],
-    [0.35355339, 0.35355339, INNER],
-    [-0.35355339, 0.35355339, INNER],
-    [0.35355339, -0.35355339, INNER],
-    [-0.35355339, -0.35355339, INNER],
-];
-pub fn length([x, y, z]: Vec3) -> f32 {
-    let (x, y, z) = (f64::from(x), f64::from(y), f64::from(z));
-    (((x * x) + (y * y)) + (z * z)).sqrt() as f32
-}
+pub use crate::scene_math::{DISK, length};
 fn normalize(v: Vec3) -> Vec3 {
     let len = 1e-6f32.max(length(v));
     [v[0] / len, v[1] / len, v[2] / len]
