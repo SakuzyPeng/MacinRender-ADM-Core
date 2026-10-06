@@ -15,5 +15,6 @@ mradm-adm = { path = "../mradm-adm" }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 
 [features]
+diagnostics = ["mradm-dsp/diagnostics", "mradm-ear/diagnostics"]
 default = ["sofa"]
 sofa = ["mradm-dsp/sofa"]

@@ -11,6 +11,7 @@
 #include "adm/audio_io.h"
 #include "adm/peak.h"
 
+#include "../adm_render_common/consistency_trace.h"
 #include "meter.h"
 
 namespace mradm {
@@ -128,6 +129,9 @@ Result<void> apply_peak_limit(const std::string& path, float target_dbtp, LogSin
     logs.log(
         LogLevel::info, "peak-limit", fmt::format("applying gain {:.4f} ({:.2f} dB)", gain, 20.0F * std::log10(gain)));
 
+    consistency::dump("post/peak.10-measurement.f32",
+                      {static_cast<float>(*peak_linear), static_cast<float>(target_linear)});
+    consistency::dump("post/peak.20-gain.f32", {gain});
     return apply_gain(path, gain);
 }
 

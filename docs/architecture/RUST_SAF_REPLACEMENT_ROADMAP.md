@@ -104,6 +104,8 @@ Rust 单元测试覆盖独立 double DFT、实际 FFT 长度、凸包/Voronoi、
 
 ## 5. 二期：跨平台逐位一致
 
+首批基线、实时回放和 Rust 分歧定位工具见 [Rust 二期基线](RUST_PHASE2_BASELINE.md)。
+
 目标仍是相同版本、输入与参数在 macOS arm64、Windows x64、Linux x64 上产生相同最终 float32 PCM，但以下项目不阻塞一期：
 
 - 建立确定性 FFT/数学参考路径，控制 SIMD/FMA、三角函数及系数生成。

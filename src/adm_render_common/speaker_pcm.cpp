@@ -11,6 +11,7 @@
 
 #include "adm/audio_io.h"
 
+#include "consistency_trace.h"
 #include "meter.h"
 #include "render_common.h"
 
@@ -156,6 +157,12 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
                         {},
                         frames_done,
                         static_cast<std::size_t>(frames_now));
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+            const std::string trace_key = "speaker/s" + std::to_string(frames_done);
+            consistency::dump(trace_key + ".10-input.f32",
+                              std::span<const float>{in_block}.first(static_cast<std::size_t>(frames_now) * num_in_ch));
+            consistency::dump(trace_key + ".40-mix.f32", std::span<const float>{out_block}.first(out_samples));
+#endif
             if (process) {
                 auto status =
                     process(std::span<const float>(in_block.data(), static_cast<std::size_t>(num_in_ch) * frames_now),

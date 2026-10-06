@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -27,6 +28,8 @@ struct SceneStreamConfig {
     std::uint64_t input_queue_bytes{64ULL * 1024ULL * 1024ULL};
     std::uint32_t output_ring_frames{8192U};
     std::uint32_t startup_watermark_frames{4096U};
+    // Private deterministic replay seam. Empty uses the production monotonic clock.
+    std::function<std::chrono::steady_clock::time_point()> clock;
 };
 
 struct ScenePcmPlaneView {
@@ -92,6 +95,7 @@ struct SceneStreamStatus {
     float ring_fill{0.0F};
     bool ended{false};
     bool failed{false};
+    bool production_complete{false};
 };
 
 class SceneStreamEngine {
@@ -113,6 +117,9 @@ class SceneStreamEngine {
     [[nodiscard]] Result<SceneSubmitStatus> submit_frame(const SceneFrameView& view, std::chrono::milliseconds timeout);
     [[nodiscard]] Result<void> signal_end(std::uint64_t epoch_id, std::int64_t end_sample);
     [[nodiscard]] Result<void> switch_backend(live_scene::RendererConfig config);
+    // Fence previously submitted work and controls. A replay consumer must drain
+    // the output ring first; this does not bypass normal queue backpressure.
+    [[nodiscard]] Result<void> wait_idle(std::chrono::milliseconds timeout);
     void set_listener_orientation(const ListenerOrientation& orientation);
     [[nodiscard]] Result<void> set_semantic_policy_json(std::string_view json, std::uint64_t revision);
 

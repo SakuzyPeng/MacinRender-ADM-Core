@@ -1003,6 +1003,35 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_repeat_render)
     mr_adm_core_apply_static_analysis(mr_adm_repeat_render)
 
+    foreach(_probe IN ITEMS scene render)
+        add_executable(mr_adm_phase2_${_probe} EXCLUDE_FROM_ALL tests/tools/phase2_${_probe}.cpp)
+        target_link_libraries(mr_adm_phase2_${_probe} PRIVATE MacinRender::ADMEngine
+            MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMAudio nlohmann_json::nlohmann_json)
+        target_include_directories(mr_adm_phase2_${_probe} PRIVATE src/adm_engine)
+        mr_adm_core_apply_warnings(mr_adm_phase2_${_probe})
+    endforeach()
+
+    set_property(TARGET mr_adm_phase2_scene PROPERTY EXCLUDE_FROM_ALL FALSE)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_custom_target(mr_adm_phase2_tools
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/consistency/phase2_common.py"
+                --stamp-build "${CMAKE_CURRENT_BINARY_DIR}"
+            DEPENDS mradm_exe mr_adm_make_fixture mr_adm_pcm_bits mr_adm_phase2_render
+                mr_adm_phase2_scene mr_adm_phase2_kernels mr_adm_repeat_render
+            USES_TERMINAL
+        )
+        add_test(NAME mr_adm_phase2_tool_tests
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/phase2_tools_test.py"
+                --scene $<TARGET_FILE:mr_adm_phase2_scene>)
+    endif()
+
+    if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
+        foreach(_trace_target IN ITEMS mr_adm_realtime mr_adm_engine mr_adm_loudness mr_adm_peak mr_adm_render_triple_balance mr_adm_audio mr_adm_render_common)
+            target_compile_definitions(${_trace_target} PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
+        endforeach()
+    endif()
+
     if(MR_ADM_BUILD_SAF_REFERENCE_TESTS)
     add_executable(mr_adm_export_saf_hoa_matrix EXCLUDE_FROM_ALL tests/tools/export_saf_hoa_matrix.cpp)
     target_link_libraries(mr_adm_export_saf_hoa_matrix PRIVATE saf)

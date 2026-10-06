@@ -1,9 +1,8 @@
 name: Consistency
 
-# Rust DSP phase 1: record cross-platform PCM differences, gate input integrity
-# and same-process repeatability. Cross-platform bit equality is a phase-2 goal.
-# A/B still records the effect of the existing C++ numerical controls; RustFFT
-# uses its normal SIMD dispatch in both configurations.
+# Rust phase 2 records current production numerics without claiming bit equality.
+# A is default; B controls C/C++ floating point only. RustFFT remains automatic.
+# Each job rebuilds in place for diagnostic noninterference and bounded attribution.
 
 on:
   push:
@@ -97,6 +96,8 @@ jobs:
           -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
           -DMR_ADM_CORE_BUILD_TESTS=ON
           -DMR_ADM_ENABLE_IAMF=OFF
+          -DMR_ADM_ENABLE_SOFA=OFF
+          -DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -104,8 +105,7 @@ jobs:
       - name: Build
         run: >
           cmake --build build/consistency-${{ matrix.config }}
-          --target mradm_exe mr_adm_pcm_bits mr_adm_make_fixture mr_adm_repeat_render
-          mr_adm_render_common_numeric_tests
+          --target mr_adm_phase2_tools mr_adm_render_common_numeric_tests
 
       - name: Test vector length rounding
         run: build/consistency-${{ matrix.config }}/mr_adm_render_common_numeric_tests
@@ -121,11 +121,12 @@ jobs:
         run: |
           python3 tests/unit/consistency_build_test.py
           python3 tests/unit/consistency_checkpoints_test.py
+          python3 tests/unit/phase2_tools_test.py --scene build/consistency-${{ matrix.config }}/mr_adm_phase2_scene
 
-      - name: Render matrix
+      - name: Collect Rust phase-2 baseline
         run: >
-          bash scripts/consistency/render-matrix.sh
-          build/consistency-${{ matrix.config }} out/${{ matrix.platform }}
+          python3 scripts/consistency/run-rust-phase2.py
+          build/consistency-${{ matrix.config }} out/${{ matrix.platform }} --config ${{ matrix.config }}
 
       # The build record travels with the PCM. A controlled-build result only means something
       # alongside evidence that the flags reached the compiler, which BLAS backend SAF picked,
@@ -151,13 +152,18 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      # The compare job needs a binary to localise differences; one build is enough.
-      - name: Upload compare tool
-        if: matrix.platform == 'linux' && matrix.config == 'a'
+      - name: Rebuild and collect diagnostics
+        run: |
+          cmake -S . -B build/consistency-${{ matrix.config }} -DMR_ADM_CONSISTENCY_DIAGNOSTICS=ON
+          cmake --build build/consistency-${{ matrix.config }} --target mr_adm_phase2_tools
+          python3 scripts/consistency/run-rust-phase2.py build/consistency-${{ matrix.config }} out/${{ matrix.platform }}-diagnostic --config ${{ matrix.config }} --baseline out/${{ matrix.platform }}
+
+      - name: Upload diagnostic baseline
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: consistency-tool
-          path: build/consistency-a/mr_adm_pcm_bits
+          name: consistency-${{ matrix.platform }}-${{ matrix.config }}-diagnostic
+          path: out/${{ matrix.platform }}-diagnostic
           if-no-files-found: error
           retention-days: 14
 
@@ -244,7 +250,7 @@ jobs:
           NUMERIC_FLAGS: ${{ matrix.numeric_flags }}
         run: |
           call "%VCVARS64%"
-          cmake -S . -B build/windows -G Ninja ^
+          cmake -S . -B build/win-canon -G Ninja ^
             -DCMAKE_BUILD_TYPE=Release ^
             -DCMAKE_C_COMPILER=cl ^
             -DCMAKE_CXX_COMPILER=cl ^
@@ -256,24 +262,25 @@ jobs:
             -DMR_ADM_FLAC_PROVIDER=VENDORED ^
             -DMR_ADM_OPUS_PROVIDER=VENDORED ^
             -DMR_ADM_ENABLE_IAMF=OFF ^
-            -DMR_ADM_ENABLE_SOFA=ON ^
+            -DMR_ADM_ENABLE_SOFA=OFF ^
+            -DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF ^
             %NUMERIC_FLAGS%
 
       - name: Build
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/windows --target mradm_exe mr_adm_pcm_bits mr_adm_make_fixture mr_adm_repeat_render mr_adm_render_common_numeric_tests
+          cmake --build build/win-canon --target mr_adm_phase2_tools mr_adm_render_common_numeric_tests
 
       - name: Test vector length rounding
         shell: cmd
         run: |
           call "%VCVARS64%"
-          build\windows\mr_adm_render_common_numeric_tests.exe
+          build\win-canon\mr_adm_render_common_numeric_tests.exe
 
       - name: Test consistency utilities
         shell: bash
-        run: python tests/unit/consistency_tools_test.py --pcm-bits build/windows/mr_adm_pcm_bits.exe --bash "$(cygpath -w "$BASH")"
+        run: python tests/unit/consistency_tools_test.py --pcm-bits build/win-canon/mr_adm_pcm_bits.exe --bash "$(cygpath -w "$BASH")"
 
       - name: Test numeric build controls
         shell: cmd
@@ -282,15 +289,17 @@ jobs:
           python tests/unit/consistency_build_test.py --c-compiler cl --cxx-compiler cl
           if errorlevel 1 exit /b 1
           python tests/unit/consistency_checkpoints_test.py
+          if errorlevel 1 exit /b 1
+          python tests/unit/phase2_tools_test.py --scene build/win-canon/mr_adm_phase2_scene.exe
 
       # One render script for all three platforms. cmd loads the MSVC environment first so the
       # binaries find their runtime, then hands off to Git Bash so the matrix has a single
       # implementation rather than a PowerShell copy that can drift.
-      - name: Render matrix
+      - name: Collect Rust phase-2 baseline
         shell: cmd
         run: |
           call "%VCVARS64%"
-          bash scripts/consistency/render-matrix.sh build/windows out/windows .exe
+          python scripts/consistency/run-rust-phase2.py build/win-canon out/windows --config ${{ matrix.config }}
 
       # scan-fp.sh needs a disassembler; Git Bash ships none, so it records that the scan was
       # skipped instead of failing. build-info.sh still captures whether /fp:precise and the
@@ -301,8 +310,8 @@ jobs:
         env:
           PYTHON: python
         run: |
-          bash scripts/consistency/build-info.sh build/windows out/windows/build-info.txt
-          bash scripts/consistency/scan-fp.sh build/windows/mradm.exe out/windows/scan-fp.txt
+          bash scripts/consistency/build-info.sh build/win-canon out/windows/build-info.txt
+          bash scripts/consistency/scan-fp.sh build/win-canon/mradm.exe out/windows/scan-fp.txt
 
       - name: Upload baseline
         if: always()
@@ -310,6 +319,25 @@ jobs:
         with:
           name: consistency-windows-${{ matrix.config }}
           path: out/windows
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Rebuild and collect diagnostics
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          cmake -S . -B build/win-canon -DMR_ADM_CONSISTENCY_DIAGNOSTICS=ON
+          if errorlevel 1 exit /b 1
+          cmake --build build/win-canon --target mr_adm_phase2_tools
+          if errorlevel 1 exit /b 1
+          python scripts/consistency/run-rust-phase2.py build/win-canon out/windows-diagnostic --config ${{ matrix.config }} --baseline out/windows
+
+      - name: Upload diagnostic baseline
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: consistency-windows-${{ matrix.config }}-diagnostic
+          path: out/windows-diagnostic
           if-no-files-found: error
           retention-days: 14
 
@@ -336,55 +364,24 @@ jobs:
         with:
           path: baselines
 
-      - name: Compare (config A — default numerics)
+      - name: Compare both configurations and diagnostic checkpoints
         shell: bash
         run: |
-          # Explicit bash enables -eo pipefail: tee must not turn a gate failure green.
-          set -o pipefail
-          chmod +x baselines/consistency-tool/mr_adm_pcm_bits
-          for platform in macos linux windows; do
-            echo "== same-process measurements: $platform =="
-            cat "baselines/consistency-$platform-a"/repeats/*.comparison.txt
-            echo "== build record: $platform =="
-            cat "baselines/consistency-$platform-a"/build-info.txt "baselines/consistency-$platform-a"/scan-fp.txt
-          done | tee consistency-report-a.txt
-          bash scripts/consistency/compare-platforms.sh \
-            --expected scripts/consistency/expected-identical-rust-phase1.txt \
-            baselines/consistency-tool/mr_adm_pcm_bits \
-            baselines/consistency-macos-a \
-            baselines/consistency-linux-a \
-            baselines/consistency-windows-a \
-            2>&1 | tee -a consistency-report-a.txt
-
-      # Runs even when config A regressed a gated case: the controlled result is the more
-      # informative half of phase 0 and should not be withheld because the other job failed.
-      - name: Compare (config B — controlled numerics)
-        if: always()
-        shell: bash
-        run: |
-          set -o pipefail
-          chmod +x baselines/consistency-tool/mr_adm_pcm_bits
-          for platform in macos linux windows; do
-            echo "== same-process measurements: $platform =="
-            cat "baselines/consistency-$platform-b"/repeats/*.comparison.txt
-            echo "== build record: $platform =="
-            cat "baselines/consistency-$platform-b"/build-info.txt "baselines/consistency-$platform-b"/scan-fp.txt
-          done | tee consistency-report-b.txt
-          bash scripts/consistency/compare-platforms.sh \
-            --expected scripts/consistency/expected-identical-rust-phase1.txt \
-            baselines/consistency-tool/mr_adm_pcm_bits \
-            baselines/consistency-macos-b \
-            baselines/consistency-linux-b \
-            baselines/consistency-windows-b \
-            2>&1 | tee -a consistency-report-b.txt
+          for config in a b; do
+            for suffix in "" "-diagnostic"; do
+              python3 scripts/consistency/compare-rust-phase2.py \
+                --output "consistency-report-${config}${suffix}.json" \
+                "baselines/consistency-macos-${config}${suffix}" \
+                "baselines/consistency-linux-${config}${suffix}" \
+                "baselines/consistency-windows-${config}${suffix}"
+            done
+          done
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: consistency-report
-          path: |
-            consistency-report-a.txt
-            consistency-report-b.txt
-          if-no-files-found: warn
+          path: consistency-report-*.json
+          if-no-files-found: error
           retention-days: 90

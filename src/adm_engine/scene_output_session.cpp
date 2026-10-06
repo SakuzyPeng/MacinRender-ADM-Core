@@ -7,6 +7,7 @@
 #include <thread>
 #include <utility>
 
+#include "../adm_render_common/consistency_trace.h"
 #include "../adm_render_common/speaker_layouts.h"
 
 namespace mradm::realtime {
@@ -232,6 +233,12 @@ std::size_t SceneOutputSession::pull(std::span<float> output, std::size_t frames
             output[i] *= gain;
         }
     }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    if (result.media_frames)
+        consistency::dump("device/e" + std::to_string(stream_->status().epoch_id) + "-s" +
+                              std::to_string(result.first_media_frame) + ".90-output.f32",
+                          std::span<const float>{output}.first(result.media_frames * channels_));
+#endif
     pulls_.fetch_sub(1U, std::memory_order_seq_cst);
     return result.media_frames;
 }
@@ -266,7 +273,19 @@ ScenePullResult SceneOutputSession::pull_stereo(std::span<float> output, std::ui
         // Headphone compensation, applied UPSTREAM of the peak guard so a boosted band is caught
         // by its -1 dBFS ceiling instead of escaping it. peak_input_ is sized for k_pull_frames
         // and `request` is clamped to it above, so this never needs to resize.
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        const std::string key =
+            "device/e" + std::to_string(pulled.epoch_id) + "-s" + std::to_string(pulled.first_media_frame);
+        if (pulled.media_frames)
+            consistency::dump(key + ".70-before-hptf.f32",
+                              std::span<const float>{peak_input_}.first(pulled.media_frames * 2U));
+#endif
         hptf_.process(peak_input_.data(), static_cast<std::size_t>(pulled.media_frames));
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        if (pulled.media_frames)
+            consistency::dump(key + ".80-hptf.f32",
+                              std::span<const float>{peak_input_}.first(pulled.media_frames * 2U));
+#endif
         peak_guard_->push(std::span{peak_input_}.first(static_cast<std::size_t>(pulled.media_frames) * 2U));
         if (pulled.media_frames == 0U && !peak_source_ended_) {
             break;

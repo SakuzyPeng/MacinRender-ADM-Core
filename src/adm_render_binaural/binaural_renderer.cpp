@@ -1960,16 +1960,34 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
                                                             : std::pair<float, float>{ss.az, ss.el};
                             adapter.set_source(
                                 static_cast<int>(li), sp_az, sp_el, ss.spread_deg, st.object_gain * ss.gain);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+                            consistency::dump("spreader/s" + std::to_string(sp_cursor) + "-g" + std::to_string(gi) +
+                                                  "-lane" + std::to_string(li) + ".20-config.f32",
+                                              {sp_az, sp_el, ss.spread_deg, st.object_gain * ss.gain});
+#endif
                             lane_ptrs[li] = track_ch.data() + (lane.track_slot * fn);
                         } else {
                             lane_ptrs[li] = zeros_full.data();
                         }
                     }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+                    const std::string trace_key = "spreader/s" + std::to_string(sp_cursor) + "-g" + std::to_string(gi);
+                    for (std::size_t li = 0; li < lane_ptrs.size(); ++li) {
+                        consistency::dump(trace_key + "-lane" + std::to_string(li) + ".30-input.f32",
+                                          std::span<const float>{lane_ptrs[li], seg_fn});
+                    }
+#endif
                     adapter.process_chunk(lane_ptrs.data(),
                                           static_cast<int>(lane_ptrs.size()),
                                           seg_fn,
                                           spr_l[gi].data() + seg_off,
                                           spr_r[gi].data() + seg_off);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+                    consistency::dump(trace_key + ".50-left.f32",
+                                      std::span<const float>{spr_l[gi].data() + seg_off, seg_fn});
+                    consistency::dump(trace_key + ".50-right.f32",
+                                      std::span<const float>{spr_r[gi].data() + seg_off, seg_fn});
+#endif
                     sp_cursor = next_boundary;
                 }
             };

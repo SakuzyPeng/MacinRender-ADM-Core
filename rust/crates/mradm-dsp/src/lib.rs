@@ -5,6 +5,7 @@ pub mod convolution;
 pub mod data;
 pub mod dataset;
 pub mod decorrelator;
+pub mod diagnostics;
 pub mod diffuse;
 pub mod ear_post;
 pub mod fft;

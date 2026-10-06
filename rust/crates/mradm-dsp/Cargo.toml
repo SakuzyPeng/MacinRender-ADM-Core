@@ -15,5 +15,6 @@ rubato.workspace = true
 sofar = { version = "=0.3.0", default-features = false, optional = true }
 
 [features]
+diagnostics = []
 default = ["sofa"]
 sofa = ["dep:sofar"]

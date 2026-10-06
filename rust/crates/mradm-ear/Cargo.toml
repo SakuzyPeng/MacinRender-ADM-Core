@@ -9,3 +9,6 @@ description = "Project-used EAR gain algorithms, derived from EBU libear"
 [dependencies]
 nalgebra.workspace = true
 rustfft.workspace = true
+
+[features]
+diagnostics = []
