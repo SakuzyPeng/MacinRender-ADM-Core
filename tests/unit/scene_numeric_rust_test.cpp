@@ -11,9 +11,11 @@
 #include "adm/scene.h"
 
 #include "../reference/scene_numeric/spatial.h"
+#include "../reference/scene_numeric/transitions.h"
 #include "head_rotation.h"
 #include "render_common.h"
 #include "scene_math.h"
+#include "scene_transition.h"
 
 namespace {
 namespace ref = scene_numeric_reference;
@@ -146,6 +148,50 @@ void spatial() {
         compare(apple[1], ar.second, "apple el");
     }
 }
+void transitions() {
+    for (const size_t channels : {1U, 2U, 65U}) {
+        for (const uint32_t rate : {1U, 8000U, 44100U, 48000U, 192000U}) {
+            dsp::SceneTransitions actual(channels, rate, 2048);
+            ref::Transitions expected(channels, rate);
+            std::vector<float> left(channels * 2051), right(left.size()), reference(left.size()), last(channels),
+                anchor(channels);
+            for (size_t i = 0; i < left.size(); ++i) {
+                right[i] = float(i % 53) / 61;
+            }
+            actual.begin_generation();
+            expected.begin_generation();
+            for (const uint32_t frames : {0U, 1U, 31U, 512U, 2047U, 7U, 2051U}) {
+                for (size_t i = 0; i < left.size(); ++i) {
+                    left[i] = float(i % 37) / 71;
+                }
+                reference = left;
+                check(actual.mix(left, right, frames) == expected.mix(reference, right, frames),
+                      "transition completion");
+                for (size_t i = 0; i < frames * channels; ++i) {
+                    compare(left[i], reference[i], "backend PCM");
+                }
+                const bool silence = frames == 31U;
+                actual.process_output(left, frames, silence);
+                expected.apply_transition(reference.data(), frames, silence);
+                for (size_t i = 0; i < frames * channels; ++i) {
+                    compare(left[i], reference[i], "generation PCM");
+                }
+                const auto status = actual.status();
+                check(status.backend_position == expected.backend_crossfade_position &&
+                          status.generation_position == expected.transition_position &&
+                          status.generation_remaining == expected.transition_remaining,
+                      "transition counters");
+                if (frames == 512U) {
+                    actual.begin_generation();
+                    expected.begin_generation();
+                }
+            }
+            auto moved = std::move(actual);
+            moved.reset();
+            check(moved.status().backend_position == 0, "transition move/reset");
+        }
+    }
+}
 void independent() {
     compare(render_common::canonical_vector_length(3, 4, 0), 5, "3-4-5", true);
     check(wrap_azimuth(-180) == 180 && wrap_azimuth(540) == 180, "azimuth seam");
@@ -166,6 +212,7 @@ void independent() {
 int main(int argc, char** argv) {
     spatial();
     independent();
+    transitions();
     std::cout << "Scene spatial comparison: " << compared << " floats, max absolute error " << maximum << ", failures "
               << failures << '\n';
     if (argc > 1) {
