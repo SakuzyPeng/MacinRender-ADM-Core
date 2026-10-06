@@ -870,6 +870,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_scene_numeric_rust_tests)
     add_test(NAME mr_adm_scene_numeric_rust_tests COMMAND mr_adm_scene_numeric_rust_tests)
 
+    add_test(NAME mr_adm_core_package_config_tests
+        COMMAND "${CMAKE_COMMAND}"
+            -S "${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/core_package_config"
+            -B "${CMAKE_CURRENT_BINARY_DIR}/tests/core_package_config"
+            "-DMR_ADM_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}")
+
     add_executable(mr_adm_live_vbap_rust_tests tests/unit/live_vbap_rust_test.cpp)
     target_link_libraries(mr_adm_live_vbap_rust_tests PRIVATE MacinRender::ADMRenderVBAP
         MacinRender::ADMRenderCommon MacinRender::ADMDsp fmt::fmt)
