@@ -31,10 +31,15 @@ pub fn length([x, y, z]: Vec3) -> f32 {
     (((x * x) + (y * y)) + (z * z)).sqrt() as f32
 }
 pub fn cross(a: Vec3, b: Vec3) -> Vec3 {
+    cross_compat(a, b, false)
+}
+pub fn cross_compat(a: Vec3, b: Vec3, contract: bool) -> Vec3 {
+    // The tangent frame must follow the same contraction policy as its radii.
+    // A one-ULP change here can select another quantized HRTF cell after atan2.
     [
-        (a[1] * b[2]) - (a[2] * b[1]),
-        (a[2] * b[0]) - (a[0] * b[2]),
-        (a[0] * b[1]) - (a[1] * b[0]),
+        cpp_madd(a[1], b[2], -(a[2] * b[1]), contract),
+        cpp_madd(a[2], b[0], -(a[0] * b[2]), contract),
+        cpp_madd(a[0], b[1], -(a[1] * b[0]), contract),
     ]
 }
 pub fn add(a: Vec3, b: Vec3) -> Vec3 {
@@ -198,13 +203,13 @@ pub fn cloud(
     } else {
         center
     };
-    let mut horizontal = cross([0., 0., 1.], center);
+    let mut horizontal = cross_compat([0., 0., 1.], center, contract);
     horizontal = if length(horizontal) < 1e-4 {
         [1., 0., 0.]
     } else {
         normalize(horizontal, binaural)
     };
-    let vertical = normalize(cross(center, horizontal), binaural);
+    let vertical = normalize(cross_compat(center, horizontal, contract), binaural);
     let mut n = 0;
     for (slot, s) in DISK.iter().enumerate() {
         if s[2] <= 0. {

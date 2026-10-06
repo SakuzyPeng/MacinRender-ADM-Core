@@ -19,6 +19,16 @@ fn fixed_sum_order_and_axes() {
     assert_eq!(distance([1., 0., 0.], [0., 1., 0.]), 2f32.sqrt());
 }
 #[test]
+fn cross_product_preserves_the_selected_contraction_policy() {
+    // (1 + 2^-23) * (1 - 2^-23) - 1 is exactly -2^-46. Separate
+    // multiplication rounds the product to one, losing the cross component.
+    let a = [f32::from_bits(0x3f800001), 1., 0.];
+    let b = [1., f32::from_bits(0x3f7ffffe), 0.];
+    assert_eq!(cross_compat(a, b, true)[2].to_bits(), 0xa8800000);
+    assert_eq!(cross_compat(a, b, false)[2].to_bits(), 0);
+    assert_eq!(cross(a, b)[2].to_bits(), 0);
+}
+#[test]
 fn seams_ties_signed_zero_and_routes() {
     for (x, y) in [
         (180., 180.),

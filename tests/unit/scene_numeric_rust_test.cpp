@@ -13,6 +13,7 @@
 
 #include "../reference/scene_numeric/spatial.h"
 #include "../reference/scene_numeric/transitions.h"
+#include "dsp_ffi.h"
 #include "head_rotation.h"
 #include "render_common.h"
 #include "scene_math.h"
@@ -218,6 +219,67 @@ class SceneNumericChecks {
         const volatile float loaded = value;
         return loaded;
     }
+    void extent_grid_boundaries() {
+        struct ExtentCase {
+            std::array<uint32_t, 6> bits;
+            bool cartesian;
+        };
+        // Runtime binary32 inputs found by comparison with the frozen native implementation.
+        // Ordinary angular tolerances cannot detect a change of HRTF cell at a half-degree boundary.
+        const std::array<ExtentCase, 5> cases{{
+            {{0x3ddd81f0, 0xbe5ad85c, 0xbf7192c9, 0x3ea32df5, 0x3f001345, 0x3efc8c93}, true},
+            {{0xc1fa471a, 0xc1d10476, 0x3fca6820, 0x3eb8574b, 0x3f491223, 0x3d032fcb}, false},
+            {{0xc262e5df, 0x4221c913, 0x3f228469, 0x3dbea0ba, 0x3f248abd, 0x3e07fcfc}, false},
+            {{0xbf4efb2b, 0x3eb65e04, 0x3f121b3a, 0x3e79702e, 0x3f672852, 0x3ebca8c1}, true},
+            {{0xbf03e9ea, 0x3eb3a364, 0xbf486ab1, 0x3de32010, 0x3f20ff43, 0x3f364b34}, true},
+        }};
+        for (const auto& sample : cases) {
+            std::array<float, 7> input{};
+            for (size_t i = 0; i < sample.bits.size(); ++i) {
+                input.at(i) = runtime_float(std::bit_cast<float>(sample.bits.at(i)));
+            }
+            input[6] = 1.0F;
+            SceneObjectBlock block;
+            block.position.cartesian = sample.cartesian;
+            block.position.x = block.position.azimuth = input[0];
+            block.position.y = block.position.elevation = input[1];
+            block.position.z = block.position.distance = input[2];
+            block.width = input[3];
+            block.height = input[4];
+            block.depth = input[5];
+            const auto common =
+                render_common::extent_disk_cloud(block.position, block.width, block.height, block.depth);
+            const auto old_common = ref::extent_disk_cloud(block.position, block.width, block.height, block.depth);
+            const auto old = ref::expand_binaural_extent(block, 1.0F, BinauralSpreadMode::automatic);
+            std::array<MradmSceneCloudPoint, 17> points{};
+            size_t count = 0;
+            check(mradm_dsp_scene_cloud(input.data(),
+                                        input.size(),
+                                        sample.cartesian ? 1U : 0U,
+                                        1U | dsp::scene_cpp_contract,
+                                        points.data(),
+                                        points.size(),
+                                        &count,
+                                        nullptr,
+                                        0) == 0,
+                  "extent boundary cloud call");
+            check(count == old.size() && common.size() == old_common.size(), "extent boundary source count");
+            for (size_t i = 0; i < count; ++i) {
+                compare(points.at(i).azimuth, old.at(i).azimuth, "extent boundary azimuth");
+                compare(points.at(i).elevation, old.at(i).elevation, "extent boundary elevation");
+                compare(common.at(i).azimuth, old_common.at(i).azimuth, "common extent boundary azimuth");
+                compare(common.at(i).elevation, old_common.at(i).elevation, "common extent boundary elevation");
+                size_t actual_grid = 0;
+                size_t expected_grid = 0;
+                check(mradm_dsp_hrtf_grid_index(
+                          points.at(i).azimuth, points.at(i).elevation, &actual_grid, nullptr, 0) == 0 &&
+                          mradm_dsp_hrtf_grid_index(
+                              old.at(i).azimuth, old.at(i).elevation, &expected_grid, nullptr, 0) == 0,
+                      "extent boundary grid lookup");
+                check(actual_grid == expected_grid, "extent boundary HRTF cell");
+            }
+        }
+    }
     void pose_boundaries() {
         for (float yaw : {-540.0F, -180.0F, -0.0F, 0.0F, 90.0F, 180.0F, 540.0F, 1.0e30F}) {
             for (float pitch : {-90.0F, -89.99992F, -45.0F, 0.0F, 45.0F, 89.99992F, 90.0F}) {
@@ -328,6 +390,7 @@ class SceneNumericChecks {
         independent();
         pose_boundaries();
         lock_boundaries();
+        extent_grid_boundaries();
         const auto spatial_compared = compared;
         const auto spatial_maximum = maximum;
         maximum = 0;
