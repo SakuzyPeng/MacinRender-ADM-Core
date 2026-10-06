@@ -119,4 +119,6 @@ Rust 单元测试覆盖独立 double DFT、实际 FFT 长度、凸包/Voronoi、
 - 单元 `saf`（`tests/reference/saf_reference_test.cpp`、`tests/reference/spreader_mr.c`、`tests/reference/spreader_mr.h`、`tests/reference/spreader_mr_internal.h`）：在默认 OFF 的 `MR_ADM_BUILD_SAF_REFERENCE_TESTS` 下编译，由 `mr_adm_saf_reference_tests` 比较。
   同一开关还挂着 SAF 探针工具（`mr_adm_numeric_probe` 等）和 `MR_ADM_DIAGNOSTIC_PORTABLE_RNG`，退役时一并处理；历史一致性定位脚本只适用于原 SAF 版本。
 
+2026-10-06 修复参考测试在新版 Xcode 上的头文件兼容性：SAF 的 `saf_hrir.h` 在 `extern "C"` 内包含 `<complex>`，测试入口现显式提前包含该标准头。只调整包含依赖，参考算法、输入和误差阈值均不变；同步更新登记表中测试文件的 SHA-256。
+
 按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。

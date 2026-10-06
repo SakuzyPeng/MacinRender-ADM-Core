@@ -3,6 +3,7 @@
 #include <array>
 #include <bit>
 #include <cmath>
+#include <complex> // SAF headers include this inside extern "C"; load its templates first.
 #include <cstdlib>
 #include <iostream>
 #include <memory>

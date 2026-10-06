@@ -17,8 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # SAF's own headers include C++ <complex> inside extern "C", which GCC rejects; the SAF
-          # comparison was validated on macOS with Accelerate, so it runs there.
+          # Keep the SAF comparison on its validated macOS/Accelerate numerical baseline.
           - unit: saf
             runner: macos-26
             option: MR_ADM_BUILD_SAF_REFERENCE_TESTS
