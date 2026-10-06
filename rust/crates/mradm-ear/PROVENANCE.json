@@ -1,0 +1,27 @@
+{
+  "upstream": "https://github.com/ebu/libear",
+  "commit": "2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15",
+  "license": "Apache-2.0",
+  "files": {
+    "src/bs2051_layouts.cpp": "8d10ad2c23074cea0ff91a7758435f92d9b77db328f667477bbf5cb7259d6178",
+    "src/common/facets.cpp": "31bf5523711012ee0afc906b2882dabd8b74548e5e5c37fa44ee1b39cc155cc5",
+    "src/direct_speakers/mapping_rules.cpp": "2ea23ec46e2e4f1b35e6a98d9079174e7ca0db3624ccde282816eeb7fdce94fc",
+    "resources/Design_5200_100_random.dat": "dcd01c9aaf33f57c8de80993bfd2c943832e629f619ad839f21642e900570ced",
+    "resources/README.md": "d1fb4efd610c794ce1eda0d091eced771b8c8a05cfc8e960f1995d77cfe7a859",
+    "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "src/common/point_source_panner.cpp": "a8192ad6dac30bd2276f9a6b5ed504604b9be140c3e4dbe9cff808a6fad4ee40",
+    "src/common/convex_hull.cpp": "ed1c41c0f65e86a3327c9493ca51ee9810e8ec4465f60facbcbf6d833a6f5573",
+    "src/common/geom.cpp": "609f479019bb71f2a4c7d570af71dc9686224f18557b1b98c9d9f0859e94f0cc",
+    "src/object_based/polar_extent.cpp": "042ff407ac4d480e435f94bc7ccdd55f267b5cc1d8186b63ffed29d828119245",
+    "src/object_based/polar_extent_scalar.cpp": "c050e33a43151dcf46cd78adceb63d5518a27d15ec0f586a050158b57e6827e9",
+    "src/direct_speakers/gain_calculator_direct_speakers.cpp": "cdab7c1a2f270129a9b6365274112ef41dd876eff417b21ab9eb585ee8bdbcf7",
+    "src/hoa/gain_calculator_hoa.cpp": "ab105cfc58cd560d1674657b088fc28eaa2544522046bf965690694c55ef146d",
+    "src/hoa/hoa.hpp": "2bf119ceb34c612c2f536c5f932985264ee1159103139396c093a9588324f659",
+    "src/decorrelate.cpp": "a1702c5f7e445c67ffe3c45699389d5f898364eded342a72e21dfd171a272321"
+  },
+  "assets": {
+    "assets/Design_5200_100_random.dat": "dcd01c9aaf33f57c8de80993bfd2c943832e629f619ad839f21642e900570ced",
+    "assets/README.md": "d1fb4efd610c794ce1eda0d091eced771b8c8a05cfc8e960f1995d77cfe7a859",
+    "src/data.rs": "6cf9224a074eca59402d94d365e19a2ae348ef4acb1d913ffab97c47a11635ce"
+  }
+}

@@ -18,7 +18,7 @@ class LiveBinauralSession {
                                                            descriptions.size(),
                                                            rate,
                                                            spread,
-                                                           scene_cpp_contract != 0 ? 1U : 0U,
+                                                           scene_arithmetic_flags != 0 ? 1U : 0U,
                                                            &raw,
                                                            message.data(),
                                                            message.size());

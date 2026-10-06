@@ -31,13 +31,13 @@ jobs:
           - platform: macos
             name: macOS render
             runner: macos-26
-            install: brew install cmake ninja boost ccache
+            install: brew install cmake ninja ccache
           - platform: linux
             name: Linux render
             runner: ubuntu-24.04
             install: |
               sudo apt-get update
-              sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache libboost-all-dev
+              sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -179,9 +179,6 @@ jobs:
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-bincache
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\.vcpkg-bincache,readwrite
-      VCPKG_FEATURE_FLAGS: binarycaching
       SCCACHE_DIR: ${{ github.workspace }}\.sccache
 
     steps:
@@ -214,14 +211,6 @@ jobs:
           restore-keys: |
             cargo-${{ runner.os }}-consistency-
 
-      - name: Restore vcpkg binary cache
-        uses: actions/cache@v5
-        with:
-          path: .vcpkg-bincache
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('.github/workflows/consistency.yml') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-
-
       - name: Restore sccache cache
         uses: actions/cache@v5
         with:
@@ -230,24 +219,6 @@ jobs:
           restore-keys: |
             sccache-${{ runner.os }}-consistency-${{ matrix.config }}-
             sccache-${{ runner.os }}-
-
-      - name: Install native dependencies
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
-          vcpkg install `
-            boost-format `
-            boost-functional `
-            boost-algorithm `
-            boost-integer `
-            boost-iterator `
-            boost-math `
-            boost-optional `
-            boost-range `
-            boost-rational `
-            boost-smart-ptr `
-            boost-variant `
-            --triplet x64-windows
 
       - name: Locate MSVC environment
         shell: pwsh
@@ -279,7 +250,6 @@ jobs:
             -DCMAKE_CXX_COMPILER=cl ^
             -DCMAKE_C_COMPILER_LAUNCHER=sccache ^
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ^
-            -DCMAKE_TOOLCHAIN_FILE="%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
             -DFETCHCONTENT_BASE_DIR="%FC_CACHE_DIR%" ^
             -DMR_ADM_CORE_BUILD_TESTS=ON ^
             -DMR_ADM_CORE_USE_INSTALLED_DEPS=OFF ^

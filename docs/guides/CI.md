@@ -24,12 +24,12 @@
 | `version-metadata` | `ubuntu-24.04` | `version_metadata.py --check`、`check_gui_i18n.py`、`check-reference-retention.py` | 见下文版本与 GUI 国际化门禁；参考代码登记见 `docs/architecture/RUST_REFERENCE_RETENTION.md` |
 | `debug`（macOS debug） | `macos-26` | `cmake --preset debug`、`cmake --build --preset debug`、`check-licenses.sh --build-dir build/debug`、`check-capi-exports.py`、`ctest --preset debug` | 主验证路径；覆盖 APAC smoke、CoreAudio layout 和 Apple 后端 |
 | `debug`（Linux debug） | `ubuntu-24.04` | 同上 | Apple-only 测试自动 skip；验证跨平台核心 |
-| `windows-debug` | `windows-2025-vs2026` | PowerShell 脚本语法检查；MSVC + Ninja Debug 构建；`check-capi-exports.py`；`ctest` | vcpkg 安装 libear 所需 Boost 头文件；显式开启 `MR_ADM_ENABLE_SOFA` 以覆盖纯 Rust SOFA reader；测试在 vcvars 环境内运行（Debug CRT） |
+| `windows-debug` | `windows-2025-vs2026` | PowerShell 脚本语法检查；MSVC + Ninja Debug 构建；`check-capi-exports.py`；`ctest` | 生产构建无需 Boost；显式开启 `MR_ADM_ENABLE_SOFA` 以覆盖纯 Rust SOFA reader；测试在 vcvars 环境内运行（Debug CRT） |
 
 三个构建 job 都先用 `rustup` 安装固定的 Rust 1.98.0（含 rustfmt / clippy），并显式使用
 `MR_ADM_FLAC_PROVIDER=VENDORED`、`MR_ADM_OPUS_PROVIDER=VENDORED`、`MR_ADM_ENABLE_IAMF=OFF`
 和 `MR_ADM_BUILD_CAPI_BUNDLE=ON`：减少系统包差异，避免普通 PR 构建 AOM `iamf-tools` bridge，
-同时验证 GUI 使用的自包含 C ABI bundle 可以链接。系统仍需安装 CMake、Ninja、Boost headers、
+同时验证 GUI 使用的自包含 C ABI bundle 可以链接。系统仍需安装 CMake、Ninja、
 ccache（Windows 用 sccache）和平台编译工具。C/C++ 第三方依赖（libear、FLAC、Opus、miniaudio 等）
 由 FetchContent 或 vendored provider 处理；Rust 依赖由 Cargo 按 `rust/Cargo.lock`（`--locked`）获取。
 
@@ -152,7 +152,6 @@ CI 使用两层缓存，不缓存 CMake build tree。
 | FetchContent | `.fc-cache` | 缓存第三方源码 checkout（含 Corrosion），降低网络波动 | OS + `cmake/MRDependencies.cmake` + `CMakeLists.txt` + `CMakePresets.json` |
 | ccache | `.ccache` | macOS / Linux 缓存 C/C++ 编译产物 | OS + job 类型 + commit SHA，带 OS/job restore key |
 | sccache | `.sccache` | Windows 缓存 MSVC 编译产物 | commit SHA，带 restore key |
-| vcpkg | `.vcpkg-bincache` | Windows 缓存 Boost 二进制包 | workflow 文件 hash |
 | Cargo | `~/.cargo/registry/{index,cache}`、`~/.cargo/git/db`、`build/rust/` | 缓存 crates.io 下载与 Rust 依赖编译产物（ci / quality / consistency；单 OS 约 400 MB） | OS + 构建类别（`debug` 由 ci 与 quality 共用，`consistency` 为 Release profile）+ `rust/Cargo.lock` + `rust/rust-toolchain.toml`，带 restore key |
 | Bazel | `.bazel-cache` | 仅 IAMF bridge prebuild 使用，缓存 AOM `iamf-tools` 构建产物 | OS + iamf-tools ref + bridge source hash |
 
@@ -175,7 +174,7 @@ rustup toolchain install 1.98.0 --profile minimal --component rustfmt --componen
 ### macOS
 
 ```bash
-brew install cmake ninja boost llvm cppcheck ccache
+brew install cmake ninja llvm cppcheck ccache
 ```
 
 CI 中应显式把 Homebrew LLVM 放入 `PATH`：
@@ -188,12 +187,12 @@ echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache curl file patchelf desktop-file-utils libboost-all-dev
+sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache curl file patchelf desktop-file-utils
 sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
 ```
 
 `curl`、`file`、`patchelf`、`desktop-file-utils` 和 libfuse 只在 AppImage 打包时需要；普通 debug job
-只安装 `cmake ninja-build build-essential git pkg-config ccache libboost-all-dev`。
+只安装 `cmake ninja-build build-essential git pkg-config ccache`。
 
 如果 Linux job 后续启用质量检查，再安装：
 
@@ -203,15 +202,9 @@ sudo apt-get install -y clang-format clang-tidy cppcheck
 
 ### Windows
 
-Visual Studio（含 VC x64 工具）、Ninja、vcpkg，以及 Boost 头文件：
-
-```powershell
-vcpkg install boost-format boost-functional boost-algorithm boost-integer boost-iterator `
-  boost-math boost-optional boost-range boost-rational boost-smart-ptr boost-variant --triplet x64-windows
-```
-
-在 `vcvars64.bat` 环境中配置，并传入 vcpkg toolchain file。维护者本机验证使用规范构建树
-`build\win-canon`（见 `AGENTS.md`），不需要 OpenBLAS。
+Visual Studio（含 VC x64 工具）、Ninja 和锁定的 Rust 工具链即可。
+在 `vcvars64.bat` 环境中配置；维护者本机验证使用规范构建树 `build\win-canon`。
+生产构建无需 Boost、vcpkg 或 OpenBLAS。只有显式启用历史 libear/libadm 参考测试时需要 Boost。
 
 ## 需要注意的边界
 
@@ -281,3 +274,10 @@ Cargo 因此使用 `release` profile（而非 `minsizerel`）。
 2. release job 后续补 macOS 签名/notarization 和完整第三方 license bundle。
 3. 视 Windows release 耗时与稳定性，决定是否扩大 Release 下运行的测试集，或在 macOS / Linux release 中加入同样的优化构建 fixture。
 4. 二期跨平台逐位一致落地后，在一致性 workflow 中按 renderer / 布局 / 语义组合恢复位相等门禁。
+
+### Scene 算术的 ARM64 Release 回归
+
+`scene-arm64-release` 在 `ubuntu-24.04-arm` 运行 Scene、Live 双耳、Live VBAP 和 HOA
+四组 Release 对照，显式设置 `MR_ADM_STRICT_FP=OFF`。参考目标局部采用固定乘加规则，
+生产构建保持默认选项；独立位模式、极点、channel-lock 与 HRTF 网格断言随目标执行。
+Cargo 缓存键包含体系结构，避免把 ARM64 和 x64 产物作为相同缓存使用。

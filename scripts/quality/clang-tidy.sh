@@ -54,6 +54,13 @@ while IFS= read -r -d '' file; do
         files+=("$file")
         continue
     fi
+    if [[ "$file" == */tests/reference/libear/* ]]; then
+        if ! grep -q '^MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
+            continue
+        fi
+        files+=("$file")
+        continue
+    fi
     if [[ "$file" == */tests/reference/libadm/* ]]; then
         if ! grep -q '^MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
             continue

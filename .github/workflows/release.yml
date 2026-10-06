@@ -27,7 +27,7 @@ jobs:
             platform: macos
             arch: arm64
             binary: build/release/mradm
-            install: brew install cmake ninja boost ccache
+            install: brew install cmake ninja ccache
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -138,7 +138,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache curl file patchelf desktop-file-utils libboost-all-dev
+          sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache curl file patchelf desktop-file-utils
           sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
 
       - name: Restore FetchContent cache
@@ -217,9 +217,6 @@ jobs:
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-bincache
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\.vcpkg-bincache,readwrite
-      VCPKG_FEATURE_FLAGS: binarycaching
 
     steps:
       - name: Checkout
@@ -235,34 +232,6 @@ jobs:
           key: fc-windows-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
           restore-keys: |
             fc-windows-
-
-      - name: Restore vcpkg binary cache
-        uses: actions/cache@v5
-        with:
-          path: .vcpkg-bincache
-          key: vcpkg-release-windows-boost-${{ hashFiles('.github/workflows/release.yml') }}
-          restore-keys: |
-            vcpkg-release-windows-boost-
-            vcpkg-windows-boost-
-
-      - name: Install native dependencies
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
-          Write-Host "VCPKG_BINARY_SOURCES=$env:VCPKG_BINARY_SOURCES"
-          vcpkg install `
-            boost-format `
-            boost-functional `
-            boost-algorithm `
-            boost-integer `
-            boost-iterator `
-            boost-math `
-            boost-optional `
-            boost-range `
-            boost-rational `
-            boost-smart-ptr `
-            boost-variant `
-            --triplet x64-windows
 
       - name: Locate MSVC environment
         shell: pwsh
@@ -287,7 +256,6 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release ^
             -DCMAKE_C_COMPILER=cl ^
             -DCMAKE_CXX_COMPILER=cl ^
-            -DCMAKE_TOOLCHAIN_FILE="%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
             -DFETCHCONTENT_BASE_DIR="%FC_CACHE_DIR%" ^
             -DMR_ADM_CORE_BUILD_TESTS=ON ^
             -DMR_ADM_FLAC_PROVIDER=VENDORED ^
@@ -328,7 +296,6 @@ jobs:
           .\scripts\release\package-windows-cli-release.ps1
           -Binary ".\build\windows\mradm.exe"
           -Arch "x64"
-          -VcpkgRoot "$env:VCPKG_INSTALLATION_ROOT"
           -CmakeOptions "Release; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF; Rust DSP"
 
       - name: Package smoke
@@ -362,9 +329,6 @@ jobs:
 
       - name: Install Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
-
-      - name: Install native dependencies
-        run: brew install cmake ninja boost
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -403,9 +367,6 @@ jobs:
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-bincache
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\.vcpkg-bincache,readwrite
-      VCPKG_FEATURE_FLAGS: binarycaching
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
 
@@ -430,35 +391,6 @@ jobs:
             fc-gui-windows-
             fc-windows-
 
-      - name: Restore vcpkg binary cache
-        uses: actions/cache@v5
-        with:
-          path: .vcpkg-bincache
-          key: vcpkg-gui-release-windows-boost-${{ hashFiles('.github/workflows/release.yml') }}
-          restore-keys: |
-            vcpkg-gui-release-windows-boost-
-            vcpkg-release-windows-boost-
-            vcpkg-windows-boost-
-
-      - name: Install native dependencies
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
-          Write-Host "VCPKG_BINARY_SOURCES=$env:VCPKG_BINARY_SOURCES"
-          vcpkg install `
-            boost-format `
-            boost-functional `
-            boost-algorithm `
-            boost-integer `
-            boost-iterator `
-            boost-math `
-            boost-optional `
-            boost-range `
-            boost-rational `
-            boost-smart-ptr `
-            boost-variant `
-            --triplet x64-windows
-
       - name: Locate MSVC environment
         shell: pwsh
         run: |
@@ -479,7 +411,6 @@ jobs:
         run: >
           .\scripts\release\package-windows-gui-release.ps1
           -Rid "win-x64"
-          -VcpkgRoot "$env:VCPKG_INSTALLATION_ROOT"
           -CmakeOptions "Release; MR_ADM_BUILD_CAPI_BUNDLE=ON; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF; Rust DSP"
 
       - name: Package smoke

@@ -26,7 +26,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/ear_post_legacy.h": "79c6f6bfe510c4b9cb8fd214c7827fa76bf94990fce0a2c4400a4a3f529d145f"
+        "tests/reference/ear_post_legacy.h": "334ab4ffed3b0c321b94e4ca59c504ed1e513429a7b98a38c95c603bfc47d00e"
       }
     },
     {
@@ -346,6 +346,29 @@
       ],
       "files": {
         "tests/reference/dr_wav_reference_test.cpp": "a249daa0316aafd8d9293e4811b0846a4faf0bfcbbe4e8a987fd1fbb2e30447c"
+      }
+    },
+    {
+      "id": "libear",
+      "kind": "third-party",
+      "migration_doc": "docs/architecture/RUST_EAR_MIGRATION.md",
+      "accepted": "2026-10-06",
+      "baseline_commit": "5dd0378",
+      "provenance": null,
+      "cmake_option": "MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS",
+      "tests": [
+        "mr_adm_libear_reference_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/libear/benchmark.cpp": "5108d0b9047ac1c4d380d0261542ed72e73e3f6142e037be7afce1eec4867d8c",
+        "tests/reference/libear/reference_test.cpp": "80f66f344c82510c11c204802af0153748b517975953e910196c5285c410d2f1"
       }
     }
   ]

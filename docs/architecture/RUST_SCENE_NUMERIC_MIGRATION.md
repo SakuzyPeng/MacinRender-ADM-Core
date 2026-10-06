@@ -3,6 +3,12 @@
 算法基线为 `726db31`。共享空间计算、Scene worker 过渡和 Live 双耳数值状态由 Rust 接管。
 公开 C ABI、`ILiveSceneRenderer`、支持范围和外层渲染网格保持不变，没有新增依赖或构建开关。
 
+## 2026-10-06 数值一致性阶段更新
+
+[Scene 算术规则统一](SCENE_ARITHMETIC_POLICY.md) 采用固定的非融合规则，更新本记录原先
+按平台选择 FMA 的阶段策略。冻结参考代码未改写；四组相关参考目标的编译算术显式固定，
+并增加独立位模式检查。下文保留迁移时的原始证据与政策。
+
 ## 所有权与调用边界
 
 - `scene_math` 提供坐标、长度、距离、角度、divergence、extent、spread、头部旋转和

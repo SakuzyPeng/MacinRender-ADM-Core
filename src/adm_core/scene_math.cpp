@@ -67,7 +67,7 @@ std::optional<size_t> nearest_non_lfe_speaker_index(const SceneBlockPosition& po
         float distance = std::numeric_limits<float>::max();
         dsp::scene_check(mradm_dsp_scene_nearest(input.data(),
                                                  input.size(),
-                                                 (pos.cartesian ? 1U : 0U) + dsp::scene_cpp_contract,
+                                                 (pos.cartesian ? 1U : 0U) + dsp::scene_arithmetic_flags,
                                                  numeric.data(),
                                                  count,
                                                  &candidate,

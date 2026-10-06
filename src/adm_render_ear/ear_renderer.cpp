@@ -15,7 +15,6 @@
 #include <string_view>
 #include <vector>
 
-#include <ear/ear.hpp>
 #include <fmt/format.h>
 
 #include "adm/audio_io.h"
@@ -23,6 +22,7 @@
 #include "adm/render_ear.h"
 
 #include "consistency_trace.h"
+#include "ear.h"
 #include "ear_post.h"
 #include "meter.h"
 #include "render_common.h"
@@ -67,66 +67,65 @@ struct ChannelGainInfo {
     return ds.speaker_labels;
 }
 
-[[nodiscard]] std::vector<SceneOutputSpeaker> output_speakers(const ear::Layout& layout) {
+[[nodiscard]] std::vector<SceneOutputSpeaker> output_speakers(const dsp::EarLayout& layout) {
     std::vector<SceneOutputSpeaker> result;
-    result.reserve(layout.channels().size());
-    for (const auto& channel : layout.channels()) {
-        const auto pos = channel.polarPosition();
-        result.push_back({static_cast<float>(pos.azimuth), static_cast<float>(pos.elevation), channel.isLfe()});
+    result.reserve(layout.channels.size());
+    for (const auto& channel : layout.channels) {
+        const auto& pos = channel.position;
+        result.push_back({static_cast<float>(pos[0]), static_cast<float>(pos[1]), channel.lfe != 0});
     }
     return result;
 }
 
-[[nodiscard]] std::vector<render_common::DirectSpeakerRoutingTarget> direct_speaker_targets(const ear::Layout& layout) {
+[[nodiscard]] std::vector<render_common::DirectSpeakerRoutingTarget>
+direct_speaker_targets(const dsp::EarLayout& layout) {
     std::vector<render_common::DirectSpeakerRoutingTarget> result;
-    result.reserve(layout.channels().size());
-    for (const auto& channel : layout.channels()) {
-        const auto position = channel.polarPosition();
-        result.push_back({channel.name(),
-                          static_cast<float>(position.azimuth),
-                          static_cast<float>(position.elevation),
-                          channel.isLfe()});
+    result.reserve(layout.channels.size());
+    for (const auto& channel : layout.channels) {
+        const auto& position = channel.position;
+        result.push_back({dsp::ear_channel_name(channel),
+                          static_cast<float>(position[0]),
+                          static_cast<float>(position[1]),
+                          channel.lfe != 0});
     }
     return result;
 }
 
-[[nodiscard]] boost::optional<std::pair<double, double>>
-to_ear_range(const std::optional<std::pair<float, float>>& range) {
-    if (!range.has_value()) {
-        return boost::none;
-    }
-    return std::make_pair(static_cast<double>(range->first), static_cast<double>(range->second));
+[[nodiscard]] MradmEarChannel make_ear_channel(const render_layouts::SpeakerSpec& speaker) {
+    MradmEarChannel result{};
+    dsp::ear_string(result.name, speaker.label);
+    result.position[0] = speaker.azimuth;
+    result.position[1] = speaker.elevation;
+    result.position[2] = 1.0;
+    std::ranges::copy(result.position, std::begin(result.nominal));
+    result.azimuth_range[0] = speaker.azimuth_range ? speaker.azimuth_range->first : speaker.azimuth;
+    result.azimuth_range[1] = speaker.azimuth_range ? speaker.azimuth_range->second : speaker.azimuth;
+    result.elevation_range[0] = speaker.elevation_range ? speaker.elevation_range->first : speaker.elevation;
+    result.elevation_range[1] = speaker.elevation_range ? speaker.elevation_range->second : speaker.elevation;
+    result.lfe = speaker.is_lfe ? 1U : 0U;
+    return result;
 }
 
-[[nodiscard]] ear::Channel make_ear_channel(const render_layouts::SpeakerSpec& speaker) {
-    const ear::PolarPosition pos{static_cast<double>(speaker.azimuth), static_cast<double>(speaker.elevation)};
-    return {std::string{speaker.label},
-            pos,
-            pos,
-            to_ear_range(speaker.azimuth_range),
-            to_ear_range(speaker.elevation_range),
-            speaker.is_lfe};
-}
-
-[[nodiscard]] ear::Layout make_custom_ear_layout(const render_layouts::SpeakerLayout& spec) {
-    std::vector<ear::Channel> channels;
+[[nodiscard]] dsp::EarLayout make_custom_ear_layout(const render_layouts::SpeakerLayout& spec) {
+    std::vector<MradmEarChannel> channels;
     channels.reserve(spec.speakers.size());
     std::ranges::transform(spec.speakers, std::back_inserter(channels), make_ear_channel);
     return {std::string{spec.id}, std::move(channels)};
 }
 
-[[nodiscard]] ear::Layout apply_effective_speaker_positions(ear::Layout layout,
-                                                            const render_layouts::SpeakerLayout& effective) {
-    for (auto& channel : layout.channels()) {
-        const auto speaker = std::ranges::find(effective.speakers, channel.name(), &render_layouts::SpeakerSpec::label);
+[[nodiscard]] dsp::EarLayout apply_effective_speaker_positions(dsp::EarLayout layout,
+                                                               const render_layouts::SpeakerLayout& effective) {
+    for (auto& channel : layout.channels) {
+        const auto speaker =
+            std::ranges::find(effective.speakers, dsp::ear_channel_name(channel), &render_layouts::SpeakerSpec::label);
         if (speaker == effective.speakers.end()) {
-            throw std::invalid_argument(
-                fmt::format("speaker '{}' is missing from geometry profile '{}'", channel.name(), effective.id));
+            throw std::invalid_argument(fmt::format(
+                "speaker '{}' is missing from geometry profile '{}'", dsp::ear_channel_name(channel), effective.id));
         }
-        channel.polarPosition(
-            ear::PolarPosition{static_cast<double>(speaker->azimuth), static_cast<double>(speaker->elevation)});
-        channel.azimuthRange(to_ear_range(speaker->azimuth_range));
-        channel.elevationRange(to_ear_range(speaker->elevation_range));
+        const auto effective_channel = make_ear_channel(*speaker);
+        std::ranges::copy(effective_channel.position, std::begin(channel.position));
+        std::ranges::copy(effective_channel.azimuth_range, std::begin(channel.azimuth_range));
+        std::ranges::copy(effective_channel.elevation_range, std::begin(channel.elevation_range));
     }
     return layout;
 }
@@ -135,7 +134,7 @@ to_ear_range(const std::optional<std::pair<float, float>>& range) {
     return layout_id == "4+5+4" || layout_id == "9.1.6";
 }
 
-[[nodiscard]] ear::Layout make_ear_layout(std::string_view layout_id, SpeakerGeometry geometry) {
+[[nodiscard]] dsp::EarLayout make_ear_layout(std::string_view layout_id, SpeakerGeometry geometry) {
     if (geometry == SpeakerGeometry::apple) {
         if (const auto* layout = render_layouts::find_speaker_layout(layout_id, geometry); layout != nullptr) {
             // Keep libear's ADM nominal positions and known triangulation, while
@@ -143,9 +142,9 @@ to_ear_range(const std::optional<std::pair<float, float>>& range) {
             // Apple's 5.1.2 top-middle pair cannot itself serve as libear's nominal
             // topology. wav71 uses libear's 0+7+0 order and is remapped to WAVE order
             // after rendering, exactly like the standard profile.
-            ear::Layout nominal;
+            dsp::EarLayout nominal;
             if (layout_id == "wav71") {
-                nominal = ear::getLayout("0+7+0");
+                nominal = dsp::ear_layout("0+7+0");
             } else if (needs_project_ear_layout(layout_id)) {
                 const auto* standard = render_layouts::find_speaker_layout(layout_id, SpeakerGeometry::standard);
                 if (standard == nullptr) {
@@ -153,34 +152,30 @@ to_ear_range(const std::optional<std::pair<float, float>>& range) {
                 }
                 nominal = make_custom_ear_layout(*standard);
             } else {
-                nominal = ear::getLayout(std::string{layout_id});
+                nominal = dsp::ear_layout(std::string{layout_id});
             }
             return apply_effective_speaker_positions(std::move(nominal), *layout);
         }
         throw std::invalid_argument(fmt::format("Apple speaker geometry is unavailable for layout '{}'", layout_id));
     }
     if (layout_id == "wav71") {
-        return ear::getLayout("0+7+0");
+        return dsp::ear_layout("0+7+0");
     }
     if (needs_project_ear_layout(layout_id)) {
         if (const auto* layout = render_layouts::find_speaker_layout(layout_id); layout != nullptr) {
             return make_custom_ear_layout(*layout);
         }
     }
-    return ear::getLayout(std::string{layout_id});
+    return dsp::ear_layout(std::string{layout_id});
 }
 
-[[nodiscard]] ear::ObjectsTypeMetadata object_metadata_from_block(const SceneObjectBlock& block,
-                                                                  const SceneObject& obj) {
-    ear::ObjectsTypeMetadata meta;
+[[nodiscard]] MradmEarObject object_metadata_from_block(const SceneObjectBlock& block, const SceneObject& obj) {
+    MradmEarObject meta{};
 
     const auto pos = scene_position_to_polar(block.position);
-    meta.position = ear::PolarPosition{
-        static_cast<double>(pos.azimuth),
-        static_cast<double>(pos.elevation),
-        static_cast<double>(pos.distance),
-    };
-    meta.cartesian = false;
+    meta.position[0] = static_cast<double>(pos.azimuth);
+    meta.position[1] = static_cast<double>(pos.elevation);
+    meta.position[2] = static_cast<double>(pos.distance);
     meta.gain = static_cast<double>(block.gain) * static_cast<double>(obj.gain);
     meta.diffuse = static_cast<double>(block.diffuse);
     meta.width = static_cast<double>(block.width);
@@ -192,7 +187,7 @@ to_ear_range(const std::optional<std::pair<float, float>>& range) {
 void append_object_blocks(const SceneTrackRef& track,
                           const SceneObject& obj,
                           ChannelGainInfo& cg,
-                          ear::GainCalculatorObjects& objects_calc,
+                          dsp::EarCalculator& objects_calc,
                           const std::vector<SceneOutputSpeaker>& speakers,
                           std::size_t num_out,
                           LogSink& logs,
@@ -213,10 +208,8 @@ void append_object_blocks(const SceneTrackRef& track,
             auto meta = object_metadata_from_block(source, obj);
             std::vector<double> direct(num_out, 0.0);
             std::vector<double> diffuse(num_out, 0.0);
-            // meta.channelLock / objectDivergence / screenRef remain default;
-            // project-owned preprocessing above keeps libear away from its
-            // not_implemented paths for these fields.
-            objects_calc.calculate(meta, direct, diffuse);
+            // Project-owned channelLock/divergence preprocessing precedes the EAR gain calculation.
+            objects_calc.objects(meta, direct, diffuse);
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
             consistency::dump("ear.01-object-input.f32",
                               {source.position.azimuth,
@@ -239,57 +232,74 @@ void append_object_blocks(const SceneTrackRef& track,
     }
 }
 
-[[nodiscard]] ear::DirectSpeakersTypeMetadata direct_speakers_metadata_from_block(const SceneDirectSpeakersBlock& ds) {
-    ear::DirectSpeakersTypeMetadata meta;
-    const bool is_lfe = render_common::direct_speakers_block_is_lfe(ds);
-    meta.speakerLabels = speaker_labels_for_libear(ds);
-    // libear throws if audioPackFormatID is set without speaker labels (including
-    // non-common-definition IDs). Only pass the ID when labels are also present so
-    // that label-less custom DS blocks fall through to position-based routing.
+struct DirectSpeakersMetadata {
+    MradmEarDirect values{};
+    std::vector<MradmEarLabel> labels;
+    std::vector<std::string> label_storage;
+};
+
+[[nodiscard]] DirectSpeakersMetadata direct_speakers_metadata_from_block(const SceneDirectSpeakersBlock& ds) {
+    DirectSpeakersMetadata meta;
+    auto& value = meta.values;
+    value.position[2] = 1.0;
+    meta.label_storage = speaker_labels_for_libear(ds);
+    for (const auto& label : meta.label_storage) {
+        MradmEarLabel item{};
+        dsp::ear_string(item, label);
+        meta.labels.push_back(item);
+    }
+    // Label-less packs use positional routing, including custom pack IDs.
     if (!ds.pack_format_id.empty() && !ds.speaker_labels.empty()) {
-        meta.audioPackFormatID = ds.pack_format_id;
+        dsp::ear_string(value.pack, ds.pack_format_id);
+        value.present |= 256U;
     }
     if (ds.has_position) {
-        ear::PolarSpeakerPosition psp{
-            static_cast<double>(ds.azimuth),
-            static_cast<double>(ds.elevation),
-            static_cast<double>(ds.distance),
-        };
-        if (ds.azimuth_min) {
-            psp.azimuthMin = static_cast<double>(*ds.azimuth_min);
+        value.position[0] = ds.azimuth;
+        value.position[1] = ds.elevation;
+        value.position[2] = ds.distance;
+        const std::array bounds{
+            ds.azimuth_min, ds.azimuth_max, ds.elevation_min, ds.elevation_max, ds.distance_min, ds.distance_max};
+        for (std::size_t i = 0; i < bounds.size(); ++i) {
+            if (const auto& bound = bounds.at(i); bound.has_value()) {
+                value.present |= 1U << i;
+                std::span{value.bounds}[i] = bound.value();
+            }
         }
-        if (ds.azimuth_max) {
-            psp.azimuthMax = static_cast<double>(*ds.azimuth_max);
-        }
-        if (ds.elevation_min) {
-            psp.elevationMin = static_cast<double>(*ds.elevation_min);
-        }
-        if (ds.elevation_max) {
-            psp.elevationMax = static_cast<double>(*ds.elevation_max);
-        }
-        if (ds.distance_min) {
-            psp.distanceMin = static_cast<double>(*ds.distance_min);
-        }
-        if (ds.distance_max) {
-            psp.distanceMax = static_cast<double>(*ds.distance_max);
-        }
-        meta.position = psp;
     }
-    if (ds.low_pass_hz) {
-        meta.channelFrequency.lowPass = static_cast<double>(*ds.low_pass_hz);
-    } else if (is_lfe) {
-        meta.channelFrequency.lowPass = 120.0;
+    if (ds.low_pass_hz || render_common::direct_speakers_block_is_lfe(ds)) {
+        value.present |= 64U;
+        value.low_pass = ds.low_pass_hz ? *ds.low_pass_hz : 120.0;
     }
     return meta;
+}
+
+void calculate_direct_speakers(const dsp::EarCalculator& calculator,
+                               const DirectSpeakersMetadata& metadata,
+                               std::span<double> gains,
+                               LogSink& logs) {
+    const bool has_frequency = (metadata.values.present & 64U) != 0;
+    const bool frequency_lfe = has_frequency && metadata.values.low_pass <= 200.0;
+    const bool label_lfe = std::ranges::any_of(metadata.label_storage, [](const auto& label) {
+        const auto key = render_common::normalise_speaker_label_key(label);
+        return key == "LFE" || key == "LFE1" || key == "LFE2" || key == "LFEL" || key == "LFER";
+    });
+    if (has_frequency && !frequency_lfe) {
+        logs.log(LogLevel::warning, "ear", "frequency indication present but does not indicate an LFE channel");
+    }
+    if (!metadata.label_storage.empty() && frequency_lfe != label_lfe) {
+        logs.log(LogLevel::warning, "ear", "LFE indication from frequency element does not match speakerLabel");
+    }
+    calculator.direct_speakers(metadata.values, metadata.labels, gains);
 }
 
 Result<void> append_direct_speakers_blocks(const SceneTrackRef& track,
                                            const SceneObject& obj,
                                            ChannelGainInfo& cg,
-                                           ear::GainCalculatorDirectSpeakers& direct_speakers_calc,
+                                           dsp::EarCalculator& direct_speakers_calc,
                                            std::size_t num_out,
                                            const render_common::ResolvedDirectSpeakersMatrix* matrix,
-                                           const render_common::LfeRoutingPlan& lfe_routing) {
+                                           const render_common::LfeRoutingPlan& lfe_routing,
+                                           LogSink& logs) {
     for (const auto& ds : track.ds_blocks) {
         BlockGains bg;
         bg.gains.resize(num_out, 0.0);
@@ -303,7 +313,7 @@ Result<void> append_direct_speakers_blocks(const SceneTrackRef& track,
             bg.gains[render_common::k_22_2_lfe2_index] = lfe_routing.gain(lfe_target, render_common::LfeTarget::lfe2);
         } else if (lfe_target != render_common::LfeTarget::none) {
             auto meta = direct_speakers_metadata_from_block(ds);
-            direct_speakers_calc.calculate(meta, bg.gains);
+            calculate_direct_speakers(direct_speakers_calc, meta, bg.gains, logs);
         } else if (matrix != nullptr) {
             auto route = render_common::direct_speakers_matrix_route_for_block(*matrix, ds);
             if (!route) {
@@ -314,7 +324,7 @@ Result<void> append_direct_speakers_blocks(const SceneTrackRef& track,
             }
         } else {
             auto meta = direct_speakers_metadata_from_block(ds);
-            direct_speakers_calc.calculate(meta, bg.gains);
+            calculate_direct_speakers(direct_speakers_calc, meta, bg.gains, logs);
         }
         const auto ds_gain = static_cast<double>(ds.gain) * static_cast<double>(obj.gain);
         std::ranges::transform(bg.gains, bg.gains.begin(), [ds_gain](double g) { return g * ds_gain; });
@@ -325,27 +335,31 @@ Result<void> append_direct_speakers_blocks(const SceneTrackRef& track,
 
 void append_hoa_blocks(const SceneHOATracks& pack,
                        std::map<uint16_t, ChannelGainInfo>& by_channel,
-                       ear::GainCalculatorHOA& hoa_calc,
-                       std::size_t num_out) {
+                       dsp::EarCalculator& hoa_calc,
+                       std::size_t num_out,
+                       LogSink& logs) {
     const std::size_t n_hoa = pack.channels.size();
     if (n_hoa == 0) {
         return;
     }
 
-    ear::HOATypeMetadata meta;
-    meta.normalization = pack.normalization;
-    meta.nfcRefDist = pack.nfc_ref_dist;
-    meta.screenRef = pack.screen_ref;
-    meta.orders.resize(n_hoa);
-    meta.degrees.resize(n_hoa);
-    for (std::size_t i = 0; i < n_hoa; ++i) {
-        meta.orders[i] = pack.channels[i].order;
-        meta.degrees[i] = pack.channels[i].degree;
+    if (pack.screen_ref) {
+        logs.log(LogLevel::warning, "ear", "screenRef for HOA is not implemented; ignoring");
     }
-
-    // decode_matrix[i][out_ch] = gain for HOA channel i → output channel out_ch.
+    if (pack.nfc_ref_dist != 0.0) {
+        logs.log(LogLevel::warning, "ear", "nfcRefDist is not implemented; ignoring");
+    }
+    std::vector<int32_t> orders(n_hoa);
+    std::vector<int32_t> degrees(n_hoa);
+    for (std::size_t i = 0; i < n_hoa; ++i) {
+        orders[i] = pack.channels[i].order;
+        degrees[i] = pack.channels[i].degree;
+    }
+    const auto flat_matrix = hoa_calc.hoa(orders, degrees, pack.normalization);
     std::vector<std::vector<double>> decode_matrix(n_hoa, std::vector<double>(num_out, 0.0));
-    hoa_calc.calculate(meta, decode_matrix);
+    for (std::size_t i = 0; i < n_hoa; ++i) {
+        std::copy_n(flat_matrix.data() + (i * num_out), num_out, decode_matrix[i].data());
+    }
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
     for (std::size_t row = 0; row < decode_matrix.size(); ++row) {
         consistency::dump("ear.hoa-decode-row-" + std::to_string(row) + ".f64", decode_matrix[row]);
@@ -382,15 +396,13 @@ void append_hoa_blocks(const SceneHOATracks& pack,
 }
 
 Result<std::vector<ChannelGainInfo>> build_gain_matrix(const AdmScene& scene,
-                                                       const ear::Layout& layout,
+                                                       const dsp::EarLayout& layout,
                                                        LogSink& logs,
                                                        const render_common::ResolvedDirectSpeakersMatrix* matrix,
                                                        const render_common::LfeRoutingPlan& lfe_routing) {
     std::map<uint16_t, ChannelGainInfo> by_channel;
-    ear::GainCalculatorObjects objects_calc{layout};
-    ear::GainCalculatorDirectSpeakers direct_speakers_calc{layout};
-    ear::GainCalculatorHOA hoa_calc{layout};
-    const std::size_t num_out = layout.channels().size();
+    dsp::EarCalculator calculator{layout};
+    const std::size_t num_out = layout.channels.size();
     const auto speakers = output_speakers(layout);
     bool screen_ref_warned{false};
 
@@ -412,9 +424,9 @@ Result<std::vector<ChannelGainInfo>> build_gain_matrix(const AdmScene& scene,
                 cg.speaker_label_key =
                     render_common::canonicalise_speaker_label(track.ds_blocks.front().speaker_labels.front());
             }
-            append_object_blocks(track, obj, cg, objects_calc, speakers, num_out, logs, screen_ref_warned);
+            append_object_blocks(track, obj, cg, calculator, speakers, num_out, logs, screen_ref_warned);
             auto direct_speakers =
-                append_direct_speakers_blocks(track, obj, cg, direct_speakers_calc, num_out, matrix, lfe_routing);
+                append_direct_speakers_blocks(track, obj, cg, calculator, num_out, matrix, lfe_routing, logs);
             if (!direct_speakers) {
                 return tl::unexpected{direct_speakers.error()};
             }
@@ -423,7 +435,7 @@ Result<std::vector<ChannelGainInfo>> build_gain_matrix(const AdmScene& scene,
 
     for (const auto& pack : scene.hoa_tracks) {
         if (!pack.mute) {
-            append_hoa_blocks(pack, by_channel, hoa_calc, num_out);
+            append_hoa_blocks(pack, by_channel, calculator, num_out, logs);
         }
     }
 
@@ -503,34 +515,23 @@ void render_ear_block(dsp::PcmMixer& mix,
     }
 }
 
-// libear owns filter design; Rust retains the raw FIRs for independent output instances.
-Result<dsp::EarFilters> prepare_ear_filters(const ear::Layout& layout) {
-    const auto raw = ear::designDecorrelators<float>(layout);
-    if (raw.size() != layout.channels().size() ||
-        raw.size() > std::numeric_limits<std::size_t>::max() / dsp::EarFilters::k_taps) {
-        return make_error(ErrorCode::render_failed, "Unexpected EAR filter count");
-    }
-    std::vector<float> firs;
-    firs.reserve(raw.size() * dsp::EarFilters::k_taps);
-    for (const auto& filter : raw) {
-        if (filter.size() != dsp::EarFilters::k_taps) {
-            return make_error(ErrorCode::render_failed, "Unexpected EAR filter length");
-        }
-        firs.insert(firs.end(), filter.begin(), filter.end());
-    }
-    return dsp::EarFilters::create(raw.size(), firs, static_cast<std::size_t>(ear::decorrelatorCompensationDelay()));
+// Rust owns FIR design and post-processing; all instances share the raw filter bank.
+Result<dsp::EarFilters> prepare_ear_filters(const dsp::EarLayout& layout) {
+    const dsp::EarCalculator calculator{layout};
+    const auto firs = calculator.filters();
+    return dsp::EarFilters::create(layout.channels.size(), firs, 255U);
 }
 
-// Immutable, reusable EAR state: the resolved libear layout and the per-object gain
+// Immutable, reusable EAR state: the resolved EAR layout and the per-object gain
 // matrix and raw FIR bank. FFT spectra/history remain per output instance so the same
-// prepared metadata supports different block capacities. ear::Layout stays in this TU.
+// prepared metadata supports different block capacities. dsp::EarLayout stays in this TU.
 struct EarPrepared final : IPreparedRender {
-    ear::Layout layout;
+    dsp::EarLayout layout;
     render_common::PreparedPcmMix gain_matrix;
     dsp::EarFilters filters;
 };
 
-// Realtime streaming EAR session over the same prepared libear layout + gain matrix as
+// Realtime streaming EAR session over the same prepared EAR layout + gain matrix as
 // render_window. It renders k_block_size-aligned blocks via the SAME render_ear_block the
 // offline path uses (carrying the FIR-decorrelator overlap + the direct compensation delay
 // across blocks) into a FIFO that process() serves at any requested frame count —
@@ -615,7 +616,7 @@ class EarStream final : public IRenderStream {
   private:
     EarStream(const EarPrepared& prepared, std::unique_ptr<audio::RenderInputReader> reader, const RenderPlan& plan)
         : prepared_(prepared), reader_(std::move(reader)), num_in_ch_(plan.scene.info.num_channels),
-          num_out_ch_(static_cast<uint16_t>(prepared.layout.channels().size())),
+          num_out_ch_(static_cast<uint16_t>(prepared.layout.channels.size())),
           sample_rate_(plan.scene.info.sample_rate), total_frames_(plan.scene.info.num_frames),
           output_layout_(plan.output_layout), object_smoothing_frames_(plan.object_smoothing_frames),
           k_block_size_(std::max<uint64_t>(1024U, plan.object_smoothing_frames)),
@@ -712,7 +713,7 @@ Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& 
         if (!lfe_routing) {
             return tl::unexpected{lfe_routing.error()};
         }
-        ear::Layout layout = make_ear_layout(plan.output_layout, plan.speaker_geometry);
+        dsp::EarLayout layout = make_ear_layout(plan.output_layout, plan.speaker_geometry);
         logs.log(LogLevel::info,
                  "ear",
                  fmt::format("speaker geometry: {}",
@@ -755,7 +756,7 @@ Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& 
 
         auto prepared = std::make_shared<EarPrepared>();
         prepared->layout = std::move(layout);
-        auto compiled = prepare_ear_mix(std::move(*gain_matrix), num_in_ch, prepared->layout.channels().size());
+        auto compiled = prepare_ear_mix(std::move(*gain_matrix), num_in_ch, prepared->layout.channels.size());
         if (!compiled) {
             return tl::unexpected{compiled.error()};
         }
@@ -766,6 +767,8 @@ Result<std::shared_ptr<IPreparedRender>> EarRenderer::prepare(const RenderPlan& 
         }
         prepared->filters = std::move(*filters);
         return std::static_pointer_cast<IPreparedRender>(prepared);
+    } catch (const dsp::EarFailure& e) {
+        return make_error(e.code(), e.what(), "layout=" + plan.output_layout);
     } catch (const std::invalid_argument& e) {
         return make_error(ErrorCode::unsupported,
                           fmt::format("unsupported output layout '{}': {}", plan.output_layout, e.what()),
@@ -789,10 +792,10 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
                 ErrorCode::internal_error, "ear: render_window received an incompatible prepared state", {});
         }
         const auto& info = plan.scene.info;
-        const ear::Layout& layout = prepared->layout;
+        const dsp::EarLayout& layout = prepared->layout;
         const auto& gain_matrix = prepared->gain_matrix;
 
-        const auto num_out_ch = static_cast<uint16_t>(layout.channels().size());
+        const auto num_out_ch = static_cast<uint16_t>(layout.channels.size());
         const auto num_in_ch = info.num_channels;
         const auto num_frames = info.num_frames;
         const auto sample_rate = info.sample_rate;
@@ -982,6 +985,8 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
         }
         return metrics;
 
+    } catch (const dsp::EarFailure& e) {
+        return make_error(e.code(), e.what(), "layout=" + plan.output_layout);
     } catch (const std::invalid_argument& e) {
         // libear throws std::invalid_argument for unknown layout names
         return make_error(ErrorCode::unsupported,
@@ -999,7 +1004,7 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
 CapabilityReport ear_capabilities() {
     CapabilityReport r;
     r.backend_name = "libear";
-    r.backend_version = "0.9.0";
+    r.backend_version = "rust-ear-0.1.0";
     r.supports_objects = true;
     r.supports_direct_speakers = true;
     r.supports_hoa = true; // HOA block decode via GainCalculatorHOA

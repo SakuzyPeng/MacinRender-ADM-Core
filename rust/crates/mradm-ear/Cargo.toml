@@ -1,0 +1,11 @@
+[package]
+name = "mradm-ear"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "Apache-2.0"
+description = "Project-used EAR gain algorithms, derived from EBU libear"
+
+[dependencies]
+nalgebra.workspace = true
+rustfft.workspace = true

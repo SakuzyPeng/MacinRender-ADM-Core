@@ -182,11 +182,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mradm-ear"
+version = "0.1.0"
+dependencies = [
+ "nalgebra",
+ "rustfft",
+]
+
+[[package]]
 name = "mradm-ffi"
 version = "0.1.0"
 dependencies = [
  "mradm-adm",
  "mradm-dsp",
+ "mradm-ear",
  "mradm-wav",
 ]
 

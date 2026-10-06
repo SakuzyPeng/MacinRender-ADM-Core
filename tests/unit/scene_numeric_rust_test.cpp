@@ -122,7 +122,7 @@ class SceneNumericChecks {
             check(mradm_dsp_scene_cloud(input.data(),
                                         input.size(),
                                         pos.cartesian ? 1U : 0U,
-                                        1U | dsp::scene_cpp_contract,
+                                        1U | dsp::scene_arithmetic_flags,
                                         binaural.data(),
                                         binaural.size(),
                                         &count,
@@ -149,7 +149,7 @@ class SceneNumericChecks {
                 p.azimuth, p.elevation, orientation.yaw_deg, orientation.pitch_deg, orientation.roll_deg};
             std::array<float, 2> apple{};
             check(mradm_dsp_scene_rotate_pose(
-                      pose.data(), pose.size(), apple.data(), apple.size(), 1U | dsp::scene_cpp_contract) == 0,
+                      pose.data(), pose.size(), apple.data(), apple.size(), 1U | dsp::scene_arithmetic_flags) == 0,
                   "apple rotation call");
             const auto ar = ref::head_lock_compensate(p.azimuth, p.elevation, orientation);
             compare(apple[0], ar.first, "apple az");
@@ -219,6 +219,31 @@ class SceneNumericChecks {
         const volatile float loaded = value;
         return loaded;
     }
+    void canonical_arithmetic() {
+        struct RadiusCase {
+            std::array<uint32_t, 4> input;
+            std::array<uint32_t, 2> expected;
+        };
+        // IEEE binary32 multiply then add, rounded at each operation. These
+        // inputs differ by one ULP if the final product/add is fused. Expected
+        // bits are independent constants, not computed by the C++ oracle.
+        constexpr std::array<RadiusCase, 4> cases{{
+            {{0x3e8a60dd, 0x3fa9aca7, 0x3fbcbeea, 0x3fd294a5}, {0x41de43de, 0x4258bd36}},
+            {{0x3fe7c8a6, 0x3ff711dc, 0x3fb63cbf, 0x3ffbdef8}, {0x428b5f03, 0x426a739a}},
+            {{0x3eb3e453, 0x3f9aca6b, 0x3fd270d0, 0x3f25294a}, {0x42a74898, 0x430750a0}},
+            {{0x3ff22983, 0x3fe82fa1, 0x3fcbeea5, 0x3f77bdef}, {0x4316394f, 0x42ea8d02}},
+        }};
+        for (const auto& sample : cases) {
+            std::array<float, 4> input{};
+            for (size_t i = 0; i < input.size(); ++i) {
+                input.at(i) = runtime_float(std::bit_cast<float>(sample.input.at(i)));
+            }
+            const auto actual = dsp::scene_math<4, 2>(5U, input);
+            for (size_t i = 0; i < actual.size(); ++i) {
+                compare(actual.at(i), std::bit_cast<float>(sample.expected.at(i)), "canonical radius bits", true);
+            }
+        }
+    }
     void extent_grid_boundaries() {
         struct ExtentCase {
             std::array<uint32_t, 6> bits;
@@ -256,7 +281,7 @@ class SceneNumericChecks {
             check(mradm_dsp_scene_cloud(input.data(),
                                         input.size(),
                                         sample.cartesian ? 1U : 0U,
-                                        1U | dsp::scene_cpp_contract,
+                                        1U | dsp::scene_arithmetic_flags,
                                         points.data(),
                                         points.size(),
                                         &count,
@@ -386,6 +411,7 @@ class SceneNumericChecks {
 
   public:
     int run(int argc, char** argv) {
+        canonical_arithmetic();
         spatial();
         independent();
         pose_boundaries();
@@ -402,10 +428,10 @@ class SceneNumericChecks {
                   << ", failures " << failures << '\n';
         if (argc > 1) {
             std::ofstream json{argv[1]};
-            json << std::setprecision(17) << R"({"spatial":{"compared":)" << spatial_compared
-                 << R"(,"max_absolute_error":)" << spatial_maximum << R"(},"transitions":{"compared":)"
-                 << transition_compared << R"(,"max_absolute_error":)" << transition_maximum << R"(},"failures":)"
-                 << failures << "}\n";
+            json << std::setprecision(17) << R"({"arithmetic":"scene-separate-v1","spatial":{"compared":)"
+                 << spatial_compared << R"(,"max_absolute_error":)" << spatial_maximum
+                 << R"(},"transitions":{"compared":)" << transition_compared << R"(,"max_absolute_error":)"
+                 << transition_maximum << R"(},"failures":)" << failures << "}\n";
         }
         return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
     }

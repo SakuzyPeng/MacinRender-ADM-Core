@@ -232,16 +232,17 @@
       "purl": "pkg:github/ebu/libear@2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15",
       "license": "Apache-2.0",
       "purpose": "BS.2127/EAR 增益计算",
-      "distribution": "available",
+      "distribution": "opt-in",
       "source": {
         "type": "fetchcontent",
         "deps_dir": "libear-src",
         "parent": null,
         "license_files": [
           "LICENSE"
-        ]
+        ],
+        "cmake_option": "MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS"
       },
-      "notes": "内嵌 vendored Eigen/xsimd/kissfft，单列于下"
+      "notes": "内嵌 vendored Eigen/xsimd/kissfft，单列于下 仅供显式启用的历史 EAR 参考测试，生产使用 Rust。"
     },
     {
       "name": "Spatial_Audio_Framework",
@@ -288,16 +289,17 @@
       "purl": "pkg:generic/eigen",
       "license": "MPL-2.0",
       "purpose": "线性代数（libear 内嵌子模块）",
-      "distribution": "available",
+      "distribution": "opt-in",
       "source": {
         "type": "nested",
         "deps_dir": "libear-src",
         "parent": "libear",
         "license_files": [
           "submodules/eigen/COPYING.MPL2"
-        ]
+        ],
+        "cmake_option": "MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS"
       },
-      "notes": "libear 以 EIGEN_MPL2_ONLY 编译，避免 LGPL-only 模块；源码树含 COPYING.GPL/LGPL/BSD 等其他文件不代表默认使用"
+      "notes": "libear 以 EIGEN_MPL2_ONLY 编译，避免 LGPL-only 模块；源码树含 COPYING.GPL/LGPL/BSD 等其他文件不代表默认使用 仅供显式启用的历史 EAR 参考测试，生产使用 Rust。"
     },
     {
       "name": "xsimd",
@@ -306,16 +308,17 @@
       "purl": "pkg:generic/xsimd",
       "license": "BSD-3-Clause",
       "purpose": "SIMD 抽象（libear 内嵌子模块）",
-      "distribution": "available",
+      "distribution": "opt-in",
       "source": {
         "type": "nested",
         "deps_dir": "libear-src",
         "parent": "libear",
         "license_files": [
           "submodules/xsimd/LICENSE"
-        ]
+        ],
+        "cmake_option": "MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS"
       },
-      "notes": ""
+      "notes": " 仅供显式启用的历史 EAR 参考测试，生产使用 Rust。"
     },
     {
       "name": "kissfft",
@@ -324,16 +327,17 @@
       "purl": "pkg:generic/kissfft",
       "license": "BSD-3-Clause",
       "purpose": "FFT（libear/SAF 内嵌子模块）",
-      "distribution": "available",
+      "distribution": "opt-in",
       "source": {
         "type": "nested",
         "deps_dir": "libear-src",
         "parent": "libear",
         "license_files": [
           "submodules/kissfft/COPYING"
-        ]
+        ],
+        "cmake_option": "MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS"
       },
-      "notes": ""
+      "notes": " 仅供显式启用的历史 EAR 参考测试，生产使用 Rust。"
     },
     {
       "name": "libmysofa",
@@ -1533,6 +1537,26 @@
         ]
       },
       "notes": "资源来自 libadm 0.14.0；保留来源、版权与哈希。仅复用数据，不链接 libadm。"
+    },
+    {
+      "name": "libear-derived-rust-ear",
+      "version": "2db69f8f-subset",
+      "cmake_key": null,
+      "purl": "pkg:generic/mradm-ear@0.1.0",
+      "license": "Apache-2.0",
+      "purpose": "Rust EAR 增益算法、布局、路由与 HOA 采样数据来源",
+      "distribution": "available",
+      "source": {
+        "type": "local",
+        "repo_dir": "rust/crates/mradm-ear",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "移植 EBU libear 实际使用的算法；保留上游归属与球面采样来源，不链接 libear。"
     }
   ]
 }

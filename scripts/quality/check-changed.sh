@@ -76,6 +76,12 @@ is_platform_excluded() {
             fi
             return 1
             ;;
+        tests/reference/libear/*)
+            if ! grep -q '^MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
+                return 0
+            fi
+            return 1
+            ;;
         tests/reference/libadm/*)
             if ! grep -q '^MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
                 return 0

@@ -23,6 +23,11 @@ jobs:
             option: MR_ADM_BUILD_SAF_REFERENCE_TESTS
             targets: mr_adm_saf_reference_tests
             tests: mr_adm_saf_reference_tests
+          - unit: libear
+            runner: ubuntu-24.04
+            option: MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS
+            targets: mr_adm_libear_reference_tests
+            tests: mr_adm_libear_reference_tests
           - unit: libadm
             runner: ubuntu-24.04
             option: MR_ADM_BUILD_LIBADM_REFERENCE_TESTS

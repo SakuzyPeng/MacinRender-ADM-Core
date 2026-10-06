@@ -317,7 +317,7 @@
       "properties": [
         {
           "name": "mradm:distribution",
-          "value": "available"
+          "value": "opt-in"
         },
         {
           "name": "mradm:source-type",
@@ -389,7 +389,7 @@
       "properties": [
         {
           "name": "mradm:distribution",
-          "value": "available"
+          "value": "opt-in"
         },
         {
           "name": "mradm:source-type",
@@ -413,7 +413,7 @@
       "properties": [
         {
           "name": "mradm:distribution",
-          "value": "available"
+          "value": "opt-in"
         },
         {
           "name": "mradm:source-type",
@@ -437,7 +437,7 @@
       "properties": [
         {
           "name": "mradm:distribution",
-          "value": "available"
+          "value": "opt-in"
         },
         {
           "name": "mradm:source-type",
@@ -1782,6 +1782,30 @@
         }
       ],
       "purl": "pkg:generic/mradm-adm-common-definitions@0.14.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "local"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libear-derived-rust-ear",
+      "version": "2db69f8f-subset",
+      "description": "Rust EAR 增益算法、布局、路由与 HOA 采样数据来源",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:generic/mradm-ear@0.1.0",
       "properties": [
         {
           "name": "mradm:distribution",
