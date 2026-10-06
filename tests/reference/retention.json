@@ -345,7 +345,7 @@
         "phase2-cleared"
       ],
       "files": {
-        "tests/reference/dr_wav_reference_test.cpp": "829a71959fb33c89c33ca593988989d8af636a1777f5bcae9ac094a23c232f88"
+        "tests/reference/dr_wav_reference_test.cpp": "a249daa0316aafd8d9293e4811b0846a4faf0bfcbbe4e8a987fd1fbb2e30447c"
       }
     }
   ]

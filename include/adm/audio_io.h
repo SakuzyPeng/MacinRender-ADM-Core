@@ -29,6 +29,7 @@ class FloatWavWriter {
 
     // Returns frame_count on success, 0 on failure.
     uint64_t write(const float* samples, uint64_t frame_count);
+    // Repeated calls return the first finish result, including any failure.
     Result<void> finish();
 
   private:

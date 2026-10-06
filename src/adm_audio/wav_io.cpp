@@ -80,7 +80,7 @@ void emit_wav_progress(ProgressSink* progress,
 
 struct FloatWavWriter::Impl {
     std::unique_ptr<RustWavWriter> writer;
-    bool finished{false};
+    std::optional<Result<void>> finish_result;
 };
 
 Result<FloatWavWriter> FloatWavWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate) {
@@ -95,7 +95,7 @@ Result<FloatWavWriter> FloatWavWriter::open(const std::string& path, uint32_t ch
 }
 
 FloatWavWriter::~FloatWavWriter() {
-    if (impl_ && !impl_->finished) {
+    if (impl_ && !impl_->finish_result.has_value()) {
         // Best effort for callers that rely on RAII; finish() reports the same failure explicitly.
         static_cast<void>(impl_->writer->finish());
     }
@@ -105,18 +105,18 @@ FloatWavWriter::FloatWavWriter(FloatWavWriter&&) noexcept = default;
 FloatWavWriter& FloatWavWriter::operator=(FloatWavWriter&&) noexcept = default;
 
 uint64_t FloatWavWriter::write(const float* samples, uint64_t frame_count) {
-    if (impl_->finished || !impl_->writer->write(samples, frame_count)) {
+    if (impl_->finish_result.has_value() || !impl_->writer->write(samples, frame_count)) {
         return 0;
     }
     return frame_count;
 }
 
 Result<void> FloatWavWriter::finish() {
-    if (impl_->finished) {
-        return {};
+    if (!impl_->finish_result.has_value()) {
+        // Rust consumes the writer even on failure; repeated calls must preserve that result.
+        impl_->finish_result.emplace(impl_->writer->finish());
     }
-    impl_->finished = true;
-    return impl_->writer->finish();
+    return *impl_->finish_result;
 }
 
 // ── FloatWavReader ────────────────────────────────────────────────────────────
