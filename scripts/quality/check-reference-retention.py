@@ -110,4 +110,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Windows consoles default to a legacy code page; the messages are Chinese.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8")
     sys.exit(main())
