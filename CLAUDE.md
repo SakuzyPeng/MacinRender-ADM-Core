@@ -45,7 +45,7 @@ CLI 二进制名固定为 `mradm`（`mradm_exe` 是 CMake target；二进制输�
 
 ### Windows 规范构建
 
-Windows 验证在维护者的 Windows 测试机上走规范 MSVC/Ninja 配方（机器相关的脚本路径见本机 `local/` 私有笔记，不入库）：规范构建树是 `build\win-canon`（cl + vendored FLAC/Opus + OpenBLAS，IAMF/SOFA off），干净构建只删 `build\win-canon` 后重跑配方。**不要**用 `win-debug` / `win-msvc` 备用构建树作为默认验证路径（会踩无关的 SAF/OpenBLAS 问题）。详见 `AGENTS.md`。
+Windows 验证在维护者的 Windows 测试机上走规范 MSVC/Ninja 配方（机器相关的脚本路径见本机 `local/` 私有笔记，不入库）：规范构建树是 `build\win-canon`（cl + vendored FLAC/Opus，IAMF/SOFA off；生产构建不再依赖 OpenBLAS/LAPACKE），干净构建只删 `build\win-canon` 后重跑配方。**不要**用 `win-debug` / `win-msvc` 备用构建树作为默认验证路径（会踩无关的 MSVC 复杂头等问题）。详见 `AGENTS.md`。
 
 ## 常用 CLI 渲染示例
 
