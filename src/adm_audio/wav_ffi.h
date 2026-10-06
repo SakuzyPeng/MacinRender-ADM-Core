@@ -1,4 +1,5 @@
 // Private Rust WAV boundary; buffers are borrowed for one call, owners have matching destroy functions.
+// Paths are UTF-8; C++ callers convert native Windows paths before crossing this boundary.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
