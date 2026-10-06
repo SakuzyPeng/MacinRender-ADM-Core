@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -16,6 +17,7 @@
 #include "adm/audio_io.h"
 #include "adm/errors.h"
 
+#include "../adm_render_common/consistency_trace.h"
 #include "audio_io_internal.h"
 #include "wav_backend.h"
 
@@ -71,6 +73,11 @@ void emit_wav_progress(ProgressSink* progress,
 struct FloatWavWriter::Impl {
     std::unique_ptr<RustWavWriter> writer;
     std::optional<Result<void>> finish_result;
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    uint64_t trace_id{0};
+    uint64_t trace_position{0};
+    uint32_t trace_channels{0};
+#endif
 };
 
 Result<FloatWavWriter> FloatWavWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate) {
@@ -81,6 +88,11 @@ Result<FloatWavWriter> FloatWavWriter::open(const std::string& path, uint32_t ch
     FloatWavWriter w;
     w.impl_ = std::make_unique<Impl>();
     w.impl_->writer = std::move(*writer);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    static std::atomic<uint64_t> next_id{0};
+    w.impl_->trace_id = next_id.fetch_add(1);
+    w.impl_->trace_channels = channels;
+#endif
     return w;
 }
 
@@ -98,6 +110,14 @@ uint64_t FloatWavWriter::write(const float* samples, uint64_t frame_count) {
     if (impl_->finish_result.has_value() || !impl_->writer->write(samples, frame_count)) {
         return 0;
     }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    if (frame_count)
+        consistency::dump(
+            "writer/pass" + std::to_string(impl_->trace_id) + "-s" + std::to_string(impl_->trace_position) +
+                ".80-pcm.f32",
+            std::span<const float>{samples, static_cast<std::size_t>(frame_count) * impl_->trace_channels});
+    impl_->trace_position += frame_count;
+#endif
     return frame_count;
 }
 

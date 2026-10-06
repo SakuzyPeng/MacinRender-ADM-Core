@@ -154,7 +154,21 @@ def collect(build):
         workspace = Path(metadata['workspace_root'])
         record['rust.cargo_lock_sha256'] = hashlib.sha256((workspace / 'Cargo.lock').read_bytes()).hexdigest()
         record['rust.toolchain_config_sha256'] = hashlib.sha256((workspace / 'rust-toolchain.toml').read_bytes()).hexdigest()
-        record['rust.fft_dispatch'] = 'RustFFT automatic SIMD (phase 1)'
+        record['rust.fft_dispatch'] = 'RustFFT automatic SIMD'
+        record['rust.fft_selected_backend'] = 'unknown: planner does not expose selected backend'
+        record['rust.target'] = cache.get('Rust_CARGO_TARGET_CACHED', 'unavailable')
+        record['rust.cmake_rustflags'] = '-Crelocation-model=pic'
+        record['rust.environment_rustflags'] = os.environ.get('RUSTFLAGS', '')
+        record['rust.environment_encoded_rustflags'] = os.environ.get('CARGO_ENCODED_RUSTFLAGS', '')
+        compiler = cache.get('Rust_COMPILER_CACHED')
+        if compiler and Path(compiler).is_file():
+            version = subprocess.run([compiler, '-vV'], capture_output=True, text=True, encoding='utf-8', check=True)
+            record['rust.compiler_verbose'] = version.stdout.strip()
+        else:
+            record['rust.compiler_verbose'] = 'unavailable'
+        packages = {p['id']: p['name'] for p in metadata['packages']}
+        record['rust.resolved_features'] = json.dumps({packages[n['id']]: sorted(n['features'])
+            for n in metadata.get('resolve', {}).get('nodes', []) if packages.get(n['id'], '').startswith('mradm-')}, sort_keys=True)
         record['rust.sofa_enabled'] = str(enabled(cache.get('MR_ADM_ENABLE_SOFA', 'OFF')))
         for package in metadata['packages']:
             if package['name'] in {'rustfft', 'realfft', 'nalgebra', 'sofar'}:

@@ -16,6 +16,9 @@ function(mr_adm_import_rust)
     if(MR_ADM_ENABLE_SOFA)
         list(APPEND features sofa)
     endif()
+    if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
+        list(APPEND features diagnostics)
+    endif()
     corrosion_import_crate(
         MANIFEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
         CRATES mradm-ffi
@@ -44,11 +47,36 @@ string(SHA1 _mr_rust_path_hash "${_mr_rust_manifest}")
 string(SUBSTRING "${_mr_rust_path_hash}" 0 5 _mr_rust_path_hash)
 set(MR_ADM_RUST_TARGET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/rust/cargo/rust_${_mr_rust_path_hash}")
 
+set(_mr_phase2_features)
+if(MR_ADM_ENABLE_SOFA)
+    list(APPEND _mr_phase2_features sofa)
+endif()
+if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
+    list(APPEND _mr_phase2_features diagnostics)
+endif()
+set(_mr_phase2_feature_args)
+if(_mr_phase2_features)
+    list(JOIN _mr_phase2_features "," _mr_phase2_feature_string)
+    set(_mr_phase2_feature_args --features "${_mr_phase2_feature_string}")
+endif()
+add_custom_target(mr_adm_phase2_kernels
+    COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+        "RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" build --locked --release
+        --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-ffi
+        --example phase2_kernels --no-default-features ${_mr_phase2_feature_args}
+        --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${MR_ADM_RUST_TARGET_DIR}/${Rust_CARGO_TARGET_CACHED}/release/examples/phase2_kernels${CMAKE_EXECUTABLE_SUFFIX}"
+        "${CMAKE_CURRENT_BINARY_DIR}/mr_adm_phase2_kernels${CMAKE_EXECUTABLE_SUFFIX}"
+    USES_TERMINAL
+)
+
 # Record Cargo's actual source locations for license verification and build
 # provenance. The lockfile includes dependencies for all supported platforms.
 execute_process(
     COMMAND "${CMAKE_COMMAND}" -E env "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}"
         "${Rust_CARGO_CACHED}" metadata --locked --format-version 1
+        --no-default-features ${_mr_phase2_feature_args}
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/rust"
     RESULT_VARIABLE _mr_cargo_metadata_status

@@ -23,6 +23,8 @@ pub fn complex_mix(
     }
     let sy = cy.try_svd(true, false, 1e-7, 64).ok_or_else(failed)?;
     let sx = cx.try_svd(true, false, 1e-7, 64).ok_or_else(failed)?;
+    crate::diagnostics::f32("complex.10-svd-x.f32", sx.singular_values.as_slice());
+    crate::diagnostics::f32("complex.11-svd-y.f32", sy.singular_values.as_slice());
     let uy = sy.u.ok_or_else(failed)?;
     let ux = sx.u.ok_or_else(failed)?;
     let sy = sy
@@ -59,6 +61,8 @@ pub fn real_mix(cx: RealMatrix, cy: RealMatrix, regularization: f32) -> Result<R
     }
     let sy = cy.try_svd(true, false, 1e-7, 64).ok_or_else(failed)?;
     let sx = cx.try_svd(true, false, 1e-7, 64).ok_or_else(failed)?;
+    crate::diagnostics::f32("real.10-svd-x.f32", sx.singular_values.as_slice());
+    crate::diagnostics::f32("real.11-svd-y.f32", sy.singular_values.as_slice());
     let uy = sy.u.ok_or_else(failed)?;
     let ux = sx.u.ok_or_else(failed)?;
     let sy = sy.singular_values.map(|v| v.max(2.23e-20).sqrt());

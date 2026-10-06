@@ -49,12 +49,15 @@
         "MR_ADM_CORE_USE_INSTALLED_DEPS": "OFF",
         "MR_ADM_STRICT_FP": "OFF",
         "MR_ADM_EAR_SCALAR_REFERENCE": "OFF",
-        "EAR_SIMD": "ON"
+        "EAR_SIMD": "ON",
+        "MR_ADM_ENABLE_IAMF": "OFF",
+        "MR_ADM_ENABLE_SOFA": "OFF",
+        "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF"
       }
     },
     {
       "name": "consistency-b",
-      "displayName": "Consistency baseline B (controlled numerics)",
+      "displayName": "Consistency baseline B (C/C++ strict FP experiment)",
       "inherits": "consistency-a",
       "binaryDir": "${sourceDir}/build/consistency-b",
       "cacheVariables": {

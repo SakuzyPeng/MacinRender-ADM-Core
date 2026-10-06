@@ -74,16 +74,15 @@ Cargo 依赖而未登记的 PR 会直接失败。release workflow 另以 `--requ
 
 | Job | Runner | 内容 |
 |---|---|---|
-| `render` | `macos-26`、`ubuntu-24.04` × config A/B | 用 `consistency-a` / `consistency-b` Release preset 构建 CLI 与工具，运行数值工具测试和 `scripts/consistency/render-matrix.sh`，上传 PCM 与构建记录 |
+| `render` | `macos-26`、`ubuntu-24.04` × config A/B | 用 `consistency-a` / `consistency-b` Release preset 构建 CLI 与工具，运行数值工具测试、Rust 二期采集和诊断无扰动验证，上传 PCM/检查点与构建记录 |
 | `render-windows` | `windows-2025-vs2026` × config A/B | Windows 对应构建与渲染矩阵 |
-| `compare` | `ubuntu-24.04` | 汇总三平台结果，`scripts/consistency/compare-platforms.sh` 比较并上传报告 |
+| `compare` | `ubuntu-24.04` | 汇总三平台结果，`scripts/consistency/compare-rust-phase2.py` 校验、比较并上传 JSON 报告 |
 
-config A 为默认数值配置，config B 打开 `MR_ADM_STRICT_FP` / `MR_ADM_EAR_SCALAR_REFERENCE` 等受控
-数值选项。Rust 一期**不设跨平台逐位一致门禁**：使用的清单
-`scripts/consistency/expected-identical-rust-phase1.txt` 为空，只记录差异；输入完整性和同进程
-重复性仍是硬门禁。跨平台逐位一致属二期目标（见 `docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md`）。
-历史 SAF 时期的门禁清单和定位脚本（`expected-identical.txt`、`expected-identical-controlled.txt`、`run-localization.py` 等）保留为
-原始证据，不适用于当前 Rust 构建。
+config A 为默认数值配置，config B 只打开 C/C++ 严格浮点选项；两组 RustFFT 均使用自动 SIMD。
+二期使用 `run-rust-phase2.py` 收集 34 个离线场景、22 个实时 Scene 配置（各含两个 epoch）及
+49 个内核测量，再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py` 验证三平台
+源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；跨平台位差仍只记录。
+详见 [Rust 二期基线](../architecture/RUST_PHASE2_BASELINE.md)。历史 SAF 清单和定位脚本保留原始边界。
 
 ### 第三阶段：发布构建
 

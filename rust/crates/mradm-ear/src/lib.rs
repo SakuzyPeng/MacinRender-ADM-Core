@@ -4,6 +4,8 @@
 
 mod data;
 pub mod decorrelate;
+#[path = "../../mradm-dsp/src/diagnostics.rs"]
+pub mod diagnostics;
 mod direct;
 mod extent;
 mod geom;

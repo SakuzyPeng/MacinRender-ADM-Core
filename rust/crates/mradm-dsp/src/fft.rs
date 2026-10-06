@@ -46,6 +46,7 @@ impl RealFft {
             return Err(Error::InvalidArgument("FFT buffer length mismatch"));
         }
         self.real.copy_from_slice(input);
+        crate::diagnostics::f32("10-fft-input.f32", input);
         self.forward
             .process_with_scratch(&mut self.real, output, &mut self.scratch)
             .map_err(|_| Error::RenderFailed("Forward FFT failed"))
@@ -68,6 +69,7 @@ impl RealFft {
             .process_with_scratch(&mut self.complex, output, &mut self.scratch)
             .map_err(|_| Error::RenderFailed("Inverse FFT failed"))?;
         let scale = 1.0 / self.len() as f32;
+        crate::diagnostics::f32("20-inverse-unscaled.f32", output);
         for sample in output {
             *sample *= scale;
         }

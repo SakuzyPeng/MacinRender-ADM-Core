@@ -50,12 +50,34 @@ pub fn filters(layout: &Layout) -> Vec<f32> {
         let mut spectrum = vec![Complex::new(0.0, 0.0); TAPS];
         spectrum[0] = Complex::new(1.0, 0.0);
         spectrum[TAPS / 2] = Complex::new(1.0, 0.0);
+        #[cfg(feature = "diagnostics")]
+        let mut angles = Vec::new();
         for i in 1..TAPS / 2 {
             let angle = std::f64::consts::TAU * (rng.next() as f64 / 4294967296.0);
+            #[cfg(feature = "diagnostics")]
+            angles.push(angle);
             spectrum[i] = Complex::new(angle.cos(), angle.sin());
             spectrum[TAPS - i] = spectrum[i].conj();
         }
+        #[cfg(feature = "diagnostics")]
+        crate::diagnostics::f64(&format!("05-angles-{}.f64", c.name), &angles);
+        #[cfg(feature = "diagnostics")]
+        crate::diagnostics::f64(
+            &format!("10-spectrum-{}.f64", c.name),
+            &spectrum
+                .iter()
+                .flat_map(|v| [v.re, v.im])
+                .collect::<Vec<_>>(),
+        );
         fft.process(&mut spectrum);
+        #[cfg(feature = "diagnostics")]
+        crate::diagnostics::f64(
+            &format!("20-inverse-{}.f64", c.name),
+            &spectrum
+                .iter()
+                .flat_map(|v| [v.re, v.im])
+                .collect::<Vec<_>>(),
+        );
         out.extend(spectrum.iter().map(|v| (v.re / TAPS as f64) as f32));
     }
     out

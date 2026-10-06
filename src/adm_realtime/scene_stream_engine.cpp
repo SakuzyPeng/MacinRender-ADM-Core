@@ -28,6 +28,7 @@
 #include "adm/scene.h"
 #include "adm/semantic_policy.h"
 
+#include "../adm_render_common/consistency_trace.h"
 #include "live_binaural_renderer.h"
 #include "live_vbap_renderer.h"
 #include "resampler.h"
@@ -381,7 +382,7 @@ struct SceneStreamEngine::Impl {
     };
 
     struct WorkItem {
-        enum class Kind : std::uint8_t { frame, end };
+        enum class Kind : std::uint8_t { frame, end, fence };
 
         Kind kind{Kind::frame};
         std::uint64_t serial{0U};
@@ -389,6 +390,7 @@ struct SceneStreamEngine::Impl {
         live_scene::Frame frame;
         std::uint64_t reserved_samples{0U};
         std::uint64_t reserved_bytes{0U};
+        std::uint64_t fence_id{0U};
     };
 
     Impl(SceneStreamConfig stream_config,
@@ -502,13 +504,17 @@ struct SceneStreamEngine::Impl {
         queue_cv.notify_all();
     }
 
-    [[nodiscard]] bool head_tracking_recent() const noexcept {
+    [[nodiscard]] std::chrono::steady_clock::time_point now() const {
+        return config.clock ? config.clock() : std::chrono::steady_clock::now();
+    }
+
+    [[nodiscard]] bool head_tracking_recent() const {
         const auto raw = last_orientation_update_ns.load(std::memory_order_relaxed);
         if (raw == 0) {
             return false;
         }
         const std::chrono::steady_clock::time_point last{std::chrono::steady_clock::duration{raw}};
-        return (std::chrono::steady_clock::now() - last) < k_tracking_active_window;
+        return (now() - last) < k_tracking_active_window;
     }
 
     [[nodiscard]] std::size_t output_lookahead_frames() const noexcept {
@@ -904,6 +910,9 @@ struct SceneStreamEngine::Impl {
         allowed_output_frames = 0U;
         output_frames_pushed = 0U;
         transitions.reset();
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        trace_output_frames = 0;
+#endif
         media_frames_pulled.store(0U, std::memory_order_relaxed);
         underruns.store(0U, std::memory_order_relaxed);
         output_ready.store(false, std::memory_order_relaxed);
@@ -987,8 +996,12 @@ struct SceneStreamEngine::Impl {
                 Result<void> processed;
                 if (item.kind == WorkItem::Kind::frame) {
                     processed = process_frame(item);
-                } else {
+                } else if (item.kind == WorkItem::Kind::end) {
                     processed = process_end(item);
+                } else {
+                    const std::lock_guard<std::mutex> lock(queue_mutex);
+                    completed_fence = std::max(completed_fence, item.fence_id);
+                    queue_cv.notify_all();
                 }
                 release_budget(item);
                 if (!processed && !reset_or_quit(item.serial)) {
@@ -1198,6 +1211,44 @@ struct SceneStreamEngine::Impl {
 
     [[nodiscard]] Result<void> render_slice(const live_scene::Frame& frame,
                                             const std::vector<live_scene::StateEntry>& incoming_snapshot) {
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        const std::string key = "scene/e" + std::to_string(frame.epoch_id) + "-g" +
+                                std::to_string(frame.generation_id) + "-s" + std::to_string(frame.media_sample_start);
+        for (const auto& plane : frame.pcm) {
+            if (!plane.samples.empty())
+                consistency::dump(key + "-element" + std::to_string(plane.element_id) + ".10-input.f32", plane.samples);
+        }
+        std::vector<float> states;
+        for (const auto& entry : frame.initial_states) {
+            const auto& v = entry.state;
+            states.insert(states.end(),
+                          {v.x,
+                           v.y,
+                           v.z,
+                           v.linear_gain,
+                           v.width,
+                           v.height,
+                           v.depth,
+                           v.diffuse,
+                           v.divergence,
+                           static_cast<float>(v.head_locked),
+                           static_cast<float>(v.channel_lock)});
+        }
+        for (const auto& update : frame.updates) {
+            const auto& v = update.state;
+            states.insert(states.end(),
+                          {static_cast<float>(update.offset_samples),
+                           static_cast<float>(update.ramp_duration_samples),
+                           v.x,
+                           v.y,
+                           v.z,
+                           v.linear_gain,
+                           static_cast<float>(v.head_locked)});
+        }
+        if (!states.empty())
+            consistency::dump(key + ".20-effective.f32", states);
+#endif
+
         render_output.resize(static_cast<std::size_t>(frame.duration_samples) * channels);
         auto rendered = renderer->render(frame, render_output);
         if (!rendered) {
@@ -1234,6 +1285,13 @@ struct SceneStreamEngine::Impl {
     }
 
     [[nodiscard]] Result<void> feed_rendered_slice(const live_scene::Frame& frame, std::uint64_t serial) {
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        consistency::dump(
+            "scene/e" + std::to_string(frame.epoch_id) + "-g" + std::to_string(frame.generation_id) + "-s" +
+                std::to_string(frame.media_sample_start) + ".40-render.f32",
+            std::span<const float>{render_output}.first(static_cast<std::size_t>(frame.duration_samples) * channels));
+#endif
+
         const auto frame_end = frame.media_sample_start + static_cast<std::int64_t>(frame.duration_samples);
         std::uint32_t hidden_frames = 0U;
         if (frame.media_sample_start < target_sample_worker) {
@@ -1437,7 +1495,17 @@ struct SceneStreamEngine::Impl {
                                                 bool force_silence,
                                                 bool before_target,
                                                 std::uint64_t serial) {
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        const auto key = "scene/e" + std::to_string(epoch_status.load()) + "-out" + std::to_string(trace_output_frames);
+        if (frames)
+            consistency::dump(key + ".50-resampled.f32", std::span<const float>{samples, frames * channels});
+#endif
         apply_transition(samples, frames, force_silence);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        if (frames)
+            consistency::dump(key + ".60-transition.f32", std::span<const float>{samples, frames * channels});
+        trace_output_frames += frames;
+#endif
         if (before_target) {
             preroll_output_frames_generated += static_cast<std::uint64_t>(frames);
         }
@@ -1607,6 +1675,8 @@ struct SceneStreamEngine::Impl {
     std::size_t channels{0U};
     PlayerOutputEngine player_output;
     std::optional<dsp::Resampler> resampler;
+    std::uint64_t issued_fence{0U};
+    std::uint64_t completed_fence{0U};
 
     std::thread worker;
     std::atomic<bool> quit{false};
@@ -1679,6 +1749,9 @@ struct SceneStreamEngine::Impl {
     std::uint64_t allowed_output_frames{0U};
     std::uint64_t output_frames_pushed{0U};
     dsp::SceneTransitions transitions;
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    std::uint64_t trace_output_frames{0};
+#endif
 };
 // NOLINTEND(misc-non-private-member-variables-in-classes,clang-analyzer-optin.performance.Padding)
 
@@ -1729,6 +1802,26 @@ SceneStreamEngine::SceneStreamEngine(std::unique_ptr<Impl> impl) : impl_(std::mo
 
 SceneStreamEngine::~SceneStreamEngine() = default;
 
+Result<void> SceneStreamEngine::wait_idle(std::chrono::milliseconds timeout) {
+    std::unique_lock<std::mutex> lock(impl_->queue_mutex);
+    Impl::WorkItem item;
+    item.kind = Impl::WorkItem::Kind::fence;
+    item.serial = impl_->reset_serial.load();
+    item.fence_id = ++impl_->issued_fence;
+    const auto id = item.fence_id;
+    impl_->queue.push_back(std::move(item));
+    impl_->queue_cv.notify_all();
+    if (!impl_->queue_cv.wait_for(lock, timeout, [&] {
+            return impl_->completed_fence >= id || impl_->failed.load() || impl_->quit.load();
+        })) {
+        return make_error(ErrorCode::render_failed, "Scene replay fence timed out");
+    }
+    if (impl_->failed.load() || impl_->quit.load()) {
+        return make_error(ErrorCode::render_failed, "Scene replay worker failed or closed");
+    }
+    return {};
+}
+
 SceneOutputFormat SceneStreamEngine::output_format() const noexcept {
     return {impl_->config.output_sample_rate, static_cast<std::uint32_t>(impl_->channels)};
 }
@@ -1771,8 +1864,7 @@ Result<void> SceneStreamEngine::switch_backend(live_scene::RendererConfig config
 }
 
 void SceneStreamEngine::set_listener_orientation(const ListenerOrientation& orientation) {
-    impl_->last_orientation_update_ns.store(std::chrono::steady_clock::now().time_since_epoch().count(),
-                                            std::memory_order_relaxed);
+    impl_->last_orientation_update_ns.store(impl_->now().time_since_epoch().count(), std::memory_order_relaxed);
     {
         const std::lock_guard<std::mutex> lock(impl_->queue_mutex);
         impl_->pending_orientation = orientation;
@@ -2219,6 +2311,7 @@ SceneStreamStatus SceneStreamEngine::status() const noexcept {
                                  static_cast<float>(impl_->player_output.capacity_frames());
     result.ended = result.state == SceneStreamState::ended;
     result.failed = impl_->failed.load(std::memory_order_acquire);
+    result.production_complete = impl_->production_done.load(std::memory_order_acquire);
     return result;
 }
 

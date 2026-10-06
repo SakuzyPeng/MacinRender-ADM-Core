@@ -15,6 +15,7 @@
 #include "adm/logging.h"
 #include "adm/loudness.h"
 
+#include "../adm_render_common/consistency_trace.h"
 #include "meter.h"
 
 namespace mradm {
@@ -150,6 +151,8 @@ Result<void> apply_loudness_norm(const std::string& path, float target_lufs, Log
     const auto gain = static_cast<float>(std::pow(10.0, gain_db / 20.0));
     logs.log(LogLevel::info, "loudness", fmt::format("applying gain {:.4f} ({:.2f} dB)", gain, gain_db));
 
+    consistency::dump("post/loudness.10-measurement.f64", {measured, target, gain_db});
+    consistency::dump("post/loudness.20-gain.f32", {gain});
     return apply_gain(path, gain);
 }
 
