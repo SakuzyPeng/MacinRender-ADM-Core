@@ -37,7 +37,6 @@ impl<R: Read + Seek> Reader<R> {
         let mut end = add(u64::from(short_size), 8)?;
         let mut at = 12;
         let mut long_data = None;
-        let mut long_frames = 0;
         let mut table = Vec::new();
         let mut chunks = Vec::new();
         if container != Container::Riff {
@@ -51,7 +50,9 @@ impl<R: Read + Seek> Reader<R> {
             }
             end = add(read_u64(&mut source)?, 8)?;
             long_data = Some(read_u64(&mut source)?);
-            long_frames = read_u64(&mut source)?;
+            // sampleCount mirrors the optional fact chunk and writers disagree on its unit
+            // (frames vs samples); the frame count is derived from data like dr_wav does.
+            let _sample_count = read_u64(&mut source)?;
             let count = read_u32(&mut source)?;
             if u64::from(count) * 12 > size - 28 {
                 return Err(Error::io("ds64 表被截断"));
@@ -129,9 +130,6 @@ impl<R: Read + Seek> Reader<R> {
             return Err(Error::io("data 长度不是完整音频帧"));
         }
         let frames = data_bytes / align;
-        if long_frames != 0 && long_frames != frames {
-            return Err(Error::io("ds64 帧数与 data 不一致"));
-        }
         source.seek(SeekFrom::Start(start))?;
         Ok(Self {
             source,

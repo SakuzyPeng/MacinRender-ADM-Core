@@ -17,6 +17,7 @@ option(MR_ADM_BUILD_LIBADM_REFERENCE_TESTS "Build optional legacy libadm metadat
 option(MR_ADM_BUILD_SAF_REFERENCE_TESTS "Build optional legacy SAF numerical reference tools" OFF)
 option(MR_ADM_BUILD_EBUR128_REFERENCE_TESTS "Build optional C libebur128 meter reference tests" OFF)
 option(MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS "Build optional C libsamplerate reference tests" OFF)
+option(MR_ADM_BUILD_DRWAV_REFERENCE_TESTS "Build optional dr_wav float WAVE I/O reference tests" OFF)
 option(MR_ADM_CONSISTENCY_DIAGNOSTICS "Enable private numerical checkpoints and worker controls (measurement only)" OFF)
 option(MR_ADM_DIAGNOSTIC_PORTABLE_RNG "Replace SAF's C RNG for a numerical attribution experiment only" OFF)
 option(MR_ADM_CORE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
@@ -392,7 +393,7 @@ endif()
 
 # ── adm_audio ─────────────────────────────────────────────────────────────────
 # Float32 WAV/CAF/FLAC, Opus MKA, APAC, and metadata I/O.
-# DR_WAV_IMPLEMENTATION is defined in wav_io.cpp only; DR_FLAC_IMPLEMENTATION is
+# WAVE sample I/O goes through Rust mradm-wav (wav_backend.h). DR_FLAC_IMPLEMENTATION is
 # defined in flac_io.cpp only. FLAC encoding uses libFLAC; decoding uses dr_flac.
 
 add_library(mr_adm_audio)
@@ -418,7 +419,7 @@ target_sources(
 
 target_link_libraries(mr_adm_audio
     PUBLIC MacinRender::ADMCore
-    PRIVATE dr_wav::dr_wav dr_flac::dr_flac FLAC::FLAC Opus::opus mradm_ffi
+    PRIVATE dr_flac::dr_flac FLAC::FLAC Opus::opus mradm_ffi
 )
 target_compile_definitions(mr_adm_audio PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
 if(MR_ADM_ENABLE_IAMF)
@@ -787,6 +788,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
         target_link_libraries(mr_adm_libbw64_reference_tests PRIVATE MacinRender::ADMAudio mradm_ffi libbw64)
         mr_adm_core_apply_warnings(mr_adm_libbw64_reference_tests)
         add_test(NAME mr_adm_libbw64_reference_tests COMMAND mr_adm_libbw64_reference_tests)
+    endif()
+
+    if(MR_ADM_BUILD_DRWAV_REFERENCE_TESTS)
+        add_executable(mr_adm_drwav_reference_tests tests/reference/dr_wav_reference_test.cpp)
+        target_include_directories(mr_adm_drwav_reference_tests PRIVATE src/adm_audio)
+        target_link_libraries(mr_adm_drwav_reference_tests PRIVATE MacinRender::ADMAudio mradm_ffi dr_wav::dr_wav)
+        mr_adm_core_apply_warnings(mr_adm_drwav_reference_tests)
+        add_test(NAME mr_adm_drwav_reference_tests COMMAND mr_adm_drwav_reference_tests)
     endif()
 
     # core_smoke_test exercises RenderService (empty-input validation); link engine.

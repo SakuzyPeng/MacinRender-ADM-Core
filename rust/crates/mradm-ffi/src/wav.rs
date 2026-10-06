@@ -1,5 +1,5 @@
 //! Private file I/O boundary. Owners and their allocations never cross allocators.
-use mradm_wav::{Error, Format, Reader, Result, SampleFormat, Writer, WriterOptions};
+use mradm_wav::{Container, Error, Format, Reader, Result, SampleFormat, Writer, WriterOptions};
 use std::{
     fs::{File, OpenOptions},
     io::BufReader,
@@ -20,6 +20,12 @@ pub struct Info {
     frames: u64,
     channels: u32,
     rate: u32,
+    /// WAVE_FORMAT_EXTENSIBLE speaker mask; 0 for plain WAVEFORMAT headers.
+    channel_mask: u32,
+    /// Container bits per sample (fmt `wBitsPerSample`).
+    bits: u16,
+    /// Format tag after resolving the extensible sub-format: 1 = PCM, 3 = IEEE float.
+    format: u16,
 }
 
 fn boundary(message: *mut u8, capacity: usize, f: impl FnOnce() -> Result<()>) -> i32 {
@@ -92,6 +98,13 @@ pub unsafe extern "C" fn mradm_wav_reader_open(
                 frames: value.frames,
                 channels: u32::from(value.format.channels),
                 rate: value.format.sample_rate,
+                channel_mask: value.format.channel_mask.unwrap_or(0),
+                bits: value.format.sample_format.bits(),
+                format: if value.format.sample_format.is_integer() {
+                    1
+                } else {
+                    3
+                },
             };
             *output = Box::into_raw(Box::new(ReadHandle { reader }));
         }
@@ -154,6 +167,8 @@ pub unsafe extern "C" fn mradm_wav_writer_create(
     channels: u32,
     rate: u32,
     bits: u16,
+    float_output: u8,
+    exclusive: u8,
     output: *mut *mut WriteHandle,
     message: *mut u8,
     capacity: usize,
@@ -164,11 +179,15 @@ pub unsafe extern "C" fn mradm_wav_writer_create(
             *output = ptr::null_mut();
         }
         let name = unsafe { path(name, length)? };
-        let sample_format = match bits {
-            16 => SampleFormat::Pcm16,
-            24 => SampleFormat::Pcm24,
-            32 => SampleFormat::Pcm32,
-            _ => return Err(Error::unsupported("整数 WAVE 位深必须为 16/24/32")),
+        // Float output keeps the established always-RF64 layout: a streaming writer cannot know
+        // the final size, and readers then see one container regardless of length.
+        let (sample_format, container) = match (float_output != 0, bits) {
+            (true, 32) => (SampleFormat::Float32, Some(Container::Rf64)),
+            (true, _) => return Err(Error::unsupported("浮点 WAVE 位深必须为 32")),
+            (false, 16) => (SampleFormat::Pcm16, None),
+            (false, 24) => (SampleFormat::Pcm24, None),
+            (false, 32) => (SampleFormat::Pcm32, None),
+            (false, _) => return Err(Error::unsupported("整数 WAVE 位深必须为 16/24/32")),
         };
         let format = Format {
             channels: u16::try_from(channels).map_err(|_| Error::invalid("WAVE 声道数过大"))?,
@@ -177,8 +196,22 @@ pub unsafe extern "C" fn mradm_wav_writer_create(
             channel_mask: None,
         };
         format.block_align()?;
-        let file = OpenOptions::new().write(true).create_new(true).open(name)?;
-        let writer = match Writer::new(file, format, WriterOptions::default()) {
+        let mut options = OpenOptions::new();
+        options.write(true);
+        if exclusive != 0 {
+            options.create_new(true);
+        } else {
+            options.create(true).truncate(true);
+        }
+        let file = options.open(name)?;
+        let writer = match Writer::new(
+            file,
+            format,
+            WriterOptions {
+                container,
+                ..WriterOptions::default()
+            },
+        ) {
             Ok(writer) => writer,
             Err(error) => {
                 let _ = std::fs::remove_file(name);
@@ -298,6 +331,8 @@ mod tests {
                     1,
                     96000,
                     24,
+                    0,
+                    1,
                     &mut writer,
                     message.as_mut_ptr(),
                     128
@@ -312,6 +347,8 @@ mod tests {
                     1,
                     96000,
                     24,
+                    0,
+                    1,
                     &mut collision,
                     message.as_mut_ptr(),
                     128
@@ -353,6 +390,7 @@ mod tests {
             );
             assert_eq!(info.frames, 3);
             assert_eq!(info.rate, 96000);
+            assert_eq!((info.bits, info.format, info.channel_mask), (24, 1, 0));
             let mut samples = [0.0; 3];
             let mut count = 0;
             assert_eq!(
@@ -402,5 +440,98 @@ mod tests {
             mradm_wav_reader_destroy(reader);
         }
         std::fs::remove_file(name).unwrap();
+    }
+
+    #[test]
+    fn float_writer_truncates_existing_output_and_writes_rf64() {
+        let name = std::env::temp_dir().join(format!("mradm-float-{}.wav", std::process::id()));
+        std::fs::write(&name, b"stale bytes that must be replaced").unwrap();
+        let name_text = name.to_str().unwrap();
+        let mut message = [0; 128];
+        unsafe {
+            let mut writer = ptr::null_mut();
+            assert_eq!(
+                mradm_wav_writer_create(
+                    name_text.as_ptr(),
+                    name_text.len(),
+                    2,
+                    48000,
+                    32,
+                    1,
+                    0,
+                    &mut writer,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            let samples = [0.25, -1.5, f32::MIN_POSITIVE, 2.0];
+            assert_eq!(
+                mradm_wav_writer_write(writer, samples.as_ptr(), 4, message.as_mut_ptr(), 128),
+                0
+            );
+            assert_eq!(
+                mradm_wav_writer_finish(writer, message.as_mut_ptr(), 128),
+                0
+            );
+            mradm_wav_writer_destroy(writer);
+            assert_eq!(&std::fs::read(&name).unwrap()[..4], b"RF64");
+            let mut reader = ptr::null_mut();
+            let mut info = Info::default();
+            assert_eq!(
+                mradm_wav_reader_open(
+                    name_text.as_ptr(),
+                    name_text.len(),
+                    &mut reader,
+                    &mut info,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            assert_eq!(
+                (
+                    info.frames,
+                    info.channels,
+                    info.bits,
+                    info.format,
+                    info.channel_mask
+                ),
+                (2, 2, 32, 3, 0)
+            );
+            let mut read = [0.0; 4];
+            let mut count = 0;
+            assert_eq!(
+                mradm_wav_reader_read(
+                    reader,
+                    read.as_mut_ptr(),
+                    4,
+                    &mut count,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            assert_eq!((count, read), (2, samples));
+            mradm_wav_reader_destroy(reader);
+            let mut invalid = ptr::dangling_mut();
+            assert_eq!(
+                mradm_wav_writer_create(
+                    name_text.as_ptr(),
+                    name_text.len(),
+                    1,
+                    48000,
+                    24,
+                    1,
+                    0,
+                    &mut invalid,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                2
+            );
+            assert!(invalid.is_null());
+        }
+        std::fs::remove_file(name).ok();
     }
 }

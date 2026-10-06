@@ -1,5 +1,3 @@
-// DR_WAV_IMPLEMENTATION must be defined in exactly one TU.
-#define DR_WAV_IMPLEMENTATION
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -8,7 +6,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <dr_wav.h>
 #include <filesystem>
 #include <iterator>
 #include <limits>
@@ -82,31 +79,25 @@ void emit_wav_progress(ProgressSink* progress,
 // ── FloatWavWriter ────────────────────────────────────────────────────────────
 
 struct FloatWavWriter::Impl {
-    drwav wav{};
-    bool open{false};
+    std::unique_ptr<RustWavWriter> writer;
+    bool finished{false};
 };
 
 Result<FloatWavWriter> FloatWavWriter::open(const std::string& path, uint32_t channels, uint32_t sample_rate) {
+    auto writer = RustWavWriter::create(path, channels, sample_rate, 32U, true, false);
+    if (!writer) {
+        return tl::unexpected{writer.error()};
+    }
     FloatWavWriter w;
     w.impl_ = std::make_unique<Impl>();
-
-    drwav_data_format fmt{};
-    fmt.container = drwav_container_rf64;
-    fmt.format = DR_WAVE_FORMAT_IEEE_FLOAT;
-    fmt.channels = channels;
-    fmt.sampleRate = sample_rate;
-    fmt.bitsPerSample = 32;
-
-    if (drwav_init_file_write(&w.impl_->wav, path.c_str(), &fmt, nullptr) == 0U) {
-        return make_error(ErrorCode::io_error, "failed to open float32 WAV for writing", "path=" + path);
-    }
-    w.impl_->open = true;
+    w.impl_->writer = std::move(*writer);
     return w;
 }
 
 FloatWavWriter::~FloatWavWriter() {
-    if (impl_ && impl_->open) {
-        drwav_uninit(&impl_->wav);
+    if (impl_ && !impl_->finished) {
+        // Best effort for callers that rely on RAII; finish() reports the same failure explicitly.
+        static_cast<void>(impl_->writer->finish());
     }
 }
 
@@ -114,133 +105,70 @@ FloatWavWriter::FloatWavWriter(FloatWavWriter&&) noexcept = default;
 FloatWavWriter& FloatWavWriter::operator=(FloatWavWriter&&) noexcept = default;
 
 uint64_t FloatWavWriter::write(const float* samples, uint64_t frame_count) {
-    return drwav_write_pcm_frames(&impl_->wav, frame_count, samples);
+    if (impl_->finished || !impl_->writer->write(samples, frame_count)) {
+        return 0;
+    }
+    return frame_count;
+}
+
+Result<void> FloatWavWriter::finish() {
+    if (impl_->finished) {
+        return {};
+    }
+    impl_->finished = true;
+    return impl_->writer->finish();
 }
 
 // ── FloatWavReader ────────────────────────────────────────────────────────────
 
 struct FloatWavReader::Impl {
-    drwav wav{};
-    std::FILE* file{nullptr};
-    bool spoof_bw64_as_rf64{false};
-    bool open{false};
-
-    static int64_t tell_file(std::FILE* file) {
-#ifdef _WIN32
-        return static_cast<int64_t>(_ftelli64(file));
-#else
-        return static_cast<int64_t>(ftello(file));
-#endif
-    }
-
-    static bool seek_file(std::FILE* file, int64_t offset, int whence) {
-#ifdef _WIN32
-        return _fseeki64(file, static_cast<__int64>(offset), whence) == 0;
-#else
-        return fseeko(file, static_cast<off_t>(offset), whence) == 0;
-#endif
-    }
-
-    static size_t read(void* user_data, void* out, size_t bytes) {
-        auto* self = static_cast<Impl*>(user_data);
-        const int64_t start = tell_file(self->file);
-        const size_t got = std::fread(out, 1U, bytes, self->file);
-        if (self->spoof_bw64_as_rf64 && start == 0 && got >= 4U && out != nullptr) {
-            auto* data = static_cast<char*>(out);
-            if (std::memcmp(data, "BW64", 4U) == 0) {
-                std::memcpy(data, "RF64", 4U);
-            }
-        }
-        return got;
-    }
-
-    static drwav_bool32 seek(void* user_data, int offset, drwav_seek_origin origin) {
-        auto* self = static_cast<Impl*>(user_data);
-        int whence = SEEK_SET;
-        if (origin == DRWAV_SEEK_CUR) {
-            whence = SEEK_CUR;
-        } else if (origin == DRWAV_SEEK_END) {
-            whence = SEEK_END;
-        }
-        return seek_file(self->file, offset, whence) ? DRWAV_TRUE : DRWAV_FALSE;
-    }
-
-    static drwav_bool32 tell(void* user_data, drwav_int64* cursor) {
-        auto* self = static_cast<Impl*>(user_data);
-        const int64_t position = tell_file(self->file);
-        if (position < 0) {
-            return DRWAV_FALSE;
-        }
-        *cursor = static_cast<drwav_int64>(position);
-        return DRWAV_TRUE;
-    }
+    std::unique_ptr<RustWavReader> reader;
 };
 
 Result<FloatWavReader> FloatWavReader::open(const std::string& path) {
+    auto reader = RustWavReader::open(path);
+    if (!reader) {
+        return tl::unexpected{reader.error()};
+    }
     FloatWavReader r;
     r.impl_ = std::make_unique<Impl>();
-
-    r.impl_->file = std::fopen(path.c_str(), "rb");
-    if (r.impl_->file == nullptr) {
-        return make_error(ErrorCode::io_error, "failed to open WAV for reading", "path=" + path);
-    }
-    std::array<char, 4> signature{};
-    const size_t signature_size = std::fread(signature.data(), 1U, signature.size(), r.impl_->file);
-    r.impl_->spoof_bw64_as_rf64 = signature_size == signature.size() && std::memcmp(signature.data(), "BW64", 4U) == 0;
-    if (!Impl::seek_file(r.impl_->file, 0, SEEK_SET)) {
-        std::fclose(r.impl_->file);
-        r.impl_->file = nullptr;
-        return make_error(ErrorCode::io_error, "failed to seek WAV for reading", "path=" + path);
-    }
-    if (drwav_init(&r.impl_->wav, Impl::read, Impl::seek, Impl::tell, r.impl_.get(), nullptr) == 0U) {
-        std::fclose(r.impl_->file);
-        r.impl_->file = nullptr;
-        return make_error(ErrorCode::io_error, "failed to open WAV for reading", "path=" + path);
-    }
-    r.impl_->open = true;
+    r.impl_->reader = std::move(*reader);
     return r;
 }
 
-FloatWavReader::~FloatWavReader() {
-    if (impl_ && impl_->open) {
-        drwav_uninit(&impl_->wav);
-    }
-    if (impl_ && impl_->file != nullptr) {
-        std::fclose(impl_->file);
-    }
-}
-
+FloatWavReader::~FloatWavReader() = default;
 FloatWavReader::FloatWavReader(FloatWavReader&&) noexcept = default;
 FloatWavReader& FloatWavReader::operator=(FloatWavReader&&) noexcept = default;
 
 uint32_t FloatWavReader::channels() const {
-    return impl_->wav.channels;
+    return impl_->reader->info().channels;
 }
 uint32_t FloatWavReader::sample_rate() const {
-    return impl_->wav.sampleRate;
+    return impl_->reader->info().rate;
 }
 uint64_t FloatWavReader::frame_count() const {
-    return impl_->wav.totalPCMFrameCount;
+    return impl_->reader->info().frames;
 }
 uint32_t FloatWavReader::channel_mask() const {
-    return impl_->wav.fmt.channelMask;
+    return impl_->reader->info().channel_mask;
 }
 uint16_t FloatWavReader::bits_per_sample() const {
-    return impl_->wav.bitsPerSample;
+    return impl_->reader->info().bits;
 }
 bool FloatWavReader::is_linear_pcm() const {
-    return impl_->wav.translatedFormatTag == DR_WAVE_FORMAT_PCM;
+    return impl_->reader->info().format == 1U;
 }
 bool FloatWavReader::is_ieee_float() const {
-    return impl_->wav.translatedFormatTag == DR_WAVE_FORMAT_IEEE_FLOAT;
+    return impl_->reader->info().format == 3U;
 }
 
 uint64_t FloatWavReader::read(float* out, uint64_t frames) {
-    return drwav_read_pcm_frames_f32(&impl_->wav, frames, out);
+    auto read = impl_->reader->read(out, frames);
+    return read ? *read : 0U;
 }
 
 bool FloatWavReader::seek(uint64_t frame) {
-    return drwav_seek_to_pcm_frame(&impl_->wav, frame) != 0U;
+    return impl_->reader->seek_frame(frame).has_value();
 }
 
 // ── downconvert_to_int ────────────────────────────────────────────────────────

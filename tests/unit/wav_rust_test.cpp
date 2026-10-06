@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -8,6 +9,7 @@
 #include <limits>
 #include <stop_token>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "adm/audio_io.h"
@@ -47,6 +49,70 @@ void verify_native_path_round_trip(const std::filesystem::path& directory) {
     require(got && *got == output.size(), "native-path integer read failed");
     require(output == std::array<float, 3>{0.0F, 4194303.0F / 8388608.0F, -4194303.0F / 8388608.0F},
             "native-path PCM mismatch");
+}
+void save(const std::filesystem::path& path, const std::vector<char>& bytes) {
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    require(output.good(), "fixture save failed");
+}
+std::vector<char> legacy_format_wave(uint16_t tag, uint16_t bits) {
+    // Mono 48 kHz, two samples. Accepted by the replaced dr_wav reader, rejected by mradm-wav.
+    const auto le = [](std::vector<char>& out, uint32_t value, int bytes) {
+        for (int i = 0; i < bytes; ++i) {
+            out.push_back(static_cast<char>((value >> (8 * i)) & 0xFFU));
+        }
+    };
+    const uint32_t align = bits / 8U;
+    std::vector<char> out{'R', 'I', 'F', 'F'};
+    le(out, 4U + 24U + 8U + 2U * align, 4);
+    for (const char c : std::string{"WAVEfmt "}) {
+        out.push_back(c);
+    }
+    le(out, 16U, 4);
+    le(out, tag, 2);
+    le(out, 1U, 2);
+    le(out, 48000U, 4);
+    le(out, 48000U * align, 4);
+    le(out, align, 2);
+    le(out, bits, 2);
+    for (const char c : std::string{"data"}) {
+        out.push_back(c);
+    }
+    le(out, 2U * align, 4);
+    out.insert(out.end(), 2U * static_cast<std::size_t>(align), '\x40');
+    return out;
+}
+void verify_float_writer_and_formats(const std::filesystem::path& directory) {
+    const auto path = directory / "float.wav";
+    save(path, {'s', 't', 'a', 'l', 'e'});
+    const std::vector<float> input{0.25F, -1.5F, 2.0F};
+    {
+        auto writer = mradm::audio::FloatWavWriter::open(path.string(), 1, 48000);
+        require(writer.has_value(), "float writer must replace an existing file");
+        require(writer->write(input.data(), input.size()) == input.size(), "float write failed");
+        require(writer->finish().has_value() && writer->finish().has_value(), "float finish failed");
+        require(writer->write(input.data(), 1) == 0, "write after finish must fail");
+    }
+    auto bytes = load(path);
+    require(bytes.size() > 4 && std::string(bytes.data(), 4) == "RF64", "float WAVE must stay RF64");
+
+    // BW64-labelled float input previously needed a dr_wav header spoof.
+    const auto bw64 = directory / "float-bw64.wav";
+    std::copy_n("BW64", 4, bytes.begin());
+    save(bw64, bytes);
+    auto reader = mradm::audio::FloatWavReader::open(bw64.string());
+    require(reader && reader->is_ieee_float() && reader->bits_per_sample() == 32 && reader->frame_count() == 3,
+            "BW64 float fmt mismatch");
+    std::vector<float> output(input.size());
+    require(reader->read(output.data(), output.size()) == output.size() && output == input, "BW64 float samples");
+
+    for (const auto& [tag, bits] : {std::pair<uint16_t, uint16_t>{1, 8}, {6, 8}, {3, 64}}) {
+        const auto legacy = directory / ("legacy-" + std::to_string(tag) + "-" + std::to_string(bits) + ".wav");
+        save(legacy, legacy_format_wave(tag, bits));
+        auto rejected = mradm::audio::FloatWavReader::open(legacy.string());
+        require(!rejected && rejected.error().code == mradm::ErrorCode::unsupported,
+                "8-bit, A-law and float64 WAVE must be reported as unsupported");
+    }
 }
 class CancelProgress final : public mradm::ProgressSink {
   public:
@@ -89,6 +155,7 @@ int main() {
             }
         }
         verify_native_path_round_trip(directory);
+        verify_float_writer_and_formats(directory);
         const auto invalid = directory / "nan.wav";
         write_float(invalid, 48000, {0.5F, std::numeric_limits<float>::quiet_NaN()});
         const auto original = load(invalid);
@@ -122,7 +189,7 @@ int main() {
                     "temporary output leaked");
         }
         std::filesystem::remove_all(directory);
-        std::cout << "Rust WAVE integration, high rates, cancellation and error preservation passed\n";
+        std::cout << "Rust WAVE integration, float RF64/BW64, high rates, cancellation and error preservation passed\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

@@ -43,6 +43,11 @@ jobs:
             option: MR_ADM_BUILD_EBUR128_REFERENCE_TESTS
             targets: mr_adm_ebur128_reference_tests
             tests: mr_adm_ebur128_reference_tests
+          - unit: dr_wav
+            runner: ubuntu-24.04
+            option: MR_ADM_BUILD_DRWAV_REFERENCE_TESTS
+            targets: mr_adm_drwav_reference_tests
+            tests: mr_adm_drwav_reference_tests
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}/.fc-cache

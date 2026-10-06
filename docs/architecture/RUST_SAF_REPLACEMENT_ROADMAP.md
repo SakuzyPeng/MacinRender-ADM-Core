@@ -112,7 +112,7 @@ Rust 单元测试覆盖独立 double DFT、实际 FFT 长度、凸包/Voronoi、
 
 一致性 CI 继续保存 A/B C++ 数值控制下的 PCM 和构建记录，使用一期专用的空跨平台门禁清单；同进程重复性仍是硬门禁。历史 SAF 清单和实验不改写：见 [原始定位](CONSISTENCY_LOCALIZATION.md)、[3D VBAP 定位](CONSISTENCY_VBAP_LOCALIZATION.md)。旧 run-localization.py 只适用于那些记录的 SAF 源码版本，会拒绝对当前 Rust 构建执行旧归因实验。
 
-后续整数 BW64/WAVE I/O 迁移见 [Rust BW64 迁移](RUST_BW64_MIGRATION.md)；dr_wav 和容器元数据编排仍保留。
+后续整数 BW64/WAVE I/O 迁移见 [Rust BW64 迁移](RUST_BW64_MIGRATION.md)，浮点 WAVE（移除 dr_wav）见 [Rust 浮点 WAVE 迁移](RUST_DR_WAV_MIGRATION.md)；容器元数据编排仍在 C++。
 
 ## 参考实现退出
 

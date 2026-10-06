@@ -9,7 +9,7 @@
 | 类别 | 位置 | 构建 | 风险 |
 |---|---|---|---|
 | 冻结参考（`frozen`） | `tests/reference/*_legacy.h`、`hoa/`、`live_vbap/`、`monitor/`、`triple_balance/`、`scene_numeric/` | 随 `MR_ADM_CORE_BUILD_TESTS` 默认编译，CI 每次运行 | 引用生产头文件，生产接口变化时需要跟着维护 |
-| 第三方对照（`third-party`） | SAF / libadm / libbw64 / libsamplerate / libebur128 的参考测试 | 只在默认 OFF 的 `MR_ADM_BUILD_*_REFERENCE_TESTS` 下获取并构建 | 必需 CI 不运行，容易无声腐烂；由手动 `reference-tests.yml` 防腐 |
+| 第三方对照（`third-party`） | SAF / libadm / libbw64 / libsamplerate / libebur128 / dr_wav 的参考测试 | 只在默认 OFF 的 `MR_ADM_BUILD_*_REFERENCE_TESTS` 下获取并构建 | 必需 CI 不运行，容易无声腐烂；由手动 `reference-tests.yml` 防腐 |
 
 两类参考都**不得**作为运行时回退，也不得进入发行产物。
 
@@ -50,7 +50,7 @@
 
 ## 当前状态
 
-全部 13 个单元均为 `retained`，三个条件都未满足：Rust 实现未发布，独立回归和二期需求尚未逐单元评审。逐单元的路径、测试和开关见登记表。
+全部 14 个单元均为 `retained`，三个条件都未满足：Rust 实现未发布，独立回归和二期需求尚未逐单元评审。逐单元的路径、测试和开关见登记表。
 
 2026-10-06 在 Linux（GCC 13，Release，`55c9fa9` 之后的工作树）本地实测第三方对照：
 

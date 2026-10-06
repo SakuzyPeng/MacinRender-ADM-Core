@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 项目长期方向是平台化重构（不是简单的 CLI 重写）：见 `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md`。
 
-**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、ADM XML 元数据（原 libadm）和整数 WAVE/BW64 读写（原 libbw64）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略、渲染编排、线程/设备调度、容器收尾与公开 C ABI；libear 仍是 EAR 后端的标准增益/滤波器设计依赖。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。跨平台 PCM 逐位一致是二期目标，当前只把同平台重复性作为硬门禁（见 `RUST_SAF_REPLACEMENT_ROADMAP.md` §5）。
+**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、ADM XML 元数据（原 libadm）和 WAVE/RF64/BW64 样本读写（原 libbw64 / dr_wav）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略、渲染编排、线程/设备调度、容器收尾与公开 C ABI；libear 仍是 EAR 后端的标准增益/滤波器设计依赖。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。跨平台 PCM 逐位一致是二期目标，当前只把同平台重复性作为硬门禁（见 `RUST_SAF_REPLACEMENT_ROADMAP.md` §5）。
 
 ## 常用构建与测试命令
 
@@ -140,7 +140,7 @@ clang-tidy 依赖 `compile_commands.json`，必须先 `cmake --preset debug`。m
 
 依赖通过 `cmake/MRDependencies.cmake` 的 `mr_adm_core_find_or_fetch()` 统一接入（`find_package(CONFIG)` 优先，FetchContent 兜底）。新增 C/C++ 依赖**必须**走该函数，不要在 `CMakeLists.txt` 散落 `FetchContent_Declare`（ADR 0004）；新增 Rust 依赖写进 `rust/Cargo.toml` 的 `[workspace.dependencies]`（精确版本 `=x.y.z`）并更新 `Cargo.lock` 与许可证清单。
 
-当前生产 C/C++ 第三方依赖：libear（+ Boost 头文件）、dr_wav/dr_flac、libFLAC、libopus、miniaudio、CLI11、spdlog/fmt、nlohmann_json、tl-expected，可选 IAMF AOM bridge。Rust 依赖：realfft/rustfft、nalgebra、ebur128、rubato、sofar（`rust/vendor/sofar` 本地补丁）、quick-xml。
+当前生产 C/C++ 第三方依赖：libear（+ Boost 头文件）、dr_flac、libFLAC、libopus、miniaudio、CLI11、spdlog/fmt、nlohmann_json、tl-expected，可选 IAMF AOM bridge。Rust 依赖：realfft/rustfft、nalgebra、ebur128、rubato、sofar（`rust/vendor/sofar` 本地补丁）、quick-xml。
 
 关键开关：
 
@@ -151,7 +151,7 @@ clang-tidy 依赖 `compile_commands.json`，必须先 `cmake --preset debug`。m
 - `MR_ADM_ENABLE_IAMF=OFF`（默认）— IAMF 编码，需配合 `MR_ADM_IAMF_AOM_ROOT=/path/to/iamf-sdk` 指向预构建的官方 AOM iamf-tools bridge SDK（提供 `lib/libmr_iamf_aom_bridge.*`）。关闭时 `.iamf` 输出直接返回 `unsupported`，**不**回退到任何手写 OBU writer
 - `MR_ADM_CORE_BUILD_CLI=ON`、`MR_ADM_CORE_BUILD_TESTS=ON`
 - `MR_ADM_BUILD_CAPI_BUNDLE=OFF` — 打开后生成自包含 `libmradm_capi` 共享库（target `mradm_capi_bundle`），供 GUI P/Invoke 加载
-- `MR_ADM_BUILD_{SAF,LIBADM,LIBBW64,EBUR128,SAMPLERATE}_REFERENCE_TESTS=OFF`（默认）— 只为维护对照获取/构建旧库参考工具，**不改变生产实现**；SAF 参考只用 Release
+- `MR_ADM_BUILD_{SAF,LIBADM,LIBBW64,EBUR128,SAMPLERATE,DRWAV}_REFERENCE_TESTS=OFF`（默认）— 只为维护对照获取/构建旧库参考工具，**不改变生产实现**；SAF 参考只用 Release
 - `MR_ADM_STRICT_FP` / `MR_ADM_EAR_SCALAR_REFERENCE` / `MR_ADM_CONSISTENCY_DIAGNOSTICS` / `MR_ADM_DIAGNOSTIC_PORTABLE_RNG` — 一致性测量专用（`cmake/MRStrictFp.cmake`），不用于发行构建
 
 CI 显式使用 `MR_ADM_FLAC_PROVIDER=VENDORED` 与 `MR_ADM_OPUS_PROVIDER=VENDORED` 以消除 runner 差异（见 `docs/guides/CI.md`）。
@@ -177,7 +177,7 @@ ADMRenderBinaural   PRIVATE: ADMDsp + ADMAudio + ADMRenderCommon（HRTF/SOFA/卷
 ADMRenderApple      macOS-only（if(APPLE)）PRIVATE: AudioToolbox/AVFoundation/CoreMedia/Foundation
                     + ADMDsp + ADMAudio + ADMRenderCommon（AUSpatialMixer 后端 + ASBR 系统空间监听 sink）
 ADMRenderWindows    Windows-only（if(WIN32)）PRIVATE: Ole32 + ADMRenderCommon（ISpatialAudioClient sink）
-ADMAudio            PRIVATE: dr_wav, dr_flac, FLAC, Opus, mradm-ffi（mradm-wav 整数 WAVE/BW64）
+ADMAudio            PRIVATE: dr_flac, FLAC, Opus, mradm-ffi（mradm-wav：全部 WAVE 样本读写）
                     macOS: AudioToolbox + CoreFoundation（APAC / CAF metadata）
                     可选: IamfAomBridge（MR_ADM_ENABLE_IAMF）；IAMF 编码 + MP4 打包
 ADMPeak / ADMLoudness  PRIVATE: ADMDsp（Rust Meter）+ ADMAudio
@@ -253,8 +253,8 @@ GUI 新接入进度条优先使用 `adm_render_file_ex2` / `adm_preview_render_w
 - binaural 默认使用内置 KEMAR HRTF（已提交的二进制资源 `rust/crates/mradm-dsp/assets/`，`manifest.json` 记录来源与 SHA-256，构建不再从 SAF 提取）；`--sofa <path>` 支持 SimpleFreeFieldHRIR / GeneralFIR、2 receivers、48 kHz、**不重采样**
 - `--renderer apple`：**macOS-only** AUSpatialMixer 后端（`src/adm_apple/`），能力见 `apple_capabilities()`，在 Linux 不编译；`mr_adm_apple_smoke_tests` 在非 macOS 跳过
 - 系统空间音频监听（`monitor_system_spatial`，仅实时监听非离线）：把多声道床交 OS 做 HRTF。**macOS** 经 `AVSampleBufferAudioRenderer`（`src/adm_apple/avsamplebuffer_device.mm`，含动态头追踪）；**Windows** 经 `ISpatialAudioClient`（`src/adm_windows/spatialaudioclient_device.cpp`，Windows Sonic / Dolby Atmos / DTS 头戴，**静态空间化无 OS 头追**，需声音设置启用某空间格式否则返回 `unsupported`）。布局白名单各自由 `apple_layouts` / `windows_layouts` 定义，经 capabilities JSON 的 `system_spatial_layouts` 字段统一暴露给 GUI（**唯一权威源，勿在 GUI 硬编码**）。sink 选择在 `monitor_session.cpp::make_monitor_device`
-- WAV `wav_io.cpp` 中定义 `DR_WAV_IMPLEMENTATION`；FLAC 解码 `dr_flac.cpp` 中定义 `DR_FLAC_IMPLEMENTATION`；编码用 `libFLAC`
-- WAV / BW64 IO 是 64-bit clean（支持 >4GB 母版与输出）：**f32 WAV 经 dr_wav 固定写 RF64**（流式写无法预知总大小，统一用 `ds64` 承载真实大小，小文件也是 RF64）；**整数 WAV 读取与写入经 Rust `mradm-wav`**（C++ 包装在 `src/adm_audio/wav_backend.h`）：默认先写 RIFF，需要 64 位长度时整数升级 BW64、浮点升级 RF64；writer 必须显式 `finish()`，整数转换写排他临时文件、成功后才安装，失败/取消保留原文件；reader 以 u64 帧 `seek_frame` 定位（不再有 libbw64 的 2^31 帧上限）。`write_wav_metadata`（bext/ambi 追加）仍在 C++，用 `_fseeki64`/`fseeko` + uint64 全程 64-bit，按 RIFF/RF64/BW64 分别更新顶层 size 或 `ds64.bw64Size`。Windows 私有 FFI 路径先按当前进程代码页把原生窄路径转 UTF-8，**不要**靠字节是否为合法 UTF-8 猜编码。回归守卫用稀疏文件造 >4GB / 跨 2^31 帧 fixture（`core_smoke_test` / `render_trim_fixture_test`，不真烧盘）；真实 >4GiB 写入测试默认忽略，需设 `MRADM_WAV_LARGE_TEST_DIR`
+- FLAC 解码在 `flac_io.cpp` 中定义 `DR_FLAC_IMPLEMENTATION`（dr_flac），编码用 `libFLAC`；dr_wav 只在 `MR_ADM_BUILD_DRWAV_REFERENCE_TESTS` 对照中使用
+- WAV / BW64 IO 是 64-bit clean（支持 >4GB 母版与输出）：**所有 WAV 样本读写经 Rust `mradm-wav`**（C++ 包装在 `src/adm_audio/wav_backend.h`；`FloatWavReader`/`FloatWavWriter`/`RenderInputReader` 均基于它，只接受 PCM16/24/32 与 float32）：**f32 WAV 固定写 RF64**（流式写无法预知总大小，统一用 `ds64` 承载真实大小，小文件也是 RF64），`FloatWavWriter` 覆盖已有文件，析构尽力收尾、先写后改名的路径须显式 `finish()`；整数输出默认先写 RIFF、需要 64 位长度时升级 BW64，整数转换写排他临时文件、成功 `finish()` 后才安装，失败/取消保留原文件；reader 以 u64 帧 `seek_frame` 定位（不再有 libbw64 的 2^31 帧上限）。`write_wav_metadata`（bext/ambi 追加）仍在 C++，用 `_fseeki64`/`fseeko` + uint64 全程 64-bit，按 RIFF/RF64/BW64 分别更新顶层 size 或 `ds64.bw64Size`。Windows 私有 FFI 路径先按当前进程代码页把原生窄路径转 UTF-8，**不要**靠字节是否为合法 UTF-8 猜编码。回归守卫用稀疏文件造 >4GB / 跨 2^31 帧 fixture（`core_smoke_test` / `render_trim_fixture_test`，不真烧盘）；真实 >4GiB 写入测试默认忽略，需设 `MRADM_WAV_LARGE_TEST_DIR`
 
 ## GUI（gui/MacinRender.Gui）
 

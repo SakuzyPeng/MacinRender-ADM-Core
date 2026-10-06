@@ -405,8 +405,8 @@ FIR 设计等**不可变且昂贵**的构建。
 只渲染 `[start - warmup, end)`，其中 `[start - warmup, start)` 用于预热状态但不写出，随后只写
 `[start, end)`。
 
-- `ReaderHandle::seek(uint64_t frame) -> Result<void>`：各 reader impl 转发（dr_wav
-  `drwav_seek_to_pcm_frame`、libbw64 seek、dr_flac seek）；无 seek 时退化为“读入丢弃”（省 DSP，不省 I/O）。
+- `ReaderHandle::seek(uint64_t frame) -> Result<void>`：各 reader impl 转发（Rust
+  `mradm-wav` 帧定位（原 dr_wav / libbw64）、dr_flac seek）；无 seek 时退化为“读入丢弃”（省 DSP，不省 I/O）。
 - `RenderPlan` 增 `std::optional<RenderWindow> render_window{start, count}`（区别于只管计量的
   `meter_window`）+ `uint64_t warmup_frames`。
 - `warmup` 由后端自报（建议进 `CapabilityReport` 或 `recommended_warmup_frames(plan)`）：EAR =
