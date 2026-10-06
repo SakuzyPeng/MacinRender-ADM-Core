@@ -68,9 +68,28 @@ Scene 标量循环和完整 Live 双耳 renderer。既有 HOA、Live VBAP 参考
 简单路由、端点、canonical length 和明确的恒等结果逐位检查；计数、有效位、槽位、路由和
 诊断顺序单独检查。输出拉取长度一致、离线/旧 stream、窗口、实时控制等既有回归保留。
 
-目前原生回归已通过 macOS Debug 66 项和 Windows canonical Release 65 项；最终源码及
-三平台 CI 尚待本批集成验收结束后填入。机器可读记录将区分空间角度、过渡 PCM 和双耳 PCM
-误差，记录参数拒绝恢复、首次调用分配、符号、许可证及安装消费者结果。
+最终源码提交为 `f7f38de`；共享数学与过渡实现分别提交为 `08113fd`、`a1b2e01`。
+[三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37434454445)
+在该源码提交通过 macOS Debug 66/66、Linux Debug 65/65、Windows Debug 65/65。
+本机 macOS Debug 66/66、Release 定向 19/19；Windows canonical Release 65/65。
+Rust Release workspace 164 项通过，既有物理 >4 GiB WAVE 测试按默认配置忽略。
+
+| Release 同平台参考 | 比较浮点值 | macOS 最大绝对差 | Windows 最大绝对差 |
+|---|---:|---:|---:|
+| 空间数学，包含角度 | 47,802 | `6.103515625e-5`（角度） | 0 |
+| Scene PCM、最后输出帧及锚点 | 3,166,080 | `1.1920928955078125e-7` | 0 |
+| Live 双耳完整 renderer 与错误恢复 PCM | 59,829 | 0 | 0 |
+
+所有值通过规定的逐项容差；端点、路由与关键状态另有精确断言。动态双耳继续使用原分段
+规则，不扩大任意 SceneFrame 重分块的逐位一致承诺。
+
+首次调用分配探针覆盖内核和 FFI 的查询、更新、预检查、处理、reset 与拒绝。Rust fmt/Clippy、
+改动 C++ 检查、许可证/SBOM、安装后的独立 ADMCore 消费者均通过。C++ 检查保留 Apple
+既有的 10 条非阻断建议。本批未增加依赖，Cargo.lock 与公开 C ABI 头文件均保持不变。
+
+两端 C ABI bundle 均保留全部 139 个 `adm_*` 入口，没有导出私有 Rust DSP/ADM/WAVE
+符号。Windows 延续原有 C++ 实现符号导出方式，这些符号不属于稳定 C ABI。
+完整配置、52 项源码/测试/构建文件指纹、冻结参考及数值摘要保存在机器可读记录中。
 
 ```sh
 cmake --build --preset debug
@@ -84,6 +103,5 @@ scripts/quality/check-licenses.sh --build-dir build/debug
 ```
 
 复用现有工作区、标准构建目录和共享 Cargo 缓存。Windows 保留原有未提交修改，同步前检查
-源文件指纹并备份原字节。原有 Triple Balance 链接修改由并行提交 `a7d0e74` 独立保存，本批保留该祖先提交。阶段结果不作为最终
-验收；最终记录见 [机器可读证据](evidence/rust-scene-numeric/validation.json)。跨平台逐位一致
+源文件指纹并备份原字节。原有 Triple Balance 链接修改由并行提交 `a7d0e74` 独立保存，本批保留该祖先提交。最终记录见 [机器可读证据](evidence/rust-scene-numeric/validation.json)。跨平台逐位一致
 继续留到二期，本轮不据迁移推断性能提升。

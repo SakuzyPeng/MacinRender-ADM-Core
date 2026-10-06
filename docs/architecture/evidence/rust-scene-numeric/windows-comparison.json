@@ -1,0 +1,18 @@
+{
+  "scene": {
+    "spatial": {
+      "compared": 47802,
+      "max_absolute_error": 0
+    },
+    "transitions": {
+      "compared": 3166080,
+      "max_absolute_error": 0
+    },
+    "failures": 0
+  },
+  "binaural": {
+    "compared": 59829,
+    "max_absolute_error": 0,
+    "failures": 0
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "spatial_and_transitions": {
+    "spatial": {
+      "compared": 47802,
+      "max_absolute_error": 6.103515625e-05
+    },
+    "transitions": {
+      "compared": 3166080,
+      "max_absolute_error": 1.1920928955078125e-07
+    },
+    "failures": 0
+  },
+  "live_binaural": {
+    "compared": 59829,
+    "max_absolute_error": 0,
+    "failures": 0
+  }
+}
