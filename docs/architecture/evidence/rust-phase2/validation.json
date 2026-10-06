@@ -1,0 +1,770 @@
+{
+  "schema": "mradm.phase2.validation.v1",
+  "date": "2026-10-06",
+  "implementation_commit": "00a70e4f2a698015a4cf23ec3122644c06960231",
+  "source_sha256": "bc9b53f6c2c2f4d654dfee75466f4aae10385d8127ca17665f941a84e417a087",
+  "ci": {
+    "run_id": 37530745999,
+    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37530745999",
+    "conclusion": "success",
+    "native_platforms": [
+      "macOS arm64",
+      "Windows x64",
+      "Linux x64"
+    ],
+    "configurations": [
+      "A default",
+      "B C/C++ strict FP"
+    ],
+    "diagnostic_noninterference": "passed on all six platform/configuration combinations"
+  },
+  "coverage": {
+    "offline_cases": 34,
+    "scene_configurations": 22,
+    "epochs_per_scene": 2,
+    "pcm_cases": 78,
+    "kernel_outputs": 49,
+    "same_process_repetitions": 2,
+    "new_process_repetitions": 2
+  },
+  "pcm_result": {
+    "a": {
+      "three_platform_identical": 29,
+      "differing": 49
+    },
+    "b": {
+      "three_platform_identical": 29,
+      "differing": 49
+    }
+  },
+  "within_platform_a_vs_b": {
+    "macos": {
+      "identical": 78,
+      "differing": []
+    },
+    "linux": {
+      "identical": 78,
+      "differing": []
+    },
+    "windows": {
+      "identical": 78,
+      "differing": []
+    }
+  },
+  "local_validation": {
+    "debug_full_ctest": "70/70 before final replay-only corrections",
+    "debug_focused_after_corrections": "6/6",
+    "phase2_tools": "16/16",
+    "rust_fmt_clippy": "passed, including all features",
+    "cpp_quality": "passed; replay driver retains a function-size advisory",
+    "public_c_abi_exports": 139,
+    "private_ffi_functions": 209,
+    "private_ffi_structs": 65,
+    "licenses": "passed",
+    "frozen_references": "16 retained units; 45 file hashes unchanged",
+    "release_options_restored": {
+      "MR_ADM_ENABLE_SOFA": "ON",
+      "MR_ADM_CORE_USE_INSTALLED_DEPS": "ON",
+      "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF",
+      "MR_ADM_STRICT_FP": "OFF"
+    }
+  },
+  "confirmed_boundaries": [
+    {
+      "module": "FFT",
+      "evidence": "Identical deterministic inputs produce different forward spectra and inverse output for all five sampled sizes on arm64 vs x64. Linux/Windows x64 FFT probe outputs match. Selected planner backend is not exposed, so SIMD/FMA causality is not claimed."
+    },
+    {
+      "module": "resampler",
+      "evidence": "48->44.1 and 44.1->48 kHz probes differ on every platform pair, including Linux vs Windows x64. Same-rate bypass matches."
+    },
+    {
+      "module": "EAR FIR design",
+      "evidence": "Phase angles match; some double-precision spectra and inverse results differ. All sampled final float32 FIR outputs match; these intermediate differences alone do not explain rendered PCM differences."
+    },
+    {
+      "module": "Scene math, OM/SVD, HpTF",
+      "evidence": "Sampled standalone output probes match across all three platforms. This is limited fixture coverage, not a module-wide guarantee."
+    }
+  ],
+  "local_worker_experiments": {
+    "platform": "macOS arm64",
+    "source_sha256": "bc9b53f6c2c2f4d654dfee75466f4aae10385d8127ca17665f941a84e417a087",
+    "results": {
+      "w1-g1": {
+        "actual_grouping": [
+          [
+            "3",
+            "1"
+          ],
+          [
+            "3",
+            "1"
+          ]
+        ],
+        "group_budget": 1,
+        "path": "experiments/w1-g1.pcmbits",
+        "versus_w1_g4": {
+          "different_words": 68847,
+          "first_bits": [
+            "0xbef1abbe",
+            "0xbef1abc0"
+          ],
+          "first_channel": 1,
+          "first_frame": 0,
+          "first_values": [
+            -0.4720134139060974,
+            -0.4720134735107422
+          ],
+          "first_word": 1,
+          "identical": false,
+          "max_absolute_error": 4.76837158203125e-07,
+          "max_ulp": 73728,
+          "sha256": [
+            "bda04ddb5175ea6b88a7d611ad4df73dbd812579184fa64ddf480f015b72976a",
+            "744e31ef7863188b8a63268b2e939d8cb5fdb193b4f27767439737a4427160d7"
+          ],
+          "shape": [
+            2,
+            48000,
+            48000
+          ],
+          "words": [
+            96000,
+            96000
+          ]
+        },
+        "workers": 1
+      },
+      "w1-g4": {
+        "actual_grouping": [
+          [
+            "3",
+            "3"
+          ],
+          [
+            "3",
+            "3"
+          ]
+        ],
+        "group_budget": 4,
+        "path": "experiments/w1-g4.pcmbits",
+        "workers": 1
+      },
+      "w2-g4": {
+        "actual_grouping": [
+          [
+            "3",
+            "3"
+          ],
+          [
+            "3",
+            "3"
+          ]
+        ],
+        "group_budget": 4,
+        "path": "experiments/w2-g4.pcmbits",
+        "versus_w1_g4": {
+          "identical": true,
+          "sha256": [
+            "bda04ddb5175ea6b88a7d611ad4df73dbd812579184fa64ddf480f015b72976a",
+            "bda04ddb5175ea6b88a7d611ad4df73dbd812579184fa64ddf480f015b72976a"
+          ],
+          "shape": [
+            2,
+            48000,
+            48000
+          ],
+          "words": [
+            96000,
+            96000
+          ]
+        },
+        "workers": 2
+      }
+    },
+    "storage_note": "Relative PCM paths refer to the collected artifact layout; full PCM is retained in CI artifacts, not in this source tree."
+  },
+  "local_partition_observations": {
+    "scene-binaural-binaural-cloud0-44100-48000-fixed-partition-epoch1": {
+      "different_words": 16758,
+      "first_bits": [
+        "0x32ba36c1",
+        "0x32ba376c"
+      ],
+      "first_channel": 0,
+      "first_frame": 0,
+      "first_values": [
+        2.167814905362775e-08,
+        2.1678452810647286e-08
+      ],
+      "first_word": 0,
+      "identical": false,
+      "max_absolute_error": 0.06885615736246109,
+      "max_ulp": 2047069908,
+      "sha256": [
+        "b0b27a56c7f9ff2d8a835d6e979bda137b758ee371db7a6a9997f6542f41b492",
+        "78683cc1799f7d5f25fedcb1defada6b31ce8216f92d20574e370811f293193e"
+      ],
+      "shape": [
+        2,
+        48000,
+        13376
+      ],
+      "words": [
+        26752,
+        26752
+      ]
+    },
+    "scene-binaural-binaural-cloud0-44100-48000-fixed-partition-epoch2": {
+      "different_words": 13,
+      "first_bits": [
+        "0xbb4cbe19",
+        "0xbb4cbe18"
+      ],
+      "first_channel": 0,
+      "first_frame": 0,
+      "first_values": [
+        -0.0031241236720234156,
+        -0.003124123439192772
+      ],
+      "first_word": 0,
+      "identical": false,
+      "max_absolute_error": 9.313225746154785e-10,
+      "max_ulp": 10,
+      "sha256": [
+        "18b253af83ddbeba4c59307389cf4bcb5e2f69af9778141432408cd4d770efbd",
+        "5f8309769d8a2407718ec1a6c1fac5e9cb9f1679d495ffbfdb75751e5bebc3c4"
+      ],
+      "shape": [
+        2,
+        48000,
+        36
+      ],
+      "words": [
+        72,
+        72
+      ]
+    },
+    "scene-binaural-binaural-cloud0-48000-44100-fixed-partition-epoch1": {
+      "different_words": 13815,
+      "first_bits": [
+        "0xb0f94a8f",
+        "0xb0f91d6d"
+      ],
+      "first_channel": 0,
+      "first_frame": 0,
+      "first_values": [
+        -1.813832528618775e-09,
+        -1.8125497769361232e-09
+      ],
+      "first_word": 0,
+      "identical": false,
+      "max_absolute_error": 0.06336293742060661,
+      "max_ulp": 2043378469,
+      "sha256": [
+        "0048652ec2edddd41b889500314765e2711accf6156bfdc10de2697974a52799",
+        "13d7327762b752b4175ffcb909d8718f3b83673424ac082ee50ec9175646782f"
+      ],
+      "shape": [
+        2,
+        44100,
+        11291
+      ],
+      "words": [
+        22582,
+        22582
+      ]
+    },
+    "scene-binaural-binaural-cloud0-48000-44100-fixed-partition-epoch2": {
+      "different_words": 7,
+      "first_bits": [
+        "0xba97855c",
+        "0xba97855d"
+      ],
+      "first_channel": 0,
+      "first_frame": 2,
+      "first_values": [
+        -0.0011560129933059216,
+        -0.0011560131097212434
+      ],
+      "first_word": 4,
+      "identical": false,
+      "max_absolute_error": 2.7939677238464355e-09,
+      "max_ulp": 18,
+      "sha256": [
+        "36765c1a5068bf929bd27299b995b6dead363f7bc33920825e1dc79d06d9766f",
+        "91c4337cc891209ce8db3024b55b0983dd5796755443fae797bd924acc5a218d"
+      ],
+      "shape": [
+        2,
+        44100,
+        31
+      ],
+      "words": [
+        62,
+        62
+      ]
+    },
+    "scene-binaural-binaural-cloud0-48000-48000-fixed-partition-epoch1": {
+      "different_words": 14376,
+      "first_bits": [
+        "0x307be10e",
+        "0x307c575f"
+      ],
+      "first_channel": 0,
+      "first_frame": 0,
+      "first_values": [
+        9.163309000470576e-10,
+        9.180122773067012e-10
+      ],
+      "first_word": 0,
+      "identical": false,
+      "max_absolute_error": 0.07937066629529,
+      "max_ulp": 2049015931,
+      "sha256": [
+        "0e83761013f3b398368e64b2232fba468f8d3004d823d91fdbdc73d33440bf7a",
+        "c2c0d715134394ec60c1e356425121c51da0af8c695f6c5c2e215b4cf148824d"
+      ],
+      "shape": [
+        2,
+        48000,
+        12289
+      ],
+      "words": [
+        24578,
+        24578
+      ]
+    },
+    "scene-binaural-binaural-cloud0-48000-48000-fixed-partition-epoch2": {
+      "identical": true,
+      "sha256": [
+        "ec50c3d76d1e8932744fc817c4e4b876ff7fe2f61d2163536cb6ddb98db02c4a",
+        "ec50c3d76d1e8932744fc817c4e4b876ff7fe2f61d2163536cb6ddb98db02c4a"
+      ],
+      "shape": [
+        2,
+        48000,
+        33
+      ],
+      "words": [
+        66,
+        66
+      ]
+    },
+    "scene-binaural-binaural-cloud1-44100-48000-fixed-partition-epoch1": {
+      "different_words": 16164,
+      "first_bits": [
+        "0x32948299",
+        "0x3294816f"
+      ],
+      "first_channel": 0,
+      "first_frame": 0,
+      "first_values": [
+        1.728885656859802e-08,
+        1.728832721425988e-08
+      ],
+      "first_word": 0,
+      "identical": false,
+      "max_absolute_error": 0.034946344792842865,
+      "max_ulp": 2030436637,
+      "sha256": [
+        "d32eb46e8e4e5694592a0f1630d2678cdccdd2322a6edb7296ad75ce922808cf",
+        "384647574cf5e7a95ccb8f2e8614ced6eb79e0c1f42df302b7e8951f4c2032fb"
+      ],
+      "shape": [
+        2,
+        48000,
+        13376
+      ],
+      "words": [
+        26752,
+        26752
+      ]
+    },
+    "scene-binaural-binaural-cloud1-44100-48000-fixed-partition-epoch2": {
+      "different_words": 8,
+      "first_bits": [
+        "0xb869e0ee",
+        "0xb869e0db"
+      ],
+      "first_channel": 0,
+      "first_frame": 1,
+      "first_values": [
+        -5.576101102633402e-05,
+        -5.576094190473668e-05
+      ],
+      "first_word": 2,
+      "identical": false,
+      "max_absolute_error": 9.313225746154785e-10,
+      "max_ulp": 19,
+      "sha256": [
+        "d870e17d1d240d5dc829fcc3530c8905705da6b923d3fd1b49829c6330292487",
+        "71082d1cc951bfc9935583bec96559b1ffc31a2ad93f2420113d90dfdaba1a63"
+      ],
+      "shape": [
+        2,
+        48000,
+        36
+      ],
+      "words": [
+        72,
+        72
+      ]
+    },
+    "scene-binaural-binaural-cloud1-48000-44100-fixed-partition-epoch1": {
+      "different_words": 13456,
+      "first_bits": [
+        "0xb0ee9a9d",
+        "0xb0eea0c6"
+      ],
+      "first_channel": 0,
+      "first_frame": 0,
+      "first_values": [
+        -1.7360722859294242e-09,
+        -1.7362473681004076e-09
+      ],
+      "first_word": 0,
+      "identical": false,
+      "max_absolute_error": 0.03368741739541292,
+      "max_ulp": 2031268250,
+      "sha256": [
+        "934d28b98e82b52e81420aa2f749bb2bf8d565b59baf9d23012ec411b932e1b2",
+        "93e301ba5aa4cd30f992522b4ce249e89b9655385651c0740015c0c413ff7c85"
+      ],
+      "shape": [
+        2,
+        44100,
+        11291
+      ],
+      "words": [
+        22582,
+        22582
+      ]
+    },
+    "scene-binaural-binaural-cloud1-48000-44100-fixed-partition-epoch2": {
+      "different_words": 9,
+      "first_bits": [
+        "0xbb327238",
+        "0xbb327236"
+      ],
+      "first_channel": 1,
+      "first_frame": 1,
+      "first_values": [
+        -0.002722872421145439,
+        -0.002722871955484152
+      ],
+      "first_word": 3,
+      "identical": false,
+      "max_absolute_error": 1.862645149230957e-09,
+      "max_ulp": 10,
+      "sha256": [
+        "e7a9e1e5ca0739759fba3fc5c0a7dd5bf7173eff3e3a490f0d950fefec7c2c0e",
+        "7be72c68533b083732b4b7bf72900f5aecb7e1994383db113b4c9724be1bda90"
+      ],
+      "shape": [
+        2,
+        44100,
+        31
+      ],
+      "words": [
+        62,
+        62
+      ]
+    },
+    "scene-binaural-binaural-cloud1-48000-48000-fixed-partition-epoch1": {
+      "different_words": 13663,
+      "first_bits": [
+        "0x307ef8ce",
+        "0x307ef48c"
+      ],
+      "first_channel": 0,
+      "first_frame": 0,
+      "first_values": [
+        9.275823442678188e-10,
+        9.275218371129768e-10
+      ],
+      "first_word": 0,
+      "identical": false,
+      "max_absolute_error": 0.03782042860984802,
+      "max_ulp": 2030962163,
+      "sha256": [
+        "5a4f296881854419f8fb2d9d5793eb8444af92780379d6fbe59fbec294f62ae2",
+        "2d47bb00c14be347ecef214eb064ac641a242f169469f5c097aa174f7e3c33fa"
+      ],
+      "shape": [
+        2,
+        48000,
+        12289
+      ],
+      "words": [
+        24578,
+        24578
+      ]
+    },
+    "scene-binaural-binaural-cloud1-48000-48000-fixed-partition-epoch2": {
+      "identical": true,
+      "sha256": [
+        "dbb75c0e32bdbf9f498fb8645d16da8400ef956ee05a89ce544340411675b835",
+        "dbb75c0e32bdbf9f498fb8645d16da8400ef956ee05a89ce544340411675b835"
+      ],
+      "shape": [
+        2,
+        48000,
+        33
+      ],
+      "words": [
+        66,
+        66
+      ]
+    },
+    "scene-device-dsp-fixed-partition-epoch1": {
+      "different_words": 14817,
+      "first_bits": [
+        "0x32d8aae8",
+        "0x32d910af"
+      ],
+      "first_channel": 0,
+      "first_frame": 0,
+      "first_values": [
+        2.522342867905536e-08,
+        2.5269711656505933e-08
+      ],
+      "first_word": 0,
+      "identical": false,
+      "max_absolute_error": 0.9069292396306992,
+      "max_ulp": 2108139667,
+      "sha256": [
+        "e3f4f4dbf3f15f0e6b1e01821188b2f8da3ddff9bf58648e210045a4516144a3",
+        "59d1d2f4fac3965e8e2ffbdfcf7b8d6da8080b6569650a63c7dc14fa044c6547"
+      ],
+      "shape": [
+        2,
+        48000,
+        12289
+      ],
+      "words": [
+        24578,
+        24578
+      ]
+    },
+    "scene-device-dsp-fixed-partition-epoch2": {
+      "identical": true,
+      "sha256": [
+        "402ab2231f444629931f3107d3b677cab85e9a6c8220f91df2606701341eabd4",
+        "402ab2231f444629931f3107d3b677cab85e9a6c8220f91df2606701341eabd4"
+      ],
+      "shape": [
+        2,
+        48000,
+        33
+      ],
+      "words": [
+        66,
+        66
+      ]
+    },
+    "scene-vbap-0+2+0-cloud0-44100-48000-fixed-partition-epoch1": {
+      "different_words": 6728,
+      "first_bits": [
+        "0x3c084925",
+        "0x3c084926"
+      ],
+      "first_channel": 0,
+      "first_frame": 7183,
+      "first_values": [
+        0.008318220265209675,
+        0.00831822119653225
+      ],
+      "first_word": 14366,
+      "identical": false,
+      "max_absolute_error": 2.2351741790771484e-08,
+      "max_ulp": 1536,
+      "sha256": [
+        "966c8d7967b2fda2d66a5baeab14d4bb18a87ac5668bd756f87b50576bd21444",
+        "65426c31b27c7c810ad62258b2c6c23b88d20cc3e581305c5c2660f2ff6738b6"
+      ],
+      "shape": [
+        2,
+        48000,
+        13376
+      ],
+      "words": [
+        26752,
+        26752
+      ]
+    },
+    "scene-vbap-0+2+0-cloud0-44100-48000-fixed-partition-epoch2": {
+      "identical": true,
+      "sha256": [
+        "d71609ddfda69aa1bbf20674893519bdedf4c14a543e3920a97a4d25a32b78ac",
+        "d71609ddfda69aa1bbf20674893519bdedf4c14a543e3920a97a4d25a32b78ac"
+      ],
+      "shape": [
+        2,
+        48000,
+        36
+      ],
+      "words": [
+        72,
+        72
+      ]
+    },
+    "scene-vbap-0+2+0-cloud0-48000-44100-fixed-partition-epoch1": {
+      "different_words": 5778,
+      "first_bits": [
+        "0xbd05bf00",
+        "0xbd05beff"
+      ],
+      "first_channel": 0,
+      "first_frame": 1291,
+      "first_values": [
+        -0.032652854919433594,
+        -0.032652851194143295
+      ],
+      "first_word": 2582,
+      "identical": false,
+      "max_absolute_error": 2.2351741790771484e-08,
+      "max_ulp": 20480,
+      "sha256": [
+        "e8e05cbc61cd5f3c3be00f24883cf86131d12a1a11df507d76bb3c0284495718",
+        "679948d4cffd9af2deb3fcac4a891c1a68b5e9b11bdcc94f88c015cb96c8c679"
+      ],
+      "shape": [
+        2,
+        44100,
+        11291
+      ],
+      "words": [
+        22582,
+        22582
+      ]
+    },
+    "scene-vbap-0+2+0-cloud0-48000-44100-fixed-partition-epoch2": {
+      "identical": true,
+      "sha256": [
+        "4c39b5ba82743044cecb266150451fe5c891d6435165ec4dff6b14cdc40171cc",
+        "4c39b5ba82743044cecb266150451fe5c891d6435165ec4dff6b14cdc40171cc"
+      ],
+      "shape": [
+        2,
+        44100,
+        31
+      ],
+      "words": [
+        62,
+        62
+      ]
+    },
+    "scene-vbap-0+2+0-cloud0-48000-48000-fixed-partition-epoch1": {
+      "different_words": 5624,
+      "first_bits": [
+        "0x3a748b6a",
+        "0x3a748b6b"
+      ],
+      "first_channel": 1,
+      "first_frame": 8229,
+      "first_values": [
+        0.0009328635642305017,
+        0.0009328636224381626
+      ],
+      "first_word": 16459,
+      "identical": false,
+      "max_absolute_error": 2.2351741790771484e-08,
+      "max_ulp": 36864,
+      "sha256": [
+        "0578b1f8a1ade647b94ed15ddf9d4ba6d42129be057c5e1fd4857dfbbbde84dd",
+        "213bf785230b3b47adf8105982d46be13d04ff415f57fde0a8beb13c7702c5d9"
+      ],
+      "shape": [
+        2,
+        48000,
+        12289
+      ],
+      "words": [
+        24578,
+        24578
+      ]
+    },
+    "scene-vbap-0+2+0-cloud0-48000-48000-fixed-partition-epoch2": {
+      "identical": true,
+      "sha256": [
+        "84fb7db8e1a55f3fa650cdf600933c911042dd76ac9924c1330e744ce2b64cae",
+        "84fb7db8e1a55f3fa650cdf600933c911042dd76ac9924c1330e744ce2b64cae"
+      ],
+      "shape": [
+        2,
+        48000,
+        33
+      ],
+      "words": [
+        66,
+        66
+      ]
+    },
+    "scene-vbap-4+7+0-cloud0-48000-48000-fixed-partition-epoch1": {
+      "identical": true,
+      "sha256": [
+        "645480446c367de44d0ce426517ece6bb787a41d26c80bf27c07457da39ceff8",
+        "645480446c367de44d0ce426517ece6bb787a41d26c80bf27c07457da39ceff8"
+      ],
+      "shape": [
+        12,
+        48000,
+        12289
+      ],
+      "words": [
+        147468,
+        147468
+      ]
+    },
+    "scene-vbap-4+7+0-cloud0-48000-48000-fixed-partition-epoch2": {
+      "identical": true,
+      "sha256": [
+        "2974aff112d27108dc5b30f6b2092294d2b7159ab41a84af65d10b2a908f5b88",
+        "2974aff112d27108dc5b30f6b2092294d2b7159ab41a84af65d10b2a908f5b88"
+      ],
+      "shape": [
+        12,
+        48000,
+        33
+      ],
+      "words": [
+        396,
+        396
+      ]
+    }
+  },
+  "next_priorities": [
+    "Create and validate a unified FFT operation/rounding path; apply it to HRTF preparation and convolution and repeat the sampled PCM matrix.",
+    "Localize resampler coefficient generation vs SIMD/interpolation with fixed coefficient/input replay, especially the Linux/Windows x64 difference.",
+    "Make spreader grouping/reduction independent of hardware worker count; workers may vary only after fixed-group bit tests pass.",
+    "Refine the remaining EAR mixing/post-processing and live-state intervals after upstream FFT/resampler differences are removed; keep partition effects separate from floating-point root-cause claims."
+  ],
+  "limits": [
+    "Numerical divergence remains measurement only; no bit-equality gate was promoted.",
+    "First observed checkpoints are not necessarily root causes.",
+    "Apple system rendering, hardware/system mixing, external SOFA, standalone Monitor API and encoded-file byte equality are excluded.",
+    "No performance or listening claim."
+  ],
+  "reports": {
+    "consistency-report-a-diagnostic.json": "dd8465f3b64bb401bc7f00c06583b0012409b0ea6f472499d5afff31878cf251",
+    "consistency-report-a.json": "fc502197ce822d8dc77522038bf5dddef918a9d923f4cb85928b43d24ffe6c43",
+    "consistency-report-b-diagnostic.json": "d082bac4a96eed65fdfd3f2c4f4f17c667b0a20c53dd57276ae16c1c9ec8fc1c",
+    "consistency-report-b.json": "4fc9b4468752f50b53312edb3dd87816650960167b7b83cc4c202061227a0aae"
+  },
+  "superseded_runs": [
+    {
+      "run_id": 37523995475,
+      "reason": "Windows Cargo/toolchain CRLF changed provenance byte hashes; fixed with targeted LF attributes."
+    },
+    {
+      "run_id": 37526461465,
+      "reason": "Callback segment shapes and mixed repeat traces were unsuitable for comparison. The replay readiness/active-signal corrections also supersede all early Scene captures."
+    }
+  ],
+  "summary_files": {
+    "comparison-a.json": "dbabf6f758e63aa0a3d05f47d711377603880c9f7c75d7487f5d0582d20bc163",
+    "comparison-b.json": "ffab434bdb1c0f0eec793c5ae5307fbc30d02b8917fd853281ed216ab57a5134"
+  }
+}
