@@ -1,11 +1,12 @@
 {
-  "status": "pending_final_ci",
+  "status": "accepted",
   "baseline_commit": "726db31277f450cfa9c0cb5f6e40bdb539f42154",
   "implementation_commits": [
     "08113fd",
-    "a1b2e01"
+    "a1b2e01",
+    "f7f38de30ccc41b7bda7abf3cbc7c68ccc62e34a"
   ],
-  "validated_source_commit": null,
+  "validated_source_commit": "f7f38de30ccc41b7bda7abf3cbc7c68ccc62e34a",
   "contract": {
     "pcm_tolerance": "2e-6 + 2e-6 * abs(reference)",
     "cross_platform_bit_identity": false,
@@ -54,7 +55,37 @@
         "private_rust_exports": [],
         "other_exports": []
       },
-      "installed_core_consumer": "passed"
+      "installed_core_consumer": "passed",
+      "builds": {
+        "debug": {
+          "BUILD_SHARED_LIBS": "OFF",
+          "CMAKE_BUILD_TYPE": "Debug",
+          "CMAKE_CXX_FLAGS": "",
+          "CMAKE_CXX_FLAGS_DEBUG": "-g -Og",
+          "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG",
+          "MR_ADM_BUILD_LIBADM_REFERENCE_TESTS": "OFF",
+          "MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS": "OFF",
+          "MR_ADM_BUILD_SAF_REFERENCE_TESTS": "OFF",
+          "MR_ADM_ENABLE_IAMF": "OFF",
+          "MR_ADM_ENABLE_SOFA": "ON",
+          "MR_ADM_STRICT_FP": "OFF",
+          "CMAKE_GENERATOR": "Ninja"
+        },
+        "release": {
+          "BUILD_SHARED_LIBS": "ON",
+          "CMAKE_BUILD_TYPE": "Release",
+          "CMAKE_CXX_FLAGS": "",
+          "CMAKE_CXX_FLAGS_DEBUG": "-g",
+          "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG",
+          "MR_ADM_BUILD_LIBADM_REFERENCE_TESTS": "OFF",
+          "MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS": "OFF",
+          "MR_ADM_BUILD_SAF_REFERENCE_TESTS": "OFF",
+          "MR_ADM_ENABLE_IAMF": "OFF",
+          "MR_ADM_ENABLE_SOFA": "ON",
+          "MR_ADM_STRICT_FP": "OFF",
+          "CMAKE_GENERATOR": "Ninja"
+        }
+      }
     },
     "windows": {
       "architecture": "x64",
@@ -92,6 +123,24 @@
         "matches_baseline": true,
         "private_rust_exports": [],
         "total_exports": 2123
+      },
+      "verified_owned_files": 46,
+      "source_verification": "All 46 owned source/reference files matched after synchronization; reference provenance metadata then updated without changing numerical source.",
+      "build": {
+        "BUILD_SHARED_LIBS": "OFF",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
+        "CMAKE_CXX_FLAGS_DEBUG": "/Zi /Ob0 /Od /RTC1",
+        "CMAKE_CXX_FLAGS_RELEASE": "/O2 /Ob2 /DNDEBUG",
+        "MR_ADM_BUILD_LIBADM_REFERENCE_TESTS": "OFF",
+        "MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS": "OFF",
+        "MR_ADM_BUILD_SAF_REFERENCE_TESTS": "OFF",
+        "MR_ADM_ENABLE_IAMF": "OFF",
+        "MR_ADM_ENABLE_SOFA": "OFF",
+        "MR_ADM_STRICT_FP": "OFF",
+        "CMAKE_GENERATOR": "Ninja",
+        "compiler_id": "MSVC",
+        "compiler_version": "19.51.36257.0"
       }
     }
   },
@@ -99,7 +148,12 @@
     "passed": 164,
     "failed": 0,
     "ignored": 1,
-    "ignored_case": "existing optional physical >4 GiB WAVE test"
+    "ignored_case": "existing optional physical >4 GiB WAVE test",
+    "platform": "macOS arm64",
+    "target": "aarch64-apple-darwin",
+    "profile": "release",
+    "rustflags": "-Crelocation-model=pic",
+    "incremental": false
   },
   "quality": {
     "rust_fmt_clippy": "passed",
@@ -107,7 +161,31 @@
     "licenses_sbom": "passed"
   },
   "ci": {
-    "status": "pending"
+    "run_id": 37434454445,
+    "commit": "f7f38de30ccc41b7bda7abf3cbc7c68ccc62e34a",
+    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37434454445",
+    "status": "success",
+    "jobs": [
+      {
+        "name": "Linux debug",
+        "conclusion": "success",
+        "tests_passed": 65
+      },
+      {
+        "name": "macOS debug",
+        "conclusion": "success",
+        "tests_passed": 66
+      },
+      {
+        "name": "Windows debug",
+        "conclusion": "success",
+        "tests_passed": 65
+      },
+      {
+        "name": "Version metadata",
+        "conclusion": "success"
+      }
+    ]
   },
   "frozen_references": {
     "tests/reference/scene_numeric/transitions.h": "a731229aae869b6a981bdea8d366b8fa0a8700d4bbac9ca5861f41b2153fbedf",
@@ -115,9 +193,90 @@
     "tests/reference/scene_numeric/spatial.h": "cb524128112bad622c36052d66a572c9c0e5d12a24e56e6cb88d3003a77cd5ad",
     "tests/reference/scene_numeric/live_binaural.h": "ed2504fdcceb52ce63588b4295dd500df0abaf71f986931e64809c6875f4ef45"
   },
-  "source_sha256": {},
+  "source_sha256": {
+    "CMakeLists.txt": "09781f8e4e1f2cc2c4b0e27988da90ce9822b3232b8f0da8a7ff7a00e6a34eb1",
+    "cmake/MRRust.cmake": "2582ee212212714e989a655a0c81cecf3266f9289ee0bf79173d77e07b24f4e1",
+    "cmake/MacinRenderADMCoreConfig.cmake.in": "21c5d569534f922bab3308e4b0459803248096fd6e91ea43377b95aaf83f9857",
+    "include/adm/scene.h": "ba16a2baab184a560851e298ccdf957553d6887b891c50d5c763cd1fb2f0f2d3",
+    "rust/Cargo.lock": "c7f6b2cca14494ac6782661123c735abea770916a133659057b4b3faf65c741c",
+    "rust/Cargo.toml": "2282dcf9e7b0496345dec09a36ffd97164ed7b02828056cb0e8fb4093a3556e6",
+    "rust/crates/mradm-dsp/Cargo.toml": "75955eb2113fe165b41f7581fc16869277f73ec8de620f707ed180e8ab27af28",
+    "rust/crates/mradm-dsp/src/convolution.rs": "2614043d11d2d385cda8f187e7f10e4fa3b9dd0757de1416af754a9f31bb37f6",
+    "rust/crates/mradm-dsp/src/diffuse.rs": "994c139c8c5dcebd8069d5530fb1a9aa05657d3e668ba5cccc9307b4b6a691ab",
+    "rust/crates/mradm-dsp/src/hoa/coefficients.rs": "e0cd5347c79597fbbf68008f9844d7fb49aa1d2726b0ab4a88fa78310c2b9fa1",
+    "rust/crates/mradm-dsp/src/hrtf_filters.rs": "28cbd4c26b0146c6a9a6231fca7e8ff67be33145406efa14cc9068dcdc37e222",
+    "rust/crates/mradm-dsp/src/lib.rs": "b51a45563877e86ad87c55a14a2db0514a5fa35d37f433396469550372aec8dc",
+    "rust/crates/mradm-dsp/src/live_binaural.rs": "bacf4d82243e6fc416994ab9d230edc9225bff40a6c64d3e6c1985caa03af978",
+    "rust/crates/mradm-dsp/src/scene_math.rs": "aeec59120dfa84208c7b246548a928ab6352921443d053aec1e5ec44a4860c03",
+    "rust/crates/mradm-dsp/src/scene_transition.rs": "2795903e2e6659735a4d1e97e925f75892c0e3e1186367528d10c83d9dbaeb49",
+    "rust/crates/mradm-dsp/tests/live_binaural.rs": "852bb41ca4e842d41a7befd8ee6d9d902df9e5d7357f8813866648467726f817",
+    "rust/crates/mradm-dsp/tests/realtime_allocations.rs": "d4862ee9b9856138186ba057fe883ffeabaa5cddc7b89794bdd8b459e001b632",
+    "rust/crates/mradm-dsp/tests/scene_math.rs": "7f6f7fe9a03f3da9b554ec4bbcbf70cb2676b64fa67476c97c8b687d01774554",
+    "rust/crates/mradm-dsp/tests/scene_transition.rs": "576d0b942246e8cafdc40466a569c610e4a1b38387730ee10874a1d1e1f58f91",
+    "rust/crates/mradm-ffi/Cargo.toml": "6ac11ecb5dd0763a29dbc9399cfda6fc7e5663685057543290c841940e9725e9",
+    "rust/crates/mradm-ffi/src/checked.rs": "c176cfd5b71fe831473513c8e751bfe3e25c894a3aa62aa73eed51aa7a844979",
+    "rust/crates/mradm-ffi/src/hrtf.rs": "df9766a8cc0f734a7741a0f508e3b171958fd8b0ce65162948ae1fdf3c9da90d",
+    "rust/crates/mradm-ffi/src/lib.rs": "1d324a1ed5b791123c732708e79df97a8f38327704f93530dedf10756bb9076c",
+    "rust/crates/mradm-ffi/src/live_binaural.rs": "8373bd7c071d6e5ae77f3f28c8b83b1c1562d460237a7d01e7cca35fb4392772",
+    "rust/crates/mradm-ffi/src/scene_math.rs": "92fda7b0d1d46482a1f14e971e81269e4014efa44be8a1d0f9bed2cce2e40bbc",
+    "rust/crates/mradm-ffi/src/scene_transition.rs": "95e90affd0f4ba65594b962e71ce73020ed0fdfe7124465a4fbdb3416410bd30",
+    "src/adm_apple/spatial_mixer_renderer.cpp": "b6a51c51a8e489fe7ffa8850f1d2da75f7884062451ba4036a4db5311a9d151c",
+    "src/adm_core/scene_math.cpp": "2618fcda24654c6a4ba1e1c04c7ec0e4280d2cb5bc33062c221c7c31eff8e751",
+    "src/adm_dsp/hrtf.h": "beff57b382f23e2022f361920c55e1ad9d53556bd9de068524f8d6e3692a7071",
+    "src/adm_dsp/live_binaural.h": "9acdbf5df641b8be0e62b3b70afc24eeb1c9915dd9233c6bb722c1526e2296fe",
+    "src/adm_dsp/live_binaural_ffi.h": "4b471ddf9a1fb730ae0565ab418a811a04e98dec1e9f8d4f074bb86614cc032a",
+    "src/adm_dsp/scene_math.h": "fd2f4a8fd5cb7da3012d07f2162b0ee2a3651e5dce91ff131b919c8645cd1fc3",
+    "src/adm_dsp/scene_transition.h": "c3e2a056a4726011396b5164b7fca2fb9a7247d214fdc1a41b6a8c3e2dd83b98",
+    "src/adm_realtime/osc_head_tracking_protocol.cpp": "836782227ffa1b4b853f2e05a24fb26d14ffbd16ce0b3782ac5839f4b5e0ef25",
+    "src/adm_realtime/scene_stream_engine.cpp": "50293fe6fbcfba90155ea706301cbc002a7213d702d65197f193be2ef2739d7d",
+    "src/adm_render_binaural/binaural_renderer.cpp": "f45c4a53abe36ae607a705659b4124739d239986b4abc71ec4ac20a3e08dbcfb",
+    "src/adm_render_binaural/live_binaural_renderer.cpp": "e6fc8157ffff4f5a5b18d8ad83b406bed59ea27dc7c375cc29d44fe6f0e36216",
+    "src/adm_render_common/head_rotation.h": "8c5377259ce46fcc84b49723ccc518fed3d7563cf573d62d0467bd5190758124",
+    "src/adm_render_common/render_common.cpp": "be150deb6cf783f5ad621893ca94fb679e648da0e803a670f02f3ba4a37d4d18",
+    "src/adm_render_common/render_common.h": "d9ee96a3db0f5fbc545df3fb6e7b640342d12627cb13a2762cdcee800a5136ff",
+    "src/adm_render_vbap/live_vbap_renderer.cpp": "97d77090c9cf4dd9f7e5ec1403ab93400f3a46f9e074ca5a4d02ebc63cf56356",
+    "src/adm_render_vbap/vbap_renderer.cpp": "c4002af088fbf0782a923f1956df32181a7be6d6b675c60b48321ef9960c195b",
+    "tests/reference/hoa/legacy.h": "01f278b0cb01f7c9442f0583f4f62b14f48f839e34d845a831973ca62ac0eedc",
+    "tests/reference/hoa/provenance.json": "85997660bed9dadc539e7afb3da60a3db78a1dccbec6a934add01c5e71bf9644",
+    "tests/reference/live_vbap/legacy.h": "0774e3ba4867b51c95e9db7f600d5c89a97b452ca60159d2a26765ee27f3eeae",
+    "tests/reference/live_vbap/provenance.json": "b1b67e4fc140165150049e75b07088d7982eda9784fe0c5e9556c4d9dbe27cc2",
+    "tests/reference/scene_numeric/live_binaural.h": "ed2504fdcceb52ce63588b4295dd500df0abaf71f986931e64809c6875f4ef45",
+    "tests/reference/scene_numeric/provenance.json": "7d99d93e3122d5f36b1ebb35c060ed65a3285e014c3987a7df06abbaec0286fd",
+    "tests/reference/scene_numeric/spatial.h": "cb524128112bad622c36052d66a572c9c0e5d12a24e56e6cb88d3003a77cd5ad",
+    "tests/reference/scene_numeric/transitions.h": "a731229aae869b6a981bdea8d366b8fa0a8700d4bbac9ca5861f41b2153fbedf",
+    "tests/unit/live_binaural_rust_test.cpp": "768121eaed65c10c79a50218d2409ecc4e828e643c7d03097aab8efd35f3b093",
+    "tests/unit/scene_numeric_rust_test.cpp": "4d6a0c6145feadd88e173e813ce3c339e9faa293640835205c62e2293d574673"
+  },
   "preserved_parallel_commit": {
     "commit": "a7d0e7412deecb40c1c057941bcde09a4f207a9f",
     "change": "Triple Balance -> ADMAudio link addition, independently committed during shared-workspace migration"
+  },
+  "toolchain": {
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+    "cmake": "cmake version 4.2.3",
+    "cxx": "Apple clang version 21.0.0 (clang-2100.3.34.2)"
+  },
+  "recorded_at_utc": "2026-10-06T08:30:13.155745+00:00",
+  "allocation_checks": {
+    "result": "passed",
+    "first_call_included": true,
+    "kernel_and_ffi": true,
+    "operations": [
+      "spatial queries",
+      "rotation updates",
+      "Scene crossfade and generation transition",
+      "Live binaural preflight and rendering",
+      "reset",
+      "parameter rejection"
+    ],
+    "excludes": "preparation/destruction and C++ semantic/diagnostic buffers"
+  },
+  "cargo_lock_sha256": "c7f6b2cca14494ac6782661123c735abea770916a133659057b4b3faf65c741c",
+  "dependencies_unchanged": true,
+  "public_c_abi_header_unchanged": true,
+  "numerical_summary_sha256": {
+    "macos-comparison.json": "265b0ad9905f2e2006b7611fc56db8173b008655917bacbe62ebe7c5847f8b42",
+    "windows-comparison.json": "43467352a8d7904632fd4124f6f1a1cdae8e98384327eaaf6ee401a9116d3241"
   }
 }
