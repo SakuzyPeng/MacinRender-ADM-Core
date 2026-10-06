@@ -16,6 +16,8 @@ writer 必须显式 `finish()`，回填长度和 padding 并 flush；析构只�
 
 私有 `mradm_wav_*` 接口加入现有 mradm-ffi 静态库，使用 opaque 句柄、按帧批量处理、调用方错误缓冲区以及 Rust 配对销毁。Rust 边界捕获 panic；公开 C ABI 的符号、结构和版本不变。
 
+私有 FFI 路径统一使用 UTF-8。Windows C++ 包装层先按当前进程代码页将原生窄字符路径转换为 UTF-8，与既有 C++ WAVE 文件操作保持一致；声明 UTF-8 代码页的 GUI 同样适用。不得通过字节是否为合法 UTF-8 来猜测原生路径的编码。
+
 RenderInputReader 整数分支使用 Rust，浮点和 channel-bed 分支继续使用 dr_wav。read 返回 Result，seek_frame 使用 u64；所有消费点检查错误和短读后再进入 DSP。整数转换使用排他创建的临时文件，仅在成功 finish、关闭所有文件句柄后安装新输出。失败和取消保留原文件。
 
 ## 测试与依赖

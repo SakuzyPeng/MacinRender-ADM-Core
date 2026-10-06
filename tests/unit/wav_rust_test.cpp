@@ -29,6 +29,25 @@ void write_float(const std::filesystem::path& path, uint32_t rate, const std::ve
     require(writer.has_value(), "float fixture open failed");
     require(writer->write(samples.data(), samples.size()) == samples.size(), "float fixture write failed");
 }
+void verify_native_path_round_trip(const std::filesystem::path& directory) {
+    // These bytes are valid in both UTF-8 and legacy Windows code pages, where
+    // they name different files. All WAVE readers/writers must use the native
+    // spelling, including hosts whose manifest selects UTF-8 as the code page.
+    const auto path = directory / "wave-\xC2\xA9.wav";
+    write_float(path, 48000, {0.0F, 0.5F, -0.5F});
+    require(std::filesystem::is_regular_file(path), "native-path fixture was not created");
+    require(mradm::audio::downconvert_to_int(path.string(), 24).has_value(), "native-path integer conversion failed");
+    auto probe = mradm::audio::FloatWavReader::open(path.string());
+    require(probe && probe->is_linear_pcm() && probe->bits_per_sample() == 24,
+            "native-path conversion did not replace the original file");
+    auto reader = mradm::audio::RenderInputReader::open(path.string(), false);
+    require(reader.has_value(), "native-path Rust reader open failed");
+    std::array<float, 3> output{};
+    const auto got = (*reader)->read(output.data(), output.size());
+    require(got && *got == output.size(), "native-path integer read failed");
+    require(output == std::array<float, 3>{0.0F, 4194303.0F / 8388608.0F, -4194303.0F / 8388608.0F},
+            "native-path PCM mismatch");
+}
 class CancelProgress final : public mradm::ProgressSink {
   public:
     explicit CancelProgress(std::stop_source& source) : source_(&source) {}
@@ -69,6 +88,7 @@ int main() {
                 require(eof && *eof == 0, "reader passed audio EOF");
             }
         }
+        verify_native_path_round_trip(directory);
         const auto invalid = directory / "nan.wav";
         write_float(invalid, 48000, {0.5F, std::numeric_limits<float>::quiet_NaN()});
         const auto original = load(invalid);

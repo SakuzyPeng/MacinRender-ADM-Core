@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <limits>
 #include <memory>
 #include <string>
@@ -16,14 +17,27 @@ inline Error wav_error(int32_t code, const std::array<uint8_t, 512>& message, co
     return {error, reinterpret_cast<const char*>(message.data()), "path=" + path};
 }
 
+inline std::string wav_path_utf8(const std::string& path) {
+#ifdef _WIN32
+    // Match the active code page used by the surrounding C++ WAVE I/O. A UTF-8
+    // application manifest makes this conversion an identity operation. Do not
+    // guess from the bytes: a native path can also happen to be valid UTF-8.
+    const auto utf8 = std::filesystem::path(path).u8string();
+    return {utf8.begin(), utf8.end()};
+#else
+    return path;
+#endif
+}
+
 class RustWavReader {
   public:
     static Result<std::unique_ptr<RustWavReader>> open(const std::string& path) {
         auto reader = std::unique_ptr<RustWavReader>{new RustWavReader{path}};
+        const auto utf8_path = wav_path_utf8(path);
         std::array<uint8_t, 512> message{};
         MradmWavReader* handle = nullptr;
-        const auto code = mradm_wav_reader_open(reinterpret_cast<const uint8_t*>(path.data()),
-                                                path.size(),
+        const auto code = mradm_wav_reader_open(reinterpret_cast<const uint8_t*>(utf8_path.data()),
+                                                utf8_path.size(),
                                                 &handle,
                                                 &reader->info_,
                                                 message.data(),
@@ -72,10 +86,11 @@ class IntegerWavWriter {
     static Result<std::unique_ptr<IntegerWavWriter>>
     create(const std::string& path, uint32_t channels, uint32_t rate, uint16_t bits) {
         auto writer = std::unique_ptr<IntegerWavWriter>{new IntegerWavWriter{path, channels}};
+        const auto utf8_path = wav_path_utf8(path);
         std::array<uint8_t, 512> message{};
         MradmWavWriter* handle = nullptr;
-        const auto code = mradm_wav_writer_create(reinterpret_cast<const uint8_t*>(path.data()),
-                                                  path.size(),
+        const auto code = mradm_wav_writer_create(reinterpret_cast<const uint8_t*>(utf8_path.data()),
+                                                  utf8_path.size(),
                                                   channels,
                                                   rate,
                                                   bits,
