@@ -12,6 +12,12 @@
 #include <utility>
 #include <vector>
 
+#ifndef _WIN32
+#include <csignal>
+
+#include <sys/resource.h>
+#endif
+
 #include "adm/audio_io.h"
 
 #include "../support/wav_fixture.h"
@@ -64,7 +70,7 @@ std::vector<char> legacy_format_wave(uint16_t tag, uint16_t bits) {
     };
     const uint32_t align = bits / 8U;
     std::vector<char> out{'R', 'I', 'F', 'F'};
-    le(out, 4U + 24U + 8U + 2U * align, 4);
+    le(out, 4U + 24U + 8U + (2U * align), 4);
     for (const char c : std::string{"WAVEfmt "}) {
         out.push_back(c);
     }
@@ -114,6 +120,59 @@ void verify_float_writer_and_formats(const std::filesystem::path& directory) {
                 "8-bit, A-law and float64 WAVE must be reported as unsupported");
     }
 }
+
+#ifndef _WIN32
+class FileSizeLimitGuard {
+  public:
+    FileSizeLimitGuard() : saved_(read_limit()), previous_handler_(std::signal(SIGXFSZ, SIG_IGN)) {
+        require(previous_handler_ != SIG_ERR, "cannot ignore file size signal");
+        auto limited = saved_;
+        limited.rlim_cur = 0;
+        if (setrlimit(RLIMIT_FSIZE, &limited) != 0) {
+            std::signal(SIGXFSZ, previous_handler_);
+            throw std::runtime_error("cannot inject file size failure");
+        }
+    }
+    FileSizeLimitGuard(const FileSizeLimitGuard&) = delete;
+    FileSizeLimitGuard& operator=(const FileSizeLimitGuard&) = delete;
+    FileSizeLimitGuard(FileSizeLimitGuard&&) = delete;
+    FileSizeLimitGuard& operator=(FileSizeLimitGuard&&) = delete;
+    ~FileSizeLimitGuard() {
+        static_cast<void>(setrlimit(RLIMIT_FSIZE, &saved_));
+        std::signal(SIGXFSZ, previous_handler_);
+    }
+
+  private:
+    static rlimit read_limit() {
+        rlimit limit{};
+        require(getrlimit(RLIMIT_FSIZE, &limit) == 0, "cannot read file size limit");
+        return limit;
+    }
+    rlimit saved_;
+    void (*previous_handler_)(int);
+};
+
+void verify_failed_finish_is_sticky(const std::filesystem::path& directory) {
+    const auto path = directory / "failed-finish.wav";
+    auto writer = mradm::audio::FloatWavWriter::open(path.string(), 1, 48000);
+    require(writer.has_value(), "finish failure fixture open failed");
+    const float sample = 0.25F;
+    require(writer->write(&sample, 1) == 1, "finish failure fixture write failed");
+    const auto first = [&] {
+        // Fail the header rewrite after all sample writes have succeeded, then restore I/O.
+        const FileSizeLimitGuard limit;
+        return writer->finish();
+    }();
+    require(!first && first.error().code == mradm::ErrorCode::io_error, "finish must report the I/O failure");
+    const auto second = writer->finish();
+    require(!second && second.error().code == first.error().code && second.error().message == first.error().message &&
+                second.error().context == first.error().context,
+            "repeated finish must preserve the original failure");
+    require(writer->write(&sample, 1) == 0, "write after failed finish must fail");
+    require(!mradm::audio::FloatWavReader::open(path.string()), "failed finish must leave an incomplete file");
+}
+#endif
+
 class CancelProgress final : public mradm::ProgressSink {
   public:
     explicit CancelProgress(std::stop_source& source) : source_(&source) {}
@@ -156,6 +215,9 @@ int main() {
         }
         verify_native_path_round_trip(directory);
         verify_float_writer_and_formats(directory);
+#ifndef _WIN32
+        verify_failed_finish_is_sticky(directory);
+#endif
         const auto invalid = directory / "nan.wav";
         write_float(invalid, 48000, {0.5F, std::numeric_limits<float>::quiet_NaN()});
         const auto original = load(invalid);

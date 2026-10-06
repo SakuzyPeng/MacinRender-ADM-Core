@@ -31,6 +31,7 @@ writer 收尾的规则：
 
 - 析构时会尽力 finish，保持原有的 RAII 用法；
 - 先写临时文件、再改名替换原文件的路径会显式调用 `finish()` 并检查结果，避免安装头部不完整的文件。这些路径包括 `apply_gain_to_file`、`trim_file_frames`、峰值限制和响度归一化。
+- `finish()` 缓存首次收尾结果；失败后的再次调用仍返回原错误，不会把未完成的文件报告为成功。
 
 ## 行为差异
 
@@ -76,6 +77,10 @@ C++ 包装 `RustWavWriter` 统一承担整数和浮点输出，`IntegerWavWriter
 
 - `mr_adm_wav_rust_tests` 新增：float writer 覆盖已存在的文件、finish 幂等、finish 后写入失败、输出为 RF64、BW64 标签的 float 输入可读，以及 8-bit、A-law、float64 返回 `unsupported`。
 - Rust 单元测试新增：FFI 的 float RF64 往返、截断模式、`Info` 新字段，以及 ds64 `sampleCount` 不一致时仍然接受文件。
+
+审查修正：参考测试末块按剩余帧数限制请求量，保证传入 Rust FFI 的切片完整位于分配的缓冲区内；
+`mr_adm_wav_rust_tests` 在 POSIX 平台用文件大小限制注入收尾 I/O 失败，验证恢复 I/O 后再次 finish
+仍保留原始错误、后续写入被拒绝，且未完成的文件不能作为有效输出读取。
 
 ## 验收记录
 

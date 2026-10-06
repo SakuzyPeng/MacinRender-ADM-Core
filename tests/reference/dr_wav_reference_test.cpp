@@ -1,6 +1,7 @@
 // Compares the Rust-backed FloatWavReader/FloatWavWriter with dr_wav, the implementation it replaced.
 // Built only with MR_ADM_BUILD_DRWAV_REFERENCE_TESTS; see docs/architecture/RUST_DR_WAV_MIGRATION.md.
 #define DR_WAV_IMPLEMENTATION
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -143,8 +144,9 @@ std::vector<float> read_all(mradm::audio::FloatWavReader& reader) {
     std::vector<float> out(static_cast<std::size_t>(reader.frame_count()) * reader.channels());
     uint64_t done = 0;
     while (done < reader.frame_count()) {
-        const uint64_t got = reader.read(out.data() + done * reader.channels(), 97U);
-        require(got != 0U, "Rust short read");
+        const uint64_t requested = std::min<uint64_t>(97U, reader.frame_count() - done);
+        const uint64_t got = reader.read(out.data() + (done * reader.channels()), requested);
+        require(got == requested, "Rust short read");
         done += got;
     }
     std::vector<float> tail(static_cast<std::size_t>(reader.channels()) * 5U);
