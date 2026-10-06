@@ -24,6 +24,7 @@ pub mod peak_guard;
 pub mod resampler;
 pub mod rng;
 pub mod scene_math;
+pub mod scene_transition;
 pub mod spreader;
 pub mod triple_balance;
 pub mod vbap;

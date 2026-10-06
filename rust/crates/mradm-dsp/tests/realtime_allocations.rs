@@ -36,6 +36,24 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOCATOR: Counting = Counting;
 
 #[test]
+fn scene_transitions_first_process_reset_and_rejection_do_not_allocate() {
+    use mradm_dsp::scene_transition::Transitions;
+    let mut t = Transitions::new(65, 48000, 2048).unwrap();
+    let mut pcm = [1.; 65 * 2049];
+    let incoming = [0.5; 65 * 2049];
+    COUNT.with(|c| c.set(Some(0)));
+    t.begin_generation();
+    t.mix(&mut pcm, &incoming, 2049).unwrap();
+    t.process_output(&mut pcm, 2049, false).unwrap();
+    t.reset_backend();
+    t.begin_generation();
+    t.process_output(&mut pcm, 1, true).unwrap();
+    assert!(t.process_output(&mut pcm[..1], 1, false).is_err());
+    t.reset();
+    assert_eq!(COUNT.with(|c| c.replace(None).unwrap()), 0);
+}
+
+#[test]
 fn scene_spatial_first_queries_and_rejections_do_not_allocate() {
     use mradm_dsp::scene_math::*;
     let rotation = Rotation::new([30., 20., 10.]).unwrap();

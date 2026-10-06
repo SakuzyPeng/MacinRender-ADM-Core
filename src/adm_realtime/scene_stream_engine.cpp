@@ -32,6 +32,7 @@
 #include "live_vbap_renderer.h"
 #include "resampler.h"
 #include "ring_buffer.h"
+#include "scene_transition.h"
 
 namespace mradm::realtime {
 
@@ -44,7 +45,6 @@ constexpr std::uint64_t k_default_input_bytes = 64ULL * 1024ULL * 1024ULL;
 constexpr std::uint32_t k_default_output_frames = 8192U;
 constexpr std::uint32_t k_default_watermark_frames = 4096U;
 constexpr std::uint32_t k_resampler_output_frames = 4096U;
-constexpr std::uint32_t k_generation_declick_ms = 10U;
 constexpr std::uint32_t k_policy_transition_ms = 20U;
 constexpr std::uint32_t k_worker_chunk_frames = 1024U;
 constexpr std::uint32_t k_tracking_chunk_frames = 512U;
@@ -399,7 +399,7 @@ struct SceneStreamEngine::Impl {
           channels(renderer->output_channels()), player_output(channels, config.output_ring_frames),
           resample_output(static_cast<std::size_t>(k_resampler_output_frames) * channels, 0.0F),
           zero_output(static_cast<std::size_t>(k_resampler_output_frames) * channels, 0.0F),
-          last_output_frame(channels, 0.0F), transition_anchor(channels, 0.0F) {
+          transitions(channels, config.output_sample_rate, k_backend_crossfade_frames) {
         if (config.renderer.sample_rate != config.output_sample_rate) {
             auto prepared = dsp::Resampler::create(channels, config.renderer.sample_rate, config.output_sample_rate);
             if (!prepared) {
@@ -567,7 +567,7 @@ struct SceneStreamEngine::Impl {
         }
         incoming_config = std::move(backend->config);
         incoming_renderer = std::move(backend->renderer);
-        backend_crossfade_position = 0U;
+        transitions.reset_backend();
         incoming_needs_initial_state = true;
     }
 
@@ -581,7 +581,7 @@ struct SceneStreamEngine::Impl {
 
     void abandon_incoming_backend() {
         incoming_renderer = nullptr;
-        backend_crossfade_position = 0U;
+        transitions.reset_backend();
         incoming_needs_initial_state = false;
         start_deferred_backend_switch();
     }
@@ -592,7 +592,7 @@ struct SceneStreamEngine::Impl {
         }
         renderer = std::move(incoming_renderer);
         config.renderer = std::move(incoming_config);
-        backend_crossfade_position = 0U;
+        transitions.reset_backend();
         incoming_needs_initial_state = false;
         start_deferred_backend_switch();
     }
@@ -830,14 +830,14 @@ struct SceneStreamEngine::Impl {
         if (!backend) {
             return;
         }
-        if (incoming_renderer && backend_crossfade_position > 0U) {
+        if (incoming_renderer && transitions.status().backend_position > 0U) {
             // Replacing an already-audible incoming renderer would jump back to
             // the outgoing backend. Finish this curve, then start the latest one.
             deferred_backend = std::move(backend);
             return;
         }
         incoming_renderer = nullptr;
-        backend_crossfade_position = 0U;
+        transitions.reset_backend();
         incoming_needs_initial_state = false;
         deferred_backend.reset();
         begin_backend_switch(std::move(backend));
@@ -873,7 +873,7 @@ struct SceneStreamEngine::Impl {
             config.renderer = std::move(incoming_config);
         }
         deferred_backend.reset();
-        backend_crossfade_position = 0U;
+        transitions.reset_backend();
         incoming_needs_initial_state = false;
         (*renderer).reset();
         renderer->set_listener_orientation(current_orientation);
@@ -903,10 +903,7 @@ struct SceneStreamEngine::Impl {
         rational_remainder = 0U;
         allowed_output_frames = 0U;
         output_frames_pushed = 0U;
-        transition_remaining = 0U;
-        transition_position = 0U;
-        std::ranges::fill(last_output_frame, 0.0F);
-        std::ranges::fill(transition_anchor, 0.0F);
+        transitions.reset();
         media_frames_pulled.store(0U, std::memory_order_relaxed);
         underruns.store(0U, std::memory_order_relaxed);
         output_ready.store(false, std::memory_order_relaxed);
@@ -1050,7 +1047,7 @@ struct SceneStreamEngine::Impl {
                                 "incoming live Scene backend rejected a generation; keeping the current backend: " +
                                     *incoming_failure});
                 incoming_renderer = nullptr;
-                backend_crossfade_position = 0U;
+                transitions.reset_backend();
                 incoming_needs_initial_state = false;
             }
         }
@@ -1101,10 +1098,7 @@ struct SceneStreamEngine::Impl {
         start_deferred_backend_switch();
         incoming_needs_initial_state = incoming_renderer != nullptr;
         generation_status.store(current_generation, std::memory_order_release);
-        transition_anchor = last_output_frame;
-        transition_remaining = std::max<std::uint64_t>(
-            1U, (static_cast<std::uint64_t>(config.output_sample_rate) * k_generation_declick_ms) / 1000U);
-        transition_position = 0U;
+        transitions.begin_generation();
         return true;
     }
 
@@ -1233,18 +1227,7 @@ struct SceneStreamEngine::Impl {
         }
         incoming_needs_initial_state = false;
 
-        for (std::uint32_t frame_index = 0U; frame_index < frame.duration_samples; ++frame_index) {
-            const auto position = std::min<std::uint64_t>(backend_crossfade_position + 1U, k_backend_crossfade_frames);
-            const float incoming_weight = static_cast<float>(position) / static_cast<float>(k_backend_crossfade_frames);
-            const float outgoing_weight = 1.0F - incoming_weight;
-            const auto output_index = static_cast<std::size_t>(frame_index) * channels;
-            for (std::size_t channel = 0U; channel < channels; ++channel) {
-                render_output[output_index + channel] = (render_output[output_index + channel] * outgoing_weight) +
-                                                        (render_output_b[output_index + channel] * incoming_weight);
-            }
-            ++backend_crossfade_position;
-        }
-        if (backend_crossfade_position >= k_backend_crossfade_frames) {
+        if (transitions.mix(render_output, render_output_b, frame.duration_samples)) {
             finalize_backend_switch();
         }
         return {};
@@ -1379,32 +1362,7 @@ struct SceneStreamEngine::Impl {
     }
 
     void apply_transition(float* samples, std::size_t frames, bool force_silence) noexcept {
-        for (std::size_t frame = 0; frame < frames; ++frame) {
-            if (force_silence) {
-                if (transition_remaining > 0U) {
-                    ++transition_position;
-                    --transition_remaining;
-                }
-                for (std::size_t channel = 0; channel < channels; ++channel) {
-                    samples[(frame * channels) + channel] = 0.0F;
-                    last_output_frame[channel] = 0.0F;
-                }
-                continue;
-            }
-            if (transition_remaining > 0U) {
-                const auto total = transition_remaining + transition_position;
-                const float alpha = static_cast<float>(transition_position + 1U) / static_cast<float>(total);
-                for (std::size_t channel = 0; channel < channels; ++channel) {
-                    const auto index = (frame * channels) + channel;
-                    samples[index] = (transition_anchor[channel] * (1.0F - alpha)) + (samples[index] * alpha);
-                }
-                ++transition_position;
-                --transition_remaining;
-            }
-            for (std::size_t channel = 0; channel < channels; ++channel) {
-                last_output_frame[channel] = samples[(frame * channels) + channel];
-            }
-        }
+        transitions.process_output(std::span<float>{samples, frames * channels}, frames, force_silence);
     }
 
     void compact_pending() {
@@ -1705,7 +1663,6 @@ struct SceneStreamEngine::Impl {
     std::unique_ptr<live_scene::ILiveSceneRenderer> incoming_renderer;
     std::unique_ptr<PendingBackend> deferred_backend;
     live_scene::RendererConfig incoming_config;
-    std::uint64_t backend_crossfade_position{0U};
     bool incoming_needs_initial_state{false};
     std::vector<float> render_output;
     std::vector<float> render_output_b;
@@ -1721,10 +1678,7 @@ struct SceneStreamEngine::Impl {
     std::uint64_t rational_remainder{0U};
     std::uint64_t allowed_output_frames{0U};
     std::uint64_t output_frames_pushed{0U};
-    std::vector<float> last_output_frame;
-    std::vector<float> transition_anchor;
-    std::uint64_t transition_remaining{0U};
-    std::uint64_t transition_position{0U};
+    dsp::SceneTransitions transitions;
 };
 // NOLINTEND(misc-non-private-member-variables-in-classes,clang-analyzer-optin.performance.Padding)
 

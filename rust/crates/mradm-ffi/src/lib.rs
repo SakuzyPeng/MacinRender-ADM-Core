@@ -22,6 +22,7 @@ mod output_dsp;
 mod pcm_mix;
 mod resampler;
 mod scene_math;
+mod scene_transition;
 mod spatial;
 mod spreader;
 #[cfg(test)]
