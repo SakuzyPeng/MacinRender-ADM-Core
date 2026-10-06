@@ -12,28 +12,35 @@ permissions:
 jobs:
   reference:
     name: ${{ matrix.unit }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          # SAF's own headers include C++ <complex> inside extern "C", which GCC rejects; the SAF
+          # comparison was validated on macOS with Accelerate, so it runs there.
           - unit: saf
+            runner: macos-26
             option: MR_ADM_BUILD_SAF_REFERENCE_TESTS
             targets: mr_adm_saf_reference_tests
             tests: mr_adm_saf_reference_tests
           - unit: libadm
+            runner: ubuntu-24.04
             option: MR_ADM_BUILD_LIBADM_REFERENCE_TESTS
             targets: mr_adm_libadm_reference_tests mr_adm_make_libadm_fixture
             tests: mr_adm_libadm_reference_tests
           - unit: libbw64
+            runner: ubuntu-24.04
             option: MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS
             targets: mr_adm_libbw64_reference_tests
             tests: mr_adm_libbw64_reference_tests
           - unit: resampler
+            runner: ubuntu-24.04
             option: MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS
             targets: mr_adm_resampler_reference_tests
             tests: mr_adm_resampler_reference_tests
           - unit: ebur128
+            runner: ubuntu-24.04
             option: MR_ADM_BUILD_EBUR128_REFERENCE_TESTS
             targets: mr_adm_ebur128_reference_tests
             tests: mr_adm_ebur128_reference_tests
@@ -48,12 +55,15 @@ jobs:
       - name: Install Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal
 
-      # OpenBLAS/LAPACKE are only needed by the legacy SAF reference build.
-      - name: Install dependencies
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build build-essential git pkg-config libboost-all-dev \
-            libopenblas-dev liblapacke-dev
+          sudo apt-get install -y cmake ninja-build build-essential git pkg-config libboost-all-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake ninja boost
 
       - name: Restore FetchContent cache
         uses: actions/cache/restore@v5

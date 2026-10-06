@@ -52,4 +52,11 @@
 
 全部 13 个单元均为 `retained`，三个条件都未满足：Rust 实现未发布，独立回归和二期需求尚未逐单元评审。逐单元的路径、测试和开关见登记表。
 
+2026-10-06 在 Linux（GCC 13，Release，`55c9fa9` 之后的工作树）本地实测第三方对照：
+
+- `libadm`、`libbw64`、`resampler`、`ebur128` 构建并通过。
+- `saf` 在 Linux 无法编译：SAF 自身的 `saf_hrir.h` 在 `extern "C"` 内包含 C++ `<complex>`，GCC 报 "template with C linkage"。该对照历来在 macOS + Accelerate 上验证，因此 `reference-tests.yml` 把它放在 macOS 运行。
+
+`reference-tests.yml` 需要合入默认分支后才能手动触发；首次运行结果待补记。
+
 另外，`tests/unit/hrtf_interpolation_test.cpp` 内联了一个旧 C++ 插值算法作为对照，不在 `tests/reference/` 下。它随所在测试一起维护，不单独登记。
