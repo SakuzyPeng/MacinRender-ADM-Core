@@ -80,6 +80,33 @@ class EvidenceTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     comparator.safe_file(root, name)
 
+    def test_actual_compiler_is_pinned(self):
+        for version in ('unavailable', 'release: 1.97.0\ncommit-hash: x\nLLVM version: 22'):
+            with self.assertRaises(ValueError):
+                comparator.compiler_identity({'rust.compiler_verbose': version})
+        result = comparator.compiler_identity({'rust.compiler_verbose': 'release: 1.98.0\ncommit-hash: abc\nLLVM version: 22.1.8'})
+        self.assertEqual(result['commit-hash'], 'abc')
+
+    def test_missing_and_tampered_worker_artifacts_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payload = struct.pack('<4sIIIQff', b'MRPB', 1, 2, 48000, 1, 0.0, 0.0)
+            experiments = {}
+            for name, workers, groups in [('w1-g4', 1, 4), ('w2-g4', 2, 4), ('w1-g1', 1, 1)]:
+                (root / name).write_bytes(payload)
+                row = {'workers': workers, 'group_budget': groups, 'actual_grouping': [['3', str(min(groups, 3))]] * 2, 'path': name}
+                if name != 'w1-g4':
+                    row['versus_w1_g4'] = common.compare_pcm(root / 'w1-g4', root / name)
+                experiments[name] = row
+            manifest = {'worker_experiments': experiments}
+            comparator.validate_experiments(root, manifest)
+            (root / 'w1-g1').unlink()
+            with self.assertRaises(ValueError):
+                comparator.validate_experiments(root, manifest)
+            (root / 'w1-g1').write_bytes(payload[:-4] + struct.pack('<I', 1))
+            with self.assertRaises(ValueError):
+                comparator.validate_experiments(root, manifest)
+
     def test_dependency_order_precedes_filename_order(self):
         self.assertLess(comparator.checkpoint_order('scene/e1-s2048.20-effective.f32'), comparator.checkpoint_order('scene/e1-s0.40-render.f32'))
         self.assertLess(comparator.checkpoint_order('ear.02-direct.f64'), comparator.checkpoint_order('post/loudness.10-measurement.f64'))
