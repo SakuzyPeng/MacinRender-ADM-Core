@@ -55,8 +55,8 @@
 2026-10-06 在 Linux（GCC 13，Release，`55c9fa9` 之后的工作树）本地实测第三方对照：
 
 - `libadm`、`libbw64`、`resampler`、`ebur128` 构建并通过。
-- `saf` 在 Linux 无法编译：SAF 自身的 `saf_hrir.h` 在 `extern "C"` 内包含 C++ `<complex>`，GCC 报 "template with C linkage"。该对照历来在 macOS + Accelerate 上验证，因此 `reference-tests.yml` 把它放在 macOS 运行。
+- `saf` 编译失败：SAF 自身的 `saf_hrir.h` 在 `extern "C"` 内包含 C++ `<complex>`，GCC 报 "template with C linkage"（下文 `5dd0378` 的修复之前）。
 
-[首轮参考 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37460398513)（`44c972b`）中，`libadm`、`libbw64`、`resampler`、`ebur128` 均通过；`saf` 在 Xcode 26.6 上也触发上述 C/C++ linkage 编译错误。修复方式是在测试入口显式提前包含 `<complex>`，让标准模板在进入 SAF 的 `extern "C"` 前加载，参考算法不变。SAF 继续使用原 macOS/Accelerate 数值验收环境。
+[首轮参考 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37460398513)（`44c972b`）中，`libadm`、`libbw64`、`resampler`、`ebur128` 均通过；`saf` 在 Xcode 26.6 上也触发上述 C/C++ linkage 编译错误。修复方式是在测试入口显式提前包含 `<complex>`，让标准模板在进入 SAF 的 `extern "C"` 前加载，参考算法不变。SAF 继续使用原 macOS/Accelerate 数值验收环境。修复后的[第二轮参考 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37462536719)（`5dd0378`）五个单元全部通过（SAF 在 macos-26，其余在 ubuntu-24.04）。
 
 另外，`tests/unit/hrtf_interpolation_test.cpp` 内联了一个旧 C++ 插值算法作为对照，不在 `tests/reference/` 下。它随所在测试一起维护，不单独登记。
