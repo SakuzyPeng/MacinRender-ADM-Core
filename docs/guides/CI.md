@@ -35,8 +35,8 @@ ccache（Windows 用 sccache）和平台编译工具。C/C++ 第三方依赖（l
 
 生产构建不再需要 SAF、OpenBLAS/LAPACKE、libmysofa、libebur128、libsamplerate、libadm 或 libbw64；
 它们只在默认关闭的 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关下作为维护对照获取，必需 CI 不开启这些开关；
-手动的 `.github/workflows/reference-tests.yml` 在 Linux Release 下逐个开启并运行对应 ctest，防止这些对照无声腐烂
-（SAF 对照需要 OpenBLAS/LAPACKE，仅在该 workflow 中安装）。失败的处理见 `docs/architecture/RUST_REFERENCE_RETENTION.md`。
+手动的 `.github/workflows/reference-tests.yml` 在 Release 下逐个开启并运行对应 ctest，防止这些对照无声腐烂
+（SAF 对照跑在 macOS + Accelerate：SAF 头文件在 `extern "C"` 内包含 C++ `<complex>`，Linux GCC 无法编译；其余跑在 Linux）。失败的处理见 `docs/architecture/RUST_REFERENCE_RETENTION.md`。
 
 ### 第二阶段：质量 CI
 
@@ -251,7 +251,7 @@ vcpkg install boost-format boost-functional boost-algorithm boost-integer boost-
 
 .github/workflows/reference-tests.yml
   workflow_dispatch
-  Linux Release × each default-OFF third-party migration reference
+  Release × each default-OFF third-party migration reference (SAF on macOS, others on Linux)
 
 .github/workflows/iamf-bridge-prebuild.yml
   workflow_dispatch / bridge-related pull_request
