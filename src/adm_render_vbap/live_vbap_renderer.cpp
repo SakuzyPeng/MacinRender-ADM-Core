@@ -23,6 +23,7 @@
 #include "dsp.h"
 #include "live_vbap.h"
 #include "render_common.h"
+#include "scene_math.h"
 #include "speaker_layouts.h"
 
 namespace mradm::live_scene {
@@ -430,11 +431,8 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
             const float distance = std::max(0.4F, position.distance);
             float spread = 0.0F;
             if (!is_2d() && config_.speaker_spread_mode != SpeakerSpreadMode::none) {
-                const float scale = std::clamp(1.0F / distance, 0.5F, 2.5F);
-                const float width = source.width * 60.0F * scale;
-                const float height = source.height * 45.0F * scale;
-                const float depth = source.depth * 20.0F * scale;
-                spread = std::min(180.0F, render_common::canonical_vector_length(width, height, depth));
+                spread =
+                    dsp::scene_math<6, 1>(7U, {source.width, source.height, source.depth, distance, 0.0F, 0.0F})[0];
             }
             auto source_gains = point_gains(position.azimuth, position.elevation, source.gain, spread);
             if (!source_gains) {

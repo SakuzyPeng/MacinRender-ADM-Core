@@ -9,6 +9,7 @@ use std::{
     ptr, slice,
 };
 mod adm;
+mod checked;
 mod convolution;
 mod ear_post;
 mod hoa;
@@ -20,6 +21,7 @@ mod monitor;
 mod output_dsp;
 mod pcm_mix;
 mod resampler;
+mod scene_math;
 mod spatial;
 mod spreader;
 #[cfg(test)]

@@ -23,6 +23,7 @@ pub mod pcm_mix;
 pub mod peak_guard;
 pub mod resampler;
 pub mod rng;
+pub mod scene_math;
 pub mod spreader;
 pub mod triple_balance;
 pub mod vbap;

@@ -1,0 +1,58 @@
+{
+  "baseline": "726db31277f450cfa9c0cb5f6e40bdb539f42154",
+  "sources": [
+    {
+      "path": "include/adm/scene.h",
+      "sha256": "cf029a2335610afb28b313490cd7fdeba1fae5f8a2d97099c67bf70003db61a4"
+    },
+    {
+      "path": "src/adm_render_common/render_common.h",
+      "sha256": "c74ea465980efac53e7ce8fd03afe7e756f85783a5136a8a661b0b7ae7d45bdf"
+    },
+    {
+      "path": "src/adm_render_common/render_common.cpp",
+      "sha256": "657a9b6634bf298f1e2b25584ea0036ae885a7e7e6ab1a7aa7cf7bda2e3b16da"
+    },
+    {
+      "path": "src/adm_render_common/head_rotation.h",
+      "sha256": "486bc4466f3c3a84f59d8bffbaa095d204fd08a2a4537812ed0a225537473bbd"
+    },
+    {
+      "path": "src/adm_render_binaural/live_binaural_renderer.cpp",
+      "sha256": "c9636e3f90ef837180f4ed8d8fd6596d8a54f4bc675cd194929bd6eb6378831a"
+    },
+    {
+      "path": "src/adm_render_binaural/binaural_renderer.cpp",
+      "sha256": "48aa7604df9b9f01dc4dcf9c728a809bdb60341bf97eee6651480a8219f45898"
+    },
+    {
+      "path": "src/adm_realtime/scene_stream_engine.cpp",
+      "sha256": "c97e747185e88e387fd6b28766260aeac9001ce45a95e9930e70fc70f12cd894"
+    },
+    {
+      "path": "src/adm_realtime/osc_head_tracking_protocol.cpp",
+      "sha256": "8c40c548dc20fd071b6f4b16029e50762bcf19bbc4ba67a8b879ed7b17b0f27f"
+    },
+    {
+      "path": "src/adm_apple/spatial_mixer_renderer.cpp",
+      "sha256": "f693f83c3c64a3faed0bcd16995c5cff141f1ead9ab3166f9d4c73b43862a8bd"
+    },
+    {
+      "path": "src/adm_render_vbap/vbap_renderer.cpp",
+      "sha256": "94bf020115b3988c78e4b350881b8db24e00908f453b2a6a6de19685104c08ca"
+    },
+    {
+      "path": "src/adm_render_vbap/live_vbap_renderer.cpp",
+      "sha256": "432e30b03356a58cd76b385c0930344ff6d956fc33eac8830958c760e961d9c3"
+    }
+  ],
+  "reference_sha256": {
+    "spatial.h": "48a3a0172da7c4ce8a7e797e83c0a65e807039f76c1d70fb6161f30f1b5dba4c",
+    "live_binaural.h": "ff438761c229c28c9fb70ca04f347b585e4834c3578ffe25c83e7977c0269e24"
+  },
+  "adaptations": [
+    "Freeze coordinate, cloud and rotation math independently of production helper functions",
+    "Namespace-isolate the baseline Live binaural renderer; retain unchanged Rust HRTF/convolution APIs",
+    "Remove reference-only diagnostic I/O while retaining numerical slot ordering"
+  ]
+}

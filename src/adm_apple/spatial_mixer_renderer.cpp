@@ -24,6 +24,7 @@
 #include "apple_layouts.h"
 #include "meter.h"
 #include "render_common.h"
+#include "scene_math.h"
 #include "speaker_layouts.h"
 
 namespace mradm {
@@ -544,61 +545,15 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
     return status;
 }
 
-struct HeadVec {
-    double x{};
-    double y{};
-    double z{};
-};
-
-struct HeadQuat {
-    double w{1.0};
-    double x{};
-    double y{};
-    double z{};
-};
-
-[[nodiscard]] HeadQuat quat_mul(const HeadQuat& a, const HeadQuat& b) {
-    return {
-        (a.w * b.w) - (a.x * b.x) - (a.y * b.y) - (a.z * b.z),
-        (a.w * b.x) + (a.x * b.w) + (a.y * b.z) - (a.z * b.y),
-        (a.w * b.y) - (a.x * b.z) + (a.y * b.w) + (a.z * b.x),
-        (a.w * b.z) + (a.x * b.y) - (a.y * b.x) + (a.z * b.w),
-    };
-}
-
-[[nodiscard]] HeadQuat axis_angle(const HeadVec& axis, double radians) {
-    const double half = radians * 0.5;
-    const double s = std::sin(half);
-    return {std::cos(half), axis.x * s, axis.y * s, axis.z * s};
-}
-
-[[nodiscard]] HeadVec rotate_by_quat(HeadVec v, const HeadQuat& q) {
-    const HeadQuat p{0.0, v.x, v.y, v.z};
-    const HeadQuat qc{q.w, -q.x, -q.y, -q.z};
-    const HeadQuat r = quat_mul(quat_mul(q, p), qc);
-    return {r.x, r.y, r.z};
-}
-
 // Head-lock 补偿:把一个总线的方向(SpatialMixer 约定:az +右、el +上)按听者头朝向预旋转,
 // 使全局 HeadYaw/Pitch/Roll 对其恰好抵消 → 该源锁在头上(head-locked),不随转头移动。
 // 坐标:x=右、y=前、z=上。组合顺序与 GUI 头部姿态反馈保持一致:roll(绕前轴 y) →
 // pitch(绕右轴 x) → yaw(绕上轴 z)。yaw 已由 smoke/真机方向锁定;pitch/roll 仍建议真机标定。
 [[nodiscard]] std::pair<float, float> head_lock_compensate(float az_deg, float el_deg, const ListenerOrientation& o) {
-    constexpr double d2r = 0.017453292519943295;
-    constexpr double r2d = 57.29577951308232;
-    const double a = az_deg * d2r;
-    const double e = el_deg * d2r;
-    const HeadVec v{std::sin(a) * std::cos(e), std::cos(a) * std::cos(e), std::sin(e)};
-
-    const HeadQuat q_roll = axis_angle({0.0, 1.0, 0.0}, o.roll_deg * d2r);
-    const HeadQuat q_pitch = axis_angle({1.0, 0.0, 0.0}, o.pitch_deg * d2r);
-    const HeadQuat q_yaw = axis_angle({0.0, 0.0, 1.0}, o.yaw_deg * d2r);
-    const HeadQuat head_to_world = quat_mul(q_yaw, quat_mul(q_pitch, q_roll));
-    const HeadVec rotated = rotate_by_quat(v, head_to_world);
-
-    const auto az = static_cast<float>(std::atan2(rotated.x, rotated.y) * r2d);
-    const auto el = static_cast<float>(std::asin(std::clamp(rotated.z, -1.0, 1.0)) * r2d);
-    return {az, el};
+    const std::array input{az_deg, el_deg, o.yaw_deg, o.pitch_deg, o.roll_deg};
+    std::array<float, 2> output{};
+    dsp::scene_check(mradm_dsp_scene_rotate_pose(input.data(), input.size(), output.data(), output.size(), 1U));
+    return {output[0], output[1]};
 }
 
 // Set the four per-source SpatialMixer parameters for one input bus, short-circuiting on

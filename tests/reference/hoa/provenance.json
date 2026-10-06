@@ -5,5 +5,12 @@
     "src/adm_render_common/render_common.h": "b2ee09363c406be5616bead1b5f020bc4df20c436ba582a4b057bf33bcb2b840",
     "src/adm_render_common/render_common.cpp": "657a9b6634bf298f1e2b25584ea0036ae885a7e7e6ab1a7aa7cf7bda2e3b16da",
     "include/adm/scene.h": "513dd6d645bc5e1d067620221d29d7608fb1c48cea7f99a52cfdc6d4bc98e8cd"
-  }
+  },
+  "adaptations": [
+    "Scene numeric migration: use independently frozen 726db31 spatial helpers; preserve the original renderer algorithm baseline."
+  ],
+  "reference_sha256": {
+    "legacy.h": "01f278b0cb01f7c9442f0583f4f62b14f48f839e34d845a831973ca62ac0eedc"
+  },
+  "spatial_reference": "../scene_numeric/spatial.h"
 }

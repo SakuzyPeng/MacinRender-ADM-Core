@@ -36,6 +36,46 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOCATOR: Counting = Counting;
 
 #[test]
+fn scene_spatial_first_queries_and_rejections_do_not_allocate() {
+    use mradm_dsp::scene_math::*;
+    let rotation = Rotation::new([30., 20., 10.]).unwrap();
+    let mut points = [CloudPoint::default(); 17];
+    let speakers = [Speaker {
+        azimuth: 30.,
+        elevation: 0.,
+        is_lfe: 0,
+    }];
+    COUNT.with(|c| c.set(Some(0)));
+    for binaural in [false, true] {
+        for contract in [false, true] {
+            assert_eq!(
+                cloud(
+                    [1., 1., 1.],
+                    true,
+                    [0.25; 3],
+                    1.,
+                    binaural,
+                    contract,
+                    &mut points,
+                    None
+                ),
+                16
+            );
+        }
+    }
+    assert_eq!(nearest([0., 0., 1.], false, &speakers).unwrap().0, 0);
+    assert!(
+        rotation
+            .apply(30., 45., false)
+            .iter()
+            .all(|x| x.is_finite())
+    );
+    assert!(pose(&[f32::NAN; 3], false).is_err());
+    assert!(pose(&[30., 90., 20.], false).is_ok());
+    assert_eq!(COUNT.with(|c| c.replace(None).unwrap()), 0);
+}
+
+#[test]
 fn prepared_ear_post_short_blocks_reset_and_rejections_do_not_allocate() {
     use mradm_dsp::ear_post::{DELAY, FilterBank, Processor, TAPS};
     use std::sync::Arc;
