@@ -68,8 +68,7 @@ class FloatWavReader {
 // Render-time input reader over the Rust WAVE reader; read/seek failures are returned as errors.
 class RenderInputReader {
   public:
-    // channel_bed no longer selects a decoder; it is kept so renderer call sites stay unchanged.
-    static Result<std::unique_ptr<RenderInputReader>> open(const std::string& path, bool channel_bed);
+    static Result<std::unique_ptr<RenderInputReader>> open(const std::string& path);
     ~RenderInputReader();
     RenderInputReader(RenderInputReader&&) noexcept;
     RenderInputReader& operator=(RenderInputReader&&) noexcept;

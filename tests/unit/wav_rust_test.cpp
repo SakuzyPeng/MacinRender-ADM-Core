@@ -48,7 +48,7 @@ void verify_native_path_round_trip(const std::filesystem::path& directory) {
     auto probe = mradm::audio::FloatWavReader::open(path.string());
     require(probe && probe->is_linear_pcm() && probe->bits_per_sample() == 24,
             "native-path conversion did not replace the original file");
-    auto reader = mradm::audio::RenderInputReader::open(path.string(), false);
+    auto reader = mradm::audio::RenderInputReader::open(path.string());
     require(reader.has_value(), "native-path Rust reader open failed");
     std::array<float, 3> output{};
     const auto got = (*reader)->read(output.data(), output.size());
@@ -202,7 +202,7 @@ int main() {
                 auto probe = mradm::audio::FloatWavReader::open(path.string());
                 require(probe && probe->sample_rate() == rate && probe->bits_per_sample() == bits,
                         "integer fmt mismatch");
-                auto reader = mradm::audio::RenderInputReader::open(path.string(), false);
+                auto reader = mradm::audio::RenderInputReader::open(path.string());
                 require(reader.has_value(), "Rust-backed reader open failed");
                 std::vector<float> output(input.size());
                 const auto got = (*reader)->read(output.data(), output.size());
@@ -239,7 +239,7 @@ int main() {
             auto writer = fixture::write_wave(short_path.string());
             writer->write(std::vector<float>(20000, 0.25F).data(), 20000);
         }
-        auto reader = mradm::audio::RenderInputReader::open(short_path.string(), false);
+        auto reader = mradm::audio::RenderInputReader::open(short_path.string());
         require(reader.has_value(), "truncation fixture open failed");
         std::filesystem::resize_file(short_path, 100);
         require((*reader)->seek_frame(15000).has_value(), "seek within declared input failed");

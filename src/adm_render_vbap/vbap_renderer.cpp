@@ -390,8 +390,7 @@ class VbapStream final : public IRenderStream {
   public:
     [[nodiscard]] static Result<std::unique_ptr<VbapStream>>
     create(const VbapPrepared& prepared, const RenderPlan& plan, LogSink& logs) {
-        auto reader = audio::RenderInputReader::open(plan.input_path,
-                                                     plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+        auto reader = audio::RenderInputReader::open(plan.input_path);
         if (!reader) {
             return tl::unexpected{reader.error()};
         }

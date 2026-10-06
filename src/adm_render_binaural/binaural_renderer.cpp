@@ -1155,8 +1155,7 @@ class BinauralStream final : public IRenderStream {
                               fmt::format("binaural renderer requires 48000 Hz input, got {}", info.sample_rate),
                               "input=" + plan.input_path);
         }
-        auto reader = audio::RenderInputReader::open(plan.input_path,
-                                                     plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+        auto reader = audio::RenderInputReader::open(plan.input_path);
         if (!reader) {
             return tl::unexpected{reader.error()};
         }
@@ -1671,8 +1670,7 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
     }
 
     // Open I/O.
-    auto reader_res =
-        audio::RenderInputReader::open(plan.input_path, plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+    auto reader_res = audio::RenderInputReader::open(plan.input_path);
     if (!reader_res) {
         return tl::unexpected{reader_res.error()};
     }
