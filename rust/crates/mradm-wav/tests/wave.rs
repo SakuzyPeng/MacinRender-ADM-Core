@@ -281,6 +281,10 @@ fn malformed_files_return_errors_without_panicking() {
     let mut rf64 = fixture(Container::Rf64, 24, 2, &[0; 12]);
     rf64[44..48].copy_from_slice(&u32::MAX.to_le_bytes());
     assert!(Reader::new(Cursor::new(rf64)).is_err());
+    // ds64 sampleCount is informational: a wrong value must not reject the file.
+    let mut bw64 = fixture(Container::Bw64, 24, 2, &[0; 12]);
+    bw64[36..44].copy_from_slice(&999u64.to_le_bytes());
+    assert_eq!(Reader::new(Cursor::new(bw64)).unwrap().info().frames, 6);
     assert!(Chna::decode(&[0; 3]).is_err());
     assert!(Chna::decode(&[1, 0, 2, 0]).is_err());
 }

@@ -73,6 +73,7 @@ class RustWavReader {
         }
         return {};
     }
+    [[nodiscard]] const MradmWavInfo& info() const noexcept { return info_; }
 
   private:
     explicit RustWavReader(std::string path) : path_(std::move(path)) {}
@@ -81,11 +82,14 @@ class RustWavReader {
     std::unique_ptr<MradmWavReader, decltype(&mradm_wav_reader_destroy)> handle_{nullptr, mradm_wav_reader_destroy};
 };
 
-class IntegerWavWriter {
+// Streaming WAVE writer. Integer PCM starts as RIFF and promotes to BW64; float32 is always RF64.
+// Exclusive writers refuse to replace an existing file; others truncate it like fopen("wb").
+// The file is only valid after finish() succeeds; destroying an unfinished writer leaves it incomplete.
+class RustWavWriter {
   public:
-    static Result<std::unique_ptr<IntegerWavWriter>>
-    create(const std::string& path, uint32_t channels, uint32_t rate, uint16_t bits) {
-        auto writer = std::unique_ptr<IntegerWavWriter>{new IntegerWavWriter{path, channels}};
+    static Result<std::unique_ptr<RustWavWriter>> create(
+        const std::string& path, uint32_t channels, uint32_t rate, uint16_t bits, bool float_output, bool exclusive) {
+        auto writer = std::unique_ptr<RustWavWriter>{new RustWavWriter{path, channels}};
         const auto utf8_path = wav_path_utf8(path);
         std::array<uint8_t, 512> message{};
         MradmWavWriter* handle = nullptr;
@@ -94,6 +98,8 @@ class IntegerWavWriter {
                                                   channels,
                                                   rate,
                                                   bits,
+                                                  float_output ? 1U : 0U,
+                                                  exclusive ? 1U : 0U,
                                                   &handle,
                                                   message.data(),
                                                   message.size());
@@ -125,9 +131,17 @@ class IntegerWavWriter {
     }
 
   private:
-    IntegerWavWriter(std::string path, uint32_t channels) : path_(std::move(path)), channels_(channels) {}
+    RustWavWriter(std::string path, uint32_t channels) : path_(std::move(path)), channels_(channels) {}
     std::string path_;
     uint32_t channels_;
     std::unique_ptr<MradmWavWriter, decltype(&mradm_wav_writer_destroy)> handle_{nullptr, mradm_wav_writer_destroy};
+};
+
+// Integer PCM conversion output: exclusive create, installed by the caller only after finish().
+struct IntegerWavWriter {
+    static Result<std::unique_ptr<RustWavWriter>>
+    create(const std::string& path, uint32_t channels, uint32_t rate, uint16_t bits) {
+        return RustWavWriter::create(path, channels, rate, bits, false, true);
+    }
 };
 } // namespace mradm::audio

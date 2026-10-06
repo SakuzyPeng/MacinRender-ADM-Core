@@ -325,6 +325,28 @@
       "files": {
         "tests/reference/ebur128_reference_test.cpp": "ddbfbdf5c373439656a9caf91be687226d9e823bd09230495013be5c9dcf61da"
       }
+    },
+    {
+      "id": "dr_wav",
+      "kind": "third-party",
+      "migration_doc": "docs/architecture/RUST_DR_WAV_MIGRATION.md",
+      "accepted": "2026-10-06",
+      "baseline_commit": "5dd0378a0b7f73a1c548a178b3528b5c376b9387",
+      "provenance": null,
+      "cmake_option": "MR_ADM_BUILD_DRWAV_REFERENCE_TESTS",
+      "tests": [
+        "mr_adm_drwav_reference_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/dr_wav_reference_test.cpp": "829a71959fb33c89c33ca593988989d8af636a1777f5bcae9ac094a23c232f88"
+      }
     }
   ]
 }

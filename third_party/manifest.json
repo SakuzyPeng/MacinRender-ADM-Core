@@ -117,7 +117,7 @@
       "cmake_key": "dr_libs",
       "purl": "pkg:github/mackron/dr_libs@47a4f08e777faddf59a8955c4ea84f69f41020d5",
       "license": "Unlicense OR MIT-0",
-      "purpose": "WAV/FLAC 轻量读写（dr_wav / dr_flac）",
+      "purpose": "FLAC 解码（dr_flac）；dr_wav 仅用于显式启用的 WAVE 参考测试",
       "distribution": "available",
       "source": {
         "type": "fetchcontent",

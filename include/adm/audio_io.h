@@ -14,9 +14,10 @@
 
 namespace mradm::audio {
 
-// Streaming writer for WAVE_FORMAT_IEEE_FLOAT (32-bit float) WAV files.
+// Streaming writer for WAVE_FORMAT_IEEE_FLOAT (32-bit float) RF64 files; an existing file is replaced.
 // Values outside [-1, 1] are preserved — no clipping. Suitable for mastering
 // pipelines where rendering may produce headroom > 0 dBFS.
+// finish() writes the final sizes and reports failure; the destructor finishes on a best-effort basis.
 class FloatWavWriter {
   public:
     static Result<FloatWavWriter> open(const std::string& path, uint32_t channels, uint32_t sample_rate);
@@ -26,7 +27,9 @@ class FloatWavWriter {
     FloatWavWriter(const FloatWavWriter&) = delete;
     FloatWavWriter& operator=(const FloatWavWriter&) = delete;
 
+    // Returns frame_count on success, 0 on failure.
     uint64_t write(const float* samples, uint64_t frame_count);
+    Result<void> finish();
 
   private:
     FloatWavWriter() = default;
@@ -34,7 +37,8 @@ class FloatWavWriter {
     std::unique_ptr<Impl> impl_;
 };
 
-// Streaming reader for WAV files; decodes any PCM or float format to float32.
+// Streaming reader for RIFF/RF64/BW64 WAVE files with PCM16/24/32 or float32 samples, decoded to float32.
+// read() returns 0 and seek() false on I/O failure.
 class FloatWavReader {
   public:
     static Result<FloatWavReader> open(const std::string& path);
@@ -60,10 +64,10 @@ class FloatWavReader {
     std::unique_ptr<Impl> impl_;
 };
 
-// Render-time input reader. Integer ADM uses the Rust PCM reader with legacy sample
-// path; float32 ADM and ordinary channel-bed WAVE use FloatWavReader.
+// Render-time input reader over the Rust WAVE reader; read/seek failures are returned as errors.
 class RenderInputReader {
   public:
+    // channel_bed no longer selects a decoder; it is kept so renderer call sites stay unchanged.
     static Result<std::unique_ptr<RenderInputReader>> open(const std::string& path, bool channel_bed);
     ~RenderInputReader();
     RenderInputReader(RenderInputReader&&) noexcept;
@@ -215,6 +219,8 @@ class WriterHandle {
     WriterHandle& operator=(const WriterHandle&) = delete;
 
     uint64_t write(const float* samples, uint64_t frame_count);
+    // Finalizes WAV output and reports failure; CAF and FLAC still finalize on destruction.
+    Result<void> finish();
 
   private:
     explicit WriterHandle(FloatWavWriter w) : impl_(std::move(w)) {}

@@ -59,6 +59,27 @@ class TempPathGuard {
     return parent / fmt::format("{}.{}.{:016x}{}", stem, purpose, dist(rng), ext);
 }
 
+// Install a finished temporary rewrite over the original. Windows cannot rename over an
+// existing file, so fall back to remove + rename.
+[[nodiscard]] Result<void> replace_with_rewrite(const std::filesystem::path& tmp_path,
+                                                const std::filesystem::path& original_path,
+                                                std::string_view operation) {
+    std::error_code ec;
+    std::filesystem::rename(tmp_path, original_path, ec);
+    if (ec) {
+        std::error_code remove_ec;
+        std::filesystem::remove(original_path, remove_ec);
+        ec.clear();
+        std::filesystem::rename(tmp_path, original_path, ec);
+        if (ec) {
+            return make_error(ErrorCode::io_error,
+                              fmt::format("failed to replace output after {}: {}", operation, ec.message()),
+                              "path=" + original_path.string());
+        }
+    }
+    return {};
+}
+
 void emit_audio_progress(ProgressSink* progress,
                          RenderOperation operation,
                          double fraction,
@@ -77,8 +98,7 @@ void emit_audio_progress(ProgressSink* progress,
 // ── RenderInputReader ────────────────────────────────────────────────────────
 
 struct RenderInputReader::Impl {
-    std::unique_ptr<RustWavReader> adm_reader;
-    std::optional<FloatWavReader> wave_reader;
+    std::unique_ptr<RustWavReader> reader;
 };
 
 RenderInputReader::RenderInputReader() = default;
@@ -86,29 +106,15 @@ RenderInputReader::~RenderInputReader() = default;
 RenderInputReader::RenderInputReader(RenderInputReader&&) noexcept = default;
 RenderInputReader& RenderInputReader::operator=(RenderInputReader&&) noexcept = default;
 
-Result<std::unique_ptr<RenderInputReader>> RenderInputReader::open(const std::string& path, bool channel_bed) {
+Result<std::unique_ptr<RenderInputReader>> RenderInputReader::open(const std::string& path, bool /*channel_bed*/) {
     try {
+        auto reader = RustWavReader::open(path);
+        if (!reader) {
+            return tl::unexpected{reader.error()};
+        }
         auto out = std::unique_ptr<RenderInputReader>{new RenderInputReader{}};
         out->impl_ = std::make_unique<Impl>();
-        if (channel_bed) {
-            auto reader = FloatWavReader::open(path);
-            if (!reader) {
-                return tl::unexpected{reader.error()};
-            }
-            out->impl_->wave_reader.emplace(std::move(*reader));
-        } else {
-            // Preserve the established dr_wav path for floating-point ADM.
-            auto wave_probe = FloatWavReader::open(path);
-            if (wave_probe && wave_probe->is_ieee_float()) {
-                out->impl_->wave_reader.emplace(std::move(*wave_probe));
-            } else {
-                auto reader = RustWavReader::open(path);
-                if (!reader) {
-                    return tl::unexpected{reader.error()};
-                }
-                out->impl_->adm_reader = std::move(*reader);
-            }
-        }
+        out->impl_->reader = std::move(*reader);
         return out;
     } catch (const std::exception& e) {
         return make_error(ErrorCode::io_error, std::string{"failed to open render input: "} + e.what(), "path=" + path);
@@ -118,27 +124,12 @@ Result<std::unique_ptr<RenderInputReader>> RenderInputReader::open(const std::st
 }
 
 Result<uint64_t> RenderInputReader::read(float* out, uint64_t frames) {
-    if (impl_->wave_reader.has_value()) {
-        return impl_->wave_reader->read(out, frames);
-    }
-    return impl_->adm_reader->read(out, frames);
+    return impl_->reader->read(out, frames);
 }
 
 Result<void> RenderInputReader::seek_frame(uint64_t frame) {
-    if (impl_->adm_reader) {
-        return impl_->adm_reader->seek_frame(frame);
-    }
-    if (!impl_->wave_reader.has_value()) {
-        return make_error(ErrorCode::internal_error, "render input reader is not open");
-    }
-
-    auto& wave_reader = *impl_->wave_reader;
-    const uint64_t total = wave_reader.frame_count();
-    const uint64_t target = std::min(frame, total);
-    if (wave_reader.seek(target)) {
-        return {};
-    }
-    return make_error(ErrorCode::io_error, "failed to seek render input");
+    // The Rust reader clamps targets past the end to the final frame boundary.
+    return impl_->reader->seek_frame(frame);
 }
 
 // ── ReaderHandle ──────────────────────────────────────────────────────────────
@@ -254,23 +245,16 @@ Result<void> apply_gain_to_file(const std::string& path,
         if (left != 0) {
             return make_error(ErrorCode::io_error, "short read in apply_gain_to_file", "path=" + path);
         }
+        if (auto finished = writer.finish(); !finished) {
+            return tl::unexpected{finished.error()};
+        }
     }
 
     if (cancel_token.stop_requested()) {
         return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
     }
-    std::error_code ec;
-    std::filesystem::rename(tmp_path, original_path, ec);
-    if (ec) {
-        std::error_code remove_ec;
-        std::filesystem::remove(original_path, remove_ec);
-        ec.clear();
-        std::filesystem::rename(tmp_path, original_path, ec);
-        if (ec) {
-            return make_error(ErrorCode::io_error,
-                              "failed to replace output after apply_gain_to_file: " + ec.message(),
-                              "path=" + path);
-        }
+    if (auto replaced = replace_with_rewrite(tmp_path, original_path, "apply_gain_to_file"); !replaced) {
+        return replaced;
     }
     tmp_guard.dismiss();
     emit_audio_progress(progress, operation, 1.0, 0, 0, "gain applied");
@@ -372,23 +356,16 @@ Result<void> trim_file_frames(const std::string& path,
                                 out_frames,
                                 "trimming output");
         }
+        if (auto finished = writer.finish(); !finished) {
+            return tl::unexpected{finished.error()};
+        }
     }
 
     if (cancel_token.stop_requested()) {
         return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
     }
-    std::error_code ec;
-    std::filesystem::rename(tmp_path, original_path, ec);
-    if (ec) {
-        std::error_code remove_ec;
-        std::filesystem::remove(original_path, remove_ec);
-        ec.clear();
-        std::filesystem::rename(tmp_path, original_path, ec);
-        if (ec) {
-            return make_error(ErrorCode::io_error,
-                              "failed to replace output after trim_file_frames: " + ec.message(),
-                              "path=" + path);
-        }
+    if (auto replaced = replace_with_rewrite(tmp_path, original_path, "trim_file_frames"); !replaced) {
+        return replaced;
     }
     tmp_guard.dismiss();
     emit_audio_progress(progress, operation, 1.0, 0, 0, "trimmed output");
@@ -426,6 +403,18 @@ WriterHandle::open(const std::string& path, uint32_t channels, uint32_t sample_r
 
 uint64_t WriterHandle::write(const float* samples, uint64_t frame_count) {
     return std::visit([&](auto& w) { return w.write(samples, frame_count); }, impl_);
+}
+
+Result<void> WriterHandle::finish() {
+    return std::visit(
+        [](auto& w) -> Result<void> {
+            if constexpr (requires { w.finish(); }) {
+                return w.finish();
+            } else {
+                return {}; // CAF and FLAC writers finalize in their destructors.
+            }
+        },
+        impl_);
 }
 
 } // namespace mradm::audio

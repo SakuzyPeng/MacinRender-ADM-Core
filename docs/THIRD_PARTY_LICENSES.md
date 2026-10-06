@@ -37,7 +37,7 @@
 | `spdlog` @ v1.15.3 | 日志库 | MIT | 可用 | 使用 external fmt |
 | `tl-expected` @ v1.1.0 | Result<T> 基础类型 | CC0-1.0 | 可用 | header-only；FetchContent 目标目录名为 expected-src |
 | `libebur128` @ v1.2.6 | 历史响度/True Peak 参考（测试专用） | MIT | opt-in（默认关闭） | 仅用于显式启用的 C 参考测试；生产计量由 Rust ebur128 实现。 |
-| `dr_libs` @ 47a4f08e777faddf59a8955c4ea84f69f41020d5 | WAV/FLAC 轻量读写（dr_wav / dr_flac） | Unlicense OR MIT-0 | 可用 | header-only；本项目按 MIT-0/Unlicense 宽松使用 |
+| `dr_libs` @ 47a4f08e777faddf59a8955c4ea84f69f41020d5 | FLAC 解码（dr_flac）；dr_wav 仅用于显式启用的 WAVE 参考测试 | Unlicense OR MIT-0 | 可用 | header-only；本项目按 MIT-0/Unlicense 宽松使用 |
 | `miniaudio` @ 0.11.21 | 实时音频设备输出（监听引擎） | Unlicense OR MIT-0 | 可用 | header-only；实现仅在 src/adm_realtime/miniaudio_device.cpp；Linux dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox |
 | `libsamplerate` @ 0.2.2 | 历史采样率转换参考（测试专用） | BSD-2-Clause | opt-in（默认关闭） | 仅用于显式开启的参考测试；生产重采样使用纯 Rust rubato。 |
 | `libFLAC` @ 1.5.0 | FLAC 编码与 metadata | BSD-3-Clause | 可用 | 默认仅链接 libFLAC（Xiph BSD-like）；源码包内 COPYING.GPL/LGPL/FDL 覆盖未链接的 C++ libs/programs/docs，默认发行不涉及 |

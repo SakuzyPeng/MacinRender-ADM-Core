@@ -107,6 +107,9 @@ Result<std::optional<double>> measure_lufs(const std::string& path) {
                 }
                 left -= got;
             }
+            if (auto finished = writer.finish(); !finished) {
+                return tl::unexpected{finished.error()};
+            }
         }
         std::filesystem::rename(tmp_path, path);
         return {};
