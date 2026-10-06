@@ -12,6 +12,7 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/adm_core/version.cpp.in" "${MR_A
 
 option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
+option(MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS "Build optional legacy libbw64 I/O reference tests" OFF)
 option(MR_ADM_BUILD_LIBADM_REFERENCE_TESTS "Build optional legacy libadm metadata reference tools" OFF)
 option(MR_ADM_BUILD_SAF_REFERENCE_TESTS "Build optional legacy SAF numerical reference tools" OFF)
 option(MR_ADM_BUILD_EBUR128_REFERENCE_TESTS "Build optional C libebur128 meter reference tests" OFF)
@@ -208,7 +209,7 @@ target_sources(
 
 target_link_libraries(mr_adm_io
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 MacinRender::ADMMetadata MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE MacinRender::ADMMetadata MacinRender::ADMAudio MacinRender::ADMRenderCommon
 )
 mr_adm_core_apply_warnings(mr_adm_io)
 mr_adm_core_apply_static_analysis(mr_adm_io)
@@ -253,7 +254,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_ear
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 ear  MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE ear MacinRender::ADMAudio MacinRender::ADMRenderCommon
     PRIVATE MacinRender::ADMDsp
 )
 mr_adm_core_apply_warnings(mr_adm_render_ear)
@@ -280,7 +281,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_vbap
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64  MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon
     PRIVATE MacinRender::ADMDsp
 )
 mr_adm_core_apply_warnings(mr_adm_render_vbap)
@@ -330,7 +331,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_hoa
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64  MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon
     PRIVATE MacinRender::ADMDsp
 )
 mr_adm_core_apply_warnings(mr_adm_render_hoa)
@@ -359,7 +360,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_binaural
     PUBLIC MacinRender::ADMCore
-    PRIVATE libbw64 MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon
     PRIVATE MacinRender::ADMDsp
 )
 target_compile_definitions(mr_adm_render_binaural PRIVATE MR_ADM_ENABLE_SOFA=$<BOOL:${MR_ADM_ENABLE_SOFA}>)
@@ -415,7 +416,7 @@ target_sources(
 
 target_link_libraries(mr_adm_audio
     PUBLIC MacinRender::ADMCore
-    PRIVATE dr_wav::dr_wav dr_flac::dr_flac FLAC::FLAC Opus::opus libbw64
+    PRIVATE dr_wav::dr_wav dr_flac::dr_flac FLAC::FLAC Opus::opus mradm_ffi
 )
 target_compile_definitions(mr_adm_audio PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
 if(MR_ADM_ENABLE_IAMF)
@@ -460,7 +461,7 @@ if(APPLE)
 
     target_link_libraries(mr_adm_apple
         PUBLIC MacinRender::ADMCore
-        PRIVATE libbw64 MacinRender::ADMDsp MacinRender::ADMAudio MacinRender::ADMRenderCommon
+        PRIVATE MacinRender::ADMDsp MacinRender::ADMAudio MacinRender::ADMRenderCommon
                 ${MR_ADM_AUDIOTOOLBOX_FW} ${MR_ADM_AVFOUNDATION_FW} ${MR_ADM_COREMEDIA_FW} ${MR_ADM_FOUNDATION_FW}
     )
     # adm_apple consumes the realtime IAudioOutputDevice interface (third-party-free header) to
@@ -688,7 +689,7 @@ if(MR_ADM_BUILD_CAPI_BUNDLE)
         SOVERSION ${PROJECT_VERSION_MAJOR}
         WINDOWS_EXPORT_ALL_SYMBOLS ON
     )
-    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime)
+    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderCommon)
     # Keep Rust's allocator/panic machinery and every private DSP symbol inside
     # this DSO. Consumers continue to see only the established adm_* C boundary.
     if(APPLE)
@@ -759,9 +760,23 @@ endif()
 if(MR_ADM_CORE_BUILD_TESTS)
     enable_testing()
 
+    add_executable(mr_adm_wav_rust_tests tests/unit/wav_rust_test.cpp)
+    target_link_libraries(mr_adm_wav_rust_tests PRIVATE MacinRender::ADMAudio)
+    mr_adm_core_apply_warnings(mr_adm_wav_rust_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_wav_rust_tests)
+    add_test(NAME mr_adm_wav_rust_tests COMMAND mr_adm_wav_rust_tests)
+
+    if(MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS)
+        add_executable(mr_adm_libbw64_reference_tests tests/reference/libbw64/reference_test.cpp)
+        target_include_directories(mr_adm_libbw64_reference_tests PRIVATE src/adm_audio)
+        target_link_libraries(mr_adm_libbw64_reference_tests PRIVATE MacinRender::ADMAudio mradm_ffi libbw64)
+        mr_adm_core_apply_warnings(mr_adm_libbw64_reference_tests)
+        add_test(NAME mr_adm_libbw64_reference_tests COMMAND mr_adm_libbw64_reference_tests)
+    endif()
+
     # core_smoke_test exercises RenderService (empty-input validation); link engine.
     add_executable(mr_adm_core_unit_tests tests/unit/core_smoke_test.cpp)
-    target_link_libraries(mr_adm_core_unit_tests PRIVATE MacinRender::ADMEngine)
+    target_link_libraries(mr_adm_core_unit_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio)
     mr_adm_core_apply_warnings(mr_adm_core_unit_tests)
     mr_adm_core_apply_static_analysis(mr_adm_core_unit_tests)
     add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
@@ -780,12 +795,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_io_smoke_tests COMMAND mr_adm_io_smoke_tests)
 
     # Contract test for the stable C ABI. Links only the C ABI target (consumer
-    # view); libbw64 is used solely to construct the runtime WAVE fixture.
+    # view); the independent fixture author only uses the standard library.
     add_executable(mr_adm_c_api_tests tests/unit/c_api_fixture_test.cpp)
     target_link_libraries(mr_adm_c_api_tests
         PRIVATE
             MacinRender::ADMCAPI
-            libbw64
     )
     target_compile_definitions(mr_adm_c_api_tests PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
     mr_adm_core_apply_warnings(mr_adm_c_api_tests)
@@ -912,7 +926,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     endif()
 
     add_executable(mr_adm_make_fixture EXCLUDE_FROM_ALL tests/tools/make_fixture.cpp)
-    target_link_libraries(mr_adm_make_fixture PRIVATE libbw64)
+    target_link_libraries(mr_adm_make_fixture PRIVATE MacinRender::ADMCore)
     mr_adm_core_apply_warnings(mr_adm_make_fixture)
     mr_adm_core_apply_static_analysis(mr_adm_make_fixture)
 
@@ -1004,7 +1018,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_io_fixture_tests
         PRIVATE
             MacinRender::ADMIo
-            libbw64
     )
     mr_adm_core_apply_warnings(mr_adm_io_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_io_fixture_tests)
@@ -1014,7 +1027,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_scene_export_tests
         PRIVATE
             MacinRender::ADMIo
-            libbw64
     )
     mr_adm_core_apply_warnings(mr_adm_scene_export_tests)
     mr_adm_core_apply_static_analysis(mr_adm_scene_export_tests)
@@ -1041,7 +1053,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
             MacinRender::ADMRenderTripleBalance
             MacinRender::ADMIo
             MacinRender::ADMAudio
-            libbw64
     )
     mr_adm_core_apply_warnings(mr_adm_vbap_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_vbap_smoke_tests)
@@ -1187,13 +1198,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # Smoke test: non-existent file → io_error via full engine stack.
     add_executable(mr_adm_ear_smoke_tests tests/unit/ear_render_smoke_test.cpp)
-    target_link_libraries(mr_adm_ear_smoke_tests PRIVATE MacinRender::ADMEngine)
+    target_link_libraries(mr_adm_ear_smoke_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMRenderEar)
     mr_adm_core_apply_warnings(mr_adm_ear_smoke_tests)
     mr_adm_core_apply_static_analysis(mr_adm_ear_smoke_tests)
     add_test(NAME mr_adm_ear_smoke_tests COMMAND mr_adm_ear_smoke_tests)
 
     add_executable(mr_adm_channel_bed_render_tests tests/unit/channel_bed_render_test.cpp)
-    target_link_libraries(mr_adm_channel_bed_render_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio)
+    target_link_libraries(mr_adm_channel_bed_render_tests PRIVATE MacinRender::ADMEngine MacinRender::ADMAudio MacinRender::ADMIo)
     mr_adm_core_apply_warnings(mr_adm_channel_bed_render_tests)
     mr_adm_core_apply_static_analysis(mr_adm_channel_bed_render_tests)
     add_test(NAME mr_adm_channel_bed_render_tests COMMAND mr_adm_channel_bed_render_tests)
@@ -1222,7 +1233,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
             MacinRender::ADMRenderCommon
             MacinRender::ADMIo
             MacinRender::ADMAudio
-            libbw64
     )
     mr_adm_core_apply_warnings(mr_adm_ear_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_ear_fixture_tests)
@@ -1236,7 +1246,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
             MacinRender::ADMEngine
             MacinRender::ADMPeak
             MacinRender::ADMAudio
-            libbw64
     )
     mr_adm_core_apply_warnings(mr_adm_peak_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_peak_fixture_tests)
@@ -1245,7 +1254,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     # Fixture test: Objects ADM → HOA3 (16ch, ACN/SN3D) encode.
     add_executable(mr_adm_hoa_rust_tests tests/unit/hoa_rust_test.cpp)
     target_link_libraries(mr_adm_hoa_rust_tests PRIVATE MacinRender::ADMRenderHOA MacinRender::ADMRenderCommon
-        MacinRender::ADMDsp nlohmann_json::nlohmann_json libbw64)
+        MacinRender::ADMDsp nlohmann_json::nlohmann_json)
     target_include_directories(mr_adm_hoa_rust_tests PRIVATE src/adm_render_common)
     mr_adm_core_apply_warnings(mr_adm_hoa_rust_tests)
     add_test(NAME mr_adm_hoa_rust_tests COMMAND mr_adm_hoa_rust_tests)
@@ -1258,7 +1267,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
             MacinRender::ADMRenderHOA
             MacinRender::ADMIo
             MacinRender::ADMAudio
-            libbw64
     )
     mr_adm_core_apply_warnings(mr_adm_hoa_encode_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hoa_encode_fixture_tests)
@@ -1270,7 +1278,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMAudio
-            libbw64
     )
     mr_adm_core_apply_warnings(mr_adm_hoa_decode_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_hoa_decode_fixture_tests)
@@ -1288,7 +1295,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
             MacinRender::ADMRenderBinaural
             MacinRender::ADMIo
             MacinRender::ADMAudio
-            libbw64
      MacinRender::ADMDsp)
     # Test-only access to the non-installed binaural internal/probe headers.
 
@@ -1393,7 +1399,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMAudio
-            libbw64
             FLAC::FLAC
     )
     mr_adm_core_apply_warnings(mr_adm_flac_io_smoke_tests)
@@ -1412,7 +1417,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         PRIVATE
             MacinRender::ADMEngine
             MacinRender::ADMAudio
-            libbw64
     )
     mr_adm_core_apply_warnings(mr_adm_render_trim_fixture_tests)
     mr_adm_core_apply_static_analysis(mr_adm_render_trim_fixture_tests)
@@ -1433,6 +1437,9 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     add_executable(mr_adm_apac_smoke_tests tests/unit/apac_smoke_test.cpp)
     target_link_libraries(mr_adm_apac_smoke_tests PRIVATE MacinRender::ADMAudio)
+    if(APPLE)
+        target_link_libraries(mr_adm_apac_smoke_tests PRIVATE ${MR_ADM_AUDIOTOOLBOX_FW} "-framework CoreFoundation")
+    endif()
     # Pin the APAC stall-watchdog test to the real mradm subprocess helper (and
     # order the build after it). Skipped when the CLI is not built.
     if(TARGET mradm_exe)
@@ -1460,8 +1467,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
                 MacinRender::ADMRenderApple
                 MacinRender::ADMRenderCommon
                 MacinRender::ADMAudio
-                libbw64
         )
+        target_link_libraries(mr_adm_apple_smoke_tests PRIVATE ${MR_ADM_AUDIOTOOLBOX_FW})
         mr_adm_core_apply_warnings(mr_adm_apple_smoke_tests)
         mr_adm_core_apply_static_analysis(mr_adm_apple_smoke_tests)
         add_test(NAME mr_adm_apple_smoke_tests COMMAND mr_adm_apple_smoke_tests)
@@ -1475,7 +1482,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
         target_link_libraries(mr_adm_cli_smoke_tests
             PRIVATE
                 MacinRender::ADMIo
-                libbw64
         )
         mr_adm_core_apply_warnings(mr_adm_cli_smoke_tests)
         mr_adm_core_apply_static_analysis(mr_adm_cli_smoke_tests)
@@ -1494,7 +1500,7 @@ install(
 )
 
 # mr_adm_c_api and all targets that depend on FetchContent ADM/rendering
-# libraries (libbw64, libear and the Rust archive) cannot be in the export set until those
+# libraries (libear and the Rust archive) cannot be in the export set until those
 # libraries provide proper installed CMake configs. Install binaries and headers
 # without export; re-integrate post-M3.
 install(

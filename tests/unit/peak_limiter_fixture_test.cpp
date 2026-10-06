@@ -11,14 +11,13 @@
 #include <string>
 #include <vector>
 
-#include <bw64/bw64.hpp>
-
 #include "adm/audio_io.h"
 #include "adm/logging.h"
 #include "adm/peak.h"
 #include "adm/render.h"
 
 #include "../support/adm_fixture.h"
+#include "../support/wav_fixture.h"
 
 namespace {
 
@@ -49,9 +48,9 @@ void write_sine_wav(float amplitude, const std::filesystem::path& path) {
     constexpr uint32_t k_frames = k_sr; // 1 second
     constexpr float k_freq = 440.0F;
 
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{});
-    auto axml = std::make_shared<bw64::AxmlChunk>("");
-    auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);
+    auto chna = std::make_shared<fixture::WaveChna>(std::vector<fixture::WaveAudioId>{});
+    auto axml = std::make_shared<fixture::WaveAxml>("");
+    auto writer = fixture::write_wave(path.string(), 1U, k_sr, 24U, chna, axml);
 
     std::vector<float> samples(k_frames);
     for (uint32_t n = 0; n < k_frames; ++n) {
@@ -106,9 +105,10 @@ void write_objects_sine_wav(float amplitude, const std::filesystem::path& path) 
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
     const std::string uid_str = fixture::format_id(uid->get<fixture::AudioTrackUidId>());
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
-    auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
+    auto writer = fixture::write_wave(path.string(), 1U, k_sr, 24U, chna, axml);
 
     std::vector<float> samples(k_frames);
     for (uint32_t n = 0; n < k_frames; ++n) {
@@ -246,7 +246,7 @@ bool verify_peak_normalize_requires_peak_limit() {
 
 } // namespace
 
-int main() {
+int main() try {
     bool ok = true;
     ok &= verify_limiter_active();
     ok &= verify_limiter_noop();
@@ -258,4 +258,7 @@ int main() {
         return EXIT_SUCCESS;
     }
     return EXIT_FAILURE;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return 1;
 }

@@ -17,8 +17,6 @@
 #include <utility>
 #include <vector>
 
-#include <bw64/bw64.hpp>
-
 #include "adm/audio_io.h"
 #include "adm/io.h"
 #include "adm/render.h"
@@ -27,6 +25,7 @@
 #include "adm/semantic_policy.h"
 
 #include "../support/adm_fixture.h"
+#include "../support/wav_fixture.h"
 
 #ifdef _WIN32
 #include <process.h>
@@ -404,10 +403,11 @@ std::filesystem::path write_input_fixture(const std::shared_ptr<fixture::Documen
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
 
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
 
-    auto writer = bw64::writeFile(path.string(), 1U, sample_rate, 24U, chna, axml);
+    auto writer = fixture::write_wave(path.string(), 1U, sample_rate, 24U, chna, axml);
     std::vector<float> samples(frames, 0.5F);
     writer->write(samples.data(), frames);
 
@@ -2503,7 +2503,7 @@ bool verify_vbap_stream_gain_override() {
 }
 
 // NOLINTNEXTLINE(readability-function-size): linear smoke-test checklist.
-int main() {
+int main() try {
     bool ok = true;
 
     // ── Capabilities ──────────────────────────────────────────────────────────
@@ -2612,4 +2612,7 @@ int main() {
         return EXIT_SUCCESS;
     }
     return EXIT_FAILURE;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return 1;
 }

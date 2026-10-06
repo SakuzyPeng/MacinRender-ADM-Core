@@ -8,7 +8,7 @@
 //   - The sample values come from a 32-bit LCG. The integer is mapped to float by subtracting
 //     2^23 and dividing by 2^23. Both steps are exact in binary32 (|v| <= 2^23 converts
 //     exactly, and the divisor is a power of two), so no libm and no rounding choice is
-//     involved. libbw64 subsequently applies its fixed 24-bit quantisation; the generated
+//     involved. the independent fixture writer applies the legacy 24-bit quantisation; the generated
 //     container bytes are compared across platforms too.
 //   - Positions, extents and gains are exact decimals that round-trip through the ADM XML text.
 //
@@ -40,7 +40,7 @@
 #include <string_view>
 #include <vector>
 
-#include <bw64/bw64.hpp>
+#include "../support/wav_fixture.h"
 
 namespace {
 
@@ -273,28 +273,23 @@ void finish_doc(const std::shared_ptr<fixture::Document>& doc,
     return {doc, uid_strs};
 }
 
-[[nodiscard]] bool write_fixture(const BuiltDoc& built, const std::string& out_path, uint32_t seed) {
+void write_fixture(const BuiltDoc& built, const std::string& out_path, uint32_t seed) {
     const auto channels = static_cast<uint16_t>(built.uids.size());
 
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, built.doc);
 
-    std::vector<bw64::AudioId> ids;
+    std::vector<fixture::WaveAudioId> ids;
     ids.reserve(built.uids.size());
     for (std::size_t i = 0; i < built.uids.size(); ++i) {
         ids.emplace_back(static_cast<uint16_t>(i + 1U), built.uids[i], "", "");
     }
-    auto chna = std::make_shared<bw64::ChnaChunk>(ids);
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+    auto chna = std::make_shared<fixture::WaveChna>(ids);
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
 
-    auto writer = bw64::writeFile(out_path, channels, k_sample_rate, k_bit_depth, chna, axml);
-    if (!writer) {
-        std::cerr << "error: cannot write " << out_path << "\n";
-        return false;
-    }
+    auto writer = fixture::write_wave(out_path, channels, k_sample_rate, k_bit_depth, chna, axml);
     const auto samples = make_signal(channels, k_frames, seed);
     writer->write(samples.data(), k_frames);
-    return true;
 }
 
 void print_usage() {
@@ -305,7 +300,7 @@ void print_usage() {
 
 } // namespace
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv) try {
     const std::vector<std::string_view> args(argv, argv + argc);
     if (args.size() != 3) {
         print_usage();
@@ -340,10 +335,11 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    if (!write_fixture(built, out_path, seed)) {
-        return 1;
-    }
+    write_fixture(built, out_path, seed);
     std::cout << "wrote " << out_path << " kind=" << kind << " channels=" << built.uids.size() << " frames=" << k_frames
               << " rate=" << k_sample_rate << "\n";
     return 0;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return 1;
 }

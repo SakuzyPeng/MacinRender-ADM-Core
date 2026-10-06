@@ -12,7 +12,7 @@ It reads ADM BWF / BW64 and ordinary channel-based WAVE / RF64 / BW64 input, the
 
 ## Feature Overview
 
-- ADM scene import: reads BW64 ADM metadata through libbw64 / libadm and converts it into the project's own domain model.
+- ADM scene import: uses project-owned Rust `mradm-adm` for ADM metadata and `mradm-wav` for integer BW64 audio; container metadata orchestration and the domain model remain in C++.
 - Channel-bed input: maps known WAVE channel masks or constrained custom labels into a DirectSpeakers scene with explicit geometry.
 - Desktop workbench: an Avalonia GUI for batch rendering, per-object semantic editing, and realtime spatial monitoring.
 - Render backends: libear, SAF VBAP, Triple Balance, HOA encoder, HRTF binaural, and Apple AUSpatialMixer on macOS.

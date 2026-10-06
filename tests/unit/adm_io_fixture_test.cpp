@@ -21,7 +21,7 @@
 // libadm – used here only for constructing the fixture document
 
 // libbw64 – used here only for writing the fixture BW64 file
-#include <bw64/bw64.hpp>
+#include "../support/wav_fixture.h"
 
 namespace {
 
@@ -398,11 +398,12 @@ std::string with_programme_reference_screen(std::string xml) {
 std::filesystem::path write_fixture(const std::string& uid_str, const std::string& xml_str) {
     auto path = std::filesystem::temp_directory_path() / "mr_adm_fixture_test.wav";
 
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_str);
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_str);
 
     // Write an empty 1-channel 48 kHz file with CHNA and AXML chunks.
-    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+    auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
     // No audio samples needed; writer flushes on destruction.
     (void) writer;
 
@@ -534,9 +535,10 @@ bool verify_objects_blocks_fixture() {
     FileGuard guard2{path2};
 
     {
-        auto chna2 = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid2_str, "", "")});
-        auto axml2 = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc2));
-        auto writer2 = bw64::writeFile(path2.string(), 1U, 48000U, 24U, chna2, axml2);
+        auto chna2 = std::make_shared<fixture::WaveChna>(
+            std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid2_str, "", "")});
+        auto axml2 = std::make_shared<fixture::WaveAxml>(serialize_doc(doc2));
+        auto writer2 = fixture::write_wave(path2.string(), 1U, 48000U, 24U, chna2, axml2);
         (void) writer2;
     }
 
@@ -606,9 +608,10 @@ bool verify_object_lock_divergence_imported() {
     FileGuard guard{path};
 
     {
-        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
-        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        auto chna = std::make_shared<fixture::WaveChna>(
+            std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<fixture::WaveAxml>(serialize_doc(doc));
+        auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
         std::vector<float> silence(1U, 0.0F);
         writer->write(silence.data(), 1U);
     }
@@ -647,9 +650,10 @@ bool verify_object_divergence_defaults_imported() {
     FileGuard guard{path};
 
     {
-        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
-        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        auto chna = std::make_shared<fixture::WaveChna>(
+            std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<fixture::WaveAxml>(serialize_doc(doc));
+        auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
         std::vector<float> silence(1U, 0.0F);
         writer->write(silence.data(), 1U);
     }
@@ -685,9 +689,10 @@ bool verify_direct_speakers_blocks_fixture() {
     FileGuard guard3{path3};
 
     {
-        auto chna3 = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid3_str, "", "")});
-        auto axml3 = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc3));
-        auto writer3 = bw64::writeFile(path3.string(), 1U, 48000U, 24U, chna3, axml3);
+        auto chna3 = std::make_shared<fixture::WaveChna>(
+            std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid3_str, "", "")});
+        auto axml3 = std::make_shared<fixture::WaveAxml>(serialize_doc(doc3));
+        auto writer3 = fixture::write_wave(path3.string(), 1U, 48000U, 24U, chna3, axml3);
         (void) writer3;
     }
 
@@ -873,10 +878,10 @@ bool verify_mixed_blocks_fixture() {
     FileGuard guard{path};
 
     {
-        auto chna = std::make_shared<bw64::ChnaChunk>(
-            std::vector<bw64::AudioId>{bw64::AudioId(1, obj_uid_str, "", ""), bw64::AudioId(2, ds_uid_str, "", "")});
-        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
-        auto writer = bw64::writeFile(path.string(), 2U, 48000U, 24U, chna, axml);
+        auto chna = std::make_shared<fixture::WaveChna>(std::vector<fixture::WaveAudioId>{
+            fixture::WaveAudioId(1, obj_uid_str, "", ""), fixture::WaveAudioId(2, ds_uid_str, "", "")});
+        auto axml = std::make_shared<fixture::WaveAxml>(serialize_doc(doc));
+        auto writer = fixture::write_wave(path.string(), 2U, 48000U, 24U, chna, axml);
         (void) writer;
     }
 
@@ -1005,12 +1010,12 @@ bool verify_direct_speakers_pack_channels_are_track_scoped() {
     auto path = std::filesystem::temp_directory_path() / "mr_adm_io_ds_track_scoped.wav";
     FileGuard guard{path};
     {
-        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{
-            bw64::AudioId(1, upper_uid(left_uid_str), "", ""),
-            bw64::AudioId(2, upper_uid(right_uid_str), "", ""),
+        auto chna = std::make_shared<fixture::WaveChna>(std::vector<fixture::WaveAudioId>{
+            fixture::WaveAudioId(1, upper_uid(left_uid_str), "", ""),
+            fixture::WaveAudioId(2, upper_uid(right_uid_str), "", ""),
         });
-        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
-        auto writer = bw64::writeFile(path.string(), 2U, 48000U, 24U, chna, axml);
+        auto axml = std::make_shared<fixture::WaveAxml>(serialize_doc(doc));
+        auto writer = fixture::write_wave(path.string(), 2U, 48000U, 24U, chna, axml);
         std::vector<float> silence(2, 0.0F);
         writer->write(silence.data(), 1U);
     }
@@ -1215,9 +1220,10 @@ bool verify_programme_loudness_metadata_imported() {
     FileGuard guard{path};
 
     {
-        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
-        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        auto chna = std::make_shared<fixture::WaveChna>(
+            std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<fixture::WaveAxml>(serialize_doc(doc));
+        auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
         std::vector<float> silence(1, 0.0F);
         writer->write(silence.data(), 1U);
     }
@@ -1278,9 +1284,10 @@ bool verify_binaural_skipped_produces_import_warning() {
     FileGuard guard{path};
 
     {
-        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
-        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        auto chna = std::make_shared<fixture::WaveChna>(
+            std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<fixture::WaveAxml>(serialize_doc(doc));
+        auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
         (void) writer;
     }
 
@@ -1306,9 +1313,10 @@ bool verify_ds_lfe_channel_frequency_imported() {
     FileGuard guard{path};
 
     {
-        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
-        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        auto chna = std::make_shared<fixture::WaveChna>(
+            std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<fixture::WaveAxml>(serialize_doc(doc));
+        auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
         (void) writer;
     }
 
@@ -1405,9 +1413,10 @@ bool verify_content_metadata_imported() {
     FileGuard guard{path};
 
     {
-        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
-        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        auto chna = std::make_shared<fixture::WaveChna>(
+            std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<fixture::WaveAxml>(serialize_doc(doc));
+        auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
         std::vector<float> silence(1, 0.0F);
         writer->write(silence.data(), 1U);
     }
@@ -1480,10 +1489,10 @@ bool verify_reference_screen_flag_imported() {
         auto path = std::filesystem::temp_directory_path() / "mr_adm_io_no_refscreen.wav";
         FileGuard guard{path};
         {
-            auto chna =
-                std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-            auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
-            auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+            auto chna = std::make_shared<fixture::WaveChna>(
+                std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+            auto axml = std::make_shared<fixture::WaveAxml>(serialize_doc(doc));
+            auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
             (void) writer;
         }
         auto result = mradm::io::import_scene(path.string());
@@ -1501,10 +1510,10 @@ bool verify_reference_screen_flag_imported() {
         auto path = std::filesystem::temp_directory_path() / "mr_adm_io_refscreen.wav";
         FileGuard guard{path};
         {
-            auto chna =
-                std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-            auto axml = std::make_shared<bw64::AxmlChunk>(with_programme_reference_screen(serialize_doc(doc)));
-            auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+            auto chna = std::make_shared<fixture::WaveChna>(
+                std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+            auto axml = std::make_shared<fixture::WaveAxml>(with_programme_reference_screen(serialize_doc(doc)));
+            auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
             (void) writer;
         }
         auto result = mradm::io::import_scene(path.string());
@@ -1588,9 +1597,10 @@ bool verify_programme_language_labels_time_imported() {
     FileGuard guard{path};
 
     {
-        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
-        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        auto chna = std::make_shared<fixture::WaveChna>(
+            std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<fixture::WaveAxml>(serialize_doc(doc));
+        auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
         std::vector<float> silence(48000, 0.0F);
         writer->write(silence.data(), 48000U);
     }
@@ -1683,9 +1693,10 @@ bool verify_object_labels_importance_dialogue_imported() {
     FileGuard guard{path};
 
     {
-        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-        auto axml = std::make_shared<bw64::AxmlChunk>(serialize_doc(doc));
-        auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+        auto chna = std::make_shared<fixture::WaveChna>(
+            std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+        auto axml = std::make_shared<fixture::WaveAxml>(serialize_doc(doc));
+        auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
         std::vector<float> silence(1, 0.0F);
         writer->write(silence.data(), 1U);
     }
@@ -1715,7 +1726,7 @@ bool verify_object_labels_importance_dialogue_imported() {
 
 } // namespace
 
-int main() {
+int main() try {
     bool ok = true;
     ok &= verify_minimal_fixture();
     ok &= verify_object_semantic_provenance();
@@ -1741,4 +1752,7 @@ int main() {
         return EXIT_SUCCESS;
     }
     return EXIT_FAILURE;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return 1;
 }

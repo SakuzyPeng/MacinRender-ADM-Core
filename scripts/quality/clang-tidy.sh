@@ -47,6 +47,13 @@ fi
 # as a TU on the macOS quality host; the windows-debug CI build verifies it instead.
 files=()
 while IFS= read -r -d '' file; do
+    if [[ "$file" == */tests/reference/libbw64/* ]]; then
+        if ! grep -q '^MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
+            continue
+        fi
+        files+=("$file")
+        continue
+    fi
     if [[ "$file" == */tests/reference/libadm/* ]]; then
         if ! grep -q '^MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
             continue

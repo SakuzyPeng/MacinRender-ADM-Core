@@ -20,7 +20,7 @@ def main():
     for block in re.split(r'^\[\[package\]\]\s*$', lock, flags=re.M)[1:]:
         name = re.search(r'^name = "([^"]+)"$', block, re.M).group(1)
         version = re.search(r'^version = "([^"]+)"$', block, re.M).group(1)
-        if name not in {'mradm-dsp', 'mradm-adm', 'mradm-ffi'}:
+        if name not in {'mradm-dsp', 'mradm-adm', 'mradm-wav', 'mradm-ffi'}:
             expected.add((name, version))
     actual = {(c['source']['package'], c['version']) for c in _common.load_components()
               if c['source']['type'] == 'cargo'}

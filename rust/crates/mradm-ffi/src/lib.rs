@@ -25,6 +25,7 @@ mod spreader;
 #[cfg(test)]
 mod test_alloc;
 mod triple_balance;
+mod wav;
 
 /// Error codes follow the project's public ErrorCode values. Messages belong to
 /// the caller, making error reporting reentrant without thread-local allocation.

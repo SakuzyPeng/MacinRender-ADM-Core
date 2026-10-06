@@ -22,7 +22,6 @@
 #include "dsp.h"
 // clang-format on
 
-#include <bw64/bw64.hpp>
 #include <fmt/format.h>
 
 #include "adm/audio_io.h"
