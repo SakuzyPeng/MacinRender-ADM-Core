@@ -4,6 +4,9 @@
 /rust/vendor/sofar/** -text -whitespace
 *.f32le binary
 *.sofa binary
+# Build provenance compares these exact bytes across all native checkouts.
+/rust/Cargo.lock text eol=lf
+/rust/rust-toolchain.toml text eol=lf
 # Frozen migration references are pinned by SHA-256 in tests/reference/retention.json.
 /tests/reference/** -text
 
