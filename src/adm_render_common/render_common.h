@@ -281,35 +281,6 @@ struct PreparedObjectBlock {
 // Shared verbatim by the apple, binaural, and HOA extent paths — the sample values and
 // weights are bit-identical across them; only the per-backend geometry (vector normalise /
 // direction / output) differs, so each backend keeps its own tangent-frame loop.
-struct ExtentDiskSample {
-    float x{0.0F};
-    float y{0.0F};
-    float weight{0.0F}; // linear gain weight (active weights sum to 1)
-};
-
-inline constexpr float k_extent_disk_outer_weight = 1.0F / 12.0F; // outer ring total = 2/3
-inline constexpr float k_extent_disk_inner_weight = 1.0F / 24.0F; // inner ring total = 1/3
-
-inline constexpr std::array<ExtentDiskSample, 17> k_extent_disk_samples{{
-    {0.0F, 0.0F, 0.0F},
-    {1.0F, 0.0F, k_extent_disk_outer_weight},
-    {-1.0F, 0.0F, k_extent_disk_outer_weight},
-    {0.0F, 1.0F, k_extent_disk_outer_weight},
-    {0.0F, -1.0F, k_extent_disk_outer_weight},
-    {0.70710678F, 0.70710678F, k_extent_disk_outer_weight},
-    {-0.70710678F, 0.70710678F, k_extent_disk_outer_weight},
-    {0.70710678F, -0.70710678F, k_extent_disk_outer_weight},
-    {-0.70710678F, -0.70710678F, k_extent_disk_outer_weight},
-    {0.5F, 0.0F, k_extent_disk_inner_weight},
-    {-0.5F, 0.0F, k_extent_disk_inner_weight},
-    {0.0F, 0.5F, k_extent_disk_inner_weight},
-    {0.0F, -0.5F, k_extent_disk_inner_weight},
-    {0.35355339F, 0.35355339F, k_extent_disk_inner_weight},
-    {-0.35355339F, 0.35355339F, k_extent_disk_inner_weight},
-    {0.35355339F, -0.35355339F, k_extent_disk_inner_weight},
-    {-0.35355339F, -0.35355339F, k_extent_disk_inner_weight},
-}};
-
 // Disk half-angle radii (degrees) for an object's extent. width*60, height*45, depth*20,
 // with a distance-based spread scale (nearer sources subtend a wider angle). distance is
 // supplied by the caller (each backend computes it the same way). Bit-identical to the

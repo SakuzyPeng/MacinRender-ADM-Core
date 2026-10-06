@@ -1,6 +1,4 @@
 // Frozen from 726db31. Test only.
-#include "live_binaural_renderer.h"
-
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -23,6 +21,8 @@
 #include <utility>
 #include <vector>
 
+#include "live_binaural_renderer.h"
+
 // Private project DSP complex type.
 
 #include <fmt/format.h>
@@ -31,9 +31,9 @@
 
 #include "binaural_internal.h"
 #include "dsp.h"
-#include "spatial.h"
 #include "live_binaural_convolver.h"
 #include "resampler.h"
+#include "spatial.h"
 
 namespace scene_live_reference {
 using namespace mradm;
@@ -892,4 +892,4 @@ Result<std::unique_ptr<ILiveSceneRenderer>> create_live_binaural_renderer(const 
     return result;
 }
 
-} // namespace mradm::live_scene
+} // namespace scene_live_reference

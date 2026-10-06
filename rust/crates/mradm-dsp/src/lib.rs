@@ -15,6 +15,7 @@ pub mod hoa;
 pub mod hptf;
 pub mod hrtf;
 pub mod hrtf_filters;
+pub mod live_binaural;
 pub mod live_vbap;
 pub mod meter;
 pub mod mixing;

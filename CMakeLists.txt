@@ -857,6 +857,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_stereo_peak_guard_tests COMMAND mr_adm_stereo_peak_guard_tests)
     set_tests_properties(mr_adm_stereo_peak_guard_tests PROPERTIES TIMEOUT 30)
 
+    add_executable(mr_adm_live_binaural_rust_tests tests/unit/live_binaural_rust_test.cpp)
+    target_link_libraries(mr_adm_live_binaural_rust_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+    target_include_directories(mr_adm_live_binaural_rust_tests PRIVATE src/adm_render_binaural)
+    mr_adm_core_apply_warnings(mr_adm_live_binaural_rust_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_live_binaural_rust_tests)
+    add_test(NAME mr_adm_live_binaural_rust_tests COMMAND mr_adm_live_binaural_rust_tests)
+
     add_executable(mr_adm_scene_numeric_rust_tests tests/unit/scene_numeric_rust_test.cpp)
     target_link_libraries(mr_adm_scene_numeric_rust_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
     mr_adm_core_apply_warnings(mr_adm_scene_numeric_rust_tests)

@@ -155,7 +155,7 @@ pub unsafe extern "C" fn mradm_dsp_hrtf_filters_create(
     taps: usize,
     fft_length: usize,
     cache_magnitudes: u32,
-    out: *mut *mut Filters,
+    out: *mut *mut Arc<Filters>,
     message: *mut u8,
     capacity: usize,
 ) -> i32 {
@@ -180,18 +180,19 @@ pub unsafe extern "C" fn mradm_dsp_hrtf_filters_create(
                 fft_length,
                 cache_magnitudes != 0,
             )
+            .map(Arc::new)
         })
     })
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mradm_dsp_hrtf_filters_destroy(value: *mut Filters) {
+pub unsafe extern "C" fn mradm_dsp_hrtf_filters_destroy(value: *mut Arc<Filters>) {
     unsafe {
         destroy(value);
     }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_hrtf_filters_info(
-    value: *const Filters,
+    value: *const Arc<Filters>,
     out: *mut FilterInfo,
     message: *mut u8,
     capacity: usize,
@@ -211,7 +212,7 @@ pub unsafe extern "C" fn mradm_dsp_hrtf_filters_info(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_hrtf_spectra_copy(
-    value: *const Filters,
+    value: *const Arc<Filters>,
     out: *mut f32,
     length: usize,
     message: *mut u8,
@@ -227,7 +228,7 @@ pub unsafe extern "C" fn mradm_dsp_hrtf_spectra_copy(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_hrtf_query(
-    value: *const Filters,
+    value: *const Arc<Filters>,
     azimuth: f32,
     elevation: f32,
     mode: u32,

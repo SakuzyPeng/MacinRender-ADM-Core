@@ -1,0 +1,123 @@
+{
+  "status": "pending_final_ci",
+  "baseline_commit": "726db31277f450cfa9c0cb5f6e40bdb539f42154",
+  "implementation_commits": [
+    "08113fd",
+    "a1b2e01"
+  ],
+  "validated_source_commit": null,
+  "contract": {
+    "pcm_tolerance": "2e-6 + 2e-6 * abs(reference)",
+    "cross_platform_bit_identity": false,
+    "performance_claim": false,
+    "atomicity": "parameter and semantic rejection; excludes panic/OOM/internal bugs and external diagnostic callback exceptions",
+    "realtime_scope": "prepared Rust kernel/FFI processing, preflight, reset and rejection; C++ worker preparation may allocate"
+  },
+  "native": {
+    "macos": {
+      "architecture": "arm64",
+      "debug_ctest": {
+        "passed": 66,
+        "failed": 0
+      },
+      "release_focused_ctest": {
+        "passed": 19,
+        "failed": 0
+      },
+      "configuration": {
+        "sofa": true,
+        "iamf": false,
+        "strict_fp": false
+      },
+      "comparisons": {
+        "scene": {
+          "spatial": {
+            "compared": 47802,
+            "max_absolute_error": 6.103515625e-05
+          },
+          "transitions": {
+            "compared": 3166080,
+            "max_absolute_error": 1.1920928955078125e-07
+          },
+          "failures": 0
+        },
+        "binaural": {
+          "compared": 59829,
+          "max_absolute_error": 0,
+          "failures": 0
+        }
+      },
+      "exports": {
+        "public_count": 139,
+        "baseline_count": 139,
+        "matches_baseline": true,
+        "private_rust_exports": [],
+        "other_exports": []
+      },
+      "installed_core_consumer": "passed"
+    },
+    "windows": {
+      "architecture": "x64",
+      "canonical_release_ctest": {
+        "passed": 65,
+        "failed": 0
+      },
+      "configuration": {
+        "sofa": false,
+        "iamf": false,
+        "strict_fp": false
+      },
+      "clean_checkout": false,
+      "git_head": "a1bd5dcf4598eea21b3025c09bfcac8243e649dc",
+      "comparisons": {
+        "scene": {
+          "spatial": {
+            "compared": 47802,
+            "max_absolute_error": 0
+          },
+          "transitions": {
+            "compared": 3166080,
+            "max_absolute_error": 0
+          },
+          "failures": 0
+        },
+        "binaural": {
+          "compared": 59829,
+          "max_absolute_error": 0,
+          "failures": 0
+        }
+      },
+      "exports": {
+        "public_count": 139,
+        "matches_baseline": true,
+        "private_rust_exports": [],
+        "total_exports": 2123
+      }
+    }
+  },
+  "rust_release": {
+    "passed": 164,
+    "failed": 0,
+    "ignored": 1,
+    "ignored_case": "existing optional physical >4 GiB WAVE test"
+  },
+  "quality": {
+    "rust_fmt_clippy": "passed",
+    "changed_cpp": "passed; ten existing Apple advisories",
+    "licenses_sbom": "passed"
+  },
+  "ci": {
+    "status": "pending"
+  },
+  "frozen_references": {
+    "tests/reference/scene_numeric/transitions.h": "a731229aae869b6a981bdea8d366b8fa0a8700d4bbac9ca5861f41b2153fbedf",
+    "tests/reference/scene_numeric/provenance.json": "7d99d93e3122d5f36b1ebb35c060ed65a3285e014c3987a7df06abbaec0286fd",
+    "tests/reference/scene_numeric/spatial.h": "cb524128112bad622c36052d66a572c9c0e5d12a24e56e6cb88d3003a77cd5ad",
+    "tests/reference/scene_numeric/live_binaural.h": "ed2504fdcceb52ce63588b4295dd500df0abaf71f986931e64809c6875f4ef45"
+  },
+  "source_sha256": {},
+  "preserved_parallel_commit": {
+    "commit": "a7d0e7412deecb40c1c057941bcde09a4f207a9f",
+    "change": "Triple Balance -> ADMAudio link addition, independently committed during shared-workspace migration"
+  }
+}

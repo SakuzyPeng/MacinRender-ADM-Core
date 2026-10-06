@@ -368,6 +368,8 @@ Monitor 后端切换淡化、seek 过渡及 Peak/RMS 的数值状态也由 Rust 
 
 Live Scene VBAP 的混音与独立声像/电平渐变状态也迁入 Rust；C++ 在整帧准备成功后提交，参数或语义错误保留输出和历史。详见 [Rust Live VBAP 迁移](docs/architecture/RUST_LIVE_VBAP_MIGRATION.md)。
 
+Scene 外层过渡、共享空间数学及 Live 双耳完整数值状态也迁入 Rust；双耳新增整帧预检查，参数或语义错误保留输出与历史。见 [Rust Scene 数值迁移](docs/architecture/RUST_SCENE_NUMERIC_MIGRATION.md)。
+
 系统依赖构建需要另备 Corrosion 0.6.1、Rust 工具链和锁定的 Cargo 依赖缓存：
 
 ```bash

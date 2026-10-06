@@ -47,22 +47,37 @@ SceneDirectionVector direction_vector_from_position(const SceneBlockPosition& po
     const auto p = scene_position_to_polar(pos);
     return direction_vector_from_polar(p.azimuth, p.elevation);
 }
-float direction_distance(const SceneDirectionVector& a, const SceneDirectionVector& b) {
-    return dsp::scene_math<6, 1>(3U, {a.x, a.y, a.z, b.x, b.y, b.z})[0];
+float direction_distance(const SceneDirectionVector& lhs, const SceneDirectionVector& rhs) {
+    return dsp::scene_math<6, 1>(3U, {lhs.x, lhs.y, lhs.z, rhs.x, rhs.y, rhs.z})[0];
 }
 std::optional<size_t> nearest_non_lfe_speaker_index(const SceneBlockPosition& pos,
                                                     const std::vector<SceneOutputSpeaker>& speakers) {
-    std::vector<MradmSceneSpeaker> numeric;
-    numeric.reserve(speakers.size());
-    for (const auto& s : speakers) {
-        numeric.push_back({s.azimuth, s.elevation, s.is_lfe ? 1U : 0U});
-    }
+    std::array<MradmSceneSpeaker, 32> numeric{};
     const auto input =
         pos.cartesian ? std::array{pos.x, pos.y, pos.z} : std::array{pos.azimuth, pos.elevation, pos.distance};
-    size_t index = 0;
-    float distance = 0;
-    dsp::scene_check(mradm_dsp_scene_nearest(
-        input.data(), input.size(), pos.cartesian ? 1U : 0U, numeric.data(), numeric.size(), &index, &distance));
+    size_t index = std::numeric_limits<size_t>::max();
+    float best = std::numeric_limits<float>::max();
+    for (size_t offset = 0; offset < speakers.size();) {
+        const size_t count = std::min(numeric.size(), speakers.size() - offset);
+        for (size_t i = 0; i < count; ++i) {
+            const auto& speaker = speakers[offset + i];
+            numeric.at(i) = {speaker.azimuth, speaker.elevation, speaker.is_lfe ? 1U : 0U};
+        }
+        size_t candidate = std::numeric_limits<size_t>::max();
+        float distance = std::numeric_limits<float>::max();
+        dsp::scene_check(mradm_dsp_scene_nearest(input.data(),
+                                                 input.size(),
+                                                 (pos.cartesian ? 1U : 0U) + dsp::scene_cpp_contract,
+                                                 numeric.data(),
+                                                 count,
+                                                 &candidate,
+                                                 &distance));
+        if (distance < best) {
+            best = distance;
+            index = offset + candidate;
+        }
+        offset += count;
+    }
     return index == std::numeric_limits<size_t>::max() ? std::nullopt : std::optional<size_t>{index};
 }
 SceneObjectBlock apply_channel_lock(const SceneObjectBlock& block, const std::vector<SceneOutputSpeaker>& speakers) {
@@ -110,10 +125,10 @@ std::vector<SceneObjectBlock> expand_object_divergence(const SceneObjectBlock& b
     result.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         auto source = base;
-        source.position.azimuth = points[i].azimuth;
-        source.position.elevation = points[i].elevation;
-        source.gain = points[i].weight;
-        result.push_back(std::move(source));
+        source.position.azimuth = points.at(i).azimuth;
+        source.position.elevation = points.at(i).elevation;
+        source.gain = points.at(i).weight;
+        result.push_back(source);
     }
     return result;
 }

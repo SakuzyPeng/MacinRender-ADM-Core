@@ -60,7 +60,7 @@ orientation(std::span<const std::byte> data, std::size_t offset, bool quaternion
     const size_t count = quaternion ? 4U : 3U;
     std::array<float, 4> input{};
     for (size_t i = 0; i < count; ++i) {
-        input[i] = static_cast<float>(read_float(data, offset + i * 4U));
+        input.at(i) = static_cast<float>(read_float(data, offset + (i * 4U)));
     }
     std::array<float, 7> result{};
     if (mradm_dsp_scene_pose(input.data(), count, result.data(), result.size(), quaternion ? 1U : 0U) != 0) {

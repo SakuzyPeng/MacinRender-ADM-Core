@@ -5,13 +5,17 @@
 #include <cmath>
 #include <numbers>
 #include <optional>
+#include <span>
 #include <vector>
-#include "adm/scene.h"
+
+#include "adm/head_tracking.h"
 #include "adm/options.h"
+#include "adm/scene.h"
 namespace scene_numeric_reference {
 using namespace mradm;
 // Apply a ScenePositionOffset to a block position.  Returns the modified copy.
-[[nodiscard]] inline SceneBlockPosition legacy_apply_position_offset(SceneBlockPosition pos, const ScenePositionOffset& off) {
+[[nodiscard]] inline SceneBlockPosition legacy_apply_position_offset(SceneBlockPosition pos,
+                                                                     const ScenePositionOffset& off) {
     if (!pos.cartesian && !off.cartesian) {
         pos.azimuth += off.azimuth;
         pos.elevation = std::clamp(pos.elevation + off.elevation, -90.0F, 90.0F);
@@ -96,7 +100,7 @@ legacy_nearest_non_lfe_speaker_index(const SceneBlockPosition& pos, const std::v
 }
 
 [[nodiscard]] inline SceneObjectBlock legacy_apply_channel_lock(const SceneObjectBlock& block,
-                                                         const std::vector<SceneOutputSpeaker>& speakers) {
+                                                                const std::vector<SceneOutputSpeaker>& speakers) {
     if (!block.channel_lock) {
         return block;
     }
@@ -193,8 +197,15 @@ inline constexpr std::array<ExtentDiskSample, 17> k_extent_disk_samples{{
 }};
 
 
-struct ExtentRadii { float width_radius; float height_radius; };
-struct ExtentDirection { float azimuth; float elevation; float weight; };
+struct ExtentRadii {
+    float width_radius;
+    float height_radius;
+};
+struct ExtentDirection {
+    float azimuth;
+    float elevation;
+    float weight;
+};
 [[nodiscard]] SceneDirectionVector vec_cross(const SceneDirectionVector& a, const SceneDirectionVector& b) noexcept {
     return {(a.y * b.z) - (a.z * b.y), (a.z * b.x) - (a.x * b.z), (a.x * b.y) - (a.y * b.x)};
 }
@@ -384,9 +395,18 @@ struct Vec3 {
 }
 
 
-struct ExtentSource { float azimuth; float elevation; float gain; size_t slot; };
-constexpr size_t k_binaural_extent_center_slot=0;constexpr size_t k_binaural_extent_slots=17;
-std::pair<float,float> block_position(const SceneObjectBlock& b){const auto p=legacy_scene_position_to_polar(b.position);return {p.azimuth,p.elevation};}
+struct ExtentSource {
+    float azimuth;
+    float elevation;
+    float gain;
+    size_t slot;
+};
+constexpr size_t k_binaural_extent_center_slot = 0;
+constexpr size_t k_binaural_extent_slots = 17;
+std::pair<float, float> block_position(const SceneObjectBlock& b) {
+    const auto p = legacy_scene_position_to_polar(b.position);
+    return {p.azimuth, p.elevation};
+}
 [[nodiscard]] std::vector<ExtentSource>
 expand_binaural_extent(const SceneObjectBlock& block, float source_gain, BinauralSpreadMode spread_mode) {
     if (spread_mode == BinauralSpreadMode::none || spread_mode == BinauralSpreadMode::saf_spreader) {
@@ -394,8 +414,7 @@ expand_binaural_extent(const SceneObjectBlock& block, float source_gain, Binaura
         return {{az, el, source_gain, k_binaural_extent_center_slot}};
     }
     const float distance = distance_from_position(block.position);
-    const auto [width_radius, height_radius] =
-        extent_disk_radii(block.width, block.height, block.depth, distance);
+    const auto [width_radius, height_radius] = extent_disk_radii(block.width, block.height, block.depth, distance);
     if (width_radius <= 1.0e-4F && height_radius <= 1.0e-4F) {
         auto [az, el] = block_position(block);
         return {{az, el, source_gain, k_binaural_extent_center_slot}};
@@ -494,4 +513,60 @@ struct HeadQuat {
 // Set the four per-source SpatialMixer parameters for one input bus, short-circuiting on
 // the first failure so a bad parameter set surfaces instead of silently continuing.
 
+
+// Frozen PoseBridge numeric conversion; binary packet parsing is intentionally outside this reference.
+std::optional<HeadTrackingOrientation> legacy_pose(std::span<const float> input, bool quaternion) {
+    const std::size_t count = quaternion ? 4U : 3U;
+    std::array<double, 4> q{};
+    for (std::size_t i = 0; i < count; ++i) {
+        q.at(i) = static_cast<double>(input[i]);
+        if (!std::isfinite(q.at(i))) {
+            return std::nullopt;
+        }
+    }
+    if (!quaternion) {
+        // Fold before trig so finite but very large float32 angles do not lose all
+        // useful range reduction precision or overflow an intermediate conversion.
+        constexpr double k_half_radians = std::numbers::pi_v<double> / 360.0;
+        const double yaw = std::remainder(q[0], 360.0) * k_half_radians;
+        const double pitch = std::remainder(q[1], 360.0) * k_half_radians;
+        const double roll = std::remainder(q[2], 360.0) * k_half_radians;
+        const double cy = std::cos(yaw);
+        const double sy = std::sin(yaw);
+        const double cp = std::cos(pitch);
+        const double sp = std::sin(pitch);
+        const double cr = std::cos(roll);
+        const double sr = std::sin(roll);
+        q = {(cy * sp * cr) + (sy * cp * sr),
+             (sy * cp * cr) - (cy * sp * sr),
+             (cy * cp * sr) - (sy * sp * cr),
+             (cy * cp * cr) + (sy * sp * sr)};
+    }
+    const double norm_squared = (q[0] * q[0]) + (q[1] * q[1]) + (q[2] * q[2]) + (q[3] * q[3]);
+    if (norm_squared < 1.0e-12) {
+        return std::nullopt;
+    }
+    const double norm = std::sqrt(norm_squared);
+    std::ranges::transform(q, q.begin(), [norm](double component) { return component / norm; });
+    const auto [x, y, z, w] = q;
+    constexpr double k_degrees = 180.0 / std::numbers::pi_v<double>;
+    HeadTrackingOrientation pose;
+    std::ranges::transform(
+        q, pose.quaternion_xyzw.begin(), [](double component) { return static_cast<float>(component); });
+    const double sin_pitch = std::clamp(2.0 * ((w * x) - (y * z)), -1.0, 1.0);
+    double yaw = 0.0;
+    double roll = 0.0;
+    if (std::abs(sin_pitch) >= 1.0 - 1e-12) {
+        // At either pole yaw and roll are coupled. Choose zero roll and retain
+        // their combined heading instead of evaluating two unstable atan2(0, 0).
+        yaw = std::atan2(2.0 * ((w * y) - (x * z)), 1.0 - (2.0 * ((y * y) + (z * z))));
+    } else {
+        yaw = std::atan2(2.0 * ((x * z) + (w * y)), 1.0 - (2.0 * ((x * x) + (y * y))));
+        roll = std::atan2(2.0 * ((x * y) + (w * z)), 1.0 - (2.0 * ((x * x) + (z * z))));
+    }
+    pose.euler_deg = {static_cast<float>(yaw * k_degrees),
+                      static_cast<float>(std::asin(sin_pitch) * k_degrees),
+                      static_cast<float>(roll * k_degrees)};
+    return pose;
 }
+} // namespace scene_numeric_reference

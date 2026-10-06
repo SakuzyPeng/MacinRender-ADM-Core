@@ -560,7 +560,7 @@ extent_disk_cloud(const SceneBlockPosition& position, float width, float height,
     std::vector<ExtentDirection> result;
     result.reserve(count);
     for (size_t i = 0; i < count; ++i) {
-        result.push_back({points[i].azimuth, points[i].elevation, points[i].weight});
+        result.push_back({points.at(i).azimuth, points.at(i).elevation, points.at(i).weight});
     }
     return result;
 }

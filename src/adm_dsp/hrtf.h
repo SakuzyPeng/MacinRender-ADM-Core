@@ -97,6 +97,7 @@ class HrtfFilters final {
         }
         return result;
     }
+    [[nodiscard]] const void* get() const noexcept { return handle_.get(); }
     [[nodiscard]] std::size_t output_size() const noexcept { return info_.output_length / 2U; }
     [[nodiscard]] std::size_t bytes() const noexcept { return info_.storage_bytes; }
     [[nodiscard]] Result<void> query(float azimuth,
