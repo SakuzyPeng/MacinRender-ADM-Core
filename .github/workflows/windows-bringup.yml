@@ -116,7 +116,6 @@ jobs:
           Copy-Item ".\build\windows\mradm.exe" -Destination $bin -Force
 
           foreach ($dir in @(
-            (Join-Path $env:OPENBLAS_ROOT "bin"),
             (Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows\bin"),
             ".\build\windows"
           )) {
@@ -143,8 +142,7 @@ jobs:
             "build_type=MinSizeRel",
             "compiler=MSVC",
             "flac_provider=VENDORED",
-            "opus_provider=VENDORED",
-            "saf_performance_lib=SAF_USE_OPEN_BLAS_AND_LAPACKE"
+            "opus_provider=VENDORED"
           ) | Set-Content -Path (Join-Path $root "BUILD_INFO.txt") -Encoding utf8
 
       - name: Upload Windows CLI artifact

@@ -30,11 +30,12 @@ as listening or runtime evidence.
 Windows validation runs on the maintainer's Windows test box via a canonical MSVC/Ninja recipe;
 the machine-specific script paths live in private local notes (`local/`, not tracked). The
 canonical build tree is `build\win-canon`, configured with `cl`, vendored FLAC/Opus, IAMF/SOFA
-off, and prebuilt OpenBLAS headers/libraries plus the existing FetchContent cache. For a clean
+off, plus the existing FetchContent cache. Production builds no longer depend on OpenBLAS or
+LAPACKE (the used SAF subset now runs in Rust). For a clean
 Windows full build, delete only `build\win-canon` and re-run the canonical recipe.
 
 Do not use the alternate `win-debug` / `win-msvc` build trees as the default validation path for
-this repo: they can hit unrelated SAF/OpenBLAS or MSVC complex-header issues.
+this repo: they can hit unrelated MSVC complex-header issues.
 
 ## Coding Style & Naming Conventions
 

@@ -127,7 +127,7 @@ echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache curl file patchelf desktop-file-utils libboost-all-dev libopenblas-dev liblapacke-dev
+sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache curl file patchelf desktop-file-utils libboost-all-dev
 sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
 ```
 
