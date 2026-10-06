@@ -15,14 +15,13 @@
 #include <utility>
 #include <vector>
 
-#include <bw64/bw64.hpp>
-
 #include "adm/audio_io.h"
 #include "adm/io.h"
 #include "adm/render.h"
 #include "adm/render_hoa.h"
 
 #include "../support/adm_fixture.h"
+#include "../support/wav_fixture.h"
 
 namespace {
 
@@ -128,9 +127,10 @@ std::filesystem::path write_fixture(const std::shared_ptr<fixture::Document>& do
     auto path = std::filesystem::temp_directory_path() / "mr_hoa_enc_in.wav";
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
-    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
+    auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
     std::vector<float> samples(k_frames, 1.0F);
     writer->write(samples.data(), k_frames);
     return path;
@@ -143,9 +143,10 @@ std::filesystem::path write_fixture_samples(const std::shared_ptr<fixture::Docum
     auto path = std::filesystem::temp_directory_path() / ("mr_hoa_enc_" + suffix + ".wav");
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
-    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
+    auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
     writer->write(samples.data(), static_cast<uint32_t>(samples.size()));
     return path;
 }
@@ -945,9 +946,10 @@ bool verify_lfe_metrics_separation() {
     {
         std::ostringstream xml_buf;
         fixture::write_xml(xml_buf, doc);
-        auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
-        auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
-        auto writer = bw64::writeFile(in_path.string(), 1U, 48000U, 24U, chna, axml);
+        auto chna = std::make_shared<fixture::WaveChna>(
+            std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
+        auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
+        auto writer = fixture::write_wave(in_path.string(), 1U, 48000U, 24U, chna, axml);
         std::vector<float> samples(k_lfe_frames, k_lfe_amp);
         writer->write(samples.data(), k_lfe_frames);
     }
@@ -1236,7 +1238,7 @@ bool verify_hoa_stream_gain_override() {
 
 } // namespace
 
-int main() {
+int main() try {
     bool ok = true;
 
     // ── Capabilities ──────────────────────────────────────────────────────────
@@ -1277,4 +1279,7 @@ int main() {
         return EXIT_SUCCESS;
     }
     return EXIT_FAILURE;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return 1;
 }

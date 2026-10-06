@@ -22,10 +22,11 @@
 
 #include <FLAC/callback.h>
 #include <FLAC/metadata.h>
-#include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
 #include "adm/render.h"
+
+#include "../support/wav_fixture.h"
 
 namespace {
 
@@ -126,10 +127,11 @@ std::filesystem::path write_render_fixture() {
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
 
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
 
-    auto writer = bw64::writeFile(path.string(), k_ch, k_sr, 24U, chna, axml);
+    auto writer = fixture::write_wave(path.string(), k_ch, k_sr, 24U, chna, axml);
     std::vector<float> samples(k_frames, 0.25F);
     writer->write(samples.data(), k_frames);
     return path;

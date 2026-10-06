@@ -1,0 +1,331 @@
+{
+  "schema": 1,
+  "date": "2026-10-05",
+  "baseline_commit": "b3de01d09838c27498847a568e6d21bb713a011d",
+  "rust_toolchain": "1.98.0",
+  "legacy_libbw64": "0.10.0",
+  "macos": {
+    "architecture": "arm64",
+    "default_debug_ctest": {
+      "passed": 64,
+      "total": 64
+    },
+    "reference_debug_ctest": {
+      "passed": 66,
+      "total": 66
+    },
+    "release_render_cases": [
+      {
+        "case": "objects-point-ear-f32",
+        "pcm_equal": true,
+        "format_equal": true,
+        "pcm_bytes": 172800,
+        "pcm_sha256": "11fdc06cee1d8c2e6b29391c0205a9e423cffce9c003da73355a536b903046c4",
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "ear"
+      },
+      {
+        "case": "objects-point-ear-i16",
+        "pcm_equal": true,
+        "format_equal": true,
+        "pcm_bytes": 86400,
+        "pcm_sha256": "8ecf4b5859e74238aa8ce168b5aa1b01e9941c49f540a193dbfe1cd0430c9661",
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "ear"
+      },
+      {
+        "case": "objects-point-ear-i24",
+        "pcm_equal": true,
+        "format_equal": true,
+        "pcm_bytes": 129600,
+        "pcm_sha256": "9e8872fa582b6b701aff2617a297020b0713ea73ddabb0d23f3606eb2169cd9f",
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "ear"
+      },
+      {
+        "case": "objects-extent-saf-f32",
+        "pcm_equal": true,
+        "format_equal": true,
+        "pcm_bytes": 172800,
+        "pcm_sha256": "f5ca917f3bf1a8fab27cde97fe7d87f4e1eb83c66f1f8190f1e535f206399059",
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "saf"
+      },
+      {
+        "case": "objects-extent-saf-i16",
+        "pcm_equal": true,
+        "format_equal": true,
+        "pcm_bytes": 86400,
+        "pcm_sha256": "34b32f9f21dbadb4d032bb19abeab88eeb4f329c10e24bc8fa6e988a55bedf78",
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "saf"
+      },
+      {
+        "case": "objects-extent-saf-i24",
+        "pcm_equal": true,
+        "format_equal": true,
+        "pcm_bytes": 129600,
+        "pcm_sha256": "57e1e81ac67c312fb499ca9d2995f033c91346eb38744429aef1b952f880fdc3",
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "saf"
+      },
+      {
+        "case": "directspeakers-ear-f32",
+        "pcm_equal": true,
+        "format_equal": true,
+        "pcm_bytes": 172800,
+        "pcm_sha256": "af8f49c5c9bd42d24a5688b3291d4f2e4a4f2797bc17ec2d11cec0913aadb448",
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "ear"
+      },
+      {
+        "case": "directspeakers-ear-i16",
+        "pcm_equal": true,
+        "format_equal": true,
+        "pcm_bytes": 86400,
+        "pcm_sha256": "463c66955fc5daefe52a424f05ba480a08a689e85940b6015a0eee4c5c69f286",
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "ear"
+      },
+      {
+        "case": "directspeakers-ear-i24",
+        "pcm_equal": true,
+        "format_equal": true,
+        "pcm_bytes": 129600,
+        "pcm_sha256": "cb50e061658708c0bcca8a2890dbb567e2bd25f5dbcb3dafd5a49cf103108049",
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "ear"
+      },
+      {
+        "case": "hoa-hoa-f32",
+        "pcm_equal": true,
+        "format_equal": true,
+        "pcm_bytes": 172800,
+        "pcm_sha256": "53853188f83a941e2f45ec1383293ae935106c5721918079000dcb2254fc550b",
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "saf"
+      },
+      {
+        "case": "hoa-hoa-i16",
+        "pcm_equal": true,
+        "format_equal": true,
+        "pcm_bytes": 86400,
+        "pcm_sha256": "c15a958bf2806ac93920a2a2b014d7fbc81e9dfd5f20eef74175eee08928e2d1",
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "saf"
+      },
+      {
+        "case": "hoa-hoa-i24",
+        "pcm_equal": true,
+        "format_equal": true,
+        "pcm_bytes": 129600,
+        "pcm_sha256": "3bd8d3cf878b4daa903082fe0a919c37faf030689116ca2a50e72c3d16748c9f",
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "saf"
+      }
+    ],
+    "release_large_file_test": "passed; generated >4 GiB BW64 removed",
+    "rust_wav_tests": {
+      "debug_passed": 7,
+      "release_passed_including_real_large_file": 8
+    },
+    "c_abi": {
+      "public_symbols": 139,
+      "matches_header": true,
+      "private_wave_exports": false
+    }
+  },
+  "windows": {
+    "architecture": "x86_64-msvc",
+    "build_tree": "win-canon",
+    "sofa": false,
+    "iamf": false,
+    "default_ctest": {
+      "passed": 63,
+      "total": 63
+    },
+    "optional_reference_tests": "passed",
+    "release_render_cases": [
+      {
+        "name": "objects-point-ear-f32",
+        "pcm_equal": true,
+        "format_equal": true,
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "ear"
+      },
+      {
+        "name": "objects-point-ear-i16",
+        "pcm_equal": true,
+        "format_equal": true,
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "ear"
+      },
+      {
+        "name": "objects-point-ear-i24",
+        "pcm_equal": true,
+        "format_equal": true,
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "ear"
+      },
+      {
+        "name": "objects-extent-saf-f32",
+        "pcm_equal": true,
+        "format_equal": true,
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "saf"
+      },
+      {
+        "name": "objects-extent-saf-i16",
+        "pcm_equal": true,
+        "format_equal": true,
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "saf"
+      },
+      {
+        "name": "objects-extent-saf-i24",
+        "pcm_equal": true,
+        "format_equal": true,
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "saf"
+      },
+      {
+        "name": "directspeakers-ear-f32",
+        "pcm_equal": true,
+        "format_equal": true,
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "ear"
+      },
+      {
+        "name": "directspeakers-ear-i16",
+        "pcm_equal": true,
+        "format_equal": true,
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "ear"
+      },
+      {
+        "name": "directspeakers-ear-i24",
+        "pcm_equal": true,
+        "format_equal": true,
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "ear"
+      },
+      {
+        "name": "hoa-hoa-f32",
+        "pcm_equal": true,
+        "format_equal": true,
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "saf"
+      },
+      {
+        "name": "hoa-hoa-i16",
+        "pcm_equal": true,
+        "format_equal": true,
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "saf"
+      },
+      {
+        "name": "hoa-hoa-i24",
+        "pcm_equal": true,
+        "format_equal": true,
+        "axml_equal": true,
+        "chna_equal": true,
+        "semantic_report_equal": true,
+        "renderer": "saf"
+      }
+    ],
+    "c_abi": {
+      "public": 139,
+      "matches_header": true,
+      "private_wave_exports": false
+    },
+    "default_dependencies": [
+      "CLI11",
+      "Corrosion",
+      "FLAC",
+      "Opus",
+      "dr_libs",
+      "fmt",
+      "libear",
+      "miniaudio",
+      "nlohmann_json",
+      "spdlog",
+      "tl-expected"
+    ]
+  },
+  "legacy_reference_matrix": {
+    "containers": [
+      "RIFF",
+      "RF64",
+      "BW64"
+    ],
+    "pcm_bits": [
+      16,
+      24,
+      32
+    ],
+    "channels": [
+      1,
+      2,
+      11,
+      128
+    ],
+    "decode_and_seek_cases": 36,
+    "encoded_samples_per_bit_depth": 65536,
+    "pcm_bytes_equal": true
+  },
+  "quality": {
+    "rust_fmt": "passed",
+    "rust_clippy": "passed with -D warnings",
+    "changed_cpp_gate": "passed; pre-existing Apple/fixture style warnings remain",
+    "license_manifest_sbom": "passed"
+  },
+  "public_c_abi_sources_changed": false,
+  "default_libbw64_dependency": false,
+  "scope": "Integer ADM input and integer PCM output only. dr_wav and C++ metadata rewriting retained."
+}

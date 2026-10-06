@@ -13,13 +13,12 @@
 #include <tuple>
 #include <vector>
 
-#include <bw64/bw64.hpp>
-
 #include "adm/audio_io.h"
 #include "adm/options.h"
 #include "adm/render.h"
 
 #include "../support/adm_fixture.h"
+#include "../support/wav_fixture.h"
 
 namespace {
 
@@ -128,19 +127,19 @@ std::filesystem::path write_hoa1_fixture(const std::shared_ptr<fixture::Document
                                          const std::string& suffix) {
     auto path = std::filesystem::temp_directory_path() / ("mr_hoa_dec_" + suffix + ".wav");
 
-    std::vector<bw64::AudioId> audio_ids;
+    std::vector<fixture::WaveAudioId> audio_ids;
     audio_ids.reserve(uid_strs.size());
     for (std::size_t i = 0; i < uid_strs.size(); ++i) {
         audio_ids.emplace_back(static_cast<uint16_t>(i + 1U), uid_strs[i], "", "");
     }
-    auto chna = std::make_shared<bw64::ChnaChunk>(audio_ids);
+    auto chna = std::make_shared<fixture::WaveChna>(audio_ids);
 
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
 
     auto writer =
-        bw64::writeFile(path.string(), static_cast<uint16_t>(k_hoa1_channels), k_sample_rate, 24U, chna, axml);
+        fixture::write_wave(path.string(), static_cast<uint16_t>(k_hoa1_channels), k_sample_rate, 24U, chna, axml);
 
     // Interleaved frame: [ch0_s0, ch1_s0, ..., chN_s0, ch0_s1, ...]
     std::vector<float> buf(k_frames * k_hoa1_channels, 0.0F);
@@ -542,17 +541,17 @@ bool verify_hoa1_no_phantom_w_from_broken_uid() {
     const auto in_path = std::filesystem::temp_directory_path() / "mr_hoa_dec_phant_in.wav";
     FileGuard in_guard{in_path};
     {
-        std::vector<bw64::AudioId> audio_ids;
+        std::vector<fixture::WaveAudioId> audio_ids;
         audio_ids.reserve(k_total_ch);
         for (std::size_t i = 0; i < k_total_ch; ++i) {
             audio_ids.emplace_back(static_cast<uint16_t>(i + 1U), all_uid_strs[i], "", "");
         }
-        auto chna = std::make_shared<bw64::ChnaChunk>(audio_ids);
+        auto chna = std::make_shared<fixture::WaveChna>(audio_ids);
         std::ostringstream xml_buf;
         fixture::write_xml(xml_buf, doc);
-        auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+        auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
         auto writer =
-            bw64::writeFile(in_path.string(), static_cast<uint16_t>(k_total_ch), k_sample_rate, 24U, chna, axml);
+            fixture::write_wave(in_path.string(), static_cast<uint16_t>(k_total_ch), k_sample_rate, 24U, chna, axml);
         std::vector<float> buf(k_frames * k_total_ch, 0.0F);
         for (std::size_t f = 0; f < k_frames; ++f) {
             buf[(f * k_total_ch) + (k_total_ch - 1U)] = k_amplitude; // phantom track only
@@ -589,7 +588,7 @@ bool verify_hoa1_no_phantom_w_from_broken_uid() {
 
 } // namespace
 
-int main() {
+int main() try {
     bool ok = true;
     ok &= verify_hoa1_w_decodes_to_all_speakers();
     ok &= verify_hoa1_w_decodes_to_916();
@@ -603,4 +602,7 @@ int main() {
         return EXIT_SUCCESS;
     }
     return EXIT_FAILURE;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return 1;
 }

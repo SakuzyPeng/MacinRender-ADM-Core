@@ -12,6 +12,9 @@ fi
 # -i src/adm_windows: Windows-only sink (windows.h / spatialaudioclient.h) — cppcheck can't parse the
 # Windows COM TUs on the macOS quality host; the windows-debug CI build verifies it instead.
 reference_excludes=()
+if ! grep -q '^MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
+    reference_excludes+=(-i "$repo_root/tests/reference/libbw64")
+fi
 if ! grep -q '^MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL=ON$' "$_build_dir/CMakeCache.txt"; then
     reference_excludes+=(-i "$repo_root/tests/reference/libadm")
 fi

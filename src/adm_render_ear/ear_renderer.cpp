@@ -15,7 +15,6 @@
 #include <string_view>
 #include <vector>
 
-#include <bw64/bw64.hpp>
 #include <ear/ear.hpp>
 #include <fmt/format.h>
 
@@ -564,7 +563,9 @@ class EarStream final : public IRenderStream {
                 if (frames_done_ >= total_frames_) {
                     break;
                 }
-                render_block();
+                if (auto result = render_block(); !result) {
+                    return tl::unexpected{result.error()};
+                }
                 if (fifo_read_ >= fifo_.size()) {
                     break;
                 }
@@ -582,7 +583,9 @@ class EarStream final : public IRenderStream {
         post_.reset();
         mix_.reset();
         frames_done_ = std::min(frame, total_frames_);
-        render_common::seek_reader_abs(*reader_, frames_done_);
+        if (auto result = reader_->seek_frame(frames_done_); !result) {
+            return tl::unexpected{result.error()};
+        }
         fifo_.clear();
         fifo_read_ = 0;
         return {};
@@ -631,15 +634,22 @@ class EarStream final : public IRenderStream {
         live_gain_smoother_.apply(in_block_.data(), static_cast<std::size_t>(frames_now));
     }
 
-    void render_block() {
+    Result<void> render_block() {
         const uint64_t frames_now = std::min<uint64_t>(k_block_size_, total_frames_ - frames_done_);
-        reader_->read(in_block_.data(), frames_now);
+        const auto read_result = reader_->read(in_block_.data(), frames_now);
+        if (!read_result) {
+            return tl::unexpected{read_result.error()};
+        }
+        if (*read_result != frames_now) {
+            return make_error(ErrorCode::io_error, "short render input read");
+        }
         apply_live_gain(frames_now);
         fifo_.assign(static_cast<std::size_t>(num_out_ch_) * frames_now, 0.0F);
         fifo_read_ = 0;
         render_ear_block(
             mix_, post_, in_block_, fifo_, diffuse_in_, frames_done_, frames_now, num_out_ch_, output_layout_);
         frames_done_ += frames_now;
+        return {};
     }
 
     const EarPrepared& prepared_; // borrowed; owner (factory) outlives the stream
@@ -860,7 +870,9 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
             start_pos = ((win_start / k_block_size) - 1) * k_block_size; // one full block of pre-roll
         }
         if (start_pos > 0) {
-            render_common::seek_reader_abs(*reader, start_pos);
+            if (auto result = reader->seek_frame(start_pos); !result) {
+                return tl::unexpected{result.error()};
+            }
         }
         const uint64_t progress_total = std::max<uint64_t>(1, win_end - start_pos);
         const auto progress_span = static_cast<double>(progress_total);
@@ -885,7 +897,13 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
             }
             std::vector<float>& out_block = out_buffers.at(buf_idx);
 
-            reader->read(in_block.data(), frames_now);
+            const auto read_result = reader->read(in_block.data(), frames_now);
+            if (!read_result) {
+                return tl::unexpected{read_result.error()};
+            }
+            if (*read_result != frames_now) {
+                return make_error(ErrorCode::io_error, "short render input read");
+            }
 
             render_ear_block(
                 mix, post, in_block, out_block, diffuse_in, frames_done, frames_now, num_out_ch, plan.output_layout);

@@ -18,12 +18,11 @@
 #include <system_error>
 #include <vector>
 
-#include <bw64/bw64.hpp>
-
 #include "adm/audio_io.h"
 #include "adm/render.h"
 
 #include "../support/adm_fixture.h"
+#include "../support/wav_fixture.h"
 
 #ifdef _WIN32
 #include <process.h>
@@ -280,21 +279,21 @@ std::optional<std::filesystem::path> write_large_seed_fixture(uint32_t channels,
 
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
-    std::vector<bw64::AudioId> audio_ids;
+    std::vector<fixture::WaveAudioId> audio_ids;
     audio_ids.reserve(channels);
     for (uint32_t ch = 0; ch < channels; ++ch) {
         audio_ids.emplace_back(static_cast<uint16_t>(ch + 1U), uid_strings[ch], "", "");
     }
-    auto chna = std::make_shared<bw64::ChnaChunk>(audio_ids);
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+    auto chna = std::make_shared<fixture::WaveChna>(audio_ids);
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
 
     auto path = temp_path("mr_trim_sparse_large_input", ".wav");
-    auto writer = bw64::writeFile(path.string(),
-                                  static_cast<uint16_t>(channels),
-                                  static_cast<uint16_t>(k_sr),
-                                  static_cast<uint16_t>(bits_per_sample),
-                                  chna,
-                                  axml);
+    auto writer = fixture::write_wave(path.string(),
+                                      static_cast<uint16_t>(channels),
+                                      static_cast<uint16_t>(k_sr),
+                                      static_cast<uint16_t>(bits_per_sample),
+                                      chna,
+                                      axml);
     std::vector<float> samples(k_seed_frames * channels, 0.0F);
     writer->write(samples.data(), k_seed_frames);
     return path;
@@ -445,10 +444,11 @@ std::filesystem::path write_render_fixture() {
 
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
 
-    auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);
+    auto writer = fixture::write_wave(path.string(), 1U, k_sr, 24U, chna, axml);
     // Silent first second, active second second. The render pipeline is causal
     // (decorrelator FIR + direct delay), so the active half cannot leak backwards:
     // the first half stays exactly silent, letting a window-aware meter tell the
@@ -524,9 +524,10 @@ std::filesystem::path write_varying_fixture() {
     auto path = temp_path("mr_trim_vary_input", ".wav");
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
-    auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
+    auto writer = fixture::write_wave(path.string(), 1U, k_sr, 24U, chna, axml);
     std::vector<float> samples(k_frames);
     for (uint64_t f = 0; f < k_frames; ++f) {
         samples[f] = 0.5F * std::sin(static_cast<float>(f) * 0.013F);
@@ -892,7 +893,7 @@ bool verify_sparse_large_bw64_input_multichannel_window() {
 
 } // namespace
 
-int main() {
+int main() try {
     bool ok = true;
     ok &= verify_end_trim();
     ok &= verify_start_end_window();
@@ -909,4 +910,7 @@ int main() {
     }
     std::cout << "render trim fixture tests passed (10/10)\n";
     return EXIT_SUCCESS;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return 1;
 }

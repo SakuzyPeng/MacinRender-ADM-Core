@@ -20,7 +20,6 @@
 #include <utility>
 #include <vector>
 
-#include <bw64/bw64.hpp>
 #include <fmt/format.h>
 
 #ifndef _WIN32
@@ -31,6 +30,7 @@
 #include "adm/errors.h"
 
 #include "audio_io_internal.h"
+#include "wav_backend.h"
 
 namespace mradm::audio {
 
@@ -38,7 +38,7 @@ namespace {
 
 class TempPathGuard {
   public:
-    explicit TempPathGuard(std::filesystem::path path) : path_(std::move(path)) {}
+    explicit TempPathGuard(std::filesystem::path path, bool active = true) : path_(std::move(path)), active_(active) {}
     TempPathGuard(const TempPathGuard&) = delete;
     TempPathGuard& operator=(const TempPathGuard&) = delete;
     TempPathGuard(TempPathGuard&&) = delete;
@@ -51,11 +51,18 @@ class TempPathGuard {
     }
 
     void dismiss() noexcept { active_ = false; }
+    void arm() noexcept { active_ = true; }
 
   private:
     std::filesystem::path path_;
     bool active_{true};
 };
+
+[[nodiscard]] std::optional<std::filesystem::path> unique_wav_sidecar_path(const std::filesystem::path& original,
+                                                                           std::string_view purpose);
+[[nodiscard]] Result<void> replace_wav_with_rewrite(const std::filesystem::path& original,
+                                                    const std::filesystem::path& rewritten,
+                                                    TempPathGuard& rewritten_guard);
 
 void emit_wav_progress(ProgressSink* progress,
                        RenderOperation operation,
@@ -253,8 +260,11 @@ Result<void> downconvert_to_int(const std::string& path,
                               "path=" + path);
         }
 
-        const auto tmp_path = path + ".bitdepth_tmp";
-        TempPathGuard tmp_guard{tmp_path};
+        const auto tmp_path = unique_wav_sidecar_path(path, "bitdepth_tmp");
+        if (!tmp_path) {
+            return make_error(ErrorCode::io_error, "cannot allocate integer WAVE temporary path", "path=" + path);
+        }
+        TempPathGuard tmp_guard{*tmp_path, false};
         uint64_t total_frames = 0;
         {
             // reader 与 writer 都置于此块内，块结束即关闭句柄；之后才能在 Windows 上
@@ -270,18 +280,12 @@ Result<void> downconvert_to_int(const std::string& path,
             total_frames = reader.frame_count();
             emit_wav_progress(progress, operation, 0.0, 0, total_frames, "converting bit depth");
 
-            // libbw64 0.10.0 writeFile takes uint16_t sampleRate.
-            if (sample_rate > std::numeric_limits<uint16_t>::max()) {
-                return make_error(
-                    ErrorCode::unsupported,
-                    fmt::format(
-                        "sample rate {} Hz exceeds integer PCM writer limit (65535 Hz); use --output-bit-depth f32",
-                        sample_rate),
-                    "path=" + path);
+            auto writer_res = IntegerWavWriter::create(tmp_path->string(), channels, sample_rate, bit_depth);
+            if (!writer_res) {
+                return tl::unexpected{writer_res.error()};
             }
-
-            auto writer = bw64::writeFile(
-                tmp_path, static_cast<uint16_t>(channels), static_cast<uint16_t>(sample_rate), bit_depth);
+            auto& writer = *writer_res;
+            tmp_guard.arm(); // create_new established ownership; never remove a competing file.
 
             constexpr uint64_t k_block = 4096;
             std::vector<float> buf(static_cast<std::size_t>(channels) * k_block);
@@ -294,10 +298,12 @@ Result<void> downconvert_to_int(const std::string& path,
                 }
                 const uint64_t n = std::min(k_block, left);
                 const uint64_t got = reader.read(buf.data(), n);
-                if (got == 0) {
-                    break;
+                if (got != n) {
+                    return make_error(ErrorCode::io_error, "short input read while converting PCM", "path=" + path);
                 }
-                writer->write(buf.data(), got);
+                if (auto result = writer->write(buf.data(), got); !result) {
+                    return result;
+                }
                 left -= got;
                 done += got;
                 emit_wav_progress(progress,
@@ -307,13 +313,17 @@ Result<void> downconvert_to_int(const std::string& path,
                                   total_frames,
                                   "converting bit depth");
             }
+            if (auto result = writer->finish(); !result) {
+                return result;
+            }
         }
 
         if (cancel_token.stop_requested()) {
             return make_error(ErrorCode::cancelled, "render cancelled", "path=" + path);
         }
-        std::filesystem::rename(tmp_path, path);
-        tmp_guard.dismiss();
+        if (auto result = replace_wav_with_rewrite(path, *tmp_path, tmp_guard); !result) {
+            return result;
+        }
         emit_wav_progress(progress, operation, 1.0, total_frames, total_frames, "bit depth converted");
         return {};
 

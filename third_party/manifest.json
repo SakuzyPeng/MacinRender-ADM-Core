@@ -190,8 +190,8 @@
       "cmake_key": "libbw64",
       "purl": "pkg:github/ebu/libbw64@0.10.0",
       "license": "Apache-2.0",
-      "purpose": "BW64/ADM BWF 读写",
-      "distribution": "available",
+      "purpose": "历史 BW64/PCM 参考（测试专用）",
+      "distribution": "opt-in",
       "source": {
         "type": "fetchcontent",
         "deps_dir": "libbw64-src",
@@ -200,7 +200,7 @@
           "LICENSE"
         ]
       },
-      "notes": ""
+      "notes": "仅用于显式启用的 libbw64/libadm 对照测试；生产整数 PCM 读写由 Rust mradm-wav 实现。"
     },
     {
       "name": "libadm",

@@ -41,7 +41,7 @@
 | `miniaudio` @ 0.11.21 | 实时音频设备输出（监听引擎） | Unlicense OR MIT-0 | 可用 | header-only；实现仅在 src/adm_realtime/miniaudio_device.cpp；Linux dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox |
 | `libsamplerate` @ 0.2.2 | 历史采样率转换参考（测试专用） | BSD-2-Clause | opt-in（默认关闭） | 仅用于显式开启的参考测试；生产重采样使用纯 Rust rubato。 |
 | `libFLAC` @ 1.5.0 | FLAC 编码与 metadata | BSD-3-Clause | 可用 | 默认仅链接 libFLAC（Xiph BSD-like）；源码包内 COPYING.GPL/LGPL/FDL 覆盖未链接的 C++ libs/programs/docs，默认发行不涉及 |
-| `libbw64` @ 0.10.0 | BW64/ADM BWF 读写 | Apache-2.0 | 可用 |  |
+| `libbw64` @ 0.10.0 | 历史 BW64/PCM 参考（测试专用） | Apache-2.0 | opt-in（默认关闭） | 仅用于显式启用的 libbw64/libadm 对照测试；生产整数 PCM 读写由 Rust mradm-wav 实现。 |
 | `libadm` @ 0.14.0 | 历史 ADM 元数据参考（测试专用） | Apache-2.0 | opt-in（默认关闭） | 仅用于显式启用的对照工具；生产 ADM 读写由 Rust mradm-adm 实现。 |
 | `libear` @ 2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15 | BS.2127/EAR 增益计算 | Apache-2.0 | 可用 | 内嵌 vendored Eigen/xsimd/kissfft，单列于下 |
 | `Spatial_Audio_Framework` @ v1.3.4 | 历史 DSP 数值参考（测试专用） | ISC | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |

@@ -60,7 +60,7 @@ class FloatWavReader {
     std::unique_ptr<Impl> impl_;
 };
 
-// Render-time input reader. Integer ADM retains the established libbw64 sample
+// Render-time input reader. Integer ADM uses the Rust PCM reader with legacy sample
 // path; float32 ADM and ordinary channel-bed WAVE use FloatWavReader.
 class RenderInputReader {
   public:
@@ -71,8 +71,8 @@ class RenderInputReader {
     RenderInputReader(const RenderInputReader&) = delete;
     RenderInputReader& operator=(const RenderInputReader&) = delete;
 
-    uint64_t read(float* out, uint64_t frames);
-    void seek(int32_t offset, std::ios_base::seekdir way = std::ios::beg);
+    Result<uint64_t> read(float* out, uint64_t frames);
+    Result<void> seek_frame(uint64_t frame);
 
   private:
     RenderInputReader();
@@ -270,8 +270,7 @@ Result<void> trim_file_frames(const std::string& path,
                               RenderOperation operation = RenderOperation::trim_output);
 
 // Convert an existing float32 WAV to integer PCM in-place (temp + rename).
-// bit_depth must be 16, 24, or 32. Limited to sample rates <= 65535 Hz by the
-// underlying bw64 integer writer (libbw64 0.10.0 API constraint).
+// bit_depth must be 16, 24, or 32. Preserves the legacy PCM quantization rules.
 Result<void> downconvert_to_int(const std::string& path,
                                 uint16_t bit_depth,
                                 const std::stop_token& cancel_token = {},

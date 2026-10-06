@@ -26,7 +26,7 @@
 #include "adm/c_api.h"
 
 // libadm / libbw64 — used here only to construct the fixture, never via the ABI.
-#include <bw64/bw64.hpp>
+#include "../support/wav_fixture.h"
 
 namespace {
 
@@ -122,9 +122,10 @@ std::filesystem::path write_fixture(uint32_t sample_rate = 48000U, bool cartesia
     fixture::write_xml(buf, doc);
 
     auto path = unique_temp_wav_path("mr_c_api_fixture");
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(buf.str());
-    auto writer = bw64::writeFile(path.string(), 1U, static_cast<uint16_t>(sample_rate), 24U, chna, axml);
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(buf.str());
+    auto writer = fixture::write_wave(path.string(), 1U, static_cast<uint16_t>(sample_rate), 24U, chna, axml);
     const uint64_t k_frames = static_cast<uint64_t>(sample_rate) / 5U; // 0.2 s
     std::vector<float> samples(k_frames, 0.5F);
     writer->write(samples.data(), k_frames);
@@ -176,9 +177,10 @@ std::filesystem::path write_direct_speakers_fixture() {
     const std::string uid_string = fixture::format_id(uid->get<fixture::AudioTrackUidId>());
 
     const auto path = unique_temp_wav_path("mr_c_api_matrix_fixture");
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_string, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml.str());
-    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_string, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml.str());
+    auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
     std::vector<float> samples(4096U, 0.25F);
     writer->write(samples.data(), samples.size());
     return path;
@@ -864,9 +866,10 @@ std::filesystem::path write_fixture_1s() {
     std::ostringstream buf;
     fixture::write_xml(buf, doc);
     auto path = unique_temp_wav_path("mr_c_api_fixture_1s");
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(buf.str());
-    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(buf.str());
+    auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
     constexpr uint64_t k_frames = 48000U; // 1 s @ 48 kHz
     std::vector<float> samples(k_frames, 0.5F);
     writer->write(samples.data(), k_frames);
@@ -2845,7 +2848,7 @@ bool verify_monitor_abi(adm_context_t* ctx, const std::filesystem::path& input) 
     return ok;
 }
 
-int main() {
+int main() try {
     if (!verify_version() || !verify_null_result_accessors()) {
         return EXIT_FAILURE;
     }
@@ -2933,4 +2936,7 @@ int main() {
 
     adm_destroy_context(ctx);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return 1;
 }

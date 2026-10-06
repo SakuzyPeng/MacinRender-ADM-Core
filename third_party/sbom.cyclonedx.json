@@ -257,7 +257,7 @@
       "type": "library",
       "name": "libbw64",
       "version": "0.10.0",
-      "description": "BW64/ADM BWF 读写",
+      "description": "历史 BW64/PCM 参考（测试专用）",
       "licenses": [
         {
           "license": {
@@ -269,7 +269,7 @@
       "properties": [
         {
           "name": "mradm:distribution",
-          "value": "available"
+          "value": "opt-in"
         },
         {
           "name": "mradm:source-type",

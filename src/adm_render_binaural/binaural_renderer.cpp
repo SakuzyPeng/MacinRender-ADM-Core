@@ -26,7 +26,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include <bw64/bw64.hpp>
 #include <fmt/format.h>
 
 #include "adm/audio_io.h"
@@ -1254,7 +1253,9 @@ class BinauralStream final : public IRenderStream {
                 if (frames_done_ >= total_frames_) {
                     break; // end of material
                 }
-                render_block();
+                if (auto result = render_block(); !result) {
+                    return tl::unexpected{result.error()};
+                }
                 if (fifo_read_ >= fifo_.size()) {
                     break;
                 }
@@ -1271,7 +1272,9 @@ class BinauralStream final : public IRenderStream {
     [[nodiscard]] Result<void> seek(uint64_t frame) override {
         reset_dsp_state(); // small discontinuity (OLA / diffuse tails dropped); fine for monitoring
         frames_done_ = std::min(frame, total_frames_);
-        render_common::seek_reader_abs(*reader_, frames_done_);
+        if (auto result = reader_->seek_frame(frames_done_); !result) {
+            return tl::unexpected{result.error()};
+        }
         fifo_.clear();
         fifo_read_ = 0;
         return {};
@@ -1511,10 +1514,16 @@ class BinauralStream final : public IRenderStream {
         }
     }
 
-    void render_block() {
+    Result<void> render_block() {
         const uint64_t frames_now = std::min<uint64_t>(render_block_size_, total_frames_ - frames_done_);
         const auto fn = static_cast<std::size_t>(frames_now);
-        reader_->read(in_block_.data(), frames_now);
+        const auto read_result = reader_->read(in_block_.data(), frames_now);
+        if (!read_result) {
+            return tl::unexpected{read_result.error()};
+        }
+        if (*read_result != frames_now) {
+            return make_error(ErrorCode::io_error, "short render input read");
+        }
         // Before the first sample there is no outgoing state to preserve. Apply the coalesced initial
         // topology directly, then begin gain envelopes on the final source graph.
         if (frames_done_ == 0U && topology_pending_) {
@@ -1544,6 +1553,7 @@ class BinauralStream final : public IRenderStream {
         }
         fifo_read_ = 0;
         frames_done_ += frames_now;
+        return {};
     }
 
     const BinauralPrepared& prepared_; // borrowed; owner (factory) outlives the stream
@@ -1831,7 +1841,9 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
         start_pos = (start_block > warmup_blocks) ? ((start_block - warmup_blocks) * render_block_size) : 0;
     }
     if (start_pos > 0) {
-        render_common::seek_reader_abs(*reader, start_pos);
+        if (auto result = reader->seek_frame(start_pos); !result) {
+            return tl::unexpected{result.error()};
+        }
     }
     frames_done = start_pos;      // input cursor
     uint64_t out_abs = start_pos; // absolute output-timeline position of the next produced sample
@@ -1888,7 +1900,13 @@ Result<RenderMetrics> BinauralRenderer::render_window(const IPreparedRender& pre
         const uint64_t frames_now = std::min(render_block_size, num_frames - frames_done);
         const auto fn = static_cast<std::size_t>(frames_now);
 
-        reader->read(in_block.data(), frames_now);
+        const auto read_result = reader->read(in_block.data(), frames_now);
+        if (!read_result) {
+            return tl::unexpected{read_result.error()};
+        }
+        if (*read_result != frames_now) {
+            return make_error(ErrorCode::io_error, "short render input read");
+        }
         std::ranges::fill(out_block, 0.0F);
 
         // Scratch L/R accumulation buffers (non-interleaved for SIMD friendliness).

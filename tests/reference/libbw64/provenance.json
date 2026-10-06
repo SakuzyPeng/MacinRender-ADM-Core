@@ -1,0 +1,7 @@
+{
+  "library": "libbw64",
+  "version": "0.10.0",
+  "source": "https://github.com/ebu/libbw64/tree/0.10.0",
+  "policy": "Use the unmodified installed or FetchContent reference library; compare decoded f32 and encoded PCM, not container padding.",
+  "matrix": "RIFF/RF64/BW64 x PCM16/24/32 x 1/2/11/128 channels; 65536 encoding samples per bit depth"
+}

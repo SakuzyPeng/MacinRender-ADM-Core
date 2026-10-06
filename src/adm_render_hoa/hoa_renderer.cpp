@@ -21,7 +21,6 @@
 #include "dsp.h"
 // clang-format on
 
-#include <bw64/bw64.hpp>
 #include <fmt/format.h>
 
 #include "adm/audio_io.h"
@@ -297,7 +296,9 @@ class HoaStream final : public IRenderStream {
     [[nodiscard]] Result<void> seek(uint64_t frame) override {
         frames_done_ = std::min(frame, total_frames_);
         encoder_.reset(frames_done_);
-        render_common::seek_reader_abs(*reader_, frames_done_);
+        if (auto result = reader_->seek_frame(frames_done_); !result) {
+            return tl::unexpected{result.error()};
+        }
         fifo_.clear();
         fifo_read_ = 0;
         return {};
@@ -347,7 +348,11 @@ class HoaStream final : public IRenderStream {
 
     Result<void> render_block() {
         const uint64_t frames_now = std::min<uint64_t>(k_block_size_, total_frames_ - frames_done_);
-        if (reader_->read(in_block_.data(), frames_now) != frames_now) {
+        const auto read_result = reader_->read(in_block_.data(), frames_now);
+        if (!read_result) {
+            return tl::unexpected{read_result.error()};
+        }
+        if (*read_result != frames_now) {
             return make_error(ErrorCode::io_error, "short input read while encoding HOA");
         }
         apply_live_gain(frames_now);
@@ -598,7 +603,9 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
             start_pos = ((win_start / k_block_size) - 1) * k_block_size; // one aligned pre-roll block
         }
         if (start_pos > 0) {
-            render_common::seek_reader_abs(*reader, start_pos);
+            if (auto result = reader->seek_frame(start_pos); !result) {
+                return tl::unexpected{result.error()};
+            }
             encoder->reset(start_pos);
             measure->reset(start_pos);
         }
@@ -627,7 +634,11 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
             std::vector<float>& in_block = in_buffers.at(buf_idx);
             std::vector<float>& out_block = out_buffers.at(buf_idx);
 
-            if (reader->read(in_block.data(), frames_now) != frames_now) {
+            const auto read_result = reader->read(in_block.data(), frames_now);
+            if (!read_result) {
+                return tl::unexpected{read_result.error()};
+            }
+            if (*read_result != frames_now) {
                 return make_error(
                     ErrorCode::io_error, "short input read while encoding HOA", "input=" + plan.input_path);
             }

@@ -70,6 +70,12 @@ done < <(
 is_platform_excluded() {
     case "$1" in
         src/adm_windows/*) return 0 ;;
+        tests/reference/libbw64/*)
+            if ! grep -q '^MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
+                return 0
+            fi
+            return 1
+            ;;
         tests/reference/libadm/*)
             if ! grep -q '^MR_ADM_BUILD_LIBADM_REFERENCE_TESTS:BOOL=ON$' "$build_dir/CMakeCache.txt"; then
                 return 0

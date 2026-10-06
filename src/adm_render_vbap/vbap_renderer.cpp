@@ -415,7 +415,9 @@ class VbapStream final : public IRenderStream {
                 if (frames_done_ >= total_frames_) {
                     break;
                 }
-                render_block();
+                if (auto result = render_block(); !result) {
+                    return tl::unexpected{result.error()};
+                }
                 if (fifo_read_ >= fifo_.size()) {
                     break;
                 }
@@ -432,7 +434,9 @@ class VbapStream final : public IRenderStream {
     [[nodiscard]] Result<void> seek(uint64_t frame) override {
         mix_.reset();
         frames_done_ = std::min(frame, total_frames_);
-        render_common::seek_reader_abs(*reader_, frames_done_);
+        if (auto result = reader_->seek_frame(frames_done_); !result) {
+            return tl::unexpected{result.error()};
+        }
         fifo_.clear();
         fifo_read_ = 0;
         return {};
@@ -481,9 +485,15 @@ class VbapStream final : public IRenderStream {
         live_gain_smoother_.apply(in_block_.data(), static_cast<std::size_t>(frames_now));
     }
 
-    void render_block() {
+    Result<void> render_block() {
         const uint64_t frames_now = std::min<uint64_t>(k_block_size_, total_frames_ - frames_done_);
-        reader_->read(in_block_.data(), frames_now);
+        const auto read_result = reader_->read(in_block_.data(), frames_now);
+        if (!read_result) {
+            return tl::unexpected{read_result.error()};
+        }
+        if (*read_result != frames_now) {
+            return make_error(ErrorCode::io_error, "short render input read");
+        }
         apply_live_gain(frames_now);
         fifo_.assign(static_cast<std::size_t>(num_out_ch_) * frames_now, 0.0F);
         fifo_read_ = 0;
@@ -493,6 +503,7 @@ class VbapStream final : public IRenderStream {
                      frames_done_,
                      frames_now);
         frames_done_ += frames_now;
+        return {};
     }
 
     const VbapPrepared& prepared_; // borrowed; owner (factory) outlives the stream

@@ -15,7 +15,6 @@
 #include <vector>
 
 #include <AudioToolbox/AudioToolbox.h>
-#include <bw64/bw64.hpp>
 #include <fmt/format.h>
 
 #include "adm/audio_io.h"
@@ -1027,7 +1026,9 @@ class AppleStream final : public IRenderStream {
                 return tl::unexpected{apple_status_error("failed to reset AUSpatialMixer on seek", status)};
             }
         }
-        render_common::seek_reader_abs(*reader_, frame);
+        if (auto result = reader_->seek_frame(frame); !result) {
+            return tl::unexpected{result.error()};
+        }
         std::ranges::fill(ev_cursor_, std::size_t{0});
         std::ranges::fill(direct_ev_cursor_, std::size_t{0});
         std::ranges::fill(lfe_ev_cursor_, std::size_t{0});
@@ -1048,7 +1049,9 @@ class AppleStream final : public IRenderStream {
             ended_ = false;
             return {};
         }
-        render_common::seek_reader_abs(*reader_, frame);
+        if (auto result = reader_->seek_frame(frame); !result) {
+            return tl::unexpected{result.error()};
+        }
         producer_pos_ = frame;
         ended_ = false;
         return {};
@@ -1122,7 +1125,13 @@ class AppleStream final : public IRenderStream {
         if (silent_) {
             std::fill_n(out.data(), n * num_in_ch_, 0.0F);
         } else {
-            reader_->read(out.data(), static_cast<UInt32>(n));
+            const auto read_result = reader_->read(out.data(), static_cast<UInt32>(n));
+            if (!read_result) {
+                return tl::unexpected{read_result.error()};
+            }
+            if (*read_result != static_cast<UInt32>(n)) {
+                return make_error(ErrorCode::io_error, "short render input read");
+            }
         }
         producer_pos_ += n;
         return n;
@@ -1351,7 +1360,13 @@ class AppleStream final : public IRenderStream {
         }
         orientation_dirty_ = false;
 
-        reader_->read(staging_.data(), frames_now);
+        const auto read_result = reader_->read(staging_.data(), frames_now);
+        if (!read_result) {
+            return tl::unexpected{read_result.error()};
+        }
+        if (*read_result != frames_now) {
+            return make_error(ErrorCode::io_error, "short render input read");
+        }
 
         // fifo_ was sized + zeroed at the top of this slice; the shared core interleaves into it.
         if (const OSStatus s = render_au_block(producer_pos_, live_orientation_, fifo_.data(), frames_now);
@@ -1723,7 +1738,9 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     }
     auto reader = std::move(*reader_res);
     if (start_pos > 0) {
-        render_common::seek_reader_abs(*reader, start_pos);
+        if (auto result = reader->seek_frame(start_pos); !result) {
+            return tl::unexpected{result.error()};
+        }
     }
 
     // Output is non-interleaved; AudioUnitRender writes one buffer per output channel.
@@ -1755,7 +1772,13 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
         const auto frames_now = static_cast<UInt32>(std::min<uint64_t>(k_render_block, num_frames - frames_done));
         std::fill_n(out_interleaved.data(), static_cast<std::size_t>(frames_now) * num_out_ch, 0.0F);
 
-        reader->read(staging.data(), frames_now);
+        const auto read_result = reader->read(staging.data(), frames_now);
+        if (!read_result) {
+            return tl::unexpected{read_result.error()};
+        }
+        if (*read_result != frames_now) {
+            return make_error(ErrorCode::io_error, "short render input read");
+        }
 
         if (!buses.empty()) {
             for (std::size_t i = 0; i < buses.size(); ++i) {

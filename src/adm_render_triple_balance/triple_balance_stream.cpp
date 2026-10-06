@@ -177,7 +177,9 @@ class TripleBalanceStream final : public IRenderStream {
             fifo_read_ = 0;
             canonical_ = true;
             reset_ramps();
-            render_common::seek_reader_abs(*reader_, position_);
+            if (auto result = reader_->seek_frame(position_); !result) {
+                return tl::unexpected{result.error()};
+            }
             while (position_ < boundary) {
                 if (cancel.stop_requested()) {
                     return make_error(ErrorCode::cancelled, "Triple Balance seek cancelled");
@@ -276,7 +278,11 @@ class TripleBalanceStream final : public IRenderStream {
 
     Result<void> render_block() {
         const auto frames = std::min(k_block_frames, total_ - position_);
-        if (reader_->read(input_.data(), frames) != frames) {
+        const auto read_result = reader_->read(input_.data(), frames);
+        if (!read_result) {
+            return tl::unexpected{read_result.error()};
+        }
+        if (*read_result != frames) {
             return make_error(ErrorCode::io_error, "short input read in Triple Balance stream");
         }
         ramps_.fill(std::span{envelopes_}.first(frames * input_channels_));

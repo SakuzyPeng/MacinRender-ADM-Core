@@ -19,7 +19,7 @@
 #include "adm/scene.h"
 
 // libadm / libbw64 — used here only to construct and inspect the fixture file.
-#include <bw64/bw64.hpp>
+#include "../support/wav_fixture.h"
 
 namespace {
 
@@ -173,11 +173,11 @@ std::vector<float> ramp_samples(uint64_t frames) {
 std::filesystem::path
 write_fixture(const std::string& uid_str, const std::string& xml_str, const std::vector<float>& samples) {
     auto path = std::filesystem::temp_directory_path() / "mr_adm_export_src.wav";
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_str);
-    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
-    auto mutable_samples = samples;
-    writer->write(mutable_samples.data(), mutable_samples.size());
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_str);
+    auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
+    writer->write(samples.data(), samples.size());
     return path;
 }
 
@@ -662,7 +662,7 @@ bool verify_export_bw64_roundtrip() {
 
 } // namespace
 
-int main() {
+int main() try {
     bool ok = true;
     ok &= verify_export_roundtrip();
     ok &= verify_export_gain_override();
@@ -671,4 +671,7 @@ int main() {
     ok &= verify_export_head_locked_block_override();
     ok &= verify_export_bw64_roundtrip();
     return ok ? 0 : 1;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return 1;
 }

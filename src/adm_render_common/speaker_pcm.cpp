@@ -122,7 +122,9 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
             windowed ? std::min(win_start + plan.render_window->frame_count, num_frames) : num_frames;
         const uint64_t start_pos = windowed && !process ? (win_start / k_block_size) * k_block_size : 0;
         if (start_pos > 0) {
-            render_common::seek_reader_abs(*reader, start_pos);
+            if (auto result = reader->seek_frame(start_pos); !result) {
+                return tl::unexpected{result.error()};
+            }
         }
         const uint64_t progress_total = std::max<uint64_t>(1, win_end - start_pos);
         const auto progress_span = static_cast<double>(progress_total);
@@ -141,7 +143,11 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
             }
             std::vector<float>& out_block = out_buffers.at(buf_idx);
 
-            if (reader->read(in_block.data(), frames_now) != frames_now) {
+            const auto read_result = reader->read(in_block.data(), frames_now);
+            if (!read_result) {
+                return tl::unexpected{read_result.error()};
+            }
+            if (*read_result != frames_now) {
                 return make_error(ErrorCode::io_error, "short input read while rendering speaker PCM");
             }
             std::fill(out_block.begin(), out_block.begin() + static_cast<ptrdiff_t>(out_samples), 0.0F);

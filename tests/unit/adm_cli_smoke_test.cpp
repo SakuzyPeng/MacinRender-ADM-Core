@@ -9,9 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include <bw64/bw64.hpp>
-
 #include "../support/adm_fixture.h"
+#include "../support/wav_fixture.h"
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
@@ -146,9 +145,10 @@ std::filesystem::path write_fixture() {
     const std::string uid_str = fixture::format_id(uid->get<fixture::AudioTrackUidId>());
 
     auto path = std::filesystem::temp_directory_path() / "mr_adm_cli_smoke_fixture.wav";
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
-    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
+    auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
     std::vector<float> silence(16U, 0.0F);
     writer->write(silence.data(), silence.size());
 
@@ -196,9 +196,10 @@ std::filesystem::path write_direct_speakers_fixture() {
     fixture::write_xml(xml, doc);
     const auto path = std::filesystem::temp_directory_path() / "mr_adm_cli_matrix_fixture.wav";
     const std::string uid_string = fixture::format_id(uid->get<fixture::AudioTrackUidId>());
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_string, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml.str());
-    auto writer = bw64::writeFile(path.string(), 1U, 48000U, 24U, chna, axml);
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_string, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml.str());
+    auto writer = fixture::write_wave(path.string(), 1U, 48000U, 24U, chna, axml);
     std::vector<float> samples(4096U, 0.25F);
     writer->write(samples.data(), samples.size());
     return path;
@@ -221,7 +222,7 @@ std::filesystem::path write_direct_speakers_matrix_fixture() {
 } // namespace
 
 // NOLINTNEXTLINE(readability-function-size): this is a linear CLI smoke script.
-int main() {
+int main() try {
     const std::string mradm_exe = "\"" MRADM_EXE_PATH "\"";
 
     const auto fixture = write_fixture();
@@ -738,4 +739,7 @@ int main() {
         return EXIT_SUCCESS;
     }
     return EXIT_FAILURE;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return 1;
 }

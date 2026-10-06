@@ -20,7 +20,6 @@
 #include <vector>
 
 #include <AudioToolbox/AudioToolbox.h>
-#include <bw64/bw64.hpp>
 
 #include "adm/audio_io.h"
 #include "adm/io.h"
@@ -28,6 +27,7 @@
 #include "adm/render_apple.h"
 
 #include "../support/adm_fixture.h"
+#include "../support/wav_fixture.h"
 #include "render_common.h"
 
 namespace {
@@ -562,9 +562,10 @@ std::filesystem::path write_fixture(float azimuth,
 
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
-    auto writer = bw64::writeFile(path.string(), k_ch, k_sr, 24U, chna, axml);
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
+    auto writer = fixture::write_wave(path.string(), k_ch, k_sr, 24U, chna, axml);
     std::vector<float> samples(frames);
     for (uint32_t i = 0; i < frames; ++i) {
         samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
@@ -580,9 +581,10 @@ std::filesystem::path write_head_locked_timeline_fixture(uint32_t frames) {
     auto path = temp_path("mr_apple_head_timeline", ".wav");
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
-    auto writer = bw64::writeFile(path.string(), 1U, k_sr, 24U, chna, axml);
+    auto chna =
+        std::make_shared<fixture::WaveChna>(std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
+    auto writer = fixture::write_wave(path.string(), 1U, k_sr, 24U, chna, axml);
     std::vector<float> samples(frames);
     for (uint32_t i = 0; i < frames; ++i) {
         samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
@@ -1083,9 +1085,10 @@ write_ds_fixture(float azimuth, float elevation, const std::string& label, uint3
     const auto in = temp_path("mr_apple_ds_input", ".wav");
     std::ostringstream xml_buf;
     fixture::write_xml(xml_buf, doc);
-    auto chna = std::make_shared<bw64::ChnaChunk>(std::vector<bw64::AudioId>{bw64::AudioId(1U, uid_str, "", "")});
-    auto axml = std::make_shared<bw64::AxmlChunk>(xml_buf.str());
-    auto writer = bw64::writeFile(in.string(), 1U, k_sr, 24U, chna, axml);
+    auto chna = std::make_shared<fixture::WaveChna>(
+        std::vector<fixture::WaveAudioId>{fixture::WaveAudioId(1U, uid_str, "", "")});
+    auto axml = std::make_shared<fixture::WaveAxml>(xml_buf.str());
+    auto writer = fixture::write_wave(in.string(), 1U, k_sr, 24U, chna, axml);
     std::vector<float> samples(frames);
     for (uint32_t i = 0; i < frames; ++i) {
         samples[i] = 0.25F * std::sin(2.0F * std::numbers::pi_v<float> * 440.0F * static_cast<float>(i) /
@@ -2346,7 +2349,7 @@ bool verify_apple_output_stage_live_gain_ramp() {
 
 } // namespace
 
-int main() {
+int main() try {
     bool ok = true;
     ok &= verify_capabilities();
     ok &= verify_lfe_label_detection();
@@ -2380,4 +2383,7 @@ int main() {
     ok &= verify_spatial_mixer_hrtf_modes_probe();
     ok &= verify_listener_orientation();
     return ok ? 0 : 1;
+} catch (const std::exception& error) {
+    std::cerr << "fixture setup failed: " << error.what() << '\n';
+    return 1;
 }
