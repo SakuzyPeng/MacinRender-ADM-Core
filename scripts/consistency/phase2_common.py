@@ -99,7 +99,7 @@ def scene_cases():
                 ('binaural', 'binaural', False), ('binaural', 'binaural', True)]
     metadata = [
         {'sample': 37, 'field': 'gain', 'value': 0.625, 'ramp': 127},
-        {'sample': 509, 'field': 'position', 'value': [-0.375, 0.625, 0.25], 'ramp': 1024},
+        {'sample': 509, 'field': 'position', 'value': [-0.25, 0.75, 0.125], 'ramp': 1024},
         {'sample': 1001, 'field': 'gain', 'value': 0.875, 'ramp': 511},
         {'sample': 3073, 'field': 'head_locked', 'value': True, 'ramp': 0},
         {'sample': 5003, 'field': 'head_locked', 'value': False, 'ramp': 0},
@@ -114,7 +114,7 @@ def scene_cases():
                     'id': f'scene-{backend}-{layout}-cloud{int(cloud)}-{input_rate}-{output_rate}-{partition_name}',
                     'version': 1, 'clock': 'epoch*2s + input_sample/input_rate; +1s at sample 10240', 'backend': backend, 'layout': layout, 'cloud': cloud,
                     'input_rate': input_rate, 'output_rate': output_rate, 'partition': partition,
-                    'device_dsp': False, 'metadata': metadata,
+                    'device_dsp': False, 'metadata': metadata, 'state_complete_on_every_frame': True,
                     'controls': {'2048': 'pose(37,23,-19)', '4096': 'generation=2',
                                  '6144': 'semantic gain scale=0.5', '8192': 'switch stereo backend',
                                  '10240': 'advance virtual clock by 1s; expire tracking'},
@@ -214,3 +214,43 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--stamp-build', required=True, type=Path)
     stamp_build(parser.parse_args().stamp_build)
+
+
+def canonicalize_device_trace(root, spec):
+    """Device callbacks are transport segments, not numeric shape boundaries.
+
+    Reassemble each measured epoch/stage by its media offset. Gaps, overlaps,
+    truncated frames and wrong total duration are errors, never zero-filled.
+    """
+    from collections import defaultdict
+    if not spec['device_dsp']:
+        return
+    groups = defaultdict(list)
+    for path in (root / 'device').glob('*.f32'):
+        match = re.fullmatch(r'e(\d+)-s(\d+)\.(\d+-.+)\.f32', path.name)
+        if match is None:
+            raise ValueError('unexpected device checkpoint name')
+        groups[(int(match[1]), match[3])].append((int(match[2]), path))
+    stages = ('70-before-hptf', '80-hptf', '90-output')
+    expected = {(epoch['epoch'], stage): ((epoch['end'] - epoch['target']) * spec['output_rate'] + spec['input_rate'] - 1) // spec['input_rate']
+                for epoch in spec['epochs'] for stage in stages}
+    if groups.keys() != expected.keys():
+        raise ValueError('missing device checkpoint stage or epoch')
+    assembled = {}
+    for key, segments in groups.items():
+        cursor, pieces = 0, []
+        for start, path in sorted(segments):
+            data = path.read_bytes()
+            validate_words(data, '.f32')
+            if len(data) % 8 or start != cursor:
+                raise ValueError('device checkpoint gap, overlap or incomplete stereo frame')
+            cursor += len(data) // 8
+            pieces.append(data)
+        if cursor != expected[key]:
+            raise ValueError('device checkpoint duration mismatch')
+        assembled[key] = b''.join(pieces)
+    for (epoch, stage), data in assembled.items():
+        (root / 'device' / f'e{epoch}.{stage}.f32').write_bytes(data)
+    for segments in groups.values():
+        for _, path in segments:
+            path.unlink()
