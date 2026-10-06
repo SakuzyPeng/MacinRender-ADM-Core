@@ -545,17 +545,6 @@ object_block_events(const render_common::PreparedObjectBlock& prepared, const Sc
     return status;
 }
 
-// Head-lock 补偿:把一个总线的方向(SpatialMixer 约定:az +右、el +上)按听者头朝向预旋转,
-// 使全局 HeadYaw/Pitch/Roll 对其恰好抵消 → 该源锁在头上(head-locked),不随转头移动。
-// 坐标:x=右、y=前、z=上。组合顺序与 GUI 头部姿态反馈保持一致:roll(绕前轴 y) →
-// pitch(绕右轴 x) → yaw(绕上轴 z)。yaw 已由 smoke/真机方向锁定;pitch/roll 仍建议真机标定。
-[[nodiscard]] std::pair<float, float> head_lock_compensate(float az_deg, float el_deg, const ListenerOrientation& o) {
-    const std::array input{az_deg, el_deg, o.yaw_deg, o.pitch_deg, o.roll_deg};
-    std::array<float, 2> output{};
-    dsp::scene_check(mradm_dsp_scene_rotate_pose(input.data(), input.size(), output.data(), output.size(), 1U));
-    return {output[0], output[1]};
-}
-
 // Set the four per-source SpatialMixer parameters for one input bus, short-circuiting on
 // the first failure so a bad parameter set surfaces instead of silently continuing.
 [[nodiscard]] OSStatus set_bus_parameters(
@@ -1192,6 +1181,9 @@ class AppleStream final : public IRenderStream {
     // direct and 22.2 LFE side buses are then mixed by the host. The function allocates nothing.
     [[nodiscard]] OSStatus
     render_au_block(uint64_t position, const ListenerOrientation& orient, float* dst, UInt32 frames_now) {
+        if (profile_.binaural) {
+            head_rotation_.update({orient.yaw_deg, orient.pitch_deg, orient.roll_deg});
+        }
         for (std::size_t i = 0; i < buses_.size(); ++i) {
             auto& gain_ramp = bus_gain_ramps_[i];
             gain_ramp.set_target(bus_gain_target_[i].load(std::memory_order_relaxed));
@@ -1208,7 +1200,7 @@ class AppleStream final : public IRenderStream {
             // head-locked 总线:把方向按头朝向补偿,使全局 AU 头旋转对其抵消(锁在头上)。
             // 头朝向恒等时补偿是 no-op,故未开头追踪 / world-locked 时零影响。
             if (profile_.binaural && !orient.is_identity() && head_locked) {
-                const auto [caz, cel] = head_lock_compensate(azimuth, elevation, orient);
+                const auto [caz, cel] = head_rotation_.apply(azimuth, elevation, true);
                 azimuth = caz;
                 elevation = cel;
             }
@@ -1373,6 +1365,7 @@ class AppleStream final : public IRenderStream {
     std::atomic<bool> render_failed_{false}; // set by render_output on a callback AU error (output-stage)
     ListenerOrientation live_orientation_;   // live head orientation; applied in render_slice when dirty (worker-only)
     bool orientation_dirty_{false};          // set by set_listener_orientation; cleared once applied to the AU
+    dsp::SceneRotation head_rotation_{{0.0F, 0.0F, 0.0F}};
     // Declared LAST so it is destroyed FIRST: ~AudioUnitGuard runs AudioUnitUninitialize
     // before staging_/contexts_ (which the AU's input pull callbacks reference) are freed.
     AudioUnitGuard unit_;
@@ -1644,6 +1637,8 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
     // cppcheck-suppress variableScope; callback backing storage must outlive AudioUnitGuard.
     std::vector<InputBusContext> contexts;
 
+    const dsp::SceneRotation head_rotation{
+        {plan.listener_orientation.yaw_deg, plan.listener_orientation.pitch_deg, plan.listener_orientation.roll_deg}};
     AudioUnitGuard unit_guard{nullptr};
     AudioUnit unit = nullptr;
     if (!buses.empty()) {
@@ -1744,7 +1739,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                 const float gain_db = linear_gain_to_db(ev != nullptr ? ev->gain : 0.0F);
                 if (profile.binaural && ev != nullptr && ev->head_locked && !plan.listener_orientation.is_identity()) {
                     const auto [compensated_azimuth, compensated_elevation] =
-                        head_lock_compensate(azimuth, elevation, plan.listener_orientation);
+                        head_rotation.apply(azimuth, elevation, true);
                     azimuth = compensated_azimuth;
                     elevation = compensated_elevation;
                 }

@@ -93,12 +93,15 @@ pub fn polar(v: Vec3, binaural: bool) -> [f32; 2] {
     }
 }
 pub fn distance(a: Vec3, b: Vec3) -> f32 {
+    distance_compat(a, b, false)
+}
+pub fn distance_compat(a: Vec3, b: Vec3, contract: bool) -> f32 {
     let [x, y, z] = [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-    ((x * x) + (y * y) + (z * z)).sqrt()
+    cpp_madd(z, z, cpp_madd(x, x, y * y, contract), contract).sqrt()
 }
 pub fn wrap(mut az: f32) -> f32 {
     // For the normal finite range use precisely the old repeated additions.
-    // Large angles for which subtraction cannot advance are reduced first.
+    // Reject non-progressing subtraction rather than entering an unbounded loop.
     if !az.is_finite() {
         return f32::NAN;
     }
@@ -131,7 +134,7 @@ fn remainder_double(x: f64) -> f64 {
 }
 // Explicitly preserve the scalar contraction used by the frozen native build.
 // The private caller selects it from the existing strict-FP/platform configuration.
-fn cpp_madd(a: f32, b: f32, c: f32, contract: bool) -> f32 {
+pub(crate) fn cpp_madd(a: f32, b: f32, c: f32, contract: bool) -> f32 {
     if contract { a.mul_add(b, c) } else { a * b + c }
 }
 pub fn radii(width: f32, height: f32, depth: f32, distance: f32, contract: bool) -> [f32; 2] {
@@ -304,6 +307,14 @@ pub struct Speaker {
     pub is_lfe: u32,
 }
 pub fn nearest(position: Vec3, cartesian: bool, speakers: &[Speaker]) -> Option<(usize, f32)> {
+    nearest_compat(position, cartesian, speakers, false)
+}
+pub fn nearest_compat(
+    position: Vec3,
+    cartesian: bool,
+    speakers: &[Speaker],
+    contract: bool,
+) -> Option<(usize, f32)> {
     let p = if cartesian {
         cartesian_to_polar(position)
     } else {
@@ -316,7 +327,7 @@ pub fn nearest(position: Vec3, cartesian: bool, speakers: &[Speaker]) -> Option<
         if s.is_lfe != 0 {
             continue;
         }
-        let d = distance(src, direction(s.azimuth, s.elevation));
+        let d = distance_compat(src, direction(s.azimuth, s.elevation), contract);
         if d < best {
             best = d;
             index = Some(i);
@@ -325,9 +336,17 @@ pub fn nearest(position: Vec3, cartesian: bool, speakers: &[Speaker]) -> Option<
     index.map(|i| (i, best))
 }
 type Quaternion = [f64; 4];
-fn multiply(a: Quaternion, b: Quaternion) -> Quaternion {
+fn multiply(a: Quaternion, b: Quaternion, contract: bool) -> Quaternion {
     let [w, x, y, z] = a;
     let [v, i, j, k] = b;
+    if contract {
+        return [
+            (-z).mul_add(k, (-y).mul_add(j, w.mul_add(v, -(x * i)))),
+            (-z).mul_add(j, y.mul_add(k, w.mul_add(i, x * v))),
+            z.mul_add(i, y.mul_add(v, w.mul_add(j, -(x * k)))),
+            z.mul_add(v, (-y).mul_add(i, w.mul_add(k, x * j))),
+        ];
+    }
     [
         w * v - x * i - y * j - z * k,
         w * i + x * v + y * k - z * j,
@@ -346,9 +365,17 @@ fn axis(axis: [f64; 3], angle: f64) -> Quaternion {
 #[derive(Clone, Copy)]
 pub struct Rotation {
     head_to_world: Quaternion,
+    contract: bool,
 }
 impl Rotation {
     pub fn new(pose: Vec3) -> Result<Self> {
+        Self::new_compat(pose, false)
+    }
+    pub fn update(&mut self, pose: Vec3) -> Result<()> {
+        *self = Self::new_compat(pose, self.contract)?;
+        Ok(())
+    }
+    pub fn new_compat(pose: Vec3, contract: bool) -> Result<Self> {
         if pose.iter().any(|x| !x.is_finite()) {
             return Err(Error::InvalidArgument("Invalid head orientation"));
         }
@@ -356,7 +383,8 @@ impl Rotation {
         let pitch = axis([1., 0., 0.], f64::from(pose[1]) * DRAD);
         let yaw = axis([0., 0., 1.], f64::from(pose[0]) * DRAD);
         Ok(Self {
-            head_to_world: multiply(yaw, multiply(pitch, roll)),
+            head_to_world: multiply(yaw, multiply(pitch, roll, contract), contract),
+            contract,
         })
     }
     pub fn apply(&self, az: f32, el: f32, apple: bool) -> [f32; 2] {
@@ -369,7 +397,11 @@ impl Rotation {
         } else {
             conjugate(self.head_to_world)
         };
-        let [_, x, y, z] = multiply(multiply(q, [0., x, a.cos() * ce, e.sin()]), conjugate(q));
+        let [_, x, y, z] = multiply(
+            multiply(q, [0., x, a.cos() * ce, e.sin()], self.contract),
+            conjugate(q),
+            self.contract,
+        );
         if apple {
             [
                 (x.atan2(y) * DEG) as f32,

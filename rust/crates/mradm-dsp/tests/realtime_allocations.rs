@@ -36,6 +36,61 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOCATOR: Counting = Counting;
 
 #[test]
+fn live_binaural_first_preview_render_rejection_and_reset_do_not_allocate() {
+    use mradm_dsp::{hrtf::Grid, hrtf_filters::Filters, live_binaural::*};
+    use std::sync::Arc;
+    let grid =
+        Arc::new(Grid::new(&[0., 0., 90., 0., 180., 0., -90., 0., 0., 90., 0., -90.]).unwrap());
+    let mut impulses = [0.; 192];
+    for i in 0..12 {
+        impulses[i * 16] = 1.;
+    }
+    let bank = Arc::new(Filters::new(grid, &impulses, 16, 64, true).unwrap());
+    let mut t = Session::new(bank, &[Description::default()], 48000, 0, false).unwrap();
+    let input = [0.125; 1025];
+    let mut pcm = [0.; 2050];
+    let initial = Command::default();
+    let mut command = Command {
+        duration: 513,
+        changed: 4,
+        ..Command::default()
+    };
+    command.state.position[0] = 1.;
+    COUNT.with(|c| c.set(Some(0)));
+    t.process(
+        1025,
+        [Some(&input[..])].into_iter(),
+        &[initial],
+        &[command],
+        [30., 20., 10.],
+        0,
+        &mut pcm,
+    )
+    .unwrap();
+    command.element = 1;
+    assert!(
+        t.process(
+            1025,
+            [Some(&input[..])].into_iter(),
+            &[],
+            &[command],
+            [0.; 3],
+            0,
+            &mut pcm
+        )
+        .is_err()
+    );
+    for n in [0, 1, 31, 32, 33, 511, 512, 513, 1023, 1024] {
+        t.process(n, [None].into_iter(), &[], &[], [0.; 3], 0, &mut pcm)
+            .unwrap();
+    }
+    t.reset();
+    t.process(1, std::iter::empty(), &[], &[], [0.; 3], 0, &mut pcm)
+        .unwrap();
+    assert_eq!(COUNT.with(|c| c.replace(None).unwrap()), 0);
+}
+
+#[test]
 fn scene_transitions_first_process_reset_and_rejection_do_not_allocate() {
     use mradm_dsp::scene_transition::Transitions;
     let mut t = Transitions::new(65, 48000, 2048).unwrap();

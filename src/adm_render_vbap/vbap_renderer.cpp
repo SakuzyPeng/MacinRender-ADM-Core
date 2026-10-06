@@ -178,12 +178,7 @@ calculate_point_vbap_gains(float azimuth, float elevation, float gain, float spr
     const auto block_has_elevation = [](const SceneObject& obj, const SceneObjectBlock& block) {
         const auto position =
             obj.position_offset ? apply_position_offset(block.position, *obj.position_offset) : block.position;
-        const float el = position.cartesian
-                             ? static_cast<float>(std::atan2(static_cast<double>(position.z),
-                                                             std::hypot(static_cast<double>(position.x),
-                                                                        static_cast<double>(position.y))) *
-                                                  (180.0 / std::numbers::pi_v<double>) )
-                             : position.elevation;
+        const float el = scene_position_to_polar(position).elevation;
         return std::fabs(el) > k_el_threshold;
     };
     return std::ranges::any_of(scene.objects, [&](const SceneObject& obj) {

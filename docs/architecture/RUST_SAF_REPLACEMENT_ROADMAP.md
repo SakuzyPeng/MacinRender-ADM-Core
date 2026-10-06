@@ -44,6 +44,9 @@ Peak/RMS；worker 与回调分别独占数值实例，C++ 保留队列、设备�
 [Live VBAP 迁移](RUST_LIVE_VBAP_MIGRATION.md)接管 Live Scene 的声像/电平独立渐变与 PCM 混音，
 按整帧提交数值命令，C++ 保留语义与路由并补齐可恢复错误的事务边界。
 
+[Scene 数值迁移](RUST_SCENE_NUMERIC_MIGRATION.md)接管共享空间/姿态数学、Scene 外层过渡和
+Live 双耳的字段渐变、cloud 合成及信号状态编排，并补齐双耳整帧错误原子性。
+
 内置 KEMAR、原型和格型系数及 HOA 矩阵是约 1.7 MiB 的已提交二进制资源。`assets/manifest.json` 记录尺寸、来源和 SHA-256；`assets/NOTICE.txt` 保留 ISC/MIT 声明及数据提供者归属。正常构建不从 SAF 提取数据。
 
 ## 2. 行为边界

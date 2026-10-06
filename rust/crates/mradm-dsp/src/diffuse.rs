@@ -3,7 +3,7 @@ use crate::{Error, Result};
 
 pub const DELAY_LENGTH: usize = 32;
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub struct DiffuseDelay {
     delay: [f32; DELAY_LENGTH],
     position: usize,

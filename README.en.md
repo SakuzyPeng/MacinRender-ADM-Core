@@ -344,6 +344,8 @@ Monitor backend crossfades, seek transitions and Peak/RMS also keep their numeri
 
 Live Scene VBAP mixing and independent spatial/level ramp state also run in Rust. C++ prepares each complete frame before committing, preserving state and output on recoverable errors. See the [Rust Live VBAP migration](docs/architecture/RUST_LIVE_VBAP_MIGRATION.md).
 
+Scene outer transitions, shared spatial math, and the remaining Live binaural numerical state also run in Rust. Whole-frame binaural preflight preserves output and history on parameter or semantic errors. See the [Rust Scene numerical migration](docs/architecture/RUST_SCENE_NUMERIC_MIGRATION.md).
+
 System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
 
 ```bash

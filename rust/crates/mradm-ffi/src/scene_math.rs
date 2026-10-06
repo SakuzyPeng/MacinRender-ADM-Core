@@ -37,7 +37,7 @@ pub unsafe extern "C" fn mradm_dsp_scene_math(
                 0 => d.copy_from_slice(&math::cartesian_to_polar([s[0], s[1], s[2]])),
                 1 => d.copy_from_slice(&math::direction(s[0], s[1])),
                 2 => d[0] = math::length([s[0], s[1], s[2]]),
-                3 => d[0] = math::distance([s[0], s[1], s[2]], [s[3], s[4], s[5]]),
+                3 => d[0] = math::distance_compat([s[0], s[1], s[2]], [s[3], s[4], s[5]], contract),
                 4 => d[0] = math::wrap(s[0]),
                 5 => d.copy_from_slice(&math::radii(s[0], s[1], s[2], s[3], contract)),
                 6 | 7 => d[0] = math::spread([s[0], s[1], s[2]], s[3], s[4], s[5], op == 7),
@@ -155,14 +155,15 @@ pub unsafe extern "C" fn mradm_dsp_scene_nearest(
         if n != 3 {
             return Err(invalid());
         }
-        let cart = flag(cartesian)?;
+        let cart = flag(cartesian & !256)?;
+        let contract = cartesian & 256 != 0;
         let s = input(src, n)?;
         let speakers = input(speakers, speaker_count)?;
         if speakers.iter().any(|s| s.is_lfe > 1) {
             return Err(invalid());
         }
-        let result =
-            math::nearest([s[0], s[1], s[2]], cart, speakers).unwrap_or((usize::MAX, f32::MAX));
+        let result = math::nearest_compat([s[0], s[1], s[2]], cart, speakers, contract)
+            .unwrap_or((usize::MAX, f32::MAX));
         *index = result.0;
         *distance = result.1;
         Ok(())
@@ -172,6 +173,7 @@ pub unsafe extern "C" fn mradm_dsp_scene_nearest(
 pub unsafe extern "C" fn mradm_dsp_scene_rotation_create(
     pose: *const f32,
     n: usize,
+    contract: u32,
     out: *mut *mut Rotation,
 ) -> i32 {
     boundary(std::ptr::null_mut(), 0, || unsafe {
@@ -180,7 +182,7 @@ pub unsafe extern "C" fn mradm_dsp_scene_rotation_create(
             return Err(invalid());
         }
         let p = input(pose, n)?;
-        let r = Rotation::new([p[0], p[1], p[2]])?;
+        let r = Rotation::new_compat([p[0], p[1], p[2]], flag(contract)?)?;
         *out = Box::into_raw(Box::new(r));
         Ok(())
     })
@@ -205,8 +207,7 @@ pub unsafe extern "C" fn mradm_dsp_scene_rotation_update(
             return Err(invalid());
         }
         let p = input(pose, n)?;
-        let r = Rotation::new([p[0], p[1], p[2]])?;
-        *h = r;
+        (*h).update([p[0], p[1], p[2]])?;
         Ok(())
     })
 }
@@ -275,12 +276,13 @@ pub unsafe extern "C" fn mradm_dsp_scene_rotate_pose(
         if n != 5 || m != 2 {
             return Err(invalid());
         }
-        let apple = flag(apple)?;
+        let contract = apple & 256 != 0;
+        let apple = flag(apple & !256)?;
         let s = input(src, n)?;
         if s.iter().any(|x| !x.is_finite()) {
             return Err(invalid());
         }
-        let rotation = Rotation::new([s[2], s[3], s[4]])?;
+        let rotation = Rotation::new_compat([s[2], s[3], s[4]], contract)?;
         let result = rotation.apply(s[0], s[1], apple);
         output(dst, m)?.copy_from_slice(&result);
         Ok(())
@@ -297,7 +299,7 @@ mod tests {
             let pose = [0f32; 3];
             let mut handle = std::ptr::null_mut();
             assert_eq!(
-                mradm_dsp_scene_rotation_create(pose.as_ptr(), 3, &mut handle),
+                mradm_dsp_scene_rotation_create(pose.as_ptr(), 3, 0, &mut handle),
                 0
             );
             let input = [0., 0., 1., 0.5, 0.5, 0.5, 1.];

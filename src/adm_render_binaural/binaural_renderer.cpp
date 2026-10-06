@@ -688,7 +688,7 @@ expand_binaural_extent(const SceneObjectBlock& block, float source_gain, Binaura
     std::vector<ExtentSource> sources;
     sources.reserve(count);
     for (size_t index = 0; index < count; ++index) {
-        const auto& point = points[index];
+        const auto& point = points.at(index);
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
         if (count > 1) {
             consistency::dump("cloud.01-slot-" + std::to_string(point.slot) + ".f32",

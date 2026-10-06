@@ -47,9 +47,9 @@
     }
   ],
   "reference_sha256": {
-    "spatial.h": "48a3a0172da7c4ce8a7e797e83c0a65e807039f76c1d70fb6161f30f1b5dba4c",
-    "live_binaural.h": "ff438761c229c28c9fb70ca04f347b585e4834c3578ffe25c83e7977c0269e24",
-    "transitions.h": "cb0263aaf4e2819e7f28e7fc481b8f2e1de60b2a26b18c664ee558f7ac968190"
+    "spatial.h": "cb524128112bad622c36052d66a572c9c0e5d12a24e56e6cb88d3003a77cd5ad",
+    "live_binaural.h": "ed2504fdcceb52ce63588b4295dd500df0abaf71f986931e64809c6875f4ef45",
+    "transitions.h": "a731229aae869b6a981bdea8d366b8fa0a8700d4bbac9ca5861f41b2153fbedf"
   },
   "adaptations": [
     "Freeze coordinate, cloud and rotation math independently of production helper functions",

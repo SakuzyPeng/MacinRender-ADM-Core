@@ -24,6 +24,9 @@ C++ 继续负责 ADM/Scene 语义、方向与 extent 解析、HRTF 幅度/相位
 [HRTF 迁移](RUST_HRTF_MIGRATION.md)已接管幅度/相位插值、连续方向查询及相关频域状态。
 上文保留本轮卷积迁移时的边界，当前所有权以这两份后续记录为准。
 
+[Scene 数值迁移](RUST_SCENE_NUMERIC_MIGRATION.md)随后接管 Live 双耳剩余的数值控制、
+cloud 合成和累加，并通过共享 HRTF 表与整帧预检查补齐状态所有权和错误原子性。
+
 ## 保留的两种卷积契约
 
 | 路径 | 历史与过渡 |

@@ -36,8 +36,9 @@ corrosion_add_target_rustflags(mradm_ffi "-Crelocation-model=pic")
 add_library(mr_adm_dsp INTERFACE)
 add_library(MacinRender::ADMDsp ALIAS mr_adm_dsp)
 # Preserve the existing numerical build policy at private Scene arithmetic boundaries.
-target_compile_definitions(mr_adm_dsp INTERFACE
-    $<$<BOOL:${MR_ADM_STRICT_FP}>:MRADM_SCENE_STRICT_FP=1>)
+if(MR_ADM_STRICT_FP)
+    add_compile_definitions(MRADM_SCENE_STRICT_FP=1)
+endif()
 target_link_libraries(mr_adm_dsp INTERFACE mradm_ffi)
 target_include_directories(mr_adm_dsp INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_dsp")
 

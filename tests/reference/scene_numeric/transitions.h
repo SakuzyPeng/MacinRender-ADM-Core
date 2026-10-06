@@ -6,13 +6,19 @@
 #include <vector>
 namespace scene_numeric_reference {
 struct Transitions {
-    size_t channels;uint32_t rate;
-    uint64_t backend_crossfade_position=0,transition_remaining=0,transition_position=0;
-    std::vector<float> last_output_frame,transition_anchor;
-    static constexpr uint64_t k_backend_crossfade_frames=2048;
-    Transitions(size_t channels,uint32_t rate):channels(channels),rate(rate),last_output_frame(channels),transition_anchor(channels){}
-    void begin_generation(){transition_anchor=last_output_frame;transition_remaining=std::max<uint64_t>(1,uint64_t(rate)*10/1000);transition_position=0;}
-    bool mix(std::span<float>render_output,std::span<const float>render_output_b,uint32_t frames){
+    size_t channels;
+    uint32_t rate;
+    uint64_t backend_crossfade_position = 0, transition_remaining = 0, transition_position = 0;
+    std::vector<float> last_output_frame, transition_anchor;
+    static constexpr uint64_t k_backend_crossfade_frames = 2048;
+    Transitions(size_t channels, uint32_t rate)
+        : channels(channels), rate(rate), last_output_frame(channels), transition_anchor(channels) {}
+    void begin_generation() {
+        transition_anchor = last_output_frame;
+        transition_remaining = std::max<uint64_t>(1, uint64_t(rate) * 10 / 1000);
+        transition_position = 0;
+    }
+    bool mix(std::span<float> render_output, std::span<const float> render_output_b, uint32_t frames) {
         for (std::uint32_t frame_index = 0U; frame_index < frames; ++frame_index) {
             const auto position = std::min<std::uint64_t>(backend_crossfade_position + 1U, k_backend_crossfade_frames);
             const float incoming_weight = static_cast<float>(position) / static_cast<float>(k_backend_crossfade_frames);
@@ -24,7 +30,7 @@ struct Transitions {
             }
             ++backend_crossfade_position;
         }
-        return backend_crossfade_position>=k_backend_crossfade_frames;
+        return backend_crossfade_position >= k_backend_crossfade_frames;
     }
     void apply_transition(float* samples, std::size_t frames, bool force_silence) noexcept {
         for (std::size_t frame = 0; frame < frames; ++frame) {
@@ -55,4 +61,4 @@ struct Transitions {
         }
     }
 };
-}
+} // namespace scene_numeric_reference

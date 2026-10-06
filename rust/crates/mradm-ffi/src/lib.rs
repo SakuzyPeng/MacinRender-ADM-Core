@@ -15,6 +15,7 @@ mod ear_post;
 mod hoa;
 mod hptf;
 mod hrtf;
+mod live_binaural;
 mod live_vbap;
 mod meter;
 mod monitor;

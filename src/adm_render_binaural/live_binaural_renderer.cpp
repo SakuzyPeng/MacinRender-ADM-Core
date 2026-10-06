@@ -14,6 +14,7 @@
 #include <optional>
 #include <ranges>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -21,6 +22,9 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
+#include "live_binaural.h"
+#include "scene_math.h"
 
 // Private project DSP complex type.
 
@@ -39,40 +43,24 @@ namespace mradm::live_scene {
 namespace {
 
 using binaural_internal::BinauralState;
-using binaural_internal::compute_continuous_hrtf_into;
 using binaural_internal::HrtfDataset;
 using binaural_internal::k_n_ears;
-
 constexpr std::uint32_t k_convolution_block = 1024U;
-constexpr std::size_t k_diffuse_delay_len = 32U;
+
 
 // These private renderer-local aggregate workspaces intentionally expose their storage to the
 // convolution helpers in this translation unit.
 // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
 struct RuntimeElement {
     ElementDescriptor descriptor;
-    ObjectState current;
     ObjectState target;
-    std::optional<std::pair<float, float>> current_direction;
-    std::optional<std::pair<float, float>> target_direction;
-    std::array<std::uint32_t, 11U> ramp_remaining{};
     bool initialized{false};
-    BinauralConvolutionState convolution;
-    dsp::DiffuseDelay diffuse;
 };
-
-struct ConvolutionScratch {
-    std::vector<float> source;
-    std::vector<float> left;
-    std::vector<float> right;
-    std::vector<dsp::Complex> hrtf_target;
-    std::vector<dsp::Complex> hrtf_temp;
-
-    void resize() {
-        source.resize(k_convolution_block);
-        left.resize(k_convolution_block);
-        right.resize(k_convolution_block);
-    }
+struct StagedControl {
+    ObjectState target;
+    bool initialized{false};
+    bool seen_initial{false};
+    bool seen_pcm{false};
 };
 // NOLINTEND(misc-non-private-member-variables-in-classes)
 
@@ -133,53 +121,10 @@ void copy_state_fields(ObjectState& destination, const ObjectState& source, std:
     destination.valid_fields |= fields;
 }
 
-[[nodiscard]] ObjectState
-interpolated_state(const ObjectState& start, const ObjectState& target, float alpha) noexcept {
-    const auto lerp = [alpha](float from, float to) { return from + ((to - from) * alpha); };
-    ObjectState result = start;
-    result.linear_gain = lerp(start.linear_gain, target.linear_gain);
-    result.x = lerp(start.x, target.x);
-    result.y = lerp(start.y, target.y);
-    result.z = lerp(start.z, target.z);
-    result.width = lerp(start.width, target.width);
-    result.height = lerp(start.height, target.height);
-    result.depth = lerp(start.depth, target.depth);
-    result.diffuse = lerp(start.diffuse, target.diffuse);
-    result.divergence = lerp(start.divergence, target.divergence);
-    result.divergence_azimuth_range = lerp(start.divergence_azimuth_range, target.divergence_azimuth_range);
-    result.divergence_position_range = lerp(start.divergence_position_range, target.divergence_position_range);
-    if (start.channel_lock_max_distance && target.channel_lock_max_distance) {
-        result.channel_lock_max_distance = lerp(*start.channel_lock_max_distance, *target.channel_lock_max_distance);
-    }
-    if (alpha >= 1.0F) {
-        result.active = target.active;
-        result.channel_lock = target.channel_lock;
-        result.screen_reference = target.screen_reference;
-        result.head_locked = target.head_locked;
-        result.channel_lock_max_distance = target.channel_lock_max_distance;
-        result.valid_fields = target.valid_fields;
-    }
-    return result;
-}
-
-[[nodiscard]] std::pair<float, float> interpolated_direction(const std::pair<float, float>& start,
-                                                             const std::pair<float, float>& target,
-                                                             float alpha) noexcept {
-    if (alpha >= 1.0F) {
-        return target;
-    }
-    const float azimuth_delta = std::remainder(target.first - start.first, 360.0F);
-    return {start.first + (azimuth_delta * alpha), start.second + ((target.second - start.second) * alpha)};
-}
-
 [[nodiscard]] std::pair<float, float> cartesian_to_polar(float x, float y, float z) noexcept {
-    constexpr double k_rad_to_deg = 180.0 / std::numbers::pi_v<double>;
-    const double horizontal = std::hypot(static_cast<double>(x), static_cast<double>(y));
-    const double azimuth = std::atan2(-static_cast<double>(x), static_cast<double>(y)) * k_rad_to_deg;
-    const double elevation = std::atan2(static_cast<double>(z), horizontal) * k_rad_to_deg;
-    return {static_cast<float>(azimuth), static_cast<float>(elevation)};
+    const auto p = dsp::scene_math<3, 3>(0U, {x, y, z});
+    return {p[0], p[1]};
 }
-
 [[nodiscard]] std::optional<std::pair<float, float>> label_position(std::string_view label) {
     static const std::unordered_map<std::string_view, std::pair<float, float>> k_positions{
         {"M+000", {0.0F, 0.0F}},     {"M+030", {30.0F, 0.0F}},   {"M-030", {-30.0F, 0.0F}},
@@ -197,27 +142,6 @@ interpolated_state(const ObjectState& start, const ObjectState& target, float al
         return std::nullopt;
     }
     return found->second;
-}
-
-[[nodiscard]] std::pair<float, float>
-channel_locked_direction(float azimuth, float elevation, const ObjectState& object_state) {
-    if (!object_state.channel_lock) {
-        return {azimuth, elevation};
-    }
-    SceneObjectBlock block;
-    block.position.cartesian = false;
-    block.position.azimuth = azimuth;
-    block.position.elevation = elevation;
-    block.position.distance = 1.0F;
-    block.channel_lock = true;
-    block.channel_lock_max_distance = object_state.channel_lock_max_distance;
-    static const std::vector<SceneOutputSpeaker> k_lock_speakers{
-        {30.0F, 0.0F, false},
-        {-30.0F, 0.0F, false},
-    };
-    const auto locked = apply_channel_lock(block, k_lock_speakers);
-    const auto locked_position = scene_position_to_polar(locked.position);
-    return {locked_position.azimuth, locked_position.elevation};
 }
 
 [[nodiscard]] Result<HrtfDataset> resample_dataset(HrtfDataset dataset, std::uint32_t sample_rate) {
@@ -398,478 +322,336 @@ class HrtfStateCache {
     return state;
 }
 
+// Producer ranges are validated upstream. Policy-expanded coordinates/extents may exceed them;
+// this numerical boundary checks finiteness without narrowing the policy domain.
+[[nodiscard]] bool valid_state(const ObjectState& state) noexcept {
+    const auto coordinate = [](float v) { return std::isfinite(v); };
+    const auto finite = [](float v) { return std::isfinite(v); };
+    if ((state.valid_fields & ~k_known_state_fields) != 0U) {
+        return false;
+    }
+    if ((state.valid_fields & state_linear_gain) != 0U &&
+        (!std::isfinite(state.linear_gain) || state.linear_gain < 0)) {
+        return false;
+    }
+    if ((state.valid_fields & state_position) != 0U &&
+        (!coordinate(state.x) || !coordinate(state.y) || !coordinate(state.z))) {
+        return false;
+    }
+    if ((state.valid_fields & state_extent) != 0U &&
+        (!finite(state.width) || !finite(state.height) || !finite(state.depth))) {
+        return false;
+    }
+    if ((state.valid_fields & state_diffuse) != 0U && !finite(state.diffuse)) {
+        return false;
+    }
+    if ((state.valid_fields & state_divergence) != 0U && !finite(state.divergence)) {
+        return false;
+    }
+    if ((state.valid_fields & state_divergence_range) != 0U &&
+        (!std::isfinite(state.divergence_azimuth_range) || state.divergence_azimuth_range < 0 ||
+         !std::isfinite(state.divergence_position_range) || state.divergence_position_range < 0)) {
+        return false;
+    }
+    return (state.valid_fields & state_channel_lock_max_distance) == 0U || !state.channel_lock_max_distance ||
+           (std::isfinite(*state.channel_lock_max_distance) && *state.channel_lock_max_distance >= 0);
+}
+
+
+[[nodiscard]] MradmLiveBinauralState numerical_state(const ObjectState& s) {
+    return {s.valid_fields,
+            s.active ? 1U : 0U,
+            s.channel_lock ? 1U : 0U,
+            s.screen_reference ? 1U : 0U,
+            s.head_locked ? 1U : 0U,
+            s.linear_gain,
+            {s.x, s.y, s.z},
+            {s.width, s.height, s.depth},
+            s.diffuse,
+            s.divergence,
+            {s.divergence_azimuth_range, s.divergence_position_range},
+            s.channel_lock_max_distance ? 1U : 0U,
+            s.channel_lock_max_distance.value_or(0.0F)};
+}
 class LiveBinauralRenderer final : public ILiveSceneRenderer {
   public:
     LiveBinauralRenderer(RendererConfig config, std::shared_ptr<const BinauralState> state, DiagnosticSink diagnostics)
-        : config_(std::move(config)), state_(std::move(state)), diagnostics_(std::move(diagnostics)),
-          convolver_(state_->fft_size, k_convolution_block, config_.sample_rate) {
-        scratch_.resize();
+        : config_(std::move(config)), state_(std::move(state)), diagnostics_(std::move(diagnostics)) {
+        auto prepared =
+            dsp::LiveBinauralSession::create(state_->filters.get(), {}, config_.sample_rate, numerical_spread());
+        if (!prepared) {
+            throw std::runtime_error(prepared.error().message);
+        }
+        session_ = std::move(*prepared);
     }
-
-    [[nodiscard]] Result<void> configure_generation(std::uint64_t generation_id,
+    [[nodiscard]] Result<void> configure_generation(uint64_t generation,
                                                     std::span<const ElementDescriptor> descriptors) override {
-        generation_id_ = generation_id;
-        elements_.clear();
-        element_index_.clear();
-        warned_.clear();
-        elements_.reserve(descriptors.size());
+        if (descriptors.size() > std::numeric_limits<uint32_t>::max()) {
+            return make_error(ErrorCode::invalid_argument, "Live binaural element count overflows numerical indices");
+        }
+        std::vector<RuntimeElement> next;
+        std::unordered_map<uint64_t, size_t> indices;
+        std::vector<MradmLiveBinauralDescription> numeric;
+        next.reserve(descriptors.size());
+        indices.reserve(descriptors.size());
+        numeric.reserve(descriptors.size());
         for (const auto& descriptor : descriptors) {
-            RuntimeElement runtime;
-            runtime.descriptor = descriptor;
-            runtime.current = default_state(descriptor);
-            runtime.target = runtime.current;
-            if (descriptor.role != ElementRole::lfe) {
-                runtime.convolution = convolver_.make_state();
+            if ((descriptor.role != ElementRole::object && descriptor.role != ElementRole::direct_speaker &&
+                 descriptor.role != ElementRole::lfe) ||
+                !indices.emplace(descriptor.element_id, next.size()).second) {
+                return make_error(ErrorCode::invalid_argument, "Live binaural has an invalid or duplicate element");
             }
-            element_index_.emplace(descriptor.element_id, elements_.size());
-            elements_.push_back(std::move(runtime));
+            auto defaults = default_state(descriptor);
+            if (descriptor.has_position) {
+                auto position = defaults;
+                position.valid_fields |= state_position;
+                if (!valid_state(position)) {
+                    return make_error(ErrorCode::invalid_argument, "Live binaural element position is invalid");
+                }
+            }
+            const auto fallback = descriptor.has_position ? cartesian_to_polar(descriptor.x, descriptor.y, descriptor.z)
+                                                          : std::pair{0.0F, 0.0F};
+            numeric.push_back({static_cast<uint32_t>(descriptor.role), 0, {fallback.first, fallback.second}});
+            next.push_back({descriptor, defaults, false});
         }
+        auto prepared =
+            dsp::LiveBinauralSession::create(state_->filters.get(), numeric, config_.sample_rate, numerical_spread());
+        if (!prepared) {
+            return tl::unexpected{prepared.error()};
+        }
+        session_ = std::move(*prepared);
+        elements_.swap(next);
+        element_index_.swap(indices);
+        generation_id_ = generation;
+        warned_ = 0;
         return {};
     }
-
     void reset() override {
-        generation_id_ = 0U;
+        session_.reset();
+        generation_id_ = 0;
         elements_.clear();
         element_index_.clear();
-        warned_.clear();
+        staged_.clear();
+        initial_.clear();
+        events_.clear();
+        planes_.clear();
+        warned_ = 0;
     }
-
     [[nodiscard]] Result<void> render(const Frame& frame, std::span<float> output) override {
-        const auto required = static_cast<std::size_t>(frame.duration_samples) * 2U;
-        if (output.size() < required) {
-            return make_error(ErrorCode::invalid_argument, "live binaural output buffer is too small");
+        if (static_cast<size_t>(frame.duration_samples) > std::numeric_limits<size_t>::max() / 2U) {
+            return make_error(ErrorCode::invalid_argument, "Live binaural output size overflows");
         }
-        if (frame.generation_id != generation_id_) {
-            return make_error(ErrorCode::invalid_argument, "live binaural frame uses an unconfigured generation");
+        const size_t required = static_cast<size_t>(frame.duration_samples) * 2U;
+        if (output.size() < required || frame.generation_id != generation_id_) {
+            return make_error(ErrorCode::invalid_argument, "Live binaural output or generation is invalid");
         }
-        std::ranges::fill(output.first(required), 0.0F);
-
-        auto initialized = initialize_frame(frame);
-        if (!initialized) {
-            return tl::unexpected{initialized.error()};
+        auto prepared = prepare_initials(frame);
+        if (!prepared) {
+            return prepared;
         }
-
-        std::unordered_map<std::uint64_t, const PcmPlane*> planes;
-        planes.reserve(frame.pcm.size());
-        for (const auto& plane : frame.pcm) {
-            planes.emplace(plane.element_id, &plane);
+        prepared = prepare_planes(frame);
+        if (!prepared) {
+            return prepared;
         }
-
-        std::size_t update_index = 0U;
-        std::uint32_t cursor = 0U;
-        while (cursor < frame.duration_samples) {
-            while (update_index < frame.updates.size() && frame.updates[update_index].offset_samples == cursor) {
-                const auto applied = apply_update(frame.updates[update_index], frame);
-                if (!applied) {
-                    return tl::unexpected{applied.error()};
-                }
-                ++update_index;
+        prepared = prepare_events(frame);
+        if (!prepared) {
+            return prepared;
+        }
+        auto report = session_.process(
+            frame.duration_samples,
+            planes_,
+            initial_,
+            events_,
+            {listener_orientation_.yaw_deg, listener_orientation_.pitch_deg, listener_orientation_.roll_deg},
+            warned_,
+            output.first(required));
+        if (!report) {
+            return tl::unexpected{report.error()};
+        }
+        for (size_t i = 0; i < elements_.size(); ++i) {
+            elements_[i].target = staged_[i].target;
+            elements_[i].initialized = staged_[i].initialized;
+        }
+        warned_ = report->mask;
+        if (diagnostics_) {
+            for (const auto& record : std::span{report->records}.first(report->count)) {
+                publish(frame, record);
             }
-            std::uint32_t segment_end = frame.duration_samples;
-            if (update_index < frame.updates.size()) {
-                segment_end = std::min(segment_end, frame.updates[update_index].offset_samples);
-            }
-            std::uint32_t frames = std::min<std::uint32_t>(k_convolution_block, segment_end - cursor);
-            for (const auto& element : elements_) {
-                for (const auto remaining : element.ramp_remaining) {
-                    if (remaining > 0U) {
-                        frames = std::min(frames, remaining);
-                    }
-                }
-            }
-            if (frames == 0U) {
-                return make_error(ErrorCode::invalid_argument, "live binaural metadata updates are not ordered");
-            }
-            for (auto& element : elements_) {
-                const auto plane = planes.find(element.descriptor.element_id);
-                const PcmPlane* pcm = plane != planes.end() ? plane->second : nullptr;
-                auto rendered = render_element(frame, element, pcm, cursor, frames, output);
-                if (!rendered) {
-                    return tl::unexpected{rendered.error()};
-                }
-            }
-            advance_states(frames);
-            cursor += frames;
         }
         return {};
     }
-
-    [[nodiscard]] std::uint32_t output_channels() const noexcept override { return 2U; }
-    [[nodiscard]] std::uint32_t sample_rate() const noexcept override { return config_.sample_rate; }
+    [[nodiscard]] uint32_t output_channels() const noexcept override { return 2; }
+    [[nodiscard]] uint32_t sample_rate() const noexcept override { return config_.sample_rate; }
+    [[nodiscard]] uint32_t tail_input_frames() const noexcept override {
+        return static_cast<uint32_t>(state_->fft_size - 1) + 32U;
+    }
     void set_listener_orientation(const ListenerOrientation& orientation) override {
         listener_orientation_ = orientation;
     }
-    [[nodiscard]] std::uint32_t tail_input_frames() const noexcept override {
-        return convolver_.tail_frames() + static_cast<std::uint32_t>(k_diffuse_delay_len);
-    }
 
   private:
-    [[nodiscard]] Result<void> initialize_frame(const Frame& frame) {
+    Result<void> prepare_initials(const Frame& frame) {
+        staged_.resize(elements_.size());
+        planes_.assign(elements_.size(), {});
+        initial_.clear();
+        events_.clear();
+        for (size_t i = 0; i < elements_.size(); ++i) {
+            staged_[i] = {elements_[i].target, elements_[i].initialized, false, false};
+        }
         for (const auto& initial : frame.initial_states) {
             const auto found = element_index_.find(initial.element_id);
-            if (found == element_index_.end()) {
-                return make_error(ErrorCode::invalid_argument, "initial state references an unknown element");
+            if (found == element_index_.end() || staged_[found->second].seen_initial || !valid_state(initial.state)) {
+                return make_error(ErrorCode::invalid_argument, "Live binaural initial state is invalid or duplicated");
             }
-            auto& element = elements_[found->second];
-            ObjectState state = default_state(element.descriptor);
-            copy_state_fields(state, initial.state, initial.state.valid_fields);
-            element.current = state;
-            element.target = state;
-            auto direction_initialized = initialize_direction(element, state, frame);
-            if (!direction_initialized) {
-                return tl::unexpected{direction_initialized.error()};
+            const auto index = found->second;
+            auto& control = staged_[index];
+            control.seen_initial = true;
+            control.target = default_state(elements_[index].descriptor);
+            copy_state_fields(control.target, initial.state, initial.state.valid_fields);
+            auto command = make_command(index, control.target);
+            if (!command) {
+                return tl::unexpected{command.error()};
             }
-            element.ramp_remaining.fill(0U);
-            element.initialized = true;
+            initial_.push_back(*command);
+            control.initialized = true;
         }
-        for (auto& element : elements_) {
-            if (!element.initialized) {
-                auto direction_initialized = initialize_direction(element, element.current, frame);
-                if (!direction_initialized) {
-                    return tl::unexpected{direction_initialized.error()};
+        for (size_t i = 0; i < elements_.size(); ++i) {
+            if (!staged_[i].initialized) {
+                auto command = make_command(i, staged_[i].target);
+                if (!command) {
+                    return tl::unexpected{command.error()};
                 }
-                element.initialized = true;
-            }
-        }
-
-        return {};
-    }
-
-    [[nodiscard]] Result<void>
-    initialize_direction(RuntimeElement& element, const ObjectState& state, const Frame& frame) {
-        if (element.descriptor.role != ElementRole::direct_speaker) {
-            return {};
-        }
-        auto direction = direction_for(element, state, frame);
-        if (!direction) {
-            return tl::unexpected{direction.error()};
-        }
-        element.current_direction = *direction;
-        element.target_direction = *direction;
-        return {};
-    }
-
-    [[nodiscard]] Result<void> apply_update(const MetadataUpdate& update, const Frame& frame) {
-        const auto found = element_index_.find(update.element_id);
-        if (found == element_index_.end()) {
-            return make_error(ErrorCode::invalid_argument, "metadata update references an unknown element");
-        }
-        auto& element = elements_[found->second];
-        ObjectState target = element.target;
-        target.valid_fields &= ~update.cleared_fields;
-        copy_state_fields(target, update.state, update.changed_fields);
-        std::optional<std::pair<float, float>> target_direction;
-        if (element.descriptor.role == ElementRole::direct_speaker) {
-            auto direction = direction_for(element, target, frame);
-            if (!direction) {
-                return tl::unexpected{direction.error()};
-            }
-            target_direction = *direction;
-        }
-        element.target = target;
-        if ((update.changed_fields & state_head_locked) != 0U) {
-            // Content reference frames switch at the event sample, independently of
-            // any continuous ramp carried by the same event or an earlier event.
-            element.current.head_locked = target.head_locked;
-            element.current.valid_fields |= state_head_locked;
-        }
-        if (update.changed_fields == state_head_locked && update.cleared_fields == 0U) {
-            return {};
-        }
-        if (target_direction) {
-            element.target_direction = *target_direction;
-        }
-        std::uint32_t duration = config_.object_smoothing_frames;
-        if (update.jump_position) {
-            duration = 0U;
-        } else if (update.ramp_duration_samples != 0U) {
-            duration = update.ramp_duration_samples;
-        }
-        const auto changed = update.changed_fields | update.cleared_fields;
-        for (std::size_t field = 0U; field < element.ramp_remaining.size(); ++field) {
-            const std::uint64_t mask = 1ULL << field;
-            if ((changed & mask) == 0U || mask == state_head_locked) {
-                continue;
-            }
-            element.ramp_remaining.at(field) = duration;
-            if (duration == 0U) {
-                copy_state_fields(element.current, target, mask);
-                element.current.valid_fields &= ~(update.cleared_fields & mask);
-                if (mask == state_position) {
-                    element.current_direction = element.target_direction;
-                }
+                initial_.push_back(*command);
+                staged_[i].initialized = true;
             }
         }
         return {};
     }
-
-    void advance_states(std::uint32_t frames) noexcept {
-        for (auto& element : elements_) {
-            element.current_direction = segment_end_direction(element, frames);
-            element.current = segment_end_state(element, frames);
-            std::ranges::transform(element.ramp_remaining, element.ramp_remaining.begin(), [frames](auto remaining) {
-                return remaining - std::min(frames, remaining);
-            });
-        }
-    }
-
-    [[nodiscard]] ObjectState segment_end_state(const RuntimeElement& element, std::uint32_t frames) const noexcept {
-        ObjectState result = element.current;
-        for (std::size_t field = 0U; field < element.ramp_remaining.size(); ++field) {
-            const auto remaining = element.ramp_remaining.at(field);
-            if (remaining == 0U) {
-                continue;
+    Result<void> prepare_planes(const Frame& frame) {
+        for (const auto& plane : frame.pcm) {
+            const auto found = element_index_.find(plane.element_id);
+            if (found == element_index_.end() || staged_[found->second].seen_pcm ||
+                (plane.has_signal && plane.samples.size() < frame.duration_samples)) {
+                return make_error(ErrorCode::invalid_argument, "Live binaural PCM view is invalid or duplicated");
             }
-            const auto advanced = std::min(frames, remaining);
-            const auto sample = interpolated_state(
-                element.current, element.target, static_cast<float>(advanced) / static_cast<float>(remaining));
-            const std::uint64_t mask = 1ULL << field;
-            copy_state_fields(result, sample, mask);
-            if (advanced == remaining && (element.target.valid_fields & mask) == 0U) {
-                result.valid_fields &= ~mask;
+            staged_[found->second].seen_pcm = true;
+            planes_[found->second] = {plane.samples.data(), plane.samples.size(), plane.has_signal ? 1U : 0U, 0};
+        }
+        return {};
+    }
+    Result<void> prepare_events(const Frame& frame) {
+        uint32_t previous = 0;
+        for (const auto& event : frame.updates) {
+            const auto found = element_index_.find(event.element_id);
+            if (found == element_index_.end() || event.offset_samples < previous ||
+                event.offset_samples >= frame.duration_samples ||
+                ((event.changed_fields | event.cleared_fields) & ~k_known_state_fields) != 0U ||
+                (event.changed_fields & ~event.state.valid_fields) != 0U || !valid_state(event.state)) {
+                return make_error(ErrorCode::invalid_argument, "Live binaural metadata event is invalid or unordered");
             }
+            previous = event.offset_samples;
+            auto& control = staged_[found->second];
+            control.target.valid_fields &= ~event.cleared_fields;
+            copy_state_fields(control.target, event.state, event.changed_fields);
+            auto command = make_command(found->second, control.target);
+            if (!command) {
+                return tl::unexpected{command.error()};
+            }
+            command->offset = event.offset_samples;
+            command->changed = event.changed_fields;
+            command->cleared = event.cleared_fields;
+            command->duration = config_.object_smoothing_frames;
+            if (event.jump_position) {
+                command->duration = 0;
+            } else if (event.ramp_duration_samples != 0) {
+                command->duration = event.ramp_duration_samples;
+            }
+            events_.push_back(*command);
         }
-        return result;
+        return {};
     }
-
-    [[nodiscard]] std::optional<std::pair<float, float>> segment_end_direction(const RuntimeElement& element,
-                                                                               std::uint32_t frames) const noexcept {
-        const auto remaining = element.ramp_remaining[2U]; // Cartesian position / label fallback.
-        if (!element.current_direction || !element.target_direction || remaining == 0U) {
-            return element.current_direction;
+    [[nodiscard]] uint32_t numerical_spread() const noexcept {
+        if (config_.binaural_spread_mode == BinauralSpreadMode::none) {
+            return 1U;
         }
-        const float alpha = static_cast<float>(std::min(frames, remaining)) / static_cast<float>(remaining);
-        return interpolated_direction(*element.current_direction, *element.target_direction, alpha);
+        if (config_.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
+            return 2U;
+        }
+        return 0U;
     }
-
-    [[nodiscard]] Result<std::pair<float, float>>
-    direction_for(const RuntimeElement& element, const ObjectState& state, const Frame& frame) {
-        // A current canonical position (including a semantic-policy re-aim) wins
-        // over the topology's fixed label. Without one, preserve label routing and
-        // use the descriptor position only as its fallback.
+    Result<MradmLiveBinauralCommand> make_command(size_t index, const ObjectState& state) {
+        MradmLiveBinauralCommand result{};
+        result.element = static_cast<uint32_t>(index);
+        result.state = numerical_state(state);
+        const auto& descriptor = elements_[index].descriptor;
+        if (descriptor.role != ElementRole::direct_speaker) {
+            return result;
+        }
+        std::optional<std::pair<float, float>> direction;
         if ((state.valid_fields & state_position) != 0U) {
-            return cartesian_to_polar(state.x, state.y, state.z);
-        }
-        if (element.descriptor.role == ElementRole::direct_speaker && !element.descriptor.speaker_label.empty()) {
-            if (const auto direction = label_position(element.descriptor.speaker_label)) {
-                return *direction;
+            direction = cartesian_to_polar(state.x, state.y, state.z);
+        } else {
+            if (!descriptor.speaker_label.empty()) {
+                direction = label_position(descriptor.speaker_label);
+                if (!direction) {
+                    result.diagnostic = 1;
+                }
             }
-            warn_once(frame,
-                      element.descriptor.element_id,
-                      0U,
-                      DiagnosticCode::direct_speaker_fallback,
-                      "DirectSpeakers label is unknown; using its canonical fixed position");
+            if (!direction && descriptor.has_position) {
+                direction = cartesian_to_polar(descriptor.x, descriptor.y, descriptor.z);
+            }
         }
-        if (element.descriptor.has_position) {
-            return cartesian_to_polar(element.descriptor.x, element.descriptor.y, element.descriptor.z);
-        }
-        if (element.descriptor.role == ElementRole::direct_speaker) {
+        if (!direction) {
             return make_error(ErrorCode::unsupported,
                               fmt::format("DirectSpeakers element {} has neither a known label nor a position",
-                                          element.descriptor.element_id));
+                                          descriptor.element_id));
         }
-        return std::pair<float, float>{0.0F, 0.0F};
+        result.has_direction = 1;
+        result.direction[0] = direction->first;
+        result.direction[1] = direction->second;
+        return result;
     }
-
-    [[nodiscard]] Result<void>
-    hrtf_for(const RuntimeElement& element,
-             const ObjectState& object_state,
-             const Frame& frame,
-             std::vector<dsp::Complex>& output,
-             const std::optional<std::pair<float, float>>& direction_override = std::nullopt) {
-        std::pair<float, float> direction;
-        if (direction_override) {
-            direction = *direction_override;
-        } else {
-            auto resolved = direction_for(element, object_state, frame);
-            if (!resolved) {
-                return tl::unexpected{resolved.error()};
-            }
-            direction = *resolved;
+    [[nodiscard]] static std::tuple<DiagnosticCode, uint64_t, const char*> diagnostic_fields(uint32_t kind) {
+        switch (kind) {
+        case 1:
+            return {DiagnosticCode::direct_speaker_fallback,
+                    0U,
+                    "DirectSpeakers label is unknown; using its canonical fixed position"};
+        case 2:
+            return {DiagnosticCode::semantic_degraded,
+                    state_screen_reference,
+                    "live binaural has no screen transform; canonical position is used"};
+        case 3:
+            return {DiagnosticCode::semantic_degraded, state_extent, "binaural spread mode is none; extent is ignored"};
+        case 4:
+            return {DiagnosticCode::semantic_degraded,
+                    state_extent,
+                    "dynamic extent uses the live HRTF cloud path; SAF spreader topology is fixed"};
+        default:
+            std::terminate();
         }
-        float azimuth = direction.first;
-        float elevation = direction.second;
-        std::tie(azimuth, elevation) = channel_locked_direction(azimuth, elevation, object_state);
-        if (object_state.screen_reference) {
-            warn_once(frame,
-                      element.descriptor.element_id,
-                      state_screen_reference,
-                      DiagnosticCode::semantic_degraded,
-                      "live binaural has no screen transform; canonical position is used");
-        }
-
-        struct DirectionWeight {
-            float azimuth;
-            float elevation;
-            float weight;
-        };
-        std::vector<DirectionWeight> directions{{azimuth, elevation, 1.0F}};
-        if (element.descriptor.role == ElementRole::object) {
-            const float divergence = std::clamp(object_state.divergence, 0.0F, 1.0F);
-            if (divergence > 0.0F) {
-                float divergence_angle = object_state.divergence_azimuth_range;
-                if (object_state.divergence_position_range > 0.0F &&
-                    (object_state.valid_fields & state_position) != 0U) {
-                    constexpr double k_radians_to_degrees = 180.0 / std::numbers::pi_v<double>;
-                    const double distance = std::max(1.0e-6,
-                                                     std::sqrt((static_cast<double>(object_state.x) * object_state.x) +
-                                                               (static_cast<double>(object_state.y) * object_state.y) +
-                                                               (static_cast<double>(object_state.z) * object_state.z)));
-                    divergence_angle = static_cast<float>(
-                        std::atan2(static_cast<double>(object_state.divergence_position_range), distance) *
-                        k_radians_to_degrees);
-                }
-                divergence_angle = std::clamp(divergence_angle, 0.0F, 120.0F);
-                const float side_weight = divergence / (divergence + 1.0F);
-                directions.front().weight = (1.0F - divergence) / (divergence + 1.0F);
-                directions.push_back({azimuth - divergence_angle, elevation, side_weight});
-                directions.push_back({azimuth + divergence_angle, elevation, side_weight});
-            }
-            const float width = std::clamp(object_state.width, 0.0F, 1.0F) * 60.0F;
-            const float height = std::clamp(object_state.height, 0.0F, 1.0F) * 45.0F;
-            const float depth = std::clamp(object_state.depth, 0.0F, 1.0F) * 20.0F;
-            const bool has_extent = width > 0.01F || height > 0.01F || depth > 0.01F;
-            if (has_extent && config_.binaural_spread_mode == BinauralSpreadMode::none) {
-                warn_once(frame,
-                          element.descriptor.element_id,
-                          state_extent,
-                          DiagnosticCode::semantic_degraded,
-                          "binaural spread mode is none; extent is ignored");
-            } else if (has_extent) {
-                if (config_.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
-                    warn_once(frame,
-                              element.descriptor.element_id,
-                              state_extent,
-                              DiagnosticCode::semantic_degraded,
-                              "dynamic extent uses the live HRTF cloud path; SAF spreader topology is fixed");
-                }
-                directions.push_back({azimuth - width, elevation, 0.5F});
-                directions.push_back({azimuth + width, elevation, 0.5F});
-                directions.push_back({azimuth, std::clamp(elevation - height, -90.0F, 90.0F), 0.5F});
-                directions.push_back({azimuth, std::clamp(elevation + height, -90.0F, 90.0F), 0.5F});
-                if (depth > 0.01F) {
-                    directions.push_back({azimuth + 180.0F, elevation, depth / 20.0F});
-                }
-            }
-        }
-
-        const float weight_sum =
-            std::accumulate(directions.begin(), directions.end(), 0.0F, [](float sum, const DirectionWeight& item) {
-                return sum + item.weight;
-            });
-        output.assign(static_cast<std::size_t>(state_->n_bands) * k_n_ears, dsp::Complex{0.0F, 0.0F});
-        const bool rotate_to_head_space = !listener_orientation_.is_identity() && !object_state.head_locked;
-        const render_common::HeadRotation rotation{listener_orientation_};
-        for (const auto& item : directions) {
-            float rendered_azimuth = item.azimuth;
-            float rendered_elevation = item.elevation;
-            if (rotate_to_head_space) {
-                std::tie(rendered_azimuth, rendered_elevation) =
-                    rotation.rotate_az_el(rendered_azimuth, rendered_elevation);
-            }
-            compute_continuous_hrtf_into(*state_, rendered_azimuth, rendered_elevation, scratch_.hrtf_temp);
-            const float normalized = item.weight / std::max(weight_sum, 1.0e-6F);
-            for (std::size_t band = 0; band < output.size(); ++band) {
-                output[band] += scratch_.hrtf_temp[band] * normalized;
-            }
-        }
-        return {};
     }
-
-    [[nodiscard]] Result<void> render_element(const Frame& frame,
-                                              RuntimeElement& element,
-                                              const PcmPlane* plane,
-                                              std::uint32_t offset,
-                                              std::uint32_t frames,
-                                              std::span<float> output) {
-        const ObjectState start = element.current;
-        const ObjectState end = segment_end_state(element, frames);
-        const auto frame_count = static_cast<std::size_t>(frames);
-        const bool has_signal = plane != nullptr && plane->has_signal;
-        for (std::size_t index = 0; index < frame_count; ++index) {
-            scratch_.source[index] = has_signal ? plane->samples[static_cast<std::size_t>(offset) + index] : 0.0F;
-        }
-        const float start_gain = start.active ? start.linear_gain : 0.0F;
-        const float end_gain = end.active ? end.linear_gain : 0.0F;
-        if (element.descriptor.role == ElementRole::lfe) {
-            for (std::size_t index = 0; index < frame_count; ++index) {
-                const float alpha = static_cast<float>(index) / static_cast<float>(frame_count);
-                const float gain = start_gain + ((end_gain - start_gain) * alpha);
-                const float sample = scratch_.source[index] * gain;
-                const auto output_index = (static_cast<std::size_t>(offset) + index) * 2U;
-                output[output_index] += sample;
-                output[output_index + 1U] += sample;
-            }
-            return {};
-        }
-
-        // Gain and diffuse belong to the input timeline. Preserve their already
-        // mixed samples in history instead of reapplying today's controls to an
-        // old, filtered output tail.
-        element.diffuse.mix(
-            std::span{scratch_.source}.first(frame_count), start_gain, end_gain, start.diffuse, end.diffuse);
-        const auto convolution_info = element.convolution.info();
-        if (convolution_info.tail_remaining == 0U &&
-            std::ranges::none_of(std::span{scratch_.source}.first(frame_count),
-                                 [](float sample) { return sample != 0.0F; })) {
-            // Inactive sources need no FFT or HRTF lookup after their history
-            // drains. Re-entry initializes at the then-current direction.
-            if (convolution_info.initialized != 0U) {
-                element.convolution.reset();
-            }
-            return {};
-        }
-        if (convolution_info.initialized == 0U) {
-            auto initial = hrtf_for(element, start, frame, scratch_.hrtf_target, element.current_direction);
-            if (!initial) {
-                return tl::unexpected{initial.error()};
-            }
-            convolver_.initialize(element.convolution, scratch_.hrtf_target);
-        }
-        auto target = hrtf_for(element, end, frame, scratch_.hrtf_target, segment_end_direction(element, frames));
-        if (!target) {
-            return tl::unexpected{target.error()};
-        }
-        bool spatial_ramp = false;
-        for (std::size_t field = 0U; field < element.ramp_remaining.size(); ++field) {
-            const auto mask = 1ULL << field;
-            if ((mask & (state_active | state_linear_gain | state_diffuse | state_head_locked)) == 0U) {
-                spatial_ramp = spatial_ramp || element.ramp_remaining.at(field) != 0U;
-            }
-        }
-        convolver_.process(element.convolution,
-                           scratch_.hrtf_target,
-                           std::span{scratch_.source}.first(frame_count),
-                           std::span{scratch_.left}.first(frame_count),
-                           std::span{scratch_.right}.first(frame_count),
-                           spatial_ramp);
-        for (std::size_t index = 0; index < frame_count; ++index) {
-            const auto output_index = (static_cast<std::size_t>(offset) + index) * 2U;
-            output[output_index] += scratch_.left[index];
-            output[output_index + 1U] += scratch_.right[index];
-        }
-        return {};
+    void publish(const Frame& frame, const MradmLiveBinauralDiagnostic& value) {
+        const auto [code, field, message] = diagnostic_fields(value.kind);
+        diagnostics_({LogLevel::warning,
+                      code,
+                      frame.epoch_id,
+                      frame.generation_id,
+                      elements_[value.element].descriptor.element_id,
+                      field,
+                      message});
     }
-
-    void warn_once(
-        const Frame& frame, std::uint64_t element_id, std::uint64_t field, DiagnosticCode code, std::string message) {
-        const auto key = (field << 8U) ^ static_cast<std::uint64_t>(code);
-        if (!warned_.insert(key).second || !diagnostics_) {
-            return;
-        }
-        diagnostics_(
-            {LogLevel::warning, code, frame.epoch_id, frame.generation_id, element_id, field, std::move(message)});
-    }
-
     RendererConfig config_;
     std::shared_ptr<const BinauralState> state_;
     DiagnosticSink diagnostics_;
-    LiveBinauralConvolver convolver_;
-    ConvolutionScratch scratch_;
-    std::uint64_t generation_id_{0U};
+    dsp::LiveBinauralSession session_;
+    uint64_t generation_id_{0};
     std::vector<RuntimeElement> elements_;
-    std::unordered_map<std::uint64_t, std::size_t> element_index_;
-    std::unordered_set<std::uint64_t> warned_;
+    std::unordered_map<uint64_t, size_t> element_index_;
+    std::vector<StagedControl> staged_;
+    std::vector<MradmLiveBinauralCommand> initial_, events_;
+    std::vector<MradmLiveBinauralPlane> planes_;
+    uint32_t warned_{0};
     ListenerOrientation listener_orientation_{};
 };
 
