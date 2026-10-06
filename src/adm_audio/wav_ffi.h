@@ -7,6 +7,7 @@
 extern "C" {
 #endif
 typedef struct MradmWavReader MradmWavReader;
+typedef struct MradmWavChunks MradmWavChunks;
 typedef struct MradmWavWriter MradmWavWriter;
 typedef struct MradmWavLayout MradmWavLayout;
 // Fields are shared with Rust, including queries performed by Rust FFI tests.
@@ -86,15 +87,18 @@ int32_t mradm_wav_layout_begin(const uint8_t*,
 int32_t mradm_wav_layout_step(MradmWavLayout*, uint64_t, uint64_t*, uint8_t*, size_t);
 int32_t mradm_wav_layout_finish(MradmWavLayout*, uint8_t*, size_t);
 void mradm_wav_layout_destroy(MradmWavLayout*);
-// Copies source into a created/truncated target with the axml payload replaced; PCM bytes are copied verbatim.
+// Copies source into an exclusively created target with the axml payload replaced; PCM bytes are copied verbatim.
+// Existing targets are untouched; newly created targets are removed on error. The caller installs the completed file.
 int32_t
 mradm_wav_replace_axml(const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*, size_t, uint8_t*, size_t);
+// Metadata-only reader: strict chunk bounds, independent of sample encoding.
+int32_t mradm_wav_chunks_open(const uint8_t*, size_t, MradmWavChunks**, uint8_t*, size_t);
+void mradm_wav_chunks_destroy(MradmWavChunks*);
 // First chunk with a four-byte id. Capacity 0 only reports found/size; otherwise it must equal the size.
-int32_t
-mradm_wav_reader_chunk(MradmWavReader*, const uint8_t*, uint8_t*, size_t, uint64_t*, uint8_t*, uint8_t*, size_t);
+int32_t mradm_wav_chunks_read(MradmWavChunks*, const uint8_t*, uint8_t*, size_t, uint64_t*, uint8_t*, uint8_t*, size_t);
 // Import-side CHNA: stored track indices and 12-byte UIDs (uid holds 12 * capacity bytes).
 // Capacity 0 only reports found/count; otherwise it must be at least count.
-int32_t mradm_wav_reader_chna(MradmWavReader*, uint16_t*, uint8_t*, size_t, size_t*, uint8_t*, uint8_t*, size_t);
+int32_t mradm_wav_chunks_chna(MradmWavChunks*, uint16_t*, uint8_t*, size_t, size_t*, uint8_t*, uint8_t*, size_t);
 // Tolerant routing probe for a top-level chunk; fails only for unreadable or non-RIFF/RF64/BW64 WAVE files.
 int32_t mradm_wav_has_chunk(const uint8_t*, size_t, const uint8_t*, uint8_t*, uint8_t*, size_t);
 #ifdef __cplusplus

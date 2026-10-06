@@ -426,7 +426,7 @@ Result<void> write_wav_metadata(const std::string& path, const MetadataFields& m
 }
 
 Result<WavAdmChunks> read_wav_adm_chunks(const std::string& path) {
-    auto reader = RustWavReader::open(path);
+    auto reader = RustWavChunks::open(path);
     if (!reader) {
         return tl::unexpected{reader.error()};
     }
@@ -435,7 +435,7 @@ Result<WavAdmChunks> read_wav_adm_chunks(const std::string& path) {
     if (!axml) {
         return tl::unexpected{axml.error()};
     }
-    chunks.axml = std::move(axml->value_or(std::string{}));
+    chunks.axml = std::move(*axml).value_or(std::string{});
     auto chna = (*reader)->chna();
     if (!chna) {
         return tl::unexpected{chna.error()};
@@ -445,8 +445,15 @@ Result<WavAdmChunks> read_wav_adm_chunks(const std::string& path) {
 }
 
 Result<void> replace_wav_axml(const std::string& source, const std::string& target, std::string_view axml) {
+    const auto rewritten_path = unique_wav_sidecar_path(target, "axml_tmp");
+    if (!rewritten_path) {
+        return make_error(ErrorCode::io_error, "无法分配 WAVE AXML 临时路径", "path=" + target);
+    }
+    // Rust creates this file exclusively and removes it on failure. Arm the guard only once
+    // creation and writing have succeeded, so a name collision cannot delete another file.
+    TempPathGuard rewritten_guard{*rewritten_path, false};
     const auto utf8_source = wav_path_utf8(source);
-    const auto utf8_target = wav_path_utf8(target);
+    const auto utf8_target = wav_path_utf8(rewritten_path->string());
     std::array<uint8_t, 512> message{};
     const auto code = mradm_wav_replace_axml(wav_bytes(utf8_source),
                                              utf8_source.size(),
@@ -459,6 +466,22 @@ Result<void> replace_wav_axml(const std::string& source, const std::string& targ
     if (code != 0) {
         return tl::unexpected{wav_error(code, message, source + " -> " + target)};
     }
+    rewritten_guard.arm();
+
+    // The source and sink are closed here. Installing a separate completed file also makes
+    // source == target, symlinks and hard links safe without a racy path-identity check.
+    std::error_code ec;
+    std::filesystem::rename(*rewritten_path, target, ec);
+    if (ec) {
+        // Windows cannot rename onto an existing file; use the same recoverable replacement
+        // as layout finalization. Never move an existing directory out of the way.
+        std::error_code status_ec;
+        if (std::filesystem::is_regular_file(target, status_ec)) {
+            return replace_wav_with_rewrite(target, *rewritten_path, rewritten_guard);
+        }
+        return make_error(ErrorCode::io_error, "无法安装 AXML 重写后的 WAVE：" + ec.message(), "path=" + target);
+    }
+    rewritten_guard.dismiss();
     return {};
 }
 
