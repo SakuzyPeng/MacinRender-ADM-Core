@@ -181,7 +181,7 @@ def compare(directories, require_platforms=True):
                 observations = checkpoints(a / 'checkpoints' / case, b / 'checkpoints' / case)
                 if name.endswith(('-epoch1', '-epoch2')):
                     epoch_marker = '/e' + name[-1] + '-'
-                    observations = [r for r in observations if not r['checkpoint'].startswith(('scene/', 'device/')) or epoch_marker in r['checkpoint']]
+                    observations = [r for r in observations if not r['checkpoint'].startswith(('scene/', 'device/')) or epoch_marker in r['checkpoint'] or ('/e' + name[-1] + '.') in r['checkpoint']]
                 row['checkpoints'] = observations
                 row['first_observed'] = next((r['checkpoint'] for r in observations if not r['identical']), None)
                 if not row['identical'] and row['first_observed'] is None:

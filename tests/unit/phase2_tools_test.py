@@ -80,6 +80,24 @@ class EvidenceTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     comparator.safe_file(root, name)
 
+    def test_device_segments_require_complete_nonoverlapping_media(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); (root / 'device').mkdir()
+            spec = {'device_dsp': True, 'input_rate': 48000, 'output_rate': 48000,
+                    'epochs': [{'epoch': 1, 'target': 0, 'end': 3}]}
+            for stage in ('70-before-hptf', '80-hptf', '90-output'):
+                (root / 'device' / f'e1-s0.{stage}.f32').write_bytes(struct.pack('<ff', 0.125, -0.125))
+                (root / 'device' / f'e1-s1.{stage}.f32').write_bytes(struct.pack('<ffff', 0.25, -0.25, 0.5, -0.5))
+            common.canonicalize_device_trace(root, spec)
+            self.assertEqual((root / 'device/e1.90-output.f32').read_bytes(), struct.pack('<ffffff', 0.125, -0.125, 0.25, -0.25, 0.5, -0.5))
+            for p in (root / 'device').iterdir():
+                p.unlink()
+            for stage in ('70-before-hptf', '80-hptf', '90-output'):
+                (root / 'device' / f'e1-s0.{stage}.f32').write_bytes(struct.pack('<ff', 1, 1))
+                (root / 'device' / f'e1-s2.{stage}.f32').write_bytes(struct.pack('<ff', 1, 1))
+            with self.assertRaisesRegex(ValueError, 'gap, overlap'):
+                common.canonicalize_device_trace(root, spec)
+
     def test_actual_compiler_is_pinned(self):
         for version in ('unavailable', 'release: 1.97.0\ncommit-hash: x\nLLVM version: 22'):
             with self.assertRaises(ValueError):
@@ -145,6 +163,11 @@ class ReplayTests(unittest.TestCase):
 
     def test_seek_short_tail_and_no_underrun(self):
         self.run_probe(common.scene_cases()[1], True)
+
+    def test_active_intervals_cannot_pass_as_silence(self):
+        case = common.scene_cases()[0]
+        case['metadata'] = sorted([*case['metadata'], {'sample': 1536, 'field': 'gain', 'value': 0, 'ramp': 0}], key=lambda r: r['sample'])
+        self.run_probe(case, False)
 
     def test_zero_partition_rejected(self):
         self.run_probe(dict(common.scene_cases()[0], partition=[0]), False)

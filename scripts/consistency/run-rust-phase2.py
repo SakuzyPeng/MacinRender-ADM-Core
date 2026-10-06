@@ -104,6 +104,8 @@ def main():
                 directory = work / f'scene{process}'
                 run([binaries['mr_adm_phase2_scene'], case, directory], out / 'logs' / f'{name}-process{process}.log',
                     out / 'checkpoints' / name if diagnostics and process == 1 else None)
+                if diagnostics and process == 1:
+                    common.canonicalize_device_trace(out / 'checkpoints' / name, row)
                 manifest['replay_status'][name + f'-process{process}'] = [
                     json.loads((directory / f'pass-{i}.json').read_text(encoding='utf-8')) for i in (1, 2)]
                 if process == 1:

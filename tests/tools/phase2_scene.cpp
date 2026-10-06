@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -289,7 +290,9 @@ class Replay {
             frame.generation_id = generation;
             frame.media_sample_start = position;
             frame.duration_samples = count;
-            frame.flags = complete ? live_scene::frame_state_complete : 0U;
+            // Completeness describes the retained semantic state, not whether this
+            // frame carries a new initial-state snapshot. Clearing it mutes audio.
+            frame.flags = live_scene::frame_state_complete;
             frame.pcm = std::span{&plane, 1U};
             frame.initial_states = complete ? std::span{&initial, 1U} : std::span<live_scene::StateEntry>{};
             frame.updates = frame_updates;
@@ -311,6 +314,20 @@ class Replay {
             (static_cast<uint64_t>(end - target) * config.output_sample_rate + config.renderer.sample_rate - 1) /
             config.renderer.sample_rate;
         require(captured.size() == expected * channels, "replay rational frame count mismatch");
+        if (epoch == 1) {
+            for (uint32_t input_start : {1024U, 3072U, 6144U, 10240U}) {
+                const auto first = static_cast<std::size_t>(static_cast<uint64_t>(input_start) *
+                                                            config.output_sample_rate / config.renderer.sample_rate);
+                const auto last = static_cast<std::size_t>(static_cast<uint64_t>(input_start + 512U) *
+                                                           config.output_sample_rate / config.renderer.sample_rate);
+                const auto window =
+                    std::span<const float>{captured}.subspan(first * channels, (last - first) * channels);
+                if (!std::ranges::any_of(window, [](float value) { return std::abs(value) > 1.0e-9F; })) {
+                    throw std::runtime_error("active replay interval unexpectedly silent at input sample " +
+                                             std::to_string(input_start));
+                }
+            }
+        }
     }
 
   private:
@@ -381,6 +398,15 @@ int main(int argc, char** argv) {
         const auto input = phase2::signal(12289, 0x12345678U, spec.at("device_dsp").get<bool>() ? 4.0F : 0.125F);
         phase2::pcm(directory / "input.pcmbits", 1, spec.at("input_rate"), input);
         for (int pass = 1; pass <= 2; ++pass) {
+            // A second replay can use different callback segment boundaries even
+            // with identical PCM. Never mix its checkpoints into the first pass.
+            if (pass == 2) {
+#ifdef _WIN32
+                require(_putenv_s("MR_ADM_TRACE_DIR", "") == 0, "cannot disable repeat trace");
+#else
+                require(unsetenv("MR_ADM_TRACE_DIR") == 0, "cannot disable repeat trace");
+#endif
+            }
             Replay replay(spec);
             Json lengths = Json::array();
             for (uint64_t epoch : {1U, 2U}) {

@@ -56,7 +56,10 @@ B 组在同一构建树顺序设置 `MR_ADM_STRICT_FP=ON`，用独立输出目�
 硬件补零不进入 PCM 比较，也不能通过丢弃补零掩盖一次无效回放。
 
 诊断构建包含当前 C++→Rust 边界的有效语义、增益、HRTF、混音、spreader 输入/输出、
-重采样、Scene 过渡、HpTF、峰值保护输出及 WAVE 写入前 PCM。键来自 epoch、generation、
+重采样、Scene 过渡、HpTF、峰值保护输出及 WAVE 写入前 PCM。实时帧始终声明已解析的状态完整，只有 generation 首帧携带初始快照；四个活跃时间窗必须有信号。
+设备回调的分段按媒体偏移重组为每个 epoch/阶段的连续 PCM，缺口、重叠及总长度不符均失败。
+只采集首轮回放，避免第二轮不同回调分段混入；合并保留每个样本的原始位模式。
+键来自 epoch、generation、
 媒体位置、group/lane；不以 worker 到达顺序编号。WAVE writer 顺序仅用于单进程 CLI 的串行写入阶段。
 Rust `diagnostics` feature 仅在显式内核 scope 中启用细节检查点，包括 EAR 随机相位角、FFT 前后
 频谱及 SVD 奇异值；普通处理没有 scope，不新增运行时 DSP 后端。
