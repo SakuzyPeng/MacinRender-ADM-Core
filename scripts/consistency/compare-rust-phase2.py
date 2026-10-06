@@ -17,6 +17,31 @@ def safe_file(root, relative):
     raise ValueError('missing or escaping artifact: ' + relative)
 
 
+def compiler_identity(build):
+    fields = dict(line.split(': ', 1) for line in build.get('rust.compiler_verbose', '').splitlines() if ': ' in line)
+    if fields.get('release') != '1.98.0' or not fields.get('commit-hash') or not fields.get('LLVM version'):
+        raise ValueError('actual Rust compiler does not match the pinned toolchain')
+    return {key: fields[key] for key in ('release', 'commit-hash', 'LLVM version')}
+
+
+def validate_experiments(root, manifest):
+    experiments = manifest.get('worker_experiments', {})
+    expected = {'w1-g4': (1, 4), 'w2-g4': (2, 4), 'w1-g1': (1, 1)}
+    if set(experiments) != set(expected):
+        raise ValueError('worker experiment inventory is incomplete')
+    for name, (workers, budget) in expected.items():
+        row = experiments[name]
+        if (row['workers'], row['group_budget']) != (workers, budget) or len(row['actual_grouping']) != 2:
+            raise ValueError('invalid worker experiment configuration')
+        if any(not 1 <= int(groups) <= min(int(tracks), budget) for tracks, groups in row['actual_grouping']):
+            raise ValueError('invalid observed group count')
+        common.pcm_bytes(safe_file(root, row['path']))
+        if name != 'w1-g4':
+            measured = common.compare_pcm(safe_file(root, experiments['w1-g4']['path']), safe_file(root, row['path']))
+            if common.json_digest(measured) != common.json_digest(row['versus_w1_g4']):
+                raise ValueError('worker comparison does not match artifact bytes')
+
+
 def validate(root):
     manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
     if manifest.get('schema') != 'mradm.phase2.v1' or manifest.get('complete') is not True:
@@ -61,7 +86,10 @@ def validate(root):
         raise ValueError('missing production-kernel measurements')
     if manifest['diagnostics'] and not manifest.get('noninterference', {}).get('passed'):
         raise ValueError('diagnostic noninterference was not verified')
+    if manifest['diagnostics']:
+        validate_experiments(root, manifest)
     build = manifest['build']
+    compiler_identity(build)
     if build.get('cmake.CMAKE_BUILD_TYPE') != 'Release' or build.get('rust.compiler_verbose') in (None, 'unavailable'):
         raise ValueError('missing Release/compiler provenance')
     repeat_keys = {r['id'] + suffix for r in manifest['offline'] for suffix in
@@ -125,6 +153,8 @@ def compare(directories, require_platforms=True):
         for field in ('config', 'diagnostics', 'source', 'offline', 'scene', 'fixtures'):
             if manifest[field] != first[field]:
                 raise ValueError('incompatible baseline: ' + field)
+        if compiler_identity(manifest['build']) != compiler_identity(first['build']):
+            raise ValueError('Rust compiler identity differs across platforms')
         for field in ('rust.cargo_lock_sha256', 'rust.toolchain_config_sha256', 'scene.arithmetic', 'rust.resolved_features'):
             if manifest['build'].get(field) != first['build'].get(field):
                 raise ValueError('incompatible build: ' + field)
