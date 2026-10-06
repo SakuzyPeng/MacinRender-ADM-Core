@@ -1,0 +1,82 @@
+{
+  "schema": "mradm.scene-arithmetic.v1",
+  "date": "2026-10-06",
+  "source_base_commit": "5b1a2985720e8a310f33ade1f677bc2dd1f1c570",
+  "implementation": "working tree; source fingerprints below",
+  "arithmetic": "scene-separate-v1",
+  "global_strict_fp": false,
+  "production_change": "Use existing separately rounded Scene/Live binaural kernels on all platforms; remove compiler/platform-based FMA selection.",
+  "reference_policy": "Unchanged frozen C++ sources, per-test contraction disabled; production C++ compiler flags unchanged.",
+  "independent_checks": "Four fixed binary32 radius vectors distinguish separate rounding from FMA by one ULP; evaluated through the production C++/Rust boundary.",
+  "platforms": {
+    "macos-arm64": {
+      "release_ctest_passed": 68,
+      "release_ctest_total": 68,
+      "scene_comparisons": 3214210,
+      "scene_max_absolute_error": 0,
+      "scene_failures": 0,
+      "strict_fp": false,
+      "debug_ctest_passed": 68,
+      "debug_ctest_total": 68
+    },
+    "linux-arm64": {
+      "release_ctest_passed": 67,
+      "release_ctest_total": 67,
+      "scene_comparisons": 3214210,
+      "scene_max_absolute_error": 0,
+      "scene_failures": 0,
+      "strict_fp": false
+    },
+    "windows-x64": {
+      "release_ctest_passed": 67,
+      "release_ctest_total": 67,
+      "scene_comparisons": 3214210,
+      "scene_max_absolute_error": 0,
+      "scene_failures": 0,
+      "strict_fp": false,
+      "checkout": "existing canonical workspace with four unrelated local files preserved byte-for-byte"
+    }
+  },
+  "macos_audio_cases": 17,
+  "macos_audio_bit_identical": true,
+  "build_policy_tests": 13,
+  "reference_source_modified": false,
+  "ci": "Linux ARM64 Release default-FP job added; not dispatched by this run",
+  "public_abi": "Unchanged; macOS and Windows bundles each export the same 139 adm_* functions",
+  "known_scope": "This stage fixes the Scene arithmetic policy. Platform transcendental math, FFT dispatch and whole-chain cross-platform PCM bit equality remain separate later work.",
+  "source_sha256": {
+    "src/adm_dsp/scene_math.h": "2ed9c167f72364ad9af52540797d580c278720d4c63dedc917c62efa9d7af7a9",
+    "src/adm_dsp/live_binaural.h": "62da1dec947769ac13f554645e6ef1d1b3dd2ecaaa6f1769d91d2b5e61e0b4c8",
+    "src/adm_core/scene_math.cpp": "082d821844a75f2bfcf074786d1ff08acf8b1338bfa20e18e78810daebe78ae5",
+    "src/adm_render_common/render_common.cpp": "1a0ec4903c10e25fb20e207475b65805999c58f78b7be4b26f2aca49884f32ae",
+    "src/adm_render_binaural/binaural_renderer.cpp": "3ac83940c78de0f80f2f45348c60d68d06507420cf67cfaf453416df4a30a945",
+    "rust/crates/mradm-dsp/src/scene_math.rs": "93d2f7cda634aeac24e6ad1409ffec0c31facc6aec903eb8a1b36f3536471ce9",
+    "CMakeLists.txt": "afa1a5120cf1f32d407c95e105188d7480b55b35c5fa7d661f3a67401b268ff4",
+    "cmake/MRStrictFp.cmake": "f087c1959b40d130efea6eb033997f641a072eb0b2eeb01059f942e4adcb74a9",
+    "cmake/MRRust.cmake": "891d242c10244566d51d886f63d8c40558fbafc6622735be73a4d3708cf2d5c0",
+    "cmake/MRDependencyRecord.cmake": "f59964f7300cf6ac33c2ecf369c54deede091572d3ae9d00d682f4ad169882b1",
+    "scripts/consistency/build_info.py": "0a341a36ec39ef1c7d796ae1b410132a281264c236fe4894436c617a5da5a8d8",
+    "tests/unit/scene_numeric_rust_test.cpp": "c84025728124cbba0275f68e255a5f703bbc04906aeb900369481fc3dda52986",
+    "tests/unit/consistency_build_test.py": "9ca23f1d7b164e59e38c0d90c019a500f6a91eb5d1e6c2e9978eb2c412472e22",
+    ".github/workflows/ci.yml": "2b24bef20404b14e1f8db23c13f7f33f1745fdfc1962c32f7710e2c93ce303bf",
+    "scripts/consistency/compare-scene-arithmetic.py": "16324df7932196869147c2e4ea1a15da428ab55501cda1bf752043c016512cd0"
+  },
+  "log_sha256": {
+    "restored-mac-ctest.log": "873b5bb156e024c7f10f3e33e90b10ad068fed724d754e7d6af444ce84c1894f",
+    "restored-linux-ctest.log": "15763375237d1636db5f65dd0c57b24302eb97be32bda9f62a32585b2a213c7c",
+    "windows-ctest.log": "3a19e5103d6bd2315d140f657fa66d95b47521491d2137a46015962553f69c33",
+    "restored-build-policy-tests.log": "181283d3172e81e9cdf6a79b0c9645b298b2fdf4ac4e1e1237f4cef4c40e3f7b",
+    "restored-quality.log": "28f0ca0d86700501439a02f8bcd8dc34a7483b03f8761c7a471d3e39d8f7d620",
+    "restored-cpp-quality.log": "48a88efc3375ac264b900fb89495fba5c91bba67403f1da21c9e0b49b018fbd3",
+    "restored-licenses.log": "2dc0146a7608872004473aa0bcfa8d736208a4004fbda0a691ecacc2f50f38b2",
+    "restored-macos-exports.log": "df2acd1e5218d179debf0525c92542bf605932fb7afeca9047683f7b203e70a2",
+    "windows-exports.log": "d6bbeac683ca2a9366d316e115eab0443db6cc0255a93cb987c5f93caa329a8f",
+    "final-debug-ctest.log": "bdce4668b50cd61d7b23a162592ca5e3cad281cec83643548f780c3b75bd95ac"
+  },
+  "stored_log_normalization": "Host-specific build directories replaced with <build-dir>; raw local log fingerprints are retained in log_sha256.",
+  "stored_log_sha256": {
+    "restored-mac-ctest.log": "0857324ae2bcec4a174648e81eba9e01515b4556ed70c6a595e6f8919f715a2a",
+    "restored-linux-ctest.log": "027e85ee8273d9eef9426570e6933ca7bfb263529d1f6e8a4c64dd4d8607ceb2",
+    "windows-ctest.log": "bfada7d986290959c79314c57879dc659d5d4b5c5fe455999a1261e4726dc226"
+  }
+}

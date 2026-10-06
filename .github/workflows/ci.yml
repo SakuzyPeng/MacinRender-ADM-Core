@@ -38,12 +38,12 @@ jobs:
         include:
           - name: macOS debug
             runner: macos-26
-            install: brew install cmake ninja boost ccache
+            install: brew install cmake ninja ccache
           - name: Linux debug
             runner: ubuntu-24.04
             install: |
               sudo apt-get update
-              sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache libboost-all-dev
+              sudo apt-get install -y cmake ninja-build build-essential git pkg-config ccache
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -119,15 +119,58 @@ jobs:
         if: always()
         run: ccache --show-stats || true
 
+  scene-arm64-release:
+    name: Linux ARM64 Scene arithmetic (Release)
+    runs-on: ubuntu-24.04-arm
+    env:
+      FC_CACHE_DIR: ${{ github.workspace }}/.fc-cache
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Install toolchains
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build build-essential git pkg-config
+      - name: Restore source and Cargo caches
+        uses: actions/cache@v5
+        with:
+          path: |
+            .fc-cache
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            build/rust/
+          key: scene-release-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml', 'cmake/MRDependencies.cmake') }}
+          restore-keys: |
+            scene-release-${{ runner.os }}-${{ runner.arch }}-
+      # GCC contraction only becomes visible in optimized builds. The production
+      # global strict-FP switch must remain OFF for this regression to be useful.
+      - name: Configure default arithmetic
+        run: >
+          cmake -S . -B build/scene-release -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
+          -DMR_ADM_STRICT_FP=OFF
+          -DMR_ADM_BUILD_LIBEAR_REFERENCE_TESTS=OFF
+          -DMR_ADM_FLAC_PROVIDER=VENDORED
+          -DMR_ADM_OPUS_PROVIDER=VENDORED
+          -DMR_ADM_ENABLE_IAMF=OFF
+      - name: Build Scene references
+        run: >
+          cmake --build build/scene-release --parallel 4
+          --target mr_adm_scene_numeric_rust_tests mr_adm_live_binaural_rust_tests
+          mr_adm_live_vbap_rust_tests mr_adm_hoa_rust_tests
+      - name: Validate arithmetic and semantic boundaries
+        run: >
+          ctest --test-dir build/scene-release --parallel 4 --output-on-failure
+          -R '^(mr_adm_scene_numeric_rust_tests|mr_adm_live_binaural_rust_tests|mr_adm_live_vbap_rust_tests|mr_adm_hoa_rust_tests)$'
+
   windows-debug:
     name: Windows debug
     runs-on: windows-2025-vs2026
 
     env:
       FC_CACHE_DIR: ${{ github.workspace }}\.fc-cache
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-bincache
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\.vcpkg-bincache,readwrite
-      VCPKG_FEATURE_FLAGS: binarycaching
       SCCACHE_DIR: ${{ github.workspace }}\.sccache
 
     steps:
@@ -181,15 +224,6 @@ jobs:
           restore-keys: |
             cargo-${{ runner.os }}-debug-
 
-      - name: Restore vcpkg binary cache
-        uses: actions/cache@v5
-        with:
-          path: .vcpkg-bincache
-          key: vcpkg-ci-windows-boost-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: |
-            vcpkg-ci-windows-boost-
-            vcpkg-windows-boost-
-
       - name: Restore sccache cache
         uses: actions/cache@v5
         with:
@@ -197,24 +231,6 @@ jobs:
           key: sccache-windows-${{ github.sha }}
           restore-keys: |
             sccache-windows-
-
-      - name: Install native dependencies
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
-          vcpkg install `
-            boost-format `
-            boost-functional `
-            boost-algorithm `
-            boost-integer `
-            boost-iterator `
-            boost-math `
-            boost-optional `
-            boost-range `
-            boost-rational `
-            boost-smart-ptr `
-            boost-variant `
-            --triplet x64-windows
 
       - name: Locate MSVC environment
         shell: pwsh
@@ -241,7 +257,6 @@ jobs:
             -DCMAKE_CXX_COMPILER=cl ^
             -DCMAKE_C_COMPILER_LAUNCHER=sccache ^
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ^
-            -DCMAKE_TOOLCHAIN_FILE="%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
             -DFETCHCONTENT_BASE_DIR="%FC_CACHE_DIR%" ^
             -DMR_ADM_CORE_BUILD_TESTS=ON ^
             -DMR_ADM_FLAC_PROVIDER=VENDORED ^

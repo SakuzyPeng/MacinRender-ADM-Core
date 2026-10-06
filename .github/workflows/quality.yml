@@ -40,7 +40,7 @@ jobs:
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
 
       - name: Install dependencies
-        run: brew install cmake ninja boost llvm cppcheck ccache
+        run: brew install cmake ninja llvm cppcheck ccache
 
       - name: Add LLVM tools to PATH
         run: echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"

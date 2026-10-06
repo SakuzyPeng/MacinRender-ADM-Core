@@ -1,0 +1,12 @@
+{
+  "arithmetic": "scene-separate-v1",
+  "spatial": {
+    "compared": 48130,
+    "max_absolute_error": 0
+  },
+  "transitions": {
+    "compared": 3166080,
+    "max_absolute_error": 0
+  },
+  "failures": 0
+}

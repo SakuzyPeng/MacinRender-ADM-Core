@@ -12,6 +12,8 @@
 - [语义编辑器 GUI](architecture/SEMANTIC_EDITOR_GUI.md)
 - [头部追踪与 OSC 跨仓库设计（原生接收接口／GUI 待适配）](architecture/HEAD_TRACKING_OSC.md)
 - [原生 OSC 头部姿态接收接口（C++／C ABI v1.40）](architecture/OSC_HEAD_TRACKING_API.md)
+- [Scene 算术规则统一](architecture/SCENE_ARITHMETIC_POLICY.md)
+- [Rust EAR 算法迁移](architecture/RUST_EAR_MIGRATION.md)
 - [Rust 落地与 SAF 替换路线图](architecture/RUST_SAF_REPLACEMENT_ROADMAP.md)
 
 ## 架构决策记录
@@ -25,6 +27,10 @@
 - [ADR 0007：C ABI 稳定性承诺与版本策略](adr/0007-c-abi-stability-policy.md)
 - [ADR 0008：Rust 落地方向与 SAF 按模块替换](adr/0008-rust-entry-and-saf-replacement.md)
 - [ADR 0009：外置头部追踪的独立仓库与 OSC 接入边界](adr/0009-head-tracking-input-boundary.md)
+
+- [ADR 0013：Rust EAR 算法与生产依赖移除](adr/0013-rust-ear.md)
+
+- [ADR 0014：统一 Scene 的乘加舍入规则](adr/0014-scene-arithmetic-policy.md)
 
 ## 使用指南
 

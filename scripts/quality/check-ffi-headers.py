@@ -25,6 +25,7 @@ CBINDGEN_CONFIG = FFI_CRATE / "cbindgen.toml"
 CBINDGEN_VERSION = "0.29.2"
 
 FFI_HEADERS = [
+    "src/adm_dsp/ear_ffi.h",
     "src/adm_dsp/dsp_ffi.h",
     "src/adm_dsp/hoa_ffi.h",
     "src/adm_dsp/live_binaural_ffi.h",

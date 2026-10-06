@@ -1,4 +1,5 @@
-//! Scene arithmetic with the original backend-specific precision and coordinate conventions.
+//! Scene arithmetic v1: fixed evaluation order, separately rounded multiply/add operations.
+//! Backend coordinate/precision conventions are retained. Fused compatibility is diagnostic only.
 #![allow(clippy::excessive_precision, clippy::approx_constant)]
 use crate::{Error, Result};
 
@@ -137,8 +138,8 @@ fn remainder_double(x: f64) -> f64 {
         r
     }
 }
-// Explicitly preserve the scalar contraction used by the frozen native build.
-// The private caller selects it from the existing strict-FP/platform configuration.
+// Production always selects false (separate rounding). The true branch retains
+// the old fused arithmetic for explicit diagnostic/unit comparisons.
 pub(crate) fn cpp_madd(a: f32, b: f32, c: f32, contract: bool) -> f32 {
     if contract { a.mul_add(b, c) } else { a * b + c }
 }

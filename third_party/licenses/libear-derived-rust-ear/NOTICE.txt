@@ -1,0 +1,12 @@
+MacinRender Rust EAR subset
+
+Copyright 2019 The libear Authors
+
+Derived from EBU libear, commit 2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15.
+https://github.com/ebu/libear
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+The algorithms were translated and adapted to Rust, with project-owned FFI and tests.
+Upstream source fingerprints are recorded in PROVENANCE.json.
+
+The spherical t-design data retains its original bytes and source attribution in
+assets/README.md (M. Graf and D. Potts, 2011; University of Vienna point sets).

@@ -12,6 +12,7 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/adm_core/version.cpp.in" "${MR_A
 
 option(MR_ADM_CORE_BUILD_CLI "Build the mradm command-line interface" ON)
 option(MR_ADM_CORE_BUILD_TESTS "Build tests" ON)
+option(MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS "Build optional legacy libear numerical reference tests" OFF)
 option(MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS "Build optional legacy libbw64 I/O reference tests" OFF)
 option(MR_ADM_BUILD_LIBADM_REFERENCE_TESTS "Build optional legacy libadm metadata reference tools" OFF)
 option(MR_ADM_BUILD_SAF_REFERENCE_TESTS "Build optional legacy SAF numerical reference tools" OFF)
@@ -239,7 +240,7 @@ mr_adm_core_apply_warnings(mr_adm_render_common)
 mr_adm_core_apply_static_analysis(mr_adm_render_common)
 
 # ── adm_render_ear ────────────────────────────────────────────────────────────
-# libear-based Objects renderer. libear types confined to this target.
+# Rust EAR Objects/DirectSpeakers/HOA renderer with a private C++ adapter.
 
 add_library(mr_adm_render_ear)
 add_library(MacinRender::ADMRenderEar ALIAS mr_adm_render_ear)
@@ -257,7 +258,7 @@ target_sources(
 
 target_link_libraries(mr_adm_render_ear
     PUBLIC MacinRender::ADMCore
-    PRIVATE ear MacinRender::ADMAudio MacinRender::ADMRenderCommon
+    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon
     PRIVATE MacinRender::ADMDsp
 )
 mr_adm_core_apply_warnings(mr_adm_render_ear)
@@ -883,12 +884,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_live_binaural_rust_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMRenderCommon MacinRender::ADMDsp)
     target_include_directories(mr_adm_live_binaural_rust_tests PRIVATE src/adm_render_binaural)
     mr_adm_core_apply_warnings(mr_adm_live_binaural_rust_tests)
+    mr_adm_core_scene_reference_fp(mr_adm_live_binaural_rust_tests)
     mr_adm_core_apply_static_analysis(mr_adm_live_binaural_rust_tests)
     add_test(NAME mr_adm_live_binaural_rust_tests COMMAND mr_adm_live_binaural_rust_tests)
 
     add_executable(mr_adm_scene_numeric_rust_tests tests/unit/scene_numeric_rust_test.cpp)
     target_link_libraries(mr_adm_scene_numeric_rust_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
     mr_adm_core_apply_warnings(mr_adm_scene_numeric_rust_tests)
+    mr_adm_core_scene_reference_fp(mr_adm_scene_numeric_rust_tests)
     mr_adm_core_apply_static_analysis(mr_adm_scene_numeric_rust_tests)
     add_test(NAME mr_adm_scene_numeric_rust_tests COMMAND mr_adm_scene_numeric_rust_tests)
 
@@ -903,6 +906,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         MacinRender::ADMRenderCommon MacinRender::ADMDsp fmt::fmt)
     target_include_directories(mr_adm_live_vbap_rust_tests PRIVATE src/adm_render_vbap src/adm_render_common)
     mr_adm_core_apply_warnings(mr_adm_live_vbap_rust_tests)
+    mr_adm_core_scene_reference_fp(mr_adm_live_vbap_rust_tests)
     mr_adm_core_apply_static_analysis(mr_adm_live_vbap_rust_tests)
     add_test(NAME mr_adm_live_vbap_rust_tests COMMAND mr_adm_live_vbap_rust_tests)
     set_tests_properties(mr_adm_live_vbap_rust_tests PROPERTIES TIMEOUT 60)
@@ -929,8 +933,19 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_pcm_mix_tests COMMAND mr_adm_pcm_mix_tests)
     set_tests_properties(mr_adm_pcm_mix_tests PROPERTIES TIMEOUT 60)
 
+    if(MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS)
+        add_executable(mr_adm_libear_reference_tests tests/reference/libear/reference_test.cpp)
+        target_link_libraries(mr_adm_libear_reference_tests PRIVATE ear MacinRender::ADMRenderCommon MacinRender::ADMDsp)
+        mr_adm_core_apply_warnings(mr_adm_libear_reference_tests)
+        add_test(NAME mr_adm_libear_reference_tests COMMAND mr_adm_libear_reference_tests)
+        set_tests_properties(mr_adm_libear_reference_tests PROPERTIES TIMEOUT 300)
+        add_executable(mr_adm_libear_benchmark EXCLUDE_FROM_ALL tests/reference/libear/benchmark.cpp)
+        target_link_libraries(mr_adm_libear_benchmark PRIVATE ear MacinRender::ADMDsp MacinRender::ADMCore)
+        mr_adm_core_apply_warnings(mr_adm_libear_benchmark)
+    endif()
+
     add_executable(mr_adm_ear_post_tests tests/unit/ear_post_test.cpp)
-    target_link_libraries(mr_adm_ear_post_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp ear)
+    target_link_libraries(mr_adm_ear_post_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMDsp)
     mr_adm_core_apply_warnings(mr_adm_ear_post_tests)
     mr_adm_core_apply_static_analysis(mr_adm_ear_post_tests)
     add_test(NAME mr_adm_ear_post_tests COMMAND mr_adm_ear_post_tests)
@@ -1302,6 +1317,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         MacinRender::ADMDsp nlohmann_json::nlohmann_json)
     target_include_directories(mr_adm_hoa_rust_tests PRIVATE src/adm_render_common)
     mr_adm_core_apply_warnings(mr_adm_hoa_rust_tests)
+    mr_adm_core_scene_reference_fp(mr_adm_hoa_rust_tests)
     add_test(NAME mr_adm_hoa_rust_tests COMMAND mr_adm_hoa_rust_tests)
     set_tests_properties(mr_adm_hoa_rust_tests PROPERTIES TIMEOUT 120)
 
@@ -1557,7 +1573,7 @@ install(
 )
 
 # mr_adm_c_api and all targets that depend on FetchContent ADM/rendering
-# libraries (libear and the Rust archive) cannot be in the export set until those
+# libraries (the Rust archive) cannot be in the export set until those
 # libraries provide proper installed CMake configs. Install binaries and headers
 # without export; re-integrate post-M3.
 install(

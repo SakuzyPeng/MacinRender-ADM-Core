@@ -1,0 +1,150 @@
+{
+  "schema": "mradm.rust-ear-migration.v1",
+  "date": "2026-10-06",
+  "baseline_commit": "5dd0378a0b7f73a1c548a178b3528b5c376b9387",
+  "upstream_libear": "2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15",
+  "implementation": "working-tree; see source_sha256",
+  "numeric_thresholds": {
+    "point_ds_hoa": "1e-9 * (1 + abs(reference))",
+    "extent": "1e-5 * (1 + abs(reference))",
+    "fir": "2e-7 * (1 + abs(reference))",
+    "pcm_agreed": "2e-5 * (1 + abs(reference))",
+    "pcm_actual_check": "2e-6 * (1 + abs(reference))"
+  },
+  "platforms": {
+    "macos_arm64": {
+      "debug_default_ctest": "68/68",
+      "release_default_focused_ctest": "12/12",
+      "release_with_oracle_focused_ctest": "13/13",
+      "public_c_exports": 139,
+      "oracle_values": 582984,
+      "final_focused_ctest": "12/12",
+      "release_rust_ear_tests": "5/5",
+      "release_ear_ffi_tests": "1/1"
+    },
+    "windows_x64": {
+      "release_default_ctest": "67/67",
+      "release_with_oracle_ctest": "68/68",
+      "public_c_exports": 139,
+      "oracle_values": 582984,
+      "checkout": "existing canonical workspace, not a clean Git checkout",
+      "preserved_local_files": [
+        "CppcheckSuppressions.txt",
+        "src/adm_realtime/monitor_engine.cpp",
+        "tests/unit/adm_io_fixture_test.cpp",
+        "tests/unit/realtime_stream_fixture_test.cpp"
+      ],
+      "local_files_preserved_verified": true
+    },
+    "linux_arm64": {
+      "compiler": "GCC 12.2.0",
+      "release_default_fp_with_oracle_ctest": "67/68",
+      "default_fp_failure": "mr_adm_scene_numeric_rust_tests; unchanged Scene source/reference contraction mismatch",
+      "release_strict_fp_default_ctest": "67/67",
+      "release_strict_fp_with_oracle_ctest": "68/68",
+      "strict_scene_values": 3214202,
+      "strict_scene_max_error": 0,
+      "public_c_exports": 139,
+      "oracle_values": 582984,
+      "cargo_workspace_tests": 171,
+      "final_focused_ctest": "12/12"
+    },
+    "linux_x64": {
+      "validation": "not executed in this local run; existing CI workflow retained"
+    }
+  },
+  "default_dependencies": {
+    "implementation": "rust",
+    "libear": false,
+    "runtime_fallback": false,
+    "oracle_option": "MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS=OFF"
+  },
+  "private_ffi": {
+    "functions_checked": 198,
+    "structs_checked": 62,
+    "algorithm_unsafe": "forbidden"
+  },
+  "performance_scope": "Release synthetic 22.2 Objects preparation and 1,048,576-frame mixing/post-processing; 5 alternating measured runs plus warm-up. CLI RSS/time uses small fixtures and includes startup/I/O. No full-program speed or perceptual claim.",
+  "reports": [
+    "macos-release-comparison.json",
+    "windows-comparison.json",
+    "linux-arm64-comparison.json",
+    "linux-arm64-strict-comparison.json",
+    "macos-audio.json",
+    "macos-kernel-benchmark.json",
+    "windows-kernel-benchmark.json",
+    "macos-cli-benchmark.json"
+  ],
+  "log_sha256": {
+    "ctest-debug.log": "b6287bb995751a89a1d63e233754c1e66e1f73393053079e5b8974293bf6683d",
+    "ctest-release-default.log": "2df34865429ef50ede3fc3b48b21418ea32aba9d7374dcb8380cccd091bf6741",
+    "windows-default-ctest.log": "e66d03070fa332daad532fd0c4b164835803aae814ad5f6b8228b024831274ae",
+    "windows-last-tests.log": "c8e5252e911cb1f0fd08cdd9d6f953ac88aeaccfb08879cc008a0e941aaf3616",
+    "windows-audit.log": "af42afb3cf66a9e7730f4de0fefeb24e1aa76c8ef1b4b01d678d86a4905f24aa",
+    "linux-ctest.log": "2785253d8d6b712acd122814bcfd0b9676caaeb6193f46033f02a22fa5213ef7",
+    "linux-strict-ctest.log": "b35a01f160c10e74f6be343cb8c3c8b24a6c11f9adbafcf74690a0d9d462d59a",
+    "linux-default-ctest.log": "394f45e7ab94a472a707bef4237523158bc327d911140b789189b078b7ef1a6a",
+    "linux-last-tests.log": "aae14e126923bd4e2cee6920da6261ec13084f36a0da356452c69782d5da25dd",
+    "linux-exports.log": "b8b044f4f50e012694e036c1f365dca5a1709e5fec7b1a47b9947cedbdd8f0ea",
+    "exports-macos.log": "df2acd1e5218d179debf0525c92542bf605932fb7afeca9047683f7b203e70a2",
+    "windows-exports.log": "d6bbeac683ca2a9366d316e115eab0443db6cc0255a93cb987c5f93caa329a8f",
+    "rust-ear-release-tests.log": "4d73fc863d03a4915eb32290d2191d7ba2e29dd5b9ad1f8fab695060d9db73ec",
+    "ffi-ear-release-tests.log": "cffdff088f0d0002c32f00ce387b9c88ea58273011950fca876e88047955f032",
+    "quality-ear-header.log": "612f6812031a2f0d10ba6c8b41e11a10982659e7fb1fd810bf834bf3231ec30c",
+    "quality-ear-header-cppcheck.log": "9bd998e0f4c28580dfa59045a08d0b619e224d0d81922b75487948fe957eec6d",
+    "quality-last.log": "0d70613767a9a2319c1081414fc55b14745c907e497c867cb6575171283e2704",
+    "rust-quality-final.log": "3ef81c6bd1907f5b7975a18fba789ef2e1227acaac3e147bacaedbde8e20dedd",
+    "ffi-last.log": "ec9c53cb1472853ba3d1f4b5b2e7b5251d14e60beae354f2b58f78b69caad25a",
+    "licenses-final.log": "2dc0146a7608872004473aa0bcfa8d736208a4004fbda0a691ecacc2f50f38b2",
+    "consistency-final.log": "27b6a74b7c5f12a1aa2467eead40441631bb44ac8cb8aab1a8c109cc27ffc88b"
+  },
+  "source_sha256": {
+    "rust/crates/mradm-ear/Cargo.toml": "e73f288cfd1f3f9e2aa68a5e0f801b9fe8d164d47dbe98c186418305b0c5b647",
+    "rust/crates/mradm-ear/PROVENANCE.json": "35c617122b0b015c277ff22ffca4aaf23ee0e4d074592b9e20e86eba19906b88",
+    "rust/crates/mradm-ear/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "rust/crates/mradm-ear/NOTICE.txt": "e38ada5ed19e2898d35b432152c42d0bda219be5dc646c5009885dd2d8f57566",
+    "rust/crates/mradm-ear/tests/semantics.rs": "a85ed516206d44a76aaaf5623d95b0e0bcf27cb68a859f1f14accab0eca2cf53",
+    "rust/crates/mradm-ear/assets/README.md": "d1fb4efd610c794ce1eda0d091eced771b8c8a05cfc8e960f1995d77cfe7a859",
+    "rust/crates/mradm-ear/assets/Design_5200_100_random.dat": "dcd01c9aaf33f57c8de80993bfd2c943832e629f619ad839f21642e900570ced",
+    "rust/crates/mradm-ear/src/hoa.rs": "0533fe7caee77b6278088086d7c0c4d77caa12241d34b51f3f6e529674524a82",
+    "rust/crates/mradm-ear/src/panner.rs": "52e6c82e56e101afbb2c08d391b7a44d74d86dd2c184b1b3b04b606e1ed3e508",
+    "rust/crates/mradm-ear/src/geom.rs": "2783b6313287f2c6101f1639ebc1a022e54cae61e284297947d4b6e6cba937f7",
+    "rust/crates/mradm-ear/src/lib.rs": "0ec888a95561544c2f047e3c9032f04d53f36ccd7f2bbe5ca02a3d095f36979b",
+    "rust/crates/mradm-ear/src/data.rs": "6cf9224a074eca59402d94d365e19a2ae348ef4acb1d913ffab97c47a11635ce",
+    "rust/crates/mradm-ear/src/direct.rs": "84be0ffe5545e0415e4946c926e232cb3e71f00e8e0b9ca34607bd1f27d18094",
+    "rust/crates/mradm-ear/src/decorrelate.rs": "f5a31cfdf40c12af026f5eff78de1bf1a7699232c3b096659a1a7164b8d02acb",
+    "rust/crates/mradm-ear/src/extent.rs": "ec9b16a4ce6a1b9f31246fbad77e0004245ea4295a6eff611267cce7c1632d02",
+    "rust/Cargo.toml": "57a10715e0c6f32af1780a311b17d7a26a1ce094f959230fd4a49a6d653f5467",
+    "rust/Cargo.lock": "d36ca071ff5e9f5265fffab07156f32090a09e9db521c594fa55e87539d1e124",
+    "rust/crates/mradm-ffi/src/ear.rs": "03a0e8ddd1fc2f0b3929f85292fb2bffec5effa6cee5da0de9e8ad30849229df",
+    "rust/crates/mradm-ffi/src/lib.rs": "8bf7a2794428506c6f9e4c75db7c1aa98ee738114fc233a238d54c173fd42a11",
+    "src/adm_dsp/ear.h": "47964a584d144e11915f2218cb618748276fa0aefe17df9ad4ad4108aad04250",
+    "src/adm_dsp/ear_ffi.h": "50d62d4d681e8f723a98659c4b4288bc1d792870b0d8eb331bd69c9e06be141e",
+    "src/adm_render_ear/ear_renderer.cpp": "edbd48a58644af2939f7ecee54fc6a8c1ff75e238a27e87da41c96e3f7507f52",
+    "CMakeLists.txt": "f961756bec3130a69b44b9c8cde9b09f80d10affc28dff37e5a5f70ca59eef2c",
+    "cmake/MRDependencies.cmake": "ada432a01a529006c331ef369c1447f0819576f768af880d475ceaaa4578cf6d",
+    "cmake/MRDependencyRecord.cmake": "80c9ef26bc107ded6022db9ee4140c340a22e55e2f88b72334e1ee8891c627f2",
+    "scripts/consistency/build_info.py": "fb60e6fc455a590350637c4abc3f72e22bf32fb57bb8c3ad095bdc4d6dd5ebe2",
+    "tests/unit/consistency_build_test.py": "a229c68eff3f708fa7595ca0198b2a9bec722e7de665674b8803ea6f587cc820",
+    "tests/unit/ear_post_test.cpp": "d1f54f96f3c523704c55939e39f745a98d1f62b2761a19809dfd41663ee7c65e",
+    "tests/reference/ear_post_legacy.h": "334ab4ffed3b0c321b94e4ca59c504ed1e513429a7b98a38c95c603bfc47d00e",
+    "tests/reference/libear/reference_test.cpp": "80f66f344c82510c11c204802af0153748b517975953e910196c5285c410d2f1",
+    "tests/reference/libear/benchmark.cpp": "5108d0b9047ac1c4d380d0261542ed72e73e3f6142e037be7afce1eec4867d8c"
+  },
+  "quality": {
+    "rust_fmt_clippy": "passed",
+    "private_ffi_header_check": "198 functions / 62 structs",
+    "cpp_changed_gate": "passed",
+    "new_cpp_wrapper_clang_tidy": "passed; repository pragma-once convention retained",
+    "new_cpp_wrapper_cppcheck": "passed",
+    "licenses_sbom": "passed",
+    "reference_registry": "14 retained units / 42 file hashes",
+    "workflow_yaml": "parsed",
+    "consistency_audit_tests": "12/12"
+  },
+  "stored_log_normalization": "Host-specific build directories replaced with <build-dir>; raw local log fingerprints are retained in log_sha256.",
+  "stored_log_sha256": {
+    "linux-default-ctest.log": "83b97ab600ca90f493bc58f9be8baed09ecde13f49aefc2fefc3bd37bbb98b55",
+    "linux-ctest.log": "fbc8e4bd3fb7011bf8defcb9ef6925da050dac11fc815ff4e930b72d2fa9cb6b"
+  }
+}

@@ -60,13 +60,22 @@ float signal(std::size_t sample, std::size_t seed) {
     return static_cast<float>(static_cast<int>((sample * 17U + seed) % 31U) - 15) / 64.0F;
 }
 
-void legacy_compatibility(const ear::Layout& layout, std::size_t capacity, std::size_t tail, Stats& stats) {
-    const auto channels = layout.channels().size();
-    auto filters =
-        take(mradm::dsp::EarFilters::create(channels, flatten(ear::designDecorrelators<float>(layout)), 255U));
+// Fixed, dense, exactly representable FIRs exercise convolution independently of filter design.
+std::vector<std::vector<float>> fixed_filters(std::size_t channels) {
+    std::vector<std::vector<float>> filters(channels, std::vector<float>(512U));
+    for (std::size_t c = 0; c < channels; ++c) {
+        for (std::size_t i = 0; i < 512U; ++i) {
+            filters[c][i] = static_cast<float>(static_cast<int>((i * 17U + c * 13U) % 31U) - 15) / 512.0F;
+        }
+    }
+    return filters;
+}
+
+void legacy_compatibility(std::size_t channels, std::size_t capacity, std::size_t tail, Stats& stats) {
+    auto filters = take(mradm::dsp::EarFilters::create(channels, flatten(fixed_filters(channels)), 255U));
     mradm::dsp::EarPostProcessor actual(filters, capacity);
     ear_post_legacy::DecorrState legacy;
-    ear_post_legacy::init_decorr_state(legacy, layout, static_cast<std::uint16_t>(channels), capacity);
+    ear_post_legacy::init_decorr_state(legacy, fixed_filters(channels), static_cast<std::uint16_t>(channels), capacity);
     std::size_t start = 0;
     for (const auto frames : {capacity, capacity, tail}) {
         std::vector<float> direct(frames * channels);
@@ -103,9 +112,8 @@ void legacy_compatibility(const ear::Layout& layout, std::size_t capacity, std::
     require(direct == reference, "moving a post processor lost history");
 }
 
-double time_domain_reference(const ear::Layout& layout) {
-    const auto firs = ear::designDecorrelators<float>(layout);
-    const auto channels = firs.size();
+double time_domain_reference(std::size_t channels) {
+    const auto firs = fixed_filters(channels);
     auto bank = take(mradm::dsp::EarFilters::create(channels, flatten(firs), 255U));
     mradm::dsp::EarPostProcessor processor(bank, 1024U);
     constexpr std::size_t k_frames = 1400U;
@@ -144,9 +152,9 @@ double time_domain_reference(const ear::Layout& layout) {
 }
 
 std::pair<std::array<float, 3>, std::array<float, 3>> short_tail_regression() {
-    const auto layout = ear::getLayout("0+2+0");
+    constexpr std::size_t channels = 2U;
     ear_post_legacy::DecorrState legacy;
-    ear_post_legacy::init_decorr_state(legacy, layout, 2U, 1U);
+    ear_post_legacy::init_decorr_state(legacy, fixed_filters(channels), 2U, 1U);
     std::vector<float> impulse(legacy.fft_len, 0.0F);
     impulse[0] = 1;
     impulse[1] = 0.5F;
@@ -181,14 +189,13 @@ int main(int argc, char** argv) {
     try {
         Stats stats;
         double fir_error = 0;
-        for (const auto* name : {"0+2+0", "0+5+0", "4+7+0", "9+10+3"}) {
-            const auto layout = ear::getLayout(name);
+        for (const std::size_t channels : {2U, 6U, 12U, 24U}) {
             for (const std::size_t capacity : {1024U, 1536U, 2048U}) {
                 for (const std::size_t tail : {1U, 7U, 200U, 254U, 255U, 256U, 510U, 511U, 512U, 1023U}) {
-                    legacy_compatibility(layout, capacity, tail, stats);
+                    legacy_compatibility(channels, capacity, tail, stats);
                 }
             }
-            fir_error = std::max(fir_error, time_domain_reference(layout));
+            fir_error = std::max(fir_error, time_domain_reference(channels));
         }
         const auto [before, after] = short_tail_regression();
         const auto report = [&](std::ostream& out) {

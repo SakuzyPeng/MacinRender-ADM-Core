@@ -5,8 +5,6 @@
 #include <cstdint>
 #include <vector>
 
-#include <ear/ear.hpp>
-
 #include "dsp.h"
 #include "render_common.h"
 namespace ear_post_legacy {
@@ -120,7 +118,10 @@ void apply_direct_delay(DecorrState& state,
     }
 }
 
-void init_decorr_state(DecorrState& decorr, const ear::Layout& layout, uint16_t num_out_ch, uint64_t k_block_size) {
+void init_decorr_state(DecorrState& decorr,
+                       const std::vector<std::vector<float>>& raw_filters,
+                       uint16_t num_out_ch,
+                       uint64_t k_block_size) {
     constexpr std::size_t k_fir_len = 512;
     const std::size_t k_fft_len = next_power_of_two(static_cast<std::size_t>(k_block_size) + k_fir_len - 1U);
     const std::size_t k_bins = (k_fft_len / 2U) + 1U;
@@ -129,11 +130,10 @@ void init_decorr_state(DecorrState& decorr, const ear::Layout& layout, uint16_t 
     decorr.fft_len = k_fft_len;
     decorr.bins = k_bins;
     decorr.overlap_len = k_fir_len - 1U;
-    decorr.comp_delay = ear::decorrelatorCompensationDelay(); // 255
+    decorr.comp_delay = 255; // 255
     decorr.overlap.assign(num_out_ch, std::vector<float>(decorr.overlap_len, 0.0F));
     decorr.dir_delay.assign(num_out_ch, std::vector<float>(static_cast<std::size_t>(decorr.comp_delay), 0.0F));
 
-    const auto raw_filters = ear::designDecorrelators<float>(layout);
     decorr.filter_fd.resize(num_out_ch, std::vector<dsp::Complex>(k_bins));
     std::vector<float> fir_buf(k_fft_len, 0.0F);
     for (std::size_t ch = 0; ch < num_out_ch; ++ch) {

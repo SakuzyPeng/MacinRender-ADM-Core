@@ -1,0 +1,139 @@
+Test project <build-dir>
+      Start 19: mr_adm_consistency_tool_tests
+      Start 20: mr_adm_consistency_build_tests
+      Start 54: mr_adm_rust_unit_tests
+      Start 67: mr_adm_cli_smoke_tests
+      Start 29: mr_adm_triple_balance_stream_tests
+      Start  7: mr_adm_osc_head_tracking_tests
+      Start 26: mr_adm_realtime_tests
+      Start 15: mr_adm_monitor_dsp_tests
+ 1/67 Test  #7: mr_adm_osc_head_tracking_tests ...............   Passed    5.93 sec
+      Start  8: mr_adm_scene_stream_c_api_tests
+ 2/67 Test #26: mr_adm_realtime_tests ........................   Passed    4.23 sec
+      Start 27: mr_adm_vbap_smoke_tests
+ 3/67 Test #29: mr_adm_triple_balance_stream_tests ...........   Passed   10.84 sec
+      Start 44: mr_adm_ear_smoke_tests
+ 4/67 Test #15: mr_adm_monitor_dsp_tests .....................   Passed    6.10 sec
+      Start 52: mr_adm_binaural_fixture_tests
+ 5/67 Test  #8: mr_adm_scene_stream_c_api_tests ..............   Passed    7.24 sec
+      Start 47: mr_adm_ear_fixture_tests
+ 6/67 Test #44: mr_adm_ear_smoke_tests .......................   Passed    2.09 sec
+ 7/67 Test #27: mr_adm_vbap_smoke_tests ......................   Passed    3.28 sec
+      Start 13: mr_adm_core_package_config_tests
+      Start 57: mr_adm_live_binaural_continuity_tests
+ 8/67 Test #67: mr_adm_cli_smoke_tests .......................   Passed   15.41 sec
+      Start 30: mr_adm_triple_balance_222_tests
+ 9/67 Test #13: mr_adm_core_package_config_tests .............   Passed    0.61 sec
+10/67 Test #47: mr_adm_ear_fixture_tests .....................   Passed    0.66 sec
+      Start 25: mr_adm_scene_export_tests
+      Start 63: mr_adm_render_trim_fixture_tests
+11/67 Test #52: mr_adm_binaural_fixture_tests ................   Passed    2.42 sec
+      Start 21: mr_adm_consistency_checkpoint_tests
+12/67 Test #25: mr_adm_scene_export_tests ....................   Passed    0.91 sec
+13/67 Test #30: mr_adm_triple_balance_222_tests ..............   Passed    0.93 sec
+      Start 55: mr_adm_hrtf_grid_tests
+      Start 50: mr_adm_hoa_encode_fixture_tests
+14/67 Test #21: mr_adm_consistency_checkpoint_tests ..........   Passed    1.34 sec
+15/67 Test #57: mr_adm_live_binaural_continuity_tests ........   Passed    2.29 sec
+      Start  2: mr_adm_core_unit_tests
+      Start 24: mr_adm_io_fixture_tests
+16/67 Test #63: mr_adm_render_trim_fixture_tests .............   Passed    1.45 sec
+17/67 Test #55: mr_adm_hrtf_grid_tests .......................   Passed    0.82 sec
+      Start 41: mr_adm_speaker_layouts_tests
+      Start 42: mr_adm_direct_speakers_matrix_tests
+18/67 Test  #2: mr_adm_core_unit_tests .......................   Passed    1.08 sec
+19/67 Test #24: mr_adm_io_fixture_tests ......................   Passed    1.04 sec
+20/67 Test #41: mr_adm_speaker_layouts_tests .................   Passed    0.80 sec
+      Start 40: mr_adm_hptf_parameters_tests
+      Start 46: mr_adm_lfe_routing_tests
+      Start 51: mr_adm_hoa_decode_fixture_tests
+21/67 Test #50: mr_adm_hoa_encode_fixture_tests ..............   Passed    3.09 sec
+22/67 Test #46: mr_adm_lfe_routing_tests .....................   Passed    0.71 sec
+      Start 38: mr_adm_hptf_regression_tests
+      Start  4: mr_adm_io_smoke_tests
+23/67 Test #40: mr_adm_hptf_parameters_tests .................   Passed    1.47 sec
+24/67 Test #42: mr_adm_direct_speakers_matrix_tests ..........   Passed    2.04 sec
+      Start 45: mr_adm_channel_bed_render_tests
+      Start 23: mr_adm_semantic_policy_tests
+25/67 Test #38: mr_adm_hptf_regression_tests .................   Passed    1.10 sec
+      Start 10: mr_adm_stereo_peak_guard_tests
+26/67 Test  #4: mr_adm_io_smoke_tests ........................   Passed    1.13 sec
+27/67 Test #51: mr_adm_hoa_decode_fixture_tests ..............   Passed    1.19 sec
+      Start 48: mr_adm_peak_fixture_tests
+      Start 28: mr_adm_triple_balance_rust_tests
+28/67 Test #45: mr_adm_channel_bed_render_tests ..............   Passed    1.44 sec
+      Start 18: mr_adm_ear_post_tests
+29/67 Test #23: mr_adm_semantic_policy_tests .................   Passed    1.32 sec
+      Start 32: mr_adm_triple_balance_semantics_tests
+30/67 Test #48: mr_adm_peak_fixture_tests ....................   Passed    0.51 sec
+      Start 43: mr_adm_direct_speakers_matrix_render_tests
+31/67 Test #32: mr_adm_triple_balance_semantics_tests ........   Passed    0.77 sec
+      Start 16: mr_adm_output_dsp_tests
+32/67 Test #18: mr_adm_ear_post_tests ........................   Passed    0.85 sec
+      Start  3: mr_adm_wav_profile_tests
+33/67 Test #28: mr_adm_triple_balance_rust_tests .............   Passed    1.06 sec
+      Start 60: mr_adm_loudness_fixture_tests
+34/67 Test  #3: mr_adm_wav_profile_tests .....................   Passed    1.14 sec
+35/67 Test #10: mr_adm_stereo_peak_guard_tests ...............   Passed    3.25 sec
+      Start 49: mr_adm_hoa_rust_tests
+      Start 11: mr_adm_live_binaural_rust_tests
+36/67 Test #43: mr_adm_direct_speakers_matrix_render_tests ...   Passed    1.37 sec
+37/67 Test #16: mr_adm_output_dsp_tests ......................   Passed    1.24 sec
+      Start 22: mr_adm_quality_scripts_tests
+      Start 35: mr_adm_triple_balance_size_processor_tests
+38/67 Test #60: mr_adm_loudness_fixture_tests ................   Passed    0.20 sec
+      Start 36: mr_adm_render_common_numeric_tests
+39/67 Test #36: mr_adm_render_common_numeric_tests ...........   Passed    0.15 sec
+      Start 37: mr_adm_hptf_tests
+40/67 Test #35: mr_adm_triple_balance_size_processor_tests ...   Passed    0.42 sec
+      Start  9: mr_adm_scene_output_c_api_tests
+41/67 Test #49: mr_adm_hoa_rust_tests ........................   Passed    0.71 sec
+42/67 Test #37: mr_adm_hptf_tests ............................   Passed    0.37 sec
+      Start 61: mr_adm_flac_io_smoke_tests
+      Start 56: mr_adm_hrtf_interpolation_tests
+43/67 Test  #9: mr_adm_scene_output_c_api_tests ..............   Passed    1.59 sec
+      Start 17: mr_adm_pcm_mix_tests
+44/67 Test #22: mr_adm_quality_scripts_tests .................   Passed    2.07 sec
+45/67 Test #11: mr_adm_live_binaural_rust_tests ..............   Passed    2.13 sec
+      Start 62: mr_adm_trim_file_smoke_tests
+      Start 58: mr_adm_resampler_tests
+46/67 Test #61: mr_adm_flac_io_smoke_tests ...................   Passed    0.79 sec
+      Start 64: mr_adm_opus_mka_smoke_tests
+47/67 Test #17: mr_adm_pcm_mix_tests .........................   Passed    1.20 sec
+48/67 Test #56: mr_adm_hrtf_interpolation_tests ..............   Passed    1.24 sec
+      Start 14: mr_adm_live_vbap_rust_tests
+      Start  5: mr_adm_c_api_tests
+49/67 Test #58: mr_adm_resampler_tests .......................   Passed    0.61 sec
+50/67 Test #62: mr_adm_trim_file_smoke_tests .................   Passed    0.64 sec
+      Start  1: mr_adm_wav_rust_tests
+      Start 53: mr_adm_sofa_fixture_tests
+51/67 Test #64: mr_adm_opus_mka_smoke_tests ..................   Passed    0.18 sec
+      Start  6: mr_adm_c_api_header_smoke
+52/67 Test  #6: mr_adm_c_api_header_smoke ....................   Passed    0.03 sec
+      Start 33: mr_adm_triple_balance_point_tests
+53/67 Test #14: mr_adm_live_vbap_rust_tests ..................   Passed    0.22 sec
+      Start 59: mr_adm_meter_tests
+54/67 Test #53: mr_adm_sofa_fixture_tests ....................   Passed    0.13 sec
+      Start 31: mr_adm_triple_balance_bed_tests
+55/67 Test #33: mr_adm_triple_balance_point_tests ............   Passed    0.07 sec
+      Start 34: mr_adm_triple_balance_size_filter_tests
+56/67 Test #31: mr_adm_triple_balance_bed_tests ..............   Passed    0.06 sec
+      Start 39: mr_adm_hptf_dsp_tests
+57/67 Test #34: mr_adm_triple_balance_size_filter_tests ......   Passed    0.06 sec
+58/67 Test #59: mr_adm_meter_tests ...........................   Passed    0.11 sec
+      Start 65: mr_adm_iamf_smoke_tests
+      Start 12: mr_adm_scene_numeric_rust_tests
+59/67 Test  #1: mr_adm_wav_rust_tests ........................   Passed    0.27 sec
+      Start 66: mr_adm_apac_smoke_tests
+60/67 Test #65: mr_adm_iamf_smoke_tests ......................   Passed    0.05 sec
+61/67 Test #39: mr_adm_hptf_dsp_tests ........................   Passed    0.08 sec
+62/67 Test #66: mr_adm_apac_smoke_tests ......................   Passed    0.04 sec
+63/67 Test #12: mr_adm_scene_numeric_rust_tests ..............   Passed    0.08 sec
+64/67 Test  #5: mr_adm_c_api_tests ...........................   Passed    1.80 sec
+65/67 Test #54: mr_adm_rust_unit_tests .......................   Passed   50.22 sec
+66/67 Test #19: mr_adm_consistency_tool_tests ................   Passed   53.31 sec
+67/67 Test #20: mr_adm_consistency_build_tests ...............   Passed   57.30 sec
+
+100% tests passed out of 67
+
+Total Test time (real) =  57.34 sec

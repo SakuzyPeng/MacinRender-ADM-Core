@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/mradm-dsp", "crates/mradm-adm", "crates/mradm-wav", "crates/mradm-ffi"]
+members = ["crates/mradm-dsp", "crates/mradm-ear", "crates/mradm-adm", "crates/mradm-wav", "crates/mradm-ffi"]
 resolver = "2"
 exclude = ["vendor/sofar"]
 

@@ -20,7 +20,7 @@ def main():
     for block in re.split(r'^\[\[package\]\]\s*$', lock, flags=re.M)[1:]:
         name = re.search(r'^name = "([^"]+)"$', block, re.M).group(1)
         version = re.search(r'^version = "([^"]+)"$', block, re.M).group(1)
-        if name not in {'mradm-dsp', 'mradm-adm', 'mradm-wav', 'mradm-ffi'}:
+        if name not in {'mradm-dsp', 'mradm-adm', 'mradm-wav', 'mradm-ffi', 'mradm-ear'}:
             expected.add((name, version))
     actual = {(c['source']['package'], c['version']) for c in _common.load_components()
               if c['source']['type'] == 'cargo'}
@@ -40,6 +40,11 @@ def main():
     adm_manifest = json.loads((adm_assets / 'manifest.json').read_text())
     if hashlib.sha256((adm_assets / adm_manifest['file']).read_bytes()).hexdigest() != adm_manifest['sha256']:
         errors.append('ADM common definitions hash mismatch')
+    ear_root = root / 'rust/crates/mradm-ear'
+    ear_manifest = json.loads((ear_root / 'PROVENANCE.json').read_text())
+    for name, expected_hash in ear_manifest['assets'].items():
+        if hashlib.sha256((ear_root / name).read_bytes()).hexdigest() != expected_hash:
+            errors.append('EAR asset hash mismatch: ' + name)
     if errors:
         print('\n'.join(errors), file=sys.stderr)
         return 1

@@ -30,7 +30,8 @@
 以及监听固定矩阵迁入 Rust；准备表可共享，渲染实例独立，C++ 保留元数据/布局算法与调度。
 
 [EAR 后处理迁移](RUST_EAR_POST_MIGRATION.md)进一步接管去相关 FIR、补偿延迟和双总线求和，
-并修复连续短块丢失未输出尾音的问题；libear 继续负责滤波器设计。
+并修复连续短块丢失未输出尾音的问题。后续 [EAR 算法迁移](RUST_EAR_MIGRATION.md)
+已接管布局、增益计算和 FIR 设计，libear 仅用于显式启用的历史对照。
 
 [Triple Balance 完整数值状态迁移](RUST_TRIPLE_BALANCE_MIGRATION.md)接管固定房间几何、
 点源/尺寸空间算法、四路去相关、运动与过渡状态及数值快照；C++ 保留语义、I/O、调度和 LRU。

@@ -43,12 +43,12 @@
 | `libFLAC` @ 1.5.0 | FLAC 编码与 metadata | BSD-3-Clause | 可用 | 默认仅链接 libFLAC（Xiph BSD-like）；源码包内 COPYING.GPL/LGPL/FDL 覆盖未链接的 C++ libs/programs/docs，默认发行不涉及 |
 | `libbw64` @ 0.10.0 | 历史 BW64/PCM 参考（测试专用） | Apache-2.0 | opt-in（默认关闭） | 仅用于显式启用的 libbw64/libadm 对照测试；生产整数 PCM 读写由 Rust mradm-wav 实现。 |
 | `libadm` @ 0.14.0 | 历史 ADM 元数据参考（测试专用） | Apache-2.0 | opt-in（默认关闭） | 仅用于显式启用的对照工具；生产 ADM 读写由 Rust mradm-adm 实现。 |
-| `libear` @ 2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15 | BS.2127/EAR 增益计算 | Apache-2.0 | 可用 | 内嵌 vendored Eigen/xsimd/kissfft，单列于下 |
+| `libear` @ 2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15 | BS.2127/EAR 增益计算 | Apache-2.0 | opt-in（默认关闭） | 内嵌 vendored Eigen/xsimd/kissfft，单列于下 仅供显式启用的历史 EAR 参考测试，生产使用 Rust。 |
 | `Spatial_Audio_Framework` @ v1.3.4 | 历史 DSP 数值参考（测试专用） | ISC | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
 | `libopus` @ v1.5.2 | Opus MKA 编码 | BSD-3-Clause | 可用 | 发行文档需保留专利 IPR 链接说明（LICENSE_PLEASE_READ.txt） |
-| `Eigen` @ bundled-in-libear@2db69f8f | 线性代数（libear 内嵌子模块） | MPL-2.0 | 可用 | libear 以 EIGEN_MPL2_ONLY 编译，避免 LGPL-only 模块；源码树含 COPYING.GPL/LGPL/BSD 等其他文件不代表默认使用 |
-| `xsimd` @ bundled-in-libear@2db69f8f | SIMD 抽象（libear 内嵌子模块） | BSD-3-Clause | 可用 |  |
-| `kissfft` @ bundled-in-libear@2db69f8f | FFT（libear/SAF 内嵌子模块） | BSD-3-Clause | 可用 |  |
+| `Eigen` @ bundled-in-libear@2db69f8f | 线性代数（libear 内嵌子模块） | MPL-2.0 | opt-in（默认关闭） | libear 以 EIGEN_MPL2_ONLY 编译，避免 LGPL-only 模块；源码树含 COPYING.GPL/LGPL/BSD 等其他文件不代表默认使用 仅供显式启用的历史 EAR 参考测试，生产使用 Rust。 |
+| `xsimd` @ bundled-in-libear@2db69f8f | SIMD 抽象（libear 内嵌子模块） | BSD-3-Clause | opt-in（默认关闭） |  仅供显式启用的历史 EAR 参考测试，生产使用 Rust。 |
+| `kissfft` @ bundled-in-libear@2db69f8f | FFT（libear/SAF 内嵌子模块） | BSD-3-Clause | opt-in（默认关闭） |  仅供显式启用的历史 EAR 参考测试，生产使用 Rust。 |
 | `libmysofa` @ bundled-in-SAF@v1.3.4 | SOFA 解析（SAF saf_sofa_reader 内嵌） | BSD-3-Clause | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
 | `zlib` @ bundled-in-SAF@v1.3.4 | 压缩支持（SAF SOFA reader 内嵌） | Zlib | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
 | `spreader_mr` @ fork-of-SAF-examples@v1.3.4 | saf_spreader 双耳扩散渲染（实验性 fork） | ISC | opt-in（默认关闭） | 仅用于显式启用的历史 SAF 参考测试；生产渲染和 SOFA 读取已由 Rust 实现。 |
@@ -109,6 +109,7 @@
 | `rust-windowfunctions-0.1.1` @ 0.1.1 | Rust 重采样的锁定依赖 | MIT | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
 | `rust-quick-xml-0.41.0` @ 0.41.0 | Rust ADM XML 解析和转义 | MIT | 可用 | 关闭所有可选 features，复用 memchr；不解析 DTD 或外部实体。 |
 | `libadm-common-definitions` @ 0.14.0 | 嵌入 Rust 的 ADM common definitions 标准引用数据 | Apache-2.0 | 可用 | 资源来自 libadm 0.14.0；保留来源、版权与哈希。仅复用数据，不链接 libadm。 |
+| `libear-derived-rust-ear` @ 2db69f8f-subset | Rust EAR 增益算法、布局、路由与 HOA 采样数据来源 | Apache-2.0 | 可用 | 移植 EBU libear 实际使用的算法；保留上游归属与球面采样来源，不链接 libear。 |
 
 <!-- END GENERATED DEPS -->
 

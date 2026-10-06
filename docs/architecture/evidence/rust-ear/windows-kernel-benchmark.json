@@ -1,0 +1,11 @@
+{
+  "layout": "22.2",
+  "metadata_blocks": 128,
+  "processed_frames": 1048576,
+  "sample_rate": 48000,
+  "repetitions": 5,
+  "legacy_prepare_seconds": 0.0150761,
+  "rust_prepare_seconds": 0.0021643,
+  "legacy_steady_seconds": 0.2127887,
+  "rust_steady_seconds": 0.2181261
+}

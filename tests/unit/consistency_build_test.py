@@ -76,6 +76,7 @@ class CMakeTests(Harness):
                          'set(MR_ADM_FLAC_PROVIDER VENDORED)\n')
             text += ('set(MR_ADM_CORE_FETCH_DEPS ON)\nset(MR_ADM_CORE_USE_INSTALLED_DEPS OFF)\n'
                      'set(FETCHCONTENT_FULLY_DISCONNECTED ON)\n'
+                     'set(MR_ADM_BUILD_LIBEAR_REFERENCE_TESTS ON)\n'
                      f'set(FETCHCONTENT_SOURCE_DIR_LIBEAR "{fixture.as_posix()}")\n'
                      f'foreach(target IN ITEMS {targets})\n'
                      'add_library(${target} INTERFACE IMPORTED)\nendforeach()\n'
@@ -158,6 +159,21 @@ class CMakeTests(Harness):
         self.run_ok([OPTIONS.cmake, '--build', build, '--target', 'FLAC'])
         self.configure(source, build, '-DMR_ADM_STRICT_FP=OFF')
         self.assertEqual((build / 'flac-options.txt').read_text(), baseline)
+
+    def test_scene_reference_arithmetic_is_scoped_and_default_on(self):
+        source = self.project()
+        with (source / 'CMakeLists.txt').open('a') as out:
+            out.write('add_executable(scene_reference probe.cpp)\n'
+                      'mr_adm_core_scene_reference_fp(scene_reference)\n')
+        build = self.root / 'scene-reference-build'
+        self.configure(source, build, '-DMR_ADM_STRICT_FP=OFF')
+        rows = json.loads((build / 'compile_commands.json').read_text())
+        reference = next(row['command'] for row in rows if 'scene_reference.dir' in row['command'])
+        production = next(row['command'] for row in rows if 'probe.dir' in row['command'])
+        flag = '/fp:strict' if sys.platform == 'win32' else '-ffp-contract=off'
+        self.assertIn(flag, reference)
+        self.assertNotIn(flag, production)
+        self.run_ok([OPTIONS.cmake, '--build', build])
 
     def test_strict_fp_rejects_common_and_release_conflicts(self):
         source = self.project()
@@ -280,6 +296,19 @@ class BuildInfoTests(Harness):
         self.assertEqual(self.record()[0]['validation.strict_fp'], 'passed')
         self.write_commands(['/fp:precise', '/fp:fast'])
         self.record(status=2)
+
+    def test_rust_ear_ignores_stale_reference_simd_but_checks_linked_oracle(self):
+        self.manifest['ear_implementation'] = 'rust'
+        self.write_manifest()
+        with (self.build / 'CMakeCache.txt').open('a') as out:
+            out.write('MR_ADM_EAR_SCALAR_REFERENCE:BOOL=ON\nMR_ADM_EAR_SIMD_EFFECTIVE:STRING=ON\n')
+        fields, _ = self.record()
+        self.assertEqual(fields['ear.implementation'], 'rust')
+        self.assertEqual(fields['validation.ear_scalar'], 'not-linked')
+        self.manifest['dependencies'] = [{'name': 'libear', 'provider': 'external'}]
+        self.write_manifest()
+        fields, _ = self.record(status=2)
+        self.assertEqual(fields['validation.ear_scalar'], 'failed')
 
     def test_sample_command_uses_json_keys_not_field_order(self):
         # Deliberately put file before command and put an unrelated command after it.

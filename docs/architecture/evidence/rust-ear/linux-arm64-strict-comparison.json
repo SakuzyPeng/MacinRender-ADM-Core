@@ -1,0 +1,22 @@
+{
+  "point": {
+    "values": 64400,
+    "max_scaled_error": 1.5345319148531868e-15
+  },
+  "extent": {
+    "values": 387136,
+    "max_scaled_error": 3.6785505939072114e-07
+  },
+  "direct_speakers": {
+    "values": 24912,
+    "max_scaled_error": 2.0503408945388955e-16
+  },
+  "hoa": {
+    "values": 12328,
+    "max_scaled_error": 3.477495107623991e-14
+  },
+  "fir": {
+    "values": 94208,
+    "max_scaled_error": 0
+  }
+}

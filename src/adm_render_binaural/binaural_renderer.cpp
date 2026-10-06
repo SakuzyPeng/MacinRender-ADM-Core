@@ -679,7 +679,7 @@ expand_binaural_extent(const SceneObjectBlock& block, float source_gain, Binaura
     dsp::scene_check(mradm_dsp_scene_cloud(input.data(),
                                            input.size(),
                                            p.cartesian ? 1U : 0U,
-                                           1U | dsp::scene_cpp_contract,
+                                           1U | dsp::scene_arithmetic_flags,
                                            points.data(),
                                            points.size(),
                                            &count,

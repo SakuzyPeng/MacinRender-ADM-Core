@@ -6,3 +6,7 @@
 *.sofa binary
 # Frozen migration references are pinned by SHA-256 in tests/reference/retention.json.
 /tests/reference/** -text
+
+# EAR source tables and spherical points are fingerprinted in PROVENANCE.json.
+/rust/crates/mradm-ear/src/data.rs text eol=lf
+/rust/crates/mradm-ear/assets/** -text
