@@ -132,7 +132,7 @@ scripts/quality/clang-tidy.sh build/debug
 scripts/quality/cppcheck.sh build/debug
 ```
 
-`check-changed.sh` 只扫描 `include/`、`src/`、`tests/` 下相对 `origin/main` + staged + worktree 的变更文件，是日常推荐的本地检查路径；它**不覆盖 Rust**，改了 `rust/` 需另跑 `cmake --build build/debug --target mr_adm_rust_quality`（rustfmt check + clippy `-D warnings`，quality CI 同样执行）。`check-all.sh` 在 CI 的 main/manual 路径上跑。改动依赖后跑 `scripts/quality/check-licenses.sh --build-dir build/debug`（含 Cargo 依赖校验；release CI 用 `--require-full`）。
+`check-changed.sh` 只扫描 `include/`、`src/`、`tests/` 下相对 `origin/main` + staged + worktree 的变更文件，是日常推荐的本地检查路径；它**不覆盖 Rust**，改了 `rust/` 需另跑 `cmake --build build/debug --target mr_adm_rust_quality`（rustfmt check + clippy `-D warnings`，quality CI 同样执行）。`check-all.sh` 在 CI 的 main/manual 路径上跑。改动依赖后跑 `scripts/quality/check-licenses.sh --build-dir build/debug`（含 Cargo 依赖校验；PR CI 的 macOS/Linux debug job 同样执行，release CI 用 `--require-full`）。
 
 clang-tidy 依赖 `compile_commands.json`，必须先 `cmake --preset debug`。macOS 上 LLVM 来自 Homebrew，需要 `export PATH="/opt/homebrew/opt/llvm/bin:$PATH"`。
 
@@ -292,10 +292,10 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 
 ## CI 与发布
 
-- `.github/workflows/ci.yml` — PR/push main：macOS + Linux + Windows debug（均安装 Rust 1.98.0），FLAC/Opus 均 vendored；Windows job 用 vcpkg Boost（libear 依赖）
+- `.github/workflows/ci.yml` — PR/push main：macOS + Linux + Windows debug（均安装 Rust 1.98.0，带 Cargo 缓存），FLAC/Opus 均 vendored；Windows job 用 vcpkg Boost（libear 依赖）；macOS/Linux 构建后跑 `check-licenses.sh --build-dir build/debug`，新增依赖未登记会让 PR 失败
 - `.github/workflows/consistency.yml` — push main / manual：记录跨平台 PCM 差异，门禁输入完整性与同进程重复性（逐位一致属二期）
 - `.github/workflows/quality.yml` — PR 跑 `check-changed.sh`；push main / manual full 跑 `check-all.sh`；只在 macOS
-- `.github/workflows/windows-bringup.yml` — 手动触发的 Windows MSVC debug 构建（vcpkg Boost）
+- `.github/workflows/windows-bringup.yml` — 手动触发的 Windows MSVC Release 探针构建（vcpkg Boost）
 - `.github/workflows/release.yml` — tag `v*` 或手动触发：macOS CLI `.tar.gz`、Linux CLI `.AppImage`、Windows CLI `.zip`，外加 macOS/Windows GUI 包（`MacinRender-Gui-*`，经 `scripts/release/package-*.sh` + smoke 脚本）
 - `.github/workflows/iamf-bridge-prebuild.yml` — 预构建 AOM iamf-tools bridge SDK；`cache-maintenance.yml` — FetchContent/ccache 缓存维护
 

@@ -85,7 +85,7 @@ jobs:
         run: |
           call "%VCVARS64%"
           cmake -S . -B build/windows -G Ninja ^
-            -DCMAKE_BUILD_TYPE=MinSizeRel ^
+            -DCMAKE_BUILD_TYPE=Release ^
             -DCMAKE_C_COMPILER=cl ^
             -DCMAKE_CXX_COMPILER=cl ^
             -DCMAKE_TOOLCHAIN_FILE="%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
@@ -98,7 +98,7 @@ jobs:
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/windows --target mradm_exe mr_adm_flac_io_smoke_tests --config RelWithDebInfo
+          cmake --build build/windows --target mradm_exe mr_adm_flac_io_smoke_tests
 
       - name: Smoke
         shell: pwsh
@@ -139,7 +139,7 @@ jobs:
             "name=mradm-windows-x64",
             "commit=${{ github.sha }}",
             "runner=${{ runner.os }}",
-            "build_type=MinSizeRel",
+            "build_type=Release",
             "compiler=MSVC",
             "flac_provider=VENDORED",
             "opus_provider=VENDORED"

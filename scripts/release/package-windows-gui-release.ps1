@@ -193,7 +193,7 @@ if (!$SkipNative) {
         "-S", $repoRoot,
         "-B", $nativeBuildDir,
         "-G", "Ninja",
-        "-DCMAKE_BUILD_TYPE=MinSizeRel",
+        "-DCMAKE_BUILD_TYPE=Release",
         "-DCMAKE_C_COMPILER=cl",
         "-DCMAKE_CXX_COMPILER=cl",
         "-DMR_ADM_BUILD_CAPI_BUNDLE=ON",
@@ -221,12 +221,12 @@ if (!$SkipNative) {
     }
 
     $configure = "cmake " + (($cmakeArgs | ForEach-Object { Quote-CmdArg $_ }) -join " ")
-    $build = "cmake --build " + (Quote-CmdArg $nativeBuildDir) + " --target mradm_capi_bundle --config MinSizeRel"
+    $build = "cmake --build " + (Quote-CmdArg $nativeBuildDir) + " --target mradm_capi_bundle --config Release"
     Invoke-VcvarsCommand -CommandLines @($configure, $build)
 
     $nativeDll = @(
         (Join-Path $nativeBuildDir "mradm_capi.dll"),
-        (Join-Path $nativeBuildDir "MinSizeRel\mradm_capi.dll")
+        (Join-Path $nativeBuildDir "Release\mradm_capi.dll")
     ) | Where-Object { Test-ExistingPath $_ } | Select-Object -First 1
     if (!$nativeDll) {
         $nativeDll = Get-ChildItem -Path $nativeBuildDir -Filter "mradm_capi.dll" -Recurse -File |
