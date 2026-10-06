@@ -1,8 +1,12 @@
 @PACKAGE_INIT@
+# CMake <= 3.29 lets dependency configs overwrite PACKAGE_PREFIX_DIR.
+set(_MacinRenderADMCore_PACKAGE_PREFIX_DIR "${PACKAGE_PREFIX_DIR}")
 include(CMakeFindDependencyMacro)
 find_dependency(fmt CONFIG)
 find_dependency(tl-expected CONFIG)
 find_dependency(Threads)
+set(PACKAGE_PREFIX_DIR "${_MacinRenderADMCore_PACKAGE_PREFIX_DIR}")
+unset(_MacinRenderADMCore_PACKAGE_PREFIX_DIR)
 if(NOT TARGET MacinRender::RustDSP)
     add_library(MacinRender::RustDSP STATIC IMPORTED)
     set_target_properties(MacinRender::RustDSP PROPERTIES

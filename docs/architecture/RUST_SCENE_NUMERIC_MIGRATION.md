@@ -68,7 +68,7 @@ Scene 标量循环和完整 Live 双耳 renderer。既有 HOA、Live VBAP 参考
 简单路由、端点、canonical length 和明确的恒等结果逐位检查；计数、有效位、槽位、路由和
 诊断顺序单独检查。输出拉取长度一致、离线/旧 stream、窗口、实时控制等既有回归保留。
 
-最终源码提交为 `f7f38de`；共享数学与过渡实现分别提交为 `08113fd`、`a1b2e01`。
+初次验收的源码提交为 `f7f38de`；共享数学与过渡实现分别提交为 `08113fd`、`a1b2e01`。
 [三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37434454445)
 在该源码提交通过 macOS Debug 66/66、Linux Debug 65/65、Windows Debug 65/65。
 本机 macOS Debug 66/66、Release 定向 19/19；Windows canonical Release 65/65。
@@ -105,3 +105,17 @@ scripts/quality/check-licenses.sh --build-dir build/debug
 复用现有工作区、标准构建目录和共享 Cargo 缓存。Windows 保留原有未提交修改，同步前检查
 源文件指纹并备份原字节。原有 Triple Balance 链接修改由并行提交 `a7d0e74` 独立保存，本批保留该祖先提交。最终记录见 [机器可读证据](evidence/rust-scene-numeric/validation.json)。跨平台逐位一致
 继续留到二期，本轮不据迁移推断性能提升。
+
+## 复查修正
+
+macOS arm64 默认构建的切平面叉乘也需要遵循 `contract` 策略。遗漏融合乘加会让部分
+extent 方向跨过半度边界，选择不同的离线 HRTF 网格。`cross_compat` 现保留这一策略；
+Rust 测试覆盖融合／非融合的消减结果，C++ 冻结参考对照增加五组运行时输入，并精确比较
+实际 HRTF 网格索引。修正前新增测试失败，修正后通过。
+
+安装配置在查找依赖前保存本包前缀，防止 CMake 3.24–3.29 的依赖配置覆盖
+`PACKAGE_PREFIX_DIR`。新增独立配置测试模拟依赖安装到不同前缀；在 CMake 3.29.6
+实际验证了修正前失败、修正后通过，现有 CMake 4.2.3 也通过。
+
+本轮本机 macOS Debug 全量 67/67、Release Scene／Live 双耳／包配置定向 3/3 通过，
+Rust fmt/Clippy 与改动 C++ 质量检查通过。上方机器可读记录保留初次验收的提交及指纹。
