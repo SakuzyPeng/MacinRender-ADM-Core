@@ -2,12 +2,12 @@
 use crate::boundary;
 use mradm_dsp::{
     Error, Result,
-    live_vbap::{Command, Mixer, Status},
+    live_vbap::{Mixer, VbapCommand, VbapStatus},
 };
 use std::{ptr, slice};
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Plane {
+pub struct VbapPlane {
     samples: *const f32,
     length: usize,
     has_signal: u32,
@@ -91,11 +91,11 @@ pub unsafe extern "C" fn mradm_dsp_live_vbap_reset(
 pub unsafe extern "C" fn mradm_dsp_live_vbap_process(
     handle: *mut Mixer,
     frames: u32,
-    planes: *const Plane,
+    planes: *const VbapPlane,
     plane_count: usize,
-    initial: *const Command,
+    initial: *const VbapCommand,
     initial_count: usize,
-    events: *const Command,
+    events: *const VbapCommand,
     event_count: usize,
     coefficients: *const f32,
     coefficient_count: usize,
@@ -150,7 +150,7 @@ pub unsafe extern "C" fn mradm_dsp_live_vbap_snapshot(
     element: u32,
     gains: *mut f32,
     gain_count: usize,
-    status: *mut Status,
+    status: *mut VbapStatus,
     message: *mut u8,
     capacity: usize,
 ) -> i32 {
@@ -171,9 +171,9 @@ mod tests {
     unsafe fn process(
         h: *mut Mixer,
         frames: u32,
-        planes: &[Plane],
-        initial: &[Command],
-        events: &[Command],
+        planes: &[VbapPlane],
+        initial: &[VbapCommand],
+        events: &[VbapCommand],
         coefficients: &[f32],
         out: &mut [f32],
     ) -> i32 {
@@ -205,26 +205,26 @@ mod tests {
                 0
             );
             let data = [1.; 4];
-            let planes = [Plane {
+            let planes = [VbapPlane {
                 samples: data.as_ptr(),
                 length: 4,
                 has_signal: 1,
                 reserved: 0,
             }];
-            let initial = [Command {
+            let initial = [VbapCommand {
                 fields: 3,
                 level: 1.,
-                ..Command::default()
+                ..VbapCommand::default()
             }];
-            let valid = Command {
+            let valid = VbapCommand {
                 fields: 2,
                 duration: 4,
                 level: 0.,
-                ..Command::default()
+                ..VbapCommand::default()
             };
             let mut out = [17.; 8];
             let mut gains = [19.; 6];
-            let mut status = Status::default();
+            let mut status = VbapStatus::default();
             COUNT.with(|c| c.set(Some(0)));
             assert_eq!(
                 process(h, 2, &planes, &initial, &[valid], &[1., 0.], &mut out),
@@ -248,7 +248,7 @@ mod tests {
                     2,
                     &planes,
                     &[],
-                    &[Command {
+                    &[VbapCommand {
                         element: 7,
                         ..valid
                     }],
@@ -266,7 +266,7 @@ mod tests {
             for events in [
                 [
                     valid,
-                    Command {
+                    VbapCommand {
                         element: 1,
                         offset: 1,
                         ..valid
@@ -274,20 +274,20 @@ mod tests {
                 ],
                 [
                     valid,
-                    Command {
+                    VbapCommand {
                         reserved: 1,
                         ..valid
                     },
                 ],
-                [valid, Command { fields: 0, ..valid }],
+                [valid, VbapCommand { fields: 0, ..valid }],
                 [
                     valid,
-                    Command {
+                    VbapCommand {
                         level: f32::NAN,
                         ..valid
                     },
                 ],
-                [valid, Command { offset: 2, ..valid }],
+                [valid, VbapCommand { offset: 2, ..valid }],
             ] {
                 assert_eq!(
                     process(h, 2, &planes, &initial, &events, &[1., 0.], &mut out),
@@ -297,31 +297,31 @@ mod tests {
                 assert_eq!(*h, before);
             }
             for plane in [
-                Plane {
+                VbapPlane {
                     length: 1,
                     ..planes[0]
                 },
-                Plane {
+                VbapPlane {
                     has_signal: 2,
                     ..planes[0]
                 },
-                Plane {
+                VbapPlane {
                     reserved: 1,
                     ..planes[0]
                 },
-                Plane {
+                VbapPlane {
                     samples: ptr::null(),
                     ..planes[0]
                 },
-                Plane {
+                VbapPlane {
                     samples: out.as_ptr(),
                     ..planes[0]
                 },
-                Plane {
+                VbapPlane {
                     samples: data.as_ptr().cast::<u8>().add(1).cast(),
                     ..planes[0]
                 },
-                Plane {
+                VbapPlane {
                     length: usize::MAX,
                     ..planes[0]
                 },

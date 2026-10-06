@@ -104,6 +104,10 @@ jobs:
       - name: License records
         run: scripts/quality/check-licenses.sh --build-dir build/debug
 
+      # The GUI bundle must export exactly the c_api.h functions; private Rust/C++ symbols stay inside.
+      - name: C ABI exports
+        run: python3 scripts/quality/check-capi-exports.py "build/debug/libmradm_capi.$([ "$RUNNER_OS" = macOS ] && echo dylib || echo so)"
+
       - name: Test
         run: ctest --preset debug --parallel "$(getconf _NPROCESSORS_ONLN)" --output-on-failure
 
@@ -247,6 +251,10 @@ jobs:
         run: |
           call "%VCVARS64%"
           cmake --build build/windows
+
+      - name: C ABI exports
+        shell: pwsh
+        run: python scripts/quality/check-capi-exports.py build/windows/mradm_capi.dll
 
       # ctest 在 vcvars 环境内运行：Debug 测试可执行文件依赖 VS 的调试版 CRT DLL
       # （vcruntime140d/ucrtbased 等），这些只在 dev 环境的 PATH 上。

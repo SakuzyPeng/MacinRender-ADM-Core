@@ -106,6 +106,7 @@ if [[ "$skip_native" -eq 0 ]]; then
         echo "native C ABI bundle is missing: $native_lib" >&2
         exit 1
     fi
+    python3 "$repo_root/scripts/quality/check-capi-exports.py" "$native_lib"
     mkdir -p "$(dirname "$native_dst")"
     cp -Lf "$native_lib" "$native_dst"
     echo "copied native bundle: $native_dst ($(du -h "$native_dst" | cut -f1))"

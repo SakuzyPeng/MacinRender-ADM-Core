@@ -11,7 +11,7 @@ use crate::{
 use std::sync::Arc;
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct RowInput {
+pub struct TbRowInput {
     pub input: usize,
     pub event_offset: usize,
     pub event_count: usize,
@@ -98,7 +98,7 @@ impl Plan {
         layout: Layout,
         rate: u32,
         total: u64,
-        rows: &[RowInput],
+        rows: &[TbRowInput],
         events: &[Event],
         bed: &[f32],
     ) -> Result<Self> {

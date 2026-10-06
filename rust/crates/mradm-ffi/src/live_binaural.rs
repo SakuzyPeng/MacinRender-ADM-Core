@@ -6,7 +6,7 @@ use mradm_dsp::{
 use std::{ptr, slice, sync::Arc};
 #[derive(Clone, Copy)]
 #[repr(C)]
-pub struct Plane {
+pub struct BinauralPlane {
     samples: *const f32,
     length: usize,
     has_signal: u32,
@@ -59,7 +59,7 @@ pub unsafe extern "C" fn mradm_dsp_live_binaural_reset(h: *mut Session) -> i32 {
 pub unsafe extern "C" fn mradm_dsp_live_binaural_process(
     h: *mut Session,
     frames: u32,
-    planes: *const Plane,
+    planes: *const BinauralPlane,
     plane_count: usize,
     initial: *const Command,
     initial_count: usize,
@@ -149,7 +149,7 @@ mod tests {
     unsafe fn render(
         h: *mut Session,
         n: u32,
-        planes: &[Plane],
+        planes: &[BinauralPlane],
         initial: &[Command],
         events: &[Command],
         out: &mut [f32],
@@ -206,7 +206,7 @@ mod tests {
             assert_eq!(Arc::strong_count(&bank), 2);
             drop(bank);
             let samples = [0.125; 1025];
-            let planes = [Plane {
+            let planes = [BinauralPlane {
                 samples: samples.as_ptr(),
                 length: samples.len(),
                 has_signal: 1,
@@ -238,7 +238,7 @@ mod tests {
             assert_eq!(report, before_report);
             assert_eq!(mradm_dsp_live_binaural_control(h, 0, &mut status), 0);
             assert_eq!(status, before);
-            let alias = [Plane {
+            let alias = [BinauralPlane {
                 samples: output.as_ptr(),
                 length: output.len(),
                 has_signal: 1,

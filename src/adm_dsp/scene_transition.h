@@ -1,22 +1,6 @@
 #pragma once
 #include "scene_math.h"
-// POD fields cross the private Rust boundary.
-// cppcheck-suppress-begin unusedStructMember
-extern "C" {
-struct MradmSceneTransitionStatus {
-    uint64_t backend_position;
-    uint64_t generation_position;
-    uint64_t generation_remaining;
-};
-int mradm_dsp_scene_transition_create(size_t, uint32_t, uint64_t, void**);
-void mradm_dsp_scene_transition_destroy(void*);
-int mradm_dsp_scene_transition_control(void*, uint32_t);
-int mradm_dsp_scene_transition_status(const void*, MradmSceneTransitionStatus*);
-int mradm_dsp_scene_transition_mix(void*, float*, size_t, const float*, size_t, size_t, uint32_t*);
-int mradm_dsp_scene_transition_output(void*, float*, size_t, size_t, uint32_t);
-int mradm_dsp_scene_transition_snapshot(const void*, float*, size_t, float*, size_t, MradmSceneTransitionStatus*);
-}
-// cppcheck-suppress-end unusedStructMember
+#include "scene_transition_ffi.h"
 
 namespace mradm::dsp {
 class SceneTransitions {

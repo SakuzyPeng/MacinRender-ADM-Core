@@ -70,21 +70,26 @@ fn flag(v: u32) -> Result<bool> {
         _ => Err(invalid()),
     }
 }
-macro_rules! destroy {
-    ($name:ident,$ty:ty) => {
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $name(p: *mut $ty) {
-            if !p.is_null() {
-                unsafe {
-                    drop(Box::from_raw(p));
-                }
-            }
+/// 释放 `Box::into_raw` 交出的句柄；空指针是无操作。
+unsafe fn release<T>(p: *mut T) {
+    if !p.is_null() {
+        unsafe {
+            drop(Box::from_raw(p));
         }
-    };
+    }
 }
-destroy!(mradm_dsp_hoa_plan_destroy, Arc<Plan>);
-destroy!(mradm_dsp_hoa_encoder_destroy, Encoder);
-destroy!(mradm_dsp_hoa_meter_destroy, MeterPreprocessor);
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_hoa_plan_destroy(p: *mut Arc<Plan>) {
+    unsafe { release(p) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_hoa_encoder_destroy(p: *mut Encoder) {
+    unsafe { release(p) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_hoa_meter_destroy(p: *mut MeterPreprocessor) {
+    unsafe { release(p) }
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_hoa_plan_create(
     inputs: usize,

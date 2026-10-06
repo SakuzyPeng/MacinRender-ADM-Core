@@ -10,7 +10,7 @@ pub struct Span {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct Position {
+pub struct AdmPosition {
     pub cartesian: u32,
     pub azimuth: f32,
     pub elevation: f32,
@@ -92,7 +92,7 @@ pub struct Object {
     pub head_locked: u32,
     pub end: u64,
     pub offset_present: u32,
-    pub position_offset: Position,
+    pub position_offset: AdmPosition,
     pub tracks: Span,
     pub labels: Span,
     pub importance_present: u32,
@@ -123,7 +123,7 @@ pub struct Track {
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ObjectBlock {
     pub node: u32,
-    pub position: Position,
+    pub position: AdmPosition,
     pub gain: f32,
     pub diffuse: f32,
     pub width: f32,
@@ -152,7 +152,7 @@ pub struct DirectBlock {
     pub labels: Span,
     pub pack_id: u32,
     pub has_position: u32,
-    pub position: Position,
+    pub position: AdmPosition,
     pub azimuth: f32,
     pub elevation: f32,
     pub distance: f32,
@@ -223,7 +223,7 @@ pub struct Patch {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct Speaker {
+pub struct AdmSpeaker {
     pub label: u32,
     pub azimuth: f32,
     pub elevation: f32,

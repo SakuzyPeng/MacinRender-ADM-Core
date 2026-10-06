@@ -527,16 +527,16 @@ fn block_source(doc: &Document, key: u32, rate: u32) -> Result<BlockSource> {
         duration_samples: duration.unwrap_or(0),
     })
 }
-fn position(doc: &Document, key: u32, name: &str, offset: bool) -> Result<Position> {
+fn position(doc: &Document, key: u32, name: &str, offset: bool) -> Result<AdmPosition> {
     let positions = doc.children(key, name);
     let cartesian = positions
         .first()
         .and_then(|p| doc.node(*p).attr("coordinate"))
         .is_some_and(|s| matches!(s, "X" | "Y" | "Z"));
-    let mut out = Position {
+    let mut out = AdmPosition {
         cartesian: u32::from(cartesian),
         distance: if offset { 0.0 } else { 1.0 },
-        ..Position::default()
+        ..AdmPosition::default()
     };
     for p in positions {
         let n = doc.node(p);

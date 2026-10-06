@@ -1,0 +1,8 @@
+# Used only by scripts/quality/check-ffi-headers.py to render the Rust exports into a throwaway C
+# header for comparison with the hand-written private FFI headers. C++ never includes the output.
+language = "C"
+documentation = false
+
+[parse]
+parse_deps = true
+include = ["mradm-dsp", "mradm-adm", "mradm-wav"]

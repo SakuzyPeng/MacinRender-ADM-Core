@@ -1,7 +1,7 @@
 use mradm_dsp::triple_balance::{
     Event, Layout, Position, panner,
     processor::{Processor, Track},
-    session::{Plan, RowInput, Session},
+    session::{Plan, Session, TbRowInput},
 };
 use std::sync::Arc;
 fn events() -> Vec<Event> {
@@ -36,7 +36,7 @@ fn events() -> Vec<Event> {
     ]
 }
 fn plan(layout: Layout) -> Arc<Plan> {
-    let rows = [RowInput {
+    let rows = [TbRowInput {
         input: 1,
         event_offset: 0,
         event_count: 3,
@@ -301,7 +301,7 @@ fn exact_simple_gain_delay_and_multi_lane_rejection() {
         },
         size: 0.,
     };
-    let row = RowInput {
+    let row = TbRowInput {
         input: 0,
         event_offset: 0,
         event_count: 1,

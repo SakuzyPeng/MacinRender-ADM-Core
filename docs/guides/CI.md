@@ -22,9 +22,9 @@
 | Job | Runner | 内容 | 说明 |
 |---|---|---|---|
 | `version-metadata` | `ubuntu-24.04` | `version_metadata.py --check`、`check_gui_i18n.py` | 见下文版本与 GUI 国际化门禁 |
-| `debug`（macOS debug） | `macos-26` | `cmake --preset debug`、`cmake --build --preset debug`、`check-licenses.sh --build-dir build/debug`、`ctest --preset debug` | 主验证路径；覆盖 APAC smoke、CoreAudio layout 和 Apple 后端 |
+| `debug`（macOS debug） | `macos-26` | `cmake --preset debug`、`cmake --build --preset debug`、`check-licenses.sh --build-dir build/debug`、`check-capi-exports.py`、`ctest --preset debug` | 主验证路径；覆盖 APAC smoke、CoreAudio layout 和 Apple 后端 |
 | `debug`（Linux debug） | `ubuntu-24.04` | 同上 | Apple-only 测试自动 skip；验证跨平台核心 |
-| `windows-debug` | `windows-2025-vs2026` | PowerShell 脚本语法检查；MSVC + Ninja Debug 构建；`ctest` | vcpkg 安装 libear 所需 Boost 头文件；显式开启 `MR_ADM_ENABLE_SOFA` 以覆盖纯 Rust SOFA reader；测试在 vcvars 环境内运行（Debug CRT） |
+| `windows-debug` | `windows-2025-vs2026` | PowerShell 脚本语法检查；MSVC + Ninja Debug 构建；`check-capi-exports.py`；`ctest` | vcpkg 安装 libear 所需 Boost 头文件；显式开启 `MR_ADM_ENABLE_SOFA` 以覆盖纯 Rust SOFA reader；测试在 vcvars 环境内运行（Debug CRT） |
 
 三个构建 job 都先用 `rustup` 安装固定的 Rust 1.98.0（含 rustfmt / clippy），并显式使用
 `MR_ADM_FLAC_PROVIDER=VENDORED`、`MR_ADM_OPUS_PROVIDER=VENDORED`、`MR_ADM_ENABLE_IAMF=OFF`
@@ -43,12 +43,23 @@ clang-tidy 脚本已经包含 macOS SDK 参数处理，且项目当前主要开�
 
 | Job | Runner | 触发 | 内容 |
 |---|---|---|---|
-| `quality` | `macos-26` | 所有触发 | `cmake --preset debug`、`cmake --build build/debug --target mr_adm_rust_quality`（`cargo fmt --check` + `cargo clippy -D warnings`） |
+| `quality` | `macos-26` | 所有触发 | `cmake --preset debug`、`cmake --build build/debug --target mr_adm_rust_quality`（`cargo fmt --check` + `cargo clippy -D warnings`）、`mr_adm_ffi_header_check` |
 | `quality` | `macos-26` | pull request / 手动 changed | `scripts/quality/check-changed.sh --base origin/main --build-dir build/debug` |
 | `quality` | `macos-26` | push 到 `main` / 手动 full | `scripts/quality/check-all.sh build/debug` |
 
 `check-changed.sh` / `check-all.sh` 只扫描 `include/`、`src/`、`tests/` 下的 C/C++，Rust 由
 `mr_adm_rust_quality` 覆盖。如果后续耗时过长，可以继续保留 PR changed / main full 的分层策略。
+
+`mr_adm_ffi_header_check`（`scripts/quality/check-ffi-headers.py`）用固定版本的 cbindgen（0.29.2，单独缓存
+`~/.cargo/bin/cbindgen`）把 `mradm-ffi` 的导出渲染成一次性 C 头，再与 C++ 侧手写的私有 FFI 头
+（`src/adm_dsp/*_ffi.h`、`src/adm_metadata/adm_ffi.h`、`src/adm_audio/wav_ffi.h`）逐项比较：导出符号集合、
+参数个数/顺序/指针层级/const、返回值，以及被签名引用的 `#[repr(C)]` 结构体字段类型与顺序（含数组长度）。
+`void*` 句柄与 Rust 侧任意结构体指针视为兼容；字段名不比较。生成头不入库、也不被 C++ include。
+
+C ABI 导出面（`scripts/quality/check-capi-exports.py`）在 ci 的三个构建 job、release 的三个 CLI job 和两个 GUI
+打包脚本中检查 `mradm_capi` 共享库恰好导出 `include/adm/c_api.h` 声明的 `adm_*` 函数：ELF / Mach-O 用 `nm`，
+PE 直接读 DLL 导出表。Windows bundle 链接由同一脚本从 `c_api.h` 生成的 `.def`，不再使用
+`WINDOWS_EXPORT_ALL_SYMBOLS`。
 
 许可证与 SBOM 校验（`scripts/quality/check-licenses.sh`）在必需 CI 的 macOS / Linux debug job 中运行：
 校验 `third_party/manifest.json` 与 `cmake/MRDependencies.cmake`、`rust/Cargo.lock` 覆盖、DSP/ADM 资源
@@ -219,7 +230,7 @@ vcpkg install boost-format boost-functional boost-algorithm boost-integer boost-
 
 .github/workflows/quality.yml
   pull_request / push main / workflow_dispatch
-  all: Rust fmt + clippy
+  all: Rust fmt + clippy + FFI header check
   PR: changed quality
   main/manual full: full quality
 

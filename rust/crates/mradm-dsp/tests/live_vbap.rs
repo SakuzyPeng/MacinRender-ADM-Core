@@ -1,4 +1,4 @@
-use mradm_dsp::live_vbap::{Command, LEVEL, Mixer, PAN};
+use mradm_dsp::live_vbap::{LEVEL, Mixer, PAN, VbapCommand};
 fn command(
     element: u32,
     offset: u32,
@@ -6,8 +6,8 @@ fn command(
     fields: u32,
     coefficient_offset: u64,
     level: f32,
-) -> Command {
-    Command {
+) -> VbapCommand {
+    VbapCommand {
         element,
         offset,
         duration,
@@ -344,7 +344,7 @@ fn arbitrary_chunking_preserves_pcm_and_exact_states() {
         let commands = events
             .iter()
             .filter(|e| e.offset as usize >= offset && (e.offset as usize) < offset + n)
-            .map(|e| Command {
+            .map(|e| VbapCommand {
                 offset: e.offset - offset as u32,
                 ..*e
             })

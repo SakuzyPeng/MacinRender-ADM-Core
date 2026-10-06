@@ -235,6 +235,10 @@ if (!$SkipNative) {
     if (!$nativeDll) {
         throw "native C ABI bundle is missing under $nativeBuildDir"
     }
+    & python (Join-Path $repoRoot "scripts\quality\check-capi-exports.py") $nativeDll
+    if ($LASTEXITCODE -ne 0) {
+        throw "native C ABI bundle export surface does not match c_api.h"
+    }
 
     New-Item -ItemType Directory -Force -Path $runtimeNativeDir | Out-Null
     Copy-Item $nativeDll -Destination (Join-Path $runtimeNativeDir "mradm_capi.dll") -Force

@@ -6,20 +6,20 @@ use mradm_dsp::{
 use std::sync::Arc;
 
 #[repr(C)]
-pub struct RowInput {
+pub struct MixRowInput {
     input_channel: usize,
     block_offset: usize,
     block_count: usize,
     output_gain: f32,
 }
 #[repr(C)]
-pub struct BlockInput {
+pub struct MixBlockInput {
     start: u64,
     end: u64,
     interpolation: u64,
     flags: u32,
 }
-impl BlockInput {
+impl MixBlockInput {
     fn block(&self) -> Block {
         Block {
             start: self.start,
@@ -77,9 +77,9 @@ unsafe fn destroy<T>(p: *mut T) {
 pub unsafe extern "C" fn mradm_dsp_mix_plan_create(
     inputs: usize,
     outputs: usize,
-    rows: *const RowInput,
+    rows: *const MixRowInput,
     row_count: usize,
-    blocks: *const BlockInput,
+    blocks: *const MixBlockInput,
     block_count: usize,
     gains_f32: *const f32,
     len_f32: usize,
@@ -108,7 +108,7 @@ pub unsafe extern "C" fn mradm_dsp_mix_plan_create(
                 .collect();
             let blocks = input(blocks, block_count)?
                 .iter()
-                .map(BlockInput::block)
+                .map(MixBlockInput::block)
                 .collect();
             Ok(Arc::new(Plan::new(
                 inputs,
@@ -194,7 +194,7 @@ pub unsafe extern "C" fn mradm_dsp_mix_reset(
 pub unsafe extern "C" fn mradm_dsp_mix_update(
     mixer: *mut Mixer,
     row: usize,
-    blocks: *const BlockInput,
+    blocks: *const MixBlockInput,
     block_count: usize,
     gains: *const f32,
     gain_count: usize,
@@ -206,7 +206,7 @@ pub unsafe extern "C" fn mradm_dsp_mix_update(
         let m = mixer.as_mut().ok_or_else(invalid)?;
         m.update(
             row,
-            input(blocks, block_count)?.iter().map(BlockInput::block),
+            input(blocks, block_count)?.iter().map(MixBlockInput::block),
             input(gains, gain_count)?,
             output_gain,
         )
@@ -316,20 +316,20 @@ mod tests {
     #[test]
     fn plan_lifetime_and_rejected_processing_preserve_output_and_cursor() {
         unsafe {
-            let rows = [RowInput {
+            let rows = [MixRowInput {
                 input_channel: 0,
                 block_offset: 0,
                 block_count: 2,
                 output_gain: 1.,
             }];
             let blocks = [
-                BlockInput {
+                MixBlockInput {
                     start: 0,
                     end: 4,
                     interpolation: 0,
                     flags: 1,
                 },
-                BlockInput {
+                MixBlockInput {
                     start: 4,
                     end: 8,
                     interpolation: 0,
@@ -523,7 +523,7 @@ mod tests {
                 ),
                 0
             );
-            let blocks = [BlockInput {
+            let blocks = [MixBlockInput {
                 start: 0,
                 end: 16,
                 interpolation: 0,

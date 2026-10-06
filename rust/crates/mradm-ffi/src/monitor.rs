@@ -93,39 +93,44 @@ pub unsafe extern "C" fn mradm_dsp_monitor_output_create(
         create(out, || Output::new(channels, rate, flag(realtime)?))
     })
 }
-macro_rules! lifecycle {
-    ($destroy:ident, $reset:ident, $ty:ty) => {
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $destroy(handle: *mut $ty) {
-            if !handle.is_null() {
-                unsafe {
-                    drop(Box::from_raw(handle));
-                }
-            }
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_monitor_crossfade_destroy(handle: *mut Crossfade) {
+    if !handle.is_null() {
+        unsafe {
+            drop(Box::from_raw(handle));
         }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $reset(
-            handle: *mut $ty,
-            message: *mut u8,
-            capacity: usize,
-        ) -> i32 {
-            boundary(message, capacity, || unsafe {
-                get_mut(handle)?.reset();
-                Ok(())
-            })
-        }
-    };
+    }
 }
-lifecycle!(
-    mradm_dsp_monitor_crossfade_destroy,
-    mradm_dsp_monitor_crossfade_reset,
-    Crossfade
-);
-lifecycle!(
-    mradm_dsp_monitor_output_destroy,
-    mradm_dsp_monitor_output_reset,
-    Output
-);
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_monitor_crossfade_reset(
+    handle: *mut Crossfade,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || unsafe {
+        get_mut(handle)?.reset();
+        Ok(())
+    })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_monitor_output_destroy(handle: *mut Output) {
+    if !handle.is_null() {
+        unsafe {
+            drop(Box::from_raw(handle));
+        }
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_monitor_output_reset(
+    handle: *mut Output,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || unsafe {
+        get_mut(handle)?.reset();
+        Ok(())
+    })
+}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_monitor_crossfade_process(
