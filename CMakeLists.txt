@@ -308,7 +308,7 @@ target_sources(mr_adm_render_triple_balance
 )
 target_link_libraries(mr_adm_render_triple_balance
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMRenderCommon nlohmann_json::nlohmann_json
+    PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMAudio nlohmann_json::nlohmann_json
 )
 mr_adm_core_apply_warnings(mr_adm_render_triple_balance)
 mr_adm_core_apply_static_analysis(mr_adm_render_triple_balance)
