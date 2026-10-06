@@ -65,6 +65,18 @@ jobs:
           restore-keys: |
             fc-${{ runner.os }}-
 
+      - name: Restore Cargo cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            build/rust/
+          key: cargo-${{ runner.os }}-debug-${{ hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-debug-
+
       - name: Restore ccache
         uses: actions/cache@v5
         with:
@@ -87,6 +99,10 @@ jobs:
 
       - name: Build
         run: cmake --build --preset debug
+
+      # Manifest/SBOM/Cargo.lock coverage plus license-text drift for the dependencies this build fetched.
+      - name: License records
+        run: scripts/quality/check-licenses.sh --build-dir build/debug
 
       - name: Test
         run: ctest --preset debug --parallel "$(getconf _NPROCESSORS_ONLN)" --output-on-failure
@@ -144,6 +160,18 @@ jobs:
           key: fc-windows-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
           restore-keys: |
             fc-windows-
+
+      - name: Restore Cargo cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            build/rust/
+          key: cargo-${{ runner.os }}-debug-${{ hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-debug-
 
       - name: Restore vcpkg binary cache
         uses: actions/cache@v5

@@ -278,7 +278,7 @@ jobs:
         run: |
           call "%VCVARS64%"
           cmake -S . -B build/windows -G Ninja ^
-            -DCMAKE_BUILD_TYPE=MinSizeRel ^
+            -DCMAKE_BUILD_TYPE=Release ^
             -DCMAKE_C_COMPILER=cl ^
             -DCMAKE_CXX_COMPILER=cl ^
             -DCMAKE_TOOLCHAIN_FILE="%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
@@ -289,18 +289,28 @@ jobs:
             -DMR_ADM_ENABLE_IAMF=OFF ^
             -DMR_ADM_BUILD_CAPI_BUNDLE=ON
 
+      # Optimized render fixtures cover the release codegen of each renderer and the main encoders.
       - name: Build
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/windows --target mradm_exe mradm_capi_bundle mr_adm_flac_io_smoke_tests --config RelWithDebInfo
+          cmake --build build/windows --target mradm_exe mradm_capi_bundle ^
+            mr_adm_flac_io_smoke_tests mr_adm_opus_mka_smoke_tests mr_adm_cli_smoke_tests ^
+            mr_adm_ear_fixture_tests mr_adm_vbap_smoke_tests mr_adm_hoa_encode_fixture_tests ^
+            mr_adm_binaural_fixture_tests mr_adm_sofa_fixture_tests mr_adm_loudness_fixture_tests
 
       - name: Smoke
         shell: pwsh
         run: |
           .\build\windows\mradm.exe --version
           .\build\windows\mradm.exe backends
-          .\build\windows\mr_adm_flac_io_smoke_tests.exe
+
+      - name: Render fixtures
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          ctest --test-dir build/windows --output-on-failure -j %NUMBER_OF_PROCESSORS% ^
+            -R "^(mr_adm_flac_io_smoke_tests|mr_adm_opus_mka_smoke_tests|mr_adm_cli_smoke_tests|mr_adm_ear_fixture_tests|mr_adm_vbap_smoke_tests|mr_adm_hoa_encode_fixture_tests|mr_adm_binaural_fixture_tests|mr_adm_sofa_fixture_tests|mr_adm_loudness_fixture_tests)$"
 
       - name: Package
         shell: pwsh
@@ -309,7 +319,7 @@ jobs:
           -Binary ".\build\windows\mradm.exe"
           -Arch "x64"
           -VcpkgRoot "$env:VCPKG_INSTALLATION_ROOT"
-          -CmakeOptions "MinSizeRel; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF; Rust DSP"
+          -CmakeOptions "Release; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF; Rust DSP"
 
       - name: Package smoke
         shell: pwsh
@@ -460,7 +470,7 @@ jobs:
           .\scripts\release\package-windows-gui-release.ps1
           -Rid "win-x64"
           -VcpkgRoot "$env:VCPKG_INSTALLATION_ROOT"
-          -CmakeOptions "MinSizeRel; MR_ADM_BUILD_CAPI_BUNDLE=ON; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF; Rust DSP"
+          -CmakeOptions "Release; MR_ADM_BUILD_CAPI_BUNDLE=ON; MR_ADM_FLAC_PROVIDER=VENDORED; MR_ADM_OPUS_PROVIDER=VENDORED; MR_ADM_ENABLE_IAMF=OFF; Rust DSP"
 
       - name: Package smoke
         shell: pwsh

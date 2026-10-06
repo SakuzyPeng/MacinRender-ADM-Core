@@ -22,7 +22,7 @@
 | Job | Runner | 内容 | 说明 |
 |---|---|---|---|
 | `version-metadata` | `ubuntu-24.04` | `version_metadata.py --check`、`check_gui_i18n.py` | 见下文版本与 GUI 国际化门禁 |
-| `debug`（macOS debug） | `macos-26` | `cmake --preset debug`、`cmake --build --preset debug`、`ctest --preset debug` | 主验证路径；覆盖 APAC smoke、CoreAudio layout 和 Apple 后端 |
+| `debug`（macOS debug） | `macos-26` | `cmake --preset debug`、`cmake --build --preset debug`、`check-licenses.sh --build-dir build/debug`、`ctest --preset debug` | 主验证路径；覆盖 APAC smoke、CoreAudio layout 和 Apple 后端 |
 | `debug`（Linux debug） | `ubuntu-24.04` | 同上 | Apple-only 测试自动 skip；验证跨平台核心 |
 | `windows-debug` | `windows-2025-vs2026` | PowerShell 脚本语法检查；MSVC + Ninja Debug 构建；`ctest` | vcpkg 安装 libear 所需 Boost 头文件；显式开启 `MR_ADM_ENABLE_SOFA` 以覆盖纯 Rust SOFA reader；测试在 vcvars 环境内运行（Debug CRT） |
 
@@ -50,8 +50,10 @@ clang-tidy 脚本已经包含 macOS SDK 参数处理，且项目当前主要开�
 `check-changed.sh` / `check-all.sh` 只扫描 `include/`、`src/`、`tests/` 下的 C/C++，Rust 由
 `mr_adm_rust_quality` 覆盖。如果后续耗时过长，可以继续保留 PR changed / main full 的分层策略。
 
-许可证与 SBOM 校验（`scripts/quality/check-licenses.sh`，包含 Cargo 依赖校验）目前在 release
-workflow 中以 `--require-full` 运行；本地改动依赖后也应手动执行。
+许可证与 SBOM 校验（`scripts/quality/check-licenses.sh`）在必需 CI 的 macOS / Linux debug job 中运行：
+校验 `third_party/manifest.json` 与 `cmake/MRDependencies.cmake`、`rust/Cargo.lock` 覆盖、DSP/ADM 资源
+哈希、SBOM 与文档依赖表，以及本次构建实际获取的依赖许可原文是否漂移。因此新增或升级 FetchContent /
+Cargo 依赖而未登记的 PR 会直接失败。release workflow 另以 `--require-full` 要求所有依赖都在构建中。
 
 ### 一致性记录
 
@@ -79,7 +81,7 @@ config A 为默认数值配置，config B 打开 `MR_ADM_STRICT_FP` / `MR_ADM_EA
 |---|---|---|
 | `release` | tag `v*`、手动触发 | 构建 `mradm_exe` + `mradm_capi_bundle`、打包并上传 `mradm-<version>-macos-arm64.tar.gz` 与 `.sha256` |
 | `release-linux-appimage` | 手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-linux-x86_64.AppImage` 与 `.sha256` |
-| `release-windows` | tag `v*`、手动触发 | 构建 `mradm_exe`、打包并上传 `mradm-<version>-windows-x64.zip` 与 `.sha256` |
+| `release-windows` | tag `v*`、手动触发 | `Release` 构建 `mradm_exe`，运行优化构建下的渲染 fixture（见下），打包并上传 `mradm-<version>-windows-x64.zip` 与 `.sha256` |
 | `release-gui-macos` | tag `v*`、手动触发 | 构建 GUI C ABI bundle、打包并上传 `MacinRender-Gui-<version>-macos-arm64.tar.gz` 与 `.sha256` |
 | `release-gui-windows` | tag `v*`、手动触发 | 构建 GUI C ABI bundle、打包并上传 `MacinRender-Gui-<version>-windows-x64.zip` 与 `.sha256` |
 | `publish-github-release` | tag `v*` | 汇总各平台产物，创建或更新 GitHub Release |
@@ -138,11 +140,13 @@ CI 使用两层缓存，不缓存 CMake build tree。
 | ccache | `.ccache` | macOS / Linux 缓存 C/C++ 编译产物 | OS + job 类型 + commit SHA，带 OS/job restore key |
 | sccache | `.sccache` | Windows 缓存 MSVC 编译产物 | commit SHA，带 restore key |
 | vcpkg | `.vcpkg-bincache` | Windows 缓存 Boost 二进制包 | workflow 文件 hash |
+| Cargo | `~/.cargo/registry/{index,cache}`、`~/.cargo/git/db`、`build/rust/` | 缓存 crates.io 下载与 Rust 依赖编译产物（ci / quality / consistency；单 OS 约 400 MB） | OS + 构建类别（`debug` 由 ci 与 quality 共用，`consistency` 为 Release profile）+ `rust/Cargo.lock` + `rust/rust-toolchain.toml`，带 restore key |
 | Bazel | `.bazel-cache` | 仅 IAMF bridge prebuild 使用，缓存 AOM `iamf-tools` 构建产物 | OS + iamf-tools ref + bridge source hash |
 
 所有 job 都 fresh configure。这样即使 CMake cache 或 FetchContent 状态变化，也不会复用旧 build tree。
-Cargo registry 和 Rust 构建产物（`build/rust/`）目前**不缓存**：每次运行按 `Cargo.lock` 从 crates.io
-下载并重新编译 Rust 依赖。若 Rust 部分成为瓶颈，可再为 `~/.cargo/registry` 与 `build/rust/` 增加缓存。
+Cargo 缓存的收益来自第三方依赖：fresh checkout 后项目自有 crate（以及以 path 引入的 `rust/vendor/sofar`）
+的源码 mtime 变化，Cargo 会照常重编译它们；crates.io 依赖按版本指纹复用。release workflow 不使用 Cargo 缓存，保证发行产物从干净的
+Rust 构建生成。
 
 `.github/workflows/cache-maintenance.yml` 每周一 03:23 UTC（也可手动）运行，按 key 族只保留最近
 访问的一代缓存，删除旧代以控制仓库缓存配额。
@@ -230,7 +234,7 @@ vcpkg install boost-format boost-functional boost-algorithm boost-integer boost-
 
 .github/workflows/windows-bringup.yml
   workflow_dispatch
-  Windows MinSizeRel probe build + CLI artifact
+  Windows Release probe build + CLI artifact
 
 .github/workflows/iamf-bridge-prebuild.yml
   workflow_dispatch / bridge-related pull_request
@@ -241,15 +245,22 @@ vcpkg install boost-format boost-functional boost-algorithm boost-integer boost-
   prune stale cache generations
 ```
 
+## Windows 发布构建
+
+Windows CLI release、GUI release（`scripts/release/package-windows-gui-release.ps1`）与
+`windows-bringup.yml` 均以 `Release` 构建。早期改用 `MinSizeRel` 是为了绕开 MSVC 14.44 在 SAF
+`saf_utility_filters.c` 上的 `/O2` 内部编译器错误；SAF 已不在生产构建中，该绕行随之取消。
+Cargo 因此使用 `release` profile（而非 `minsizerel`）。
+
+`release-windows` 在打包前用 ctest 运行一组优化构建下的测试，覆盖各渲染后端和主要编码器：
+`mr_adm_flac_io_smoke_tests`、`mr_adm_opus_mka_smoke_tests`、`mr_adm_cli_smoke_tests`、
+`mr_adm_ear_fixture_tests`、`mr_adm_vbap_smoke_tests`、`mr_adm_hoa_encode_fixture_tests`、
+`mr_adm_binaural_fixture_tests`、`mr_adm_sofa_fixture_tests`、`mr_adm_loudness_fixture_tests`。
+完整测试集仍由必需 CI 的 `windows-debug` 覆盖。
+
 ## 后续实施顺序
 
-1. 评估为 Cargo registry 和 `build/rust/` 增加缓存，缩短 Rust 依赖重复编译时间。
-2. 如果 quality 太慢，保留 PR changed，必要时把 main full 改成夜间 schedule。
-3. 评估把 `check-licenses.sh` 加入 PR 路径，尽早发现未登记的 Cargo / FetchContent 依赖。
-4. release job 后续补 macOS 签名/notarization 和完整第三方 license bundle。
-5. Windows release 与 `windows-bringup.yml` 仍以 `MinSizeRel` 构建，只运行 `mradm --version`、`mradm backends`、
-   `mr_adm_flac_io_smoke_tests` 和打包 smoke。当初选 `MinSizeRel` 是为了绕开 MSVC 14.44 在 SAF
-   `saf_utility_filters.c` 上的 `/O2` 内部编译器错误；SAF 已不在生产构建中，可以评估改回 `Release`
-   并逐步打开实际渲染 fixture。`windows-bringup.yml` 保留为手动探针，用于在不触发完整 release 的情况下
-   验证 Windows 构建边界。
-6. 二期跨平台逐位一致落地后，在一致性 workflow 中按 renderer / 布局 / 语义组合恢复位相等门禁。
+1. 如果 quality 太慢，保留 PR changed，必要时把 main full 改成夜间 schedule。
+2. release job 后续补 macOS 签名/notarization 和完整第三方 license bundle。
+3. 视 Windows release 耗时与稳定性，决定是否扩大 Release 下运行的测试集，或在 macOS / Linux release 中加入同样的优化构建 fixture。
+4. 二期跨平台逐位一致落地后，在一致性 workflow 中按 renderer / 布局 / 语义组合恢复位相等门禁。
