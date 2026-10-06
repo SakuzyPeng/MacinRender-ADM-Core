@@ -1,8 +1,12 @@
 //! Private file I/O boundary. Owners and their allocations never cross allocators.
-use mradm_wav::{Container, Error, Format, Reader, Result, SampleFormat, Writer, WriterOptions};
+use mradm_wav::{
+    AMBI_HOA3, BextFields, Chna, ChnaTrack, Container, Error, Format, LayoutOptions,
+    LayoutRewriter, Reader, Result, SampleFormat, Writer, WriterOptions, append_bext, bext_payload,
+    has_chunk, replace_chunk,
+};
 use std::{
     fs::{File, OpenOptions},
-    io::BufReader,
+    io::{BufReader, BufWriter, Write},
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice, str,
 };
@@ -275,6 +279,396 @@ pub unsafe extern "C" fn mradm_wav_writer_finish(
     })
 }
 
+/// Borrowed bytes; a null pointer is accepted only for an empty slice.
+unsafe fn borrowed<'a, T>(data: *const T, len: usize) -> Result<&'a [T]> {
+    valid(data, len)?;
+    Ok(if len == 0 {
+        &[]
+    } else {
+        unsafe { slice::from_raw_parts(data, len) }
+    })
+}
+unsafe fn fourcc(id: *const u8) -> Result<[u8; 4]> {
+    let id = unsafe { borrowed(id, 4)? };
+    Ok([id[0], id[1], id[2], id[3]])
+}
+fn disjoint(regions: &[(usize, usize)]) -> Result<()> {
+    for (index, &(start, len)) in regions.iter().enumerate() {
+        for &(other, other_len) in &regions[index + 1..] {
+            if len != 0 && other_len != 0 && start < other + other_len && other < start + len {
+                return Err(Error::invalid("WAVE 输出缓冲区互相重叠"));
+            }
+        }
+    }
+    Ok(())
+}
+fn region<T>(pointer: *const T, len: usize) -> (usize, usize) {
+    (pointer as usize, len * size_of::<T>())
+}
+
+#[repr(C)]
+pub struct WavBext {
+    description: *const u8,
+    description_len: usize,
+    originator: *const u8,
+    originator_len: usize,
+    originator_reference: *const u8,
+    originator_reference_len: usize,
+    /// ISO 8601 UTC text.
+    date_utc: *const u8,
+    date_utc_len: usize,
+    loudness: f64,
+    true_peak: f64,
+    has_loudness: u8,
+    has_true_peak: u8,
+    /// Also write the third-order AmbiX `ambi` marker.
+    hoa3_ambi: u8,
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_wav_append_bext(
+    name: *const u8,
+    length: usize,
+    fields: *const WavBext,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        valid(fields, 1)?;
+        let fields = unsafe { &*fields };
+        let payload = unsafe {
+            bext_payload(&BextFields {
+                description: borrowed(fields.description, fields.description_len)?,
+                originator: borrowed(fields.originator, fields.originator_len)?,
+                originator_reference: borrowed(
+                    fields.originator_reference,
+                    fields.originator_reference_len,
+                )?,
+                date_utc: borrowed(fields.date_utc, fields.date_utc_len)?,
+                loudness: (fields.has_loudness != 0).then_some(fields.loudness),
+                true_peak: (fields.has_true_peak != 0).then_some(fields.true_peak),
+            })
+        };
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(unsafe { path(name, length)? })?;
+        append_bext(
+            &mut file,
+            &payload,
+            (fields.hoa3_ambi != 0).then_some(&AMBI_HOA3),
+        )
+    })
+}
+
+#[repr(C)]
+pub struct WavChnaTrack {
+    uid: *const u8,
+    uid_len: usize,
+    track_format: *const u8,
+    track_format_len: usize,
+    pack_format: *const u8,
+    pack_format_len: usize,
+    /// One-based audio track.
+    track_index: u16,
+}
+#[repr(C)]
+pub struct WavLayoutOptions {
+    /// File channel -> source channel; empty is identity.
+    permutation: *const u16,
+    permutation_len: usize,
+    chna: *const WavChnaTrack,
+    chna_len: usize,
+    axml: *const u8,
+    axml_len: usize,
+    channel_mask: u32,
+    force_extensible: u8,
+    prefer_riff: u8,
+    include_pcm_fact: u8,
+}
+pub struct LayoutHandle {
+    rewriter: Option<LayoutRewriter<BufReader<File>, BufWriter<File>>>,
+}
+
+/// Opens `source`, creates `target` exclusively and writes the new header. The caller owns the
+/// target path (including removal on failure) and installs it only after a successful finish.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_wav_layout_begin(
+    source: *const u8,
+    source_length: usize,
+    target: *const u8,
+    target_length: usize,
+    options: *const WavLayoutOptions,
+    output: *mut *mut LayoutHandle,
+    frames: *mut u64,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        valid(output, 1)?;
+        valid(frames, 1)?;
+        disjoint(&[region(output, 1), region(frames, 1)])?;
+        unsafe {
+            *output = ptr::null_mut();
+            *frames = 0;
+        }
+        valid(options, 1)?;
+        let options = unsafe { &*options };
+        let tracks = unsafe { borrowed(options.chna, options.chna_len)? }
+            .iter()
+            .map(|track| unsafe {
+                Ok(ChnaTrack {
+                    track_index: track.track_index,
+                    uid: borrowed(track.uid, track.uid_len)?,
+                    track_format: borrowed(track.track_format, track.track_format_len)?,
+                    pack_format: borrowed(track.pack_format, track.pack_format_len)?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let layout = LayoutOptions {
+            channel_mask: options.channel_mask,
+            force_extensible: options.force_extensible != 0,
+            include_pcm_fact: options.include_pcm_fact != 0,
+            prefer_riff: options.prefer_riff != 0,
+            permutation: unsafe { borrowed(options.permutation, options.permutation_len)? },
+            axml: unsafe { borrowed(options.axml, options.axml_len)? },
+            chna: &tracks,
+        };
+        let input = BufReader::new(File::open(unsafe { path(source, source_length)? })?);
+        let target = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(unsafe { path(target, target_length)? })?;
+        let rewriter = LayoutRewriter::new(input, BufWriter::new(target), &layout)?;
+        unsafe {
+            *frames = rewriter.frames();
+            *output = Box::into_raw(Box::new(LayoutHandle {
+                rewriter: Some(rewriter),
+            }));
+        }
+        Ok(())
+    })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_wav_layout_step(
+    handle: *mut LayoutHandle,
+    max_frames: u64,
+    copied: *mut u64,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        valid(copied, 1)?;
+        unsafe {
+            *copied = 0;
+        }
+        valid(handle, 1)?;
+        let count = unsafe { &mut *handle }
+            .rewriter
+            .as_mut()
+            .ok_or_else(|| Error::invalid("WAVE 布局重写已结束"))?
+            .step(max_frames)?;
+        unsafe {
+            *copied = count;
+        }
+        Ok(())
+    })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_wav_layout_finish(
+    handle: *mut LayoutHandle,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        valid(handle, 1)?;
+        let rewriter = unsafe { &mut *handle }
+            .rewriter
+            .take()
+            .ok_or_else(|| Error::invalid("WAVE 布局重写已结束"))?;
+        let mut sink = rewriter.finish()?;
+        sink.flush()?;
+        sink.into_inner()
+            .map_err(|error| Error::io(error.error().to_string()))?;
+        Ok(())
+    })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_wav_layout_destroy(handle: *mut LayoutHandle) {
+    if !handle.is_null() {
+        unsafe {
+            drop(Box::from_raw(handle));
+        }
+    }
+}
+
+/// Writes `target` (created or truncated) as a copy of `source` with the axml payload replaced.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_wav_replace_axml(
+    source: *const u8,
+    source_length: usize,
+    target: *const u8,
+    target_length: usize,
+    axml: *const u8,
+    axml_length: usize,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        let axml = unsafe { borrowed(axml, axml_length)? };
+        let source = unsafe { path(source, source_length)? };
+        let target = unsafe { path(target, target_length)? };
+        let input = BufReader::new(File::open(source)?);
+        let output = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(target)?;
+        let mut sink = BufWriter::new(output);
+        replace_chunk(input, &mut sink, *b"axml", axml)?;
+        sink.into_inner()
+            .map_err(|error| Error::io(error.error().to_string()))?;
+        Ok(())
+    })
+}
+
+/// Reports the first chunk with `id` (four bytes). With `capacity == 0` only `found`/`size` are
+/// set; otherwise `capacity` must equal the payload size and the payload is copied.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_wav_reader_chunk(
+    handle: *mut ReadHandle,
+    id: *const u8,
+    output: *mut u8,
+    output_capacity: usize,
+    size: *mut u64,
+    found: *mut u8,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        valid(size, 1)?;
+        valid(found, 1)?;
+        valid(output, output_capacity)?;
+        disjoint(&[
+            region(output, output_capacity),
+            region(size, 1),
+            region(found, 1),
+        ])?;
+        unsafe {
+            *size = 0;
+            *found = 0;
+        }
+        valid(handle, 1)?;
+        let id = unsafe { fourcc(id)? };
+        let reader = &mut unsafe { &mut *handle }.reader;
+        let Some(chunk) = reader.chunks().iter().find(|c| c.id == id).copied() else {
+            return Ok(());
+        };
+        if output_capacity != 0 {
+            reader.read_chunk(id, unsafe {
+                slice::from_raw_parts_mut(output, output_capacity)
+            })?;
+        }
+        unsafe {
+            *size = chunk.size;
+            *found = 1;
+        }
+        Ok(())
+    })
+}
+
+/// Import-side CHNA: track indices as stored and 12-byte UIDs (`uid` holds `12 * entry_capacity`
+/// bytes). With `entry_capacity == 0` only `found`/`count` are set; otherwise it must be at
+/// least `count`. Reserved records after numUIDs are ignored.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_wav_reader_chna(
+    handle: *mut ReadHandle,
+    track_index: *mut u16,
+    uid: *mut u8,
+    entry_capacity: usize,
+    count: *mut usize,
+    found: *mut u8,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        valid(count, 1)?;
+        valid(found, 1)?;
+        valid(track_index, entry_capacity)?;
+        let uid_bytes = entry_capacity
+            .checked_mul(12)
+            .ok_or_else(|| Error::invalid("CHNA 缓冲区过大"))?;
+        valid(uid, uid_bytes)?;
+        disjoint(&[
+            region(track_index, entry_capacity),
+            region(uid, uid_bytes),
+            region(count, 1),
+            region(found, 1),
+        ])?;
+        unsafe {
+            *count = 0;
+            *found = 0;
+        }
+        valid(handle, 1)?;
+        let Some(data) = unsafe { &mut *handle }
+            .reader
+            .metadata(*b"chna", u64::MAX)?
+        else {
+            return Ok(());
+        };
+        let chna = Chna::decode_import(&data)?;
+        if entry_capacity != 0 {
+            if entry_capacity < chna.entries.len() {
+                return Err(Error::invalid("CHNA 缓冲区容量不足"));
+            }
+            let indices = unsafe { slice::from_raw_parts_mut(track_index, entry_capacity) };
+            let uids = unsafe { slice::from_raw_parts_mut(uid, uid_bytes) };
+            for ((entry, index), uid) in chna
+                .entries
+                .iter()
+                .zip(indices.iter_mut())
+                .zip(uids.as_chunks_mut::<12>().0.iter_mut())
+            {
+                *index = entry.track_index;
+                uid.copy_from_slice(&entry.uid);
+            }
+        }
+        unsafe {
+            *count = chna.entries.len();
+            *found = 1;
+        }
+        Ok(())
+    })
+}
+
+/// Tolerant routing probe: sets `present` when a top-level chunk `id` exists. Fails only when the
+/// file cannot be opened or is not RIFF/RF64/BW64 WAVE.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_wav_has_chunk(
+    name: *const u8,
+    length: usize,
+    id: *const u8,
+    present: *mut u8,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || {
+        valid(present, 1)?;
+        unsafe {
+            *present = 0;
+        }
+        let id = unsafe { fourcc(id)? };
+        let found = has_chunk(
+            BufReader::new(File::open(unsafe { path(name, length)? })?),
+            id,
+        )?;
+        unsafe {
+            *present = u8::from(found);
+        }
+        Ok(())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -533,5 +927,367 @@ mod tests {
             assert!(invalid.is_null());
         }
         std::fs::remove_file(name).ok();
+    }
+
+    fn empty_options() -> WavLayoutOptions {
+        WavLayoutOptions {
+            permutation: ptr::null(),
+            permutation_len: 0,
+            chna: ptr::null(),
+            chna_len: 0,
+            axml: ptr::null(),
+            axml_len: 0,
+            channel_mask: 0,
+            force_extensible: 0,
+            prefer_riff: 0,
+            include_pcm_fact: 0,
+        }
+    }
+
+    #[test]
+    fn container_edits_validate_arguments_and_round_trip() {
+        let dir = std::env::temp_dir();
+        let source = dir.join(format!("mradm-edit-{}.wav", std::process::id()));
+        let target = dir.join(format!("mradm-edit-{}.layout.wav", std::process::id()));
+        let copy = dir.join(format!("mradm-edit-{}.copy.wav", std::process::id()));
+        for path in [&source, &target, &copy] {
+            std::fs::remove_file(path).ok();
+        }
+        let source_text = source.to_str().unwrap().as_bytes();
+        let target_text = target.to_str().unwrap().as_bytes();
+        let copy_text = copy.to_str().unwrap().as_bytes();
+        let mut message = [0u8; 128];
+        unsafe {
+            let mut writer = ptr::null_mut();
+            assert_eq!(
+                mradm_wav_writer_create(
+                    source_text.as_ptr(),
+                    source_text.len(),
+                    2,
+                    48000,
+                    16,
+                    0,
+                    1,
+                    &mut writer,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            let samples = [0.5f32, -0.5, 0.25, -0.25, 0.125, -0.125];
+            assert_eq!(
+                mradm_wav_writer_write(writer, samples.as_ptr(), 6, message.as_mut_ptr(), 128),
+                0
+            );
+            assert_eq!(
+                mradm_wav_writer_finish(writer, message.as_mut_ptr(), 128),
+                0
+            );
+            mradm_wav_writer_destroy(writer);
+
+            // Layout: null options are rejected and outputs cleared; a swap with ADM chunks succeeds.
+            let mut layout = ptr::dangling_mut();
+            let mut frames = 99;
+            assert_eq!(
+                mradm_wav_layout_begin(
+                    source_text.as_ptr(),
+                    source_text.len(),
+                    target_text.as_ptr(),
+                    target_text.len(),
+                    ptr::null(),
+                    &mut layout,
+                    &mut frames,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                1
+            );
+            assert!(layout.is_null() && frames == 0);
+            let permutation = [1u16, 0];
+            let tracks = [1u16, 2].map(|index| WavChnaTrack {
+                uid: b"ATU_00000001".as_ptr(),
+                uid_len: 12,
+                track_format: b"AT_00010001_01".as_ptr(),
+                track_format_len: 14,
+                pack_format: b"AP_00010002".as_ptr(),
+                pack_format_len: 11,
+                track_index: index,
+            });
+            let options = WavLayoutOptions {
+                permutation: permutation.as_ptr(),
+                permutation_len: 2,
+                chna: tracks.as_ptr(),
+                chna_len: 2,
+                axml: b"<a/>".as_ptr(),
+                axml_len: 4,
+                channel_mask: 0x3,
+                ..empty_options()
+            };
+            assert_eq!(
+                mradm_wav_layout_begin(
+                    source_text.as_ptr(),
+                    source_text.len(),
+                    target_text.as_ptr(),
+                    target_text.len(),
+                    &options,
+                    &mut layout,
+                    &mut frames,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            assert_eq!(frames, 3);
+            let mut copied = 0;
+            let mut total = 0;
+            loop {
+                assert_eq!(
+                    mradm_wav_layout_step(layout, 2, &mut copied, message.as_mut_ptr(), 128),
+                    0
+                );
+                if copied == 0 {
+                    break;
+                }
+                total += copied;
+            }
+            assert_eq!(total, 3);
+            assert_eq!(
+                mradm_wav_layout_finish(layout, message.as_mut_ptr(), 128),
+                0
+            );
+            assert_eq!(
+                mradm_wav_layout_finish(layout, message.as_mut_ptr(), 128),
+                1
+            );
+            mradm_wav_layout_destroy(layout);
+            // The target is created exclusively.
+            assert_eq!(
+                mradm_wav_layout_begin(
+                    source_text.as_ptr(),
+                    source_text.len(),
+                    target_text.as_ptr(),
+                    target_text.len(),
+                    &empty_options(),
+                    &mut layout,
+                    &mut frames,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                3
+            );
+            assert!(layout.is_null());
+
+            // bext append keeps the file readable; then the reader exposes axml and CHNA.
+            let fields = WavBext {
+                description: ptr::null(),
+                description_len: 0,
+                originator: b"enc".as_ptr(),
+                originator_len: 3,
+                originator_reference: ptr::null(),
+                originator_reference_len: 0,
+                date_utc: ptr::null(),
+                date_utc_len: 0,
+                loudness: -23.0,
+                true_peak: 0.0,
+                has_loudness: 1,
+                has_true_peak: 0,
+                hoa3_ambi: 0,
+            };
+            assert_eq!(
+                mradm_wav_append_bext(
+                    target_text.as_ptr(),
+                    target_text.len(),
+                    &fields,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            let mut reader = ptr::null_mut();
+            let mut info = Info::default();
+            assert_eq!(
+                mradm_wav_reader_open(
+                    target_text.as_ptr(),
+                    target_text.len(),
+                    &mut reader,
+                    &mut info,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            assert_eq!((info.frames, info.channel_mask), (3, 0x3));
+            let (mut size, mut found) = (0u64, 0u8);
+            assert_eq!(
+                mradm_wav_reader_chunk(
+                    reader,
+                    b"axml".as_ptr(),
+                    ptr::null_mut(),
+                    0,
+                    &mut size,
+                    &mut found,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            assert_eq!((size, found), (4, 1));
+            let mut axml = [0u8; 4];
+            assert_eq!(
+                mradm_wav_reader_chunk(
+                    reader,
+                    b"axml".as_ptr(),
+                    axml.as_mut_ptr(),
+                    4,
+                    &mut size,
+                    &mut found,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            assert_eq!(&axml, b"<a/>");
+            // Wrong capacity, and an output buffer overlapping the size slot, are rejected.
+            assert_eq!(
+                mradm_wav_reader_chunk(
+                    reader,
+                    b"axml".as_ptr(),
+                    axml.as_mut_ptr(),
+                    3,
+                    &mut size,
+                    &mut found,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                1
+            );
+            let mut slots = [0u64; 2];
+            let base = slots.as_mut_ptr();
+            assert_eq!(
+                mradm_wav_reader_chunk(
+                    reader,
+                    b"axml".as_ptr(),
+                    base.cast(),
+                    4,
+                    base,
+                    &mut found,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                1
+            );
+            let mut count = 0usize;
+            assert_eq!(
+                mradm_wav_reader_chna(
+                    reader,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    0,
+                    &mut count,
+                    &mut found,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            assert_eq!((count, found), (2, 1));
+            let mut indices = [0u16; 2];
+            let mut uids = [0u8; 24];
+            assert_eq!(
+                mradm_wav_reader_chna(
+                    reader,
+                    indices.as_mut_ptr(),
+                    uids.as_mut_ptr(),
+                    1,
+                    &mut count,
+                    &mut found,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                1
+            );
+            assert_eq!(
+                mradm_wav_reader_chna(
+                    reader,
+                    indices.as_mut_ptr(),
+                    uids.as_mut_ptr(),
+                    2,
+                    &mut count,
+                    &mut found,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            assert_eq!(indices, [1, 2]);
+            assert_eq!(&uids[12..], b"ATU_00000001");
+            assert_eq!(
+                mradm_wav_reader_chunk(
+                    reader,
+                    b"chn".as_ptr(),
+                    ptr::null_mut(),
+                    0,
+                    &mut size,
+                    &mut found,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            mradm_wav_reader_destroy(reader);
+
+            // axml replacement, then the tolerant probe.
+            assert_eq!(
+                mradm_wav_replace_axml(
+                    target_text.as_ptr(),
+                    target_text.len(),
+                    copy_text.as_ptr(),
+                    copy_text.len(),
+                    b"<b/>!".as_ptr(),
+                    5,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            let mut present = 9;
+            assert_eq!(
+                mradm_wav_has_chunk(
+                    copy_text.as_ptr(),
+                    copy_text.len(),
+                    b"bext".as_ptr(),
+                    &mut present,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                0
+            );
+            assert_eq!(present, 1);
+            assert_eq!(
+                mradm_wav_has_chunk(
+                    copy_text.as_ptr(),
+                    copy_text.len(),
+                    ptr::null(),
+                    &mut present,
+                    message.as_mut_ptr(),
+                    128
+                ),
+                1
+            );
+            assert_eq!(present, 0);
+            assert_eq!(
+                mradm_wav_append_bext(
+                    copy_text.as_ptr(),
+                    copy_text.len(),
+                    ptr::null(),
+                    message.as_mut_ptr(),
+                    128
+                ),
+                1
+            );
+        }
+        for path in [&source, &target, &copy] {
+            std::fs::remove_file(path).ok();
+        }
     }
 }

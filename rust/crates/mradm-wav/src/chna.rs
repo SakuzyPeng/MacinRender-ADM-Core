@@ -47,6 +47,37 @@ impl Chna {
         }
         Ok(Self { tracks, entries })
     }
+    /// Import-side decoding: numUIDs may leave reserved records unused at the end of the chunk,
+    /// and track indices are returned as stored (zero included) for the caller's ADM policy.
+    pub fn decode_import(data: &[u8]) -> Result<Self> {
+        if data.len() < 4 {
+            return Err(Error::io("无效的 CHNA chunk"));
+        }
+        let tracks = u16::from_le_bytes([data[0], data[1]]);
+        let count = usize::from(u16::from_le_bytes([data[2], data[3]]));
+        let records = data[4..]
+            .get(..count * 40)
+            .ok_or_else(|| Error::io("CHNA UID 表被截断"))?;
+        let entries = records
+            .as_chunks::<40>()
+            .0
+            .iter()
+            .map(|record| {
+                let mut entry = ChnaEntry {
+                    track_index: u16::from_le_bytes([record[0], record[1]]),
+                    uid: [0; 12],
+                    track_format: [0; 14],
+                    pack_format: [0; 11],
+                    pad: record[39],
+                };
+                entry.uid.copy_from_slice(&record[2..14]);
+                entry.track_format.copy_from_slice(&record[14..28]);
+                entry.pack_format.copy_from_slice(&record[28..39]);
+                entry
+            })
+            .collect();
+        Ok(Self { tracks, entries })
+    }
     pub fn encode(&self) -> Result<Vec<u8>> {
         let count =
             u16::try_from(self.entries.len()).map_err(|_| Error::invalid("CHNA 条目数超限"))?;

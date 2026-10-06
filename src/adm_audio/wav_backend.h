@@ -5,8 +5,12 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <vector>
 
+#include "adm/audio_io.h"
 #include "adm/errors.h"
 
 #include "wav_ffi.h"
@@ -74,6 +78,71 @@ class RustWavReader {
         return {};
     }
     [[nodiscard]] const MradmWavInfo& info() const noexcept { return info_; }
+    // Payload of the first chunk with this four-character id.
+    Result<std::optional<std::string>> chunk(std::string_view id) {
+        if (id.size() != 4U) {
+            return make_error(ErrorCode::invalid_argument, "WAVE chunk id must have four characters", "path=" + path_);
+        }
+        const auto* raw_id = reinterpret_cast<const uint8_t*>(id.data());
+        std::array<uint8_t, 512> message{};
+        uint64_t size = 0;
+        uint8_t found = 0;
+        auto code =
+            mradm_wav_reader_chunk(handle_.get(), raw_id, nullptr, 0, &size, &found, message.data(), message.size());
+        if (code != 0) {
+            return tl::unexpected{wav_error(code, message, path_)};
+        }
+        if (found == 0U) {
+            return std::optional<std::string>{};
+        }
+        std::string payload;
+        if (size > payload.max_size()) {
+            return make_error(ErrorCode::unsupported, "WAVE chunk is too large", "path=" + path_);
+        }
+        payload.resize(static_cast<std::size_t>(size));
+        if (size != 0U) {
+            code = mradm_wav_reader_chunk(handle_.get(),
+                                          raw_id,
+                                          reinterpret_cast<uint8_t*>(payload.data()),
+                                          payload.size(),
+                                          &size,
+                                          &found,
+                                          message.data(),
+                                          message.size());
+            if (code != 0) {
+                return tl::unexpected{wav_error(code, message, path_)};
+            }
+        }
+        return std::optional<std::string>{std::move(payload)};
+    }
+    // Import-side CHNA records; empty when the file has no chna chunk.
+    Result<std::vector<WavChnaUid>> chna() {
+        std::array<uint8_t, 512> message{};
+        std::size_t count = 0;
+        uint8_t found = 0;
+        auto code =
+            mradm_wav_reader_chna(handle_.get(), nullptr, nullptr, 0, &count, &found, message.data(), message.size());
+        if (code != 0) {
+            return tl::unexpected{wav_error(code, message, path_)};
+        }
+        std::vector<WavChnaUid> records;
+        if (found == 0U || count == 0U) {
+            return records;
+        }
+        std::vector<uint16_t> indices(count);
+        std::vector<uint8_t> uids(count * 12U);
+        code = mradm_wav_reader_chna(
+            handle_.get(), indices.data(), uids.data(), count, &count, &found, message.data(), message.size());
+        if (code != 0) {
+            return tl::unexpected{wav_error(code, message, path_)};
+        }
+        records.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            const auto* uid = reinterpret_cast<const char*>(uids.data() + (index * 12U));
+            records.push_back({indices[index], std::string{uid, 12U}});
+        }
+        return records;
+    }
 
   private:
     explicit RustWavReader(std::string path) : path_(std::move(path)) {}

@@ -6,6 +6,7 @@
 #include <optional>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -83,6 +84,26 @@ class RenderInputReader {
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
+
+// ADM chunks of a WAVE file, read through the Rust container parser. axml is empty when absent;
+// chna holds each record's stored track index (one-based; 0 is passed through) and raw 12-byte UID.
+struct WavChnaUid {
+    uint16_t track_index{0};
+    std::string uid;
+};
+struct WavAdmChunks {
+    std::string axml;
+    std::vector<WavChnaUid> chna;
+};
+Result<WavAdmChunks> read_wav_adm_chunks(const std::string& path);
+
+// Writes target (created or truncated) as a copy of source with the axml payload replaced. All other
+// chunks, including PCM, keep their bytes; the RIFF size or ds64.bw64Size is recomputed.
+Result<void> replace_wav_axml(const std::string& source, const std::string& target, std::string_view axml);
+
+// Tolerant routing probe: whether a top-level chunk with this four-character id exists. Fails only when
+// the file cannot be opened or is not RIFF/RF64/BW64 WAVE; a truncated chunk table ends the scan.
+Result<bool> wav_has_chunk(const std::string& path, std::string_view id);
 
 // Streaming writer for CAF (Core Audio Format) files with IEEE float32 samples
 // and an Apple AudioChannelLayoutTag encoded in the 'chan' chunk.

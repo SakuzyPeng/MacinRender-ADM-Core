@@ -783,6 +783,15 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_wav_rust_tests)
     add_test(NAME mr_adm_wav_rust_tests COMMAND mr_adm_wav_rust_tests)
 
+    # WAVE container metadata parity against the frozen C++ implementation (tests/reference/wav_container).
+    add_executable(mr_adm_wav_container_tests
+        tests/unit/wav_container_test.cpp
+        tests/reference/wav_container/legacy.cpp)
+    target_include_directories(mr_adm_wav_container_tests PRIVATE src/adm_audio)
+    target_link_libraries(mr_adm_wav_container_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMIo)
+    mr_adm_core_apply_warnings(mr_adm_wav_container_tests)
+    add_test(NAME mr_adm_wav_container_tests COMMAND mr_adm_wav_container_tests)
+
     if(MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS)
         add_executable(mr_adm_libbw64_reference_tests tests/reference/libbw64/reference_test.cpp)
         target_include_directories(mr_adm_libbw64_reference_tests PRIVATE src/adm_audio)

@@ -1,11 +1,17 @@
-//! Streaming RIFF/RF64/BW64 I/O. ADM XML interpretation remains outside this crate.
+//! Streaming RIFF/RF64/BW64 I/O and container-level edits. ADM XML interpretation remains
+//! outside this crate.
 #![forbid(unsafe_code)]
 
 mod chna;
+mod edit;
 mod reader;
 mod writer;
 
 pub use chna::{Chna, ChnaEntry};
+pub use edit::{
+    AMBI_HOA3, BEXT_SIZE, BextFields, ChnaTrack, LayoutOptions, LayoutRewriter, append_bext,
+    bext_payload, has_chunk, replace_chunk,
+};
 pub use reader::{Chunk, Reader};
 pub use writer::{Writer, WriterOptions};
 

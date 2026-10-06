@@ -207,6 +207,29 @@
       }
     },
     {
+      "id": "wav_container",
+      "kind": "frozen",
+      "migration_doc": "docs/architecture/RUST_WAV_CONTAINER_MIGRATION.md",
+      "accepted": "2026-10-06",
+      "baseline_commit": "fae56067f41ad24dc0b500629d964e844ba654da",
+      "provenance": null,
+      "cmake_option": null,
+      "tests": [
+        "mr_adm_wav_container_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/wav_container/legacy.cpp": "1e377d3df62c388fb88eadba176aacc119b94837d3f04a915529b7e12f0450ae",
+        "tests/reference/wav_container/legacy.h": "d732f23a351dbb1fb223f30fc0c8d9f4772d42d3d55f68564371155acba94712"
+      }
+    },
+    {
       "id": "saf",
       "kind": "third-party",
       "migration_doc": "docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md",

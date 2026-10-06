@@ -1,6 +1,6 @@
 # Rust 整数 WAVE/BW64 迁移
 
-本轮以项目自有 `mradm-wav` 替换 libbw64 的生产用途：整数 ADM 音频读取，以及浮点 WAVE 到整数 PCM 的位深转换。dr_wav、C++ 容器元数据读取／改写、ADM XML 语义和渲染算法保持各自职责。
+本轮以项目自有 `mradm-wav` 替换 libbw64 的生产用途：整数 ADM 音频读取，以及浮点 WAVE 到整数 PCM 的位深转换。dr_wav、C++ 容器元数据读取／改写、ADM XML 语义和渲染算法保持各自职责（dr_wav 与容器元数据后续已迁移，见 [Rust 浮点 WAVE 迁移](RUST_DR_WAV_MIGRATION.md) 与 [Rust WAVE 容器元数据迁移](RUST_WAV_CONTAINER_MIGRATION.md)）。
 
 ## 边界与数值契约
 
