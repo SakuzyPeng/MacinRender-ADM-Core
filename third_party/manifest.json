@@ -383,7 +383,7 @@
       "distribution": "opt-in",
       "source": {
         "type": "vendored",
-        "repo_path": "src/adm_render_binaural/spreader_mr.h",
+        "repo_path": "tests/reference/spreader_mr.h",
         "license_files": [
           "NOTICE.txt"
         ],

@@ -87,3 +87,9 @@ cmake --preset release -DMR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS=OFF
 ```
 
 `libsamplerate` 只在可选参考目标中使用；生产链接及全部 139 个公开 C 入口分别验证。
+
+## 参考实现退出
+
+- 单元 `resampler`（`tests/reference/resampler_reference_test.cpp`）：在默认 OFF 的 `MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS` 下编译，由 `mr_adm_resampler_reference_tests` 比较。
+
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。

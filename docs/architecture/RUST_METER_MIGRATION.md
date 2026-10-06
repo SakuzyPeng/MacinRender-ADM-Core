@@ -62,3 +62,9 @@ cmake --preset release -DMR_ADM_BUILD_EBUR128_REFERENCE_TESTS=OFF
 评估期的原始数值/性能结果保留在 [候选评估](RUST_EBUR128_EVALUATION.md)，不当作整个渲染器的新性能结果。
 最终验收与源文件指纹见 [机器可读记录](evidence/rust-ebur128-migration/validation.json)。
 决策见 [ADR 0010](../adr/0010-rust-loudness-meter.md)。
+
+## 参考实现退出
+
+- 单元 `ebur128`（`tests/reference/ebur128_reference_test.cpp`）：在默认 OFF 的 `MR_ADM_BUILD_EBUR128_REFERENCE_TESTS` 下编译，由 `mr_adm_ebur128_reference_tests` 比较。
+
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。

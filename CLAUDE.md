@@ -213,6 +213,7 @@ Rust/C++ 边界规则：
 - 共享 C ABI bundle 只导出 `c_api.h` 声明的 `adm_*`（当前 139 个；Windows 用从 `c_api.h` 生成的 `.def`）；Rust 分配器、panic 入口与私有 `mradm_*` 符号不得外泄，`scripts/quality/check-capi-exports.py <lib>` 在 ci/release 校验
 - 新的 Rust 依赖必须锁定精确版本、关闭不需要的 features，并登记到许可证清单/SBOM（`scripts/quality/check-licenses.sh` 会校验 Cargo 依赖）
 - 迁移批次的惯例：先保留旧 C++ 实现作对照（`tests/reference/*` + `provenance.json`，或 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关），记录验收到 `docs/architecture/RUST_*_MIGRATION.md` 与 `evidence/`；**禁止**把旧实现当运行时静默回退
+- `tests/reference/` 下每个文件都登记在 `tests/reference/retention.json`（单元、测试、开关、SHA-256、未满足的退役条件），`scripts/quality/check-reference-retention.py` 校验（ci 的 version-metadata job）；冻结参考不得改算法，必须改时同步更新哈希并在迁移文档说明。退役条件（已发布 + 独立回归 + 二期确认）与步骤见 `docs/architecture/RUST_REFERENCE_RETENTION.md`
 
 ### 绝对边界（ADR 0003，按迁移现状更新）
 
@@ -297,6 +298,7 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 - `.github/workflows/quality.yml` — 所有触发跑 Rust fmt/clippy 与 FFI 头校验；PR 跑 `check-changed.sh`；push main / manual full 跑 `check-all.sh`；只在 macOS
 - `.github/workflows/windows-bringup.yml` — 手动触发的 Windows MSVC Release 探针构建（vcpkg Boost）
 - `.github/workflows/release.yml` — tag `v*` 或手动触发：macOS CLI `.tar.gz`、Linux CLI `.AppImage`、Windows CLI `.zip`，外加 macOS/Windows GUI 包（`MacinRender-Gui-*`，经 `scripts/release/package-*.sh` + smoke 脚本）
+- `.github/workflows/reference-tests.yml` — 手动触发：Linux Release 逐个打开 `MR_ADM_BUILD_*_REFERENCE_TESTS` 跑第三方对照，防止默认 OFF 的参考腐烂
 - `.github/workflows/iamf-bridge-prebuild.yml` — 预构建 AOM iamf-tools bridge SDK；`cache-maintenance.yml` — FetchContent/ccache 缓存维护
 
 详见 `docs/guides/CI.md`。
@@ -309,6 +311,7 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 - `docs/architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md` — Windows ISpatialAudioClient 系统空间监听 sink（静态床/能力实测/切换恢复）
 - `docs/architecture/hptf-eq.md` — HpTF 耳机补偿（v1.38 内存参数接口、AutoEq ParametricEQ，实时监听专用，设备绑定）
 - `docs/adr/0001` C++20 标准 | `0002` C++-first，Rust-later | `0003` 自有领域模型与后端边界 | `0004` 第三方依赖管理 | `0005` 错误处理模型 | `0006` CLI11 选择 | `0007` C ABI 稳定性 | `0008` Rust 落地与 SAF 替换 | `0009` 头追踪输入边界 | `0010` Rust Meter | `0011` Rust 固定采样率转换 | `0012` Rust ADM 元数据与 libadm 参考边界
+- `docs/architecture/RUST_REFERENCE_RETENTION.md` — 迁移参考实现的登记、冻结校验与退役条件
 - `docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md` — Rust 一期总览与二期（跨平台逐位一致）计划；各批次验收见 `docs/architecture/RUST_*_MIGRATION.md`（ADM、BW64、Live VBAP、Scene numeric、HOA、Monitor 等）及 `docs/architecture/evidence/`
 - `docs/guides/QUALITY.md` — 质量工具与策略
 - `docs/guides/CI.md` — CI 设计与边界

@@ -25,6 +25,10 @@ jobs:
       - name: Verify GUI localization
         run: python3 scripts/quality/check_gui_i18n.py
 
+      # Frozen Rust-migration references must stay registered and byte-identical.
+      - name: Verify migration references
+        run: python3 scripts/quality/check-reference-retention.py
+
   debug:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}

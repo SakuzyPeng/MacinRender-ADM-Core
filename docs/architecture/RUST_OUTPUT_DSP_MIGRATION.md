@@ -87,3 +87,9 @@ ctest --test-dir build/release -R '(output_dsp|stereo_peak_guard|hptf|scene_.*c_
 
 比较器对增益使用 float32 位比较，对峰值 PCM 使用绝对误差门限；长度、非有限结果或
 未输出区域被改写均直接失败。独立断言与参考算法共同约束行为，不使用音频文件大小推断一致性。
+
+## 参考实现退出
+
+- 单元 `output_dsp`（`tests/reference/output_dsp_legacy.h`）：随默认测试构建编译，由 `mr_adm_output_dsp_tests` 比较。
+
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。

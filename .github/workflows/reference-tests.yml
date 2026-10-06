@@ -1,0 +1,81 @@
+name: Reference tests
+
+# Keeps the default-OFF third-party migration references (tests/reference/retention.json,
+# kind "third-party") from rotting unnoticed. Manual only; see
+# docs/architecture/RUST_REFERENCE_RETENTION.md for what a failure means.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reference:
+    name: ${{ matrix.unit }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - unit: saf
+            option: MR_ADM_BUILD_SAF_REFERENCE_TESTS
+            targets: mr_adm_saf_reference_tests
+            tests: mr_adm_saf_reference_tests
+          - unit: libadm
+            option: MR_ADM_BUILD_LIBADM_REFERENCE_TESTS
+            targets: mr_adm_libadm_reference_tests mr_adm_make_libadm_fixture
+            tests: mr_adm_libadm_reference_tests
+          - unit: libbw64
+            option: MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS
+            targets: mr_adm_libbw64_reference_tests
+            tests: mr_adm_libbw64_reference_tests
+          - unit: resampler
+            option: MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS
+            targets: mr_adm_resampler_reference_tests
+            tests: mr_adm_resampler_reference_tests
+          - unit: ebur128
+            option: MR_ADM_BUILD_EBUR128_REFERENCE_TESTS
+            targets: mr_adm_ebur128_reference_tests
+            tests: mr_adm_ebur128_reference_tests
+
+    env:
+      FC_CACHE_DIR: ${{ github.workspace }}/.fc-cache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal
+
+      # OpenBLAS/LAPACKE are only needed by the legacy SAF reference build.
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build build-essential git pkg-config libboost-all-dev \
+            libopenblas-dev liblapacke-dev
+
+      - name: Restore FetchContent cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .fc-cache
+          key: fc-${{ runner.os }}-${{ hashFiles('cmake/MRDependencies.cmake', 'CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            fc-${{ runner.os }}-
+
+      # SAF references are Release-only; the others use the same configuration for simplicity.
+      - name: Configure
+        run: >
+          cmake -S . -B build/reference -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DFETCHCONTENT_BASE_DIR="$FC_CACHE_DIR"
+          -DMR_ADM_FLAC_PROVIDER=VENDORED
+          -DMR_ADM_OPUS_PROVIDER=VENDORED
+          -DMR_ADM_ENABLE_IAMF=OFF
+          -D${{ matrix.option }}=ON
+
+      - name: Build
+        run: cmake --build build/reference --target ${{ matrix.targets }}
+
+      - name: Test
+        run: ctest --test-dir build/reference --output-on-failure -R "^${{ matrix.tests }}$"

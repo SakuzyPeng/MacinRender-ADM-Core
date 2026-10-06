@@ -4,3 +4,5 @@
 /rust/vendor/sofar/** -text -whitespace
 *.f32le binary
 *.sofa binary
+# Frozen migration references are pinned by SHA-256 in tests/reference/retention.json.
+/tests/reference/** -text
