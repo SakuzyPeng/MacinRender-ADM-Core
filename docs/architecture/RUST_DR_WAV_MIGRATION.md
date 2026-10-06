@@ -11,7 +11,7 @@
 
 - 公开 C++ API（`include/adm/audio_io.h`）的类名和方法签名不变，只新增 `FloatWavWriter::finish()` 和 `WriterHandle::finish()`。
 - 失败约定与 dr_wav 一致：`FloatWavReader::read` 失败时返回 0，`seek` 返回 false，`FloatWavWriter::write` 返回 0。
-- `RenderInputReader` 不再区分浮点 ADM 与整数 ADM，所有输入统一使用 Rust reader，错误经 `Result` 返回。
+- `RenderInputReader` 不再区分浮点 ADM 与整数 ADM，所有输入统一使用 Rust reader，错误经 `Result` 返回。后续清理删除了 `RenderInputReader::open` 已不起作用的 `channel_bed` 参数（内部 C++ API，不影响 C ABI）。
 
 解码结果与 dr_wav 逐位一致：
 

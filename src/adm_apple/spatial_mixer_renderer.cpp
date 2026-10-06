@@ -920,8 +920,7 @@ class AppleStream final : public IRenderStream {
             stream->contexts_[i].live_gain = stream->bus_gain_envelopes_.data() + (i * k_render_block);
         }
 
-        auto reader = audio::RenderInputReader::open(plan.input_path,
-                                                     plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+        auto reader = audio::RenderInputReader::open(plan.input_path);
         if (!reader) {
             return tl::unexpected{reader.error()};
         }
@@ -1681,8 +1680,7 @@ Result<RenderMetrics> AppleRenderer::render_window(const IPreparedRender& prep,
                          frames_to_write));
     progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "rendering audio"});
 
-    auto reader_res =
-        audio::RenderInputReader::open(plan.input_path, plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+    auto reader_res = audio::RenderInputReader::open(plan.input_path);
     if (!reader_res) {
         return tl::unexpected{reader_res.error()};
     }

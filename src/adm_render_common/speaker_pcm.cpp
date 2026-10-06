@@ -70,8 +70,7 @@ Result<RenderMetrics> render_speaker_pcm(const RenderPlan& plan,
         progress.on_progress(
             {RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "rendering audio"});
 
-        auto reader_res = audio::RenderInputReader::open(plan.input_path,
-                                                         plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+        auto reader_res = audio::RenderInputReader::open(plan.input_path);
         if (!reader_res) {
             return tl::unexpected{reader_res.error()};
         }

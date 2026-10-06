@@ -544,8 +544,7 @@ class EarStream final : public IRenderStream {
   public:
     [[nodiscard]] static Result<std::unique_ptr<EarStream>>
     create(const EarPrepared& prepared, const RenderPlan& plan, LogSink& logs) {
-        auto reader = audio::RenderInputReader::open(plan.input_path,
-                                                     plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+        auto reader = audio::RenderInputReader::open(plan.input_path);
         if (!reader) {
             return tl::unexpected{reader.error()};
         }
@@ -814,8 +813,7 @@ Result<RenderMetrics> EarRenderer::render_window(const IPreparedRender& prep,
         dsp::EarPostProcessor post(prepared->filters, static_cast<std::size_t>(k_block_size));
 
         // Open file for audio only — ADM metadata comes from plan.scene.
-        auto reader_res = audio::RenderInputReader::open(plan.input_path,
-                                                         plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+        auto reader_res = audio::RenderInputReader::open(plan.input_path);
         if (!reader_res) {
             return tl::unexpected{reader_res.error()};
         }

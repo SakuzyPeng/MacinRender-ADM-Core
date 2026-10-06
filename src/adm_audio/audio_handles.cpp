@@ -106,7 +106,7 @@ RenderInputReader::~RenderInputReader() = default;
 RenderInputReader::RenderInputReader(RenderInputReader&&) noexcept = default;
 RenderInputReader& RenderInputReader::operator=(RenderInputReader&&) noexcept = default;
 
-Result<std::unique_ptr<RenderInputReader>> RenderInputReader::open(const std::string& path, bool /*channel_bed*/) {
+Result<std::unique_ptr<RenderInputReader>> RenderInputReader::open(const std::string& path) {
     try {
         auto reader = RustWavReader::open(path);
         if (!reader) {

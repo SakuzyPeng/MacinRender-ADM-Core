@@ -245,8 +245,7 @@ class HoaStream final : public IRenderStream {
             plan.scene.info.sample_rate != prepared.sample_rate) {
             return make_error(ErrorCode::invalid_argument, "HOA prepared/input format mismatch");
         }
-        auto reader = audio::RenderInputReader::open(plan.input_path,
-                                                     plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+        auto reader = audio::RenderInputReader::open(plan.input_path);
         if (!reader) {
             return tl::unexpected{reader.error()};
         }
@@ -476,8 +475,7 @@ Result<RenderMetrics> HoaRenderer::render_window(const IPreparedRender& prep,
                              num_frames));
         progress.on_progress({RenderStage::rendering, RenderOperation::render_audio, 0.3, 0.0, 0, 0, "encoding HOA"});
 
-        auto reader_res = audio::RenderInputReader::open(plan.input_path,
-                                                         plan.scene.info.source_kind == SceneSourceKind::channel_bed);
+        auto reader_res = audio::RenderInputReader::open(plan.input_path);
         if (!reader_res) {
             return tl::unexpected{reader_res.error()};
         }

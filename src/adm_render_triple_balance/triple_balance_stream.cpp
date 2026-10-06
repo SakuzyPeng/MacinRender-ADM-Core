@@ -23,7 +23,7 @@ class TripleBalanceStream final : public IRenderStream {
             prepared.sample_rate != plan.scene.info.sample_rate) {
             return make_error(ErrorCode::invalid_argument, "triple-balance: invalid stream format");
         }
-        auto reader = audio::RenderInputReader::open(plan.input_path, false);
+        auto reader = audio::RenderInputReader::open(plan.input_path);
         if (!reader) {
             return tl::unexpected{reader.error()};
         }
