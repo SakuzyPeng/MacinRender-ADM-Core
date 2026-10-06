@@ -15,7 +15,7 @@ BS.2076）空间音频渲染核心，使用 C++20 实现，提供桌面 GUI、�
 - ADM scene import：由项目自有 Rust `mradm-adm` 解析 ADM 元数据，整数 BW64 音频由 `mradm-wav` 流式读取；容器元数据编排与领域模型保留在 C++。
 - 普通多声道输入：支持预设 WAVE channel mask 与受控自定义声道标签，合成为精确几何的 DirectSpeakers 场景。
 - 桌面工作台：基于 Avalonia 的批量渲染、逐对象语义编辑与实时空间监听 GUI。
-- 多后端渲染：libear、SAF VBAP、Triple Balance、HOA encoder、HRTF binaural，以及 macOS 上的 Apple AUSpatialMixer。
+- 多后端渲染：EAR（BS.2127，Rust 移植自 libear）、SAF VBAP、Triple Balance、HOA encoder、HRTF binaural，以及 macOS 上的 Apple AUSpatialMixer。
 - Objects / DirectSpeakers：支持对象和直达扬声器内容，含时间块、增益、插值、扩散、channelLock 和 objectDivergence 等语义。
 - 输出后处理：响度归一化、True Peak 限制、位深转换、CAF/FLAC/Opus/APAC metadata。HOA 输出通过 7.1.4 AllRAD 参考解码测量；LUFS 使用全频声道，True Peak 覆盖全部声道。
 - 平台范围：核心功能面向 macOS / Linux / Windows；macOS 还提供 APAC 编码与 Apple AUSpatialMixer 后端。
@@ -140,7 +140,7 @@ GUI 发行包包含 macOS `.app` 或 Windows `app/MacinRender.Gui.exe`，同样�
 
 | 后端 | CLI 选项 | 输入类型 | 输出 |
 |---|---|---|---|
-| libear | `--renderer auto` / `ear` | Objects / DirectSpeakers / HOA | 多声道扬声器 |
+| EAR（兼容名 `libear`） | `--renderer auto` / `ear` | Objects / DirectSpeakers / HOA | 多声道扬声器 |
 | SAF VBAP | `--renderer saf` | Objects / DirectSpeakers | 多声道扬声器 |
 | Triple Balance | `--renderer triple-balance` | Cartesian Objects / 标准 7.1.2 bed | 7.1.4 / 9.1.6 / 22.2，离线与实时监听 |
 | HOA 编码 | `--renderer hoa` | Objects / DirectSpeakers | HOA3 16ch（ACN/SN3D） |
@@ -207,7 +207,7 @@ HOA 直接回放在 macOS 上使用 CAF PCM、APAC MPEG-4 与 APAC CAF。WAV HOA
 | `22.2` | 24 | yes | yes | yes |
 | `hoa3` | 16 | - | - | - |
 
-EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4` / `9.1.6` 在 libear 后端由项目侧自定义 `ear::Layout` 实现。
+EAR 与 SAF VBAP 的扬声器布局能力共享同一份项目 registry；`9.1.4` / `9.1.6` 在 EAR 后端由项目侧自定义布局实现。
 
 EAR / SAF 的输出扬声器几何可用 `--speaker-geometry standard|apple` 切换。默认 `standard`
 保持既有项目 / ADM 标称坐标；`apple` 使用 CoreAudio 固定坐标，覆盖 `5.1`、`7.1`、
@@ -358,7 +358,9 @@ HpTF 耳机补偿的系数设计、频响、自动预衰减、级联处理与热
 
 通用扬声器与 EAR 双总线混音的数值表、时间线游标和工作缓冲，以及监听固定矩阵也由 Rust 持有；C++ 保留布局/ADM 算法和调度。范围与验收见 [Rust 共享 PCM 混音迁移](docs/architecture/RUST_PCM_MIX_MIGRATION.md)。
 
-EAR 的去相关卷积、补偿延迟和双总线求和也已迁入 Rust，支持保留连续短块的完整尾音；滤波器设计继续使用 libear。范围与验收见 [Rust EAR 后处理迁移](docs/architecture/RUST_EAR_POST_MIGRATION.md)。
+EAR 的去相关卷积、补偿延迟和双总线求和也已迁入 Rust，支持保留连续短块的完整尾音。范围与验收见 [Rust EAR 后处理迁移](docs/architecture/RUST_EAR_POST_MIGRATION.md)。
+
+EAR 的标准布局、Objects/DirectSpeakers/HOA 增益计算与 FIR 设计也已迁入 Rust（`mradm-ear`），生产构建不再链接 libear，也不需要 Boost。范围与验收见 [Rust EAR 算法迁移](docs/architecture/RUST_EAR_MIGRATION.md)。
 
 Triple Balance 的点源/尺寸声像、22.2 几何、去相关、运动/过渡状态和数值快照也已迁入 Rust；C++ 保留语义、I/O、调度及快照 LRU。见 [Rust Triple Balance 迁移](docs/architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)。
 

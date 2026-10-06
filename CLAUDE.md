@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 项目长期方向是平台化重构（不是简单的 CLI 重写）：见 `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md`。
 
-**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、ADM XML 元数据（原 libadm）和 WAVE/RF64/BW64 样本读写（原 libbw64 / dr_wav）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略、渲染编排、线程/设备调度、容器收尾与公开 C ABI；libear 仍是 EAR 后端的标准增益/滤波器设计依赖。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。跨平台 PCM 逐位一致是二期目标，当前只把同平台重复性作为硬门禁（见 `RUST_SAF_REPLACEMENT_ROADMAP.md` §5）。
+**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）和 WAVE/RF64/BW64 样本读写（原 libbw64 / dr_wav）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度、容器元数据收尾与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。跨平台 PCM 逐位一致是二期目标，当前只把同平台重复性作为硬门禁（见 `RUST_SAF_REPLACEMENT_ROADMAP.md` §5）；二期第一个切片是 Scene 统一乘加舍入规则 `scene-separate-v1`（ADR 0014）。
 
 ## 常用构建与测试命令
 
@@ -140,7 +140,7 @@ clang-tidy 依赖 `compile_commands.json`，必须先 `cmake --preset debug`。m
 
 依赖通过 `cmake/MRDependencies.cmake` 的 `mr_adm_core_find_or_fetch()` 统一接入（`find_package(CONFIG)` 优先，FetchContent 兜底）。新增 C/C++ 依赖**必须**走该函数，不要在 `CMakeLists.txt` 散落 `FetchContent_Declare`（ADR 0004）；新增 Rust 依赖写进 `rust/Cargo.toml` 的 `[workspace.dependencies]`（精确版本 `=x.y.z`）并更新 `Cargo.lock` 与许可证清单。
 
-当前生产 C/C++ 第三方依赖：libear（+ Boost 头文件）、dr_flac、libFLAC、libopus、miniaudio、CLI11、spdlog/fmt、nlohmann_json、tl-expected，可选 IAMF AOM bridge。Rust 依赖：realfft/rustfft、nalgebra、ebur128、rubato、sofar（`rust/vendor/sofar` 本地补丁）、quick-xml。
+当前生产 C/C++ 第三方依赖：dr_flac、libFLAC、libopus、miniaudio、CLI11、spdlog/fmt、nlohmann_json、tl-expected，可选 IAMF AOM bridge。Rust 依赖：realfft/rustfft、nalgebra、ebur128、rubato、sofar（`rust/vendor/sofar` 本地补丁）、quick-xml。`mradm-ear` 是移植自 libear 的项目内 crate（Apache-2.0，来源与数据登记在 crate 的 `LICENSE` / `NOTICE.txt` / `PROVENANCE.json`），不是外部依赖。生产构建不需要 Boost / vcpkg。
 
 关键开关：
 
@@ -151,8 +151,8 @@ clang-tidy 依赖 `compile_commands.json`，必须先 `cmake --preset debug`。m
 - `MR_ADM_ENABLE_IAMF=OFF`（默认）— IAMF 编码，需配合 `MR_ADM_IAMF_AOM_ROOT=/path/to/iamf-sdk` 指向预构建的官方 AOM iamf-tools bridge SDK（提供 `lib/libmr_iamf_aom_bridge.*`）。关闭时 `.iamf` 输出直接返回 `unsupported`，**不**回退到任何手写 OBU writer
 - `MR_ADM_CORE_BUILD_CLI=ON`、`MR_ADM_CORE_BUILD_TESTS=ON`
 - `MR_ADM_BUILD_CAPI_BUNDLE=OFF` — 打开后生成自包含 `libmradm_capi` 共享库（target `mradm_capi_bundle`），供 GUI P/Invoke 加载
-- `MR_ADM_BUILD_{SAF,LIBADM,LIBBW64,EBUR128,SAMPLERATE,DRWAV}_REFERENCE_TESTS=OFF`（默认）— 只为维护对照获取/构建旧库参考工具，**不改变生产实现**；SAF 参考只用 Release
-- `MR_ADM_STRICT_FP` / `MR_ADM_EAR_SCALAR_REFERENCE` / `MR_ADM_CONSISTENCY_DIAGNOSTICS` / `MR_ADM_DIAGNOSTIC_PORTABLE_RNG` — 一致性测量专用（`cmake/MRStrictFp.cmake`），不用于发行构建
+- `MR_ADM_BUILD_{SAF,LIBADM,LIBBW64,LIBEAR,EBUR128,SAMPLERATE,DRWAV}_REFERENCE_TESTS=OFF`（默认）— 只为维护对照获取/构建旧库参考工具，**不改变生产实现**；SAF 参考只用 Release；libear / libadm 参考需要 Boost
+- `MR_ADM_STRICT_FP` / `MR_ADM_EAR_SCALAR_REFERENCE` / `MR_ADM_CONSISTENCY_DIAGNOSTICS` / `MR_ADM_DIAGNOSTIC_PORTABLE_RNG` — 一致性测量专用（`cmake/MRStrictFp.cmake`），不用于发行构建。生产 Scene 算术不依赖这些开关：C++ 生产入口固定用私有非融合标志（`scene-separate-v1`，ADR 0014），冻结的 Scene / Live 双耳 / Live VBAP / HOA 参考测试目标单独加 `-ffp-contract=off`（MSVC `/fp:strict`）
 
 CI 显式使用 `MR_ADM_FLAC_PROVIDER=VENDORED` 与 `MR_ADM_OPUS_PROVIDER=VENDORED` 以消除 runner 差异（见 `docs/guides/CI.md`）。
 
@@ -169,7 +169,8 @@ ADMDsp              INTERFACE：src/adm_dsp/*.h 私有 FFI 头 + Rust mradm-ffi 
 ADMMetadata         PRIVATE: mradm-ffi（mradm-adm）；ADM AXML 解析/投影/回写，经类型化只读视图复制到 AdmScene
 ADMIo               PRIVATE: ADMMetadata + ADMAudio + ADMRenderCommon  → AdmScene
 ADMRenderCommon     PRIVATE: ADMAudio + ADMDsp；后端共用 block timeline / object preprocessing / HpTF 控制
-ADMRenderEar        PRIVATE: libear + ADMDsp + ADMAudio + ADMRenderCommon
+ADMRenderEar        PRIVATE: ADMDsp + ADMAudio + ADMRenderCommon（布局/增益/FIR 设计在 Rust mradm-ear；
+                    CLI `ear` 与兼容 backend 名 `libear` 不变）
 ADMRenderVBAP       PRIVATE: ADMDsp + ADMAudio + ADMRenderCommon（含 Live VBAP）
 ADMRenderTripleBalance  PRIVATE: ADMRenderCommon + ADMAudio + nlohmann_json（数值状态在 Rust）
 ADMRenderHOA        PRIVATE: ADMDsp + ADMAudio + ADMRenderCommon（HOA encode；output_layout="hoa3"）
@@ -202,7 +203,9 @@ mradm-dsp   #![forbid(unsafe_code)]；FFT、VBAP/MDAP、HRTF/SOFA(sofar 本地�
             Monitor、Live VBAP/双耳、scene_math / scene_transition
 mradm-adm   #![forbid(unsafe_code)]；ADM XML（quick-xml）、内嵌 BS.2094 common definitions、场景投影与语义回写
 mradm-wav   #![forbid(unsafe_code)]；只依赖 std，RIFF/RF64/BW64 读写、u64 帧定位
-mradm-ffi   staticlib；唯一含 unsafe 的私有 C 边界，聚合 mradm_dsp_* / mradm_adm_* / mradm_wav_* 等入口
+mradm-ear   #![forbid(unsafe_code)]；移植自 libear 2db69f8f：标准布局、nominal/effective 拓扑、Objects extent、
+            DirectSpeakers、HOA AllRAD、512-tap FIR 设计（MT19937）；实现版本 rust-ear-0.1.0
+mradm-ffi   staticlib；唯一含 unsafe 的私有 C 边界，聚合 mradm_dsp_* / mradm_adm_* / mradm_wav_* / mradm_ear_* 等入口
 ```
 
 Rust/C++ 边界规则：
@@ -217,9 +220,8 @@ Rust/C++ 边界规则：
 
 ### 绝对边界（ADR 0003，按迁移现状更新）
 
-- `include/adm/*` 不得 `#include` 任何第三方 ADM/renderer 头（libear、Apple 框架等）或 Rust FFI 头
-- `libear` 类型只允许出现在 `src/adm_render_ear/` 内部（测试 `mr_adm_ear_post_tests` 除外）
-- libadm / libbw64 / SAF / libebur128 / libsamplerate **已不是生产依赖**，只能出现在对应 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关下的参考测试与工具中；不得重新引入生产路径
+- `include/adm/*` 不得 `#include` 任何第三方 ADM/renderer 头（Apple 框架等）或 Rust FFI 头
+- libear / libadm / libbw64 / SAF / libebur128 / libsamplerate / dr_wav **已不是生产依赖**，只能出现在对应 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关下的参考测试与工具中；不得重新引入生产路径
 - CLI 不直接调用任何 renderer 或 IO 库；只构造 `RenderRequest`，调用 `RenderService`
 - Apple 框架（AudioToolbox、CoreAudio、CoreFoundation、AVFoundation）只允许出现在 `src/adm_audio/` 与 `src/adm_apple/`（`if(APPLE)` 门控）
 - Windows COM / SpatialAudio（`spatialaudioclient.h`、`mmdeviceapi.h`、WRL）只允许出现在 `src/adm_windows/`（Windows-only 系统空间监听 sink，`if(WIN32)` 门控）；工厂返回第三方无关的 `IAudioOutputDevice`
@@ -282,7 +284,7 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 - 命名约定：namespace lower_case、class/struct CamelCase、function/variable/enum-constant lower_case
 - 错误日志、用户可见消息、ADR 文档以**中文**为主，与代码注释/英文混用
 - 优先使用 `std::span`、`std::filesystem`、`std::optional`、`std::variant`、`std::jthread`/`std::stop_token`；谨慎使用 concepts / ranges；**不使用** modules、coroutines、复杂 ranges 链式、`std::format`、C++23-only 标准库
-- Rust：edition 2024、默认 rustfmt；算法 crate（`mradm-dsp` / `mradm-adm` / `mradm-wav`）保持 `#![forbid(unsafe_code)]`，unsafe 只写在 `mradm-ffi`；准备阶段之后的处理调用不应分配内存（FFT、运动控制、spreader 等已有分配计数测试约束）；随机状态归实例所有，不用全局 RNG
+- Rust：edition 2024、默认 rustfmt；算法 crate（`mradm-dsp` / `mradm-adm` / `mradm-wav` / `mradm-ear`）保持 `#![forbid(unsafe_code)]`，unsafe 只写在 `mradm-ffi`；准备阶段之后的处理调用不应分配内存（FFT、运动控制、spreader 等已有分配计数测试约束）；随机状态归实例所有，不用全局 RNG
 
 ## 测试约束
 
@@ -293,10 +295,10 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 
 ## CI 与发布
 
-- `.github/workflows/ci.yml` — PR/push main：macOS + Linux + Windows debug（均安装 Rust 1.98.0，带 Cargo 缓存），FLAC/Opus 均 vendored；Windows job 用 vcpkg Boost（libear 依赖）；macOS/Linux 构建后跑 `check-licenses.sh --build-dir build/debug`，新增依赖未登记会让 PR 失败
+- `.github/workflows/ci.yml` — PR/push main：macOS + Linux + Windows debug（均安装 Rust 1.98.0，带 Cargo 缓存），FLAC/Opus 均 vendored；生产构建无需 Boost/vcpkg；macOS/Linux 构建后跑 `check-licenses.sh --build-dir build/debug`，新增依赖未登记会让 PR 失败；另有 Linux ARM64 Release job（`ubuntu-24.04-arm`，显式 `MR_ADM_STRICT_FP=OFF`）守护 Scene 算术规则在优化构建下不漂移
 - `.github/workflows/consistency.yml` — push main / manual：记录跨平台 PCM 差异，门禁输入完整性与同进程重复性（逐位一致属二期）
 - `.github/workflows/quality.yml` — 所有触发跑 Rust fmt/clippy 与 FFI 头校验；PR 跑 `check-changed.sh`；push main / manual full 跑 `check-all.sh`；只在 macOS
-- `.github/workflows/windows-bringup.yml` — 手动触发的 Windows MSVC Release 探针构建（vcpkg Boost）
+- `.github/workflows/windows-bringup.yml` — 手动触发的 Windows MSVC Release 探针构建
 - `.github/workflows/release.yml` — tag `v*` 或手动触发：macOS CLI `.tar.gz`、Linux CLI `.AppImage`、Windows CLI `.zip`，外加 macOS/Windows GUI 包（`MacinRender-Gui-*`，经 `scripts/release/package-*.sh` + smoke 脚本）
 - `.github/workflows/reference-tests.yml` — 手动触发：Release 逐个打开（SAF 在 macOS，其余 Linux） `MR_ADM_BUILD_*_REFERENCE_TESTS` 跑第三方对照，防止默认 OFF 的参考腐烂
 - `.github/workflows/iamf-bridge-prebuild.yml` — 预构建 AOM iamf-tools bridge SDK；`cache-maintenance.yml` — FetchContent/ccache 缓存维护
@@ -310,9 +312,10 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 - `docs/architecture/ADM_APPLE_BACKEND.md` — macOS AUSpatialMixer 后端 + ASBR 系统空间监听 sink
 - `docs/architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md` — Windows ISpatialAudioClient 系统空间监听 sink（静态床/能力实测/切换恢复）
 - `docs/architecture/hptf-eq.md` — HpTF 耳机补偿（v1.38 内存参数接口、AutoEq ParametricEQ，实时监听专用，设备绑定）
-- `docs/adr/0001` C++20 标准 | `0002` C++-first，Rust-later | `0003` 自有领域模型与后端边界 | `0004` 第三方依赖管理 | `0005` 错误处理模型 | `0006` CLI11 选择 | `0007` C ABI 稳定性 | `0008` Rust 落地与 SAF 替换 | `0009` 头追踪输入边界 | `0010` Rust Meter | `0011` Rust 固定采样率转换 | `0012` Rust ADM 元数据与 libadm 参考边界
+- `docs/adr/0001` C++20 标准 | `0002` C++-first，Rust-later | `0003` 自有领域模型与后端边界 | `0004` 第三方依赖管理 | `0005` 错误处理模型 | `0006` CLI11 选择 | `0007` C ABI 稳定性 | `0008` Rust 落地与 SAF 替换 | `0009` 头追踪输入边界 | `0010` Rust Meter | `0011` Rust 固定采样率转换 | `0012` Rust ADM 元数据与 libadm 参考边界 | `0013` Rust EAR 与 libear 生产依赖移除 | `0014` Scene 统一乘加舍入规则
+- `docs/architecture/SCENE_ARITHMETIC_POLICY.md` — `scene-separate-v1` 的验证证据（二期第一个切片）
 - `docs/architecture/RUST_REFERENCE_RETENTION.md` — 迁移参考实现的登记、冻结校验与退役条件
-- `docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md` — Rust 一期总览与二期（跨平台逐位一致）计划；各批次验收见 `docs/architecture/RUST_*_MIGRATION.md`（ADM、BW64、Live VBAP、Scene numeric、HOA、Monitor 等）及 `docs/architecture/evidence/`
+- `docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md` — Rust 一期总览与二期（跨平台逐位一致）计划；各批次验收见 `docs/architecture/RUST_*_MIGRATION.md`（ADM、BW64、dr_wav、EAR、EAR post、Live VBAP、Scene numeric、HOA、Monitor 等）及 `docs/architecture/evidence/`
 - `docs/guides/QUALITY.md` — 质量工具与策略
 - `docs/guides/CI.md` — CI 设计与边界
 - `docs/THIRD_PARTY_LICENSES.md` — 第三方许可证与发行边界
