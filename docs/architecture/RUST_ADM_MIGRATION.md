@@ -54,3 +54,9 @@ channelLock 等参数沿用旧库已有的取值范围，避免异常有限角�
 其实际身份以音频记录中的二进制 SHA-256 为准，不将归档时 HEAD 当作重新构建的证明。
 C++ 质量门仍显示既有长函数等告警；没有将其描述为零告警。参考探针的单次耗时只作观察，
 不作为性能提升结论。
+
+## 参考实现退出
+
+- 单元 `libadm`（`tests/reference/libadm/`）：在默认 OFF 的 `MR_ADM_BUILD_LIBADM_REFERENCE_TESTS` 下编译，由 `mr_adm_libadm_reference_tests` 比较。
+
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。

@@ -97,3 +97,10 @@ scripts/quality/check-licenses.sh --build-dir build/debug
 本批单独提交在 `codex/rust-live-vbap`，原 libadm 提交和其分支保持独立。
 
 本批不增加第三方依赖，不推断性能、RSS 或跨平台逐位一致；后者继续留到二期。
+
+## 参考实现退出
+
+- 单元 `live_vbap`（`tests/reference/live_vbap/`）：随默认测试构建编译，由 `mr_adm_live_vbap_rust_tests` 比较。
+  引用 `scene_numeric/spatial.h`，因此 `scene_numeric` 须等本单元退役后才能退役。
+
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。

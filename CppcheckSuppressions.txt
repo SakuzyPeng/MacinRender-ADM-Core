@@ -44,8 +44,8 @@ unusedStructMember:*/src/adm_realtime/audio_output_device.h
 unusedStructMember:*/src/adm_realtime/monitor_engine.h
 # SAF spreader is a local C fork of the upstream SAF example; keep cppcheck from
 # treating third-party C idioms as project C++ style issues.
-*:*/src/adm_render_binaural/spreader_mr.c
-unusedStructMember:*/src/adm_render_binaural/spreader_mr_internal.h
+*:*/tests/reference/spreader_mr.c
+unusedStructMember:*/tests/reference/spreader_mr_internal.h
 
 // OSC protocol header is also analyzed alone; these fields are used by the parser, receiver and contract tests.
 unusedStructMember:*src/adm_realtime/osc_head_tracking_protocol.h

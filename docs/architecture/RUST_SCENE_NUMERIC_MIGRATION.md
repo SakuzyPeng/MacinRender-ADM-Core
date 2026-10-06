@@ -119,3 +119,10 @@ Rust 测试覆盖融合／非融合的消减结果，C++ 冻结参考对照增�
 
 本轮本机 macOS Debug 全量 67/67、Release Scene／Live 双耳／包配置定向 3/3 通过，
 Rust fmt/Clippy 与改动 C++ 质量检查通过。上方机器可读记录保留初次验收的提交及指纹。
+
+## 参考实现退出
+
+- 单元 `scene_numeric`（`tests/reference/scene_numeric/`）：随默认测试构建编译，由 `mr_adm_scene_numeric_rust_tests`、`mr_adm_live_binaural_rust_tests` 比较。
+  `hoa` 与 `live_vbap` 的冻结参考引用本单元的 `spatial.h`，本单元必须在二者之后退役。
+
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。

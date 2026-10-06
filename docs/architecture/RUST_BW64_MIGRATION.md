@@ -42,3 +42,9 @@ RenderInputReader 整数分支使用 Rust，浮点和 channel-bed 分支继续�
 Release 共享库全量构建还补齐了 C API bundle、core/EAR/channel-bed 测试及 Apple/APAC 测试的直接链接依赖；没有改变公开 ABI 或渲染算法。原有未提交的 Triple Balance 链接修正保留。
 
 长期代码、测试和摘要位于仓库；大文件临时材料可放在 cache 外置盘，永久构建不依赖其挂载状态。
+
+## 参考实现退出
+
+- 单元 `libbw64`（`tests/reference/libbw64/`）：在默认 OFF 的 `MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS` 下编译，由 `mr_adm_libbw64_reference_tests` 比较。
+
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。

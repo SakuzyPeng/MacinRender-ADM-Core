@@ -118,3 +118,10 @@ scripts/quality/check-licenses.sh --build-dir build/debug
 [Release CLI](evidence/rust-hoa/macos-audio.json)、
 [诊断检查点](evidence/rust-hoa/diagnostics.json)。
 跨平台逐位一致继续留到二期，性能改进不由本次迁移推断。
+
+## 参考实现退出
+
+- 单元 `hoa`（`tests/reference/hoa/`）：随默认测试构建编译，由 `mr_adm_hoa_rust_tests` 比较。
+  引用 `scene_numeric/spatial.h`，因此 `scene_numeric` 须等本单元退役后才能退役。
+
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。

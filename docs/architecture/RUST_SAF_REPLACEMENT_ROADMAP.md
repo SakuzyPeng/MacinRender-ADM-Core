@@ -113,3 +113,10 @@ Rust 单元测试覆盖独立 double DFT、实际 FFT 长度、凸包/Voronoi、
 一致性 CI 继续保存 A/B C++ 数值控制下的 PCM 和构建记录，使用一期专用的空跨平台门禁清单；同进程重复性仍是硬门禁。历史 SAF 清单和实验不改写：见 [原始定位](CONSISTENCY_LOCALIZATION.md)、[3D VBAP 定位](CONSISTENCY_VBAP_LOCALIZATION.md)。旧 run-localization.py 只适用于那些记录的 SAF 源码版本，会拒绝对当前 Rust 构建执行旧归因实验。
 
 后续整数 BW64/WAVE I/O 迁移见 [Rust BW64 迁移](RUST_BW64_MIGRATION.md)；dr_wav 和容器元数据编排仍保留。
+
+## 参考实现退出
+
+- 单元 `saf`（`tests/reference/saf_reference_test.cpp`、`tests/reference/spreader_mr.c`、`tests/reference/spreader_mr.h`、`tests/reference/spreader_mr_internal.h`）：在默认 OFF 的 `MR_ADM_BUILD_SAF_REFERENCE_TESTS` 下编译，由 `mr_adm_saf_reference_tests` 比较。
+  同一开关还挂着 SAF 探针工具（`mr_adm_numeric_probe` 等）和 `MR_ADM_DIAGNOSTIC_PORTABLE_RNG`，退役时一并处理；历史一致性定位脚本只适用于原 SAF 版本。
+
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。

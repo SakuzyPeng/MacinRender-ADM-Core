@@ -115,3 +115,9 @@ ADM/WAV。覆盖 13 个既有后端控制用例和 15 个新增尺寸/窗口用�
 [CLI 对照](evidence/rust-triple-balance/macos-audio.json)及
 [有效语义核对](evidence/rust-triple-balance/semantic-policies.json)。
 性能和跨平台位一致不由本次语言迁移结果推断。
+
+## 参考实现退出
+
+- 单元 `triple_balance`（`tests/reference/triple_balance/`）：随默认测试构建编译，由 `mr_adm_triple_balance_rust_tests` 比较。
+
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。

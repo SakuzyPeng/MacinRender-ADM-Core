@@ -95,3 +95,9 @@ scripts/quality/check-licenses.sh --build-dir build/debug
 
 继续复用标准 Debug/Release 构建及共享 Cargo 缓存，不创建独立工作区。跨平台逐位一致
 留到二期；本批不推断吞吐、延迟或 RSS 改善，也不改变 GUI 电平显示口径。
+
+## 参考实现退出
+
+- 单元 `monitor`（`tests/reference/monitor/`）：随默认测试构建编译，由 `mr_adm_monitor_dsp_tests` 比较。
+
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。

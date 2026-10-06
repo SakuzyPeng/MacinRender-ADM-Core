@@ -1,0 +1,330 @@
+{
+  "schema": "mradm.reference-retention.v1",
+  "policy": "docs/architecture/RUST_REFERENCE_RETENTION.md",
+  "conditions": {
+    "released": "该批次的 Rust 实现已随至少一个正式 v* tag 发布",
+    "independent-regression": "比较测试覆盖的行为已固化为不依赖旧实现的回归（golden、误差阈值或 fixture）并在 CI 运行",
+    "phase2-cleared": "二期跨平台逐位一致计划已确认不再需要该单元作为数值对照"
+  },
+  "units": [
+    {
+      "id": "ear_post",
+      "kind": "frozen",
+      "migration_doc": "docs/architecture/RUST_EAR_POST_MIGRATION.md",
+      "accepted": "2026-10-04",
+      "baseline_commit": "e12332b",
+      "provenance": null,
+      "cmake_option": null,
+      "tests": [
+        "mr_adm_ear_post_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/ear_post_legacy.h": "79c6f6bfe510c4b9cb8fd214c7827fa76bf94990fce0a2c4400a4a3f529d145f"
+      }
+    },
+    {
+      "id": "output_dsp",
+      "kind": "frozen",
+      "migration_doc": "docs/architecture/RUST_OUTPUT_DSP_MIGRATION.md",
+      "accepted": "2026-10-04",
+      "baseline_commit": "53cc36e",
+      "provenance": null,
+      "cmake_option": null,
+      "tests": [
+        "mr_adm_output_dsp_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/output_dsp_legacy.h": "5c7aa022f6e0e41f859b075dbfdcf2f7abd28351dcefd66901f69ce19d19d843"
+      }
+    },
+    {
+      "id": "pcm_mix",
+      "kind": "frozen",
+      "migration_doc": "docs/architecture/RUST_PCM_MIX_MIGRATION.md",
+      "accepted": "2026-10-04",
+      "baseline_commit": "4286f3e",
+      "provenance": null,
+      "cmake_option": null,
+      "tests": [
+        "mr_adm_pcm_mix_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/pcm_mix_legacy.h": "315408ae047bd449bab3fc44df17adfbb76962f66e50aa91d373dca6ba838389"
+      }
+    },
+    {
+      "id": "scene_numeric",
+      "kind": "frozen",
+      "migration_doc": "docs/architecture/RUST_SCENE_NUMERIC_MIGRATION.md",
+      "accepted": "2026-10-06",
+      "baseline_commit": "726db31277f450cfa9c0cb5f6e40bdb539f42154",
+      "provenance": "tests/reference/scene_numeric/provenance.json",
+      "cmake_option": null,
+      "tests": [
+        "mr_adm_scene_numeric_rust_tests",
+        "mr_adm_live_binaural_rust_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/scene_numeric/live_binaural.h": "ed2504fdcceb52ce63588b4295dd500df0abaf71f986931e64809c6875f4ef45",
+        "tests/reference/scene_numeric/provenance.json": "7d99d93e3122d5f36b1ebb35c060ed65a3285e014c3987a7df06abbaec0286fd",
+        "tests/reference/scene_numeric/spatial.h": "cb524128112bad622c36052d66a572c9c0e5d12a24e56e6cb88d3003a77cd5ad",
+        "tests/reference/scene_numeric/transitions.h": "a731229aae869b6a981bdea8d366b8fa0a8700d4bbac9ca5861f41b2153fbedf"
+      }
+    },
+    {
+      "id": "hoa",
+      "kind": "frozen",
+      "migration_doc": "docs/architecture/RUST_HOA_MIGRATION.md",
+      "accepted": "2026-10-05",
+      "baseline_commit": "ba96baca607d32e336727976669b06f83c426355",
+      "provenance": "tests/reference/hoa/provenance.json",
+      "cmake_option": null,
+      "tests": [
+        "mr_adm_hoa_rust_tests"
+      ],
+      "depends_on": [
+        "scene_numeric"
+      ],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/hoa/legacy.h": "01f278b0cb01f7c9442f0583f4f62b14f48f839e34d845a831973ca62ac0eedc",
+        "tests/reference/hoa/provenance.json": "85997660bed9dadc539e7afb3da60a3db78a1dccbec6a934add01c5e71bf9644"
+      }
+    },
+    {
+      "id": "live_vbap",
+      "kind": "frozen",
+      "migration_doc": "docs/architecture/RUST_LIVE_VBAP_MIGRATION.md",
+      "accepted": "2026-10-05",
+      "baseline_commit": "577fe2d107b7004933597484aec1a6696b9a5da4",
+      "provenance": "tests/reference/live_vbap/provenance.json",
+      "cmake_option": null,
+      "tests": [
+        "mr_adm_live_vbap_rust_tests"
+      ],
+      "depends_on": [
+        "scene_numeric"
+      ],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/live_vbap/legacy.h": "0774e3ba4867b51c95e9db7f600d5c89a97b452ca60159d2a26765ee27f3eeae",
+        "tests/reference/live_vbap/provenance.json": "b1b67e4fc140165150049e75b07088d7982eda9784fe0c5e9556c4d9dbe27cc2",
+        "tests/reference/live_vbap/ramps.h": "80bad4f99cfa886ff1de00863b20f245e656796316526165a7a2d5ef217a06fc"
+      }
+    },
+    {
+      "id": "monitor",
+      "kind": "frozen",
+      "migration_doc": "docs/architecture/RUST_MONITOR_DSP_MIGRATION.md",
+      "accepted": "2026-10-05",
+      "baseline_commit": "a54fdc32fda2ef6ffa864778b1e3296eae95c1bc",
+      "provenance": "tests/reference/monitor/provenance.json",
+      "cmake_option": null,
+      "tests": [
+        "mr_adm_monitor_dsp_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/monitor/legacy.h": "5c009553bd8cf4b818f5ffd3d6826eac2587330f94cfe62ea906b0ecd463c764",
+        "tests/reference/monitor/provenance.json": "f2f9a521b40da3541d9923115a5b05c49c1ae9c096d7964af47db4ce9445ec1f"
+      }
+    },
+    {
+      "id": "triple_balance",
+      "kind": "frozen",
+      "migration_doc": "docs/architecture/RUST_TRIPLE_BALANCE_MIGRATION.md",
+      "accepted": "2026-10-05",
+      "baseline_commit": "19728179608c4cfe550dc11ff2b3b4425db37963",
+      "provenance": "tests/reference/triple_balance/provenance.json",
+      "cmake_option": null,
+      "tests": [
+        "mr_adm_triple_balance_rust_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/triple_balance/layout_222.cpp": "463962fa1f189c82e32e108f87b96aeb188f4cae1578c8318aee538d7119e0bb",
+        "tests/reference/triple_balance/layout_222.h": "8b2ef0246cabd0fbef895328e0893f12cc26a330cc5f1668c6c32da762a38d54",
+        "tests/reference/triple_balance/motion.h": "ef63fdd02c922ee3b60dc54e4e5c4e235118c66f7e91f67b6a86e8043da818a4",
+        "tests/reference/triple_balance/panner.cpp": "70aeb68bd338351bb0820713c070c327a81cea3010d1b27f725b03cdeebd01b0",
+        "tests/reference/triple_balance/panner.h": "e3ca69fb0dcaf67ae92e0851457aa57cae03404596f72e382dec31330d7f511b",
+        "tests/reference/triple_balance/provenance.json": "f71cf8966415e1203f5535e63c6e3aebe4a1826b4929b36819a4f5b616981bf3",
+        "tests/reference/triple_balance/render_state.cpp": "5489d2ebec86bca6779c114f31cd7c85e4ed5a6d5eb468559a3769ccfd253e36",
+        "tests/reference/triple_balance/render_state.h": "3e78caee5cec4d47b2d04d755e06a5a1ef39f72a86f47eb0fad82511fb441afa",
+        "tests/reference/triple_balance/size_panner.cpp": "3fe883eafa1e1532ba11ead8cb0932d6b52b22afb1c7d48613306ccdd95153c6",
+        "tests/reference/triple_balance/size_panner.h": "6227a8a52d894285cb60483c582ef7bcbcd06f6c67461600bc5e69a75d5a1747",
+        "tests/reference/triple_balance/size_processor.cpp": "b6c36d4e37bd702bf86d279d099339b4d7c19d022f3658c1c62752e7906699b5",
+        "tests/reference/triple_balance/size_processor.h": "676b22f86a383a03044fc2123d09cd1f87531044d04aec890bda07297945b262"
+      }
+    },
+    {
+      "id": "saf",
+      "kind": "third-party",
+      "migration_doc": "docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md",
+      "accepted": "2026-10-04",
+      "baseline_commit": null,
+      "provenance": null,
+      "cmake_option": "MR_ADM_BUILD_SAF_REFERENCE_TESTS",
+      "tests": [
+        "mr_adm_saf_reference_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/saf_reference_test.cpp": "7238cea78ee3088c7e37c9f7a30fb3c6f33822d6217f9ecf3ee42503d359239e",
+        "tests/reference/spreader_mr.c": "d51afe176b4036e38861a714d8dc2192a33d1b08ae2c2c0d18d160975dbbd47e",
+        "tests/reference/spreader_mr.h": "a9494cc3949688003d343651f836d0d86e7d5961bae81e1438aa7144d0a58417",
+        "tests/reference/spreader_mr_internal.h": "912307ed2471da6ddf9ceb52159debf14d8e5923116606e19ae9fb500093efca"
+      },
+      "note": "SAF 参考只支持 Release；同一开关还挂着 EXCLUDE_FROM_ALL 的 SAF 探针工具与 MR_ADM_DIAGNOSTIC_PORTABLE_RNG。"
+    },
+    {
+      "id": "libadm",
+      "kind": "third-party",
+      "migration_doc": "docs/architecture/RUST_ADM_MIGRATION.md",
+      "accepted": "2026-10-05",
+      "baseline_commit": "577fe2d",
+      "provenance": "tests/reference/libadm/provenance.json",
+      "cmake_option": "MR_ADM_BUILD_LIBADM_REFERENCE_TESTS",
+      "tests": [
+        "mr_adm_libadm_reference_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/libadm/make_fixture.cpp": "224d8e30da3b27ea6f93459c82c5b149198903c75975eab410f95d9d6a640130",
+        "tests/reference/libadm/provenance.json": "56974758cd472d51184bb4c265f797305af16ea497ec560503ebf2ab33d74d76",
+        "tests/reference/libadm/reference_test.cpp": "d0574f7d2b23943fe9438280395e1f4bb2ca09c22ca820c467ed5506a0677b2e",
+        "tests/reference/libadm/run.py": "7ed1f5059f298301bf69e6d8f67af38241ed8cc3544046e3037689837bca8763",
+        "tests/reference/libadm/scene_importer.cpp": "6f7e8d3356ae7c58a371f09518959e58dadb19e6e64442b7a079a8ef69fd6ce6"
+      }
+    },
+    {
+      "id": "libbw64",
+      "kind": "third-party",
+      "migration_doc": "docs/architecture/RUST_BW64_MIGRATION.md",
+      "accepted": "2026-10-05",
+      "baseline_commit": "b3de01d09838c27498847a568e6d21bb713a011d",
+      "provenance": "tests/reference/libbw64/provenance.json",
+      "cmake_option": "MR_ADM_BUILD_LIBBW64_REFERENCE_TESTS",
+      "tests": [
+        "mr_adm_libbw64_reference_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/libbw64/acceptance.json": "0507fb904bed4548c2db2e25391869cf7e627dea5b651043baecbe826b2a25b9",
+        "tests/reference/libbw64/provenance.json": "714eb856cacafaec7ec5a39e99cbf38a986660cd7e3a53cce008ae7303de3ddf",
+        "tests/reference/libbw64/reference_test.cpp": "b87a431e6a4b43149f6a426a94dd26fca93e0a33296d7dd87fae10476f72d2fa"
+      }
+    },
+    {
+      "id": "resampler",
+      "kind": "third-party",
+      "migration_doc": "docs/architecture/RUST_RESAMPLER_MIGRATION.md",
+      "accepted": "2026-10-04",
+      "baseline_commit": null,
+      "provenance": null,
+      "cmake_option": "MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS",
+      "tests": [
+        "mr_adm_resampler_reference_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/resampler_reference_test.cpp": "4754ded44efc08632050b6941810b8ae2918a3bd0f2291585503f2d2980ad1fd"
+      }
+    },
+    {
+      "id": "ebur128",
+      "kind": "third-party",
+      "migration_doc": "docs/architecture/RUST_METER_MIGRATION.md",
+      "accepted": "2026-10-04",
+      "baseline_commit": null,
+      "provenance": null,
+      "cmake_option": "MR_ADM_BUILD_EBUR128_REFERENCE_TESTS",
+      "tests": [
+        "mr_adm_ebur128_reference_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/ebur128_reference_test.cpp": "ddbfbdf5c373439656a9caf91be687226d9e823bd09230495013be5c9dcf61da"
+      }
+    }
+  ]
+}

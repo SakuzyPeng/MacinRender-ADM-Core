@@ -21,7 +21,7 @@
 
 | Job | Runner | 内容 | 说明 |
 |---|---|---|---|
-| `version-metadata` | `ubuntu-24.04` | `version_metadata.py --check`、`check_gui_i18n.py` | 见下文版本与 GUI 国际化门禁 |
+| `version-metadata` | `ubuntu-24.04` | `version_metadata.py --check`、`check_gui_i18n.py`、`check-reference-retention.py` | 见下文版本与 GUI 国际化门禁；参考代码登记见 `docs/architecture/RUST_REFERENCE_RETENTION.md` |
 | `debug`（macOS debug） | `macos-26` | `cmake --preset debug`、`cmake --build --preset debug`、`check-licenses.sh --build-dir build/debug`、`check-capi-exports.py`、`ctest --preset debug` | 主验证路径；覆盖 APAC smoke、CoreAudio layout 和 Apple 后端 |
 | `debug`（Linux debug） | `ubuntu-24.04` | 同上 | Apple-only 测试自动 skip；验证跨平台核心 |
 | `windows-debug` | `windows-2025-vs2026` | PowerShell 脚本语法检查；MSVC + Ninja Debug 构建；`check-capi-exports.py`；`ctest` | vcpkg 安装 libear 所需 Boost 头文件；显式开启 `MR_ADM_ENABLE_SOFA` 以覆盖纯 Rust SOFA reader；测试在 vcvars 环境内运行（Debug CRT） |
@@ -34,7 +34,9 @@ ccache（Windows 用 sccache）和平台编译工具。C/C++ 第三方依赖（l
 由 FetchContent 或 vendored provider 处理；Rust 依赖由 Cargo 按 `rust/Cargo.lock`（`--locked`）获取。
 
 生产构建不再需要 SAF、OpenBLAS/LAPACKE、libmysofa、libebur128、libsamplerate、libadm 或 libbw64；
-它们只在默认关闭的 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关下作为维护对照获取，CI 不开启这些开关。
+它们只在默认关闭的 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关下作为维护对照获取，必需 CI 不开启这些开关；
+手动的 `.github/workflows/reference-tests.yml` 在 Linux Release 下逐个开启并运行对应 ctest，防止这些对照无声腐烂
+（SAF 对照需要 OpenBLAS/LAPACKE，仅在该 workflow 中安装）。失败的处理见 `docs/architecture/RUST_REFERENCE_RETENTION.md`。
 
 ### 第二阶段：质量 CI
 
@@ -246,6 +248,10 @@ vcpkg install boost-format boost-functional boost-algorithm boost-integer boost-
 .github/workflows/windows-bringup.yml
   workflow_dispatch
   Windows Release probe build + CLI artifact
+
+.github/workflows/reference-tests.yml
+  workflow_dispatch
+  Linux Release × each default-OFF third-party migration reference
 
 .github/workflows/iamf-bridge-prebuild.yml
   workflow_dispatch / bridge-related pull_request

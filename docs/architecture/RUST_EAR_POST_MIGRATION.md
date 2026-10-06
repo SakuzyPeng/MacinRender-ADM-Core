@@ -94,3 +94,9 @@ python3 scripts/consistency/compare-pcm-mix.py \
 ```
 
 复用现有构建目录和共享 Cargo 产物根目录。音频对照使用 Release，比较器仅保留摘要和指纹。
+
+## 参考实现退出
+
+- 单元 `ear_post`（`tests/reference/ear_post_legacy.h`）：随默认测试构建编译，由 `mr_adm_ear_post_tests` 比较。
+
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。
