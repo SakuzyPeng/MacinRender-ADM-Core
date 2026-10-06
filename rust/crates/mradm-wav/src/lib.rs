@@ -12,7 +12,7 @@ pub use edit::{
     AMBI_HOA3, BEXT_SIZE, BextFields, ChnaTrack, LayoutOptions, LayoutRewriter, append_bext,
     bext_payload, has_chunk, replace_chunk,
 };
-pub use reader::{Chunk, Reader};
+pub use reader::{Chunk, ChunkReader, Reader};
 pub use writer::{Writer, WriterOptions};
 
 use std::io::{Read, Write};

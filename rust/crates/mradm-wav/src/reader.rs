@@ -11,17 +11,17 @@ pub struct Chunk {
     pub size: u64,
 }
 
-pub struct Reader<R> {
+/// Strict WAVE container reader, independent of the supported sample encodings.
+/// Metadata operations validate the chunk table without needing to decode `fmt ` or audio.
+pub struct ChunkReader<R> {
     source: R,
-    info: Info,
+    container: Container,
     chunks: Vec<Chunk>,
     end: u64,
-    start: u64,
-    position: u64,
-    scratch: Vec<u8>,
-    failed: bool,
+    format: Chunk,
+    data: Chunk,
 }
-impl<R: Read + Seek> Reader<R> {
+impl<R: Read + Seek> ChunkReader<R> {
     pub fn new(mut source: R) -> Result<Self> {
         let physical_end = source.seek(SeekFrom::End(0))?;
         source.seek(SeekFrom::Start(0))?;
@@ -104,7 +104,10 @@ impl<R: Read + Seek> Reader<R> {
                     if format.is_some() {
                         return Err(Error::io("重复 fmt chunk"));
                     }
-                    format = Some(read_format(&mut source, size)?);
+                    if size < 16 {
+                        return Err(Error::io("fmt 被截断"));
+                    }
+                    format = Some(Chunk { id, offset, size });
                 }
                 b"data" => {
                     if data.is_some() || format.is_none() {
@@ -113,7 +116,7 @@ impl<R: Read + Seek> Reader<R> {
                     if long_data.is_some_and(|n| n != size) {
                         return Err(Error::io("data 与 ds64 长度不一致"));
                     }
-                    data = Some((offset, size));
+                    data = Some(Chunk { id, offset, size });
                 }
                 b"ds64" => return Err(Error::io("ds64 位置无效或重复")),
                 _ => {}
@@ -124,33 +127,17 @@ impl<R: Read + Seek> Reader<R> {
             chunks.push(Chunk { id, offset, size });
             at = next;
         }
-        let (format, valid_bits) = format.ok_or_else(|| Error::io("缺少 fmt chunk"))?;
-        let (start, data_bytes) = data.ok_or_else(|| Error::io("缺少 data chunk"))?;
-        let align = u64::from(format.block_align()?);
-        if !data_bytes.is_multiple_of(align) {
-            return Err(Error::io("data 长度不是完整音频帧"));
-        }
-        let frames = data_bytes / align;
-        source.seek(SeekFrom::Start(start))?;
         Ok(Self {
             source,
-            info: Info {
-                container,
-                format,
-                valid_bits,
-                frames,
-                data_bytes,
-            },
+            container,
             chunks,
             end,
-            start,
-            position: 0,
-            scratch: Vec::new(),
-            failed: false,
+            format: format.ok_or_else(|| Error::io("缺少 fmt chunk"))?,
+            data: data.ok_or_else(|| Error::io("缺少 data chunk"))?,
         })
     }
-    pub fn info(&self) -> Info {
-        self.info
+    pub fn container(&self) -> Container {
+        self.container
     }
     pub fn chunks(&self) -> &[Chunk] {
         &self.chunks
@@ -161,9 +148,6 @@ impl<R: Read + Seek> Reader<R> {
     }
     pub fn into_inner(self) -> R {
         self.source
-    }
-    pub fn position(&self) -> u64 {
-        self.position
     }
     /// Read one metadata chunk with an explicit caller budget. Never allocate unknown chunks on open.
     pub fn metadata(&mut self, id: [u8; 4], limit: u64) -> Result<Option<Vec<u8>>> {
@@ -190,6 +174,65 @@ impl<R: Read + Seek> Reader<R> {
         self.source.read_exact(output)?;
         Ok(true)
     }
+}
+
+pub struct Reader<R> {
+    reader: ChunkReader<R>,
+    info: Info,
+    start: u64,
+    position: u64,
+    scratch: Vec<u8>,
+    failed: bool,
+}
+impl<R: Read + Seek> Reader<R> {
+    pub fn new(source: R) -> Result<Self> {
+        let mut reader = ChunkReader::new(source)?;
+        reader.source.seek(SeekFrom::Start(reader.format.offset))?;
+        let (format, valid_bits) = read_format(&mut reader.source, reader.format.size)?;
+        let data_bytes = reader.data.size;
+        let align = u64::from(format.block_align()?);
+        if !data_bytes.is_multiple_of(align) {
+            return Err(Error::io("data 长度不是完整音频帧"));
+        }
+        let info = Info {
+            container: reader.container,
+            format,
+            valid_bits,
+            frames: data_bytes / align,
+            data_bytes,
+        };
+        let start = reader.data.offset;
+        reader.source.seek(SeekFrom::Start(start))?;
+        Ok(Self {
+            reader,
+            info,
+            start,
+            position: 0,
+            scratch: Vec::new(),
+            failed: false,
+        })
+    }
+    pub fn info(&self) -> Info {
+        self.info
+    }
+    pub fn chunks(&self) -> &[Chunk] {
+        self.reader.chunks()
+    }
+    pub fn end(&self) -> u64 {
+        self.reader.end()
+    }
+    pub fn into_inner(self) -> R {
+        self.reader.into_inner()
+    }
+    pub fn position(&self) -> u64 {
+        self.position
+    }
+    pub fn metadata(&mut self, id: [u8; 4], limit: u64) -> Result<Option<Vec<u8>>> {
+        self.reader.metadata(id, limit)
+    }
+    pub fn read_chunk(&mut self, id: [u8; 4], output: &mut [u8]) -> Result<bool> {
+        self.reader.read_chunk(id, output)
+    }
     pub fn chna(&mut self) -> Result<Option<Chna>> {
         self.metadata(*b"chna", 4 + u64::from(u16::MAX) * 40)?
             .map(|data| {
@@ -210,7 +253,7 @@ impl<R: Read + Seek> Reader<R> {
             self.start,
             frame * u64::from(self.info.format.block_align()?),
         )?;
-        if let Err(error) = self.source.seek(SeekFrom::Start(offset)) {
+        if let Err(error) = self.reader.source.seek(SeekFrom::Start(offset)) {
             self.failed = true;
             return Err(error.into());
         }
@@ -243,9 +286,10 @@ impl<R: Read + Seek> Reader<R> {
             self.position * u64::from(self.info.format.block_align()?),
         )?;
         let read = self
+            .reader
             .source
             .seek(SeekFrom::Start(offset))
-            .and_then(|_| self.source.read_exact(&mut self.scratch));
+            .and_then(|_| self.reader.source.read_exact(&mut self.scratch));
         if let Err(error) = read {
             self.failed = true;
             return Err(error.into());

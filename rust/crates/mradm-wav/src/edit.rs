@@ -1,6 +1,8 @@
 //! Container-level edits of finished WAVE files: BWF metadata append, layout rewrite, chunk
 //! replacement and a tolerant chunk probe. Sample bytes are copied verbatim, never decoded.
-use crate::{Chna, ChnaEntry, Container, Error, Reader, Result, SampleFormat, add, bytes};
+use crate::{
+    Chna, ChnaEntry, ChunkReader, Container, Error, Reader, Result, SampleFormat, add, bytes,
+};
 use std::io::{Read, Seek, SeekFrom, Write};
 
 /// Fixed BWF v2 `bext` payload without coding history (EBU Tech 3285).
@@ -72,8 +74,8 @@ pub fn append_bext<F: Read + Write + Seek>(
     ambi: Option<&[u8; 16]>,
 ) -> Result<()> {
     let physical_end = file.seek(SeekFrom::End(0))?;
-    let reader = Reader::new(&mut *file)?;
-    let container = reader.info().container;
+    let reader = ChunkReader::new(&mut *file)?;
+    let container = reader.container();
     let end = reader.end();
     let existing_ambi = reader.chunks().iter().find(|c| c.id == *b"ambi").copied();
     let ds64 = reader.chunks().iter().find(|c| c.id == *b"ds64").copied();
@@ -431,8 +433,8 @@ pub fn replace_chunk<R: Read + Seek, W: Write>(
     id: [u8; 4],
     payload: &[u8],
 ) -> Result<()> {
-    let reader = Reader::new(source)?;
-    let container = reader.info().container;
+    let reader = ChunkReader::new(source)?;
+    let container = reader.container();
     let chunks = reader.chunks().to_vec();
     let mut source = reader.into_inner();
     let mut body = 4u64;

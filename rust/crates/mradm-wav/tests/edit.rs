@@ -1,7 +1,7 @@
 // Independent regressions for container edits; fixtures are assembled by hand, not by the writer.
 use mradm_wav::{
-    AMBI_HOA3, BEXT_SIZE, BextFields, Chna, ChnaTrack, Container, LayoutOptions, LayoutRewriter,
-    Reader, SampleFormat, append_bext, bext_payload, has_chunk, replace_chunk,
+    AMBI_HOA3, BEXT_SIZE, BextFields, Chna, ChnaTrack, ChunkReader, Container, LayoutOptions,
+    LayoutRewriter, Reader, SampleFormat, append_bext, bext_payload, has_chunk, replace_chunk,
 };
 use std::io::Cursor;
 
@@ -380,4 +380,55 @@ fn import_chna_accepts_reserved_records() {
     assert!(Chna::decode(&data).is_err());
     assert!(Chna::decode_import(&data[..43]).is_err());
     assert!(Chna::decode_import(&data[..3]).is_err());
+}
+
+#[test]
+fn metadata_edits_do_not_require_a_supported_sample_encoding() {
+    for (tag, bits) in [(1, 8), (3, 64)] {
+        let audio = vec![0x5a; usize::from(bits / 8) * 3];
+        let chunks = [
+            chunk(b"fmt ", &fmt(tag, 1, bits)),
+            chunk(b"LIST", b"odd"),
+            chunk(b"data", &audio),
+            chunk(b"axml", b"<old/>"),
+        ];
+        for original in [riff(&chunks), rf64(b"RF64", &chunks, audio.len() as u64)] {
+            // Audio decoding keeps its existing supported-format boundary.
+            assert_eq!(Reader::new(Cursor::new(&original)).err().unwrap().code, 2);
+            let mut reader = ChunkReader::new(Cursor::new(&original)).unwrap();
+            assert_eq!(reader.metadata(*b"axml", 64).unwrap().unwrap(), b"<old/>");
+            let mut raw = [0; 6];
+            assert!(reader.read_chunk(*b"axml", &mut raw).unwrap());
+            assert_eq!(&raw, b"<old/>");
+
+            let mut edited = Cursor::new(original.clone());
+            append_bext(&mut edited, &[7; BEXT_SIZE], None).unwrap();
+            let mut reader = ChunkReader::new(edited).unwrap();
+            assert_eq!(
+                reader
+                    .metadata(*b"bext", BEXT_SIZE as u64)
+                    .unwrap()
+                    .unwrap(),
+                [7; BEXT_SIZE]
+            );
+            assert_eq!(reader.metadata(*b"data", 64).unwrap().unwrap(), audio);
+
+            let mut rewritten = Vec::new();
+            replace_chunk(Cursor::new(&original), &mut rewritten, *b"axml", b"<new/>!").unwrap();
+            let mut reader = ChunkReader::new(Cursor::new(rewritten)).unwrap();
+            assert_eq!(reader.metadata(*b"axml", 64).unwrap().unwrap(), b"<new/>!");
+            assert_eq!(reader.metadata(*b"LIST", 64).unwrap().unwrap(), b"odd");
+            assert_eq!(reader.metadata(*b"data", 64).unwrap().unwrap(), audio);
+
+            // Container-only operations still reject truncated chunks before writing.
+            let truncated = &original[..original.len() - 1];
+            assert!(ChunkReader::new(Cursor::new(truncated)).is_err());
+            let mut edited = Cursor::new(truncated.to_vec());
+            assert!(append_bext(&mut edited, &[7; BEXT_SIZE], None).is_err());
+            assert_eq!(edited.into_inner(), truncated);
+            let mut rewritten = Vec::new();
+            assert!(replace_chunk(Cursor::new(truncated), &mut rewritten, *b"axml", b"x").is_err());
+            assert!(rewritten.is_empty());
+        }
+    }
 }

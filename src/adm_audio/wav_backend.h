@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "adm/audio_io.h"
@@ -78,6 +79,33 @@ class RustWavReader {
         return {};
     }
     [[nodiscard]] const MradmWavInfo& info() const noexcept { return info_; }
+
+  private:
+    explicit RustWavReader(std::string path) : path_(std::move(path)) {}
+    std::string path_;
+    MradmWavInfo info_{};
+    std::unique_ptr<MradmWavReader, decltype(&mradm_wav_reader_destroy)> handle_{nullptr, mradm_wav_reader_destroy};
+};
+
+// Metadata reader: validates the container without requiring a supported audio encoding.
+class RustWavChunks {
+  public:
+    static Result<std::unique_ptr<RustWavChunks>> open(const std::string& path) {
+        auto reader = std::unique_ptr<RustWavChunks>{new RustWavChunks{path}};
+        const auto utf8_path = wav_path_utf8(path);
+        std::array<uint8_t, 512> message{};
+        MradmWavChunks* handle = nullptr;
+        const auto code = mradm_wav_chunks_open(reinterpret_cast<const uint8_t*>(utf8_path.data()),
+                                                utf8_path.size(),
+                                                &handle,
+                                                message.data(),
+                                                message.size());
+        if (code != 0) {
+            return tl::unexpected{wav_error(code, message, path)};
+        }
+        reader->handle_.reset(handle);
+        return reader;
+    }
     // Payload of the first chunk with this four-character id.
     Result<std::optional<std::string>> chunk(std::string_view id) {
         if (id.size() != 4U) {
@@ -88,7 +116,7 @@ class RustWavReader {
         uint64_t size = 0;
         uint8_t found = 0;
         auto code =
-            mradm_wav_reader_chunk(handle_.get(), raw_id, nullptr, 0, &size, &found, message.data(), message.size());
+            mradm_wav_chunks_read(handle_.get(), raw_id, nullptr, 0, &size, &found, message.data(), message.size());
         if (code != 0) {
             return tl::unexpected{wav_error(code, message, path_)};
         }
@@ -101,14 +129,14 @@ class RustWavReader {
         }
         payload.resize(static_cast<std::size_t>(size));
         if (size != 0U) {
-            code = mradm_wav_reader_chunk(handle_.get(),
-                                          raw_id,
-                                          reinterpret_cast<uint8_t*>(payload.data()),
-                                          payload.size(),
-                                          &size,
-                                          &found,
-                                          message.data(),
-                                          message.size());
+            code = mradm_wav_chunks_read(handle_.get(),
+                                         raw_id,
+                                         reinterpret_cast<uint8_t*>(payload.data()),
+                                         payload.size(),
+                                         &size,
+                                         &found,
+                                         message.data(),
+                                         message.size());
             if (code != 0) {
                 return tl::unexpected{wav_error(code, message, path_)};
             }
@@ -121,7 +149,7 @@ class RustWavReader {
         std::size_t count = 0;
         uint8_t found = 0;
         auto code =
-            mradm_wav_reader_chna(handle_.get(), nullptr, nullptr, 0, &count, &found, message.data(), message.size());
+            mradm_wav_chunks_chna(handle_.get(), nullptr, nullptr, 0, &count, &found, message.data(), message.size());
         if (code != 0) {
             return tl::unexpected{wav_error(code, message, path_)};
         }
@@ -131,7 +159,7 @@ class RustWavReader {
         }
         std::vector<uint16_t> indices(count);
         std::vector<uint8_t> uids(count * 12U);
-        code = mradm_wav_reader_chna(
+        code = mradm_wav_chunks_chna(
             handle_.get(), indices.data(), uids.data(), count, &count, &found, message.data(), message.size());
         if (code != 0) {
             return tl::unexpected{wav_error(code, message, path_)};
@@ -145,10 +173,9 @@ class RustWavReader {
     }
 
   private:
-    explicit RustWavReader(std::string path) : path_(std::move(path)) {}
+    explicit RustWavChunks(std::string path) : path_(std::move(path)) {}
     std::string path_;
-    MradmWavInfo info_{};
-    std::unique_ptr<MradmWavReader, decltype(&mradm_wav_reader_destroy)> handle_{nullptr, mradm_wav_reader_destroy};
+    std::unique_ptr<MradmWavChunks, decltype(&mradm_wav_chunks_destroy)> handle_{nullptr, mradm_wav_chunks_destroy};
 };
 
 // Streaming WAVE writer. Integer PCM starts as RIFF and promotes to BW64; float32 is always RF64.

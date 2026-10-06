@@ -3,7 +3,6 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
-#include <filesystem>
 #include <iterator>
 #include <limits>
 #include <map>
@@ -132,25 +131,11 @@ namespace {
 // (or the source when dst == src).
 Result<void>
 rewrite_bwf_replacing_axml(const std::string& src_path, const std::string& dst_path, const std::string& new_axml) {
-    const std::string tmp_path = dst_path + ".export.tmp";
-    auto written = audio::replace_wav_axml(src_path, tmp_path, new_axml);
+    auto written = audio::replace_wav_axml(src_path, dst_path, new_axml);
     if (!written) {
-        std::error_code rm;
-        std::filesystem::remove(tmp_path, rm);
         auto error = written.error();
         error.context = "input=" + src_path + " output=" + dst_path;
         return tl::unexpected{std::move(error)};
-    }
-
-    std::error_code ec;
-    std::filesystem::rename(tmp_path, dst_path, ec);
-    if (ec) {
-        std::filesystem::copy_file(tmp_path, dst_path, std::filesystem::copy_options::overwrite_existing, ec);
-        std::error_code rm;
-        std::filesystem::remove(tmp_path, rm);
-        if (ec) {
-            return make_error(ErrorCode::io_error, "替换输出文件失败：" + ec.message(), "output=" + dst_path);
-        }
     }
     return {};
 }

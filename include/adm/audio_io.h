@@ -85,7 +85,7 @@ class RenderInputReader {
     std::unique_ptr<Impl> impl_;
 };
 
-// ADM chunks of a WAVE file, read through the Rust container parser. axml is empty when absent;
+// ADM chunks of a WAVE file, read without decoding its sample format. axml is empty when absent;
 // chna holds each record's stored track index (one-based; 0 is passed through) and raw 12-byte UID.
 struct WavChnaUid {
     uint16_t track_index{0};
@@ -97,8 +97,9 @@ struct WavAdmChunks {
 };
 Result<WavAdmChunks> read_wav_adm_chunks(const std::string& path);
 
-// Writes target (created or truncated) as a copy of source with the axml payload replaced. All other
-// chunks, including PCM, keep their bytes; the RIFF size or ds64.bw64Size is recomputed.
+// Writes a temporary copy of source with the axml payload replaced, then installs it at target.
+// Source and target may refer to the same file. A failed rewrite leaves an existing target intact.
+// All other chunks, including PCM, keep their bytes; the RIFF size or ds64.bw64Size is recomputed.
 Result<void> replace_wav_axml(const std::string& source, const std::string& target, std::string_view axml);
 
 // Tolerant routing probe: whether a top-level chunk with this four-character id exists. Fails only when

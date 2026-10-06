@@ -168,6 +168,7 @@ struct Fixture {
     std::string name;
     Bytes bytes;
     uint16_t channels{2};
+    bool audio_supported{true};
 };
 
 std::vector<Fixture> fixtures() {
@@ -212,6 +213,22 @@ std::vector<Fixture> fixtures() {
          wave("RF64",
               {{"fmt ", fmt_payload(1, 2, 16)}, {"axml", axml}, {"data", samples(std::size_t{2} * 2U * 50U, 8U)}},
               1)});
+    const auto mono_chna = chna_payload(1, {{1, "ATU_00000001"}});
+    for (const std::string_view container : {"RIFF", "RF64"}) {
+        out.push_back(
+            {std::string{container} + "-pcm8-metadata",
+             wave(container,
+                  {{"fmt ", fmt_payload(1, 1, 8)}, {"chna", mono_chna}, {"data", samples(3, 9)}, {"axml", axml}}),
+             1,
+             false});
+        out.push_back(
+            {std::string{container} + "-float64-metadata",
+             wave(
+                 container,
+                 {{"fmt ", fmt_payload(3, 1, 64, 0U)}, {"chna", mono_chna}, {"data", samples(24, 10)}, {"axml", axml}}),
+             1,
+             false});
+    }
     return out;
 }
 
@@ -484,6 +501,61 @@ void rust_only_checks(const fs::path& root, const std::vector<Fixture>& all) {
     require(!leftovers, "layout temporary file left behind");
 }
 
+void replace_alias_checks(const fs::path& root) {
+    const auto source = root / "alias-source.wav";
+    const auto destination = root / "alias-destination.wav";
+    const auto format = fmt_payload(1, 1, 16);
+    const auto audio = samples(20, 11);
+    const auto original = wave("RIFF", {{"fmt ", format}, {"data", audio}, {"axml", text_bytes("<old/>")}});
+    const auto expected = wave("RIFF", {{"fmt ", format}, {"data", audio}, {"axml", text_bytes("<new/>!")}});
+    save(source, original);
+    auto rewritten = mradm::audio::replace_wav_axml(source.string(), source.string(), "<new/>!");
+    require(rewritten.has_value() && load(source) == expected, "in-place AXML replacement lost source data");
+
+    save(source, original);
+    save(destination, text_bytes("existing output"));
+    rewritten = mradm::audio::replace_wav_axml(source.string(), destination.string(), "<new/>!");
+    require(rewritten.has_value() && load(destination) == expected && load(source) == original,
+            "replacing an existing output changed the source");
+    fs::remove(destination);
+    fs::create_hard_link(source, destination);
+    rewritten = mradm::audio::replace_wav_axml(source.string(), destination.string(), "<new/>!");
+    require(rewritten.has_value() && load(destination) == expected && load(source) == original,
+            "hard-link AXML replacement lost source data");
+    fs::remove(destination);
+#ifndef _WIN32
+    // Windows symlink creation requires privileges that the test runner may not have.
+    fs::create_symlink(source, destination);
+    rewritten = mradm::audio::replace_wav_axml(source.string(), destination.string(), "<new/>!");
+    require(rewritten.has_value() && load(destination) == expected && load(source) == original,
+            "symlink AXML replacement lost source data");
+    fs::remove(destination);
+#endif
+
+    const auto missing_axml = wave("RIFF", {{"fmt ", format}, {"data", audio}});
+    save(source, missing_axml);
+    save(destination, expected);
+    require(!mradm::audio::replace_wav_axml(source.string(), destination.string(), "<new/>!"), "missing AXML accepted");
+    require(load(source) == missing_axml && load(destination) == expected,
+            "failed AXML rewrite changed an existing file");
+    require(!mradm::audio::replace_wav_axml(source.string(), source.string(), "<new/>!"),
+            "missing AXML accepted in place");
+    require(load(source) == missing_axml, "failed in-place AXML rewrite changed the source");
+
+    const auto directory = root / "directory.wav";
+    fs::create_directory(directory);
+    save(directory / "keep", text_bytes("keep"));
+    save(source, original);
+    require(!mradm::audio::replace_wav_axml(source.string(), directory.string(), "<new/>!"),
+            "directory destination accepted");
+    require(load(directory / "keep") == text_bytes("keep") && load(source) == original,
+            "failed AXML installation changed the directory or source");
+    const bool leftovers = std::ranges::any_of(fs::directory_iterator(root), [](const fs::directory_entry& entry) {
+        return entry.path().filename().string().find(".axml_tmp.") != std::string::npos;
+    });
+    require(!leftovers, "AXML rewrite left a temporary file behind");
+}
+
 } // namespace
 
 int main() {
@@ -493,13 +565,22 @@ int main() {
         fs::create_directories(root);
         const auto all = fixtures();
         for (const auto& fixture : all) {
-            finalize_parity(root, fixture);
+            if (fixture.audio_supported) {
+                finalize_parity(root, fixture);
+            } else {
+                const auto path = root / "metadata-only.wav";
+                save(path, fixture.bytes);
+                const auto reader = mradm::audio::FloatWavReader::open(path.string());
+                require(code_of(reader) == static_cast<int>(mradm::ErrorCode::unsupported),
+                        "metadata-only encoding unexpectedly accepted for audio decoding");
+            }
             metadata_parity(root, fixture);
             read_parity(root, fixture);
             replace_parity(root, fixture);
         }
         scan_parity(root, all);
         rust_only_checks(root, all);
+        replace_alias_checks(root);
         fs::remove_all(root);
         std::cout << case_count() << " WAVE container cases match the frozen C++ implementation\n";
         return 0;
