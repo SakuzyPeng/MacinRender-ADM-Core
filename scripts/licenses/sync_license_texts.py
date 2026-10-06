@@ -55,14 +55,22 @@ def component_root(component: dict, build_dir: Path) -> Path | None:
 
 
 def optional_disabled(component: dict, build_dir: Path) -> bool:
-    option = component['source'].get('cmake_option')
-    if not option:
+    """cmake_option 可为单个选项或列表；列表表示任一选项开启都会获取该依赖，全部关闭才视为未启用。"""
+    options = component['source'].get('cmake_option')
+    if not options:
         return False
+    if isinstance(options, str):
+        options = [options]
     cache = build_dir / 'CMakeCache.txt'
     if not cache.exists():
         return False
-    return any(line.startswith(option + ':') and line.partition('=')[2].strip().upper() in {'OFF', '0', 'FALSE'}
-               for line in cache.read_text(encoding='utf-8').splitlines())
+    lines = cache.read_text(encoding='utf-8').splitlines()
+
+    def disabled(option: str) -> bool:
+        return any(line.startswith(option + ':') and line.partition('=')[2].strip().upper() in {'OFF', '0', 'FALSE'}
+                   for line in lines)
+
+    return all(disabled(option) for option in options)
 
 
 def find_deps_root(build_dir: Path, deps_dir: str) -> Path | None:
