@@ -36,7 +36,8 @@ void validate_spec(const Json& spec) {
     // the fields this runner actually reads while replaying.
     require(spec.contains("device_dsp") && spec.at("device_dsp").is_boolean(), "invalid replay device DSP flag");
     const bool device_dsp = spec.at("device_dsp");
-    Json fixed{{"version", 1},
+    const bool triple = spec.at("backend") == "triple-balance";
+    Json fixed{{"version", triple ? 2 : 1},
                {"clock", "epoch*2s + input_sample/input_rate; +1s at sample 10240"},
                {"state_complete_on_every_frame", true},
                {"signal", {{"generator", "lcg32-v1"}, {"seed", k_signal_seed}, {"scale", signal_scale(device_dsp)}}},
@@ -47,7 +48,7 @@ void validate_spec(const Json& spec) {
                 {{"2048", "pose(37,23,-19)"},
                  {"4096", "generation=2"},
                  {"6144", "semantic gain scale=0.5"},
-                 {"8192", "switch stereo backend"},
+                 {"8192", triple ? "switch speaker backend" : "switch stereo backend"},
                  {"10240", "advance virtual clock by 1s; expire tracking"}}}};
     if (device_dsp) {
         fixed["output_controls"] = {{"0", "volume=0.875; HpTF bypass"},
@@ -64,7 +65,7 @@ void validate_spec(const Json& spec) {
             throw std::runtime_error("unsupported replay field for version 1: " + field);
         }
     }
-    require(spec.at("backend") == "vbap" || spec.at("backend") == "binaural", "unknown replay backend");
+    require(triple || spec.at("backend") == "vbap" || spec.at("backend") == "binaural", "unknown replay backend");
 }
 
 template <class T> T take(Result<T> result) {
@@ -105,6 +106,9 @@ class Replay {
     explicit Replay(const Json& case_spec) : spec(case_spec), device_dsp(case_spec.at("device_dsp").get<bool>()) {
         config.renderer.renderer =
             spec.at("backend") == "vbap" ? RendererSelection::saf : RendererSelection::saf_binaural;
+        if (spec.at("backend") == "triple-balance") {
+            config.renderer.renderer = RendererSelection::triple_balance;
+        }
         config.renderer.output_layout = spec.at("layout").get<std::string>();
         config.renderer.binaural_spread_mode =
             spec.at("cloud").get<bool>() ? BinauralSpreadMode::cloud : BinauralSpreadMode::none;
@@ -142,6 +146,9 @@ class Replay {
                 update.state.x = item.at("value").at(0);
                 update.state.y = item.at("value").at(1);
                 update.state.z = item.at("value").at(2);
+            } else if (field == "size") {
+                update.changed_fields = live_scene::state_extent;
+                update.state.width = update.state.height = update.state.depth = item.at("value");
             } else if (field == "head_locked") {
                 update.changed_fields = live_scene::state_head_locked;
                 update.state.head_locked = item.at("value");
@@ -259,6 +266,17 @@ class Replay {
                 done(stream->set_semantic_policy_json(
                     R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":0.5}}})", 99));
             }
+            if (position == 8192 && config.renderer.renderer == RendererSelection::triple_balance) {
+                auto next = config.renderer;
+                next.renderer = RendererSelection::saf;
+                if (next.output_layout == "7.1.4") {
+                    next.output_layout = "4+7+0";
+                }
+                if (next.output_layout == "22.2") {
+                    next.output_layout = "9+10+3";
+                }
+                done(stream->switch_backend(next));
+            }
             if (position == 8192 && channels == 2) {
                 auto next = config.renderer;
                 next.renderer =
@@ -271,6 +289,7 @@ class Replay {
     }
 
   public:
+    // NOLINTNEXTLINE(readability-function-size): one complete replay transaction including timeline and EOS checks.
     void run_epoch(uint64_t epoch, uint32_t target, uint32_t end) {
         captured.clear();
         ended = false;
@@ -301,6 +320,10 @@ class Replay {
         initial.state.width = spec.at("cloud").get<bool>() ? 0.5F : 0;
         initial.state.height = initial.state.width / 2;
         initial.state.diffuse = spec.at("cloud").get<bool>() ? 0.25F : 0;
+        if (config.renderer.renderer == RendererSelection::triple_balance) {
+            initial.state.height = initial.state.depth = initial.state.width;
+            initial.state.diffuse = 0;
+        }
         const auto source = phase2::signal(end, k_signal_seed, signal_scale(device_dsp));
         const std::vector<uint32_t> chunks = spec.at("partition").get<std::vector<uint32_t>>();
         require(!chunks.empty() && std::ranges::all_of(chunks, [](uint32_t n) { return n > 0 && n <= 1024; }),

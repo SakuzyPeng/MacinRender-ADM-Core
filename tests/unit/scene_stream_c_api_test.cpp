@@ -2334,6 +2334,181 @@ bool test_listener_orientation(adm_context_t* context) {
     return ok;
 }
 
+
+adm_scene_stream_config_t triple_scene_config(const char* layout = "7.1.4") {
+    auto config = stream_config();
+    config.rendering = vbap_renderer_config(layout);
+    config.rendering.renderer = ADM_RENDERER_TRIPLE_BALANCE;
+    config.output_ring_frames = 8192;
+    return config;
+}
+
+bool test_triple_balance_scene(adm_context_t* context) {
+    bool ok = true;
+    for (const auto* layout : {"7.1.4", "4+7+0", "9.1.6", "22.2", "9+10+3"}) {
+        StreamGuard stream;
+        auto config = triple_scene_config(layout);
+        config.output_sample_rate = 44100;
+        if (!create_stream(context, config, stream)) {
+            return false;
+        }
+        uint32_t channels = 12;
+        if (std::string_view{layout} == "9.1.6") {
+            channels = 16;
+        }
+        if (std::string_view{layout} == "22.2" || std::string_view{layout} == "9+10+3") {
+            channels = 24;
+        }
+        for (uint64_t epoch : {1U, 2U}) {
+            ok &= check(adm_scene_stream_begin_epoch(stream.value, epoch, 13) == ADM_ERROR_OK,
+                        "Triple Balance reset/preroll");
+            ok &= configure_object(stream.value, epoch, 1);
+            ok &= check(
+                adm_scene_stream_set_semantic_policy_json(
+                    stream.value,
+                    epoch == 1 ? R"({"schema":"mradm.semantic-policy.v1","global":{"gain":{"scale":0.5}}})" : nullptr,
+                    epoch) == ADM_ERROR_OK,
+                "Triple Balance policy replace/clear");
+            ok &= wait_for_policy_revision(stream.value, epoch);
+            std::vector<float> samples(2051, .1F);
+            adm_scene_pcm_plane_t plane{};
+            adm_scene_initial_state_t initial{};
+            auto frame = object_frame(epoch, 1, 0, samples, plane, initial);
+            initial.state.position_z = .5F;
+            initial.state.extent_width = initial.state.extent_height = initial.state.extent_depth = .3F;
+            adm_scene_metadata_update_t update{};
+            update.struct_size = sizeof(update);
+            update.element_id = 7;
+            update.offset_samples = 73;
+            update.ramp_duration_samples = 137;
+            update.changed_fields = ADM_SCENE_STATE_EXTENT;
+            update.state = initial.state;
+            update.state.extent_width = update.state.extent_height = update.state.extent_depth = .6F;
+            frame.metadata_update_count = 1;
+            frame.metadata_updates = &update;
+            int32_t submit = -1;
+            ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 100, &submit) == ADM_ERROR_OK &&
+                            submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                        "Triple Balance accepts canonical Scene PCM");
+            ok &= check(adm_scene_stream_signal_end(stream.value, epoch, 2051) == ADM_ERROR_OK, "Triple Balance EOS");
+            bool signal = false;
+            ok &= wait_for_output(stream.value, channels, (2038U * 44100U + 47999U) / 48000U, signal);
+            ok &= check(signal, "Triple Balance size Scene has audible output after preroll/resampling");
+        }
+    }
+    for (int kind = 0; kind < 4; ++kind) {
+        StreamGuard stream;
+        auto config = triple_scene_config();
+        if (kind == 0) {
+            config.rendering.speaker_geometry = ADM_SPEAKER_GEOMETRY_APPLE;
+        }
+        if (kind == 1) {
+            config.rendering.speaker_spread_mode = ADM_SPEAKER_SPREAD_MDAP;
+        }
+        if (kind == 2) {
+            config.rendering.sofa_path = "unused.sofa";
+        }
+        if (kind == 3) {
+            config.rendering.output_layout = "22.2";
+            config.input_sample_rate = 96000;
+        }
+        ok &= check(adm_create_scene_stream(context, &config, &stream.value) == ADM_ERROR_UNSUPPORTED &&
+                        stream.value == nullptr,
+                    "Triple Balance configuration rejection is synchronous");
+    }
+    return ok;
+}
+
+bool test_triple_balance_switch(adm_context_t* context, bool incompatible_state) {
+    StreamGuard stream;
+    auto config = triple_scene_config("4+7+0");
+    config.rendering.renderer = ADM_RENDERER_SAF;
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok = check(adm_scene_stream_begin_epoch(stream.value, 1, 0) == ADM_ERROR_OK, "Triple Balance switch epoch") &&
+              configure_object(stream.value, 1, 1);
+    std::vector<float> samples(1024, .1F);
+    adm_scene_pcm_plane_t plane{};
+    adm_scene_initial_state_t initial{};
+    auto frame = object_frame(1, 1, 0, samples, plane, initial);
+    initial.state.head_locked = incompatible_state ? 1 : 0;
+    int32_t submit = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 100, &submit) == ADM_ERROR_OK, "pre-switch submit");
+    std::vector<float> output;
+    ok &= pull_open_stream(stream.value, 12, 1024, output);
+    const auto logs_before = adm_scene_stream_log_count(stream.value);
+    auto triple = triple_scene_config().rendering;
+    ok &=
+        check(adm_scene_stream_switch_backend(stream.value, &triple) == ADM_ERROR_OK, "prepare Triple Balance switch");
+    samples.assign(4096, .1F);
+    frame = object_frame(1, 1, 1024, samples, plane, initial);
+    frame.initial_state_count = 0;
+    frame.initial_states = nullptr;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 100, &submit) == ADM_ERROR_OK,
+                "switch-crossfade submit");
+    ok &= pull_open_stream(stream.value, 12, 4096, output);
+    adm_scene_stream_status_t status{};
+    status.struct_size = sizeof(status);
+    ok &= check(adm_scene_stream_get_status(stream.value, &status) == ADM_ERROR_OK && status.failed == 0,
+                "candidate failure or successful switch preserves active stream");
+    if (incompatible_state) {
+        ok &= check(adm_scene_stream_log_count(stream.value) > logs_before, "incompatible candidate emits diagnostic");
+    } else {
+        auto vbap = vbap_renderer_config("4+7+0");
+        ok &= check(adm_scene_stream_switch_backend(stream.value, &vbap) == ADM_ERROR_OK,
+                    "Triple Balance switches back to VBAP");
+        frame.media_sample_start = 5120;
+        ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 100, &submit) == ADM_ERROR_OK,
+                    "return crossfade submit");
+        ok &= pull_open_stream(stream.value, 12, 4096, output);
+    }
+    const int64_t end = incompatible_state ? 5120 : 9216;
+    ok &= check(adm_scene_stream_signal_end(stream.value, 1, end) == ADM_ERROR_OK, "switch EOS");
+    bool signal = false;
+    ok &= wait_for_output(stream.value, 12, 0, signal);
+    return ok;
+}
+
+bool test_triple_balance_worker_failure(adm_context_t* context) {
+    StreamGuard stream;
+    const auto config = triple_scene_config();
+    if (!create_stream(context, config, stream)) {
+        return false;
+    }
+    bool ok = check(adm_scene_stream_begin_epoch(stream.value, 1, 0) == ADM_ERROR_OK, "Triple Balance failure epoch") &&
+              configure_object(stream.value, 1, 1);
+    std::vector<float> samples(31, .1F);
+    adm_scene_pcm_plane_t plane{};
+    adm_scene_initial_state_t initial{};
+    auto frame = object_frame(1, 1, 0, samples, plane, initial);
+    initial.state.head_locked = 1;
+    int32_t submit = -1;
+    ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 100, &submit) == ADM_ERROR_OK &&
+                    submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                "unsupported renderer semantics accepted for worker validation");
+    bool failed = false;
+    for (int attempt = 0; attempt < 1000 && !failed; ++attempt) {
+        adm_scene_stream_status_t status{};
+        status.struct_size = sizeof(status);
+        adm_scene_stream_get_status(stream.value, &status);
+        failed = status.failed != 0;
+        if (!failed) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    bool identified = false;
+    for (uint32_t i = 0; i < adm_scene_stream_log_count(stream.value); ++i) {
+        adm_scene_diagnostic_t diagnostic{};
+        diagnostic.struct_size = sizeof(diagnostic);
+        if (adm_scene_stream_log_entry(stream.value, i, &diagnostic) != 0 && diagnostic.message != nullptr) {
+            identified |= std::string_view{diagnostic.message}.find("headLocked") != std::string_view::npos;
+        }
+    }
+    ok &= check(failed && identified, "unsupported Scene state fails explicitly with field context");
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -2361,6 +2536,10 @@ int main() {
         ok &= test_binaural_dynamic_position(context);
         ok &= test_sofa_cache_invalidation(context);
         ok &= test_backend_hot_switch(context);
+        ok &= test_triple_balance_scene(context);
+        ok &= test_triple_balance_switch(context, false);
+        ok &= test_triple_balance_switch(context, true);
+        ok &= test_triple_balance_worker_failure(context);
         ok &= test_semantic_policy_hot_replace(context);
         ok &= test_semantic_identity_grouping_and_roles(context);
         ok &= test_direct_speaker_policy_position_clear(context);

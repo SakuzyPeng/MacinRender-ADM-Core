@@ -52,11 +52,11 @@ pub const NODES: [Node; 22] = [
     node(14, 0., A, 1., -1, 0.),
     node(13, A, A, 1., 3, -1.),
 ];
-fn pair(f: f64) -> (f64, f64) {
+fn pair<const PORTABLE: bool>(f: f64) -> (f64, f64) {
     let angle = f.clamp(0., 1.) * std::f64::consts::PI * 0.5;
-    (angle.cos(), angle.sin())
+    (cos::<PORTABLE>(angle), sin::<PORTABLE>(angle))
 }
-fn row(x: f64, nodes: &[(f64, usize)]) -> [f64; 24] {
+fn row<const PORTABLE: bool>(x: f64, nodes: &[(f64, usize)]) -> [f64; 24] {
     let mut g = [0.; 24];
     if x <= nodes[0].0 {
         g[nodes[0].1] = 1.;
@@ -65,7 +65,7 @@ fn row(x: f64, nodes: &[(f64, usize)]) -> [f64; 24] {
     } else {
         for n in nodes.windows(2) {
             if x <= n[1].0 {
-                let (a, b) = pair((x - n[0].0) / (n[1].0 - n[0].0));
+                let (a, b) = pair::<PORTABLE>((x - n[0].0) / (n[1].0 - n[0].0));
                 g[n[0].1] = a;
                 g[n[1].1] = b;
                 break;
@@ -75,18 +75,18 @@ fn row(x: f64, nodes: &[(f64, usize)]) -> [f64; 24] {
     g
 }
 type Row<'a> = (f64, &'a [(f64, usize)]);
-fn layer(x: f64, y: f64, rows: &[Row<'_>], channels: usize) -> [f64; 24] {
+fn layer<const PORTABLE: bool>(x: f64, y: f64, rows: &[Row<'_>], channels: usize) -> [f64; 24] {
     if y <= rows[0].0 {
-        return row(x, rows[0].1);
+        return row::<PORTABLE>(x, rows[0].1);
     }
     if y >= rows[rows.len() - 1].0 {
-        return row(x, rows[rows.len() - 1].1);
+        return row::<PORTABLE>(x, rows[rows.len() - 1].1);
     }
     for r in rows.windows(2) {
         if y <= r[1].0 {
-            let mut low = row(x, r[0].1);
-            let high = row(x, r[1].1);
-            let (a, b) = pair((y - r[0].0) / (r[1].0 - r[0].0));
+            let mut low = row::<PORTABLE>(x, r[0].1);
+            let high = row::<PORTABLE>(x, r[1].1);
+            let (a, b) = pair::<PORTABLE>((y - r[0].0) / (r[1].0 - r[0].0));
             for c in 0..channels {
                 low[c] = a * low[c] + b * high[c];
             }
@@ -95,12 +95,16 @@ fn layer(x: f64, y: f64, rows: &[Row<'_>], channels: usize) -> [f64; 24] {
     }
     [0.; 24]
 }
-pub fn point(position: Position, gain: f32, layout: Layout) -> Result<Gains> {
+fn point_impl<const PORTABLE: bool>(
+    position: Position,
+    gain: f32,
+    layout: Layout,
+) -> Result<Gains> {
     if !gain.is_finite() {
         return Err(invalid());
     }
     if layout == Layout::Room222 {
-        let mut g = room(position, 0.)?;
+        let mut g = room_impl::<PORTABLE>(position, 0.)?;
         for x in &mut g {
             *x *= gain;
         }
@@ -110,7 +114,7 @@ pub fn point(position: Position, gain: f32, layout: Layout) -> Result<Gains> {
     let x = (f64::from(position.x) * 155. + 0.5).floor();
     let y = -(-f64::from(position.y) * 155. + 0.5).floor();
     let z = (f64::from(position.z) * 75. + 0.5).floor();
-    let (a, b) = pair((z / 75.).clamp(0., 1.));
+    let (a, b) = pair::<PORTABLE>((z / 75.).clamp(0., 1.));
     let mut middle_rows: [Row<'_>; 4] = [
         (-155., &[(-155., 6), (155., 7)]),
         (0., &[(-155., 4), (155., 5)]),
@@ -119,12 +123,12 @@ pub fn point(position: Position, gain: f32, layout: Layout) -> Result<Gains> {
     ];
     let middle = if layout == Layout::Seven {
         middle_rows[2] = middle_rows[3];
-        layer(x, y, &middle_rows[..3], 12)
+        layer::<PORTABLE>(x, y, &middle_rows[..3], 12)
     } else {
-        layer(x, y, &middle_rows, 16)
+        layer::<PORTABLE>(x, y, &middle_rows, 16)
     };
     let upper = if layout == Layout::Seven {
-        layer(
+        layer::<PORTABLE>(
             x,
             y,
             &[
@@ -134,7 +138,7 @@ pub fn point(position: Position, gain: f32, layout: Layout) -> Result<Gains> {
             12,
         )
     } else {
-        layer(
+        layer::<PORTABLE>(
             x,
             y,
             &[
@@ -165,7 +169,7 @@ fn validate(p: Position, size: f32, extended: bool) -> Result<()> {
     }
     Ok(())
 }
-fn power_weights(knots: &[f64], lo: f64, hi: f64) -> [f64; 4] {
+fn power_weights<const PORTABLE: bool>(knots: &[f64], lo: f64, hi: f64) -> [f64; 4] {
     let mut w = [0.; 4];
     let n = knots.len();
     if n == 1 {
@@ -183,8 +187,8 @@ fn power_weights(knots: &[f64], lo: f64, hi: f64) -> [f64; 4] {
                 if x <= knots[i] {
                     let a =
                         (x - knots[i - 1]) / (knots[i] - knots[i - 1]) * std::f64::consts::PI / 2.;
-                    w[i - 1] = a.cos().powi(2);
-                    w[i] = a.sin().powi(2);
+                    w[i - 1] = cos::<PORTABLE>(a).powi(2);
+                    w[i] = sin::<PORTABLE>(a).powi(2);
                     break;
                 }
             }
@@ -202,7 +206,9 @@ fn power_weights(knots: &[f64], lo: f64, hi: f64) -> [f64; 4] {
         let span = knots[i] - knots[i - 1];
         let integral = |x: f64| {
             let t = x - knots[i - 1];
-            t * 0.5 + span * (std::f64::consts::PI * t / span).sin() / (2. * std::f64::consts::PI)
+            t * 0.5
+                + span * sin::<PORTABLE>(std::f64::consts::PI * t / span)
+                    / (2. * std::f64::consts::PI)
         };
         let before = integral(r) - integral(l);
         w[i - 1] += before;
@@ -213,7 +219,7 @@ fn power_weights(knots: &[f64], lo: f64, hi: f64) -> [f64; 4] {
     }
     w
 }
-pub fn room(p: Position, size: f32) -> Result<Gains> {
+fn room_impl<const PORTABLE: bool>(p: Position, size: f32) -> Result<Gains> {
     validate(p, size, true)?;
     let interval = |c: f32| {
         (
@@ -224,7 +230,7 @@ pub fn room(p: Position, size: f32) -> Result<Gains> {
     let (xlo, xhi) = interval(p.x);
     let (ylo, yhi) = interval(p.y);
     let (zlo, zhi) = interval(p.z);
-    let vertical = power_weights(&[-1., 0., 1.], zlo, zhi);
+    let vertical = power_weights::<PORTABLE>(&[-1., 0., 1.], zlo, zhi);
     let ranges: [&[(usize, usize)]; 3] = [
         &[(0, 3)],
         &[(3, 6), (6, 8), (8, 10), (10, 13)],
@@ -237,13 +243,13 @@ pub fn room(p: Position, size: f32) -> Result<Gains> {
         for (j, &(a, _)) in rows.iter().enumerate() {
             depths[j] = f64::from(NODES[a].position.y);
         }
-        let row_weights = power_weights(&depths[..rows.len()], ylo, yhi);
+        let row_weights = power_weights::<PORTABLE>(&depths[..rows.len()], ylo, yhi);
         for (j, &(a, b)) in rows.iter().enumerate() {
             let mut widths = [0.; 3];
             for (k, n) in NODES[a..b].iter().enumerate() {
                 widths[k] = f64::from(n.position.x);
             }
-            let horizontal = power_weights(&widths[..b - a], xlo, xhi);
+            let horizontal = power_weights::<PORTABLE>(&widths[..b - a], xlo, xhi);
             for (k, n) in NODES[a..b].iter().enumerate() {
                 power[n.channel] += vertical[i] * row_weights[j] * horizontal[k];
             }
@@ -251,17 +257,17 @@ pub fn room(p: Position, size: f32) -> Result<Gains> {
     }
     Ok(power.map(|x| x.sqrt() as f32))
 }
-pub fn room_mix(spatial: Gains, size: f32) -> Mix {
-    mix_impl(spatial, size, true)
+fn room_mix_impl<const PORTABLE: bool>(spatial: Gains, size: f32) -> Mix {
+    mix_impl::<PORTABLE>(spatial, size, true)
 }
-fn mix_impl(spatial: Gains, size: f32, extended: bool) -> Mix {
+fn mix_impl<const PORTABLE: bool>(spatial: Gains, size: f32, extended: bool) -> Mix {
     let phase = if extended {
         (size / 0.2).clamp(0., 1.) * std::f32::consts::PI / 2.
     } else {
         (size / 0.2).clamp(0., 1.) * FRAC_PI_2
     };
-    let sine = phase.sin();
-    let cosine = phase.cos();
+    let sine = sinf::<PORTABLE>(phase);
+    let cosine = cosf::<PORTABLE>(phase);
     let mut result = Mix {
         direct: if size >= 0.2 { 0. } else { cosine * cosine },
         spread: [0.; 24],
@@ -285,7 +291,11 @@ fn mix_impl(spatial: Gains, size: f32, extended: bool) -> Mix {
         }
     }
     if front + rest > 1e-6 {
-        let attenuation = 10f32.powf(size * -1.2 / 20.);
+        let attenuation = if PORTABLE {
+            libm::powf(10., size * -1.2 / 20.)
+        } else {
+            10f32.powf(size * -1.2 / 20.)
+        };
         let square = attenuation * attenuation;
         let common = (((front + rest) * square) / (front + rest * square)).sqrt();
         for i in 0..n {
@@ -441,7 +451,7 @@ fn radius(size: f32) -> f32 {
     }
     1.
 }
-fn kernel(point: f32, center: f32, radius: f32, axis: usize) -> f32 {
+fn kernel<const PORTABLE: bool>(point: f32, center: f32, radius: f32, axis: usize) -> f32 {
     if radius < 2.5e-5 {
         return 0.;
     }
@@ -453,11 +463,11 @@ fn kernel(point: f32, center: f32, radius: f32, axis: usize) -> f32 {
     let square = ratio * ratio;
     let mut r = exp2_approx((square * square * -0.6328125) * 26.575424194335938);
     if axis == 2 {
-        r *= ((point * 0.34147748351097107) * 4.).cos();
+        r *= cosf::<PORTABLE>((point * 0.34147748351097107) * 4.);
     }
     r
 }
-fn axis_basis(axis: usize, p: f32) -> SizeGains {
+fn axis_basis<const PORTABLE: bool>(axis: usize, p: f32) -> SizeGains {
     let mut r = [0.; 11];
     if axis == 0 {
         for row in 0..5 {
@@ -473,8 +483,8 @@ fn axis_basis(axis: usize, p: f32) -> SizeGains {
                     let h = n[i];
                     if p <= SPEAKERS[h].x {
                         let f = (p - SPEAKERS[l].x) / (SPEAKERS[h].x - SPEAKERS[l].x);
-                        r[l] = (f * FRAC_PI_2).cos();
-                        r[h] = (f * FRAC_PI_2).sin();
+                        r[l] = cosf::<PORTABLE>(f * FRAC_PI_2);
+                        r[h] = sinf::<PORTABLE>(f * FRAC_PI_2);
                         break;
                     }
                 }
@@ -495,8 +505,8 @@ fn axis_basis(axis: usize, p: f32) -> SizeGains {
                     let hi = SPEAKERS[ROWS[start + i][0]].y;
                     if p <= hi {
                         let f = (p - lo) / (hi - lo);
-                        g[i - 1] = (f * FRAC_PI_2).cos();
-                        g[i] = (f * FRAC_PI_2).sin();
+                        g[i - 1] = cosf::<PORTABLE>(f * FRAC_PI_2);
+                        g[i] = sinf::<PORTABLE>(f * FRAC_PI_2);
                         break;
                     }
                 }
@@ -511,12 +521,12 @@ fn axis_basis(axis: usize, p: f32) -> SizeGains {
         let lo = if p >= ROOM_MAX {
             0.
         } else {
-            (p * FRAC_PI_2).cos()
+            cosf::<PORTABLE>(p * FRAC_PI_2)
         };
         let hi = if p >= ROOM_MAX {
             1.
         } else {
-            (p * FRAC_PI_2).sin()
+            sinf::<PORTABLE>(p * FRAC_PI_2)
         };
         for i in 0..11 {
             r[i] = if i < 7 { lo } else { hi };
@@ -524,7 +534,32 @@ fn axis_basis(axis: usize, p: f32) -> SizeGains {
     }
     r
 }
-fn quadrature(axis: usize, p: u32, r: u32) -> SizeGains {
+// The integration lattice is fixed. Share its ~64 KiB of immutable values across
+// Scene sessions; preparation happens before the allocation-free process boundary.
+static LIVE_LATTICE: std::sync::OnceLock<Vec<SizeGains>> = std::sync::OnceLock::new();
+pub(crate) fn prepare_live() {
+    LIVE_LATTICE.get_or_init(|| {
+        let mut values = Vec::with_capacity(1480);
+        for axis in 0..3 {
+            for p in 0..if axis == 2 { 4 } else { 35 } {
+                for r in 0..20 {
+                    values.push(quadrature_uncached::<true>(axis, p, r));
+                }
+            }
+        }
+        values
+    });
+}
+fn quadrature<const PORTABLE: bool>(axis: usize, p: u32, r: u32) -> SizeGains {
+    if PORTABLE {
+        LIVE_LATTICE
+            .get()
+            .expect("Scene lattice prepared at creation")[axis * 700 + p as usize * 20 + r as usize]
+    } else {
+        quadrature_uncached::<false>(axis, p, r)
+    }
+}
+fn quadrature_uncached<const PORTABLE: bool>(axis: usize, p: u32, r: u32) -> SizeGains {
     let count = if axis == 2 { 8 } else { 20 };
     let step = if axis == 2 { 1. / 7. } else { 1. / 19. };
     let center = repeated(if axis == 2 { 1. / 3. } else { 1. / 34. }, p);
@@ -533,8 +568,8 @@ fn quadrature(axis: usize, p: u32, r: u32) -> SizeGains {
     let mut result = [0.; 11];
     let mut position = 0.;
     for _ in 0..count {
-        let basis = axis_basis(axis, position);
-        let w = kernel(position, center, radius, axis);
+        let basis = axis_basis::<PORTABLE>(axis, position);
+        let w = kernel::<PORTABLE>(position, center, radius, axis);
         for i in 0..11 {
             result[i] += power(basis[i] * w, exp);
         }
@@ -542,7 +577,7 @@ fn quadrature(axis: usize, p: u32, r: u32) -> SizeGains {
     }
     result
 }
-fn extent(axis: usize, coordinate: f32, radius: f32) -> SizeGains {
+fn extent<const PORTABLE: bool>(axis: usize, coordinate: f32, radius: f32) -> SizeGains {
     let steps = if axis == 2 { 3 } else { 34 };
     let step = 1. / steps as f32;
     let a = ((coordinate * steps as f32).floor() as u32).min(steps);
@@ -567,10 +602,10 @@ fn extent(axis: usize, coordinate: f32, radius: f32) -> SizeGains {
     ];
     let sum = weights[0] + weights[1] + weights[2] + weights[3];
     let corners = [
-        quadrature(axis, a, c),
-        quadrature(axis, b, c),
-        quadrature(axis, a, d),
-        quadrature(axis, b, d),
+        quadrature::<PORTABLE>(axis, a, c),
+        quadrature::<PORTABLE>(axis, b, c),
+        quadrature::<PORTABLE>(axis, a, d),
+        quadrature::<PORTABLE>(axis, b, d),
     ];
     let mut result = [0.; 11];
     for i in 0..11 {
@@ -590,16 +625,16 @@ pub fn quantize(p: Position, size: f32) -> Result<[i32; 4]> {
     }
     Ok(values.map(|v| ((v * 32768. + 0.5).floor() as i32).min(32767)))
 }
-pub fn raw(q: [i32; 4]) -> Result<SizeGains> {
+fn raw_impl<const PORTABLE: bool>(q: [i32; 4]) -> Result<SizeGains> {
     if !q.iter().all(|v| (0..=32767).contains(v)) {
         return Err(invalid());
     }
     let [x, y, z, size] = q.map(|v| v as f32 / 32768.);
     let r = radius(size);
     if r < 2.5e-5 {
-        let px = axis_basis(0, x);
-        let py = axis_basis(1, y);
-        let pz = axis_basis(2, z);
+        let px = axis_basis::<PORTABLE>(0, x);
+        let py = axis_basis::<PORTABLE>(1, y);
+        let pz = axis_basis::<PORTABLE>(2, z);
         let mut result = [0.; 11];
         for i in 0..11 {
             result[i] = px[i] * py[i] * pz[i];
@@ -607,15 +642,15 @@ pub fn raw(q: [i32; 4]) -> Result<SizeGains> {
         return Ok(result);
     }
     let exp = exponent(r);
-    let ax = extent(0, x, r);
-    let ay = extent(1, y, r);
-    let az = extent(2, z, r);
+    let ax = extent::<PORTABLE>(0, x, r);
+    let ay = extent::<PORTABLE>(1, y, r);
+    let az = extent::<PORTABLE>(2, z, r);
     let wall = [
-        kernel(0., x, r, 0),
-        kernel(1., x, r, 0),
-        kernel(0., y, r, 1),
-        kernel(1., y, r, 1),
-        kernel(1., z, r, 0) * 0.20345592498779297,
+        kernel::<PORTABLE>(0., x, r, 0),
+        kernel::<PORTABLE>(1., x, r, 0),
+        kernel::<PORTABLE>(0., y, r, 1),
+        kernel::<PORTABLE>(1., y, r, 1),
+        kernel::<PORTABLE>(1., z, r, 0) * 0.20345592498779297,
     ];
     let mut volume = [0.; 11];
     let mut boundary = [0.; 11];
@@ -653,8 +688,52 @@ pub fn raw(q: [i32; 4]) -> Result<SizeGains> {
     normalize(&mut result);
     Ok(result)
 }
-pub fn size_mix(raw: SizeGains, size: f32) -> Mix {
+fn size_mix_impl<const PORTABLE: bool>(raw: SizeGains, size: f32) -> Mix {
     let mut spatial = [0.; 24];
     spatial[..11].copy_from_slice(&raw);
-    mix_impl(spatial, size, false)
+    mix_impl::<PORTABLE>(spatial, size, false)
+}
+
+fn sin<const P: bool>(v: f64) -> f64 {
+    if P { libm::sin(v) } else { v.sin() }
+}
+fn cos<const P: bool>(v: f64) -> f64 {
+    if P { libm::cos(v) } else { v.cos() }
+}
+fn sinf<const P: bool>(v: f32) -> f32 {
+    if P { libm::sinf(v) } else { v.sin() }
+}
+fn cosf<const P: bool>(v: f32) -> f32 {
+    if P { libm::cosf(v) } else { v.cos() }
+}
+
+pub fn point(p: Position, gain: f32, layout: Layout) -> Result<Gains> {
+    point_impl::<false>(p, gain, layout)
+}
+pub fn room(p: Position, size: f32) -> Result<Gains> {
+    room_impl::<false>(p, size)
+}
+pub fn room_mix(spatial: Gains, size: f32) -> Mix {
+    room_mix_impl::<false>(spatial, size)
+}
+pub fn raw(q: [i32; 4]) -> Result<SizeGains> {
+    raw_impl::<false>(q)
+}
+pub fn size_mix(raw: SizeGains, size: f32) -> Mix {
+    size_mix_impl::<false>(raw, size)
+}
+pub(crate) fn live_point(p: Position, gain: f32, layout: Layout) -> Result<Gains> {
+    point_impl::<true>(p, gain, layout)
+}
+pub(crate) fn live_room(p: Position, size: f32) -> Result<Gains> {
+    room_impl::<true>(p, size)
+}
+pub(crate) fn live_room_mix(spatial: Gains, size: f32) -> Mix {
+    room_mix_impl::<true>(spatial, size)
+}
+pub(crate) fn live_raw(q: [i32; 4]) -> Result<SizeGains> {
+    raw_impl::<true>(q)
+}
+pub(crate) fn live_size_mix(raw: SizeGains, size: f32) -> Mix {
+    size_mix_impl::<true>(raw, size)
 }

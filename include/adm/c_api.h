@@ -198,12 +198,13 @@
  * v1.41 新增：OSC 时间元数据草案。
  * v1.42：统一未发布头追接口与 PoseBridge 协议 3，来源过滤、状态心跳和 JSON 快照；其余音频 ABI 不变。
  * v1.43：新增独立离线 ADM_RENDERER_TRIPLE_BALANCE（7）；既有枚举值和结构布局不变。
+ * v1.44：Scene stream 支持 Triple Balance，采样精确更新；既有 enum/POD/函数布局不变。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 43
+#define ADM_API_VERSION_MINOR 44
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -273,7 +274,7 @@ typedef enum adm_renderer_t {
     ADM_RENDERER_APPLE = 4,
     ADM_RENDERER_BINAURAL = 5,
     ADM_RENDERER_SAF_BINAURAL = 6,
-    ADM_RENDERER_TRIPLE_BALANCE = 7 /* offline Cartesian room renderer; since v1.43 */
+    ADM_RENDERER_TRIPLE_BALANCE = 7 /* Cartesian room renderer; Scene support since v1.44 */
 } adm_renderer_t;
 
 typedef enum adm_output_bit_depth_t {
@@ -1505,7 +1506,7 @@ typedef enum adm_scene_diagnostic_code_t {
  * sofa_path NULL/"" selects the built-in KEMAR dataset. */
 typedef struct adm_scene_renderer_config_t {
     uint32_t struct_size;
-    int32_t renderer; /* adm_renderer_t: SAF or SAF_BINAURAL */
+    int32_t renderer; /* adm_renderer_t: SAF, SAF_BINAURAL or TRIPLE_BALANCE (since v1.44) */
     const char* output_layout;
     const char* sofa_path;
     int32_t speaker_geometry;         /* adm_speaker_geometry_t */

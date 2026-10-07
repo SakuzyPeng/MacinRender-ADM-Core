@@ -756,6 +756,198 @@
       "pattern": "scene-binaural-binaural-cloud1-96000-48000-fragmented-epoch2",
       "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
       "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-7.1.4-size0-48000-48000-fixed-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-7.1.4-size0-48000-48000-fixed-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-7.1.4-size0-48000-48000-fragmented-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-7.1.4-size0-48000-48000-fragmented-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-7.1.4-size1-48000-48000-fixed-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-7.1.4-size1-48000-48000-fixed-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-7.1.4-size1-48000-48000-fragmented-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-7.1.4-size1-48000-48000-fragmented-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-9.1.6-size0-48000-48000-fixed-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-9.1.6-size0-48000-48000-fixed-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-9.1.6-size0-48000-48000-fragmented-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-9.1.6-size0-48000-48000-fragmented-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-9.1.6-size1-48000-48000-fixed-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-9.1.6-size1-48000-48000-fixed-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-9.1.6-size1-48000-48000-fragmented-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-9.1.6-size1-48000-48000-fragmented-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-22.2-size0-48000-48000-fixed-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-22.2-size0-48000-48000-fixed-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-22.2-size0-48000-48000-fragmented-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-22.2-size0-48000-48000-fragmented-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-22.2-size1-48000-48000-fixed-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-22.2-size1-48000-48000-fixed-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-22.2-size1-48000-48000-fragmented-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-22.2-size1-48000-48000-fragmented-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-7.1.4-size0-96000-96000-fixed-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-7.1.4-size0-96000-96000-fixed-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-7.1.4-size0-96000-96000-fragmented-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-7.1.4-size0-96000-96000-fragmented-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-9.1.6-size1-48000-44100-fixed-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-9.1.6-size1-48000-44100-fixed-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-9.1.6-size1-48000-44100-fragmented-epoch1",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-triple-balance-9.1.6-size1-48000-44100-fragmented-epoch2",
+      "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
+      "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
     }
   ]
 }

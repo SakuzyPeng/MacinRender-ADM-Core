@@ -297,6 +297,7 @@ add_library(mr_adm_render_triple_balance)
 add_library(MacinRender::ADMRenderTripleBalance ALIAS mr_adm_render_triple_balance)
 target_sources(mr_adm_render_triple_balance
     PRIVATE
+        src/adm_render_triple_balance/live_triple_balance_renderer.cpp
         src/adm_render_triple_balance/triple_balance_renderer.cpp
         src/adm_render_triple_balance/render_state.cpp
         src/adm_render_triple_balance/triple_balance_stream.cpp
@@ -310,7 +311,7 @@ target_sources(mr_adm_render_triple_balance
 )
 target_link_libraries(mr_adm_render_triple_balance
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMAudio nlohmann_json::nlohmann_json
+    PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMAudio MacinRender::ADMDsp nlohmann_json::nlohmann_json
 )
 mr_adm_core_apply_warnings(mr_adm_render_triple_balance)
 mr_adm_core_apply_static_analysis(mr_adm_render_triple_balance)
@@ -639,10 +640,12 @@ target_link_libraries(mr_adm_realtime
         MacinRender::ADMRenderCommon
         MacinRender::ADMRenderVBAP
         MacinRender::ADMRenderBinaural
+        MacinRender::ADMRenderTripleBalance
 )
 target_include_directories(mr_adm_realtime PRIVATE
     src/adm_render_vbap
     src/adm_render_binaural
+    src/adm_render_triple_balance
 )
 if(WIN32)
     target_link_libraries(mr_adm_realtime PRIVATE ws2_32)
@@ -1163,6 +1166,16 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_vbap_smoke_tests)
     add_test(NAME mr_adm_vbap_smoke_tests COMMAND mr_adm_vbap_smoke_tests)
 
+    add_executable(mr_adm_triple_balance_scene_benchmark EXCLUDE_FROM_ALL
+        tests/manual/triple_balance_scene_benchmark.cpp)
+    target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE
+        MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderCommon)
+    target_include_directories(mr_adm_triple_balance_scene_benchmark PRIVATE src/adm_engine src/adm_render_triple_balance)
+    if(WIN32)
+        target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE Psapi)
+    endif()
+    mr_adm_core_apply_warnings(mr_adm_triple_balance_scene_benchmark)
+
     add_executable(mr_adm_triple_balance_monitor_benchmark EXCLUDE_FROM_ALL
         tests/manual/triple_balance_monitor_benchmark.cpp)
     target_link_libraries(mr_adm_triple_balance_monitor_benchmark PRIVATE
@@ -1179,6 +1192,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_triple_balance_rust_tests)
     add_test(NAME mr_adm_triple_balance_rust_tests COMMAND mr_adm_triple_balance_rust_tests)
     set_tests_properties(mr_adm_triple_balance_rust_tests PROPERTIES TIMEOUT 120)
+
+    add_executable(mr_adm_live_triple_balance_tests tests/unit/live_triple_balance_test.cpp)
+    target_link_libraries(mr_adm_live_triple_balance_tests PRIVATE MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderCommon)
+    target_include_directories(mr_adm_live_triple_balance_tests PRIVATE src/adm_render_triple_balance)
+    mr_adm_core_apply_warnings(mr_adm_live_triple_balance_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_live_triple_balance_tests)
+    add_test(NAME mr_adm_live_triple_balance_tests COMMAND mr_adm_live_triple_balance_tests)
 
     add_executable(mr_adm_triple_balance_stream_tests tests/unit/triple_balance_stream_test.cpp)
     target_link_libraries(mr_adm_triple_balance_stream_tests PRIVATE

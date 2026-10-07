@@ -61,6 +61,60 @@ Release 的 `mr_adm_triple_balance_monitor_benchmark [9.1.6|9+10+3]` 使用 13 �
 （7.1.2 bed、两个尺寸对象和一个点源）经 null 音频设备按实际时钟循环监听 60 秒，输出 RTF、
 首次／缓存跳转耗时、underrun 和 macOS 内存峰值。它不代替物理设备或高对象数素材的验收。
 
+## Scene 流（C ABI v1.44）
+
+`adm_create_scene_stream` 和 `adm_scene_stream_switch_backend` 现在接受
+`ADM_RENDERER_TRIPLE_BALANCE`。输出布局为 `7.1.4`（`4+7+0`）、`9.1.6`、
+`22.2`（`9+10+3`），PCM 顺序与对应 renderer 的内部布局一致。既有 `adm_scene_output_*`
+可绑定 null 或平台支持的系统空间音频设备；设备支持范围仍由平台决定。
+
+Scene 接收 canonical 有效状态，不经过文件输入的原生 ADM gain/mute/time 忽略规则。
+`linear_gain` 和 `active` 在对象干声／尺寸混合后生效，静音继续推进滤波历史。
+位置、等尺寸和音量各自维护 ramp；事件在 `offset_samples` 开始，显式 ramp 优先于
+`object_smoothing_frames`，jump 按 Scene 契约立即更新。更新一个字段不延长其它字段的
+ramp。多次更新可以位于同一控制块甚至同一采样点，按提交顺序处理。
+
+此路径不使用文件渲染的 512 帧事件取整及位置／尺寸平滑。两者复用空间算法和滤波系数，
+动态输出不承诺与文件渲染逐样本相同。四路滤波逐样本推进，保留内部延迟但无额外分块延迟；
+连续 512 个低于既有阈值的输入采样触发静音退出，最后 32 个采样淡出。尺寸归零后重置
+尺寸滤波历史；纯点源不引入尺寸滤波。generation/epoch 重建清空历史，EOS 截在媒体终点。
+
+- 非零尺寸、bed、22.2 要求 48 kHz 输入；7.1.4/9.1.6 纯点源可使用 Scene 的 8–192 kHz
+  输入范围。输出采样率由既有 Scene 重采样路径处理。
+- 7.1.4/9.1.6 坐标 X/Y 为 [-1,1]、Z 为 [0,1]；22.2 的 Z 为 [-1,1]。
+  尺寸要求三轴相等且在 [0,1]。沿用当前尺寸语义：diffuse 只允许 0，或非零尺寸上的 1；
+  它不作为独立的干湿混合旋钮。`spread=none` 显式忽略尺寸与 diffuse 并记录诊断。
+- bed 必须包含一组完整的十个标准 7.1.2 通道。RC、BS.2051 和现有 DAW 别名经公共
+  标签规范化映射到固定路由；PCM 按 element ID 绑定，描述符可乱序。单个 LFE role 的空标签
+  按 LFE1 解释。重复／缺失标签、多 bed 身份及显式 bed 位置覆盖被拒绝。
+- MDAP、Apple 几何、SOFA、非等尺寸、divergence、channelLock、screenRef、headLocked
+  等未支持组合严格报错；不会回退到其他声像算法。配置错误同步返回；worker 中发现的
+  不支持状态通过 FAILED 状态与结构化 backend diagnostic 报告。
+- 后端切换保持现有输出声道数和采样率限制，并使用 2048 输入帧交叉淡化。
+  候选拓扑或有效状态不兼容时保留当前后端。每个 renderer 调用先校验完整输入，拒绝时
+  不修改该次调用的输出和 DSP 历史。
+
+Scene 的三角函数与衰减幂函数使用已有 libm crate 的可移植实现，文件路径保持原算术。
+固定积分格点约 64 KiB，在创建时准备并由会话共享，避免尺寸 ramp 逐样本重复积分。
+Rust session 仅持有各元素的控制／滤波状态，不保留历史事件或整轨 PCM；私有 FFI 每个
+worker slice 调用一次，处理和 reset 不分配。C++ 的场景复制和控制编排不属于此零分配承诺。
+`mr_adm_live_triple_balance_tests`、Scene C API/设备测试及 Rust `live_triple_balance`
+测试覆盖固定路由、拒绝原子性、独立 ramp、静音恢复、任意分块和现有静态尺寸内核对照。
+跨平台矩阵新增 `scene-triple-balance-*` 用例，涵盖三布局、尺寸过零、重采样、generation、
+epoch 与 VBAP 热切换；一致性结论以实际执行平台的结果为准。
+
+### 本次验证（2026-10-07）
+
+macOS arm64 Debug 全部 72 项 CTest、macOS Release 定向 3 项、Linux arm64 Release 定向与
+Rust 4 项、Windows x64 canonical Release 定向与 Rust 6 项均通过。新增 32 个 Scene PCM
+结果在三平台逐位一致；Windows replay 工具 28 项测试通过，原有矩阵参数保持冻结。
+
+60 秒 Release null 输出使用 7.1.2 bed、两个持续移动／变尺寸对象和一个点源，共 13 路输入。
+RTF 单独计量 10 秒等价 live renderer 输入的处理时间。macOS（M4 Pro）9.1.6／22.2 的渲染 RTF 分别约 0.030／0.057，Windows 9.1.6 约 0.066；均无 underrun，
+RSS 在预热后未持续增长。此合成基准不替代物理设备或更高对象数素材的实测。
+可复现命令为 `mr_adm_triple_balance_scene_benchmark [9.1.6|22.2] 60`，必须使用 Release。
+来源哈希、PCM 哈希和详细结果见 [验证记录](evidence/live-triple-balance/validation.json)。
+
 ## 模块边界
 
 `MacinRender::ADMRenderTripleBalance` 通过私有适配层使用 Rust 数值内核：

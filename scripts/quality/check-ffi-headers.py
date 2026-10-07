@@ -30,6 +30,7 @@ FFI_HEADERS = [
     "src/adm_dsp/hoa_ffi.h",
     "src/adm_dsp/live_binaural_ffi.h",
     "src/adm_dsp/live_vbap_ffi.h",
+    "src/adm_dsp/live_triple_balance_ffi.h",
     "src/adm_dsp/monitor_ffi.h",
     "src/adm_dsp/scene_math_ffi.h",
     "src/adm_dsp/scene_transition_ffi.h",
