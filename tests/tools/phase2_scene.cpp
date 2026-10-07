@@ -21,6 +21,52 @@ using namespace mradm::realtime;
 using Json = nlohmann::json;
 using Clock = std::chrono::steady_clock;
 using phase2::require;
+constexpr uint32_t k_signal_seed = 0x12345678U;
+constexpr uint32_t k_main_epoch_end = 12289U;
+constexpr uint32_t k_seek_target = 257U;
+constexpr uint32_t k_seek_end = 290U;
+
+float signal_scale(bool device_dsp) {
+    return device_dsp ? 4.0F : 0.125F;
+}
+
+void validate_spec(const Json& spec) {
+    // Version 1 describes a fixed control script. Reject divergent descriptions
+    // before writing evidence; metadata, partition and renderer parameters are
+    // the fields this runner actually reads while replaying.
+    require(spec.contains("device_dsp") && spec.at("device_dsp").is_boolean(), "invalid replay device DSP flag");
+    const bool device_dsp = spec.at("device_dsp");
+    Json fixed{{"version", 1},
+               {"clock", "epoch*2s + input_sample/input_rate; +1s at sample 10240"},
+               {"state_complete_on_every_frame", true},
+               {"signal", {{"generator", "lcg32-v1"}, {"seed", k_signal_seed}, {"scale", signal_scale(device_dsp)}}},
+               {"epochs",
+                {{{"epoch", 1}, {"target", 0}, {"end", k_main_epoch_end}},
+                 {{"epoch", 2}, {"target", k_seek_target}, {"end", k_seek_end}}}},
+               {"controls",
+                {{"2048", "pose(37,23,-19)"},
+                 {"4096", "generation=2"},
+                 {"6144", "semantic gain scale=0.5"},
+                 {"8192", "switch stereo backend"},
+                 {"10240", "advance virtual clock by 1s; expire tracking"}}}};
+    if (device_dsp) {
+        fixed["output_controls"] = {{"0", "volume=0.875; HpTF bypass"},
+                                    {"2048", "HpTF peak 1700Hz +6dB Q0.75 preamp -3dB auto-trim"},
+                                    {"4096", "HpTF high-shelf 4200Hz -4dB Q0.75 preamp -6dB"},
+                                    {"6144", "HpTF bypass"},
+                                    {"8192", "volume=0.5"}};
+    } else {
+        require(!spec.contains("output_controls"), "replay output controls require device DSP");
+    }
+    for (const auto& [field, expected] : fixed.items()) {
+        require(spec.contains(field), "missing fixed replay field");
+        if (spec.at(field) != expected) {
+            throw std::runtime_error("unsupported replay field for version 1: " + field);
+        }
+    }
+    require(spec.at("backend") == "vbap" || spec.at("backend") == "binaural", "unknown replay backend");
+}
+
 template <class T> T take(Result<T> result) {
     if (!result) {
         throw std::runtime_error(result.error().message);
@@ -83,7 +129,7 @@ class Replay {
             live_scene::MetadataUpdate update;
             update.element_id = 1;
             update.offset_samples = item.at("sample");
-            require(update.offset_samples > previous_sample && update.offset_samples < 12289,
+            require(update.offset_samples > previous_sample && update.offset_samples < k_main_epoch_end,
                     "invalid replay event order");
             previous_sample = update.offset_samples;
             update.ramp_duration_samples = item.at("ramp");
@@ -255,7 +301,7 @@ class Replay {
         initial.state.width = spec.at("cloud").get<bool>() ? 0.5F : 0;
         initial.state.height = initial.state.width / 2;
         initial.state.diffuse = spec.at("cloud").get<bool>() ? 0.25F : 0;
-        const auto source = phase2::signal(end, 0x12345678U, device_dsp ? 4.0F : 0.125F);
+        const auto source = phase2::signal(end, k_signal_seed, signal_scale(device_dsp));
         const std::vector<uint32_t> chunks = spec.at("partition").get<std::vector<uint32_t>>();
         require(!chunks.empty() && std::ranges::all_of(chunks, [](uint32_t n) { return n > 0 && n <= 1024; }),
                 "invalid replay partition");
@@ -392,10 +438,11 @@ int main(int argc, char** argv) {
         require(argc == 3, "usage: mr_adm_phase2_scene case.json output-directory");
         std::ifstream in(argv[1]);
         const auto spec = Json::parse(in);
+        validate_spec(spec);
         const std::filesystem::path directory(argv[2]);
         std::filesystem::create_directories(directory);
         save_json(directory / "events.json", spec);
-        const auto input = phase2::signal(12289, 0x12345678U, spec.at("device_dsp").get<bool>() ? 4.0F : 0.125F);
+        const auto input = phase2::signal(k_main_epoch_end, k_signal_seed, signal_scale(spec.at("device_dsp")));
         phase2::pcm(directory / "input.pcmbits", 1, spec.at("input_rate"), input);
         for (int pass = 1; pass <= 2; ++pass) {
             // A second replay can use different callback segment boundaries even
@@ -410,7 +457,7 @@ int main(int argc, char** argv) {
             Replay replay(spec);
             Json lengths = Json::array();
             for (uint64_t epoch : {1U, 2U}) {
-                replay.run_epoch(epoch, epoch == 1 ? 0U : 257U, epoch == 1 ? 12289U : 290U);
+                replay.run_epoch(epoch, epoch == 1 ? 0U : k_seek_target, epoch == 1 ? k_main_epoch_end : k_seek_end);
                 const std::string name = "pass-" + std::to_string(pass) + "-epoch-" + std::to_string(epoch);
                 phase2::pcm(
                     directory / (name + ".pcmbits"), replay.channel_count(), replay.sample_rate(), replay.samples());

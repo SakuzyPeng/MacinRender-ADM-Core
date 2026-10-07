@@ -25,6 +25,17 @@ def run(command, log, trace=None, extra_env=None):
         raise RuntimeError(f'command failed ({result.returncode}): {command[0]}: {log.read_text(encoding="utf-8", errors="replace")[-3000:]}')
 
 
+def load_uninstrumented_baseline(root, source, config):
+    baseline = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+    if (baseline.get('schema') != 'mradm.phase2.v1' or baseline.get('complete') is not True
+            or baseline.get('source') != source or baseline.get('config') != config):
+        raise ValueError('baseline schema/source/config/completeness mismatch')
+    if (baseline.get('diagnostics') is not False
+            or baseline.get('build', {}).get('cmake.MR_ADM_CONSISTENCY_DIAGNOSTICS') != 'OFF'):
+        raise ValueError('noninterference requires an uninstrumented baseline with diagnostics OFF')
+    return baseline
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('build', type=Path)
@@ -50,13 +61,9 @@ def main():
     for binary in binaries.values():
         if not binary.is_file():
             parser.error(f'missing tool: {binary}')
-    out.mkdir(parents=True, exist_ok=True)
-    for name in ('fixtures', 'pcm', 'kernels', 'cases', 'logs'):
-        (out / name).mkdir()
     source = common.source_fingerprint()
-    stamp = json.loads((build / 'phase2-build-stamp.json').read_text(encoding='utf-8'))
-    if stamp['source'] != source or stamp['binaries'] != {k: common.digest(v.read_bytes()) for k, v in binaries.items()}:
-        raise ValueError('stale source/binaries; build target mr_adm_phase2_tools first')
+    common.validate_build_stamp(build, source, binaries)
+    baseline = load_uninstrumented_baseline(args.baseline, source, args.config) if diagnostics else None
     offline, scenes = common.offline_cases(), common.scene_cases()
     build_record, build_errors = collect(build)
     if build_errors:
@@ -67,6 +74,9 @@ def main():
                 'comparisons': {}, 'outputs': {}, 'fixtures': {}, 'replay_status': {}}
     if manifest['build'].get('rust.compiler_verbose') == 'unavailable':
         raise ValueError('actual Rust compiler provenance unavailable')
+    out.mkdir(parents=True, exist_ok=True)
+    for name in ('fixtures', 'pcm', 'kernels', 'cases', 'logs'):
+        (out / name).mkdir()
     common.save(out / 'manifest.json', manifest)
     def record(name, path):
         shape, bits = common.pcm_bytes(path)
@@ -160,9 +170,6 @@ def main():
             if not list((out / 'kernel-checkpoints').rglob('*.f32')):
                 raise ValueError('Rust diagnostics feature produced no checkpoints')
             worker_experiments(binaries, out, work, manifest)
-            baseline = json.loads((args.baseline / 'manifest.json').read_text(encoding='utf-8'))
-            if not baseline['complete'] or baseline['source'] != source or baseline['config'] != args.config:
-                raise ValueError('baseline source/config/completeness mismatch')
             if set(baseline['outputs']) != set(manifest['outputs']):
                 raise ValueError('diagnostic case inventory changed')
             for name, row in manifest['outputs'].items():

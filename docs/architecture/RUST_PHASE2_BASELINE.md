@@ -42,13 +42,17 @@ python3 scripts/consistency/run-rust-phase2.py build/release local/phase2-a-diag
 ```
 
 B 组在同一构建树顺序设置 `MR_ADM_STRICT_FP=ON`，用独立输出目录及 `--config b` 重复上述步骤。
-收集器拒绝 Debug、陈旧构建指纹、混合输出目录或不匹配的配置。生产默认仍关闭诊断。
+收集器拒绝 Debug、陈旧构建指纹、混合输出目录或不匹配的配置。构建戳同时绑定 CMake cache、
+编译命令和依赖记录；仅重新 configure 后必须重新构建工具，旧版缺少配置指纹的构建戳也需重建。
+诊断采集在开始前检查 `--baseline`，要求其清单和构建记录均明确关闭诊断。生产默认仍关闭诊断。
 
 ## 实时与检查点边界
 
 回放工具驱动生产 SceneStream 和 SceneOutputSession，通过已有设备注入接口手动拉取 PCM。
 私有时钟每个 epoch 从 `epoch*2s` 起步，按输入样本时间推进，在样本 10240 额外前进一秒，
 覆盖头追踪 750 ms 活跃窗口的失效。时钟保持单调；生产默认时钟和分块策略不变。
+v1 回放使用固定的信号生成器、epoch 和控制脚本；修改这些描述字段会在写入事件或 PCM 前失败，
+不能通过仅修改清单声明另一次未执行的实验。metadata、partition 和 renderer 参数仍由清单驱动。
 
 私有 worker fence 确认已提交输入与控制完成；它保留输出背压，输出环满时允许超时。
 回放先消费可用媒体，再等待 fence。结束标记仅代表开始 draining，必须等待实际 production_complete

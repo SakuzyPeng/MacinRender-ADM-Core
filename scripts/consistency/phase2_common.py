@@ -200,13 +200,29 @@ def require_same(a, b):
     return result
 
 
+def build_configuration(build):
+    # Local build identity, not a cross-platform equality key. A configure-only
+    # change updates these files even when every executable still has its old hash.
+    names = ('CMakeCache.txt', 'compile_commands.json', 'consistency-dependencies.json', 'rust-dependencies.json')
+    return {name: digest((build / name).read_bytes()) for name in names}
+
+
+def validate_build_stamp(build, source, binaries):
+    stamp = json.loads((build / 'phase2-build-stamp.json').read_text(encoding='utf-8'))
+    if (stamp.get('source') != source
+            or stamp.get('binaries') != {name: digest(path.read_bytes()) for name, path in binaries.items()}
+            or stamp.get('configuration') != build_configuration(build)):
+        raise ValueError('stale source/binaries/configuration; build target mr_adm_phase2_tools first')
+
+
 def stamp_build(build):
     """Called by CMake only after all measured executables were built."""
     names = ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', 'mr_adm_phase2_render',
              'mr_adm_phase2_scene', 'mr_adm_phase2_kernels', 'mr_adm_repeat_render')
     import os
     binaries = {name: digest((build / (name + ('.exe' if os.name == 'nt' else ''))).read_bytes()) for name in names}
-    save(build / 'phase2-build-stamp.json', {'source': source_fingerprint(), 'binaries': binaries})
+    save(build / 'phase2-build-stamp.json', {'source': source_fingerprint(), 'binaries': binaries,
+                                           'configuration': build_configuration(build)})
 
 
 if __name__ == '__main__':
