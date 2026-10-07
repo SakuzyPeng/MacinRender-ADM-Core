@@ -127,6 +127,9 @@ float32 PCM，已在锁定的 78 个用例中达成。完成项包括：
 [首批性能回收](RUST_PHASE2_PERFORMANCE.md)已在相同位模式下优化 FFT 的独立列计算；三平台 A/B
 及诊断门禁仍为 78/78，本机双耳 cloud 端到端耗时减少约 7%–8%。后续优化继续同时验证原版位模式与性能。
 
+二期之后已推进[高采样率与边界覆盖](RUST_COVERAGE_EXTENSION.md)：当前矩阵扩展至 118 份 PCM、
+133 份内核测量，并保留原 78 项结果不变。dr_flac 按用户决定暂缓，选型记录单独保留。
+
 ## 参考实现退出
 
 - 单元 `saf`（`tests/reference/saf_reference_test.cpp`、`tests/reference/spreader_mr.c`、`tests/reference/spreader_mr.h`、`tests/reference/spreader_mr_internal.h`）：在默认 OFF 的 `MR_ADM_BUILD_SAF_REFERENCE_TESTS` 下编译，由 `mr_adm_saf_reference_tests` 比较。

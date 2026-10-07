@@ -3,6 +3,9 @@
 > 状态：已完成（2026-10-07）。结项范围是已锁定、已验收的三平台 Release 矩阵。
 > 机器可读记录：[closeout.json](evidence/rust-phase2/closeout.json)。
 
+> 后续覆盖已扩展到 118 份 PCM / 133 份内核测量，见[扩展记录](RUST_COVERAGE_EXTENSION.md)。
+> 本文及结项 JSON 保留原 78 项矩阵的验收范围与证据。dr_flac 已按用户后续决定暂缓。
+
 ## 验收结论
 
 二期完成了基线与分歧定位、Scene 算术统一、FFT/重采样/OM spreader 收敛，以及保持位模式的

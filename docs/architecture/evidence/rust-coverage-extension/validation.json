@@ -1,0 +1,244 @@
+{
+  "all_platforms_configs_diagnostics_identical_pcm": 118,
+  "ci": {
+    "consistency": {
+      "conclusion": "success",
+      "headSha": "77b796738f437110501bdbfe4cd20aac0b98f674",
+      "run": 37602151191,
+      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37602151191"
+    },
+    "correctness": {
+      "conclusion": "success",
+      "headSha": "77b796738f437110501bdbfe4cd20aac0b98f674",
+      "run": 37602159351,
+      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37602159351"
+    },
+    "quality": {
+      "conclusion": "success",
+      "headSha": "77b796738f437110501bdbfe4cd20aac0b98f674",
+      "run": 37602180003,
+      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37602180003"
+    }
+  },
+  "commit": "77b796738f437110501bdbfe4cd20aac0b98f674",
+  "dr_flac": "deferred by user; existing decoder retained",
+  "evidence_sha256": {
+    "kernel-summary.json": "0f4f64073befd84549ea52b16193311d6b1063b5942b05a082b69ed10d912e9b",
+    "original-matrix.json": "332fe3b207bddcfbf5a491f1a75a06ca702e60856eff3b836b33714c382a74fe",
+    "pcm-summary.json": "a788335235d85d6e99571a70ea554e6e2b325bc60089aad6dd556e6bd7efa779"
+  },
+  "identical_kernels": 132,
+  "inventory": {
+    "kernel_gates": 123,
+    "kernels": 133,
+    "offline": 34,
+    "pcm": 118,
+    "pcm_gates": 118,
+    "scene": 42
+  },
+  "local_diagnostic_noninterference": true,
+  "observation_only_difference": "fft-twiddles.10-libm.f64",
+  "original_kernels_preserved": 67,
+  "original_pcm_preserved": 78,
+  "production_algorithms_changed": false,
+  "public_api_changed": false,
+  "quality": [
+    "related Debug CTest 9/9",
+    "phase2 tool tests including frozen original catalog",
+    "Rust fmt and Clippy including all features",
+    "reference file hashes and licenses"
+  ],
+  "reports": {
+    "consistency-report-a-diagnostic.json": {
+      "ci_report_sha256": "967e7f24a306b179165228e523bbe9265b180de92ab69be65c36e8e02ca5edd0",
+      "differing_pcm": 0,
+      "gate_failures": 0,
+      "identical_pcm": 118,
+      "observations": [
+        {
+          "differing_kernels": [
+            {
+              "checkpoint": "fft-twiddles.10-libm.f64",
+              "different_words": 5557,
+              "max_ulp": 1
+            }
+          ],
+          "platforms": [
+            "consistency-macos-a-diagnostic",
+            "consistency-linux-a-diagnostic"
+          ]
+        },
+        {
+          "differing_kernels": [
+            {
+              "checkpoint": "fft-twiddles.10-libm.f64",
+              "different_words": 6677,
+              "max_ulp": 1
+            }
+          ],
+          "platforms": [
+            "consistency-macos-a-diagnostic",
+            "consistency-windows-a-diagnostic"
+          ]
+        },
+        {
+          "differing_kernels": [
+            {
+              "checkpoint": "fft-twiddles.10-libm.f64",
+              "different_words": 4240,
+              "max_ulp": 1
+            }
+          ],
+          "platforms": [
+            "consistency-linux-a-diagnostic",
+            "consistency-windows-a-diagnostic"
+          ]
+        }
+      ]
+    },
+    "consistency-report-a.json": {
+      "ci_report_sha256": "d1869979cd88fa34405e6d5bed96650f5c723496dcb525dac4c01e7fea1b0764",
+      "differing_pcm": 0,
+      "gate_failures": 0,
+      "identical_pcm": 118,
+      "observations": [
+        {
+          "differing_kernels": [
+            {
+              "checkpoint": "fft-twiddles.10-libm.f64",
+              "different_words": 5557,
+              "max_ulp": 1
+            }
+          ],
+          "platforms": [
+            "consistency-macos-a",
+            "consistency-linux-a"
+          ]
+        },
+        {
+          "differing_kernels": [
+            {
+              "checkpoint": "fft-twiddles.10-libm.f64",
+              "different_words": 6677,
+              "max_ulp": 1
+            }
+          ],
+          "platforms": [
+            "consistency-macos-a",
+            "consistency-windows-a"
+          ]
+        },
+        {
+          "differing_kernels": [
+            {
+              "checkpoint": "fft-twiddles.10-libm.f64",
+              "different_words": 4240,
+              "max_ulp": 1
+            }
+          ],
+          "platforms": [
+            "consistency-linux-a",
+            "consistency-windows-a"
+          ]
+        }
+      ]
+    },
+    "consistency-report-b-diagnostic.json": {
+      "ci_report_sha256": "6cc7dd0d1e581656bd074ec2c5222b10a270a81a27284904e7b86163c960a44d",
+      "differing_pcm": 0,
+      "gate_failures": 0,
+      "identical_pcm": 118,
+      "observations": [
+        {
+          "differing_kernels": [
+            {
+              "checkpoint": "fft-twiddles.10-libm.f64",
+              "different_words": 5557,
+              "max_ulp": 1
+            }
+          ],
+          "platforms": [
+            "consistency-macos-b-diagnostic",
+            "consistency-linux-b-diagnostic"
+          ]
+        },
+        {
+          "differing_kernels": [
+            {
+              "checkpoint": "fft-twiddles.10-libm.f64",
+              "different_words": 6677,
+              "max_ulp": 1
+            }
+          ],
+          "platforms": [
+            "consistency-macos-b-diagnostic",
+            "consistency-windows-b-diagnostic"
+          ]
+        },
+        {
+          "differing_kernels": [
+            {
+              "checkpoint": "fft-twiddles.10-libm.f64",
+              "different_words": 4240,
+              "max_ulp": 1
+            }
+          ],
+          "platforms": [
+            "consistency-linux-b-diagnostic",
+            "consistency-windows-b-diagnostic"
+          ]
+        }
+      ]
+    },
+    "consistency-report-b.json": {
+      "ci_report_sha256": "bc07010735196c0761d95709004eb10e44ff268be7ee5b6b45ada1dbf515b51c",
+      "differing_pcm": 0,
+      "gate_failures": 0,
+      "identical_pcm": 118,
+      "observations": [
+        {
+          "differing_kernels": [
+            {
+              "checkpoint": "fft-twiddles.10-libm.f64",
+              "different_words": 5557,
+              "max_ulp": 1
+            }
+          ],
+          "platforms": [
+            "consistency-macos-b",
+            "consistency-linux-b"
+          ]
+        },
+        {
+          "differing_kernels": [
+            {
+              "checkpoint": "fft-twiddles.10-libm.f64",
+              "different_words": 6677,
+              "max_ulp": 1
+            }
+          ],
+          "platforms": [
+            "consistency-macos-b",
+            "consistency-windows-b"
+          ]
+        },
+        {
+          "differing_kernels": [
+            {
+              "checkpoint": "fft-twiddles.10-libm.f64",
+              "different_words": 4240,
+              "max_ulp": 1
+            }
+          ],
+          "platforms": [
+            "consistency-linux-b",
+            "consistency-windows-b"
+          ]
+        }
+      ]
+    }
+  },
+  "repository_evidence_hash_normalization": "UTF-8 LF (normalize CRLF when verifying)",
+  "schema": "mradm.coverage-extension.validation.v1",
+  "source_sha256": "cee14021136a9d4e519b84de9d19adf752cc357b4c11286eaf32b0f129b3fa55"
+}
