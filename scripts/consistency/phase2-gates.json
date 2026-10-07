@@ -20,6 +20,18 @@
       "reference": "docs/architecture/RUST_PHASE2_FFT.md"
     },
     {
+      "kind": "kernel",
+      "pattern": "trig.*",
+      "reason": "portable musl-derived sin/cos behind the resampler's sinc and window tables",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "kernel",
+      "pattern": "resampler-*",
+      "reason": "patched rubato: scalar sinc interpolation and portable sinc/window tables",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
       "kind": "case",
       "pattern": "binaural-cartesian-cloud",
       "reason": "identical on all three platforms after the scalar FFT path",

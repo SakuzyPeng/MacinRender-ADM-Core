@@ -196,8 +196,13 @@ dependencies = [
  "mradm-adm",
  "mradm-dsp",
  "mradm-ear",
+ "mradm-math",
  "mradm-wav",
 ]
+
+[[package]]
+name = "mradm-math"
+version = "0.1.0"
 
 [[package]]
 name = "mradm-wav"
@@ -324,15 +329,13 @@ dependencies = [
 [[package]]
 name = "rubato"
 version = "5.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc1e951b9f5432ec1422f4dcfa5733fc501265902612edf5ef8bd8ecdd960930"
 dependencies = [
  "audioadapter",
  "audioadapter-buffers",
+ "mradm-math",
  "num-integer",
  "num-traits",
  "visibility",
- "windowfunctions",
 ]
 
 [[package]]
@@ -477,15 +480,6 @@ checksum = "d920ac99c3c8edce110cb8d07dbb324d6d026011dce85b1e9355b70f0adacc4f"
 dependencies = [
  "bytemuck",
  "safe_arch",
-]
-
-[[package]]
-name = "windowfunctions"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90628d739333b7c5d2ee0b70210b97b8cddc38440c682c96fd9e2c24c2db5f3a"
-dependencies = [
- "num-traits",
 ]
 
 [[package]]

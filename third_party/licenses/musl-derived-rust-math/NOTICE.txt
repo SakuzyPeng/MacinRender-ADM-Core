@@ -1,0 +1,21 @@
+MacinRender portable trigonometry (mradm-math)
+
+The sin/cos kernels and the medium-range argument reduction are translated to Rust from
+musl libc v1.2.5 (src/math/__sin.c, __cos.c, __rem_pio2.c, sin.c, cos.c).
+https://musl.libc.org/  —  musl is licensed under the MIT license (see LICENSE).
+Upstream source fingerprints are recorded in PROVENANCE.json.
+
+Those musl files originate from FreeBSD msun (k_sin.c, k_cos.c, e_rem_pio2.c, s_sin.c,
+s_cos.c) and carry the following notice, which is preserved here:
+
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+
+Project changes: only the medium-range reduction is translated (|x| < 2^20*pi/2; larger
+arguments panic), and floating-point status flags are not raised.

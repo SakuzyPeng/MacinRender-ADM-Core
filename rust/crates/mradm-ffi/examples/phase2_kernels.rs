@@ -57,6 +57,28 @@ fn run(out: &Path) {
         fft.inverse(&spectrum, &mut inverse).unwrap();
         floats(out, &format!("fft-{size}.30-inverse.f32"), &inverse);
     }
+    // Portable sin/cos behind the resampler's sinc and window tables (ADR 0016): window
+    // arguments up to 8π, sinc arguments up to ~380 (wider ranges also sampled) and points next
+    // to multiples of π/2.
+    let mut trig_input = Vec::new();
+    let mut state = 0x2545_f491_4f6c_dd1du64;
+    for scale in [1.0, 8.0 * std::f64::consts::PI, 1024.0, 131_072.0] {
+        for _ in 0..4096 {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            let unit = (state >> 11) as f64 / (1u64 << 53) as f64;
+            trig_input.push((unit * 2.0 - 1.0) * scale);
+        }
+    }
+    for k in -256i32..=256 {
+        trig_input.push(f64::from(k) * std::f64::consts::FRAC_PI_2);
+    }
+    doubles(out, "trig.10-input.f64", &trig_input);
+    let (sines, cosines): (Vec<_>, Vec<_>) =
+        trig_input.iter().map(|&x| mradm_math::sin_cos(x)).unzip();
+    doubles(out, "trig.20-sin.f64", &sines);
+    doubles(out, "trig.30-cos.f64", &cosines);
     let directions: [f32; 12] = [
         0., 0., 30., 15., -179.75, 89.5, 179.75, -89.5, 37., 23., -19., 0.25,
     ];

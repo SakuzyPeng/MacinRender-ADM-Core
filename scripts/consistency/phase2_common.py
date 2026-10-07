@@ -144,6 +144,7 @@ def kernel_outputs():
     names += [f'resampler-{a}-{b}.{part}' for a, b in ((48000, 48000), (48000, 44100), (44100, 48000))
               for part in ('10-input.f32', '20-output.f32')]
     names += [f'hptf-{rate}.{part}' for rate in (44100, 48000) for part in ('10-input.f64', '20-coefficients.f32')]
+    names += ['trig.10-input.f64', 'trig.20-sin.f64', 'trig.30-cos.f64']
     return sorted(names)
 
 

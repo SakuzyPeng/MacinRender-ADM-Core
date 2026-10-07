@@ -1,7 +1,7 @@
 [workspace]
-members = ["crates/mradm-dsp", "crates/mradm-ear", "crates/mradm-adm", "crates/mradm-wav", "crates/mradm-ffi"]
+members = ["crates/mradm-dsp", "crates/mradm-ear", "crates/mradm-math", "crates/mradm-adm", "crates/mradm-wav", "crates/mradm-ffi"]
 resolver = "2"
-exclude = ["vendor/sofar"]
+exclude = ["vendor/sofar", "vendor/rubato"]
 
 [workspace.package]
 edition = "2024"
@@ -35,3 +35,5 @@ lto = "thin"
 
 [patch.crates-io]
 sofar = { path = "vendor/sofar" }
+# Scalar interpolation and platform-independent sinc/window tables (ADR 0016).
+rubato = { path = "vendor/rubato" }

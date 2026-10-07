@@ -17,12 +17,14 @@
 | libadm-common-definitions | 0.14.0 | Apache-2.0 | `LICENSE`, `NOTICE.txt` |
 | libbw64 | 0.10.0 | Apache-2.0 | `LICENSE` |
 | libear | 2db69f8fcea0bc5db8a78e14a9c2ae6ed4283c15 | Apache-2.0 | `LICENSE` |
+| libear-derived-rust-ear | 2db69f8f-subset | Apache-2.0 | `LICENSE`, `NOTICE.txt` |
 | libebur128 | v1.2.6 | MIT | `COPYING` |
 | libFLAC | 1.5.0 | BSD-3-Clause | `COPYING.Xiph` |
 | libmysofa | bundled-in-SAF@v1.3.4 | BSD-3-Clause | `LICENSE` |
 | libopus | v1.5.2 | BSD-3-Clause | `COPYING`, `LICENSE_PLEASE_READ.txt` |
 | libsamplerate | 0.2.2 | BSD-2-Clause | `COPYING` |
 | miniaudio | 0.11.21 | Unlicense OR MIT-0 | `LICENSE` |
+| musl-derived-rust-math | musl-1.2.5-subset | MIT | `LICENSE`, `NOTICE.txt` |
 | nlohmann_json | v3.12.0 | MIT | `LICENSE.MIT` |
 | rust-adler2-2.0.1 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | `LICENSE-0BSD`, `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-approx-0.5.1 | 0.5.1 | Apache-2.0 | `LICENSE` |
@@ -74,7 +76,6 @@
 | rust-unicode-ident-1.0.26 | 1.0.26 | (MIT OR Apache-2.0) AND Unicode-3.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-UNICODE` |
 | rust-visibility-0.1.1 | 0.1.1 | Zlib OR MIT OR Apache-2.0 | `LICENSE`, `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-ZLIB` |
 | rust-wide-1.7.1 | 1.7.1 | Zlib OR Apache-2.0 OR MIT | `LICENSE-APACHE.txt`, `LICENSE-MIT.txt`, `LICENSE-ZLIB.txt` |
-| rust-windowfunctions-0.1.1 | 0.1.1 | MIT | `LICENSE.txt` |
 | rust-winnow-0.7.15 | 0.7.15 | MIT | `LICENSE-MIT` |
 | saf-derived-rust-dsp | v1.3.4-subset | ISC AND MIT | `NOTICE.txt` |
 | Spatial_Audio_Framework | v1.3.4 | ISC | `LICENSE.md` |

@@ -1,0 +1,1815 @@
+use audioadapter::{Adapter, AdapterMut};
+use std::fmt;
+use std::marker::PhantomData;
+
+use crate::asynchro_fast::{InnerPoly, PolynomialDegree};
+use crate::asynchro_sinc::{
+    make_interpolator, resolve_cutoff, InnerSinc, SincInterpolationParameters,
+    SincInterpolationType,
+};
+use crate::error::{ResampleError, ResampleResult, ResamplerConstructionError};
+use crate::sinc_interpolator::{
+    AnyInterpolator, AvxSample, NeonSample, SincInterpolator, SseSample,
+};
+use crate::{get_offsets, get_partial_len, update_mask, Indexing};
+use crate::{validate_buffers, Adjustable, Resampler, Resizable, Sample};
+
+/// An enum for specifying which side of an asynchronous resampler should be fixed size.
+/// This is similar to [FixedSync](crate::FixedSync) that is used for the synchronous resamplers.
+/// The difference is asynchronous resamplers must allow one side to vary,
+/// and can therefore not support the `Both` option.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum FixedAsync {
+    /// Input size is fixed, output size varies.
+    Input,
+    /// Output size is fixed, input size varies.
+    Output,
+}
+
+/// Functions for making the scalar product with a sinc.
+pub trait InnerResampler<T>: Send {
+    /// Make the scalar product between the waveform starting at `index` and the sinc of `subindex`.
+    #[allow(clippy::too_many_arguments)]
+    fn process(
+        &mut self,
+        index: f64,
+        nbr_frames: usize,
+        channel_mask: &[bool],
+        t_ratio: f64,
+        t_ratio_increment: f64,
+        wave_in: &[Vec<T>],
+        wave_out: &mut dyn AdapterMut<T>,
+        output_offset: usize,
+    ) -> f64;
+
+    /// Get interpolator length.
+    fn nbr_points(&self) -> usize;
+
+    /// Get initial value for last_index.
+    fn init_last_index(&self) -> f64;
+}
+
+/// An asynchronous resampler that uses either polynomial or sinc interpolation.
+///
+/// The `fixed` argument determines if input of output should be fixed size.
+/// When the input size is fixed, the output size varies from call to call,
+/// and when output size is fixed, the input size varies.
+///
+/// The number of frames on the fixed side is determined by the chunk size argument to the constructor.
+/// This value can be changed by the [set_chunk_size](Resizable::set_chunk_size) method of the
+/// [Resizable] trait (which must be in scope), to let the resampler process smaller chunks of audio data.
+/// Note that the chunk size cannot exceed the value given at creation time.
+///
+/// When the input size is fixed, the maximum value can be retrieved using the `input_size_max()` method,
+/// and `input_frames_next()` gives the current value.
+/// When the output size is fixed, the corresponding values are instead provided by the `output_size_max()`
+/// and `output_size_next()` methods.
+///
+/// # Interpolation
+/// This resampler can use either polynomial or sinc interpolation.
+/// Sinc interpolation gives the best quality, while polynomial interpolation
+/// runs significantly faster.
+///
+/// ## Polynomial
+/// The resampling is done by interpolating between the input samples by fitting a polynomial.
+/// The polynomial degree can be selected, see [PolynomialDegree] for the available options.
+/// Higher polynomial degrees give better quality but run slower.
+///
+/// Note that no anti-aliasing filter is used.
+/// This makes it run considerably faster than the corresponding Sinc resampler, which performs anti-aliasing filtering.
+/// The price is that the resampling creates some artefacts in the output, mainly at higher frequencies.
+/// Use a Sinc resampler if this can not be tolerated.
+///
+/// ## Sinc
+/// The resampling is done by creating a number of intermediate points (defined by oversampling_factor)
+/// by sinc interpolation. The new samples are then calculated by interpolating between these points.
+///
+/// # Adjusting the resampling ratio
+/// The resampling ratio can be freely adjusted within the range specified to the constructor.
+/// Adjusting the ratio does not recalculate the sinc functions used by the anti-aliasing filter.
+/// This causes no issue when increasing the ratio (which slows down the output).
+/// However, when decreasing more than a few percent (or speeding up the output),
+/// the filters can no longer suppress all aliasing and this may lead to some artefacts.
+///
+/// The resampling ratio can be freely adjusted within the range specified to the constructor.
+/// Higher maximum ratios require more memory to be allocated by an internal buffer,
+/// and increase the maximum length of the variable length input or output buffer.
+///
+/// When the ratio is steered by a clock-drift feedback loop, [Slip](crate::Slip) carries a complete
+/// worked example of such a loop that applies here too.
+pub struct Async<T> {
+    nbr_channels: usize,
+    chunk_size: usize,
+    max_chunk_size: usize,
+    needed_input_size: usize,
+    needed_output_size: usize,
+    last_index: f64,
+    current_buffer_fill: usize,
+    resample_ratio: f64,
+    resample_ratio_original: f64,
+    target_ratio: f64,
+    max_relative_ratio: f64,
+    buffer: Vec<Vec<T>>,
+    inner_resampler: Box<dyn InnerResampler<T>>,
+    channel_mask: Vec<bool>,
+    fixed: FixedAsync,
+    sinc_cutoff: Option<f32>,
+}
+
+impl<T> fmt::Debug for Async<T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.debug_struct("Async")
+            .field("nbr_channels", &self.nbr_channels)
+            .field("chunk_size", &self.chunk_size)
+            .field("max_chunk_size", &self.max_chunk_size)
+            .field("needed_input_size", &self.needed_input_size)
+            .field("needed_output_size", &self.needed_output_size)
+            .field("last_index", &self.last_index)
+            .field("current_buffer_fill", &self.current_buffer_fill)
+            .field("resample_ratio", &self.resample_ratio)
+            .field("resample_ratio_original", &self.resample_ratio_original)
+            .field("target_ratio", &self.target_ratio)
+            .field("max_relative_ratio", &self.max_relative_ratio)
+            .field("buffer[0].len()", &self.buffer[0].len())
+            .field("channel_mask", &self.channel_mask)
+            .field("fixed", &self.fixed)
+            .finish()
+    }
+}
+
+/// Advance the interpolation index by one output frame.
+///
+/// This is the single-step kernel shared by every inner resampler loop and
+/// by the [`Async`] size-estimation helper `advance_index`.  Keeping it in
+/// one place guarantees that the estimation math and the real stepping logic
+/// can never silently diverge.
+///
+/// The increment-first order (`t_ratio` is updated *before* being added to
+/// `idx`) is preserved so that the step sequence is identical to what the
+/// inner loops produce.
+///
+/// Returns `(new_idx, new_t_ratio)`.
+#[inline(always)]
+pub(crate) fn step_index(idx: f64, t_ratio: f64, t_ratio_increment: f64) -> (f64, f64) {
+    let new_t_ratio = t_ratio + t_ratio_increment;
+    (idx + new_t_ratio, new_t_ratio)
+}
+
+fn validate_ratios(
+    resample_ratio: f64,
+    max_resample_ratio_relative: f64,
+) -> Result<(), ResamplerConstructionError> {
+    // `<= 0.0` is false for both NaN and infinity, so finiteness has to be checked separately.
+    if !resample_ratio.is_finite() || resample_ratio <= 0.0 {
+        return Err(ResamplerConstructionError::InvalidRatio(resample_ratio));
+    }
+    if !max_resample_ratio_relative.is_finite() || max_resample_ratio_relative < 1.0 {
+        return Err(ResamplerConstructionError::InvalidRelativeRatio(
+            max_resample_ratio_relative,
+        ));
+    }
+    Ok(())
+}
+
+/// Convert a computed size to a `usize`, panicking if it does not fit.
+///
+/// Casting a float to `usize` saturates, which would turn an impossible size into an ordinary
+/// looking answer for callers to allocate from. The check goes via `i128` because it holds
+/// every `usize`, while `usize::MAX` has no exact `f64`. A size below zero means no frames,
+/// as it did before, but a NaN or an out of range size cannot pass.
+fn size_as_usize(size: f64) -> usize {
+    let frames = size as i128;
+    assert!(
+        !size.is_nan() && frames <= usize::MAX as i128,
+        "The combination of chunk_size, resample_ratio and max_resample_ratio_relative gives \
+         a size of {size} frames, which does not fit in a usize"
+    );
+    frames.max(0) as usize
+}
+
+impl<T> Async<T>
+where
+    T: Sample,
+{
+    /// Create a new Async resampler that uses polynomial interpolation.
+    ///
+    /// Parameters are:
+    /// - `resample_ratio`: Starting ratio between output and input sample rates, must be finite
+    ///   and > 0.
+    /// - `max_resample_ratio_relative`: Maximum ratio that can be set with
+    ///   [Adjustable::set_resample_ratio](crate::Adjustable::set_resample_ratio) relative to
+    ///   `resample_ratio`, must be finite and >= 1.0. The minimum relative ratio is the reciprocal
+    ///   of the maximum. For example, with `max_resample_ratio_relative` of 10.0, the ratio can be
+    ///   set between `resample_ratio * 10.0` and `resample_ratio / 10.0`.
+    /// - `interpolation_type`: Degree of polynomial used for interpolation, see [PolynomialDegree].
+    /// - `chunk_size`: Size of input data in frames.
+    /// - `nbr_channels`: Number of channels in input/output.
+    /// - `fixed`: Deciding whether input or output size is fixed.
+    pub fn new_poly(
+        resample_ratio: f64,
+        max_resample_ratio_relative: f64,
+        interpolation_type: PolynomialDegree,
+        chunk_size: usize,
+        nbr_channels: usize,
+        fixed: FixedAsync,
+    ) -> Result<Self, ResamplerConstructionError> {
+        debug!(
+            "Create new Fast with fixed {:?}, ratio: {}, chunk_size: {}, channels: {}",
+            fixed, resample_ratio, chunk_size, nbr_channels,
+        );
+
+        validate_ratios(resample_ratio, max_resample_ratio_relative)?;
+
+        if chunk_size == 0 {
+            return Err(ResamplerConstructionError::InvalidChunkSize(chunk_size));
+        }
+
+        let channel_mask = vec![true; nbr_channels];
+
+        let interpolator_len = interpolation_type.nbr_points();
+        let inner_resampler = InnerPoly {
+            interpolation: interpolation_type,
+            _phantom: PhantomData,
+        };
+
+        let last_index = inner_resampler.init_last_index();
+        let needed_input_size = Self::calculate_input_size(
+            chunk_size,
+            resample_ratio,
+            resample_ratio,
+            last_index,
+            interpolator_len,
+            &fixed,
+        );
+        let needed_output_size = Self::calculate_output_size(
+            chunk_size,
+            resample_ratio,
+            resample_ratio,
+            last_index,
+            interpolator_len,
+            &fixed,
+        );
+
+        let buffer_len = Self::calculate_max_input_size(
+            chunk_size,
+            resample_ratio,
+            max_resample_ratio_relative,
+            interpolator_len,
+            &fixed,
+        )
+        .saturating_add(2 * interpolator_len);
+        let buffer = vec![vec![T::zero(); buffer_len]; nbr_channels];
+
+        Ok(Async {
+            nbr_channels,
+            chunk_size,
+            max_chunk_size: chunk_size,
+            needed_input_size,
+            needed_output_size,
+            current_buffer_fill: needed_input_size,
+            last_index,
+            resample_ratio,
+            resample_ratio_original: resample_ratio,
+            target_ratio: resample_ratio,
+            max_relative_ratio: max_resample_ratio_relative,
+            buffer,
+            inner_resampler: Box::new(inner_resampler),
+            channel_mask,
+            fixed,
+            // Polynomial interpolation uses no anti-aliasing filter.
+            sinc_cutoff: None,
+        })
+    }
+
+    /// Create a new [Async] resampler that uses sinc interpolation.
+    ///
+    /// Parameters are:
+    /// - `resample_ratio`: Starting ratio between output and input sample rates, must be finite
+    ///   and > 0.
+    /// - `max_resample_ratio_relative`: Maximum ratio that can be set with
+    ///   [Adjustable::set_resample_ratio](crate::Adjustable::set_resample_ratio) relative to
+    ///   `resample_ratio`, must be finite and >= 1.0. The minimum relative ratio is the reciprocal
+    ///   of the maximum. For example, with `max_resample_ratio_relative` of 10.0, the ratio can be
+    ///   set between `resample_ratio * 10.0` and `resample_ratio / 10.0`.
+    /// - `parameters`: Parameters for interpolation, see [SincInterpolationParameters].
+    /// - `chunk_size`: Size of input data in frames.
+    /// - `nbr_channels`: Number of channels in input/output.
+    pub fn new_sinc(
+        resample_ratio: f64,
+        max_resample_ratio_relative: f64,
+        parameters: &SincInterpolationParameters,
+        chunk_size: usize,
+        nbr_channels: usize,
+        fixed: FixedAsync,
+    ) -> Result<Self, ResamplerConstructionError> {
+        debug!(
+            "Create new Sinc fixed {:?}, ratio: {}, chunk_size: {}, channels: {}, parameters: {:?}",
+            fixed, resample_ratio, chunk_size, nbr_channels, parameters
+        );
+
+        let interpolator = make_interpolator(
+            parameters.sinc_len,
+            resample_ratio,
+            parameters.f_cutoff,
+            parameters.oversampling_factor,
+            parameters.window,
+        );
+
+        Self::new_with_sinc_interpolator(
+            resample_ratio,
+            max_resample_ratio_relative,
+            parameters.interpolation,
+            interpolator,
+            resolve_cutoff(
+                parameters.sinc_len,
+                resample_ratio,
+                parameters.f_cutoff,
+                parameters.window,
+            ),
+            chunk_size,
+            nbr_channels,
+            fixed,
+        )
+    }
+
+    /// The relative cutoff frequency of the sinc anti-aliasing filter,
+    /// or `None` if this resampler uses polynomial interpolation.
+    ///
+    /// The value is relative to the Nyquist frequency of the *input* rate,
+    /// where `1.0` means the cutoff sits right at Nyquist.
+    /// Multiply by `sample_rate_input / 2` to get the cutoff in Hz.
+    ///
+    /// The cutoff is either the one given in the
+    /// [SincInterpolationParameters], or, when that is left unset, one derived
+    /// from the sinc length and the window function. A longer sinc moves it
+    /// closer to Nyquist. When the resampler was created for downsampling, it
+    /// is scaled down to keep it below the output Nyquist frequency.
+    ///
+    /// The filter is built once, so the value reflects the resample ratio the
+    /// resampler was created with, and does not change with
+    /// [Adjustable::set_resample_ratio](crate::Adjustable::set_resample_ratio).
+    pub fn cutoff(&self) -> Option<f32> {
+        self.sinc_cutoff
+    }
+
+    /// Create a new Sinc using an existing Interpolator.
+    ///
+    /// Parameters are:
+    /// - `resample_ratio`: Starting ratio between output and input sample rates, must be finite
+    ///   and > 0.
+    /// - `max_resample_ratio_relative`: Maximum ratio that can be set with
+    ///   [Adjustable::set_resample_ratio](crate::Adjustable::set_resample_ratio) relative to
+    ///   `resample_ratio`, must be finite and >= 1.0. The minimum relative ratio is the reciprocal
+    ///   of the maximum. For example, with `max_resample_ratio_relative` of 10.0, the ratio can be
+    ///   set between `resample_ratio` * 10.0 and `resample_ratio` / 10.0.
+    /// - `interpolation_type`: Parameters for interpolation, see `SincInterpolationParameters`.
+    /// - `interpolator`: The interpolator to use.
+    /// - `f_cutoff`: The relative cutoff frequency the interpolator was built with, reported by [cutoff](Async::cutoff).
+    /// - `chunk_size`: Size of output data in frames.
+    /// - `nbr_channels`: Number of channels in input/output.
+    #[cfg_attr(feature = "bench_asyncro", visibility::make(pub))]
+    #[allow(clippy::too_many_arguments)]
+    fn new_with_sinc_interpolator(
+        resample_ratio: f64,
+        max_resample_ratio_relative: f64,
+        interpolation_type: SincInterpolationType,
+        interpolator: AnyInterpolator<T>,
+        f_cutoff: f32,
+        chunk_size: usize,
+        nbr_channels: usize,
+        fixed: FixedAsync,
+    ) -> Result<Self, ResamplerConstructionError>
+    where
+        T: AvxSample + SseSample + NeonSample,
+    {
+        validate_ratios(resample_ratio, max_resample_ratio_relative)?;
+
+        if chunk_size == 0 {
+            return Err(ResamplerConstructionError::InvalidChunkSize(chunk_size));
+        }
+
+        let interpolator_len = interpolator.nbr_points();
+        let inner_resampler = InnerSinc::new(interpolator, interpolation_type);
+
+        let last_index = inner_resampler.init_last_index();
+        let needed_input_size = Self::calculate_input_size(
+            chunk_size,
+            resample_ratio,
+            resample_ratio,
+            last_index,
+            interpolator_len,
+            &fixed,
+        );
+        let needed_output_size = Self::calculate_output_size(
+            chunk_size,
+            resample_ratio,
+            resample_ratio,
+            last_index,
+            interpolator_len,
+            &fixed,
+        );
+
+        let buffer_len = Self::calculate_max_input_size(
+            chunk_size,
+            resample_ratio,
+            max_resample_ratio_relative,
+            interpolator_len,
+            &fixed,
+        )
+        .saturating_add(2 * interpolator_len);
+
+        let buffer = vec![vec![T::zero(); buffer_len]; nbr_channels];
+
+        let channel_mask = vec![true; nbr_channels];
+
+        Ok(Async {
+            nbr_channels,
+            chunk_size,
+            max_chunk_size: chunk_size,
+            needed_input_size,
+            needed_output_size,
+            last_index,
+            current_buffer_fill: needed_input_size,
+            resample_ratio,
+            resample_ratio_original: resample_ratio,
+            target_ratio: resample_ratio,
+            max_relative_ratio: max_resample_ratio_relative,
+            inner_resampler: Box::new(inner_resampler),
+            buffer,
+            channel_mask,
+            fixed,
+            sinc_cutoff: Some(f_cutoff),
+        })
+    }
+
+    /// Compute the average step size for a block that ramps linearly from
+    /// `resample_ratio` to `target_ratio`.
+    ///
+    /// The step size for a single output frame is `reciprocal(ratio)` (the
+    /// number of input frames consumed per output frame). When the ratio ramps
+    /// linearly over the block, the total index advance over `n` output frames
+    /// is
+    ///
+    /// ```text
+    /// n * avg_t_ratio + 0.5 * (reciprocal(target_ratio) - reciprocal(resample_ratio))
+    /// ```
+    ///
+    /// The first term uses the arithmetic mean of the start and end step sizes.
+    /// The second term accounts for the increment-first order in the inner loop
+    /// (the step size is incremented before being added to the index, so all
+    /// steps are offset by `+1` increment compared to a midpoint approximation).
+    ///
+    /// Using the arithmetic mean of the *ratios* instead of the step sizes
+    /// would severely underestimate the advance when the ratio decreases
+    /// sharply, causing the interpolation index to exceed the buffer bounds
+    /// (issue #136).
+    #[inline(always)]
+    fn avg_t_ratio(resample_ratio: f64, target_ratio: f64) -> f64 {
+        0.5 * (1.0 / resample_ratio + 1.0 / target_ratio)
+    }
+
+    /// Compute the per-frame step-size increment used during a ramped
+    /// transition from `resample_ratio` to `target_ratio` over `nbr_frames`
+    /// output frames.
+    ///
+    /// The step size ramps linearly in step-size space:
+    /// ```text
+    /// t_ratio[k] = 1/resample_ratio + k * t_ratio_increment
+    /// t_ratio[nbr_frames] == 1/target_ratio
+    /// ```
+    /// This is the value used in the inner loop:
+    /// `t_ratio += t_ratio_increment; idx += t_ratio;`
+    #[inline(always)]
+    fn compute_t_ratio_increment(resample_ratio: f64, target_ratio: f64, nbr_frames: usize) -> f64 {
+        (1.0 / target_ratio - 1.0 / resample_ratio) / nbr_frames as f64
+    }
+
+    /// Simulate `nbr_frames` steps of the inner index-advance loop:
+    /// ```text
+    /// t_ratio += t_ratio_increment
+    /// idx     += t_ratio
+    /// ```
+    /// Returns the final value of `idx`.
+    ///
+    /// This function is the reference implementation of the loop body shared
+    /// by all inner resamplers (polynomial and sinc). It can be used in tests
+    /// to verify that `calculate_output_size` and `calculate_input_size` never
+    /// let the index exceed the input buffer boundary.
+    #[cfg(test)]
+    fn advance_index(
+        start_idx: f64,
+        start_t_ratio: f64,
+        t_ratio_increment: f64,
+        nbr_frames: usize,
+    ) -> f64 {
+        let mut idx = start_idx;
+        let mut t_ratio = start_t_ratio;
+        for _ in 0..nbr_frames {
+            (idx, t_ratio) = step_index(idx, t_ratio, t_ratio_increment);
+        }
+        idx
+    }
+
+    fn calculate_input_size(
+        chunk_size: usize,
+        resample_ratio: f64,
+        target_ratio: f64,
+        last_index: f64,
+        interpolator_len: usize,
+        fixed: &FixedAsync,
+    ) -> usize {
+        match fixed {
+            FixedAsync::Input => chunk_size,
+            FixedAsync::Output => {
+                // The total index advance for chunk_size output frames is
+                // chunk_size * avg_t_ratio + 0.5 * (1/r2 - 1/r1).
+                let ramp_overshoot = 0.5 * (1.0 / target_ratio - 1.0 / resample_ratio);
+                size_as_usize(
+                    (last_index
+                        + chunk_size as f64 * Self::avg_t_ratio(resample_ratio, target_ratio)
+                        + ramp_overshoot
+                        + interpolator_len as f64)
+                        .ceil(),
+                )
+            }
+        }
+    }
+
+    fn calculate_output_size(
+        chunk_size: usize,
+        resample_ratio: f64,
+        target_ratio: f64,
+        last_index: f64,
+        interpolator_len: usize,
+        fixed: &FixedAsync,
+    ) -> usize {
+        match fixed {
+            FixedAsync::Output => chunk_size,
+            FixedAsync::Input => {
+                // n * avg_t_ratio + 0.5*(1/r2 - 1/r1) <= space  =>
+                // n <= (space - ramp_overshoot) / avg_t_ratio
+                let space = chunk_size as f64 - (interpolator_len + 1) as f64 - last_index;
+                let ramp_overshoot = 0.5 * (1.0 / target_ratio - 1.0 / resample_ratio);
+                size_as_usize(
+                    ((space - ramp_overshoot) / Self::avg_t_ratio(resample_ratio, target_ratio))
+                        .floor(),
+                )
+            }
+        }
+    }
+
+    fn calculate_max_input_size(
+        chunk_size: usize,
+        resample_ratio_original: f64,
+        max_relative_ratio: f64,
+        interpolator_len: usize,
+        fixed: &FixedAsync,
+    ) -> usize {
+        let size = match fixed {
+            FixedAsync::Input => chunk_size as f64,
+            FixedAsync::Output => {
+                (chunk_size as f64 / resample_ratio_original * max_relative_ratio).ceil()
+                    + 2.0
+                    + (interpolator_len / 2) as f64
+            }
+        };
+        size_as_usize(size)
+    }
+
+    fn calculate_max_output_size(
+        chunk_size: usize,
+        resample_ratio_original: f64,
+        max_relative_ratio: f64,
+        fixed: &FixedAsync,
+    ) -> usize {
+        let size = match fixed {
+            FixedAsync::Output => chunk_size as f64,
+            FixedAsync::Input => {
+                chunk_size as f64 * resample_ratio_original * max_relative_ratio + 10.0
+            }
+        };
+        size_as_usize(size)
+    }
+
+    fn update_lengths(&mut self) {
+        self.needed_input_size = Async::<T>::calculate_input_size(
+            self.chunk_size,
+            self.resample_ratio,
+            self.target_ratio,
+            self.last_index,
+            self.inner_resampler.nbr_points(),
+            &self.fixed,
+        );
+        self.needed_output_size = Async::<T>::calculate_output_size(
+            self.chunk_size,
+            self.resample_ratio,
+            self.target_ratio,
+            self.last_index,
+            self.inner_resampler.nbr_points(),
+            &self.fixed,
+        );
+        trace!(
+            "Updated lengths, input: {}, output: {}",
+            self.needed_input_size,
+            self.needed_output_size
+        );
+    }
+
+    /// Check whether a ratio, expressed relative to the original ratio, is within the
+    /// allowed `1 / max` to `max` range. Checking the relative ratio directly avoids the
+    /// rounding error that a `(original * rel) / original` round-trip would introduce at
+    /// the exact bounds.
+    fn relative_ratio_in_bounds(&self, rel_ratio: f64) -> bool {
+        rel_ratio >= 1.0 / self.max_relative_ratio && rel_ratio <= self.max_relative_ratio
+    }
+
+    /// Apply an already validated resample ratio to the internal state.
+    fn apply_ratio(&mut self, new_ratio: f64, ramp: bool) {
+        if !ramp {
+            self.resample_ratio = new_ratio;
+        }
+        self.target_ratio = new_ratio;
+        self.update_lengths();
+    }
+}
+
+impl<T> Resampler<T> for Async<T>
+where
+    T: Sample,
+{
+    fn process_into_buffer(
+        &mut self,
+        buffer_in: &dyn Adapter<T>,
+        buffer_out: &mut dyn AdapterMut<T>,
+        indexing: Option<&Indexing>,
+    ) -> ResampleResult<(usize, usize)> {
+        // read the optional indexing struct
+        update_mask(&indexing, &mut self.channel_mask)?;
+        let (input_offset, output_offset) = get_offsets(&indexing);
+
+        // figure out how many frames to read
+        let partial_input_len = get_partial_len(&indexing);
+        let frames_to_read = if let Some(frames) = partial_input_len {
+            frames.min(self.needed_input_size)
+        } else {
+            self.needed_input_size
+        };
+
+        trace!("Start processing, {:?}", self);
+
+        validate_buffers(
+            buffer_in,
+            buffer_out,
+            self.nbr_channels,
+            frames_to_read + input_offset,
+            self.needed_output_size + output_offset,
+        )?;
+
+        let interpolator_len = self.inner_resampler.nbr_points();
+
+        let t_ratio = 1.0 / self.resample_ratio;
+
+        let t_ratio_increment = Self::compute_t_ratio_increment(
+            self.resample_ratio,
+            self.target_ratio,
+            self.needed_output_size,
+        );
+
+        // Update buffer with new data.
+        for buf in self.buffer.iter_mut() {
+            buf.copy_within(
+                self.current_buffer_fill..self.current_buffer_fill + 2 * interpolator_len,
+                0,
+            );
+        }
+
+        for (chan, active) in self.channel_mask.iter().enumerate() {
+            if *active {
+                let slice = &mut self.buffer[chan]
+                    [2 * interpolator_len..2 * interpolator_len + frames_to_read];
+                buffer_in.copy_from_channel_to_slice(chan, input_offset, slice);
+                // partial, write zeros to internal buffer
+                if frames_to_read < self.needed_input_size {
+                    for value in self.buffer[chan][2 * interpolator_len + frames_to_read
+                        ..2 * interpolator_len + self.needed_input_size]
+                        .iter_mut()
+                    {
+                        *value = T::zero();
+                    }
+                }
+            }
+        }
+
+        self.current_buffer_fill = self.needed_input_size;
+
+        let mut idx = self.last_index;
+
+        // Process
+        idx = self.inner_resampler.as_mut().process(
+            idx,
+            self.needed_output_size,
+            &self.channel_mask,
+            t_ratio,
+            t_ratio_increment,
+            &self.buffer,
+            buffer_out,
+            output_offset,
+        );
+
+        // Store last index for next iteration.
+        self.last_index = idx - self.needed_input_size as f64;
+        self.resample_ratio = self.target_ratio;
+        trace!(
+            "Resampling channels {:?}, {} frames in, {} frames out",
+            self.channel_mask,
+            self.needed_input_size,
+            self.needed_output_size,
+        );
+        let input_size = self.needed_input_size;
+        let output_size = self.needed_output_size;
+        self.update_lengths();
+        Ok((input_size, output_size))
+    }
+
+    fn output_frames_max(&self) -> usize {
+        Async::<T>::calculate_max_output_size(
+            self.max_chunk_size,
+            self.resample_ratio_original,
+            self.max_relative_ratio,
+            &self.fixed,
+        )
+    }
+
+    fn output_frames_next(&self) -> usize {
+        self.needed_output_size
+    }
+
+    fn output_delay(&self) -> usize {
+        (self.inner_resampler.nbr_points() as f64 * self.resample_ratio / 2.0) as usize
+    }
+
+    fn nbr_channels(&self) -> usize {
+        self.nbr_channels
+    }
+
+    fn input_frames_max(&self) -> usize {
+        Async::<T>::calculate_max_input_size(
+            self.max_chunk_size,
+            self.resample_ratio_original,
+            self.max_relative_ratio,
+            self.inner_resampler.nbr_points(),
+            &self.fixed,
+        )
+    }
+
+    fn input_frames_next(&self) -> usize {
+        self.needed_input_size
+    }
+
+    fn resample_ratio(&self) -> f64 {
+        self.resample_ratio
+    }
+
+    fn reset(&mut self) {
+        self.buffer
+            .iter_mut()
+            .for_each(|ch| ch.iter_mut().for_each(|s| *s = T::zero()));
+        self.channel_mask.iter_mut().for_each(|val| *val = true);
+        self.last_index = self.inner_resampler.init_last_index();
+        self.resample_ratio = self.resample_ratio_original;
+        self.target_ratio = self.resample_ratio_original;
+        self.chunk_size = self.max_chunk_size;
+        self.update_lengths();
+    }
+
+    fn as_adjustable(&mut self) -> Option<&mut dyn Adjustable<T>> {
+        Some(self)
+    }
+
+    fn is_adjustable(&self) -> bool {
+        true
+    }
+
+    fn as_resizable(&mut self) -> Option<&mut dyn Resizable<T>> {
+        Some(self)
+    }
+
+    fn is_resizable(&self) -> bool {
+        true
+    }
+}
+
+impl<T> Adjustable<T> for Async<T>
+where
+    T: Sample,
+{
+    fn set_resample_ratio(&mut self, new_ratio: f64, ramp: bool) -> ResampleResult<()> {
+        trace!("Change resample ratio to {}", new_ratio);
+        if self.relative_ratio_in_bounds(new_ratio / self.resample_ratio_original) {
+            self.apply_ratio(new_ratio, ramp);
+            Ok(())
+        } else {
+            Err(ResampleError::RatioOutOfBounds {
+                provided: new_ratio,
+                original: self.resample_ratio_original,
+                max_relative_ratio: self.max_relative_ratio,
+            })
+        }
+    }
+
+    fn set_resample_ratio_relative(&mut self, rel_ratio: f64, ramp: bool) -> ResampleResult<()> {
+        let new_ratio = self.resample_ratio_original * rel_ratio;
+        // The product can overflow to infinity, or underflow to zero, while `rel_ratio`
+        // itself is in bounds.
+        if new_ratio.is_finite() && new_ratio > 0.0 && self.relative_ratio_in_bounds(rel_ratio) {
+            self.apply_ratio(new_ratio, ramp);
+            Ok(())
+        } else {
+            Err(ResampleError::RatioOutOfBounds {
+                provided: new_ratio,
+                original: self.resample_ratio_original,
+                max_relative_ratio: self.max_relative_ratio,
+            })
+        }
+    }
+}
+
+impl<T> Resizable<T> for Async<T>
+where
+    T: Sample,
+{
+    fn set_chunk_size(&mut self, chunksize: usize) -> ResampleResult<()> {
+        if chunksize > self.max_chunk_size || chunksize == 0 {
+            return Err(ResampleError::InvalidChunkSize {
+                max: self.max_chunk_size,
+                requested: chunksize,
+            });
+        }
+        self.chunk_size = chunksize;
+        self.update_lengths();
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::expected_output_value;
+    use crate::Indexing;
+    use crate::PolynomialDegree;
+    use crate::SincInterpolationParameters;
+    use crate::SincInterpolationType;
+    use crate::WindowFunction;
+    use crate::{
+        assert_fi_len, assert_fo_len, check_input_offset, check_masked, check_output,
+        check_output_offset, check_ratio, check_reset,
+    };
+    use crate::{Adjustable, Resampler, Resizable};
+    use crate::{Async, FixedAsync};
+    use approx::assert_abs_diff_eq;
+    use audioadapter_buffers::direct::SequentialSliceOfVecs;
+    use test_case::test_matrix;
+
+    fn basic_params() -> SincInterpolationParameters {
+        SincInterpolationParameters {
+            sinc_len: 64,
+            f_cutoff: Some(0.95),
+            interpolation: SincInterpolationType::Cubic,
+            oversampling_factor: 16,
+            window: WindowFunction::BlackmanHarris2,
+        }
+    }
+
+    #[test_log::test(test_matrix([0.8, 1.2, 0.125, 8.0]))]
+    fn poly_cutoff_is_none(ratio: f64) {
+        let resampler = Async::<f64>::new_poly(
+            ratio,
+            1.0,
+            PolynomialDegree::Cubic,
+            1024,
+            2,
+            FixedAsync::Input,
+        )
+        .unwrap();
+        assert_eq!(resampler.cutoff(), None);
+    }
+
+    #[test_log::test(test_matrix([0.8, 1.2, 0.125, 8.0]))]
+    fn sinc_cutoff_given(ratio: f64) {
+        // The given cutoff is used as is when upsampling, and scaled by the
+        // ratio when downsampling, to stay below the output Nyquist frequency.
+        let resampler =
+            Async::<f64>::new_sinc(ratio, 1.0, &basic_params(), 1024, 2, FixedAsync::Input)
+                .unwrap();
+        let expected = 0.95 * ratio.min(1.0) as f32;
+        assert_abs_diff_eq!(resampler.cutoff().unwrap(), expected, epsilon = 1e-6);
+    }
+
+    #[test_log::test(test_matrix([0.8, 1.2, 0.125, 8.0], [32, 256]))]
+    fn sinc_cutoff_automatic(ratio: f64, sinc_len: usize) {
+        // Without a given cutoff it is derived from the sinc length and window,
+        // and must stay below the lower Nyquist frequency of the two rates.
+        let params = SincInterpolationParameters {
+            sinc_len,
+            f_cutoff: None,
+            ..basic_params()
+        };
+        let resampler =
+            Async::<f64>::new_sinc(ratio, 1.0, &params, 1024, 2, FixedAsync::Input).unwrap();
+        let limit = ratio.min(1.0) as f32;
+        let cutoff = resampler.cutoff().unwrap();
+        assert!(cutoff > 0.5 * limit);
+        assert!(cutoff < limit);
+    }
+
+    #[test_log::test(test_matrix(
+        [1, 100, 1024],
+        [0.8, 1.2, 0.125, 8.0],
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn poly_output(chunksize: usize, ratio: f64, fixed: FixedAsync) {
+        let mut resampler =
+            Async::<f64>::new_poly(ratio, 1.0, PolynomialDegree::Cubic, chunksize, 2, fixed)
+                .unwrap();
+        check_output!(resampler, f64);
+    }
+
+    #[test_log::test(test_matrix(
+        [1, 100, 1024],
+        [0.8, 1.2, 0.125, 8.0],
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn poly_ratio(chunksize: usize, ratio: f64, fixed: FixedAsync) {
+        let mut resampler =
+            Async::<f64>::new_poly(ratio, 1.0, PolynomialDegree::Cubic, chunksize, 2, fixed)
+                .unwrap();
+        check_ratio!(resampler, 100000 / chunksize, 0.001, f64);
+    }
+
+    #[test_log::test(test_matrix(
+        [1, 100, 1024],
+        [0.8, 1.2, 0.125, 8.0],
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn poly_len(chunksize: usize, ratio: f64, fixed: FixedAsync) {
+        let resampler =
+            Async::<f64>::new_poly(ratio, 1.0, PolynomialDegree::Cubic, chunksize, 2, fixed)
+                .unwrap();
+        match fixed {
+            FixedAsync::Input => {
+                assert_fi_len!(resampler, chunksize);
+            }
+            FixedAsync::Output => {
+                assert_fo_len!(resampler, chunksize);
+            }
+        }
+    }
+
+    #[test_log::test(test_matrix(
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn poly_masked(fixed: FixedAsync) {
+        let mut resampler =
+            Async::<f64>::new_poly(0.75, 1.0, PolynomialDegree::Cubic, 1024, 2, fixed).unwrap();
+        check_masked!(resampler);
+    }
+
+    #[test_log::test(test_matrix(
+        [1, 100, 1024],
+        [0.8, 1.2, 0.125, 8.0],
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn poly_reset(chunksize: usize, ratio: f64, fixed: FixedAsync) {
+        let mut resampler =
+            Async::<f64>::new_poly(ratio, 1.0, PolynomialDegree::Cubic, chunksize, 2, fixed)
+                .unwrap();
+        check_reset!(resampler);
+    }
+
+    #[test_log::test(test_matrix(
+        [1, 100, 1024],
+        [0.8, 1.2, 0.125, 8.0],
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn sinc_output(chunksize: usize, ratio: f64, fixed: FixedAsync) {
+        let params = basic_params();
+        let mut resampler =
+            Async::<f64>::new_sinc(ratio, 1.0, &params, chunksize, 2, fixed).unwrap();
+        check_output!(resampler, f64);
+    }
+
+    #[test_log::test(test_matrix(
+        [1, 100, 1024],
+        [0.8, 1.2, 0.125, 8.0],
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn sinc_ratio(chunksize: usize, ratio: f64, fixed: FixedAsync) {
+        let params = basic_params();
+        let mut resampler =
+            Async::<f64>::new_sinc(ratio, 1.0, &params, chunksize, 2, fixed).unwrap();
+        check_ratio!(resampler, 100000 / chunksize, 0.001, f64);
+    }
+
+    #[test_log::test(test_matrix(
+        [1, 100, 1024],
+        [0.8, 1.2, 0.125, 8.0],
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn sinc_len(chunksize: usize, ratio: f64, fixed: FixedAsync) {
+        let params = basic_params();
+        let resampler = Async::<f64>::new_sinc(ratio, 1.0, &params, chunksize, 2, fixed).unwrap();
+        match fixed {
+            FixedAsync::Input => {
+                assert_fi_len!(resampler, chunksize);
+            }
+            FixedAsync::Output => {
+                assert_fo_len!(resampler, chunksize);
+            }
+        }
+    }
+
+    #[test_log::test(test_matrix(
+        [1, 100, 1024],
+        [0.8, 1.2, 0.125, 8.0],
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn sinc_reset(chunksize: usize, ratio: f64, fixed: FixedAsync) {
+        let params = basic_params();
+        let mut resampler =
+            Async::<f64>::new_sinc(ratio, 1.0, &params, chunksize, 2, fixed).unwrap();
+        check_reset!(resampler);
+    }
+
+    #[test_log::test(test_matrix(
+        [1, 100, 1024],
+        [0.8, 1.2, 0.125, 8.0],
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn async_input_offset(chunksize: usize, ratio: f64, fixed: FixedAsync) {
+        let params = basic_params();
+        let mut resampler =
+            Async::<f64>::new_sinc(ratio, 1.0, &params, chunksize, 2, fixed).unwrap();
+        check_input_offset!(resampler);
+    }
+
+    #[test_log::test(test_matrix(
+        [1, 100, 1024],
+        [0.8, 1.2, 0.125, 8.0],
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn async_output_offset(chunksize: usize, ratio: f64, fixed: FixedAsync) {
+        let params = basic_params();
+        let mut resampler =
+            Async::<f64>::new_sinc(ratio, 1.0, &params, chunksize, 2, fixed).unwrap();
+        check_output_offset!(resampler);
+    }
+
+    #[test_log::test(test_matrix(
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn sinc_masked(fixed: FixedAsync) {
+        let params = basic_params();
+        let mut resampler = Async::<f64>::new_sinc(0.75, 1.0, &params, 1024, 2, fixed).unwrap();
+        check_masked!(resampler);
+    }
+
+    #[test_log::test(test_matrix(
+        [0.8, 1.2, 0.125, 8.0],
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn async_resize(ratio: f64, fixed: FixedAsync) {
+        let params = basic_params();
+        let mut resampler = Async::<f64>::new_sinc(ratio, 1.0, &params, 1024, 2, fixed).unwrap();
+        resampler.set_chunk_size(600).unwrap();
+        check_output!(resampler, f64);
+    }
+
+    // The exact relative bounds `1 / max` and `max` must be accepted. The pair below is chosen
+    // so that the old `(original * rel) / original` round-trip rounds the lower bound just outside
+    // the range and wrongly rejected it; checking the relative ratio directly must not.
+    #[test_log::test]
+    fn async_relative_ratio_exact_bounds() {
+        let params = basic_params();
+        let original_ratio = 44100.0 / 48000.0;
+        let max = 1.0161;
+        let mut resampler =
+            Async::<f64>::new_sinc(original_ratio, max, &params, 1024, 2, FixedAsync::Input)
+                .unwrap();
+
+        assert!(
+            resampler.set_resample_ratio_relative(max, false).is_ok(),
+            "exact upper bound must be accepted"
+        );
+        assert!(
+            resampler
+                .set_resample_ratio_relative(1.0 / max, false)
+                .is_ok(),
+            "exact lower bound must be accepted"
+        );
+        // Just outside the range must still be rejected.
+        assert!(resampler
+            .set_resample_ratio_relative(max * 1.0001, false)
+            .is_err());
+        assert!(resampler
+            .set_resample_ratio_relative(1.0 / max * 0.9999, false)
+            .is_err());
+    }
+
+    fn process_and_get_frame_counts(resampler: &mut Async<f64>) -> (usize, usize) {
+        let input_frames = resampler.input_frames_next();
+        let output_frames_max = resampler.output_frames_max();
+        let input_data = vec![vec![0.25; input_frames]; 2];
+        let input = SequentialSliceOfVecs::new(&input_data, 2, input_frames).unwrap();
+
+        let mut output_data = vec![vec![0.0; output_frames_max]; 2];
+        let mut output =
+            SequentialSliceOfVecs::new_mut(&mut output_data, 2, output_frames_max).unwrap();
+
+        let (consumed_frames, produced_frames) = resampler
+            .process_into_buffer(&input, &mut output, None)
+            .unwrap();
+        (consumed_frames, produced_frames)
+    }
+
+    fn process_chunks_and_get_total_frame_counts(
+        resampler: &mut Async<f64>,
+        nbr_chunks: usize,
+    ) -> (usize, usize) {
+        (0..nbr_chunks).fold((0, 0), |(sum_in, sum_out), _| {
+            let (frames_in, frames_out) = process_and_get_frame_counts(resampler);
+            (sum_in + frames_in, sum_out + frames_out)
+        })
+    }
+
+    fn assert_ratio_within_tolerance(
+        total_in: usize,
+        total_out: usize,
+        expected_ratio: f64,
+        tolerance: f64,
+        label: &str,
+    ) {
+        let measured_ratio = total_out as f64 / total_in as f64;
+        let lower = expected_ratio - tolerance;
+        let upper = expected_ratio + tolerance;
+        assert!(
+            measured_ratio >= lower && measured_ratio <= upper,
+            "{} ratio out of range: got {}, expected {} +/- {} (out {}, in {})",
+            label,
+            measured_ratio,
+            expected_ratio,
+            tolerance,
+            total_out,
+            total_in,
+        );
+    }
+
+    fn check_relative_ratio_changes_frame_ratio(mut resampler: Async<f64>) {
+        let nbr_chunks = 8;
+        let tolerance = 0.01;
+
+        let (baseline_in, baseline_out) =
+            process_chunks_and_get_total_frame_counts(&mut resampler, nbr_chunks);
+        assert_ratio_within_tolerance(baseline_in, baseline_out, 1.0, tolerance, "Baseline");
+
+        // Lower ratio speeds up output.
+        resampler.set_resample_ratio_relative(0.75, false).unwrap();
+        let (lower_in, lower_out) =
+            process_chunks_and_get_total_frame_counts(&mut resampler, nbr_chunks);
+        assert_ratio_within_tolerance(lower_in, lower_out, 0.75, tolerance, "0.75x");
+
+        // Higher ratio slows down output.
+        resampler.set_resample_ratio_relative(1.25, false).unwrap();
+        let (higher_in, higher_out) =
+            process_chunks_and_get_total_frame_counts(&mut resampler, nbr_chunks);
+        assert_ratio_within_tolerance(higher_in, higher_out, 1.25, tolerance, "1.25x");
+    }
+
+    #[test_log::test(test_matrix(
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn poly_relative_ratio_changes_frame_ratio(fixed: FixedAsync) {
+        let resampler =
+            Async::<f64>::new_poly(1.0, 4.0, PolynomialDegree::Cubic, 1024, 2, fixed).unwrap();
+        check_relative_ratio_changes_frame_ratio(resampler);
+    }
+
+    #[test_log::test(test_matrix(
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn sinc_relative_ratio_changes_frame_ratio(fixed: FixedAsync) {
+        let params = basic_params();
+        let resampler = Async::<f64>::new_sinc(1.0, 4.0, &params, 1024, 2, fixed).unwrap();
+        check_relative_ratio_changes_frame_ratio(resampler);
+    }
+
+    /// Run a 1-channel and a 4-channel sinc resampler with identical per-channel input and
+    /// compare their outputs. The 1-channel resampler uses the direct path (separate dot
+    /// products per nearest point); the 4-channel resampler uses the combined-sinc path
+    /// (scaled accumulation into a combined filter, then one dot product per channel). They must agree within floating-
+    /// point rounding tolerance.
+    fn compare_1ch_4ch_sinc_output(
+        interpolation: SincInterpolationType,
+        ratio: f64,
+        fixed: FixedAsync,
+    ) {
+        let params = SincInterpolationParameters {
+            sinc_len: 64,
+            f_cutoff: Some(0.95),
+            interpolation,
+            oversampling_factor: 16,
+            window: WindowFunction::BlackmanHarris2,
+        };
+        let chunk = 256;
+
+        let mut r1 = Async::<f64>::new_sinc(ratio, 1.0, &params, chunk, 1, fixed).unwrap();
+        let mut r4 = Async::<f64>::new_sinc(ratio, 1.0, &params, chunk, 4, fixed).unwrap();
+
+        let mut phase = 0.0f64;
+        for _ in 0..20 {
+            let frames_in = r1.input_frames_next();
+            let frames_out = r1.output_frames_next();
+            assert_eq!(frames_in, r4.input_frames_next());
+            assert_eq!(frames_out, r4.output_frames_next());
+
+            let wave: Vec<f64> = (0..frames_in)
+                .map(|i| (phase + i as f64 * 0.1).sin())
+                .collect();
+            phase += frames_in as f64 * 0.1;
+
+            let in1_data = vec![wave.clone()];
+            let in4_data = vec![wave.clone(), wave.clone(), wave.clone(), wave.clone()];
+            let input_1ch = SequentialSliceOfVecs::new(&in1_data, 1, frames_in).unwrap();
+            let input_4ch = SequentialSliceOfVecs::new(&in4_data, 4, frames_in).unwrap();
+
+            let mut out1_data = vec![vec![0.0f64; frames_out]; 1];
+            let mut out4_data = vec![vec![0.0f64; frames_out]; 4];
+            let mut out1 = SequentialSliceOfVecs::new_mut(&mut out1_data, 1, frames_out).unwrap();
+            let mut out4 = SequentialSliceOfVecs::new_mut(&mut out4_data, 4, frames_out).unwrap();
+
+            r1.process_into_buffer(&input_1ch, &mut out1, None).unwrap();
+            r4.process_into_buffer(&input_4ch, &mut out4, None).unwrap();
+
+            for frame in 0..frames_out {
+                let expected = out1_data[0][frame];
+                // All 4 channels must be exactly equal (identical input, same combined sinc).
+                for ch in 1..4 {
+                    assert_eq!(
+                        out4_data[ch][frame], out4_data[0][frame],
+                        "interp={interpolation:?} ratio={ratio} frame={frame}: \
+                         ch{ch} differs from ch0 inside 4ch resampler"
+                    );
+                }
+                // 4ch output must agree with 1ch output within floating-point tolerance.
+                for (ch, ch_data) in out4_data.iter().enumerate() {
+                    let diff = (ch_data[frame] - expected).abs();
+                    assert!(
+                        diff < 1e-10,
+                        "interp={interpolation:?} ratio={ratio} ch={ch} frame={frame}: \
+                         4ch={} vs 1ch={expected} diff={diff}",
+                        ch_data[frame]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test_log::test(test_matrix(
+        [
+            SincInterpolationType::Cubic,
+            SincInterpolationType::Quadratic,
+            SincInterpolationType::Linear,
+            SincInterpolationType::Nearest,
+        ],
+        [0.8f64, 1.2f64],
+        [FixedAsync::Input, FixedAsync::Output]
+    ))]
+    fn sinc_4ch_matches_1ch(interp: SincInterpolationType, ratio: f64, fixed: FixedAsync) {
+        compare_1ch_4ch_sinc_output(interp, ratio, fixed);
+    }
+
+    // --- avg_t_ratio unit tests ---
+
+    #[test_log::test]
+    fn avg_t_ratio_equal_ratios() {
+        // When both ratios are equal, avg_t_ratio must equal 1/ratio.
+        for r in [0.1f64, 0.5, 1.0, 2.0, 10.0] {
+            let got = Async::<f64>::avg_t_ratio(r, r);
+            let expected = 1.0 / r;
+            assert!(
+                (got - expected).abs() < 1e-12,
+                "avg_t_ratio({r}, {r}) = {got}, expected {expected}",
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn avg_t_ratio_symmetric() {
+        // avg_t_ratio must be symmetric for a variety of ratio pairs including
+        // both-greater-than-1, both-less-than-1, and mixed pairs.
+        for (r1, r2) in [
+            (1.0f64, 0.2f64),
+            (2.0, 3.0),
+            (0.3, 0.5),
+            (0.125, 8.0),
+            (1.0, 1.0),
+        ] {
+            let forward = Async::<f64>::avg_t_ratio(r1, r2);
+            let backward = Async::<f64>::avg_t_ratio(r2, r1);
+            assert!(
+                (forward - backward).abs() < 1e-12,
+                "avg_t_ratio must be symmetric: avg_t_ratio({r1},{r2})={forward}, avg_t_ratio({r2},{r1})={backward}",
+            );
+        }
+    }
+
+    #[test_log::test]
+    fn avg_t_ratio_known_value() {
+        // avg_t_ratio(1.0, 0.2) = 0.5 * (1/1.0 + 1/0.2) = 0.5 * (1 + 5) = 3.0
+        let got = Async::<f64>::avg_t_ratio(1.0, 0.2);
+        assert!(
+            (got - 3.0).abs() < 1e-12,
+            "avg_t_ratio(1.0, 0.2) = {got}, expected 3.0",
+        );
+        // avg_t_ratio(2.0, 3.0) = 0.5 * (0.5 + 1/3) = 0.5 * (5/6) = 5/12
+        let got2 = Async::<f64>::avg_t_ratio(2.0, 3.0);
+        let expected2 = 5.0 / 12.0;
+        assert!(
+            (got2 - expected2).abs() < 1e-12,
+            "avg_t_ratio(2.0, 3.0) = {got2}, expected {expected2}",
+        );
+    }
+
+    // --- Regression tests for issue #136 ---
+
+    /// Helper: fill one block through `resampler`, returning (frames_in, frames_out).
+    fn process_one_block(resampler: &mut Async<f64>, channels: usize) -> (usize, usize) {
+        let frames_in = resampler.input_frames_next();
+        let frames_out_max = resampler.output_frames_max();
+        let in_data = vec![vec![0.0f64; frames_in]; channels];
+        let input = SequentialSliceOfVecs::new(&in_data, channels, frames_in).unwrap();
+        let mut out_data = vec![vec![0.0f64; frames_out_max]; channels];
+        let mut out =
+            SequentialSliceOfVecs::new_mut(&mut out_data, channels, frames_out_max).unwrap();
+        let (consumed, produced) = resampler
+            .process_into_buffer(&input, &mut out, None)
+            .unwrap();
+        (consumed, produced)
+    }
+
+    /// Regression test for issue #136 — `FixedAsync::Input` mode.
+    ///
+    /// Before the fix, `calculate_output_size` used the arithmetic mean of the
+    /// *ratios* to estimate how many output frames fit inside the input buffer.
+    /// When the ratio decreased sharply (e.g. 1.0 → 0.2, relative 0.2×) with
+    /// `ramp = true`, the step size averaged to 3.0 instead of ≈ 0.6, so the
+    /// resampler tried to consume far more input frames than the buffer holds
+    /// and panicked with an unsafe precondition violation.
+    #[test_log::test(test_matrix(
+        [PolynomialDegree::Cubic, PolynomialDegree::Linear],
+        [0.2f64, 5.0f64]
+    ))]
+    fn poly_ramp_large_ratio_change_does_not_panic(degree: PolynomialDegree, target_rel: f64) {
+        let chunk_size = 1024;
+        let channels = 1;
+        let mut resampler =
+            Async::<f64>::new_poly(1.0, 6.0, degree, chunk_size, channels, FixedAsync::Input)
+                .unwrap();
+
+        // First block at the nominal ratio.
+        let (frames_in, frames_out) = process_one_block(&mut resampler, channels);
+        assert!(
+            frames_in == chunk_size,
+            "first block: expected {chunk_size} input frames, got {frames_in}",
+        );
+        assert!(
+            frames_out > 0,
+            "first block: expected nonzero output frames, got 0",
+        );
+
+        // Change ratio dramatically with ramp=true — the issue #136 trigger.
+        resampler
+            .set_resample_ratio_relative(target_rel, true)
+            .unwrap();
+
+        // The sizes reported by the resampler must be in bounds.
+        let frames_in2 = resampler.input_frames_next();
+        let frames_out2 = resampler.output_frames_next();
+        assert!(
+            frames_in2 == chunk_size,
+            "after ratio change: expected {chunk_size} input frames, got {frames_in2}",
+        );
+        assert!(
+            frames_out2 > 0,
+            "after ratio change: expected nonzero output frames, got {frames_out2}",
+        );
+
+        // Second block must complete without panicking.
+        let (consumed2, produced2) = process_one_block(&mut resampler, channels);
+        assert_eq!(
+            consumed2, frames_in2,
+            "second block consumed {consumed2} frames, expected {frames_in2}",
+        );
+        assert_eq!(
+            produced2, frames_out2,
+            "second block produced {produced2} frames, expected {frames_out2}",
+        );
+    }
+
+    #[test_log::test(test_matrix(
+        [0.2f64, 5.0f64]
+    ))]
+    fn sinc_ramp_large_ratio_change_does_not_panic(target_rel: f64) {
+        let chunk_size = 1024;
+        let channels = 1;
+        let params = basic_params();
+        let mut resampler =
+            Async::<f64>::new_sinc(1.0, 6.0, &params, chunk_size, channels, FixedAsync::Input)
+                .unwrap();
+
+        // First block at the nominal ratio.
+        let (frames_in, frames_out) = process_one_block(&mut resampler, channels);
+        assert!(
+            frames_in == chunk_size,
+            "first block: expected {chunk_size} input frames, got {frames_in}",
+        );
+        assert!(
+            frames_out > 0,
+            "first block: expected nonzero output frames, got 0",
+        );
+
+        // Change ratio dramatically with ramp=true — the issue #136 trigger.
+        resampler
+            .set_resample_ratio_relative(target_rel, true)
+            .unwrap();
+
+        let frames_in2 = resampler.input_frames_next();
+        let frames_out2 = resampler.output_frames_next();
+        assert!(
+            frames_in2 == chunk_size,
+            "after ratio change: expected {chunk_size} input frames, got {frames_in2}",
+        );
+        assert!(
+            frames_out2 > 0,
+            "after ratio change: expected nonzero output frames, got {frames_out2}",
+        );
+
+        // Second block must complete without panicking.
+        let (consumed2, produced2) = process_one_block(&mut resampler, channels);
+        assert_eq!(
+            consumed2, frames_in2,
+            "second block consumed {consumed2} frames, expected {frames_in2}",
+        );
+        assert_eq!(
+            produced2, frames_out2,
+            "second block produced {produced2} frames, expected {frames_out2}",
+        );
+    }
+
+    /// Regression test for issue #136 — `FixedAsync::Output` mode.
+    ///
+    /// In `FixedAsync::Output` mode the output chunk size is fixed and the
+    /// input size is variable (computed by `calculate_input_size`). The same
+    /// averaging error that caused the `FixedAsync::Input` panic would have
+    /// caused `calculate_input_size` to underestimate how many input frames
+    /// are needed, making the resampler read past the allocated buffer.
+    #[test_log::test(test_matrix(
+        [PolynomialDegree::Cubic, PolynomialDegree::Linear],
+        [0.2f64, 5.0f64]
+    ))]
+    fn poly_output_fixed_ramp_large_ratio_change_does_not_panic(
+        degree: PolynomialDegree,
+        target_rel: f64,
+    ) {
+        let chunk_size = 1024;
+        let channels = 1;
+        let mut resampler =
+            Async::<f64>::new_poly(1.0, 6.0, degree, chunk_size, channels, FixedAsync::Output)
+                .unwrap();
+
+        // First block at the nominal ratio.
+        let (_, frames_out) = process_one_block(&mut resampler, channels);
+        assert!(
+            frames_out == chunk_size,
+            "first block: expected {chunk_size} output frames, got {frames_out}",
+        );
+
+        // Change ratio dramatically with ramp=true.
+        resampler
+            .set_resample_ratio_relative(target_rel, true)
+            .unwrap();
+
+        let frames_in2 = resampler.input_frames_next();
+        let frames_out2 = resampler.output_frames_next();
+        assert!(
+            frames_in2 > 0,
+            "after ratio change: expected nonzero input frames, got {frames_in2}",
+        );
+        assert_eq!(
+            frames_out2, chunk_size,
+            "after ratio change: expected {chunk_size} output frames, got {frames_out2}",
+        );
+
+        // Second block must complete without panicking.
+        let (consumed2, produced2) = process_one_block(&mut resampler, channels);
+        assert_eq!(
+            consumed2, frames_in2,
+            "second block consumed {consumed2} frames, expected {frames_in2}",
+        );
+        assert_eq!(
+            produced2, frames_out2,
+            "second block produced {produced2} frames, expected {frames_out2}",
+        );
+    }
+
+    #[test_log::test(test_matrix(
+        [0.2f64, 5.0f64]
+    ))]
+    fn sinc_output_fixed_ramp_large_ratio_change_does_not_panic(target_rel: f64) {
+        let chunk_size = 1024;
+        let channels = 1;
+        let params = basic_params();
+        let mut resampler =
+            Async::<f64>::new_sinc(1.0, 6.0, &params, chunk_size, channels, FixedAsync::Output)
+                .unwrap();
+
+        // First block at the nominal ratio.
+        let (_, frames_out) = process_one_block(&mut resampler, channels);
+        assert!(
+            frames_out == chunk_size,
+            "first block: expected {chunk_size} output frames, got {frames_out}",
+        );
+
+        // Change ratio dramatically with ramp=true.
+        resampler
+            .set_resample_ratio_relative(target_rel, true)
+            .unwrap();
+
+        let frames_in2 = resampler.input_frames_next();
+        let frames_out2 = resampler.output_frames_next();
+        assert!(
+            frames_in2 > 0,
+            "after ratio change: expected nonzero input frames, got {frames_in2}",
+        );
+        assert_eq!(
+            frames_out2, chunk_size,
+            "after ratio change: expected {chunk_size} output frames, got {frames_out2}",
+        );
+
+        // Second block must complete without panicking.
+        let (consumed2, produced2) = process_one_block(&mut resampler, channels);
+        assert_eq!(
+            consumed2, frames_in2,
+            "second block consumed {consumed2} frames, expected {frames_in2}",
+        );
+        assert_eq!(
+            produced2, frames_out2,
+            "second block produced {produced2} frames, expected {frames_out2}",
+        );
+    }
+
+    // --- compute_t_ratio_increment unit tests ---
+
+    /// `compute_t_ratio_increment` must produce a ramp that reaches exactly
+    /// `1/target_ratio` after `n` increments from `1/resample_ratio`.
+    #[test_log::test]
+    fn t_ratio_increment_reaches_target() {
+        for (r1, r2, n) in [
+            (1.0f64, 0.2f64, 100usize),
+            (1.0, 5.0, 1024),
+            (2.0, 3.0, 512),
+            (0.5, 0.5, 256),
+            (0.125, 8.0, 64),
+        ] {
+            let inc = Async::<f64>::compute_t_ratio_increment(r1, r2, n);
+            let t_ratio_end = 1.0 / r1 + n as f64 * inc;
+            let expected_end = 1.0 / r2;
+            assert!(
+                (t_ratio_end - expected_end).abs() < 1e-10,
+                "r1={r1}, r2={r2}, n={n}: t_ratio after {n} increments = {t_ratio_end}, expected {expected_end}",
+            );
+        }
+    }
+
+    /// At equal ratios `compute_t_ratio_increment` must return zero (no ramp).
+    #[test_log::test]
+    fn t_ratio_increment_equal_ratios_is_zero() {
+        for r in [0.1f64, 0.5, 1.0, 2.0, 10.0] {
+            for n in [1usize, 100, 1024] {
+                let inc = Async::<f64>::compute_t_ratio_increment(r, r, n);
+                assert!(
+                    inc.abs() < 1e-15,
+                    "compute_t_ratio_increment({r}, {r}, {n}) = {inc}, expected 0.0",
+                );
+            }
+        }
+    }
+
+    // --- advance_index unit tests ---
+
+    /// The index advance produced by the exact loop must equal the closed-form
+    /// prediction `n * avg_t_ratio + ramp_overshoot` to within floating-point
+    /// rounding error.
+    ///
+    /// This closes the loop between the analytical estimate used in
+    /// `calculate_output_size`/`calculate_input_size` and the real arithmetic
+    /// performed in every inner resampler loop.
+    #[test_log::test]
+    fn advance_index_matches_analytical_formula() {
+        for (r1, r2, n) in [
+            (1.0f64, 0.2f64, 100usize),
+            (1.0, 5.0, 1024),
+            (2.0, 3.0, 512),
+            (0.5, 0.8, 256),
+            (0.125, 8.0, 64),
+            (1.0, 1.0, 200),
+        ] {
+            let start_idx = 0.0f64;
+            let inc = Async::<f64>::compute_t_ratio_increment(r1, r2, n);
+            let final_idx = Async::<f64>::advance_index(start_idx, 1.0 / r1, inc, n);
+
+            let avg = Async::<f64>::avg_t_ratio(r1, r2);
+            let ramp_overshoot = 0.5 * (1.0 / r2 - 1.0 / r1);
+            let analytical = start_idx + n as f64 * avg + ramp_overshoot;
+
+            // Tolerate small floating-point accumulation over n steps.
+            let tol = 1e-6;
+            assert!(
+                (final_idx - analytical).abs() <= tol,
+                "r1={r1}, r2={r2}, n={n}: advance_index={final_idx}, analytical={analytical}, diff={}",
+                (final_idx - analytical).abs(),
+            );
+        }
+    }
+
+    /// For every combination of ratio-change direction and magnitude, the
+    /// index produced by `advance_index` (using the output-frame count from
+    /// `calculate_output_size`) must stay within the input buffer bounds.
+    ///
+    /// This is the direct, loop-level proof that the fix in
+    /// `calculate_output_size` is tight: the analytical estimate is never an
+    /// overestimate.
+    #[test_log::test]
+    fn advance_index_stays_within_buffer_bounds() {
+        let chunk_size = 1024usize;
+        let interpolator_len = 4usize; // representative polynomial kernel half-width
+
+        for last_index in [0.0f64, 0.5, 2.0] {
+            for (r1, r2) in [
+                (1.0f64, 0.2f64),
+                (1.0, 5.0),
+                (0.5, 2.0),
+                (2.0, 0.5),
+                (1.0, 1.0),
+                (0.3, 0.3),
+                (0.125, 8.0),
+                (8.0, 0.125),
+            ] {
+                let n = Async::<f64>::calculate_output_size(
+                    chunk_size,
+                    r1,
+                    r2,
+                    last_index,
+                    interpolator_len,
+                    &FixedAsync::Input,
+                );
+
+                if n == 0 {
+                    // No output frames fit in this configuration; nothing to check.
+                    continue;
+                }
+
+                let inc = Async::<f64>::compute_t_ratio_increment(r1, r2, n);
+                let final_idx = Async::<f64>::advance_index(last_index, 1.0 / r1, inc, n);
+
+                // The inner loop uses floor(idx) as the array start index,
+                // so we check the integer part rather than the raw float to
+                // avoid false failures from sub-ULP floating-point noise.
+                let bound = chunk_size - interpolator_len - 1;
+                assert!(
+                    final_idx.floor() as usize <= bound,
+                    "r1={r1}, r2={r2}, last_index={last_index}, n={n}: \
+                     advance_index floor(final_idx)={} exceeds buffer bound={bound}",
+                    final_idx.floor() as usize,
+                );
+            }
+        }
+    }
+    #[test]
+    fn reject_non_finite_ratios() {
+        use crate::ResamplerConstructionError;
+
+        for ratio in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let res = Async::<f64>::new_poly(
+                ratio,
+                1.0,
+                PolynomialDegree::Cubic,
+                1024,
+                2,
+                FixedAsync::Input,
+            );
+            assert!(
+                matches!(res, Err(ResamplerConstructionError::InvalidRatio(_))),
+                "resample_ratio {ratio} was accepted"
+            );
+        }
+
+        for rel in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 0.5] {
+            let res = Async::<f64>::new_poly(
+                1.0,
+                rel,
+                PolynomialDegree::Cubic,
+                1024,
+                2,
+                FixedAsync::Input,
+            );
+            assert!(
+                matches!(
+                    res,
+                    Err(ResamplerConstructionError::InvalidRelativeRatio(_))
+                ),
+                "max_resample_ratio_relative {rel} was accepted"
+            );
+        }
+    }
+
+    /// A ratio can be finite, positive, and still give a size that does not fit in a
+    /// `usize`. The cast saturates, so this used to come back as an ordinary `usize::MAX`
+    /// sized buffer that callers would then allocate from, both from the `_max` accessors
+    /// and from the `_next` ones.
+    ///
+    /// A size that is merely enormous is a real answer and is left alone, to fail on
+    /// allocation like any other oversized `Vec`.
+    #[test]
+    #[should_panic(expected = "does not fit in a usize")]
+    fn huge_ratio_panics_on_size_calculation() {
+        let _ = Async::<f64>::new_poly(
+            1e19,
+            1.0,
+            PolynomialDegree::Cubic,
+            1024,
+            2,
+            FixedAsync::Input,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "does not fit in a usize")]
+    fn huge_relative_ratio_panics_on_buffer_length() {
+        let _ = Async::<f64>::new_poly(
+            1.0,
+            usize::MAX as f64,
+            PolynomialDegree::Cubic,
+            1024,
+            2,
+            FixedAsync::Output,
+        );
+    }
+
+    /// `resample_ratio_original * rel_ratio` can overflow to infinity while `rel_ratio`
+    /// itself is inside the allowed range, which used to install a non-finite ratio.
+    #[test]
+    fn relative_ratio_cannot_install_a_non_finite_ratio() {
+        let mut resampler = Async::<f64>::new_poly(
+            1e308,
+            10.0,
+            PolynomialDegree::Cubic,
+            1024,
+            2,
+            FixedAsync::Output,
+        )
+        .unwrap();
+
+        assert!(resampler.set_resample_ratio_relative(10.0, false).is_err());
+        assert_eq!(resampler.resample_ratio(), 1e308);
+
+        // A relative change that stays finite is still accepted.
+        let mut resampler = Async::<f64>::new_poly(
+            2.0,
+            10.0,
+            PolynomialDegree::Cubic,
+            1024,
+            2,
+            FixedAsync::Output,
+        )
+        .unwrap();
+        assert!(resampler.set_resample_ratio_relative(10.0, false).is_ok());
+        assert_eq!(resampler.resample_ratio(), 20.0);
+    }
+
+    /// The limit must leave room for ratios and buffer sizes that are actually used.
+    #[test]
+    fn accept_realistic_sizes() {
+        for (ratio, rel, fixed) in [
+            (192000.0 / 44100.0, 10.0, FixedAsync::Input),
+            (192000.0 / 44100.0, 10.0, FixedAsync::Output),
+            (44100.0 / 192000.0, 10.0, FixedAsync::Input),
+            (44100.0 / 192000.0, 10.0, FixedAsync::Output),
+            (1.0, 1.0, FixedAsync::Input),
+            (1.0, 1000.0, FixedAsync::Output),
+        ] {
+            assert!(
+                Async::<f64>::new_poly(ratio, rel, PolynomialDegree::Cubic, 8192, 2, fixed).is_ok(),
+                "ratio {ratio} with relative {rel} and {fixed:?} was rejected"
+            );
+        }
+    }
+}

@@ -1723,30 +1723,6 @@
     },
     {
       "type": "library",
-      "name": "rust-windowfunctions-0.1.1",
-      "version": "0.1.1",
-      "description": "Rust 重采样的锁定依赖",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:cargo/windowfunctions@0.1.1",
-      "properties": [
-        {
-          "name": "mradm:distribution",
-          "value": "available"
-        },
-        {
-          "name": "mradm:source-type",
-          "value": "cargo"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "rust-quick-xml-0.41.0",
       "version": "0.41.0",
       "description": "Rust ADM XML 解析和转义",
@@ -1806,6 +1782,30 @@
         }
       ],
       "purl": "pkg:generic/mradm-ear@0.1.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "local"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "musl-derived-rust-math",
+      "version": "musl-1.2.5-subset",
+      "description": "可移植 sin/cos（重采样 sinc 与窗函数系数表）",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:generic/mradm-math@0.1.0",
       "properties": [
         {
           "name": "mradm:distribution",
