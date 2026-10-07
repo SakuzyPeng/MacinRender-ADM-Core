@@ -123,7 +123,7 @@ bool lfe_layout(const char* layout, uint32_t channels, bool split) {
 }
 
 // NOLINTNEXTLINE(readability-function-size): end-to-end ownership and drain scenario.
-bool run(bool system_spatial) {
+bool run(bool system_spatial, bool triple_balance = false) {
     mradm::realtime::BufferedMediaTimeline timeline;
     timeline.enqueue(0, 33);
     timeline.enqueue(1024, 0);
@@ -143,9 +143,9 @@ bool run(bool system_spatial) {
     adm_scene_stream_config_t config{};
     config.struct_size = sizeof(config);
     config.rendering.struct_size = sizeof(config.rendering);
-    config.rendering.renderer = ADM_RENDERER_SAF;
+    config.rendering.renderer = triple_balance ? ADM_RENDERER_TRIPLE_BALANCE : ADM_RENDERER_SAF;
     config.rendering.output_layout = "4+7+0";
-    config.rendering.speaker_geometry = ADM_SPEAKER_GEOMETRY_APPLE;
+    config.rendering.speaker_geometry = triple_balance ? ADM_SPEAKER_GEOMETRY_STANDARD : ADM_SPEAKER_GEOMETRY_APPLE;
     config.input_sample_rate = 48000;
     config.output_sample_rate = 48000;
     config.startup_watermark_frames = 1;
@@ -175,7 +175,7 @@ bool run(bool system_spatial) {
     ok &= check(adm_scene_output_begin_epoch(output, 1, 0) == ADM_ERROR_OK, "output reset failed");
     adm_scene_element_descriptor_t element{};
     element.struct_size = sizeof(element);
-    element.role = ADM_SCENE_ELEMENT_LFE;
+    element.role = triple_balance ? ADM_SCENE_ELEMENT_OBJECT : ADM_SCENE_ELEMENT_LFE;
     element.element_id = 7;
     ok &= check(adm_scene_stream_configure_generation(stream, 1, 0, &element, 1) == ADM_ERROR_OK, "configure failed");
     adm_scene_initial_state_t state{};
@@ -238,5 +238,5 @@ int main(int argc, char** argv) {
     const bool system_spatial = argc == 2 && std::string_view(argv[1]) == "--system";
     const bool lfe_ok =
         lfe_layout("4+7+0", 12, false) && lfe_layout("9.1.6", 16, false) && lfe_layout("9+10+3", 24, true);
-    return lfe_ok && run(system_spatial) ? 0 : 1;
+    return lfe_ok && run(system_spatial) && run(false, true) ? 0 : 1;
 }

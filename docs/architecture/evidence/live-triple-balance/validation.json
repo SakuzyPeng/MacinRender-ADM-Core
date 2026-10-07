@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-07",
+  "api_version": "1.44.0",
+  "scope": "Canonical Scene Triple Balance; file and monitor regressions retained",
+  "toolchain": "Rust 1.98.0",
+  "checks": {
+    "macos_arm64_debug_ctest": "72/72",
+    "macos_arm64_release_focused_ctest": "3/3",
+    "linux_arm64_bookworm_release_focused_ctest_and_rust": "4/4",
+    "windows_x64_canonical_release_focused_ctest_and_rust": "6/6",
+    "windows_replay_tool_tests": "28/28",
+    "rust_clippy": "-D warnings passed",
+    "private_ffi_headers": {
+      "functions": 213,
+      "structs": 68
+    },
+    "new_cpp_clang_tidy": "warnings-as-errors passed",
+    "cppcheck": "passed"
+  },
+  "pcm": {
+    "case_count": 32,
+    "macos_linux_exact": 32,
+    "macos_windows_exact": 32,
+    "sha256": {
+      "scene-triple-balance-22.2-size0-48000-48000-fixed/pass-1-epoch-1.pcmbits": "ee11cedd0d40dd0b0f4d156dd43d2c123e77e02d3be7f39710de9b3e55a2365d",
+      "scene-triple-balance-22.2-size0-48000-48000-fixed/pass-1-epoch-2.pcmbits": "7622d0f36ca8d95081732704ba116bdd8131f2b97c5e84df7aba0325155c3016",
+      "scene-triple-balance-22.2-size0-48000-48000-fragmented/pass-1-epoch-1.pcmbits": "ee11cedd0d40dd0b0f4d156dd43d2c123e77e02d3be7f39710de9b3e55a2365d",
+      "scene-triple-balance-22.2-size0-48000-48000-fragmented/pass-1-epoch-2.pcmbits": "7622d0f36ca8d95081732704ba116bdd8131f2b97c5e84df7aba0325155c3016",
+      "scene-triple-balance-22.2-size1-48000-48000-fixed/pass-1-epoch-1.pcmbits": "50652d53df58d4fab8e3b8fdcdee53903c9426ba8434a783e43dfb8672c829ee",
+      "scene-triple-balance-22.2-size1-48000-48000-fixed/pass-1-epoch-2.pcmbits": "a60040c8a9ec9b96d0c16d4ab5bae65ec7d3378967df16eb54024a4a84ea9964",
+      "scene-triple-balance-22.2-size1-48000-48000-fragmented/pass-1-epoch-1.pcmbits": "50652d53df58d4fab8e3b8fdcdee53903c9426ba8434a783e43dfb8672c829ee",
+      "scene-triple-balance-22.2-size1-48000-48000-fragmented/pass-1-epoch-2.pcmbits": "a60040c8a9ec9b96d0c16d4ab5bae65ec7d3378967df16eb54024a4a84ea9964",
+      "scene-triple-balance-7.1.4-size0-48000-48000-fixed/pass-1-epoch-1.pcmbits": "a0867280e99e97f2e3fccc4a0af5f7492f9ae6a7dd58e53c85570ca377c080cc",
+      "scene-triple-balance-7.1.4-size0-48000-48000-fixed/pass-1-epoch-2.pcmbits": "33afe7259988b9624e6c09eaef18899b863c10b0dd47991ee1fbc05aa2a88542",
+      "scene-triple-balance-7.1.4-size0-48000-48000-fragmented/pass-1-epoch-1.pcmbits": "a0867280e99e97f2e3fccc4a0af5f7492f9ae6a7dd58e53c85570ca377c080cc",
+      "scene-triple-balance-7.1.4-size0-48000-48000-fragmented/pass-1-epoch-2.pcmbits": "33afe7259988b9624e6c09eaef18899b863c10b0dd47991ee1fbc05aa2a88542",
+      "scene-triple-balance-7.1.4-size0-96000-96000-fixed/pass-1-epoch-1.pcmbits": "fbb8671a73e063978efdf340a7e346fd9a23d7aec14513c639d4365cc0af7068",
+      "scene-triple-balance-7.1.4-size0-96000-96000-fixed/pass-1-epoch-2.pcmbits": "d7319d30315232e97aa196ec2b434a3be61871eeaee90dfd64b9a9aa8b67d699",
+      "scene-triple-balance-7.1.4-size0-96000-96000-fragmented/pass-1-epoch-1.pcmbits": "fbb8671a73e063978efdf340a7e346fd9a23d7aec14513c639d4365cc0af7068",
+      "scene-triple-balance-7.1.4-size0-96000-96000-fragmented/pass-1-epoch-2.pcmbits": "d7319d30315232e97aa196ec2b434a3be61871eeaee90dfd64b9a9aa8b67d699",
+      "scene-triple-balance-7.1.4-size1-48000-48000-fixed/pass-1-epoch-1.pcmbits": "3dbec784da72382516755840c02d86d5991511231ddfc12dc142b01822f77b28",
+      "scene-triple-balance-7.1.4-size1-48000-48000-fixed/pass-1-epoch-2.pcmbits": "c5b69499521da26db55b09202278489fc7fc9c551cad144c49af78fea560977c",
+      "scene-triple-balance-7.1.4-size1-48000-48000-fragmented/pass-1-epoch-1.pcmbits": "3dbec784da72382516755840c02d86d5991511231ddfc12dc142b01822f77b28",
+      "scene-triple-balance-7.1.4-size1-48000-48000-fragmented/pass-1-epoch-2.pcmbits": "c5b69499521da26db55b09202278489fc7fc9c551cad144c49af78fea560977c",
+      "scene-triple-balance-9.1.6-size0-48000-48000-fixed/pass-1-epoch-1.pcmbits": "854e782914957a56c086029a4538518a11abd0b6578964258951a74dec2e2181",
+      "scene-triple-balance-9.1.6-size0-48000-48000-fixed/pass-1-epoch-2.pcmbits": "992b447ead275e5229a82bf395fc8dd241e2ba2d4b5783b7756e00f3d72f74a9",
+      "scene-triple-balance-9.1.6-size0-48000-48000-fragmented/pass-1-epoch-1.pcmbits": "854e782914957a56c086029a4538518a11abd0b6578964258951a74dec2e2181",
+      "scene-triple-balance-9.1.6-size0-48000-48000-fragmented/pass-1-epoch-2.pcmbits": "992b447ead275e5229a82bf395fc8dd241e2ba2d4b5783b7756e00f3d72f74a9",
+      "scene-triple-balance-9.1.6-size1-48000-44100-fixed/pass-1-epoch-1.pcmbits": "031a5d2882d6501ce8d63e7d8618b4eaf1d95da4ab2eff6a9d87b274840fc4f1",
+      "scene-triple-balance-9.1.6-size1-48000-44100-fixed/pass-1-epoch-2.pcmbits": "ad36e1a7efb7b256bb9ec624555d43d3f7557b344eec0974e148cc4f380f5581",
+      "scene-triple-balance-9.1.6-size1-48000-44100-fragmented/pass-1-epoch-1.pcmbits": "c46a2f7bd50dd8bca301ff7bdf3b9780e1416699b6ab4583707e513d89d93c6e",
+      "scene-triple-balance-9.1.6-size1-48000-44100-fragmented/pass-1-epoch-2.pcmbits": "ad36e1a7efb7b256bb9ec624555d43d3f7557b344eec0974e148cc4f380f5581",
+      "scene-triple-balance-9.1.6-size1-48000-48000-fixed/pass-1-epoch-1.pcmbits": "b98570d9c5ce56c642642c0bda2efea91e2e27d29460cdbd529a41d353f6bec0",
+      "scene-triple-balance-9.1.6-size1-48000-48000-fixed/pass-1-epoch-2.pcmbits": "1a5f56e54382ac9a1074ce36f143fb9b3e1f99e7b7ae6460fc284098b96269c6",
+      "scene-triple-balance-9.1.6-size1-48000-48000-fragmented/pass-1-epoch-1.pcmbits": "b98570d9c5ce56c642642c0bda2efea91e2e27d29460cdbd529a41d353f6bec0",
+      "scene-triple-balance-9.1.6-size1-48000-48000-fragmented/pass-1-epoch-2.pcmbits": "1a5f56e54382ac9a1074ce36f143fb9b3e1f99e7b7ae6460fc284098b96269c6"
+    }
+  },
+  "benchmark": {
+    "fixture": "13 mono inputs: 7.1.2 bed, two continuously ramped size Objects and one point; 480-frame submissions, 60 seconds, timed null output",
+    "macos_arm64_9_1_6": "layout=9.1.6 rtf=0.0300577 elapsed_s=60.0329 underruns=0 frames=2880000 rss_5s=12500992 rss_final=12533760 rss_peak=12533760",
+    "macos_arm64_22_2": "layout=22.2 rtf=0.0566716 elapsed_s=60.0368 underruns=0 frames=2880000 rss_5s=13123584 rss_final=13123584 rss_peak=13123584",
+    "windows_x64_9_1_6": "layout=9.1.6 rtf=0.0660833 elapsed_s=60.0278 underruns=0 frames=2880000 rss_5s=12845056 rss_final=10645504 rss_peak=13115392",
+    "macos_hardware": "Apple M4 Pro",
+    "rtf_measurement": "10 seconds of equivalent live-renderer input rendered as fast as possible; the following 60-second Scene/null-output run measures underruns and RSS"
+  },
+  "sources": {
+    "src/adm_render_triple_balance/live_triple_balance_renderer.cpp": "fd6a309f45fc101f15738137ccddce1b2eee596deeab3a7ba54c24fcb8a64582",
+    "rust/crates/mradm-dsp/src/triple_balance/live.rs": "c6981c7f382cc00442fe23bcc0638dc390f822a78582194828770b4cdb015663",
+    "rust/crates/mradm-dsp/src/triple_balance/panner.rs": "f1eec8d732315a4dcbb3a1d84c80adb225f6d4c6ab0c9ab04ef74c3056c49956",
+    "rust/crates/mradm-dsp/src/triple_balance/processor.rs": "52ec2e04ec09545f13e69ec4b4f5b3b747e5aa1182f9a1e102a804839d00ba00",
+    "rust/crates/mradm-ffi/src/live_triple_balance.rs": "f6b0419b2fb7c00aab4d1ee760e1fca5e27b08915dd2615bdaafa966a81a0736",
+    "tests/tools/phase2_scene.cpp": "ee43902d5327731cfc551d8289b21094644a07c7b36660951a65b948b43097d7",
+    "scripts/consistency/phase2_common.py": "7ee8c95188b7852ed65b6ec6aa5d7d9cbb9ae94d3e0330f2486dd45eabbebc30"
+  },
+  "windows_original_state_restored": {
+    "restored_files": 841,
+    "all_original_bytes_verified": true,
+    "git_status_identical": true
+  }
+}

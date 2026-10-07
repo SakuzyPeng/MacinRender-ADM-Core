@@ -530,7 +530,8 @@ to_scene_renderer_config(const adm_scene_renderer_config_t* config, std::uint32_
     }
     adm_scene_renderer_config_t input{};
     std::memcpy(&input, config, sizeof(input));
-    if ((input.renderer != ADM_RENDERER_SAF && input.renderer != ADM_RENDERER_SAF_BINAURAL) ||
+    if ((input.renderer != ADM_RENDERER_SAF && input.renderer != ADM_RENDERER_SAF_BINAURAL &&
+         input.renderer != ADM_RENDERER_TRIPLE_BALANCE) ||
         input.speaker_geometry < ADM_SPEAKER_GEOMETRY_STANDARD || input.speaker_geometry > ADM_SPEAKER_GEOMETRY_APPLE ||
         input.speaker_spread_mode < ADM_SPEAKER_SPREAD_AUTOMATIC ||
         input.speaker_spread_mode > ADM_SPEAKER_SPREAD_MDAP ||
@@ -540,11 +541,12 @@ to_scene_renderer_config(const adm_scene_renderer_config_t* config, std::uint32_
         input.object_smoothing_frames > 48000U) {
         return mradm::make_error(mradm::ErrorCode::invalid_argument, "invalid live Scene renderer configuration value");
     }
-    if (input.renderer == ADM_RENDERER_SAF && (input.output_layout == nullptr || input.output_layout[0] == '\0')) {
+    if (input.renderer != ADM_RENDERER_SAF_BINAURAL &&
+        (input.output_layout == nullptr || input.output_layout[0] == '\0')) {
         return mradm::make_error(mradm::ErrorCode::invalid_argument,
-                                 "SAF VBAP live Scene rendering requires an output layout");
+                                 "Speaker live Scene rendering requires an output layout");
     }
-    if (input.renderer == ADM_RENDERER_SAF && input.sofa_path != nullptr && input.sofa_path[0] != '\0') {
+    if (input.renderer != ADM_RENDERER_SAF_BINAURAL && input.sofa_path != nullptr && input.sofa_path[0] != '\0') {
         return mradm::make_error(mradm::ErrorCode::unsupported,
                                  "a live Scene SOFA path is valid only for SAF binaural rendering");
     }

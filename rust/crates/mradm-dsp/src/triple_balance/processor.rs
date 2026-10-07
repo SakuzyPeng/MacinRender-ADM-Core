@@ -55,7 +55,8 @@ impl Decorrelator {
         self.reset_dsp();
         self.silent = 0;
     }
-    pub fn process(&mut self, input: &[f32; 32], out: &mut [FilteredFrame; 32]) {
+    // Shared arithmetic only: the legacy and Scene adapters own their silence clocks.
+    fn sample(&mut self, x: f32, fade: f32) -> FilteredFrame {
         const DELAYS: [usize; 4] = [152, 200, 263, 346];
         const COEFF: [[f32; 4]; 4] = [
             [-0.4, -0.4, -0.4, -0.4],
@@ -63,6 +64,40 @@ impl Decorrelator {
             [-0.4, -0.4, 0.4, 0.4],
             [-0.4, 0.4, 0.4, -0.4],
         ];
+        let pref = 0.6752336621284485 * (x + self.prefilter);
+        self.prefilter = pref - x;
+        let level = pref.abs() + 1e-8;
+        self.fast = 0.00415802001953125 * level + 0.9958419799804688 * self.fast;
+        self.slow = 0.00026035308837890625 * level + 0.9997396469116211 * self.slow;
+        self.pre = (self.pre - 1.) * 0.9995834231376648 + 1.;
+        self.post = (self.post - 1.) * 0.9995834231376648 + 1.;
+        let slow = if self.slow == 0. { 1e-8 } else { self.slow };
+        let fast = if self.fast == 0. { 1e-8 } else { self.fast };
+        // std::min retains its first argument when the comparison is unordered.
+        let next = slow * 1.1 / fast;
+        if next < self.pre {
+            self.pre = next;
+        }
+        let next = fast * 1.1 / slow;
+        if next < self.post {
+            self.post = next;
+        }
+        let delayed = self.input[self.input_index];
+        self.input[self.input_index] = x;
+        self.input_index = (self.input_index + 1) % 96;
+        let mut signal = [delayed * self.pre; 4];
+        for stage in 0..4 {
+            let memory = &mut self.delays[stage][self.indices[stage]];
+            for mode in 0..4 {
+                let next = COEFF[stage][mode] * memory[mode] + signal[mode];
+                signal[mode] = memory[mode] - COEFF[stage][mode] * next;
+                memory[mode] = next;
+            }
+            self.indices[stage] = (self.indices[stage] + 1) % DELAYS[stage];
+        }
+        signal.map(|v| (v * self.post) * fade)
+    }
+    pub fn process(&mut self, input: &[f32; 32], out: &mut [FilteredFrame; 32]) {
         let silent = input.iter().all(|x| x.abs() <= 0.00000011920928955078125);
         if !silent {
             self.silent = 0;
@@ -76,45 +111,12 @@ impl Decorrelator {
             } else {
                 input[f]
             };
-            let pref = 0.6752336621284485 * (x + self.prefilter);
-            self.prefilter = pref - x;
-            let level = pref.abs() + 1e-8;
-            self.fast = 0.00415802001953125 * level + 0.9958419799804688 * self.fast;
-            self.slow = 0.00026035308837890625 * level + 0.9997396469116211 * self.slow;
-            self.pre = (self.pre - 1.) * 0.9995834231376648 + 1.;
-            self.post = (self.post - 1.) * 0.9995834231376648 + 1.;
-            let slow = if self.slow == 0. { 1e-8 } else { self.slow };
-            let fast = if self.fast == 0. { 1e-8 } else { self.fast };
-            // std::min retains its first argument when the comparison is unordered.
-            let next = slow * 1.1 / fast;
-            if next < self.pre {
-                self.pre = next;
-            }
-            let next = fast * 1.1 / slow;
-            if next < self.post {
-                self.post = next;
-            }
-            let delayed = self.input[self.input_index];
-            self.input[self.input_index] = x;
-            self.input_index = (self.input_index + 1) % 96;
-            let mut signal = [delayed * self.pre; 4];
-            for stage in 0..4 {
-                let memory = &mut self.delays[stage][self.indices[stage]];
-                for mode in 0..4 {
-                    let next = COEFF[stage][mode] * memory[mode] + signal[mode];
-                    signal[mode] = memory[mode] - COEFF[stage][mode] * next;
-                    memory[mode] = next;
-                }
-                self.indices[stage] = (self.indices[stage] + 1) % DELAYS[stage];
-            }
             let fade = if silent && self.silent == 15 {
                 (32 - f) as f32 / 32.
             } else {
                 1.
             };
-            for mode in 0..4 {
-                out[f][mode] = (signal[mode] * self.post) * fade;
-            }
+            out[f] = self.sample(x, fade);
         }
         self.initial = false;
         if silent {
@@ -123,6 +125,46 @@ impl Decorrelator {
             }
             self.silent += 1;
         }
+    }
+}
+/// Causal Scene variant: no lookahead or producer-block-dependent silence decisions.
+#[derive(Default)]
+pub(crate) struct LiveDecorrelator {
+    filter: Decorrelator,
+    startup: u32,
+    silent: u32,
+}
+impl LiveDecorrelator {
+    pub fn reset(&mut self) {
+        self.filter.reset();
+        self.startup = 0;
+        self.silent = 0;
+    }
+    pub fn process(&mut self, input: f32) -> FilteredFrame {
+        if input.abs() > 0.00000011920928955078125 {
+            self.silent = 0;
+        } else if self.silent == 512 {
+            return [0.; 4];
+        } else {
+            self.silent += 1;
+        }
+        let x = if self.startup < 32 {
+            input * (self.startup as f32 / 32.)
+        } else {
+            input
+        };
+        self.startup = (self.startup + 1).min(32);
+        let fade = if self.silent > 480 {
+            (513 - self.silent) as f32 / 32.
+        } else {
+            1.
+        };
+        let output = self.filter.sample(x, fade);
+        if self.silent == 512 {
+            self.filter.reset();
+            self.startup = 0;
+        }
+        output
     }
 }
 pub struct Track {

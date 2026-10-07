@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.43）
-> 日期：2026-05-17（增量记录持续更新至 2026-10-03 的 v1.43）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.44）
+> 日期：2026-05-17（增量记录持续更新至 2026-10-07 的 v1.44）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -668,3 +668,12 @@ profile setter，以保留请求次序；错误通过 `out_error` 独立返回�
 - 该后端仅支持已验证的 Cartesian / 7.1.2 bed 离线范围；不宣称实时流、HOA、channelLock 或 divergence 支持。
 - 删除原 C++ `SpeakerPannerMode` 和 CLI `--speaker-panner`。此前它们未进入稳定 C ABI，且维护者要求不保留旧入口。
 - 实现边界和命名来源见 [Triple Balance](../architecture/TRIPLE_BALANCE_RENDERER.md)。
+
+### v1.44.0（additive，`SOVERSION` 仍为 1）
+
+- Scene 创建与后端热切换接受已有 `ADM_RENDERER_TRIPLE_BALANCE=7`；公开符号、POD
+  布局、函数签名及 enum 数值不变。输入和边界见 [Triple Balance](../architecture/TRIPLE_BALANCE_RENDERER.md)。
+- Scene 使用输入采样时钟与独立位置／尺寸／增益 ramp，不继承文件路径的 512 帧元数据网格。
+  既有文件渲染与 monitor 行为保持。新能力可通过 API minor >= 44 识别。
+- 非法配置同步返回；已提交状态的不支持语义通过 worker FAILED 状态和诊断报告。
+  候选后端失败保留原后端，沿用已有交叉淡化及输出格式约束。

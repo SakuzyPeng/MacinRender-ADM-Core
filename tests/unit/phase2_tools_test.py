@@ -147,7 +147,7 @@ class EvidenceTests(unittest.TestCase):
         offline, scene = common.offline_cases(), common.scene_cases()
         self.assertEqual(len(offline), 34)
         self.assertEqual(len({r['id'] for r in offline}), 34)
-        self.assertEqual(len(scene), 42)
+        self.assertEqual(len(scene), 58)
         self.assertTrue(any('--loudness-target' in c['args'] for c in offline))
         self.assertTrue(any('triple-balance' in c['args'] for c in offline))
         for row in scene:
@@ -166,7 +166,7 @@ class EvidenceTests(unittest.TestCase):
     def test_original_matrix_parameters_remain_frozen(self):
         closeout = json.loads((ROOT / 'docs/architecture/evidence/rust-phase2/closeout.json').read_text())
         original_scene = [row for row in common.scene_cases()
-                          if max(row['input_rate'], row['output_rate']) <= 48000]
+                          if row['version'] == 1 and max(row['input_rate'], row['output_rate']) <= 48000]
         self.assertEqual(len(original_scene), closeout['inventory']['scene_configurations'])
         self.assertEqual(common.json_digest(common.offline_cases()),
                          closeout['inventory']['offline_parameters_sha256'])

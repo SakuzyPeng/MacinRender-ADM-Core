@@ -30,6 +30,7 @@
 
 #include "../adm_render_common/consistency_trace.h"
 #include "live_binaural_renderer.h"
+#include "live_triple_balance_renderer.h"
 #include "live_vbap_renderer.h"
 #include "resampler.h"
 #include "ring_buffer.h"
@@ -98,7 +99,10 @@ create_live_renderer(const live_scene::RendererConfig& config, const live_scene:
     if (config.renderer == RendererSelection::saf_binaural) {
         return live_scene::create_live_binaural_renderer(config, diagnostics);
     }
-    return make_error(ErrorCode::unsupported, "Scene stream v1 supports only SAF VBAP and SAF binaural renderers");
+    if (config.renderer == RendererSelection::triple_balance) {
+        return live_scene::create_live_triple_balance_renderer(config, diagnostics);
+    }
+    return make_error(ErrorCode::unsupported, "Scene streams support SAF VBAP, SAF binaural and Triple Balance");
 }
 
 [[nodiscard]] live_scene::ObjectState default_state(const live_scene::ElementDescriptor& descriptor) {

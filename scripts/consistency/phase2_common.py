@@ -128,6 +128,21 @@ def scene_cases():
                    output_controls={'0': 'volume=0.875; HpTF bypass', '2048': 'HpTF peak 1700Hz +6dB Q0.75 preamp -3dB auto-trim',
                                     '4096': 'HpTF high-shelf 4200Hz -4dB Q0.75 preamp -6dB', '6144': 'HpTF bypass', '8192': 'volume=0.5'})
         result.append(row)
+    # Version 2 adds speaker-backend switching; the original replay catalog stays frozen.
+    for layout, sized, input_rate, output_rate in [
+            (layout, sized, 48000, 48000) for layout in ('7.1.4', '9.1.6', '22.2') for sized in (False, True)
+    ] + [('7.1.4', False, 96000, 96000), ('9.1.6', True, 48000, 44100)]:
+        for partition_name, partition in [('fixed', [512]), ('fragmented', [1, 7, 127, 511, 1024])]:
+            row = dict(result[0], id=f'scene-triple-balance-{layout}-size{int(sized)}-{input_rate}-{output_rate}-{partition_name}',
+                       version=2, backend='triple-balance', layout=layout, cloud=sized,
+                       input_rate=input_rate, output_rate=output_rate, partition=partition)
+            row['controls'] = dict(row['controls'], **{'8192': 'switch speaker backend'})
+            row['metadata'] = [dict(event) for event in metadata[:3]]
+            row['metadata'] += ([{'sample': 3073, 'field': 'size', 'value': 0.7, 'ramp': 97},
+                                 {'sample': 5003, 'field': 'size', 'value': 0.0, 'ramp': 71}] if sized else
+                                [{'sample': 3073, 'field': 'position', 'value': [0.75, -0.25, 0.5], 'ramp': 97},
+                                 {'sample': 5003, 'field': 'position', 'value': [0.0, 1.0, 0.0], 'ramp': 0}])
+            result.append(row)
     return result
 
 
