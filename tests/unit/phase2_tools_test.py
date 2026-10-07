@@ -259,11 +259,13 @@ class EvidenceTests(unittest.TestCase):
                 cases = [c['id'] for c in common.offline_cases()]
                 cases += [c['id'] + f'-epoch{e}' for c in common.scene_cases() for e in (1, 2)]
                 self.assertTrue(any(fnmatch.fnmatchcase(n, gate['pattern']) for n in cases), gate['pattern'])
-        # Spreader cases join the gates only after three-platform acceptance (RUST_PHASE2_SPREADER.md).
+        # Every PCM case is bit-identical on all three platforms (ADR 0017): each case is gated by
+        # exact id, so a new case must join the gates (or be argued out here) in the same change.
         case_gates = [g['pattern'] for g in gates if g['kind'] == 'case']
         self.assertEqual(len(case_gates), len(set(case_gates)))
-        for pattern in case_gates:
-            self.assertNotIn('spreader', pattern)
+        cases = [c['id'] for c in common.offline_cases()]
+        cases += [c['id'] + f'-epoch{e}' for c in common.scene_cases() for e in (1, 2)]
+        self.assertEqual(sorted(case_gates), sorted(cases))
         for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'

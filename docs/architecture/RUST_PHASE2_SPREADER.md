@@ -44,4 +44,25 @@
 
 ## 三平台验收
 
-待 Consistency CI 结果补充。
+[Consistency run 37569897598](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37569897598)
+在 `0d62eeb` 上完成三平台 A/B 及诊断采集，同一提交的 CI 通过。四份报告结果一致，摘要与报告哈希见
+[OM spreader 验收记录](evidence/rust-phase2/spreader-validation.json)。
+
+| 三平台共同逐位相同的 PCM | 用例数 |
+|---|---:|
+| 二期基线 `00a70e4` | 29/78 |
+| FFT 切片 `6ec2dc6` | 52/78 |
+| 重采样切片 `0f6c187` | 76/78 |
+| 本切片 `0d62eeb` | 78/78 |
+
+- 门禁 0 失败：新增的 `om-*`、`spreader.*` 内核及此前全部门禁在三个平台对上逐位相同。
+  67 个内核中只剩平台 libm 计算的 `fft-twiddles.10-libm.f64` 有 1 ULP 差异（4240–6677 个字，不设门禁）。
+- 两个 spreader 用例在 macOS arm64、Linux x64、Windows x64 上逐位相同；EAR/HOA 等使用 nalgebra 的用例在
+  `libm-force` 后仍全部相同。
+- 每个平台内部 A 对 B 为 78/78；同进程/新进程重复性、Scene 健康、帧数、诊断无扰动与 worker/分组实验门禁通过。
+
+### PCM 门禁
+
+两个 spreader 用例按精确 id 加入 `phase2-gates.json`（来源注明 ADR 0017），门禁共 7 项内核与全部 78 个
+PCM 用例。`phase2_tools_test.py` 现在要求 case 门禁恰好等于全部用例 id：新增一致性用例必须在同一改动中
+加入门禁（或在测试中写明例外），已达成的完整位相等不会被静默绕过。

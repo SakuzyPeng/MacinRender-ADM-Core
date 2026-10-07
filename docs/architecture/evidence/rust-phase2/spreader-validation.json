@@ -1,0 +1,83 @@
+{
+  "schema": "mradm.phase2.validation.v1",
+  "slice": "om-spreader-fixed-groups-portable-libm",
+  "decision": "docs/adr/0017-deterministic-spreader.md",
+  "ci": {
+    "workflow": "Consistency",
+    "run_id": 37569897598,
+    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37569897598",
+    "commit": "0d62eeb8917bd07a1eed4e472982536eda1bd36e",
+    "other_runs": {
+      "CI": 37569903513,
+      "Quality": 37569905700
+    },
+    "conclusion": "success"
+  },
+  "source_sha256": "f22a1a89e685d6d709796a6d4c3949afd2f0cb34edf0e096b868577193256368",
+  "reports": {
+    "consistency-report-a.json": {
+      "sha256": "d4b85b9ecce17c624b6e6ba1304564af47f23ddd8226f770d48e2469d3b90832",
+      "identical": 78,
+      "differing": 0,
+      "gate_failures": 0
+    },
+    "consistency-report-b.json": {
+      "sha256": "2029cf6d069d45661043b860c4eea039cb81c3d1e134ceeb9deab02903e632e5",
+      "identical": 78,
+      "differing": 0,
+      "gate_failures": 0
+    },
+    "consistency-report-a-diagnostic.json": {
+      "sha256": "a9a04f2eeb467ca44ae2d5f7055e874825c2adf1c741c4ccdb0579a6df531a11",
+      "identical": 78,
+      "differing": 0,
+      "gate_failures": 0
+    },
+    "consistency-report-b-diagnostic.json": {
+      "sha256": "848e5cedef7408cf07ebeb3f3e39c666e154d5b363a8634195d873a5de592bf2",
+      "identical": 78,
+      "differing": 0,
+      "gate_failures": 0
+    }
+  },
+  "pcm_result": {
+    "baseline_identical": 29,
+    "after_fft_slice": 52,
+    "after_resampler_slice": 76,
+    "identical": 78,
+    "newly_identical": [
+      "binaural-extent-spreader",
+      "binaural-extent-spreader-multi"
+    ],
+    "all_four_reports_agree": true
+  },
+  "kernel_differences_config_a": {
+    "macos/linux": [
+      {
+        "kernel": "fft-twiddles.10-libm.f64",
+        "different_words": 5557,
+        "max_ulp": 1
+      }
+    ],
+    "macos/windows": [
+      {
+        "kernel": "fft-twiddles.10-libm.f64",
+        "different_words": 6677,
+        "max_ulp": 1
+      }
+    ],
+    "linux/windows": [
+      {
+        "kernel": "fft-twiddles.10-libm.f64",
+        "different_words": 4240,
+        "max_ulp": 1
+      }
+    ]
+  },
+  "kernel_notes": [
+    "67 kernels; om-*, spreader.*, trig.*, resampler-*, fft-*, ear FIR, scene and HpTF kernels are identical on all pairs",
+    "only fft-twiddles.10-libm.f64 (platform libm, not gated) still differs by 1 ULP"
+  ],
+  "remaining_differences_first_observed": {},
+  "gates": "scripts/consistency/phase2-gates.json: 7 kernel gates + 78 case gates (every PCM case)"
+}

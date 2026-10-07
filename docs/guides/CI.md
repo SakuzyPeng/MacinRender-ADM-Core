@@ -83,8 +83,8 @@ config A 为默认数值配置，config B 只打开 C/C++ 严格浮点选项；�
 二期使用 `run-rust-phase2.py` 收集 34 个离线场景、22 个实时 Scene 配置（各含两个 epoch）及
 67 个内核测量（含 FFT twiddle 表、可移植三角函数与 OM spreader），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
 验证三平台源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；
-`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM 与 spreader 内核及 76/78 个 PCM 用例）必须三平台逐位相同，
-其余跨平台位差仍只记录。`compare` job 先写出全部四份报告，再按门禁结果失败。
+`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM 与 spreader 内核及全部 78 个 PCM 用例）必须三平台逐位相同；
+新增用例必须同时按精确 id 加入门禁（`phase2_tools_test.py` 校验），未设门禁的测量（平台 libm f64 twiddle 列）只记录。`compare` job 先写出全部四份报告，再按门禁结果失败。
 详见 [Rust 二期基线](../architecture/RUST_PHASE2_BASELINE.md)与 [二期 FFT 收敛](../architecture/RUST_PHASE2_FFT.md)。历史 SAF 清单和定位脚本保留原始边界。
 
 ### 第三阶段：发布构建
