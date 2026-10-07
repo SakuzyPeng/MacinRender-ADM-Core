@@ -1,0 +1,4210 @@
+{
+  "schema_version": 1,
+  "stage": "selection-only",
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "source_revision": "cceed19c3215ddc60cc90b75f33eb245caf6b750",
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+  "cxx": "Homebrew clang version 21.1.8",
+  "flac_cli": "flac 1.5.0",
+  "profiles": {
+    "rust": "release",
+    "cpp": "-O2"
+  },
+  "versions": {
+    "symphonia": "0.6.1",
+    "claxon": "0.4.3"
+  },
+  "dr_flac_header_sha256": "4c4ecf25e31e0766871db99e31c1867524bf5aa5cd1b5e442177ffbeb6c0c183",
+  "probe_sources": {
+    "scripts/flac-eval/run.py": "e2a8d19a3dd681674a2dfa424af48e0a11d287edbc1690e7ecadfe0402ea689b",
+    "scripts/flac-eval/reference.cpp": "d268f48762f629c9c2474a3005782247bbdd9960ba166fd3152b1d266ca3d03b",
+    "scripts/flac-eval/src/main.rs": "38137f84785002b1058ea347e7517f34ce1f7b9886c3cf7a15b475fc4dba1018",
+    "scripts/flac-eval/Cargo.toml": "9f0371ad40e91d25a4b62c50487df7261e6d618639256c167c45ea97ea875c62",
+    "scripts/flac-eval/Cargo.lock": "3180a219e63056c4819c0f63b3e573fc4ee3e54a856a39248efb9292f4bd46af"
+  },
+  "cases": [
+    {
+      "id": "pcm4-1ch",
+      "category": "valid",
+      "channels": 1,
+      "input_sha256": "b10572e21d5ad855a4ef906d63a8fb9ecadd2b88b6939ba90d4246b63e7d7bea",
+      "expected_sha256": "2cc365d2e2bfc6b8459968a1c07132320b63c28cdf817948be1f654723c8f875",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0001",
+          "rate": "44100",
+          "bits": "\u0004",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "2cc365d2e2bfc6b8459968a1c07132320b63c28cdf817948be1f654723c8f875",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "70466819156d9ee6c1aa1e6432faacd681d39a326dd2ed70118f2fdbb231dd09",
+          "float_sha256": "b8d322bce0cd17539ce697e597170bbe96ca9a78458530b84b000b849f38057f"
+        },
+        "symphonia": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "4",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "2cc365d2e2bfc6b8459968a1c07132320b63c28cdf817948be1f654723c8f875",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "70466819156d9ee6c1aa1e6432faacd681d39a326dd2ed70118f2fdbb231dd09",
+          "float_sha256": "b8d322bce0cd17539ce697e597170bbe96ca9a78458530b84b000b849f38057f"
+        },
+        "claxon": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "4",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "decode_error: A currently unsupported feature of the FLAC format was encountered: header without bits per sample info",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    },
+    {
+      "id": "pcm4-2ch",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "0b5c86ec46e8ed4845f9fdaeba534fcfa263db39cf32bfb265c385fea60e7599",
+      "expected_sha256": "c8fa1273591adce1b5ea82d4d49023afa791345daf67bf54835154ad656a5a29",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "96000",
+          "bits": "\u0004",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "c8fa1273591adce1b5ea82d4d49023afa791345daf67bf54835154ad656a5a29",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "76cb0c60deedfb5a3991f45b6fff28fd0789ac31514a21714ea2be5a3ed1c897",
+          "float_sha256": "ba7d32e79d61b9a4ab55df6a0697672102f01f046c4c9c4ac81b3657358ee3c4"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "96000",
+          "bits": "4",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "c8fa1273591adce1b5ea82d4d49023afa791345daf67bf54835154ad656a5a29",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "76cb0c60deedfb5a3991f45b6fff28fd0789ac31514a21714ea2be5a3ed1c897",
+          "float_sha256": "ba7d32e79d61b9a4ab55df6a0697672102f01f046c4c9c4ac81b3657358ee3c4"
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "96000",
+          "bits": "4",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "decode_error: A currently unsupported feature of the FLAC format was encountered: header without bits per sample info",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    },
+    {
+      "id": "pcm4-6ch",
+      "category": "valid",
+      "channels": 6,
+      "input_sha256": "d2427966b2a514ae3309d80c6fa487dc9829d2a95cb3b316a7dd24806bc0060e",
+      "expected_sha256": "0afee3ff3eb08e9325bc6766aec5b104f089193fad8108204fd27ee325ddabf8",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": "\u0004",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "0afee3ff3eb08e9325bc6766aec5b104f089193fad8108204fd27ee325ddabf8",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "dcdf158f8a97c235ecab7a329b0929fc750fe86bb1e82dbd1480533ae1492eb5",
+          "float_sha256": "27f07796d6fd93cf416fec4cb2f238604eece4f42d7f79cecd04ee09121a5bf7"
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "4",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "0afee3ff3eb08e9325bc6766aec5b104f089193fad8108204fd27ee325ddabf8",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "dcdf158f8a97c235ecab7a329b0929fc750fe86bb1e82dbd1480533ae1492eb5",
+          "float_sha256": "27f07796d6fd93cf416fec4cb2f238604eece4f42d7f79cecd04ee09121a5bf7"
+        },
+        "claxon": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "4",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "decode_error: A currently unsupported feature of the FLAC format was encountered: header without bits per sample info",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    },
+    {
+      "id": "pcm4-8ch",
+      "category": "valid",
+      "channels": 8,
+      "input_sha256": "2ca39048909e2d79ebffa74adf8d92c3635693283897b064ca36aee481116c2a",
+      "expected_sha256": "57a6bcac8dcc6f4b5e28546bfbcf59552134d090818003e9ddcf0cac8e230488",
+      "decoders": {
+        "drflac": {
+          "channels": "\b",
+          "rate": "8000",
+          "bits": "\u0004",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "57a6bcac8dcc6f4b5e28546bfbcf59552134d090818003e9ddcf0cac8e230488",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "3dbe8918dce216c9c18e587b8bb9027e8f2146b0a02d62496893038323fb7416",
+          "float_sha256": "65e79a23837c677b9bda165c87081e8c1146fcaa71c03638f5feb9f5e45640da"
+        },
+        "symphonia": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "4",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "57a6bcac8dcc6f4b5e28546bfbcf59552134d090818003e9ddcf0cac8e230488",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "3dbe8918dce216c9c18e587b8bb9027e8f2146b0a02d62496893038323fb7416",
+          "float_sha256": "65e79a23837c677b9bda165c87081e8c1146fcaa71c03638f5feb9f5e45640da"
+        },
+        "claxon": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "4",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "decode_error: A currently unsupported feature of the FLAC format was encountered: header without bits per sample info",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    },
+    {
+      "id": "pcm8-1ch",
+      "category": "valid",
+      "channels": 1,
+      "input_sha256": "ebfc83d282cc100a7ed70475c8dce547102471063a7ed4466af585366c8c7a42",
+      "expected_sha256": "18b91a9615d1144c8e0c28de76a562ae68f1d43c3833ed8ae6d566240db98cf8",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0001",
+          "rate": "44100",
+          "bits": "\b",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "18b91a9615d1144c8e0c28de76a562ae68f1d43c3833ed8ae6d566240db98cf8",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "ad432a040b15f63ee7e839fcb84ef081b79ee70ce4cbaeca10c119f82ca62304",
+          "float_sha256": "83c76723b07d0af3c5bb62c95079a97888f7b4d4a95feeaa5f3e8397b8482547"
+        },
+        "symphonia": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "8",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "18b91a9615d1144c8e0c28de76a562ae68f1d43c3833ed8ae6d566240db98cf8",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "ad432a040b15f63ee7e839fcb84ef081b79ee70ce4cbaeca10c119f82ca62304",
+          "float_sha256": "83c76723b07d0af3c5bb62c95079a97888f7b4d4a95feeaa5f3e8397b8482547"
+        },
+        "claxon": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "8",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "18b91a9615d1144c8e0c28de76a562ae68f1d43c3833ed8ae6d566240db98cf8",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "ad432a040b15f63ee7e839fcb84ef081b79ee70ce4cbaeca10c119f82ca62304",
+          "float_sha256": "83c76723b07d0af3c5bb62c95079a97888f7b4d4a95feeaa5f3e8397b8482547"
+        }
+      }
+    },
+    {
+      "id": "pcm8-2ch",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "7ea319388d296d551631596dc62997a7f62057eab14134dbae783328e6ce66b0",
+      "expected_sha256": "3e62f415aed878e0ac99ccae893e691b36b5d7c19eb1ee5fd2d480b0a06d6d39",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "96000",
+          "bits": "\b",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "3e62f415aed878e0ac99ccae893e691b36b5d7c19eb1ee5fd2d480b0a06d6d39",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "5e8e900b1fa592fdc506aeaed1cddd79fe6ae33460b631763fad542b1fde8d77",
+          "float_sha256": "d63cf6d1e2fbaa8dea6411df90d17b72b34cfb9f54aefd2b5c0164b8690aa517"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "96000",
+          "bits": "8",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "3e62f415aed878e0ac99ccae893e691b36b5d7c19eb1ee5fd2d480b0a06d6d39",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "5e8e900b1fa592fdc506aeaed1cddd79fe6ae33460b631763fad542b1fde8d77",
+          "float_sha256": "d63cf6d1e2fbaa8dea6411df90d17b72b34cfb9f54aefd2b5c0164b8690aa517"
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "96000",
+          "bits": "8",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "3e62f415aed878e0ac99ccae893e691b36b5d7c19eb1ee5fd2d480b0a06d6d39",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "5e8e900b1fa592fdc506aeaed1cddd79fe6ae33460b631763fad542b1fde8d77",
+          "float_sha256": "d63cf6d1e2fbaa8dea6411df90d17b72b34cfb9f54aefd2b5c0164b8690aa517"
+        }
+      }
+    },
+    {
+      "id": "pcm8-6ch",
+      "category": "valid",
+      "channels": 6,
+      "input_sha256": "866c7c4797c13fb0f7e74c5a1dc3fea4f726d9a284e509892a457dee8d6c5ef8",
+      "expected_sha256": "4545a3b568efdce6d09121c830fbcb6047ff55cc8083e487f347e1e236130a73",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": "\b",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "4545a3b568efdce6d09121c830fbcb6047ff55cc8083e487f347e1e236130a73",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "8bc310b0de4eea25d1d3d990b26d4802db1be836e7fdc657ef8bf166f0687aaf",
+          "float_sha256": "b7589ad647a0a57a8fc2a311b1d1abcb0537ee4b6a2dd4bd88d5f8b792e08381"
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "8",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "4545a3b568efdce6d09121c830fbcb6047ff55cc8083e487f347e1e236130a73",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "8bc310b0de4eea25d1d3d990b26d4802db1be836e7fdc657ef8bf166f0687aaf",
+          "float_sha256": "b7589ad647a0a57a8fc2a311b1d1abcb0537ee4b6a2dd4bd88d5f8b792e08381"
+        },
+        "claxon": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "8",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "4545a3b568efdce6d09121c830fbcb6047ff55cc8083e487f347e1e236130a73",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "8bc310b0de4eea25d1d3d990b26d4802db1be836e7fdc657ef8bf166f0687aaf",
+          "float_sha256": "b7589ad647a0a57a8fc2a311b1d1abcb0537ee4b6a2dd4bd88d5f8b792e08381"
+        }
+      }
+    },
+    {
+      "id": "pcm8-8ch",
+      "category": "valid",
+      "channels": 8,
+      "input_sha256": "61305d17eeee6a7dac0d6127af5bc80f7821caa7ad1d4d770cc3bf4baf59d741",
+      "expected_sha256": "8d3a35c64d403231481e535eadaad031134a38de6e9c2ee87530a5af1e5e5012",
+      "decoders": {
+        "drflac": {
+          "channels": "\b",
+          "rate": "8000",
+          "bits": "\b",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "8d3a35c64d403231481e535eadaad031134a38de6e9c2ee87530a5af1e5e5012",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "a91abff815af4a5ab7e7a3f910bb5777e96c3dc8a70925a445542a09edc7a986",
+          "float_sha256": "3e9d296d6f48b4c5d65e839dbb8f2371bf5e51bdc76fd81ed145e6919f907cc4"
+        },
+        "symphonia": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "8",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "8d3a35c64d403231481e535eadaad031134a38de6e9c2ee87530a5af1e5e5012",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "a91abff815af4a5ab7e7a3f910bb5777e96c3dc8a70925a445542a09edc7a986",
+          "float_sha256": "3e9d296d6f48b4c5d65e839dbb8f2371bf5e51bdc76fd81ed145e6919f907cc4"
+        },
+        "claxon": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "8",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "8d3a35c64d403231481e535eadaad031134a38de6e9c2ee87530a5af1e5e5012",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "a91abff815af4a5ab7e7a3f910bb5777e96c3dc8a70925a445542a09edc7a986",
+          "float_sha256": "3e9d296d6f48b4c5d65e839dbb8f2371bf5e51bdc76fd81ed145e6919f907cc4"
+        }
+      }
+    },
+    {
+      "id": "pcm12-1ch",
+      "category": "valid",
+      "channels": 1,
+      "input_sha256": "8c45fdca907916f99a84a7b6e116b88bc2ac588fe58faa70cfcb8014552f0de2",
+      "expected_sha256": "aa99d014a137ae7c7939a3aaae268eeb5d73a4b37b288262b574982b394afcba",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0001",
+          "rate": "44100",
+          "bits": "",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "aa99d014a137ae7c7939a3aaae268eeb5d73a4b37b288262b574982b394afcba",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "f5151951739fa76abab0b3105f09191045a4c4c007b5b492045f13c505b667dd",
+          "float_sha256": "616dbfcb7ac046861a73f47de8eb72ab093cde518b3951382c0935a1429e769c"
+        },
+        "symphonia": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "12",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "aa99d014a137ae7c7939a3aaae268eeb5d73a4b37b288262b574982b394afcba",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "f5151951739fa76abab0b3105f09191045a4c4c007b5b492045f13c505b667dd",
+          "float_sha256": "616dbfcb7ac046861a73f47de8eb72ab093cde518b3951382c0935a1429e769c"
+        },
+        "claxon": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "12",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "aa99d014a137ae7c7939a3aaae268eeb5d73a4b37b288262b574982b394afcba",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "f5151951739fa76abab0b3105f09191045a4c4c007b5b492045f13c505b667dd",
+          "float_sha256": "616dbfcb7ac046861a73f47de8eb72ab093cde518b3951382c0935a1429e769c"
+        }
+      }
+    },
+    {
+      "id": "pcm12-2ch",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "923f6100466cdd3e65221717d75d5b795961bb1cede807c36cc634245f1d7efe",
+      "expected_sha256": "39debe811e38e11dada8f44f95039ce13fd75d423adf693fdce5f85ad2045dcf",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "96000",
+          "bits": "",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "39debe811e38e11dada8f44f95039ce13fd75d423adf693fdce5f85ad2045dcf",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "c31e4c253821d11d6d6e8c088b713b4e667677240aea1920253877bbc2d28d2d",
+          "float_sha256": "6c612e459ed3d2867b6087a5e07ecebbe17173c784d8dbcfd9682ffbb0da6bf4"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "96000",
+          "bits": "12",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "39debe811e38e11dada8f44f95039ce13fd75d423adf693fdce5f85ad2045dcf",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "c31e4c253821d11d6d6e8c088b713b4e667677240aea1920253877bbc2d28d2d",
+          "float_sha256": "6c612e459ed3d2867b6087a5e07ecebbe17173c784d8dbcfd9682ffbb0da6bf4"
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "96000",
+          "bits": "12",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "39debe811e38e11dada8f44f95039ce13fd75d423adf693fdce5f85ad2045dcf",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "c31e4c253821d11d6d6e8c088b713b4e667677240aea1920253877bbc2d28d2d",
+          "float_sha256": "6c612e459ed3d2867b6087a5e07ecebbe17173c784d8dbcfd9682ffbb0da6bf4"
+        }
+      }
+    },
+    {
+      "id": "pcm12-6ch",
+      "category": "valid",
+      "channels": 6,
+      "input_sha256": "b71c0aa196abbde26b64d097264985ca8952a17b238e8e7a5eadfd1b661ddb14",
+      "expected_sha256": "6414a0a2aaf9b8ef992895c0631db06a83c058b0eafb6b8ddb85807a9244e6de",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": "",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "6414a0a2aaf9b8ef992895c0631db06a83c058b0eafb6b8ddb85807a9244e6de",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "6f0d065febc12fe076d11a2b1903d10f5271b7319f58ce22ec5f9cdb148b52bd",
+          "float_sha256": "3ceebad9cc8150eee09696fddd1e3e8281a0dffa38db9b4f50159cd78370970f"
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "12",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "6414a0a2aaf9b8ef992895c0631db06a83c058b0eafb6b8ddb85807a9244e6de",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "6f0d065febc12fe076d11a2b1903d10f5271b7319f58ce22ec5f9cdb148b52bd",
+          "float_sha256": "3ceebad9cc8150eee09696fddd1e3e8281a0dffa38db9b4f50159cd78370970f"
+        },
+        "claxon": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "12",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "6414a0a2aaf9b8ef992895c0631db06a83c058b0eafb6b8ddb85807a9244e6de",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "6f0d065febc12fe076d11a2b1903d10f5271b7319f58ce22ec5f9cdb148b52bd",
+          "float_sha256": "3ceebad9cc8150eee09696fddd1e3e8281a0dffa38db9b4f50159cd78370970f"
+        }
+      }
+    },
+    {
+      "id": "pcm12-8ch",
+      "category": "valid",
+      "channels": 8,
+      "input_sha256": "bb54baf1a3b2780dd315caac1fd0ad0bb1ee7d0f09c2165f4d27c03d6b35f198",
+      "expected_sha256": "09a0b1f18c5c8936e6d29e95a0c9265ce05b2ed2f0b596c771cda107bba59ea4",
+      "decoders": {
+        "drflac": {
+          "channels": "\b",
+          "rate": "8000",
+          "bits": "",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "09a0b1f18c5c8936e6d29e95a0c9265ce05b2ed2f0b596c771cda107bba59ea4",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "9839b29c7ecb649e3859ba3eb85c2f831793ee106fa01174b6eab2bf9d6fd2fb",
+          "float_sha256": "65497d34fa83a08c9610cb00a7b10e46c7a8ddefe1b6096545c1cb76cb4991b5"
+        },
+        "symphonia": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "12",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "09a0b1f18c5c8936e6d29e95a0c9265ce05b2ed2f0b596c771cda107bba59ea4",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "9839b29c7ecb649e3859ba3eb85c2f831793ee106fa01174b6eab2bf9d6fd2fb",
+          "float_sha256": "65497d34fa83a08c9610cb00a7b10e46c7a8ddefe1b6096545c1cb76cb4991b5"
+        },
+        "claxon": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "12",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "09a0b1f18c5c8936e6d29e95a0c9265ce05b2ed2f0b596c771cda107bba59ea4",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "9839b29c7ecb649e3859ba3eb85c2f831793ee106fa01174b6eab2bf9d6fd2fb",
+          "float_sha256": "65497d34fa83a08c9610cb00a7b10e46c7a8ddefe1b6096545c1cb76cb4991b5"
+        }
+      }
+    },
+    {
+      "id": "pcm16-1ch",
+      "category": "valid",
+      "channels": 1,
+      "input_sha256": "b6d844b4f0904dc536b880dd6446b85436f9fe5d64b88790672b8f644dcc6a51",
+      "expected_sha256": "c60eeef99a0aea87195f58e1010121a7d81235443f2ea8d46524470cc84ed095",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0001",
+          "rate": "44100",
+          "bits": "\u0010",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "c60eeef99a0aea87195f58e1010121a7d81235443f2ea8d46524470cc84ed095",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "8ced3407cc5e77724fccd00550be4362b4501b78ba2c41898535a94b33e516b4",
+          "float_sha256": "8cd7782d2914cdbad38012257b07c3522d81d8874f421cdbf2a9bc00e149046c"
+        },
+        "symphonia": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "16",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "c60eeef99a0aea87195f58e1010121a7d81235443f2ea8d46524470cc84ed095",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "8ced3407cc5e77724fccd00550be4362b4501b78ba2c41898535a94b33e516b4",
+          "float_sha256": "8cd7782d2914cdbad38012257b07c3522d81d8874f421cdbf2a9bc00e149046c"
+        },
+        "claxon": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "16",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "c60eeef99a0aea87195f58e1010121a7d81235443f2ea8d46524470cc84ed095",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "8ced3407cc5e77724fccd00550be4362b4501b78ba2c41898535a94b33e516b4",
+          "float_sha256": "8cd7782d2914cdbad38012257b07c3522d81d8874f421cdbf2a9bc00e149046c"
+        }
+      }
+    },
+    {
+      "id": "pcm16-2ch",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "95ac97e7498d68a14c3df167462c1f643f4d0d8278b9b8a48b7eae6b77281c2b",
+      "expected_sha256": "e904b4d00f5ed290034a058ff31290a4d1af9aa5a98e332ecb9bb4cd94216b21",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "96000",
+          "bits": "\u0010",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e904b4d00f5ed290034a058ff31290a4d1af9aa5a98e332ecb9bb4cd94216b21",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0c7772ff0049063de22b597c5d85ef9c3a343afea9add50b7977e430bfb4d1b6",
+          "float_sha256": "dfcc5aafded46dbda402b90b8e700a8368eebfefce1f070d75a594502ed7aeba"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "96000",
+          "bits": "16",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "e904b4d00f5ed290034a058ff31290a4d1af9aa5a98e332ecb9bb4cd94216b21",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0c7772ff0049063de22b597c5d85ef9c3a343afea9add50b7977e430bfb4d1b6",
+          "float_sha256": "dfcc5aafded46dbda402b90b8e700a8368eebfefce1f070d75a594502ed7aeba"
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "96000",
+          "bits": "16",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "e904b4d00f5ed290034a058ff31290a4d1af9aa5a98e332ecb9bb4cd94216b21",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0c7772ff0049063de22b597c5d85ef9c3a343afea9add50b7977e430bfb4d1b6",
+          "float_sha256": "dfcc5aafded46dbda402b90b8e700a8368eebfefce1f070d75a594502ed7aeba"
+        }
+      }
+    },
+    {
+      "id": "pcm16-6ch",
+      "category": "valid",
+      "channels": 6,
+      "input_sha256": "621627e0cd1544aa710d856fefdd530ad926fc8c12e18e88ec0694a8ba0968a7",
+      "expected_sha256": "4a6238562cbd0fc792af684d094149c2d71a11fda8adedc44d04fbe9731abb50",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": "\u0010",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "4a6238562cbd0fc792af684d094149c2d71a11fda8adedc44d04fbe9731abb50",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "e318282bc49371373ebf6e3ea3e991da3475fdab14a5dd9c462e9bdc35e405b6",
+          "float_sha256": "936dec9ce2eaf6ebc1d0150a4ed39551f898d4466f1a8679e9e29ec10170fad3"
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "16",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "4a6238562cbd0fc792af684d094149c2d71a11fda8adedc44d04fbe9731abb50",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "e318282bc49371373ebf6e3ea3e991da3475fdab14a5dd9c462e9bdc35e405b6",
+          "float_sha256": "936dec9ce2eaf6ebc1d0150a4ed39551f898d4466f1a8679e9e29ec10170fad3"
+        },
+        "claxon": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "16",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "4a6238562cbd0fc792af684d094149c2d71a11fda8adedc44d04fbe9731abb50",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "e318282bc49371373ebf6e3ea3e991da3475fdab14a5dd9c462e9bdc35e405b6",
+          "float_sha256": "936dec9ce2eaf6ebc1d0150a4ed39551f898d4466f1a8679e9e29ec10170fad3"
+        }
+      }
+    },
+    {
+      "id": "pcm16-8ch",
+      "category": "valid",
+      "channels": 8,
+      "input_sha256": "96e130207e22ef6bd90f9ccca09105c0777ea1bee74040d0fbe97607d54c801e",
+      "expected_sha256": "6d9feb5f91ae4ea37cb5b9cfd29a0dc1c347c6a231231ec5bf9bf18497e3109d",
+      "decoders": {
+        "drflac": {
+          "channels": "\b",
+          "rate": "8000",
+          "bits": "\u0010",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "6d9feb5f91ae4ea37cb5b9cfd29a0dc1c347c6a231231ec5bf9bf18497e3109d",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "759876ede5d54f9f02ef83fb7da8a1d7c07eef713d629ce212e616990f2bb05c",
+          "float_sha256": "9f57bd2d739b0c7f070e6a9942614f3c635b28df912735bb2f4ad93df5b773e4"
+        },
+        "symphonia": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "16",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "6d9feb5f91ae4ea37cb5b9cfd29a0dc1c347c6a231231ec5bf9bf18497e3109d",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "759876ede5d54f9f02ef83fb7da8a1d7c07eef713d629ce212e616990f2bb05c",
+          "float_sha256": "9f57bd2d739b0c7f070e6a9942614f3c635b28df912735bb2f4ad93df5b773e4"
+        },
+        "claxon": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "16",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "6d9feb5f91ae4ea37cb5b9cfd29a0dc1c347c6a231231ec5bf9bf18497e3109d",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "759876ede5d54f9f02ef83fb7da8a1d7c07eef713d629ce212e616990f2bb05c",
+          "float_sha256": "9f57bd2d739b0c7f070e6a9942614f3c635b28df912735bb2f4ad93df5b773e4"
+        }
+      }
+    },
+    {
+      "id": "pcm20-1ch",
+      "category": "valid",
+      "channels": 1,
+      "input_sha256": "f561960b765ade8de0871aa161aba7a2f8f1dbf615a0081d1cc78f2afe388b3b",
+      "expected_sha256": "7dc9b2d445767e05ee35ae0b6432a8065e449f00aba0fc8f6a406256fa39a2d0",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0001",
+          "rate": "44100",
+          "bits": "\u0014",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "7dc9b2d445767e05ee35ae0b6432a8065e449f00aba0fc8f6a406256fa39a2d0",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "cd21c7a5ad2b9f124d51563aae2466fe7ea7921d47ad647820ff06e5822575c2",
+          "float_sha256": "19b5eacfd6de4d34fbf33014fe0e2ec4e14eb38faed8633f3336019f723ffd3c"
+        },
+        "symphonia": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "20",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "7dc9b2d445767e05ee35ae0b6432a8065e449f00aba0fc8f6a406256fa39a2d0",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "cd21c7a5ad2b9f124d51563aae2466fe7ea7921d47ad647820ff06e5822575c2",
+          "float_sha256": "19b5eacfd6de4d34fbf33014fe0e2ec4e14eb38faed8633f3336019f723ffd3c"
+        },
+        "claxon": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "20",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "7dc9b2d445767e05ee35ae0b6432a8065e449f00aba0fc8f6a406256fa39a2d0",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "cd21c7a5ad2b9f124d51563aae2466fe7ea7921d47ad647820ff06e5822575c2",
+          "float_sha256": "19b5eacfd6de4d34fbf33014fe0e2ec4e14eb38faed8633f3336019f723ffd3c"
+        }
+      }
+    },
+    {
+      "id": "pcm20-2ch",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "8614f0ddd5b8c67bd78af6f1ac6230030c8b645e38b5541731844434bfcf1334",
+      "expected_sha256": "3cfd8bce3e3438d3e7909123ab0f94d4516e1a892e1eef108b7113be29c30b73",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "96000",
+          "bits": "\u0014",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "3cfd8bce3e3438d3e7909123ab0f94d4516e1a892e1eef108b7113be29c30b73",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "8f4d76aade0a32ad82e8e6cb20ba455a21caf5884479694c6736f26b1ff926cc",
+          "float_sha256": "01a10d60f49811368d035efa3f75d5cbd111471efe4375eb0520a8b198f2f7cb"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "96000",
+          "bits": "20",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "3cfd8bce3e3438d3e7909123ab0f94d4516e1a892e1eef108b7113be29c30b73",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "8f4d76aade0a32ad82e8e6cb20ba455a21caf5884479694c6736f26b1ff926cc",
+          "float_sha256": "01a10d60f49811368d035efa3f75d5cbd111471efe4375eb0520a8b198f2f7cb"
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "96000",
+          "bits": "20",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "3cfd8bce3e3438d3e7909123ab0f94d4516e1a892e1eef108b7113be29c30b73",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "8f4d76aade0a32ad82e8e6cb20ba455a21caf5884479694c6736f26b1ff926cc",
+          "float_sha256": "01a10d60f49811368d035efa3f75d5cbd111471efe4375eb0520a8b198f2f7cb"
+        }
+      }
+    },
+    {
+      "id": "pcm20-6ch",
+      "category": "valid",
+      "channels": 6,
+      "input_sha256": "b7139d25b1f289ceffc1633953db39841fb7697a4f6921693930fac350845450",
+      "expected_sha256": "43f7ec13ed786e36c376cb350f19ceda27238a4f918a1e5d049a7b3143d5fb0c",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": "\u0014",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "43f7ec13ed786e36c376cb350f19ceda27238a4f918a1e5d049a7b3143d5fb0c",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "87c927fb276f31cfa6f2731a508f16502f920665a9a9822a36d16ae173713e3e",
+          "float_sha256": "289c4c407222e20c6316c940a453c2fbb370a06bab6f91e024997ab540810e4b"
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "20",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "43f7ec13ed786e36c376cb350f19ceda27238a4f918a1e5d049a7b3143d5fb0c",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "87c927fb276f31cfa6f2731a508f16502f920665a9a9822a36d16ae173713e3e",
+          "float_sha256": "289c4c407222e20c6316c940a453c2fbb370a06bab6f91e024997ab540810e4b"
+        },
+        "claxon": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "20",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "43f7ec13ed786e36c376cb350f19ceda27238a4f918a1e5d049a7b3143d5fb0c",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "87c927fb276f31cfa6f2731a508f16502f920665a9a9822a36d16ae173713e3e",
+          "float_sha256": "289c4c407222e20c6316c940a453c2fbb370a06bab6f91e024997ab540810e4b"
+        }
+      }
+    },
+    {
+      "id": "pcm20-8ch",
+      "category": "valid",
+      "channels": 8,
+      "input_sha256": "230b488762617f246b7e46e7958321a0e71418573326b0e7838b41faafb53964",
+      "expected_sha256": "771544acac981b59d9eb3b6f64e3d65754f0557662705fd28f8743f0e4353f5c",
+      "decoders": {
+        "drflac": {
+          "channels": "\b",
+          "rate": "8000",
+          "bits": "\u0014",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "771544acac981b59d9eb3b6f64e3d65754f0557662705fd28f8743f0e4353f5c",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "375f0b978ee3272885c7aca0db6b415074843918ec77c0733c38f6f9543a2592",
+          "float_sha256": "fd1f6aafcdee41d12ab4474e25032f244a28c3a6a8696fb3479fd83acca0ce48"
+        },
+        "symphonia": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "20",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "771544acac981b59d9eb3b6f64e3d65754f0557662705fd28f8743f0e4353f5c",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "375f0b978ee3272885c7aca0db6b415074843918ec77c0733c38f6f9543a2592",
+          "float_sha256": "fd1f6aafcdee41d12ab4474e25032f244a28c3a6a8696fb3479fd83acca0ce48"
+        },
+        "claxon": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "20",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "771544acac981b59d9eb3b6f64e3d65754f0557662705fd28f8743f0e4353f5c",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "375f0b978ee3272885c7aca0db6b415074843918ec77c0733c38f6f9543a2592",
+          "float_sha256": "fd1f6aafcdee41d12ab4474e25032f244a28c3a6a8696fb3479fd83acca0ce48"
+        }
+      }
+    },
+    {
+      "id": "pcm24-1ch",
+      "category": "valid",
+      "channels": 1,
+      "input_sha256": "3fc4b25a7cf29c496f09afa6ee1cce550fde3445feaf91eb69c9920498f105f9",
+      "expected_sha256": "feec9aef2b0f4f63dbe4bd75e87a1a1f336e37f2c376fe7384171ce766ae54d2",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0001",
+          "rate": "44100",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "feec9aef2b0f4f63dbe4bd75e87a1a1f336e37f2c376fe7384171ce766ae54d2",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "b87c717944ff0a02b4d531883fd3f5252f9d556d4f2d569a3ebf3d0745500722",
+          "float_sha256": "38ef949d9fe40c44613aec0e27d7c2fb67a90888d901b4c997d0114249dac0d3"
+        },
+        "symphonia": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "feec9aef2b0f4f63dbe4bd75e87a1a1f336e37f2c376fe7384171ce766ae54d2",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "b87c717944ff0a02b4d531883fd3f5252f9d556d4f2d569a3ebf3d0745500722",
+          "float_sha256": "38ef949d9fe40c44613aec0e27d7c2fb67a90888d901b4c997d0114249dac0d3"
+        },
+        "claxon": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "feec9aef2b0f4f63dbe4bd75e87a1a1f336e37f2c376fe7384171ce766ae54d2",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "b87c717944ff0a02b4d531883fd3f5252f9d556d4f2d569a3ebf3d0745500722",
+          "float_sha256": "38ef949d9fe40c44613aec0e27d7c2fb67a90888d901b4c997d0114249dac0d3"
+        }
+      }
+    },
+    {
+      "id": "pcm24-2ch",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "b084a69cd5f7549fb07b348c436659a0dadda074e2e1a6eac2ac27640cd49faa",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        }
+      }
+    },
+    {
+      "id": "pcm24-6ch",
+      "category": "valid",
+      "channels": 6,
+      "input_sha256": "dd603b2bd3d3e4b662d30469176c74e98e01d3175da205eeda1b9a346b58ba36",
+      "expected_sha256": "23b2660aa28c6577ae1c9e5eddd40e725485ebf68e91ebefb85845a6ff8dca2d",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "23b2660aa28c6577ae1c9e5eddd40e725485ebf68e91ebefb85845a6ff8dca2d",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "c41d4381e59c3b4e128b17da78a8ff38484a29c3cbf536b73c5ac292df4cfd8e",
+          "float_sha256": "3a845c2ffe012769b166058b45297dc0684a8f383e607b1baa4081e362c33382"
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "23b2660aa28c6577ae1c9e5eddd40e725485ebf68e91ebefb85845a6ff8dca2d",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "c41d4381e59c3b4e128b17da78a8ff38484a29c3cbf536b73c5ac292df4cfd8e",
+          "float_sha256": "3a845c2ffe012769b166058b45297dc0684a8f383e607b1baa4081e362c33382"
+        },
+        "claxon": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "23b2660aa28c6577ae1c9e5eddd40e725485ebf68e91ebefb85845a6ff8dca2d",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "c41d4381e59c3b4e128b17da78a8ff38484a29c3cbf536b73c5ac292df4cfd8e",
+          "float_sha256": "3a845c2ffe012769b166058b45297dc0684a8f383e607b1baa4081e362c33382"
+        }
+      }
+    },
+    {
+      "id": "pcm24-8ch",
+      "category": "valid",
+      "channels": 8,
+      "input_sha256": "9074b313c75987649a3c768ef94f3a6bd4ae6a61a771358645b439e921221b26",
+      "expected_sha256": "9ad22fc22f25c1cea3754b2574450b1a738deec6315c3c061155b91664d52966",
+      "decoders": {
+        "drflac": {
+          "channels": "\b",
+          "rate": "8000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "9ad22fc22f25c1cea3754b2574450b1a738deec6315c3c061155b91664d52966",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "1519bcabc9c63a3a93cd3024ad186978c2abcf9c92a1183f3903390bdd595bae",
+          "float_sha256": "078a609e1b2ab68adf4746c7af0536cacf7e15ecebbe9b523711b746ae81d372"
+        },
+        "symphonia": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "9ad22fc22f25c1cea3754b2574450b1a738deec6315c3c061155b91664d52966",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "1519bcabc9c63a3a93cd3024ad186978c2abcf9c92a1183f3903390bdd595bae",
+          "float_sha256": "078a609e1b2ab68adf4746c7af0536cacf7e15ecebbe9b523711b746ae81d372"
+        },
+        "claxon": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "9ad22fc22f25c1cea3754b2574450b1a738deec6315c3c061155b91664d52966",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "1519bcabc9c63a3a93cd3024ad186978c2abcf9c92a1183f3903390bdd595bae",
+          "float_sha256": "078a609e1b2ab68adf4746c7af0536cacf7e15ecebbe9b523711b746ae81d372"
+        }
+      }
+    },
+    {
+      "id": "pcm32-1ch",
+      "category": "valid",
+      "channels": 1,
+      "input_sha256": "43dc1f98e91878e476b9b88a2aef413e182081b89633364047c2bb31cc4c06de",
+      "expected_sha256": "8194e9ec2bf8a6305455ed8ef12ad4d74ef7bd5d49a9170153ca642841d89494",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0001",
+          "rate": "44100",
+          "bits": " ",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "32",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "8194e9ec2bf8a6305455ed8ef12ad4d74ef7bd5d49a9170153ca642841d89494",
+          "output_bytes": 65544,
+          "pcm_exact": true,
+          "integer_sha256": "cc5342de6bcbb4557a1134955d958854622fb05452a4db913dd6fc880b892f32",
+          "float_sha256": "e3d2713041a4f3afd0ce924e7c941a870c7d635de11a48dd8430918e2eb0678e"
+        },
+        "claxon": {
+          "channels": "1",
+          "rate": "44100",
+          "bits": "32",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "decode_error: Ill-formed FLAC stream: invalid frame header, encountered reserved value",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    },
+    {
+      "id": "pcm32-2ch",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "239d11a3459e1e32eec7838f646aea5b3197024528c8c225f567ac25b4429430",
+      "expected_sha256": "8324b9812228cd4ca4020cea1bfe4ce4409193c606d50538e352b76308f27a1c",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "96000",
+          "bits": " ",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "96000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(false)",
+          "exit_code": 0,
+          "output_sha256": "e1092956010a0d40873a27b7ab567c51a14572b5adc092388612c5fd82ce82bc",
+          "output_bytes": 131088,
+          "pcm_exact": false,
+          "integer_sha256": "020a6931288a720e5493befd2cc5294b37edd84bb931c6b6bdafdd24a95da539",
+          "float_sha256": "818986c9c718dcd6f587642ea52e8c95dad0522a044ca993a94e28a9abcde57d",
+          "first_different_sample": 8192,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              2147483647,
+              1065353216
+            ],
+            "actual_i32_f32bits": [
+              -1,
+              2952790016
+            ]
+          }
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "96000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "decode_error: Ill-formed FLAC stream: invalid frame header, encountered reserved value",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    },
+    {
+      "id": "pcm32-6ch",
+      "category": "valid",
+      "channels": 6,
+      "input_sha256": "302fd16b9016af2e77ad55d790dc9a790088f8e1ff053df832e7b615621b8a63",
+      "expected_sha256": "1de43ea3eb68c0cf0f0d6171293854d869cb7cb5848e73761fc8e8d87290984a",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": " ",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "1de43ea3eb68c0cf0f0d6171293854d869cb7cb5848e73761fc8e8d87290984a",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "d14fb2f7b6ae18e0c175c2a957734178a4da0a7e31bf8c7d3d6f649cab3d5425",
+          "float_sha256": "03ac19fa1c70ed6d5a48c8e2d51279d8f5413fdb8bb68fc1239f62fe993cfa96"
+        },
+        "claxon": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "decode_error: Ill-formed FLAC stream: invalid frame header, encountered reserved value",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    },
+    {
+      "id": "pcm32-8ch",
+      "category": "valid",
+      "channels": 8,
+      "input_sha256": "f9670f894be9e25ccf537955449531285c89e3ef498c3fcc281e75b98cc7d9d0",
+      "expected_sha256": "b9d4fdfa20062dbc3f5d6448e94ed4979abf2f0b76660dfc5a847a37e8442bde",
+      "decoders": {
+        "drflac": {
+          "channels": "\b",
+          "rate": "8000",
+          "bits": " ",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "b9d4fdfa20062dbc3f5d6448e94ed4979abf2f0b76660dfc5a847a37e8442bde",
+          "output_bytes": 524352,
+          "pcm_exact": true,
+          "integer_sha256": "79d95dd292e36325694928f26770d7e09ff658f366c86c1e2a1fc021bee0ebfd",
+          "float_sha256": "4903cd51bb2e3c94742a9e52d65c1d7bf0e74bc27c4dac1e0a212f6d580a90de"
+        },
+        "claxon": {
+          "channels": "8",
+          "rate": "8000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "decode_error: Ill-formed FLAC stream: invalid frame header, encountered reserved value",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    },
+    {
+      "id": "pcm24-3ch",
+      "category": "valid",
+      "channels": 3,
+      "input_sha256": "7544ef5159a877acc41e034b06b2265ce6b6da77ea85940ee7d7492f894d1c9d",
+      "expected_sha256": "9e057cf9889bb831c77067b8490fb0ccd694f59cd15098c5c5db83d44ed7bf58",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0003",
+          "rate": "192000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "9e057cf9889bb831c77067b8490fb0ccd694f59cd15098c5c5db83d44ed7bf58",
+          "output_bytes": 196632,
+          "pcm_exact": true,
+          "integer_sha256": "b602fb770162a6fb79c98b4c8dab97c8cc3567cd8997d467daa74128321851eb",
+          "float_sha256": "1807cd91a9002362ddfcb6a65d255268970cebc8ac84993a81f44b0036f48148"
+        },
+        "symphonia": {
+          "channels": "3",
+          "rate": "192000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "9e057cf9889bb831c77067b8490fb0ccd694f59cd15098c5c5db83d44ed7bf58",
+          "output_bytes": 196632,
+          "pcm_exact": true,
+          "integer_sha256": "b602fb770162a6fb79c98b4c8dab97c8cc3567cd8997d467daa74128321851eb",
+          "float_sha256": "1807cd91a9002362ddfcb6a65d255268970cebc8ac84993a81f44b0036f48148"
+        },
+        "claxon": {
+          "channels": "3",
+          "rate": "192000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "9e057cf9889bb831c77067b8490fb0ccd694f59cd15098c5c5db83d44ed7bf58",
+          "output_bytes": 196632,
+          "pcm_exact": true,
+          "integer_sha256": "b602fb770162a6fb79c98b4c8dab97c8cc3567cd8997d467daa74128321851eb",
+          "float_sha256": "1807cd91a9002362ddfcb6a65d255268970cebc8ac84993a81f44b0036f48148"
+        }
+      }
+    },
+    {
+      "id": "pcm24-4ch",
+      "category": "valid",
+      "channels": 4,
+      "input_sha256": "3403082c5128f9f8635b377d9a51b729d93a464ed1cfc1dff6a891e57b72bff2",
+      "expected_sha256": "352c477b564d898d3c1e4497287af221e320fa40ffe7e1ccb345f2b6244d8056",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0004",
+          "rate": "8000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "352c477b564d898d3c1e4497287af221e320fa40ffe7e1ccb345f2b6244d8056",
+          "output_bytes": 262176,
+          "pcm_exact": true,
+          "integer_sha256": "857762a5f1a5af40fa51c80671015f45bd283ebc92a5ab1dffc50c54d6c5182c",
+          "float_sha256": "66843d19a1ca53f77ecada9d9a39981cf799e0439830d5ac1305041643f6db2e"
+        },
+        "symphonia": {
+          "channels": "4",
+          "rate": "8000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "352c477b564d898d3c1e4497287af221e320fa40ffe7e1ccb345f2b6244d8056",
+          "output_bytes": 262176,
+          "pcm_exact": true,
+          "integer_sha256": "857762a5f1a5af40fa51c80671015f45bd283ebc92a5ab1dffc50c54d6c5182c",
+          "float_sha256": "66843d19a1ca53f77ecada9d9a39981cf799e0439830d5ac1305041643f6db2e"
+        },
+        "claxon": {
+          "channels": "4",
+          "rate": "8000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "352c477b564d898d3c1e4497287af221e320fa40ffe7e1ccb345f2b6244d8056",
+          "output_bytes": 262176,
+          "pcm_exact": true,
+          "integer_sha256": "857762a5f1a5af40fa51c80671015f45bd283ebc92a5ab1dffc50c54d6c5182c",
+          "float_sha256": "66843d19a1ca53f77ecada9d9a39981cf799e0439830d5ac1305041643f6db2e"
+        }
+      }
+    },
+    {
+      "id": "pcm24-5ch",
+      "category": "valid",
+      "channels": 5,
+      "input_sha256": "a194207619f040912589912b898b97e527332c1265cf9ce5a54d28f1fff6474e",
+      "expected_sha256": "36e442974956f0d1a72a1d8a8557ddc6542311abf20f5f0807d00d09793ec01a",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0005",
+          "rate": "44100",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "36e442974956f0d1a72a1d8a8557ddc6542311abf20f5f0807d00d09793ec01a",
+          "output_bytes": 327720,
+          "pcm_exact": true,
+          "integer_sha256": "294b8b0c4e2af3e86aa6883b25a41ed133f5a9b22f5066eb8d1de4f0b1fba280",
+          "float_sha256": "8a1d9ac658277404105fb4d6eb5bea4c7c1833b5240243d181df61b71a5147dd"
+        },
+        "symphonia": {
+          "channels": "5",
+          "rate": "44100",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "36e442974956f0d1a72a1d8a8557ddc6542311abf20f5f0807d00d09793ec01a",
+          "output_bytes": 327720,
+          "pcm_exact": true,
+          "integer_sha256": "294b8b0c4e2af3e86aa6883b25a41ed133f5a9b22f5066eb8d1de4f0b1fba280",
+          "float_sha256": "8a1d9ac658277404105fb4d6eb5bea4c7c1833b5240243d181df61b71a5147dd"
+        },
+        "claxon": {
+          "channels": "5",
+          "rate": "44100",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "36e442974956f0d1a72a1d8a8557ddc6542311abf20f5f0807d00d09793ec01a",
+          "output_bytes": 327720,
+          "pcm_exact": true,
+          "integer_sha256": "294b8b0c4e2af3e86aa6883b25a41ed133f5a9b22f5066eb8d1de4f0b1fba280",
+          "float_sha256": "8a1d9ac658277404105fb4d6eb5bea4c7c1833b5240243d181df61b71a5147dd"
+        }
+      }
+    },
+    {
+      "id": "pcm24-7ch",
+      "category": "valid",
+      "channels": 7,
+      "input_sha256": "74b399e105527df4b840556f18e129771cd8b5d0ae236dffdc5ec67c6712d174",
+      "expected_sha256": "e7c8c495747a67a0effe1778b834bcf27e54146879ec1776a2515807025b3088",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0007",
+          "rate": "192000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e7c8c495747a67a0effe1778b834bcf27e54146879ec1776a2515807025b3088",
+          "output_bytes": 458808,
+          "pcm_exact": true,
+          "integer_sha256": "e9e0b6cb9be5de295d62f832aaa36de916a4d6f1d38cb26e8e97083a7641acb8",
+          "float_sha256": "095bd7241d807b745a9c52f117f051f04133ae0d18d7ed804d9ef06e5983d73e"
+        },
+        "symphonia": {
+          "channels": "7",
+          "rate": "192000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "e7c8c495747a67a0effe1778b834bcf27e54146879ec1776a2515807025b3088",
+          "output_bytes": 458808,
+          "pcm_exact": true,
+          "integer_sha256": "e9e0b6cb9be5de295d62f832aaa36de916a4d6f1d38cb26e8e97083a7641acb8",
+          "float_sha256": "095bd7241d807b745a9c52f117f051f04133ae0d18d7ed804d9ef06e5983d73e"
+        },
+        "claxon": {
+          "channels": "7",
+          "rate": "192000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "e7c8c495747a67a0effe1778b834bcf27e54146879ec1776a2515807025b3088",
+          "output_bytes": 458808,
+          "pcm_exact": true,
+          "integer_sha256": "e9e0b6cb9be5de295d62f832aaa36de916a4d6f1d38cb26e8e97083a7641acb8",
+          "float_sha256": "095bd7241d807b745a9c52f117f051f04133ae0d18d7ed804d9ef06e5983d73e"
+        }
+      }
+    },
+    {
+      "id": "unknown-total",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "58629761624103a12a432d896248e76133cac0d46c4d45df7a6edaf6210d00b6",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        }
+      }
+    },
+    {
+      "id": "unknown-total-no-md5",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "6d9a996302352dec42b45102886e6179e9a1e366afd5c2a74ec6452306e7e849",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        }
+      }
+    },
+    {
+      "id": "metadata-unicode-padding-application-unknown",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "f6de8784dd56decdaa720a71c5c06f6cff7586e99bd2f88eefaee4e2bbcd3eac",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        }
+      }
+    },
+    {
+      "id": "ogg-flac",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "34ad5b52dd99e12bfeb46d8afa33991a7f062316c95ad63e7d02bdbc49231c7a",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "claxon": {
+          "status": "error: Ill-formed FLAC stream: invalid stream header",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    },
+    {
+      "id": "seektable",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "fa69a43c250a1ed834e9b303cfb8c65e27a7d4d6b1f4ba9a30663ead2426a607",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        }
+      }
+    },
+    {
+      "id": "truncated-header",
+      "category": "damaged",
+      "channels": 2,
+      "input_sha256": "3d1d482c22a2e5f12a22817e9bf288bda4af83a2bf256e5d39abc6fe927aa721",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "status": "open_error",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "status": "error: unexpected end of file",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "claxon": {
+          "status": "error: Expected one more byte.",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    },
+    {
+      "id": "truncated-last-byte",
+      "category": "damaged",
+      "channels": 2,
+      "input_sha256": "6d7763eddaddbb98b2167ec6444b02b8f393892ae5074719258e779304abbfe7",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8192",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "c6aedd1ae70b089a08dc8cda3e5d812d1d8fe236a3f6f81f9d7702efb3e29df8",
+          "output_bytes": 131072,
+          "pcm_exact": false,
+          "integer_sha256": "47f3891926d3704e356a63111d8590d8d1e7a8c6afdd19ef2bf5918980213b03",
+          "float_sha256": "0694c06346822ba8820feb0b536528746e35a529b08565618b5ea08b070a801b",
+          "first_different_sample": 16384
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8192",
+          "gaps": "0",
+          "status": "demux_error: unexpected end of file",
+          "md5": "Some(false)",
+          "exit_code": 0,
+          "output_sha256": "c6aedd1ae70b089a08dc8cda3e5d812d1d8fe236a3f6f81f9d7702efb3e29df8",
+          "output_bytes": 131072,
+          "pcm_exact": false,
+          "integer_sha256": "47f3891926d3704e356a63111d8590d8d1e7a8c6afdd19ef2bf5918980213b03",
+          "float_sha256": "0694c06346822ba8820feb0b536528746e35a529b08565618b5ea08b070a801b",
+          "first_different_sample": 16384
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8192",
+          "status": "decode_error: Expected one more byte.",
+          "exit_code": 0,
+          "output_sha256": "c6aedd1ae70b089a08dc8cda3e5d812d1d8fe236a3f6f81f9d7702efb3e29df8",
+          "output_bytes": 131072,
+          "pcm_exact": false,
+          "integer_sha256": "47f3891926d3704e356a63111d8590d8d1e7a8c6afdd19ef2bf5918980213b03",
+          "float_sha256": "0694c06346822ba8820feb0b536528746e35a529b08565618b5ea08b070a801b",
+          "first_different_sample": 16384
+        }
+      }
+    },
+    {
+      "id": "truncated-mid-frame",
+      "category": "damaged",
+      "channels": 2,
+      "input_sha256": "4d1206aa2d82d83ef4c684b86cfaf6a9b732992e9882b0c569cd6eae26c61c08",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "4096",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "a6df63a7775fe32a93f619d5fda82cf2460ea637482713e2126fedb101acb336",
+          "output_bytes": 65536,
+          "pcm_exact": false,
+          "integer_sha256": "671f0070911692cb50cacb2ef1912d2aff4b97fba3cffa433d8a4ea204b5390e",
+          "float_sha256": "bd49297e54f61a01d76850f2ddd4c650207dd108396c9297172f41bdea0a6d63",
+          "first_different_sample": 8192
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "4096",
+          "gaps": "0",
+          "status": "demux_error: unexpected end of file",
+          "md5": "Some(false)",
+          "exit_code": 0,
+          "output_sha256": "a6df63a7775fe32a93f619d5fda82cf2460ea637482713e2126fedb101acb336",
+          "output_bytes": 65536,
+          "pcm_exact": false,
+          "integer_sha256": "671f0070911692cb50cacb2ef1912d2aff4b97fba3cffa433d8a4ea204b5390e",
+          "float_sha256": "bd49297e54f61a01d76850f2ddd4c650207dd108396c9297172f41bdea0a6d63",
+          "first_different_sample": 8192
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "4096",
+          "status": "decode_error: Expected one more byte.",
+          "exit_code": 0,
+          "output_sha256": "a6df63a7775fe32a93f619d5fda82cf2460ea637482713e2126fedb101acb336",
+          "output_bytes": 65536,
+          "pcm_exact": false,
+          "integer_sha256": "671f0070911692cb50cacb2ef1912d2aff4b97fba3cffa433d8a4ea204b5390e",
+          "float_sha256": "bd49297e54f61a01d76850f2ddd4c650207dd108396c9297172f41bdea0a6d63",
+          "first_different_sample": 8192
+        }
+      }
+    },
+    {
+      "id": "crc-first",
+      "category": "damaged",
+      "channels": 2,
+      "input_sha256": "a867151980a0e249bec7cf7f3425db143155888e058c4f7ff48289689fbb17bf",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "7169",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "939f3c58ab0843ac82d382a6b1b5047ba781af2040314e6e858f551c7b677b8f",
+          "output_bytes": 114704,
+          "pcm_exact": false,
+          "integer_sha256": "ecdffa4c7e49037c9ba1f1e242e324be01a24869754a979caa977ddead5d12f7",
+          "float_sha256": "fe78c9cc76c6b58f04d1581fdfeccacf5d23dca8aad92d36330e870a0a940dd9",
+          "first_different_sample": 0,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              -2147483648,
+              3212836864
+            ],
+            "actual_i32_f32bits": [
+              715827712,
+              1051372200
+            ]
+          }
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "7169",
+          "gaps": "1",
+          "status": "eof",
+          "md5": "Some(false)",
+          "exit_code": 0,
+          "output_sha256": "939f3c58ab0843ac82d382a6b1b5047ba781af2040314e6e858f551c7b677b8f",
+          "output_bytes": 114704,
+          "pcm_exact": false,
+          "integer_sha256": "ecdffa4c7e49037c9ba1f1e242e324be01a24869754a979caa977ddead5d12f7",
+          "float_sha256": "fe78c9cc76c6b58f04d1581fdfeccacf5d23dca8aad92d36330e870a0a940dd9",
+          "first_different_sample": 0,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              -2147483648,
+              3212836864
+            ],
+            "actual_i32_f32bits": [
+              715827712,
+              1051372200
+            ]
+          }
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "decode_error: Ill-formed FLAC stream: frame CRC mismatch",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    },
+    {
+      "id": "crc-middle",
+      "category": "damaged",
+      "channels": 2,
+      "input_sha256": "f9ed55f0e625091cadfb80c0bf670c8eec1ebc970f50b78dab55dc9cf562bf2a",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "7169",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "a433b755a7f74110bb4bcefb89cad8e4cd497626ea67748bca5678c367dbf5e3",
+          "output_bytes": 114704,
+          "pcm_exact": false,
+          "integer_sha256": "517821a4fa487264c4cd2d2aa93d6e89d1ff445cde89198604dbe0d9294de51d",
+          "float_sha256": "daa9c05f949c7090fb236619a6d10b7d04f0b3ddc65e1420a0330e27ddc22d34",
+          "first_different_sample": 6144,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              490733568,
+              1047134208
+            ],
+            "actual_i32_f32bits": [
+              2147483392,
+              1065353214
+            ]
+          }
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "7169",
+          "gaps": "1",
+          "status": "eof",
+          "md5": "Some(false)",
+          "exit_code": 0,
+          "output_sha256": "a433b755a7f74110bb4bcefb89cad8e4cd497626ea67748bca5678c367dbf5e3",
+          "output_bytes": 114704,
+          "pcm_exact": false,
+          "integer_sha256": "517821a4fa487264c4cd2d2aa93d6e89d1ff445cde89198604dbe0d9294de51d",
+          "float_sha256": "daa9c05f949c7090fb236619a6d10b7d04f0b3ddc65e1420a0330e27ddc22d34",
+          "first_different_sample": 6144,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              490733568,
+              1047134208
+            ],
+            "actual_i32_f32bits": [
+              2147483392,
+              1065353214
+            ]
+          }
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "3072",
+          "status": "decode_error: Ill-formed FLAC stream: frame CRC mismatch",
+          "exit_code": 0,
+          "output_sha256": "35657b46249e8f77efc5d2e98e906cdbc99e12c1bcdd132858847b55270fdde9",
+          "output_bytes": 49152,
+          "pcm_exact": false,
+          "integer_sha256": "de6a222bb29a86bb1c065ce63960659713deb83cdb9a827734379e04a441269f",
+          "float_sha256": "b32e68cdc47e678a25203da6111cbf9448e0ab6e5d52c4c90943da33e2bcbebb",
+          "first_different_sample": 6144
+        }
+      }
+    },
+    {
+      "id": "crc-last",
+      "category": "damaged",
+      "channels": 2,
+      "input_sha256": "713d8817191cd59b9cdb70d902bffcc5a1a948cf0701d1f0779e46fd36e337b2",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8192",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "c6aedd1ae70b089a08dc8cda3e5d812d1d8fe236a3f6f81f9d7702efb3e29df8",
+          "output_bytes": 131072,
+          "pcm_exact": false,
+          "integer_sha256": "47f3891926d3704e356a63111d8590d8d1e7a8c6afdd19ef2bf5918980213b03",
+          "float_sha256": "0694c06346822ba8820feb0b536528746e35a529b08565618b5ea08b070a801b",
+          "first_different_sample": 16384
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8192",
+          "gaps": "0",
+          "status": "demux_error: unexpected end of file",
+          "md5": "Some(false)",
+          "exit_code": 0,
+          "output_sha256": "c6aedd1ae70b089a08dc8cda3e5d812d1d8fe236a3f6f81f9d7702efb3e29df8",
+          "output_bytes": 131072,
+          "pcm_exact": false,
+          "integer_sha256": "47f3891926d3704e356a63111d8590d8d1e7a8c6afdd19ef2bf5918980213b03",
+          "float_sha256": "0694c06346822ba8820feb0b536528746e35a529b08565618b5ea08b070a801b",
+          "first_different_sample": 16384
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8192",
+          "status": "decode_error: Ill-formed FLAC stream: frame CRC mismatch",
+          "exit_code": 0,
+          "output_sha256": "c6aedd1ae70b089a08dc8cda3e5d812d1d8fe236a3f6f81f9d7702efb3e29df8",
+          "output_bytes": 131072,
+          "pcm_exact": false,
+          "integer_sha256": "47f3891926d3704e356a63111d8590d8d1e7a8c6afdd19ef2bf5918980213b03",
+          "float_sha256": "0694c06346822ba8820feb0b536528746e35a529b08565618b5ea08b070a801b",
+          "first_different_sample": 16384
+        }
+      }
+    },
+    {
+      "id": "wrong-md5",
+      "category": "damaged",
+      "channels": 2,
+      "input_sha256": "6c59ce21dc0affb91101fbfe8ca05d7a2b729d5f209dffd81c7f779d6639fc54",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(false)",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        }
+      }
+    },
+    {
+      "id": "missing-frame-no-total-no-md5",
+      "category": "damaged",
+      "channels": 2,
+      "input_sha256": "f39df2559e2f247ed94d965929300b58fdb698555aefae4adfa461102f0dff4d",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "7169",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "a433b755a7f74110bb4bcefb89cad8e4cd497626ea67748bca5678c367dbf5e3",
+          "output_bytes": 114704,
+          "pcm_exact": false,
+          "integer_sha256": "517821a4fa487264c4cd2d2aa93d6e89d1ff445cde89198604dbe0d9294de51d",
+          "float_sha256": "daa9c05f949c7090fb236619a6d10b7d04f0b3ddc65e1420a0330e27ddc22d34",
+          "first_different_sample": 6144,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              490733568,
+              1047134208
+            ],
+            "actual_i32_f32bits": [
+              2147483392,
+              1065353214
+            ]
+          }
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "frames_read": "7169",
+          "gaps": "1",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "a433b755a7f74110bb4bcefb89cad8e4cd497626ea67748bca5678c367dbf5e3",
+          "output_bytes": 114704,
+          "pcm_exact": false,
+          "integer_sha256": "517821a4fa487264c4cd2d2aa93d6e89d1ff445cde89198604dbe0d9294de51d",
+          "float_sha256": "daa9c05f949c7090fb236619a6d10b7d04f0b3ddc65e1420a0330e27ddc22d34",
+          "first_different_sample": 6144,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              490733568,
+              1047134208
+            ],
+            "actual_i32_f32bits": [
+              2147483392,
+              1065353214
+            ]
+          }
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "frames_read": "7169",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "a433b755a7f74110bb4bcefb89cad8e4cd497626ea67748bca5678c367dbf5e3",
+          "output_bytes": 114704,
+          "pcm_exact": false,
+          "integer_sha256": "517821a4fa487264c4cd2d2aa93d6e89d1ff445cde89198604dbe0d9294de51d",
+          "float_sha256": "daa9c05f949c7090fb236619a6d10b7d04f0b3ddc65e1420a0330e27ddc22d34",
+          "first_different_sample": 6144,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              490733568,
+              1047134208
+            ],
+            "actual_i32_f32bits": [
+              2147483392,
+              1065353214
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "truncated-packet-no-total-no-md5",
+      "category": "damaged",
+      "channels": 2,
+      "input_sha256": "7d126f33c4edf3fa4ba437f67fb9db825f2d528c119ae4daa4d3764c2b44ad35",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "4096",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "a6df63a7775fe32a93f619d5fda82cf2460ea637482713e2126fedb101acb336",
+          "output_bytes": 65536,
+          "pcm_exact": false,
+          "integer_sha256": "671f0070911692cb50cacb2ef1912d2aff4b97fba3cffa433d8a4ea204b5390e",
+          "float_sha256": "bd49297e54f61a01d76850f2ddd4c650207dd108396c9297172f41bdea0a6d63",
+          "first_different_sample": 8192
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "frames_read": "4096",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "a6df63a7775fe32a93f619d5fda82cf2460ea637482713e2126fedb101acb336",
+          "output_bytes": 65536,
+          "pcm_exact": false,
+          "integer_sha256": "671f0070911692cb50cacb2ef1912d2aff4b97fba3cffa433d8a4ea204b5390e",
+          "float_sha256": "bd49297e54f61a01d76850f2ddd4c650207dd108396c9297172f41bdea0a6d63",
+          "first_different_sample": 8192
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "frames_read": "4096",
+          "status": "decode_error: Expected one more byte.",
+          "exit_code": 0,
+          "output_sha256": "a6df63a7775fe32a93f619d5fda82cf2460ea637482713e2126fedb101acb336",
+          "output_bytes": 65536,
+          "pcm_exact": false,
+          "integer_sha256": "671f0070911692cb50cacb2ef1912d2aff4b97fba3cffa433d8a4ea204b5390e",
+          "float_sha256": "bd49297e54f61a01d76850f2ddd4c650207dd108396c9297172f41bdea0a6d63",
+          "first_different_sample": 8192
+        }
+      }
+    },
+    {
+      "id": "prefix-no-total-no-md5",
+      "category": "ambiguous-prefix",
+      "channels": 2,
+      "input_sha256": "785c0e88c64c3153011268153ce508ff022485a45a08b92def71bac8084464e6",
+      "expected_sha256": "a6df63a7775fe32a93f619d5fda82cf2460ea637482713e2126fedb101acb336",
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "4096",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "a6df63a7775fe32a93f619d5fda82cf2460ea637482713e2126fedb101acb336",
+          "output_bytes": 65536,
+          "pcm_exact": true,
+          "integer_sha256": "671f0070911692cb50cacb2ef1912d2aff4b97fba3cffa433d8a4ea204b5390e",
+          "float_sha256": "bd49297e54f61a01d76850f2ddd4c650207dd108396c9297172f41bdea0a6d63"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "frames_read": "4096",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "a6df63a7775fe32a93f619d5fda82cf2460ea637482713e2126fedb101acb336",
+          "output_bytes": 65536,
+          "pcm_exact": true,
+          "integer_sha256": "671f0070911692cb50cacb2ef1912d2aff4b97fba3cffa433d8a4ea204b5390e",
+          "float_sha256": "bd49297e54f61a01d76850f2ddd4c650207dd108396c9297172f41bdea0a6d63"
+        },
+        "claxon": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "frames_read": "4096",
+          "status": "eof",
+          "exit_code": 0,
+          "output_sha256": "a6df63a7775fe32a93f619d5fda82cf2460ea637482713e2126fedb101acb336",
+          "output_bytes": 65536,
+          "pcm_exact": true,
+          "integer_sha256": "671f0070911692cb50cacb2ef1912d2aff4b97fba3cffa433d8a4ea204b5390e",
+          "float_sha256": "bd49297e54f61a01d76850f2ddd4c650207dd108396c9297172f41bdea0a6d63"
+        }
+      }
+    },
+    {
+      "id": "not-flac",
+      "category": "damaged",
+      "channels": 2,
+      "input_sha256": "68aa78c4181c7fc3356384c1d5c98c2ff26bf4775d1dd20c47b56bac2ecd68b6",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "status": "open_error",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "status": "error: unsupported feature: core (probe): no suitable format reader found",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "claxon": {
+          "status": "error: Ill-formed FLAC stream: invalid stream header",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    },
+    {
+      "id": "id3v2-prefix",
+      "category": "valid",
+      "channels": 2,
+      "input_sha256": "8c719d828ade8c9c243e34b1e9cbbdb924354c0a9ea42911d9f6fc1a59b26bad",
+      "expected_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+      "decoders": {
+        "drflac": {
+          "status": "open_error",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "Some(true)",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "claxon": {
+          "status": "error: Ill-formed FLAC stream: stream starts with ID3 header rather than FLAC header",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        }
+      }
+    }
+  ],
+  "seeks": [
+    {
+      "id": "pcm24-2ch",
+      "target_frame": 0,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        }
+      }
+    },
+    {
+      "id": "pcm24-2ch",
+      "target_frame": 1,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8192",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "2a398a438d6b2cf0ccd328d7d7ac855207775786b24bd61442898d486532adf8",
+          "output_bytes": 131072,
+          "pcm_exact": true,
+          "integer_sha256": "5da6bfc0ad7f9e1d1c9f90e985cef8ae18d43e5b8accd17e8633e5ebb1ae8f9b",
+          "float_sha256": "0f9dd2177609c88f2d47148be55101b0925893ff241597c2335472df0c5c33cf"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "8192",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "2a398a438d6b2cf0ccd328d7d7ac855207775786b24bd61442898d486532adf8",
+          "output_bytes": 131072,
+          "pcm_exact": true,
+          "integer_sha256": "5da6bfc0ad7f9e1d1c9f90e985cef8ae18d43e5b8accd17e8633e5ebb1ae8f9b",
+          "float_sha256": "0f9dd2177609c88f2d47148be55101b0925893ff241597c2335472df0c5c33cf"
+        }
+      }
+    },
+    {
+      "id": "pcm24-2ch",
+      "target_frame": 1023,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "7170",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "807c788c282a442b87b3b4358f3cf6386b38d8b8258a74c9c90d55c5b55727c5",
+          "output_bytes": 114720,
+          "pcm_exact": true,
+          "integer_sha256": "eba5516f1b2b8f997c18aedfd2ac363f6d9c8b16bb7531e5fa6c35e376931dce",
+          "float_sha256": "8c94021959d0933d16e19f2be4aeefa0dc4bf2e2e3e2fdebee34bacd46ed68e9"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "7170",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "807c788c282a442b87b3b4358f3cf6386b38d8b8258a74c9c90d55c5b55727c5",
+          "output_bytes": 114720,
+          "pcm_exact": true,
+          "integer_sha256": "eba5516f1b2b8f997c18aedfd2ac363f6d9c8b16bb7531e5fa6c35e376931dce",
+          "float_sha256": "8c94021959d0933d16e19f2be4aeefa0dc4bf2e2e3e2fdebee34bacd46ed68e9"
+        }
+      }
+    },
+    {
+      "id": "pcm24-2ch",
+      "target_frame": 1024,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "7169",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "939f3c58ab0843ac82d382a6b1b5047ba781af2040314e6e858f551c7b677b8f",
+          "output_bytes": 114704,
+          "pcm_exact": true,
+          "integer_sha256": "ecdffa4c7e49037c9ba1f1e242e324be01a24869754a979caa977ddead5d12f7",
+          "float_sha256": "fe78c9cc76c6b58f04d1581fdfeccacf5d23dca8aad92d36330e870a0a940dd9"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "1024",
+          "frames_read": "7169",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "939f3c58ab0843ac82d382a6b1b5047ba781af2040314e6e858f551c7b677b8f",
+          "output_bytes": 114704,
+          "pcm_exact": true,
+          "integer_sha256": "ecdffa4c7e49037c9ba1f1e242e324be01a24869754a979caa977ddead5d12f7",
+          "float_sha256": "fe78c9cc76c6b58f04d1581fdfeccacf5d23dca8aad92d36330e870a0a940dd9"
+        }
+      }
+    },
+    {
+      "id": "pcm24-2ch",
+      "target_frame": 1234,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "6959",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "76883faf2b9dec8969c035d01863a34f0fa9c12c59658608bffdece1f15fc475",
+          "output_bytes": 111344,
+          "pcm_exact": true,
+          "integer_sha256": "c58d8eb8011e8f717c2eae097054536903a9d6928b439b19cbea85501942ef14",
+          "float_sha256": "49616fd65fd86a65b29ac74568bb9321a725c7c5abf5d00dff588066e6ec5f1a"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "1024",
+          "frames_read": "6959",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "76883faf2b9dec8969c035d01863a34f0fa9c12c59658608bffdece1f15fc475",
+          "output_bytes": 111344,
+          "pcm_exact": true,
+          "integer_sha256": "c58d8eb8011e8f717c2eae097054536903a9d6928b439b19cbea85501942ef14",
+          "float_sha256": "49616fd65fd86a65b29ac74568bb9321a725c7c5abf5d00dff588066e6ec5f1a"
+        }
+      }
+    },
+    {
+      "id": "pcm24-2ch",
+      "target_frame": 8192,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "1",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "3c7ff77c5d2ab5d9877c1475b03d32db0025fa1401f6feb4bbfd83ff48fd6c52",
+          "output_bytes": 16,
+          "pcm_exact": true,
+          "integer_sha256": "b24f51c20483aa2f2d23c97cc9ca268fd2f784d80081f48dac3b6a5cbb56dee3",
+          "float_sha256": "06f5075717e3007c828a27e0d30ad7c643deaa173c9517078df8f203e09d5950"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "8192",
+          "frames_read": "1",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "3c7ff77c5d2ab5d9877c1475b03d32db0025fa1401f6feb4bbfd83ff48fd6c52",
+          "output_bytes": 16,
+          "pcm_exact": true,
+          "integer_sha256": "b24f51c20483aa2f2d23c97cc9ca268fd2f784d80081f48dac3b6a5cbb56dee3",
+          "float_sha256": "06f5075717e3007c828a27e0d30ad7c643deaa173c9517078df8f203e09d5950"
+        }
+      }
+    },
+    {
+      "id": "pcm24-2ch",
+      "target_frame": 8193,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "status": "error: unexpected end of file",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "pcm24-2ch",
+      "target_frame": 10000,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "status": "error: seek error: requested seek timestamp is out-of-range for stream",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "pcm32-6ch",
+      "target_frame": 0,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": " ",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "1de43ea3eb68c0cf0f0d6171293854d869cb7cb5848e73761fc8e8d87290984a",
+          "output_bytes": 393264,
+          "pcm_exact": true,
+          "integer_sha256": "d14fb2f7b6ae18e0c175c2a957734178a4da0a7e31bf8c7d3d6f649cab3d5425",
+          "float_sha256": "03ac19fa1c70ed6d5a48c8e2d51279d8f5413fdb8bb68fc1239f62fe993cfa96"
+        }
+      }
+    },
+    {
+      "id": "pcm32-6ch",
+      "target_frame": 1,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": " ",
+          "frames_hint": "8193",
+          "status": "seek_error",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "8192",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "5e156371169b2ba4b2202004c254d5840a6595691e8ca5c71e9365e95f946a6b",
+          "output_bytes": 393216,
+          "pcm_exact": true,
+          "integer_sha256": "e307049b5d594a1a3007ada5606a18a868a33b8967cdf57b9aaeb5b67d17959f",
+          "float_sha256": "f04ad58cb941817f5bc11e82590f43687b2f234b01d085a6a0cf57c5c1418af4"
+        }
+      }
+    },
+    {
+      "id": "pcm32-6ch",
+      "target_frame": 1023,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": " ",
+          "frames_hint": "8193",
+          "status": "seek_error",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "7170",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "2884e5fbafe4d7bff4f0ad2234948fa8b97ae38d23d925d96e0d7aacd7774e8a",
+          "output_bytes": 344160,
+          "pcm_exact": true,
+          "integer_sha256": "c1bb639fe0132bdcecce279ec8dec5f08b4bef49345b7333b0a23ca85a2edbf5",
+          "float_sha256": "a3db01c89a9df5889cdca8277a81e13c03699eca0c1a29037676acb3b0f8c810"
+        }
+      }
+    },
+    {
+      "id": "pcm32-6ch",
+      "target_frame": 1024,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": " ",
+          "frames_hint": "8193",
+          "status": "seek_error",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "seek_actual": "1024",
+          "frames_read": "7169",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "40f5c73cb1025b4425a309037b3b66b49936916abfe1cb127cae0240c833b50a",
+          "output_bytes": 344112,
+          "pcm_exact": true,
+          "integer_sha256": "2887459026cdc96a55677ff651d66544d3ad237afeebeb7298fd8d76c89943fa",
+          "float_sha256": "35140d989de6599989deebaecacf9d21cda47e06ab04ecaeac5d2406b5bc935d"
+        }
+      }
+    },
+    {
+      "id": "pcm32-6ch",
+      "target_frame": 1234,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": " ",
+          "frames_hint": "8193",
+          "status": "seek_error",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "seek_actual": "1024",
+          "frames_read": "6959",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "efc1885289239fa05992b5cbaac274937625009f00cc39b32bb687f7f94102c4",
+          "output_bytes": 334032,
+          "pcm_exact": true,
+          "integer_sha256": "753558f5df2668ec13cbba23eae086aea2bf438942c73ccc576530faf422d86f",
+          "float_sha256": "7fb8dbf56d211903e1e5157baac9f029b2a324cab352f982c7ee339a90a6afbe"
+        }
+      }
+    },
+    {
+      "id": "pcm32-6ch",
+      "target_frame": 8192,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": " ",
+          "frames_hint": "8193",
+          "status": "seek_error",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": false,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "seek_actual": "8192",
+          "frames_read": "1",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "c568a6900b89d048e47b81ee461634c0e2f0564251f2366eac3d86a1fc5fb39d",
+          "output_bytes": 48,
+          "pcm_exact": true,
+          "integer_sha256": "c3f5315cb805a1326ed018ac891250de8413a220553612aeedc48628d6203f36",
+          "float_sha256": "e5f12ceaa2ba3c85f011e38ac270af97733c23f6b5080436226a503de9443a39"
+        }
+      }
+    },
+    {
+      "id": "pcm32-6ch",
+      "target_frame": 8193,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": " ",
+          "frames_hint": "8193",
+          "status": "seek_error",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "status": "error: unexpected end of file",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "pcm32-6ch",
+      "target_frame": 10000,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0006",
+          "rate": "96000",
+          "bits": " ",
+          "frames_hint": "8193",
+          "status": "seek_error",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "symphonia": {
+          "channels": "6",
+          "rate": "96000",
+          "bits": "32",
+          "frames_hint": "8193",
+          "status": "error: seek error: requested seek timestamp is out-of-range for stream",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "unknown-total",
+      "target_frame": 0,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "seek_actual": "0",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        }
+      }
+    },
+    {
+      "id": "unknown-total",
+      "target_frame": 1,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": false,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6",
+          "first_different_sample": 0,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              2147483392,
+              1065353214
+            ],
+            "actual_i32_f32bits": [
+              -2147483648,
+              3212836864
+            ]
+          }
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "seek_actual": "0",
+          "frames_read": "8192",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "2a398a438d6b2cf0ccd328d7d7ac855207775786b24bd61442898d486532adf8",
+          "output_bytes": 131072,
+          "pcm_exact": true,
+          "integer_sha256": "5da6bfc0ad7f9e1d1c9f90e985cef8ae18d43e5b8accd17e8633e5ebb1ae8f9b",
+          "float_sha256": "0f9dd2177609c88f2d47148be55101b0925893ff241597c2335472df0c5c33cf"
+        }
+      }
+    },
+    {
+      "id": "unknown-total",
+      "target_frame": 1023,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": false,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6",
+          "first_different_sample": 0,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              1776853504,
+              1062457668
+            ],
+            "actual_i32_f32bits": [
+              -2147483648,
+              3212836864
+            ]
+          }
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "seek_actual": "0",
+          "frames_read": "7170",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "807c788c282a442b87b3b4358f3cf6386b38d8b8258a74c9c90d55c5b55727c5",
+          "output_bytes": 114720,
+          "pcm_exact": true,
+          "integer_sha256": "eba5516f1b2b8f997c18aedfd2ac363f6d9c8b16bb7531e5fa6c35e376931dce",
+          "float_sha256": "8c94021959d0933d16e19f2be4aeefa0dc4bf2e2e3e2fdebee34bacd46ed68e9"
+        }
+      }
+    },
+    {
+      "id": "unknown-total",
+      "target_frame": 1024,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": false,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6",
+          "first_different_sample": 0,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              715827712,
+              1051372200
+            ],
+            "actual_i32_f32bits": [
+              -2147483648,
+              3212836864
+            ]
+          }
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "seek_actual": "1024",
+          "frames_read": "7169",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "939f3c58ab0843ac82d382a6b1b5047ba781af2040314e6e858f551c7b677b8f",
+          "output_bytes": 114704,
+          "pcm_exact": true,
+          "integer_sha256": "ecdffa4c7e49037c9ba1f1e242e324be01a24869754a979caa977ddead5d12f7",
+          "float_sha256": "fe78c9cc76c6b58f04d1581fdfeccacf5d23dca8aad92d36330e870a0a940dd9"
+        }
+      }
+    },
+    {
+      "id": "unknown-total",
+      "target_frame": 1234,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": false,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6",
+          "first_different_sample": 0,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              715827712,
+              1051372200
+            ],
+            "actual_i32_f32bits": [
+              -2147483648,
+              3212836864
+            ]
+          }
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "seek_actual": "1024",
+          "frames_read": "6959",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "76883faf2b9dec8969c035d01863a34f0fa9c12c59658608bffdece1f15fc475",
+          "output_bytes": 111344,
+          "pcm_exact": true,
+          "integer_sha256": "c58d8eb8011e8f717c2eae097054536903a9d6928b439b19cbea85501942ef14",
+          "float_sha256": "49616fd65fd86a65b29ac74568bb9321a725c7c5abf5d00dff588066e6ec5f1a"
+        }
+      }
+    },
+    {
+      "id": "unknown-total",
+      "target_frame": 8192,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": false,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6",
+          "first_different_sample": 0,
+          "first_difference": {
+            "expected_i32_f32bits": [
+              -881629440,
+              3201446500
+            ],
+            "actual_i32_f32bits": [
+              -2147483648,
+              3212836864
+            ]
+          }
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "seek_actual": "8192",
+          "frames_read": "1",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "3c7ff77c5d2ab5d9877c1475b03d32db0025fa1401f6feb4bbfd83ff48fd6c52",
+          "output_bytes": 16,
+          "pcm_exact": true,
+          "integer_sha256": "b24f51c20483aa2f2d23c97cc9ca268fd2f784d80081f48dac3b6a5cbb56dee3",
+          "float_sha256": "06f5075717e3007c828a27e0d30ad7c643deaa173c9517078df8f203e09d5950"
+        }
+      }
+    },
+    {
+      "id": "unknown-total",
+      "target_frame": 8193,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": false,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "status": "error: seek error: requested seek timestamp is out-of-range for stream",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "unknown-total",
+      "target_frame": 10000,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "0",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": false,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6",
+          "first_different_sample": 0
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "unknown",
+          "status": "error: seek error: requested seek timestamp is out-of-range for stream",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "seektable",
+      "target_frame": 0,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        }
+      }
+    },
+    {
+      "id": "seektable",
+      "target_frame": 1,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8192",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "2a398a438d6b2cf0ccd328d7d7ac855207775786b24bd61442898d486532adf8",
+          "output_bytes": 131072,
+          "pcm_exact": true,
+          "integer_sha256": "5da6bfc0ad7f9e1d1c9f90e985cef8ae18d43e5b8accd17e8633e5ebb1ae8f9b",
+          "float_sha256": "0f9dd2177609c88f2d47148be55101b0925893ff241597c2335472df0c5c33cf"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "8192",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "2a398a438d6b2cf0ccd328d7d7ac855207775786b24bd61442898d486532adf8",
+          "output_bytes": 131072,
+          "pcm_exact": true,
+          "integer_sha256": "5da6bfc0ad7f9e1d1c9f90e985cef8ae18d43e5b8accd17e8633e5ebb1ae8f9b",
+          "float_sha256": "0f9dd2177609c88f2d47148be55101b0925893ff241597c2335472df0c5c33cf"
+        }
+      }
+    },
+    {
+      "id": "seektable",
+      "target_frame": 1023,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "7170",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "807c788c282a442b87b3b4358f3cf6386b38d8b8258a74c9c90d55c5b55727c5",
+          "output_bytes": 114720,
+          "pcm_exact": true,
+          "integer_sha256": "eba5516f1b2b8f997c18aedfd2ac363f6d9c8b16bb7531e5fa6c35e376931dce",
+          "float_sha256": "8c94021959d0933d16e19f2be4aeefa0dc4bf2e2e3e2fdebee34bacd46ed68e9"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "7170",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "807c788c282a442b87b3b4358f3cf6386b38d8b8258a74c9c90d55c5b55727c5",
+          "output_bytes": 114720,
+          "pcm_exact": true,
+          "integer_sha256": "eba5516f1b2b8f997c18aedfd2ac363f6d9c8b16bb7531e5fa6c35e376931dce",
+          "float_sha256": "8c94021959d0933d16e19f2be4aeefa0dc4bf2e2e3e2fdebee34bacd46ed68e9"
+        }
+      }
+    },
+    {
+      "id": "seektable",
+      "target_frame": 1024,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "7169",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "939f3c58ab0843ac82d382a6b1b5047ba781af2040314e6e858f551c7b677b8f",
+          "output_bytes": 114704,
+          "pcm_exact": true,
+          "integer_sha256": "ecdffa4c7e49037c9ba1f1e242e324be01a24869754a979caa977ddead5d12f7",
+          "float_sha256": "fe78c9cc76c6b58f04d1581fdfeccacf5d23dca8aad92d36330e870a0a940dd9"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "7169",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "939f3c58ab0843ac82d382a6b1b5047ba781af2040314e6e858f551c7b677b8f",
+          "output_bytes": 114704,
+          "pcm_exact": true,
+          "integer_sha256": "ecdffa4c7e49037c9ba1f1e242e324be01a24869754a979caa977ddead5d12f7",
+          "float_sha256": "fe78c9cc76c6b58f04d1581fdfeccacf5d23dca8aad92d36330e870a0a940dd9"
+        }
+      }
+    },
+    {
+      "id": "seektable",
+      "target_frame": 1234,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "6959",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "76883faf2b9dec8969c035d01863a34f0fa9c12c59658608bffdece1f15fc475",
+          "output_bytes": 111344,
+          "pcm_exact": true,
+          "integer_sha256": "c58d8eb8011e8f717c2eae097054536903a9d6928b439b19cbea85501942ef14",
+          "float_sha256": "49616fd65fd86a65b29ac74568bb9321a725c7c5abf5d00dff588066e6ec5f1a"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "6959",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "76883faf2b9dec8969c035d01863a34f0fa9c12c59658608bffdece1f15fc475",
+          "output_bytes": 111344,
+          "pcm_exact": true,
+          "integer_sha256": "c58d8eb8011e8f717c2eae097054536903a9d6928b439b19cbea85501942ef14",
+          "float_sha256": "49616fd65fd86a65b29ac74568bb9321a725c7c5abf5d00dff588066e6ec5f1a"
+        }
+      }
+    },
+    {
+      "id": "seektable",
+      "target_frame": 8192,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "1",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "3c7ff77c5d2ab5d9877c1475b03d32db0025fa1401f6feb4bbfd83ff48fd6c52",
+          "output_bytes": 16,
+          "pcm_exact": true,
+          "integer_sha256": "b24f51c20483aa2f2d23c97cc9ca268fd2f784d80081f48dac3b6a5cbb56dee3",
+          "float_sha256": "06f5075717e3007c828a27e0d30ad7c643deaa173c9517078df8f203e09d5950"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "8192",
+          "frames_read": "1",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "3c7ff77c5d2ab5d9877c1475b03d32db0025fa1401f6feb4bbfd83ff48fd6c52",
+          "output_bytes": 16,
+          "pcm_exact": true,
+          "integer_sha256": "b24f51c20483aa2f2d23c97cc9ca268fd2f784d80081f48dac3b6a5cbb56dee3",
+          "float_sha256": "06f5075717e3007c828a27e0d30ad7c643deaa173c9517078df8f203e09d5950"
+        }
+      }
+    },
+    {
+      "id": "seektable",
+      "target_frame": 8193,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "status": "error: unexpected end of file",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "seektable",
+      "target_frame": 10000,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "status": "error: seek error: requested seek timestamp is out-of-range for stream",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "ogg-flac",
+      "target_frame": 0,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8193",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "8193",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "b2ebc8216e8bbff9f63b19e8c12ad2f27a765c0aa29213b0ec0c6021824696e4",
+          "output_bytes": 131088,
+          "pcm_exact": true,
+          "integer_sha256": "0e35f3ab32f3ef6c9786f9cfdb70f6c38ea468decd1bf642247dd5f13abc40ce",
+          "float_sha256": "bf743e8b54507fbb19dd0f02291ea9e50657045fd864139e2496d29035db20b6"
+        }
+      }
+    },
+    {
+      "id": "ogg-flac",
+      "target_frame": 1,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "8192",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "2a398a438d6b2cf0ccd328d7d7ac855207775786b24bd61442898d486532adf8",
+          "output_bytes": 131072,
+          "pcm_exact": true,
+          "integer_sha256": "5da6bfc0ad7f9e1d1c9f90e985cef8ae18d43e5b8accd17e8633e5ebb1ae8f9b",
+          "float_sha256": "0f9dd2177609c88f2d47148be55101b0925893ff241597c2335472df0c5c33cf"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "8192",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "2a398a438d6b2cf0ccd328d7d7ac855207775786b24bd61442898d486532adf8",
+          "output_bytes": 131072,
+          "pcm_exact": true,
+          "integer_sha256": "5da6bfc0ad7f9e1d1c9f90e985cef8ae18d43e5b8accd17e8633e5ebb1ae8f9b",
+          "float_sha256": "0f9dd2177609c88f2d47148be55101b0925893ff241597c2335472df0c5c33cf"
+        }
+      }
+    },
+    {
+      "id": "ogg-flac",
+      "target_frame": 1023,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "7170",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "807c788c282a442b87b3b4358f3cf6386b38d8b8258a74c9c90d55c5b55727c5",
+          "output_bytes": 114720,
+          "pcm_exact": true,
+          "integer_sha256": "eba5516f1b2b8f997c18aedfd2ac363f6d9c8b16bb7531e5fa6c35e376931dce",
+          "float_sha256": "8c94021959d0933d16e19f2be4aeefa0dc4bf2e2e3e2fdebee34bacd46ed68e9"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "7170",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "807c788c282a442b87b3b4358f3cf6386b38d8b8258a74c9c90d55c5b55727c5",
+          "output_bytes": 114720,
+          "pcm_exact": true,
+          "integer_sha256": "eba5516f1b2b8f997c18aedfd2ac363f6d9c8b16bb7531e5fa6c35e376931dce",
+          "float_sha256": "8c94021959d0933d16e19f2be4aeefa0dc4bf2e2e3e2fdebee34bacd46ed68e9"
+        }
+      }
+    },
+    {
+      "id": "ogg-flac",
+      "target_frame": 1024,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "7169",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "939f3c58ab0843ac82d382a6b1b5047ba781af2040314e6e858f551c7b677b8f",
+          "output_bytes": 114704,
+          "pcm_exact": true,
+          "integer_sha256": "ecdffa4c7e49037c9ba1f1e242e324be01a24869754a979caa977ddead5d12f7",
+          "float_sha256": "fe78c9cc76c6b58f04d1581fdfeccacf5d23dca8aad92d36330e870a0a940dd9"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "7169",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "939f3c58ab0843ac82d382a6b1b5047ba781af2040314e6e858f551c7b677b8f",
+          "output_bytes": 114704,
+          "pcm_exact": true,
+          "integer_sha256": "ecdffa4c7e49037c9ba1f1e242e324be01a24869754a979caa977ddead5d12f7",
+          "float_sha256": "fe78c9cc76c6b58f04d1581fdfeccacf5d23dca8aad92d36330e870a0a940dd9"
+        }
+      }
+    },
+    {
+      "id": "ogg-flac",
+      "target_frame": 1234,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "6959",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "76883faf2b9dec8969c035d01863a34f0fa9c12c59658608bffdece1f15fc475",
+          "output_bytes": 111344,
+          "pcm_exact": true,
+          "integer_sha256": "c58d8eb8011e8f717c2eae097054536903a9d6928b439b19cbea85501942ef14",
+          "float_sha256": "49616fd65fd86a65b29ac74568bb9321a725c7c5abf5d00dff588066e6ec5f1a"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "0",
+          "frames_read": "6959",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "76883faf2b9dec8969c035d01863a34f0fa9c12c59658608bffdece1f15fc475",
+          "output_bytes": 111344,
+          "pcm_exact": true,
+          "integer_sha256": "c58d8eb8011e8f717c2eae097054536903a9d6928b439b19cbea85501942ef14",
+          "float_sha256": "49616fd65fd86a65b29ac74568bb9321a725c7c5abf5d00dff588066e6ec5f1a"
+        }
+      }
+    },
+    {
+      "id": "ogg-flac",
+      "target_frame": 8192,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "1",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "3c7ff77c5d2ab5d9877c1475b03d32db0025fa1401f6feb4bbfd83ff48fd6c52",
+          "output_bytes": 16,
+          "pcm_exact": true,
+          "integer_sha256": "b24f51c20483aa2f2d23c97cc9ca268fd2f784d80081f48dac3b6a5cbb56dee3",
+          "float_sha256": "06f5075717e3007c828a27e0d30ad7c643deaa173c9517078df8f203e09d5950"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "4096",
+          "frames_read": "1",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "3c7ff77c5d2ab5d9877c1475b03d32db0025fa1401f6feb4bbfd83ff48fd6c52",
+          "output_bytes": 16,
+          "pcm_exact": true,
+          "integer_sha256": "b24f51c20483aa2f2d23c97cc9ca268fd2f784d80081f48dac3b6a5cbb56dee3",
+          "float_sha256": "06f5075717e3007c828a27e0d30ad7c643deaa173c9517078df8f203e09d5950"
+        }
+      }
+    },
+    {
+      "id": "ogg-flac",
+      "target_frame": 8193,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "seek_actual": "8192",
+          "frames_read": "0",
+          "gaps": "0",
+          "status": "eof",
+          "md5": "None",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "ogg-flac",
+      "target_frame": 10000,
+      "decoders": {
+        "drflac": {
+          "channels": "\u0002",
+          "rate": "48000",
+          "bits": "\u0018",
+          "frames_hint": "8193",
+          "frames_read": "0",
+          "status": "read_zero",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "symphonia": {
+          "channels": "2",
+          "rate": "48000",
+          "bits": "24",
+          "frames_hint": "8193",
+          "status": "error: seek error: requested seek timestamp is out-of-range for stream",
+          "exit_code": 0,
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_bytes": 0,
+          "pcm_exact": true,
+          "integer_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "float_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  ],
+  "summary": {
+    "valid_cases": 38,
+    "all_cases": 49,
+    "seek_cases": 40,
+    "valid_pcm_exact": {
+      "drflac": 33,
+      "symphonia": 37,
+      "claxon": 28
+    }
+  }
+}

@@ -1,0 +1,20 @@
+[package]
+name = "mradm-flac-eval"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# An opt-in selection experiment, deliberately outside the production workspace.
+[workspace]
+
+[dependencies]
+symphonia = { version = "=0.6.1", default-features = false, features = ["flac", "ogg"] }
+claxon = "=0.4.3"
+
+[profile.dev]
+debug = 1
+incremental = false
+
+[profile.release]
+debug = 0
+incremental = false
