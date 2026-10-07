@@ -27,7 +27,8 @@ AVX+FMA、SSE4.1、NEON，最后才是标量规划器；SIMD 后端对 2 的幂�
 - 二期内核探针记录 rustfft/realfft 可能生成的全部 twiddle（每个 2 的幂长度 ≤ 32768 的每个
   索引），分别保存 f64 libm 值与转换后的 f32 值，并把 FFT 覆盖扩展到 32768 点。
 - 一致性比较器新增显式位相等门禁（`scripts/consistency/phase2-gates.json`）。首批门禁为
-  f32 twiddle 表、全部 `RealFft` 正/逆变换内核和 EAR 去相关 FIR；其余差异继续只做测量。
+  f32 twiddle 表、全部 `RealFft` 正/逆变换内核和 EAR 去相关 FIR。三平台验收后，把当时三平台
+  逐位相同的 52 个 PCM 用例按精确 id 加入门禁（变采样 Scene 与 OM spreader 除外）；其余差异继续只做测量。
 
 ## 代价
 

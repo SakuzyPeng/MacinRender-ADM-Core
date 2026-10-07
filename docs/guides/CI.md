@@ -83,7 +83,7 @@ config A 为默认数值配置，config B 只打开 C/C++ 严格浮点选项；�
 二期使用 `run-rust-phase2.py` 收集 34 个离线场景、22 个实时 Scene 配置（各含两个 epoch）及
 60 个内核测量（含 FFT twiddle 表），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
 验证三平台源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；
-`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT 与 EAR 去相关 FIR）必须三平台逐位相同，
+`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR 与 52 个 PCM 用例）必须三平台逐位相同，
 其余跨平台位差仍只记录。`compare` job 先写出全部四份报告，再按门禁结果失败。
 详见 [Rust 二期基线](../architecture/RUST_PHASE2_BASELINE.md)与 [二期 FFT 收敛](../architecture/RUST_PHASE2_FFT.md)。历史 SAF 清单和定位脚本保留原始边界。
 
@@ -275,7 +275,7 @@ Cargo 因此使用 `release` profile（而非 `minsizerel`）。
 1. 如果 quality 太慢，保留 PR changed，必要时把 main full 改成夜间 schedule。
 2. release job 后续补 macOS 签名/notarization 和完整第三方 license bundle。
 3. 视 Windows release 耗时与稳定性，决定是否扩大 Release 下运行的测试集，或在 macOS / Linux release 中加入同样的优化构建 fixture。
-4. 二期跨平台逐位一致落地后，在一致性 workflow 中按 renderer / 布局 / 语义组合恢复位相等门禁。
+4. 二期每个切片收敛后，把新增的三平台相同用例按精确 id 加入 `phase2-gates.json`（FFT 切片已加入 52 个），直至覆盖全部 renderer / 布局 / 语义组合。
 
 ### Scene 算术的 ARM64 Release 回归
 
