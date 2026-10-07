@@ -2,390 +2,253 @@
 
 English | [中文](README.md)
 
-MacinRender ADM Core is a cross-platform ADM (Audio Definition Model, ITU-R BS.2076) spatial-audio rendering core
-written in C++20. It provides a desktop GUI, the `mradm` command-line tool, and a stable C ABI library.
+ITU-R BS.2076 ADM spatial-audio rendering core · C++20 + Rust 2024 · Rust 1.98 · stable C ABI v1 · cross-platform bit-identical gates
 
-It reads ADM BWF / BW64 and ordinary channel-based WAVE / RF64 / BW64 input, then renders to loudspeaker layouts, HOA encoding, HRTF binaural output, and delivery formats including WAV, CAF, FLAC, Opus MKA, IAMF, and APAC.
+## What is this?
+
+ADM (Audio Definition Model, ITU-R BS.2076) uses XML metadata to describe immersive audio such as objects, direct
+speakers, and HOA, and is usually delivered as ADM BWF / BW64 files. MacinRender ADM Core (Chinese name: 麦渲峰 ADM Core)
+reads an ADM scene or an ordinary multichannel WAVE file, **renders** it to loudspeaker layouts, HOA, or HRTF binaural
+signals, and packages the result as WAV / CAF / FLAC / Opus MKA / IAMF / APAC. Besides offline rendering it provides a
+realtime monitoring path with hot backend switching and head tracking.
+
+There are three entry points: the `mradm` command-line tool, a stable C ABI library, and an Avalonia desktop GUI built
+on that C ABI.
+
+This project is **not** an ADM mastering tool: semantic policy rewrites semantics only at render time, and `export`
+reuses the source PCM when it writes a new ADM file. Audio codecs are not implemented here either: FLAC / Opus / IAMF /
+APAC encoding goes through libFLAC, libopus, AOM iamf-tools, and AudioToolbox respectively. The project makes no
+Dolby / Apple product-certification claims.
 
 > **Naming:** 麦渲峰 is the official Chinese name of MacinRender. The English brand name and technical identifiers,
 > including repository, package, CMake target, namespace, and executable names, remain `MacinRender`.
 
-## Feature Overview
+This project is not affiliated with, sponsored by, or endorsed by Dolby Laboratories or Apple Inc. Dolby Atmos, Apple,
+AirPods, and similar names are trademarks of their respective owners and are referenced only to describe compatibility.
 
-- ADM scene import: uses project-owned Rust `mradm-adm` for ADM metadata and `mradm-wav` for integer BW64 audio; container metadata orchestration and the domain model remain in C++.
-- Channel-bed input: maps known WAVE channel masks or constrained custom labels into a DirectSpeakers scene with explicit geometry.
-- Desktop workbench: an Avalonia GUI for batch rendering, per-object semantic editing, and realtime spatial monitoring.
-- Render backends: libear, SAF VBAP, Triple Balance, HOA encoder, HRTF binaural, and Apple AUSpatialMixer on macOS.
-- Objects / DirectSpeakers: supports timed blocks, gain, interpolation, diffuse, channelLock, objectDivergence, and related ADM semantics.
-- Post-processing: loudness normalization, True Peak limiting, bit-depth conversion, and CAF / FLAC / Opus / APAC metadata. HOA output is measured through a 7.1.4 AllRAD reference decode; LUFS uses full-range channels and True Peak covers every channel.
-- Platform scope: core functionality targets macOS, Linux, and Windows; macOS also provides APAC encoding and the Apple AUSpatialMixer backend.
+## Features
+
+- **ADM and channel-bed input**: ADM BWF / BW64 / RF64 scene import; ordinary multichannel WAVE mapped to a DirectSpeakers scene through a channel mask, a preset layout, or constrained custom labels
+- **Multiple render backends**: EAR (BS.2127), VBAP, Triple Balance Cartesian room rendering, HOA3 encoding, HRTF binaural, and Apple AUSpatialMixer on macOS
+- **ADM semantics**: Objects / DirectSpeakers / HOA with timed blocks, gain, interpolation, diffuse, extent, channelLock, and objectDivergence
+- **Semantic policy**: rewrite object semantics at render time with JSON, write the effective-semantics snapshot, or export a policy-applied ADM BWF
+- **Post-processing**: loudness normalization, True Peak limiting, bit-depth conversion; HOA is measured through a 7.1.4 AllRAD reference decode
+- **Multi-format delivery**: WAV / CAF / FLAC / Opus MKA / IAMF / APAC; WAV output and master input both support files over 4 GB
+- **Realtime monitoring**: hot switching of backend / layout / device, head tracking (OSC, AirPods), HpTF headphone compensation, system spatial audio (macOS / Windows)
+- **Desktop workbench**: batch rendering, per-object semantic editing, realtime monitoring, and spatial visualization
+- **Stable C ABI**: backward binary compatible since 1.0, structured progress callbacks, realtime Scene input
+- **Cross-platform bit identity**: all 78 PCM cases in the consistency CI are bit-identical on macOS arm64 / Linux x64 / Windows x64 and gated
+- **Rust numerical core**: DSP, EAR, ADM XML, and WAVE I/O run in Rust; project-owned algorithm crates forbid `unsafe`, which appears only in the private C boundary `mradm-ffi`
+
+## Quick Start
+
+### Prerequisites
+
+- A C++20 compiler (Clang / GCC / MSVC) and CMake ≥ 3.24
+- Rust 1.98.0 with rustfmt / clippy (see `rust/rust-toolchain.toml`)
+
+```bash
+rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
+```
+
+C/C++ dependencies are fetched by CMake `FetchContent` by default, and Rust dependencies use the committed
+`Cargo.lock`; production builds need no Boost, vcpkg, SAF, or OpenBLAS. APAC encoding and the Apple backend are
+available only on macOS.
+
+Prebuilt CLI and GUI packages for macOS arm64 and Windows x64 are available from
+[GitHub Releases](https://github.com/SakuzyPeng/MacinRender-ADM-Core/releases); see
+[release packages](docs/guides/BINARY_RELEASE.en.md) for artifacts and SHA-256 verification.
+
+### Build and Test
+
+```bash
+cmake --preset debug
+cmake --build --preset debug
+ctest --preset debug --output-on-failure
+```
+
+Use a Release build for real renders:
+
+```bash
+cmake --preset release
+cmake --build --preset release
+```
+
+### Inspect Scenes and Capabilities
+
+```bash
+./build/release/mradm inspect input.wav      # ADM / channel-bed scene metadata
+./build/release/mradm backends               # render backends, capabilities, and supported layouts
+./build/release/mradm formats                # output formats, availability, and constraints
+./build/release/mradm layouts --format wav   # final channel order for an output format
+```
+
+### Common Build Options
+
+| Option | Description | Default |
+|---|---|---|
+| `MR_ADM_CORE_FETCH_DEPS` | Turn off to use system dependencies; also requires Corrosion 0.6.1 and a prepared Cargo cache | `ON` |
+| `MR_ADM_FLAC_PROVIDER` / `MR_ADM_OPUS_PROVIDER` | `AUTO` (vendored static for Release, system libraries preferred for Debug) / `VENDORED` / `SYSTEM` | `AUTO` |
+| `MR_ADM_ENABLE_SOFA` | User SOFA HRIR support for the binaural backend | `ON` |
+| `MR_ADM_ENABLE_IAMF` | IAMF encoding; needs `MR_ADM_IAMF_AOM_ROOT` pointing at the official AOM iamf-tools bridge SDK | `OFF` |
+| `MR_ADM_BUILD_CAPI_BUNDLE` | Build the self-contained `libmradm_capi` shared library loaded by the GUI | `OFF` |
+| `MR_ADM_BUILD_*_REFERENCE_TESTS` | Build legacy-library reference comparisons (SAF, libear, libadm, ...) without changing production code | `OFF` |
+
+## Basic Usage
+
+The most common commands are below. See the [CLI usage guide](docs/guides/CLI_USAGE.en.md) for every subcommand,
+backend, output format and layout, option, and the semantic policy.
+
+**Binaural → FLAC** — the default output semantic is `binaural`; `--sofa` selects a user HRIR:
+
+```bash
+./build/release/mradm render -i input.wav -o out.binaural.flac --renderer saf-binaural
+```
+
+**Loudspeaker layouts** — FLAC for ≤ 8-channel layouts without height, Opus MKA for height layouts (48 kHz required;
+APAC `.m4a` on macOS):
+
+```bash
+./build/release/mradm render -i input.wav -o out.5_1.flac --renderer ear --output-layout 5.1
+./build/release/mradm render -i input.wav -o out.7_1_4.mka --renderer ear --output-layout 7.1.4
+```
+
+**Third-order HOA**:
+
+```bash
+./build/release/mradm render -i input.wav -o out.hoa3.mka --renderer hoa --output-layout hoa3
+```
+
+**Ordinary multichannel input** — interpret WAVE channels with a preset or custom labels:
+
+```bash
+./build/release/mradm render -i bed.wav -o bed_714.mka --input-layout 5.1 --renderer ear --output-layout 7.1.4
+```
+
+**Semantic policy** — generate a neutral template, apply the edited policy, and write the effective-semantics snapshot:
+
+```bash
+./build/release/mradm inspect input.wav --write-semantic-policy-template policy.json
+./build/release/mradm render -i input.wav -o out.flac --semantic-policy policy.json \
+  --write-semantic-report report.json
+```
+
+**C ABI** — `include/adm/c_api.h` is the stable v1 interface: file rendering should use `adm_render_file_ex2` with
+structured progress, realtime monitoring uses the `adm_monitor_*` family, and external decoders can submit per-object
+PCM and spatial metadata through the realtime Scene interface. See [ADR 0007](docs/adr/0007-c-abi-stability-policy.md)
+for the compatibility policy.
 
 ## Desktop GUI
 
-The MacinRender GUI is an Avalonia desktop workbench backed by the same rendering core as the CLI through the stable
-C ABI. The interface consumes renderer, layout, format, and platform capabilities queried directly from the core.
-Current releases provide self-contained NativeAOT applications for macOS arm64 and Windows x64.
+The MacinRender GUI is an Avalonia / .NET NativeAOT desktop workbench that drives the same rendering core as the CLI
+through the stable C ABI; renderer, layout, format, and platform capabilities come directly from core queries. Release
+packages cover macOS arm64 and Windows x64.
 
 | Workflow | Current capabilities |
 |---|---|
 | Batch rendering | Add files or folders, select renderer, layout, codec, and container, inspect structured progress and logs, and cancel jobs |
 | Semantic editing | Load one ADM file and edit per-object gain, diffuse, extent, divergence, and head-tracking participation |
-| Realtime monitoring | Compare semantic overrides during playback, switch renderer, layout, and output device, and use custom SOFA HRIRs; Apple / SAF binaural monitoring supports hardware-free manual yaw, pitch, roll, and recentering through a mouse, trackpad, or keyboard |
-| Spatial visualization | Object positions, trails, and per-channel meters; drag in a standard 64x64 PNG character skin, with automatic classic / slim model selection and persistence |
+| Realtime monitoring | Compare semantic overrides during playback, switch renderer, layout, and output device, and use custom SOFA HRIRs; binaural monitoring supports mouse, trackpad, and keyboard yaw / pitch / roll control |
+| Spatial visualization | Object positions, trails, and per-channel meters; the spatial character accepts a custom 64x64 PNG skin |
 | Inspection and export | Export an effective ADM while preserving source audio and writing supported semantic changes |
 
-The interface supports Chinese / English and dark / light themes, and exposes system spatial audio when supported by
-the platform. macOS additionally provides Apple AUSpatialMixer, APAC, and AirPods head tracking. The GUI focuses on
-ADM batch rendering, semantic editing, realtime monitoring, spatial visualization, inspection, and export.
-
-After extracting a release package, open `MacinRender ADM.app` on macOS. On Windows, run `MacinRender ADM.cmd` or
-`app/MacinRender.Gui.exe`. Initial packages use local developer distribution: macOS follows the Gatekeeper confirmation
-flow and Windows follows the SmartScreen confirmation flow. Initial packages target macOS arm64 and Windows x64.
-
-For implementation details, see the [semantic editor design](docs/architecture/SEMANTIC_EDITOR_GUI.md) and
+The interface supports Chinese / English and dark / light themes; macOS additionally provides Apple AUSpatialMixer,
+APAC, and AirPods head tracking. See the [semantic editor design](docs/architecture/SEMANTIC_EDITOR_GUI.md) and the
 [realtime monitoring design](docs/architecture/REALTIME_MONITORING.md).
 
-## CLI Quick Start
+## Project Structure
 
-```bash
-cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
-cmake --build build/release
+```text
+mradm (CLI) ──→ ADMEngine ──→ RenderService / monitor_session
+GUI (C#) ──→ ADMCAPI ──→ ADMEngine
+ADMEngine ──→ ADMRendererFactory ──→ ADMRender{Ear,VBAP,TripleBalance,HOA,Binaural,Apple}
+          ──→ ADMRealtime / ADMIo / ADMMetadata / ADMAudio / ADMPeak / ADMLoudness
+C++ modules ──→ ADMDsp ──→ mradm-ffi (Rust staticlib) ──→ mradm-dsp / mradm-ear / mradm-adm / mradm-wav
+All modules ──→ ADMCore (domain model, errors, options, capabilities)
 ```
 
-Inspect an ADM scene and query available backends / layouts:
-
-```bash
-./build/release/mradm inspect input.wav
-./build/release/mradm backends
-./build/release/mradm input-layouts
-./build/release/mradm layouts --format wav
-./build/release/mradm layouts --format flac --renderer saf
-```
-
-Render examples:
-
-```bash
-./build/release/mradm render -i input.wav -o out_binaural.wav --renderer saf-binaural
-./build/release/mradm render -i input.wav -o out_714.flac --renderer ear --output-layout 7.1.4
-./build/release/mradm render -i input.wav -o out_222.wav --renderer apple --output-layout 22.2
-./build/release/mradm render -i input.wav -o out_room.wav --renderer triple-balance --output-layout 9.1.6
-./build/release/mradm render -i input.wav -o out_trim.wav --start 12.5 --end 45.0
-./build/release/mradm render -i bed.wav -o bed_714.wav --input-layout 5.1 --renderer ear --output-layout 7.1.4
-./build/release/mradm render -i custom.wav -o custom_binaural.wav --input-channels L,R,C,LFE,M+090,M-090 --renderer saf-binaural --sofa listener.sofa
-```
-
-## Ordinary Channel-Bed Input
-
-Ordinary input accepts PCM 16/24/32-bit and IEEE float32 WAVE / RF64 / BW64 with 1–64 channels.
-The default `--input-layout auto` follows an ordered detection path: an `axml` chunk selects ADM import, followed by a
-recognised WAVEFORMATEXTENSIBLE channel mask. Invalid ADM produces an error. Presets are `5.1`, `5.1.2`,
-`7.1`, `5.1.4`, `7.1.4`, `9.1.4`, `9.1.6`, and `22.2`; `--input-channels` provides a constrained custom order.
-
-Azimuth is positive left, negative right, and `0°` front; elevation is positive up. Aliases have exact semantics:
-`L/FL=M+030` (`+30°`, `0°`), `R/FR=M-030` (`-30°`, `0°`), `C/FC=M+000` (`0°`, `0°`), and
-`LFE=LFE1` (the low-frequency semantic channel). Label count must exactly match the file; empty, unknown, and duplicate
-labels produce errors. Custom `U±110` labels require `@30` or `@45` to select elevation. See the
-[complete channel-bed input semantics](docs/guides/CHANNEL_BED_INPUT.en.md), or query `mradm input-layouts` and
-`mradm input-layouts --format json`.
-
-Public two-channel output uses the `binaural` semantic, which is also the default. Backend and HRTF source are separate
-choices: `triple-balance` is an independent Cartesian room renderer. Point sources use successive equal-power
-panning along X/Y/Z, with verified 48 kHz isotropic-size processing. The existing 7.1.4 / 9.1.6 reference
-behavior is retained; 22.2 is a project-defined extension. See the [backend documentation](docs/architecture/TRIPLE_BALANCE_RENDERER.md)
-for input limits. CLI, C ABI and GUI batch rendering are available. C API and GUI system-spatial monitoring also
-support realtime playback, exact seeks, gain/mute and linked isotropic extent multipliers.
-The former `--speaker-panner` option has been removed.
-
-`saf-binaural` offers built-in KEMAR and build-enabled `--sofa` user HRIRs; `apple` uses the Apple system HRTF.
-Current entry points are the CLI, C++ API, and C ABI v1.34.
-
-## Release Packages
-
-The GitHub Actions release workflow produces auditable packages for tags matching `v*` and for manual release runs.
-
-| Platform | Artifact | Baseline | Self-contained boundary |
-|---|---|---|---|
-| macOS arm64 | `mradm-<version>-macos-arm64.tar.gz` | Built on macOS 26 runner | Third-party libraries ship statically; external dependencies are Apple system libraries and frameworks |
-| Windows x64 | `mradm-<version>-windows-x64.zip` | Windows Server 2025 + MSVC | Includes `mradm.exe` and required DLLs, plus a `dumpbin /dependents` manifest |
-| macOS GUI arm64 | `MacinRender-Gui-<version>-macos-arm64.tar.gz` | Built on macOS 26 runner | Self-contained `.app`; external dependencies are Apple system libraries and frameworks |
-| Windows GUI x64 | `MacinRender-Gui-<version>-windows-x64.zip` | Windows Server 2025 + MSVC | Includes the NativeAOT GUI, `mradm_capi.dll`, required DLLs, and a `dumpbin /dependents` manifest |
-
-CLI packages contain:
-
-- `bin/mradm`
-- `LICENSE`
-- `THIRD_PARTY_NOTICES.md`
-- `BUILD_INFO.txt`
-- `DEPENDENCIES.txt`
-
-macOS CLI / GUI packages use `.tar.gz`, and Windows CLI / GUI packages use `.zip`. Each artifact has a matching
-`.sha256` file. GUI packages contain a macOS `.app` or `app/MacinRender.Gui.exe`, together with license,
-build-information, checksum, and dependency files. The initial platform set is macOS arm64 and Windows x64,
-delivered through local developer distribution.
-
-## Render Backends
-
-| Backend | CLI option | Input types | Output |
-|---|---|---|---|
-| libear | `--renderer auto` / `ear` | Objects / DirectSpeakers / HOA | Multichannel loudspeakers |
-| SAF VBAP | `--renderer saf` | Objects / DirectSpeakers | Multichannel loudspeakers |
-| Triple Balance | `--renderer triple-balance` | Cartesian Objects / standard 7.1.2 bed | Offline and realtime 7.1.4 / 9.1.6 / 22.2 |
-| HOA encoder | `--renderer hoa` | Objects / DirectSpeakers | HOA3 16ch (ACN/SN3D) |
-| SAF HRTF binaural | `--renderer saf-binaural` | Objects / DirectSpeakers | 2ch binaural |
-| Apple AUSpatialMixer | `--renderer apple` | Objects / DirectSpeakers | 2ch binaural / multichannel loudspeakers (macOS) |
-
-The `saf-binaural` backend uses SAF's built-in Genelec KEMAR HRTF by default. A user FIR SOFA HRIR file can be loaded with `--sofa <path>`. Current SOFA specifications are SimpleFreeFieldHRIR / GeneralFIR, 2 receivers, and a native 48 kHz sample rate. The `apple` backend uses Apple's system HRTF; `mradm backends` reports each binaural backend's `HRTF sources`.
-
-The recommended general-purpose external HRTF is the D1 KU100 SOFA from the [SADIE II Database](https://www.york.ac.uk/sadie-project/database.html), for example `D1_48K_24bit_256tap_FIR_SOFA.sofa` (also available from the [SOFA database SADIE index](https://sofacoustics.org/data/database/sadie/)). It is a 48 kHz, 256-tap SimpleFreeFieldHRIR dataset with dense direction sampling and low-frequency extension / diffuse-field EQ, making it a balanced default `--sofa` recommendation for headphone checks. The SADIE II data is published by the University of York under the Apache License 2.0; when distributing data or using it academically, follow the dataset page and cite [DOI:10.3390/app8112029](https://doi.org/10.3390/app8112029).
-
-The `apple` backend uses AudioToolbox AUSpatialMixer and Apple platform rendering semantics. It supports binaural, 5.1, 7.1, 5.1.2, 5.1.4, 7.1.4, 9.1.6, and 22.2, plus speaker-output channelLock and extent cloud approximation. SpatialMixer handles dynamic parameter smoothing. `--start` / `--end` use on-demand window rendering with one render block of pre-roll to update SpatialMixer state.
-
-## Output Formats
-
-### Codecs and Containers
-
-| Codec | Lossy / Lossless | Container | Extension | Status |
-|---|---|---|---|---|
-| PCM float32 | Uncompressed | WAV / CAF | `.wav` / `.caf` | Cross-platform |
-| PCM integer | Uncompressed | WAV | `.wav` | Cross-platform; 24-bit / 16-bit |
-| FLAC | Lossless | FLAC | `.flac` | Cross-platform; fixed 24-bit, up to 8 channels |
-| Opus | Lossy | Matroska Audio | `.mka` | Cross-platform; Opus VBR |
-| Opus | Lossy | IAMF raw OBU | `.iamf` | Requires the official AOM iamf-tools bridge SDK |
-| APAC | Lossy | MPEG-4 Audio | `.m4a` / `.mp4` | macOS; AudioToolbox |
-| APAC | Lossy | CAF | `.caf` | macOS; uses `--apac-container caf` |
-
-The status column describes the combinations this project currently writes. Target systems and players determine spatial-layout preservation during playback. Plain `.caf` output writes float32 PCM by default; `--apac-container caf` selects APAC-in-CAF.
-
-### Uncompressed / Lossless Output
-
-WAV can be written as float32, 24-bit, or 16-bit PCM. The scope of `--output-bit-depth` is WAV. Final WAV output carries machine-readable layout semantics: `5.1`, `5.1.2`, `7.1`, `5.1.4`, and `7.1.4` carry WAVEFORMATEXTENSIBLE masks in ascending mask-bit order, so `7.1.4` is written as `L R C LFE Rls Rrs Ls Rs ...`. `9.1.4`, `9.1.6`, and `22.2` carry ADM DirectSpeakers AXML/CHNA; `binaural` carries ADM Binaural `leftEar/rightEar`; and `hoa3` carries ADM HOA ACN/SN3D AXML/CHNA plus the `ambi` chunk.
-
-Float32 WAV uses RF64. For ADM-labelled layouts this is an RF64 extension carrying AXML/CHNA; integer `i24` / `i16` uses normative PCM BW64. Mask-labelled integer output uses RIFF through 4 GB and RF64 above 4 GB so WAVEFORMATEXTENSIBLE semantics are retained. The reader accepts RIFF, RF64, BW64, and this project's float32 ADM RF64 output. Choose `--output-bit-depth i24` when a delivery chain explicitly requires PCM BW64. CAF currently writes float32 PCM and carries CoreAudio spatial layout tags. FLAC currently writes fixed 24-bit lossless audio, supports up to 8 channels, and exposes `binaural`, `5.1`, and `7.1`-style base-layer layouts. Height-channel lossless delivery uses WAV or CAF.
-
-For lossless or uncompressed output with height channels or more than 8 channels, prefer WAV or CAF. Playback compatibility must still be validated against the target player.
-
-### Lossy Delivery Output
-
-Opus MKA is Matroska Audio + Opus VBR and can be written on all supported platforms. Standard 5.1 / 7.1 layouts use Opus/Vorbis channel semantics; higher discrete layouts such as 9.1.6 and 22.2 use transparent multistream encoding with metadata. Full spatial-layout recognition depends on player capabilities.
-
-IAMF output is a raw OBU stream (`.iamf`) with Opus for IAMF testing and delivery chains. It uses the official AOM iamf-tools bridge at configure time:
-
-```bash
-cmake -S . -B build/release \
-  -DMR_ADM_ENABLE_IAMF=ON \
-  -DMR_ADM_IAMF_AOM_ROOT=/path/to/iamf-sdk
-```
-
-APAC output writes MPEG-4 Audio (`.m4a` / `.mp4`) on macOS via AudioToolbox by default and currently requires 48 kHz. APAC-in-CAF is also available by using a `.caf` output path with `--apac-container caf`. Spatial layouts and HOA use stable total-bitrate hints by default, scaled from a 7.1.4 baseline of 2048 kbps. AudioToolbox treats this as an encoder target / hint, so measured bitrate can differ substantially.
-
-### Containers, Layouts, and Playback
-
-Channel order and spatial layout semantics are determined by the combination of codec, container, and layout tag / mapping. Use `mradm layouts --format <fmt>` to query the implemented channel order for a given output format.
-
-| Format | Layout | Final container / mapping | Final channel order |
-|---|---|---|---|
-| WAV / FLAC | `7.1` | WAVE_7_1 / `wav71` | L R C LFE Rls Rrs Ls Rs |
-| WAV | `7.1.4` | WAVEFORMATEXTENSIBLE `0x2D63F` | L R C LFE Rls Rrs Ls Rs U+045 U-045 U+135 U-135 |
-| WAV | `9.1.4` / `9.1.6` / `22.2` | ADM DirectSpeakers AXML/CHNA | Exact ADM order reported by `mradm layouts --format wav` |
-| WAV | `binaural` | ADM Binaural `leftEar/rightEar` AXML/CHNA | leftEar rightEar |
-| WAV | `hoa3` | ADM HOA AXML/CHNA + AmbiX `ambi` chunk | ACN/SN3D 16ch |
-
-Direct HOA playback on macOS uses CAF PCM, APAC MPEG-4, and APAC CAF. WAV HOA3 writes an AmbiX `ambi` chunk for AmbiX-aware tools. Opus MKA writes an ambisonics mapping for compatible players.
-
-## Output Layouts
-
-| Common name / CLI value | Channels | EAR | SAF VBAP | Apple |
-|---|---:|---|---|---|
-| `5.1` | 6 | yes | yes | yes |
-| `5.1.2` | 8 | yes | yes | yes |
-| `7.1` | 8 | yes | yes | yes |
-| `5.1.4` | 10 | yes | yes | yes |
-| `9.1.4` | 14 | yes | yes | - |
-| `7.1.4` | 12 | yes | yes | yes |
-| `9.1.6` | 16 | yes | yes | yes |
-| `22.2` | 24 | yes | yes | yes |
-| `hoa3` | 16 | - | - | - |
-
-EAR and SAF VBAP share the same project layout registry. `9.1.4` / `9.1.6` are implemented for the libear backend through project-side custom `ear::Layout` definitions.
-
-EAR / SAF output-speaker geometry is selectable with `--speaker-geometry standard|apple`. The default `standard`
-preserves the existing project / ADM nominal coordinates. `apple` uses CoreAudio's fixed coordinates for `5.1`, `7.1`,
-`5.1.2`, `5.1.4`, `7.1.4`, `9.1.6`, and `22.2` (`5.1` is coordinate-identical). CoreAudio has no matching fixed
-profile for project `9.1.4` or internal speaker stereo, so those combinations return unsupported instead of silently
-falling back. The Apple renderer always uses CoreAudio geometry and ignores this option. LFE does not participate in
-the geometry switch.
-
-DirectSpeakers routing is selectable with `--direct-speakers-routing auto|label|position|matrix`. The default `auto`
-resolves to `label` for SAF and Apple loudspeaker output:
-an exact output-label match is attempted first, followed by the shared alias table (for example `L` → `M+030`), and
-a match is routed one-hot to that output slot. A miss is spatialized from the known BS.2051/alias label direction when
-available, otherwise from the ADM nominal coordinates. `position` ignores non-LFE labels and performs zero-spread,
-non-interpolated spatialization; SAF uses the selected speaker geometry and Apple uses its AmbienceBed path. When a
-coordinate fallback is needed but coordinates are missing, front centre `(0°,0°)` is used with a warning.
-
-`matrix` uses `--direct-speakers-matrix <json>` to route every non-LFE input label to one or more target labels on
-EAR, SAF, and Apple loudspeaker outputs. Each row is normalized as `sqrt(weight/sum)`, and `mute:true` is an explicit
-silent route. The profile must bind the effective output layout and cover every non-LFE DirectSpeakers block;
-duplicate, unknown, or ambiguous labels and LFE source/target rows are errors. LFE always takes the existing dedicated
-route first. Apple binaural keeps `auto=position`, rejects explicit `label`, and rejects `matrix`; EAR adds only
-`matrix`, while its explicit `label` / `position` boundary is unchanged. SAF binaural and HOA retain native `auto`
-behaviour and reject every explicit mode. This phase exposes CLI, C++, and C ABI entry points; GUI controls are
-deferred.
-The desktop app exposes the same Speaker Geometry selector for EAR / SAF loudspeaker rendering and remembers the last
-selection.
-
-```bash
-./build/release/mradm render -i input.wav -o saf_apple_222.wav \
-  --renderer saf --output-layout 22.2 --speaker-geometry apple
-
-./build/release/mradm render -i bed.wav -o remapped_714.wav \
-  --renderer ear --output-layout 7.1.4 \
-  --direct-speakers-routing matrix --direct-speakers-matrix routes.json
-```
-
-Query full channel-order tables with:
-
-```bash
-./build/release/mradm layouts --format wav
-./build/release/mradm layouts --format caf
-./build/release/mradm layouts --format apac
-./build/release/mradm layouts --format flac --renderer ear
-```
-
-## Common CLI Options
-
-| Option | Description | Default |
-|---|---|---|
-| `--renderer auto\|ear\|saf\|triple-balance\|hoa\|saf-binaural\|apple` | Select the render backend | `auto` |
-| `--input-layout auto\|5.1\|5.1.2\|7.1\|5.1.4\|7.1.4\|9.1.4\|9.1.6\|22.2` | Ordinary WAVE input layout; `auto` prefers ADM, then a recognised channel mask | `auto` |
-| `--input-channels <csv>` | Custom ordinary-input labels in exact file-channel order; choose this or an explicit `--input-layout` | Off |
-| `--output-layout <layout>` | Output semantic/layout: `binaural`, a multichannel layout, or `hoa3` | `binaural` |
-| `--speaker-geometry standard\|apple` | EAR / SAF output-speaker coordinates; the Apple backend always uses CoreAudio geometry | `standard` |
-| `--direct-speakers-routing auto\|label\|position\|matrix` | Native, label, position, or custom label-matrix DirectSpeakers routing | `auto` |
-| `--direct-speakers-matrix <path>` | Strict v1 sparse-matrix JSON required by `matrix` mode | Off |
-| `--output-bit-depth f32\|i24\|i16` | WAV output bit depth; CAF is fixed float32, FLAC is fixed 24-bit / up to 8 channels | `f32` |
-| `--loudness-target <LUFS>` | Normalize integrated loudness; HOA uses a 7.1.4 AllRAD reference decode and full-range channels for LUFS | Off |
-| `--peak-limit-dbtp <dBTP>` | True Peak limit target | `-1.0` |
-| `--peak-normalize-to-limit` | After loudness gain, raise global gain up to `--peak-limit-dbtp` when True Peak is below the ceiling; requires peak limiting | Off |
-| `--final-gain-db <dB>` | Add final gain after automatic loudness / peak staging and True Peak limiting; the result may exceed 0 dBFS | `0` |
-| `--no-peak-limit` | Set True Peak limiting to off | - |
-| `--start <sec>` | Trim output so it starts at this second on the rendered timeline; loudness / True Peak are measured over the kept segment | `0` |
-| `--end <sec>` | Trim output to this absolute second on the rendered timeline; the value is greater than `--start`, with timeline end as the default | Off |
-| `--interp-ms <ms>` | Gain interpolation ramp when an ADM block omits jumpPosition | `5` |
-| `--object-smoothing-frames <frames>` | Smoothing window for dynamic Objects metadata; `0` follows ADM blocks sample-by-sample; raise explicitly for extreme dynamic metadata; Apple delegates smoothing to SpatialMixer | `0` |
-| `--opus-bitrate-per-ch <kbps>` | Opus VBR target bitrate per channel | Auto |
-| `--apac-bitrate <kbps>` | APAC total bitrate hint; the default scales spatial layouts / HOA from the 7.1.4=2048 kbps baseline | See output-format notes |
-| `--apac-container mpeg4\|caf` | APAC container; `caf` uses a `.caf` output path, and the default plain `.caf` mode is PCM | `mpeg4` |
-| `--sofa <path>` | Select a user SOFA HRIR for a backend reporting `user-sofa`; currently `saf-binaural` | SAF built-in KEMAR |
-| `--semantic-policy <path>` | Apply ADM semantic-control JSON during rendering | Off |
-| `--write-semantic-report <path>` | Write the effective semantic JSON after policy application | Off |
-
-Post-processing order: `--loudness-target` determines the loudness gain first, `--peak-normalize-to-limit` can optionally add peak makeup to the True Peak ceiling, and `--peak-limit-dbtp` clamps the automatic gain stage; `--final-gain-db` is added after those automatic stages, so it bypasses True Peak limiting.
-
-## Semantic Policy
-
-Semantic policy applies to the current render while the source AXML remains intact. `inspect --write-semantic-policy-template` writes an editable neutral template for the scene; applying the template unchanged is an identity operation.
-
-```bash
-./build/release/mradm inspect in.wav --write-semantic-policy-template policy.json
-./build/release/mradm render -i in.wav -o out.flac --renderer saf-binaural --semantic-policy policy.json
-```
-
-`global` applies to all content. `objects[]` contains rule-based overrides. Match dimensions are OR-combined: `id`, `name`, `name_glob`, `track_uid`, `all`, `importance_min/max`, `dialogue_id`, `content`, `programme`; HOA rules also accept `pack_format`.
-
-Supported override areas:
-
-- **Objects**: object-level `gain` (`scale`, `gain_db`, `mute`), block-level `position`, `diffuse`, `extent`, `divergence`, `channel_lock`, and `interpolation`.
-- **DirectSpeakers**: `direct_speakers` with per-block filters `speaker_label` / `lfe` (AND), gain, and position re-aiming.
-- **HOA**: `id` / `pack_format` / `all` matching, with pack-level gain / mute.
-
-More options:
-
-```bash
-./build/release/mradm render --help
-```
-
-## Build Options
-
-Builds require C++20, CMake 3.24+, and Rust 1.98.0. The used SAF DSP subset now runs in Rust; default builds need no SAF, OpenBLAS, or LAPACKE. Existing renderer names such as `saf` remain compatible.
-
-Recommended local workflow:
-
-```bash
-rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
-cmake --preset debug
-cmake --build --preset debug
-ctest --test-dir build/debug --output-on-failure
-```
-
-Native dependencies use `FetchContent`; Rust dependencies use the committed Cargo.lock. SOFA parsing is pure Rust. `MR_ADM_BUILD_SAF_REFERENCE_TESTS=ON` enables historical reference tools without changing production rendering.
-
-Loudness and True Peak metering use Rust `ebur128`, with live integration kept on the worker. The C `libebur128` library is only used by the default-off `MR_ADM_BUILD_EBUR128_REFERENCE_TESTS` comparison target and is not linked into production. See the [Rust Meter migration](docs/architecture/RUST_METER_MIGRATION.md) for the boundary and validation results.
-
-Binaural convolution, filter transitions, diffuse delay and live input mixing also run in Rust. Live Scene and batch/legacy streaming retain their respective history and tail semantics; prepared kernel processing and reset allocate no memory. See the [Rust binaural DSP migration](docs/architecture/RUST_BINAURAL_DSP_MIGRATION.md) for scope and validation.
-
-Scene output and live HRTF resampling use Rust `rubato`, retaining rational duration, preroll and reset semantics. `libsamplerate` is only used by the default-off `MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS` target. See the [Rust resampler migration](docs/architecture/RUST_RESAMPLER_MIGRATION.md) for filter/phase differences and reference measurements.
-
-HRTF magnitude/phase interpolation, continuous live direction lookup and spectral state are now owned by Rust, with immutable geometry shared across filter banks. Offline and live lookups retain their respective semantics and allocate no memory after preparation. See the [Rust HRTF migration](docs/architecture/RUST_HRTF_MIGRATION.md) for scope and validation.
-
-HpTF headphone compensation also uses Rust for coefficient design, response and auto-trim calculation, cascades and transitions. C++ retains parameter import and publication between threads. See the [Rust HpTF migration](docs/architecture/RUST_HPTF_MIGRATION.md) for scope and validation.
-
-Stereo device peak protection and live gain ramps also keep their state in Rust. Backends generate envelopes or process PCM in batches, preserving latency, EOS and seek behavior. See the [Rust output DSP migration](docs/architecture/RUST_OUTPUT_DSP_MIGRATION.md) for scope and validation.
-
-Rust also owns the numerical tables, timeline cursors and scratch buffers for shared speaker and EAR direct/diffuse mixing, plus fixed monitor matrices. C++ retains layout/ADM algorithms and scheduling. See the [Rust PCM mixing migration](docs/architecture/RUST_PCM_MIX_MIGRATION.md) for scope and validation.
-
-EAR decorrelation, compensation delay and bus summation also run in Rust, retaining complete FIR tails across consecutive short blocks. Filter design remains in libear. See the [Rust EAR post-processing migration](docs/architecture/RUST_EAR_POST_MIGRATION.md) for scope and validation.
-
-Triple Balance point/size panning, 22.2 geometry, decorrelation, motion/transitions and numerical snapshots also run in Rust. C++ retains semantics, I/O, scheduling and snapshot LRU management. See the [Rust Triple Balance migration](docs/architecture/RUST_TRIPLE_BALANCE_MIGRATION.md).
-
-HOA3 coefficient generation, interpolation, diffuse state, LFE separation and metering decode also run in Rust. Existing seek/window behavior is retained, with output-capacity and short-read checks added. See the [Rust HOA migration](docs/architecture/RUST_HOA_MIGRATION.md).
-
-Monitor backend crossfades, seek transitions and Peak/RMS also keep their numerical state in Rust. Worker and callback instances remain independent; C++ retains device, queue and control scheduling. See the [Rust Monitor DSP migration](docs/architecture/RUST_MONITOR_DSP_MIGRATION.md).
-
-Live Scene VBAP mixing and independent spatial/level ramp state also run in Rust. C++ prepares each complete frame before committing, preserving state and output on recoverable errors. See the [Rust Live VBAP migration](docs/architecture/RUST_LIVE_VBAP_MIGRATION.md).
-
-Scene outer transitions, shared spatial math, and the remaining Live binaural numerical state also run in Rust. Whole-frame binaural preflight preserves output and history on parameter or semantic errors. See the [Rust Scene numerical migration](docs/architecture/RUST_SCENE_NUMERIC_MIGRATION.md).
-
-System-dependency builds additionally need Corrosion 0.6.1, the Rust toolchain, and a prepared Cargo dependency cache:
-
-```bash
-cmake -S . -B build -DMR_ADM_CORE_FETCH_DEPS=OFF
-```
-
-FLAC and Opus providers:
-
-| Option | Description |
+| Component | Responsibility |
 |---|---|
-| `MR_ADM_FLAC_PROVIDER=AUTO` / `MR_ADM_OPUS_PROVIDER=AUTO` | Default; Release uses vendored static libraries, Debug prefers system libraries |
-| `VENDORED` | Force FetchContent static linking, suitable for release packages |
-| `SYSTEM` | Force system libraries, suitable for package-manager / distro builds |
+| `ADMCore` | Project-owned ADM domain model (`AdmScene`), errors, logging, options, capabilities, and semantic policy |
+| `ADMMetadata` / `ADMIo` | ADM AXML parsing and write-back, channel-bed scene synthesis, producing `AdmScene` |
+| `ADMRender*` | EAR, VBAP, Triple Balance, HOA, HRTF binaural, and Apple AUSpatialMixer backends |
+| `ADMRendererFactory` | Backend selection shared by offline rendering and realtime monitoring |
+| `ADMAudio` / `ADMPeak` / `ADMLoudness` | Container encoding and metadata, loudness and True Peak |
+| `ADMRealtime` | Realtime monitoring: MonitorEngine, SceneStream, device output, and head tracking |
+| `ADMEngine` / `ADMCAPI` | `RenderService` orchestration and the stable C ABI |
+| `rust/crates/mradm-dsp` | Numerical DSP: FFT, VBAP, HRTF/SOFA, convolution, OM spreader, resampling, metering, HOA, Monitor, and more |
+| `rust/crates/mradm-ear` | Layouts, gains, and FIR design ported from libear |
+| `rust/crates/mradm-adm` / `mradm-wav` | ADM XML metadata; WAVE / RF64 / BW64 I/O and container editing |
+| `rust/crates/mradm-math` | Portable, cross-platform bit-identical sin/cos |
+| `rust/crates/mradm-ffi` | The only private C boundary containing `unsafe` |
+| `gui/MacinRender.Gui` | Avalonia NativeAOT desktop GUI calling the C ABI through P/Invoke |
 
-SOFA support is enabled by default:
+See [ADR 0003](docs/adr/0003-owned-domain-model-and-backend-boundaries.md) for module boundaries and third-party type
+isolation.
 
-```bash
-cmake -S . -B build -DMR_ADM_ENABLE_SOFA=ON
+## Data Flow
+
+```text
+ADM BWF / BW64 / RF64, or ordinary multichannel WAVE
+    → container and chunk reading (mradm-wav)
+    → ADM AXML parsing (mradm-adm) or channel-bed synthesis
+    → AdmScene  ← optional semantic-policy rewrite
+    → RenderPlan → render backend (EAR / VBAP / Triple Balance / HOA / binaural / Apple)
+    → post-processing (loudness normalization, True Peak limiting, bit-depth conversion)
+    → container encoding (WAV / CAF / FLAC / Opus MKA / IAMF / APAC)
 ```
 
-## Quality Checks
+Realtime monitoring shares the same backend selection: worker threads render into a ring buffer and the audio callback
+only does lightweight output.
 
-```bash
-./scripts/quality/check-changed.sh
-./scripts/quality/format.sh --check
-./scripts/quality/clang-tidy.sh build/debug
-./scripts/quality/cppcheck.sh build/debug
-```
+## Current Status
+
+| Area | Status | Summary |
+|---|---|---|
+| Render backends | ✅ | EAR, VBAP, Triple Balance, HOA3, HRTF binaural, Apple AUSpatialMixer (macOS) |
+| Output formats | ✅ | WAV / CAF / FLAC / Opus MKA on all platforms; APAC on macOS only |
+| IAMF | 🚧 | Needs the official AOM bridge SDK; layouts up to 7.1.4, 9.1.6 deferred for player compatibility |
+| Realtime monitoring | ✅ | Hot switching, head tracking, HpTF, system spatial audio (Windows is static spatialization without OS head tracking) |
+| C ABI | ✅ | Stable v1 (currently 1.43), compatibility maintained through `struct_size` extension and deprecation |
+| Desktop GUI | ✅ | macOS arm64 / Windows x64 release packages |
+| Rust phase 1 migration | ✅ | SAF, libear, libadm, libbw64, dr_wav, libebur128, and libsamplerate are out of the production path and kept only as reference comparisons |
+| Rust phase 2 consistency | ✅ | After converging FFT, resampling, the OM spreader, and more, 78/78 PCM cases are bit-identical on three platforms and gated |
+
+See the [Rust adoption and SAF replacement roadmap](docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md) for migration
+scope and acceptance, and the [ADM feature coverage audit](docs/architecture/ADM_FEATURE_COVERAGE.md) for ADM coverage.
+
+## Design Principles
+
+1. A project-owned ADM domain model; third-party types never cross module boundaries, and render backends do not re-parse ADM.
+2. Public APIs return `Result` for recoverable errors; every exported C ABI function is `noexcept` and translates errors to codes.
+3. The C ABI is backward binary compatible since 1.0; struct extensions always use `struct_size`.
+4. Numerical code lives in Rust and is always called from C++; algorithm crates forbid `unsafe`, and processing after preparation does not allocate.
+5. Replacing a legacy library keeps a frozen reference implementation for comparison; the old implementation is never a silent runtime fallback.
+6. Cross-platform bit identity is continuously verified by gates; a failing gate means fixing the implementation, not loosening the gate.
+7. Test fixtures are generated at run time; the repository does not commit private or non-redistributable media.
+8. GUI backend, format, and layout availability always comes from core capability queries, never a hard-coded support table.
 
 ## Documentation
 
-- [ADM feature coverage audit](docs/architecture/ADM_FEATURE_COVERAGE.md)
-- [Apple AUSpatialMixer backend implementation notes](docs/architecture/ADM_APPLE_BACKEND.md)
-- [C++ ADM platform rewrite plan](docs/architecture/CPP_ADM_PLATFORM_REWRITE.md)
-- [Architecture decision records](docs/adr/)
-- [Quality tooling](docs/guides/QUALITY.md)
-- [Third-party licenses and release boundary](docs/THIRD_PARTY_LICENSES.md)
+| Document | Description |
+|---|---|
+| [CLI usage guide](docs/guides/CLI_USAGE.en.md) | Subcommands, backends, output formats and layouts, options, semantic policy |
+| [Channel-bed input](docs/guides/CHANNEL_BED_INPUT.en.md) | Preset order, label geometry, channel masks, and constraints |
+| [Release packages](docs/guides/BINARY_RELEASE.en.md) | Release artifacts, package contents, SHA-256, and launching the GUI |
+| [Platform rewrite plan](docs/architecture/CPP_ADM_PLATFORM_REWRITE.md) | Module boundaries and long-term direction |
+| [ADM feature coverage audit](docs/architecture/ADM_FEATURE_COVERAGE.md) | Supported ADM semantics |
+| [Realtime monitoring](docs/architecture/REALTIME_MONITORING.md) | Monitoring path, backend switching, and device output |
+| [Rust roadmap](docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md) | Phase 1 migration and phase 2 cross-platform consistency |
+| [Quality tooling](docs/guides/QUALITY.md) / [CI guide](docs/guides/CI.md) | Local checks, CI workflows, and gates |
+| [Third-party licenses](docs/THIRD_PARTY_LICENSES.md) | Dependency licenses and release boundary |
+| [Documentation index](docs/README.md) / [ADRs](docs/adr/) | All architecture documents and the 17 architecture decision records |
+
+Architecture documents are mostly written in Chinese.
 
 ## License
 
-This project is licensed under the **MIT License**. See [LICENSE](LICENSE).
+This project's source code is licensed under the **MIT License**; see [LICENSE](LICENSE).
 
-Binary release packages must include notice / license text for third-party dependencies.
+The default build dependencies are compatible with the MIT source license; binary release packages include notice /
+license text for third-party dependencies. Ported algorithms, the built-in KEMAR set, and filter data keep their
+original licenses and provenance; see [third-party licenses](docs/THIRD_PARTY_LICENSES.md).

@@ -17,9 +17,29 @@
 - [Rust 二期 FFT 收敛](architecture/RUST_PHASE2_FFT.md)
 - [Rust 二期重采样收敛](architecture/RUST_PHASE2_RESAMPLER.md)
 - [Rust 二期 OM spreader 收敛](architecture/RUST_PHASE2_SPREADER.md)
-- [Rust EAR 算法迁移](architecture/RUST_EAR_MIGRATION.md)
-- [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [Rust 落地与 SAF 替换路线图](architecture/RUST_SAF_REPLACEMENT_ROADMAP.md)
+- [迁移参考实现的登记与退役条件](architecture/RUST_REFERENCE_RETENTION.md)
+
+## Rust 迁移验收记录
+
+- [Rust ADM 元数据迁移](architecture/RUST_ADM_MIGRATION.md)
+- [Rust 双耳卷积与滤波过渡迁移](architecture/RUST_BINAURAL_DSP_MIGRATION.md)
+- [Rust 整数 WAVE/BW64 迁移](architecture/RUST_BW64_MIGRATION.md)
+- [Rust 浮点 WAVE 迁移（移除 dr_wav）](architecture/RUST_DR_WAV_MIGRATION.md)
+- [Rust EAR 算法迁移](architecture/RUST_EAR_MIGRATION.md)
+- [Rust EAR 后处理与连续短块尾音修复](architecture/RUST_EAR_POST_MIGRATION.md)
+- [Rust HOA 编码、状态与计量前处理迁移](architecture/RUST_HOA_MIGRATION.md)
+- [Rust HpTF 耳机补偿 DSP 迁移](architecture/RUST_HPTF_MIGRATION.md)
+- [Rust HRTF 插值与频域状态迁移](architecture/RUST_HRTF_MIGRATION.md)
+- [Rust Live VBAP 混音与独立渐变迁移](architecture/RUST_LIVE_VBAP_MIGRATION.md)
+- [Rust Meter 迁移记录](architecture/RUST_METER_MIGRATION.md)
+- [Rust Monitor 淡化、seek 过渡与 Peak/RMS 迁移](architecture/RUST_MONITOR_DSP_MIGRATION.md)
+- [Rust 峰值保护与实时增益迁移](architecture/RUST_OUTPUT_DSP_MIGRATION.md)
+- [Rust 共享 PCM 混音与状态迁移](architecture/RUST_PCM_MIX_MIGRATION.md)
+- [Rust 重采样迁移](architecture/RUST_RESAMPLER_MIGRATION.md)
+- [Rust Scene 过渡、空间数学与 Live 双耳迁移](architecture/RUST_SCENE_NUMERIC_MIGRATION.md)
+- [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
+- [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 
 ## 架构决策记录
 
@@ -32,9 +52,10 @@
 - [ADR 0007：C ABI 稳定性承诺与版本策略](adr/0007-c-abi-stability-policy.md)
 - [ADR 0008：Rust 落地方向与 SAF 按模块替换](adr/0008-rust-entry-and-saf-replacement.md)
 - [ADR 0009：外置头部追踪的独立仓库与 OSC 接入边界](adr/0009-head-tracking-input-boundary.md)
-
+- [ADR 0010：以统一 Rust Meter 替换 C 计量库](adr/0010-rust-loudness-meter.md)
+- [ADR 0011：固定采样率转换迁入 Rust](adr/0011-rust-fixed-rate-resampling.md)
+- [ADR 0012：Rust ADM 元数据与 libadm 参考边界](adr/0012-rust-adm-metadata.md)
 - [ADR 0013：Rust EAR 算法与生产依赖移除](adr/0013-rust-ear.md)
-
 - [ADR 0014：统一 Scene 的乘加舍入规则](adr/0014-scene-arithmetic-policy.md)
 - [ADR 0015：RustFFT 固定使用标量路径](adr/0015-rust-fft-scalar-path.md)
 - [ADR 0016：重采样固定标量插值与可移植三角函数](adr/0016-deterministic-resampling.md)
@@ -42,6 +63,9 @@
 
 ## 使用指南
 
+- [CLI 用法指南](guides/CLI_USAGE.md)（[English](guides/CLI_USAGE.en.md)）
+- [普通多声道输入语义](guides/CHANNEL_BED_INPUT.md)（[English](guides/CHANNEL_BED_INPUT.en.md)）
+- [发行包](guides/BINARY_RELEASE.md)（[English](guides/BINARY_RELEASE.en.md)）
 - [CI 设计草案](guides/CI.md)
 - [质量工具配置](guides/QUALITY.md)
 - [第三方许可证与发行边界](THIRD_PARTY_LICENSES.md)

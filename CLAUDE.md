@@ -60,7 +60,7 @@ Windows 验证在维护者的 Windows 测试机上走规范 MSVC/Ninja 配方（
 # 双耳 → FLAC（2ch）
 ./build/release/mradm render \
   -i input.wav -o output.binaural.flac \
-  --renderer binaural
+  --renderer saf-binaural
 
 # ≤8ch 无高度扬声器布局（如 5.1）→ FLAC
 ./build/release/mradm render \
@@ -88,7 +88,7 @@ Windows 验证在维护者的 Windows 测试机上走规范 MSVC/Ninja 配方（
   --renderer hoa --output-layout hoa3
 
 # 查看场景元数据
-./build/release/mradm inspect -i input.wav
+./build/release/mradm inspect input.wav
 
 # 列出可用渲染后端与支持布局
 ./build/release/mradm backends
@@ -100,7 +100,7 @@ Windows 验证在维护者的 Windows 测试机上走规范 MSVC/Ninja 配方（
 ./build/release/mradm formats
 ```
 
-CLI 共六个用户可见子命令：`render`、`inspect`、`backends`、`layouts`、`formats`、`export`（定义在 `src/adm_cli/*_command.cpp`）。另有内部子命令 `__apac-encode`（APAC 编码子进程 worker，带 heartbeat 协议，勿在文档/GUI 中暴露）。`-v` 打印详细进度日志。
+CLI 共七个用户可见子命令：`render`、`inspect`（输入为位置参数，不用 `-i`）、`backends`、`layouts`、`input-layouts`、`formats`、`export`（定义在 `src/adm_cli/*_command.cpp`，完整参考见 `docs/guides/CLI_USAGE.md`）。另有内部子命令 `__apac-encode`（APAC 编码子进程 worker，带 heartbeat 协议，勿在文档/GUI 中暴露）。`-v` 打印详细进度日志。
 
 ## ADM 语义策略（semantic policy）
 
@@ -108,7 +108,7 @@ CLI 共六个用户可见子命令：`render`、`inspect`、`backends`、`layout
 
 ```bash
 # 1. 生成可编辑的中性策略模板（含场景实际取值）
-./build/release/mradm inspect -i input.wav --write-semantic-policy-template policy.json
+./build/release/mradm inspect input.wav --write-semantic-policy-template policy.json
 
 # 2. 编辑 policy.json 后应用，并把生效后的语义快照写出验证
 ./build/release/mradm render -i input.wav -o out.flac \
@@ -253,7 +253,7 @@ GUI 新接入进度条优先使用 `adm_render_file_ex2` / `adm_preview_render_w
 - Opus MKA：输入采样率固定 48 kHz；1–2ch 用 mapping family 0，3–8ch family 1，9–255ch family 255
 - IAMF：仅 `MR_ADM_ENABLE_IAMF=ON` 构建可用；编码经 AOM iamf-tools bridge（用 integer PCM staging），输出 raw OBU stream（`.iamf`）+ Opus，面向 IAMF 测试/交付链路而非通用播放器。`--iamf-container mp4` 进一步打包为 ISOBMFF：运行时探测 PATH 中的打包器，**mp4box（GPAC）优先于 ffmpeg**（ffmpeg 需 ≥7），探测用 `fork`+`execvp` / `CreateProcessW`（不走 shell）；找不到则返回 `unsupported`。目前 IAMF 只开放到 `7.1.4`，`9.1.6`（需 expanded/Base-Enhanced IAMF）因播放器兼容性暂时禁用
 - APAC：**macOS-only**；通过 AudioToolbox；CI 在 Linux 上 `mr_adm_apac_smoke_tests` 自动 skip
-- 空间布局 / HOA 的 APAC 默认码率以 `7.1.4=2048 kbps` 为 12 声道基准缩放（README 输出格式表）
+- 空间布局 / HOA 的 APAC 默认码率以 `7.1.4=2048 kbps` 为 12 声道基准缩放（`docs/guides/CLI_USAGE.md` 输出格式）
 - HOA 输出的响度归一化可用；测量先解码到 7.1.4 AllRAD 参考播放域，LFE 不计入 LUFS 但单独计入 True Peak
 - binaural 默认使用内置 KEMAR HRTF（已提交的二进制资源 `rust/crates/mradm-dsp/assets/`，`manifest.json` 记录来源与 SHA-256，构建不再从 SAF 提取）；`--sofa <path>` 支持 SimpleFreeFieldHRIR / GeneralFIR、2 receivers、48 kHz、**不重采样**
 - `--renderer apple`：**macOS-only** AUSpatialMixer 后端（`src/adm_apple/`），能力见 `apple_capabilities()`，在 Linux 不编译；`mr_adm_apple_smoke_tests` 在非 macOS 跳过
