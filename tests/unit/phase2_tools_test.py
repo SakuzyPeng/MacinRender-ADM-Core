@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Evidence corruption must fail independently of numerical gate policy."""
 import importlib.util
+import copy
 import json
+import os
 from pathlib import Path
 import struct
 import sys
@@ -9,6 +11,7 @@ import tempfile
 import unittest
 import argparse
 import subprocess
+from unittest.mock import patch
 
 OPTIONS = None
 
@@ -16,6 +19,89 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/consistency'))
 import phase2_common as common
 comparator = common.load_module('phase2_comparator', ROOT / 'scripts/consistency/compare-rust-phase2.py')
+collector = common.load_module('phase2_collector', ROOT / 'scripts/consistency/run-rust-phase2.py')
+
+
+class CollectionTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.build = self.root / 'build'; self.build.mkdir()
+        self.source = common.source_fingerprint()
+        self.cache = {'CMAKE_BUILD_TYPE': 'Release', 'MR_ADM_ENABLE_IAMF': 'OFF', 'MR_ADM_ENABLE_SOFA': 'OFF',
+                      'MR_ADM_FLAC_PROVIDER': 'VENDORED', 'MR_ADM_OPUS_PROVIDER': 'VENDORED',
+                      'MR_ADM_CORE_USE_INSTALLED_DEPS': 'OFF', 'MR_ADM_STRICT_FP': 'OFF',
+                      'MR_ADM_CONSISTENCY_DIAGNOSTICS': 'OFF'}
+        self.configure()
+        common.save(self.build / 'consistency-dependencies.json', {'version': 1, 'dependencies': []})
+        common.save(self.build / 'rust-dependencies.json', {'packages': [], 'resolve': {'nodes': []}})
+        self.binaries = {}
+        for name in ('mradm', 'mr_adm_make_fixture', 'mr_adm_pcm_bits', 'mr_adm_phase2_render',
+                     'mr_adm_phase2_scene', 'mr_adm_phase2_kernels', 'mr_adm_repeat_render'):
+            path = self.build / (name + ('.exe' if os.name == 'nt' else ''))
+            path.write_bytes(b'unchanged executable')
+            self.binaries[name] = path
+        common.stamp_build(self.build)
+
+    def configure(self):
+        (self.build / 'CMakeCache.txt').write_text(''.join(f'{k}:STRING={v}\n' for k, v in self.cache.items()))
+        strict = ' -fno-fast-math -ffp-contract=off' if self.cache['MR_ADM_STRICT_FP'] == 'ON' else ''
+        common.save(self.build / 'compile_commands.json', [{'file': 'probe.cpp', 'command': 'c++ -O3' + strict}])
+
+    def assert_collection_rejected(self, message, *arguments):
+        output = self.root / 'output'
+        with patch.object(sys, 'argv', ['collector', str(self.build), str(output), *arguments]), \
+                patch.object(collector, 'run') as run, patch.object(collector, 'collect') as collect:
+            with self.assertRaisesRegex(ValueError, message):
+                collector.main()
+            run.assert_not_called()
+            collect.assert_not_called()
+        self.assertFalse(output.exists(), 'preflight failure must not leave an incomplete collection')
+
+    def test_configure_only_change_cannot_relabel_old_binaries(self):
+        common.validate_build_stamp(self.build, self.source, self.binaries)
+        self.cache['MR_ADM_STRICT_FP'] = 'ON'
+        self.configure()  # CMake configuration changed; no executable was rebuilt.
+        self.assert_collection_rejected('stale.*configuration', '--config', 'b')
+
+    def test_changed_commands_and_dependency_records_invalidate_stamp(self):
+        changes = {
+            'compile_commands.json': [{'file': 'probe.cpp', 'command': 'c++ -O3 -march=native'}],
+            'consistency-dependencies.json': {'version': 1, 'dependencies': [{'name': 'fmt', 'provider': 'system'}]},
+            'rust-dependencies.json': {'packages': [], 'resolve': {'nodes': [{'features': ['diagnostics']}]}},
+        }
+        for name, value in changes.items():
+            with self.subTest(file=name):
+                path = self.build / name
+                original = path.read_bytes()
+                common.save(path, value)
+                with self.assertRaisesRegex(ValueError, 'stale.*configuration'):
+                    common.validate_build_stamp(self.build, self.source, self.binaries)
+                path.write_bytes(original)
+
+    def test_legacy_stamp_requires_rebuild(self):
+        path = self.build / 'phase2-build-stamp.json'
+        stamp = json.loads(path.read_text())
+        del stamp['configuration']
+        common.save(path, stamp)
+        self.assert_collection_rejected('stale.*configuration', '--config', 'a')
+
+    def test_noninterference_requires_plain_baseline_before_collection(self):
+        self.cache['MR_ADM_CONSISTENCY_DIAGNOSTICS'] = 'ON'
+        self.configure()
+        common.stamp_build(self.build)
+        root = self.root / 'baseline'
+        baseline = {'schema': 'mradm.phase2.v1', 'complete': True, 'source': self.source, 'config': 'a',
+                    'diagnostics': False, 'build': {'cmake.MR_ADM_CONSISTENCY_DIAGNOSTICS': 'OFF'}}
+        common.save(root / 'manifest.json', baseline)
+        self.assertEqual(collector.load_uninstrumented_baseline(root, self.source, 'a'), baseline)
+        for diagnostics, flag in ((True, 'ON'), (True, 'OFF'), (False, 'ON'), (None, 'OFF'), (False, None)):
+            with self.subTest(diagnostics=diagnostics, build_flag=flag):
+                baseline['diagnostics'] = diagnostics
+                baseline['build']['cmake.MR_ADM_CONSISTENCY_DIAGNOSTICS'] = flag
+                common.save(root / 'manifest.json', baseline)
+                self.assert_collection_rejected('uninstrumented baseline', '--config', 'a', '--baseline', str(root))
 
 
 class EvidenceTests(unittest.TestCase):
@@ -139,7 +225,7 @@ class EvidenceTests(unittest.TestCase):
 
 
 class ReplayTests(unittest.TestCase):
-    def run_probe(self, case, success):
+    def run_probe(self, case, success, no_artifacts=False):
         if OPTIONS.scene is None:
             self.skipTest('native replay executable not provided')
         with tempfile.TemporaryDirectory() as tmp:
@@ -154,6 +240,8 @@ class ReplayTests(unittest.TestCase):
                 self.assertEqual(json.loads((tmp / 'out/pass-1.json').read_text())['underruns'], 0)
             else:
                 self.assertIn('replay', result.stderr)
+                if no_artifacts:
+                    self.assertFalse((tmp / 'out').exists(), 'invalid script must not be recorded as evidence')
 
     def test_fence_timeout_clock_injection_and_recovery(self):
         if OPTIONS.scene is None:
@@ -163,6 +251,35 @@ class ReplayTests(unittest.TestCase):
 
     def test_seek_short_tail_and_no_underrun(self):
         self.run_probe(common.scene_cases()[1], True)
+
+    def test_every_catalog_script_is_supported(self):
+        for case in common.scene_cases():
+            with self.subTest(case=case['id']):
+                self.run_probe(case, True)
+
+    def test_unexecuted_script_changes_are_rejected(self):
+        original = common.scene_cases()[0]
+        changes = [
+            ('version', 2), ('clock', 'wall clock'), ('state_complete_on_every_frame', False),
+            ('controls', {}), ('epochs', [{'epoch': 1, 'target': 0, 'end': 2048}]),
+            ('signal', dict(original['signal'], seed=original['signal']['seed'] + 1)),
+            ('signal', dict(original['signal'], scale=0.25)),
+            ('signal', dict(original['signal'], generator='different-generator')),
+            ('output_controls', {'0': 'volume=0.5'}), ('backend', 'unknown'),
+        ]
+        for field, value in changes:
+            with self.subTest(field=field, value=value):
+                case = copy.deepcopy(original)
+                case[field] = value
+                self.run_probe(case, False, no_artifacts=True)
+        case = copy.deepcopy(original)
+        del case['controls']
+        self.run_probe(case, False, no_artifacts=True)
+
+    def test_unexecuted_device_controls_are_rejected(self):
+        case = next(row for row in common.scene_cases() if row['device_dsp'])
+        case['output_controls']['2048'] = 'HpTF bypass'
+        self.run_probe(case, False, no_artifacts=True)
 
     def test_active_intervals_cannot_pass_as_silence(self):
         case = common.scene_cases()[0]
