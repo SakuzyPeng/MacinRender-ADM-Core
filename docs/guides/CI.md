@@ -80,16 +80,16 @@ Cargo 依赖而未登记的 PR 会直接失败。release workflow 另以 `--requ
 
 config A 为默认数值配置，config B 只打开 C/C++ 严格浮点选项；两组 RustFFT 均使用标量规划器
 （ADR 0015，构建记录中含 SIMD 特性的结果会被比较器拒收）。
-二期使用 `run-rust-phase2.py` 收集 34 个离线场景、22 个实时 Scene 配置（各含两个 epoch）及
-67 个内核测量（含 FFT twiddle 表、可移植三角函数与 OM spreader），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
+二期结项后的扩展继续使用 `run-rust-phase2.py`，当前收集 34 个离线场景、42 个实时 Scene 配置（各含两个 epoch）及
+133 个内核测量（含 FFT、重采样、HRTF、退化 OM 与 spreader），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
 验证三平台源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；
-`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM 与 spreader 内核及全部 78 个 PCM 用例）必须三平台逐位相同；
-新增用例必须同时按精确 id 加入门禁（`phase2_tools_test.py` 校验）。7 个内核模式展开为 57 个
+`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF 内核及全部 118 个 PCM 用例）必须三平台逐位相同；
+新增用例必须同时按精确 id 加入门禁（`phase2_tools_test.py` 校验）。8 个内核模式展开为 123 个
 文件，其余 10 个为观察项（EAR 布局、Scene、HpTF 和平台 libm f64 twiddle）；目前只有 f64
 twiddle 观察列存在差异。`compare` job 先写出全部四份报告，再按门禁结果失败。
 A 组还在同一构建树交替测量原标量与补丁 FFT，核对位指纹并上传性能 JSON；共享 runner 的
 细小计时变化不作为硬门禁。
-二期已按此矩阵结项，范围和维护要求见 [结项记录](../architecture/RUST_PHASE2_CLOSEOUT.md)。
+原 78 项矩阵的范围和维护要求见 [二期结项](../architecture/RUST_PHASE2_CLOSEOUT.md)，当前新增范围见[覆盖扩展](../architecture/RUST_COVERAGE_EXTENSION.md)。
 历史 SAF 清单和定位脚本保留原始边界。
 
 ### 第三阶段：发布构建
@@ -218,7 +218,7 @@ Visual Studio（含 VC x64 工具）、Ninja 和锁定的 Rust 工具链即可�
 - APAC 编码只在 macOS 可用；Linux / Windows 上 `mr_adm_apac_smoke_tests` 会跳过。
 - Apple 后端（`--renderer apple`）与 ASBR 系统空间监听只在 macOS 编译；Windows 系统空间监听 sink 只在 Windows 编译。
 - SOFA 由纯 Rust `sofar`（`rust/vendor/sofar` 本地补丁）解析，默认开启；CI 使用 `tests/fixtures/sofa/` 下的小型 fixture，不下载外部 SOFA 数据集。
-- RustFFT 使用标量规划器与保持算术树的独立列优化；运行时 SIMD features 继续关闭。已登记的 78 个 PCM 用例和 57 个内核文件必须三平台逐位相同，差异会使 Consistency 失败；观察项按结项范围单独记录。
+- RustFFT 使用标量规划器与保持算术树的独立列优化；运行时 SIMD features 继续关闭。已登记的 118 个 PCM 用例和 123 个内核文件必须三平台逐位相同，差异会使 Consistency 失败；观察项按结项范围单独记录。
 - Rust 私有符号不得从 C ABI bundle 导出；bundle 只导出 `adm_*`。
 - Release preset 默认会让 FLAC / Opus 的 `AUTO` provider 走 vendored static；Debug 在本机可能优先系统库。CI 建议显式指定 provider，减少 runner 差异。
 - `mradm` 是唯一正式 CLI 二进制名；CI 不应检查或生成 `adm` 兼容入口。
@@ -280,7 +280,7 @@ Cargo 因此使用 `release` profile（而非 `minsizerel`）。
 1. 如果 quality 太慢，保留 PR changed，必要时把 main full 改成夜间 schedule。
 2. release job 后续补 macOS 签名/notarization 和完整第三方 license bundle。
 3. 视 Windows release 耗时与稳定性，决定是否扩大 Release 下运行的测试集，或在 macOS / Linux release 中加入同样的优化构建 fixture。
-4. 二期现有 78 个用例已全部设为位相等门禁。后续扩展 renderer / 布局 / 语义组合时，明确新增范围并同时登记用例；数值、资源、工具链或相关依赖改动合入前，在分支手动触发 Consistency 并保留结果。
+4. 二期及后续扩展的 118 个用例已全部设为位相等门禁。后续扩展 renderer / 布局 / 语义组合时，明确新增范围并同时登记用例；数值、资源、工具链或相关依赖改动合入前，在分支手动触发 Consistency 并保留结果。
 
 ### Scene 算术的 ARM64 Release 回归
 

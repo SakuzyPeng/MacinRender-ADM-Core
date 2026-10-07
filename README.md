@@ -200,7 +200,7 @@ ADM BWF / BW64 / RF64，或普通多声道 WAVE
 | C ABI | ✅ | 稳定 v1（当前 1.43），`struct_size` 扩展与 deprecation 维护兼容 |
 | 桌面 GUI | ✅ | macOS arm64 / Windows x64 发行包 |
 | Rust 一期迁移 | ✅ | SAF、libear、libadm、libbw64、dr_wav、libebur128、libsamplerate 已移出生产路径，仅保留为参考对照 |
-| Rust 二期一致性 | ✅ 已结项 | 锁定矩阵的 78/78 PCM 用例三平台逐位相同；完成首批性能回收，见[结项范围](docs/architecture/RUST_PHASE2_CLOSEOUT.md) |
+| Rust 二期一致性 | ✅ 已结项 | 原 78 项矩阵已[结项](docs/architecture/RUST_PHASE2_CLOSEOUT.md)并完成首批性能回收；[后续覆盖](docs/architecture/RUST_COVERAGE_EXTENSION.md)扩展至 118/118 PCM 三平台逐位相同 |
 
 迁移范围与验收见 [Rust 落地与 SAF 替换路线图](docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md)，ADM 特性覆盖见
 [ADM 特性覆盖审计](docs/architecture/ADM_FEATURE_COVERAGE.md)。

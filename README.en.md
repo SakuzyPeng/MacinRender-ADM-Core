@@ -212,7 +212,7 @@ only does lightweight output.
 | C ABI | ✅ | Stable v1 (currently 1.43), compatibility maintained through `struct_size` extension and deprecation |
 | Desktop GUI | ✅ | macOS arm64 / Windows x64 release packages |
 | Rust phase 1 migration | ✅ | SAF, libear, libadm, libbw64, dr_wav, libebur128, and libsamplerate are out of the production path and kept only as reference comparisons |
-| Rust phase 2 consistency | ✅ Closed | All 78 PCM cases in the pinned matrix are bit-identical and gated across three platforms; initial performance recovery is complete. See the [accepted scope](docs/architecture/RUST_PHASE2_CLOSEOUT.md) |
+| Rust phase 2 consistency | ✅ Closed | The original 78-case matrix is [closed](docs/architecture/RUST_PHASE2_CLOSEOUT.md), with initial performance recovery complete. [Follow-up coverage](docs/architecture/RUST_COVERAGE_EXTENSION.md) reaches 118/118 bit-identical PCM cases across three platforms |
 
 See the [Rust adoption and SAF replacement roadmap](docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md) for migration
 scope and acceptance, and the [ADM feature coverage audit](docs/architecture/ADM_FEATURE_COVERAGE.md) for ADM coverage.
