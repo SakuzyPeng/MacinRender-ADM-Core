@@ -168,7 +168,7 @@ fn hrtf_probes(out: &Path, size: usize) {
     integers(
         out,
         &format!("{prefix}.13-parameters.i32"),
-        &[taps as i32, size as i32, 26],
+        &[taps as i32, size as i32, (directions.len() / 2) as i32],
     );
     let grid = Arc::new(Grid::new(&directions).unwrap());
     floats(
@@ -207,6 +207,12 @@ fn hrtf_probes(out: &Path, size: usize) {
                 }),
             )
             .unwrap();
+        // Isolate trace neutrality from cache equivalence: change one option at
+        // a time while using the same immutable filter bank and query.
+        filters
+            .query(azimuth, elevation, Lookup::Quantized, &mut reference, None)
+            .unwrap();
+        same_bits(&output, &reference);
         cached
             .query(azimuth, elevation, Lookup::Quantized, &mut reference, None)
             .unwrap();

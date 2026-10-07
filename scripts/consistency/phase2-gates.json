@@ -44,6 +44,12 @@
       "reference": "docs/adr/0017-deterministic-spreader.md"
     },
     {
+      "kind": "kernel",
+      "pattern": "hrtf-[0-9]*",
+      "reason": "production HRTF grid, coefficients and quantized/continuous queries at seams and poles; verified on all three platforms",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
       "kind": "case",
       "pattern": "binaural-cartesian-cloud",
       "reason": "identical on all three platforms after the scalar FFT path",
