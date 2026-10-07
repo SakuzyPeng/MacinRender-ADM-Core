@@ -102,11 +102,35 @@ jobs:
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      # Reuse this build/Cargo directory. The helper restores both Cargo manifests
+      # before the candidate is built; reference preparation is not PCM evidence.
+      - name: Prepare original scalar FFT benchmark
+        if: matrix.config == 'a'
+        run: >
+          python3 scripts/consistency/benchmark-fft.py prepare-reference
+          build/consistency-${{ matrix.config }} out/fft-reference-${{ matrix.platform }}
+
       # The fixture/repeat helpers are EXCLUDE_FROM_ALL, so name the tool targets explicitly.
       - name: Build
         run: >
           cmake --build build/consistency-${{ matrix.config }}
-          --target mr_adm_phase2_tools mr_adm_render_common_numeric_tests
+          --target mr_adm_phase2_tools mr_adm_render_common_numeric_tests mr_adm_fft_benchmark
+
+      - name: Measure FFT performance and preserved bits
+        if: matrix.config == 'a'
+        run: >
+          python3 scripts/consistency/benchmark-fft.py compare
+          out/fft-reference-${{ matrix.platform }} build/consistency-${{ matrix.config }}/mr_adm_fft_benchmark
+          out/fft-performance-${{ matrix.platform }}.json
+
+      - name: Upload FFT performance
+        if: always() && matrix.config == 'a'
+        uses: actions/upload-artifact@v7
+        with:
+          name: fft-performance-${{ matrix.platform }}
+          path: out/fft-performance-${{ matrix.platform }}.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Test vector length rounding
         run: build/consistency-${{ matrix.config }}/mr_adm_render_common_numeric_tests
@@ -122,6 +146,7 @@ jobs:
         run: |
           python3 tests/unit/consistency_build_test.py
           python3 tests/unit/consistency_checkpoints_test.py
+          python3 tests/unit/fft_benchmark_test.py
           python3 tests/unit/phase2_tools_test.py --scene build/consistency-${{ matrix.config }}/mr_adm_phase2_scene
 
       - name: Collect Rust phase-2 baseline
@@ -267,11 +292,34 @@ jobs:
             -DMR_ADM_CONSISTENCY_DIAGNOSTICS=OFF ^
             %NUMERIC_FLAGS%
 
+      - name: Prepare original scalar FFT benchmark
+        if: matrix.config == 'a'
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          python scripts/consistency/benchmark-fft.py prepare-reference build/win-canon out/fft-reference-windows
+
       - name: Build
         shell: cmd
         run: |
           call "%VCVARS64%"
-          cmake --build build/win-canon --target mr_adm_phase2_tools mr_adm_render_common_numeric_tests
+          cmake --build build/win-canon --target mr_adm_phase2_tools mr_adm_render_common_numeric_tests mr_adm_fft_benchmark
+
+      - name: Measure FFT performance and preserved bits
+        if: matrix.config == 'a'
+        shell: cmd
+        run: |
+          call "%VCVARS64%"
+          python scripts/consistency/benchmark-fft.py compare out/fft-reference-windows build/win-canon/mr_adm_fft_benchmark.exe out/fft-performance-windows.json
+
+      - name: Upload FFT performance
+        if: always() && matrix.config == 'a'
+        uses: actions/upload-artifact@v7
+        with:
+          name: fft-performance-windows
+          path: out/fft-performance-windows.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Test vector length rounding
         shell: cmd
@@ -290,6 +338,8 @@ jobs:
           python tests/unit/consistency_build_test.py --c-compiler cl --cxx-compiler cl
           if errorlevel 1 exit /b 1
           python tests/unit/consistency_checkpoints_test.py
+          if errorlevel 1 exit /b 1
+          python tests/unit/fft_benchmark_test.py
           if errorlevel 1 exit /b 1
           python tests/unit/phase2_tools_test.py --scene build/win-canon/mr_adm_phase2_scene.exe
 

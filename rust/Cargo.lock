@@ -348,8 +348,6 @@ dependencies = [
 [[package]]
 name = "rustfft"
 version = "6.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21db5f9893e91f41798c88680037dba611ca6674703c1a18601b01a72c8adb89"
 dependencies = [
  "num-complex",
  "num-integer",

@@ -154,7 +154,7 @@ def collect(build):
         workspace = Path(metadata['workspace_root'])
         record['rust.cargo_lock_sha256'] = hashlib.sha256((workspace / 'Cargo.lock').read_bytes()).hexdigest()
         record['rust.toolchain_config_sha256'] = hashlib.sha256((workspace / 'rust-toolchain.toml').read_bytes()).hexdigest()
-        record['rust.fft_dispatch'] = 'RustFFT scalar planner (SIMD features disabled)'
+        record['rust.fft_dispatch'] = 'RustFFT scalar planner; packed radix-4 columns (automatic vectorization, separate multiply/add)'
         record['rust.target'] = cache.get('Rust_CARGO_TARGET_CACHED', 'unavailable')
         record['rust.cmake_rustflags'] = '-Crelocation-model=pic'
         record['rust.environment_rustflags'] = os.environ.get('RUSTFLAGS', '')

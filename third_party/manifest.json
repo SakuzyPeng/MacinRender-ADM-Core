@@ -1088,7 +1088,7 @@
           "LICENSE-MIT"
         ]
       },
-      "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+      "notes": "6.4.1 本地补丁（rust/vendor/rustfft/PATCHES.md）：标量规划器的 radix-4 独立列成批计算与系数布局优化，保留原有逐位结果；运行时 SIMD 分派继续关闭。"
     },
     {
       "name": "rust-safe_arch-1.2.0",
