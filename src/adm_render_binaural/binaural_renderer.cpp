@@ -533,6 +533,12 @@ struct SpreaderGroup {
 };
 // NOLINTEND(cppcoreguidelines-special-member-functions,misc-non-private-member-variables-in-classes)
 
+// Group budget for packing spreader tracks into adapters. Packing changes how lanes share a
+// filterbank and therefore the output bits, so it must not follow the host's core count
+// (ADR 0017). Worker threads still scale with the hardware; group outputs are reduced in index
+// order, so the worker count never changes the result.
+constexpr std::size_t k_spreader_group_budget = 8U;
+
 std::vector<SpreaderGroup> build_spreader_groups(const std::vector<SpreaderTrack>& tracks,
                                                  std::size_t target_group_count) {
     const auto adapter_max_lanes = static_cast<std::size_t>(BinauralSpreaderAdapter::max_sources());
@@ -1601,11 +1607,10 @@ Result<std::shared_ptr<IPreparedRender>> BinauralRenderer::prepare(const RenderP
     std::vector<SpreaderTrack> spreader_tracks;
     std::vector<SpreaderGroup> spreader_groups;
     if (plan.binaural_spread_mode == BinauralSpreadMode::saf_spreader) {
-        const auto hw_threads = static_cast<std::size_t>(std::thread::hardware_concurrency());
-        const std::size_t parallel_budget = consistency::count_override(
-            "MR_ADM_DIAGNOSTIC_GROUP_BUDGET", (hw_threads > 0U) ? hw_threads : sources.size());
+        const std::size_t group_budget =
+            consistency::count_override("MR_ADM_DIAGNOSTIC_GROUP_BUDGET", k_spreader_group_budget);
         spreader_tracks = build_spreader_tracks(plan.scene, logs);
-        spreader_groups = build_spreader_groups(spreader_tracks, std::max<std::size_t>(1U, parallel_budget));
+        spreader_groups = build_spreader_groups(spreader_tracks, std::max<std::size_t>(1U, group_budget));
         logs.log(
             LogLevel::info,
             "binaural",

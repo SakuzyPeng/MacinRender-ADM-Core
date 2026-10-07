@@ -9,6 +9,7 @@ license.workspace = true
 realfft.workspace = true
 rustfft.workspace = true
 nalgebra.workspace = true
+libm.workspace = true
 ebur128.workspace = true
 rubato.workspace = true
 

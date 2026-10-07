@@ -36,6 +36,9 @@ pub fn complex_mix(
     let floor = sx.max() * regularization + 2.23e-13;
     let inverse =
         ComplexMatrix::from_diagonal(&sx.map(|v| C::new(1. / v.max(floor), 0.))) * ux.adjoint();
+    // Covariance diagonals are h·conj(h) sums with an exactly zero imaginary part, so the
+    // num_complex norm (hypot) and sqrt below are exact or correctly rounded on every platform;
+    // all SVD math goes through nalgebra's libm-force path (ADR 0017).
     let limit = cx[(0, 0)].norm().max(cx[(1, 1)].norm()) * 0.001 + 2.23e-13;
     let gain = ComplexMatrix::from_diagonal(&Vector2::new(
         C::new((cy[(0, 0)] / cx[(0, 0)].norm().max(limit)).sqrt().re, 0.),

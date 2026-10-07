@@ -60,7 +60,7 @@ impl Spreader {
         if seeds.is_empty() || seeds.len() > 8 || rate == 0 {
             return Err(Error::InvalidArgument("Invalid spreader configuration"));
         }
-        let directions = geometry::directions(dirs)?;
+        let directions = geometry::portable_directions(dirs)?;
         let weights = geometry::voronoi_weights(&directions)?;
         let hrtf = filterbank::fir_coefficients(ir, directions.len(), taps)?;
         let frequencies = filterbank::frequencies(rate);
@@ -113,8 +113,8 @@ impl Spreader {
         }
         source.position = Some(position);
         source.cone.clear();
-        let direction = geometry::direction(position[0], position[1]);
-        let threshold = (position[2] as f64 * 0.5).to_radians().cos();
+        let direction = geometry::portable_direction(position[0], position[1]);
+        let threshold = libm::cos((position[2] as f64 * 0.5).to_radians());
         let mut center = 0;
         let mut maximum = f64::NEG_INFINITY;
         for (i, &point) in self.directions.iter().enumerate() {

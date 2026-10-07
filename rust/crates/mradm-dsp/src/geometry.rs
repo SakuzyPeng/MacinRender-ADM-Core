@@ -35,7 +35,20 @@ pub fn direction(azimuth: f32, elevation: f32) -> Vec3 {
     let (se, ce) = (elevation as f64).to_radians().sin_cos();
     [ca * ce, sa * ce, se]
 }
+/// Same as [`direction`], evaluated with the pure-Rust `libm` port so the result does not
+/// depend on the platform C library (OM spreader, ADR 0017).
+pub fn portable_direction(azimuth: f32, elevation: f32) -> Vec3 {
+    let (sa, ca) = libm::sincos((azimuth as f64).to_radians());
+    let (se, ce) = libm::sincos((elevation as f64).to_radians());
+    [ca * ce, sa * ce, se]
+}
 pub fn directions(input: &[f32]) -> Result<Vec<Vec3>> {
+    directions_with(input, direction)
+}
+pub fn portable_directions(input: &[f32]) -> Result<Vec<Vec3>> {
+    directions_with(input, portable_direction)
+}
+fn directions_with(input: &[f32], direction: fn(f32, f32) -> Vec3) -> Result<Vec<Vec3>> {
     if !input.len().is_multiple_of(2) || input.len() < 4 || input.iter().any(|v| !v.is_finite()) {
         return Err(Error::InvalidArgument("Invalid azimuth/elevation array"));
     }
@@ -227,6 +240,7 @@ pub fn triplets(vertices: &[Vec3], omit_large: bool) -> Result<Vec<Triplet>> {
 
 /// Spherical Voronoi cells are dual to hull triangles. Triangulate each ordered
 /// dual polygon around its measurement direction, using spherical excess.
+/// `atan2` comes from the pure-Rust `libm` port (OM spreader, ADR 0017).
 pub fn voronoi_weights(vertices: &[Vec3]) -> Result<Vec<f32>> {
     let faces = hull(vertices)?;
     let mut cells = vec![Vec::new(); vertices.len()];
@@ -251,9 +265,7 @@ pub fn voronoi_weights(vertices: &[Vec3]) -> Result<Vec<f32>> {
         let x = unit(cross(center, reference));
         let y = cross(center, x);
         cell.sort_by(|&a, &b| {
-            dot(a, y)
-                .atan2(dot(a, x))
-                .total_cmp(&dot(b, y).atan2(dot(b, x)))
+            libm::atan2(dot(a, y), dot(a, x)).total_cmp(&libm::atan2(dot(b, y), dot(b, x)))
         });
         let mut area = 0.0;
         if cell.len() >= 3 {
@@ -261,9 +273,10 @@ pub fn voronoi_weights(vertices: &[Vec3]) -> Result<Vec<f32>> {
                 let a = cell[k];
                 let b = cell[(k + 1) % cell.len()];
                 area += 2.0
-                    * dot(center, cross(a, b))
-                        .abs()
-                        .atan2(1.0 + dot(center, a) + dot(a, b) + dot(b, center));
+                    * libm::atan2(
+                        dot(center, cross(a, b)).abs(),
+                        1.0 + dot(center, a) + dot(a, b) + dot(b, center),
+                    );
             }
         }
         weights.push(area as f32);

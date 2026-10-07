@@ -104,7 +104,7 @@ Rust 单元测试覆盖独立 double DFT、实际 FFT 长度、凸包/Voronoi、
 
 ## 5. 二期：跨平台逐位一致
 
-首批基线、实时回放和 Rust 分歧定位工具见 [Rust 二期基线](RUST_PHASE2_BASELINE.md)。已完成的切片：Scene 乘加舍入规则（[ADR 0014](../adr/0014-scene-arithmetic-policy.md)）与 RustFFT 固定标量路径（[ADR 0015](../adr/0015-rust-fft-scalar-path.md)，[二期 FFT 收敛](RUST_PHASE2_FFT.md)）；后者让 FFT 内核成为一致性 CI 的首批跨平台位相等门禁；以及重采样固定标量插值与可移植三角函数（[ADR 0016](../adr/0016-deterministic-resampling.md)，[二期重采样收敛](RUST_PHASE2_RESAMPLER.md)）。
+首批基线、实时回放和 Rust 分歧定位工具见 [Rust 二期基线](RUST_PHASE2_BASELINE.md)。已完成的切片：Scene 乘加舍入规则（[ADR 0014](../adr/0014-scene-arithmetic-policy.md)）与 RustFFT 固定标量路径（[ADR 0015](../adr/0015-rust-fft-scalar-path.md)，[二期 FFT 收敛](RUST_PHASE2_FFT.md)）；后者让 FFT 内核成为一致性 CI 的首批跨平台位相等门禁；重采样固定标量插值与可移植三角函数（[ADR 0016](../adr/0016-deterministic-resampling.md)，[二期重采样收敛](RUST_PHASE2_RESAMPLER.md)）；以及 OM spreader 固定分组预算与可移植数学函数（[ADR 0017](../adr/0017-deterministic-spreader.md)，[二期 OM spreader 收敛](RUST_PHASE2_SPREADER.md)）。
 
 目标仍是相同版本、输入与参数在 macOS arm64、Windows x64、Linux x64 上产生相同最终 float32 PCM，但以下项目不阻塞一期：
 

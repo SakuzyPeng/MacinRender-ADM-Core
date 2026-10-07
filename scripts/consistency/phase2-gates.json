@@ -32,6 +32,18 @@
       "reference": "docs/adr/0016-deterministic-resampling.md"
     },
     {
+      "kind": "kernel",
+      "pattern": "om-*",
+      "reason": "OM covariance mixing: nalgebra SVD with simba's pure-Rust libm path (libm-force)",
+      "reference": "docs/adr/0017-deterministic-spreader.md"
+    },
+    {
+      "kind": "kernel",
+      "pattern": "spreader.*",
+      "reason": "OM spreader geometry, Voronoi weights, filterbank coefficients and processing on portable libm",
+      "reference": "docs/adr/0017-deterministic-spreader.md"
+    },
+    {
       "kind": "case",
       "pattern": "binaural-cartesian-cloud",
       "reason": "identical on all three platforms after the scalar FFT path",

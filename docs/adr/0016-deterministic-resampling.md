@@ -48,4 +48,4 @@ FFT 切片后，三平台剩余 26 个 PCM 差异中有 24 个是变采样 Scene
 
 退出条件：上游提供强制标量的开关并允许注入数学函数后，删除补丁改回 crates.io 版本，
 重新通过同一门禁。`mradm-math` 可供后续需要确定性系数的模块复用（如 FFT twiddle 改为固定表时），
-但每次复用都需单独验证。OM spreader 的分组/归约仍是下一个切片。
+但每次复用都需单独验证。OM spreader 由 [ADR 0017](0017-deterministic-spreader.md) 处理。

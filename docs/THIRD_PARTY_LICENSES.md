@@ -70,6 +70,7 @@
 | `rust-glam-0.31.1` @ 0.31.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-glam-0.32.1` @ 0.32.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-glam-0.33.12` @ 0.33.12 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-libm-0.2.16` @ 0.2.16 | nalgebra/simba libm-force 与 OM spreader 的可移植数学函数（纯 Rust musl 移植） | MIT | 可用 | 经 nalgebra libm-force 与 mradm-dsp 直接使用，替代平台 C libm（ADR 0017）；默认 arch 特性只提供 IEEE 精确的 sqrt/fma/rint 硬件指令。 |
 | `rust-log-0.4.34` @ 0.4.34 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-matrixmultiply-0.3.11` @ 0.3.11 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-memchr-2.8.3` @ 2.8.3 | Rust DSP 的锁定依赖 | Unlicense OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
