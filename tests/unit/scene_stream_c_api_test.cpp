@@ -126,7 +126,10 @@ bool create_stream(adm_context_t* context, const adm_scene_stream_config_t& conf
            check(stream.value != nullptr, "create returned a stream handle");
 }
 
-bool configure_object(adm_scene_stream_t* stream, std::uint64_t epoch, std::uint64_t generation) {
+bool configure_object(adm_scene_stream_t* stream,
+                      std::uint64_t epoch,
+                      std::uint64_t generation,
+                      float default_z = 0.0F) {
     struct ForwardDescriptor {
         adm_scene_element_descriptor_t descriptor;
         // cppcheck-suppress unusedStructMember
@@ -137,6 +140,7 @@ bool configure_object(adm_scene_stream_t* stream, std::uint64_t epoch, std::uint
     descriptor.descriptor.element_id = 7U;
     descriptor.descriptor.has_position = 1;
     descriptor.descriptor.position_y = 1.0F;
+    descriptor.descriptor.position_z = default_z;
     return check(adm_scene_stream_configure_generation(stream, epoch, generation, &descriptor.descriptor, 1U) ==
                      ADM_ERROR_OK,
                  "configure object generation");
@@ -2419,6 +2423,54 @@ bool test_triple_balance_scene(adm_context_t* context) {
     return ok;
 }
 
+bool test_triple_balance_effective_position(adm_context_t* context) {
+    bool ok = true;
+    for (const auto* layout : {"7.1.4", "9.1.6"}) {
+        const uint32_t channels = std::string_view{layout} == "7.1.4" ? 12U : 16U;
+        for (const bool use_policy : {false, true}) {
+            StreamGuard stream;
+            if (!create_stream(context, triple_scene_config(layout), stream) ||
+                !check(adm_scene_stream_begin_epoch(stream.value, 1, 0) == ADM_ERROR_OK,
+                       "Triple Balance effective position epoch") ||
+                !configure_object(stream.value, 1, 1, -.5F)) {
+                return false;
+            }
+            if (use_policy) {
+                ok &= check(adm_scene_stream_set_semantic_policy_json(
+                                stream.value,
+                                R"({"schema":"mradm.semantic-policy.v1","global":{"position":{"elevation":30}}})",
+                                1) == ADM_ERROR_OK,
+                            "policy moves the descriptor position into the supported room");
+                ok &= wait_for_policy_revision(stream.value, 1);
+            }
+            std::vector<float> samples(257, .1F);
+            adm_scene_pcm_plane_t plane{};
+            adm_scene_initial_state_t initial{};
+            auto frame = object_frame(1, 1, 0, samples, plane, initial);
+            initial.state.position_z = .5F;
+            if (use_policy) {
+                frame.initial_state_count = 0;
+                frame.initial_states = nullptr;
+            }
+            int32_t submit = -1;
+            ok &= check(adm_scene_stream_submit_frame(stream.value, &frame, 100, &submit) == ADM_ERROR_OK &&
+                            submit == ADM_SCENE_SUBMIT_ACCEPTED,
+                        "Triple Balance accepts an overridden descriptor position");
+            std::vector<float> output;
+            if (!pull_open_stream(stream.value, channels, 257, output)) {
+                return false;
+            }
+            ok &= check(std::ranges::any_of(output, [](float sample) { return std::fabs(sample) > 1.0e-7F; }),
+                        "effective position produces non-silent Scene output");
+            ok &= check(adm_scene_stream_signal_end(stream.value, 1, 257) == ADM_ERROR_OK,
+                        "effective position Scene EOS");
+            bool signal = false;
+            ok &= wait_for_output(stream.value, channels, 0, signal);
+        }
+    }
+    return ok;
+}
+
 bool test_triple_balance_switch(adm_context_t* context, bool incompatible_state) {
     StreamGuard stream;
     auto config = triple_scene_config("4+7+0");
@@ -2427,7 +2479,7 @@ bool test_triple_balance_switch(adm_context_t* context, bool incompatible_state)
         return false;
     }
     bool ok = check(adm_scene_stream_begin_epoch(stream.value, 1, 0) == ADM_ERROR_OK, "Triple Balance switch epoch") &&
-              configure_object(stream.value, 1, 1);
+              configure_object(stream.value, 1, 1, -.5F);
     std::vector<float> samples(1024, .1F);
     adm_scene_pcm_plane_t plane{};
     adm_scene_initial_state_t initial{};
@@ -2455,6 +2507,8 @@ bool test_triple_balance_switch(adm_context_t* context, bool incompatible_state)
     if (incompatible_state) {
         ok &= check(adm_scene_stream_log_count(stream.value) > logs_before, "incompatible candidate emits diagnostic");
     } else {
+        ok &= check(adm_scene_stream_log_count(stream.value) == logs_before,
+                    "Triple Balance switch validates the effective position instead of the descriptor default");
         auto vbap = vbap_renderer_config("4+7+0");
         ok &= check(adm_scene_stream_switch_backend(stream.value, &vbap) == ADM_ERROR_OK,
                     "Triple Balance switches back to VBAP");
@@ -2537,6 +2591,7 @@ int main() {
         ok &= test_sofa_cache_invalidation(context);
         ok &= test_backend_hot_switch(context);
         ok &= test_triple_balance_scene(context);
+        ok &= test_triple_balance_effective_position(context);
         ok &= test_triple_balance_switch(context, false);
         ok &= test_triple_balance_switch(context, true);
         ok &= test_triple_balance_worker_failure(context);

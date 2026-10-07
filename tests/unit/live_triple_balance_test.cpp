@@ -112,6 +112,33 @@ void bed_routes() {
         }
     }
 }
+void descriptor_position_overrides() {
+    for (const auto* layout : {"7.1.4", "9.1.6"}) {
+        const auto settings = config(layout);
+        auto renderer = take(create_live_triple_balance_renderer(settings, {}));
+        ElementDescriptor descriptor;
+        descriptor.element_id = 7;
+        descriptor.has_position = true;
+        descriptor.z = -.5F;
+        done(renderer->configure_generation(1, std::span{&descriptor, 1}));
+
+        auto input = frame();
+        input.initial_states.clear();
+        std::vector<float> actual(static_cast<std::size_t>(input.duration_samples) * renderer->output_channels(), 7);
+        const auto rejected = renderer->render(input, actual);
+        require(!rejected && rejected.error().code == ErrorCode::unsupported,
+                "unsupported descriptor position is rejected when it remains effective");
+        require(std::ranges::all_of(actual, [](float value) { return value == 7; }),
+                "default position rejection preserves output");
+
+        input = frame();
+        done(renderer->render(input, actual));
+        auto reference = object_renderer(settings);
+        std::vector<float> expected(actual.size());
+        done(reference->render(input, expected));
+        require(actual == expected, "initial position overrides the descriptor before backend validation");
+    }
+}
 void unsupported_states() {
     for (int kind = 0; kind < 9; ++kind) {
         auto renderer = object_renderer(config("7.1.4"));
@@ -227,6 +254,7 @@ void independent_ramp_deadlines() {
 int main() {
     try {
         bed_routes();
+        descriptor_position_overrides();
         unsupported_states();
         independent_ramp_deadlines();
         std::cout << "Live Triple Balance semantics, routes, ramps and error atomicity passed\n";

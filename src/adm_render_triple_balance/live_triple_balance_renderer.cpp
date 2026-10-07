@@ -188,14 +188,9 @@ class LiveTripleBalanceRenderer final : public ILiveSceneRenderer {
                 lane.kind = 1U;
                 std::ranges::copy(*gains, std::begin(lane.gains));
             }
-            auto state = default_state(descriptor);
-            if (descriptor.role == ElementRole::object) {
-                auto valid = validate_state(descriptor, state);
-                if (!valid) {
-                    return valid;
-                }
-            }
-            next.push_back({descriptor, state, false});
+            // Initial states and semantic policy can override descriptor defaults. Validate the
+            // effective state in render(), after the worker has applied those overrides.
+            next.push_back({descriptor, default_state(descriptor), false});
             numeric.push_back(lane);
         }
         if (std::ranges::any_of(bed, [](bool present) { return present; }) &&
