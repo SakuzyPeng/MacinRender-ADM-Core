@@ -59,9 +59,29 @@ cubic、截止 0.94，48→44.1 kHz 为 280 taps、44.1→48 kHz 为 256 taps）
 
 ## 三平台验收
 
-（待 Consistency CI 结果补充。）
+[Consistency run 37562888092](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37562888092)
+在 `0f6c187` 上完成三平台 A/B 及诊断采集，同一提交的 CI 与 Quality 均通过。四份报告结果一致，摘要、
+报告哈希与剩余用例的首个分歧点见 [重采样验收记录](evidence/rust-phase2/resampler-validation.json)。
+
+| 三平台共同逐位相同的 PCM | 用例数 |
+|---|---:|
+| 二期基线 `00a70e4` | 29/78 |
+| FFT 切片 `6ec2dc6` | 52/78 |
+| 本切片 `0f6c187` | 76/78 |
+
+- 门禁 0 失败：`trig.*` 可移植三角函数、两个变采样 `resampler-*` 内核及此前的 FFT/EAR FIR 门禁在
+  三个平台对上均逐位相同。63 个内核中只剩平台 libm 计算的 `fft-twiddles.10-libm.f64` 仍有 1 ULP
+  差异（不设门禁，仅用于观察 libm）。
+- 新增三平台相同的 24 个 PCM 用例正是全部变采样 Scene：双耳 cloud0/cloud1 与立体声 VBAP 的
+  48→44.1、44.1→48 kHz，fixed/fragmented 分块，两个 epoch。
+- 每个平台内部 A 对 B 仍为 78/78；同进程/新进程重复性、Scene 健康、帧数与诊断无扰动门禁通过。
+
+### PCM 门禁
+
+这 24 个用例按精确 id 加入 `phase2-gates.json`（来源注明 ADR 0016），门禁共 5 项内核与 76 个 PCM
+用例。单元测试仍禁止把 OM spreader 用例列入门禁。
 
 ## 剩余分歧
 
-OM spreader（`binaural-extent-spreader`、`-multi`）在三个平台对上都最早于
+剩余 2 个差异均为 OM spreader（`binaural-extent-spreader`、`-multi`），三个平台对都最早于
 `spreader/s0-g0.50-left.f32` 分歧，属于下一个切片：固定与硬件线程数无关的分组和归约顺序。

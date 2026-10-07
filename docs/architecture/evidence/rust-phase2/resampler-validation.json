@@ -1,0 +1,135 @@
+{
+  "schema": "mradm.phase2.validation.v1",
+  "slice": "resampler-scalar-portable-trig",
+  "decision": "docs/adr/0016-deterministic-resampling.md",
+  "ci": {
+    "workflow": "Consistency",
+    "run_id": 37562888092,
+    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37562888092",
+    "commit": "0f6c187d4ff08fd9ae51543da4daa669928f7632",
+    "other_runs": {
+      "CI": 37562890078,
+      "Quality": 37562892004
+    },
+    "conclusion": "success"
+  },
+  "source_sha256": "05d29edadf67c1981bfa83e6ce17ecf5703aa3c2bb48b124c8b7ad5cba421f55",
+  "reports": {
+    "consistency-report-a.json": {
+      "sha256": "3a0707191ea66d659582192bf7b978350eac26a316dd13cd11d7ffbefb7e6c6c",
+      "identical": 76,
+      "differing": 2,
+      "gate_failures": 0
+    },
+    "consistency-report-b.json": {
+      "sha256": "9a0ea849f455a68eef3f7e34a394322d4ecc9ad3c5f3c2533c5784c9a69ba107",
+      "identical": 76,
+      "differing": 2,
+      "gate_failures": 0
+    },
+    "consistency-report-a-diagnostic.json": {
+      "sha256": "5dc86dd482c66196e064572410af715d284830af8ea450e0cad7b3f18bf2a11d",
+      "identical": 76,
+      "differing": 2,
+      "gate_failures": 0
+    },
+    "consistency-report-b-diagnostic.json": {
+      "sha256": "7e027714b6f9c7c7e4cfb15191a15b94f83a57ddd92e486caa8af437e769d438",
+      "identical": 76,
+      "differing": 2,
+      "gate_failures": 0
+    }
+  },
+  "pcm_result": {
+    "baseline_identical": 29,
+    "after_fft_slice": 52,
+    "identical": 76,
+    "newly_identical": [
+      "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch1",
+      "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch2",
+      "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch1",
+      "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch2",
+      "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch1",
+      "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch2",
+      "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch1",
+      "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch2",
+      "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch1",
+      "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch2",
+      "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch1",
+      "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch2",
+      "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch1",
+      "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch2",
+      "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch1",
+      "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch2",
+      "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch1",
+      "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch2",
+      "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch1",
+      "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch2",
+      "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch1",
+      "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch2",
+      "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch1",
+      "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch2"
+    ],
+    "all_four_reports_agree": true
+  },
+  "kernel_differences_config_a": {
+    "macos/linux": [
+      {
+        "kernel": "fft-twiddles.10-libm.f64",
+        "different_words": 5557,
+        "max_ulp": 1
+      }
+    ],
+    "macos/windows": [
+      {
+        "kernel": "fft-twiddles.10-libm.f64",
+        "different_words": 6677,
+        "max_ulp": 1
+      }
+    ],
+    "linux/windows": [
+      {
+        "kernel": "fft-twiddles.10-libm.f64",
+        "different_words": 4240,
+        "max_ulp": 1
+      }
+    ]
+  },
+  "kernel_notes": [
+    "trig.*, resampler-*, fft-*, ear FIR, scene, OM and HpTF kernels are identical on all pairs",
+    "only fft-twiddles.10-libm.f64 (platform libm, not gated) still differs by 1 ULP"
+  ],
+  "remaining_differences_first_observed": {
+    "macos/linux": {
+      "binaural-extent-spreader": {
+        "first_observed": "spreader/s0-g0.50-left.f32",
+        "max_absolute_error": 0.013589650392532349
+      },
+      "binaural-extent-spreader-multi": {
+        "first_observed": "spreader/s0-g0.50-left.f32",
+        "max_absolute_error": 0.024533748626708984
+      }
+    },
+    "macos/windows": {
+      "binaural-extent-spreader": {
+        "first_observed": "spreader/s0-g0.50-left.f32",
+        "max_absolute_error": 0.008783921599388123
+      },
+      "binaural-extent-spreader-multi": {
+        "first_observed": "spreader/s0-g0.50-left.f32",
+        "max_absolute_error": 0.011507213115692139
+      }
+    },
+    "linux/windows": {
+      "binaural-extent-spreader": {
+        "first_observed": "spreader/s0-g0.50-left.f32",
+        "max_absolute_error": 0.013705849647521973
+      },
+      "binaural-extent-spreader-multi": {
+        "first_observed": "spreader/s0-g0.50-left.f32",
+        "max_absolute_error": 0.02457854151725769
+      }
+    }
+  },
+  "gates": "scripts/consistency/phase2-gates.json: 5 kernel gates + 76 case gates"
+}
