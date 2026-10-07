@@ -145,6 +145,7 @@ def kernel_outputs():
               for part in ('10-input.f32', '20-output.f32')]
     names += [f'hptf-{rate}.{part}' for rate in (44100, 48000) for part in ('10-input.f64', '20-coefficients.f32')]
     names += ['trig.10-input.f64', 'trig.20-sin.f64', 'trig.30-cos.f64']
+    names += ['spreader.10-input.f32', 'spreader.20-voronoi.f32', 'spreader.30-fir.c32', 'spreader.40-output.f32']
     return sorted(names)
 
 

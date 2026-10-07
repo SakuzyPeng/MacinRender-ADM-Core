@@ -923,6 +923,30 @@
     },
     {
       "type": "library",
+      "name": "rust-libm-0.2.16",
+      "version": "0.2.16",
+      "description": "nalgebra/simba libm-force 与 OM spreader 的可移植数学函数（纯 Rust musl 移植）",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/libm@0.2.16",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "rust-log-0.4.34",
       "version": "0.4.34",
       "description": "Rust DSP 的锁定依赖",

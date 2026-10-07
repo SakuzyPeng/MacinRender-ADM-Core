@@ -81,9 +81,9 @@ Cargo 依赖而未登记的 PR 会直接失败。release workflow 另以 `--requ
 config A 为默认数值配置，config B 只打开 C/C++ 严格浮点选项；两组 RustFFT 均使用标量规划器
 （ADR 0015，构建记录中含 SIMD 特性的结果会被比较器拒收）。
 二期使用 `run-rust-phase2.py` 收集 34 个离线场景、22 个实时 Scene 配置（各含两个 epoch）及
-63 个内核测量（含 FFT twiddle 表与可移植三角函数），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
+67 个内核测量（含 FFT twiddle 表、可移植三角函数与 OM spreader），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
 验证三平台源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；
-`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样内核与 76/78 个 PCM 用例）必须三平台逐位相同，
+`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM 与 spreader 内核及 76/78 个 PCM 用例）必须三平台逐位相同，
 其余跨平台位差仍只记录。`compare` job 先写出全部四份报告，再按门禁结果失败。
 详见 [Rust 二期基线](../architecture/RUST_PHASE2_BASELINE.md)与 [二期 FFT 收敛](../architecture/RUST_PHASE2_FFT.md)。历史 SAF 清单和定位脚本保留原始边界。
 

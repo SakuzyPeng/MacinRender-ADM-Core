@@ -224,7 +224,11 @@ pub fn fir_coefficients(ir: &[f32], directions: usize, taps: usize) -> Result<Ve
             for ear in 0..2 {
                 let i = band * 2 + ear;
                 let gain = (energy[i] / center_power.max(2.23e-8)).sqrt();
-                output[i * directions + dir] = C::from_polar(gain, cross[i].arg());
+                // C::from_polar(gain, cross.arg()) with the pure-Rust libm port instead of the
+                // platform C library, so OM spreader coefficients match across platforms (ADR 0017).
+                let phase = libm::atan2f(cross[i].im, cross[i].re);
+                output[i * directions + dir] =
+                    C::new(gain * libm::cosf(phase), gain * libm::sinf(phase));
             }
         }
     }

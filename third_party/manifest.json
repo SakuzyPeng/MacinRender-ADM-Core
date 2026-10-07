@@ -749,6 +749,25 @@
       "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
     },
     {
+      "name": "rust-libm-0.2.16",
+      "version": "0.2.16",
+      "cmake_key": null,
+      "purl": "pkg:cargo/libm@0.2.16",
+      "license": "MIT",
+      "purpose": "nalgebra/simba libm-force 与 OM spreader 的可移植数学函数（纯 Rust musl 移植）",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "libm",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE.txt"
+        ]
+      },
+      "notes": "经 nalgebra libm-force 与 mradm-dsp 直接使用，替代平台 C libm（ADR 0017）；默认 arch 特性只提供 IEEE 精确的 sqrt/fma/rint 硬件指令。"
+    },
+    {
       "name": "rust-log-0.4.34",
       "version": "0.4.34",
       "cmake_key": null,

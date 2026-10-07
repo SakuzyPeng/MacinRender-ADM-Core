@@ -1,5 +1,8 @@
 //! Release probe of production Rust kernels. Inputs are exact dyadic numbers.
-use mradm_dsp::{Complex32, fft::RealFft, hptf, mixing, resampler::Resampler, scene_math};
+use mradm_dsp::{
+    Complex32, fft::RealFft, filterbank, geometry, hptf, mixing, resampler::Resampler, scene_math,
+    spreader::Spreader,
+};
 use std::{fs, io::Write, path::Path};
 fn floats(path: &Path, name: &str, values: &[f32]) {
     assert!(!values.is_empty() && values.iter().all(|v| v.is_finite()));
@@ -132,7 +135,67 @@ fn run(out: &Path) {
             residual.as_slice(),
         );
     }
-    // Leave the OM scope: later kernels have no internal checkpoints of their own.
+    // OM spreader (ADR 0017): a synthetic 26-direction HRIR grid, its Voronoi weights and
+    // filterbank coefficients, then two moving, widening sources over several blocks.
+    mradm_dsp::diagnostics::scope("spreader");
+    let mut dirs = vec![0., 90., 0., -90.];
+    for (ring, elevation) in [-45f32, 0., 30., 60.].into_iter().enumerate() {
+        for k in 0..6 {
+            dirs.extend([k as f32 * 60. + ring as f32 * 7.5 - 180., elevation]);
+        }
+    }
+    let taps = 64;
+    let mut ir = signal(dirs.len() * taps);
+    for (index, value) in ir.iter_mut().enumerate() {
+        *value /= ((index % taps) / 8 + 1) as f32;
+    }
+    let pcm = signal(2 * filterbank::FRAME * 6);
+    floats(
+        out,
+        "spreader.10-input.f32",
+        &[&dirs[..], &ir, &pcm].concat(),
+    );
+    let vertices = geometry::portable_directions(&dirs).unwrap();
+    floats(
+        out,
+        "spreader.20-voronoi.f32",
+        &geometry::voronoi_weights(&vertices).unwrap(),
+    );
+    let coefficients = filterbank::fir_coefficients(&ir, vertices.len(), taps).unwrap();
+    floats(
+        out,
+        "spreader.30-fir.c32",
+        &coefficients
+            .iter()
+            .flat_map(|v| [v.re, v.im])
+            .collect::<Vec<_>>(),
+    );
+    let mut spreader = Spreader::new(&ir, &dirs, taps, 48000, &[7, 9]).unwrap();
+    let mut output = Vec::new();
+    let mut block = vec![0.; filterbank::FRAME * 2];
+    for (index, input) in pcm
+        .as_chunks::<{ filterbank::FRAME * 2 }>()
+        .0
+        .iter()
+        .enumerate()
+    {
+        let step = index as f32;
+        spreader
+            .set_source(0, 37.5 + step * 22.5, 12.25 - step * 3.5, 15. + step * 30.)
+            .unwrap();
+        spreader
+            .set_source(
+                1,
+                -101.25 - step * 11.25,
+                -20. + step * 9.,
+                120. + step * 45.,
+            )
+            .unwrap();
+        spreader.process(input, &mut block).unwrap();
+        output.extend_from_slice(&block);
+    }
+    floats(out, "spreader.40-output.f32", &output);
+    // Leave the OM/spreader scope: later kernels have no internal checkpoints of their own.
     mradm_dsp::diagnostics::scope("");
     for (input_rate, output_rate) in [(48000, 48000), (48000, 44100), (44100, 48000)] {
         let input = signal(2051 * 2);

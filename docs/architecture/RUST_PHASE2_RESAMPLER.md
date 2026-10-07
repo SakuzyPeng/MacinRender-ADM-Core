@@ -84,4 +84,4 @@ cubic、截止 0.94，48→44.1 kHz 为 280 taps、44.1→48 kHz 为 256 taps）
 ## 剩余分歧
 
 剩余 2 个差异均为 OM spreader（`binaural-extent-spreader`、`-multi`），三个平台对都最早于
-`spreader/s0-g0.50-left.f32` 分歧，属于下一个切片：固定与硬件线程数无关的分组和归约顺序。
+`spreader/s0-g0.50-left.f32` 分歧，由下一个切片处理，见 [二期 OM spreader 收敛](RUST_PHASE2_SPREADER.md)。

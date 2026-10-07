@@ -13,7 +13,10 @@ license = "MIT"
 # and use different decompositions and FMA, so their results differ across platforms (ADR 0015).
 realfft = { version = "=3.5.0", default-features = false }
 rustfft = { version = "=6.4.1", default-features = false }
-nalgebra = { version = "=0.35.0", default-features = false, features = ["std"] }
+# libm-force routes every simba/nalgebra scalar function (SVD rotations, hypot, atan2, ...) through
+# the pure-Rust libm port instead of the platform C library (ADR 0017).
+nalgebra = { version = "=0.35.0", default-features = false, features = ["std", "libm-force"] }
+libm = { version = "=0.2.16" }
 ebur128 = { version = "=0.1.10", default-features = false }
 rubato = { version = "=5.0.1", default-features = false }
 

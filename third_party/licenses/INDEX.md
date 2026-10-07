@@ -44,6 +44,7 @@
 | rust-glam-0.31.1 | 0.31.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-glam-0.32.1 | 0.32.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-glam-0.33.12 | 0.33.12 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-libm-0.2.16 | 0.2.16 | MIT | `LICENSE.txt` |
 | rust-log-0.4.34 | 0.4.34 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-matrixmultiply-0.3.11 | 0.3.11 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-memchr-2.8.3 | 2.8.3 | Unlicense OR MIT | `COPYING`, `LICENSE-MIT` |
