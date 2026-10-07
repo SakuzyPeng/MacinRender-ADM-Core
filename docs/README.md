@@ -13,6 +13,8 @@
 - [头部追踪与 OSC 跨仓库设计（原生接收接口／GUI 待适配）](architecture/HEAD_TRACKING_OSC.md)
 - [原生 OSC 头部姿态接收接口（C++／C ABI v1.40）](architecture/OSC_HEAD_TRACKING_API.md)
 - [Scene 算术规则统一](architecture/SCENE_ARITHMETIC_POLICY.md)
+- [Rust 二期基线与分歧定位](architecture/RUST_PHASE2_BASELINE.md)
+- [Rust 二期 FFT 收敛](architecture/RUST_PHASE2_FFT.md)
 - [Rust EAR 算法迁移](architecture/RUST_EAR_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [Rust 落地与 SAF 替换路线图](architecture/RUST_SAF_REPLACEMENT_ROADMAP.md)
@@ -32,6 +34,7 @@
 - [ADR 0013：Rust EAR 算法与生产依赖移除](adr/0013-rust-ear.md)
 
 - [ADR 0014：统一 Scene 的乘加舍入规则](adr/0014-scene-arithmetic-policy.md)
+- [ADR 0015：RustFFT 固定使用标量路径](adr/0015-rust-fft-scalar-path.md)
 
 ## 使用指南
 

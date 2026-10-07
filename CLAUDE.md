@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 项目长期方向是平台化重构（不是简单的 CLI 重写）：见 `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md`。
 
-**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）和 WAVE/RF64/BW64 样本读写与容器元数据（原 libbw64 / dr_wav / C++ chunk 改写）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度、输出文件的临时文件/替换编排与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。跨平台 PCM 逐位一致是二期目标，当前只把同平台重复性作为硬门禁（见 `RUST_SAF_REPLACEMENT_ROADMAP.md` §5）；二期第一个切片是 Scene 统一乘加舍入规则 `scene-separate-v1`（ADR 0014）。
+**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）和 WAVE/RF64/BW64 样本读写与容器元数据（原 libbw64 / dr_wav / C++ chunk 改写）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度、输出文件的临时文件/替换编排与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014 / 0015）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。跨平台 PCM 逐位一致是二期目标，完整 PCM 当前只把同平台重复性作为硬门禁（见 `RUST_SAF_REPLACEMENT_ROADMAP.md` §5、`RUST_PHASE2_BASELINE.md`）；二期已完成的切片：Scene 统一乘加舍入规则 `scene-separate-v1`（ADR 0014）、RustFFT 固定标量路径（ADR 0015，FFT 内核是一致性 CI 的跨平台位相等门禁）。
 
 ## 常用构建与测试命令
 
@@ -198,7 +198,7 @@ mradm_exe (CLI)     PRIVATE: ADMEngine + 所有 renderer + CLI11 + spdlog
 单一 Cargo workspace（edition 2024），CMake 经 Corrosion 只导入 `mradm-ffi`：
 
 ```
-mradm-dsp   #![forbid(unsafe_code)]；FFT、VBAP/MDAP、HRTF/SOFA(sofar 本地补丁)、afSTFT、去相关、OM spreader、
+mradm-dsp   #![forbid(unsafe_code)]；FFT（RustFFT 标量规划器，workspace 关闭 SIMD 特性，ADR 0015）、VBAP/MDAP、HRTF/SOFA(sofar 本地补丁)、afSTFT、去相关、OM spreader、
             卷积、HpTF、Meter(ebur128 crate)、重采样(rubato)、PCM 混音、EAR 后处理、Triple Balance、HOA、
             Monitor、Live VBAP/双耳、scene_math / scene_transition
 mradm-adm   #![forbid(unsafe_code)]；ADM XML（quick-xml）、内嵌 BS.2094 common definitions、场景投影与语义回写
@@ -297,7 +297,7 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 ## CI 与发布
 
 - `.github/workflows/ci.yml` — PR/push main：macOS + Linux + Windows debug（均安装 Rust 1.98.0，带 Cargo 缓存），FLAC/Opus 均 vendored；生产构建无需 Boost/vcpkg；macOS/Linux 构建后跑 `check-licenses.sh --build-dir build/debug`，新增依赖未登记会让 PR 失败；另有 Linux ARM64 Release job（`ubuntu-24.04-arm`，显式 `MR_ADM_STRICT_FP=OFF`）守护 Scene 算术规则在优化构建下不漂移
-- `.github/workflows/consistency.yml` — push main / manual：记录跨平台 PCM 差异，门禁输入完整性与同进程重复性（逐位一致属二期）
+- `.github/workflows/consistency.yml` — push main / manual：Rust 二期三平台 A/B 采集；门禁输入完整性、同进程/新进程重复性、诊断无扰动，以及 `scripts/consistency/phase2-gates.json` 列出的跨平台位相等项（当前为 FFT 与 EAR 去相关 FIR），其余跨平台差异只记录
 - `.github/workflows/quality.yml` — 所有触发跑 Rust fmt/clippy 与 FFI 头校验；PR 跑 `check-changed.sh`；push main / manual full 跑 `check-all.sh`；只在 macOS
 - `.github/workflows/windows-bringup.yml` — 手动触发的 Windows MSVC Release 探针构建
 - `.github/workflows/release.yml` — tag `v*` 或手动触发：macOS CLI `.tar.gz`、Linux CLI `.AppImage`、Windows CLI `.zip`，外加 macOS/Windows GUI 包（`MacinRender-Gui-*`，经 `scripts/release/package-*.sh` + smoke 脚本）
@@ -313,8 +313,9 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 - `docs/architecture/ADM_APPLE_BACKEND.md` — macOS AUSpatialMixer 后端 + ASBR 系统空间监听 sink
 - `docs/architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md` — Windows ISpatialAudioClient 系统空间监听 sink（静态床/能力实测/切换恢复）
 - `docs/architecture/hptf-eq.md` — HpTF 耳机补偿（v1.38 内存参数接口、AutoEq ParametricEQ，实时监听专用，设备绑定）
-- `docs/adr/0001` C++20 标准 | `0002` C++-first，Rust-later | `0003` 自有领域模型与后端边界 | `0004` 第三方依赖管理 | `0005` 错误处理模型 | `0006` CLI11 选择 | `0007` C ABI 稳定性 | `0008` Rust 落地与 SAF 替换 | `0009` 头追踪输入边界 | `0010` Rust Meter | `0011` Rust 固定采样率转换 | `0012` Rust ADM 元数据与 libadm 参考边界 | `0013` Rust EAR 与 libear 生产依赖移除 | `0014` Scene 统一乘加舍入规则
+- `docs/adr/0001` C++20 标准 | `0002` C++-first，Rust-later | `0003` 自有领域模型与后端边界 | `0004` 第三方依赖管理 | `0005` 错误处理模型 | `0006` CLI11 选择 | `0007` C ABI 稳定性 | `0008` Rust 落地与 SAF 替换 | `0009` 头追踪输入边界 | `0010` Rust Meter | `0011` Rust 固定采样率转换 | `0012` Rust ADM 元数据与 libadm 参考边界 | `0013` Rust EAR 与 libear 生产依赖移除 | `0014` Scene 统一乘加舍入规则 | `0015` RustFFT 固定标量路径
 - `docs/architecture/SCENE_ARITHMETIC_POLICY.md` — `scene-separate-v1` 的验证证据（二期第一个切片）
+- `docs/architecture/RUST_PHASE2_BASELINE.md` — 二期三平台基线、回放与分歧定位工具；`RUST_PHASE2_FFT.md` — FFT 收敛切片（标量路径、twiddle 证据、位相等门禁、性能代价）
 - `docs/architecture/RUST_REFERENCE_RETENTION.md` — 迁移参考实现的登记、冻结校验与退役条件
 - `docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md` — Rust 一期总览与二期（跨平台逐位一致）计划；各批次验收见 `docs/architecture/RUST_*_MIGRATION.md`（ADM、BW64、dr_wav、EAR、EAR post、Live VBAP、Scene numeric、HOA、Monitor 等）及 `docs/architecture/evidence/`
 - `docs/guides/QUALITY.md` — 质量工具与策略

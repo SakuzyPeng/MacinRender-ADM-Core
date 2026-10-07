@@ -2,6 +2,7 @@
 """Evidence corruption must fail independently of numerical gate policy."""
 import importlib.util
 import copy
+import fnmatch
 import json
 import os
 from pathlib import Path
@@ -210,6 +211,59 @@ class EvidenceTests(unittest.TestCase):
             (root / 'w1-g1').write_bytes(payload[:-4] + struct.pack('<I', 1))
             with self.assertRaises(ValueError):
                 comparator.validate_experiments(root, manifest)
+
+    def test_fft_simd_features_are_rejected(self):
+        scalar = {'rust.fft_features': json.dumps({'rustfft': [], 'realfft': []})}
+        self.assertEqual(comparator.fft_features(scalar), {'rustfft': [], 'realfft': []})
+        for features in ({'rustfft': ['avx', 'neon', 'sse'], 'realfft': []},
+                         {'rustfft': [], 'realfft': ['default']},
+                         {'rustfft': []}):
+            with self.subTest(features=features), self.assertRaises(ValueError):
+                comparator.fft_features({'rust.fft_features': json.dumps(features)})
+        with self.assertRaises(ValueError):
+            comparator.fft_features({})
+
+    def test_kernel_inventory_matches_probe_sizes(self):
+        names = common.kernel_outputs()
+        self.assertEqual(len(names), len(set(names)))
+        self.assertIn('fft-twiddles.20-table.f32', names)
+        for size in common.FFT_SIZES:
+            self.assertIn(f'fft-{size}.20-spectrum.c32', names)
+        self.assertTrue(all(Path(name).suffix in common.FORMATS for name in names))
+
+    def test_gates_fail_on_difference_or_empty_match(self):
+        def pair(kernel_identical, case_identical):
+            return {'platforms': ['a', 'b'],
+                    'kernels': [{'checkpoint': 'fft-256.20-spectrum.c32', 'identical': kernel_identical},
+                                {'checkpoint': 'fft-twiddles.10-libm.f64', 'identical': False}],
+                    'cases': {'binaural-point': {'identical': case_identical}}}
+        gates = [{'kind': 'kernel', 'pattern': 'fft-[0-9]*', 'reason': 'r'},
+                 {'kind': 'case', 'pattern': 'binaural-*', 'reason': 'r'}]
+        self.assertEqual(comparator.gate_failures({'pairs': [pair(True, True)]}, gates), [])
+        failures = comparator.gate_failures({'pairs': [pair(False, True)]}, gates)
+        self.assertEqual([f['name'] for f in failures], ['fft-256.20-spectrum.c32'])
+        failures = comparator.gate_failures({'pairs': [pair(True, False)]}, gates)
+        self.assertEqual([f['name'] for f in failures], ['binaural-point'])
+        failures = comparator.gate_failures({'pairs': [pair(True, True)]},
+                                            [{'kind': 'kernel', 'pattern': 'missing-*', 'reason': 'r'}])
+        self.assertEqual(failures, [{'pattern': 'missing-*', 'name': None, 'platforms': None}])
+
+    def test_committed_gates_are_valid(self):
+        gates = comparator.load_gates(comparator.DEFAULT_GATES)
+        names = common.kernel_outputs()
+        for gate in gates:
+            if gate['kind'] == 'kernel':
+                self.assertTrue(any(fnmatch.fnmatchcase(n, gate['pattern']) for n in names), gate['pattern'])
+            else:
+                cases = [c['id'] for c in common.offline_cases()]
+                cases += [c['id'] + f'-epoch{e}' for c in common.scene_cases() for e in (1, 2)]
+                self.assertTrue(any(fnmatch.fnmatchcase(n, gate['pattern']) for n in cases), gate['pattern'])
+        for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
+            with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / 'gates.json'
+                path.write_text(json.dumps(bad), encoding='utf-8')
+                with self.assertRaises(ValueError):
+                    comparator.load_gates(path)
 
     def test_dependency_order_precedes_filename_order(self):
         self.assertLess(comparator.checkpoint_order('scene/e1-s2048.20-effective.f32'), comparator.checkpoint_order('scene/e1-s0.40-render.f32'))

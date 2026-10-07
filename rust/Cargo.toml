@@ -9,8 +9,10 @@ rust-version = "1.98"
 license = "MIT"
 
 [workspace.dependencies]
-realfft = "=3.5.0"
-rustfft = "=6.4.1"
+# FFT stays on RustFFT's scalar planner: the SIMD backends (AVX/SSE/NEON) are picked at run time
+# and use different decompositions and FMA, so their results differ across platforms (ADR 0015).
+realfft = { version = "=3.5.0", default-features = false }
+rustfft = { version = "=6.4.1", default-features = false }
 nalgebra = { version = "=0.35.0", default-features = false, features = ["std"] }
 ebur128 = { version = "=0.1.10", default-features = false }
 rubato = { version = "=5.0.1", default-features = false }

@@ -28,7 +28,23 @@ fn signal(size: usize) -> Vec<f32> {
 }
 fn run(out: &Path) {
     fs::create_dir_all(out).unwrap();
-    for size in [256, 512, 1024, 2048, 4096] {
+    // Every twiddle RustFFT/realfft can build for these lengths: compute_twiddle(k, len) for each
+    // power-of-two len <= 32768 and 0 <= k < len, with the crates' own formula. The scalar FFT is
+    // deterministic given these f32 constants; the f64 values show where libm itself differs.
+    let mut twiddle_f64 = Vec::new();
+    let mut twiddle_f32 = Vec::new();
+    for len in (1..=15).map(|p| 1usize << p) {
+        let constant = -2f64 * std::f64::consts::PI / len as f64;
+        for k in 0..len {
+            let angle = constant * k as f64;
+            let (re, im) = (angle.cos(), angle.sin());
+            twiddle_f64.extend([re, im]);
+            twiddle_f32.extend([re as f32, im as f32]);
+        }
+    }
+    doubles(out, "fft-twiddles.10-libm.f64", &twiddle_f64);
+    floats(out, "fft-twiddles.20-table.f32", &twiddle_f32);
+    for size in [256, 512, 1024, 2048, 4096, 8192, 16384, 32768] {
         mradm_dsp::diagnostics::scope(&format!("fft-{size}"));
         let input = signal(size);
         let mut fft = RealFft::new(size).unwrap();
@@ -94,6 +110,8 @@ fn run(out: &Path) {
             residual.as_slice(),
         );
     }
+    // Leave the OM scope: later kernels have no internal checkpoints of their own.
+    mradm_dsp::diagnostics::scope("");
     for (input_rate, output_rate) in [(48000, 48000), (48000, 44100), (44100, 48000)] {
         let input = signal(2051 * 2);
         let mut resampler = Resampler::new(2, input_rate, output_rate).unwrap();
@@ -171,8 +189,7 @@ fn run(out: &Path) {
         std::arch::is_aarch64_feature_detected!("neon")
     ));
     capabilities.push(format!("diagnostics={}", cfg!(feature = "diagnostics")));
-    capabilities
-        .push("fft_dispatch=automatic; selected_backend=unknown (not exposed by planner)".into());
+    capabilities.push("fft_dispatch=scalar (RustFFT SIMD features disabled)".into());
     fs::write(out.join("capabilities.txt"), capabilities.join("\n") + "\n").unwrap();
 }
 
