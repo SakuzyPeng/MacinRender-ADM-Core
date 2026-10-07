@@ -33,7 +33,8 @@ macOS arm64 与 x64 的频谱/逆变换有位差，Linux 与 Windows x64 相同�
   - `fft-[0-9]*`（全部 `RealFft` 输入、频谱和逆变换）
   - `ear-*.20-fir.f32`（同一依赖改动也作用于 EAR 去相关 FFT；基线中已三平台相同）
 
-  其余内核与 PCM 差异继续只做测量。Consistency CI 的 `compare` job 先写完四份报告再按门禁失败。
+  三平台验收后又加入 52 个 PCM 用例门禁（见下文）。其余差异继续只做测量。Consistency CI 的
+  `compare` job 先写完四份报告再按门禁失败。
 
 ## Linux x64 本地验收（2026-10-07）
 
@@ -83,7 +84,38 @@ FFT 单独测量（Linux x64，AVX2/FMA/AVX-512 CPU，rustfft 6.4.1 复数正变
 
 ## 三平台验收
 
-（待 Consistency CI 结果补充：三平台 FFT/twiddle 门禁、PCM 变为相同的用例，以及据此新增的 PCM 门禁。）
+[Consistency run 37557152120](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37557152120)
+在 `6ec2dc6` 上完成三平台 A/B 及诊断采集；同一提交的 CI 与 Quality 均通过。四份报告（A、B 及各自诊断版）
+结果一致，摘要、报告哈希与逐对首个分歧点见 [FFT 验收记录](evidence/rust-phase2/fft-validation.json)。
+
+| 比较范围 | 基线 `00a70e4` | 本切片 `6ec2dc6` |
+|---|---:|---:|
+| 三平台共同逐位相同的 PCM | 29/78 | 52/78 |
+| Linux x64 对 Windows x64 | 52/78 | 52/78 |
+| 每个平台内部 A 对 B | 78/78 | 78/78 |
+| 有差异的内核（不计 f64 libm 列） | FFT 10 项、重采样 2 项 | 重采样 2 项 |
+
+- FFT 门禁 0 失败：f32 twiddle 表、8 种长度的 `RealFft` 输入/频谱/逆变换、EAR 去相关 FIR 在三个
+  平台对上均逐位相同。
+- f64 libm 列（`fft-twiddles.10-libm.f64`）在每个平台对上都有 1 ULP 差异（4240–6677 个字），转换为 f32 后
+  全部相同。这说明当前 twiddle 的确定性依赖舍入裕量而不是 libm 本身；f32 表门禁会在 runner libm 变化导致
+  翻转时立即失败，届时改用固定表或项目自有三角函数。
+- 新增 23 个三平台相同的 PCM：offline 双耳 point/cartesian-cloud/extent-cloud、EAR 4 个 extent/cartesian/window
+  用例（EAR 后处理 FFT 是其原分歧来源）、48 kHz Scene 双耳 8 个、Scene 设备 DSP 4 个、
+  `scene-binaural-cloud`/`-rotated`、48 kHz 立体声 VBAP epoch1 2 个。基线中已相同的 29 个保持相同。
+- 剩余 26 个差异只有两类：
+  - **重采样**（24 个变采样 Scene 用例）：44.1→48 kHz 最早在重采样后的 HRIR（`binaural.01-hrir.f32`），
+    48→44.1 kHz 在输出重采样（`scene/eN-out0.50-resampled.f32`）观测到分歧，包含 Linux/Windows 对；
+    重采样内核本身仍在所有平台对上不同。
+  - **OM spreader**（`binaural-extent-spreader`、`-multi`）：三个平台对都在 `spreader/s0-g0.50-left.f32`
+    最早分歧，macOS 对 x64 的分歧点已从 HRTF FFT 后移到 spreader 内部。
+
+### PCM 门禁
+
+`phase2-gates.json` 以精确用例 id 把这 52 个用例全部设为三平台位相等门禁（不用通配符，新增用例不会被
+自动纳入），每项注明来源：基线已相同或 ADR 0015 之后相同。单元测试禁止把变采样 Scene 和 spreader 用例
+列入门禁。重采样或 spreader 切片收敛后，再按同样方式扩展。门禁只在 Consistency workflow（push main 和
+手动触发）执行，不阻塞 PR CI。
 
 ## 剩余分歧
 

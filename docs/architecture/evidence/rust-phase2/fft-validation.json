@@ -1,0 +1,465 @@
+{
+  "schema": "mradm.phase2.validation.v1",
+  "slice": "fft-scalar-path",
+  "decision": "docs/adr/0015-rust-fft-scalar-path.md",
+  "ci": {
+    "workflow": "Consistency",
+    "run_id": 37557152120,
+    "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37557152120",
+    "commit": "6ec2dc6a5217320af8b783512cc00dde55961953",
+    "other_runs": {
+      "CI": 37557154769,
+      "Quality": 37557157535
+    },
+    "conclusion": "success"
+  },
+  "source_sha256": "be767024d5994d02b316822cb707d3d99c5f81fe06e75fc5865a80d52ef6bf69",
+  "reports": {
+    "consistency-report-a.json": {
+      "sha256": "52ca02db69e76155b04a2c87bf6add6e6be942ae77209f6ac89a995586b8cd14",
+      "identical": 52,
+      "differing": 26,
+      "gate_failures": 0
+    },
+    "consistency-report-b.json": {
+      "sha256": "7337d1f77623a2714c870f3183d80a0fe39b7a7a28f92230aa0b6cf7dbb2b17a",
+      "identical": 52,
+      "differing": 26,
+      "gate_failures": 0
+    },
+    "consistency-report-a-diagnostic.json": {
+      "sha256": "49041e49c533694334bea0b01fa7922c23967bbb90e8ab0033014fa81d409fbd",
+      "identical": 52,
+      "differing": 26,
+      "gate_failures": 0
+    },
+    "consistency-report-b-diagnostic.json": {
+      "sha256": "d49d234c0913bcb2d19e85a083dcb3be7a13d4259a913253866dd192ec18ba46",
+      "identical": 52,
+      "differing": 26,
+      "gate_failures": 0
+    }
+  },
+  "pcm_result": {
+    "baseline_identical": 29,
+    "identical": 52,
+    "newly_identical": [
+      "binaural-cartesian-cloud",
+      "binaural-extent-cloud",
+      "binaural-point",
+      "ear-5_1-extent",
+      "ear-cartesian",
+      "ear-extent",
+      "ear-window",
+      "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch1",
+      "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch2",
+      "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch1",
+      "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch2",
+      "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch1",
+      "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch2",
+      "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch1",
+      "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch2",
+      "scene-binaural-cloud",
+      "scene-binaural-rotated",
+      "scene-device-dsp-fixed-epoch1",
+      "scene-device-dsp-fixed-epoch2",
+      "scene-device-dsp-fragmented-epoch1",
+      "scene-device-dsp-fragmented-epoch2",
+      "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch1",
+      "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch1"
+    ],
+    "all_four_reports_agree": true
+  },
+  "kernel_differences_config_a": {
+    "macos/linux": [
+      {
+        "kernel": "fft-twiddles.10-libm.f64",
+        "different_words": 5557,
+        "max_ulp": 1,
+        "max_absolute_error": 1.1102230246251565e-16
+      },
+      {
+        "kernel": "resampler-44100-48000.20-output.f32",
+        "different_words": 2967,
+        "max_ulp": 1024,
+        "max_absolute_error": 2.384185791015625e-07
+      },
+      {
+        "kernel": "resampler-48000-44100.20-output.f32",
+        "different_words": 2537,
+        "max_ulp": 1280,
+        "max_absolute_error": 2.384185791015625e-07
+      }
+    ],
+    "macos/windows": [
+      {
+        "kernel": "fft-twiddles.10-libm.f64",
+        "different_words": 6677,
+        "max_ulp": 1,
+        "max_absolute_error": 1.1102230246251565e-16
+      },
+      {
+        "kernel": "resampler-44100-48000.20-output.f32",
+        "different_words": 2983,
+        "max_ulp": 1024,
+        "max_absolute_error": 2.384185791015625e-07
+      },
+      {
+        "kernel": "resampler-48000-44100.20-output.f32",
+        "different_words": 2522,
+        "max_ulp": 1280,
+        "max_absolute_error": 2.384185791015625e-07
+      }
+    ],
+    "linux/windows": [
+      {
+        "kernel": "fft-twiddles.10-libm.f64",
+        "different_words": 4240,
+        "max_ulp": 1,
+        "max_absolute_error": 1.1102230246251565e-16
+      },
+      {
+        "kernel": "resampler-44100-48000.20-output.f32",
+        "different_words": 141,
+        "max_ulp": 64,
+        "max_absolute_error": 1.1920928955078125e-07
+      },
+      {
+        "kernel": "resampler-48000-44100.20-output.f32",
+        "different_words": 160,
+        "max_ulp": 128,
+        "max_absolute_error": 1.1920928955078125e-07
+      }
+    ]
+  },
+  "kernel_notes": [
+    "fft-twiddles.20-table.f32, every fft-N kernel and ear-*.20-fir.f32 are identical on all pairs",
+    "fft-twiddles.10-libm.f64 differs by at most 1 ULP on every pair (platform libm); the f32 conversion absorbs it",
+    "resampler rate-changing outputs still differ on every pair, including Linux/Windows x64"
+  ],
+  "remaining_differences_first_observed": {
+    "macos/linux": {
+      "binaural-extent-spreader": {
+        "first_observed": "spreader/s0-g0.50-left.f32",
+        "max_absolute_error": 0.013589650392532349
+      },
+      "binaural-extent-spreader-multi": {
+        "first_observed": "spreader/s0-g0.50-left.f32",
+        "max_absolute_error": 0.024533748626708984
+      },
+      "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 5.21540641784668e-08
+      },
+      "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 1.1175870895385742e-08
+      },
+      "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 5.21540641784668e-08
+      },
+      "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 1.1175870895385742e-08
+      },
+      "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 7.450580596923828e-09
+      },
+      "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 7.450580596923828e-09
+      },
+      "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 2.2351741790771484e-08
+      },
+      "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 7.450580596923828e-09
+      },
+      "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 2.2351741790771484e-08
+      },
+      "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 7.450580596923828e-09
+      },
+      "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 1.4901161193847656e-08
+      },
+      "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 3.725290298461914e-09
+      },
+      "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 1.4901161193847656e-08
+      },
+      "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 3.725290298461914e-09
+      },
+      "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 3.3527612686157227e-08
+      },
+      "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 7.450580596923828e-09
+      },
+      "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 7.450580596923828e-09
+      },
+      "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 1.1175870895385742e-08
+      },
+      "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 1.1175870895385742e-08
+      }
+    },
+    "macos/windows": {
+      "binaural-extent-spreader": {
+        "first_observed": "spreader/s0-g0.50-left.f32",
+        "max_absolute_error": 0.008783921599388123
+      },
+      "binaural-extent-spreader-multi": {
+        "first_observed": "spreader/s0-g0.50-left.f32",
+        "max_absolute_error": 0.011507213115692139
+      },
+      "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 4.470348358154297e-08
+      },
+      "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 1.210719347000122e-08
+      },
+      "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 5.21540641784668e-08
+      },
+      "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 1.210719347000122e-08
+      },
+      "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 7.450580596923828e-09
+      },
+      "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 7.450580596923828e-09
+      },
+      "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 2.421438694000244e-08
+      },
+      "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 9.313225746154785e-09
+      },
+      "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 2.421438694000244e-08
+      },
+      "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 9.313225746154785e-09
+      },
+      "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 1.4901161193847656e-08
+      },
+      "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 3.725290298461914e-09
+      },
+      "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 1.4901161193847656e-08
+      },
+      "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 3.725290298461914e-09
+      },
+      "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 7.450580596923828e-09
+      },
+      "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 7.450580596923828e-09
+      },
+      "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 1.1175870895385742e-08
+      },
+      "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 1.1175870895385742e-08
+      }
+    },
+    "linux/windows": {
+      "binaural-extent-spreader": {
+        "first_observed": "spreader/s0-g0.50-left.f32",
+        "max_absolute_error": 0.013705849647521973
+      },
+      "binaural-extent-spreader-multi": {
+        "first_observed": "spreader/s0-g0.50-left.f32",
+        "max_absolute_error": 0.02457854151725769
+      },
+      "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 3.725290298461914e-08
+      },
+      "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 1.1175870895385742e-08
+      },
+      "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 3.725290298461914e-08
+      },
+      "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 1.1175870895385742e-08
+      },
+      "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 4.656612873077393e-10
+      },
+      "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 2.9802322387695312e-08
+      },
+      "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 4.656612873077393e-10
+      },
+      "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 2.0489096641540527e-08
+      },
+      "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 5.587935447692871e-09
+      },
+      "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 2.0489096641540527e-08
+      },
+      "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 5.587935447692871e-09
+      },
+      "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 7.450580596923828e-09
+      },
+      "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 4.656612873077393e-10
+      },
+      "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 7.450580596923828e-09
+      },
+      "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 2.3283064365386963e-10
+      },
+      "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 2.2351741790771484e-08
+      },
+      "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 1.862645149230957e-09
+      },
+      "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch1": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 2.2351741790771484e-08
+      },
+      "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch2": {
+        "first_observed": "binaural.01-hrir.f32",
+        "max_absolute_error": 1.862645149230957e-09
+      },
+      "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 1.4901161193847656e-08
+      },
+      "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 3.725290298461914e-09
+      },
+      "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch1": {
+        "first_observed": "scene/e1-out0.50-resampled.f32",
+        "max_absolute_error": 1.4901161193847656e-08
+      },
+      "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch2": {
+        "first_observed": "scene/e2-out0.50-resampled.f32",
+        "max_absolute_error": 3.725290298461914e-09
+      }
+    }
+  },
+  "remaining_classes": {
+    "resampling": "24 rate-changing Scene cases; first observed at binaural.01-hrir.f32 (44.1->48 kHz HRIR resampling) or scene/eN-out0.50-resampled.f32 (48->44.1 kHz output)",
+    "om_spreader": "binaural-extent-spreader and -multi; first observed at spreader/s0-g0.50-left.f32 on every pair"
+  },
+  "gates": "scripts/consistency/phase2-gates.json: 3 kernel gates + 52 case gates"
+}

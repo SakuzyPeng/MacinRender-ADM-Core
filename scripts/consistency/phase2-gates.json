@@ -18,6 +18,318 @@
       "pattern": "ear-*.20-fir.f32",
       "reason": "EAR decorrelation FIRs use the same scalar f64 FFT; identical on all platforms since the phase-two baseline",
       "reference": "docs/architecture/RUST_PHASE2_FFT.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "binaural-cartesian-cloud",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "binaural-extent-cloud",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "binaural-point",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-5_1-directspeakers",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-5_1-extent",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-5_1-hoa-input",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-5_1-point",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-5_1-point-postproc",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-bed",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-cartesian",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-extent",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-hoa",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-loudness-minus23",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-peak-minus6",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-point",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "ear-window",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "hoa-hoa3-cartesian",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "hoa-hoa3-point",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "saf-5_1-extent",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "saf-5_1-point",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "saf-5_1_4-cartesian",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "saf-5_1_4-extent",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch1",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch2",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch1",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch2",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch1",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch2",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch1",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch2",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-cloud",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-rotated",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-device-dsp-fixed-epoch1",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-device-dsp-fixed-epoch2",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-device-dsp-fragmented-epoch1",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-device-dsp-fragmented-epoch2",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-hoa-extent",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch1",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch2",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch1",
+      "reason": "identical on all three platforms after the scalar FFT path",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch2",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fixed-epoch1",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fixed-epoch2",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch1",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch2",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "triple-222",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "triple-point",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "triple-window",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "vbap-bed",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "vbap-extent",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "vbap-point",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "vbap-window",
+      "reason": "identical on all three platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
     }
   ]
 }
