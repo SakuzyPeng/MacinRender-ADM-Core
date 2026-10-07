@@ -1003,6 +1003,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_repeat_render)
     mr_adm_core_apply_static_analysis(mr_adm_repeat_render)
 
+    add_executable(mr_adm_fft_benchmark EXCLUDE_FROM_ALL tests/tools/fft_benchmark.cpp)
+    target_link_libraries(mr_adm_fft_benchmark PRIVATE MacinRender::ADMDsp nlohmann_json::nlohmann_json)
+    target_compile_definitions(mr_adm_fft_benchmark PRIVATE MR_ADM_BENCHMARK_RELEASE=$<IF:$<CONFIG:Release>,1,0>)
+    mr_adm_core_apply_warnings(mr_adm_fft_benchmark)
+
     foreach(_probe IN ITEMS scene render)
         add_executable(mr_adm_phase2_${_probe} EXCLUDE_FROM_ALL tests/tools/phase2_${_probe}.cpp)
         target_link_libraries(mr_adm_phase2_${_probe} PRIVATE MacinRender::ADMEngine
@@ -1014,6 +1019,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     set_property(TARGET mr_adm_phase2_scene PROPERTY EXCLUDE_FROM_ALL FALSE)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME mr_adm_fft_benchmark_tests
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/fft_benchmark_test.py")
         add_custom_target(mr_adm_phase2_tools
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/consistency/phase2_common.py"
                 --stamp-build "${CMAKE_CURRENT_BINARY_DIR}"

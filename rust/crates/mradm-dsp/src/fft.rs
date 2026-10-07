@@ -4,6 +4,8 @@
 //! to the scalar planner: the algorithm depends only on the length and no FMA is used, which keeps
 //! the result bit-identical across x86_64 and aarch64 (ADR 0015). Do not re-enable `avx`, `sse` or
 //! `neon`; the consistency comparator rejects builds that resolve them.
+//! The local RustFFT patch batches independent radix-4 columns for automatic vectorization;
+//! each column retains the scalar planner's coefficients, expression tree and signed zeros.
 use crate::{Complex32, Error, Result};
 use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use std::sync::Arc;

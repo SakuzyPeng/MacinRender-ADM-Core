@@ -1,7 +1,7 @@
 [workspace]
 members = ["crates/mradm-dsp", "crates/mradm-ear", "crates/mradm-math", "crates/mradm-adm", "crates/mradm-wav", "crates/mradm-ffi"]
 resolver = "2"
-exclude = ["vendor/sofar", "vendor/rubato"]
+exclude = ["vendor/sofar", "vendor/rubato", "vendor/rustfft"]
 
 [workspace.package]
 edition = "2024"
@@ -40,3 +40,5 @@ lto = "thin"
 sofar = { path = "vendor/sofar" }
 # Scalar interpolation and platform-independent sinc/window tables (ADR 0016).
 rubato = { path = "vendor/rubato" }
+# Preserve scalar FFT arithmetic while exposing independent columns to LLVM.
+rustfft = { path = "vendor/rustfft" }
