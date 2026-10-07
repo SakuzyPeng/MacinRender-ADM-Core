@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 项目长期方向是平台化重构（不是简单的 CLI 重写）：见 `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md`。
 
-**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）和 WAVE/RF64/BW64 样本读写与容器元数据（原 libbw64 / dr_wav / C++ chunk 改写）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度、输出文件的临时文件/替换编排与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014 / 0015 / 0016）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。跨平台 PCM 逐位一致是二期目标，完整 PCM 当前只把同平台重复性作为硬门禁（见 `RUST_SAF_REPLACEMENT_ROADMAP.md` §5、`RUST_PHASE2_BASELINE.md`）；二期已完成的切片：Scene 统一乘加舍入规则 `scene-separate-v1`（ADR 0014）、RustFFT 固定标量路径（ADR 0015）、重采样固定标量插值与可移植三角函数（ADR 0016）；FFT、三角函数、重采样内核与三平台相同的 PCM 用例是一致性 CI 的跨平台位相等门禁，剩余差异来自 OM spreader。
+**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）和 WAVE/RF64/BW64 样本读写与容器元数据（原 libbw64 / dr_wav / C++ chunk 改写）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度、输出文件的临时文件/替换编排与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014 / 0015 / 0016）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。跨平台 PCM 逐位一致是二期目标，完整 PCM 当前只把同平台重复性作为硬门禁（见 `RUST_SAF_REPLACEMENT_ROADMAP.md` §5、`RUST_PHASE2_BASELINE.md`）；二期已完成的切片：Scene 统一乘加舍入规则 `scene-separate-v1`（ADR 0014）、RustFFT 固定标量路径（ADR 0015）、重采样固定标量插值与可移植三角函数（ADR 0016）；FFT、三角函数、重采样内核与三平台相同的 76/78 个 PCM 用例是一致性 CI 的跨平台位相等门禁，剩余 2 个差异来自 OM spreader。
 
 ## 常用构建与测试命令
 
@@ -299,7 +299,7 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 ## CI 与发布
 
 - `.github/workflows/ci.yml` — PR/push main：macOS + Linux + Windows debug（均安装 Rust 1.98.0，带 Cargo 缓存），FLAC/Opus 均 vendored；生产构建无需 Boost/vcpkg；macOS/Linux 构建后跑 `check-licenses.sh --build-dir build/debug`，新增依赖未登记会让 PR 失败；另有 Linux ARM64 Release job（`ubuntu-24.04-arm`，显式 `MR_ADM_STRICT_FP=OFF`）守护 Scene 算术规则在优化构建下不漂移
-- `.github/workflows/consistency.yml` — push main / manual：Rust 二期三平台 A/B 采集；门禁输入完整性、同进程/新进程重复性、诊断无扰动，以及 `scripts/consistency/phase2-gates.json` 列出的跨平台位相等项（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样内核与三平台相同的 PCM 用例；OM spreader 尚未收敛），其余跨平台差异只记录
+- `.github/workflows/consistency.yml` — push main / manual：Rust 二期三平台 A/B 采集；门禁输入完整性、同进程/新进程重复性、诊断无扰动，以及 `scripts/consistency/phase2-gates.json` 列出的跨平台位相等项（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样内核与 76/78 个 PCM 用例；OM spreader 两例尚未收敛），其余跨平台差异只记录
 - `.github/workflows/quality.yml` — 所有触发跑 Rust fmt/clippy 与 FFI 头校验；PR 跑 `check-changed.sh`；push main / manual full 跑 `check-all.sh`；只在 macOS
 - `.github/workflows/windows-bringup.yml` — 手动触发的 Windows MSVC Release 探针构建
 - `.github/workflows/release.yml` — tag `v*` 或手动触发：macOS CLI `.tar.gz`、Linux CLI `.AppImage`、Windows CLI `.zip`，外加 macOS/Windows GUI 包（`MacinRender-Gui-*`，经 `scripts/release/package-*.sh` + smoke 脚本）

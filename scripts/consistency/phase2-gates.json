@@ -342,6 +342,150 @@
       "pattern": "vbap-window",
       "reason": "identical on all three platforms since the phase-two baseline",
       "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch1",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch2",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch1",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch2",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch1",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch2",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch1",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch2",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch1",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch2",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch1",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch2",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch1",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch2",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch1",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch2",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch1",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch2",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch1",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch2",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch1",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch2",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch1",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch2",
+      "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+      "reference": "docs/adr/0016-deterministic-resampling.md"
     }
   ]
 }

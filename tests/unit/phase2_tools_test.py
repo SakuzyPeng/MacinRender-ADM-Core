@@ -258,12 +258,11 @@ class EvidenceTests(unittest.TestCase):
                 cases = [c['id'] for c in common.offline_cases()]
                 cases += [c['id'] + f'-epoch{e}' for c in common.scene_cases() for e in (1, 2)]
                 self.assertTrue(any(fnmatch.fnmatchcase(n, gate['pattern']) for n in cases), gate['pattern'])
-        # Resampling and the OM spreader are not converged yet (RUST_PHASE2_FFT.md); they must stay measured.
+        # The OM spreader is not converged yet (RUST_PHASE2_RESAMPLER.md); its cases must stay measured.
         case_gates = [g['pattern'] for g in gates if g['kind'] == 'case']
         self.assertEqual(len(case_gates), len(set(case_gates)))
         for pattern in case_gates:
             self.assertNotIn('spreader', pattern)
-            self.assertNotRegex(pattern, r'-(48000-44100|44100-48000)-')
         for bad in ({'schema': 'x', 'gates': []}, {'schema': 'mradm.phase2.gates.v1', 'gates': [{'kind': 'kernel'}]}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'gates.json'
