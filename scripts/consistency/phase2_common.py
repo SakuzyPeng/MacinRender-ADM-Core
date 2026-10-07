@@ -130,6 +130,23 @@ def scene_cases():
     return result
 
 
+FFT_SIZES = (256, 512, 1024, 2048, 4096, 8192, 16384, 32768)
+
+
+def kernel_outputs():
+    """Measurement files written by the mr_adm_phase2_kernels probe, per pass."""
+    names = ['fft-twiddles.10-libm.f64', 'fft-twiddles.20-table.f32']
+    names += [f'fft-{n}.{part}' for n in FFT_SIZES for part in ('10-input.f32', '20-spectrum.c32', '30-inverse.f32')]
+    names += ['scene.10-input.f32', 'scene.20-output.f32']
+    names += [f'ear-{layout}.{part}' for layout in ('0+5+0', '4+7+0', '9+10+3') for part in ('10-layout.f64', '20-fir.f32')]
+    names += [f'om-{i}.{part}' for i in range(4)
+              for part in ('10-input.f32', '20-real.f32', '30-complex.c32', '40-residual.f32')]
+    names += [f'resampler-{a}-{b}.{part}' for a, b in ((48000, 48000), (48000, 44100), (44100, 48000))
+              for part in ('10-input.f32', '20-output.f32')]
+    names += [f'hptf-{rate}.{part}' for rate in (44100, 48000) for part in ('10-input.f64', '20-coefficients.f32')]
+    return sorted(names)
+
+
 def pcm_bytes(path):
     data = Path(path).read_bytes()
     if len(data) < 24:

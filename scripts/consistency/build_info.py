@@ -154,8 +154,7 @@ def collect(build):
         workspace = Path(metadata['workspace_root'])
         record['rust.cargo_lock_sha256'] = hashlib.sha256((workspace / 'Cargo.lock').read_bytes()).hexdigest()
         record['rust.toolchain_config_sha256'] = hashlib.sha256((workspace / 'rust-toolchain.toml').read_bytes()).hexdigest()
-        record['rust.fft_dispatch'] = 'RustFFT automatic SIMD'
-        record['rust.fft_selected_backend'] = 'unknown: planner does not expose selected backend'
+        record['rust.fft_dispatch'] = 'RustFFT scalar planner (SIMD features disabled)'
         record['rust.target'] = cache.get('Rust_CARGO_TARGET_CACHED', 'unavailable')
         record['rust.cmake_rustflags'] = '-Crelocation-model=pic'
         record['rust.environment_rustflags'] = os.environ.get('RUSTFLAGS', '')
@@ -169,6 +168,9 @@ def collect(build):
         packages = {p['id']: p['name'] for p in metadata['packages']}
         record['rust.resolved_features'] = json.dumps({packages[n['id']]: sorted(n['features'])
             for n in metadata.get('resolve', {}).get('nodes', []) if packages.get(n['id'], '').startswith('mradm-')}, sort_keys=True)
+        # Resolved FFT features: any SIMD feature brings back run-time backend dispatch (ADR 0015).
+        record['rust.fft_features'] = json.dumps({packages[n['id']]: sorted(n['features'])
+            for n in metadata.get('resolve', {}).get('nodes', []) if packages.get(n['id']) in {'rustfft', 'realfft'}}, sort_keys=True)
         record['rust.sofa_enabled'] = str(enabled(cache.get('MR_ADM_ENABLE_SOFA', 'OFF')))
         for package in metadata['packages']:
             if package['name'] in {'rustfft', 'realfft', 'nalgebra', 'sofar'}:

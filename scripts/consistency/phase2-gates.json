@@ -1,0 +1,23 @@
+{
+  "schema": "mradm.phase2.gates.v1",
+  "gates": [
+    {
+      "kind": "kernel",
+      "pattern": "fft-twiddles.20-table.f32",
+      "reason": "f32 twiddles of every power-of-two length up to 32768; the scalar FFT is deterministic given these constants",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "kernel",
+      "pattern": "fft-[0-9]*",
+      "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
+      "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+    },
+    {
+      "kind": "kernel",
+      "pattern": "ear-*.20-fir.f32",
+      "reason": "EAR decorrelation FIRs use the same scalar f64 FFT; identical on all platforms since the phase-two baseline",
+      "reference": "docs/architecture/RUST_PHASE2_FFT.md"
+    }
+  ]
+}

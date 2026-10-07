@@ -78,11 +78,14 @@ Cargo 依赖而未登记的 PR 会直接失败。release workflow 另以 `--requ
 | `render-windows` | `windows-2025-vs2026` × config A/B | Windows 对应构建与渲染矩阵 |
 | `compare` | `ubuntu-24.04` | 汇总三平台结果，`scripts/consistency/compare-rust-phase2.py` 校验、比较并上传 JSON 报告 |
 
-config A 为默认数值配置，config B 只打开 C/C++ 严格浮点选项；两组 RustFFT 均使用自动 SIMD。
+config A 为默认数值配置，config B 只打开 C/C++ 严格浮点选项；两组 RustFFT 均使用标量规划器
+（ADR 0015，构建记录中含 SIMD 特性的结果会被比较器拒收）。
 二期使用 `run-rust-phase2.py` 收集 34 个离线场景、22 个实时 Scene 配置（各含两个 epoch）及
-49 个内核测量，再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py` 验证三平台
-源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；跨平台位差仍只记录。
-详见 [Rust 二期基线](../architecture/RUST_PHASE2_BASELINE.md)。历史 SAF 清单和定位脚本保留原始边界。
+60 个内核测量（含 FFT twiddle 表），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
+验证三平台源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；
+`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT 与 EAR 去相关 FIR）必须三平台逐位相同，
+其余跨平台位差仍只记录。`compare` job 先写出全部四份报告，再按门禁结果失败。
+详见 [Rust 二期基线](../architecture/RUST_PHASE2_BASELINE.md)与 [二期 FFT 收敛](../architecture/RUST_PHASE2_FFT.md)。历史 SAF 清单和定位脚本保留原始边界。
 
 ### 第三阶段：发布构建
 

@@ -1,4 +1,9 @@
 //! Stateful real FFT with a non-destructive input and a normalized inverse.
+//!
+//! The workspace builds RustFFT without its SIMD features, so `RealFftPlanner` always falls back
+//! to the scalar planner: the algorithm depends only on the length and no FMA is used, which keeps
+//! the result bit-identical across x86_64 and aarch64 (ADR 0015). Do not re-enable `avx`, `sse` or
+//! `neon`; the consistency comparator rejects builds that resolve them.
 use crate::{Complex32, Error, Result};
 use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use std::sync::Arc;

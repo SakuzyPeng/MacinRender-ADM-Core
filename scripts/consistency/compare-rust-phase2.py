@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate complete phase-2 evidence, then locate the first observed numerical divergence."""
 import argparse
+import fnmatch
 import itertools
 import json
 from pathlib import Path
@@ -8,6 +9,8 @@ import re
 import phase2_common as common
 
 REQUIRED_PLATFORMS = {('Darwin', 'arm64'), ('Windows', 'x86_64'), ('Linux', 'x86_64')}
+DEFAULT_GATES = Path(__file__).with_name('phase2-gates.json')
+FFT_SIMD_FEATURES = {'default', 'avx', 'sse', 'neon', 'wasm_simd'}
 
 
 def safe_file(root, relative):
@@ -22,6 +25,48 @@ def compiler_identity(build):
     if fields.get('release') != '1.98.0' or not fields.get('commit-hash') or not fields.get('LLVM version'):
         raise ValueError('actual Rust compiler does not match the pinned toolchain')
     return {key: fields[key] for key in ('release', 'commit-hash', 'LLVM version')}
+
+
+def fft_features(build):
+    """Resolved RustFFT/realfft features; any SIMD feature restores run-time dispatch (ADR 0015)."""
+    try:
+        features = json.loads(build['rust.fft_features'])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError('missing resolved FFT feature record') from None
+    if set(features) != {'rustfft', 'realfft'}:
+        raise ValueError('FFT feature record does not cover rustfft and realfft')
+    enabled = sorted(f'{name}/{feature}' for name, values in features.items() for feature in values
+                     if feature in FFT_SIMD_FEATURES)
+    if enabled:
+        raise ValueError('FFT SIMD dispatch is enabled: ' + ', '.join(enabled))
+    return features
+
+
+def load_gates(path):
+    data = json.loads(Path(path).read_text(encoding='utf-8'))
+    if data.get('schema') != 'mradm.phase2.gates.v1' or not isinstance(data.get('gates'), list):
+        raise ValueError('unsupported gate file')
+    for gate in data['gates']:
+        if gate.get('kind') not in {'kernel', 'case'} or not gate.get('pattern') or not gate.get('reason'):
+            raise ValueError('invalid gate entry')
+    return data['gates']
+
+
+def gate_failures(report, gates):
+    """Gated kernels/cases must be bit-identical on every platform pair; a gate must match something."""
+    failures = []
+    for gate in gates:
+        matched = set()
+        for pair in report['pairs']:
+            rows = ({r['checkpoint']: r for r in pair['kernels']} if gate['kind'] == 'kernel' else pair['cases'])
+            for name, row in rows.items():
+                if fnmatch.fnmatchcase(name, gate['pattern']):
+                    matched.add(name)
+                    if not row['identical']:
+                        failures.append({'pattern': gate['pattern'], 'name': name, 'platforms': pair['platforms']})
+        if not matched:
+            failures.append({'pattern': gate['pattern'], 'name': None, 'platforms': None})
+    return failures
 
 
 def validate_experiments(root, manifest):
@@ -81,15 +126,16 @@ def validate(root):
             raise ValueError('checkpoint integrity failure: ' + name)
         if path.suffix in common.FORMATS:
             common.validate_words(data, path.suffix)
-    kernels = [p for p in actual if p.startswith('kernels/') and Path(p).suffix in common.FORMATS]
-    if len(kernels) != 49:
-        raise ValueError('missing production-kernel measurements')
+    kernels = {p for p in actual if p.startswith('kernels/') and Path(p).suffix in common.FORMATS}
+    if kernels != {'kernels/' + name for name in common.kernel_outputs()}:
+        raise ValueError('production-kernel measurements differ from the inventory')
     if manifest['diagnostics'] and not manifest.get('noninterference', {}).get('passed'):
         raise ValueError('diagnostic noninterference was not verified')
     if manifest['diagnostics']:
         validate_experiments(root, manifest)
     build = manifest['build']
     compiler_identity(build)
+    fft_features(build)
     if build.get('cmake.CMAKE_BUILD_TYPE') != 'Release' or build.get('rust.compiler_verbose') in (None, 'unavailable'):
         raise ValueError('missing Release/compiler provenance')
     repeat_keys = {r['id'] + suffix for r in manifest['offline'] for suffix in
@@ -146,7 +192,7 @@ def checkpoints(a, b):
     return rows
 
 
-def compare(directories, require_platforms=True):
+def compare(directories, require_platforms=True, gates=()):
     manifests = [validate(p) for p in directories]
     first = manifests[0]
     for manifest in manifests[1:]:
@@ -155,7 +201,8 @@ def compare(directories, require_platforms=True):
                 raise ValueError('incompatible baseline: ' + field)
         if compiler_identity(manifest['build']) != compiler_identity(first['build']):
             raise ValueError('Rust compiler identity differs across platforms')
-        for field in ('rust.cargo_lock_sha256', 'rust.toolchain_config_sha256', 'scene.arithmetic', 'rust.resolved_features'):
+        for field in ('rust.cargo_lock_sha256', 'rust.toolchain_config_sha256', 'scene.arithmetic', 'rust.resolved_features',
+                      'rust.fft_features'):
             if manifest['build'].get(field) != first['build'].get(field):
                 raise ValueError('incompatible build: ' + field)
     platforms = set()
@@ -168,7 +215,7 @@ def compare(directories, require_platforms=True):
     report = {'schema': 'mradm.phase2.comparison.v1', 'source_sha256': first['source']['sha256'],
               'config': first['config'], 'diagnostics': first['diagnostics'],
               'full_platform_set': platforms == REQUIRED_PLATFORMS,
-              'platforms': sorted(platforms), 'pairs': [], 'numerical_gate': 'measurement only',
+              'platforms': sorted(platforms), 'pairs': [],
               'interpretation': 'first_observed is an observation boundary, not a proven root cause'}
     for i, j in itertools.combinations(range(len(directories)), 2):
         a, b = directories[i], directories[j]
@@ -191,6 +238,8 @@ def compare(directories, require_platforms=True):
         report['pairs'].append(pair)
     report['identical_cases'] = [name for name in sorted(first['outputs']) if all(p['cases'][name]['identical'] for p in report['pairs'])]
     report['differing_cases'] = sorted(set(first['outputs']) - set(report['identical_cases']))
+    # Only the listed kernels/cases are bit-equality gates; every other difference is measured.
+    report['numerical_gate'] = {'gates': list(gates), 'failures': gate_failures(report, gates)}
     return report
 
 
@@ -198,13 +247,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--allow-partial', action='store_true', help='diagnostic comparisons only; report cannot claim three-platform acceptance')
+    parser.add_argument('--gates', type=Path, default=DEFAULT_GATES, help='cross-platform bit-equality gates')
     parser.add_argument('directories', nargs='+', type=Path)
     args = parser.parse_args()
     if len(args.directories) < 2:
         parser.error('at least two baselines required')
-    result = compare(args.directories, not args.allow_partial)
+    result = compare(args.directories, not args.allow_partial, load_gates(args.gates))
     common.save(args.output, result)
-    print(f"identical={len(result['identical_cases'])} differing={len(result['differing_cases'])} full_platform_set={result['full_platform_set']}")
+    failures = result['numerical_gate']['failures']
+    print(f"identical={len(result['identical_cases'])} differing={len(result['differing_cases'])} "
+          f"full_platform_set={result['full_platform_set']} gate_failures={len(failures)}")
+    for failure in failures:
+        print('gate failure:', json.dumps(failure, sort_keys=True))
+    if failures:
+        raise SystemExit(1)
 
 
 if __name__ == '__main__':

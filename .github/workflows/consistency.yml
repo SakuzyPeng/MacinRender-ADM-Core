@@ -1,7 +1,8 @@
 name: Consistency
 
-# Rust phase 2 records current production numerics without claiming bit equality.
-# A is default; B controls C/C++ floating point only. RustFFT remains automatic.
+# Rust phase 2 records current production numerics. Only the gates in
+# scripts/consistency/phase2-gates.json claim cross-platform bit equality (FFT, ADR 0015).
+# A is default; B controls C/C++ floating point only. RustFFT uses its scalar planner in both.
 # Each job rebuilds in place for diagnostic noninterference and bounded attribution.
 
 on:
@@ -364,18 +365,22 @@ jobs:
         with:
           path: baselines
 
+      # Cross-platform differences are measured, except the bit-equality gates in
+      # scripts/consistency/phase2-gates.json (ADR 0015). Every report is written before failing.
       - name: Compare both configurations and diagnostic checkpoints
         shell: bash
         run: |
+          status=0
           for config in a b; do
             for suffix in "" "-diagnostic"; do
               python3 scripts/consistency/compare-rust-phase2.py \
                 --output "consistency-report-${config}${suffix}.json" \
                 "baselines/consistency-macos-${config}${suffix}" \
                 "baselines/consistency-linux-${config}${suffix}" \
-                "baselines/consistency-windows-${config}${suffix}"
+                "baselines/consistency-windows-${config}${suffix}" || status=1
             done
           done
+          exit "$status"
 
       - name: Upload report
         if: always()
