@@ -147,7 +147,7 @@ class EvidenceTests(unittest.TestCase):
         offline, scene = common.offline_cases(), common.scene_cases()
         self.assertEqual(len(offline), 34)
         self.assertEqual(len({r['id'] for r in offline}), 34)
-        self.assertEqual(len(scene), 22)
+        self.assertEqual(len(scene), 42)
         self.assertTrue(any('--loudness-target' in c['args'] for c in offline))
         self.assertTrue(any('triple-balance' in c['args'] for c in offline))
         for row in scene:
@@ -155,6 +155,23 @@ class EvidenceTests(unittest.TestCase):
             self.assertEqual(positions, sorted(set(positions)))
             self.assertTrue(all(0 < n <= 1024 for n in row['partition']))
             self.assertEqual(row['epochs'][1], {'epoch': 2, 'target': 257, 'end': 290})
+        self.assertEqual({(r['input_rate'], r['output_rate']) for r in scene},
+                         {(48000, 48000), (48000, 44100), (44100, 48000),
+                          (96000, 96000), (48000, 96000), (96000, 48000)})
+        for rate in ((96000, 96000), (48000, 96000), (96000, 48000)):
+            self.assertEqual({tuple(r['partition']) for r in scene
+                              if (r['input_rate'], r['output_rate']) == rate},
+                             {(512,), (1, 7, 127, 511, 1024)})
+
+    def test_original_matrix_parameters_remain_frozen(self):
+        closeout = json.loads((ROOT / 'docs/architecture/evidence/rust-phase2/closeout.json').read_text())
+        original_scene = [row for row in common.scene_cases()
+                          if max(row['input_rate'], row['output_rate']) <= 48000]
+        self.assertEqual(len(original_scene), closeout['inventory']['scene_configurations'])
+        self.assertEqual(common.json_digest(common.offline_cases()),
+                         closeout['inventory']['offline_parameters_sha256'])
+        self.assertEqual(common.json_digest(original_scene),
+                         closeout['inventory']['scene_parameters_sha256'])
 
     def test_incomplete_and_path_escape_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -228,6 +245,14 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
+        self.assertEqual(len(names), 133)
+        for rates in common.RESAMPLER_RATES:
+            self.assertIn(f'resampler-{rates[0]}-{rates[1]}.20-output.f32', names)
+        for name in common.OM_EDGE_CASES:
+            self.assertIn(f'om-edge-{name}.40-residual.f32', names)
+        for size in common.HRTF_PROBE_SIZES:
+            self.assertIn(f'hrtf-{size}.20-grid-weights.f32', names)
+            self.assertIn(f'hrtf-{size}.50-continuous.c32', names)
         for size in common.FFT_SIZES:
             self.assertIn(f'fft-{size}.20-spectrum.c32', names)
         self.assertTrue(all(Path(name).suffix in common.FORMATS for name in names))

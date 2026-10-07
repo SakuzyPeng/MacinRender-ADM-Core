@@ -14,6 +14,7 @@
 - [原生 OSC 头部姿态接收接口（C++／C ABI v1.40）](architecture/OSC_HEAD_TRACKING_API.md)
 - [Scene 算术规则统一](architecture/SCENE_ARITHMETIC_POLICY.md)
 - [Rust 二期结项：验收范围与维护契约](architecture/RUST_PHASE2_CLOSEOUT.md)
+- [Rust 后续覆盖：高采样率、HRTF 与退化 OM](architecture/RUST_COVERAGE_EXTENSION.md)
 - [dr_flac 替换准备、风险验证与优先级](architecture/RUST_FLAC_DECODER_PLAN.md)
 - [Rust 二期基线与分歧定位](architecture/RUST_PHASE2_BASELINE.md)
 - [Rust 二期 FFT 收敛](architecture/RUST_PHASE2_FFT.md)
