@@ -272,7 +272,7 @@
       "identical_pcm": 78,
       "total_pcm": 78,
       "evidence": "docs/architecture/evidence/rust-phase2/performance/validation.json",
-      "sha256": "a0f74a5018f3229501e7262899bad332b7777eb9f5f8ce8726a2d9d01c9033e6"
+      "sha256": "8d16b4cbaa8bc6e5d6c9285d451f7f09c6cba97c2fbdede1dd68c32d8e9b6b48"
     }
   ],
   "local_validation": {
