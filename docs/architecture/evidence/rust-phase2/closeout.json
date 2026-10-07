@@ -1,0 +1,354 @@
+{
+  "schema": "mradm.phase2.closeout.v1",
+  "status": "complete",
+  "closed_on": "2026-10-07",
+  "scope": "Pinned Release evidence matrix; not an all-input or all-toolchain guarantee",
+  "implementation_commit": "666fe49fd4da0a2b6f454e3c19220f4978adee62",
+  "source_sha256": "aef16671d84baf9a5a2561e9d6ec41cb13d5b9d04c26dbcb05db81210e111b31",
+  "ci": {
+    "consistency": {
+      "run": 37588314154,
+      "conclusion": "success",
+      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37588314154"
+    },
+    "correctness": {
+      "run": 37588322470,
+      "conclusion": "success"
+    },
+    "quality": {
+      "run": 37588335394,
+      "conclusion": "success"
+    }
+  },
+  "reports": {
+    "consistency-report-a-diagnostic.json": {
+      "sha256": "65af9c52a6e0e0579f908cf5f7e98b60df39b0988fec277cae400fcfd52a4d35",
+      "identical_pcm": 78,
+      "differing_pcm": 0,
+      "gate_failures": 0
+    },
+    "consistency-report-a.json": {
+      "sha256": "7c37b18ae822796f76296934e6ae26b5dffc868cdd7964ed8483ca00c52e198b",
+      "identical_pcm": 78,
+      "differing_pcm": 0,
+      "gate_failures": 0
+    },
+    "consistency-report-b-diagnostic.json": {
+      "sha256": "72487253492df286ce31da40907c933291909341f322cd2a2455e10ee3f519a0",
+      "identical_pcm": 78,
+      "differing_pcm": 0,
+      "gate_failures": 0
+    },
+    "consistency-report-b.json": {
+      "sha256": "0da9005b502709f0ae44e04f5ccabbf29e24da8bfb4ec1332d75f85bbaf83501",
+      "identical_pcm": 78,
+      "differing_pcm": 0,
+      "gate_failures": 0
+    }
+  },
+  "platforms": [
+    "macOS arm64",
+    "Windows x64",
+    "Linux x64"
+  ],
+  "configuration": {
+    "rust": "1.98.0",
+    "llvm": "22.1.8",
+    "build": "Release",
+    "flac": "VENDORED",
+    "opus": "VENDORED",
+    "iamf": false,
+    "sofa": false,
+    "hrtf": "built-in KEMAR",
+    "a": "default numerics",
+    "b": "C/C++ strict floating-point experiment",
+    "scene_arithmetic": "scene-separate-v1"
+  },
+  "inventory": {
+    "offline": 34,
+    "scene_configurations": 22,
+    "scene_epochs_per_configuration": 2,
+    "pcm": 78,
+    "kernels": 67,
+    "offline_parameters_sha256": "f7b587cc0936e405bf253e4d3d5ab0bc990122f1428d061456839938d1b34a65",
+    "scene_parameters_sha256": "ff17038a416f0a1864052de86524d3c87a6efeacfc18a639fc3a7e74bc9f5b1d"
+  },
+  "gates": {
+    "path": "scripts/consistency/phase2-gates.json",
+    "sha256": "3356e3c6273f774731234ece9cb8598599f5df81b7f9933915cca88de397ebe9",
+    "pcm_ids": [
+      "binaural-cartesian-cloud",
+      "binaural-extent-cloud",
+      "binaural-point",
+      "ear-5_1-directspeakers",
+      "ear-5_1-extent",
+      "ear-5_1-hoa-input",
+      "ear-5_1-point",
+      "ear-5_1-point-postproc",
+      "ear-bed",
+      "ear-cartesian",
+      "ear-extent",
+      "ear-hoa",
+      "ear-loudness-minus23",
+      "ear-peak-minus6",
+      "ear-point",
+      "ear-window",
+      "hoa-hoa3-cartesian",
+      "hoa-hoa3-point",
+      "saf-5_1-extent",
+      "saf-5_1-point",
+      "saf-5_1_4-cartesian",
+      "saf-5_1_4-extent",
+      "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch1",
+      "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch2",
+      "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch1",
+      "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch2",
+      "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch1",
+      "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch2",
+      "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch1",
+      "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch2",
+      "scene-binaural-cloud",
+      "scene-binaural-rotated",
+      "scene-device-dsp-fixed-epoch1",
+      "scene-device-dsp-fixed-epoch2",
+      "scene-device-dsp-fragmented-epoch1",
+      "scene-device-dsp-fragmented-epoch2",
+      "scene-hoa-extent",
+      "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch1",
+      "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch2",
+      "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch1",
+      "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch2",
+      "scene-vbap-4+7+0-cloud0-48000-48000-fixed-epoch1",
+      "scene-vbap-4+7+0-cloud0-48000-48000-fixed-epoch2",
+      "scene-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch1",
+      "scene-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch2",
+      "triple-222",
+      "triple-point",
+      "triple-window",
+      "vbap-bed",
+      "vbap-extent",
+      "vbap-point",
+      "vbap-window",
+      "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch1",
+      "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch2",
+      "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch1",
+      "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch2",
+      "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch1",
+      "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch2",
+      "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch1",
+      "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch2",
+      "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch1",
+      "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch2",
+      "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch1",
+      "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch2",
+      "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch1",
+      "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch2",
+      "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch1",
+      "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch2",
+      "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch1",
+      "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch2",
+      "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch1",
+      "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch2",
+      "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch1",
+      "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch2",
+      "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch1",
+      "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch2",
+      "binaural-extent-spreader",
+      "binaural-extent-spreader-multi"
+    ],
+    "kernel_patterns": [
+      "fft-twiddles.20-table.f32",
+      "fft-[0-9]*",
+      "ear-*.20-fir.f32",
+      "trig.*",
+      "resampler-*",
+      "om-*",
+      "spreader.*"
+    ],
+    "matched_kernel_files": [
+      "ear-0+5+0.20-fir.f32",
+      "ear-4+7+0.20-fir.f32",
+      "ear-9+10+3.20-fir.f32",
+      "fft-1024.10-input.f32",
+      "fft-1024.20-spectrum.c32",
+      "fft-1024.30-inverse.f32",
+      "fft-16384.10-input.f32",
+      "fft-16384.20-spectrum.c32",
+      "fft-16384.30-inverse.f32",
+      "fft-2048.10-input.f32",
+      "fft-2048.20-spectrum.c32",
+      "fft-2048.30-inverse.f32",
+      "fft-256.10-input.f32",
+      "fft-256.20-spectrum.c32",
+      "fft-256.30-inverse.f32",
+      "fft-32768.10-input.f32",
+      "fft-32768.20-spectrum.c32",
+      "fft-32768.30-inverse.f32",
+      "fft-4096.10-input.f32",
+      "fft-4096.20-spectrum.c32",
+      "fft-4096.30-inverse.f32",
+      "fft-512.10-input.f32",
+      "fft-512.20-spectrum.c32",
+      "fft-512.30-inverse.f32",
+      "fft-8192.10-input.f32",
+      "fft-8192.20-spectrum.c32",
+      "fft-8192.30-inverse.f32",
+      "fft-twiddles.20-table.f32",
+      "om-0.10-input.f32",
+      "om-0.20-real.f32",
+      "om-0.30-complex.c32",
+      "om-0.40-residual.f32",
+      "om-1.10-input.f32",
+      "om-1.20-real.f32",
+      "om-1.30-complex.c32",
+      "om-1.40-residual.f32",
+      "om-2.10-input.f32",
+      "om-2.20-real.f32",
+      "om-2.30-complex.c32",
+      "om-2.40-residual.f32",
+      "om-3.10-input.f32",
+      "om-3.20-real.f32",
+      "om-3.30-complex.c32",
+      "om-3.40-residual.f32",
+      "resampler-44100-48000.10-input.f32",
+      "resampler-44100-48000.20-output.f32",
+      "resampler-48000-44100.10-input.f32",
+      "resampler-48000-44100.20-output.f32",
+      "resampler-48000-48000.10-input.f32",
+      "resampler-48000-48000.20-output.f32",
+      "spreader.10-input.f32",
+      "spreader.20-voronoi.f32",
+      "spreader.30-fir.c32",
+      "spreader.40-output.f32",
+      "trig.10-input.f64",
+      "trig.20-sin.f64",
+      "trig.30-cos.f64"
+    ]
+  },
+  "observation_only_kernels": [
+    "ear-0+5+0.10-layout.f64",
+    "ear-4+7+0.10-layout.f64",
+    "ear-9+10+3.10-layout.f64",
+    "fft-twiddles.10-libm.f64",
+    "hptf-44100.10-input.f64",
+    "hptf-44100.20-coefficients.f32",
+    "hptf-48000.10-input.f64",
+    "hptf-48000.20-coefficients.f32",
+    "scene.10-input.f32",
+    "scene.20-output.f32"
+  ],
+  "observed_differing_kernel": "fft-twiddles.10-libm.f64",
+  "milestones": [
+    {
+      "commit": "00a70e4",
+      "identical_pcm": 29,
+      "total_pcm": 78,
+      "evidence": "docs/architecture/evidence/rust-phase2/validation.json",
+      "sha256": "23b12d0192c80d53b93f3ab5f72a6b5c659e09b2df9aa056598e35d6f16fbbe1"
+    },
+    {
+      "commit": "6ec2dc6",
+      "identical_pcm": 52,
+      "total_pcm": 78,
+      "evidence": "docs/architecture/evidence/rust-phase2/fft-validation.json",
+      "sha256": "e768911cafa3165ab2031890d0eea39d6a91b8679a04e9a3a6cafb4203095e04"
+    },
+    {
+      "commit": "0f6c187",
+      "identical_pcm": 76,
+      "total_pcm": 78,
+      "evidence": "docs/architecture/evidence/rust-phase2/resampler-validation.json",
+      "sha256": "3fb5eacaeaf44d394b76af443d25e24f2a8f2c485f3784060278a193ffdbc414"
+    },
+    {
+      "commit": "0d62eeb",
+      "identical_pcm": 78,
+      "total_pcm": 78,
+      "evidence": "docs/architecture/evidence/rust-phase2/spreader-validation.json",
+      "sha256": "4806003e0d1febc87b4e17b4bc58ed703f1acf73769823d7a40234520d110e28"
+    },
+    {
+      "commit": "666fe49",
+      "identical_pcm": 78,
+      "total_pcm": 78,
+      "evidence": "docs/architecture/evidence/rust-phase2/performance/validation.json",
+      "sha256": "a0f74a5018f3229501e7262899bad332b7777eb9f5f8ce8726a2d9d01c9033e6"
+    }
+  ],
+  "local_validation": {
+    "cpu": "Apple M4 Pro",
+    "debug_tests": "71/71",
+    "fft_column_tests": [
+      "f32/f64 raw-bit comparisons, Debug and Release",
+      "both directions, custom column widths, signed zeros, underflow, cancellation"
+    ],
+    "rust_quality": "fmt and Clippy including all features passed",
+    "cpp_quality": "format, clang-tidy and cppcheck passed",
+    "c_abi_exports": 139,
+    "private_ffi_functions": 209,
+    "private_ffi_structs": 65,
+    "retained_reference_units": 16,
+    "frozen_reference_hashes": 45,
+    "restored_release_configuration": {
+      "MR_ADM_CORE_USE_INSTALLED_DEPS": "ON",
+      "MR_ADM_ENABLE_SOFA": "ON",
+      "MR_ADM_STRICT_FP": "OFF",
+      "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF"
+    }
+  },
+  "reference_retention": {
+    "registry": "tests/reference/retention.json",
+    "sha256": "3f4ce91dd1577bd7ed2f3e3b31a464bac5af55f7a831fd8b1e40d072c09768de",
+    "retained_units": [
+      "ear_post",
+      "output_dsp",
+      "pcm_mix",
+      "scene_numeric",
+      "hoa",
+      "live_vbap",
+      "monitor",
+      "triple_balance",
+      "wav_container",
+      "saf",
+      "libadm",
+      "libbw64",
+      "resampler",
+      "ebur128",
+      "dr_wav",
+      "libear"
+    ],
+    "registered_files": 45,
+    "retired_units": [],
+    "exit_conditions_changed": false,
+    "decision": "Retain all references; platform equality does not replace behavior comparisons, independent regression or release/retirement review"
+  },
+  "in_scope_blockers": [],
+  "excluded": [
+    "Apple system renderer",
+    "physical devices and system mixing",
+    "external SOFA datasets",
+    "standalone Monitor API",
+    "encoded-file byte equality",
+    "equality across different input partitions",
+    "all-input SVD degeneracy/ordering guarantees"
+  ],
+  "followups": [
+    {
+      "id": "dr_flac",
+      "scope": "Evaluate and migrate FLAC decoding independently; libFLAC encoding remains separate"
+    },
+    {
+      "id": "coverage",
+      "scope": "Extend rates, FFT lengths, HRTF directions, degenerate SVD and long Scene timelines; add gates explicitly"
+    },
+    {
+      "id": "performance",
+      "scope": "Further FFT, convolution and resampler improvements with preserved bits and Release evidence"
+    },
+    {
+      "id": "release-retirement",
+      "scope": "Formal release and per-unit reference retirement review in a later version cycle"
+    }
+  ],
+  "release_tag_created": false
+}

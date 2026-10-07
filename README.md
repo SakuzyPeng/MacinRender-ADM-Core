@@ -200,7 +200,7 @@ ADM BWF / BW64 / RF64，或普通多声道 WAVE
 | C ABI | ✅ | 稳定 v1（当前 1.43），`struct_size` 扩展与 deprecation 维护兼容 |
 | 桌面 GUI | ✅ | macOS arm64 / Windows x64 发行包 |
 | Rust 一期迁移 | ✅ | SAF、libear、libadm、libbw64、dr_wav、libebur128、libsamplerate 已移出生产路径，仅保留为参考对照 |
-| Rust 二期一致性 | ✅ | FFT、重采样、OM spreader 等收敛后，78/78 PCM 用例三平台逐位相同并设为门禁 |
+| Rust 二期一致性 | ✅ 已结项 | 锁定矩阵的 78/78 PCM 用例三平台逐位相同；完成首批性能回收，见[结项范围](docs/architecture/RUST_PHASE2_CLOSEOUT.md) |
 
 迁移范围与验收见 [Rust 落地与 SAF 替换路线图](docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md)，ADM 特性覆盖见
 [ADM 特性覆盖审计](docs/architecture/ADM_FEATURE_COVERAGE.md)。
@@ -226,7 +226,7 @@ ADM BWF / BW64 / RF64，或普通多声道 WAVE
 | [平台化重构规划](docs/architecture/CPP_ADM_PLATFORM_REWRITE.md) | 模块边界与长期方向 |
 | [ADM 特性覆盖审计](docs/architecture/ADM_FEATURE_COVERAGE.md) | ADM 语义的支持范围 |
 | [实时监听引擎](docs/architecture/REALTIME_MONITORING.md) | 监听链路、后端切换与设备输出 |
-| [Rust 路线图](docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md) | 一期迁移与二期跨平台一致性 |
+| [Rust 路线图](docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md) / [二期结项](docs/architecture/RUST_PHASE2_CLOSEOUT.md) | 迁移、已验收矩阵、证据与后续边界 |
 | [质量工具](docs/guides/QUALITY.md) / [CI 指南](docs/guides/CI.md) | 本地检查、CI 工作流与门禁 |
 | [第三方许可证](docs/THIRD_PARTY_LICENSES.md) | 依赖许可证与发行边界 |
 | [文档索引](docs/README.md) / [ADR](docs/adr/) | 全部架构文档与 17 份架构决策记录 |

@@ -212,7 +212,7 @@ only does lightweight output.
 | C ABI | ✅ | Stable v1 (currently 1.43), compatibility maintained through `struct_size` extension and deprecation |
 | Desktop GUI | ✅ | macOS arm64 / Windows x64 release packages |
 | Rust phase 1 migration | ✅ | SAF, libear, libadm, libbw64, dr_wav, libebur128, and libsamplerate are out of the production path and kept only as reference comparisons |
-| Rust phase 2 consistency | ✅ | After converging FFT, resampling, the OM spreader, and more, 78/78 PCM cases are bit-identical on three platforms and gated |
+| Rust phase 2 consistency | ✅ Closed | All 78 PCM cases in the pinned matrix are bit-identical and gated across three platforms; initial performance recovery is complete. See the [accepted scope](docs/architecture/RUST_PHASE2_CLOSEOUT.md) |
 
 See the [Rust adoption and SAF replacement roadmap](docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md) for migration
 scope and acceptance, and the [ADM feature coverage audit](docs/architecture/ADM_FEATURE_COVERAGE.md) for ADM coverage.
@@ -238,7 +238,7 @@ scope and acceptance, and the [ADM feature coverage audit](docs/architecture/ADM
 | [Platform rewrite plan](docs/architecture/CPP_ADM_PLATFORM_REWRITE.md) | Module boundaries and long-term direction |
 | [ADM feature coverage audit](docs/architecture/ADM_FEATURE_COVERAGE.md) | Supported ADM semantics |
 | [Realtime monitoring](docs/architecture/REALTIME_MONITORING.md) | Monitoring path, backend switching, and device output |
-| [Rust roadmap](docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md) | Phase 1 migration and phase 2 cross-platform consistency |
+| [Rust roadmap](docs/architecture/RUST_SAF_REPLACEMENT_ROADMAP.md) / [Phase 2 closeout](docs/architecture/RUST_PHASE2_CLOSEOUT.md) | Migration, accepted matrix, evidence, and follow-up boundaries |
 | [Quality tooling](docs/guides/QUALITY.md) / [CI guide](docs/guides/CI.md) | Local checks, CI workflows, and gates |
 | [Third-party licenses](docs/THIRD_PARTY_LICENSES.md) | Dependency licenses and release boundary |
 | [Documentation index](docs/README.md) / [ADRs](docs/adr/) | All architecture documents and the 17 architecture decision records |

@@ -1,5 +1,8 @@
 # Rust 二期：FFT 收敛
 
+> 二期已按锁定矩阵结项，当前范围和维护规则见[结项记录](RUST_PHASE2_CLOSEOUT.md)。
+> 本文保留本切片当时的测量、门禁状态和阶段边界。
+
 > 决策见 [ADR 0015](../adr/0015-rust-fft-scalar-path.md)。前序：[Rust 二期基线](RUST_PHASE2_BASELINE.md)。
 
 二期基线确认 FFT 是第一个可独立收敛的分歧边界：5 种长度的 `RealFft` 探针输入相同，

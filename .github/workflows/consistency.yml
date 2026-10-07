@@ -1,7 +1,7 @@
 name: Consistency
 
-# Rust phase 2 records current production numerics. Only the gates in
-# scripts/consistency/phase2-gates.json claim cross-platform bit equality (FFT, ADR 0015).
+# Rust phase 2 is closed for the versioned Release matrix (RUST_PHASE2_CLOSEOUT.md).
+# scripts/consistency/phase2-gates.json defines the exact PCM and kernel equality gates.
 # A is default; B controls C/C++ floating point only. RustFFT uses its scalar planner in both.
 # Each job rebuilds in place for diagnostic noninterference and bounded attribution.
 

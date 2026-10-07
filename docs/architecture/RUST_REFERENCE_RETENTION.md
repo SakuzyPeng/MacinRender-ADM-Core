@@ -8,8 +8,8 @@
 
 | 类别 | 位置 | 构建 | 风险 |
 |---|---|---|---|
-| 冻结参考（`frozen`） | `tests/reference/*_legacy.h`、`hoa/`、`live_vbap/`、`monitor/`、`triple_balance/`、`scene_numeric/` | 随 `MR_ADM_CORE_BUILD_TESTS` 默认编译，CI 每次运行 | 引用生产头文件，生产接口变化时需要跟着维护 |
-| 第三方对照（`third-party`） | SAF / libadm / libbw64 / libsamplerate / libebur128 / dr_wav 的参考测试 | 只在默认 OFF 的 `MR_ADM_BUILD_*_REFERENCE_TESTS` 下获取并构建 | 必需 CI 不运行，容易无声腐烂；由手动 `reference-tests.yml` 防腐 |
+| 冻结参考（`frozen`） | `tests/reference/*_legacy.h`、`hoa/`、`live_vbap/`、`monitor/`、`triple_balance/`、`scene_numeric/`、`wav_container/` | 随 `MR_ADM_CORE_BUILD_TESTS` 默认编译，CI 每次运行 | 引用生产头文件，生产接口变化时需要跟着维护 |
+| 第三方对照（`third-party`） | SAF / libear / libadm / libbw64 / libsamplerate / libebur128 / dr_wav 的参考测试 | 只在默认 OFF 的 `MR_ADM_BUILD_*_REFERENCE_TESTS` 下获取并构建 | 必需 CI 不运行，容易无声腐烂；由手动 `reference-tests.yml` 防腐 |
 
 两类参考都**不得**作为运行时回退，也不得进入发行产物。
 
@@ -50,7 +50,11 @@
 
 ## 当前状态
 
-全部 16 个单元均为 `retained`，三个条件都未满足：Rust 实现未发布，独立回归和二期需求尚未逐单元评审。逐单元的路径、测试和开关见登记表。
+2026-10-07 [二期限定矩阵已结项](RUST_PHASE2_CLOSEOUT.md)。本次决定继续保留全部 16 个单元、
+45 个文件，不批量解除登记表的三个退出条件。跨平台 PCM 相等不能替代各参考的旧算法行为、
+容器或错误路径回归；独立 Monitor API 也不在该矩阵内。正式发布与逐单元退役审查仍在后续版本
+周期完成，`released`、`independent-regression` 和 `phase2-cleared` 保持登记中的未解除状态。
+二期技术结项不等于参考退役批准。逐单元的路径、测试和开关见登记表。
 
 2026-10-06 在 Linux（GCC 13，Release，`55c9fa9` 之后的工作树）本地实测第三方对照：
 
