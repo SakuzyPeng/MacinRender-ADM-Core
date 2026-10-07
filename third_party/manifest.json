@@ -1436,7 +1436,7 @@
           "LICENSE.txt"
         ]
       },
-      "notes": "由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。"
+      "notes": "5.0.1 本地补丁（rust/vendor/rubato/PATCHES.md）：固定标量 sinc 插值，sinc/窗函数改用 mradm-math 可移植三角函数，移除 windowfunctions 依赖（ADR 0016）。"
     },
     {
       "name": "rust-syn-2.0.119",
@@ -1476,25 +1476,6 @@
           "LICENSE-APACHE",
           "LICENSE-MIT",
           "LICENSE-ZLIB"
-        ]
-      },
-      "notes": "由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。"
-    },
-    {
-      "name": "rust-windowfunctions-0.1.1",
-      "version": "0.1.1",
-      "cmake_key": null,
-      "purl": "pkg:cargo/windowfunctions@0.1.1",
-      "license": "MIT",
-      "purpose": "Rust 重采样的锁定依赖",
-      "distribution": "available",
-      "source": {
-        "type": "cargo",
-        "package": "windowfunctions",
-        "deps_dir": null,
-        "parent": null,
-        "license_files": [
-          "LICENSE.txt"
         ]
       },
       "notes": "由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。"
@@ -1557,6 +1538,26 @@
         ]
       },
       "notes": "移植 EBU libear 实际使用的算法；保留上游归属与球面采样来源，不链接 libear。"
+    },
+    {
+      "name": "musl-derived-rust-math",
+      "version": "musl-1.2.5-subset",
+      "cmake_key": null,
+      "purl": "pkg:generic/mradm-math@0.1.0",
+      "license": "MIT",
+      "purpose": "可移植 sin/cos（重采样 sinc 与窗函数系数表）",
+      "distribution": "available",
+      "source": {
+        "type": "local",
+        "repo_dir": "rust/crates/mradm-math",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "移植 musl 1.2.5 的 sin/cos 内核与中等区间约简（源自 FreeBSD msun，保留 Sun 许可声明）；只用 IEEE 基本运算，跨平台逐位一致。"
     }
   ]
 }

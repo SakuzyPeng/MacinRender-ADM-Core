@@ -14,6 +14,9 @@ mradm-wav = { path = "../mradm-wav" }
 mradm-adm = { path = "../mradm-adm" }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 
+[dev-dependencies]
+mradm-math = { path = "../mradm-math" }
+
 [features]
 diagnostics = ["mradm-dsp/diagnostics", "mradm-ear/diagnostics"]
 default = ["sofa"]

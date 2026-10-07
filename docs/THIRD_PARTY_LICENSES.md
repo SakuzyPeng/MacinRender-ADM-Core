@@ -103,13 +103,13 @@
 | `rust-audioadapter-5.0.0` @ 5.0.0 | Rust 重采样的锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
 | `rust-audioadapter-buffers-5.2.0` @ 5.2.0 | Rust 重采样的锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
 | `rust-audioadapter-sample-5.2.0` @ 5.2.0 | Rust 重采样的锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
-| `rust-rubato-5.0.1` @ 5.0.1 | Rust 重采样的锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
+| `rust-rubato-5.0.1` @ 5.0.1 | Rust 重采样的锁定依赖 | MIT OR Apache-2.0 | 可用 | 5.0.1 本地补丁（rust/vendor/rubato/PATCHES.md）：固定标量 sinc 插值，sinc/窗函数改用 mradm-math 可移植三角函数，移除 windowfunctions 依赖（ADR 0016）。 |
 | `rust-syn-2.0.119` @ 2.0.119 | Rust 重采样的锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
 | `rust-visibility-0.1.1` @ 0.1.1 | Rust 重采样的锁定依赖 | Zlib OR MIT OR Apache-2.0 | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
-| `rust-windowfunctions-0.1.1` @ 0.1.1 | Rust 重采样的锁定依赖 | MIT | 可用 | 由 rubato 及其缓冲适配器引入；实际编入范围由 Cargo 决定。 |
 | `rust-quick-xml-0.41.0` @ 0.41.0 | Rust ADM XML 解析和转义 | MIT | 可用 | 关闭所有可选 features，复用 memchr；不解析 DTD 或外部实体。 |
 | `libadm-common-definitions` @ 0.14.0 | 嵌入 Rust 的 ADM common definitions 标准引用数据 | Apache-2.0 | 可用 | 资源来自 libadm 0.14.0；保留来源、版权与哈希。仅复用数据，不链接 libadm。 |
 | `libear-derived-rust-ear` @ 2db69f8f-subset | Rust EAR 增益算法、布局、路由与 HOA 采样数据来源 | Apache-2.0 | 可用 | 移植 EBU libear 实际使用的算法；保留上游归属与球面采样来源，不链接 libear。 |
+| `musl-derived-rust-math` @ musl-1.2.5-subset | 可移植 sin/cos（重采样 sinc 与窗函数系数表） | MIT | 可用 | 移植 musl 1.2.5 的 sin/cos 内核与中等区间约简（源自 FreeBSD msun，保留 Sun 许可声明）；只用 IEEE 基本运算，跨平台逐位一致。 |
 
 <!-- END GENERATED DEPS -->
 

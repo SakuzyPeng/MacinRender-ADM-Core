@@ -1,0 +1,9 @@
+[package]
+name = "mradm-math"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+description = "Platform-independent sin/cos for reproducible DSP coefficient tables"
+
+[dependencies]

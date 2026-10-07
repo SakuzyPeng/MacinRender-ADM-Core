@@ -15,6 +15,7 @@
 - [Scene 算术规则统一](architecture/SCENE_ARITHMETIC_POLICY.md)
 - [Rust 二期基线与分歧定位](architecture/RUST_PHASE2_BASELINE.md)
 - [Rust 二期 FFT 收敛](architecture/RUST_PHASE2_FFT.md)
+- [Rust 二期重采样收敛](architecture/RUST_PHASE2_RESAMPLER.md)
 - [Rust EAR 算法迁移](architecture/RUST_EAR_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 - [Rust 落地与 SAF 替换路线图](architecture/RUST_SAF_REPLACEMENT_ROADMAP.md)
@@ -35,6 +36,7 @@
 
 - [ADR 0014：统一 Scene 的乘加舍入规则](adr/0014-scene-arithmetic-policy.md)
 - [ADR 0015：RustFFT 固定使用标量路径](adr/0015-rust-fft-scalar-path.md)
+- [ADR 0016：重采样固定标量插值与可移植三角函数](adr/0016-deterministic-resampling.md)
 
 ## 使用指南
 

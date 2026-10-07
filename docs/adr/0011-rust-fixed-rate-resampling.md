@@ -40,3 +40,6 @@ Cargo.lock、manifest、许可证文本、生成的许可证表与 SBOM 同步�
 设备库 miniaudio 内部的采样率适配属于设备后端，本决策不替换该部分。
 
 验收及测量限制见 [迁移记录](../architecture/RUST_RESAMPLER_MIGRATION.md)。
+
+> 2026-10-07 补充：[ADR 0016](0016-deterministic-resampling.md) 为跨平台逐位一致给 rubato 5.0.1 打了本地补丁
+> （`rust/vendor/rubato`：固定标量插值，sinc/窗函数改用 `mradm-math`）。本 ADR 的参数、时序与质量契约不变。
