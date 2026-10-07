@@ -82,6 +82,10 @@ FFT 单独测量（Linux x64，AVX2/FMA/AVX-512 CPU，rustfft 6.4.1 复数正变
 
 最慢的双耳 cloud 仍约为 33 倍实时。arm64 原 NEON 路径的代价需由 macOS 实测补充。
 
+后续[首批性能回收](RUST_PHASE2_PERFORMANCE.md)在保留本切片位模式的前提下，将独立 radix-4 列
+成批计算：常用长度的 FFT 耗时减少约 22%–33%（平台不同），本机双耳 cloud 端到端减少约 7%–8%。
+该补丁继续使用标量规划器和原有算术树，未重新启用 RustFFT 的运行时 SIMD 后端。
+
 ## 三平台验收
 
 [Consistency run 37557152120](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37557152120)

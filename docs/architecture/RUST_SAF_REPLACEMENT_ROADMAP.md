@@ -117,6 +117,9 @@ Rust 单元测试覆盖独立 double DFT、实际 FFT 长度、凸包/Voronoi、
 
 后续整数 BW64/WAVE I/O 迁移见 [Rust BW64 迁移](RUST_BW64_MIGRATION.md)，浮点 WAVE（移除 dr_wav）见 [Rust 浮点 WAVE 迁移](RUST_DR_WAV_MIGRATION.md)，`bext`/`ambi` 追加、布局重写、ADM chunk 读取与 export 写回见 [Rust WAVE 容器元数据迁移](RUST_WAV_CONTAINER_MIGRATION.md)；临时文件与替换编排仍在 C++。
 
+[首批性能回收](RUST_PHASE2_PERFORMANCE.md)已在相同位模式下优化 FFT 的独立列计算；三平台 A/B
+及诊断门禁仍为 78/78，本机双耳 cloud 端到端耗时减少约 7%–8%。后续优化继续同时验证原版位模式与性能。
+
 ## 参考实现退出
 
 - 单元 `saf`（`tests/reference/saf_reference_test.cpp`、`tests/reference/spreader_mr.c`、`tests/reference/spreader_mr.h`、`tests/reference/spreader_mr_internal.h`）：在默认 OFF 的 `MR_ADM_BUILD_SAF_REFERENCE_TESTS` 下编译，由 `mr_adm_saf_reference_tests` 比较。
