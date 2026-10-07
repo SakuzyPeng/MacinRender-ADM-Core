@@ -1,6 +1,7 @@
 # Rust SAF 子集替换与二期确定性路线
 
-> 2026-10-04：一期实现及三平台验证已完成，采用 Rust DSP 和纯 Rust SOFA 解析。跨平台逐位一致按用户决定留到二期。
+> 2026-10-07：一期迁移与二期限定矩阵均已验收。二期的 78 个 PCM 用例三平台逐位相同，
+> 并完成首批性能回收；最终范围、维护规则和后续独立任务见 [二期结项](RUST_PHASE2_CLOSEOUT.md)。
 
 ## 1. 一期范围
 
@@ -50,7 +51,9 @@ Live 双耳的字段渐变、cloud 合成及信号状态编排，并补齐双耳
 
 内置 KEMAR、原型和格型系数及 HOA 矩阵是约 1.7 MiB 的已提交二进制资源。`assets/manifest.json` 记录尺寸、来源和 SHA-256；`assets/NOTICE.txt` 保留 ISC/MIT 声明及数据提供者归属。正常构建不从 SAF 提取数据。
 
-## 2. 行为边界
+## 2. 一期验收时的行为边界
+
+以下保留一期迁移当时的边界；当前二期的位相等承诺以 §5 和结项记录为准。
 
 - 一期不复制旧 SAF 位模式，也不以新实现的跨平台位相等作为门禁。RustFFT 使用默认 SIMD，数学函数和 SVD 的跨平台确定性尚未承诺。
 - 同平台、同配置、同输入的重复渲染必须一致；分块、窗口、尾音和实时连续性继续满足原有契约。
@@ -102,16 +105,20 @@ Rust 单元测试覆盖独立 double DFT、实际 FFT 长度、凸包/Voronoi、
 
 重复全量验证还复现了原 SceneStream 空闲关闭丢唤醒：析构更新 quit 时未持有 queue_mutex。现已在同一锁内发布退出谓词，并增加并发反复创建/销毁及超时回归。
 
-## 5. 二期：跨平台逐位一致
+## 5. 二期：跨平台逐位一致（已结项）
 
 首批基线、实时回放和 Rust 分歧定位工具见 [Rust 二期基线](RUST_PHASE2_BASELINE.md)。已完成的切片：Scene 乘加舍入规则（[ADR 0014](../adr/0014-scene-arithmetic-policy.md)）与 RustFFT 固定标量路径（[ADR 0015](../adr/0015-rust-fft-scalar-path.md)，[二期 FFT 收敛](RUST_PHASE2_FFT.md)）；后者让 FFT 内核成为一致性 CI 的首批跨平台位相等门禁；重采样固定标量插值与可移植三角函数（[ADR 0016](../adr/0016-deterministic-resampling.md)，[二期重采样收敛](RUST_PHASE2_RESAMPLER.md)）；以及 OM spreader 固定分组预算与可移植数学函数（[ADR 0017](../adr/0017-deterministic-spreader.md)，[二期 OM spreader 收敛](RUST_PHASE2_SPREADER.md)）。
 
-目标仍是相同版本、输入与参数在 macOS arm64、Windows x64、Linux x64 上产生相同最终 float32 PCM，但以下项目不阻塞一期：
+相同源码、输入、事件和有效配置在 macOS arm64、Windows x64、Linux x64 上产生相同最终
+float32 PCM，已在锁定的 78 个用例中达成。完成项包括：
 
-- 建立确定性 FFT/数学参考路径，控制 SIMD/FMA、三角函数及系数生成。
-- 明确 SVD 简并子空间、排序与停止条件；固定 worker 分组及累加拓扑。
-- 覆盖保留的 libear 系数、增益、Rust 重采样和计量/归一化反馈链路。
-- 按 renderer/布局/语义/后处理组合恢复位相等门禁。
+- 统一 FFT 规划与乘加顺序，收敛重采样的系数生成和点积路径。
+- 固定 spreader 分组及累加拓扑，令 OM/SVD 的相关数学函数使用可移植实现。
+- 验证所测 EAR 系数/增益、重采样、计量/归一化反馈与实时设备前输出。
+- 为全部已验收 PCM 用例建立精确 id 门禁，补齐原版位模式不变的 FFT 性能优化。
+
+退化 SVD 的完整输入域、更多组合和矩阵之外的系统路径列为后续扩展；
+当前承诺不扩展为任意输入、编译器或设备的全局证明。完整范围见 [二期结项](RUST_PHASE2_CLOSEOUT.md)。
 
 一致性 CI 保存 A/B C++ 数值控制下的 PCM、构建记录与二期诊断检查点；同进程/新进程重复性、输入完整性与诊断无扰动性是硬门禁。ADR 0017 之后全部 78 个 PCM 用例与 FFT、三角函数、重采样、OM/spreader 内核三平台逐位相同，均按 `phase2-gates.json` 设为跨平台位相等门禁（[OM spreader 验收](RUST_PHASE2_SPREADER.md#三平台验收)）。一期专用的空跨平台门禁清单保留为历史记录。历史 SAF 清单和实验不改写：见 [原始定位](CONSISTENCY_LOCALIZATION.md)、[3D VBAP 定位](CONSISTENCY_VBAP_LOCALIZATION.md)。旧 run-localization.py 只适用于那些记录的 SAF 源码版本，会拒绝对当前 Rust 构建执行旧归因实验。
 
@@ -127,4 +134,4 @@ Rust 单元测试覆盖独立 double DFT、实际 FFT 长度、凸包/Voronoi、
 
 2026-10-06 修复参考测试在新版 Xcode 上的头文件兼容性：SAF 的 `saf_hrir.h` 在 `extern "C"` 内包含 `<complex>`，测试入口现显式提前包含该标准头。只调整包含依赖，参考算法、输入和误差阈值均不变；同步更新登记表中测试文件的 SHA-256。
 
-按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布，独立回归与二期需求待评审）。
+按[参考实现保留与退役](RUST_REFERENCE_RETENTION.md)的通用条件退役；登记与文件哈希见 [`tests/reference/retention.json`](../../tests/reference/retention.json)。当前状态：保留（Rust 实现尚未随正式 tag 发布；独立回归与逐单元退役审查仍须完成，二期结项不自动解除退出条件）。

@@ -1,5 +1,8 @@
 # Rust 二期：重采样收敛
 
+> 二期已按锁定矩阵结项，当前范围和维护规则见[结项记录](RUST_PHASE2_CLOSEOUT.md)。
+> 本文保留本切片当时的测量、门禁状态和阶段边界。
+
 > 决策见 [ADR 0016](../adr/0016-deterministic-resampling.md)。前序：[Rust 二期 FFT 收敛](RUST_PHASE2_FFT.md)、
 > [Rust 二期基线](RUST_PHASE2_BASELINE.md)。
 
@@ -84,4 +87,4 @@ cubic、截止 0.94，48→44.1 kHz 为 280 taps、44.1→48 kHz 为 256 taps）
 ## 剩余分歧
 
 剩余 2 个差异均为 OM spreader（`binaural-extent-spreader`、`-multi`），三个平台对都最早于
-`spreader/s0-g0.50-left.f32` 分歧，由下一个切片处理，见 [二期 OM spreader 收敛](RUST_PHASE2_SPREADER.md)。
+`spreader/s0-g0.50-left.f32` 分歧，后续已由 [OM spreader 切片](RUST_PHASE2_SPREADER.md)解决。此处保留重采样切片验收时的结果。

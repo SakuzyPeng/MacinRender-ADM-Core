@@ -13,10 +13,12 @@
 - [头部追踪与 OSC 跨仓库设计（原生接收接口／GUI 待适配）](architecture/HEAD_TRACKING_OSC.md)
 - [原生 OSC 头部姿态接收接口（C++／C ABI v1.40）](architecture/OSC_HEAD_TRACKING_API.md)
 - [Scene 算术规则统一](architecture/SCENE_ARITHMETIC_POLICY.md)
+- [Rust 二期结项：验收范围与维护契约](architecture/RUST_PHASE2_CLOSEOUT.md)
 - [Rust 二期基线与分歧定位](architecture/RUST_PHASE2_BASELINE.md)
 - [Rust 二期 FFT 收敛](architecture/RUST_PHASE2_FFT.md)
 - [Rust 二期重采样收敛](architecture/RUST_PHASE2_RESAMPLER.md)
 - [Rust 二期 OM spreader 收敛](architecture/RUST_PHASE2_SPREADER.md)
+- [Rust 二期 FFT 性能回收](architecture/RUST_PHASE2_PERFORMANCE.md)
 - [Rust 落地与 SAF 替换路线图](architecture/RUST_SAF_REPLACEMENT_ROADMAP.md)
 - [迁移参考实现的登记与退役条件](architecture/RUST_REFERENCE_RETENTION.md)
 

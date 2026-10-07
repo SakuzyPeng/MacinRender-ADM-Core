@@ -1,5 +1,8 @@
 # Rust 二期：OM spreader 收敛
 
+> 二期已按锁定矩阵结项，当前范围和维护规则见[结项记录](RUST_PHASE2_CLOSEOUT.md)。
+> 本文保留本切片当时的测量、门禁状态和阶段边界。
+
 > 决策见 [ADR 0017](../adr/0017-deterministic-spreader.md)。前序：[Rust 二期重采样收敛](RUST_PHASE2_RESAMPLER.md)、
 > [Rust 二期 FFT 收敛](RUST_PHASE2_FFT.md)、[Rust 二期基线](RUST_PHASE2_BASELINE.md)。
 
