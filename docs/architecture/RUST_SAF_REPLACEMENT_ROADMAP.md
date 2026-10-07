@@ -113,7 +113,7 @@ Rust 单元测试覆盖独立 double DFT、实际 FFT 长度、凸包/Voronoi、
 - 覆盖保留的 libear 系数、增益、Rust 重采样和计量/归一化反馈链路。
 - 按 renderer/布局/语义/后处理组合恢复位相等门禁。
 
-一致性 CI 保存 A/B C++ 数值控制下的 PCM、构建记录与二期诊断检查点；跨平台差异仅记录，同进程/新进程重复性、输入完整性与诊断无扰动性是硬门禁。一期专用的空跨平台门禁清单保留为历史记录。历史 SAF 清单和实验不改写：见 [原始定位](CONSISTENCY_LOCALIZATION.md)、[3D VBAP 定位](CONSISTENCY_VBAP_LOCALIZATION.md)。旧 run-localization.py 只适用于那些记录的 SAF 源码版本，会拒绝对当前 Rust 构建执行旧归因实验。
+一致性 CI 保存 A/B C++ 数值控制下的 PCM、构建记录与二期诊断检查点；同进程/新进程重复性、输入完整性与诊断无扰动性是硬门禁。ADR 0017 之后全部 78 个 PCM 用例与 FFT、三角函数、重采样、OM/spreader 内核三平台逐位相同，均按 `phase2-gates.json` 设为跨平台位相等门禁（[OM spreader 验收](RUST_PHASE2_SPREADER.md#三平台验收)）。一期专用的空跨平台门禁清单保留为历史记录。历史 SAF 清单和实验不改写：见 [原始定位](CONSISTENCY_LOCALIZATION.md)、[3D VBAP 定位](CONSISTENCY_VBAP_LOCALIZATION.md)。旧 run-localization.py 只适用于那些记录的 SAF 源码版本，会拒绝对当前 Rust 构建执行旧归因实验。
 
 后续整数 BW64/WAVE I/O 迁移见 [Rust BW64 迁移](RUST_BW64_MIGRATION.md)，浮点 WAVE（移除 dr_wav）见 [Rust 浮点 WAVE 迁移](RUST_DR_WAV_MIGRATION.md)，`bext`/`ambi` 追加、布局重写、ADM chunk 读取与 export 写回见 [Rust WAVE 容器元数据迁移](RUST_WAV_CONTAINER_MIGRATION.md)；临时文件与替换编排仍在 C++。
 

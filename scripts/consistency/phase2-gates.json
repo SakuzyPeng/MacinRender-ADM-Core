@@ -498,6 +498,18 @@
       "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch2",
       "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
       "reference": "docs/adr/0016-deterministic-resampling.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "binaural-extent-spreader",
+      "reason": "identical on all three platforms after the fixed group budget and portable libm (OM spreader)",
+      "reference": "docs/adr/0017-deterministic-spreader.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "binaural-extent-spreader-multi",
+      "reason": "identical on all three platforms after the fixed group budget and portable libm (OM spreader)",
+      "reference": "docs/adr/0017-deterministic-spreader.md"
     }
   ]
 }
