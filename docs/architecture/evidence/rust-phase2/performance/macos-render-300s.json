@@ -1,0 +1,495 @@
+{
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "repeats": 7,
+  "binaries": {
+    "legacy": "36bb755a4d61ed0500dfbc1a92a347b13bd88d47e8346bd80817294c82401635",
+    "candidate": "36bb755a4d61ed0500dfbc1a92a347b13bd88d47e8346bd80817294c82401635"
+  },
+  "runtime_libraries": {
+    "legacy": {
+      "libmr_adm_apple.dylib": "b1ea0a8e3baf940cfb50da3f23fffb8fdecfc4be64a72e90e8bb9526af3e5ae2",
+      "libmr_adm_audio.dylib": "dcc0975335d686ce72c940131a5533cd220e21708650f8eabd51db1244ecbc28",
+      "libmr_adm_c_api.1.9.1.dylib": "2a2f8314fb5d1f4b63c5be5b73bd3816af023df58f81d449047ed934c45ccbe0",
+      "libmr_adm_c_api.1.dylib": "2a2f8314fb5d1f4b63c5be5b73bd3816af023df58f81d449047ed934c45ccbe0",
+      "libmr_adm_c_api.dylib": "2a2f8314fb5d1f4b63c5be5b73bd3816af023df58f81d449047ed934c45ccbe0",
+      "libmr_adm_core.dylib": "a15230665ba98dc1ac0975f738a3d54c54cd17b0ca27f346b9f1dae44b288152",
+      "libmr_adm_engine.dylib": "4d70f085df0fad262cf20c9e32902ac6e70459bfa8de2d9cb368cd5091752579",
+      "libmr_adm_io.dylib": "5a0fbda33f829d16f0ecea48525d8ce1628d5d2008fcc4d267bc5a88d41a553b",
+      "libmr_adm_loudness.dylib": "1642e0fc0166b1fcb6a2c1e2ff364103962cbb38b0ec688e7b9748db37ff2b35",
+      "libmr_adm_metadata.dylib": "8d01e2319e8facb5c42e92b7eec96ddc609bd8561e9ad230a0772ac88f5a40e7",
+      "libmr_adm_peak.dylib": "17496b79091853145d6204bbae25bddb9275cfa61edf3a64e9544fc4815f9326",
+      "libmr_adm_realtime.dylib": "16bc236d8937a2b53ecaa34c29b2ecb12d7b8fe601afaceb9a8272607da86b9a",
+      "libmr_adm_render_binaural.dylib": "b6c46dfcd033d6549e87d3026ef30093105a64846bb181a5c248acb7665fcec1",
+      "libmr_adm_render_common.dylib": "4348c4924f23e7ac6c3742b35147163565744e69d24b98868d2d6914878907a4",
+      "libmr_adm_render_ear.dylib": "aec677d5581c8a3f9726a1d4ba3cfc773fbc8473fc754925b0ffb293128c2ac6",
+      "libmr_adm_render_hoa.dylib": "cbbfddceed336c0f4fc656bfdf5f7387ef9268766a1748291f66644492cc7170",
+      "libmr_adm_render_triple_balance.dylib": "e9edfcc50a4b5890428afefd5bdf7e1ba4cc351f2fd3d302d4a6d5d2fe1ee91d",
+      "libmr_adm_render_vbap.dylib": "a29df7d34fc029c5fc96b641f5e5746540b3cfd9b5442989adf9884575e1afcb",
+      "libmr_adm_renderer_factory.dylib": "1f856dc4a306bbea8a75110427c26b22a8930e45c04b3e165a8261ccc74cad51",
+      "libmradm_capi.1.9.1.dylib": "e836912773cdec8db06a21c5d59f421d6179fdedf593378cc90ea09885adb2b6",
+      "libmradm_capi.1.dylib": "e836912773cdec8db06a21c5d59f421d6179fdedf593378cc90ea09885adb2b6",
+      "libmradm_capi.dylib": "e836912773cdec8db06a21c5d59f421d6179fdedf593378cc90ea09885adb2b6"
+    },
+    "candidate": {
+      "libmr_adm_apple.dylib": "037a1cbaa9f602983eebf487ed9626d7e5af6ec0805d417520baa68e96457691",
+      "libmr_adm_audio.dylib": "dcc0975335d686ce72c940131a5533cd220e21708650f8eabd51db1244ecbc28",
+      "libmr_adm_c_api.1.9.1.dylib": "2a2f8314fb5d1f4b63c5be5b73bd3816af023df58f81d449047ed934c45ccbe0",
+      "libmr_adm_c_api.1.dylib": "2a2f8314fb5d1f4b63c5be5b73bd3816af023df58f81d449047ed934c45ccbe0",
+      "libmr_adm_c_api.dylib": "2a2f8314fb5d1f4b63c5be5b73bd3816af023df58f81d449047ed934c45ccbe0",
+      "libmr_adm_core.dylib": "8e3b5df28e69fd11e5d81a8fc41b895314faa57d85fd3b9339e6e983e0f87dcf",
+      "libmr_adm_engine.dylib": "4d70f085df0fad262cf20c9e32902ac6e70459bfa8de2d9cb368cd5091752579",
+      "libmr_adm_io.dylib": "5a0fbda33f829d16f0ecea48525d8ce1628d5d2008fcc4d267bc5a88d41a553b",
+      "libmr_adm_loudness.dylib": "9c7b42dcc027cb9d74859f844cf61239b45ec63494f784c28783e82d0528e1a2",
+      "libmr_adm_metadata.dylib": "8d01e2319e8facb5c42e92b7eec96ddc609bd8561e9ad230a0772ac88f5a40e7",
+      "libmr_adm_peak.dylib": "bd23bb8c5daf0b3bdbb3cc55f8b50a0d72f318d168dbd49d816ff98ec88ed38e",
+      "libmr_adm_realtime.dylib": "95042788e54f92ef6fc1242cdd3a5cf958f665bb3129bff0d5be74e5391c6094",
+      "libmr_adm_render_binaural.dylib": "b6c46dfcd033d6549e87d3026ef30093105a64846bb181a5c248acb7665fcec1",
+      "libmr_adm_render_common.dylib": "4348c4924f23e7ac6c3742b35147163565744e69d24b98868d2d6914878907a4",
+      "libmr_adm_render_ear.dylib": "aec677d5581c8a3f9726a1d4ba3cfc773fbc8473fc754925b0ffb293128c2ac6",
+      "libmr_adm_render_hoa.dylib": "cbbfddceed336c0f4fc656bfdf5f7387ef9268766a1748291f66644492cc7170",
+      "libmr_adm_render_triple_balance.dylib": "e9edfcc50a4b5890428afefd5bdf7e1ba4cc351f2fd3d302d4a6d5d2fe1ee91d",
+      "libmr_adm_render_vbap.dylib": "a29df7d34fc029c5fc96b641f5e5746540b3cfd9b5442989adf9884575e1afcb",
+      "libmr_adm_renderer_factory.dylib": "1f856dc4a306bbea8a75110427c26b22a8930e45c04b3e165a8261ccc74cad51",
+      "libmradm_capi.1.9.1.dylib": "b96bfca65b8329deac2cd126a3f47766dcb31a46cfe919c9cb3e998e2a2a3ebc",
+      "libmradm_capi.1.dylib": "b96bfca65b8329deac2cd126a3f47766dcb31a46cfe919c9cb3e998e2a2a3ebc",
+      "libmradm_capi.dylib": "b96bfca65b8329deac2cd126a3f47766dcb31a46cfe919c9cb3e998e2a2a3ebc"
+    }
+  },
+  "cases": [
+    {
+      "case": "ear-extent",
+      "fixture_sha256": "eba707b5492c61a7f41c940f9728c492393d26fde751652d304aa3d8126c36bd",
+      "arguments": [
+        "--renderer",
+        "ear",
+        "--output-layout",
+        "5.1"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 1.898285792209208,
+            "rss_bytes": 15630336
+          },
+          {
+            "seconds": 1.9621622087433934,
+            "rss_bytes": 15695872
+          },
+          {
+            "seconds": 1.8906989167444408,
+            "rss_bytes": 15728640
+          },
+          {
+            "seconds": 1.869366125203669,
+            "rss_bytes": 15646720
+          },
+          {
+            "seconds": 1.9849700001068413,
+            "rss_bytes": 15712256
+          },
+          {
+            "seconds": 1.911990957800299,
+            "rss_bytes": 15630336
+          },
+          {
+            "seconds": 1.9245380409993231,
+            "rss_bytes": 15646720
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 1.9281475422903895,
+            "rss_bytes": 15548416
+          },
+          {
+            "seconds": 2.585361042059958,
+            "rss_bytes": 15482880
+          },
+          {
+            "seconds": 1.8538402090780437,
+            "rss_bytes": 15581184
+          },
+          {
+            "seconds": 1.7798817921429873,
+            "rss_bytes": 15695872
+          },
+          {
+            "seconds": 1.7628257498145103,
+            "rss_bytes": 15712256
+          },
+          {
+            "seconds": 1.782012041658163,
+            "rss_bytes": 15613952
+          },
+          {
+            "seconds": 1.8269395418465137,
+            "rss_bytes": 15597568
+          }
+        ]
+      },
+      "pcm_sha256": {
+        "legacy": "640bf8ba139209f413928b8cbd8ac99085f26c6fa6414296159ee66cb16cf57a",
+        "candidate": "640bf8ba139209f413928b8cbd8ac99085f26c6fa6414296159ee66cb16cf57a"
+      },
+      "legacy": {
+        "seconds": 1.911990957800299,
+        "rss_bytes": 15646720
+      },
+      "candidate": {
+        "seconds": 1.8269395418465137,
+        "rss_bytes": 15597568
+      },
+      "time_ratio": 0.9555168314960888,
+      "rss_ratio": 0.9968586387434555
+    },
+    {
+      "case": "vbap-point",
+      "fixture_sha256": "c317edcd31f0068e1e32952061ae3fed94ec9cc38136bfd6436e4f3dee4cf10b",
+      "arguments": [
+        "--renderer",
+        "saf",
+        "--output-layout",
+        "5.1.4"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 2.178973666857928,
+            "rss_bytes": 14860288
+          },
+          {
+            "seconds": 2.092669750098139,
+            "rss_bytes": 15007744
+          },
+          {
+            "seconds": 2.1748024160042405,
+            "rss_bytes": 14811136
+          },
+          {
+            "seconds": 2.2348471670411527,
+            "rss_bytes": 14843904
+          },
+          {
+            "seconds": 2.2485037920996547,
+            "rss_bytes": 14942208
+          },
+          {
+            "seconds": 2.046705665998161,
+            "rss_bytes": 14876672
+          },
+          {
+            "seconds": 1.996234375052154,
+            "rss_bytes": 14876672
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 2.98854116583243,
+            "rss_bytes": 14942208
+          },
+          {
+            "seconds": 2.329077834263444,
+            "rss_bytes": 15040512
+          },
+          {
+            "seconds": 6.21893750037998,
+            "rss_bytes": 15024128
+          },
+          {
+            "seconds": 2.088397500105202,
+            "rss_bytes": 14942208
+          },
+          {
+            "seconds": 2.0073048751801252,
+            "rss_bytes": 15073280
+          },
+          {
+            "seconds": 2.051459665875882,
+            "rss_bytes": 14876672
+          },
+          {
+            "seconds": 2.0027654580771923,
+            "rss_bytes": 14778368
+          }
+        ]
+      },
+      "pcm_sha256": {
+        "legacy": "f1d85e34314055dbcb409aa20c50b7ffac32cfa68b6b9fbb263558766b2ae644",
+        "candidate": "f1d85e34314055dbcb409aa20c50b7ffac32cfa68b6b9fbb263558766b2ae644"
+      },
+      "legacy": {
+        "seconds": 2.1748024160042405,
+        "rss_bytes": 14876672
+      },
+      "candidate": {
+        "seconds": 2.088397500105202,
+        "rss_bytes": 14942208
+      },
+      "time_ratio": 0.9602699926838458,
+      "rss_ratio": 1.0044052863436124
+    },
+    {
+      "case": "binaural-point",
+      "fixture_sha256": "eae89db74d9196d4e69ab78f83debe3061c7c5e174b5f845143b5c70ee4390d0",
+      "arguments": [
+        "--renderer",
+        "saf-binaural",
+        "--output-layout",
+        "binaural"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 0.9170902078039944,
+            "rss_bytes": 36175872
+          },
+          {
+            "seconds": 0.9158664578571916,
+            "rss_bytes": 36601856
+          },
+          {
+            "seconds": 0.9179882919415832,
+            "rss_bytes": 36503552
+          },
+          {
+            "seconds": 0.954011166933924,
+            "rss_bytes": 36552704
+          },
+          {
+            "seconds": 0.9295667498372495,
+            "rss_bytes": 36454400
+          },
+          {
+            "seconds": 0.9191280417144299,
+            "rss_bytes": 36569088
+          },
+          {
+            "seconds": 0.9253632090985775,
+            "rss_bytes": 38174720
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 0.9303139173425734,
+            "rss_bytes": 36634624
+          },
+          {
+            "seconds": 0.8638337920419872,
+            "rss_bytes": 36421632
+          },
+          {
+            "seconds": 0.8764477916993201,
+            "rss_bytes": 36225024
+          },
+          {
+            "seconds": 0.8679827498272061,
+            "rss_bytes": 36536320
+          },
+          {
+            "seconds": 0.8861983329989016,
+            "rss_bytes": 36552704
+          },
+          {
+            "seconds": 0.8672144999727607,
+            "rss_bytes": 36487168
+          },
+          {
+            "seconds": 0.9150141659192741,
+            "rss_bytes": 36503552
+          }
+        ]
+      },
+      "pcm_sha256": {
+        "legacy": "422e3e045328de0c01a6063db03cbfd07b144d063cd413c12305b90e05ff30ef",
+        "candidate": "422e3e045328de0c01a6063db03cbfd07b144d063cd413c12305b90e05ff30ef"
+      },
+      "legacy": {
+        "seconds": 0.9191280417144299,
+        "rss_bytes": 36552704
+      },
+      "candidate": {
+        "seconds": 0.8764477916993201,
+        "rss_bytes": 36503552
+      },
+      "time_ratio": 0.953564413141504,
+      "rss_ratio": 0.9986553115194979
+    },
+    {
+      "case": "binaural-cloud",
+      "fixture_sha256": "eba707b5492c61a7f41c940f9728c492393d26fde751652d304aa3d8126c36bd",
+      "arguments": [
+        "--renderer",
+        "saf-binaural",
+        "--output-layout",
+        "binaural",
+        "--binaural-spread-mode",
+        "cloud"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 2.517466500401497,
+            "rss_bytes": 40648704
+          },
+          {
+            "seconds": 2.592827582731843,
+            "rss_bytes": 40468480
+          },
+          {
+            "seconds": 2.526507208123803,
+            "rss_bytes": 40534016
+          },
+          {
+            "seconds": 2.550072459038347,
+            "rss_bytes": 40337408
+          },
+          {
+            "seconds": 2.5797718330286443,
+            "rss_bytes": 40632320
+          },
+          {
+            "seconds": 2.524190458934754,
+            "rss_bytes": 40386560
+          },
+          {
+            "seconds": 2.579183875117451,
+            "rss_bytes": 40648704
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 2.3666275828145444,
+            "rss_bytes": 40370176
+          },
+          {
+            "seconds": 2.328697624616325,
+            "rss_bytes": 40271872
+          },
+          {
+            "seconds": 2.360919417347759,
+            "rss_bytes": 40468480
+          },
+          {
+            "seconds": 2.344392207916826,
+            "rss_bytes": 40648704
+          },
+          {
+            "seconds": 2.360453334171325,
+            "rss_bytes": 40615936
+          },
+          {
+            "seconds": 2.3599284579977393,
+            "rss_bytes": 40353792
+          },
+          {
+            "seconds": 2.3711547078564763,
+            "rss_bytes": 42319872
+          }
+        ]
+      },
+      "pcm_sha256": {
+        "legacy": "143359e4a46c7c8a3acd40f40f7081608b8ae9a9278611c4d58c73454aee2d1f",
+        "candidate": "143359e4a46c7c8a3acd40f40f7081608b8ae9a9278611c4d58c73454aee2d1f"
+      },
+      "legacy": {
+        "seconds": 2.550072459038347,
+        "rss_bytes": 40534016
+      },
+      "candidate": {
+        "seconds": 2.360453334171325,
+        "rss_bytes": 40468480
+      },
+      "time_ratio": 0.925641671790562,
+      "rss_ratio": 0.9983831851253031
+    },
+    {
+      "case": "binaural-spreader",
+      "fixture_sha256": "2c64d497ee346d961c1ecb727d0176e9fcc6f3d205fed5979c1ea0381432efb6",
+      "arguments": [
+        "--renderer",
+        "saf-binaural",
+        "--output-layout",
+        "binaural",
+        "--binaural-spread-mode",
+        "saf-spreader"
+      ],
+      "runs": {
+        "legacy": [
+          {
+            "seconds": 4.438103999942541,
+            "rss_bytes": 44007424
+          },
+          {
+            "seconds": 4.449859540909529,
+            "rss_bytes": 44138496
+          },
+          {
+            "seconds": 4.443943292368203,
+            "rss_bytes": 44253184
+          },
+          {
+            "seconds": 4.461397624574602,
+            "rss_bytes": 44023808
+          },
+          {
+            "seconds": 4.480596833396703,
+            "rss_bytes": 44384256
+          },
+          {
+            "seconds": 4.514804624952376,
+            "rss_bytes": 44089344
+          },
+          {
+            "seconds": 4.466239249799401,
+            "rss_bytes": 44072960
+          }
+        ],
+        "candidate": [
+          {
+            "seconds": 4.435469374991953,
+            "rss_bytes": 44105728
+          },
+          {
+            "seconds": 4.352352874819189,
+            "rss_bytes": 44187648
+          },
+          {
+            "seconds": 4.373803332913667,
+            "rss_bytes": 44187648
+          },
+          {
+            "seconds": 4.378270958084613,
+            "rss_bytes": 44351488
+          },
+          {
+            "seconds": 4.336828124709427,
+            "rss_bytes": 44597248
+          },
+          {
+            "seconds": 4.380240791942924,
+            "rss_bytes": 44482560
+          },
+          {
+            "seconds": 4.6471152496524155,
+            "rss_bytes": 44482560
+          }
+        ]
+      },
+      "pcm_sha256": {
+        "legacy": "838ebc888b67edba5fc928851139cde45e9115f5a9acb039bffbc040cf98d668",
+        "candidate": "838ebc888b67edba5fc928851139cde45e9115f5a9acb039bffbc040cf98d668"
+      },
+      "legacy": {
+        "seconds": 4.461397624574602,
+        "rss_bytes": 44089344
+      },
+      "candidate": {
+        "seconds": 4.378270958084613,
+        "rss_bytes": 44351488
+      },
+      "time_ratio": 0.981367572791068,
+      "rss_ratio": 1.00594574507618
+    }
+  ]
+}

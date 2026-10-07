@@ -1,0 +1,2133 @@
+{
+  "schema": "mradm.phase2.performance-validation.v1",
+  "commit": "666fe49fd4da0a2b6f454e3c19220f4978adee62",
+  "source_sha256": "aef16671d84baf9a5a2561e9d6ec41cb13d5b9d04c26dbcb05db81210e111b31",
+  "baseline_commit": "c182872",
+  "ci": {
+    "consistency": {
+      "run": 37588314154,
+      "conclusion": "success",
+      "url": "https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37588314154"
+    },
+    "correctness": {
+      "run": 37588322470,
+      "conclusion": "success"
+    },
+    "quality": {
+      "run": 37588335394,
+      "conclusion": "success"
+    }
+  },
+  "reports": {
+    "consistency-report-a-diagnostic.json": {
+      "sha256": "65af9c52a6e0e0579f908cf5f7e98b60df39b0988fec277cae400fcfd52a4d35",
+      "identical": 78,
+      "differing": 0,
+      "numerical_gate": {
+        "failures": [],
+        "gates": [
+          {
+            "kind": "kernel",
+            "pattern": "fft-twiddles.20-table.f32",
+            "reason": "f32 twiddles of every power-of-two length up to 32768; the scalar FFT is deterministic given these constants",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "fft-[0-9]*",
+            "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "ear-*.20-fir.f32",
+            "reason": "EAR decorrelation FIRs use the same scalar f64 FFT; identical on all platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_FFT.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "trig.*",
+            "reason": "portable musl-derived sin/cos behind the resampler's sinc and window tables",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "resampler-*",
+            "reason": "patched rubato: scalar sinc interpolation and portable sinc/window tables",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "om-*",
+            "reason": "OM covariance mixing: nalgebra SVD with simba's pure-Rust libm path (libm-force)",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "spreader.*",
+            "reason": "OM spreader geometry, Voronoi weights, filterbank coefficients and processing on portable libm",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-cartesian-cloud",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-extent-cloud",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-point",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-directspeakers",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-extent",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-hoa-input",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-point-postproc",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-bed",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-cartesian",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-extent",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-hoa",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-loudness-minus23",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-peak-minus6",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-window",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "hoa-hoa3-cartesian",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "hoa-hoa3-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1_4-cartesian",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1_4-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-cloud",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-rotated",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-hoa-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "triple-222",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "triple-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "triple-window",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-bed",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-window",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-extent-spreader",
+            "reason": "identical on all three platforms after the fixed group budget and portable libm (OM spreader)",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-extent-spreader-multi",
+            "reason": "identical on all three platforms after the fixed group budget and portable libm (OM spreader)",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          }
+        ]
+      }
+    },
+    "consistency-report-a.json": {
+      "sha256": "7c37b18ae822796f76296934e6ae26b5dffc868cdd7964ed8483ca00c52e198b",
+      "identical": 78,
+      "differing": 0,
+      "numerical_gate": {
+        "failures": [],
+        "gates": [
+          {
+            "kind": "kernel",
+            "pattern": "fft-twiddles.20-table.f32",
+            "reason": "f32 twiddles of every power-of-two length up to 32768; the scalar FFT is deterministic given these constants",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "fft-[0-9]*",
+            "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "ear-*.20-fir.f32",
+            "reason": "EAR decorrelation FIRs use the same scalar f64 FFT; identical on all platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_FFT.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "trig.*",
+            "reason": "portable musl-derived sin/cos behind the resampler's sinc and window tables",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "resampler-*",
+            "reason": "patched rubato: scalar sinc interpolation and portable sinc/window tables",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "om-*",
+            "reason": "OM covariance mixing: nalgebra SVD with simba's pure-Rust libm path (libm-force)",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "spreader.*",
+            "reason": "OM spreader geometry, Voronoi weights, filterbank coefficients and processing on portable libm",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-cartesian-cloud",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-extent-cloud",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-point",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-directspeakers",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-extent",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-hoa-input",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-point-postproc",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-bed",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-cartesian",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-extent",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-hoa",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-loudness-minus23",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-peak-minus6",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-window",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "hoa-hoa3-cartesian",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "hoa-hoa3-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1_4-cartesian",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1_4-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-cloud",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-rotated",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-hoa-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "triple-222",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "triple-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "triple-window",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-bed",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-window",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-extent-spreader",
+            "reason": "identical on all three platforms after the fixed group budget and portable libm (OM spreader)",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-extent-spreader-multi",
+            "reason": "identical on all three platforms after the fixed group budget and portable libm (OM spreader)",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          }
+        ]
+      }
+    },
+    "consistency-report-b-diagnostic.json": {
+      "sha256": "72487253492df286ce31da40907c933291909341f322cd2a2455e10ee3f519a0",
+      "identical": 78,
+      "differing": 0,
+      "numerical_gate": {
+        "failures": [],
+        "gates": [
+          {
+            "kind": "kernel",
+            "pattern": "fft-twiddles.20-table.f32",
+            "reason": "f32 twiddles of every power-of-two length up to 32768; the scalar FFT is deterministic given these constants",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "fft-[0-9]*",
+            "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "ear-*.20-fir.f32",
+            "reason": "EAR decorrelation FIRs use the same scalar f64 FFT; identical on all platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_FFT.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "trig.*",
+            "reason": "portable musl-derived sin/cos behind the resampler's sinc and window tables",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "resampler-*",
+            "reason": "patched rubato: scalar sinc interpolation and portable sinc/window tables",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "om-*",
+            "reason": "OM covariance mixing: nalgebra SVD with simba's pure-Rust libm path (libm-force)",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "spreader.*",
+            "reason": "OM spreader geometry, Voronoi weights, filterbank coefficients and processing on portable libm",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-cartesian-cloud",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-extent-cloud",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-point",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-directspeakers",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-extent",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-hoa-input",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-point-postproc",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-bed",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-cartesian",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-extent",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-hoa",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-loudness-minus23",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-peak-minus6",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-window",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "hoa-hoa3-cartesian",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "hoa-hoa3-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1_4-cartesian",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1_4-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-cloud",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-rotated",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-hoa-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "triple-222",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "triple-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "triple-window",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-bed",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-window",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-extent-spreader",
+            "reason": "identical on all three platforms after the fixed group budget and portable libm (OM spreader)",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-extent-spreader-multi",
+            "reason": "identical on all three platforms after the fixed group budget and portable libm (OM spreader)",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          }
+        ]
+      }
+    },
+    "consistency-report-b.json": {
+      "sha256": "0da9005b502709f0ae44e04f5ccabbf29e24da8bfb4ec1332d75f85bbaf83501",
+      "identical": 78,
+      "differing": 0,
+      "numerical_gate": {
+        "failures": [],
+        "gates": [
+          {
+            "kind": "kernel",
+            "pattern": "fft-twiddles.20-table.f32",
+            "reason": "f32 twiddles of every power-of-two length up to 32768; the scalar FFT is deterministic given these constants",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "fft-[0-9]*",
+            "reason": "RealFft forward/inverse on RustFFT's scalar planner (no run-time SIMD dispatch, no FMA)",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "ear-*.20-fir.f32",
+            "reason": "EAR decorrelation FIRs use the same scalar f64 FFT; identical on all platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_FFT.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "trig.*",
+            "reason": "portable musl-derived sin/cos behind the resampler's sinc and window tables",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "resampler-*",
+            "reason": "patched rubato: scalar sinc interpolation and portable sinc/window tables",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "om-*",
+            "reason": "OM covariance mixing: nalgebra SVD with simba's pure-Rust libm path (libm-force)",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          },
+          {
+            "kind": "kernel",
+            "pattern": "spreader.*",
+            "reason": "OM spreader geometry, Voronoi weights, filterbank coefficients and processing on portable libm",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-cartesian-cloud",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-extent-cloud",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-point",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-directspeakers",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-extent",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-hoa-input",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-5_1-point-postproc",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-bed",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-cartesian",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-extent",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-hoa",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-loudness-minus23",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-peak-minus6",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "ear-window",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "hoa-hoa3-cartesian",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "hoa-hoa3-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1_4-cartesian",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "saf-5_1_4-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-cloud",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-rotated",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-device-dsp-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-hoa-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar FFT path",
+            "reference": "docs/adr/0015-rust-fft-scalar-path.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fixed-epoch1",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fixed-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-4+7+0-cloud0-48000-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "triple-222",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "triple-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "triple-window",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-bed",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-extent",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-point",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "vbap-window",
+            "reason": "identical on all three platforms since the phase-two baseline",
+            "reference": "docs/architecture/RUST_PHASE2_BASELINE.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-44100-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud0-48000-44100-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-44100-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-binaural-binaural-cloud1-48000-44100-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-44100-48000-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fixed-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch1",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "scene-vbap-0+2+0-cloud0-48000-44100-fragmented-epoch2",
+            "reason": "identical on all three platforms after the scalar resampler and portable sin/cos",
+            "reference": "docs/adr/0016-deterministic-resampling.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-extent-spreader",
+            "reason": "identical on all three platforms after the fixed group budget and portable libm (OM spreader)",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          },
+          {
+            "kind": "case",
+            "pattern": "binaural-extent-spreader-multi",
+            "reason": "identical on all three platforms after the fixed group budget and portable libm (OM spreader)",
+            "reference": "docs/adr/0017-deterministic-spreader.md"
+          }
+        ]
+      }
+    }
+  },
+  "local": {
+    "cpu": "Apple M4 Pro",
+    "debug_tests": "71/71",
+    "fft_column_tests": [
+      "f32/f64 raw-bit comparisons, Debug and Release",
+      "both directions, custom column widths, signed zeros, underflow, cancellation"
+    ],
+    "rust_quality": "fmt and Clippy including all features passed",
+    "cpp_quality": "format, clang-tidy and cppcheck passed",
+    "c_abi_exports": 139,
+    "private_ffi_functions": 209,
+    "private_ffi_structs": 65,
+    "retained_reference_units": 16,
+    "frozen_reference_hashes": 45,
+    "restored_release_configuration": {
+      "MR_ADM_CORE_USE_INSTALLED_DEPS": "ON",
+      "MR_ADM_ENABLE_SOFA": "ON",
+      "MR_ADM_STRICT_FP": "OFF",
+      "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF"
+    }
+  },
+  "evidence_sha256": {
+    "fft-performance-linux.json": "5c9980c84e810c3198418ba59e9278cf4f18b5f2ddc27bd2a224eb9642bc6a52",
+    "fft-performance-m4pro.json": "5d91e16b530536718d7c1bb7de99f724f602ff847f74bcf1fb988ce258f54e10",
+    "fft-performance-macos.json": "981fef23e58289eddca754bd215139e8ea7410acdade455fda2662b168809e34",
+    "fft-performance-windows.json": "58f64305bb6b133ccf5e7968446c4963a1219c76a41a4ee89d1710a5e63c1c00",
+    "macos-before-after-bits.json": "197709bc99d32f585a16f872c871cd0eac9faebd52a9f868e2da26373b55082e",
+    "macos-render-300s.json": "e7ca047caefb8bef6bacaacb649671f67aa15d3c323449c1f81be6c1f3127716",
+    "macos-render-60s.json": "b07498cf2627e7c4f9eb05e4a29b461fba23e5aa213698d90adacab85ce2fa76"
+  }
+}
