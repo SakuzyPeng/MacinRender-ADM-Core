@@ -105,7 +105,8 @@ def scene_cases():
         {'sample': 5003, 'field': 'head_locked', 'value': False, 'ramp': 0},
     ]
     for backend, layout, cloud in variants:
-        for input_rate, output_rate in [(48000, 48000), (48000, 44100), (44100, 48000)]:
+        for input_rate, output_rate in [(48000, 48000), (48000, 44100), (44100, 48000),
+                                        (96000, 96000), (48000, 96000), (96000, 48000)]:
             # Multichannel conversion is represented by the same VBAP kernel's stereo cases.
             if layout == '4+7+0' and input_rate != output_rate:
                 continue
@@ -131,6 +132,11 @@ def scene_cases():
 
 
 FFT_SIZES = (256, 512, 1024, 2048, 4096, 8192, 16384, 32768)
+RESAMPLER_RATES = ((48000, 48000), (48000, 44100), (44100, 48000), (96000, 96000),
+                   (48000, 96000), (96000, 48000), (48000, 192000), (192000, 48000))
+OM_EDGE_CASES = ('zero', 'repeated', 'rank-one', 'antiphase', 'near-rank-one', 'tiny',
+                 'complex-rank-one', 'floor-adjacent')
+HRTF_PROBE_SIZES = (256, 1024)
 
 
 def kernel_outputs():
@@ -141,8 +147,15 @@ def kernel_outputs():
     names += [f'ear-{layout}.{part}' for layout in ('0+5+0', '4+7+0', '9+10+3') for part in ('10-layout.f64', '20-fir.f32')]
     names += [f'om-{i}.{part}' for i in range(4)
               for part in ('10-input.f32', '20-real.f32', '30-complex.c32', '40-residual.f32')]
-    names += [f'resampler-{a}-{b}.{part}' for a, b in ((48000, 48000), (48000, 44100), (44100, 48000))
+    names += [f'resampler-{a}-{b}.{part}' for a, b in RESAMPLER_RATES
               for part in ('10-input.f32', '20-output.f32')]
+    names += [f'om-edge-{name}.{part}' for name in OM_EDGE_CASES
+              for part in ('10-input.f32', '20-real.f32', '30-complex.c32', '40-residual.f32')]
+    names += [f'hrtf-{size}.{part}' for size in HRTF_PROBE_SIZES for part in
+              ('10-directions.f32', '11-hrir.f32', '12-queries.f32', '13-parameters.i32',
+               '20-grid-weights.f32', '21-grid-indices.i32', '30-spectra.c32',
+               '40-quantized.c32', '41-magnitudes.f32', '42-complex-sum.c32',
+               '43-scales.f32', '50-continuous.c32')]
     names += [f'hptf-{rate}.{part}' for rate in (44100, 48000) for part in ('10-input.f64', '20-coefficients.f32')]
     names += ['trig.10-input.f64', 'trig.20-sin.f64', 'trig.30-cos.f64']
     names += ['spreader.10-input.f32', 'spreader.20-voronoi.f32', 'spreader.30-fir.c32', 'spreader.40-output.f32']

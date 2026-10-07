@@ -4,6 +4,8 @@ use mradm_dsp::{
     spreader::Spreader,
 };
 use std::{fs, io::Write, path::Path};
+#[path = "phase2/coverage.rs"]
+mod coverage;
 fn floats(path: &Path, name: &str, values: &[f32]) {
     assert!(!values.is_empty() && values.iter().all(|v| v.is_finite()));
     let mut out = fs::File::create(path.join(name)).unwrap();
@@ -17,6 +19,14 @@ fn doubles(path: &Path, name: &str, values: &[f64]) {
     let mut out = fs::File::create(path.join(name)).unwrap();
     for v in values {
         out.write_all(&v.to_bits().to_le_bytes()).unwrap();
+    }
+    out.flush().unwrap();
+}
+fn integers(path: &Path, name: &str, values: &[i32]) {
+    assert!(!values.is_empty());
+    let mut out = fs::File::create(path.join(name)).unwrap();
+    for value in values {
+        out.write_all(&value.to_le_bytes()).unwrap();
     }
     out.flush().unwrap();
 }
@@ -195,9 +205,19 @@ fn run(out: &Path) {
         output.extend_from_slice(&block);
     }
     floats(out, "spreader.40-output.f32", &output);
+    coverage::run(out);
     // Leave the OM/spreader scope: later kernels have no internal checkpoints of their own.
     mradm_dsp::diagnostics::scope("");
-    for (input_rate, output_rate) in [(48000, 48000), (48000, 44100), (44100, 48000)] {
+    for (input_rate, output_rate) in [
+        (48000, 48000),
+        (48000, 44100),
+        (44100, 48000),
+        (96000, 96000),
+        (48000, 96000),
+        (96000, 48000),
+        (48000, 192000),
+        (192000, 48000),
+    ] {
         let input = signal(2051 * 2);
         let mut resampler = Resampler::new(2, input_rate, output_rate).unwrap();
         let mut pcm = Vec::new();

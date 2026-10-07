@@ -510,6 +510,246 @@
       "pattern": "binaural-extent-spreader-multi",
       "reason": "identical on all three platforms after the fixed group budget and portable libm (OM spreader)",
       "reference": "docs/adr/0017-deterministic-spreader.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-96000-96000-fixed-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-96000-96000-fixed-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-96000-96000-fragmented-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-96000-96000-fragmented-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-48000-96000-fixed-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-48000-96000-fixed-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-48000-96000-fragmented-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-48000-96000-fragmented-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-96000-48000-fixed-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-96000-48000-fixed-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-96000-48000-fragmented-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-0+2+0-cloud0-96000-48000-fragmented-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-4+7+0-cloud0-96000-96000-fixed-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-4+7+0-cloud0-96000-96000-fixed-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-4+7+0-cloud0-96000-96000-fragmented-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-4+7+0-cloud0-96000-96000-fragmented-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-96000-96000-fixed-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-96000-96000-fixed-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-96000-96000-fragmented-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-96000-96000-fragmented-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-48000-96000-fixed-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-48000-96000-fixed-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-48000-96000-fragmented-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-48000-96000-fragmented-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-96000-48000-fixed-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-96000-48000-fixed-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-96000-48000-fragmented-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud0-96000-48000-fragmented-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-96000-96000-fixed-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-96000-96000-fixed-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-96000-96000-fragmented-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-96000-96000-fragmented-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-48000-96000-fixed-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-48000-96000-fixed-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-48000-96000-fragmented-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-48000-96000-fragmented-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-96000-48000-fixed-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-96000-48000-fixed-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-96000-48000-fragmented-epoch1",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-binaural-binaural-cloud1-96000-48000-fragmented-epoch2",
+      "reason": "96 kHz follow-up matrix: HRTF preparation, rate conversion and Scene state contracts",
+      "reference": "docs/architecture/RUST_COVERAGE_EXTENSION.md"
     }
   ]
 }
