@@ -12,6 +12,7 @@ crate-type = ["staticlib", "rlib"]
 mradm-ear = { path = "../mradm-ear" }
 mradm-wav = { path = "../mradm-wav" }
 mradm-adm = { path = "../mradm-adm" }
+mradm-osc = { path = "../mradm-osc" }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
 
 [dev-dependencies]

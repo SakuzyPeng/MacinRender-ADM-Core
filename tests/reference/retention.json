@@ -393,6 +393,29 @@
         "tests/reference/libear/benchmark.cpp": "5108d0b9047ac1c4d380d0261542ed72e73e3f6142e037be7afce1eec4867d8c",
         "tests/reference/libear/reference_test.cpp": "80f66f344c82510c11c204802af0153748b517975953e910196c5285c410d2f1"
       }
+    },
+    {
+      "id": "osc_protocol",
+      "kind": "frozen",
+      "migration_doc": "docs/architecture/RUST_OSC_PROTOCOL_MIGRATION.md",
+      "accepted": "2026-10-08",
+      "baseline_commit": "a125ab7d1fcb2527f46265088fdf4b5c2aa3645b",
+      "provenance": "tests/reference/osc_protocol/provenance.json",
+      "cmake_option": null,
+      "tests": [
+        "mr_adm_osc_protocol_reference_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/osc_protocol/legacy.h": "e8d55bc7f7fef6632f9560d26c0c8a325fd885dcbd315a44f6da6fc8d65eb815",
+        "tests/reference/osc_protocol/provenance.json": "95d01cdd8942e9bdb64c7a3a48bcddabb8070d0457bb3b9b38bf653e66918e7e"
+      }
     }
   ]
 }

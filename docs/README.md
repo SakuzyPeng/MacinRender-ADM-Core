@@ -38,6 +38,7 @@
 - [Rust Live VBAP 混音与独立渐变迁移](architecture/RUST_LIVE_VBAP_MIGRATION.md)
 - [Rust Meter 迁移记录](architecture/RUST_METER_MIGRATION.md)
 - [Rust Monitor 淡化、seek 过渡与 Peak/RMS 迁移](architecture/RUST_MONITOR_DSP_MIGRATION.md)
+- [Rust PoseBridge OSC 协议解析迁移](architecture/RUST_OSC_PROTOCOL_MIGRATION.md)
 - [Rust 峰值保护与实时增益迁移](architecture/RUST_OUTPUT_DSP_MIGRATION.md)
 - [Rust 共享 PCM 混音与状态迁移](architecture/RUST_PCM_MIX_MIGRATION.md)
 - [Rust 重采样迁移](architecture/RUST_RESAMPLER_MIGRATION.md)

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <optional>
 #include <span>
@@ -8,6 +7,8 @@
 #include <string_view>
 
 #include "adm/head_tracking.h"
+
+#include "osc_ffi.h"
 
 namespace mradm::realtime {
 
@@ -26,23 +27,20 @@ struct HeadTrackingMessage {
 };
 
 // Ordering applies to accepted poses only; telemetry cannot retire a pose stream.
+// The state machine is Rust mradm-osc; this object only owns its plain state.
 class OscSourceOrder {
   public:
     [[nodiscard]] bool accept(const HeadTrackingTiming& timing) noexcept;
     [[nodiscard]] bool retired(std::uint64_t instance_id) const noexcept;
-    [[nodiscard]] std::uint64_t last_gap() const noexcept { return last_gap_; }
+    [[nodiscard]] std::uint64_t last_gap() const noexcept { return state_.last_gap; }
 
   private:
-    HeadTrackingTiming last_;
-    HeadTrackingTiming clock_;
-    std::array<std::uint64_t, 16> retired_{};
-    std::size_t retired_next_{0};
-    std::uint64_t last_gap_{0};
+    MradmOscSourceOrder state_{};
 };
 
 [[nodiscard]] bool valid_source_id(std::string_view value) noexcept;
-// Current protocol only, one complete message per datagram, at most 8 KiB.
-// Strings/JSON may allocate on the background receiver; never call in an audio callback.
+// Decoded by Rust mradm-osc: current protocol only, one complete message per datagram, at most 8 KiB.
+// Strings may allocate on the background receiver; never call in an audio callback.
 [[nodiscard]] std::optional<HeadTrackingMessage> decode_head_tracking_osc(std::span<const std::byte> data) noexcept;
 
 } // namespace mradm::realtime

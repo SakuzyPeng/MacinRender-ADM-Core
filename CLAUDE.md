@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 项目长期方向是平台化重构（不是简单的 CLI 重写）：见 `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md`。
 
-**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）和 WAVE/RF64/BW64 样本读写与容器元数据（原 libbw64 / dr_wav / C++ chunk 改写）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度、输出文件的临时文件/替换编排与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014 / 0015 / 0016 / 0017）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。二期已按锁定矩阵结项（见 `docs/architecture/RUST_PHASE2_CLOSEOUT.md`）：macOS arm64 / Linux x64 / Windows x64 的全部 78 个 PCM 用例逐位相同并设为门禁。完成切片包括 Scene `scene-separate-v1`（ADR 0014）、RustFFT 标量规划器（ADR 0015）、重采样固定归约及可移植三角函数（ADR 0016）、OM spreader 固定分组与可移植数学函数（ADR 0017），以及保持每列算术树的 FFT 独立列优化。后续覆盖已扩展到 118 个精确 PCM id 和 8 个内核模式（123 个文件），新增 96 kHz Scene、96/192 kHz 重采样、HRTF 边界及退化 OM 输入（见 `RUST_COVERAGE_EXTENSION.md`）；其余 10 个内核文件继续观察，只有平台 libm 的 f64 twiddle 列仍有差异。新增 PCM 用例必须同步加入门禁（`phase2_tools_test.py` 强制）；不得把当前矩阵扩展为任意输入或工具链的全局承诺。dr_flac 按用户决定暂缓；覆盖继续按批次扩展，进一步优化与参考退役分别推进。
+**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）、WAVE/RF64/BW64 样本读写与容器元数据（原 libbw64 / dr_wav / C++ chunk 改写）和 PoseBridge OSC 协议解析（`mradm-osc`，见 `RUST_OSC_PROTOCOL_MIGRATION.md`）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度（含 OSC 头追踪的 UDP 收发与快照）、输出文件的临时文件/替换编排与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014 / 0015 / 0016 / 0017）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。二期已按锁定矩阵结项（见 `docs/architecture/RUST_PHASE2_CLOSEOUT.md`）：macOS arm64 / Linux x64 / Windows x64 的全部 78 个 PCM 用例逐位相同并设为门禁。完成切片包括 Scene `scene-separate-v1`（ADR 0014）、RustFFT 标量规划器（ADR 0015）、重采样固定归约及可移植三角函数（ADR 0016）、OM spreader 固定分组与可移植数学函数（ADR 0017），以及保持每列算术树的 FFT 独立列优化。后续覆盖已扩展到 118 个精确 PCM id 和 8 个内核模式（123 个文件），新增 96 kHz Scene、96/192 kHz 重采样、HRTF 边界及退化 OM 输入（见 `RUST_COVERAGE_EXTENSION.md`）；其余 10 个内核文件继续观察，只有平台 libm 的 f64 twiddle 列仍有差异。新增 PCM 用例必须同步加入门禁（`phase2_tools_test.py` 强制）；不得把当前矩阵扩展为任意输入或工具链的全局承诺。dr_flac 按用户决定暂缓；覆盖继续按批次扩展，进一步优化与参考退役分别推进。
 
 ## 常用构建与测试命令
 
@@ -140,7 +140,7 @@ clang-tidy 依赖 `compile_commands.json`，必须先 `cmake --preset debug`。m
 
 依赖通过 `cmake/MRDependencies.cmake` 的 `mr_adm_core_find_or_fetch()` 统一接入（`find_package(CONFIG)` 优先，FetchContent 兜底）。新增 C/C++ 依赖**必须**走该函数，不要在 `CMakeLists.txt` 散落 `FetchContent_Declare`（ADR 0004）；新增 Rust 依赖写进 `rust/Cargo.toml` 的 `[workspace.dependencies]`（精确版本 `=x.y.z`）并更新 `Cargo.lock` 与许可证清单。
 
-当前生产 C/C++ 第三方依赖：dr_flac、libFLAC、libopus、miniaudio、CLI11、spdlog/fmt、nlohmann_json、tl-expected，可选 IAMF AOM bridge。Rust 依赖：realfft/rustfft（`rust/vendor/rustfft` 保持位模式的列优化补丁）、nalgebra（`libm-force`，ADR 0017）、libm、ebur128、rubato（`rust/vendor/rubato` 本地补丁，ADR 0016）、sofar（`rust/vendor/sofar` 本地补丁）、quick-xml。`mradm-ear` 是移植自 libear 的项目内 crate（Apache-2.0，来源与数据登记在 crate 的 `LICENSE` / `NOTICE.txt` / `PROVENANCE.json`），`mradm-math` 是移植自 musl 的可移植 sin/cos（MIT，同样登记 `NOTICE.txt` / `PROVENANCE.json`），都不是外部依赖。生产构建不需要 Boost / vcpkg。
+当前生产 C/C++ 第三方依赖：dr_flac、libFLAC、libopus、miniaudio、CLI11、spdlog/fmt、nlohmann_json、tl-expected，可选 IAMF AOM bridge。Rust 依赖：realfft/rustfft（`rust/vendor/rustfft` 保持位模式的列优化补丁）、nalgebra（`libm-force`，ADR 0017）、libm、ebur128、rubato（`rust/vendor/rubato` 本地补丁，ADR 0016）、sofar（`rust/vendor/sofar` 本地补丁）、quick-xml、serde_json（只开 `std`、无类型 `Value`，PoseBridge 遥测）。`mradm-ear` 是移植自 libear 的项目内 crate（Apache-2.0，来源与数据登记在 crate 的 `LICENSE` / `NOTICE.txt` / `PROVENANCE.json`），`mradm-math` 是移植自 musl 的可移植 sin/cos（MIT，同样登记 `NOTICE.txt` / `PROVENANCE.json`），都不是外部依赖。生产构建不需要 Boost / vcpkg。
 
 关键开关：
 
@@ -208,14 +208,16 @@ mradm-math  #![forbid(unsafe_code)]；无依赖，移植自 musl 的 sin/cos（�
             |x| < 2^20·π/2），供 vendored rubato 的 sinc/窗函数表使用
 mradm-ear   #![forbid(unsafe_code)]；移植自 libear 2db69f8f：标准布局、nominal/effective 拓扑、Objects extent、
             DirectSpeakers、HOA AllRAD、512-tap FIR 设计（MT19937）；实现版本 rust-ear-0.1.0
-mradm-ffi   staticlib；唯一含 unsafe 的私有 C 边界，聚合 mradm_dsp_* / mradm_adm_* / mradm_wav_* / mradm_ear_* 等入口
+mradm-osc   #![forbid(unsafe_code)]；PoseBridge 协议 3 OSC 数据报解码（回环 UDP 的不可信输入）、source_id 校验、
+            姿态流顺序判定；遥测 JSON 用 serde_json，接受范围与冻结的 nlohmann 实现逐字段一致
+mradm-ffi   staticlib；唯一含 unsafe 的私有 C 边界，聚合 mradm_dsp_* / mradm_adm_* / mradm_wav_* / mradm_ear_* / mradm_osc_* 等入口
 ```
 
 Rust/C++ 边界规则：
 
 - 方向是 **C++ 调 Rust**（ADR 0008 决策三）；Rust 不实现 `IRenderer` / `IRenderStream` 等 STL 接口
 - FFI 用显式长度缓冲、opaque 句柄、调用方提供的错误消息缓冲；状态码对应 `adm::ErrorCode`；句柄由分配侧配对销毁；panic 不穿过 C 边界
-- C++ 侧的私有 FFI 头（`src/adm_dsp/*_ffi.h`、`src/adm_metadata/adm_ffi.h`、`src/adm_audio/wav_ffi.h`，纯 C、`extern "C"` 由 `__cplusplus` 守护；C++ 包装另放 `scene_math.h` 等）是**手写**的，改 Rust 签名必须同步修改，并跑 `cmake --build build/debug --target mr_adm_ffi_header_check`（需 `cargo install cbindgen --locked --version 0.29.2`；比较导出符号、签名与 `#[repr(C)]` 字段，quality CI 同样执行）。被签名引用的 `#[repr(C)]` 类型名在 workspace 内必须唯一（cbindgen 按名字合并）。Rust 类型与这些头不得出现在 `include/adm/*`
+- C++ 侧的私有 FFI 头（`src/adm_dsp/*_ffi.h`、`src/adm_metadata/adm_ffi.h`、`src/adm_audio/wav_ffi.h`、`src/adm_realtime/osc_ffi.h`，纯 C、`extern "C"` 由 `__cplusplus` 守护；C++ 包装另放 `scene_math.h` 等）是**手写**的，改 Rust 签名必须同步修改，并跑 `cmake --build build/debug --target mr_adm_ffi_header_check`（需 `cargo install cbindgen --locked --version 0.29.2`；比较导出符号、签名与 `#[repr(C)]` 字段，quality CI 同样执行）。被签名引用的 `#[repr(C)]` 类型名在 workspace 内必须唯一（cbindgen 按名字合并）。Rust 类型与这些头不得出现在 `include/adm/*`
 - 共享 C ABI bundle 只导出 `c_api.h` 声明的 `adm_*`（当前 139 个；Windows 用从 `c_api.h` 生成的 `.def`）；Rust 分配器、panic 入口与私有 `mradm_*` 符号不得外泄，`scripts/quality/check-capi-exports.py <lib>` 在 ci/release 校验
 - 新的 Rust 依赖必须锁定精确版本、关闭不需要的 features，并登记到许可证清单/SBOM（`scripts/quality/check-licenses.sh` 会校验 Cargo 依赖）
 - 迁移批次的惯例：先保留旧 C++ 实现作对照（`tests/reference/*` + `provenance.json`，或 `MR_ADM_BUILD_*_REFERENCE_TESTS` 开关），记录验收到 `docs/architecture/RUST_*_MIGRATION.md` 与 `evidence/`；**禁止**把旧实现当运行时静默回退

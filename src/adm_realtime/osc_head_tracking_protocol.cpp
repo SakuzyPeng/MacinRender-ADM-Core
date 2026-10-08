@@ -1,362 +1,84 @@
 #include "osc_head_tracking_protocol.h"
 
 #include <algorithm>
-#include <array>
-#include <bit>
-#include <charconv>
-#include <cmath>
 #include <cstdint>
-#include <limits>
-#include <numbers>
-#include <string_view>
-
-#include <nlohmann/json.hpp>
-
-#include "scene_math.h"
 
 namespace mradm::realtime {
 namespace {
 
-std::optional<std::string_view> read_string(std::span<const std::byte> data, std::size_t& offset) noexcept {
-    const auto begin = offset;
-    while (offset < data.size() && data[offset] != std::byte{0}) {
-        ++offset;
-    }
-    if (offset == data.size()) {
-        return std::nullopt;
-    }
-    const auto end = offset;
-    const auto aligned = (offset + 4U) & ~std::size_t{3};
-    if (aligned > data.size()) {
-        return std::nullopt;
-    }
-    while (offset < aligned) {
-        if (data[offset++] != std::byte{0}) {
-            return std::nullopt;
-        }
-    }
-    return std::string_view{reinterpret_cast<const char*>(data.data() + begin), end - begin};
-}
-std::uint64_t read_integer(std::span<const std::byte> data, std::size_t& offset, std::size_t size) noexcept {
-    std::uint64_t value = 0;
-    for (std::size_t i = 0; i < size; ++i) {
-        value = (value << 8U) | std::to_integer<std::uint64_t>(data[offset++]);
-    }
-    return value;
-}
-double read_float(std::span<const std::byte> data, std::size_t offset) noexcept {
-    std::uint32_t bits = 0;
-    for (std::size_t i = 0; i < 4U; ++i) {
-        bits = (bits << 8U) | std::to_integer<std::uint32_t>(data[offset + i]);
-    }
-    return static_cast<double>(std::bit_cast<float>(bits));
-}
-bool signed_range(std::uint64_t value) noexcept {
-    return value <= static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
+MradmOscTiming to_rust(const HeadTrackingTiming& t) noexcept {
+    return MradmOscTiming{t.protocol_version,
+                          t.sample_time_kind,
+                          t.instance_id,
+                          t.tx_sequence,
+                          t.reference_epoch,
+                          t.metadata_revision,
+                          t.source_age_at_send_ns,
+                          t.source_session_id,
+                          t.source_sequence,
+                          t.source_received_ns,
+                          t.sample_time_ms,
+                          t.sample_clock_epoch};
 }
 
-std::optional<HeadTrackingOrientation>
-orientation(std::span<const std::byte> data, std::size_t offset, bool quaternion) noexcept {
-    const size_t count = quaternion ? 4U : 3U;
-    std::array<float, 4> input{};
-    for (size_t i = 0; i < count; ++i) {
-        input.at(i) = static_cast<float>(read_float(data, offset + (i * 4U)));
-    }
-    std::array<float, 7> result{};
-    if (mradm_dsp_scene_pose(input.data(), count, result.data(), result.size(), quaternion ? 1U : 0U) != 0) {
-        return std::nullopt;
-    }
-    HeadTrackingOrientation pose;
-    std::copy_n(result.begin(), 4U, pose.quaternion_xyzw.begin());
-    std::copy_n(result.begin() + 4, 3U, pose.euler_deg.begin());
-    return pose;
+HeadTrackingTiming from_rust(const MradmOscTiming& t) noexcept {
+    HeadTrackingTiming result;
+    result.protocol_version = t.protocol_version;
+    result.sample_time_kind = t.sample_time_kind;
+    result.instance_id = t.instance_id;
+    result.tx_sequence = t.tx_sequence;
+    result.reference_epoch = t.reference_epoch;
+    result.metadata_revision = t.metadata_revision;
+    result.source_age_at_send_ns = t.source_age_at_send_ns;
+    result.source_session_id = t.source_session_id;
+    result.source_sequence = t.source_sequence;
+    result.source_received_ns = t.source_received_ns;
+    result.sample_time_ms = t.sample_time_ms;
+    result.sample_clock_epoch = t.sample_clock_epoch;
+    return result;
 }
 
-std::optional<std::uint64_t> decimal(const nlohmann::json& object, const char* key, bool positive) {
-    const auto field = object.find(key);
-    if (field == object.end() || !field->is_string()) {
-        return std::nullopt;
-    }
-    const auto& value = field->get_ref<const std::string&>();
-    if (value.empty() || (value.size() > 1U && value.front() == '0')) {
-        return std::nullopt;
-    }
-    std::uint64_t number = 0;
-    const auto result = std::from_chars(value.data(), value.data() + value.size(), number);
-    if (result.ec != std::errc{} || result.ptr != value.data() + value.size() || !signed_range(number) ||
-        (positive && number == 0U)) {
-        return std::nullopt;
-    }
-    return number;
-}
-
-std::optional<HeadTrackingMessage> telemetry(std::string_view address, std::string_view text) {
-    bool too_deep = false;
-    const auto value = nlohmann::json::parse(
-        text,
-        [&too_deep](int depth, auto, auto&) {
-            if (depth > 16) {
-                too_deep = true;
-                return false;
-            }
-            return true;
-        },
-        false);
-    if (too_deep || value.is_discarded() || !value.is_object() || !value.contains("schema") ||
-        !value["schema"].is_number_unsigned()) {
-        return std::nullopt;
-    }
-    HeadTrackingMessage msg;
-    if (value["schema"] != k_posebridge_protocol) {
-        msg.kind = HeadTrackingMessageKind::incompatible;
-        return msg;
-    }
-    const bool info = address == "/posebridge/info";
-    if (value.value("kind", std::string{}) != (info ? "info" : "status") || !value.contains("source_id") ||
-        !value["source_id"].is_string()) {
-        return std::nullopt;
-    }
-    msg.source_id = value["source_id"].get<std::string>();
-    const auto instance = decimal(value, "instance_id", true);
-    const auto session = decimal(value, "session_id", false);
-    const auto revision = decimal(value, "metadata_revision", true);
-    const auto reference = decimal(value, "reference_epoch", true);
-    const auto sequence = decimal(value, "message_seq", true);
-    if (!valid_source_id(msg.source_id) || !instance || !session || !revision || !reference || !sequence) {
-        return std::nullopt;
-    }
-    msg.kind = info ? HeadTrackingMessageKind::info : HeadTrackingMessageKind::status;
-    msg.timing.protocol_version = k_posebridge_protocol;
-    msg.timing.instance_id = *instance;
-    msg.timing.source_session_id = *session;
-    msg.timing.metadata_revision = *revision;
-    msg.timing.reference_epoch = *reference;
-    msg.message_sequence = *sequence;
-    const char* payload_key = info ? "descriptor" : "status";
-    if (!value.contains(payload_key) || !value[payload_key].is_object()) {
-        return std::nullopt;
-    }
-    const auto& payload = value[payload_key];
-    if (decimal(payload, "session_id", false) != session) {
-        return std::nullopt;
-    }
-    if (info) {
-        if (payload.value("source_id", std::string{}) != msg.source_id ||
-            decimal(payload, "instance_id", true) != instance ||
-            decimal(payload, "metadata_revision", true) != revision ||
-            decimal(payload, "reference_epoch", true) != reference ||
-            payload.value("coordinate_profile", std::string{}) != "posebridge.yxz.v1") {
-            return std::nullopt;
-        }
-    } else {
-        const auto state = payload.value("state", std::string{});
-        constexpr std::array states{"idle",
-                                    "scanning",
-                                    "connecting",
-                                    "active",
-                                    "stale",
-                                    "reconnecting",
-                                    "stopped",
-                                    "failed",
-                                    "configuring",
-                                    "complete",
-                                    "inspecting"};
-        const auto samples = decimal(payload, "session_samples", false);
-        if (!samples || std::ranges::find(states, state) == states.end()) {
-            return std::nullopt;
-        }
-        msg.source_active = state == "active";
-        msg.reported_samples = *samples;
-    }
-    msg.json = std::string{text};
-    return msg;
-}
-
-std::optional<HeadTrackingMessage> pose_message(std::span<const std::byte> data, std::size_t offset, bool quaternion) {
-    if (data.size() - offset < 4U) {
-        return std::nullopt;
-    }
-    HeadTrackingMessage msg;
-    if (read_integer(data, offset, 4U) != k_posebridge_protocol) {
-        msg.kind = HeadTrackingMessageKind::incompatible;
-        return msg;
-    }
-    const auto source = read_string(data, offset);
-    const std::size_t count = quaternion ? 4U : 3U;
-    if (!source || !valid_source_id(*source) || data.size() - offset != 84U + (count * 4U)) {
-        return std::nullopt;
-    }
-    msg.source_id = *source;
-    auto& t = msg.timing;
-    t.protocol_version = k_posebridge_protocol;
-    t.instance_id = read_integer(data, offset, 8U);
-    t.source_session_id = read_integer(data, offset, 8U);
-    t.source_sequence = read_integer(data, offset, 8U);
-    t.tx_sequence = read_integer(data, offset, 8U);
-    t.reference_epoch = read_integer(data, offset, 8U);
-    t.metadata_revision = read_integer(data, offset, 8U);
-    t.source_received_ns = read_integer(data, offset, 8U);
-    t.source_age_at_send_ns = read_integer(data, offset, 8U);
-    t.sample_time_kind = static_cast<std::uint32_t>(read_integer(data, offset, 4U));
-    t.sample_time_ms = read_integer(data, offset, 8U);
-    t.sample_clock_epoch = read_integer(data, offset, 8U);
-    const std::array positive{
-        t.instance_id, t.source_session_id, t.source_sequence, t.tx_sequence, t.reference_epoch, t.metadata_revision};
-    const std::array nonnegative{t.source_received_ns, t.source_age_at_send_ns, t.sample_time_ms, t.sample_clock_epoch};
-    if (!std::ranges::all_of(positive, [](auto v) { return v > 0U && signed_range(v); }) ||
-        !std::ranges::all_of(nonnegative, signed_range) || t.source_age_at_send_ns >= 500000000U ||
-        t.sample_time_kind > 2U ||
-        (t.sample_time_kind == 0U && (t.sample_time_ms != 0U || t.sample_clock_epoch != 0U)) ||
-        (t.sample_time_kind != 0U && t.sample_clock_epoch == 0U)) {
-        return std::nullopt;
-    }
-    const auto pose = orientation(data, offset, quaternion);
-    if (!pose) {
-        return std::nullopt;
-    }
-    msg.orientation = *pose;
-    return msg;
+const std::uint8_t* bytes(const void* data) noexcept {
+    return static_cast<const std::uint8_t*>(data);
 }
 
 } // namespace
 
 bool valid_source_id(std::string_view value) noexcept {
-    if (value.empty() || value.size() > 256U || std::ranges::all_of(value, [](char c) { return c == ' '; })) {
-        return false;
-    }
-    // Validate UTF-8, including overlong encodings, surrogates, and control characters.
-    bool nonblank = false;
-    const auto whitespace = [](std::uint32_t c) {
-        return c == 0x20U || c == 0xa0U || c == 0x1680U || (c >= 0x2000U && c <= 0x200aU) || c == 0x2028U ||
-               c == 0x2029U || c == 0x202fU || c == 0x205fU || c == 0x3000U;
-    };
-    std::uint32_t point = 0;
-    std::uint32_t minimum = 0;
-    unsigned remaining = 0;
-    for (const char character : value) {
-        const auto c = static_cast<unsigned char>(character);
-        if (remaining == 0U) {
-            if (c < 0x80U) {
-                if (c < 0x20U || c == 0x7fU) {
-                    return false;
-                }
-                nonblank = nonblank || !whitespace(c);
-                continue;
-            }
-            if (c >= 0xc2U && c <= 0xdfU) {
-                remaining = 1;
-                point = c & 0x1fU;
-                minimum = 0x80U;
-            } else if (c >= 0xe0U && c <= 0xefU) {
-                remaining = 2;
-                point = c & 0x0fU;
-                minimum = 0x800U;
-            } else if (c >= 0xf0U && c <= 0xf4U) {
-                remaining = 3;
-                point = c & 0x07U;
-                minimum = 0x10000U;
-            } else {
-                return false;
-            }
-        } else {
-            if ((c & 0xc0U) != 0x80U) {
-                return false;
-            }
-            point = (point << 6U) | (c & 0x3fU);
-            --remaining;
-            if (remaining == 0U) {
-                nonblank = nonblank || !whitespace(point);
-            }
-            if (remaining == 0U && (point < minimum || point > 0x10ffffU || (point >= 0xd800U && point <= 0xdfffU) ||
-                                    (point >= 0x80U && point <= 0x9fU))) {
-                return false;
-            }
-        }
-    }
-    return remaining == 0U && nonblank;
+    return mradm_osc_valid_source_id(bytes(value.data()), value.size()) != 0U;
 }
 
 std::optional<HeadTrackingMessage> decode_head_tracking_osc(std::span<const std::byte> data) noexcept {
     try {
-        if (data.size() > k_max_posebridge_packet) {
+        MradmOscMessage raw{};
+        if (mradm_osc_decode(bytes(data.data()), data.size(), &raw) != 0 || raw.kind > 3U ||
+            raw.source_id_len > sizeof(raw.source_id) || raw.json_offset > data.size() ||
+            raw.json_len > data.size() - raw.json_offset) {
             return std::nullopt;
         }
-        std::size_t offset = 0;
-        const auto address = read_string(data, offset);
-        const auto tags = read_string(data, offset);
-        if (!address || !tags) {
-            return std::nullopt;
-        }
-        if (address->starts_with("/posebridge/v")) {
-            HeadTrackingMessage msg;
-            msg.kind = HeadTrackingMessageKind::incompatible;
-            return msg;
-        }
-        if (*address == "/posebridge/info" || *address == "/posebridge/status") {
-            if (*tags != ",s") {
-                return std::nullopt;
-            }
-            const auto text = read_string(data, offset);
-            if (!text || offset != data.size()) {
-                return std::nullopt;
-            }
-            return telemetry(*address, *text);
-        }
-        const bool quaternion = *address == "/posebridge/quaternion";
-        if (!quaternion && *address != "/posebridge/euler") {
-            return std::nullopt;
-        }
-        if (*tags != (quaternion ? ",ishhhhhhhhihhffff" : ",ishhhhhhhhihhfff")) {
-            return std::nullopt;
-        }
-        return pose_message(data, offset, quaternion);
+        HeadTrackingMessage msg;
+        msg.kind = static_cast<HeadTrackingMessageKind>(raw.kind);
+        std::ranges::copy(raw.quaternion_xyzw, msg.orientation.quaternion_xyzw.begin());
+        std::ranges::copy(raw.euler_deg, msg.orientation.euler_deg.begin());
+        msg.timing = from_rust(raw.timing);
+        msg.source_id.assign(reinterpret_cast<const char*>(raw.source_id), raw.source_id_len);
+        msg.message_sequence = raw.message_sequence;
+        msg.reported_samples = raw.reported_samples;
+        msg.source_active = raw.source_active != 0U;
+        msg.json.assign(reinterpret_cast<const char*>(data.data()) + raw.json_offset, raw.json_len);
+        return msg;
     } catch (...) {
         return std::nullopt;
     }
 }
 
 bool OscSourceOrder::retired(std::uint64_t instance_id) const noexcept {
-    return std::ranges::find(retired_, instance_id) != retired_.end();
+    return mradm_osc_source_order_retired(&state_, instance_id) != 0U;
 }
+
 bool OscSourceOrder::accept(const HeadTrackingTiming& t) noexcept {
-    const bool new_instance = t.instance_id != last_.instance_id;
-    last_gap_ = 0;
-    if (new_instance) {
-        if (retired(t.instance_id)) {
-            return false;
-        }
-    } else {
-        if (t.tx_sequence <= last_.tx_sequence || t.metadata_revision < last_.metadata_revision ||
-            t.reference_epoch < last_.reference_epoch) {
-            return false;
-        }
-        if (t.source_session_id == last_.source_session_id) {
-            if (t.source_sequence <= last_.source_sequence || t.source_received_ns < last_.source_received_ns) {
-                return false;
-            }
-            if (t.sample_time_kind != 0U && clock_.sample_time_kind != 0U &&
-                (t.sample_clock_epoch < clock_.sample_clock_epoch ||
-                 (t.sample_clock_epoch == clock_.sample_clock_epoch &&
-                  (t.sample_time_kind != clock_.sample_time_kind || t.sample_time_ms <= clock_.sample_time_ms)))) {
-                return false;
-            }
-        } else if (t.metadata_revision <= last_.metadata_revision || t.reference_epoch <= last_.reference_epoch) {
-            return false;
-        }
-        last_gap_ = t.tx_sequence - last_.tx_sequence - 1U;
-    }
-    if (new_instance) {
-        retired_.at(retired_next_) = last_.instance_id;
-        retired_next_ = (retired_next_ + 1U) % retired_.size();
-    }
-    if (new_instance || t.source_session_id != last_.source_session_id) {
-        clock_ = {};
-    }
-    last_ = t;
-    if (t.sample_time_kind != 0U) {
-        clock_ = t;
-    }
-    return true;
+    const auto timing = to_rust(t);
+    return mradm_osc_source_order_accept(&state_, &timing) != 0U;
 }
 
 } // namespace mradm::realtime
