@@ -1,0 +1,11 @@
+[package]
+name = "mradm-osc"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "PoseBridge protocol 3 OSC head-tracking datagram decoding"
+
+[dependencies]
+mradm-dsp = { path = "../mradm-dsp", default-features = false }
+serde_json.workspace = true

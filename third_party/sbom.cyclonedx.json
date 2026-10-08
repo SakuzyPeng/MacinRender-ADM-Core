@@ -923,6 +923,28 @@
     },
     {
       "type": "library",
+      "name": "rust-itoa-1.0.18",
+      "version": "1.0.18",
+      "description": "serde_json 的整数格式化依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/itoa@1.0.18",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "rust-libm-0.2.16",
       "version": "0.2.16",
       "description": "nalgebra/simba libm-force 与 OM spreader 的可移植数学函数（纯 Rust musl 移植）",
@@ -1303,6 +1325,28 @@
     },
     {
       "type": "library",
+      "name": "rust-ryu-1.0.23",
+      "version": "1.0.23",
+      "description": "serde_json 的浮点格式化依赖",
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR BSL-1.0"
+        }
+      ],
+      "purl": "pkg:cargo/ryu@1.0.23",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "rust-safe_arch-1.2.0",
       "version": "1.2.0",
       "description": "Rust DSP 的锁定依赖",
@@ -1312,6 +1356,94 @@
         }
       ],
       "purl": "pkg:cargo/safe_arch@1.2.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-serde-1.0.229",
+      "version": "1.0.229",
+      "description": "serde_json 的序列化框架依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/serde@1.0.229",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-serde_core-1.0.229",
+      "version": "1.0.229",
+      "description": "serde 的核心 trait 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/serde_core@1.0.229",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-serde_derive-1.0.229",
+      "version": "1.0.229",
+      "description": "serde 锁定版本的派生宏",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/serde_derive@1.0.229",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-serde_json-1.0.140",
+      "version": "1.0.140",
+      "description": "PoseBridge 遥测 JSON 解析（mradm-osc）",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/serde_json@1.0.140",
       "properties": [
         {
           "name": "mradm:distribution",

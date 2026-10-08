@@ -21,6 +21,7 @@ mod live_triple_balance;
 mod live_vbap;
 mod meter;
 mod monitor;
+mod osc;
 mod output_dsp;
 mod pcm_mix;
 mod resampler;

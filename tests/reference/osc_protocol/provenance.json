@@ -1,0 +1,15 @@
+{
+  "baseline_commit": "a125ab7d1fcb2527f46265088fdf4b5c2aa3645b",
+  "source_sha256": {
+    "src/adm_realtime/osc_head_tracking_protocol.h": "a1ae44cb943dbd3abfcf6e0671083fca015d8cd407f1920e1097465f1cb1eedf",
+    "src/adm_realtime/osc_head_tracking_protocol.cpp": "836782227ffa1b4b853f2e05a24fb26d14ffbd16ce0b3782ac5839f4b5e0ef25"
+  },
+  "adaptations": [
+    "Merge header and implementation into header-only legacy.h in mradm::osc_protocol_legacy for test-only compilation",
+    "Rename the anonymous helper namespace to detail and mark definitions inline; algorithm, limits and nlohmann_json parsing unchanged",
+    "clang-format only"
+  ],
+  "reference_sha256": {
+    "legacy.h": "e8d55bc7f7fef6632f9560d26c0c8a325fd885dcbd315a44f6da6fc8d65eb815"
+  }
+}

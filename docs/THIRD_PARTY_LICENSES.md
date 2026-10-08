@@ -70,6 +70,7 @@
 | `rust-glam-0.31.1` @ 0.31.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-glam-0.32.1` @ 0.32.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-glam-0.33.12` @ 0.33.12 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-itoa-1.0.18` @ 1.0.18 | serde_json 的整数格式化依赖 | MIT OR Apache-2.0 | 可用 | 经 serde_json 引入。 |
 | `rust-libm-0.2.16` @ 0.2.16 | nalgebra/simba libm-force 与 OM spreader 的可移植数学函数（纯 Rust musl 移植） | MIT | 可用 | 经 nalgebra libm-force 与 mradm-dsp 直接使用，替代平台 C libm（ADR 0017）；默认 arch 特性只提供 IEEE 精确的 sqrt/fma/rint 硬件指令。 |
 | `rust-log-0.4.34` @ 0.4.34 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-matrixmultiply-0.3.11` @ 0.3.11 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
@@ -87,7 +88,12 @@
 | `rust-rawpointer-0.2.1` @ 0.2.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-realfft-3.5.0` @ 3.5.0 | Rust DSP 的锁定依赖 | MIT | 可用 | 上游发布包在 README 声明 MIT；随包保留声明、作者归属和标准 MIT 许可文本。 |
 | `rust-rustfft-6.4.1` @ 6.4.1 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 6.4.1 本地补丁（rust/vendor/rustfft/PATCHES.md）：标量规划器的 radix-4 独立列成批计算与系数布局优化，保留原有逐位结果；运行时 SIMD 分派继续关闭。 |
+| `rust-ryu-1.0.23` @ 1.0.23 | serde_json 的浮点格式化依赖 | Apache-2.0 OR BSL-1.0 | 可用 | 经 serde_json 引入。 |
 | `rust-safe_arch-1.2.0` @ 1.2.0 | Rust DSP 的锁定依赖 | Zlib OR Apache-2.0 OR MIT | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
+| `rust-serde-1.0.229` @ 1.0.229 | serde_json 的序列化框架依赖 | MIT OR Apache-2.0 | 可用 | 只开 std，不启用 derive。 |
+| `rust-serde_core-1.0.229` @ 1.0.229 | serde 的核心 trait 依赖 | MIT OR Apache-2.0 | 可用 | 经 serde 引入。 |
+| `rust-serde_derive-1.0.229` @ 1.0.229 | serde 锁定版本的派生宏 | MIT OR Apache-2.0 | 可用 | serde 用永不成立的 target 条件把它锁在 Cargo.lock 中以保持版本同步；未启用 derive，不参与编译。 |
+| `rust-serde_json-1.0.140` @ 1.0.140 | PoseBridge 遥测 JSON 解析（mradm-osc） | MIT OR Apache-2.0 | 可用 | 只开 std，使用无类型 Value，不启用 derive/preserve_order/arbitrary_precision；替代该路径原来的 nlohmann_json 解析。 |
 | `rust-simba-0.10.2` @ 0.10.2 | Rust DSP 的锁定依赖 | Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-smallvec-1.16.2` @ 1.16.2 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 |
 | `rust-sofar-0.3.0` @ 0.3.0 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 0.3.0 最小本地补丁公开 RawHrtf；关闭 DSP/重采样 features；保留上游 NOTICE。 |

@@ -749,6 +749,26 @@
       "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
     },
     {
+      "name": "rust-itoa-1.0.18",
+      "version": "1.0.18",
+      "cmake_key": null,
+      "purl": "pkg:cargo/itoa@1.0.18",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "serde_json 的整数格式化依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "itoa",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "经 serde_json 引入。"
+    },
+    {
       "name": "rust-libm-0.2.16",
       "version": "0.2.16",
       "cmake_key": null,
@@ -1091,6 +1111,26 @@
       "notes": "6.4.1 本地补丁（rust/vendor/rustfft/PATCHES.md）：标量规划器的 radix-4 独立列成批计算与系数布局优化，保留原有逐位结果；运行时 SIMD 分派继续关闭。"
     },
     {
+      "name": "rust-ryu-1.0.23",
+      "version": "1.0.23",
+      "cmake_key": null,
+      "purl": "pkg:cargo/ryu@1.0.23",
+      "license": "Apache-2.0 OR BSL-1.0",
+      "purpose": "serde_json 的浮点格式化依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "ryu",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-BOOST"
+        ]
+      },
+      "notes": "经 serde_json 引入。"
+    },
+    {
       "name": "rust-safe_arch-1.2.0",
       "version": "1.2.0",
       "cmake_key": null,
@@ -1110,6 +1150,86 @@
         ]
       },
       "notes": "包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。"
+    },
+    {
+      "name": "rust-serde-1.0.229",
+      "version": "1.0.229",
+      "cmake_key": null,
+      "purl": "pkg:cargo/serde@1.0.229",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "serde_json 的序列化框架依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "serde",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "只开 std，不启用 derive。"
+    },
+    {
+      "name": "rust-serde_core-1.0.229",
+      "version": "1.0.229",
+      "cmake_key": null,
+      "purl": "pkg:cargo/serde_core@1.0.229",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "serde 的核心 trait 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "serde_core",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "经 serde 引入。"
+    },
+    {
+      "name": "rust-serde_derive-1.0.229",
+      "version": "1.0.229",
+      "cmake_key": null,
+      "purl": "pkg:cargo/serde_derive@1.0.229",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "serde 锁定版本的派生宏",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "serde_derive",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "serde 用永不成立的 target 条件把它锁在 Cargo.lock 中以保持版本同步；未启用 derive，不参与编译。"
+    },
+    {
+      "name": "rust-serde_json-1.0.140",
+      "version": "1.0.140",
+      "cmake_key": null,
+      "purl": "pkg:cargo/serde_json@1.0.140",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "PoseBridge 遥测 JSON 解析（mradm-osc）",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "serde_json",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "只开 std，使用无类型 Value，不启用 derive/preserve_order/arbitrary_precision；替代该路径原来的 nlohmann_json 解析。"
     },
     {
       "name": "rust-simba-0.10.2",

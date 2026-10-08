@@ -76,3 +76,5 @@ MacinRender 引用明确协议版本并共享契约测试向量；破坏消息�
 厂商标称的 200 Hz、0.2° 和续航不作为验收结果。尤其需要核实四元数实际更新方式、航向磁干扰，
 以及 BLE、GUI 平滑与音频缓冲共同形成的整体延迟。完整实施阶段见
 [头部追踪与 OSC 跨仓库设计](../architecture/HEAD_TRACKING_OSC.md)。
+
+2026-10-08：MacinRender 侧的 OSC 协议解析（分帧、姿态、遥测 JSON、source_id 校验、顺序判定）已迁入本仓库的 Rust crate `mradm-osc`，接受范围与原 C++ 实现逐字段一致；socket 收发、快照和 C ABI 仍在 C++。见 [Rust PoseBridge OSC 协议解析迁移](../architecture/RUST_OSC_PROTOCOL_MIGRATION.md)。本决策中“不向 MacinRender 引入 Rust 包”指 PoseBridge 的设备侧依赖，不受影响。
