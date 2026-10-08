@@ -66,7 +66,20 @@ fn number(token: &[u8]) -> Option<f64> {
         return None;
     }
     let value: f64 = text.parse().ok()?;
-    value.is_finite().then_some(value)
+    if !value.is_finite() {
+        return None;
+    }
+    // A nonzero literal that rounds to zero or a subnormal is rejected. The old stream
+    // extraction disagreed across platforms here: libstdc++ took it as 0, while libc++ and
+    // MSVC failed it with ERANGE; rejecting keeps a typo from silently zeroing a parameter.
+    let mantissa = token
+        .split(|&b| b == b'e' || b == b'E')
+        .next()
+        .unwrap_or_default();
+    if (value == 0. || value.is_subnormal()) && mantissa.iter().any(|b| (b'1'..=b'9').contains(b)) {
+        return None;
+    }
+    Some(value)
 }
 
 /// The first number after `key` anywhere on the line, so AutoEq LP/HP/BP lines that omit
@@ -247,13 +260,15 @@ Filter 4: ON\nFilter 5: ON ZZZ Fc 1 Hz\nFilter 6 ON no Fc 50\nPreamp 1e-1\nunkno
             ("+2", 2.),
             ("-0", -0.),
             ("1E2", 100.),
-            ("1e-400", 0.),
+            ("0e-400", 0.),
+            ("0.000", 0.),
+            ("2.2250738585072014e-308", f64::MIN_POSITIVE),
         ] {
             assert_eq!(number(token.as_bytes()), Some(value), "{token}");
         }
         for token in [
             "", "1e", "1e+", ".", "+", "1,5", "1.2.3", "0x10", "inf", "-inf", "infinity", "NaN",
-            "1e400", "1Hz", "１",
+            "1e400", "1Hz", "１", "1e-400", "-1e-400", "1e-310", "4.9e-324",
         ] {
             assert_eq!(number(token.as_bytes()), None, "{token}");
         }

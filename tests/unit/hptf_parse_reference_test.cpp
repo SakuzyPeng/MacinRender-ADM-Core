@@ -1,11 +1,18 @@
 // Differential test: Rust AutoEq ParametricEQ parsing against the frozen C++ parser.
 // Results must match exactly: bands bit for bit, or the same error code, message and context.
+// Texts with an underflowing number (nonzero literal rounding to zero or a subnormal) are
+// excluded: the old stream extraction accepted them on libstdc++ but failed them on libc++ and
+// MSVC. The Rust parser rejects them everywhere, which differential_underflow asserts directly.
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cctype>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -36,6 +43,8 @@ class Random {
 struct Counts {
     std::size_t compared{0};
     std::size_t parsed{0};
+    std::size_t platform_dependent{0};
+    std::vector<std::string> mismatches;
 };
 Counts& counts() {
     static Counts value;
@@ -60,18 +69,64 @@ bool same_double(double a, double b) {
     return std::bit_cast<std::uint64_t>(a) == std::bit_cast<std::uint64_t>(b);
 }
 
+bool space(char c) {
+    return std::isspace(static_cast<unsigned char>(c)) != 0;
+}
+
+// A nonzero decimal literal whose value rounds below the smallest normal double.
+bool underflow_literal(std::string_view token) {
+    const auto exponent = token.find_first_of("eE");
+    const auto mantissa = token.substr(0, exponent);
+    if (std::ranges::none_of(mantissa, [](char c) { return c >= '1' && c <= '9'; })) {
+        return false;
+    }
+    const std::string copy{token};
+    char* end = nullptr;
+    const double value = std::strtod(copy.c_str(), &end);
+    return end == copy.c_str() + copy.size() && std::isfinite(value) &&
+           std::abs(value) < std::numeric_limits<double>::min();
+}
+
+bool has_underflow_literal(std::string_view text) {
+    std::size_t i = 0;
+    while (i < text.size()) {
+        while (i < text.size() && space(text[i])) {
+            ++i;
+        }
+        const auto start = i;
+        while (i < text.size() && !space(text[i])) {
+            ++i;
+        }
+        if (i > start && underflow_literal(text.substr(start, i - start))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void compare(std::string_view text) {
+    if (has_underflow_literal(text)) {
+        ++counts().platform_dependent;
+        return;
+    }
     ++counts().compared;
     const auto expected = legacy::parse_parametric_eq(text);
     const auto actual = mradm::render_common::parse_parametric_eq(text);
+    bool failed = false;
     const auto fail = [&](std::string_view what) {
-        std::string message{what};
-        message.append(" differs for \"").append(escaped(text)).append("\"");
-        throw std::runtime_error(message);
+        if (!failed && counts().mismatches.size() < 20U) {
+            std::string message{what};
+            message.append(" differs for \"").append(escaped(text)).append("\"");
+            counts().mismatches.push_back(std::move(message));
+        } else if (!failed) {
+            counts().mismatches.emplace_back();
+        }
+        failed = true;
     };
     if (!expected || !actual) {
         if (expected.has_value() != actual.has_value()) {
             fail(expected ? "acceptance (legacy parsed)" : "acceptance (Rust parsed)");
+            return;
         }
         const auto& e = expected.error();
         const auto& a = actual.error();
@@ -84,6 +139,7 @@ void compare(std::string_view text) {
     if (!same_double(expected->preamp_db, actual->preamp_db) || expected->name != actual->name ||
         expected->bands.size() != actual->bands.size()) {
         fail("profile");
+        return;
     }
     for (std::size_t i = 0; i < expected->bands.size(); ++i) {
         const auto& e = expected->bands[i];
@@ -264,6 +320,26 @@ void differential_bytes(Random& random) {
     }
 }
 
+// Rust rejects underflowing numbers on every platform, wherever they appear.
+void differential_underflow() {
+    for (const std::string_view literal : {"1e-400", "-1e-400", "1e-310", "4.9e-324", "0.1e-320"}) {
+        for (const auto& line : {std::string{"Preamp: "} + std::string{literal} + " dB",
+                                 std::string{"Filter 1: ON PK Fc 100 Hz Gain "} + std::string{literal},
+                                 std::string{"Filter 1: ON PK Fc 100 Hz Q "} + std::string{literal}}) {
+            if (!has_underflow_literal(line) || mradm::render_common::parse_parametric_eq(line)) {
+                throw std::runtime_error("underflowing number must be rejected: " + line);
+            }
+        }
+    }
+    for (const std::string_view zero : {"0e-400", "0.000e-999", "-0.0"}) {
+        const auto line = std::string{"Preamp: "} + std::string{zero};
+        const auto parsed = mradm::render_common::parse_parametric_eq(line);
+        if (has_underflow_literal(line) || !parsed || parsed->preamp_db != 0.0) {
+            throw std::runtime_error("an explicit zero must still parse: " + line);
+        }
+    }
+}
+
 } // namespace
 
 int main() {
@@ -272,8 +348,17 @@ int main() {
         Random random(0x5eed0004U);
         differential_tokens(random);
         differential_bytes(random);
+        differential_underflow();
         std::cout << "HpTF ParametricEQ differential: " << counts().compared << " texts, " << counts().parsed
-                  << " parsed\n";
+                  << " parsed, " << counts().platform_dependent << " underflow texts excluded\n";
+        if (!counts().mismatches.empty()) {
+            for (const auto& mismatch : counts().mismatches) {
+                if (!mismatch.empty()) {
+                    std::cerr << "MISMATCH: " << mismatch << '\n';
+                }
+            }
+            throw std::runtime_error(std::to_string(counts().mismatches.size()) + " mismatching texts");
+        }
         if (counts().parsed < 1000U) {
             throw std::runtime_error("corpus must exercise successful parses");
         }
