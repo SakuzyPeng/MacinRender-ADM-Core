@@ -226,6 +226,12 @@ std::vector<std::string> json_edge_cases() {
                                          "1e400",
                                          "-1e400",
                                          "1e-400",
+                                         "1.7976931348623157e308",
+                                         "-1.7976931348623157e308",
+                                         "1.7976931348623158e308",
+                                         "-1.7976931348623158e308",
+                                         "1.79769313486231581e308",
+                                         "-1.79769313486231581e308",
                                          "123456789012345678901234567890",
                                          "18446744073709551615",
                                          "18446744073709551616",
@@ -257,6 +263,12 @@ std::vector<std::string> json_edge_cases() {
                                          R"("\u12")",
                                          "\"\xf0\x9f\x98\x80\""}) {
         cases.push_back(with_extra(extra));
+    }
+    // Exercise the long-integer path at the same finite/overflow boundary.
+    for (const std::string& extra : {std::string{"17976931348623157"} + std::string(292, '0'),
+                                     std::string{"179769313486231581"} + std::string(291, '0')}) {
+        cases.push_back(with_extra(extra));
+        cases.push_back(with_extra("-" + extra));
     }
     for (const std::string_view schema :
          {"-0", "3.0", "3e0", "\"3\"", "03", "4", "2", "1e400", "18446744073709551619"}) {

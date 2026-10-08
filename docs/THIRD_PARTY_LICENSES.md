@@ -93,7 +93,7 @@
 | `rust-serde-1.0.229` @ 1.0.229 | serde_json 的序列化框架依赖 | MIT OR Apache-2.0 | 可用 | 只开 std，不启用 derive。 |
 | `rust-serde_core-1.0.229` @ 1.0.229 | serde 的核心 trait 依赖 | MIT OR Apache-2.0 | 可用 | 经 serde 引入。 |
 | `rust-serde_derive-1.0.229` @ 1.0.229 | serde 锁定版本的派生宏 | MIT OR Apache-2.0 | 可用 | serde 用永不成立的 target 条件把它锁在 Cargo.lock 中以保持版本同步；未启用 derive，不参与编译。 |
-| `rust-serde_json-1.0.140` @ 1.0.140 | PoseBridge 遥测 JSON 解析（mradm-osc） | MIT OR Apache-2.0 | 可用 | 只开 std，使用无类型 Value，不启用 derive/preserve_order/arbitrary_precision；替代该路径原来的 nlohmann_json 解析。 |
+| `rust-serde_json-1.0.140` @ 1.0.140 | PoseBridge 遥测 JSON 解析（mradm-osc） | MIT OR Apache-2.0 | 可用 | 开启 std 与 float_roundtrip，使浮点溢出判定与 C++ 快照重解析一致；使用无类型 Value，不启用 derive/preserve_order/arbitrary_precision。 |
 | `rust-simba-0.10.2` @ 0.10.2 | Rust DSP 的锁定依赖 | Apache-2.0 | 可用 | 包含各平台、feature 及构建工具的锁定依赖；实际编入范围由 Cargo 决定。 |
 | `rust-smallvec-1.16.2` @ 1.16.2 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 |
 | `rust-sofar-0.3.0` @ 0.3.0 | Rust DSP 的锁定依赖 | MIT OR Apache-2.0 | 可用 | 0.3.0 最小本地补丁公开 RawHrtf；关闭 DSP/重采样 features；保留上游 NOTICE。 |

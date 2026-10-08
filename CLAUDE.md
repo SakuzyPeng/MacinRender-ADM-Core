@@ -140,7 +140,7 @@ clang-tidy 依赖 `compile_commands.json`，必须先 `cmake --preset debug`。m
 
 依赖通过 `cmake/MRDependencies.cmake` 的 `mr_adm_core_find_or_fetch()` 统一接入（`find_package(CONFIG)` 优先，FetchContent 兜底）。新增 C/C++ 依赖**必须**走该函数，不要在 `CMakeLists.txt` 散落 `FetchContent_Declare`（ADR 0004）；新增 Rust 依赖写进 `rust/Cargo.toml` 的 `[workspace.dependencies]`（精确版本 `=x.y.z`）并更新 `Cargo.lock` 与许可证清单。
 
-当前生产 C/C++ 第三方依赖：dr_flac、libFLAC、libopus、miniaudio、CLI11、spdlog/fmt、nlohmann_json、tl-expected，可选 IAMF AOM bridge。Rust 依赖：realfft/rustfft（`rust/vendor/rustfft` 保持位模式的列优化补丁）、nalgebra（`libm-force`，ADR 0017）、libm、ebur128、rubato（`rust/vendor/rubato` 本地补丁，ADR 0016）、sofar（`rust/vendor/sofar` 本地补丁）、quick-xml、serde_json（只开 `std`、无类型 `Value`，PoseBridge 遥测）。`mradm-ear` 是移植自 libear 的项目内 crate（Apache-2.0，来源与数据登记在 crate 的 `LICENSE` / `NOTICE.txt` / `PROVENANCE.json`），`mradm-math` 是移植自 musl 的可移植 sin/cos（MIT，同样登记 `NOTICE.txt` / `PROVENANCE.json`），都不是外部依赖。生产构建不需要 Boost / vcpkg。
+当前生产 C/C++ 第三方依赖：dr_flac、libFLAC、libopus、miniaudio、CLI11、spdlog/fmt、nlohmann_json、tl-expected，可选 IAMF AOM bridge。Rust 依赖：realfft/rustfft（`rust/vendor/rustfft` 保持位模式的列优化补丁）、nalgebra（`libm-force`，ADR 0017）、libm、ebur128、rubato（`rust/vendor/rubato` 本地补丁，ADR 0016）、sofar（`rust/vendor/sofar` 本地补丁）、quick-xml、serde_json（开启 `std` / `float_roundtrip`、无类型 `Value`，PoseBridge 遥测）。`mradm-ear` 是移植自 libear 的项目内 crate（Apache-2.0，来源与数据登记在 crate 的 `LICENSE` / `NOTICE.txt` / `PROVENANCE.json`），`mradm-math` 是移植自 musl 的可移植 sin/cos（MIT，同样登记 `NOTICE.txt` / `PROVENANCE.json`），都不是外部依赖。生产构建不需要 Boost / vcpkg。
 
 关键开关：
 

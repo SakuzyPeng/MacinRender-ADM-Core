@@ -1229,7 +1229,7 @@
           "LICENSE-MIT"
         ]
       },
-      "notes": "只开 std，使用无类型 Value，不启用 derive/preserve_order/arbitrary_precision；替代该路径原来的 nlohmann_json 解析。"
+      "notes": "开启 std 与 float_roundtrip，使浮点溢出判定与 C++ 快照重解析一致；使用无类型 Value，不启用 derive/preserve_order/arbitrary_precision。"
     },
     {
       "name": "rust-simba-0.10.2",

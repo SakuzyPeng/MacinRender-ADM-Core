@@ -20,7 +20,8 @@ libm = { version = "=0.2.16" }
 ebur128 = { version = "=0.1.10", default-features = false }
 rubato = { version = "=5.0.1", default-features = false }
 # PoseBridge telemetry JSON (mradm-osc); untyped Value only, no derive.
-serde_json = { version = "=1.0.140", default-features = false, features = ["std"] }
+# Exact float parsing keeps overflow acceptance compatible with C++ snapshot reparsing.
+serde_json = { version = "=1.0.140", default-features = false, features = ["std", "float_roundtrip"] }
 
 [profile.dev]
 opt-level = 1

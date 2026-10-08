@@ -9,7 +9,7 @@ OSC 字符串分帧、大端整数与浮点、UTF-8 校验，以及用 nlohmann_
 唯一直接处理不可信网络输入的手写 C++ 解析代码，因此整体迁入 `#![forbid(unsafe_code)]` 的新 crate。
 
 - `rust/crates/mradm-osc`：`decode`、`valid_source_id`、`SourceOrder`。依赖 `mradm-dsp` 的
-  `scene_math::pose`（原 C++ 解码同样经 FFI 调用它）和 `serde_json`（只开 `std`，只用无类型 `Value`）。
+  `scene_math::pose`（原 C++ 解码同样经 FFI 调用它）和 `serde_json`（开启 `std` / `float_roundtrip`，只用无类型 `Value`）。
 - `rust/crates/mradm-ffi/src/osc.rs` 与手写头 `src/adm_realtime/osc_ffi.h`：
   - `mradm_osc_decode` 把结果写入调用方的 POD 结构；遥测 source_id 来自 JSON 转义，因此复制到
     256 字节定长数组；JSON 原文只以偏移/长度指回调用方数据报。
@@ -38,7 +38,7 @@ serde_json 与 nlohmann 之间的差异逐项对齐：
 | 开头 UTF-8 BOM | nlohmann 跳过；Rust 解析前去掉，保存的原文仍含 BOM |
 | 嵌套深度 | nlohmann 回调在任一 token 位于 ≥17 层未闭合容器内时拒绝（第 17 层空容器可接受）；Rust 解析前按同一规则扫描 |
 | 重复键 | 两者都取最后一个 |
-| 超出 f64 的数字（如 `1e400`） | 两者都拒绝整条消息 |
+| 超出 f64 的数字（如 `1e400`、`1.79769313486231581e308`） | 启用 `float_roundtrip` 精确解析；两者都拒绝整条消息，有限值仍接受 |
 | `-0`、`3.0`、`3e0` 作为 schema | 两者都不是无符号整数，拒绝 |
 | 非字符串字段、孤立代理、非法 UTF-8、控制字符、注释、尾随内容 | 两者都拒绝 |
 
@@ -46,7 +46,7 @@ serde_json 与 nlohmann 之间的差异逐项对齐：
 
 ## 验收结果
 
-本机（Linux x64，GCC 13，Debug）：
+迁移初验（Linux x64，GCC 13，Debug）：
 
 - `mr_adm_osc_protocol_reference_tests`：冻结 C++ 解码器与 Rust 逐字段比较，共 285068 个数据报，其中 5650 个被接受。
   比较项包括接受与否、kind、四元数和欧拉角的 float 位模式、全部 timing 字段、source_id、JSON 原文和遥测字段。语料包括：
@@ -63,6 +63,21 @@ serde_json 与 nlohmann 之间的差异逐项对齐：
 
 新增 Rust 依赖为 serde_json 1.0.140 及 serde / serde_core 1.0.229、itoa 1.0.18、ryu 1.0.23。
 serde_derive 只因 serde 的版本锁定写进 Cargo.lock，并不参与编译。这些依赖都登记在许可证清单、SBOM 和 `third_party/licenses/`。
+
+### JSON 浮点边界回归
+
+`serde_json` 默认浮点解析会在 f64 溢出临界值处与 nlohmann 不一致：
+`1.79769313486231581e308` 会被错误接受，写入遥测缓存后使 C++ 快照重解析抛出
+`out_of_range.406`，公开 C ABI 返回 `ADM_ERROR_INTERNAL`；部分有限值也会被错误拒绝。
+启用 `float_roundtrip` 后按精确舍入判定，依赖版本和公开 ABI 均不变。
+
+新增回归覆盖 info/status、正负数、科学记数法和长整数表示；对照旧解码器验证接受范围，
+并通过真实回环 UDP 和 `adm_osc_head_tracking_snapshot_json` 验证溢出报文被拒绝、
+既有缓存保持可读，最大有限值仍可进入快照。
+
+2026-10-08 macOS arm64 Debug 验证：新增 Rust 测试和两组 C++ OSC 测试在修复前均失败，
+启用精确解析后全部通过。OSC 差分语料增至 294704 个数据报（5641 个接受），
+10 个 OSC Rust 单元测试与 7 个 OSC/HpTF CTest 全部通过。
 
 ## 复现
 

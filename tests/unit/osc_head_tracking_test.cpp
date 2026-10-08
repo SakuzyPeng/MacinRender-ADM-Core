@@ -136,12 +136,15 @@ nlohmann::json metadata(const Timing& t,
     }
     return j;
 }
-std::vector<std::byte> telemetry(const nlohmann::json& j, bool info) {
+std::vector<std::byte> telemetry_text(std::string_view json, bool info) {
     std::vector<std::byte> bytes;
     text(bytes, info ? "/posebridge/info" : "/posebridge/status");
     text(bytes, ",s");
-    text(bytes, j.dump());
+    text(bytes, json);
     return bytes;
+}
+std::vector<std::byte> telemetry(const nlohmann::json& j, bool info) {
+    return telemetry_text(j.dump(), info);
 }
 mradm::realtime::HeadTrackingMessage decoded(const std::vector<std::byte>& bytes) {
     const auto result = mradm::realtime::decode_head_tracking_osc(bytes);
@@ -418,6 +421,36 @@ void deliver(const Sender& sender, const Receiver& receiver, const std::vector<s
     sender.send(before.bound_port, bytes);
     wait_until([&] { return status(receiver).packets_received > before.packets_received; });
 }
+void telemetry_number_boundaries() {
+    Sender sender;
+    auto receiver = create(0, "head");
+    require(adm_osc_head_tracking_start(receiver.get()) == ADM_ERROR_OK, "numeric boundary start");
+    const auto t = fixture();
+    for (bool info : {false, true}) {
+        const char* key = info ? "info" : "source_status";
+        deliver(sender, receiver, telemetry(metadata(t, 1, info), info));
+        for (const std::string_view overflow : {"1.79769313486231581e308", "-1.79769313486231581e308"}) {
+            auto json = metadata(t, 2, info).dump();
+            json.insert(1, std::string{R"("extra":)"} + std::string{overflow} + ",");
+            const auto before = status(receiver);
+            deliver(sender, receiver, telemetry_text(json, info));
+            // Read through the public C ABI before checking rejection so a cached overflow
+            // also exposes the snapshot failure that motivated this regression test.
+            const auto all = snapshot(receiver);
+            const auto after = status(receiver);
+            require(after.rejected_packets == before.rejected_packets + 1U &&
+                        after.telemetry_packets == before.telemetry_packets,
+                    "overflowing telemetry must be rejected");
+            require(all[key]["message_seq"] == "1", "overflow must preserve the readable cached telemetry");
+        }
+        auto json = metadata(t, 2, info).dump();
+        json.insert(1, R"("extra":1.7976931348623157e308,)");
+        deliver(sender, receiver, telemetry_text(json, info));
+        const auto all = snapshot(receiver);
+        require(all[key]["message_seq"] == "2" && all[key]["extra"] == std::numeric_limits<double>::max(),
+                "maximum finite telemetry must survive snapshot parsing");
+    }
+}
 void telemetry_instance_ordering() {
     Sender sender;
     auto receiver = create(0, "head");
@@ -648,6 +681,7 @@ int main() {
         orientation_poles();
         ordering_contract();
         invalid_arguments();
+        telemetry_number_boundaries();
         telemetry_instance_ordering();
         status_reference_changes();
         receiver_contract();
