@@ -253,6 +253,29 @@ fn rejects_malformed_telemetry() {
 }
 
 #[test]
+fn telemetry_number_limits_match_snapshot_parser() {
+    let cases = [
+        ("1.7976931348623157e308".to_owned(), true),
+        ("1.7976931348623158e308".to_owned(), true),
+        ("1.79769313486231581e308".to_owned(), false),
+        (format!("17976931348623157{}", "0".repeat(292)), true),
+        (format!("179769313486231581{}", "0".repeat(291)), false),
+    ];
+    for (base, info) in [(info_json(), true), (status_json("active"), false)] {
+        for (number, accepted) in &cases {
+            for sign in ["", "-"] {
+                let json = base.replacen('{', &format!(r#"{{"extra":{sign}{number},"#), 1);
+                assert_eq!(
+                    decode(&telemetry(json.as_bytes(), info)).is_some(),
+                    *accepted,
+                    "info={info}, extra={sign}{number}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn json_depth_matches_frozen_callback() {
     let nest =
         |levels: usize, inner: &str| format!("{}{inner}{}", "[".repeat(levels), "]".repeat(levels));
