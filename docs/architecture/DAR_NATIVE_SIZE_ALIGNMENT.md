@@ -19,7 +19,9 @@
   范围及混合验收见 [bed 接入](DAR_BED_SEMANTICS.md)。
   Objects 的增益、静音、起止语义与用户覆盖见 [对象语义对齐](DAR_OBJECT_SEMANTICS.md)。
   positionOffset、divergence、channelLock、screenRef、headLocked、HOA 及未验证组合返回 unsupported。
-- 兼容语义层解释对象与块的时间；DSP 从文件第 0 帧推进。每个 512-frame 控制块最多一个元数据事件。
+- 兼容语义层解释对象与块的时间；DSP 从文件第 0 帧推进。每个 512-frame 控制块允许多条
+  时间非递减的元数据事件，以块内最后一条作为控制目标；同采样点按文件顺序选择，首块规则相同。
+  密集事件是后续新增的输入支持，不将原有参考验收扩大为参考渲染器的密集事件行为结论。
 - `spread=auto` 对含非零尺寸的轨道使用有状态内核；`spread=none` 明确忽略尺寸，继续原点源路径。
   全片 size=0 不进入尺寸处理器；显式 MDAP 与 Triple Balance 互斥。
 - 当前通过独立 `triple-balance` 后端提供离线渲染与实时监听；实时编辑支持等尺寸倍率，独立三轴尺寸仍不开放。详见 [Triple Balance](TRIPLE_BALANCE_RENDERER.md)。

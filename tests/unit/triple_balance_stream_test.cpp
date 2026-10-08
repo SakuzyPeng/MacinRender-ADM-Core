@@ -82,10 +82,13 @@ mradm::RenderPlan make_plan(const Files& files, const std::string& layout) {
         mradm::SceneTrackRef track;
         track.channel_index = ch;
         track.track_uid = object.id;
-        for (uint64_t frame : {0U, 1025U, 16384U, 66049U}) {
+        for (uint64_t frame : {0U, 31U, 511U, 512U, 1025U, 1051U, 1126U, 16384U, 16391U, 66049U}) {
             mradm::SceneObjectBlock block;
             block.position.cartesian = true;
             block.position.x = frame == 0 ? -.4F : .3F;
+            if (frame != 0 && frame % 3 == 0) {
+                block.position.x = -.2F;
+            }
             block.position.y = frame < 16384 ? .2F : -.3F;
             block.position.z = .5F;
             const float size = frame == 16384 ? .7F : .3F;

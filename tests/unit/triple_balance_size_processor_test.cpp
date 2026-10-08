@@ -160,7 +160,15 @@ int main(int argc, char** argv) {
     ok &= require(!mradm::triple_balance::SizeObjectProcessor::create(events, "5.1.4", 48000),
                   "unverified layout rejected");
     events[1].start_sample = 1;
-    ok &=
-        require(!mradm::triple_balance::SizeObjectProcessor::create(events, "7.1.4", 48000), "dense metadata rejected");
+    auto dense = mradm::triple_balance::SizeObjectProcessor::create(events, "7.1.4", 48000);
+    auto selected = events;
+    selected.erase(selected.begin());
+    selected.front().start_sample = 0;
+    auto control_reference = mradm::triple_balance::SizeObjectProcessor::create(selected, "7.1.4", 48000);
+    ok &= require(dense && control_reference && render(*dense, signal, 257) == render(*control_reference, signal, 512),
+                  "dense initial metadata uses the last target without delaying later events");
+    events[2].start_sample = 0;
+    ok &= require(!mradm::triple_balance::SizeObjectProcessor::create(events, "7.1.4", 48000),
+                  "backwards metadata remains rejected");
     return ok ? 0 : 1;
 }

@@ -90,6 +90,50 @@ std::vector<float> read_floats(const std::filesystem::path& path) {
     return output;
 }
 
+bool dense_event_semantics() {
+    auto plan = make_plan(0);
+    plan.scene.info.num_frames = 170496;
+    auto& blocks = plan.scene.objects.front().tracks.front().blocks;
+    const auto seed = blocks.front();
+    if (!seed.adm_source) {
+        return check(false, "dense fixture retains source metadata");
+    }
+    blocks.clear();
+    // A real ADM can contain several distinct, ordered positions within this control block.
+    for (uint64_t frame : {0U, 169472U, 169498U, 169498U, 169573U, 169984U}) {
+        auto block = seed;
+        block.start_sample = frame + 1000;
+        auto source = *seed.adm_source;
+        source.rtime_samples = frame;
+        block.adm_source = source;
+        block.position.x = .1F * static_cast<float>(blocks.size());
+        blocks.push_back(block);
+    }
+    std::string report;
+    const auto scene = mradm::triple_balance::prepare_semantics(plan, report);
+    if (!check(scene.has_value(), "ordered dense metadata and equal timestamps are supported")) {
+        return false;
+    }
+    const auto diagnostic = nlohmann::json::parse(report);
+    const auto& events = diagnostic["objects"][0]["tracks"][0]["events"];
+    bool ok = check(diagnostic["control_event_policy"] == "last_event_in_block",
+                    "report declares the file control-target selection rule");
+    ok &= check(events.size() == 6 && scene->objects.front().tracks.front().blocks.size() == 6,
+                "preparation retains every source event for validation and reporting");
+    for (std::size_t i = 0; i < 6; ++i) {
+        ok &= check(events[i]["control_target"] == (i == 0 || i >= 4),
+                    "only the last source event in each control block supplies its target");
+        const auto& block = blocks[i];
+        ok &= check(block.adm_source && block.start_sample == block.adm_source->rtime_samples + 1000,
+                    "dense preparation leaves source metadata untouched");
+    }
+    auto backwards = *seed.adm_source;
+    backwards.rtime_samples = 169497;
+    blocks[3].adm_source = backwards;
+    ok &= check(!mradm::triple_balance::prepare_semantics(plan, report), "backwards metadata remains rejected");
+    return ok;
+}
+
 bool point_half_code(const std::filesystem::path& fixtures) {
     std::ifstream file(fixtures / "point-motion-half-code.json");
     const auto reference = nlohmann::json::parse(file);
@@ -154,7 +198,7 @@ int main(int argc, char** argv) {
     if (argc != 2) {
         return 2;
     }
-    bool ok = true;
+    bool ok = dense_event_semantics();
     std::string report;
     for (const uint64_t first : {0U, 31U, 32U, 511U, 512U, 513U, 48000U}) {
         const auto original = make_plan(first);

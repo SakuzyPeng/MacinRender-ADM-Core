@@ -183,11 +183,9 @@ impl Track {
             ));
         }
         for (i, e) in events.iter().enumerate() {
-            if i > 0
-                && (e.start <= events[i - 1].start || e.start / 512 == events[i - 1].start / 512)
-            {
+            if i > 0 && e.start < events[i - 1].start {
                 return Err(Error::Unsupported(
-                    "Triple Balance permits one ordered event per control block",
+                    "Triple Balance requires nondecreasing metadata timestamps",
                 ));
             }
             if layout == Layout::Room222 {
@@ -204,6 +202,12 @@ impl Track {
             events: events.into_boxed_slice(),
             layout,
         })
+    }
+
+    /// The initial control block uses its last submitted target, like later blocks.
+    pub(super) fn initial_event(&self) -> (usize, Event) {
+        let next = self.events.partition_point(|e| e.start < 512);
+        (next, self.events[next - 1])
     }
 }
 #[derive(Clone)]
@@ -298,8 +302,9 @@ impl Processor {
         self.track.layout.channels()
     }
     pub fn reset(&mut self) {
+        let (next, event) = self.track.initial_event();
         let s = &mut self.state;
-        s.next = 1;
+        s.next = next;
         s.control = 0;
         s.pending_frames = 0;
         s.pending.fill(0.);
@@ -314,7 +319,6 @@ impl Processor {
         s.previous_active = false;
         s.older_active = false;
         s.decorrelator.reset();
-        let event = self.track.events[0];
         s.position = event.position;
         s.target = event.position;
         s.source_size = event.size;
@@ -404,7 +408,8 @@ impl Processor {
         let layout = self.track.layout;
         let channels = layout.channels();
         let s = &mut self.state;
-        if s.next < self.track.events.len() && self.track.events[s.next].start < s.control + 512 {
+        while s.next < self.track.events.len() && self.track.events[s.next].start < s.control + 512
+        {
             let e = self.track.events[s.next];
             s.next += 1;
             s.target = e.position;
