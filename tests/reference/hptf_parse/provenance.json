@@ -1,0 +1,14 @@
+{
+  "baseline_commit": "1094e51f544356757ea3e9f2c86970f9e7ee0a47",
+  "source_sha256": {
+    "src/adm_render_common/hptf_eq.cpp": "cbc527b31308981529fa06489b33867626d024a73591399852c01d8764052f18"
+  },
+  "adaptations": [
+    "Extract the text helpers, parse_parametric_eq and validate_hptf_profile into header-only legacy.h in mradm::hptf_parse_legacy",
+    "Move the anonymous helpers into namespace detail and mark definitions inline; grammar, C-locale number parsing, messages and validation unchanged",
+    "clang-format only"
+  ],
+  "reference_sha256": {
+    "legacy.h": "f21ccef99b7f97fc88e043576ce4074a8be6f4bc3bcfe275360499de2d89d986"
+  }
+}

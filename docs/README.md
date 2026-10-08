@@ -34,6 +34,7 @@
 - [Rust EAR 后处理与连续短块尾音修复](architecture/RUST_EAR_POST_MIGRATION.md)
 - [Rust HOA 编码、状态与计量前处理迁移](architecture/RUST_HOA_MIGRATION.md)
 - [Rust HpTF 耳机补偿 DSP 迁移](architecture/RUST_HPTF_MIGRATION.md)
+- [Rust HpTF ParametricEQ 文本解析迁移](architecture/RUST_HPTF_PARSE_MIGRATION.md)
 - [Rust HRTF 插值与频域状态迁移](architecture/RUST_HRTF_MIGRATION.md)
 - [Rust Live VBAP 混音与独立渐变迁移](architecture/RUST_LIVE_VBAP_MIGRATION.md)
 - [Rust Meter 迁移记录](architecture/RUST_METER_MIGRATION.md)

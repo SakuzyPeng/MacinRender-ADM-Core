@@ -318,6 +318,71 @@ pub unsafe extern "C" fn mradm_dsp_hptf_processor_process(
     })
 }
 
+/// error: 0 parsed, 1 Preamp value, 2 Fc value, 3 Gain/Q value, 4 nothing usable.
+/// line_offset/line_len index the offending trimmed line of the caller's text.
+#[repr(C)]
+pub struct ParseResult {
+    error: u32,
+    preamp_db: f64,
+    band_count: usize,
+    line_offset: usize,
+    line_len: usize,
+}
+
+/// Parses AutoEq ParametricEQ text. Writes at most `capacity` bands and always reports the
+/// full `band_count`; the caller retries with a larger buffer when it exceeds `capacity`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_hptf_parse(
+    text: *const u8,
+    length: usize,
+    bands: *mut Band,
+    capacity: usize,
+    result: *mut ParseResult,
+    message: *mut u8,
+    message_capacity: usize,
+) -> i32 {
+    boundary(message, message_capacity, || unsafe {
+        let result = mutable(result)?;
+        if bands.is_null() && capacity != 0 {
+            return Err(Error::InvalidArgument("HpTF: null band buffer"));
+        }
+        let text = input(text, length)?;
+        *result = match dsp::parse_parametric_eq(text) {
+            Ok(profile) => {
+                for (slot, band) in profile.bands.iter().take(capacity).enumerate() {
+                    bands.add(slot).write(Band {
+                        kind: band.kind as u32,
+                        enabled: u32::from(band.enabled),
+                        frequency: band.frequency,
+                        gain_db: band.gain_db,
+                        q: band.q,
+                    });
+                }
+                ParseResult {
+                    error: 0,
+                    preamp_db: profile.preamp_db,
+                    band_count: profile.bands.len(),
+                    line_offset: 0,
+                    line_len: 0,
+                }
+            }
+            Err(e) => ParseResult {
+                error: match e.kind {
+                    dsp::ParseErrorKind::Preamp => 1,
+                    dsp::ParseErrorKind::Frequency => 2,
+                    dsp::ParseErrorKind::GainOrQ => 3,
+                    dsp::ParseErrorKind::Empty => 4,
+                },
+                preamp_db: 0.,
+                band_count: 0,
+                line_offset: e.line.start,
+                line_len: e.line.len(),
+            },
+        };
+        Ok(())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

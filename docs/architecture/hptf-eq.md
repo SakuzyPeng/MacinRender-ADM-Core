@@ -248,7 +248,8 @@ the end of its crossfade. Rapid submissions replace the pending target. The audi
 callback never parses text or reads a file. Failure preserves the accepted profile
 and audible state. Saving an editor draft is a separate client operation.
 
-`adm_hptf_parse_parametric_eq` imports NUL-terminated text without a device or file:
+`adm_hptf_parse_parametric_eq` imports NUL-terminated text without a device or file.
+The text grammar is implemented in Rust (`mradm-dsp` `hptf::parametric_eq`, C-locale rules):
 first pass `out_bands = NULL`, `capacity = 0` to query the total band count; then
 allocate that many elements, initialize every `struct_size`, and call again.
 Disabled entries are retained and validated. Capacity errors return the required

@@ -179,6 +179,15 @@ typedef struct MradmDspHptfUpdate {
     uint32_t blending;
     uint32_t applied;
 } MradmDspHptfUpdate;
+// AutoEq text import. error: 0 parsed, 1 Preamp value, 2 Fc value, 3 Gain/Q value, 4 nothing usable;
+// line_offset/line_len index the offending trimmed line of the caller's text.
+typedef struct MradmDspHptfParseResult {
+    uint32_t error;
+    double preamp_db;
+    size_t band_count;
+    size_t line_offset;
+    size_t line_len;
+} MradmDspHptfParseResult;
 // cppcheck-suppress-end unusedStructMember
 int32_t mradm_dsp_hptf_design(const MradmDspHptfBand* bands,
                               size_t length,
@@ -188,6 +197,14 @@ int32_t mradm_dsp_hptf_design(const MradmDspHptfBand* bands,
                               MradmDspHptfCoefficients* output,
                               char* message,
                               size_t capacity);
+// Writes at most capacity bands; band_count is always the full count (retry when larger).
+int32_t mradm_dsp_hptf_parse(const uint8_t* text,
+                             size_t length,
+                             MradmDspHptfBand* bands,
+                             size_t capacity,
+                             MradmDspHptfParseResult* result,
+                             char* message,
+                             size_t message_capacity);
 int32_t mradm_dsp_hptf_magnitude(
     const MradmDspHptfCoefficients* coefficients, double hz, double* output, char* message, size_t capacity);
 int32_t mradm_dsp_hptf_cascade_create(size_t channels, void** output, char* message, size_t capacity);

@@ -1,14 +1,16 @@
 //! Headphone compensation: quantized biquads, double state and linear swaps.
 //! Control publication and applied-state mailboxes belong to the C++ adapter.
 mod design;
+mod parametric_eq;
 use crate::{Error, Result};
 pub use design::design;
+pub use parametric_eq::{ParseError, ParseErrorKind, Profile, parse as parse_parametric_eq};
 
 pub const MAX_BANDS: usize = 32;
 pub const BLEND_FRAMES: usize = 2048;
 pub const CHUNK_FRAMES: usize = 1024;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BandKind {
     Peaking,
     LowShelf,
@@ -33,7 +35,7 @@ impl TryFrom<u32> for BandKind {
         }
     }
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Band {
     pub kind: BandKind,
     pub enabled: bool,

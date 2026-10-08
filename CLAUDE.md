@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 项目长期方向是平台化重构（不是简单的 CLI 重写）：见 `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md`。
 
-**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）、WAVE/RF64/BW64 样本读写与容器元数据（原 libbw64 / dr_wav / C++ chunk 改写）和 PoseBridge OSC 协议解析（`mradm-osc`，见 `RUST_OSC_PROTOCOL_MIGRATION.md`）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度（含 OSC 头追踪的 UDP 收发与快照）、输出文件的临时文件/替换编排与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014 / 0015 / 0016 / 0017）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。二期已按锁定矩阵结项（见 `docs/architecture/RUST_PHASE2_CLOSEOUT.md`）：macOS arm64 / Linux x64 / Windows x64 的全部 78 个 PCM 用例逐位相同并设为门禁。完成切片包括 Scene `scene-separate-v1`（ADR 0014）、RustFFT 标量规划器（ADR 0015）、重采样固定归约及可移植三角函数（ADR 0016）、OM spreader 固定分组与可移植数学函数（ADR 0017），以及保持每列算术树的 FFT 独立列优化。后续覆盖已扩展到 118 个精确 PCM id 和 8 个内核模式（123 个文件），新增 96 kHz Scene、96/192 kHz 重采样、HRTF 边界及退化 OM 输入（见 `RUST_COVERAGE_EXTENSION.md`）；其余 10 个内核文件继续观察，只有平台 libm 的 f64 twiddle 列仍有差异。新增 PCM 用例必须同步加入门禁（`phase2_tools_test.py` 强制）；不得把当前矩阵扩展为任意输入或工具链的全局承诺。dr_flac 按用户决定暂缓；覆盖继续按批次扩展，进一步优化与参考退役分别推进。
+**Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）、WAVE/RF64/BW64 样本读写与容器元数据（原 libbw64 / dr_wav / C++ chunk 改写）、PoseBridge OSC 协议解析（`mradm-osc`，见 `RUST_OSC_PROTOCOL_MIGRATION.md`）和 AutoEq ParametricEQ 文本解析（`mradm-dsp` `hptf::parametric_eq`，见 `RUST_HPTF_PARSE_MIGRATION.md`）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度（含 OSC 头追踪的 UDP 收发与快照）、输出文件的临时文件/替换编排与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014 / 0015 / 0016 / 0017）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。二期已按锁定矩阵结项（见 `docs/architecture/RUST_PHASE2_CLOSEOUT.md`）：macOS arm64 / Linux x64 / Windows x64 的全部 78 个 PCM 用例逐位相同并设为门禁。完成切片包括 Scene `scene-separate-v1`（ADR 0014）、RustFFT 标量规划器（ADR 0015）、重采样固定归约及可移植三角函数（ADR 0016）、OM spreader 固定分组与可移植数学函数（ADR 0017），以及保持每列算术树的 FFT 独立列优化。后续覆盖已扩展到 118 个精确 PCM id 和 8 个内核模式（123 个文件），新增 96 kHz Scene、96/192 kHz 重采样、HRTF 边界及退化 OM 输入（见 `RUST_COVERAGE_EXTENSION.md`）；其余 10 个内核文件继续观察，只有平台 libm 的 f64 twiddle 列仍有差异。新增 PCM 用例必须同步加入门禁（`phase2_tools_test.py` 强制）；不得把当前矩阵扩展为任意输入或工具链的全局承诺。dr_flac 按用户决定暂缓；覆盖继续按批次扩展，进一步优化与参考退役分别推进。
 
 ## 常用构建与测试命令
 
@@ -199,7 +199,7 @@ mradm_exe (CLI)     PRIVATE: ADMEngine + 所有 renderer + CLI11 + spdlog
 
 ```
 mradm-dsp   #![forbid(unsafe_code)]；FFT（RustFFT 标量规划器，workspace 关闭 SIMD 特性，ADR 0015）、VBAP/MDAP、HRTF/SOFA(sofar 本地补丁)、afSTFT、去相关、OM spreader（libm 可移植几何/系数，ADR 0017）、
-            卷积、HpTF、Meter(ebur128 crate)、重采样(rubato 本地补丁：固定标量插值，ADR 0016)、PCM 混音、EAR 后处理、Triple Balance、HOA、
+            卷积、HpTF（含 AutoEq 文本解析）、Meter(ebur128 crate)、重采样(rubato 本地补丁：固定标量插值，ADR 0016)、PCM 混音、EAR 后处理、Triple Balance、HOA、
             Monitor、Live VBAP/双耳、scene_math / scene_transition
 mradm-adm   #![forbid(unsafe_code)]；ADM XML（quick-xml）、内嵌 BS.2094 common definitions、场景投影与语义回写
 mradm-wav   #![forbid(unsafe_code)]；只依赖 std，RIFF/RF64/BW64 读写、u64 帧定位；容器编辑（bext/ambi 追加、
