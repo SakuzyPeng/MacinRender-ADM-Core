@@ -416,6 +416,29 @@
         "tests/reference/osc_protocol/legacy.h": "e8d55bc7f7fef6632f9560d26c0c8a325fd885dcbd315a44f6da6fc8d65eb815",
         "tests/reference/osc_protocol/provenance.json": "95d01cdd8942e9bdb64c7a3a48bcddabb8070d0457bb3b9b38bf653e66918e7e"
       }
+    },
+    {
+      "id": "hptf_parse",
+      "kind": "frozen",
+      "migration_doc": "docs/architecture/RUST_HPTF_PARSE_MIGRATION.md",
+      "accepted": "2026-10-08",
+      "baseline_commit": "1094e51f544356757ea3e9f2c86970f9e7ee0a47",
+      "provenance": "tests/reference/hptf_parse/provenance.json",
+      "cmake_option": null,
+      "tests": [
+        "mr_adm_hptf_parse_reference_tests"
+      ],
+      "depends_on": [],
+      "status": "retained",
+      "open_conditions": [
+        "released",
+        "independent-regression",
+        "phase2-cleared"
+      ],
+      "files": {
+        "tests/reference/hptf_parse/legacy.h": "f21ccef99b7f97fc88e043576ce4074a8be6f4bc3bcfe275360499de2d89d986",
+        "tests/reference/hptf_parse/provenance.json": "b078f4931c67ece554674007342317bcd379ce6388b54c3b3c6f5571815cf301"
+      }
     }
   ]
 }

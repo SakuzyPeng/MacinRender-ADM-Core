@@ -13,6 +13,7 @@
 独立历史的深拷贝；创建、复制和销毁属于非实时操作。
 
 C++ 保留 AutoEq 文本解析、文件读取、参数验证的用户错误上下文，以及原有三槽 mailbox。
+（2026-10-08 起文本解析也已迁入 Rust，C++ 保留错误消息与文件读取，见 [Rust HpTF ParametricEQ 文本解析迁移](RUST_HPTF_PARSE_MIGRATION.md)。）
 两个控制侧 mutex 仍只串行化发布者和状态读取者；音频线程不获取它们。
 公开 C ABI、HpTF 参数结构、选项枚举及设备适用边界不变：仅处理项目生成的耳机馈送，
 离线母版、多声道设备、system-spatial 床和裸 Scene pull 不增加补偿。
