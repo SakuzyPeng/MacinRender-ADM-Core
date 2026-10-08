@@ -43,6 +43,22 @@ fn motion(
     if first.start != 0 {
         return Err(invalid());
     }
+    if events.windows(2).any(|pair| pair[1].start < pair[0].start) {
+        return Err(Error::Unsupported(
+            "Triple Balance requires nondecreasing metadata timestamps",
+        ));
+    }
+    if events.last().is_some_and(|e| e.start >= total) {
+        return Err(Error::Unsupported(
+            "Triple Balance metadata lies outside the timeline",
+        ));
+    }
+    // Validate every source target, including updates superseded within a control block.
+    for event in events {
+        panner::point(event.position, 1., layout)?;
+    }
+    let mut next = events.partition_point(|e| e.start < 512);
+    let first = &events[next - 1];
     let mut current = panner::point(first.position, 1., layout)?;
     blocks.push(Block {
         start: 0,
@@ -51,23 +67,15 @@ fn motion(
         flags: 3,
     });
     gains.extend_from_slice(&current[..layout.channels()]);
-    if events.len() == 1 {
+    if next == events.len() {
         return Ok(());
     }
     let mut state = first.position.internal();
     let mut target = state;
-    let mut next = 1;
     let mut control = 512u64;
     while control < total {
         let end = control.checked_add(512).ok_or_else(invalid)?;
-        if next < events.len() && events[next].start < end {
-            if events[next].start < control
-                || (next + 1 < events.len() && events[next + 1].start < end)
-            {
-                return Err(Error::Unsupported(
-                    "Triple Balance permits one metadata event per control block",
-                ));
-            }
+        while next < events.len() && events[next].start < end {
             target = events[next].position.internal();
             next += 1;
         }
@@ -142,8 +150,6 @@ impl Plan {
                 if source.last().is_none_or(|e| e.start >= total) {
                     return Err(invalid());
                 }
-                let first = source.first().ok_or_else(invalid)?;
-                let initial = panner::point(first.position, 1., layout)?;
                 let converted = source
                     .iter()
                     .map(|e| Event {
@@ -152,6 +158,8 @@ impl Plan {
                     })
                     .collect();
                 let track = Arc::new(Track::new(converted, layout, rate)?);
+                let (next, _) = track.initial_event();
+                let initial = panner::point(source[next - 1].position, 1., layout)?;
                 sizes[r.size_index] = Some(SizedTrack {
                     track,
                     input: r.input,
@@ -243,12 +251,15 @@ impl Session {
         let initial: Vec<_> = if live {
             plan.tracks
                 .iter()
-                .map(|t| Point {
-                    position: t.track.events[0].position,
-                    target: t.track.events[0].position,
-                    gains: t.initial,
-                    next: 1,
-                    control: 0,
+                .map(|t| {
+                    let (next, event) = t.track.initial_event();
+                    Point {
+                        position: event.position,
+                        target: event.position,
+                        gains: t.initial,
+                        next,
+                        control: 0,
+                    }
                 })
                 .collect()
         } else {
@@ -370,7 +381,9 @@ impl Session {
             let events = &self.plan.tracks[i].track.events;
             for _ in (0..frames).step_by(512) {
                 if state.control != 0 && events.len() > 1 {
-                    if state.next < events.len() && events[state.next].start < state.control + 512 {
+                    while state.next < events.len()
+                        && events[state.next].start < state.control + 512
+                    {
                         state.target = events[state.next].position;
                         state.next += 1;
                     }

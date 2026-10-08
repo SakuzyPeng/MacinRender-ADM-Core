@@ -260,7 +260,7 @@ fn shared_sessions_controls_snapshots_and_errors() {
 #[test]
 fn preparation_rejects_bad_events_and_capacity() {
     let mut e = events();
-    e[1].start = 1;
+    e[2].start = e[1].start - 1;
     assert!(Track::new(e, Layout::Seven, 48000).is_err());
     assert!(Track::new(events(), Layout::Seven, 44100).is_err());
     assert!(Track::new(vec![], Layout::Seven, 48000).is_err());
@@ -271,6 +271,139 @@ fn preparation_rejects_bad_events_and_capacity() {
     assert!(s.prepare_points(u64::MAX, 1024).is_err());
     assert!(s.prepare_points(0, 1025).is_err());
     s.prepare_points(0, 1024).unwrap();
+}
+
+fn dense_events() -> Vec<Event> {
+    [0, 31, 511, 512, 600, 600, 1023, 1024, 1100, 1535, 2048]
+        .into_iter()
+        .enumerate()
+        .map(|(i, start)| Event {
+            start,
+            position: Position {
+                x: 0.1 + i as f32 * 0.07,
+                y: 0.8 - i as f32 * 0.05,
+                z: i as f32 * 0.08,
+            },
+            size: if i == 6 { 0. } else { 0.1 + i as f32 * 0.06 },
+        })
+        .collect()
+}
+
+fn selected_control_targets(dense: &[Event]) -> Vec<Event> {
+    // Explicit control targets, including the last event in the initial block and a
+    // zero-size target. Intermediate updates must not leak into later control blocks.
+    vec![
+        Event {
+            start: 0,
+            ..dense[2]
+        },
+        dense[6],
+        dense[9],
+        dense[10],
+    ]
+}
+
+#[test]
+fn dense_events_use_the_last_target_without_a_control_block_backlog() {
+    let dense = dense_events();
+    let selected = selected_control_targets(&dense);
+    let input = samples(2309);
+    for layout in [Layout::Seven, Layout::Nine, Layout::Room222] {
+        let mut reference = Processor::new(Arc::new(
+            Track::new(selected.clone(), layout, 48000).unwrap(),
+        ));
+        let mut expected = vec![0.; input.len() * layout.channels()];
+        reference.process(&input, &mut expected, true).unwrap();
+        let track = Arc::new(Track::new(dense.clone(), layout, 48000).unwrap());
+        for chunk in [1, 31, 257, 511, 512, 513, 1024] {
+            let mut processor = Processor::new(Arc::clone(&track));
+            let mut actual = Vec::new();
+            for block in input.chunks(chunk) {
+                let mut output = vec![0.; processor.required(block.len(), false).unwrap()];
+                processor.process(block, &mut output, false).unwrap();
+                actual.extend(output);
+            }
+            let mut tail = vec![0.; processor.required(0, true).unwrap()];
+            processor.process(&[], &mut tail, true).unwrap();
+            actual.extend(tail);
+            assert_eq!(actual, expected, "{layout:?}, chunk={chunk}");
+            assert_eq!(processor.status().next_event, dense.len());
+            processor.reset();
+            processor.process(&input, &mut actual, true).unwrap();
+            assert_eq!(actual, expected, "reset {layout:?}, chunk={chunk}");
+        }
+    }
+}
+
+#[test]
+fn dense_compiled_and_live_point_curves_match_control_targets() {
+    use mradm_dsp::pcm_mix::Mixer;
+    let dense = dense_events();
+    let selected = selected_control_targets(&dense);
+    let input = samples(2309);
+    for layout in [Layout::Seven, Layout::Nine, Layout::Room222] {
+        for kind in [1, 2] {
+            let prepare = |events: &[Event]| {
+                let row = TbRowInput {
+                    input: 0,
+                    event_offset: 0,
+                    event_count: events.len(),
+                    bed_offset: 0,
+                    size_index: 0,
+                    kind,
+                    gain: 0.75,
+                };
+                Arc::new(
+                    Plan::new(1, layout, 48000, input.len() as u64, &[row], events, &[]).unwrap(),
+                )
+            };
+            let dense_plan = prepare(&dense);
+            let selected_plan = prepare(&selected);
+            let mut a = Mixer::new(Arc::clone(&dense_plan.mix), 1024, 960, false).unwrap();
+            let mut b = Mixer::new(Arc::clone(&selected_plan.mix), 1024, 960, false).unwrap();
+            let mut live_a = Session::new(dense_plan, 1024, 960, true).unwrap();
+            let mut live_b = Session::new(selected_plan, 1024, 960, true).unwrap();
+            for (block, source) in input.chunks(1024).enumerate() {
+                let start = (block * 1024) as u64;
+                let frames = source.len();
+                let mut actual = vec![0.; frames * layout.channels()];
+                let mut expected = actual.clone();
+                if kind == 1 {
+                    a.speaker(source, &mut actual, &[], start, frames, None, None)
+                        .unwrap();
+                    b.speaker(source, &mut expected, &[], start, frames, None, None)
+                        .unwrap();
+                } else {
+                    live_a.prepare_points(start, frames).unwrap();
+                    live_b.prepare_points(start, frames).unwrap();
+                    live_a
+                        .point(0, source, &mut actual, &[], start, frames, true)
+                        .unwrap();
+                    live_b
+                        .point(0, source, &mut expected, &[], start, frames, true)
+                        .unwrap();
+                }
+                assert_eq!(actual, expected, "{layout:?}, kind={kind}, start={start}");
+            }
+        }
+    }
+}
+
+#[test]
+fn superseded_invalid_targets_are_still_rejected() {
+    let mut invalid = dense_events();
+    invalid[1].position.x = f32::NAN;
+    assert!(Track::new(invalid.clone(), Layout::Seven, 48000).is_err());
+    let row = TbRowInput {
+        input: 0,
+        event_offset: 0,
+        event_count: invalid.len(),
+        bed_offset: 0,
+        size_index: 0,
+        kind: 1,
+        gain: 1.,
+    };
+    assert!(Plan::new(1, Layout::Seven, 48000, 4096, &[row], &invalid, &[]).is_err());
 }
 
 #[test]

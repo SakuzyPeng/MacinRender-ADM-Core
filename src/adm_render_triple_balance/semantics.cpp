@@ -37,6 +37,7 @@ Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) 
                      {"status", "prepared"},
                      {"time_basis", "file_absolute_samples"},
                      {"control_frames", 512},
+                     {"control_event_policy", "last_event_in_block"},
                      {"event_stage", "targets before existing room conversion, smoothing and quantization"},
                      {"objects", Json::array()},
                      {"bed_profile", "triple-balance-7.1.2-bed-v1"},
@@ -179,8 +180,8 @@ Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) 
             bool first = true;
             for (auto& block : track.blocks) {
                 const uint64_t relative = block.adm_source ? block.adm_source->rtime_samples : block.start_sample;
-                if (!first && (relative <= previous || relative / 512 == previous / 512)) {
-                    return reject(object.id, "rtime", "triple-balance requires one ordered update per 512-frame block");
+                if (!first && relative < previous) {
+                    return reject(object.id, "rtime", "triple-balance requires nondecreasing metadata timestamps");
                 }
                 if (relative >= scene.info.num_frames) {
                     return reject(
@@ -189,11 +190,15 @@ Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) 
                 if (!std::isfinite(block.gain) || block.gain < 0) {
                     return reject(object.id, "block.gain", "triple-balance requires finite nonnegative block gain");
                 }
+                if (!first && relative / 512 == previous / 512) {
+                    events.back()["control_target"] = false;
+                }
                 events.push_back(
                     {{"source_absolute_start_sample", block.start_sample},
                      {"source_rtime_sample", relative},
                      {"renderer_event_sample", relative / 512 * 512},
                      {"control_start_sample", relative / 512 * 512},
+                     {"control_target", true},
                      {"target_cartesian", block.position.cartesian},
                      {"target_xyz", Json::array({block.position.x, block.position.y, block.position.z})},
                      {"extent",
