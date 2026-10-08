@@ -1,8 +1,12 @@
 // Differential test: Rust AutoEq ParametricEQ parsing against the frozen C++ parser.
 // Results must match exactly: bands bit for bit, or the same error code, message and context.
-// Texts with an underflowing number (nonzero literal rounding to zero or a subnormal) are
-// excluded: the old stream extraction accepted them on libstdc++ but failed them on libc++ and
-// MSVC. The Rust parser rejects them everywhere, which differential_underflow asserts directly.
+// Two token classes made the old stream extraction platform-dependent, so texts containing them
+// are excluded and the Rust behaviour is asserted directly instead (differential_platform):
+// - underflowing numbers (nonzero literal rounding to zero or a subnormal): libstdc++ accepted
+//   them, libc++ and MSVC failed them with ERANGE;
+// - hexadecimal numbers (0x10, 0x1p3): libc++ and MSVC accepted them through strtod, libstdc++
+//   failed them.
+// The Rust parser rejects both on every platform.
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -43,7 +47,8 @@ class Random {
 struct Counts {
     std::size_t compared{0};
     std::size_t parsed{0};
-    std::size_t platform_dependent{0};
+    std::size_t underflow{0};
+    std::size_t hexadecimal{0};
     std::vector<std::string> mismatches;
 };
 Counts& counts() {
@@ -87,7 +92,16 @@ bool underflow_literal(std::string_view token) {
            std::abs(value) < std::numeric_limits<double>::min();
 }
 
-bool has_underflow_literal(std::string_view text) {
+bool hex_literal(std::string_view token) {
+    if (!token.empty() && (token.front() == '+' || token.front() == '-')) {
+        token.remove_prefix(1);
+    }
+    return token.size() >= 2U && token[0] == '0' && (token[1] == 'x' || token[1] == 'X');
+}
+
+enum class TokenClass : std::uint8_t { portable, underflow, hexadecimal };
+
+TokenClass classify(std::string_view text) {
     std::size_t i = 0;
     while (i < text.size()) {
         while (i < text.size() && space(text[i])) {
@@ -97,17 +111,26 @@ bool has_underflow_literal(std::string_view text) {
         while (i < text.size() && !space(text[i])) {
             ++i;
         }
+        if (i > start && hex_literal(text.substr(start, i - start))) {
+            return TokenClass::hexadecimal;
+        }
         if (i > start && underflow_literal(text.substr(start, i - start))) {
-            return true;
+            return TokenClass::underflow;
         }
     }
-    return false;
+    return TokenClass::portable;
 }
 
 void compare(std::string_view text) {
-    if (has_underflow_literal(text)) {
-        ++counts().platform_dependent;
+    switch (classify(text)) {
+    case TokenClass::underflow:
+        ++counts().underflow;
         return;
+    case TokenClass::hexadecimal:
+        ++counts().hexadecimal;
+        return;
+    case TokenClass::portable:
+        break;
     }
     ++counts().compared;
     const auto expected = legacy::parse_parametric_eq(text);
@@ -320,21 +343,23 @@ void differential_bytes(Random& random) {
     }
 }
 
-// Rust rejects underflowing numbers on every platform, wherever they appear.
-void differential_underflow() {
-    for (const std::string_view literal : {"1e-400", "-1e-400", "1e-310", "4.9e-324", "0.1e-320"}) {
+// Rust rejects underflowing and hexadecimal numbers on every platform, wherever they appear.
+void differential_platform() {
+    for (const std::string_view literal :
+         {"1e-400", "-1e-400", "1e-310", "4.9e-324", "0.1e-320", "0x10", "0X1P3", "-0x1", "+0x1.8p1"}) {
         for (const auto& line : {std::string{"Preamp: "} + std::string{literal} + " dB",
+                                 std::string{"Filter 1: ON PK Fc "} + std::string{literal} + " Hz",
                                  std::string{"Filter 1: ON PK Fc 100 Hz Gain "} + std::string{literal},
                                  std::string{"Filter 1: ON PK Fc 100 Hz Q "} + std::string{literal}}) {
-            if (!has_underflow_literal(line) || mradm::render_common::parse_parametric_eq(line)) {
-                throw std::runtime_error("underflowing number must be rejected: " + line);
+            if (classify(line) == TokenClass::portable || mradm::render_common::parse_parametric_eq(line)) {
+                throw std::runtime_error("platform-dependent number must be rejected: " + line);
             }
         }
     }
     for (const std::string_view zero : {"0e-400", "0.000e-999", "-0.0"}) {
         const auto line = std::string{"Preamp: "} + std::string{zero};
         const auto parsed = mradm::render_common::parse_parametric_eq(line);
-        if (has_underflow_literal(line) || !parsed || parsed->preamp_db != 0.0) {
+        if (classify(line) != TokenClass::portable || !parsed || parsed->preamp_db != 0.0) {
             throw std::runtime_error("an explicit zero must still parse: " + line);
         }
     }
@@ -348,9 +373,10 @@ int main() {
         Random random(0x5eed0004U);
         differential_tokens(random);
         differential_bytes(random);
-        differential_underflow();
+        differential_platform();
         std::cout << "HpTF ParametricEQ differential: " << counts().compared << " texts, " << counts().parsed
-                  << " parsed, " << counts().platform_dependent << " underflow texts excluded\n";
+                  << " parsed; excluded " << counts().underflow << " underflow and " << counts().hexadecimal
+                  << " hexadecimal texts\n";
         if (!counts().mismatches.empty()) {
             for (const auto& mismatch : counts().mismatches) {
                 if (!mismatch.empty()) {
