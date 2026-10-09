@@ -177,6 +177,13 @@ def scene_cases():
                            input_rate=input_rate, output_rate=output_rate, partition=partition)
                 row['controls'] = dict(row['controls'], **{'8192': 'switch SOFA to built-in KEMAR'})
                 result.append(row)
+    # Extend the same multichannel VBAP replay contract to the 24-channel 22.2 layout.
+    for rate in (48000, 96000):
+        for partition_name in ('fixed', 'fragmented'):
+            template = next(row for row in result
+                            if row['id'] == f'scene-vbap-4+7+0-cloud0-{rate}-{rate}-{partition_name}')
+            result.append(dict(template, id=f'scene-vbap-9+10+3-cloud0-{rate}-{rate}-{partition_name}',
+                               layout='9+10+3'))
     return result
 
 

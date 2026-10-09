@@ -1103,6 +1103,46 @@
       "kind": "kernel",
       "pattern": "sofa-*",
       "reason": "Pinned external SOFA parsing, grid, spectra and interpolated HRTFs must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-9+10+3-cloud0-48000-48000-fixed-epoch1",
+      "reason": "SAF VBAP Scene 22.2 at 48/96 kHz must preserve all 24 PCM channels across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-9+10+3-cloud0-48000-48000-fixed-epoch2",
+      "reason": "SAF VBAP Scene 22.2 at 48/96 kHz must preserve all 24 PCM channels across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-9+10+3-cloud0-48000-48000-fragmented-epoch1",
+      "reason": "SAF VBAP Scene 22.2 at 48/96 kHz must preserve all 24 PCM channels across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-9+10+3-cloud0-48000-48000-fragmented-epoch2",
+      "reason": "SAF VBAP Scene 22.2 at 48/96 kHz must preserve all 24 PCM channels across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-9+10+3-cloud0-96000-96000-fixed-epoch1",
+      "reason": "SAF VBAP Scene 22.2 at 48/96 kHz must preserve all 24 PCM channels across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-9+10+3-cloud0-96000-96000-fixed-epoch2",
+      "reason": "SAF VBAP Scene 22.2 at 48/96 kHz must preserve all 24 PCM channels across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-9+10+3-cloud0-96000-96000-fragmented-epoch1",
+      "reason": "SAF VBAP Scene 22.2 at 48/96 kHz must preserve all 24 PCM channels across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-vbap-9+10+3-cloud0-96000-96000-fragmented-epoch2",
+      "reason": "SAF VBAP Scene 22.2 at 48/96 kHz must preserve all 24 PCM channels across platforms."
     }
   ]
 }
