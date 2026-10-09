@@ -5,6 +5,7 @@ import copy
 import fnmatch
 import json
 import os
+import shutil
 from pathlib import Path
 import struct
 import sys
@@ -30,7 +31,7 @@ class CollectionTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.build = self.root / 'build'; self.build.mkdir()
         self.source = common.source_fingerprint()
-        self.cache = {'CMAKE_BUILD_TYPE': 'Release', 'MR_ADM_ENABLE_IAMF': 'OFF', 'MR_ADM_ENABLE_SOFA': 'OFF',
+        self.cache = {'CMAKE_BUILD_TYPE': 'Release', 'MR_ADM_ENABLE_IAMF': 'OFF', 'MR_ADM_ENABLE_SOFA': 'ON',
                       'MR_ADM_FLAC_PROVIDER': 'VENDORED', 'MR_ADM_OPUS_PROVIDER': 'VENDORED',
                       'MR_ADM_CORE_USE_INSTALLED_DEPS': 'OFF', 'MR_ADM_STRICT_FP': 'OFF',
                       'MR_ADM_CONSISTENCY_DIAGNOSTICS': 'OFF'}
@@ -87,6 +88,16 @@ class CollectionTests(unittest.TestCase):
         del stamp['configuration']
         common.save(path, stamp)
         self.assert_collection_rejected('stale.*configuration', '--config', 'a')
+
+    def test_sofa_disabled_cannot_silently_drop_coverage(self):
+        self.cache['MR_ADM_ENABLE_SOFA'] = 'OFF'
+        self.configure()
+        common.stamp_build(self.build)
+        with patch.object(sys, 'argv', ['collector', str(self.build), str(self.root / 'out'), '--config', 'a']), \
+                patch.object(collector, 'run') as run, self.assertRaises(SystemExit):
+            collector.main()
+        run.assert_not_called()
+        self.assertFalse((self.root / 'out').exists())
 
     def test_noninterference_requires_plain_baseline_before_collection(self):
         self.cache['MR_ADM_CONSISTENCY_DIAGNOSTICS'] = 'ON'
@@ -145,9 +156,9 @@ class EvidenceTests(unittest.TestCase):
 
     def test_catalog_covers_current_backends_and_exact_requests(self):
         offline, scene = common.offline_cases(), common.scene_cases()
-        self.assertEqual(len(offline), 34)
-        self.assertEqual(len({r['id'] for r in offline}), 34)
-        self.assertEqual(len(scene), 58)
+        self.assertEqual(len(offline), 40)
+        self.assertEqual(len({r['id'] for r in offline}), 40)
+        self.assertEqual(len(scene), 70)
         self.assertTrue(any('--loudness-target' in c['args'] for c in offline))
         self.assertTrue(any('triple-balance' in c['args'] for c in offline))
         for row in scene:
@@ -168,10 +179,65 @@ class EvidenceTests(unittest.TestCase):
         original_scene = [row for row in common.scene_cases()
                           if row['version'] == 1 and max(row['input_rate'], row['output_rate']) <= 48000]
         self.assertEqual(len(original_scene), closeout['inventory']['scene_configurations'])
-        self.assertEqual(common.json_digest(common.offline_cases()),
+        self.assertEqual(common.json_digest([row for row in common.offline_cases() if 'sofa' not in row]),
                          closeout['inventory']['offline_parameters_sha256'])
         self.assertEqual(common.json_digest(original_scene),
                          closeout['inventory']['scene_parameters_sha256'])
+        self.assertEqual(common.json_digest([row for row in common.scene_cases() if 'sofa' not in row]),
+                         '4af0ffe8691c5287445862e3336ceab8e98a359c60b274acf7952584db3bf46c')
+
+    def test_sofa_inputs_are_pinned_and_part_of_source_identity(self):
+        source = common.ROOT / 'tests/fixtures/sofa'
+        common.validate_sofa_fixtures(source)
+        files = common.source_fingerprint()['files']
+        for name, sha in common.SOFA_FIXTURES.items():
+            self.assertEqual(files['tests/fixtures/sofa/' + name], sha)
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp)
+            for name in common.SOFA_FIXTURES:
+                shutil.copyfile(source / name, destination / name)
+            for name in common.SOFA_FIXTURES:
+                path = destination / name
+                original = path.read_bytes()
+                path.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
+                with self.assertRaisesRegex(ValueError, 'pinned SOFA'):
+                    common.validate_sofa_fixtures(destination)
+                path.unlink()
+                with self.assertRaisesRegex(ValueError, 'pinned SOFA'):
+                    common.validate_sofa_fixtures(destination)
+                path.write_bytes(original)
+
+    def test_sofa_catalog_covers_offline_modes_and_live_conversion(self):
+        offline = [r for r in common.offline_cases() if 'sofa' in r]
+        scene = [r for r in common.scene_cases() if 'sofa' in r]
+        self.assertEqual(len(offline), 6)
+        self.assertEqual(len(scene), 12)
+        self.assertEqual({r['sofa'] for r in scene}, set(common.SOFA_FIXTURES))
+        for row in scene:
+            self.assertEqual(row['version'], 3)
+            self.assertEqual(row['controls']['8192'], 'switch SOFA to built-in KEMAR')
+
+    def test_sofa_build_requires_actual_resolved_features(self):
+        build = {'cmake.MR_ADM_ENABLE_SOFA': 'ON',
+                 'rust.resolved_features': json.dumps({'mradm-ffi': ['sofa'], 'mradm-dsp': ['sofa']})}
+        comparator.validate_sofa_build(build)
+        for features in ({}, {'mradm-ffi': ['sofa']}, {'mradm-dsp': ['sofa']}):
+            with self.assertRaisesRegex(ValueError, 'SOFA-enabled'):
+                comparator.validate_sofa_build(dict(build, **{'rust.resolved_features': json.dumps(features)}))
+        with self.assertRaisesRegex(ValueError, 'SOFA-enabled'):
+            comparator.validate_sofa_build(dict(build, **{'cmake.MR_ADM_ENABLE_SOFA': 'OFF'}))
+
+    def test_sofa_silence_or_missing_ear_cannot_pass_equality(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'pcm'
+            for channels, values in [(2, [0.125, -0.125]), (1, [0.125]), (2, [0., 0.]), (2, [0.125, 0.])]:
+                path.write_bytes(struct.pack('<4sIIIQ', b'MRPB', 1, channels, 48000, 1)
+                                 + struct.pack('<' + 'f' * channels, *values))
+                if channels == 2 and all(values):
+                    common.validate_sofa_pcm(path)
+                else:
+                    with self.assertRaisesRegex(ValueError, 'non-silent stereo'):
+                        common.validate_sofa_pcm(path)
 
     def test_incomplete_and_path_escape_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -245,7 +311,8 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         self.assertIn('fft-twiddles.20-table.f32', names)
         self.assertIn('spreader.40-output.f32', names)
-        self.assertEqual(len(names), 133)
+        self.assertEqual(len(names), 160)
+        self.assertEqual(len([n for n in names if n.startswith('sofa-')]), 27)
         for rates in common.RESAMPLER_RATES:
             self.assertIn(f'resampler-{rates[0]}-{rates[1]}.20-output.f32', names)
         for name in common.OM_EDGE_CASES:
@@ -312,13 +379,24 @@ class EvidenceTests(unittest.TestCase):
 
 
 class ReplayTests(unittest.TestCase):
-    def run_probe(self, case, success, no_artifacts=False):
+    def run_probe(self, case, success, no_artifacts=False, stage_sofa=True, corrupt_sofa=False):
         if OPTIONS.scene is None:
             self.skipTest('native replay executable not provided')
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
-            common.save(tmp / 'case.json', case)
-            result = subprocess.run([str(OPTIONS.scene), str(tmp / 'case.json'), str(tmp / 'out')],
+            if 'sofa' in case:
+                enabled = subprocess.run([str(OPTIONS.scene), '--sofa-supported'], check=True,
+                                         capture_output=True, text=True).stdout.strip() == 'yes'
+                if success and not enabled:
+                    success, no_artifacts = False, True
+                if stage_sofa:
+                    (tmp / 'fixtures').mkdir()
+                    for name in common.SOFA_FIXTURES:
+                        shutil.copyfile(ROOT / 'tests/fixtures/sofa' / name, tmp / 'fixtures' / name)
+                        if corrupt_sofa:
+                            (tmp / 'fixtures' / name).write_bytes(b'not a SOFA file')
+            common.save(tmp / 'cases/case.json', case)
+            result = subprocess.run([str(OPTIONS.scene), str(tmp / 'cases/case.json'), str(tmp / 'out')],
                                     capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode == 0, success, result.stderr)
             if success:
@@ -326,7 +404,7 @@ class ReplayTests(unittest.TestCase):
                     common.require_same(tmp / 'out' / f'pass-1-epoch-{epoch}.pcmbits', tmp / 'out' / f'pass-2-epoch-{epoch}.pcmbits')
                 self.assertEqual(json.loads((tmp / 'out/pass-1.json').read_text())['underruns'], 0)
             else:
-                self.assertIn('replay', result.stderr)
+                self.assertIn('SOFA' if corrupt_sofa else 'replay', result.stderr)
                 if no_artifacts:
                     self.assertFalse((tmp / 'out').exists(), 'invalid script must not be recorded as evidence')
 
@@ -343,6 +421,16 @@ class ReplayTests(unittest.TestCase):
         for case in common.scene_cases():
             with self.subTest(case=case['id']):
                 self.run_probe(case, True)
+
+    def test_missing_sofa_and_unexecuted_switch_are_rejected(self):
+        case = next(row for row in common.scene_cases() if 'sofa' in row)
+        self.run_probe(case, False, no_artifacts=True, stage_sofa=False)
+        self.run_probe(case, False, corrupt_sofa=True)
+        for field, value in [('sofa', '../simple.sofa'), ('version', 1), ('backend', 'vbap'),
+                             ('controls', dict(case['controls'], **{'8192': 'switch stereo backend'}))]:
+            invalid = copy.deepcopy(case)
+            invalid[field] = value
+            self.run_probe(invalid, False, no_artifacts=True)
 
     def test_unexecuted_script_changes_are_rejected(self):
         original = common.scene_cases()[0]

@@ -1032,6 +1032,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         mr_adm_core_apply_warnings(mr_adm_phase2_${_probe})
     endforeach()
 
+    target_link_libraries(mr_adm_phase2_scene PRIVATE MacinRender::ADMRenderBinaural)
     set_property(TARGET mr_adm_phase2_scene PROPERTY EXCLUDE_FROM_ALL FALSE)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)

@@ -47,7 +47,7 @@ def main():
     if out.exists() and any(out.iterdir()):
         parser.error('output must be empty; do not mix runs')
     cache = read_cache(build / 'CMakeCache.txt')
-    required = {'CMAKE_BUILD_TYPE': 'Release', 'MR_ADM_ENABLE_IAMF': 'OFF', 'MR_ADM_ENABLE_SOFA': 'OFF',
+    required = {'CMAKE_BUILD_TYPE': 'Release', 'MR_ADM_ENABLE_IAMF': 'OFF', 'MR_ADM_ENABLE_SOFA': 'ON',
                 'MR_ADM_FLAC_PROVIDER': 'VENDORED', 'MR_ADM_OPUS_PROVIDER': 'VENDORED',
                 'MR_ADM_CORE_USE_INSTALLED_DEPS': 'OFF', 'MR_ADM_STRICT_FP': 'ON' if args.config == 'b' else 'OFF'}
     for key, value in required.items():
@@ -65,11 +65,13 @@ def main():
     common.validate_build_stamp(build, source, binaries)
     baseline = load_uninstrumented_baseline(args.baseline, source, args.config) if diagnostics else None
     offline, scenes = common.offline_cases(), common.scene_cases()
+    sofa_root = common.ROOT / 'tests/fixtures/sofa'
+    common.validate_sofa_fixtures(sofa_root)
     build_record, build_errors = collect(build)
     if build_errors:
         raise ValueError('invalid build provenance: ' + '; '.join(build_errors))
     manifest = {'schema': 'mradm.phase2.v1', 'complete': False, 'config': args.config, 'diagnostics': diagnostics,
-                'source': source, 'offline': offline, 'scene': scenes, 'build': build_record,
+                'source': source, 'offline': offline, 'scene': scenes, 'sofa': common.SOFA_FIXTURES, 'build': build_record,
                 'binaries': {k: common.digest(v.read_bytes()) for k, v in binaries.items()},
                 'comparisons': {}, 'outputs': {}, 'fixtures': {}, 'replay_status': {}}
     if manifest['build'].get('rust.compiler_verbose') == 'unavailable':
@@ -80,9 +82,13 @@ def main():
     common.save(out / 'manifest.json', manifest)
     def record(name, path):
         shape, bits = common.pcm_bytes(path)
+        if name.startswith(('sofa-', 'scene-sofa-')):
+            common.validate_sofa_pcm(path)
         manifest['outputs'][name] = {'path': path.relative_to(out).as_posix(), 'shape': shape, 'sha256': common.digest(bits)}
     work = out / '_work'; work.mkdir()
     try:
+        for name in common.SOFA_FIXTURES:
+            shutil.copyfile(sofa_root / name, out / 'fixtures' / name)
         for fixture in sorted({c['fixture'] for c in offline}):
             run([binaries['mr_adm_make_fixture'], fixture, out / 'fixtures' / (fixture + '.wav')], out / 'logs' / (fixture + '.log'))
         for row in offline:
@@ -91,9 +97,10 @@ def main():
             fixture = out / 'fixtures' / (row['fixture'] + '.wav')
             destination = out / 'pcm' / (name + '.pcmbits')
             trace = out / 'checkpoints' / name if diagnostics else None
+            sofa_args = ['--sofa', out / 'fixtures' / row['sofa']] if 'sofa' in row else []
             for process in (1, 2):
                 wav, bits = work / 'cli.wav', work / 'cli.pcmbits'
-                run([binaries['mradm'], 'render', '-i', fixture, '-o', wav, '--output-bit-depth', 'f32', *row['args']],
+                run([binaries['mradm'], 'render', '-i', fixture, '-o', wav, '--output-bit-depth', 'f32', *row['args'], *sofa_args],
                     out / 'logs' / f'{name}-cli{process}.log', trace if process == 1 else None)
                 run([binaries['mr_adm_pcm_bits'], 'extract', wav, bits], out / 'logs' / f'{name}-extract{process}.log')
                 wav.unlink()
@@ -137,7 +144,7 @@ def main():
                 shutil.rmtree(directory)
         for process in (1, 2):
             directory = work / f'kernels{process}'
-            run([binaries['mr_adm_phase2_kernels'], directory], out / 'logs' / f'kernels{process}.log',
+            run([binaries['mr_adm_phase2_kernels'], directory, out / 'fixtures'], out / 'logs' / f'kernels{process}.log',
                 out / 'kernel-checkpoints' if diagnostics and process == 1 else None)
             for path in sorted((directory / 'pass-1').iterdir()):
                 other = directory / 'pass-2' / path.name
@@ -178,6 +185,7 @@ def main():
                 if path.suffix in common.FORMATS and path.read_bytes() != (args.baseline / 'kernels' / path.name).read_bytes():
                     raise ValueError('kernel diagnostic noninterference failed: ' + path.name)
             manifest['noninterference'] = {'passed': True, 'baseline_manifest_sha256': common.digest((args.baseline / 'manifest.json').read_bytes())}
+        common.validate_sofa_fixtures(out / 'fixtures')
         manifest['fixtures'] = {p.name: common.digest(p.read_bytes()) for p in sorted((out / 'fixtures').iterdir())}
         manifest['artifacts'] = {p.relative_to(out).as_posix(): common.digest(p.read_bytes())
                                  for folder in ('kernels', 'checkpoints', 'kernel-checkpoints')

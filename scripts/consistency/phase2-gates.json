@@ -948,6 +948,161 @@
       "pattern": "scene-triple-balance-9.1.6-size1-48000-44100-fragmented-epoch2",
       "reason": "Sample-clock Triple Balance Scene rendering, independent ramps, generation reset and same-layout backend switching",
       "reference": "docs/architecture/TRIPLE_BALANCE_RENDERER.md"
+    },
+    {
+      "kind": "case",
+      "pattern": "sofa-simple-point",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "sofa-simple-cloud",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "sofa-simple-saf-spreader",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "sofa-off-axis-compressed-point",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "sofa-off-axis-compressed-cloud",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "sofa-off-axis-compressed-saf-spreader",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-simple-cloud0-48000-44100-fixed-epoch1",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-simple-cloud0-48000-44100-fixed-epoch2",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-simple-cloud0-48000-44100-fragmented-epoch1",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-simple-cloud0-48000-44100-fragmented-epoch2",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-simple-cloud1-48000-44100-fixed-epoch1",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-simple-cloud1-48000-44100-fixed-epoch2",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-simple-cloud1-48000-44100-fragmented-epoch1",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-simple-cloud1-48000-44100-fragmented-epoch2",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-general-compressed-cloud0-48000-48000-fixed-epoch1",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-general-compressed-cloud0-48000-48000-fixed-epoch2",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-general-compressed-cloud0-48000-48000-fragmented-epoch1",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-general-compressed-cloud0-48000-48000-fragmented-epoch2",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-general-compressed-cloud1-48000-48000-fixed-epoch1",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-general-compressed-cloud1-48000-48000-fixed-epoch2",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-general-compressed-cloud1-48000-48000-fragmented-epoch1",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-general-compressed-cloud1-48000-48000-fragmented-epoch2",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-off-axis-compressed-cloud0-44100-48000-fixed-epoch1",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-off-axis-compressed-cloud0-44100-48000-fixed-epoch2",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-off-axis-compressed-cloud0-44100-48000-fragmented-epoch1",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-off-axis-compressed-cloud0-44100-48000-fragmented-epoch2",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-off-axis-compressed-cloud1-44100-48000-fixed-epoch1",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-off-axis-compressed-cloud1-44100-48000-fixed-epoch2",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-off-axis-compressed-cloud1-44100-48000-fragmented-epoch1",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "case",
+      "pattern": "scene-sofa-off-axis-compressed-cloud1-44100-48000-fragmented-epoch2",
+      "reason": "External SOFA reader, HRTF preparation and offline/Scene PCM must match across platforms."
+    },
+    {
+      "kind": "kernel",
+      "pattern": "sofa-*",
+      "reason": "Pinned external SOFA parsing, grid, spectra and interpolated HRTFs must match across platforms."
     }
   ]
 }
