@@ -150,6 +150,29 @@ libm 是例外。Rust 的 `f32::powf`、`f64::log10`、`tan` 等仍然调用平�
 两次提交属于同一个切片，一起合入。这样可以分开验证"搬运是否出错"和"有意改变了什么"。
 合入前要把三平台矩阵和门禁更新到位。
 
+### 性能回归检查
+
+每个切片在两次提交之后、合入之前，都要做一次性能对比：基线是切片开始前的提交，候选是切片完成后的提交。
+
+- **离线**
+  - 用 `scripts/consistency/benchmark-dsp.py` 比较两个 Release CLI。
+    - 新旧版本交替运行，先预热，至少测 5 轮，取耗时和峰值 RSS 的中位数。
+    - 等价迁移的那次提交要加 `--pcm-tool --require-identical-pcm`；一致性修正那次提交不要求 PCM 相同。
+  - 脚本现有 5 个用例，全部带 `--no-peak-limit`，按切片补充相关用例：
+    - 一期：带语义策略的用例；
+    - 二期：开启峰值限制、响度目标、FLAC 和 i24 输出的用例。
+  - 脚本目前只支持 macOS 和 Linux。Windows 需要时，把脚本扩展为只计时。
+- **Scene（一期）**
+  - 现有工具只有手动运行的 `mr_adm_triple_balance_scene_benchmark` 和 `scene_stream_stress`，覆盖不到 VBAP、双耳和策略改写。
+  - 一期需要补一个 Release Scene 基准：按固定频率推送状态更新（包括策略改写），记录 worker 每块耗时的 p50/p99 与实时预算之比。
+- **内存分配**
+  - 新增的 Rust 处理入口要按 `rust/crates/mradm-dsp/tests/realtime_allocations.rs` 的方式加分配计数测试，覆盖每次状态更新时的策略改写、Scene 状态转换和输出音量。
+  - 准备阶段（例如每代的策略解析）可以分配内存；处理调用必须零分配。
+- **判定**
+  - 共享 CI runner 波动大，与 FFT 切片的先例一样，不设 CI 硬门禁，以本机 Release 测量为准。
+  - 耗时中位数比超过 1.05，或 RSS 比超过 1.10，合入前必须定位原因，然后优化或说明。
+  - 结果写进切片 `RUST_*_MIGRATION.md` 的性能一节，原始 JSON 放在 `evidence/`。
+
 ### 一期：Scene 链路
 
 完成标准：从 `adm_scene_stream_*` 输入到设备缓冲区，C++ 只剩队列、线程、时钟和设备调度。
