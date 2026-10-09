@@ -409,7 +409,7 @@ fn exp2_approx(value: f32) -> f32 {
         (f64::from(p) * f64::from_bits(((e + 1023) as u64) << 52)) as f32
     }
 }
-fn power(v: f32, e: f32) -> f32 {
+pub(super) fn power(v: f32, e: f32) -> f32 {
     if v > 0. {
         exp2_approx(log2_approx(v) * e)
     } else {
@@ -433,14 +433,14 @@ fn normalize(v: &mut SizeGains) {
         *x /= norm;
     }
 }
-fn exponent(radius: f32) -> f32 {
+pub(super) fn exponent(radius: f32) -> f32 {
     if radius <= 0.125 {
         6.
     } else {
         radius * -6.956521987915039 + 6.869565010070801
     }
 }
-fn radius(size: f32) -> f32 {
+pub(super) fn radius(size: f32) -> f32 {
     let sizes = [0., 0.2, 0.5, 0.75, 1.];
     let radii = [0., 0.075, 0.25, 0.45, 0.7];
     for i in 1..5 {
@@ -451,7 +451,12 @@ fn radius(size: f32) -> f32 {
     }
     1.
 }
-fn kernel<const PORTABLE: bool>(point: f32, center: f32, radius: f32, axis: usize) -> f32 {
+pub(super) fn kernel<const PORTABLE: bool>(
+    point: f32,
+    center: f32,
+    radius: f32,
+    axis: usize,
+) -> f32 {
     if radius < 2.5e-5 {
         return 0.;
     }

@@ -16,6 +16,43 @@ C++ 使用 `RendererSelection::triple_balance` 或 `create_triple_balance_render
 C ABI v1.43 使用 `ADM_RENDERER_TRIPLE_BALANCE = 7`。
 GUI 批量渲染通过相同的能力查询和枚举显示 Triple Balance。`auto` 的原有选择策略不变。
 
+## D mode
+
+`--triple-balance-mode standard|d` 选择模式，默认 `standard` 保留现有行为。
+D mode 提供相干的对象尺寸分配：固定房间几何、尺寸核积分与边界贡献、按半径混合点源和
+尺寸增益；尺寸分支不经过四路去相关滤波。位置和尺寸经过受控量化，元数据以 512 帧推进，输出增益
+以 1536 帧插值，并包含相同长度的启动渐入。它是本项目的可选模式，不声明与外部产品完全等价。
+
+```sh
+./build/release/mradm render -i input.wav -o output.caf \
+  --renderer triple-balance --triple-balance-mode d --output-layout 9.1.6
+./build/release/mradm render -i input.wav -o output-222.caf \
+  --renderer triple-balance --triple-balance-mode d --output-layout 22.2 --lfe-routing split-power
+```
+
+支持范围为 **48 kHz、9.1.6 和实验性 22.2 离线渲染**，沿用独立绑定的 Cartesian 等尺寸对象和标准单个
+7.1.2 bed 输入限制。`spread=none` 忽略尺寸，仍保留 D mode 的时间规则。7.1.4、实时监听和
+Scene 流尚未提供 D mode；不支持的组合明确返回错误。标准模式的布局和实时功能不变。
+
+22.2 在项目现有 22 个全频节点上直接渲染 ADM。Z=-1/0/1 对应下／中／上层，下层仍为前方三点的
+Y 投影。D mode 将 Z 映射到 [0,1]，每半层使用 75 个位置量化区间，确保中层位置可精确表示；
+高度权重关于中层对称，边界项增加地板贡献。空间目标保持单位功率；输出仍经过时间插值和启动渐入。
+这是本项目对 D mode 的三层扩展，9.1.6 的参考精度结论不外推到 22.2。
+
+两个 LFE 不参与空间积分，也不从 Objects 合成低音。`--lfe-routing split-power` 将唯一源 LFE
+以每路 `1/sqrt(2)` 分给两路，平方和为 1，包含同样的启动渐入。GUI 新选 D mode + 22.2 时预选
+等功率分配，仍可手动改回 direct；CLI／C ABI 通过既有 LFE 选项显式指定。
+
+Rust 内核位于 `mradm-dsp::triple_balance::d_mode`。两种布局按需初始化各自固定积分格点，9.1.6
+约 87 KiB、22.2 约 132 KiB，在所有会话之间共享；
+每次渲染仅保存独立的控制状态，不保存整轨 PCM 或逐采样增益表。任意输入分块、裁剪预热和重复使用
+prepared 数据保持一致。内部数值通过私有 FFI 接入现有读写、计量、取消和输出后处理流程。
+
+C ABI v1.45 新增 `adm_render_options_set_triple_balance_mode`，既有结构体和枚举值保持不变。
+能力 JSON 的 `modes` 列出各模式布局、采样率和实时能力；GUI 批量渲染据此展示模式及有效布局。
+生效语义报告使用 `profile=triple-balance-d-v1` 或 `triple-balance-d-222-v1`，记录模式、空间模型、
+两种控制时钟及 22.2 的 LFE 路由。22.2 的 D mode 报告不引用标准模式的去相关滤波或立方体积分系数。
+
 ## 支持范围
 
 - 输出 7.1.4、9.1.6，以及项目自有的实验性 22.2 扩展。

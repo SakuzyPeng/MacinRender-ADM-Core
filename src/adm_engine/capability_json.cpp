@@ -52,6 +52,16 @@ json backend_to_json(const char* renderer, const CapabilityReport& caps) {
     j["supports_screen_ref"] = caps.supports_screen_ref;
     j["supports_diffuse"] = caps.supports_diffuse;
     j["hrtf_sources"] = caps.hrtf_sources;
+    if (!caps.modes.empty()) {
+        j["modes"] = json::array();
+        for (const auto& mode : caps.modes) {
+            j["modes"].push_back({{"id", mode.id},
+                                  {"display_name", mode.display_name},
+                                  {"layouts", mode.layouts},
+                                  {"sample_rates", mode.sample_rates},
+                                  {"supports_realtime", mode.supports_realtime}});
+        }
+    }
     json layouts = json::array();
     for (const auto& layout : caps.supported_layouts) {
         // The 0+2+0 renderer path exists only for diagnostics and tests. Public

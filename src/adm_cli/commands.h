@@ -34,6 +34,7 @@ struct RenderCliOptions {
     std::string direct_speakers_routing_str{"auto"};
     std::string direct_speakers_matrix_path;
     std::string speaker_spread_mode_str{"auto"};
+    std::string triple_balance_mode_str{"standard"};
     std::string binaural_spread_mode_str{"auto"};
     std::string lfe_routing_mode_str{"direct"};
     std::string apple_spatial_preset_str{"off"};

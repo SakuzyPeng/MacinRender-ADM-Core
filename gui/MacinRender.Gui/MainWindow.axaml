@@ -187,6 +187,20 @@
                                         </ComboBox.ItemTemplate>
                                     </ComboBox>
                                 </StackPanel>
+                                <StackPanel Grid.Column="2" Width="200" Spacing="5"
+                                            IsVisible="{Binding TripleBalanceModeApplicable}">
+                                    <TextBlock Classes="muted" Text="{DynamicResource TripleBalanceMode}"/>
+                                    <ComboBox HorizontalAlignment="Stretch"
+                                              ItemsSource="{Binding TripleBalanceModes}"
+                                              SelectedItem="{Binding SelectedTripleBalanceMode}"
+                                              ToolTip.Tip="{Binding SelectedTripleBalanceMode.Detail}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="m:TripleBalanceModeDef">
+                                                <TextBlock Text="{Binding Name}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
                             </Grid>
 
                             <!-- 封装:[编码器(有损让半列给码率)] | 容器 -->

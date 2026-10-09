@@ -54,6 +54,12 @@ void print_capabilities(const mradm::CapabilityReport& caps) {
     if (!caps.hrtf_sources.empty()) {
         fmt::print("  HRTF sources:   {}\n", fmt::join(caps.hrtf_sources, ", "));
     }
+    for (const auto& mode : caps.modes) {
+        fmt::print("  Mode: {} ({}){}\n", mode.display_name, mode.id, mode.supports_realtime ? "" : " — offline only");
+        if (!mode.sample_rates.empty()) {
+            fmt::print("    Sample rates: {} Hz\n", fmt::join(mode.sample_rates, ", "));
+        }
+    }
     const auto visible_layouts = std::ranges::count_if(
         caps.supported_layouts, [](const auto& layout) { return layout.is_binaural || layout.channel_count != 2U; });
     fmt::print("  Layouts ({}):\n", visible_layouts);

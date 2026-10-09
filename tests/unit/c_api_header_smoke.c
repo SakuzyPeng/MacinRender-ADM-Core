@@ -6,11 +6,12 @@
 #error "unexpected C ABI major version"
 #endif
 
-#if ADM_API_VERSION_MINOR != 44
+#if ADM_API_VERSION_MINOR != 45
 #error "unexpected C ABI minor version"
 #endif
 
 _Static_assert(sizeof(adm_osc_head_tracking_state_t) == sizeof(int), "OSC enum representation");
+_Static_assert(sizeof(adm_triple_balance_mode_t) == sizeof(int), "Triple Balance mode representation");
 _Static_assert(sizeof(adm_osc_head_tracking_config_t) == 16, "current config on supported 64-bit platforms");
 _Static_assert(sizeof(adm_head_tracking_pose_t) == 160, "current unified pose layout");
 _Static_assert(sizeof(adm_osc_head_tracking_status_t) == 120, "current status layout");

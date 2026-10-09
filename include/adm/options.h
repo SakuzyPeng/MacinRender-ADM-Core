@@ -31,6 +31,11 @@ enum class SpeakerSpreadMode {
     mdap,      // always use MDAP (multi-directional amplitude panning) for 3D layouts
 };
 
+enum class TripleBalanceMode {
+    standard,
+    d, // Coherent size distribution; offline 48 kHz / 9.1.6 and experimental 22.2.
+};
+
 // Effective loudspeaker coordinates used by software speaker renderers. `standard`
 // preserves the existing project / ADM nominal geometry; `apple` uses the fixed
 // coordinates reported by CoreAudio for the matching standard layout tags. The
@@ -163,6 +168,7 @@ struct RenderOptions {
     SpeakerGeometry speaker_geometry{SpeakerGeometry::standard};
     DirectSpeakersRoutingMode direct_speakers_routing_mode{DirectSpeakersRoutingMode::automatic};
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
+    TripleBalanceMode triple_balance_mode{TripleBalanceMode::standard};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
     LfeRoutingMode lfe_routing_mode{LfeRoutingMode::direct};
     // Apple AUSpatialMixer binaural only. PresentPreset resets several unit/bus

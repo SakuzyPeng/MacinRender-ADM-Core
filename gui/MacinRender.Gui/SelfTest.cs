@@ -100,6 +100,23 @@ internal static class SelfTest
         // capabilities 同时驱动语义能力提示与系统空间音频布局下拉。
         var capabilities = AdmQueries.LoadCapabilities(ctx);
         OutputModel.InitializeCapabilities(capabilities);
+        var dMode = OutputModel.TripleBalanceModes.FirstOrDefault(m => m.Mode == AdmTripleBalanceMode.D);
+        if (dMode is null || dMode.Id != "d" || dMode.Name != "D mode" ||
+            !dMode.LayoutIds.SequenceEqual(new[] { "9.1.6", "9+10+3" }) ||
+            !dMode.SampleRates.SequenceEqual(new[] { 48000 }))
+        {
+            Console.Error.WriteLine("[失败] Triple Balance D mode 能力未正确传入界面");
+            return 1;
+        }
+        using (var modeOptions = NativeMethods.adm_create_render_options())
+        {
+            if (NativeMethods.adm_render_options_set_triple_balance_mode(modeOptions, AdmTripleBalanceMode.D) !=
+                AdmErrorCode.Ok)
+            {
+                Console.Error.WriteLine("[失败] D mode 设置未通过 C ABI");
+                return 1;
+            }
+        }
         Console.WriteLine($"系统空间音频布局({OutputModel.SystemSpatialLayouts.Count}): [{string.Join(", ", OutputModel.SystemSpatialLayouts)}]");
 
         var tripleMonitorLayouts = OutputModel.SystemSpatialLayoutsFor(AdmRenderer.TripleBalance)

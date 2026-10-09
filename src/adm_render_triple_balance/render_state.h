@@ -21,6 +21,8 @@ struct Prepared final : IPreparedRender {
     SpeakerSpreadMode spread_mode{};
     render_common::PreparedPcmMix gain_matrix;
     dsp::TbPlan numeric;
+    TripleBalanceMode mode{TripleBalanceMode::standard};
+    dsp::TbHandle<mradm_dsp_tb_d_plan_destroy> d_numeric{nullptr, mradm_dsp_tb_d_plan_destroy};
     std::vector<SizeTrack> size_tracks;
 };
 class SizeMixer {

@@ -70,6 +70,16 @@ internal sealed class BackendDto
     public string BackendName { get; set; } = "";
     public bool? SupportsDiffuse { get; set; }
     public List<LayoutDto> Layouts { get; set; } = new();
+    public List<RenderModeDto> Modes { get; set; } = new();
+}
+
+internal sealed class RenderModeDto
+{
+    public string Id { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public List<string> Layouts { get; set; } = new();
+    public List<int> SampleRates { get; set; } = new();
+    public bool SupportsRealtime { get; set; }
 }
 
 internal sealed class LayoutDto

@@ -253,6 +253,14 @@ int main() try {
 
     // Triple Balance is independently selectable and reports only its fixed layouts.
     {
+        auto help = run_cmd(mradm_exe + " render --help");
+        ok &= check(help.code == 0 && help.out.find("--triple-balance-mode") != std::string::npos,
+                    "Triple Balance mode appears in CLI help");
+        auto invalid_mode = run_cmd(mradm_exe + " render --renderer saf --triple-balance-mode d -i missing.wav");
+        ok &= check(invalid_mode.code != 0 && invalid_mode.out.find("D mode requires") != std::string::npos,
+                    "D mode cannot be silently applied to another renderer");
+        invalid_mode = run_cmd(mradm_exe + " render --triple-balance-mode unknown -i missing.wav");
+        ok &= check(invalid_mode.code != 0, "unknown Triple Balance mode rejected");
         auto r = run_cmd(mradm_exe + " layouts --format wav --renderer triple-balance");
         ok &= check(r.code == 0 && r.out.find("triple-balance") != std::string::npos &&
                         r.out.find("7.1.4") != std::string::npos && r.out.find("9.1.6") != std::string::npos &&

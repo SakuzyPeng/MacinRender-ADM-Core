@@ -107,6 +107,10 @@ internal static partial class NativeMethods
         AdmSpeakerSpreadMode mode);
 
     [LibraryImport(Lib)]
+    internal static partial AdmErrorCode adm_render_options_set_triple_balance_mode(AdmRenderOptionsHandle opts,
+        AdmTripleBalanceMode mode);
+
+    [LibraryImport(Lib)]
     internal static partial AdmErrorCode adm_render_options_set_speaker_geometry(AdmRenderOptionsHandle opts,
         AdmSpeakerGeometry geometry);
 

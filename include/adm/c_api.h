@@ -199,12 +199,13 @@
  * v1.42：统一未发布头追接口与 PoseBridge 协议 3，来源过滤、状态心跳和 JSON 快照；其余音频 ABI 不变。
  * v1.43：新增独立离线 ADM_RENDERER_TRIPLE_BALANCE（7）；既有枚举值和结构布局不变。
  * v1.44：Scene stream 支持 Triple Balance，采样精确更新；既有 enum/POD/函数布局不变。
+ * v1.45：新增 Triple Balance 模式 setter；D mode 为 48 kHz / 9.1.6、22.2 离线相干尺寸模式。
  */
 
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 44
+#define ADM_API_VERSION_MINOR 45
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -289,6 +290,11 @@ typedef enum adm_speaker_spread_mode_t {
     ADM_SPEAKER_SPREAD_MDAP = 2
 } adm_speaker_spread_mode_t;
 
+typedef enum adm_triple_balance_mode_t {
+    ADM_TRIPLE_BALANCE_STANDARD = 0,
+    ADM_TRIPLE_BALANCE_D = 1,
+} adm_triple_balance_mode_t;
+
 typedef enum adm_binaural_spread_mode_t {
     ADM_BINAURAL_SPREAD_AUTOMATIC = 0,
     ADM_BINAURAL_SPREAD_NONE = 1,
@@ -369,6 +375,7 @@ typedef enum adm_progress_operation_t {
 static_assert(sizeof(adm_renderer_t) == sizeof(int));
 static_assert(sizeof(adm_output_bit_depth_t) == sizeof(int));
 static_assert(sizeof(adm_speaker_spread_mode_t) == sizeof(int));
+static_assert(sizeof(adm_triple_balance_mode_t) == sizeof(int));
 static_assert(sizeof(adm_binaural_spread_mode_t) == sizeof(int));
 static_assert(sizeof(adm_iamf_container_t) == sizeof(int));
 static_assert(sizeof(adm_apac_container_t) == sizeof(int));
@@ -560,6 +567,10 @@ adm_error_code_t adm_render_options_set_object_smoothing_frames(adm_render_optio
 /* Returns ADM_ERROR_INVALID_ARGUMENT for unrecognised enum values. */
 adm_error_code_t adm_render_options_set_speaker_spread_mode(adm_render_options_t* opts,
                                                             adm_speaker_spread_mode_t mode) ADM_API_NOEXCEPT;
+/* v1.45. Default: STANDARD. D requires Triple Balance, 48 kHz, 9.1.6 or 22.2 and offline rendering.
+ * Unsupported combinations are rejected when preparing the render. NULL opts is a no-op. */
+adm_error_code_t adm_render_options_set_triple_balance_mode(adm_render_options_t* opts,
+                                                            adm_triple_balance_mode_t mode) ADM_API_NOEXCEPT;
 adm_error_code_t adm_render_options_set_binaural_spread_mode(adm_render_options_t* opts,
                                                              adm_binaural_spread_mode_t mode) ADM_API_NOEXCEPT;
 /* v1.31. Select effective EAR / SAF output-speaker coordinates. The Apple renderer

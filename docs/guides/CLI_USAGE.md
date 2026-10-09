@@ -37,6 +37,8 @@
 ./build/release/mradm render -i input.wav -o out_714.flac --renderer ear --output-layout 7.1.4
 ./build/release/mradm render -i input.wav -o out_222.wav --renderer apple --output-layout 22.2
 ./build/release/mradm render -i input.wav -o out_room.wav --renderer triple-balance --output-layout 9.1.6
+./build/release/mradm render -i input.wav -o out_d.caf --renderer triple-balance --triple-balance-mode d --output-layout 9.1.6
+./build/release/mradm render -i input.wav -o out_d_222.caf --renderer triple-balance --triple-balance-mode d --output-layout 22.2 --lfe-routing split-power
 ./build/release/mradm render -i input.wav -o out_trim.wav --start 12.5 --end 45.0
 ./build/release/mradm render -i bed.wav -o bed_714.wav --input-layout 5.1 --renderer ear --output-layout 7.1.4
 ./build/release/mradm render -i custom.wav -o custom_binaural.wav --input-channels L,R,C,LFE,M+090,M-090 --renderer saf-binaural --sofa listener.sofa
@@ -61,6 +63,9 @@ WAVEFORMATEXTENSIBLE channel mask；无效 ADM 直接报错。也可显式选择
 `triple-balance` 是独立的房间坐标渲染后端，点源沿 X/Y/Z 三轴逐层进行等功率声像分配，
 并提供已验证的 48 kHz 等尺寸对象处理。7.1.4 / 9.1.6 保留现有参考对齐行为；22.2 为项目自有扩展。
 当前支持范围和输入限制见 [Triple Balance 渲染器](../architecture/TRIPLE_BALANCE_RENDERER.md)。
+D mode 通过 `--triple-balance-mode d` 选择，采用相干尺寸分配，支持 48 kHz 的 9.1.6 和实验性 22.2 离线输出。
+22.2 双 LFE 等功率分配使用 `--lfe-routing split-power`，每路增益为 `1/sqrt(2)`。
+默认 `standard` 保留现有模式，7.1.4 和实时监听继续使用标准模式。
 CLI、C ABI 和 GUI 批量渲染可选；C API 和 GUI 系统空间音频监听支持实时播放、精确跳转、增益／静音与等尺寸倍率编辑。旧 `--speaker-panner` 参数已删除。
 
 `saf-binaural` 提供内置 KEMAR 与构建支持时的 `--sofa` 用户 HRIR；`apple` 使用 Apple 系统 HRTF。
