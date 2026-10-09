@@ -42,6 +42,7 @@ Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) 
                      {"objects", Json::array()},
                      {"bed_profile", "triple-balance-7.1.2-bed-v1"},
                      {"beds", Json::array()}};
+    document["mode"] = plan.triple_balance_mode == TripleBalanceMode::d ? "d" : "standard";
     if (is_room_222(plan.output_layout)) {
         document["profile"] = "room-222-extension-v1";
         document["bed_profile"] = "source-7.1.2-to-room-222-v1";
@@ -54,11 +55,26 @@ Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) 
         document["lfe_routing"] = plan.lfe_routing_mode == LfeRoutingMode::direct ? "direct" : "split-power";
         document["spatial_nodes"] = Json::array();
         for (const auto& node : room_222_nodes()) {
-            document["spatial_nodes"].push_back({{"channel", node.channel},
-                                                 {"label", node.label},
-                                                 {"xyz", Json::array({node.x, node.y, node.z})},
-                                                 {"filter", node.filter},
-                                                 {"filter_sign", node.sign}});
+            document["spatial_nodes"].push_back(
+                {{"channel", node.channel},
+                 {"label", node.label},
+                 {"xyz", Json::array({node.x, node.y, node.z})},
+                 {"filter", plan.triple_balance_mode == TripleBalanceMode::d ? Json(nullptr) : Json(node.filter)},
+                 {"filter_sign", plan.triple_balance_mode == TripleBalanceMode::d ? 0 : node.sign}});
+        }
+    }
+    if (plan.triple_balance_mode == TripleBalanceMode::d) {
+        const bool extended = is_room_222(plan.output_layout);
+        document["profile"] = extended ? "triple-balance-d-222-v1" : "triple-balance-d-v1";
+        document["gain_control_frames"] = 1536;
+        document["startup_ramp_frames"] = 1536;
+        document["spatial_model"] = extended ? "self-defined three-layer 22.2 room with quantized position and size"
+                                             : "fixed 9.1.6 room geometry with quantized position and size";
+        document["size_model"] = "coherent kernel integration with boundary contributions and radius-based blending";
+        document["size_decorrelation"] = false;
+        document["event_stage"] = "targets before room conversion, smoothing and quantization";
+        if (extended) {
+            document["height_rule"] = "Z in [-1,1]; symmetric height weighting and top/bottom boundary contributions";
         }
     }
     std::set<uint16_t> input_channels;
@@ -213,7 +229,7 @@ Result<AdmScene> prepare_semantics(const RenderPlan& plan, std::string& report) 
                                block.end_sample == std::numeric_limits<uint64_t>::max() ? Json(nullptr)
                                                                                         : Json(block.end_sample),
                                scene.info.num_frames)}});
-                if (is_room_222(plan.output_layout)) {
+                if (is_room_222(plan.output_layout) && plan.triple_balance_mode == TripleBalanceMode::standard) {
                     const float extent = plan.speaker_spread_mode == SpeakerSpreadMode::none ? 0 : block.width;
                     auto target = room_222_gains(block.position, extent);
                     if (!target) {

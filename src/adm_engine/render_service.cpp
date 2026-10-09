@@ -409,6 +409,17 @@ RenderResult RenderService::render(const RenderRequest& request,
     if (request.input_path.empty()) {
         return {{ErrorCode::invalid_argument, "input path is required", {}}, std::nullopt, std::nullopt, {}};
     }
+    if (request.options.triple_balance_mode != TripleBalanceMode::standard &&
+        request.options.triple_balance_mode != TripleBalanceMode::d) {
+        return {{ErrorCode::invalid_argument, "invalid Triple Balance mode", {}}, std::nullopt, std::nullopt, {}};
+    }
+    if (request.options.triple_balance_mode == TripleBalanceMode::d &&
+        request.options.renderer != RendererSelection::triple_balance) {
+        return {{ErrorCode::invalid_argument, "D mode requires the Triple Balance renderer", {}},
+                std::nullopt,
+                std::nullopt,
+                {}};
+    }
 
     logs.log(LogLevel::info, "engine", fmt::format("render request: {}", request.input_path.string()));
 
@@ -786,6 +797,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     plan.direct_speakers_routing_mode = request.options.direct_speakers_routing_mode;
     plan.direct_speakers_matrix = std::move(direct_speakers_matrix);
     plan.speaker_spread_mode = request.options.speaker_spread_mode;
+    plan.triple_balance_mode = request.options.triple_balance_mode;
     plan.binaural_spread_mode = request.options.binaural_spread_mode;
     plan.lfe_routing_mode = request.options.lfe_routing_mode;
     plan.apple_spatial_preset = request.options.apple_spatial_preset;

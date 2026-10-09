@@ -323,6 +323,9 @@ bool verify_version_11() {
 bool verify_options_null_setters() {
     bool ok = check(adm_render_options_set_renderer(nullptr, ADM_RENDERER_BINAURAL) == ADM_ERROR_OK,
                     "NULL opts set_renderer should return OK");
+    ok = check(adm_render_options_set_triple_balance_mode(nullptr, ADM_TRIPLE_BALANCE_D) == ADM_ERROR_OK,
+               "NULL opts set_triple_balance_mode should return OK") &&
+         ok;
     ok = check(adm_render_options_set_output_layout(nullptr, "5.1") == ADM_ERROR_OK,
                "NULL opts set_output_layout should return OK") &&
          ok;
@@ -421,6 +424,17 @@ bool verify_options_invalid_values(adm_render_options_t* opts) {
     const auto invalid_renderer = static_cast<adm_renderer_t>(99);
     bool ok = check(adm_render_options_set_renderer(opts, invalid_renderer) == ADM_ERROR_INVALID_ARGUMENT,
                     "out-of-range renderer should return INVALID_ARGUMENT");
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    ok = check(adm_render_options_set_triple_balance_mode(opts, static_cast<adm_triple_balance_mode_t>(99)) ==
+                   ADM_ERROR_INVALID_ARGUMENT,
+               "out-of-range Triple Balance mode rejected") &&
+         ok;
+    ok = check(adm_render_options_set_triple_balance_mode(opts, ADM_TRIPLE_BALANCE_D) == ADM_ERROR_OK,
+               "D mode accepted") &&
+         ok;
+    ok = check(adm_render_options_set_triple_balance_mode(opts, ADM_TRIPLE_BALANCE_STANDARD) == ADM_ERROR_OK,
+               "Standard mode restored") &&
+         ok;
     // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     ok = check(adm_render_options_set_output_bit_depth(opts, static_cast<adm_output_bit_depth_t>(99)) ==
                    ADM_ERROR_INVALID_ARGUMENT,
@@ -2502,6 +2516,50 @@ bool verify_monitor_hptf_memory_applied(adm_monitor_t* monitor) {
     return check(false, "monitor memory HpTF did not become active");
 }
 
+bool verify_triple_balance_d_mode(adm_context_t* ctx) {
+    const FileGuard input{write_fixture(48000, true)};
+    const FileGuard output{unique_temp_wav_path("mr_d_mode")};
+    auto* options = adm_create_render_options();
+    if (options == nullptr) {
+        return false;
+    }
+    adm_render_options_set_renderer(options, ADM_RENDERER_TRIPLE_BALANCE);
+    adm_render_options_set_output_layout(options, "9.1.6");
+    adm_render_options_set_triple_balance_mode(options, ADM_TRIPLE_BALANCE_D);
+    adm_render_options_set_capture_semantic_report(options, 1);
+    adm_render_result_t* result = nullptr;
+    const auto status = adm_render_file_ex(
+        ctx, input.path().string().c_str(), output.path().string().c_str(), options, nullptr, nullptr, &result);
+    bool ok = check(status == ADM_ERROR_OK && result != nullptr, "D mode renders through C ABI");
+    const auto* report = adm_render_result_semantic_report_json(result);
+    ok &= check(report != nullptr && std::string_view{report}.find("triple-balance-d-v1") != std::string_view::npos,
+                "D mode effective report reaches C ABI result");
+    adm_destroy_render_result(result);
+    const FileGuard rejected{unique_temp_wav_path("mr_d_mode_rejected")};
+    adm_render_options_set_output_layout(options, "22.2");
+    adm_render_options_set_lfe_routing_mode(options, ADM_LFE_ROUTING_SPLIT_POWER);
+    result = nullptr;
+    const auto extended_status = adm_render_file_ex(
+        ctx, input.path().string().c_str(), output.path().string().c_str(), options, nullptr, nullptr, &result);
+    ok &= check(extended_status == ADM_ERROR_OK && result != nullptr, "D mode 22.2 renders through C ABI");
+    const auto* extended_report = adm_render_result_semantic_report_json(result);
+    ok &= check(extended_report != nullptr &&
+                    std::string_view{extended_report}.find("triple-balance-d-222-v1") != std::string_view::npos &&
+                    std::string_view{extended_report}.find("split-power") != std::string_view::npos,
+                "D mode 22.2 report carries coherent model and equal-power LFE");
+    adm_destroy_render_result(result);
+    for (const auto* layout : {"7.1.4", "5.1"}) {
+        adm_render_options_set_output_layout(options, layout);
+        result = nullptr;
+        const auto code = adm_render_file_ex(
+            ctx, input.path().string().c_str(), rejected.path().string().c_str(), options, nullptr, nullptr, &result);
+        ok &= check(code == ADM_ERROR_UNSUPPORTED, "D mode rejects unsupported layouts through C ABI");
+        adm_destroy_render_result(result);
+    }
+    adm_destroy_render_options(options);
+    return ok;
+}
+
 bool verify_triple_balance_monitor_abi(adm_context_t* ctx) {
     const auto input = write_fixture(48000, true);
     const FileGuard guard{input};
@@ -2932,6 +2990,7 @@ int main() try {
     ok = verify_iamf_layer_validation(ctx, fixture.path()) && ok;
     // v1.15 tests
     ok = verify_triple_balance_monitor_abi(ctx) && ok;
+    ok = verify_triple_balance_d_mode(ctx) && ok;
     ok = verify_monitor_abi(ctx, fixture.path()) && ok;
 
     adm_destroy_context(ctx);

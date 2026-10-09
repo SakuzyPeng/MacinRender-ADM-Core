@@ -2,7 +2,7 @@
 use crate::boundary;
 use mradm_dsp::{
     Error, Result, pcm_mix,
-    triple_balance::{Event, Layout, Position, panner, processor, session},
+    triple_balance::{Event, Layout, Position, d_mode, panner, processor, session},
 };
 use std::{ptr, slice, sync::Arc};
 fn invalid() -> Error {
@@ -74,6 +74,71 @@ unsafe fn release<T>(p: *mut T) {
             drop(Box::from_raw(p));
         }
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_tb_d_plan_create(
+    inputs: usize,
+    layout: u32,
+    total: u64,
+    rows: *const session::TbRowInput,
+    n: usize,
+    events: *const Event,
+    en: usize,
+    bed: *const f32,
+    bn: usize,
+    out: *mut *mut Arc<d_mode::Plan>,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || unsafe {
+        create(out, || {
+            Ok(Arc::new(d_mode::Plan::new(
+                inputs,
+                Layout::from_code(layout)?,
+                total,
+                input(rows, n)?,
+                input(events, en)?,
+                input(bed, bn)?,
+            )?))
+        })
+    })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_tb_d_plan_destroy(p: *mut Arc<d_mode::Plan>) {
+    unsafe { release(p) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_tb_d_create(
+    plan: *const Arc<d_mode::Plan>,
+    out: *mut *mut d_mode::Session,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || unsafe {
+        create(out, || Ok(d_mode::Session::new(Arc::clone(get(plan)?))))
+    })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_tb_d_destroy(p: *mut d_mode::Session) {
+    unsafe { release(p) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_dsp_tb_d_process(
+    state: *mut d_mode::Session,
+    src: *const f32,
+    src_len: usize,
+    out: *mut f32,
+    out_len: usize,
+    start: u64,
+    frames: usize,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || unsafe {
+        separate(src, src_len, out, out_len)?;
+        get_mut(state)?.process(input(src, src_len)?, output(out, out_len)?, start, frames)
+    })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mradm_dsp_tb_plan_destroy(p: *mut Arc<session::Plan>) {

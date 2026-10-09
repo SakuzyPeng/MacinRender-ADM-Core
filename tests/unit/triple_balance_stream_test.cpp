@@ -266,6 +266,101 @@ void run(const Files& files, const std::string& layout) {
     check_live_edits(plan, *renderer, *prepared, chunks);
     std::cout << layout << ": stream, policy, checkpoint and seek checks passed\n";
 }
+void check_d_lfe_routes(mradm::IRenderer& renderer, const mradm::RenderPlan& plan, std::span<const float> full) {
+    auto direct_plan = plan;
+    direct_plan.lfe_routing_mode = mradm::LfeRoutingMode::direct;
+    const auto direct = offline(renderer, direct_plan);
+    for (std::size_t i = 0; i < full.size(); i += 24) {
+        require(direct[i + 9] == 0 && full[i + 3] == full[i + 9], "D 22.2 LFE channels share one signal");
+        require(std::abs(full[i + 3] - (direct[i + 3] * std::sqrt(.5F))) < 1e-7F,
+                "D 22.2 LFE uses equal-power gain including startup");
+        for (std::size_t c = 0; c < 24; ++c) {
+            if (c != 3 && c != 9) {
+                require(full[i + c] == direct[i + c], "D 22.2 LFE routing preserves full-band PCM");
+            }
+        }
+    }
+}
+void run_d(const Files& files, const std::string& layout) {
+    auto plan = make_plan(files, layout);
+    const bool extended = layout == "9+10+3";
+    const std::size_t channels = extended ? 24U : 16U;
+    plan.triple_balance_mode = mradm::TripleBalanceMode::d;
+    if (extended) {
+        plan.lfe_routing_mode = mradm::LfeRoutingMode::split_power;
+        for (auto& object : plan.scene.objects) {
+            for (auto& track : object.tracks) {
+                for (auto& block : track.blocks) {
+                    if (block.start_sample > 1024) {
+                        block.position.z = -.5F;
+                    }
+                }
+            }
+        }
+    }
+    auto renderer = mradm::create_triple_balance_renderer();
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    std::string report;
+    plan.renderer_semantics_sink = [&](std::string value) { report = std::move(value); };
+    auto prepared = take(renderer->prepare(plan, logs));
+    const auto full = offline(*renderer, plan);
+    require(full.size() == plan.scene.info.num_frames * channels, "D mode frame count");
+    require(std::ranges::all_of(std::span{full}.first(channels), [](float x) { return x == 0; }),
+            "D mode startup ramp");
+    require(report.find(R"("mode":"d")") != std::string::npos &&
+                report.find(R"("gain_control_frames":1536)") != std::string::npos,
+            "D mode effective report");
+    if (extended) {
+        require(report.find("triple-balance-d-222-v1") != std::string::npos &&
+                    report.find(R"("lfe_routing":"split-power")") != std::string::npos &&
+                    report.find(R"("size_decorrelation":false)") != std::string::npos &&
+                    report.find("target_mix_spread_gains") == std::string::npos,
+                "D 22.2 report describes the effective coherent model");
+        check_d_lfe_routes(*renderer, plan, full);
+    }
+    auto clipped = plan;
+    clipped.render_window = mradm::RenderWindow{1537, 2051};
+    take(renderer->render_window(*prepared, clipped, progress, logs));
+    auto reader = take(mradm::audio::FloatWavReader::open(clipped.output_path));
+    std::vector<float> actual(reader.frame_count() * reader.channels());
+    require(reader.read(actual.data(), reader.frame_count()) == reader.frame_count(), "D mode clipped read");
+    const auto expected = std::span{full}.subspan(1537 * channels, 2051 * channels);
+    expect_equal(
+        actual, std::vector<float>(expected.begin(), expected.end()), "D mode cropped output matches full PCM");
+    expect_equal(offline(*renderer, plan), full, "D mode repeated prepared data");
+    require(!renderer->open_stream(*prepared, plan, logs), "D mode realtime rejected");
+    auto standard = plan;
+    standard.triple_balance_mode = mradm::TripleBalanceMode::standard;
+    require(!renderer->open_stream(*prepared, standard, logs), "D prepared state cannot enter standard stream");
+    require(!renderer->render_window(*prepared, standard, progress, logs), "prepared mode mismatch rejected");
+    auto wrong_layout = plan;
+    wrong_layout.output_layout = extended ? "9.1.6" : "9+10+3";
+    require(!renderer->render_window(*prepared, wrong_layout, progress, logs),
+            "D mode prepared layout mismatch rejected");
+    auto ignored = plan;
+    ignored.speaker_spread_mode = mradm::SpeakerSpreadMode::none;
+    auto zero = plan;
+    for (auto& object : zero.scene.objects) {
+        for (auto& track : object.tracks) {
+            for (auto& block : track.blocks) {
+                block.width = block.height = block.depth = block.diffuse = 0;
+            }
+        }
+    }
+    expect_equal(offline(*renderer, ignored), offline(*renderer, zero), "D mode spread none ignores size");
+    for (const auto* rejected_layout : {"4+7+0", "0+5+0"}) {
+        auto invalid = plan;
+        invalid.output_layout = rejected_layout;
+        auto result = renderer->prepare(invalid, logs);
+        require(!result && result.error().code == mradm::ErrorCode::unsupported, "D mode layout boundary");
+    }
+    auto invalid = plan;
+    invalid.scene.info.sample_rate = 44100;
+    require(!renderer->prepare(invalid, logs), "D mode rate boundary");
+    require(!renderer->render_window(*prepared, invalid, progress, logs), "D mode prepared rate mismatch rejected");
+    std::cout << "D mode " << layout << ": offline, crop, repeat, LFE and unsupported-boundary checks passed\n";
+}
 } // namespace
 int main() {
     try {
@@ -286,6 +381,8 @@ int main() {
         for (const auto* layout : {"4+7+0", "9.1.6", "9+10+3"}) {
             run(files, layout);
         }
+        run_d(files, "9.1.6");
+        run_d(files, "9+10+3");
     } catch (const std::exception& error) {
         std::cerr << "FAIL: " << error.what() << '\n';
         return 1;

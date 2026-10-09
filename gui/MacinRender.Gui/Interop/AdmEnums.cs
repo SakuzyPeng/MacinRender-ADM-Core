@@ -46,6 +46,12 @@ public enum AdmSpeakerGeometry
     Apple = 1,
 }
 
+public enum AdmTripleBalanceMode
+{
+    Standard = 0,
+    D = 1,
+}
+
 public enum AdmDirectSpeakersRoutingMode
 {
     Automatic = 0,

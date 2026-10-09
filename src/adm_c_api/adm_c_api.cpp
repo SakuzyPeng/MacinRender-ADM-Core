@@ -163,6 +163,8 @@ static_assert(static_cast<int>(mradm::RendererSelection::apple) == ADM_RENDERER_
 static_assert(static_cast<int>(mradm::RendererSelection::binaural) == ADM_RENDERER_BINAURAL);
 static_assert(static_cast<int>(mradm::RendererSelection::saf_binaural) == ADM_RENDERER_SAF_BINAURAL);
 static_assert(static_cast<int>(mradm::RendererSelection::triple_balance) == ADM_RENDERER_TRIPLE_BALANCE);
+static_assert(static_cast<int>(mradm::TripleBalanceMode::standard) == ADM_TRIPLE_BALANCE_STANDARD);
+static_assert(static_cast<int>(mradm::TripleBalanceMode::d) == ADM_TRIPLE_BALANCE_D);
 
 static_assert(static_cast<int>(mradm::OutputBitDepth::f32) == ADM_BIT_DEPTH_F32);
 static_assert(static_cast<int>(mradm::OutputBitDepth::i24) == ADM_BIT_DEPTH_I24);
@@ -1160,6 +1162,18 @@ adm_error_code_t adm_render_options_set_speaker_spread_mode(adm_render_options_t
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     opts->opts.speaker_spread_mode = static_cast<mradm::SpeakerSpreadMode>(mode);
+    return ADM_ERROR_OK;
+}
+
+adm_error_code_t adm_render_options_set_triple_balance_mode(adm_render_options_t* opts,
+                                                            adm_triple_balance_mode_t mode) noexcept {
+    if (opts == nullptr) {
+        return ADM_ERROR_OK;
+    }
+    if (mode != ADM_TRIPLE_BALANCE_STANDARD && mode != ADM_TRIPLE_BALANCE_D) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    opts->opts.triple_balance_mode = static_cast<mradm::TripleBalanceMode>(mode);
     return ADM_ERROR_OK;
 }
 

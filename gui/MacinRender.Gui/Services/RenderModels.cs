@@ -16,6 +16,7 @@ public sealed record RenderSettings
     public string? SofaPath { get; init; }
     public string? SemanticPolicyJson { get; init; }
     public AdmSpeakerGeometry SpeakerGeometry { get; init; } = AdmSpeakerGeometry.Standard;
+    public AdmTripleBalanceMode TripleBalanceMode { get; init; } = AdmTripleBalanceMode.Standard;
     public AdmLfeRoutingMode LfeRoutingMode { get; init; } = AdmLfeRoutingMode.Direct;
 
     /// <summary>仅监听:多声道输出走 macOS 系统空间音频(AVSampleBufferAudioRenderer,系统 HRTF + 头追踪),

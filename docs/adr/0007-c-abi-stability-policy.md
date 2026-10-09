@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.44）
-> 日期：2026-05-17（增量记录持续更新至 2026-10-07 的 v1.44）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.45）
+> 日期：2026-05-17（增量记录持续更新至 2026-10-08 的 v1.45）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -107,6 +107,14 @@ C ABI 走 **两阶段稳定** 模型：
 - Major 版本升级（2.0）可一次性删除所有已 deprecated 函数。
 
 ## 变更记录（实际发布的 ABI 演化）
+
+### v1.45（additive，向后二进制兼容）
+
+- 新增 `adm_triple_balance_mode_t`（`STANDARD=0`、`D=1`）与
+  `adm_render_options_set_triple_balance_mode`。默认标准模式；D mode 限 Triple Balance 的
+  48 kHz／9.1.6 与实验性 22.2 离线渲染。无效枚举返回 `INVALID_ARGUMENT`，不支持的组合在渲染准备时拒绝。
+- 能力 JSON 增加可选 `modes` 描述，供调用方查询各模式的布局、采样率与实时支持范围。
+- 仅扩展 opaque options 内部字段和新增符号；既有 enum、非 opaque POD、函数及回调布局不变。
 
 记录已发布的 ABI 表面变化，便于绑定方查阅。所有变更均遵循上述兼容规则。
 

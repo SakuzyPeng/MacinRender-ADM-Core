@@ -54,15 +54,18 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<ContainerDef> Containers { get; } = new();
     public ObservableCollection<SpeakerGeometryOption> SpeakerGeometries { get; } =
         new() { StandardSpeakerGeometry, AppleSpeakerGeometry };
+    public ObservableCollection<TripleBalanceModeDef> TripleBalanceModes => OutputModel.TripleBalanceModes;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SofaApplicable))]
     [NotifyPropertyChangedFor(nameof(SpeakerGeometryApplicable))]
+    [NotifyPropertyChangedFor(nameof(TripleBalanceModeApplicable))]
     private BackendDef _selectedBackend = OutputModel.BackendById["ear"];
     [ObservableProperty] private LayoutDef? _selectedLayout;
     [ObservableProperty] private CodecOption? _selectedCodec;
     [ObservableProperty] private ContainerDef? _selectedContainer;
     [ObservableProperty] private SpeakerGeometryOption _selectedSpeakerGeometry = StandardSpeakerGeometry;
+    [ObservableProperty] private TripleBalanceModeDef _selectedTripleBalanceMode = OutputModel.StandardTripleBalanceMode;
     [ObservableProperty] private AdmLfeRoutingMode _lfeRoutingMode = AdmLfeRoutingMode.Direct;
 
     // 自定义 HRIR(SOFA):只对 SAF 双耳后端(binaural / saf-binaural)有效;Apple 双耳用自家 HRTF。
@@ -77,6 +80,12 @@ public partial class MainWindowViewModel : ObservableObject
     // Auto 的扬声器输出解析为 EAR；CoreAudio 后端固定 Apple 几何，双耳 / HOA 无扬声器几何。
     public bool SpeakerGeometryApplicable =>
         SelectedBackend.Renderer is AdmRenderer.Automatic or AdmRenderer.Ear or AdmRenderer.Saf;
+
+    public bool TripleBalanceModeApplicable => SelectedBackend.Renderer == AdmRenderer.TripleBalance;
+
+    private bool ModeSupportsLayout(string layout) => !TripleBalanceModeApplicable ||
+        SelectedTripleBalanceMode.Mode == AdmTripleBalanceMode.Standard ||
+        SelectedTripleBalanceMode.LayoutIds.Contains(layout);
 
     partial void OnSofaPathChanged(string? value) => SaveSettings();
 
@@ -172,6 +181,7 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnSelectedBackendChanged(BackendDef value)
     {
         RebuildCodecs();
+        ApplyDModeLfeDefault();
         SaveSettings();
     }
 
@@ -185,11 +195,26 @@ public partial class MainWindowViewModel : ObservableObject
     {
         RebuildContainers();
         UpdateSubOptions();
+        ApplyDModeLfeDefault();
         SaveSettings();
     }
 
     partial void OnSelectedContainerChanged(ContainerDef? value) => SaveSettings();
     partial void OnSelectedSpeakerGeometryChanged(SpeakerGeometryOption value) => SaveSettings();
+    partial void OnSelectedTripleBalanceModeChanged(TripleBalanceModeDef value)
+    {
+        RebuildCodecs();
+        ApplyDModeLfeDefault();
+        SaveSettings();
+    }
+    private void ApplyDModeLfeDefault()
+    {
+        if (_settingsReady && TripleBalanceModeApplicable &&
+            SelectedTripleBalanceMode.Mode == AdmTripleBalanceMode.D && SelectedLayout?.Id == "9+10+3")
+        {
+            LfeRoutingMode = AdmLfeRoutingMode.SplitPower;
+        }
+    }
     partial void OnLfeRoutingModeChanged(AdmLfeRoutingMode value) => SaveSettings();
     partial void OnBitrateChanged(decimal value) => SaveSettings();
     partial void OnIsDarkChanged(bool value) => SaveSettings();
@@ -202,7 +227,8 @@ public partial class MainWindowViewModel : ObservableObject
         Codecs.Clear();
         foreach (var def in OutputModel.Codecs)
         {
-            if (OutputModel.IsCodecSupportedByBackend(SelectedBackend, def.Id))
+            if (SelectedBackend.LayoutIds.Any(id => ModeSupportsLayout(id) &&
+                    OutputModel.IsCodecSupported(SelectedBackend.Id, id, def.Id)))
             {
                 Codecs.Add(new CodecOption(def, true, def.Name));
             }
@@ -229,7 +255,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             foreach (var id in SelectedBackend.LayoutIds)
             {
-                if (OutputModel.IsCodecSupported(SelectedBackend.Id, id, SelectedCodec.Def.Id))
+                if (ModeSupportsLayout(id) && OutputModel.IsCodecSupported(SelectedBackend.Id, id, SelectedCodec.Def.Id))
                 {
                     Layouts.Add(OutputModel.LayoutById[id]);
                 }
@@ -337,6 +363,12 @@ public partial class MainWindowViewModel : ObservableObject
             SelectedBackend = backend; // → 重建下游
         }
 
+        if (s.TripleBalanceMode is not null &&
+            TripleBalanceModes.FirstOrDefault(m => m.Id == s.TripleBalanceMode) is { } mode)
+        {
+            SelectedTripleBalanceMode = mode;
+        }
+
         if (s.Codec is not null && Codecs.FirstOrDefault(c => c.Def.Id == s.Codec) is { } codec
             && !ReferenceEquals(codec, SelectedCodec))
         {
@@ -395,6 +427,7 @@ public partial class MainWindowViewModel : ObservableObject
             s.Codec = SelectedCodec?.Def.Id;
             s.Layout = SelectedLayout?.Id;
             s.SpeakerGeometry = SelectedSpeakerGeometry.Geometry.ToString();
+            s.TripleBalanceMode = SelectedTripleBalanceMode.Id;
             s.LfeRoutingMode = LfeRoutingMode.ToString();
             s.Container = SelectedContainer?.Id;
             s.Bitrate = ShowBitrate ? Bitrate : null;
@@ -650,6 +683,8 @@ public partial class MainWindowViewModel : ObservableObject
             ApacContainer = apacContainer,
             SofaPath = SofaApplicable ? SofaPath : null, // 仅 SAF 双耳后端传 SOFA
             SpeakerGeometry = SelectedSpeakerGeometry.Geometry,
+            TripleBalanceMode = TripleBalanceModeApplicable
+                ? SelectedTripleBalanceMode.Mode : AdmTripleBalanceMode.Standard,
             LfeRoutingMode = LfeRoutingMode,
         };
     }

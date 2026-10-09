@@ -18,6 +18,13 @@ public sealed record LayoutDef(string Id, string Name, int Channels, bool HasHei
 // Renderer = 渲染时传 adm_render_options_set_renderer 的枚举;Id = support-matrix 的 renderer 字符串。
 public sealed record BackendDef(string Id, string Name, IReadOnlyList<string> LayoutIds, AdmRenderer Renderer);
 
+public sealed record TripleBalanceModeDef(string Id, string Name, AdmTripleBalanceMode Mode,
+    IReadOnlyList<string> LayoutIds, IReadOnlyList<int> SampleRates)
+{
+    public string Detail => string.Join(" / ", LayoutIds) +
+                            (SampleRates.Count == 0 ? "" : " · " + string.Join(" / ", SampleRates) + " Hz");
+}
+
 // Id = support-matrix 的 target;Ext = 输出文件扩展名(无点)。
 public sealed record ContainerDef(string Id, string Name, string Ext);
 
@@ -47,6 +54,10 @@ public sealed class CodecOption
 /// </summary>
 public static class OutputModel
 {
+    public static TripleBalanceModeDef StandardTripleBalanceMode { get; } =
+        new("standard", "Standard", AdmTripleBalanceMode.Standard, Array.Empty<string>(), Array.Empty<int>());
+    public static ObservableCollection<TripleBalanceModeDef> TripleBalanceModes { get; } =
+        new() { StandardTripleBalanceMode };
     public static bool ApacAvailable { get; private set; }
     public static bool IamfAvailable { get; private set; }
     public static bool SofaAvailable { get; private set; }
@@ -73,6 +84,15 @@ public static class OutputModel
     /// <summary>载入后端语义能力与系统空间音频布局；两者均以 capabilities JSON 为权威源。</summary>
     internal static void InitializeCapabilities(CapabilitiesDoc? caps)
     {
+        TripleBalanceModes.Clear();
+        TripleBalanceModes.Add(StandardTripleBalanceMode);
+        var dMode = caps?.Backends.FirstOrDefault(b => b.Renderer == "triple-balance")?
+            .Modes.FirstOrDefault(m => m.Id == "d");
+        if (dMode is { Layouts.Count: > 0 })
+        {
+            TripleBalanceModes.Add(new TripleBalanceModeDef(dMode.Id, dMode.DisplayName,
+                AdmTripleBalanceMode.D, dMode.Layouts, dMode.SampleRates));
+        }
         SystemSpatialLayouts = caps is null
             ? Array.Empty<string>()
             : caps.SystemSpatialLayouts.Select(l => l.DisplayName).ToArray();

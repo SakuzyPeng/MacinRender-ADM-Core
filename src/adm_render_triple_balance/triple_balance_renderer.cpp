@@ -39,7 +39,14 @@ bool uses_room_size(const SceneTrackRef& track, SpeakerSpreadMode spread_mode) {
 }
 
 [[nodiscard]] Result<void> validate_triple_balance_input(const RenderPlan& plan) {
+    if (plan.triple_balance_mode != TripleBalanceMode::standard && plan.triple_balance_mode != TripleBalanceMode::d) {
+        return make_error(ErrorCode::invalid_argument, "invalid Triple Balance mode");
+    }
     const bool extended = triple_balance::is_room_222(plan.output_layout);
+    if (plan.triple_balance_mode == TripleBalanceMode::d &&
+        ((plan.output_layout != "9.1.6" && !extended) || plan.scene.info.sample_rate != 48000)) {
+        return make_error(ErrorCode::unsupported, "Triple Balance D mode requires 48 kHz and 9.1.6 or 22.2 output");
+    }
     if (plan.output_layout != "4+7+0" && plan.output_layout != "9.1.6" && !extended) {
         return make_error(ErrorCode::unsupported, "room renderer supports 7.1.4/9.1.6 and experimental 22.2");
     }
@@ -133,9 +140,17 @@ class TripleBalanceRenderer final : public IRenderer {
     [[nodiscard]] Result<std::unique_ptr<IRenderStream>>
     open_stream(const IPreparedRender& state, const RenderPlan& plan, LogSink& logs) override {
         (void) logs;
+        if (plan.triple_balance_mode == TripleBalanceMode::d) {
+            return make_error(ErrorCode::unsupported,
+                              "Triple Balance D mode currently supports offline rendering only");
+        }
         const auto* prepared = dynamic_cast<const TripleBalancePrepared*>(&state);
         if (prepared == nullptr) {
             return make_error(ErrorCode::internal_error, "triple-balance: incompatible prepared state");
+        }
+        if (prepared->mode != TripleBalanceMode::standard) {
+            return make_error(ErrorCode::unsupported,
+                              "Triple Balance D mode currently supports offline rendering only");
         }
         return triple_balance::open_stream(*prepared, plan);
     }
@@ -178,6 +193,7 @@ Result<std::shared_ptr<IPreparedRender>> TripleBalanceRenderer::prepare(const Re
     prepared->output_channels = static_cast<uint16_t>(layout->speakers.size());
     prepared->sample_rate = plan.scene.info.sample_rate;
     prepared->spread_mode = plan.speaker_spread_mode;
+    prepared->mode = plan.triple_balance_mode;
     std::map<uint16_t, ChannelGainInfo> by_channel;
     std::map<uint16_t, MradmTbRow> numeric_rows;
     std::vector<MradmTbEvent> events;
@@ -253,6 +269,33 @@ Result<std::shared_ptr<IPreparedRender>> TripleBalanceRenderer::prepare(const Re
         prepared->gain_matrix.channels.push_back(
             {channel, std::move(gains.object_id), std::move(gains.speaker_label_key)});
     }
+    if (prepared->mode == TripleBalanceMode::d) {
+        void* raw = nullptr;
+        auto status = dsp::tb_status(mradm_dsp_tb_d_plan_create,
+                                     plan.scene.info.num_channels,
+                                     *dsp::tb_layout(plan.output_layout),
+                                     plan.scene.info.num_frames,
+                                     rows.data(),
+                                     rows.size(),
+                                     events.data(),
+                                     events.size(),
+                                     bed_coefficients.data(),
+                                     bed_coefficients.size(),
+                                     &raw);
+        if (!status) {
+            return fail(status.error());
+        }
+        prepared->d_numeric.reset(raw);
+        // The D-mode processor owns all routes and clocks; the common mixer starts silent.
+        auto silent = render_common::prepare_speaker_mix({}, plan.scene.info.num_channels, prepared->output_channels);
+        if (!silent) {
+            return fail(silent.error());
+        }
+        prepared->gain_matrix.plan = std::move(silent->plan);
+        logs.log(LogLevel::info, "triple-balance", "D mode: coherent size distribution, 512/1536-frame controls");
+        triple_balance::publish_semantics(plan, report);
+        return std::static_pointer_cast<IPreparedRender>(prepared);
+    }
     auto numeric = dsp::TbPlan::create(plan.scene.info.num_channels,
                                        *dsp::tb_layout(plan.output_layout),
                                        plan.scene.info.sample_rate,
@@ -284,6 +327,41 @@ Result<RenderMetrics> TripleBalanceRenderer::render_window(const IPreparedRender
     if (prepared == nullptr) {
         return make_error(ErrorCode::internal_error, "triple-balance: incompatible prepared state");
     }
+    if (prepared->mode != plan.triple_balance_mode) {
+        return make_error(ErrorCode::invalid_argument, "Triple Balance prepared mode does not match render options");
+    }
+    if (prepared->mode == TripleBalanceMode::d) {
+        const auto* layout = render_layouts::find_speaker_layout(plan.output_layout);
+        if (layout == nullptr || layout->speakers.size() != prepared->output_channels ||
+            plan.scene.info.sample_rate != prepared->sample_rate) {
+            return make_error(ErrorCode::invalid_argument,
+                              "D mode prepared layout or sample rate does not match render options");
+        }
+        void* raw = nullptr;
+        auto status = dsp::tb_status(mradm_dsp_tb_d_create, prepared->d_numeric.get(), &raw);
+        if (!status) {
+            return tl::unexpected{status.error()};
+        }
+        dsp::TbHandle<mradm_dsp_tb_d_destroy> mixer{raw, mradm_dsp_tb_d_destroy};
+        uint64_t position = 0;
+        const render_common::SpeakerBlockProcessor process =
+            [&](std::span<const float> input, std::span<float> output, bool final) -> Result<void> {
+            (void) final;
+            const auto frames = input.size() / plan.scene.info.num_channels;
+            auto result = dsp::tb_status(mradm_dsp_tb_d_process,
+                                         mixer.get(),
+                                         input.data(),
+                                         input.size(),
+                                         output.data(),
+                                         output.size(),
+                                         position,
+                                         frames);
+            position += frames;
+            return result;
+        };
+        return render_common::render_speaker_pcm(
+            plan, prepared->gain_matrix, prepared->output_channels, "triple-balance", progress, logs, process);
+    }
     if (prepared->size_tracks.empty()) {
         return render_common::render_speaker_pcm(
             plan, prepared->gain_matrix, prepared->output_channels, "triple-balance", progress, logs);
@@ -312,6 +390,8 @@ CapabilityReport triple_balance_capabilities() {
     result.supports_objects = true;
     result.supports_direct_speakers = true;
     result.supports_render_window = true;
+    result.modes = {{"standard", "Standard", {"4+7+0", "9.1.6", "9+10+3"}, {}, true},
+                    {"d", "D mode", {"9.1.6", "9+10+3"}, {48000}, false}};
     // Fixed room layouts; no custom SAF layouts or listener-oriented geometry.
     result.supported_layouts = {
         {"4+7+0", "7.1.4", 12, true, 1, true, false},

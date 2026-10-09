@@ -381,6 +381,11 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
             "Speaker Objects extent: auto (Triple Balance size, otherwise MDAP for 3D), none (ignore extent), mdap")
         ->check(CLI::IsMember({"auto", "none", "mdap"}));
     render_cmd
+        ->add_option("--triple-balance-mode",
+                     opts.triple_balance_mode_str,
+                     "Triple Balance mode: standard, or d (coherent size; offline 48 kHz / 9.1.6)")
+        ->check(CLI::IsMember({"standard", "d"}));
+    render_cmd
         ->add_option("--binaural-spread-mode",
                      opts.binaural_spread_mode_str,
                      "Binaural Objects extent spread algorithm: auto (cloud), none, cloud, "
@@ -474,6 +479,8 @@ mradm::RenderRequest make_render_request(const RenderCliOptions& opts) {
         request.options.direct_speakers_matrix_path = opts.direct_speakers_matrix_path;
     }
     request.options.speaker_spread_mode = parse_speaker_spread_mode(opts.speaker_spread_mode_str);
+    request.options.triple_balance_mode =
+        opts.triple_balance_mode_str == "d" ? mradm::TripleBalanceMode::d : mradm::TripleBalanceMode::standard;
     request.options.binaural_spread_mode = parse_binaural_spread_mode(opts.binaural_spread_mode_str);
     request.options.lfe_routing_mode = parse_lfe_routing_mode(opts.lfe_routing_mode_str);
     request.options.apple_spatial_preset = parse_apple_spatial_preset(opts.apple_spatial_preset_str);

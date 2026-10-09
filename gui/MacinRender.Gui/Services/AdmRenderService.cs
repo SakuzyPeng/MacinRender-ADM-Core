@@ -186,6 +186,11 @@ public sealed class AdmRenderService
         NativeMethods.adm_render_options_set_output_layout(opts, s.Layout);
         NativeMethods.adm_render_options_set_monitor_system_spatial(opts, s.MonitorSystemSpatial ? 1 : 0);
         NativeMethods.adm_render_options_set_speaker_geometry(opts, s.SpeakerGeometry);
+        // Older cores have only Standard mode and do not export this additive setter.
+        if (s.TripleBalanceMode != AdmTripleBalanceMode.Standard)
+        {
+            NativeMethods.adm_render_options_set_triple_balance_mode(opts, s.TripleBalanceMode);
+        }
         NativeMethods.adm_render_options_set_lfe_routing_mode(opts, s.EffectiveLfeRoutingMode);
 
         if (s.BitDepth is { } depth)

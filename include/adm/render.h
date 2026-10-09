@@ -97,6 +97,7 @@ struct RenderPlan {
     // direct_speakers_routing_mode == matrix.
     std::shared_ptr<const DirectSpeakersMatrix> direct_speakers_matrix;
     SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
+    TripleBalanceMode triple_balance_mode{TripleBalanceMode::standard};
     BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
     LfeRoutingMode lfe_routing_mode{LfeRoutingMode::direct};
     AppleSpatialPreset apple_spatial_preset{AppleSpatialPreset::off};

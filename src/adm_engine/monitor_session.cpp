@@ -151,6 +151,10 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
 
     Result<std::unique_ptr<IRenderStream>>
     open(const AdmScene& scene, const RenderOptions& options, LogSink& logs) override {
+        if (options.triple_balance_mode != TripleBalanceMode::standard) {
+            return make_error(ErrorCode::unsupported,
+                              "Triple Balance D mode currently supports offline rendering only");
+        }
         const std::string requested_layout =
             normalize_output_layout(options.output_layout.empty() ? std::string{"0+2+0"} : options.output_layout);
         auto resolved = resolve_renderer(options.renderer, requested_layout, options.internal_allow_speaker_stereo);
@@ -182,6 +186,7 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         plan.direct_speakers_routing_mode = options.direct_speakers_routing_mode;
         plan.direct_speakers_matrix = std::move(*matrix);
         plan.speaker_spread_mode = options.speaker_spread_mode;
+        plan.triple_balance_mode = options.triple_balance_mode;
         plan.binaural_spread_mode = options.binaural_spread_mode;
         plan.lfe_routing_mode = options.lfe_routing_mode;
         plan.apple_spatial_preset = options.apple_spatial_preset;
