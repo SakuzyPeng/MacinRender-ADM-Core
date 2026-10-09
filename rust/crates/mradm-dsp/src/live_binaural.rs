@@ -5,7 +5,7 @@ use crate::{
     Error, Result,
     convolution::{LiveConvolver, LiveState},
     diffuse::DiffuseDelay,
-    hrtf_filters::{Filters, Lookup},
+    hrtf_filters::{CachedQueries, Filters},
     scene_math::{self as math, Rotation, Speaker},
 };
 use std::sync::Arc;
@@ -297,7 +297,7 @@ pub struct Session {
     elements: Vec<Element>,
     preview: Vec<Preview>,
     active: usize,
-    filters: Arc<Filters>,
+    filters: CachedQueries,
     convolver: LiveConvolver,
     source: Vec<f32>,
     left: Vec<f32>,
@@ -307,6 +307,9 @@ pub struct Session {
     spread: u32,
     contract: bool,
 }
+
+#[cfg(test)]
+mod tests;
 impl Session {
     pub fn new(
         filters: Arc<Filters>,
@@ -345,7 +348,7 @@ impl Session {
             elements,
             preview: vec![Preview::default(); descriptions.len()],
             active: descriptions.len(),
-            filters,
+            filters: CachedQueries::new(filters),
             convolver,
             source: vec![0.; BLOCK],
             left: vec![0.; BLOCK],
@@ -360,6 +363,7 @@ impl Session {
         self.convolver.tail_frames() + 32
     }
     pub fn reset(&mut self) {
+        self.filters.clear();
         for e in &mut self.elements {
             e.control = Control::default();
             e.diffuse.reset();
@@ -662,8 +666,7 @@ impl Session {
             } else {
                 [d[0], d[1]]
             };
-            self.filters
-                .query(az, el, Lookup::Continuous, &mut self.query, None)?;
+            self.filters.query(az, el, &mut self.query)?;
             let normalized = d[2] / math::max(sum, 1e-6);
             for (out, sample) in self.hrtf.iter_mut().zip(&self.query) {
                 *out += *sample * normalized;

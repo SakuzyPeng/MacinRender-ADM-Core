@@ -177,6 +177,42 @@ mod tests {
         }
     }
     #[test]
+    fn cold_motion_eviction_and_reset_do_not_allocate() {
+        let grid =
+            Arc::new(Grid::new(&[0., 0., 90., 0., 180., 0., -90., 0., 0., 90., 0., -90.]).unwrap());
+        let mut ir = [0.; 192];
+        for i in 0..12 {
+            ir[i * 16 + i] = 0.5;
+        }
+        let bank = Arc::new(Filters::new(grid, &ir, 16, 64, true).unwrap());
+        let mut session = Session::new(bank, &[Description::default()], 48000, 0, false).unwrap();
+        let input = [0.125; 32];
+        let mut output = [0.; 64];
+        COUNT.with(|c| c.set(Some(0)));
+        for step in 0..768 {
+            let initial = [Command::default()];
+            session
+                .process(
+                    32,
+                    [Some(&input[..])].into_iter(),
+                    if step == 0 { &initial } else { &[] },
+                    &[],
+                    [step as f32 * 137.125, step as f32 * 11.25, 3.],
+                    0,
+                    &mut output,
+                )
+                .unwrap();
+        }
+        session.reset();
+        session
+            .process(32, std::iter::empty(), &[], &[], [0.; 3], 0, &mut output)
+            .unwrap();
+        let allocations = COUNT.with(|c| c.replace(None).unwrap());
+        assert_eq!(allocations, 0);
+        assert_eq!(output, [0.; 64]);
+    }
+
+    #[test]
     fn allocation_atomicity_aliasing_and_shared_bank_lifetime() {
         unsafe {
             let grid = Arc::new(
