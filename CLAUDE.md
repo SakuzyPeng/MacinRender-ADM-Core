@@ -16,6 +16,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Rust 迁移现状**：数值 DSP（原 SAF 子集、计量、重采样、HRTF/双耳、HpTF、输出保护、PCM 混音、EAR 后处理、Triple Balance、HOA、Monitor、Live VBAP、Scene 空间数学/过渡）、EAR 布局/增益/FIR 设计（原 libear）、ADM XML 元数据（原 libadm）、WAVE/RF64/BW64 样本读写与容器元数据（原 libbw64 / dr_wav / C++ chunk 改写）、PoseBridge OSC 协议解析（`mradm-osc`，见 `RUST_OSC_PROTOCOL_MIGRATION.md`）和 AutoEq ParametricEQ 文本解析（`mradm-dsp` `hptf::parametric_eq`，见 `RUST_HPTF_PARSE_MIGRATION.md`）已迁入同仓库 Cargo workspace `rust/`。C++ 仍持有 `AdmScene`、语义策略（含 EAR 的 channelLock/divergence 预处理与 22.2 LFE 策略）、渲染编排、线程/设备调度（含 OSC 头追踪的 UDP 收发与快照）、输出文件的临时文件/替换编排与公开 C ABI。长期目标是把 C++ 面逐步压到最小，但每一步的边界以已接受的 ADR（0008 / 0010 / 0011 / 0012 / 0013 / 0014 / 0015 / 0016 / 0017）和 `docs/architecture/RUST_*_MIGRATION.md` 验收记录为准。二期已按锁定矩阵结项（见 `docs/architecture/RUST_PHASE2_CLOSEOUT.md`）：macOS arm64 / Linux x64 / Windows x64 的全部 78 个 PCM 用例逐位相同并设为门禁。完成切片包括 Scene `scene-separate-v1`（ADR 0014）、RustFFT 标量规划器（ADR 0015）、重采样固定归约及可移植三角函数（ADR 0016）、OM spreader 固定分组与可移植数学函数（ADR 0017），以及保持每列算术树的 FFT 独立列优化。后续覆盖已扩展到 118 个精确 PCM id 和 8 个内核模式（123 个文件），新增 96 kHz Scene、96/192 kHz 重采样、HRTF 边界及退化 OM 输入（见 `RUST_COVERAGE_EXTENSION.md`）；其余 10 个内核文件继续观察，只有平台 libm 的 f64 twiddle 列仍有差异。新增 PCM 用例必须同步加入门禁（`phase2_tools_test.py` 强制）；不得把当前矩阵扩展为任意输入或工具链的全局承诺。dr_flac 按用户决定暂缓；覆盖继续按批次扩展，进一步优化与参考退役分别推进。
 
+上述迁移清单表示主要内核已经迁入 Rust；C++ 仍有系数组装、样本归约、淡化和后置增益，尚非纯调度层。
+剩余数值运算与本轮分期统一维护在 [PCM 一致性审计与 Rust 迁移路线](docs/architecture/PCM_CONSISTENCY_AUDIT.md)：
+一期 Scene 流式渲染及其实际共享依赖，二期计量与归一化，三期文件流式渲染和离线渲染；Apple 后端及后续编码排除。
+基于 `456a3ba` 的现行门禁清单为 188 个 PCM id、160 份内核测量，其中 150 份内核设为门禁；
+清单规模与历史已完成验收分别记录，不将 118 项历史报告直接当作新增范围的三平台结果。
+
 ## 常用构建与测试命令
 
 主要使用 CMake preset：
@@ -319,14 +325,14 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 ## 关键文档索引
 
 - `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md` — 平台化重构方向、模块边界
-- `docs/architecture/CPP_NUMERIC_SURFACE_AUDIT.md` — 离线与 Scene 链路到写出 PCM 为止仍由 C++ 执行的数值计算清单（一致性风险分级、门禁覆盖）与 C++ 退化为纯调度的分期路线（一期 Scene 链路）
+- `docs/architecture/PCM_CONSISTENCY_AUDIT.md` — 到 PCM 写出为止的 C++/Rust 数值审计、唯一的本轮迁移路线与逐切片验证要求；一期 Scene 流式渲染及其实际共享依赖
 - `docs/architecture/ADM_FEATURE_COVERAGE.md` — ADM 特性覆盖审计
 - `docs/architecture/ADM_APPLE_BACKEND.md` — macOS AUSpatialMixer 后端 + ASBR 系统空间监听 sink
 - `docs/architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md` — Windows ISpatialAudioClient 系统空间监听 sink（静态床/能力实测/切换恢复）
 - `docs/architecture/hptf-eq.md` — HpTF 耳机补偿（v1.38 内存参数接口、AutoEq ParametricEQ，实时监听专用，设备绑定）
 - `docs/adr/0001` C++20 标准 | `0002` C++-first，Rust-later | `0003` 自有领域模型与后端边界 | `0004` 第三方依赖管理 | `0005` 错误处理模型 | `0006` CLI11 选择 | `0007` C ABI 稳定性 | `0008` Rust 落地与 SAF 替换 | `0009` 头追踪输入边界 | `0010` Rust Meter | `0011` Rust 固定采样率转换 | `0012` Rust ADM 元数据与 libadm 参考边界 | `0013` Rust EAR 与 libear 生产依赖移除 | `0014` Scene 统一乘加舍入规则 | `0015` RustFFT 固定标量路径 | `0016` 重采样固定标量插值与可移植三角函数 | `0017` OM spreader 固定分组预算与可移植数学函数
 - `docs/architecture/SCENE_ARITHMETIC_POLICY.md` — `scene-separate-v1` 的验证证据（二期第一个切片）
-- `docs/architecture/RUST_COVERAGE_EXTENSION.md` — 二期后的 96 kHz Scene、96/192 kHz 重采样、HRTF 与退化 OM 覆盖；当前 118 份 PCM / 133 份内核测量
+- `docs/architecture/RUST_COVERAGE_EXTENSION.md` — 二期后的 96 kHz Scene、96/192 kHz 重采样、HRTF 与退化 OM 覆盖；该批验收为 118 份 PCM / 133 份内核测量
 - `docs/architecture/RUST_PHASE2_CLOSEOUT.md` — 二期结项、限定矩阵、维护门禁与后续边界；`RUST_PHASE2_PERFORMANCE.md` — 保持位模式的性能回收
 - `docs/architecture/RUST_PHASE2_BASELINE.md` — 二期三平台基线、回放与分歧定位工具；`RUST_PHASE2_FFT.md` — FFT 收敛切片（标量路径、twiddle 证据、位相等门禁、性能代价）；`RUST_PHASE2_RESAMPLER.md` — 重采样收敛切片（rubato 补丁、mradm-math）；`RUST_PHASE2_SPREADER.md` — OM spreader 收敛切片（固定分组预算、libm-force）
 - `docs/architecture/RUST_REFERENCE_RETENTION.md` — 迁移参考实现的登记、冻结校验与退役条件
