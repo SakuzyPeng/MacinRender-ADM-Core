@@ -158,7 +158,7 @@ class EvidenceTests(unittest.TestCase):
         offline, scene = common.offline_cases(), common.scene_cases()
         self.assertEqual(len(offline), 40)
         self.assertEqual(len({r['id'] for r in offline}), 40)
-        self.assertEqual(len(scene), 70)
+        self.assertEqual(len(scene), 74)
         self.assertTrue(any('--loudness-target' in c['args'] for c in offline))
         self.assertTrue(any('triple-balance' in c['args'] for c in offline))
         for row in scene:
@@ -177,14 +177,24 @@ class EvidenceTests(unittest.TestCase):
     def test_original_matrix_parameters_remain_frozen(self):
         closeout = json.loads((ROOT / 'docs/architecture/evidence/rust-phase2/closeout.json').read_text())
         original_scene = [row for row in common.scene_cases()
-                          if row['version'] == 1 and max(row['input_rate'], row['output_rate']) <= 48000]
+                          if row['version'] == 1 and row['layout'] != '9+10+3'
+                          and max(row['input_rate'], row['output_rate']) <= 48000]
         self.assertEqual(len(original_scene), closeout['inventory']['scene_configurations'])
         self.assertEqual(common.json_digest([row for row in common.offline_cases() if 'sofa' not in row]),
                          closeout['inventory']['offline_parameters_sha256'])
         self.assertEqual(common.json_digest(original_scene),
                          closeout['inventory']['scene_parameters_sha256'])
-        self.assertEqual(common.json_digest([row for row in common.scene_cases() if 'sofa' not in row]),
+        self.assertEqual(common.json_digest([row for row in common.scene_cases()
+                                            if 'sofa' not in row and row['layout'] != '9+10+3']),
                          '4af0ffe8691c5287445862e3336ceab8e98a359c60b274acf7952584db3bf46c')
+
+    def test_vbap_scene_222_covers_rates_partitions_and_both_epochs(self):
+        cases = [row for row in common.scene_cases() if row['backend'] == 'vbap' and row['layout'] == '9+10+3']
+        self.assertEqual(len(cases), 4)
+        self.assertEqual({(row['input_rate'], row['output_rate'], tuple(row['partition'])) for row in cases},
+                         {(rate, rate, partition) for rate in (48000, 96000)
+                          for partition in ((512,), (1, 7, 127, 511, 1024))})
+        self.assertTrue(all(len(row['epochs']) == 2 for row in cases))
 
     def test_sofa_inputs_are_pinned_and_part_of_source_identity(self):
         source = common.ROOT / 'tests/fixtures/sofa'
@@ -402,6 +412,9 @@ class ReplayTests(unittest.TestCase):
             if success:
                 for epoch in (1, 2):
                     common.require_same(tmp / 'out' / f'pass-1-epoch-{epoch}.pcmbits', tmp / 'out' / f'pass-2-epoch-{epoch}.pcmbits')
+                    if case['backend'] == 'vbap' and case['layout'] == '9+10+3':
+                        shape, _ = common.pcm_bytes(tmp / 'out' / f'pass-1-epoch-{epoch}.pcmbits')
+                        self.assertEqual(shape[0], 24, '22.2 must render all 24 output channels')
                 self.assertEqual(json.loads((tmp / 'out/pass-1.json').read_text())['underruns'], 0)
             else:
                 self.assertIn('SOFA' if corrupt_sofa else 'replay', result.stderr)

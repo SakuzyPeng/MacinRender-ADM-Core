@@ -80,15 +80,17 @@ Cargo 依赖而未登记的 PR 会直接失败。release workflow 另以 `--requ
 
 config A 为默认数值配置，config B 只打开 C/C++ 严格浮点选项；两组 RustFFT 均使用标量规划器
 （ADR 0015，构建记录中含 SIMD 特性的结果会被比较器拒收）。
-二期结项后的扩展继续使用 `run-rust-phase2.py`，当前收集 40 个离线场景、70 个实时 Scene 配置（各含两个 epoch）及
+二期结项后的扩展继续使用 `run-rust-phase2.py`，当前收集 40 个离线场景、74 个 Scene 流式渲染配置（各含两个 epoch）及
 160 个内核测量（含 FFT、重采样、HRTF、外部 SOFA、退化 OM 与 spreader），再在原构建树启用诊断并验证 PCM 无扰动。`compare-rust-phase2.py`
 验证三平台源码、输入和产物后输出逐用例 JSON。输入完整性、重复性、帧数和无扰动性是硬门禁；
-`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA 内核及全部 180 个 PCM 用例）必须三平台逐位相同；
+`scripts/consistency/phase2-gates.json` 列出的内核/用例（当前为 FFT、EAR 去相关 FIR、可移植三角函数、重采样、OM/spreader、HRTF、SOFA 内核及全部 188 个 PCM 用例）必须三平台逐位相同；
 新增用例必须同时按精确 id 加入门禁（`phase2_tools_test.py` 校验）。9 个内核模式展开为 150 个
 文件，其余 10 个为观察项（EAR 布局、Scene、HpTF 和平台 libm f64 twiddle）；目前只有 f64
 twiddle 观察列存在差异。`compare` job 先写出全部四份报告，再按门禁结果失败。
 SOFA 必须开启；三份仓库内固定文件受 SHA-256 校验，覆盖解析、HRTF 准备、离线与实时输出，见
 [外部 SOFA 一致性检查](../architecture/RUST_SOFA_CONSISTENCY.md)。未设置本机数据集环境变量不会跳过这些检查。
+SAF VBAP Scene 流式渲染另覆盖 22.2（`9+10+3`，24 声道）：48/96 kHz、固定/碎片分块，各含正常与 seek 后短尾
+两个 epoch，共 8 份 PCM；原生工具测试还核对实际输出为 24 声道。
 A 组还在同一构建树交替测量原标量与补丁 FFT，核对位指纹并上传性能 JSON；共享 runner 的
 细小计时变化不作为硬门禁。
 原 78 项矩阵的范围和维护要求见 [二期结项](../architecture/RUST_PHASE2_CLOSEOUT.md)，当前新增范围见[覆盖扩展](../architecture/RUST_COVERAGE_EXTENSION.md)。
