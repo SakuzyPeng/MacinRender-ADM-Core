@@ -8,6 +8,25 @@ use crate::{
 };
 use std::sync::Arc;
 
+mod cache;
+pub(crate) use cache::CachedQueries;
+
+// Shared by the uncached reference path and the session-local live cache.
+fn continuous_cells(az: f32, el: f32) -> ([usize; 4], [f32; 4]) {
+    let (az0, el0) = (az.floor() as usize, el.floor() as usize);
+    let (az1, el1) = ((az0 + 1) % 360, (el0 + 1).min(180));
+    let (a, e) = (az - az0 as f32, el - el0 as f32);
+    (
+        [
+            el0 * AZIMUTHS + az0,
+            el0 * AZIMUTHS + az1,
+            el1 * AZIMUTHS + az0,
+            el1 * AZIMUTHS + az1,
+        ],
+        [(1.0 - a) * (1.0 - e), a * (1.0 - e), (1.0 - a) * e, a * e],
+    )
+}
+
 #[derive(Clone, Copy)]
 pub enum Lookup {
     Quantized,
@@ -218,16 +237,7 @@ impl Filters {
                 }
             }
             Lookup::Continuous => {
-                let (az0, el0) = (az.floor() as usize, el.floor() as usize);
-                let (az1, el1) = ((az0 + 1) % 360, (el0 + 1).min(180));
-                let (a, e) = (az - az0 as f32, el - el0 as f32);
-                let corners = [
-                    el0 * AZIMUTHS + az0,
-                    el0 * AZIMUTHS + az1,
-                    el1 * AZIMUTHS + az0,
-                    el1 * AZIMUTHS + az1,
-                ];
-                let weights = [(1.0 - a) * (1.0 - e), a * (1.0 - e), (1.0 - a) * e, a * e];
+                let (corners, weights) = continuous_cells(az, el);
                 output.fill(0.0);
                 for (grid, weight) in corners.into_iter().zip(weights) {
                     if weight == 0.0 {
