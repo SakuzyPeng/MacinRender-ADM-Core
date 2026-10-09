@@ -203,6 +203,29 @@ mod tests {
                 )
                 .unwrap();
         }
+        // More HRTF endpoints than the per-object replay allowance must take
+        // the ordinary two-pass path without allocating during overflow.
+        let events = std::array::from_fn::<_, 4, _>(|i| Command {
+            offset: i as u32 * 8,
+            duration: 8,
+            changed: 4,
+            state: mradm_dsp::live_binaural::State {
+                position: [i as f32 * 0.25, 1., 0.2],
+                ..mradm_dsp::live_binaural::State::default()
+            },
+            ..Command::default()
+        });
+        session
+            .process(
+                32,
+                [Some(&input[..])].into_iter(),
+                &[],
+                &events,
+                [22.5, 13., 3.],
+                0,
+                &mut output,
+            )
+            .unwrap();
         session.reset();
         session
             .process(32, std::iter::empty(), &[], &[], [0.; 3], 0, &mut output)

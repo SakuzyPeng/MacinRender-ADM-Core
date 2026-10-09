@@ -9,6 +9,8 @@ use crate::{
     scene_math::{self as math, Rotation, Speaker},
 };
 use std::sync::Arc;
+mod prepared;
+use prepared::PreparedHrtfs;
 pub const FIELDS: u64 = (1 << 11) - 1;
 const HEAD: u64 = 1 << 8;
 const BLOCK: usize = 1024;
@@ -298,6 +300,7 @@ pub struct Session {
     preview: Vec<Preview>,
     active: usize,
     filters: CachedQueries,
+    prepared: PreparedHrtfs,
     convolver: LiveConvolver,
     source: Vec<f32>,
     left: Vec<f32>,
@@ -343,12 +346,18 @@ impl Session {
             })
             .collect();
         let n = filters.output_len();
+        let spatial = descriptions.iter().filter(|d| d.role != 2).count();
         Ok(Self {
             descriptions: descriptions.to_vec(),
             elements,
             preview: vec![Preview::default(); descriptions.len()],
             active: descriptions.len(),
-            filters: CachedQueries::new(filters),
+            filters: if spatial == 0 {
+                CachedQueries::with_limits(filters, 0, 0)
+            } else {
+                CachedQueries::new(filters)
+            },
+            prepared: PreparedHrtfs::new(n, spatial),
             convolver,
             source: vec![0.; BLOCK],
             left: vec![0.; BLOCK],
@@ -364,6 +373,7 @@ impl Session {
     }
     pub fn reset(&mut self) {
         self.filters.clear();
+        self.prepared.begin();
         for e in &mut self.elements {
             e.control = Control::default();
             e.diffuse.reset();
@@ -466,6 +476,7 @@ impl Session {
                     tail: s.tail_remaining(),
                 });
         }
+        self.prepared.begin();
         self.run(
             frames,
             planes.clone(),
@@ -477,10 +488,11 @@ impl Session {
             true,
             None,
         )?;
+        self.prepared.finish_preview();
         output[..required].fill(0.);
         // All user-recoverable failures were checked above, including every diffuse result
         // and spectrum consumed by the convolution. A remaining error is an invariant bug.
-        Ok(self
+        let report = self
             .run(
                 frames,
                 planes,
@@ -492,7 +504,9 @@ impl Session {
                 false,
                 Some(output),
             )
-            .expect("prevalidated Live binaural processing"))
+            .expect("prevalidated Live binaural processing");
+        self.prepared.finish_commit();
+        Ok(report)
     }
     fn run<'a, I>(
         &mut self,
@@ -580,7 +594,11 @@ impl Session {
         rotation: &Rotation,
         rotate: bool,
         report: &mut Report,
+        preview: bool,
     ) -> Result<()> {
+        if !preview && self.prepared.replay(&mut self.hrtf, report) {
+            return Ok(());
+        }
         let description = self.descriptions[index];
         let mut dir = direction.unwrap_or_else(|| {
             if state.valid & 4 != 0 {
@@ -675,6 +693,9 @@ impl Session {
         if self.hrtf.iter().any(|x| !x.is_finite()) {
             return Err(invalid());
         }
+        if preview {
+            self.prepared.record(&self.hrtf, *report);
+        }
         Ok(())
     }
     fn render_element(
@@ -760,6 +781,7 @@ impl Session {
                     rotation,
                     rotate,
                     report,
+                    preview,
                 )?;
                 if !preview {
                     self.convolver.initialize(
@@ -777,7 +799,7 @@ impl Session {
             } else {
                 None
             };
-            self.hrtf_for(index, end, direction, rotation, rotate, report)?;
+            self.hrtf_for(index, end, direction, rotation, rotate, report, preview)?;
             if !preview {
                 let spatial_ramp = control
                     .remaining

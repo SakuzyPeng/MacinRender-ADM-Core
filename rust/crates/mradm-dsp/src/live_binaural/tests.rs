@@ -36,12 +36,113 @@ fn pair(
         Session::new(Arc::clone(bank), &descriptions, 48000, spread, contract).unwrap();
     cached.filters = CachedQueries::with_limits(Arc::clone(bank), corners, queries);
     reference.filters = CachedQueries::with_limits(Arc::clone(bank), 0, 0);
+    reference.prepared = PreparedHrtfs::new(bank.output_len(), 0);
     (cached, reference)
 }
 
 fn equal_bits(a: &[f32], b: &[f32]) {
+    assert_eq!(a.len(), b.len());
     for (i, (a, b)) in a.iter().zip(b).enumerate() {
         assert_eq!(a.to_bits(), b.to_bits(), "PCM {i}: {a} != {b}");
+    }
+}
+
+#[test]
+fn prepared_hrtf_replay_preserves_reports_and_recovers_after_overflow_and_failure() {
+    let bank = bank(1.);
+    let (mut cached, mut reference) = pair(&bank, 2, false, 1, 1);
+    let state = State {
+        position: [0.4, 0.8, 0.2],
+        extent: [0.4, 0.3, 0.25],
+        divergence: 0.4,
+        diffuse: 0.2,
+        screen_reference: 1,
+        ..State::default()
+    };
+    let initial = std::array::from_fn::<_, 3, _>(|i| Command {
+        element: i as u32,
+        state,
+        has_direction: u32::from(i == 1),
+        direction: [37.25, 13.5],
+        ..Command::default()
+    });
+    let input = [0.125; 512];
+    let mut actual = [0.; 1024];
+    let mut expected = actual;
+    for step in 0..4 {
+        let mut events = Vec::new();
+        let count = if step == 1 { 8 } else { 2 };
+        for segment in 0..count {
+            events.push(Command {
+                offset: segment * (512 / count),
+                duration: 512 / count,
+                changed: 4,
+                diagnostic: u32::from(segment == 1),
+                state: State {
+                    position: [0.1 * segment as f32, 0.7, 0.2],
+                    ..state
+                },
+                ..Command::default()
+            });
+        }
+        let init = if step == 0 { &initial[..] } else { &[] };
+        let pose = [step as f32 * 13.25, 8., -3.];
+        let a = cached
+            .process(
+                512,
+                [Some(&input[..]); 3].into_iter(),
+                init,
+                &events,
+                pose,
+                0,
+                &mut actual,
+            )
+            .unwrap();
+        let b = reference
+            .process(
+                512,
+                [Some(&input[..]); 3].into_iter(),
+                init,
+                &events,
+                pose,
+                0,
+                &mut expected,
+            )
+            .unwrap();
+        assert_eq!(a, b);
+        equal_bits(&actual, &expected);
+        assert_eq!(cached.prepared.recorded().is_some(), step != 1);
+        if step == 2 {
+            let before = cached.control(0).unwrap();
+            let mut bad_input = input;
+            bad_input[511] = f32::MAX;
+            let bad = [Command {
+                offset: 511,
+                changed: 2,
+                state: State {
+                    gain: f32::MAX,
+                    ..state
+                },
+                ..Command::default()
+            }];
+            actual.fill(17.);
+            expected.fill(17.);
+            assert!(
+                cached
+                    .process(
+                        512,
+                        [Some(&bad_input[..]); 3].into_iter(),
+                        &[],
+                        &bad,
+                        pose,
+                        0,
+                        &mut actual
+                    )
+                    .is_err()
+            );
+            assert_eq!(cached.control(0).unwrap(), before);
+            equal_bits(&actual, &expected);
+        }
     }
 }
 

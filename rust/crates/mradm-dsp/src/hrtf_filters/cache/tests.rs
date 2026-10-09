@@ -3,6 +3,10 @@ use crate::hrtf::Grid;
 use std::sync::OnceLock;
 
 fn bank(fft: usize, scale: f32) -> Arc<Filters> {
+    bank_with_layout(fft, scale, true)
+}
+
+fn bank_with_layout(fft: usize, scale: f32, cached: bool) -> Arc<Filters> {
     static GRID: OnceLock<Arc<Grid>> = OnceLock::new();
     let grid = Arc::clone(GRID.get_or_init(|| {
         Arc::new(Grid::new(&[0., 0., 90., 0., 180., 0., -90., 0., 0., 90., 0., -90.]).unwrap())
@@ -13,7 +17,7 @@ fn bank(fft: usize, scale: f32) -> Arc<Filters> {
         ir[d * taps + d % taps] = scale * (d as f32 - 5.5) * 0.125;
         ir[d * taps + taps - 1] += scale * 0.03125;
     }
-    Arc::new(Filters::new(grid, &ir, taps, fft, true).unwrap())
+    Arc::new(Filters::new(grid, &ir, taps, fft, cached).unwrap())
 }
 
 fn equal_bits(a: &[f32], b: &[f32]) {
@@ -99,12 +103,13 @@ fn adjacent_directions_reuse_corners_and_exact_queries_use_normalized_bits() {
 fn lru_retains_recent_hits_and_budget_includes_values_keys_and_links() {
     let mut cache = Spectra::new(4, 3, 1024);
     for key in 0..3 {
-        let slot = cache.insert(key).unwrap();
+        let (slot, _) = cache.insert(key).unwrap();
         cache.get_mut(slot).fill(key as f32);
     }
     assert_eq!(cache.find(0), Some(0));
-    let slot = cache.insert(3).unwrap();
+    let (slot, previous) = cache.insert(3).unwrap();
     assert_eq!(slot, 1);
+    assert_eq!(previous, Some(1));
     cache.get_mut(slot).fill(3.);
     assert_eq!(cache.find(1), None);
     assert_eq!(cache.get(cache.newest), &[3.; 4]);
@@ -115,11 +120,98 @@ fn lru_retains_recent_hits_and_budget_includes_values_keys_and_links() {
         assert!(queries.entries.len() <= 128);
         assert!(
             corners.storage_bytes() + queries.storage_bytes() + size_of::<Arc<Filters>>()
-                <= 8 * 1024 * 1024
+                <= CORNER_BYTES + QUERY_BYTES
         );
     }
     let mut no_space = Spectra::<usize>::new(1024, 512, size_of::<Spectra<usize>>());
     assert!(no_space.insert(0).is_none());
+}
+
+#[test]
+fn production_capacity_includes_indexes_and_does_not_lose_a_slot_to_rounding() {
+    let cache = CachedQueries::new(bank(2048, 1.));
+    assert_eq!(cache.corners.entries.len(), CORNER_LIMIT);
+    assert_eq!(cache.queries.entries.len(), QUERY_LIMIT);
+    assert_eq!(cache.storage_bytes(), CORNER_BYTES + QUERY_BYTES);
+    let longer = CachedQueries::new(bank(8192, 1.));
+    assert!(longer.corners.entries.len() < CORNER_LIMIT);
+    assert!(longer.queries.entries.len() < QUERY_LIMIT);
+    assert!(longer.storage_bytes() <= CORNER_BYTES + QUERY_BYTES);
+}
+
+#[test]
+fn bulk_corners_and_live_snapshots_match_the_offline_layout_bit_for_bit() {
+    for (fft, scale) in [(2, 1e-10), (64, 1e-8), (2048, 1.)] {
+        let live = bank(fft, scale);
+        let offline = bank_with_layout(fft, scale, false);
+        let mut actual = vec![0.; live.spectrum_len()];
+        let mut expected = actual.clone();
+        live.copy_spectra(&mut actual).unwrap();
+        offline.copy_spectra(&mut expected).unwrap();
+        equal_bits(&actual, &expected);
+        actual.resize(live.output_len(), 0.);
+        expected.resize(live.output_len(), 0.);
+        for grid in [0, 360, 361 * 90 + 180, GRID_POINTS - 1, 137, 7919, 32767] {
+            live.grid_spectrum(grid, &mut actual);
+            for (i, pair) in expected.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+                let h = offline.grid_bin(grid, i / 2, i % 2).value;
+                pair.copy_from_slice(&[h.re, h.im]);
+            }
+            equal_bits(&actual, &expected);
+        }
+    }
+}
+
+#[test]
+fn query_index_backshift_preserves_collisions_across_the_end_of_the_table() {
+    let mut index = QueryIndex::new(4);
+    let keys = index.collision_keys(7, 5);
+    for (slot, key) in keys[..4].iter().enumerate() {
+        index.insert(*key, slot);
+    }
+    index.remove(keys[1]);
+    assert_eq!(index.find(keys[1]), None);
+    for slot in [0, 2, 3] {
+        assert_eq!(index.find(keys[slot]), Some(slot));
+    }
+    index.insert(keys[4], 1);
+    index.remove(keys[0]);
+    for slot in [2, 3] {
+        assert_eq!(index.find(keys[slot]), Some(slot));
+    }
+    assert_eq!(index.find(keys[4]), Some(1));
+    index.insert(keys[4], 0);
+    assert_eq!(index.find(keys[4]), Some(0));
+    index.clear();
+    for key in keys {
+        assert_eq!(index.find(key), None);
+    }
+    assert_eq!(QueryIndex::new(0).find([0; 2]), None);
+}
+
+#[test]
+fn query_index_matches_a_map_through_repeated_insertion_removal_and_clear() {
+    let mut index = QueryIndex::new(64);
+    let mut expected = std::collections::BTreeMap::new();
+    let mut random = 12345u32;
+    for step in 0..10_000 {
+        random = random.wrapping_mul(1664525).wrapping_add(1013904223);
+        let key = [random % 128, 0x8000_0000];
+        if random & 0x10000 != 0 && expected.remove(&key).is_some() {
+            index.remove(key);
+        } else if expected.len() < 64 || expected.contains_key(&key) {
+            let slot = step % 64;
+            expected.insert(key, slot);
+            index.insert(key, slot);
+        }
+        for key in (0..128).map(|n| [n, 0x8000_0000]) {
+            assert_eq!(index.find(key), expected.get(&key).copied());
+        }
+        if step % 257 == 0 {
+            index.clear();
+            expected.clear();
+        }
+    }
 }
 
 #[test]

@@ -71,8 +71,10 @@ struct GridBin {
 pub struct Filters {
     grid: Arc<Grid>,
     bins: usize,
-    spectra: Vec<Complex32>, // [bin][ear][measurement]
-    magnitudes: Vec<f32>,    // live-only cache; offline computes on demand
+    // Live banks keep each measurement contiguous: [measurement][bin][ear].
+    // Offline banks retain [bin][ear][measurement]; snapshots always use that order.
+    spectra: Vec<Complex32>,
+    magnitudes: Vec<f32>, // nonempty only for the contiguous live layout
 }
 
 impl Filters {
@@ -113,7 +115,12 @@ impl Filters {
                     {
                         return Err(Error::RenderFailed("Nonfinite prepared HRTF spectrum"));
                     }
-                    spectra[(bin * 2 + ear) * directions + direction] = value;
+                    let index = if cache_magnitudes {
+                        (direction * bins + bin) * 2 + ear
+                    } else {
+                        (bin * 2 + ear) * directions + direction
+                    };
+                    spectra[index] = value;
                 }
             }
         }
@@ -157,10 +164,21 @@ impl Filters {
                 "Invalid HRTF spectrum snapshot length",
             ));
         }
-        for (pair, h) in output.as_chunks_mut::<2>().0.iter_mut().zip(&self.spectra) {
+        let directions = self.grid.direction_count();
+        for (i, pair) in output.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+            let h = self.spectra
+                [self.spectrum_index(i % directions, i / directions / 2, i / directions % 2)];
             pair.copy_from_slice(&[h.re, h.im]);
         }
         Ok(())
+    }
+
+    fn spectrum_index(&self, direction: usize, bin: usize, ear: usize) -> usize {
+        if self.magnitudes.is_empty() {
+            (bin * 2 + ear) * self.grid.direction_count() + direction
+        } else {
+            (direction * self.bins + bin) * 2 + ear
+        }
     }
 
     // Magnitude comes from weighted |H|, phase from weighted complex H. This
@@ -173,7 +191,7 @@ impl Filters {
         for (k, m) in magnitudes.iter_mut().enumerate() {
             let gain = self.grid.weights()[grid * 3 + k];
             let direction = self.grid.indices()[grid * 3 + k] as usize;
-            let index = (bin * 2 + ear) * self.grid.direction_count() + direction;
+            let index = self.spectrum_index(direction, bin, ear);
             let h = self.spectra[index];
             *m = if self.magnitudes.is_empty() {
                 h.re.hypot(h.im)
@@ -195,6 +213,40 @@ impl Filters {
             sum,
             magnitude,
             complex_magnitude,
+        }
+    }
+
+    /// Fill a complete corner from three contiguous measurement streams. Each
+    /// bin retains grid_bin's neighbour, multiply/add and phase-fallback order.
+    fn grid_spectrum(&self, grid: usize, output: &mut [f32]) {
+        debug_assert_eq!(output.len(), self.output_len());
+        if self.magnitudes.is_empty() {
+            for (i, pair) in output.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+                let h = self.grid_bin(grid, i / 2, i % 2).value;
+                pair.copy_from_slice(&[h.re, h.im]);
+            }
+            return;
+        }
+        let width = self.bins * 2;
+        let gains: [f32; 3] = std::array::from_fn(|k| self.grid.weights()[grid * 3 + k]);
+        let offsets: [usize; 3] =
+            std::array::from_fn(|k| self.grid.indices()[grid * 3 + k] as usize * width);
+        let spectra = offsets.map(|offset| &self.spectra[offset..offset + width]);
+        let magnitudes = offsets.map(|offset| &self.magnitudes[offset..offset + width]);
+        for (i, pair) in output.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+            let mut magnitude = 0.;
+            let mut sum = Complex32::default();
+            for k in 0..3 {
+                magnitude += gains[k] * magnitudes[k][i];
+                sum += spectra[k][i] * gains[k];
+            }
+            let complex_magnitude = sum.re.hypot(sum.im);
+            let h = if complex_magnitude > 1e-9 {
+                sum * (magnitude / complex_magnitude)
+            } else {
+                Complex32::new(magnitude, 0.)
+            };
+            pair.copy_from_slice(&[h.re, h.im]);
         }
     }
 
