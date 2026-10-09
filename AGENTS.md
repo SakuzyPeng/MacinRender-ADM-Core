@@ -55,6 +55,14 @@ Recent history uses Conventional Commit style, for example `fix: ...`, `ci: ...`
 
 Use Chinese for user-facing discussion by default, unless the user explicitly asks for another language. Do not edit generated build directories under `build/`. Preserve existing uncommitted user changes. For public C ABI work, review `docs/adr/0007-c-abi-stability-policy.md`; for error handling, follow `docs/adr/0005-error-handling-model.md`.
 
+Name rendering flows by function: **离线渲染 / offline rendering** (`IRenderer::render_window`),
+**文件流式渲染 / file streaming** (`IRenderer::open_stream` → `IRenderStream`, including `BinauralStream`),
+and **Scene 流式渲染 / Scene streaming** (`SceneStreamEngine` / `ILiveSceneRenderer`). Use these names in
+discussion, documentation, comments, and diagnostics; do not label these supported flows by age or imply
+that Scene replaces file rendering. Realtime monitoring describes a use of either streaming flow.
+For implementation comparisons, identify the reference implementation, language, version, or commit.
+See [rendering terminology](docs/README.md#渲染流程命名).
+
 When validating ADM semantic behavior, prefer the built-in semantic policy path (`--semantic-policy` and
 `--write-semantic-report`) over editing source ADM BWF/WAV files. For example, to force direct extent/spreader coverage
 on material whose extent blocks are fully diffuse, use a temporary policy that disables diffuse while preserving extent,

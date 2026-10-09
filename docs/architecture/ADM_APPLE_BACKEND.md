@@ -21,7 +21,7 @@
   binaural 生效。
 - **扬声器 rendering flags**：默认对每个输入 bus 写入
   `kAudioUnitProperty_SpatialMixerRenderingFlags=0`，避免 InterAuralDelay / DistanceAttenuation 额外改变
-  ADM 对象的低中频和增益。`--apple-speaker-rendering-flags` 显式开启两个 Apple flags，用于兼容旧渲染。
+  ADM 对象的低中频和增益。`--apple-speaker-rendering-flags` 显式开启系统的耳间延迟和距离衰减。
 - **DirectSpeakers 路由**：`--direct-speakers-routing auto|label|position|matrix`。Apple 扬声器的 `auto`
   解析为 `label`（这是相对旧版 AmbienceBed 默认的有意调整）；Apple binaural 的 `auto` 仍解析为
   `position`，显式 `label` 或 `matrix` 返回 unsupported。矩阵由 path 或内存 JSON 提供，并在

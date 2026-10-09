@@ -33,7 +33,7 @@ Dolby / Apple 产品认证。
 - **多格式交付**：WAV / CAF / FLAC / Opus MKA / IAMF / APAC，WAV 输出与母版输入均支持超过 4 GB
 - **实时监听**：后端/布局/设备热切换、头部追踪（OSC、AirPods）、HpTF 耳机补偿、系统空间音频（macOS / Windows）
 - **桌面工作台**：批量渲染、逐对象语义编辑、实时监听与空间可视化
-- **稳定 C ABI**：自 1.0 起向后二进制兼容，结构化进度回调，实时 Scene 输入接口
+- **稳定 C ABI**：自 1.0 起向后二进制兼容，结构化进度回调，Scene 流式渲染输入接口
 - **跨平台逐位一致**：一致性 CI 的 78 个 PCM 用例在 macOS arm64 / Linux x64 / Windows x64 上逐位相同，并设为门禁
 - **Rust 数值核心**：DSP、EAR、ADM XML 与 WAVE I/O 由 Rust 实现；项目自有算法 crate 禁用 `unsafe`，`unsafe` 只出现在私有 C 边界 `mradm-ffi`
 
@@ -127,7 +127,7 @@ cmake --build --preset release
 ```
 
 **C ABI**——`include/adm/c_api.h` 是稳定 v1 接口：文件渲染优先使用带结构化进度的 `adm_render_file_ex2`，
-实时监听使用 `adm_monitor_*` 家族，外部解码器可经实时 Scene 接口逐对象提交 PCM 与空间元数据。兼容策略见
+文件流式渲染的监听使用 `adm_monitor_*` 家族，外部解码器可经 Scene 流式渲染接口逐对象提交 PCM 与空间元数据。兼容策略见
 [ADR 0007](docs/adr/0007-c-abi-stability-policy.md)。
 
 ## 图形界面
@@ -188,7 +188,8 @@ ADM BWF / BW64 / RF64，或普通多声道 WAVE
     → 容器编码（WAV / CAF / FLAC / Opus MKA / IAMF / APAC）
 ```
 
-实时监听共用同一后端选择：worker 线程渲染到 ring buffer，音频回调只做轻量输出。
+文件流式渲染与离线渲染共用后端选择；Scene 流式渲染接收调用方提交的 PCM 与对象元数据。
+两种流式渲染都可用于实时监听。名称、接口与边界见[渲染流程命名](docs/README.md#渲染流程命名)。
 
 ## 当前进度
 

@@ -1,6 +1,6 @@
-# Rust Scene 过渡、空间数学与 Live 双耳迁移
+# Rust Scene 流式渲染的过渡、空间数学与双耳迁移
 
-算法基线为 `726db31`。共享空间计算、Scene worker 过渡和 Live 双耳数值状态由 Rust 接管。
+算法基线为 `726db31`。共享空间计算、Scene worker 过渡和 Scene 流式双耳数值状态由 Rust 接管。
 公开 C ABI、`ILiveSceneRenderer`、支持范围和外层渲染网格保持不变，没有新增依赖或构建开关。
 
 ## 2026-10-06 数值一致性阶段更新
@@ -41,7 +41,7 @@ Scene 后端淡化仍在源采样率下运行 2048 帧，从 `1/2048` 开始；�
 计数并清零最后输出帧。零帧不推进状态，epoch reset 清历史，暂停保留历史。尾音 flush、
 EOS 时长钳制和补零仍由原 C++ 调度完成。
 
-Live 双耳继续按事件、1024 帧上限和最近字段期限分段。同偏移事件保留顺序，head_locked
+Scene 流式双耳渲染继续按事件、1024 帧上限和最近字段期限分段。同偏移事件保留顺序，head_locked
 立即生效，其他字段各自保留 jump/显式/默认期限；方向使用原 remainder 最短路径。
 gain/diffuse 在卷积历史前生效，LFE 保留 `i/N` 增益，源按 generation 顺序累加。
 缺失 PCM 推进历史，静音休眠和恢复规则不变，EOF 不由新内核额外补齐。
@@ -67,12 +67,12 @@ Rust 内核和 FFI 从首次处理起无分配、无锁、无 I/O，覆盖预检
 ## 验证与复现
 
 冻结参考位于 `tests/reference/scene_numeric`，包括所有被迁移的数学辅助、PoseBridge、
-Scene 标量循环和完整 Live 双耳 renderer。既有 HOA、Live VBAP 参考也改用冻结辅助函数，
+Scene 标量循环和完整 Scene 流式双耳 renderer。既有 HOA、Scene 流式 VBAP 参考也改用冻结辅助函数，
 避免新旧双方共用本轮迁移实现。来源与适配说明见该目录 provenance.json。
 
 数值比较只使用 Release。同平台一般有限值要求 `abs(new-old) <= 2e-6 + 2e-6*abs(old)`；
 简单路由、端点、canonical length 和明确的恒等结果逐位检查；计数、有效位、槽位、路由和
-诊断顺序单独检查。输出拉取长度一致、离线/旧 stream、窗口、实时控制等既有回归保留。
+诊断顺序单独检查。输出拉取长度一致、离线渲染与文件流式渲染的一致性、窗口、实时控制等既有回归保留。
 
 初次验收的源码提交为 `f7f38de`；共享数学与过渡实现分别提交为 `08113fd`、`a1b2e01`。
 [三平台 CI](https://github.com/SakuzyPeng/MacinRender-ADM-Core/actions/runs/37434454445)
@@ -84,7 +84,7 @@ Rust Release workspace 164 项通过，既有物理 >4 GiB WAVE 测试按默认�
 |---|---:|---:|---:|
 | 空间数学，包含角度 | 47,802 | `6.103515625e-5`（角度） | 0 |
 | Scene PCM、最后输出帧及锚点 | 3,166,080 | `1.1920928955078125e-7` | 0 |
-| Live 双耳完整 renderer 与错误恢复 PCM | 59,829 | 0 | 0 |
+| Scene 流式双耳完整 renderer 与错误恢复 PCM | 59,829 | 0 | 0 |
 
 所有值通过规定的逐项容差；端点、路由与关键状态另有精确断言。动态双耳继续使用原分段
 规则，不扩大任意 SceneFrame 重分块的逐位一致承诺。
@@ -123,7 +123,7 @@ Rust 测试覆盖融合／非融合的消减结果，C++ 冻结参考对照增�
 `PACKAGE_PREFIX_DIR`。新增独立配置测试模拟依赖安装到不同前缀；在 CMake 3.29.6
 实际验证了修正前失败、修正后通过，现有 CMake 4.2.3 也通过。
 
-本轮本机 macOS Debug 全量 67/67、Release Scene／Live 双耳／包配置定向 3/3 通过，
+本轮本机 macOS Debug 全量 67/67、Release Scene 流式渲染／双耳数值内核／包配置定向 3/3 通过，
 Rust fmt/Clippy 与改动 C++ 质量检查通过。上方机器可读记录保留初次验收的提交及指纹。
 
 ## 参考实现退出

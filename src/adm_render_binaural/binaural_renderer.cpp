@@ -1136,7 +1136,7 @@ struct BinauralPrepared final : IPreparedRender {
     uint64_t render_block_size{0};
 };
 
-// Realtime streaming binaural session over the same prepared HRTF tables + source list as
+// File streaming binaural session over the same prepared HRTF tables + source list as
 // render_window. It renders render_block_size-aligned blocks on demand into a FIFO, from
 // which process() serves any requested frame count via render_source_ola_block — the SAME
 // per-source OLA path render_window uses — so a gap-free run from frame 0 is bit-identical

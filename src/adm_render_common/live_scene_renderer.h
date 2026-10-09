@@ -163,6 +163,7 @@ struct Diagnostic {
 
 using DiagnosticSink = std::function<void(Diagnostic)>;
 
+// Scene streaming renderer: consumes PCM and metadata in caller-submitted frames.
 class ILiveSceneRenderer {
   public:
     virtual ~ILiveSceneRenderer() = default;

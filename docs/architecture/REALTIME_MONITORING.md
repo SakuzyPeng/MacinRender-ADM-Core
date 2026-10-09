@@ -4,6 +4,10 @@
 > 日期：2026-06-16
 > 目标：记录把当前批处理（offline）渲染核心扩展为「实时空间监听引擎」的方向、接口边界与落地顺序。监听引擎让用户在**播放过程中**实时改听感语义参数、并在不同渲染后端 / 监听格式之间热切换、立即听到差异——类似 Logic Pro 的 Atmos 监听段。GUI 是它的遥控器，能力在 core。
 
+本文描述**文件流式渲染**的监听链路：`IRenderer::open_stream` → `IRenderStream` → `MonitorEngine`。
+**Scene 流式渲染**由调用方提交音频块与对象元数据，使用 `SceneStreamEngine` / `ILiveSceneRenderer`。
+两者与**离线渲染**按功能并列命名，详见[渲染流程命名](../README.md#渲染流程命名)。
+
 ## 1. 背景与诉求
 
 语义编辑 GUI（见 `SEMANTIC_EDITOR_GUI.md`）一期落地后，验证手段曾用「应用 policy 渲极短窗口取语义报告 → 数值 diff」。实测下来该 diff **对用户无意义**：用户要的不是「数值变了」的确认，而是**实时监听**——边调边听。

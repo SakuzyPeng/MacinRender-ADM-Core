@@ -26,7 +26,7 @@
 #include "render_stream_factory.h"
 #include "ring_buffer.h"
 
-// Realtime monitor engine: a worker thread renders an IRenderStream ahead of the playhead
+// File streaming monitor engine: a worker thread renders an IRenderStream ahead of the playhead
 // into an SPSC ring; the injected IAudioOutputDevice's pull callback drains the ring at
 // device rate. Decoupling the (allocating, thread-pooled) DSP from the audio callback via
 // the ring is what lets the batch backends run in realtime without becoming lock-free.

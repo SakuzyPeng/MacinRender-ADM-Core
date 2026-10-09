@@ -1,5 +1,6 @@
-//! Binaural kernels with prepared storage. Live overlap-save and batch
-//! overlap-add deliberately retain their different filter-transition contracts.
+//! Binaural kernels with prepared storage. Scene streaming uses overlap-save;
+//! offline rendering and file streaming use overlap-add. The two convolution
+//! models deliberately retain their different filter-transition contracts.
 //! Spectra are [L.re, L.im, R.re, R.im] per bin, independent of host complex ABI.
 use crate::{Complex32, Error, Result, fft::RealFft};
 
@@ -249,9 +250,9 @@ impl LiveConvolver {
     }
 }
 
-/// Batch/legacy stream OLA. Both paths share this owner, including overlap,
+/// OLA for offline rendering and file streaming. Both paths share this owner, including overlap,
 /// silence advancement and endpoint-inclusive block crossfades. The declared
-/// overlap remains the measured HRIR tail, as in the existing batch renderer.
+/// overlap remains the measured HRIR tail, as in the offline renderer.
 pub struct OlaConvolver {
     fft: RealFft,
     maximum_frames: usize,
