@@ -319,6 +319,7 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 ## 关键文档索引
 
 - `docs/architecture/CPP_ADM_PLATFORM_REWRITE.md` — 平台化重构方向、模块边界
+- `docs/architecture/CPP_NUMERIC_SURFACE_AUDIT.md` — 离线与 Scene 链路到写出 PCM 为止仍由 C++ 执行的数值计算清单（一致性风险分级、门禁覆盖）与 C++ 退化为纯调度的分期路线（一期 Scene 链路）
 - `docs/architecture/ADM_FEATURE_COVERAGE.md` — ADM 特性覆盖审计
 - `docs/architecture/ADM_APPLE_BACKEND.md` — macOS AUSpatialMixer 后端 + ASBR 系统空间监听 sink
 - `docs/architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md` — Windows ISpatialAudioClient 系统空间监听 sink（静态床/能力实测/切换恢复）
