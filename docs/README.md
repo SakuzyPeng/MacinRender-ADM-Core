@@ -20,7 +20,7 @@
 ## 架构文档
 
 - [C++ ADM 渲染平台化重构规划](architecture/CPP_ADM_PLATFORM_REWRITE.md)
-- [C++ 数值面审计与纯调度路线](architecture/CPP_NUMERIC_SURFACE_AUDIT.md)
+- [PCM 一致性审计与 Rust 迁移路线](architecture/PCM_CONSISTENCY_AUDIT.md) — 剩余数值运算与本轮分期的统一入口，一期为 Scene 流式渲染及其实际共享依赖
 - [ADM 特性覆盖审计](architecture/ADM_FEATURE_COVERAGE.md)
 - [adm_apple 后端实现说明（AUSpatialMixer）](architecture/ADM_APPLE_BACKEND.md)
 - [adm_windows：系统空间音频监听 sink（ISpatialAudioClient）](architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md)
