@@ -2,8 +2,8 @@
   "date": "2026-10-04",
   "baseline_commit": "56f4b56b548281e40a2eab851a25b05b49c10b69",
   "scope": [
-    "Live Scene overlap-save and input history",
-    "batch/legacy stream overlap-add and crossfades",
+    "Scene streaming overlap-save and input history",
+    "offline rendering/file streaming overlap-add and crossfades",
     "diffuse delay and live gain/diffuse mixing"
   ],
   "rust_version": "1.98.0",

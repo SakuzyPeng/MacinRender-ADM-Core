@@ -130,7 +130,7 @@ Apple AUSpatialMixer、系统设备混音和系统编码器不属于软件渲染
 - 标量 FFT、矩阵与 SVD 可能影响吞吐和实时延迟。阶段 1、2 使用 Release 实测，不从矩阵尺寸或函数行数直接推断性能成本。
 - 引入 Rust / Cargo 和 Corrosion 后，工具链、PIC、MSVC CRT、静态库链接及导出表需要三平台验证。符号冲突应依据实际链接结果处理；Windows 自动导出与 ELF / Mach-O 的可见性规则不同。
 - Corrosion 按 ADR 0004 接入并登记依赖。Rust 已成为必需工具链；离线构建需提前准备锁定的 Cargo 依赖和 Corrosion。一期已验证 Cargo MinSizeRel 的 --locked --offline 构建。
-- 迁移期会同时维护旧路径和新路径。应按单元记录退出条件与移除旧路径的时机；可回滚不会自动消除双路径维护成本。通用退出条件与逐单元登记见[参考实现保留与退役](../architecture/RUST_REFERENCE_RETENTION.md)。
+- 迁移期会同时维护参考实现和 Rust 实现。应按单元记录退出条件与移除参考实现的时机；可回滚不会自动消除两套实现的维护成本。通用退出条件与逐单元登记见[参考实现保留与退役](../architecture/RUST_REFERENCE_RETENTION.md)。
 - C ABI 名字和数值保持兼容。减少原生依赖、缩小数学实现范围和减少 Cargo 传递依赖是不同指标，需要分别记录。
 
 ## 参考资料

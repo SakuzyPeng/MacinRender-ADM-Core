@@ -36,7 +36,7 @@ AirPods, and similar names are trademarks of their respective owners and are ref
 - **Multi-format delivery**: WAV / CAF / FLAC / Opus MKA / IAMF / APAC; WAV output and master input both support files over 4 GB
 - **Realtime monitoring**: hot switching of backend / layout / device, head tracking (OSC, AirPods), HpTF headphone compensation, system spatial audio (macOS / Windows)
 - **Desktop workbench**: batch rendering, per-object semantic editing, realtime monitoring, and spatial visualization
-- **Stable C ABI**: backward binary compatible since 1.0, structured progress callbacks, realtime Scene input
+- **Stable C ABI**: backward binary compatible since 1.0, structured progress callbacks, Scene streaming input
 - **Cross-platform bit identity**: all 78 PCM cases in the consistency CI are bit-identical on macOS arm64 / Linux x64 / Windows x64 and gated
 - **Rust numerical core**: DSP, EAR, ADM XML, and WAVE I/O run in Rust; project-owned algorithm crates forbid `unsafe`, which appears only in the private C boundary `mradm-ffi`
 
@@ -134,8 +134,8 @@ APAC `.m4a` on macOS):
 ```
 
 **C ABI** — `include/adm/c_api.h` is the stable v1 interface: file rendering should use `adm_render_file_ex2` with
-structured progress, realtime monitoring uses the `adm_monitor_*` family, and external decoders can submit per-object
-PCM and spatial metadata through the realtime Scene interface. See [ADR 0007](docs/adr/0007-c-abi-stability-policy.md)
+structured progress, monitoring through file streaming uses the `adm_monitor_*` family, and external decoders can submit per-object
+PCM and spatial metadata through the Scene streaming interface. See [ADR 0007](docs/adr/0007-c-abi-stability-policy.md)
 for the compatibility policy.
 
 ## Desktop GUI
@@ -199,8 +199,9 @@ ADM BWF / BW64 / RF64, or ordinary multichannel WAVE
     → container encoding (WAV / CAF / FLAC / Opus MKA / IAMF / APAC)
 ```
 
-Realtime monitoring shares the same backend selection: worker threads render into a ring buffer and the audio callback
-only does lightweight output.
+File streaming and offline rendering share backend selection; Scene streaming accepts PCM and object metadata submitted
+by the caller. Both streaming flows can provide realtime monitoring. See the names, interfaces, and boundaries in
+[rendering terminology](docs/README.md#渲染流程命名).
 
 ## Current Status
 

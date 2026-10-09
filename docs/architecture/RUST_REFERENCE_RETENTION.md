@@ -1,6 +1,6 @@
 # Rust 迁移参考实现的保留与退役
 
-> 2026-10-06：落实 [ADR 0008](../adr/0008-rust-entry-and-saf-replacement.md)"按单元记录退出条件与移除旧路径的时机"。登记表为 [`tests/reference/retention.json`](../../tests/reference/retention.json)，由 `scripts/quality/check-reference-retention.py` 校验。
+> 2026-10-06：落实 [ADR 0008](../adr/0008-rust-entry-and-saf-replacement.md)"按单元记录退出条件与移除参考实现的时机"。登记表为 [`tests/reference/retention.json`](../../tests/reference/retention.json)，由 `scripts/quality/check-reference-retention.py` 校验。
 
 ## 两类参考
 

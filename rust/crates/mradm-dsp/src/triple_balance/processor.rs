@@ -55,7 +55,7 @@ impl Decorrelator {
         self.reset_dsp();
         self.silent = 0;
     }
-    // Shared arithmetic only: the legacy and Scene adapters own their silence clocks.
+    // Shared arithmetic only: the offline/file streaming and Scene streaming adapters own their silence clocks.
     fn sample(&mut self, x: f32, fade: f32) -> FilteredFrame {
         const DELAYS: [usize; 4] = [152, 200, 263, 346];
         const COEFF: [[f32; 4]; 4] = [
@@ -172,7 +172,7 @@ pub struct Track {
     pub layout: Layout,
 }
 impl Track {
-    /// Events use the legacy internal coordinates, retaining their binary32 conversion.
+    /// Events use the processor's internal coordinates, retaining their binary32 conversion.
     pub fn new(events: Vec<Event>, layout: Layout, sample_rate: u32) -> Result<Self> {
         if sample_rate != 48000 {
             return Err(Error::Unsupported("Triple Balance size requires 48 kHz"));

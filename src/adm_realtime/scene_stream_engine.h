@@ -98,6 +98,7 @@ struct SceneStreamStatus {
     bool production_complete{false};
 };
 
+// Scene streaming engine: queues caller-submitted frames and exposes rendered PCM through pull().
 class SceneStreamEngine {
   public:
     [[nodiscard]] static Result<std::unique_ptr<SceneStreamEngine>> create(SceneStreamConfig config);

@@ -1,6 +1,8 @@
 # Rust 双耳卷积与滤波过渡迁移
 
-> 2026-10-04：实时 Scene、离线双耳和旧流式双耳接口均使用项目自有 Rust 内核。
+> 2026-10-04：离线双耳渲染、文件流式双耳渲染和 Scene 流式双耳渲染均使用项目自有 Rust 内核。
+
+流程名称与接口对应关系见[渲染流程命名](../README.md#渲染流程命名)。
 
 ## 范围与边界
 
@@ -24,19 +26,19 @@ C++ 继续负责 ADM/Scene 语义、方向与 extent 解析、HRTF 幅度/相位
 [HRTF 迁移](RUST_HRTF_MIGRATION.md)已接管幅度/相位插值、连续方向查询及相关频域状态。
 上文保留本轮卷积迁移时的边界，当前所有权以这两份后续记录为准。
 
-[Scene 数值迁移](RUST_SCENE_NUMERIC_MIGRATION.md)随后接管 Live 双耳剩余的数值控制、
+[Scene 数值迁移](RUST_SCENE_NUMERIC_MIGRATION.md)随后接管 Scene 流式双耳渲染剩余的数值控制、
 cloud 合成和累加，并通过共享 HRTF 表与整帧预检查补齐状态所有权和错误原子性。
 
 ## 保留的两种卷积契约
 
 | 路径 | 历史与过渡 |
 |---|---|
-| Live Scene overlap-save | 保留完整 N 点 HRTF 逆变换 FIR 及 N−1 输入历史；两端滤波器使用同一输入 FFT。控制跳变持续淡变 10 ms，短调用可跨块继续；新目标从当前滤波器状态出发。显式元数据 ramp 的端点在下一段生效。输出覆盖调用方缓冲。 |
-| 离线 / BinauralStream overlap-add | 保留测量 HRIR 长度对应的 overlap 及短块残留；silent gap 在原时间位置输出尾音。块内 crossfade 包含首尾端点，共享进入块前的 overlap，之后保留结束滤波器的尾音。单帧块输出起始端、保留结束端尾音。输出累加至调用方缓冲。 |
+| Scene 流式渲染（overlap-save） | 保留完整 N 点 HRTF 逆变换 FIR 及 N−1 输入历史；两端滤波器使用同一输入 FFT。控制跳变持续淡变 10 ms，短调用可跨块继续；新目标从当前滤波器状态出发。显式元数据 ramp 的端点在下一段生效。输出覆盖调用方缓冲。 |
+| 离线渲染 / 文件流式渲染（`BinauralStream`，overlap-add） | 保留测量 HRIR 长度对应的 overlap 及短块残留；silent gap 在原时间位置输出尾音。块内 crossfade 包含首尾端点，共享进入块前的 overlap，之后保留结束滤波器的尾音。单帧块输出起始端、保留结束端尾音。输出累加至调用方缓冲。 |
 
-两条路径的原有滤波支持范围和增益作用位置保持原样；没有借迁移统一成同一算法。
-特别是 batch 仍使用测量 HRIR 长度的 overlap，不宣称获得 Live 完整插值 FIR 的分块不变性。
-离线和旧流式接口共用同一个 Rust OLA 实现，继续满足它们之间的逐位相同契约。
+两种卷积模型的原有滤波支持范围和增益作用位置保持原样；没有借迁移统一成同一算法。
+特别是离线渲染和文件流式渲染仍使用测量 HRIR 长度的 overlap，不宣称获得 Scene 流式渲染完整插值 FIR 的分块不变性。
+离线渲染和文件流式渲染共用同一个 Rust OLA 实现，继续满足它们之间的逐位相同契约。
 
 Live gain/diffuse 在保存输入历史之前混合，历史样本不重新施加当前增益；全程 mute 时延迟线输入为零。
 尾音计数沿用从最后一个有信号的分块末尾计算的保守值，不能把它解释成最后非零样本的精确位置。
@@ -62,7 +64,7 @@ OLA crossfade、静音推进、diffuse 及 reset 均无 alloc/realloc；这不�
 独立 double DFT/时域 FIR 对照覆盖双耳不同滤波器、完整 FIR、1/7/37/64 帧分块、静音尾音、
 10 ms 淡变中断、显式 ramp、OLA 单帧/短段/增益变化及 silent gap。另验证 reset、独立 state、
 移动所有权、长度/非有限值错误和失败不污染历史。既有 renderer fixture 覆盖真实 KEMAR 的运动、
-headLocked、窗口、离线/旧 stream 一致性及 Scene C API。SOFA fixture 继续验证原始数据与渲染接入。
+headLocked、窗口、离线渲染与文件流式渲染的一致性及 Scene C API。SOFA fixture 继续验证原始数据与渲染接入。
 
 CLI 对照以迁移前 `56f4b56` 的 Release 程序为基线，覆盖点声源、固定头部姿态、cloud/diffuse、
 多声源、spreader/diffuse、Cartesian、DirectSpeakers 和裁剪窗口。这些是合成、固定姿态用例，

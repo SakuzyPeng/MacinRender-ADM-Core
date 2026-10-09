@@ -2,6 +2,21 @@
 
 「麦渲峰」是 MacinRender 的正式中文名；技术标识继续使用 `MacinRender`。
 
+## 渲染流程命名
+
+文档、代码注释与诊断统一按输入方式和调用契约命名：
+
+| 中文名称 | 英文名称 | 接口与职责 |
+|---|---|---|
+| 离线渲染 | offline rendering | `IRenderer::render_window`：根据文件与 ADM 场景渲染整段或指定窗口，并写出音频文件。 |
+| 文件流式渲染 | file streaming | `IRenderer::open_stream` → `IRenderStream`：内部读取文件，通过 `process()` 分块输出 PCM，跨调用保存渲染状态；双耳实现为 `BinauralStream`。 |
+| Scene 流式渲染 | Scene streaming | `SceneStreamEngine` / `ILiveSceneRenderer`：调用方提交音频块与对象元数据，再拉取渲染后的 PCM。 |
+
+三者都是受支持的处理流程，名称不表示实现先后、替代关系或弃用状态。实时监听是用途，
+可以使用文件流式渲染或 Scene 流式渲染；Scene 流式渲染也可用于受控回放验证。
+各流程的支持范围、状态推进及数值契约分别定义，不能仅因复用 DSP 内核就视为等价。
+迁移对照应明确写出“参考实现”“Rust 实现”或具体版本／提交。
+
 ## 架构文档
 
 - [C++ ADM 渲染平台化重构规划](architecture/CPP_ADM_PLATFORM_REWRITE.md)
@@ -43,7 +58,7 @@
 - [Rust 峰值保护与实时增益迁移](architecture/RUST_OUTPUT_DSP_MIGRATION.md)
 - [Rust 共享 PCM 混音与状态迁移](architecture/RUST_PCM_MIX_MIGRATION.md)
 - [Rust 重采样迁移](architecture/RUST_RESAMPLER_MIGRATION.md)
-- [Rust Scene 过渡、空间数学与 Live 双耳迁移](architecture/RUST_SCENE_NUMERIC_MIGRATION.md)
+- [Rust Scene 流式渲染的过渡、空间数学与双耳迁移](architecture/RUST_SCENE_NUMERIC_MIGRATION.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)
 

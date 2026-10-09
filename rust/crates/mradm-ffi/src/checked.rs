@@ -1,4 +1,4 @@
-//! Raw range validation shared by the new Scene-only private boundaries.
+//! Raw range validation shared by the Scene streaming private boundaries.
 use mradm_dsp::{Error, Result};
 use std::slice;
 pub fn invalid() -> Error {

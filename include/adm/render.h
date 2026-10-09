@@ -145,7 +145,7 @@ class IPreparedRender {
 // of render_window() (they ignore the prepared argument and rebuild per call).
 struct EmptyPreparedRender final : IPreparedRender {};
 
-// A persistent, stateful streaming render session for realtime monitoring. Where
+// A persistent, stateful file streaming render session for realtime monitoring. Where
 // render_window() renders a window to a file in one batch, an IRenderStream is pulled
 // block-by-block: process() advances an internal playhead and carries DSP state
 // (convolution overlap, STFT, decorrelator delay) across calls, so consecutive blocks
@@ -299,7 +299,7 @@ class IRenderer {
         return render_window(**prepared, plan, progress, logs);
     }
 
-    // Open a persistent streaming session (realtime monitoring) reusing `prepared` —
+    // Open a persistent file streaming session (realtime monitoring) reusing `prepared` —
     // which MUST come from THIS renderer's prepare(). Intentionally NOT pure virtual so
     // backends adopt streaming incrementally; the default reports unsupported. See
     // docs/architecture/REALTIME_MONITORING.md.
