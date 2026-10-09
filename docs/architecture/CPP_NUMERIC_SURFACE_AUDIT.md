@@ -1,6 +1,6 @@
 # C++ 数值面审计与纯调度路线
 
-> 2026-10-09：盘点离线渲染链路从输入 WAV 到写出 PCM 为止，仍由 C++ 执行、可能影响跨平台一致性的计算，
+> 2026-10-09：盘点离线渲染链路（从输入 WAV 到写出 PCM）和 Scene 拉流链路（从状态输入到设备缓冲区），仍由 C++ 执行、可能影响跨平台一致性的计算，
 > 并据此排出 C++ 退化为纯调度的迁移顺序。本文只做盘点和规划，不改变任何实现。
 
 ## 口径
@@ -89,12 +89,27 @@
 | O8 | `loudness_normalizer.cpp:151`、`peak_limiter.cpp:117-131` | 旧的两遍归一化，公式与 O2 重复，峰值限制用的是比值而不是 dB | 不在 CLI 生产路径上，但能通过公开的 `loudness.h`/`peak.h` 调用，可能与 CLI 结果分叉 | 中 |
 | O9 | `opus_mka_io.cpp:396-489`；IAMF bridge；APAC `ExtAudioFileWrite` | 有损编码器 | libopus 浮点构建没有开 `FLOAT_APPROX`，调用平台 `log`/`exp`，在 Apple clang arm64 上还会被融合成 FMA；IAMF 自带的 libopus 编译选项不受本仓控制；APAC 是闭源实现，只在 macOS 上可用。这些格式按设计就不承诺逐位一致 | 不纳入承诺 |
 
+### Scene 拉流
+
+Scene 拉流从 `adm_scene_stream_*` 接收对象状态，经 `scene_stream_engine.cpp` 转换成渲染状态，交给
+Live VBAP、Live 双耳或 Live Triple Balance 渲染，最后由 `scene_output_session.cpp` 送往设备。
+重采样、声像、卷积、Triple Balance、HpTF 和立体声峰值保护都已经在 Rust 里。
+Live 双耳和 Live Triple Balance 的 C++ 部分只做搬运。
+
+| ID | 位置 | 计算 | 一致性风险 | 级别 |
+|---|---|---|---|---|
+| SC1 | `scene_stream_engine.cpp:611-640/683/748`，调用 `semantic_policy.cpp:1473-1536` | 每代按语义策略解析对象身份，每次状态更新时按策略改写对象和 DirectSpeakers 的参数 | 与离线链路共用 S2–S4，其中包括平台 `powf`。84 个 Scene 门禁 id 都不带策略 | 高（仅在使用策略时） |
+| SC2 | `scene_stream_engine.cpp:684/750` | `block.gain * object_gain` | 单次乘法，结果确定 | 低 |
+| SC3 | `scene_stream_engine.cpp:697-700/744-747` | Rust 算出方向向量后，C++ 乘以距离得到笛卡尔坐标 | 单次乘法，结果确定 | 低 |
+| SC4 | `live_vbap_renderer.cpp:431/442/523-524` | 距离下限 0.4、发散子源增益按声道累加、LFE 分功率增益 | 顺序固定，结果确定 | 低 |
+| SC5 | `scene_output_session.cpp:229-234` | 多声道输出在没有设备音量时逐样本 `*= volume`；立体声带峰值保护时，音量在 Rust 里施加 | 单次乘法，结果确定 | 低 |
+| SC6 | `scene_stream_engine.cpp:1400-1425` | 输出帧边界的有理数累加 | 纯整数运算，结果确定 | 无 |
+
 ### 实时监听（不写文件，只作记录）
 
 - `monitor_session.cpp:49-53`：立体声折叠系数用 float 版 `sin`/`cos`，即平台 `sinf`/`cosf`。
 - `render_common.cpp:310`、`hoa_renderer.cpp:309`：实时覆盖增益用平台 `powf`。
 - `binaural_renderer.cpp:1447-1448/1481`：`BinauralStream` 归约和拓扑交叉淡化的乘加表达式可能被融合成 FMA。
-- `scene_output_session.cpp:233`：音量乘法。
 - `monitor_session.cpp:43`：`clamp_frame` 截断取整，而离线链路是 `llround`，两条路径不一致。
 - miniaudio 和系统混音器做的格式/采样率转换都不在本仓控制范围内。
 
@@ -111,42 +126,62 @@
 
 C++ 侧的包装头（`src/adm_dsp/*.h`）不含任何运算。
 
-## 纯调度路线
+## 纯调度路线（按优先级）
 
-先处理会改变 PCM 的项，再处理只是仍由 C++ 持有的计算。每个切片沿用已有的迁移惯例：
-冻结旧实现、跑差分测试、做灵敏度检查、写 `RUST_*_MIGRATION.md` 验收记录。
-凡是有意改变结果的地方，单独列出，并在合入前把三平台矩阵和门禁更新到位。
+每个切片都沿用已有的迁移惯例：冻结旧实现、跑差分测试、做灵敏度检查，并把验收写进 `RUST_*_MIGRATION.md`。
+有意改变结果的地方单独列出。合入前要把三平台矩阵和门禁更新到位。
 
-1. **后置增益链（O1–O4、O8）**
-   - 增益合成、dB 与线性互换、逐样本乘法都迁入 Rust，使用可移植的数学函数（`libm` crate 或 `mradm-math`），不用 std 的 `powf`/`log10`。
-   - ebur128 的 libm 调用和只在 x86 生效的 FTZ 需要在 vendored 补丁中改成可移植实现。
+### 一期：Scene 链路
+
+完成标准：从 `adm_scene_stream_*` 输入到设备缓冲区，C++ 只剩队列、线程、时钟和设备调度。
+现有 84 个 Scene id 保持逐位相同，新增的带策略的 Scene id 纳入门禁。
+
+1. **语义策略迁入 Rust（SC1、S2–S4）**
+   - 迁移内容：
+     - 策略 JSON 改用 serde_json 解析，依赖已经引入；
+     - 身份解析、规则合并和参数改写也迁入 Rust。
+   - Scene 和离线共用这一套 Rust 实现：
+     - Scene 每代解析一次，每次状态更新时调用改写；
+     - 离线在渲染前改写整个场景。
+   - dB 转线性改用可移植的 `powf`，不再依赖平台 libm。
+   - 门禁新增：
+     - Scene 用例：带策略的 `gain_db`、`scale`、位置偏移、channelLock、divergence；
+     - 离线用例：一个带策略的。
+   - 这一步对应之前列出的“EAR channelLock/divergence 与语义策略”迁移。
+2. **Scene 状态转换迁入 Rust（SC2、SC3）**：对象状态到渲染状态的换算（增益相乘、极坐标转笛卡尔）
+   并入 Rust 的 scene_math 入口，C++ 只搬运字段。
+3. **Live VBAP 胶水层迁入 Rust（SC4）**：距离下限、发散子源累加、LFE 增益并入 Live VBAP 的 Rust 状态。
+4. **Scene 输出音量迁入 Rust（SC5）**：多声道音量并入 Rust 输出 DSP，与立体声峰值保护走同一入口。
+
+### 二期：离线默认路径上会改变 PCM 的项
+
+5. **非稳定排序（S1）**：把 5 处排序改成稳定排序，或在起点相同时按块序号排序；补一个同起点块超过 32 个的回归用例。
+6. **后置增益链（O1–O4、O8）**
+   - 增益合成、dB 与线性互换、逐样本乘法都迁入 Rust，并改用可移植数学函数。
+   - ebur128 中的 libm 调用和只在 x86 生效的 FTZ，在 vendored 补丁里改成可移植实现。
    - 旧的两遍归一化接口改为调用同一个 Rust 函数。
-   - 门禁新增几个默认开启峰值限制的用例，覆盖 VBAP、HOA、双耳和 Triple Balance。
-   - 结果可能变化，需要单独记录。
-2. **非稳定排序（S1）**
-   - 把 5 处排序改成稳定排序，或在起点相同时按块序号排序，并补一个同起点块超过 32 个的回归用例。
-   - 这是一处很小的修复。与其等后续切片，更适合先单独做。
-3. **整数量化统一（O5）**
-   - FLAC 改用 `mradm-wav` 的量化函数，C++ 只把 int32 交给 libFLAC。
-   - NaN 一律当作 0 处理。
+   - 门禁新增默认开启峰值限制的用例，覆盖 VBAP、HOA、双耳和 Triple Balance。
+7. **整数量化统一（O5）**
+   - FLAC 改用 `mradm-wav` 的量化函数，NaN 一律当作 0。
    - 门禁新增 i24 WAV 和 FLAC 解码后的 PCM。
-   - 这需要一个用户决定：统一用四舍五入还是向零截断。两种做法都会改变其中一种格式的现有输出。
-4. **语义策略（S2–S4）**
-   - 策略 JSON 改用 serde_json 解析（依赖已经引入）。
-   - 规则匹配与参数改写迁入 Rust，C++ 只把场景交给 Rust 改写。
-   - 这就是之前列出的“EAR channelLock/divergence 与语义策略”迁移。
-5. **双耳逐样本归约（R1–R3、R6）**
-   - OLA/spreader 的归约、LFE 旁路、`extent_spread_deg` 迁入 Rust 的混音内核。
-   - C++ 只保留线程池调度：先由各线程并行算出每个源的结果，再固定顺序归约。
-6. **块时间线与增益组装（R4、R5、S5–S7）**
-   - 按声道分组块、组装增益、解析标签、处理声道床位置表，都交给 Rust；完成后 AdmScene 到 Rust 渲染计划的转换只剩搬运。
-   - 这一步完成后，渲染后端的 C++ 只剩调度。
-7. **实时监听剩余项**：折叠系数、实时覆盖增益、交叉淡化表达式。
+   - 待用户决定统一用四舍五入还是向零截断。两种做法都会改变其中一种格式的现有输出。
 
-在第 1、5、6 步完成之前，可以先给生产渲染目标加上 `-ffp-contract=off`（MSVC 用 `/fp:contract-`），
-作为过渡防护：它不改变 x64 上的结果，只阻止 arm64 上的 FMA 融合（R2–R4）。
-这在 macOS 上会改变 R3 的现有输出，所以同样需要跑三平台矩阵确认。
+### 三期：离线结构性迁移（目前结果确定，但仍由 C++ 计算）
+
+8. **双耳逐样本归约（R1–R3、R6）**：OLA/spreader 归约、LFE 旁路、`extent_spread_deg` 迁入 Rust 混音内核，C++ 只保留线程池。
+9. **块时间线与增益组装（R4、R5、S5–S7、O7）**：按声道分组块、组装增益、解析标签、处理声道床位置表和裁剪换算，
+   都交给 Rust。完成后渲染后端的 C++ 只剩调度。
+
+### 四期：实时监听剩余项
+
+10. 折叠系数、实时覆盖增益、`BinauralStream` 归约与交叉淡化、`clamp_frame` 取整。
+
+### 过渡防护与不纳入范围
+
+在二期和三期完成之前，可以先给生产渲染目标加上 `-ffp-contract=off`（MSVC 用 `/fp:contract-`）。
+它不改变 x64 的结果，只阻止 arm64 上的 FMA 融合（R2–R4）。但它可能改变 macOS 上 R3 的现有输出，
+同样需要跑三平台矩阵确认。
 
 以下项目不纳入路线：
-- 有损编码器（O9）和 libFLAC 的文件字节（O6）不承诺逐位一致；
-- 线程、设备、文件替换、进度和公开 C ABI 本来就是调度层，继续留在 C++。
+- 有损编码器（O9）和 libFLAC 的文件字节（O6），不承诺逐位一致；
+- 线程、设备、文件替换、进度和公开 C ABI，本来就是调度层，继续留在 C++。
