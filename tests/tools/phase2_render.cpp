@@ -91,6 +91,12 @@ int main(int argc, char** argv) {
             request.input_path = argv[2];
             request.output_path = directory / ("pass-" + std::to_string(pass) + ".wav");
             request.options = options(spec.at("args"));
+            if (spec.contains("sofa")) {
+                const std::filesystem::path name(spec.at("sofa").get<std::string>());
+                phase2::require(name == name.filename() && name.extension() == ".sofa", "invalid SOFA fixture name");
+                request.options.sofa_path =
+                    std::filesystem::path(argv[1]).parent_path().parent_path() / "fixtures" / name;
+            }
             const auto result = service.render(request, progress, logs);
             if (!result.success()) {
                 throw std::runtime_error(result.error.message);

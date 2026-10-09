@@ -11,6 +11,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "adm/render_binaural.h"
+
 #include "phase2_io.h"
 #include "scene_output_session.h"
 #include "scene_stream_engine.h"
@@ -37,7 +39,15 @@ void validate_spec(const Json& spec) {
     require(spec.contains("device_dsp") && spec.at("device_dsp").is_boolean(), "invalid replay device DSP flag");
     const bool device_dsp = spec.at("device_dsp");
     const bool triple = spec.at("backend") == "triple-balance";
-    Json fixed{{"version", triple ? 2 : 1},
+    const bool sofa = spec.contains("sofa");
+    require(!sofa || (spec.at("backend") == "binaural" && !device_dsp), "SOFA replay requires binaural rendering");
+    int version = triple ? 2 : 1;
+    std::string switch_control = triple ? "switch speaker backend" : "switch stereo backend";
+    if (sofa) {
+        version = 3;
+        switch_control = "switch SOFA to built-in KEMAR";
+    }
+    Json fixed{{"version", version},
                {"clock", "epoch*2s + input_sample/input_rate; +1s at sample 10240"},
                {"state_complete_on_every_frame", true},
                {"signal", {{"generator", "lcg32-v1"}, {"seed", k_signal_seed}, {"scale", signal_scale(device_dsp)}}},
@@ -48,7 +58,7 @@ void validate_spec(const Json& spec) {
                 {{"2048", "pose(37,23,-19)"},
                  {"4096", "generation=2"},
                  {"6144", "semantic gain scale=0.5"},
-                 {"8192", triple ? "switch speaker backend" : "switch stereo backend"},
+                 {"8192", switch_control},
                  {"10240", "advance virtual clock by 1s; expire tracking"}}}};
     if (device_dsp) {
         fixed["output_controls"] = {{"0", "volume=0.875; HpTF bypass"},
@@ -62,7 +72,7 @@ void validate_spec(const Json& spec) {
     for (const auto& [field, expected] : fixed.items()) {
         require(spec.contains(field), "missing fixed replay field");
         if (spec.at(field) != expected) {
-            throw std::runtime_error("unsupported replay field for version 1: " + field);
+            throw std::runtime_error("unsupported replay field: " + field);
         }
     }
     require(triple || spec.at("backend") == "vbap" || spec.at("backend") == "binaural", "unknown replay backend");
@@ -103,13 +113,15 @@ class Capture final : public IAudioOutputDevice {
 };
 class Replay {
   public:
-    explicit Replay(const Json& case_spec) : spec(case_spec), device_dsp(case_spec.at("device_dsp").get<bool>()) {
+    Replay(const Json& case_spec, const std::filesystem::path& sofa_path)
+        : spec(case_spec), device_dsp(case_spec.at("device_dsp").get<bool>()) {
         config.renderer.renderer =
             spec.at("backend") == "vbap" ? RendererSelection::saf : RendererSelection::saf_binaural;
         if (spec.at("backend") == "triple-balance") {
             config.renderer.renderer = RendererSelection::triple_balance;
         }
         config.renderer.output_layout = spec.at("layout").get<std::string>();
+        config.renderer.sofa_path = sofa_path;
         config.renderer.binaural_spread_mode =
             spec.at("cloud").get<bool>() ? BinauralSpreadMode::cloud : BinauralSpreadMode::none;
         config.renderer.sample_rate = spec.at("input_rate");
@@ -279,9 +291,13 @@ class Replay {
             }
             if (position == 8192 && channels == 2) {
                 auto next = config.renderer;
-                next.renderer =
-                    next.renderer == RendererSelection::saf ? RendererSelection::saf_binaural : RendererSelection::saf;
-                next.output_layout = next.renderer == RendererSelection::saf ? "0+2+0" : "binaural";
+                if (spec.contains("sofa")) {
+                    next.sofa_path.clear();
+                } else {
+                    next.renderer = next.renderer == RendererSelection::saf ? RendererSelection::saf_binaural
+                                                                            : RendererSelection::saf;
+                    next.output_layout = next.renderer == RendererSelection::saf ? "0+2+0" : "binaural";
+                }
                 done(stream->switch_backend(next));
             }
         }
@@ -454,6 +470,10 @@ void verify_controls() {
 } // namespace
 int main(int argc, char** argv) {
     try {
+        if (argc == 2 && std::string_view(argv[1]) == "--sofa-supported") {
+            std::cout << (binaural_sofa_supported() ? "yes\n" : "no\n");
+            return 0;
+        }
         if (argc == 2 && std::string_view(argv[1]) == "--self-test") {
             verify_controls();
             return 0;
@@ -462,6 +482,14 @@ int main(int argc, char** argv) {
         std::ifstream in(argv[1]);
         const auto spec = Json::parse(in);
         validate_spec(spec);
+        std::filesystem::path sofa_path;
+        if (spec.contains("sofa")) {
+            require(binaural_sofa_supported(), "SOFA replay is disabled in this build");
+            const std::filesystem::path name(spec.at("sofa").get<std::string>());
+            require(name == name.filename() && name.extension() == ".sofa", "invalid replay SOFA fixture name");
+            sofa_path = std::filesystem::path(argv[1]).parent_path().parent_path() / "fixtures" / name;
+            require(std::filesystem::is_regular_file(sofa_path), "missing replay SOFA fixture");
+        }
         const std::filesystem::path directory(argv[2]);
         std::filesystem::create_directories(directory);
         save_json(directory / "events.json", spec);
@@ -477,7 +505,7 @@ int main(int argc, char** argv) {
                 require(unsetenv("MR_ADM_TRACE_DIR") == 0, "cannot disable repeat trace");
 #endif
             }
-            Replay replay(spec);
+            Replay replay(spec, sofa_path);
             Json lengths = Json::array();
             for (uint64_t epoch : {1U, 2U}) {
                 replay.run_epoch(epoch, epoch == 1 ? 0U : k_seek_target, epoch == 1 ? k_main_epoch_end : k_seek_end);

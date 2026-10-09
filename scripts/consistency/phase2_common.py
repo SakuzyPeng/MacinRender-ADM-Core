@@ -12,7 +12,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 FORMATS = {'.f32': (4, 'f'), '.f64': (8, 'd'), '.c32': (4, 'f'), '.i32': (4, 'i')}
-SOURCE_DIRS = ('src', 'include', 'cmake', 'rust', 'tests/tools', 'tests/support', 'scripts/consistency')
+SOURCE_DIRS = ('src', 'include', 'cmake', 'rust', 'tests/tools', 'tests/support', 'tests/fixtures/sofa', 'scripts/consistency')
 TEXT_SUFFIXES = {'.h', '.hpp', '.c', '.cpp', '.rs', '.toml', '.lock', '.json', '.py', '.sh', '.cmake', '.txt', '.xml', '.dat'}
 
 
@@ -56,6 +56,21 @@ def load_module(name, path):
     return module
 
 
+# Committed binary inputs, never generated on CI or replaced by a local dataset.
+SOFA_FIXTURES = {
+    'simple.sofa': '03e3a0ed655fb39d3e0af0e829b7f48e39b0f27477cb326949a5771b7815bf2d',
+    'general-compressed.sofa': 'ccfe5aac2be59406a462d41056024ac14068645b62e2eed1d4e7e39a833c6a82',
+    'off-axis-compressed.sofa': '482486e39774d1f64a0ca8121f839c0afb78e2784174a59616f4b52e14335b58',
+}
+
+
+def validate_sofa_fixtures(directory):
+    for name, expected in SOFA_FIXTURES.items():
+        path = directory / name
+        if not path.is_file() or digest(path.read_bytes()) != expected:
+            raise ValueError('missing or modified pinned SOFA fixture: ' + name)
+
+
 def offline_cases():
     source = (ROOT / 'scripts/consistency/render-matrix.sh').read_text(encoding='utf-8')
     match = re.search(r"cases=\$\(\s*cat <<'EOF'\n(.*?)\nEOF", source, re.S)
@@ -90,6 +105,13 @@ def offline_cases():
         if key not in seen:
             seen.add(key)
             result.append({'id': name, 'fixture': fixture, 'args': args})
+    for sofa in ('simple.sofa', 'off-axis-compressed.sofa'):
+        for mode, fixture in [('point', 'objects-point'), ('cloud', 'objects-extent-multi'),
+                              ('saf-spreader', 'objects-extent-multi')]:
+            args = ['--no-peak-limit', '--renderer', 'saf-binaural', '--output-layout', 'binaural']
+            if mode != 'point':
+                args += ['--binaural-spread-mode', mode]
+            result.append({'id': f'sofa-{Path(sofa).stem}-{mode}', 'fixture': fixture, 'args': args, 'sofa': sofa})
     return result
 
 
@@ -143,6 +165,18 @@ def scene_cases():
                                 [{'sample': 3073, 'field': 'position', 'value': [0.75, -0.25, 0.5], 'ramp': 97},
                                  {'sample': 5003, 'field': 'position', 'value': [0.0, 1.0, 0.0], 'ramp': 0}])
             result.append(row)
+    # Version 3 keeps the binaural backend and switches the external dataset to KEMAR.
+    # Together these exercise native HRIRs, HRIR resampling and output resampling.
+    for sofa, input_rate, output_rate in [('simple.sofa', 48000, 44100),
+                                          ('general-compressed.sofa', 48000, 48000),
+                                          ('off-axis-compressed.sofa', 44100, 48000)]:
+        for cloud in (False, True):
+            for partition_name, partition in [('fixed', [512]), ('fragmented', [1, 7, 127, 511, 1024])]:
+                row = dict(result[0], id=f'scene-sofa-{Path(sofa).stem}-cloud{int(cloud)}-{input_rate}-{output_rate}-{partition_name}',
+                           version=3, backend='binaural', layout='binaural', cloud=cloud, sofa=sofa,
+                           input_rate=input_rate, output_rate=output_rate, partition=partition)
+                row['controls'] = dict(row['controls'], **{'8192': 'switch SOFA to built-in KEMAR'})
+                result.append(row)
     return result
 
 
@@ -174,6 +208,9 @@ def kernel_outputs():
     names += [f'hptf-{rate}.{part}' for rate in (44100, 48000) for part in ('10-input.f64', '20-coefficients.f32')]
     names += ['trig.10-input.f64', 'trig.20-sin.f64', 'trig.30-cos.f64']
     names += ['spreader.10-input.f32', 'spreader.20-voronoi.f32', 'spreader.30-fir.c32', 'spreader.40-output.f32']
+    names += [f'sofa-{Path(sofa).stem}.{part}' for sofa in SOFA_FIXTURES for part in
+              ('10-parameters.i32', '11-directions.f32', '12-hrir.f32', '20-grid-weights.f32',
+               '21-grid-indices.i32', '30-spectra.c32', '40-queries.f32', '50-quantized.c32', '60-continuous.c32')]
     return sorted(names)
 
 
@@ -186,6 +223,13 @@ def pcm_bytes(path):
         raise ValueError(f'invalid PCM header/shape: {path}')
     validate_words(data[24:], '.f32')
     return (channels, rate, frames), data[24:]
+
+
+def validate_sofa_pcm(path):
+    shape, bits = pcm_bytes(path)
+    values = validate_words(bits, '.f32')
+    if shape[0] != 2 or any(not any(abs(v) > 1e-9 for v in values[ear::2]) for ear in (0, 1)):
+        raise ValueError('SOFA output must contain non-silent stereo PCM')
 
 
 def validate_words(data, suffix):

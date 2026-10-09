@@ -51,7 +51,7 @@
         "MR_ADM_EAR_SCALAR_REFERENCE": "OFF",
         "EAR_SIMD": "ON",
         "MR_ADM_ENABLE_IAMF": "OFF",
-        "MR_ADM_ENABLE_SOFA": "OFF",
+        "MR_ADM_ENABLE_SOFA": "ON",
         "MR_ADM_CONSISTENCY_DIAGNOSTICS": "OFF"
       }
     },

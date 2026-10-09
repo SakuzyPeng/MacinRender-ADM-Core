@@ -10,6 +10,8 @@ use std::{
 };
 #[path = "phase2/coverage.rs"]
 mod coverage;
+#[path = "phase2/sofa.rs"]
+mod sofa;
 fn floats(path: &Path, name: &str, values: &[f32]) {
     assert!(!values.is_empty() && values.iter().all(|v| v.is_finite()));
     let mut out = BufWriter::new(fs::File::create(path.join(name)).unwrap());
@@ -43,7 +45,7 @@ fn signal(size: usize) -> Vec<f32> {
         })
         .collect()
 }
-fn run(out: &Path) {
+fn run(out: &Path, fixtures: &Path) {
     fs::create_dir_all(out).unwrap();
     // Every twiddle RustFFT/realfft can build for these lengths: compute_twiddle(k, len) for each
     // power-of-two len <= 32768 and 0 <= k < len, with the crates' own formula. The scalar FFT is
@@ -300,11 +302,18 @@ fn run(out: &Path) {
     capabilities.push(format!("diagnostics={}", cfg!(feature = "diagnostics")));
     capabilities.push("fft_dispatch=scalar (RustFFT SIMD features disabled)".into());
     fs::write(out.join("capabilities.txt"), capabilities.join("\n") + "\n").unwrap();
+    sofa::run(out, fixtures);
 }
 
 fn main() {
     let out = std::env::args_os().nth(1).expect("output directory");
+    let fixtures = std::env::args_os()
+        .nth(2)
+        .expect("pinned SOFA fixture directory");
     for pass in 1..=2 {
-        run(&Path::new(&out).join(format!("pass-{pass}")));
+        run(
+            &Path::new(&out).join(format!("pass-{pass}")),
+            Path::new(&fixtures),
+        );
     }
 }

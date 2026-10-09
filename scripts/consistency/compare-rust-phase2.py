@@ -13,6 +13,13 @@ DEFAULT_GATES = Path(__file__).with_name('phase2-gates.json')
 FFT_SIMD_FEATURES = {'default', 'avx', 'sse', 'neon', 'wasm_simd'}
 
 
+def validate_sofa_build(build):
+    features = json.loads(build.get('rust.resolved_features', '{}'))
+    if (build.get('cmake.MR_ADM_ENABLE_SOFA') != 'ON'
+            or any('sofa' not in features.get(crate, []) for crate in ('mradm-dsp', 'mradm-ffi'))):
+        raise ValueError('SOFA-enabled C++ and Rust build provenance is required')
+
+
 def safe_file(root, relative):
     path = root / relative
     if path.resolve().is_relative_to(root.resolve()) and path.is_file():
@@ -95,14 +102,19 @@ def validate(root):
         raise ValueError('source fingerprint does not match inventory')
     if manifest['offline'] != common.offline_cases() or manifest['scene'] != common.scene_cases():
         raise ValueError('baseline does not cover the versioned case catalog')
+    if manifest.get('sofa') != common.SOFA_FIXTURES:
+        raise ValueError('baseline does not cover the pinned SOFA inputs')
+    common.validate_sofa_fixtures(root / 'fixtures')
     expected = [c['id'] for c in manifest['offline']] + [c['id'] + f'-epoch{e}' for c in manifest['scene'] for e in (1, 2)]
     if not expected or len(set(expected)) != len(expected) or set(expected) != set(manifest['outputs']):
         raise ValueError('missing or duplicate case outputs')
     disk_pcm = {p.name for p in (root / 'pcm').glob('*.pcmbits')}
     if disk_pcm != {Path(v['path']).name for v in manifest['outputs'].values()}:
         raise ValueError('PCM inventory differs from manifest')
-    for row in manifest['outputs'].values():
+    for name, row in manifest['outputs'].items():
         shape, bits = common.pcm_bytes(safe_file(root, row['path']))
+        if name.startswith(('sofa-', 'scene-sofa-')):
+            common.validate_sofa_pcm(safe_file(root, row['path']))
         if list(shape) != row['shape'] or common.digest(bits) != row['sha256']:
             raise ValueError('PCM shape/hash differs from manifest')
     if not manifest['fixtures'] or set(manifest['fixtures']) != {p.name for p in (root / 'fixtures').iterdir()}:
@@ -134,6 +146,7 @@ def validate(root):
     if manifest['diagnostics']:
         validate_experiments(root, manifest)
     build = manifest['build']
+    validate_sofa_build(build)
     compiler_identity(build)
     fft_features(build)
     if build.get('cmake.CMAKE_BUILD_TYPE') != 'Release' or build.get('rust.compiler_verbose') in (None, 'unavailable'):
@@ -196,7 +209,7 @@ def compare(directories, require_platforms=True, gates=()):
     manifests = [validate(p) for p in directories]
     first = manifests[0]
     for manifest in manifests[1:]:
-        for field in ('config', 'diagnostics', 'source', 'offline', 'scene', 'fixtures'):
+        for field in ('config', 'diagnostics', 'source', 'offline', 'scene', 'sofa', 'fixtures'):
             if manifest[field] != first[field]:
                 raise ValueError('incompatible baseline: ' + field)
         if compiler_identity(manifest['build']) != compiler_identity(first['build']):
