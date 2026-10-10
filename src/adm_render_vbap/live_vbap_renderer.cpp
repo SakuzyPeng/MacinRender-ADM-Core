@@ -21,6 +21,7 @@
 #include "adm/scene.h"
 
 #include "dsp.h"
+#include "live_scene_trace.h"
 #include "live_vbap.h"
 #include "render_common.h"
 #include "scene_math.h"
@@ -314,6 +315,9 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
                 events_.push_back(command);
             }
         }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        trace_commands(frame);
+#endif
         auto rendered =
             mixer.process(frame.duration_samples, planes_, initial_, events_, coefficients_, output.first(required));
         if (!rendered) {
@@ -337,6 +341,32 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
     [[nodiscard]] std::uint32_t tail_input_frames() const noexcept override { return 0U; }
 
   private:
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    // Commands and panning coefficients exactly as handed to the Rust mixer.
+    void trace_commands(const Frame& frame) const {
+        std::vector<int> commands;
+        std::vector<float> levels;
+        for (const auto* list : {&initial_, &events_}) {
+            for (const auto& command : *list) {
+                commands.insert(commands.end(),
+                                {static_cast<int>(command.element),
+                                 static_cast<int>(command.offset),
+                                 static_cast<int>(command.duration),
+                                 static_cast<int>(command.fields),
+                                 static_cast<int>(command.coefficient_offset)});
+                levels.push_back(command.level);
+            }
+        }
+        const auto key = consistency::scene_slice_key(frame) + ".30-vbap" + std::to_string(layout_.speakers.size());
+        if (!commands.empty()) {
+            consistency::dump(key + "-commands.i32", commands);
+            consistency::dump(key + "-levels.f32", levels);
+        }
+        if (!coefficients_.empty()) {
+            consistency::dump(key + "-coefficients.f32", coefficients_);
+        }
+    }
+#endif
     Result<void> prepare_initial(std::size_t index, const Frame& frame) {
         auto gains = gains_for(elements_[index], staged_[index].target, frame);
         if (!gains) {

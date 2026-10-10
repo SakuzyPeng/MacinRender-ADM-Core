@@ -330,7 +330,7 @@ AOT 注意：markup extension 返回 `IObservable` 会 cast crash、索引器反
 - `docs/architecture/ADM_APPLE_BACKEND.md` — macOS AUSpatialMixer 后端 + ASBR 系统空间监听 sink
 - `docs/architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md` — Windows ISpatialAudioClient 系统空间监听 sink（静态床/能力实测/切换恢复）
 - `docs/architecture/hptf-eq.md` — HpTF 耳机补偿（v1.38 内存参数接口、AutoEq ParametricEQ，实时监听专用，设备绑定）
-- `docs/adr/0001` C++20 标准 | `0002` C++-first，Rust-later | `0003` 自有领域模型与后端边界 | `0004` 第三方依赖管理 | `0005` 错误处理模型 | `0006` CLI11 选择 | `0007` C ABI 稳定性 | `0008` Rust 落地与 SAF 替换 | `0009` 头追踪输入边界 | `0010` Rust Meter | `0011` Rust 固定采样率转换 | `0012` Rust ADM 元数据与 libadm 参考边界 | `0013` Rust EAR 与 libear 生产依赖移除 | `0014` Scene 统一乘加舍入规则 | `0015` RustFFT 固定标量路径 | `0016` 重采样固定标量插值与可移植三角函数 | `0017` OM spreader 固定分组预算与可移植数学函数
+- `docs/adr/0001` C++20 标准 | `0002` C++-first，Rust-later | `0003` 自有领域模型与后端边界 | `0004` 第三方依赖管理 | `0005` 错误处理模型 | `0006` CLI11 选择 | `0007` C ABI 稳定性 | `0008` Rust 落地与 SAF 替换 | `0009` 头追踪输入边界 | `0010` Rust Meter | `0011` Rust 固定采样率转换 | `0012` Rust ADM 元数据与 libadm 参考边界 | `0013` Rust EAR 与 libear 生产依赖移除 | `0014` Scene 统一乘加舍入规则 | `0015` RustFFT 固定标量路径 | `0016` 重采样固定标量插值与可移植三角函数 | `0017` OM spreader 固定分组预算与可移植数学函数 | `0018` Scene 流式渲染的数值与重放规则（提议，一期 1.1）
 - `docs/architecture/SCENE_ARITHMETIC_POLICY.md` — `scene-separate-v1` 的验证证据（二期第一个切片）
 - `docs/architecture/RUST_COVERAGE_EXTENSION.md` — 二期后的 96 kHz Scene、96/192 kHz 重采样、HRTF 与退化 OM 覆盖；该批验收为 118 份 PCM / 133 份内核测量
 - `docs/architecture/RUST_PHASE2_CLOSEOUT.md` — 二期结项、限定矩阵、维护门禁与后续边界；`RUST_PHASE2_PERFORMANCE.md` — 保持位模式的性能回收

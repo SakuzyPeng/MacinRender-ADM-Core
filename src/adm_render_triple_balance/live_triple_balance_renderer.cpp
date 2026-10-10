@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "bed.h"
+#include "live_scene_trace.h"
 #include "live_triple_balance.h"
 #include "render_common.h"
 #include "triple_balance.h"
@@ -197,6 +198,21 @@ class LiveTripleBalanceRenderer final : public ILiveSceneRenderer {
             (config_.sample_rate != 48000U || !std::ranges::all_of(bed, [](bool present) { return present; }))) {
             return make_error(ErrorCode::unsupported, "Live Triple Balance requires one complete 48 kHz 7.1.2 bed");
         }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        {
+            std::vector<int> kinds;
+            std::vector<float> gains;
+            for (const auto& lane : numeric) {
+                kinds.push_back(static_cast<int>(lane.kind));
+                gains.insert(gains.end(), std::begin(lane.gains), std::end(lane.gains));
+            }
+            if (!kinds.empty()) {
+                const auto key = "triple/g" + std::to_string(generation) + ".30-lane";
+                consistency::dump(key + "-kinds.i32", kinds);
+                consistency::dump(key + "-gains.f32", gains);
+            }
+        }
+#endif
         auto mixer = dsp::LiveTripleBalanceMixer::create(layout_, config_.sample_rate, numeric);
         if (!mixer) {
             return tl::unexpected{mixer.error()};
@@ -305,6 +321,9 @@ class LiveTripleBalanceRenderer final : public ILiveSceneRenderer {
                 events_.push_back(command(found->second, update.offset_samples, duration, fields));
             }
         }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        trace_commands(frame);
+#endif
         auto rendered = mixer.process(frame.duration_samples,
                                       planes_,
                                       initial_,
@@ -378,6 +397,30 @@ class LiveTripleBalanceRenderer final : public ILiveSceneRenderer {
         }
         return {};
     }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    // Commands as handed to the Rust mixer: position, size and level are derived in C++.
+    void trace_commands(const Frame& frame) const {
+        std::vector<int> commands;
+        std::vector<float> values;
+        for (const auto* list : {&initial_, &events_}) {
+            for (const auto& command : *list) {
+                commands.insert(commands.end(),
+                                {static_cast<int>(command.element),
+                                 static_cast<int>(command.offset),
+                                 static_cast<int>(command.duration),
+                                 static_cast<int>(command.fields)});
+                values.insert(
+                    values.end(),
+                    {command.position.x, command.position.y, command.position.z, command.size, command.level});
+            }
+        }
+        if (!commands.empty()) {
+            const auto key = consistency::scene_slice_key(frame) + ".30-triple";
+            consistency::dump(key + "-commands.i32", commands);
+            consistency::dump(key + "-values.f32", values);
+        }
+    }
+#endif
     [[nodiscard]] MradmTbLiveCommand
     command(std::size_t index, uint32_t offset, uint32_t duration, uint32_t fields) const {
         const auto& state = staged_[index].target;
