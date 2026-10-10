@@ -1255,7 +1255,12 @@ struct SceneStreamEngine::Impl {
 #endif
 
         render_output.resize(static_cast<std::size_t>(frame.duration_samples) * channels);
-        auto rendered = renderer->render(frame, render_output);
+        auto rendered = [&] {
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+            const consistency::SceneRendererTraceScope scope(incoming_renderer ? "outgoing" : "current");
+#endif
+            return renderer->render(frame, render_output);
+        }();
         if (!rendered) {
             return tl::unexpected{rendered.error()};
         }
@@ -1268,7 +1273,12 @@ struct SceneStreamEngine::Impl {
             incoming_frame.initial_states = incoming_snapshot;
         }
         render_output_b.resize(static_cast<std::size_t>(frame.duration_samples) * channels);
-        auto incoming_rendered = incoming_renderer->render(incoming_frame, render_output_b);
+        auto incoming_rendered = [&] {
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+            const consistency::SceneRendererTraceScope scope("incoming");
+#endif
+            return incoming_renderer->render(incoming_frame, render_output_b);
+        }();
         if (!incoming_rendered) {
             add_diagnostic({LogLevel::error,
                             live_scene::DiagnosticCode::backend_failure,

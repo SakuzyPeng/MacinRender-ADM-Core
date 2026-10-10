@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "consistency_trace.h"
@@ -15,6 +16,9 @@ namespace mradm::consistency {
 
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
 namespace detail {
+
+[[nodiscard]] std::string_view renderer_role() noexcept;
+std::string_view set_renderer_role(std::string_view role) noexcept;
 
 inline int low_word(std::uint64_t value) {
     return static_cast<int>(static_cast<std::uint32_t>(value));
@@ -47,6 +51,21 @@ inline void append_state(std::vector<float>& values, std::vector<int>& fields, c
 }
 
 } // namespace detail
+
+// Both renderers receive the same Frame during a crossfade, including a same-backend
+// SOFA switch. Scope their checkpoints by role without changing the production Frame ABI.
+class SceneRendererTraceScope {
+  public:
+    explicit SceneRendererTraceScope(std::string_view role) noexcept : previous_(detail::set_renderer_role(role)) {}
+    ~SceneRendererTraceScope() { detail::set_renderer_role(previous_); }
+    SceneRendererTraceScope(const SceneRendererTraceScope&) = delete;
+    SceneRendererTraceScope& operator=(const SceneRendererTraceScope&) = delete;
+    SceneRendererTraceScope(SceneRendererTraceScope&&) = delete;
+    SceneRendererTraceScope& operator=(SceneRendererTraceScope&&) = delete;
+
+  private:
+    std::string_view previous_;
+};
 #endif
 
 // Writes `<stage>.f32` (12 floats per row) and `<stage>-fields.i32` (rows of 15 words:
@@ -92,5 +111,11 @@ inline std::string scene_slice_key(const live_scene::Frame& frame) {
     return "scene/e" + std::to_string(frame.epoch_id) + "-g" + std::to_string(frame.generation_id) + "-s" +
            std::to_string(frame.media_sample_start);
 }
+
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+inline std::string scene_renderer_key(const live_scene::Frame& frame) {
+    return scene_slice_key(frame) + "-" + std::string{detail::renderer_role()};
+}
+#endif
 
 } // namespace mradm::consistency

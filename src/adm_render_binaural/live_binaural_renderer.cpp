@@ -514,7 +514,7 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
             }
         }
         if (!commands.empty()) {
-            const auto key = consistency::scene_slice_key(frame) + ".30-binaural";
+            const auto key = consistency::scene_renderer_key(frame) + ".30-binaural";
             consistency::dump(key + "-commands.i32", commands);
             consistency::dump(key + "-directions.f32", directions);
         }
