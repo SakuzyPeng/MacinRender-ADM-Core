@@ -377,16 +377,19 @@ class EvidenceTests(unittest.TestCase):
 
     def test_scene_checkpoint_inventory_follows_backend(self):
         common_files = ['scene/e1-g1-s0.15-producer.f32', 'scene/e1-g1-s0.21-effective.f32',
-                        'scene/e1-g1-s0.21-effective-fields.i32', 'scene/e1-g1-s8192.35-outgoing.f32',
-                        'scene/e1-g1-s8192.36-incoming.f32', 'scene/e1-g1-s0.40-render.f32']
-        backends = {'vbap': ['scene/e1-g1-s0.30-vbap2-coefficients.f32'],
-                    'binaural': ['scene/e1-g1-s0.30-binaural-commands.i32'],
-                    'triple-balance': ['triple/g1.30-lane-gains.f32', 'scene/e1-g1-s0.30-triple-commands.i32']}
-        for backend, files in backends.items():
+                        'scene/e1-g1-s0.21-effective-fields.i32', 'scene/e1-g1-s0.40-render.f32']
+        crossfade = ['scene/e1-g1-s8192.35-outgoing.f32', 'scene/e1-g1-s8192.36-incoming.f32']
+        backends = {('vbap', '0+2+0'): ['scene/e1-g1-s0.30-vbap2-coefficients.f32'] + crossfade,
+                    ('vbap', '4+7+0'): ['scene/e1-g1-s0.30-vbap12-coefficients.f32'],
+                    ('binaural', 'binaural'): ['scene/e1-g1-s0.30-binaural-commands.i32'] + crossfade,
+                    ('triple-balance', '7.1.4'): ['triple/g1.30-lane-gains.f32',
+                                                  'scene/e1-g1-s0.30-triple-commands.i32'] + crossfade}
+        for (backend, layout), files in backends.items():
             for device_dsp in (False, True):
-                row = {'id': 'case', 'backend': backend, 'device_dsp': device_dsp}
+                row = {'id': 'case', 'backend': backend, 'layout': layout, 'device_dsp': device_dsp}
                 expected = common_files + files + (['hptf/r1.10-coefficients.f32'] if device_dsp else [])
-                with self.subTest(backend=backend, device_dsp=device_dsp), tempfile.TemporaryDirectory() as tmp:
+                with self.subTest(backend=backend, layout=layout, device_dsp=device_dsp), \
+                        tempfile.TemporaryDirectory() as tmp:
                     root = Path(tmp)
                     for name in expected:
                         (root / name).parent.mkdir(parents=True, exist_ok=True)

@@ -201,7 +201,10 @@ def main():
 def require_scene_checkpoints(root, row):
     """Every Scene replay must expose the boundaries later migrations are compared against."""
     patterns = ['scene/*.15-producer.f32', 'scene/*.21-effective.f32', 'scene/*.21-effective-fields.i32',
-                'scene/*.35-outgoing.f32', 'scene/*.36-incoming.f32', 'scene/*.40-render.f32']
+                'scene/*.40-render.f32']
+    # The replay switches backend only for stereo outputs and Triple Balance (phase2_scene.cpp).
+    if row['backend'] == 'triple-balance' or row['layout'] in ('0+2+0', 'binaural'):
+        patterns += ['scene/*.35-outgoing.f32', 'scene/*.36-incoming.f32']
     patterns += {'vbap': ['scene/*.30-vbap*-coefficients.f32'],
                  'binaural': ['scene/*.30-binaural-commands.i32'],
                  'triple-balance': ['triple/*.30-lane-gains.f32', 'scene/*.30-triple-commands.i32']}[row['backend']]
