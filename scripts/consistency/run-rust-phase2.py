@@ -172,8 +172,7 @@ def main():
                 if not list((out / 'checkpoints' / row['id'] / 'writer').glob('*.f32')):
                     raise ValueError('missing offline PCM checkpoint: ' + row['id'])
             for row in scenes:
-                if not list((out / 'checkpoints' / row['id'] / 'scene').glob('*.40-render.f32')):
-                    raise ValueError('missing Scene renderer checkpoint: ' + row['id'])
+                require_scene_checkpoints(out / 'checkpoints' / row['id'], row)
             if not list((out / 'kernel-checkpoints').rglob('*.f32')):
                 raise ValueError('Rust diagnostics feature produced no checkpoints')
             worker_experiments(binaries, out, work, manifest)
@@ -197,6 +196,20 @@ def main():
     finally:
         shutil.rmtree(work)
     print('baseline complete:', out, flush=True)
+
+
+def require_scene_checkpoints(root, row):
+    """Every Scene replay must expose the boundaries later migrations are compared against."""
+    patterns = ['scene/*.15-producer.f32', 'scene/*.21-effective.f32', 'scene/*.21-effective-fields.i32',
+                'scene/*.35-outgoing.f32', 'scene/*.36-incoming.f32', 'scene/*.40-render.f32']
+    patterns += {'vbap': ['scene/*.30-vbap*-coefficients.f32'],
+                 'binaural': ['scene/*.30-binaural-commands.i32'],
+                 'triple-balance': ['triple/*.30-lane-gains.f32', 'scene/*.30-triple-commands.i32']}[row['backend']]
+    if row['device_dsp']:
+        patterns.append('hptf/*.10-coefficients.f32')
+    for pattern in patterns:
+        if not list(root.glob(pattern)):
+            raise ValueError(f'missing Scene checkpoint {pattern}: {row["id"]}')
 
 
 def worker_experiments(tools, out, work, manifest):

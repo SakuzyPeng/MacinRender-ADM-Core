@@ -375,8 +375,35 @@ class EvidenceTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     comparator.load_gates(path)
 
+    def test_scene_checkpoint_inventory_follows_backend(self):
+        common_files = ['scene/e1-g1-s0.15-producer.f32', 'scene/e1-g1-s0.21-effective.f32',
+                        'scene/e1-g1-s0.21-effective-fields.i32', 'scene/e1-g1-s8192.35-outgoing.f32',
+                        'scene/e1-g1-s8192.36-incoming.f32', 'scene/e1-g1-s0.40-render.f32']
+        backends = {'vbap': ['scene/e1-g1-s0.30-vbap2-coefficients.f32'],
+                    'binaural': ['scene/e1-g1-s0.30-binaural-commands.i32'],
+                    'triple-balance': ['triple/g1.30-lane-gains.f32', 'scene/e1-g1-s0.30-triple-commands.i32']}
+        for backend, files in backends.items():
+            for device_dsp in (False, True):
+                row = {'id': 'case', 'backend': backend, 'device_dsp': device_dsp}
+                expected = common_files + files + (['hptf/r1.10-coefficients.f32'] if device_dsp else [])
+                with self.subTest(backend=backend, device_dsp=device_dsp), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    for name in expected:
+                        (root / name).parent.mkdir(parents=True, exist_ok=True)
+                        (root / name).write_bytes(struct.pack('<f', 1))
+                    collector.require_scene_checkpoints(root, row)
+                    for name in expected:
+                        (root / name).rename(root / (name + '.missing'))
+                        with self.assertRaisesRegex(ValueError, 'missing Scene checkpoint'):
+                            collector.require_scene_checkpoints(root, row)
+                        (root / (name + '.missing')).rename(root / name)
+
     def test_dependency_order_precedes_filename_order(self):
         self.assertLess(comparator.checkpoint_order('scene/e1-s2048.20-effective.f32'), comparator.checkpoint_order('scene/e1-s0.40-render.f32'))
+        stages = ['scene/e1-g1-s0.15-producer.f32', 'scene/e1-g1-s0.21-effective.f32',
+                  'scene/e1-g1-s0.30-vbap2-coefficients.f32', 'scene/e1-g1-s0.35-outgoing.f32',
+                  'scene/e1-g1-s0.40-render.f32']
+        self.assertEqual(sorted(stages, key=comparator.checkpoint_order), stages)
         self.assertLess(comparator.checkpoint_order('ear.02-direct.f64'), comparator.checkpoint_order('post/loudness.10-measurement.f64'))
 
     def test_topology_difference_is_not_equality(self):

@@ -29,6 +29,7 @@
 #include "adm/semantic_policy.h"
 
 #include "../adm_render_common/consistency_trace.h"
+#include "../adm_render_common/live_scene_trace.h"
 #include "live_binaural_renderer.h"
 #include "live_triple_balance_renderer.h"
 #include "live_vbap_renderer.h"
@@ -1216,8 +1217,7 @@ struct SceneStreamEngine::Impl {
     [[nodiscard]] Result<void> render_slice(const live_scene::Frame& frame,
                                             const std::vector<live_scene::StateEntry>& incoming_snapshot) {
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-        const std::string key = "scene/e" + std::to_string(frame.epoch_id) + "-g" +
-                                std::to_string(frame.generation_id) + "-s" + std::to_string(frame.media_sample_start);
+        const std::string key = consistency::scene_slice_key(frame);
         for (const auto& plane : frame.pcm) {
             if (!plane.samples.empty())
                 consistency::dump(key + "-element" + std::to_string(plane.element_id) + ".10-input.f32", plane.samples);
@@ -1251,6 +1251,7 @@ struct SceneStreamEngine::Impl {
         }
         if (!states.empty())
             consistency::dump(key + ".20-effective.f32", states);
+        consistency::dump_states(key + ".21-effective", frame.initial_states, frame.updates);
 #endif
 
         render_output.resize(static_cast<std::size_t>(frame.duration_samples) * channels);
@@ -1282,6 +1283,11 @@ struct SceneStreamEngine::Impl {
         }
         incoming_needs_initial_state = false;
 
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        const auto mixed = static_cast<std::size_t>(frame.duration_samples) * channels;
+        consistency::dump(key + ".35-outgoing.f32", std::span<const float>{render_output}.first(mixed));
+        consistency::dump(key + ".36-incoming.f32", std::span<const float>{render_output_b}.first(mixed));
+#endif
         if (transitions.mix(render_output, render_output_b, frame.duration_samples)) {
             finalize_backend_switch();
         }
@@ -1376,10 +1382,24 @@ struct SceneStreamEngine::Impl {
                                                : std::vector<live_scene::StateEntry>{};
             std::uint64_t stream_order = 0U;
             append_policy_retargets(slice.updates, stream_order);
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+            std::vector<live_scene::MetadataUpdate> producer_updates;
+#endif
             while (update_index < frame.updates.size() && frame.updates[update_index].offset_samples < slice_end) {
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+                producer_updates.push_back(frame.updates[update_index]);
+                producer_updates.back().offset_samples -= slice_start;
+#endif
                 append_producer_update(frame.updates[update_index], slice_start, slice.updates, stream_order);
                 ++update_index;
             }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+            // Producer state before semantic policy; offsets are slice-relative like the effective rows.
+            consistency::dump_states(consistency::scene_slice_key(slice) + ".15-producer",
+                                     first_slice ? std::span<const live_scene::StateEntry>{frame.initial_states}
+                                                 : std::span<const live_scene::StateEntry>{},
+                                     producer_updates);
+#endif
 
             auto rendered = render_slice(slice, incoming_snapshot);
             if (!rendered) {

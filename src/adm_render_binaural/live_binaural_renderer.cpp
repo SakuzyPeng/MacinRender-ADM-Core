@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "live_binaural.h"
+#include "live_scene_trace.h"
 #include "scene_math.h"
 
 // Private project DSP complex type.
@@ -457,6 +458,9 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
         if (!prepared) {
             return prepared;
         }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        trace_commands(frame);
+#endif
         auto report = session_.process(
             frame.duration_samples,
             planes_,
@@ -490,6 +494,32 @@ class LiveBinauralRenderer final : public ILiveSceneRenderer {
     }
 
   private:
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    // Commands as handed to the Rust session; the state copies the effective rows, so only the
+    // C++-derived DirectSpeakers direction and the timing words are recorded.
+    void trace_commands(const Frame& frame) const {
+        std::vector<int> commands;
+        std::vector<float> directions;
+        for (const auto* list : {&initial_, &events_}) {
+            for (const auto& command : *list) {
+                commands.insert(commands.end(),
+                                {static_cast<int>(command.element),
+                                 static_cast<int>(command.offset),
+                                 static_cast<int>(command.duration),
+                                 static_cast<int>(command.has_direction),
+                                 static_cast<int>(command.diagnostic),
+                                 static_cast<int>(static_cast<uint32_t>(command.changed)),
+                                 static_cast<int>(static_cast<uint32_t>(command.cleared))});
+                directions.insert(directions.end(), {command.direction[0], command.direction[1]});
+            }
+        }
+        if (!commands.empty()) {
+            const auto key = consistency::scene_slice_key(frame) + ".30-binaural";
+            consistency::dump(key + "-commands.i32", commands);
+            consistency::dump(key + "-directions.f32", directions);
+        }
+    }
+#endif
     Result<void> prepare_initials(const Frame& frame) {
         staged_.resize(elements_.size());
         planes_.assign(elements_.size(), {});
