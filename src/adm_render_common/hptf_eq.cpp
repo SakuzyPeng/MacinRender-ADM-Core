@@ -8,9 +8,11 @@
 #include <ios>
 #include <iterator>
 #include <limits>
+#include <span>
 #include <sstream>
 #include <utility>
 
+#include "consistency_trace.h"
 #include "dsp.h"
 
 namespace mradm::render_common {
@@ -319,6 +321,19 @@ void HptfProcessor::prepare(std::uint32_t channel_count, std::uint32_t rate) {
 }
 
 void HptfProcessor::publish(const HptfCoefficients& coeffs, std::uint64_t revision) {
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    {
+        std::vector<float> values{coeffs.preamp_gain, coeffs.max_response_db, coeffs.auto_trim_db, coeffs.preamp_db};
+        for (const auto& section :
+             std::span{coeffs.sections}.first(std::min<std::size_t>(coeffs.band_count, coeffs.sections.size()))) {
+            values.insert(values.end(), {section.b0, section.b1, section.b2, section.a1, section.a2});
+        }
+        const auto key = "hptf/r" + std::to_string(revision) + ".10-coefficients";
+        consistency::dump(key + ".f32", values);
+        consistency::dump(key + "-shape.i32",
+                          {static_cast<int>(coeffs.sample_rate), static_cast<int>(coeffs.band_count)});
+    }
+#endif
     const std::lock_guard lock(publication_mutex_);
     pending_.publish({coeffs, revision});
 }

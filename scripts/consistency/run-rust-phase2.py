@@ -172,8 +172,7 @@ def main():
                 if not list((out / 'checkpoints' / row['id'] / 'writer').glob('*.f32')):
                     raise ValueError('missing offline PCM checkpoint: ' + row['id'])
             for row in scenes:
-                if not list((out / 'checkpoints' / row['id'] / 'scene').glob('*.40-render.f32')):
-                    raise ValueError('missing Scene renderer checkpoint: ' + row['id'])
+                require_scene_checkpoints(out / 'checkpoints' / row['id'], row)
             if not list((out / 'kernel-checkpoints').rglob('*.f32')):
                 raise ValueError('Rust diagnostics feature produced no checkpoints')
             worker_experiments(binaries, out, work, manifest)
@@ -197,6 +196,78 @@ def main():
     finally:
         shutil.rmtree(work)
     print('baseline complete:', out, flush=True)
+
+
+def require_scene_checkpoints(root, row):
+    """Every Scene replay must expose the boundaries later migrations are compared against."""
+    backend_patterns = {'vbap': ['.30-vbap*-commands.i32', '.30-vbap*-levels.f32', '.30-vbap*-coefficients.f32'],
+                        'binaural': ['.30-binaural-commands.i32', '.30-binaural-directions.f32'],
+                        'triple-balance': ['.30-triple-lane-kinds.i32', '.30-triple-lane-gains.f32',
+                                           '.30-triple-commands.i32', '.30-triple-values.f32']}
+    patterns = []
+    for epoch in row['epochs']:
+        prefix = f'scene/e{epoch["epoch"]}-*'
+        patterns += [prefix + suffix for suffix in ('.15-producer.f32', '.15-producer-fields.i32',
+                                                    '.21-effective.f32', '.21-effective-fields.i32', '.40-render.f32')]
+        patterns += [prefix + '-current' + suffix for suffix in backend_patterns[row['backend']]]
+    # The replay switches backend only for stereo outputs and Triple Balance (phase2_scene.cpp).
+    if row['backend'] == 'triple-balance' or row['layout'] in ('0+2+0', 'binaural'):
+        patterns += ['scene/e1-*.35-outgoing.f32', 'scene/e1-*.36-incoming.f32']
+        incoming = 'binaural' if row['backend'] == 'vbap' or 'sofa' in row else 'vbap'
+        patterns += ['scene/e1-*-incoming' + suffix for suffix in backend_patterns[incoming]]
+    if row['device_dsp']:
+        patterns += ['hptf/*.10-coefficients.f32', 'hptf/*.10-coefficients-shape.i32']
+    for pattern in patterns:
+        if not any(path.is_file() for path in root.glob(pattern)):
+            raise ValueError(f'missing Scene checkpoint {pattern}: {row["id"]}')
+
+    def pairs(pattern, left_suffix, right_suffix, left_width, right_width):
+        # Check both directions and every emitted slice. A surviving pair elsewhere in the
+        # case must not hide a missing payload, timing stream or entire epoch.
+        stems = {path.relative_to(root).as_posix()[:-len(suffix)]
+                 for suffix in (left_suffix, right_suffix) for path in root.glob(pattern + suffix)
+                 if path.is_file()}
+        for stem in sorted(stems):
+            paths = [root / (stem + suffix) for suffix in (left_suffix, right_suffix)]
+            if not all(path.is_file() for path in paths):
+                raise ValueError(f'missing Scene checkpoint companion: {stem}')
+            values = [common.validate_words(path.read_bytes(), path.suffix) for path in paths]
+            if (len(values[0]) % left_width or len(values[1]) % right_width
+                    or len(values[0]) // left_width != len(values[1]) // right_width):
+                raise ValueError(f'inconsistent Scene checkpoint rows: {stem}')
+            yield stem, values
+
+    for stage in ('15-producer', '21-effective'):
+        list(pairs('scene/*.' + stage, '.f32', '-fields.i32', 12, 15))
+    for stem, (commands, _) in pairs('scene/*.30-vbap*', '-commands.i32', '-levels.f32', 5, 1):
+        channels = int(stem.rsplit('.30-vbap', 1)[1])
+        panning = [commands[i + 4] & 0xffffffff for i in range(0, len(commands), 5) if commands[i + 3] & 1]
+        if panning:
+            path = root / (stem + '-coefficients.f32')
+            if not path.is_file():
+                raise ValueError(f'missing Scene checkpoint coefficients: {stem}')
+            coefficients = common.validate_words(path.read_bytes(), '.f32')
+            if channels <= 0 or len(coefficients) % channels or any(i + channels > len(coefficients) for i in panning):
+                raise ValueError(f'inconsistent Scene checkpoint coefficients: {stem}')
+    list(pairs('scene/*.30-binaural', '-commands.i32', '-directions.f32', 7, 2))
+    list(pairs('scene/*.30-triple', '-commands.i32', '-values.f32', 4, 5))
+    list(pairs('scene/*.30-triple-lane', '-kinds.i32', '-gains.f32', 1, 24))
+    list(pairs('scene/*', '.35-outgoing.f32', '.36-incoming.f32', 1, 1))
+    for path in root.glob('scene/*.30-vbap*-coefficients.f32'):
+        stem = path.as_posix().removesuffix('-coefficients.f32')
+        if not Path(stem + '-commands.i32').is_file():
+            raise ValueError(f'missing Scene checkpoint commands: {path.name}')
+    for shape_path in root.glob('hptf/*.10-coefficients-shape.i32'):
+        coefficients_path = shape_path.with_name(shape_path.name.replace('-shape.i32', '.f32'))
+        if not coefficients_path.is_file():
+            raise ValueError(f'missing Scene checkpoint coefficients: {shape_path.name}')
+        shape = common.validate_words(shape_path.read_bytes(), '.i32')
+        values = common.validate_words(coefficients_path.read_bytes(), '.f32')
+        if len(shape) != 2 or shape[0] <= 0 or not 0 <= shape[1] <= 32 or len(values) != 4 + 5 * shape[1]:
+            raise ValueError(f'inconsistent Scene checkpoint HpTF shape: {shape_path.name}')
+    for path in root.glob('hptf/*.10-coefficients.f32'):
+        if not path.with_name(path.stem + '-shape.i32').is_file():
+            raise ValueError(f'missing Scene checkpoint shape: {path.name}')
 
 
 def worker_experiments(tools, out, work, manifest):
