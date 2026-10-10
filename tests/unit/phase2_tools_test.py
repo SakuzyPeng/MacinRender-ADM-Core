@@ -375,31 +375,122 @@ class EvidenceTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     comparator.load_gates(path)
 
+    @staticmethod
+    def scene_checkpoint_fixture(root, row):
+        files = {}
+
+        def floats(name, count):
+            files[name] = struct.pack('<' + 'f' * count, *([1.] * count))
+
+        def integers(name, values):
+            files[name] = struct.pack('<' + 'i' * len(values), *values)
+
+        def renderer(prefix, backend, channels):
+            if backend == 'vbap':
+                stem = prefix + f'.30-vbap{channels}'
+                integers(stem + '-commands.i32', [0, 0, 0, 3, 0])
+                floats(stem + '-levels.f32', 1)
+                floats(stem + '-coefficients.f32', channels)
+            elif backend == 'binaural':
+                stem = prefix + '.30-binaural'
+                integers(stem + '-commands.i32', [0] * 7)
+                floats(stem + '-directions.f32', 2)
+            else:
+                stem = prefix + '.30-triple'
+                integers(stem + '-commands.i32', [0] * 4)
+                floats(stem + '-values.f32', 5)
+                integers(stem + '-lane-kinds.i32', [0])
+                floats(stem + '-lane-gains.f32', 24)
+
+        channels = 2 if row['layout'] in ('0+2+0', 'binaural') else 12
+        for epoch in row['epochs']:
+            prefix = f'scene/e{epoch["epoch"]}-g1-s0'
+            for stage in ('15-producer', '21-effective'):
+                floats(prefix + f'.{stage}.f32', 12)
+                integers(prefix + f'.{stage}-fields.i32', [0] * 15)
+            floats(prefix + '.40-render.f32', channels)
+            renderer(prefix + '-current', row['backend'], channels)
+        if channels == 2 or row['backend'] == 'triple-balance':
+            prefix = 'scene/e1-g2-s8192'
+            floats(prefix + '.35-outgoing.f32', channels)
+            floats(prefix + '.36-incoming.f32', channels)
+            incoming = 'binaural' if row['backend'] == 'vbap' or 'sofa' in row else 'vbap'
+            renderer(prefix + '-outgoing', row['backend'], channels)
+            renderer(prefix + '-incoming', incoming, channels)
+        if row['device_dsp']:
+            floats('hptf/r1.10-coefficients.f32', 9)
+            integers('hptf/r1.10-coefficients-shape.i32', [48000, 1])
+        for name, data in files.items():
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        return files
+
     def test_scene_checkpoint_inventory_follows_backend(self):
-        common_files = ['scene/e1-g1-s0.15-producer.f32', 'scene/e1-g1-s0.21-effective.f32',
-                        'scene/e1-g1-s0.21-effective-fields.i32', 'scene/e1-g1-s0.40-render.f32']
-        crossfade = ['scene/e1-g1-s8192.35-outgoing.f32', 'scene/e1-g1-s8192.36-incoming.f32']
-        backends = {('vbap', '0+2+0'): ['scene/e1-g1-s0.30-vbap2-coefficients.f32'] + crossfade,
-                    ('vbap', '4+7+0'): ['scene/e1-g1-s0.30-vbap12-coefficients.f32'],
-                    ('binaural', 'binaural'): ['scene/e1-g1-s0.30-binaural-commands.i32'] + crossfade,
-                    ('triple-balance', '7.1.4'): ['triple/g1.30-lane-gains.f32',
-                                                  'scene/e1-g1-s0.30-triple-commands.i32'] + crossfade}
-        for (backend, layout), files in backends.items():
+        variants = [('vbap', '0+2+0', False), ('vbap', '4+7+0', False),
+                    ('binaural', 'binaural', False), ('binaural', 'binaural', True),
+                    ('triple-balance', '7.1.4', False)]
+        for backend, layout, sofa in variants:
             for device_dsp in (False, True):
-                row = {'id': 'case', 'backend': backend, 'layout': layout, 'device_dsp': device_dsp}
-                expected = common_files + files + (['hptf/r1.10-coefficients.f32'] if device_dsp else [])
-                with self.subTest(backend=backend, layout=layout, device_dsp=device_dsp), \
+                row = {'id': 'case', 'backend': backend, 'layout': layout, 'device_dsp': device_dsp,
+                       'epochs': [{'epoch': 1}, {'epoch': 2}]}
+                if sofa:
+                    row['sofa'] = 'simple.sofa'
+                with self.subTest(backend=backend, layout=layout, sofa=sofa, device_dsp=device_dsp), \
                         tempfile.TemporaryDirectory() as tmp:
                     root = Path(tmp)
-                    for name in expected:
-                        (root / name).parent.mkdir(parents=True, exist_ok=True)
-                        (root / name).write_bytes(struct.pack('<f', 1))
+                    expected = self.scene_checkpoint_fixture(root, row)
                     collector.require_scene_checkpoints(root, row)
-                    for name in expected:
-                        (root / name).rename(root / (name + '.missing'))
-                        with self.assertRaisesRegex(ValueError, 'missing Scene checkpoint'):
+                    for name, data in expected.items():
+                        (root / name).unlink()
+                        with self.assertRaisesRegex(ValueError, 'missing Scene checkpoint', msg=name):
                             collector.require_scene_checkpoints(root, row)
-                        (root / (name + '.missing')).rename(root / name)
+                        (root / name).write_bytes(data)
+
+    def test_scene_checkpoint_checks_each_slice_and_epoch(self):
+        row = {'id': 'case', 'backend': 'vbap', 'layout': '4+7+0', 'device_dsp': False,
+               'epochs': [{'epoch': 1}, {'epoch': 2}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.scene_checkpoint_fixture(root, row)
+            orphan = root / 'scene/e1-g1-s512.15-producer-fields.i32'
+            orphan.write_bytes(struct.pack('<15i', *([0] * 15)))
+            with self.assertRaisesRegex(ValueError, 'missing Scene checkpoint companion'):
+                collector.require_scene_checkpoints(root, row)
+            orphan.unlink()
+            for path in root.glob('scene/e2-*'):
+                path.unlink()
+            with self.assertRaisesRegex(ValueError, 'missing Scene checkpoint'):
+                collector.require_scene_checkpoints(root, row)
+
+    def test_scene_checkpoint_rejects_wrong_rows_and_coefficient_shapes(self):
+        row = {'id': 'case', 'backend': 'triple-balance', 'layout': '7.1.4', 'device_dsp': True,
+               'epochs': [{'epoch': 1}, {'epoch': 2}]}
+        mutations = {
+            'scene/e1-g1-s0.21-effective-fields.i32': struct.pack('<14i', *([0] * 14)),
+            'scene/e1-g1-s0-current.30-triple-values.f32': struct.pack('<4f', *([1.] * 4)),
+            'scene/e1-g1-s0-current.30-triple-lane-gains.f32': struct.pack('<23f', *([1.] * 23)),
+            'scene/e1-g2-s8192-incoming.30-vbap12-levels.f32': struct.pack('<2f', 1., 1.),
+            'scene/e1-g2-s8192-incoming.30-vbap12-coefficients.f32': struct.pack('<f', 1.),
+            'scene/e1-g2-s8192.36-incoming.f32': struct.pack('<f', 1.),
+            'hptf/r1.10-coefficients-shape.i32': struct.pack('<2i', 48000, 2),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            expected = self.scene_checkpoint_fixture(root, row)
+            for name, data in mutations.items():
+                with self.subTest(name=name):
+                    (root / name).write_bytes(data)
+                    with self.assertRaisesRegex(ValueError, 'inconsistent Scene checkpoint'):
+                        collector.require_scene_checkpoints(root, row)
+                    (root / name).write_bytes(expected[name])
+
+    def test_scene_checkpoint_statistics_exclude_offline_name_prefixes(self):
+        cases = {'scene-binaural-cloud': {'checkpoints': [{'identical': False}] * 240},
+                 'scene-real-epoch1': {'checkpoints': [{'identical': True}, {'identical': False}]},
+                 'scene-real-epoch2': {'checkpoints': [{'identical': True}]}}
+        catalog = [{'id': 'scene-real', 'epochs': [{'epoch': 1}, {'epoch': 2}]}]
+        self.assertEqual(comparator.scene_checkpoint_summary(cases, catalog), {'comparisons': 3, 'differing': 1})
 
     def test_dependency_order_precedes_filename_order(self):
         self.assertLess(comparator.checkpoint_order('scene/e1-s2048.20-effective.f32'), comparator.checkpoint_order('scene/e1-s0.40-render.f32'))
@@ -419,7 +510,7 @@ class EvidenceTests(unittest.TestCase):
 
 
 class ReplayTests(unittest.TestCase):
-    def run_probe(self, case, success, no_artifacts=False, stage_sofa=True, corrupt_sofa=False):
+    def run_probe(self, case, success, no_artifacts=False, stage_sofa=True, corrupt_sofa=False, same_backend_fade=False):
         if OPTIONS.scene is None:
             self.skipTest('native replay executable not provided')
         with tempfile.TemporaryDirectory() as tmp:
@@ -436,8 +527,11 @@ class ReplayTests(unittest.TestCase):
                         if corrupt_sofa:
                             (tmp / 'fixtures' / name).write_bytes(b'not a SOFA file')
             common.save(tmp / 'cases/case.json', case)
+            env = dict(os.environ)
+            if OPTIONS.diagnostic_checkpoints and success:
+                env['MR_ADM_TRACE_DIR'] = str(tmp / 'checkpoints')
             result = subprocess.run([str(OPTIONS.scene), str(tmp / 'cases/case.json'), str(tmp / 'out')],
-                                    capture_output=True, text=True, timeout=30)
+                                    capture_output=True, text=True, timeout=30, env=env)
             self.assertEqual(result.returncode == 0, success, result.stderr)
             if success:
                 for epoch in (1, 2):
@@ -446,6 +540,14 @@ class ReplayTests(unittest.TestCase):
                         shape, _ = common.pcm_bytes(tmp / 'out' / f'pass-1-epoch-{epoch}.pcmbits')
                         self.assertEqual(shape[0], 24, '22.2 must render all 24 output channels')
                 self.assertEqual(json.loads((tmp / 'out/pass-1.json').read_text())['underruns'], 0)
+                if OPTIONS.diagnostic_checkpoints:
+                    collector.require_scene_checkpoints(tmp / 'checkpoints', case)
+                if same_backend_fade:
+                    outgoing, = (tmp / 'checkpoints/scene').glob('*-s8192-outgoing.30-binaural-commands.i32')
+                    incoming, = (tmp / 'checkpoints/scene').glob('*-s8192-incoming.30-binaural-commands.i32')
+                    # The incoming renderer has an initial snapshot as well as the gain event;
+                    # the outgoing renderer has only the event. Neither may overwrite the other.
+                    self.assertNotEqual(outgoing.read_bytes(), incoming.read_bytes())
             else:
                 self.assertIn('SOFA' if corrupt_sofa else 'replay', result.stderr)
                 if no_artifacts:
@@ -459,6 +561,19 @@ class ReplayTests(unittest.TestCase):
 
     def test_seek_short_tail_and_no_underrun(self):
         self.run_probe(common.scene_cases()[1], True)
+
+    def test_same_backend_crossfade_keeps_both_command_streams(self):
+        if OPTIONS.scene is None or not OPTIONS.diagnostic_checkpoints:
+            self.skipTest('diagnostic native replay executable not provided')
+        enabled = subprocess.run([str(OPTIONS.scene), '--sofa-supported'], check=True,
+                                 capture_output=True, text=True).stdout.strip() == 'yes'
+        if not enabled:
+            self.skipTest('SOFA support required for the same-backend switch')
+        case = copy.deepcopy(next(row for row in common.scene_cases()
+                                  if row.get('sofa') == 'simple.sofa' and row['id'].endswith('-fixed')))
+        case['metadata'] = sorted([*case['metadata'], {'sample': 8192, 'field': 'gain', 'value': 0.25, 'ramp': 17}],
+                                  key=lambda event: event['sample'])
+        self.run_probe(case, True, same_backend_fade=True)
 
     def test_every_catalog_script_is_supported(self):
         for case in common.scene_cases():
@@ -516,5 +631,6 @@ class ReplayTests(unittest.TestCase):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--scene', type=Path)
+    parser.add_argument('--diagnostic-checkpoints', action='store_true')
     OPTIONS, rest = parser.parse_known_args()
     unittest.main(argv=[sys.argv[0], *rest])

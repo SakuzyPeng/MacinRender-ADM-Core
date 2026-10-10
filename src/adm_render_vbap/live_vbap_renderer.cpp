@@ -357,7 +357,7 @@ class LiveVbapRenderer final : public ILiveSceneRenderer {
                 levels.push_back(command.level);
             }
         }
-        const auto key = consistency::scene_slice_key(frame) + ".30-vbap" + std::to_string(layout_.speakers.size());
+        const auto key = consistency::scene_renderer_key(frame) + ".30-vbap" + std::to_string(layout_.speakers.size());
         if (!commands.empty()) {
             consistency::dump(key + "-commands.i32", commands);
             consistency::dump(key + "-levels.f32", levels);

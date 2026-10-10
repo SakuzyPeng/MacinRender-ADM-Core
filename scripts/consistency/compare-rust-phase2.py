@@ -205,6 +205,13 @@ def checkpoints(a, b):
     return rows
 
 
+def scene_checkpoint_summary(cases, catalog):
+    """Use the Scene catalog, not the ambiguous 'scene-' prefix of some offline cases."""
+    ids = [row['id'] + f'-epoch{epoch["epoch"]}' for row in catalog for epoch in row['epochs']]
+    observations = [point for name in ids for point in cases[name].get('checkpoints', [])]
+    return {'comparisons': len(observations), 'differing': sum(not row['identical'] for row in observations)}
+
+
 def compare(directories, require_platforms=True, gates=()):
     manifests = [validate(p) for p in directories]
     first = manifests[0]
@@ -248,6 +255,8 @@ def compare(directories, require_platforms=True, gates=()):
                     row['first_observed'] = 'final PCM; preceding sampled boundaries identical or not instrumented'
                 row['root_cause'] = 'not established by this comparison'
             pair['cases'][name] = row
+        if first['diagnostics']:
+            pair['scene_checkpoints'] = scene_checkpoint_summary(pair['cases'], first['scene'])
         report['pairs'].append(pair)
     report['identical_cases'] = [name for name in sorted(first['outputs']) if all(p['cases'][name]['identical'] for p in report['pairs'])]
     report['differing_cases'] = sorted(set(first['outputs']) - set(report['identical_cases']))

@@ -229,6 +229,7 @@ target_sources(
     mr_adm_render_common
     PRIVATE
         src/adm_render_common/hptf_eq.cpp
+        src/adm_render_common/live_scene_trace.cpp
         src/adm_render_common/render_common.cpp
         src/adm_render_common/speaker_layouts.cpp
         src/adm_render_common/speaker_pcm.cpp
@@ -374,7 +375,7 @@ mr_adm_core_apply_static_analysis(mr_adm_render_binaural)
 
 if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
     target_sources(mr_adm_render_binaural PRIVATE src/adm_render_binaural/consistency_spreader_trace.cpp)
-    foreach(_mr_diagnostic_target IN ITEMS mr_adm_render_ear mr_adm_render_hoa mr_adm_render_binaural mr_adm_render_vbap)
+    foreach(_mr_diagnostic_target IN ITEMS mr_adm_render_common mr_adm_render_ear mr_adm_render_hoa mr_adm_render_binaural mr_adm_render_vbap)
         target_compile_definitions(${_mr_diagnostic_target} PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
     endforeach()
 endif()
@@ -1034,6 +1035,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     target_link_libraries(mr_adm_phase2_scene PRIVATE MacinRender::ADMRenderBinaural)
     set_property(TARGET mr_adm_phase2_scene PROPERTY EXCLUDE_FROM_ALL FALSE)
+    add_executable(mr_adm_live_scene_trace_tests tests/unit/live_scene_trace_test.cpp src/adm_render_common/live_scene_trace.cpp)
+    target_link_libraries(mr_adm_live_scene_trace_tests PRIVATE MacinRender::ADMCore)
+    target_compile_definitions(mr_adm_live_scene_trace_tests PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
+    mr_adm_core_apply_warnings(mr_adm_live_scene_trace_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_live_scene_trace_tests)
+    add_test(NAME mr_adm_live_scene_trace_tests COMMAND mr_adm_live_scene_trace_tests)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
         add_test(NAME mr_adm_fft_benchmark_tests
@@ -1045,9 +1052,13 @@ if(MR_ADM_CORE_BUILD_TESTS)
                 mr_adm_phase2_scene mr_adm_phase2_kernels mr_adm_repeat_render
             USES_TERMINAL
         )
+        set(_mr_scene_checkpoint_args)
+        if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
+            list(APPEND _mr_scene_checkpoint_args --diagnostic-checkpoints)
+        endif()
         add_test(NAME mr_adm_phase2_tool_tests
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/phase2_tools_test.py"
-                --scene $<TARGET_FILE:mr_adm_phase2_scene>)
+                --scene $<TARGET_FILE:mr_adm_phase2_scene> ${_mr_scene_checkpoint_args})
     endif()
 
     if(MR_ADM_CONSISTENCY_DIAGNOSTICS)

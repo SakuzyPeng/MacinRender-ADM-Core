@@ -198,25 +198,21 @@ class LiveTripleBalanceRenderer final : public ILiveSceneRenderer {
             (config_.sample_rate != 48000U || !std::ranges::all_of(bed, [](bool present) { return present; }))) {
             return make_error(ErrorCode::unsupported, "Live Triple Balance requires one complete 48 kHz 7.1.2 bed");
         }
-#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
-        {
-            std::vector<int> kinds;
-            std::vector<float> gains;
-            for (const auto& lane : numeric) {
-                kinds.push_back(static_cast<int>(lane.kind));
-                gains.insert(gains.end(), std::begin(lane.gains), std::end(lane.gains));
-            }
-            if (!kinds.empty()) {
-                const auto key = "triple/g" + std::to_string(generation) + ".30-lane";
-                consistency::dump(key + "-kinds.i32", kinds);
-                consistency::dump(key + "-gains.f32", gains);
-            }
-        }
-#endif
         auto mixer = dsp::LiveTripleBalanceMixer::create(layout_, config_.sample_rate, numeric);
         if (!mixer) {
             return tl::unexpected{mixer.error()};
         }
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+        // Generation ids may be reused in another epoch. Defer the snapshot until the
+        // first render supplies the epoch and the current/outgoing/incoming role.
+        trace_lane_kinds_.clear();
+        trace_lane_gains_.clear();
+        for (const auto& lane : numeric) {
+            trace_lane_kinds_.push_back(static_cast<int>(lane.kind));
+            trace_lane_gains_.insert(trace_lane_gains_.end(), std::begin(lane.gains), std::end(lane.gains));
+        }
+        trace_lanes_pending_ = true;
+#endif
         mixer_.emplace(std::move(*mixer));
         elements_ = std::move(next);
         indices_ = std::move(indices);
@@ -399,7 +395,13 @@ class LiveTripleBalanceRenderer final : public ILiveSceneRenderer {
     }
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
     // Commands as handed to the Rust mixer: position, size and level are derived in C++.
-    void trace_commands(const Frame& frame) const {
+    void trace_commands(const Frame& frame) {
+        const auto key = consistency::scene_renderer_key(frame) + ".30-triple";
+        if (trace_lanes_pending_ && !trace_lane_kinds_.empty()) {
+            consistency::dump(key + "-lane-kinds.i32", trace_lane_kinds_);
+            consistency::dump(key + "-lane-gains.f32", trace_lane_gains_);
+        }
+        trace_lanes_pending_ = false;
         std::vector<int> commands;
         std::vector<float> values;
         for (const auto* list : {&initial_, &events_}) {
@@ -415,7 +417,6 @@ class LiveTripleBalanceRenderer final : public ILiveSceneRenderer {
             }
         }
         if (!commands.empty()) {
-            const auto key = consistency::scene_slice_key(frame) + ".30-triple";
             consistency::dump(key + "-commands.i32", commands);
             consistency::dump(key + "-values.f32", values);
         }
@@ -445,6 +446,11 @@ class LiveTripleBalanceRenderer final : public ILiveSceneRenderer {
     std::vector<MradmTbLivePlane> planes_;
     std::vector<MradmTbLiveCommand> initial_, events_;
     std::unordered_set<uint64_t> warned_, pending_warned_;
+#ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
+    std::vector<int> trace_lane_kinds_;
+    std::vector<float> trace_lane_gains_;
+    bool trace_lanes_pending_{false};
+#endif
 };
 } // namespace
 
