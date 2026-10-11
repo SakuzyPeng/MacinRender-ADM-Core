@@ -148,6 +148,7 @@ impl Emitter {
     /// Once an outgoing room has completed its direct fade, that branch cannot
     /// become audible again. Wet EQ and all reflected/send history still run.
     pub fn begin_branches(&mut self, input: &[f32], wet_gain: &[f32], direct: bool) -> Result<()> {
+        let _profile = super::profile::Guard::new(super::profile::Stage::EmitterBegin);
         if input.len() != BLOCK || wet_gain.len() != BLOCK {
             return Err(Error::InvalidArgument(
                 "Unprepared room emitter or invalid block",
@@ -182,6 +183,7 @@ impl Emitter {
         early: &mut [f32],
         send: &mut [f32],
     ) -> Result<()> {
+        let _profile = super::profile::Guard::new(super::profile::Stage::EmitterConvolution);
         if self.render_direct {
             self.direct.render_range(offset, frames, direct)?;
         } else {
@@ -225,6 +227,11 @@ struct Decoders {
 }
 impl Decoders {
     fn render(&mut self) -> Result<()> {
+        let _profile = super::profile::Guard::new(if self.kind == TailKind::Field {
+            super::profile::Stage::LateField
+        } else {
+            super::profile::Stage::LateDecoder
+        });
         if self.kind == TailKind::Field || (self.kind == TailKind::Combined && self.begin) {
             self.history.as_mut().unwrap().begin(&self.source)?;
         }

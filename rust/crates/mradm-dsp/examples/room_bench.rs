@@ -71,7 +71,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         None
     };
     if arguments.len() < 2 {
-        return Err("usage: room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512]".into());
+        return Err(
+            "usage: room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0]".into(),
+        );
     }
     let file = Path::new(&arguments[1]);
     let root = file.parent().ok_or("missing parent")?;
@@ -111,7 +113,19 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         Arc::new(other),
         bank,
     )?))?);
+    let only_sources = arguments.get(4).map(|v| v.parse::<usize>()).transpose()?;
+    if only_sources.is_some_and(|n| ![1, 16, 32].contains(&n)) {
+        return Err("SOURCES must be 1, 16 or 32".into());
+    }
+    let switch_period = arguments
+        .get(5)
+        .map(|v| v.parse::<usize>())
+        .transpose()?
+        .unwrap_or(0);
     for sources in [1, 16, 32] {
+        if only_sources.is_some_and(|n| n != sources) {
+            continue;
+        }
         for (moving, switching) in [(false, false), (true, false), (true, true)] {
             let mut session = Session::new(prepared.clone(), 1.5, true, false)?;
             let descriptions: Vec<_> = (0..sources)
@@ -137,6 +151,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             } else {
                 None
             };
+            let mut revision = 0u64;
+            let mut preparation_seconds = 0.;
             let mut input = vec![0f32; frames];
             let mut output = vec![0f32; 2 * frames];
             let mut elapsed = Vec::with_capacity(blocks);
@@ -145,6 +161,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let mut rss_peak = 0u64;
             for block in 0..blocks + 32 {
                 if block == 32 {
+                    mradm_dsp::room::profile::reset();
                     let (cpu, rss) = process_counters(ticks);
                     cpu_start = cpu;
                     rss_peak = rss.unwrap_or(0);
@@ -159,8 +176,31 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                         block as f32 * 0.02,
                     ])?;
                 }
-                if switching && block == 64 {
-                    session.queue_room(candidate.take().unwrap(), 1)?;
+                if switching
+                    && (block == 64
+                        || (switch_period != 0 && block > 64 && (block - 64) % switch_period == 0))
+                {
+                    if session.info().phase != 0 {
+                        return Err("Switch period shorter than transition and tail".into());
+                    }
+                    revision += 1;
+                    let prepare_start = Instant::now();
+                    let next = candidate.take().map_or_else(
+                        || {
+                            Instance::new(
+                                if revision % 2 == 1 {
+                                    other.clone()
+                                } else {
+                                    prepared.clone()
+                                },
+                                sources,
+                            )
+                            .map(Box::new)
+                        },
+                        Ok,
+                    )?;
+                    session.queue_room(next, revision)?;
+                    preparation_seconds += prepare_start.elapsed().as_secs_f64();
                 }
                 let start = Instant::now();
                 session.process(
@@ -186,9 +226,13 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let counters = process_counters(ticks);
             rss_peak = rss_peak.max(counters.1.unwrap_or(0));
             let cpu = cpu_start.zip(counters.0).map(|(start, end)| end - start);
+            let profile = mradm_dsp::room::profile::snapshot();
+            let stages: serde_json::Map<String, serde_json::Value> = mradm_dsp::room::profile::NAMES.iter().zip(profile).map(|(name, (calls, nanos))| ((*name).to_owned(), serde_json::json!({"calls": calls, "worker_summed_ms": nanos as f64 / 1e6}))).collect();
             println!(
                 "{}",
                 serde_json::json!({"sources":sources,"continuous_pose":moving,"room_transition":switching,
+                "room_switches":revision,"switch_period_calls":switch_period,"preparation_outside_dsp_seconds":preparation_seconds,
+                "profiling":cfg!(feature = "room-profile"), "stages":stages,
                 "blocks":blocks,"call_frames":frames,"dsp_seconds":total,"audio_seconds":blocks as f64*deadline,
                 "worker_wall_budget_percent":100.*total/(blocks as f64*deadline),
                 "cpu_seconds":cpu,"cpu_audio_budget_percent":cpu.map(|v|100.*v/(blocks as f64*deadline)),

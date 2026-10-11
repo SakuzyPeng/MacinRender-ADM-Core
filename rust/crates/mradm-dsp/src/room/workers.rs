@@ -115,8 +115,10 @@ impl Workers {
                 }
                 let job = state.job.take().unwrap();
                 drop(state);
+                let profile = super::profile::Guard::new(super::profile::Stage::WorkerExecution);
                 let result = catch_unwind(AssertUnwindSafe(|| job.run()))
                     .unwrap_or(Err(Error::RenderFailed("Room worker panicked")));
+                drop(profile);
                 // Release the job before signalling completion. The session keeps
                 // the owning Arc; ordinary dispatch never destroys DSP resources.
                 drop(job);
@@ -138,6 +140,7 @@ impl Workers {
         self.run(self.noop.clone())
     }
     pub fn run(&self, job: Arc<dyn Work>) -> Result<()> {
+        let _profile = super::profile::Guard::new(super::profile::Stage::WorkerRoundtrip);
         let _serial = self.serial.lock().unwrap();
         let mut state = self.shared.state.lock().unwrap();
         state.result = None;

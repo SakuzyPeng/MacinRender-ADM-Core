@@ -456,6 +456,7 @@ impl HrirBank {
         previous_face: &mut usize,
         output: &mut [f32],
     ) -> Result<()> {
+        let _profile = super::profile::Guard::new(super::profile::Stage::HrirQuery);
         let bins = self.fft_length / 2 + 1;
         let stride = self.spectra.stride();
         if output.len() != 4 * stride {
