@@ -1,0 +1,295 @@
+{
+  "schema": "mradm.room-input-span-optimization",
+  "version": 1,
+  "base_commit": "d2db9716fa7f7297106e6c3a80b3cbee651d6aa4",
+  "source_sha256": {
+    "rust/crates/mradm-dsp/src/room/control.rs": "289e4a9bd25f109c62a3dfe8118d6389d9bc40a22bf983af96f8a21a2ce09ca8",
+    "rust/crates/mradm-dsp/src/room/session.rs": "d821e3652cbc075f4621c0d8199cba78e2717f6b8082d84761185c82e39e7354",
+    "rust/crates/mradm-dsp/tests/room.rs": "dd0b9a3f177baeabd644a2a5b51c546787f3fe3a56708ce587277ededdc3f71e"
+  },
+  "retained_change": "Process each source contiguously between command/canonical-block boundaries. Combine authored/live controls and screen geometry once only when both control timelines have settled; evaluate active ramps per sample. Audio delay/head-lock state still advances for every sample.",
+  "configuration": {
+    "profile": "Release",
+    "rust": "1.98.0",
+    "sources": 32,
+    "sample_rate": 48000,
+    "frames_per_call": 512,
+    "deadline_ms": 10.666666666666666,
+    "pose_hz": 93.75,
+    "switch_period_calls": 469,
+    "short_repeats": 3,
+    "short_calls_per_scenario": 938,
+    "order": "baseline/candidate interleaved; reverse order every second repeat",
+    "statistics": "Median of per-run means and per-run P99; maximum and miss counts span all three repeats."
+  },
+  "short_comparison": {
+    "macos": {
+      "workers": 8,
+      "binary_sha256": {
+        "baseline": "2d2bc8bee337ce0557b20bb806e9cd96bfa4e9c0f4fd3425018415c504b0300c",
+        "settled-spans": "70717ba134d4c9155b4d51266fa14ac998850bc527c819357c43c7d33f9f3c50"
+      },
+      "scenarios": {
+        "static": {
+          "baseline": {
+            "median_mean_ms": 0.6906396982942419,
+            "median_p99_ms": 1.043916,
+            "maximum_ms": 1.368667,
+            "deadline_misses": 0,
+            "calls": 2814
+          },
+          "settled-spans": {
+            "median_mean_ms": 0.6167810437100223,
+            "median_p99_ms": 1.005042,
+            "maximum_ms": 1.2498749999999998,
+            "deadline_misses": 0,
+            "calls": 2814
+          },
+          "mean_reduction_percent": 10.694238220976493,
+          "p99_reduction_percent": 3.7238628395388162
+        },
+        "continuous_pose": {
+          "baseline": {
+            "median_mean_ms": 1.9290361055437097,
+            "median_p99_ms": 2.341,
+            "maximum_ms": 7.792166,
+            "deadline_misses": 0,
+            "calls": 2814
+          },
+          "settled-spans": {
+            "median_mean_ms": 1.855298335820894,
+            "median_p99_ms": 2.352583,
+            "maximum_ms": 11.56275,
+            "deadline_misses": 1,
+            "calls": 2814
+          },
+          "mean_reduction_percent": 3.8225189000302473,
+          "p99_reduction_percent": -0.4947885519008821
+        },
+        "continuous_pose_and_room_switch": {
+          "baseline": {
+            "median_mean_ms": 2.2670877398720695,
+            "median_p99_ms": 3.8669580000000003,
+            "maximum_ms": 12.831834,
+            "deadline_misses": 2,
+            "calls": 2814
+          },
+          "settled-spans": {
+            "median_mean_ms": 2.155184836886993,
+            "median_p99_ms": 3.463,
+            "maximum_ms": 9.957458,
+            "deadline_misses": 0,
+            "calls": 2814
+          },
+          "mean_reduction_percent": 4.935975834415274,
+          "p99_reduction_percent": 10.446402572771674
+        }
+      }
+    },
+    "linux": {
+      "workers": 32,
+      "binary_sha256": {
+        "baseline": "b15e4606a561fcc99d22dd503908a00af48a638556fb34d9eec312c2a6173cf1",
+        "settled-spans": "0ec5436f4bb00f6286850761c6b2967a7b9e1408cc264b8d7889f3c97805a54f"
+      },
+      "scenarios": {
+        "static": {
+          "baseline": {
+            "median_mean_ms": 3.2521933646055445,
+            "median_p99_ms": 4.727652,
+            "maximum_ms": 12.371534,
+            "deadline_misses": 2,
+            "calls": 2814
+          },
+          "settled-spans": {
+            "median_mean_ms": 2.7893801513859278,
+            "median_p99_ms": 4.324741,
+            "maximum_ms": 10.20646,
+            "deadline_misses": 0,
+            "calls": 2814
+          },
+          "mean_reduction_percent": 14.230802456475434,
+          "p99_reduction_percent": 8.522433546293161
+        },
+        "continuous_pose": {
+          "baseline": {
+            "median_mean_ms": 5.514813676972282,
+            "median_p99_ms": 7.622953,
+            "maximum_ms": 16.121232,
+            "deadline_misses": 7,
+            "calls": 2814
+          },
+          "settled-spans": {
+            "median_mean_ms": 3.1577608262260095,
+            "median_p99_ms": 4.596222,
+            "maximum_ms": 11.252842000000001,
+            "deadline_misses": 1,
+            "calls": 2814
+          },
+          "mean_reduction_percent": 42.740389590828954,
+          "p99_reduction_percent": 39.705492084235594
+        },
+        "continuous_pose_and_room_switch": {
+          "baseline": {
+            "median_mean_ms": 6.587823160980808,
+            "median_p99_ms": 10.329227999999999,
+            "maximum_ms": 13.555583,
+            "deadline_misses": 24,
+            "calls": 2814
+          },
+          "settled-spans": {
+            "median_mean_ms": 3.7652406950959483,
+            "median_p99_ms": 6.441536,
+            "maximum_ms": 9.979688000000001,
+            "deadline_misses": 0,
+            "calls": 2814
+          },
+          "mean_reduction_percent": 42.845449808106686,
+          "p99_reduction_percent": 37.637778931784624
+        }
+      }
+    }
+  },
+  "linux_long_validation": {
+    "repeats": 3,
+    "audio_seconds_per_scenario": 120,
+    "total_calls": 101250,
+    "total_deadline_misses": 4,
+    "zero_deadline_miss_acceptance_passed": false,
+    "runs": [
+      {
+        "repeat": 1,
+        "scenario": "static",
+        "calls": 11250,
+        "audio_seconds": 120.0,
+        "mean_ms": 2.7795836575111115,
+        "p99_ms": 4.206357,
+        "maximum_ms": 10.477133,
+        "deadline_misses": 0,
+        "room_switches": 0
+      },
+      {
+        "repeat": 1,
+        "scenario": "continuous_pose",
+        "calls": 11250,
+        "audio_seconds": 120.0,
+        "mean_ms": 3.166296123199982,
+        "p99_ms": 4.622972000000001,
+        "maximum_ms": 8.500605,
+        "deadline_misses": 0,
+        "room_switches": 0
+      },
+      {
+        "repeat": 1,
+        "scenario": "continuous_pose_and_room_switch",
+        "calls": 11250,
+        "audio_seconds": 120.0,
+        "mean_ms": 3.7738172789333406,
+        "p99_ms": 6.398369,
+        "maximum_ms": 9.912251000000001,
+        "deadline_misses": 0,
+        "room_switches": 24
+      },
+      {
+        "repeat": 2,
+        "scenario": "static",
+        "calls": 11250,
+        "audio_seconds": 120.0,
+        "mean_ms": 2.781893425333336,
+        "p99_ms": 4.243826,
+        "maximum_ms": 12.619859,
+        "deadline_misses": 3,
+        "room_switches": 0
+      },
+      {
+        "repeat": 2,
+        "scenario": "continuous_pose",
+        "calls": 11250,
+        "audio_seconds": 120.0,
+        "mean_ms": 3.095801832622222,
+        "p99_ms": 4.46305,
+        "maximum_ms": 8.633837,
+        "deadline_misses": 0,
+        "room_switches": 0
+      },
+      {
+        "repeat": 2,
+        "scenario": "continuous_pose_and_room_switch",
+        "calls": 11250,
+        "audio_seconds": 120.0,
+        "mean_ms": 3.753683520444437,
+        "p99_ms": 6.283099,
+        "maximum_ms": 11.779247,
+        "deadline_misses": 1,
+        "room_switches": 24
+      },
+      {
+        "repeat": 3,
+        "scenario": "static",
+        "calls": 11250,
+        "audio_seconds": 120.0,
+        "mean_ms": 2.7837588162666633,
+        "p99_ms": 4.2287230000000005,
+        "maximum_ms": 8.943263,
+        "deadline_misses": 0,
+        "room_switches": 0
+      },
+      {
+        "repeat": 3,
+        "scenario": "continuous_pose",
+        "calls": 11250,
+        "audio_seconds": 120.0,
+        "mean_ms": 3.1978896868444453,
+        "p99_ms": 4.573372,
+        "maximum_ms": 7.675981,
+        "deadline_misses": 0,
+        "room_switches": 0
+      },
+      {
+        "repeat": 3,
+        "scenario": "continuous_pose_and_room_switch",
+        "calls": 11250,
+        "audio_seconds": 120.0,
+        "mean_ms": 3.8288187796444464,
+        "p99_ms": 6.292452,
+        "maximum_ms": 9.423538,
+        "deadline_misses": 0,
+        "room_switches": 24
+      }
+    ]
+  },
+  "numerical": {
+    "three_platform_replays_identical": true,
+    "frames": 163398,
+    "frozen_pcm_sha256": "b3a3ec3747db934c995289036c7d65eb0224b0726ffc7b8f74aad62a1ffe453d",
+    "screens_pcm_sha256": "1f0dfebf5f8a603ce6c06ecfd9ffe76aa999f7c0792a0ad8c6646ca699883910",
+    "frozen_28_point_maximum_relative_l2": 3.4903576027247285e-05,
+    "frozen_relative_l2_limit": 0.0002,
+    "corrected_28_omni_response_hashes_unchanged": true,
+    "corrected_acoustic_passed": true,
+    "maximum_channel_spread_db": 1.9855577169562786
+  },
+  "tests": {
+    "macos_room_library_tests": 12,
+    "macos_room_integration_tests": 17,
+    "macos_all_worker_no_alloc": true,
+    "macos_cpp_room_debug_ctest": true,
+    "linux_library_tests": 48,
+    "linux_room_integration_tests": 17,
+    "linux_all_worker_no_alloc": true,
+    "windows_library_tests": 48,
+    "windows_room_integration_tests": 17,
+    "windows_all_worker_no_alloc": true,
+    "windows_canonical_release_room_ctest": true,
+    "rustfmt_changed_files_passed": true,
+    "clippy": "Exit 0; 16 existing style warnings, none in the new input-span code or regression test.",
+    "source_hashes_checked_on_windows_and_linux": true
+  },
+  "limits": [
+    "DSP-only unpaced workload, not real-device underrun or end-to-end latency evidence.",
+    "Background desktop/cloud load remains uncontrolled; process scheduling spikes remain.",
+    "Strict Linux zero-deadline-miss acceptance is still not met.",
+    "No new 30-minute macOS or Windows device validation in this optimization."
+  ],
+  "evidence_directory": "local/room-v1/optimization-20261011"
+}

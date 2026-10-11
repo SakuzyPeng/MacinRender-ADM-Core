@@ -208,6 +208,11 @@ impl Control {
         self.settled = self.end.iter().copied().max().unwrap_or(0);
         Ok(())
     }
+    /// The state remains constant from this sample until another command.
+    #[inline]
+    pub(super) fn is_settled(&self, sample: u64) -> bool {
+        sample >= self.settled
+    }
     #[inline]
     pub fn at(&self, sample: u64) -> State {
         // Most PCM samples have no pending metadata ramps. This returns exactly

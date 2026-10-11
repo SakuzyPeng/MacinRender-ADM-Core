@@ -538,6 +538,175 @@ fn arbitrary_packets_and_sample_events_are_bit_identical() {
 }
 
 #[test]
+fn source_spans_preserve_coincident_events_ramps_and_block_boundaries() {
+    let prepared = fixture();
+    let descriptions: Vec<_> = (0..4)
+        .map(|i| RoomDescription {
+            id: i + 1,
+            role: if i == 3 { 2 } else { 0 },
+            position: [i as f32 * 0.2 - 0.3, 1., 0.1],
+            ..RoomDescription::default()
+        })
+        .collect();
+    let initial: Vec<_> = descriptions
+        .iter()
+        .enumerate()
+        .map(|(i, d)| RoomCommand {
+            element: i as u32,
+            state: State {
+                position: d.position,
+                diffuse: 0.2 * i as f32,
+                head_locked: u32::from(i == 0),
+                ..State::default()
+            },
+            ..RoomCommand::default()
+        })
+        .collect();
+    let mut gain = initial[0].state;
+    gain.gain = 0.17;
+    let mut moved = initial[1].state;
+    moved.position = [-0.8, 0.6, 0.2];
+    let mut locked = initial[1].state;
+    locked.head_locked = 1;
+    let events = [
+        (
+            0,
+            RoomCommand {
+                element: 0,
+                changed: 2,
+                duration: 333,
+                state: gain,
+                ..RoomCommand::default()
+            },
+        ),
+        (
+            255,
+            RoomCommand {
+                element: 1,
+                changed: 4,
+                duration: 411,
+                state: moved,
+                ..RoomCommand::default()
+            },
+        ),
+        (
+            256,
+            RoomCommand {
+                element: 3,
+                changed: 2,
+                duration: 211,
+                state: gain,
+                ..RoomCommand::default()
+            },
+        ),
+        (
+            257,
+            RoomCommand {
+                element: 0,
+                cleared: 2,
+                duration: 171,
+                ..RoomCommand::default()
+            },
+        ),
+        (
+            257,
+            RoomCommand {
+                element: 1,
+                changed: 256,
+                state: locked,
+                ..RoomCommand::default()
+            },
+        ),
+        (
+            1023,
+            RoomCommand {
+                element: 1,
+                cleared: 4,
+                duration: 137,
+                ..RoomCommand::default()
+            },
+        ),
+    ];
+    let input: Vec<Vec<_>> = (0..4)
+        .map(|source| {
+            (0..1539)
+                .map(|i| ((i * 37 + source * 19) % 113) as f32 / 512. - 0.1)
+                .collect()
+        })
+        .collect();
+    for scene in [false, true] {
+        let render = |chunks: &[usize]| {
+            let mut session = Session::new(prepared.clone(), 1.5, scene, true).unwrap();
+            session.configure(&descriptions).unwrap();
+            let mut result = Vec::new();
+            let mut at = 0;
+            let mut packet = 0;
+            while at < input[0].len() {
+                if at == 537 {
+                    session.set_pose([23., -7., 11.]).unwrap();
+                }
+                let mut count = chunks[packet % chunks.len()].min(input[0].len() - at);
+                if at < 537 {
+                    count = count.min(537 - at);
+                }
+                let commands: Vec<_> = events
+                    .iter()
+                    .filter(|(n, _)| *n >= at && *n < at + count)
+                    .map(|(n, c)| RoomCommand {
+                        offset: (n - at) as u32,
+                        ..*c
+                    })
+                    .collect();
+                let mut output = vec![0.; count * 2];
+                session
+                    .process(
+                        count,
+                        input.iter().enumerate().map(|(i, plane)| {
+                            if i == 2 {
+                                None
+                            } else {
+                                Some(&plane[at..at + count])
+                            }
+                        }),
+                        if at == 0 { &initial } else { &[] },
+                        &commands,
+                        &mut output,
+                    )
+                    .unwrap();
+                result.extend(output);
+                at += count;
+                packet += 1;
+            }
+            session.end_input();
+            let mut remaining = session.info().tail_frames as usize;
+            while remaining != 0 {
+                let count = remaining.min(511);
+                let mut output = vec![0.; count * 2];
+                session
+                    .process(count, [None; 4].into_iter(), &[], &[], &mut output)
+                    .unwrap();
+                result.extend(output);
+                remaining -= count;
+            }
+            result
+        };
+        let reference = render(&[1]);
+        for chunks in [&[4096][..], &[3, 255, 1, 257, 33][..]] {
+            let actual = render(chunks);
+            assert_eq!(actual.len(), reference.len());
+            let first = actual
+                .iter()
+                .zip(&reference)
+                .position(|(a, b)| a.to_bits() != b.to_bits());
+            assert_eq!(
+                first, None,
+                "input span changed sample {first:?}, scene={scene}"
+            );
+        }
+    }
+}
+
+#[test]
 fn head_locked_content_ignores_head_rotation() {
     let prepared = fixture();
     let stationary = render(prepared.clone(), &[256], true, false);
