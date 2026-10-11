@@ -256,14 +256,7 @@ impl Slot {
         }
         state
     }
-    fn input(
-        &mut self,
-        value: f32,
-        sample: u64,
-        offset: usize,
-        scene: bool,
-        snapshot: bool,
-    ) -> Result<()> {
+    fn input_state(&mut self, sample: u64) -> State {
         let mut state = self.control.at(sample);
         let live = self.live.at(sample);
         state.gain *= live.gain;
@@ -289,8 +282,55 @@ impl Slot {
             self.screen_position = state.position;
         }
         self.track_direction(state);
+        state
+    }
+    fn input_span(
+        &mut self,
+        input: Option<&[f32]>,
+        sample: u64,
+        offset: usize,
+        scene: bool,
+        snapshots: &[bool],
+    ) -> Result<()> {
+        // The caller ends spans at every command and canonical block boundary.
+        // Stable controls and screen geometry can be combined once; active
+        // ramps still evaluate at every sample exactly as before.
+        if self.control.is_settled(sample) && self.live.is_settled(sample) {
+            let state = self.input_state(sample);
+            for (i, snapshot) in snapshots.iter().copied().enumerate() {
+                self.input_with_state(
+                    input.map_or(0., |v| v[i]),
+                    &state,
+                    offset + i,
+                    scene,
+                    snapshot,
+                )?;
+            }
+        } else {
+            for (i, snapshot) in snapshots.iter().copied().enumerate() {
+                let state = self.input_state(sample + i as u64);
+                self.input_with_state(
+                    input.map_or(0., |v| v[i]),
+                    &state,
+                    offset + i,
+                    scene,
+                    snapshot,
+                )?;
+            }
+        }
+        Ok(())
+    }
+    #[inline]
+    fn input_with_state(
+        &mut self,
+        value: f32,
+        state: &State,
+        offset: usize,
+        scene: bool,
+        snapshot: bool,
+    ) -> Result<()> {
         if snapshot {
-            self.states[offset] = state;
+            self.states[offset] = *state;
             self.directions[offset] = self.last_direction;
         }
         let gain = if state.active != 0 { state.gain } else { 0. };
@@ -1505,7 +1545,8 @@ impl Session {
             self.geometry_marks[self.fill] = true;
         }
         let mut event = 0;
-        for frame in 0..frames {
+        let mut frame = 0;
+        while frame < frames {
             while event < events.len() && events[event].offset as usize == frame {
                 let command = &events[event];
                 self.slots[self.active[command.element as usize]]
@@ -1527,24 +1568,38 @@ impl Session {
             if self.marks[self.fill] {
                 self.poses[self.fill] = self.pose;
             }
+            // No control event or DSP block boundary lies inside this span.
+            // Finish each source's contiguous input while its control/delay
+            // state is hot, preserving that source's exact sample order.
+            let next_event = events.get(event).map_or(frames, |c| c.offset as usize);
+            let count = (BLOCK - self.fill)
+                .min(frames - frame)
+                .min(next_event - frame);
             for slot in &mut self.slots {
                 if !slot.active {
-                    slot.input(0., self.clock, self.fill, self.scene, self.marks[self.fill])?;
+                    slot.input_span(
+                        None,
+                        self.clock,
+                        self.fill,
+                        self.scene,
+                        &self.marks[self.fill..self.fill + count],
+                    )?;
                 }
             }
             for (index, plane) in self.active.iter().zip(planes.clone()) {
-                self.slots[*index].input(
-                    plane.map_or(0., |v| v[frame]),
+                self.slots[*index].input_span(
+                    plane.map(|v| &v[frame..frame + count]),
                     self.clock,
                     self.fill,
                     self.scene,
-                    self.marks[self.fill],
+                    &self.marks[self.fill..self.fill + count],
                 )?;
             }
-            output[frame * 2..frame * 2 + 2]
-                .copy_from_slice(&self.fifo[self.fill * 2..self.fill * 2 + 2]);
-            self.fill += 1;
-            self.clock += 1;
+            output[frame * 2..(frame + count) * 2]
+                .copy_from_slice(&self.fifo[self.fill * 2..(self.fill + count) * 2]);
+            self.fill += count;
+            self.clock += count as u64;
+            frame += count;
             if self.fill == BLOCK {
                 self.render_block()?;
                 self.fill = 0;
