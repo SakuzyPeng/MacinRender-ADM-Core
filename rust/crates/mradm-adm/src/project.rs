@@ -22,6 +22,71 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
+    fn screen(doc: &Document, programme: u32) -> Result<AdmScreen> {
+        let screens = doc.children(programme, "audioProgrammeReferenceScreen");
+        if screens.len() > 1 {
+            return Err(Error::invalid("Programme 包含多个 referenceScreen"));
+        }
+        let Some(&key) = screens.first() else {
+            return Ok(AdmScreen::default());
+        };
+        let centre = doc.child(key, "screenCentrePosition").map(|k| doc.node(k));
+        let width = doc.child(key, "screenWidth").map(|k| doc.node(k));
+        let cartesian = centre.is_some_and(|n| ["X", "Y", "Z"].iter().any(|a| n.attr(a).is_some()))
+            || width.is_some_and(|n| n.attr("X").is_some());
+        let polar = centre.is_some_and(|n| {
+            ["azimuth", "elevation", "distance"]
+                .iter()
+                .any(|a| n.attr(a).is_some())
+        }) || width.is_some_and(|n| n.attr("azimuth").is_some());
+        if cartesian && polar {
+            return Err(Error::invalid("referenceScreen 坐标系混用"));
+        }
+        if cartesian && width.and_then(|n| n.attr("X")).is_none() {
+            return Err(Error::invalid(
+                "Cartesian referenceScreen 需要 screenWidth X",
+            ));
+        }
+        let mut result = AdmScreen::default();
+        result.cartesian = u32::from(cartesian);
+        result.aspect_ratio = doc
+            .text(key, "aspectRatio")
+            .map(number)
+            .transpose()?
+            .unwrap_or(1.78);
+        if cartesian {
+            result.centre = [0., 1., 0.];
+        }
+        for (i, attribute) in if cartesian {
+            ["X", "Y", "Z"]
+        } else {
+            ["azimuth", "elevation", "distance"]
+        }
+        .iter()
+        .enumerate()
+        {
+            if let Some(value) = centre.and_then(|n| n.attr(attribute)) {
+                result.centre[i] = number(value)?;
+            }
+        }
+        result.width = width
+            .and_then(|n| n.attr(if cartesian { "X" } else { "azimuth" }))
+            .map(number)
+            .transpose()?
+            .unwrap_or(if cartesian { 1.0 } else { 58.0 });
+        if result.aspect_ratio <= 0.
+            || result.width <= 0.
+            || (cartesian && result.centre == [0.; 3])
+            || (!cartesian
+                && (result.centre[2] <= 0.
+                    || result.width >= 180.
+                    || !(-180. ..=180.).contains(&result.centre[0])
+                    || !(-90. ..90.).contains(&result.centre[1])))
+        {
+            return Err(Error::invalid("无效的 referenceScreen 几何"));
+        }
+        Ok(result)
+    }
     fn string(&mut self, value: impl Into<String>) -> u32 {
         let index = u32::try_from(self.strings.len()).expect("ADM string table overflow");
         self.strings.push(value.into());
@@ -117,6 +182,7 @@ impl Snapshot {
                 reference_screen: u32::from(
                     doc.child(key, "audioProgrammeReferenceScreen").is_some(),
                 ),
+                screen_geometry: Self::screen(doc, key)?,
             };
             out.programmes.push(item);
         }

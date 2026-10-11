@@ -96,6 +96,27 @@ build/release/mradm render -i programme.wav -o binaural.wav --renderer room-bina
 来源哈希一致，不在运行时重新估计时延或替换 HRIR。距离比例范围为 0.01–100 m/unit。
 文件实时编辑支持 gain/mute、extent、diffuse、divergence 与 headLocked；这些控制仍作用于声源。
 
+`--screen-config screen.json` 为房间后端指定制作／重放屏幕，例如：
+
+```json
+{"schema":"mradm.screen-config","version":1,
+ "reproduction":{"coordinates":"polar","centre":[0,0,1],"width":90,"aspect_ratio":1.78}}
+```
+
+`coordinates` 为 `polar` 或 `cartesian`；polar 的 centre 是方位角、仰角、距离，width 为角度；
+cartesian 使用 ADM x/right、y/front、z/up，width 为 X 宽度。每个定义需 centre、width、aspect_ratio。
+可选 `reference` 显式覆盖制作屏幕；否则文件按对象所属 Programme（包括父对象继承）读取，
+缺省使用 58°／1.78 的标准制作屏幕。多个 Programme 定义不一致时需显式覆盖。
+未配置 reproduction 时保持原来的物理位置，screenRef 会给出一次缺少重放屏幕的诊断。
+
+映射使用 BS.2127-1 §7.3.3 的极坐标屏幕边界，参考 EBU EAR Python 2.0.0
+（`10149bb07eeb8a92c34a5e10d2f0597e3bcdfbde`）。Room 接口中的位置是物理射线，
+所以在原始控制插值之后改变方向、保留半径，再执行房间边界约束；不套用扬声器布局补偿。
+screenRef 开关按事件样本生效，独立位置渐变不重启。headLocked 继续使用头部坐标的干声分支。
+C ABI v1.47 的 `adm_render_options_set_screen_config_json` 和 `adm_create_scene_stream_with_room_ex`
+复制同一配置；Scene 未显式指定 reference 时使用标准制作屏幕。屏幕固定到会话，换房／epoch
+保留，更换屏幕需新建会话。旧入口和所有公开 POD 大小保持不变。
+
 C ABI v1.46 增加 `adm_room_t` 和独立配置，旧 Scene 嵌套结构大小不变。例如：
 
 ```c

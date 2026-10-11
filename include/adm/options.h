@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "adm/room.h"
+#include "adm/screen.h"
 
 namespace mradm {
 
@@ -211,6 +212,7 @@ struct RenderOptions {
     // references shared state, so copying RenderOptions stays cheap and safe.
     std::stop_token cancel_token;
     RoomConfig room{};
+    ScreenConfig screens{};
 };
 
 struct RenderRequest {

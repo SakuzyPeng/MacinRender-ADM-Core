@@ -7,6 +7,7 @@ pub mod partition;
 pub mod prepared;
 pub mod profile;
 pub mod resources;
+pub mod screen;
 pub mod session;
 pub mod signal;
 pub mod spatial;

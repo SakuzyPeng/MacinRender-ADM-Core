@@ -30,6 +30,7 @@ struct RenderCliOptions {
     std::string sofa_path;
     std::string room_path;
     std::string room_hrir_path;
+    std::string screen_config_path;
     double room_metres_per_unit{1.5};
     std::string semantic_policy_path;
     std::string semantic_report_path;

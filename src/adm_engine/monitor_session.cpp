@@ -181,6 +181,11 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         plan.scene = scene;
         plan.sofa_path = options.sofa_path;
         plan.room = options.room;
+        plan.screens = options.screens;
+        if ((plan.screens.reference || plan.screens.reproduction) &&
+            resolved->backend != RendererSelection::room_binaural) {
+            return make_error(ErrorCode::unsupported, "屏幕配置当前仅支持 room-binaural");
+        }
         plan.default_interp_ms = options.default_interp_ms;
         plan.object_smoothing_frames = options.object_smoothing_frames;
         plan.speaker_geometry = options.speaker_geometry;

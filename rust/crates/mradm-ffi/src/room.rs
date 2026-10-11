@@ -9,6 +9,7 @@ use mradm_dsp::{
         hrir::HrirBank,
         prepared::PreparedRoom,
         resources::{HrirData, RoomProfile, sha256},
+        screen::{Mapping, RoomScreens},
         session::{Instance, PreparedSet, RoomInfo, Session},
     },
 };
@@ -26,6 +27,21 @@ fn boundary(message: *mut u8, capacity: usize, call: impl FnOnce() -> Result<()>
     mradm_dsp::room::set_worker_start_hook(crate::room_environment::start_worker);
     let _environment = crate::room_environment::Environment::enter();
     crate::boundary(message, capacity, call)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_room_validate_screens(
+    screens: *const RoomScreens,
+    count: usize,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || unsafe {
+        for value in input(screens, count)? {
+            Mapping::new(*value)?;
+        }
+        Ok(())
+    })
 }
 
 #[unsafe(no_mangle)]

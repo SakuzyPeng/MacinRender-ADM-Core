@@ -140,6 +140,7 @@ struct RendererConfig {
     std::uint32_t object_smoothing_frames{0U};
     std::uint32_t sample_rate{48000U};
     RoomConfig room{};
+    ScreenConfig screens{};
 };
 
 enum class DiagnosticCode : std::uint32_t {

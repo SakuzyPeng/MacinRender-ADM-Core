@@ -4,6 +4,19 @@
 extern "C" {
 #endif
 // cppcheck-suppress-begin unusedStructMember
+typedef struct MradmRoomScreenGeometry {
+    uint32_t cartesian;
+    uint32_t reserved;
+    double aspect_ratio;
+    double centre[3];
+    double width;
+} MradmRoomScreenGeometry;
+typedef struct MradmRoomScreens {
+    uint32_t enabled;
+    uint32_t reserved;
+    MradmRoomScreenGeometry reference;
+    MradmRoomScreenGeometry reproduction;
+} MradmRoomScreens;
 typedef struct MradmRoomDescription {
     uint64_t id;
     uint64_t generation;
@@ -11,6 +24,7 @@ typedef struct MradmRoomDescription {
     uint32_t reserved;
     float position[3];
     uint32_t padding;
+    MradmRoomScreens screens;
 } MradmRoomDescription;
 typedef struct MradmRoomOverride {
     float gain_db;
@@ -68,6 +82,7 @@ typedef struct MradmRoomInfo {
 } MradmRoomInfo;
 // cppcheck-suppress-end unusedStructMember
 int mradm_room_polar(float azimuth, float elevation, float distance, float* out);
+int mradm_room_validate_screens(const MradmRoomScreens* screens, size_t count, char* message, size_t capacity);
 int mradm_room_validate_overrides(const MradmRoomOverride* values, size_t count, char* message, size_t capacity);
 int mradm_room_session_overrides(
     void* handle, const MradmRoomOverride* values, size_t count, char* message, size_t capacity);

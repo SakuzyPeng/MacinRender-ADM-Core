@@ -16,6 +16,8 @@
 #include "live_room_renderer.h"
 
 namespace {
+constexpr const char* k_screen_json = R"({"schema":"mradm.screen-config","version":1,
+    "reproduction":{"coordinates":"polar","centre":[0,0,1],"width":90,"aspect_ratio":1.78}})";
 void require(bool condition, const char* message) {
     if (!condition) {
         throw std::runtime_error(message);
@@ -41,6 +43,79 @@ std::vector<float> read(const std::filesystem::path& path) {
     std::vector<float> output(reader.frame_count() * reader.channels());
     require(reader.read(output.data(), reader.frame_count()) == reader.frame_count(), "read rendered fixture");
     return output;
+}
+void screen_config_test() {
+    auto config = take(mradm::parse_screen_config_json(k_screen_json));
+    require(config.reproduction && config.reproduction->width == 90, "screen JSON geometry");
+    require(!mradm::parse_screen_config_json("{}"), "missing screen schema rejected");
+    auto invalid = config;
+    invalid.reproduction = mradm::ScreenGeometry{.width = 0.0};
+    require(!mradm::validate_screen_config(invalid), "invalid screen width rejected");
+    mradm::AdmScene scene;
+    mradm::SceneObject child;
+    child.id = "child";
+    mradm::SceneObject parent;
+    parent.id = "parent";
+    parent.adm_source = mradm::SceneObjectSource{};
+    parent.adm_source->child_objects = {child.id};
+    scene.objects = {parent, child};
+    mradm::SceneContent content;
+    content.id = "content";
+    content.object_ids = {parent.id};
+    scene.contents = {content};
+    mradm::SceneProgramme programme;
+    programme.id = "first";
+    programme.content_ids = {content.id};
+    programme.has_reference_screen = true;
+    programme.reference_screen = mradm::ScreenGeometry{};
+    programme.reference_screen->width = 60;
+    scene.programmes = {programme};
+    require(take(mradm::resolve_reference_screen(scene, child.id, config)).width == 60,
+            "descendant inherits programme reference screen");
+    programme.id = "second";
+    programme.reference_screen->width = 70;
+    scene.programmes.push_back(programme);
+    require(!mradm::resolve_reference_screen(scene, child.id, config), "conflicting programme screens rejected");
+    config.reference = mradm::ScreenGeometry{};
+    require(take(mradm::resolve_reference_screen(scene, child.id, config)).width == 58,
+            "explicit reference overrides programme conflict");
+    require(take(mradm::resolve_reference_screen(scene, child.id, {})).width == 58,
+            "disabled screen mapping preserves old programme handling");
+    auto* options = adm_create_render_options();
+    require(adm_render_options_set_screen_config_json(options, k_screen_json) == ADM_ERROR_OK, "C screen setter");
+    require(adm_render_options_set_screen_config_json(options, "{}") == ADM_ERROR_INVALID_ARGUMENT,
+            "C screen setter rejects malformed input");
+    require(adm_render_options_set_screen_config_json(options, nullptr) == ADM_ERROR_OK, "C screen clear");
+    adm_destroy_render_options(options);
+}
+
+void screened_file_test(mradm::RenderPlan plan, const std::vector<float>& reference) {
+    mradm::NullLogSink logs;
+    mradm::NullProgressSink progress;
+    plan.screens = take(mradm::parse_screen_config_json(k_screen_json));
+    plan.render_window.reset();
+    for (auto& block : plan.scene.objects[0].tracks[0].blocks) {
+        block.screen_ref = true;
+    }
+    auto renderer = mradm::create_room_renderer();
+    auto prepared = take(renderer->prepare(plan, logs));
+    take(renderer->render_window(*prepared, plan, progress, logs));
+    auto expected = read(plan.output_path);
+    require(expected != reference, "screen mapping must affect off-centre file source");
+    auto stream = take(renderer->open_stream(*prepared, plan, logs));
+    std::array<float, 698> output{};
+    std::vector<float> actual;
+    for (;;) {
+        const auto count = take(stream->process(output, 349));
+        if (count == 0) {
+            break;
+        }
+        actual.insert(actual.end(), output.begin(), output.begin() + static_cast<std::ptrdiff_t>(count * 2));
+    }
+    require(actual == expected, "screen mapping is identical in offline and file streaming");
+    ok(stream->seek(20111));
+    require(take(stream->process(output, 349)) == 349, "screen seek produces requested frames");
+    require(std::equal(output.begin(), output.end(), expected.begin() + 40222), "screen seek retains authored ramp");
 }
 // NOLINTNEXTLINE(readability-function-size): one integration lifecycle and its assertions.
 void file_test(const std::filesystem::path& root, const mradm::RoomConfig& config) {
@@ -126,6 +201,8 @@ void file_test(const std::filesystem::path& root, const mradm::RoomConfig& confi
             "live controls survive seek");
     overrides.objects[0].extent_scale = -1;
     require(!edited->validate_overrides(overrides), "invalid live control rejected");
+    plan.output_path = utf8(root / "screened.wav");
+    screened_file_test(plan, reference);
     std::cout << "file/offline/FIFO/seek/window/tail passed\n";
 }
 
@@ -271,7 +348,7 @@ void preparation_capacity_test(const std::filesystem::path& root, const mradm::R
 }
 
 // NOLINTNEXTLINE(readability-function-size): one integration lifecycle and its assertions.
-void scene_test(const std::filesystem::path& root, std::uint32_t output_rate) {
+void scene_test(const std::filesystem::path& root, std::uint32_t output_rate, bool screen = false) {
     auto* context = adm_create_context();
     require(context != nullptr, "context");
     adm_room_t* room = nullptr;
@@ -296,7 +373,8 @@ void scene_test(const std::filesystem::path& root, std::uint32_t output_rate) {
     config.output_ring_frames = 32768;
     config.startup_watermark_frames = 1;
     adm_scene_stream_t* stream = nullptr;
-    require(adm_create_scene_stream_with_room(context, &config, &room_config, &stream) == ADM_ERROR_OK,
+    require(adm_create_scene_stream_with_room_ex(
+                context, &config, &room_config, screen ? k_screen_json : nullptr, &stream) == ADM_ERROR_OK,
             "create Scene room stream");
     adm_room_destroy(room); // the session retained both room and HRIR assets
     require(adm_scene_stream_begin_epoch(stream, 1, 0) == ADM_ERROR_OK, "begin epoch");
@@ -306,6 +384,10 @@ void scene_test(const std::filesystem::path& root, std::uint32_t output_rate) {
     descriptor.element_id = 7;
     descriptor.has_position = 1;
     descriptor.position_y = 2; // distance must survive the Scene boundary
+    if (screen) {
+        descriptor.position_x = -0.96961924F;
+        descriptor.position_y = 1.74923944F;
+    }
     require(adm_scene_stream_configure_generation(stream, 1, 1, &descriptor, 1) == ADM_ERROR_OK,
             "configure Scene real distance");
     std::array<float, 1001> samples{};
@@ -325,7 +407,12 @@ void scene_test(const std::filesystem::path& root, std::uint32_t output_rate) {
     initial.state.valid_fields = ADM_SCENE_STATE_ACTIVE | ADM_SCENE_STATE_LINEAR_GAIN | ADM_SCENE_STATE_POSITION;
     initial.state.active = 1;
     initial.state.linear_gain = 1;
-    initial.state.position_y = 2;
+    initial.state.position_x = descriptor.position_x;
+    initial.state.position_y = descriptor.position_y;
+    if (screen) {
+        initial.state.valid_fields |= ADM_SCENE_STATE_SCREEN_REFERENCE;
+        initial.state.screen_reference = 1;
+    }
     adm_scene_frame_t frame{};
     frame.struct_size = sizeof(frame);
     frame.flags = ADM_SCENE_FRAME_STATE_COMPLETE;
@@ -366,7 +453,11 @@ void scene_test(const std::filesystem::path& root, std::uint32_t output_rate) {
     require(adm_scene_stream_room_source_json(stream, 7, &report) == ADM_ERROR_OK, "actual room source position");
     auto source = nlohmann::json::parse(report);
     adm_free_string(report);
-    require(std::abs(source.at("distance_metres").get<double>() - 3.0) < 1e-7, "3 metre Scene source preserved");
+    require(std::abs(source.at("distance_metres").get<double>() - 3.0) < 1e-6, "3 metre Scene source preserved");
+    if (screen) {
+        require(std::abs(source.at("direction")[0].get<double>() - source.at("direction")[1].get<double>()) < 1e-6,
+                "Scene screen edge maps to 45 degrees without changing distance");
+    }
     adm_destroy_scene_stream(stream);
     adm_destroy_context(context);
     std::cout << "Scene/C API/resource ownership/EOS passed at " << output_rate << " Hz\n";
@@ -378,11 +469,13 @@ int main(int argc, char** argv) {
         const std::filesystem::path root{argv[1]};
         auto room = take(mradm::RoomProfile::load(root / "room.json"));
         require(!mradm::RoomProfile::load(root / "bad.json"), "corrupt hash rejected");
+        screen_config_test();
         file_test(root, {room, {}, 1.5});
         switching_test(root, {room, {}, 1.5});
         preparation_capacity_test(root, {room, {}, 1.5});
         scene_test(root, 48000);
         scene_test(root, 44100);
+        scene_test(root, 48000, true);
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

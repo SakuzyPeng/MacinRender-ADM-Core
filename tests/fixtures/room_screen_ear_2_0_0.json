@@ -1,0 +1,1169 @@
+{
+  "schema": "mradm.screen-reference",
+  "version": 1,
+  "reference": "EBU EAR Python 2.0.0",
+  "numpy": "2.5.3",
+  "revision": "10149bb07eeb8a92c34a5e10d2f0597e3bcdfbde",
+  "source_sha256": {
+    "ear/core/screen_scale.py": "bbbdb90b8cae099090d3e106adfc3a81bca320769744a797aec671017d86374b",
+    "ear/core/screen_common.py": "463a9f9887da75121c49f453188c40a532249732d67ae0c3e63c6dcdd5f1ed13",
+    "ear/core/geom.py": "99f17b03f6d4b6d04c9d8a9b81292b37c3618c0339306d20f6cd9b08b6387e88",
+    "ear/common.py": "f40f2f7d8a3bef843d5f3720b6623ecde114fd4b0aa4c1109cb4cdbf5e11c835"
+  },
+  "scope": "PolarScreenScaler physical-direction mapping, without loudspeaker-layout compensation",
+  "absolute_tolerance": 3e-06,
+  "cases": [
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 90,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "expected": [
+        2.0045221252923187e-17,
+        1.0,
+        9.474382438240926e-19
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 90,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        -0.800000011920929,
+        1.2999999523162842,
+        0.20000000298023224
+      ],
+      "expected": [
+        -1.1044510733787858,
+        1.018044718908926,
+        0.33730205024875615
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 90,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        1.0,
+        -1.0,
+        0.5
+      ],
+      "expected": [
+        0.8292072037060143,
+        -0.9801306873479925,
+        0.7757314284214634
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 90,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "expected": [
+        1.2274158022796438e-33,
+        6.123233995736766e-17,
+        1.0
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 90,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "expected": [
+        1.2274158022796438e-33,
+        6.123233995736766e-17,
+        -1.0
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 90,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        9.999999974752427e-07,
+        -1.0,
+        0.0
+      ],
+      "expected": [
+        8.940397330354807e-07,
+        -1.0000000000001004,
+        9.474382438245664e-19
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 90,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        -9.999999974752427e-07,
+        -1.0,
+        0.0
+      ],
+      "expected": [
+        -8.940397325913915e-07,
+        -1.0000000000001004,
+        9.474382438245664e-19
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 90,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        0.0,
+        3.0,
+        0.4000000059604645
+      ],
+      "expected": [
+        5.914216644940304e-17,
+        2.950437199129361,
+        0.674477826738627
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 90,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        -0.25,
+        0.20000000298023224,
+        -0.10000000149011612
+      ],
+      "expected": [
+        -0.2648607864774346,
+        0.12365849331895,
+        -0.16449116178919196
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          10,
+          5,
+          2
+        ],
+        "width": 70,
+        "aspect_ratio": 1.6
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          -5,
+          -3,
+          1.5
+        ],
+        "width": 54,
+        "aspect_ratio": 2
+      },
+      "position": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "expected": [
+        0.21864549820220242,
+        0.9701454800296851,
+        -0.10493757045921451
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          10,
+          5,
+          2
+        ],
+        "width": 70,
+        "aspect_ratio": 1.6
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          -5,
+          -3,
+          1.5
+        ],
+        "width": 54,
+        "aspect_ratio": 2
+      },
+      "position": [
+        -0.800000011920929,
+        1.2999999523162842,
+        0.20000000298023224
+      ],
+      "expected": [
+        -0.3104859827121829,
+        1.5073000630411226,
+        -0.040557006588236535
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          10,
+          5,
+          2
+        ],
+        "width": 70,
+        "aspect_ratio": 1.6
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          -5,
+          -3,
+          1.5
+        ],
+        "width": 54,
+        "aspect_ratio": 2
+      },
+      "position": [
+        1.0,
+        -1.0,
+        0.5
+      ],
+      "expected": [
+        1.0176008386835724,
+        -1.0917400769497156,
+        0.1503068111973596
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          10,
+          5,
+          2
+        ],
+        "width": 70,
+        "aspect_ratio": 1.6
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          -5,
+          -3,
+          1.5
+        ],
+        "width": 54,
+        "aspect_ratio": 2
+      },
+      "position": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "expected": [
+        1.3462504502570358e-17,
+        5.973408096868083e-17,
+        1.0
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          10,
+          5,
+          2
+        ],
+        "width": 70,
+        "aspect_ratio": 1.6
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          -5,
+          -3,
+          1.5
+        ],
+        "width": 54,
+        "aspect_ratio": 2
+      },
+      "position": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "expected": [
+        1.3462504502570358e-17,
+        5.973408096868083e-17,
+        -1.0
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          10,
+          5,
+          2
+        ],
+        "width": 70,
+        "aspect_ratio": 1.6
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          -5,
+          -3,
+          1.5
+        ],
+        "width": 54,
+        "aspect_ratio": 2
+      },
+      "position": [
+        9.999999974752427e-07,
+        -1.0,
+        0.0
+      ],
+      "expected": [
+        9.499923074185029e-07,
+        -0.9944788113912755,
+        -0.10493757045926698
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          10,
+          5,
+          2
+        ],
+        "width": 70,
+        "aspect_ratio": 1.6
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          -5,
+          -3,
+          1.5
+        ],
+        "width": 54,
+        "aspect_ratio": 2
+      },
+      "position": [
+        -9.999999974752427e-07,
+        -1.0,
+        0.0
+      ],
+      "expected": [
+        -1.1645602383816061e-06,
+        -0.9944788113910473,
+        -0.10493757045926698
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          10,
+          5,
+          2
+        ],
+        "width": 70,
+        "aspect_ratio": 1.6
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          -5,
+          -3,
+          1.5
+        ],
+        "width": 54,
+        "aspect_ratio": 2
+      },
+      "position": [
+        0.0,
+        3.0,
+        0.4000000059604645
+      ],
+      "expected": [
+        0.6652077168754941,
+        2.951573506493199,
+        -0.07558130684966141
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          10,
+          5,
+          2
+        ],
+        "width": 70,
+        "aspect_ratio": 1.6
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          -5,
+          -3,
+          1.5
+        ],
+        "width": 54,
+        "aspect_ratio": 2
+      },
+      "position": [
+        -0.25,
+        0.20000000298023224,
+        -0.10000000149011612
+      ],
+      "expected": [
+        -0.15755027082871897,
+        0.2803377429017358,
+        -0.09533448251642064
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": true,
+        "centre": [
+          0,
+          1,
+          0
+        ],
+        "width": 1,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": true,
+        "centre": [
+          0.1,
+          1.4,
+          0.1
+        ],
+        "width": 1.7,
+        "aspect_ratio": 1.6
+      },
+      "position": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "expected": [
+        0.05207016103256519,
+        0.9967024530337939,
+        0.06223277630365357
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": true,
+        "centre": [
+          0,
+          1,
+          0
+        ],
+        "width": 1,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": true,
+        "centre": [
+          0.1,
+          1.4,
+          0.1
+        ],
+        "width": 1.7,
+        "aspect_ratio": 1.6
+      },
+      "position": [
+        -0.800000011920929,
+        1.2999999523162842,
+        0.20000000298023224
+      ],
+      "expected": [
+        -0.8193440027675888,
+        1.2536156884806746,
+        0.3565431348544376
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": true,
+        "centre": [
+          0,
+          1,
+          0
+        ],
+        "width": 1,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": true,
+        "centre": [
+          0.1,
+          1.4,
+          0.1
+        ],
+        "width": 1.7,
+        "aspect_ratio": 1.6
+      },
+      "position": [
+        1.0,
+        -1.0,
+        0.5
+      ],
+      "expected": [
+        0.9030224840942682,
+        -0.976111055897778,
+        0.6940876023776409
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": true,
+        "centre": [
+          0,
+          1,
+          0
+        ],
+        "width": 1,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": true,
+        "centre": [
+          0.1,
+          1.4,
+          0.1
+        ],
+        "width": 1.7,
+        "aspect_ratio": 1.6
+      },
+      "position": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "expected": [
+        3.1945699576844544e-18,
+        6.114895076319874e-17,
+        1.0
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": true,
+        "centre": [
+          0,
+          1,
+          0
+        ],
+        "width": 1,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": true,
+        "centre": [
+          0.1,
+          1.4,
+          0.1
+        ],
+        "width": 1.7,
+        "aspect_ratio": 1.6
+      },
+      "position": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "expected": [
+        3.1945699576844544e-18,
+        6.114895076319874e-17,
+        -1.0
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": true,
+        "centre": [
+          0,
+          1,
+          0
+        ],
+        "width": 1,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": true,
+        "centre": [
+          0.1,
+          1.4,
+          0.1
+        ],
+        "width": 1.7,
+        "aspect_ratio": 1.6
+      },
+      "position": [
+        9.999999974752427e-07,
+        -1.0,
+        0.0
+      ],
+      "expected": [
+        9.48660121859993e-07,
+        -0.9980616622001045,
+        0.06223277630368469
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": true,
+        "centre": [
+          0,
+          1,
+          0
+        ],
+        "width": 1,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": true,
+        "centre": [
+          0.1,
+          1.4,
+          0.1
+        ],
+        "width": 1.7,
+        "aspect_ratio": 1.6
+      },
+      "position": [
+        -9.999999974752427e-07,
+        -1.0,
+        0.0
+      ],
+      "expected": [
+        -9.875659324853534e-07,
+        -0.9980616622000669,
+        0.06223277630368469
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": true,
+        "centre": [
+          0,
+          1,
+          0
+        ],
+        "width": 1,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": true,
+        "centre": [
+          0.1,
+          1.4,
+          0.1
+        ],
+        "width": 1.7,
+        "aspect_ratio": 1.6
+      },
+      "position": [
+        0.0,
+        3.0,
+        0.4000000059604645
+      ],
+      "expected": [
+        0.15349598426630537,
+        2.938147703314799,
+        0.7097373183710003
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": true,
+        "centre": [
+          0,
+          1,
+          0
+        ],
+        "width": 1,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": true,
+        "centre": [
+          0.1,
+          1.4,
+          0.1
+        ],
+        "width": 1.7,
+        "aspect_ratio": 1.6
+      },
+      "position": [
+        -0.25,
+        0.20000000298023224,
+        -0.10000000149011612
+      ],
+      "expected": [
+        -0.2526950103709958,
+        0.19254946537081247,
+        -0.10756363980980174
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "expected": [
+        -0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        -0.800000011920929,
+        1.2999999523162842,
+        0.20000000298023224
+      ],
+      "expected": [
+        -0.8000000119209288,
+        1.299999952316284,
+        0.20000000298023227
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        1.0,
+        -1.0,
+        0.5
+      ],
+      "expected": [
+        1.0,
+        -1.0,
+        0.5
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "expected": [
+        -0.0,
+        6.123233995736766e-17,
+        1.0
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "expected": [
+        -0.0,
+        6.123233995736766e-17,
+        -1.0
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        9.999999974752427e-07,
+        -1.0,
+        0.0
+      ],
+      "expected": [
+        9.999999971539515e-07,
+        -1.0,
+        0.0
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        -9.999999974752427e-07,
+        -1.0,
+        0.0
+      ],
+      "expected": [
+        -9.999999971539515e-07,
+        -1.0,
+        0.0
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        0.0,
+        3.0,
+        0.4000000059604645
+      ],
+      "expected": [
+        -0.0,
+        2.9999999999999996,
+        0.40000000596046453
+      ]
+    },
+    {
+      "reference": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "reproduction": {
+        "cartesian": false,
+        "centre": [
+          0,
+          0,
+          1
+        ],
+        "width": 58,
+        "aspect_ratio": 1.78
+      },
+      "position": [
+        -0.25,
+        0.20000000298023224,
+        -0.10000000149011612
+      ],
+      "expected": [
+        -0.25,
+        0.20000000298023218,
+        -0.10000000149011613
+      ]
+    }
+  ]
+}

@@ -133,6 +133,9 @@ impl HeadSignal {
 
 struct Slot {
     description: RoomDescription,
+    screen: super::screen::Mapping,
+    screen_input: Option<[f32; 3]>,
+    screen_position: [f32; 3],
     control: Control,
     live: Control,
     live_target: State,
@@ -170,6 +173,9 @@ impl Slot {
         drop(query_cache.lock().unwrap());
         Ok(Self {
             description,
+            screen: super::screen::Mapping::new(description.screens)?,
+            screen_input: None,
+            screen_position: [0.; 3],
             control: Control::new(state),
             live: Control::new(control::neutral_override()),
             live_target: control::neutral_override(),
@@ -208,6 +214,7 @@ impl Slot {
         self.born = 0;
         self.last_direction = [1., 0., 0.];
         self.last_position = None;
+        self.screen_input = None;
         self.directions.fill([1., 0., 0.]);
     }
     fn track_direction(&mut self, state: State) {
@@ -230,6 +237,25 @@ impl Slot {
             self.last_direction = crate::geometry::scale(vector, 1. / length);
         }
     }
+    fn spatial_state(&self, mut state: State) -> State {
+        if state.valid & 128 != 0
+            && state.screen_reference != 0
+            && self.description.screens.enabled != 0
+        {
+            let position = if state.valid & 4 != 0 {
+                state.position
+            } else {
+                self.description.position
+            };
+            state.position = if self.screen_input == Some(position) {
+                self.screen_position
+            } else {
+                self.screen.position(position)
+            };
+            state.valid |= 4;
+        }
+        state
+    }
     fn input(
         &mut self,
         value: f32,
@@ -248,6 +274,19 @@ impl Slot {
         state.divergence = (state.divergence * live.divergence).clamp(0., 1.);
         if live.valid & 256 != 0 {
             state.head_locked = live.head_locked;
+        }
+        let authored = if state.valid & 4 != 0 {
+            state.position
+        } else {
+            self.description.position
+        };
+        let mapped = state.valid & 128 != 0
+            && state.screen_reference != 0
+            && self.description.screens.enabled != 0;
+        state = self.spatial_state(state);
+        if mapped {
+            self.screen_input = Some(authored);
+            self.screen_position = state.position;
         }
         self.track_direction(state);
         if snapshot {
@@ -909,13 +948,16 @@ impl Session {
             return Err(Error::InvalidArgument("Invalid room source descriptions"));
         }
         for (i, d) in descriptions.iter().enumerate() {
+            super::screen::Mapping::new(d.screens)?;
             if descriptions[..i].iter().any(|v| v.id == d.id)
                 || self.slots.iter().enumerate().any(|(i, v)| {
-                    v.description.same_source(d) && v.description.role != d.role && !reusable[i]
+                    v.description.same_source(d)
+                        && (v.description.role != d.role || v.description.screens != d.screens)
+                        && !reusable[i]
                 })
             {
                 return Err(Error::InvalidArgument(
-                    "Duplicate room source or changed source role",
+                    "Duplicate room source or changed role/screen configuration",
                 ));
             }
         }
@@ -1063,10 +1105,10 @@ impl Session {
         }
         let slot = &mut self.slots[self.active[command.element as usize]];
         if sample > 0 {
-            slot.track_direction(slot.control.at(sample - 1));
+            slot.track_direction(slot.spatial_state(slot.control.at(sample - 1)));
         }
         slot.control.apply(command, sample)?;
-        slot.track_direction(slot.control.at(sample));
+        slot.track_direction(slot.spatial_state(slot.control.at(sample)));
         Ok(())
     }
     pub fn set_pose(&mut self, pose: [f32; 3]) -> Result<()> {
@@ -1166,6 +1208,7 @@ impl Session {
             &self.current
         };
         let mut state = slot.control.at(self.ended.unwrap_or(self.clock));
+        state = slot.spatial_state(state);
         let live = slot.live.at(self.ended.unwrap_or(self.clock));
         if live.valid & 256 != 0 {
             state.head_locked = live.head_locked;

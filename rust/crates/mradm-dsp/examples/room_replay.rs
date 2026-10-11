@@ -8,6 +8,7 @@ use mradm_dsp::{
         hrir::HrirBank,
         prepared::{PreparedRoom, ResponseWork},
         resources::{HrirData, RoomProfile, sha256},
+        screen::{RoomScreenGeometry, RoomScreens},
         session::{Instance, PreparedSet, Session},
     },
 };
@@ -33,6 +34,7 @@ fn render(
     prepared: Arc<PreparedSet>,
     next: Arc<PreparedSet>,
     chunks: &[usize],
+    screens: bool,
 ) -> Result<Vec<f32>> {
     const MATERIAL: usize = 96013;
     let mut session = Session::new(prepared.clone(), 1.5, true, false)?;
@@ -42,6 +44,14 @@ fn render(
             RoomDescription {
                 id: i as u64 + 1,
                 role: if i >= 30 { 2 } else { 0 },
+                screens: RoomScreens {
+                    enabled: u32::from(screens),
+                    reproduction: RoomScreenGeometry {
+                        width: 90.,
+                        ..RoomScreenGeometry::default()
+                    },
+                    ..RoomScreens::default()
+                },
                 position: [
                     (-v[1] * 1.4) as f32,
                     (v[0] * 1.4) as f32,
@@ -60,6 +70,7 @@ fn render(
             state: State {
                 position: d.position,
                 head_locked: u32::from(i == 0),
+                screen_reference: u32::from(screens && i < 30),
                 diffuse: if i == 4 { 0.7 } else { 0. },
                 ..State::default()
             },
@@ -182,9 +193,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         return Err("Use Release for numerical acceptance".into());
     }
     let args: Vec<_> = std::env::args().collect();
-    if args.len() != 3 {
-        return Err("usage: room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY".into());
+    if args.len() != 3 && !(args.len() == 4 && args[3] == "--screens") {
+        return Err("usage: room_replay ROOM_JSON NEW_OUTPUT_DIRECTORY [--screens]".into());
     }
+    let screens = args.len() == 4;
     let file = Path::new(&args[1]);
     let root = file.parent().ok_or("missing parent")?;
     let out = Path::new(&args[2]);
@@ -250,8 +262,11 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let name = format!("branches-{index}.f32");
         manifest["files"][&name] = save(out, &name, &work.impulse)?;
     }
-    let canonical = render(prepared.clone(), next.clone(), &[256])?;
-    let fragmented = render(prepared, next, &[1, 173, 733, 4096, 19, 257])?;
+    if screens {
+        manifest["scenario"] = "controls-screen-distance-geometry-switch-v1".into();
+    }
+    let canonical = render(prepared.clone(), next.clone(), &[256], screens)?;
+    let fragmented = render(prepared, next, &[1, 173, 733, 4096, 19, 257], screens)?;
     if canonical
         .iter()
         .map(|v| v.to_bits())

@@ -125,6 +125,7 @@ struct RenderPlan {
     // Invoked synchronously; never retained in reusable prepared/DSP state.
     std::function<void(std::string)> renderer_semantics_sink{};
     RoomConfig room{};
+    ScreenConfig screens{};
 };
 
 // Immutable, reusable backend state produced by IRenderer::prepare() (gain matrices,

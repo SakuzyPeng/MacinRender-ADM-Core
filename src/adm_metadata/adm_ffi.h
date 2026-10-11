@@ -48,6 +48,14 @@ typedef struct MradmAdmLoudness {
     uint32_t method;
 } MradmAdmLoudness;
 
+typedef struct MradmAdmScreen {
+    uint32_t cartesian;
+    uint32_t reserved;
+    double aspect_ratio;
+    double centre[3];
+    double width;
+} MradmAdmScreen;
+
 typedef struct MradmAdmProgramme {
     uint32_t id;
     uint32_t name;
@@ -59,6 +67,7 @@ typedef struct MradmAdmProgramme {
     uint64_t end;
     MradmAdmLoudness loudness;
     uint32_t reference_screen;
+    MradmAdmScreen screen_geometry;
 } MradmAdmProgramme;
 
 typedef struct MradmAdmContent {
