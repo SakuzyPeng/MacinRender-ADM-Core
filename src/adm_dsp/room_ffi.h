@@ -113,6 +113,10 @@ int mradm_room_session_process(void* handle,
                                size_t capacity);
 int mradm_room_instance_create(const void* prepared, size_t sources, void** out, char* message, size_t capacity);
 void mradm_room_instance_destroy(void* handle);
+// Preparation-thread only; grow a candidate before handing it to the session.
+int mradm_room_instance_reserve(void* handle, size_t sources, char* message, size_t capacity);
+// Worker notification, independent of whether the latest preparation succeeds.
+int mradm_room_session_request(void* handle, uint64_t request);
 int mradm_room_session_queue(
     void* handle, void* next, uint64_t request, void** displaced, size_t count, char* message, size_t capacity);
 int mradm_room_session_retired(void* handle, void** out);

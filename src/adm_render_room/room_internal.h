@@ -18,6 +18,8 @@ struct Access {
 };
 using PreparedHandle = std::unique_ptr<void, decltype(&mradm_room_prepared_destroy)>;
 using InstanceHandle = std::unique_ptr<void, decltype(&mradm_room_instance_destroy)>;
+// Members are used by the out-of-line implementation in room.cpp.
+// cppcheck-suppress-begin unusedStructMember
 struct Prepared {
     PreparedHandle handle{nullptr, mradm_room_prepared_destroy};
     MradmRoomPreparedInfo info{};
@@ -58,7 +60,7 @@ class Runtime final : public IRoomControl {
   private:
     Runtime(std::shared_ptr<const Prepared> prepared, RoomConfig config, void* handle);
     void prepare_loop(const std::stop_token& stop);
-    void pump();
+    [[nodiscard]] Result<void> pump();
     void publish(const MradmRoomInfo& info);
     struct Request {
         RoomConfig config;
@@ -70,6 +72,7 @@ class Runtime final : public IRoomControl {
         std::uint64_t revision{0};
         std::uint64_t epoch{0};
         std::uint64_t preroll{0};
+        std::size_t capacity{0};
     };
     std::shared_ptr<const Prepared> prepared_;
     RoomConfig config_;
@@ -91,4 +94,5 @@ class Runtime final : public IRoomControl {
     std::vector<RoomSourcePosition> positions_;
     std::jthread preparer_; // destroyed first; session/resources outlive preparation
 };
+// cppcheck-suppress-end unusedStructMember
 } // namespace mradm::room_internal

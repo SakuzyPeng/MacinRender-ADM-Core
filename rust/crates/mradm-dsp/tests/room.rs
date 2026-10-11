@@ -536,6 +536,148 @@ fn alternate(base: &Arc<PreparedSet>, name: &str, energy: f64) -> Arc<PreparedSe
 }
 
 #[test]
+fn shorter_room_keeps_the_head_locked_tail_after_switching() {
+    let base = fixture();
+    let prepare = |name: &str, side: f64| {
+        let mut profile = (*base.room.profile).clone();
+        profile.identity = name.into();
+        profile.dimensions = [side; 3];
+        profile.listener = [side / 2.; 3];
+        profile.early_fade = [0., 0.001];
+        profile.late_predelay = 0.;
+        profile.late_taps = 1;
+        profile.late = vec![0.; profile.late_directions.len()];
+        profile.eq = vec![1.];
+        Arc::new(
+            PreparedSet::new(Arc::new(
+                PreparedRoom::new(Arc::new(profile), base.room.hrir.clone()).unwrap(),
+            ))
+            .unwrap(),
+        )
+    };
+    let large = prepare("large", 50.);
+    let small = prepare("small", 1.);
+    let small_tail = small.tail_frames();
+    let mut session = Session::new(large.clone(), 1.5, true, true).unwrap();
+    session
+        .configure(&[RoomDescription {
+            id: 1,
+            position: [0., 50., 0.],
+            ..RoomDescription::default()
+        }])
+        .unwrap();
+    let initial = RoomCommand {
+        state: State {
+            position: [0., 50., 0.],
+            head_locked: 1,
+            ..State::default()
+        },
+        ..RoomCommand::default()
+    };
+    let mut block = [0.; 2 * BLOCK];
+    session
+        .process(BLOCK, [None].into_iter(), &[initial], &[], &mut block)
+        .unwrap();
+    session
+        .queue_room(Box::new(Instance::new(small, 1).unwrap()), 1)
+        .unwrap();
+    for _ in 0..200 {
+        session
+            .process(BLOCK, [None].into_iter(), &[], &[], &mut block)
+            .unwrap();
+        drop(session.take_retired());
+        if session.info().applied_request == 1 {
+            break;
+        }
+    }
+    assert_eq!(session.info().applied_request, 1);
+    let mut input = [0.; BLOCK];
+    input[BLOCK - 1] = 1.;
+    session
+        .process(
+            BLOCK,
+            [Some(input.as_slice())].into_iter(),
+            &[],
+            &[],
+            &mut block,
+        )
+        .unwrap();
+    let before_end = session.info().tail_frames;
+    session.end_input();
+    let tail = session.info().tail_frames as usize;
+    assert_eq!(tail as u64, before_end);
+    let frames = large.tail_frames() + BLOCK;
+    let mut output = vec![0.; frames * 2];
+    session
+        .process(frames, [None].into_iter(), &[], &[], &mut output)
+        .unwrap();
+    assert!(
+        output[small_tail * 2..].iter().any(|v| v.abs() > 0.01),
+        "fixture must arrive after the new world's tail quota"
+    );
+    assert!(
+        output[..tail * 2].iter().any(|v| v.abs() > 0.01),
+        "EOS must retain the delayed head-locked impulse"
+    );
+    assert!(
+        output[tail * 2..].iter().all(|v| v.abs() < 1e-6),
+        "declared tail must cover every audible branch"
+    );
+}
+
+#[test]
+fn a_new_request_invalidates_pending_room_before_preparation_finishes() {
+    let a = fixture();
+    let b = alternate(&a, "incoming", 0.2);
+    let c = alternate(&a, "superseded", 0.1);
+    let mut session = Session::new(a, 1.5, true, true).unwrap();
+    session
+        .queue_room(Box::new(Instance::new(b.clone(), 0).unwrap()), 1)
+        .unwrap();
+    let mut output = [0.; BLOCK * 2];
+    for _ in 0..50 {
+        session
+            .process(BLOCK, [].into_iter(), &[], &[], &mut output)
+            .unwrap();
+        if session.info().phase == 2 {
+            break;
+        }
+    }
+    assert_eq!(session.info().phase, 2);
+    session
+        .queue_room(Box::new(Instance::new(c.clone(), 0).unwrap()), 2)
+        .unwrap();
+    assert_eq!(session.info().pending_request, 2);
+    session.note_room_request(3).unwrap(); // preparation may fail without producing an instance
+    assert_ne!(session.info().pending_request, 2);
+    for _ in 0..100 {
+        session
+            .process(BLOCK, [].into_iter(), &[], &[], &mut output)
+            .unwrap();
+    }
+    assert_eq!(session.info().applied_request, 1);
+    drop(session.take_retired()); // release the outgoing room, but delay obsolete-candidate disposal
+    for _ in 0..100 {
+        session
+            .process(BLOCK, [].into_iter(), &[], &[], &mut output)
+            .unwrap();
+    }
+    assert_eq!(session.info().applied_request, 1);
+    assert_eq!(session.info().phase, 0);
+    assert_eq!(session.info().pending_request, 0);
+    let obsolete = session.take_retired().unwrap();
+    assert_eq!(
+        obsolete.prepared.room.profile.identity,
+        c.room.profile.identity
+    );
+    assert!(session.validate_room(&obsolete, 2).is_err());
+    session
+        .queue_room(Box::new(Instance::new(b, 0).unwrap()), 4)
+        .unwrap();
+    assert_eq!(session.info().applied_request, 4);
+}
+
+#[test]
 fn identical_acoustics_switch_has_no_gain_step_and_completes() {
     let a = fixture();
     let b = alternate(&a, "same-acoustics", a.room.profile.late_energy);
@@ -616,9 +758,10 @@ fn room_switch_keeps_latest_request_and_rejects_underprepared_state() {
             .is_err()
     );
     assert_eq!(session.info().phase, 0);
-    session
-        .queue_room(Box::new(Instance::new(b.clone(), 1).unwrap()), 2)
-        .unwrap();
+    let mut candidate = Box::new(Instance::new(b.clone(), 0).unwrap());
+    candidate.reserve(1).unwrap();
+    assert_eq!(candidate.capacity(), 1);
+    session.queue_room(candidate, 2).unwrap();
     let input = [0.01; BLOCK];
     let mut output = [0.; BLOCK * 2];
     for _ in 0..50 {

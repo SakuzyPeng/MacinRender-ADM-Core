@@ -592,7 +592,8 @@ impl Instance {
     pub fn capacity(&self) -> usize {
         self.group.lock().unwrap().voices.len()
     }
-    fn reserve(&mut self, count: usize) -> Result<()> {
+    /// May allocate. Preparation/configuration only, never during processing.
+    pub fn reserve(&mut self, count: usize) -> Result<()> {
         if count > MAX_SOURCES {
             return Err(Error::InvalidArgument("Room source capacity exceeded"));
         }
@@ -756,6 +757,7 @@ pub struct Session {
     fade_done: usize,
     drain_remaining: usize,
     incoming_request: u64,
+    requested_revision: u64,
     applied_request: u64,
     transition_sample: u64,
     slots: Vec<Slot>,
@@ -852,6 +854,7 @@ impl Session {
             fade_done: 0,
             drain_remaining: 0,
             incoming_request: 0,
+            requested_revision: 0,
             applied_request: 0,
             transition_sample: 0,
             slots: Vec::new(),
@@ -1076,15 +1079,11 @@ impl Session {
     }
     pub fn end_input(&mut self) {
         if self.ended.is_none() {
-            self.end_tail = self.current.prepared.tail_frames();
-            if self.phase >= 2 {
-                if let Some(incoming) = &self.incoming {
-                    self.end_tail = self.end_tail.max(incoming.prepared.tail_frames());
-                }
-            } else {
+            if self.phase < 2 {
                 self.incoming = None;
                 self.phase = 0;
             }
+            self.end_tail = self.tail_frames();
             self.pending = None;
             self.sync_voice_pair();
             self.ended = Some(self.clock);
@@ -1096,6 +1095,26 @@ impl Session {
             self.geometry_marks[self.fill] = true;
         }
     }
+    fn tail_frames(&self) -> usize {
+        // Head-locked sources retain the initial dry propagation filters across
+        // room switches, even when the new world's acoustic support is shorter.
+        let head = self.head_room.short_taps - 1 + crate::diffuse::DELAY_LENGTH - 1 + BLOCK;
+        self.incoming
+            .as_ref()
+            .map_or(self.current.prepared.tail_frames(), |v| {
+                self.current
+                    .prepared
+                    .tail_frames()
+                    .max(v.prepared.tail_frames())
+            })
+            .max(head)
+    }
+    fn pending_request(&self) -> u64 {
+        self.pending
+            .as_ref()
+            .filter(|v| v.0 == self.requested_revision)
+            .map_or(0, |v| v.0)
+    }
     pub fn info(&self) -> RoomInfo {
         RoomInfo {
             input_frames: self.ended.unwrap_or(self.clock),
@@ -1103,14 +1122,7 @@ impl Session {
             tail_frames: if self.ended.is_some() {
                 self.end_tail as u64
             } else {
-                self.incoming
-                    .as_ref()
-                    .map_or(self.current.prepared.tail_frames(), |v| {
-                        self.current
-                            .prepared
-                            .tail_frames()
-                            .max(v.prepared.tail_frames())
-                    }) as u64
+                self.tail_frames() as u64
             },
             source_count: self.active.len() as u32,
             material_guard_frames: self.current.prepared.room.profile.band_offset as u64,
@@ -1122,21 +1134,20 @@ impl Session {
                 .filter_map(|s| self.position_for_slot(s))
                 .filter(|p| p.constrained)
                 .count() as u32,
-            phase: if self.phase == 0 && self.pending.is_some() {
+            phase: if self.phase == 0 && self.pending_request() != 0 {
                 1
             } else {
                 self.phase
             },
             applied_request: self.applied_request,
             transition_sample: self.transition_sample,
-            pending_request: self.pending.as_ref().map_or(
-                if self.phase != 0 {
-                    self.incoming_request
-                } else {
-                    0
-                },
-                |v| v.0,
-            ),
+            pending_request: if self.pending_request() != 0 {
+                self.pending_request()
+            } else if self.phase != 0 {
+                self.incoming_request
+            } else {
+                0
+            },
         }
     }
     pub fn source_position(&self, id: u64) -> Option<Position> {
@@ -1182,6 +1193,9 @@ impl Session {
     /// The caller prepares `next` off the render worker. A displaced, inaudible
     /// candidate is returned to the caller for background destruction.
     pub fn validate_room(&self, next: &Instance, request: u64) -> Result<()> {
+        if request < self.requested_revision {
+            return Err(Error::InvalidArgument("Room switch has been superseded"));
+        }
         if self.ended.is_some() || request == 0 || next.capacity() < self.slots.len() {
             return Err(Error::InvalidArgument(
                 "Room switch is ended, invalid or under-prepared",
@@ -1214,12 +1228,23 @@ impl Session {
         }
         Ok(())
     }
+    /// Notify the worker before asynchronous preparation completes (or fails).
+    /// Superseded pending resources are reclaimed through `take_retired`, never
+    /// destroyed here or started by render_block. An ongoing transition finishes.
+    pub fn note_room_request(&mut self, request: u64) -> Result<()> {
+        if request == 0 {
+            return Err(Error::InvalidArgument("Invalid room request revision"));
+        }
+        self.requested_revision = self.requested_revision.max(request);
+        Ok(())
+    }
     pub fn queue_room(
         &mut self,
         next: Box<Instance>,
         request: u64,
     ) -> Result<[Option<Box<Instance>>; 2]> {
         self.validate_room(&next, request)?;
+        self.note_room_request(request)?;
         if self.phase == 0
             && next.prepared.room.profile.identity == self.current.prepared.room.profile.identity
         {
@@ -1242,7 +1267,17 @@ impl Session {
         }
     }
     pub fn take_retired(&mut self) -> Option<Box<Instance>> {
-        self.retired.take()
+        self.retired.take().or_else(|| {
+            if self
+                .pending
+                .as_ref()
+                .is_some_and(|v| v.0 < self.requested_revision)
+            {
+                self.pending.take().map(|v| v.1)
+            } else {
+                None
+            }
+        })
     }
     fn sync_voice_pair(&mut self) {
         let mut paired = self.paired.lock().unwrap();
@@ -1397,12 +1432,14 @@ impl Session {
     }
     fn render_block(&mut self) -> Result<()> {
         let start = self.clock - BLOCK as u64;
-        if self.phase == 0 && self.retired.is_none() {
-            if let Some((request, next)) = self.pending.take() {
-                self.incoming = Some(next);
-                self.incoming_request = request;
-                self.begin_warmup();
-            }
+        if self.phase == 0
+            && self.retired.is_none()
+            && self.pending_request() != 0
+            && let Some((request, next)) = self.pending.take()
+        {
+            self.incoming = Some(next);
+            self.incoming_request = request;
+            self.begin_warmup();
         }
         let mut old_gain = [1.; BLOCK];
         let mut new_gain = [0.; BLOCK];

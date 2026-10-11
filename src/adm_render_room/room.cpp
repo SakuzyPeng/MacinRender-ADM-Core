@@ -215,7 +215,10 @@ Result<void> Runtime::process(std::size_t frames,
                               std::span<const MradmRoomCommand> initial,
                               std::span<const MradmRoomCommand> events,
                               std::span<float> out) {
-    pump();
+    auto pending = pump();
+    if (!pending) {
+        return pending;
+    }
     std::array<char, 512> message{};
     MradmRoomInfo info{};
     auto result = checked(mradm_room_session_process(session_.get(),
@@ -240,6 +243,9 @@ Result<void> Runtime::process(std::size_t frames,
 }
 void Runtime::publish(const MradmRoomInfo& info) {
     const std::lock_guard lock(mutex_);
+    if (info.source_capacity > capacity_) {
+        cv_.notify_all();
+    }
     capacity_ = info.source_capacity;
     status_.material_frames = info.input_frames;
     status_.buffer_frames = info.latency_frames;
@@ -315,17 +321,25 @@ std::uint64_t Runtime::tail_frames() const {
     const std::lock_guard lock(mutex_);
     return status_.tail_frames;
 }
-void Runtime::pump() {
+Result<void> Runtime::pump() {
     const std::lock_guard lock(mutex_);
+    if (latest_ != 0) {
+        auto notified = checked(mradm_room_session_request(session_.get(), latest_));
+        if (!notified) {
+            return notified;
+        }
+    }
     // A stalled preparer must never force a destructor onto the render worker.
+    // Request invalidation above still prevents an obsolete pending room starting.
     if (dispose_count_ + 3 > dispose_.size()) {
-        return;
+        return {};
     }
     void* retired = nullptr;
     if (mradm_room_session_retired(session_.get(), &retired) == 0 && retired != nullptr) {
         dispose_.at(dispose_count_++) = retired;
     }
-    if (candidate_ && candidate_->epoch == epoch_ && candidate_->revision == latest_ && !ended_) {
+    if (candidate_ && candidate_->epoch == epoch_ && candidate_->revision == latest_ &&
+        candidate_->capacity >= capacity_ && !ended_) {
         std::array<void*, 2> displaced{};
         std::array<char, 512> message{};
         const auto code = mradm_room_session_queue(session_.get(),
@@ -350,10 +364,13 @@ void Runtime::pump() {
         candidate_.reset();
     }
     cv_.notify_all();
+    return {};
 }
 void Runtime::prepare_loop(const std::stop_token& stop) {
     while (!stop.stop_requested()) {
         std::optional<Request> queued;
+        std::optional<Candidate> growing;
+        bool resize_candidate = false;
         std::size_t capacity = 0;
         std::array<void*, 8> dispose{};
         std::size_t count = 0;
@@ -361,7 +378,8 @@ void Runtime::prepare_loop(const std::stop_token& stop) {
             std::unique_lock lock(mutex_);
             cv_.wait(lock, stop, [&] {
                 return request_.has_value() || dispose_count_ != 0 ||
-                       (candidate_ && (candidate_->epoch != epoch_ || candidate_->revision != latest_));
+                       (candidate_ && (candidate_->epoch != epoch_ || candidate_->revision != latest_ ||
+                                       candidate_->capacity < capacity_));
             });
             if (stop.stop_requested()) {
                 return;
@@ -370,27 +388,45 @@ void Runtime::prepare_loop(const std::stop_token& stop) {
             capacity = capacity_;
             count = std::exchange(dispose_count_, 0);
             std::copy_n(dispose_.begin(), count, dispose.begin());
-            if (candidate_ && (candidate_->epoch != epoch_ || candidate_->revision != latest_)) {
-                candidate_.reset();
+            if (candidate_ &&
+                (candidate_->epoch != epoch_ || candidate_->revision != latest_ || candidate_->capacity < capacity)) {
+                resize_candidate = candidate_->epoch == epoch_ && candidate_->revision == latest_;
+                growing = std::exchange(candidate_, std::nullopt);
             }
         }
         for (std::size_t i = 0; i < count; ++i) {
             mradm_room_instance_destroy(dispose.at(i));
         }
-        if (!queued) {
+        if (!queued && !resize_candidate) {
             continue;
         }
-        auto prepared = prepare(queued->config, {}, prepared_.get());
+        Candidate candidate;
         std::array<char, 512> message{};
-        void* raw = nullptr;
-        Result<void> result =
-            prepared ? checked(mradm_room_instance_create(
-                                   (*prepared)->handle.get(), capacity, &raw, message.data(), message.size()),
-                               message.data())
-                     : Result<void>{tl::unexpected{prepared.error()}};
-        InstanceHandle instance{raw, mradm_room_instance_destroy};
+        Result<void> result;
+        if (queued) {
+            growing.reset(); // stale candidate disposal stays outside the worker's mutex
+            auto prepared = prepare(queued->config, {}, prepared_.get());
+            void* raw = nullptr;
+            result = prepared ? checked(mradm_room_instance_create(
+                                            (*prepared)->handle.get(), capacity, &raw, message.data(), message.size()),
+                                        message.data())
+                              : Result<void>{tl::unexpected{prepared.error()}};
+            candidate = Candidate{InstanceHandle{raw, mradm_room_instance_destroy},
+                                  queued->revision,
+                                  queued->epoch,
+                                  prepared ? (*prepared)->info.preroll_frames : 0,
+                                  capacity};
+        } else if (growing) {
+            candidate = std::move(*growing);
+            result =
+                checked(mradm_room_instance_reserve(candidate.instance.get(), capacity, message.data(), message.size()),
+                        message.data());
+            candidate.capacity = capacity;
+        } else {
+            continue;
+        }
         const std::lock_guard lock(mutex_);
-        if (queued->epoch != epoch_ || queued->revision != latest_) {
+        if (candidate.epoch != epoch_ || candidate.revision != latest_) {
             continue;
         }
         if (!result) {
@@ -399,8 +435,7 @@ void Runtime::prepare_loop(const std::stop_token& stop) {
             status_.state = RoomSwitchState::failed;
             status_.message = result.error().message;
         } else {
-            candidate_ =
-                Candidate{std::move(instance), queued->revision, queued->epoch, (*prepared)->info.preroll_frames};
+            candidate_ = std::move(candidate);
         }
     }
 }

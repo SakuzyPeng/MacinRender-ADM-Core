@@ -558,6 +558,25 @@ pub unsafe extern "C" fn mradm_room_instance_destroy(handle: *mut Instance) {
         }
     }
 }
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_room_instance_reserve(
+    handle: *mut Instance,
+    source_capacity: usize,
+    message: *mut u8,
+    capacity: usize,
+) -> i32 {
+    boundary(message, capacity, || unsafe {
+        range(handle, 1)?;
+        (*handle).reserve(source_capacity)
+    })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mradm_room_session_request(handle: *mut Session, request: u64) -> i32 {
+    boundary(ptr::null_mut(), 0, || unsafe {
+        range(handle, 1)?;
+        (*handle).note_room_request(request)
+    })
+}
 /// Consumes `next` after argument validation, including when queueing fails.
 /// Returns up to two displaced instances; caller destroys them off the worker.
 #[unsafe(no_mangle)]
