@@ -120,9 +120,15 @@ class HrirPreparation(unittest.TestCase):
         np.testing.assert_allclose(array(self.output, result["assets"]["directions"]), DIRECTIONS, atol=1e-12)
 
     def test_invalid_sources_leave_no_partial_package(self):
+        def complex_ir(file):
+            data = file["Data.IR"][...].astype(complex) + .25j
+            del file["Data.IR"]
+            file.create_dataset("Data.IR", data=data)
+
         mutations = {
             "multiple radii": lambda f: f["SourcePosition"].__setitem__((0, 0), 2),
             "nonfinite PCM": lambda f: f["Data.IR"].__setitem__((0, 0, 0), np.nan),
+            "complex PCM must not discard its imaginary component": complex_ir,
             "duplicate direction": lambda f: f["SourcePosition"].__setitem__(0, DIRECTIONS[1]),
             "ambiguous ears": lambda f: f["ReceiverPosition"].__setitem__((1, 1, 0), .08),
             "excessive support": lambda f: f.create_dataset("Data.Delay", data=[[-5000., 0]]),

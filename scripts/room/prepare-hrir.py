@@ -36,7 +36,10 @@ def text(value):
 
 
 def finite(value, name):
-    result = np.asarray(value, dtype=np.float64)
+    result = np.asarray(value)
+    if result.dtype.kind not in "fiu":
+        raise ValueError(f"{name} must contain real numeric values")
+    result = result.astype(np.float64, copy=False)
     if not np.isfinite(result).all():
         raise ValueError(f"Nonfinite {name}")
     return result
@@ -196,7 +199,7 @@ def mesh(directions, supplied=None, index_base=0):
     else:
         path = Path(supplied)
         values = np.load(path, allow_pickle=False) if path.suffix == ".npy" else (
-            np.asarray(json.loads(path.read_text())) if path.suffix == ".json" else np.loadtxt(path))
+            np.asarray(json.loads(path.read_text(encoding="utf-8"))) if path.suffix == ".json" else np.loadtxt(path))
         if not np.isfinite(values).all() or np.any(values != np.floor(values)):
             raise ValueError("Mesh indices must be finite integers")
         faces = np.asarray(values, dtype=np.int64) - index_base
@@ -307,14 +310,14 @@ def prepare(source, output, *, ear_order="auto", faces=None, index_base=0, check
                               "directions": asset(staging, "hrir-directions.f64", directions, "<f8"),
                               "faces": asset(staging, "hrir-faces.u32", triangles, "<u4"),
                               "delays": asset(staging, "hrir-delays.f64", delays, "<f8")})
-        (staging / "hrir.json").write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
+        (staging / "hrir.json").write_text(json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         if checker:
             completed = subprocess.run([str(Path(checker).resolve()), str(staging / "hrir.json")],
                                        capture_output=True, text=True, check=True)
             verification = json.loads(completed.stdout)
             if verification.get("passed") is not True:
                 raise ValueError("Native node reconstruction failed")
-            (staging / "node-validation.json").write_text(json.dumps(verification, indent=2) + "\n")
+            (staging / "node-validation.json").write_text(json.dumps(verification, indent=2) + "\n", encoding="utf-8")
         staging.rename(output)
         return result
     finally:
