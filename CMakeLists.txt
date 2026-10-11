@@ -1545,7 +1545,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
             "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" test --locked --workspace
             --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
             --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}" ${_mr_rust_test_features})
-    set_tests_properties(mr_adm_rust_unit_tests PROPERTIES TIMEOUT 300)
+    set_tests_properties(mr_adm_rust_unit_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
+    add_test(NAME mr_adm_room_trace_tests
+        COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+            "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}" "${Rust_CARGO_CACHED}" test --locked
+            --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-dsp
+            --no-default-features --features room-trace --test room_profile --test room_no_alloc
+            --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}")
+    set_tests_properties(mr_adm_room_trace_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
 
     add_executable(mr_adm_hrtf_grid_tests tests/unit/hrtf_grid_test.cpp)
     target_link_libraries(mr_adm_hrtf_grid_tests PRIVATE MacinRender::ADMRenderBinaural MacinRender::ADMDsp)

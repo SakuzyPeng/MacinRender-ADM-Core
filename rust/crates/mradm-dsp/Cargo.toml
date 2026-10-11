@@ -23,5 +23,7 @@ sofar = { version = "=0.3.0", default-features = false, optional = true }
 diagnostics = []
 # Room stage counters only; disabled in production and final benchmarks.
 room-profile = []
+# Coarse wall/CPU tracing avoids clocks inside arithmetic kernels.
+room-trace = ["room-profile"]
 default = ["sofa"]
 sofa = ["dep:sofar"]
