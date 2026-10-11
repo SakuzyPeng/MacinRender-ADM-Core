@@ -344,6 +344,20 @@ mr_adm_core_apply_warnings(mr_adm_render_hoa)
 mr_adm_core_apply_static_analysis(mr_adm_render_hoa)
 
 # ── adm_render_binaural ───────────────────────────────────────────────────────
+# Native room DSP is shared by offline rendering, file streaming and Scene streaming.
+add_library(mr_adm_render_room)
+add_library(MacinRender::ADMRenderRoom ALIAS mr_adm_render_room)
+target_sources(mr_adm_render_room PRIVATE
+    src/adm_render_room/room.cpp
+    src/adm_render_room/room_renderer.cpp
+    src/adm_render_room/live_room_renderer.cpp
+    PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/adm/room.h include/adm/render_room.h)
+target_include_directories(mr_adm_render_room PRIVATE src/adm_render_room)
+target_link_libraries(mr_adm_render_room PUBLIC MacinRender::ADMCore
+    PRIVATE MacinRender::ADMAudio MacinRender::ADMRenderCommon MacinRender::ADMDsp Threads::Threads)
+mr_adm_core_apply_warnings(mr_adm_render_room)
+mr_adm_core_apply_static_analysis(mr_adm_render_room)
+
 # Rust HRTF binaural renderer: Objects/DirectSpeakers → 2ch via VBAP-interpolated
 # KEMAR or user SOFA HRTF convolution.  HOA not supported.
 
@@ -561,7 +575,7 @@ target_sources(mr_adm_renderer_factory PRIVATE src/adm_renderer_factory/renderer
 target_include_directories(mr_adm_renderer_factory PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/adm_renderer_factory)
 target_link_libraries(mr_adm_renderer_factory
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural
+    PRIVATE MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMRenderRoom
             MacinRender::ADMRenderCommon
 )
 if(APPLE)
@@ -593,7 +607,7 @@ target_sources(
 
 target_link_libraries(mr_adm_engine
     PUBLIC MacinRender::ADMCore
-    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio MacinRender::ADMMetadata
+    PRIVATE MacinRender::ADMIo MacinRender::ADMRendererFactory MacinRender::ADMRealtime MacinRender::ADMRenderCommon MacinRender::ADMRenderEar MacinRender::ADMRenderVBAP MacinRender::ADMRenderTripleBalance MacinRender::ADMRenderHOA MacinRender::ADMRenderBinaural MacinRender::ADMRenderRoom MacinRender::ADMPeak MacinRender::ADMLoudness MacinRender::ADMAudio MacinRender::ADMMetadata
 )
 if(APPLE)
     target_link_libraries(mr_adm_engine PRIVATE MacinRender::ADMRenderApple)
@@ -625,6 +639,7 @@ target_sources(mr_adm_realtime PRIVATE
     src/adm_realtime/monitor_engine.cpp
     src/adm_realtime/miniaudio_device.cpp
     src/adm_realtime/scene_stream_engine.cpp
+    src/adm_realtime/room_worker_wait.cpp
     src/adm_realtime/stereo_peak_guard.cpp
     src/adm_realtime/osc_head_tracking.cpp
     src/adm_realtime/osc_head_tracking_protocol.cpp
@@ -641,12 +656,14 @@ target_link_libraries(mr_adm_realtime
         MacinRender::ADMRenderCommon
         MacinRender::ADMRenderVBAP
         MacinRender::ADMRenderBinaural
+        MacinRender::ADMRenderRoom
         MacinRender::ADMRenderTripleBalance
 )
 target_include_directories(mr_adm_realtime PRIVATE
     src/adm_render_vbap
     src/adm_render_binaural
     src/adm_render_triple_balance
+    src/adm_render_room
 )
 if(WIN32)
     target_link_libraries(mr_adm_realtime PRIVATE ws2_32)
@@ -675,7 +692,8 @@ target_sources(
             include/adm/c_api.h
 )
 
-target_link_libraries(mr_adm_c_api PUBLIC MacinRender::ADMEngine PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon)
+target_link_libraries(mr_adm_c_api PUBLIC MacinRender::ADMEngine PRIVATE MacinRender::ADMRealtime MacinRender::ADMRenderCommon
+    MacinRender::ADMRenderRoom nlohmann_json::nlohmann_json)
 set_target_properties(mr_adm_c_api PROPERTIES
     VERSION   ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
@@ -696,7 +714,8 @@ if(MR_ADM_BUILD_CAPI_BUNDLE)
         VERSION   ${PROJECT_VERSION}
         SOVERSION ${PROJECT_VERSION_MAJOR}
     )
-    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime MacinRender::ADMRenderCommon)
+    target_link_libraries(mradm_capi_bundle PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime
+        MacinRender::ADMRenderCommon MacinRender::ADMRenderRoom nlohmann_json::nlohmann_json)
     # Keep Rust's allocator/panic machinery and every private DSP symbol inside
     # this DSO. Consumers continue to see only the established adm_* C boundary.
     # scripts/quality/check-capi-exports.py verifies the result on every platform.
@@ -756,6 +775,7 @@ if(MR_ADM_CORE_BUILD_CLI)
             MacinRender::ADMRenderTripleBalance
             MacinRender::ADMRenderHOA
             MacinRender::ADMRenderBinaural
+            MacinRender::ADMRenderRoom
             MacinRender::ADMAudio
             CLI11::CLI11
             spdlog::spdlog
@@ -1043,6 +1063,14 @@ if(MR_ADM_CORE_BUILD_TESTS)
     add_test(NAME mr_adm_live_scene_trace_tests COMMAND mr_adm_live_scene_trace_tests)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
+        add_executable(mr_adm_room_tests tests/unit/room_render_test.cpp)
+        target_link_libraries(mr_adm_room_tests PRIVATE MacinRender::ADMRenderRoom MacinRender::ADMAudio
+            MacinRender::ADMCAPI MacinRender::ADMRenderCommon nlohmann_json::nlohmann_json)
+        target_include_directories(mr_adm_room_tests PRIVATE src/adm_render_room)
+        mr_adm_core_apply_warnings(mr_adm_room_tests)
+        add_test(NAME mr_adm_room_tests COMMAND "${Python3_EXECUTABLE}" -B
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/room_fixture.py" "$<TARGET_FILE:mr_adm_room_tests>")
+        set_tests_properties(mr_adm_room_tests PROPERTIES TIMEOUT 120)
         add_test(NAME mr_adm_fft_benchmark_tests
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/fft_benchmark_test.py")
         add_custom_target(mr_adm_phase2_tools
@@ -1200,6 +1228,15 @@ if(MR_ADM_CORE_BUILD_TESTS)
         target_link_libraries(mr_adm_triple_balance_scene_benchmark PRIVATE Psapi)
     endif()
     mr_adm_core_apply_warnings(mr_adm_triple_balance_scene_benchmark)
+
+    add_executable(mr_adm_room_scene_benchmark EXCLUDE_FROM_ALL tests/manual/room_scene_benchmark.cpp)
+    target_link_libraries(mr_adm_room_scene_benchmark PRIVATE MacinRender::ADMEngine MacinRender::ADMRealtime
+        MacinRender::ADMRenderRoom MacinRender::ADMRenderCommon MacinRender::ADMDsp nlohmann_json::nlohmann_json)
+    target_include_directories(mr_adm_room_scene_benchmark PRIVATE src/adm_engine src/adm_render_room)
+    if(WIN32)
+        target_link_libraries(mr_adm_room_scene_benchmark PRIVATE Psapi)
+    endif()
+    mr_adm_core_apply_warnings(mr_adm_room_scene_benchmark)
 
     add_executable(mr_adm_triple_balance_monitor_benchmark EXCLUDE_FROM_ALL
         tests/manual/triple_balance_monitor_benchmark.cpp)
@@ -1683,6 +1720,7 @@ install(
         mr_adm_render_triple_balance
         mr_adm_render_hoa
         mr_adm_render_binaural
+        mr_adm_render_room
         mr_adm_peak
         mr_adm_loudness
         mr_adm_engine

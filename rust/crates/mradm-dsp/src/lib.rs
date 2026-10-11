@@ -25,6 +25,7 @@ pub mod pcm_mix;
 pub mod peak_guard;
 pub mod resampler;
 pub mod rng;
+pub mod room;
 pub mod scene_math;
 pub mod scene_transition;
 pub mod spreader;

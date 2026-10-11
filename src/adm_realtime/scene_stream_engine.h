@@ -122,6 +122,7 @@ class SceneStreamEngine {
     // the output ring first; this does not bypass normal queue backpressure.
     [[nodiscard]] Result<void> wait_idle(std::chrono::milliseconds timeout);
     void set_listener_orientation(const ListenerOrientation& orientation);
+    [[nodiscard]] std::shared_ptr<IRoomControl> room_control() const;
     [[nodiscard]] Result<void> set_semantic_policy_json(std::string_view json, std::uint64_t revision);
 
     [[nodiscard]] ScenePullResult pull(float* interleaved_output, std::uint32_t frames) noexcept;

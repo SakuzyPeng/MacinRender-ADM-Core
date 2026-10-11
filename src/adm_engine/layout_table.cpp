@@ -18,6 +18,7 @@
 #include "adm/render_binaural.h"
 #include "adm/render_ear.h"
 #include "adm/render_hoa.h"
+#include "adm/render_room.h"
 #include "adm/render_triple_balance.h"
 #include "adm/render_vbap.h"
 
@@ -196,12 +197,14 @@ std::vector<OutputLayoutRow> build_output_layouts() {
     static const auto triple_balance = triple_balance_capabilities();
     static const auto hoa = hoa_capabilities();
     static const auto binaural = binaural_capabilities();
+    static const auto room = room_capabilities();
     std::vector<std::pair<const char*, const CapabilityReport*>> backends{
         {"ear", &ear},
         {"saf", &saf},
         {"triple-balance", &triple_balance},
         {"hoa", &hoa},
         {"saf-binaural", &binaural},
+        {"room-binaural", &room},
     };
 #ifdef __APPLE__
     static const auto apple = apple_capabilities();

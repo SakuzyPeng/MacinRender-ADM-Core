@@ -1,0 +1,31 @@
+{
+  "schema": "mradm.room-definition",
+  "version": 1,
+  "id": "example-room-v1",
+  "name": "Example room (requires acoustic validation)",
+  "dimensions": [7.0, 6.0, 3.2],
+  "listener": [3.4, 3.0, 1.2],
+  "speed_of_sound": 344.02,
+  "reference_distance": 2.1,
+  "minimum_distance": 0.25,
+  "boundary_clearance": 0.15,
+  "reflection_order": 4,
+  "absorption": [
+    [0.94, 0.94, 0.94, 0.94, 0.94, 0.94, 0.94, 0.94],
+    [0.94, 0.94, 0.94, 0.94, 0.94, 0.94, 0.94, 0.94],
+    [0.94, 0.94, 0.94, 0.94, 0.94, 0.94, 0.94, 0.94],
+    [0.94, 0.94, 0.94, 0.94, 0.94, 0.94, 0.94, 0.94],
+    [0.94, 0.94, 0.94, 0.94, 0.94, 0.94, 0.94, 0.94],
+    [0.94, 0.94, 0.94, 0.94, 0.94, 0.94, 0.94, 0.94]
+  ],
+  "early_fade_seconds": [0.015, 0.025],
+  "late_predelay_seconds": 0.018,
+  "late_energy": 0.2493265891586277,
+  "late": {
+    "generator": "octave-decay-noise-v1",
+    "seed": 1,
+    "duration_seconds": 1.0,
+    "rt60_seconds": [0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28],
+    "band_energy": [1, 1, 1, 1, 1, 1, 1, 1]
+  }
+}

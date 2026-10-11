@@ -212,6 +212,8 @@ struct IamfLayerInfo {
         return "binaural";
     case RendererSelection::saf_binaural:
         return "saf-binaural";
+    case RendererSelection::room_binaural:
+        return "room-binaural";
     }
     return "unknown";
 }
@@ -573,7 +575,8 @@ RenderResult RenderService::render(const RenderRequest& request,
                     std::nullopt,
                     {{LogLevel::error, msg}}};
         }
-        if (std::ranges::find(caps.hrtf_sources, "user-sofa") == caps.hrtf_sources.end()) {
+        if (std::ranges::find(caps.hrtf_sources, "user-sofa") == caps.hrtf_sources.end() &&
+            sel != RendererSelection::room_binaural) {
             const auto msg = fmt::format("renderer '{}' does not support user SOFA HRTFs", renderer_name(sel));
             return {{ErrorCode::unsupported, msg, {}}, std::nullopt, std::nullopt, {{LogLevel::error, msg}}};
         }
@@ -791,6 +794,7 @@ RenderResult RenderService::render(const RenderRequest& request,
     plan.output_path = render_path;
     plan.output_layout = output_layout;
     plan.sofa_path = request.options.sofa_path;
+    plan.room = request.options.room;
     plan.default_interp_ms = request.options.default_interp_ms;
     plan.object_smoothing_frames = request.options.object_smoothing_frames;
     plan.speaker_geometry = request.options.speaker_geometry;

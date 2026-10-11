@@ -1,0 +1,1 @@
+pulp-wasm-simd-flag 0.1.1 declares MIT in Cargo.toml and names the same upstream repository as pulp 0.22.3: https://github.com/sarah-quinones/pulp/ . The crate archive omits a license text. LICENSE is the MIT license shipped at the pulp 0.22.3 repository/package root. This notice records that provenance; it does not change the upstream license.

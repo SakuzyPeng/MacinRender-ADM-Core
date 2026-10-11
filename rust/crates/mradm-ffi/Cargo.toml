@@ -14,6 +14,8 @@ mradm-wav = { path = "../mradm-wav" }
 mradm-adm = { path = "../mradm-adm" }
 mradm-osc = { path = "../mradm-osc" }
 mradm-dsp = { path = "../mradm-dsp", default-features = false }
+serde_json.workspace = true
+libm.workspace = true
 
 [dev-dependencies]
 mradm-math = { path = "../mradm-math" }

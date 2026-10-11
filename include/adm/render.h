@@ -124,6 +124,7 @@ struct RenderPlan {
     // Optional diagnostics from prepare(), including rejected combinations.
     // Invoked synchronously; never retained in reusable prepared/DSP state.
     std::function<void(std::string)> renderer_semantics_sink{};
+    RoomConfig room{};
 };
 
 // Immutable, reusable backend state produced by IRenderer::prepare() (gain matrices,
@@ -202,6 +203,10 @@ class IRenderStream {
     // rotation) implement it; other backends ignore it. NOT pure virtual so backends adopt it
     // incrementally; the default keeps the prepared (identity) orientation.
     virtual void set_listener_orientation(const ListenerOrientation& orientation) { (void) orientation; }
+
+    [[nodiscard]] virtual std::shared_ptr<IRoomControl> room_control() const { return {}; }
+    // Room paths append their finite acoustic support to complete programmes.
+    [[nodiscard]] virtual std::uint64_t appended_tail_frames() const { return 0; }
 
     // ── Output-stage orientation (two-stage rendering) ──────────────────────────────────────
     // Opt-in contract for streams that can apply the listener head orientation at the audio

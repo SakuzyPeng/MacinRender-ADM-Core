@@ -1972,6 +1972,456 @@
           "value": "local"
         }
       ]
+    },
+    {
+      "type": "library",
+      "name": "rust-block-buffer-0.10.4",
+      "version": "0.10.4",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/block-buffer@0.10.4",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-cfg-if-1.0.5",
+      "version": "1.0.5",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/cfg-if@1.0.5",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-cpufeatures-0.2.17",
+      "version": "0.2.17",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/cpufeatures@0.2.17",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-crossbeam-deque-0.8.8",
+      "version": "0.8.8",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/crossbeam-deque@0.8.8",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-crossbeam-epoch-0.9.21",
+      "version": "0.9.21",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/crossbeam-epoch@0.9.21",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-crossbeam-utils-0.8.23",
+      "version": "0.8.23",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/crossbeam-utils@0.8.23",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-crypto-common-0.1.7",
+      "version": "0.1.7",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/crypto-common@0.1.7",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-digest-0.10.7",
+      "version": "0.10.7",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/digest@0.10.7",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-either-1.19.0",
+      "version": "1.19.0",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/either@1.19.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-generic-array-0.14.7",
+      "version": "0.14.7",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/generic-array@0.14.7",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-libc-0.2.190",
+      "version": "0.2.190",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/libc@0.2.190",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-rayon-1.11.0",
+      "version": "1.11.0",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/rayon@1.11.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-rayon-core-1.13.0",
+      "version": "1.13.0",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/rayon-core@1.13.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-sha2-0.10.9",
+      "version": "0.10.9",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/sha2@0.10.9",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-version_check-0.9.5",
+      "version": "0.9.5",
+      "description": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/version_check@0.9.5",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-paste-1.0.15",
+      "version": "1.0.15",
+      "description": "房间独立频率 SIMD 的安全运行时分派依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/paste@1.0.15",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-pulp-0.22.3",
+      "version": "0.22.3",
+      "description": "房间独立频率 SIMD 的安全运行时分派依赖",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/pulp@0.22.3",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-pulp-wasm-simd-flag-0.1.1",
+      "version": "0.1.1",
+      "description": "房间独立频率 SIMD 的安全运行时分派依赖",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/pulp-wasm-simd-flag@0.1.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-raw-cpuid-11.6.0",
+      "version": "11.6.0",
+      "description": "房间独立频率 SIMD 的安全运行时分派依赖",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/raw-cpuid@11.6.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-reborrow-0.5.5",
+      "version": "0.5.5",
+      "description": "房间独立频率 SIMD 的安全运行时分派依赖",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/reborrow@0.5.5",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
     }
   ]
 }

@@ -39,6 +39,10 @@ corrosion_add_target_rustflags(mradm_ffi "-Crelocation-model=pic")
 add_library(mr_adm_dsp INTERFACE)
 add_library(MacinRender::ADMDsp ALIAS mr_adm_dsp)
 target_link_libraries(mr_adm_dsp INTERFACE mradm_ffi)
+if(WIN32)
+    # Dedicated room DSP workers register with the system Audio scheduling task.
+    target_link_libraries(mr_adm_dsp INTERFACE avrt)
+endif()
 target_include_directories(mr_adm_dsp INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/src/adm_dsp")
 
 # Reuse Corrosion's actual target directory for Cargo unit/integration tests.

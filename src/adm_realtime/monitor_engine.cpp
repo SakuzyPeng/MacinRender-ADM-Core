@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "meter.h"
+#include "room_worker_wait.h"
 
 namespace mradm::realtime {
 
@@ -64,6 +65,7 @@ MonitorEngine::MonitorEngine(std::unique_ptr<IRenderStream> stream, IAudioOutput
       scratch_b_(static_cast<std::size_t>(k_chunk_frames) * channels_, 0.0F),
       meter_ring_(output_stage_ ? static_cast<std::size_t>(k_ring_frames) * channels_ : 0U),
       output_dsp_(channels_, sample_rate_, pull_is_realtime_playback_), crossfade_dsp_(channels_, k_crossfade_frames) {
+    std::atomic_store(&room_control_, stream_->room_control());
     if (output_stage_) {
         // pull_scratch_ holds one callback's worth of intermediate before render_output; sized for a
         // generous max block (the callback loops if it ever asks for more). meter_scratch_ is the
@@ -474,6 +476,7 @@ void MonitorEngine::finalize_crossfade() {
     // completes, or to settle a mid-flight fade before a seek / a new switch.
     if (xfade_active_) {
         stream_ = std::move(xfade_stream_);
+        std::atomic_store(&room_control_, stream_->room_control());
         xfade_active_ = false;
         crossfade_dsp_.reset();
     }
@@ -518,6 +521,7 @@ void MonitorEngine::apply_pending_seek_locked(std::unique_lock<std::mutex>& lock
 
 // NOLINTNEXTLINE(readability-function-size): keep command ordering and callback handshakes in one worker transaction.
 void MonitorEngine::worker_loop() {
+    bool room_worker_active = false;
     while (!quit_.load(std::memory_order_acquire)) {
         {
             std::unique_lock<std::mutex> lock(control_mutex_);
@@ -573,6 +577,7 @@ void MonitorEngine::worker_loop() {
                             std::this_thread::yield();
                         }
                         stream_ = std::move(pending_stream_);
+                        std::atomic_store(&room_control_, stream_->room_control());
                         producer_pos_ = switch_to;
                         consumer_src_pos_ = switch_to;
                         ring_.clear();
@@ -624,6 +629,11 @@ void MonitorEngine::worker_loop() {
             }
         }
 
+        const bool room_active = stream_->room_control() || (xfade_stream_ && xfade_stream_->room_control());
+        if (room_active || room_worker_active) {
+            set_room_worker_active(room_active);
+            room_worker_active = room_active;
+        }
         // Output-stage: drain the callback's rendered-output tap to keep the LUFS meter fed (no-op
         // otherwise), and surface a callback render error (the affected block was already silenced).
         if (output_stage_) {
@@ -635,7 +645,11 @@ void MonitorEngine::worker_loop() {
         }
         // Produce ahead of the playhead without holding the lock.
         if (!top_up_ring()) {
-            std::this_thread::sleep_for(k_idle_nap); // ring full (or nothing to add) — back off
+            if (stream_->room_control() || (xfade_stream_ && xfade_stream_->room_control())) {
+                wait_room_worker(k_idle_nap);
+            } else {
+                std::this_thread::sleep_for(k_idle_nap); // ring full (or nothing to add) — back off
+            }
         }
     }
 }

@@ -205,7 +205,7 @@
 /* ── Version macros ──────────────────────────────────────────────────────── */
 
 #define ADM_API_VERSION_MAJOR 1
-#define ADM_API_VERSION_MINOR 45
+#define ADM_API_VERSION_MINOR 46
 #define ADM_API_VERSION_PATCH 0
 #define ADM_API_VERSION ((ADM_API_VERSION_MAJOR * 10000) + (ADM_API_VERSION_MINOR * 100) + ADM_API_VERSION_PATCH)
 
@@ -275,7 +275,8 @@ typedef enum adm_renderer_t {
     ADM_RENDERER_APPLE = 4,
     ADM_RENDERER_BINAURAL = 5,
     ADM_RENDERER_SAF_BINAURAL = 6,
-    ADM_RENDERER_TRIPLE_BALANCE = 7 /* Cartesian room renderer; Scene support since v1.44 */
+    ADM_RENDERER_TRIPLE_BALANCE = 7, /* Cartesian room renderer; Scene support since v1.44 */
+    ADM_RENDERER_ROOM_BINAURAL = 8   /* native 48 kHz room + 3DoF, since v1.46 */
 } adm_renderer_t;
 
 typedef enum adm_output_bit_depth_t {
@@ -1854,6 +1855,64 @@ adm_error_code_t adm_scene_output_get_status(adm_scene_output_t* output,
 adm_error_code_t adm_scene_stream_switch_backend_ex(const adm_scene_stream_t* stream,
                                                     const adm_scene_renderer_config_t* config,
                                                     char** out_error) ADM_API_NOEXCEPT;
+
+/* ── Native room rendering (v1.46, additive) ────────────────────────────────
+ * Load/inspect/creation may allocate and read files. Active sessions retain all
+ * resources in memory. No room API is an audio-device callback operation.
+ * Room changes retain the listener HRIR and metres_per_unit. They prepare in the
+ * background; failure leaves the audible room running. Only the newest pending
+ * request survives. Stream/monitor lifetime and other setters follow their
+ * existing serialization rules; Scene room setters do not borrow last-error storage.
+ */
+typedef struct adm_room_t adm_room_t;
+typedef struct adm_room_config_t {
+    uint32_t struct_size;
+    uint32_t reserved;
+    const adm_room_t* room;
+    const char* hrir_manifest; /* UTF-8; NULL selects the package default */
+    double metres_per_unit;    /* [0.01, 100]; recommended/default scale = 1.5 */
+} adm_room_config_t;
+
+adm_error_code_t adm_room_load(adm_context_t* context, const char* manifest, adm_room_t** out) ADM_API_NOEXCEPT;
+void adm_room_destroy(adm_room_t* room) ADM_API_NOEXCEPT;
+/* Borrowed until room destruction. */
+const char* adm_room_manifest_json(const adm_room_t* room) ADM_API_NOEXCEPT;
+/* Owned UTF-8 JSON. Free with adm_free_string. Sets *out_json=NULL on failure. */
+adm_error_code_t
+adm_room_inspect(adm_context_t* context, const adm_room_config_t* config, char** out_json) ADM_API_NOEXCEPT;
+/* Copies/retains config; caller may destroy its room handle immediately. NULL clears. */
+adm_error_code_t adm_render_options_set_room(adm_render_options_t* options,
+                                             const adm_room_config_t* config) ADM_API_NOEXCEPT;
+/* Existing nested Scene structures keep their ABI layout. rendering.renderer must
+ * be ADM_RENDERER_ROOM_BINAURAL; the extra room config is passed separately. */
+adm_error_code_t adm_create_scene_stream_with_room(adm_context_t* context,
+                                                   const adm_scene_stream_config_t* config,
+                                                   const adm_room_config_t* room,
+                                                   adm_scene_stream_t** out) ADM_API_NOEXCEPT;
+/* out_request and out_error are required. Revision is nonzero on acceptance.
+ * out_error owns any synchronous error text; use adm_free_string. Preparation
+ * failures are reported asynchronously by the status JSON. */
+adm_error_code_t adm_monitor_switch_room(adm_monitor_t* monitor,
+                                         const adm_room_config_t* config,
+                                         uint64_t* out_request,
+                                         char** out_error) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_stream_switch_room(const adm_scene_stream_t* stream,
+                                              const adm_room_config_t* config,
+                                              uint64_t* out_request,
+                                              char** out_error) ADM_API_NOEXCEPT;
+/* Owned mradm.room-status v1 JSON: state (applied/preparing/transitioning/draining/failed),
+ * requested_revision, applied_revision, transition_sample, material_frames,
+ * tail_frames (finite support), buffer_frames (algorithm FIFO), constrained_sources,
+ * message. Does not claim device/head-motion latency. */
+adm_error_code_t adm_monitor_room_status_json(const adm_monitor_t* monitor, char** out_json) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_stream_room_status_json(const adm_scene_stream_t* stream, char** out_json) ADM_API_NOEXCEPT;
+/* Latest worker snapshot of actual ray-constrained room coordinates, metres.
+ * IDs are the submitted Scene element IDs; file source IDs start at 1 in scene track order. */
+adm_error_code_t
+adm_monitor_room_source_json(const adm_monitor_t* monitor, uint64_t element_id, char** out_json) ADM_API_NOEXCEPT;
+adm_error_code_t adm_scene_stream_room_source_json(const adm_scene_stream_t* stream,
+                                                   uint64_t element_id,
+                                                   char** out_json) ADM_API_NOEXCEPT;
 
 #ifdef __cplusplus
 } /* extern "C" */
