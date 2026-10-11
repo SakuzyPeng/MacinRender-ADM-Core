@@ -517,12 +517,76 @@ impl super::workers::Work for Mutex<Voices> {
 // During a room transition, process the same source in both rooms on the same
 // worker before moving to another source. Its exact HRIR query cache stays hot;
 // audio reduction still happens later in the fixed source-ID order.
-struct PairedVoices {
+struct BlockJob {
     current: Arc<Mutex<Voices>>,
     incoming: Option<Arc<Mutex<Voices>>>,
+    current_output: Arc<Mutex<InstanceOutput>>,
+    incoming_output: Option<Arc<Mutex<InstanceOutput>>>,
+    order: [usize; MAX_SOURCES],
+    sources: usize,
+    draining: bool,
+    drain_remaining: usize,
+    old_gain: [f32; BLOCK],
+    new_gain: [f32; BLOCK],
+    marks: [bool; BLOCK],
+    poses: [[f32; 3]; BLOCK],
+    late_decoder: WorldTail,
+    late_input: Vec<f32>,
+    late_output: [f32; BLOCK * 2],
+    output: [f32; BLOCK * 2],
 }
-impl PairedVoices {
+impl BlockJob {
     fn render(&mut self) -> Result<()> {
+        self.render_voices()?;
+        let mut current = self.current_output.lock().unwrap();
+        current.finish(&self.current.lock().unwrap(), &self.order[..self.sources])?;
+        let mut incoming = self.incoming_output.as_ref().map(|v| v.lock().unwrap());
+        if let (Some(output), Some(voices)) = (&mut incoming, &self.incoming) {
+            output.finish(&voices.lock().unwrap(), &self.order[..self.sources])?;
+        }
+        for i in 0..BLOCK {
+            for ear in 0..2 {
+                let at = ear * BLOCK + i;
+                let tail_gain = if self.draining && i >= self.drain_remaining {
+                    0.
+                } else {
+                    1.
+                };
+                let mut sample =
+                    current.direct[at] * self.old_gain[i] + current.wet[at] * tail_gain;
+                if let Some(incoming) = &incoming {
+                    sample += incoming.direct[at] * self.new_gain[i] + incoming.wet[at];
+                }
+                self.output[2 * i + ear] = sample;
+            }
+        }
+        for (index, value) in self.late_input.iter_mut().enumerate() {
+            *value = if self.draining && index % BLOCK >= self.drain_remaining {
+                0.
+            } else {
+                current.late_output[index]
+            };
+            if let Some(next) = &incoming {
+                *value += next.late_output[index];
+            }
+        }
+        self.late_decoder.begin_world(&self.late_input)?;
+        let mut begin = 0;
+        while begin < BLOCK {
+            let end = (begin + 1..BLOCK).find(|i| self.marks[*i]).unwrap_or(BLOCK);
+            self.late_decoder.update(self.poses[begin])?;
+            self.late_decoder
+                .render_range(begin, end - begin, &mut self.late_output)?;
+            begin = end;
+        }
+        for i in 0..BLOCK {
+            for ear in 0..2 {
+                self.output[2 * i + ear] += self.late_output[ear * BLOCK + i];
+            }
+        }
+        Ok(())
+    }
+    fn render_voices(&mut self) -> Result<()> {
         let mut current = self.current.lock().unwrap();
         let Some(incoming) = &self.incoming else {
             return current.render();
@@ -577,23 +641,73 @@ impl PairedVoices {
         }
     }
 }
-impl super::workers::Work for Mutex<PairedVoices> {
+impl super::workers::Work for Mutex<BlockJob> {
     fn run(&self) -> Result<()> {
         self.lock().unwrap().render()
     }
 }
 
-pub struct Instance {
-    pub prepared: Arc<PreparedSet>,
-    group: Arc<Mutex<Voices>>,
+struct InstanceOutput {
     field: WorldTail,
     lfe: Long,
     send: [f32; BLOCK],
     lfe_input: [f32; BLOCK],
     lfe_output: [f32; BLOCK],
     late_output: Vec<f32>,
-    pub direct: [f32; 2 * BLOCK],
-    pub wet: [f32; 2 * BLOCK],
+    direct: [f32; 2 * BLOCK],
+    wet: [f32; 2 * BLOCK],
+}
+impl InstanceOutput {
+    fn finish(&mut self, group: &Voices, order: &[usize]) -> Result<()> {
+        let block = group
+            .block
+            .ok_or(Error::InvalidArgument("Missing room reduction block"))?;
+        let wet_gain = &block.wet_gain;
+        let excitation = block.excitation;
+        self.direct.fill(0.);
+        self.wet.fill(0.);
+        self.send.fill(0.);
+        self.lfe_input.fill(0.);
+        let profile = super::profile::Guard::new(super::profile::Stage::SourceReduction);
+        // Parallel work never reduces audio. Preserve the fixed source-ID order.
+        for index in order {
+            let slot = &group.inputs[*index];
+            if slot.description.role == 2 {
+                if excitation {
+                    for i in 0..BLOCK {
+                        self.lfe_input[i] += slot.world[i] * wet_gain[i];
+                    }
+                }
+            } else {
+                let voice = &group.voices[*index];
+                for i in 0..BLOCK {
+                    self.send[i] += voice.send[i];
+                    for ear in 0..2 {
+                        let at = ear * BLOCK + i;
+                        self.direct[at] += voice.direct[at];
+                        self.wet[at] += voice.early[at];
+                    }
+                }
+            }
+        }
+        drop(profile);
+        self.field
+            .process_field(&self.send, &mut self.late_output)?;
+        self.lfe.process(&self.lfe_input, &mut self.lfe_output)?;
+        for i in 0..BLOCK {
+            for ear in 0..2 {
+                let at = ear * BLOCK + i;
+                self.wet[at] += self.lfe_output[i];
+            }
+        }
+        Ok(())
+    }
+}
+
+pub struct Instance {
+    pub prepared: Arc<PreparedSet>,
+    group: Arc<Mutex<Voices>>,
+    output: Arc<Mutex<InstanceOutput>>,
 }
 impl Instance {
     fn query_caches(&mut self, slots: Option<&[Slot]>) {
@@ -609,23 +723,26 @@ impl Instance {
             return Err(Error::InvalidArgument("Room source capacity exceeded"));
         }
         let mut result = Self {
-            field: WorldTail::new_field(prepared.room.clone())?,
-            lfe: Long::new(prepared.lfe.clone())?,
             group: Arc::new(Mutex::new(Voices {
                 room: prepared.room.clone(),
                 voices: Vec::with_capacity(capacity),
                 inputs: Vec::with_capacity(capacity),
                 block: None,
             })),
-            send: [0.; BLOCK],
-            lfe_input: [0.; BLOCK],
-            lfe_output: [0.; BLOCK],
-            late_output: vec![0.; prepared.room.profile.late_directions.len() * BLOCK],
-            direct: [0.; 2 * BLOCK],
-            wet: [0.; 2 * BLOCK],
+            output: Arc::new(Mutex::new(InstanceOutput {
+                field: WorldTail::new_field(prepared.room.clone())?,
+                lfe: Long::new(prepared.lfe.clone())?,
+                send: [0.; BLOCK],
+                lfe_input: [0.; BLOCK],
+                lfe_output: [0.; BLOCK],
+                late_output: vec![0.; prepared.room.profile.late_directions.len() * BLOCK],
+                direct: [0.; 2 * BLOCK],
+                wet: [0.; 2 * BLOCK],
+            })),
             prepared,
         };
         result.reserve(capacity)?;
+        drop(result.output.lock().unwrap());
         Ok(result)
     }
     pub fn capacity(&self) -> usize {
@@ -662,10 +779,11 @@ impl Instance {
             voice.until = 0;
             voice.constrained = false;
         }
-        self.field.reset();
-        self.lfe.reset();
-        self.direct.fill(0.);
-        self.wet.fill(0.);
+        let mut output = self.output.lock().unwrap();
+        output.field.reset();
+        output.lfe.reset();
+        output.direct.fill(0.);
+        output.wet.fill(0.);
     }
     fn reset_voice(&mut self, index: usize) {
         let mut group = self.group.lock().unwrap();
@@ -688,10 +806,6 @@ impl Instance {
         excitation: bool,
         prepare_filters: bool,
     ) -> Result<()> {
-        self.direct.fill(0.);
-        self.wet.fill(0.);
-        self.send.fill(0.);
-        self.lfe_input.fill(0.);
         let mut boundaries = [0usize; BLOCK + 1];
         let mut count = 0;
         for (i, mark) in marks.iter().enumerate() {
@@ -726,49 +840,6 @@ impl Instance {
         }
         Ok(())
     }
-    fn finish_render(
-        &mut self,
-        slots: &[Slot],
-        order: &[usize],
-        wet_gain: &[f32; BLOCK],
-        excitation: bool,
-    ) -> Result<()> {
-        let profile = super::profile::Guard::new(super::profile::Stage::SourceReduction);
-        let group = self.group.lock().unwrap();
-        // Parallel work never reduces audio. Preserve the fixed source-ID order.
-        for index in order {
-            let slot = &slots[*index];
-            if slot.description.role == 2 {
-                if excitation {
-                    for i in 0..BLOCK {
-                        self.lfe_input[i] += slot.world[i] * wet_gain[i];
-                    }
-                }
-            } else {
-                let voice = &group.voices[*index];
-                for i in 0..BLOCK {
-                    self.send[i] += voice.send[i];
-                    for ear in 0..2 {
-                        let at = ear * BLOCK + i;
-                        self.direct[at] += voice.direct[at];
-                        self.wet[at] += voice.early[at];
-                    }
-                }
-            }
-        }
-        drop(group);
-        drop(profile);
-        self.field
-            .process_field(&self.send, &mut self.late_output)?;
-        self.lfe.process(&self.lfe_input, &mut self.lfe_output)?;
-        for i in 0..BLOCK {
-            for ear in 0..2 {
-                let at = ear * BLOCK + i;
-                self.wet[at] += self.lfe_output[i];
-            }
-        }
-        Ok(())
-    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -789,7 +860,7 @@ pub struct RoomInfo {
 
 pub struct Session {
     current: Box<Instance>,
-    paired: Arc<Mutex<PairedVoices>>,
+    paired: Arc<Mutex<BlockJob>>,
     incoming: Option<Box<Instance>>,
     pending: Option<(u64, Box<Instance>)>,
     retired: Option<Box<Instance>>,
@@ -819,9 +890,6 @@ pub struct Session {
     head_room: Arc<PreparedRoom>,
     head_samples: [WeightedPosition; MAX_SAMPLES],
     head_output: [f32; BLOCK * 2],
-    late_decoder: WorldTail,
-    late_input: Vec<f32>,
-    late_output: [f32; BLOCK * 2],
     ended: Option<u64>,
     end_tail: usize,
 }
@@ -879,9 +947,23 @@ impl Session {
             return Err(Error::InvalidArgument("Invalid room distance scale"));
         }
         let current = Box::new(Instance::new(prepared.clone(), 0)?);
-        let paired = Arc::new(Mutex::new(PairedVoices {
+        let paired = Arc::new(Mutex::new(BlockJob {
             current: current.group.clone(),
             incoming: None,
+            current_output: current.output.clone(),
+            incoming_output: None,
+            order: [0; MAX_SOURCES],
+            sources: 0,
+            draining: false,
+            drain_remaining: 0,
+            old_gain: [1.; BLOCK],
+            new_gain: [0.; BLOCK],
+            marks: [false; BLOCK],
+            poses: [[0.; 3]; BLOCK],
+            late_decoder: WorldTail::new_decoder(prepared.room.clone())?,
+            late_input: vec![0.; prepared.room.profile.late_directions.len() * BLOCK],
+            late_output: [0.; BLOCK * 2],
+            output: [0.; BLOCK * 2],
         }));
         drop(paired.lock().unwrap());
         Ok(Self {
@@ -916,9 +998,6 @@ impl Session {
             head_room: prepared.room.clone(),
             head_samples: [WeightedPosition::default(); MAX_SAMPLES],
             head_output: [0.; BLOCK * 2],
-            late_decoder: WorldTail::new_decoder(prepared.room.clone())?,
-            late_input: vec![0.; prepared.room.profile.late_directions.len() * BLOCK],
-            late_output: [0.; BLOCK * 2],
             ended: None,
             end_tail: 0,
         })
@@ -1081,9 +1160,13 @@ impl Session {
         self.clock = sample;
         self.fill = 0;
         self.fifo.fill(0.);
-        self.late_decoder.reset();
-        self.late_input.fill(0.);
-        self.late_output.fill(0.);
+        {
+            let mut job = self.paired.lock().unwrap();
+            job.late_decoder.reset();
+            job.late_input.fill(0.);
+            job.late_output.fill(0.);
+            job.output.fill(0.);
+        }
         self.marks.fill(false);
         self.geometry_marks.fill(false);
         self.pose_changed = true;
@@ -1328,6 +1411,8 @@ impl Session {
         let mut paired = self.paired.lock().unwrap();
         paired.current = self.current.group.clone();
         paired.incoming = self.incoming.as_ref().map(|v| v.group.clone());
+        paired.current_output = self.current.output.clone();
+        paired.incoming_output = self.incoming.as_ref().map(|v| v.output.clone());
     }
     fn begin_warmup(&mut self) {
         self.sync_voice_pair();
@@ -1529,56 +1614,25 @@ impl Session {
                 self.phase != 1 || self.warm_remaining <= FILTER_FADE + 2 * BLOCK,
             )?;
         }
+        {
+            let mut job = self.paired.lock().unwrap();
+            job.order[..self.order.len()].copy_from_slice(&self.order);
+            job.sources = self.order.len();
+            job.draining = self.phase == 3;
+            job.drain_remaining = self.drain_remaining;
+            job.old_gain = old_gain;
+            job.new_gain = new_gain;
+            job.marks = self.marks;
+            job.poses = self.poses;
+        }
+        // A single owned job covers voices, fixed-order reduction, the world
+        // field and its decoder. Nested stages stay on the same worker pool.
         if self.slots.len() >= 4 {
             self.current.prepared.workers.run(self.paired.clone())?;
         } else {
             self.paired.lock().unwrap().render()?;
         }
-        self.current
-            .finish_render(&self.slots, &self.order, &old_gain, self.phase != 3)?;
-        if let Some(incoming) = &mut self.incoming {
-            incoming.finish_render(&self.slots, &self.order, &new_gain, true)?;
-        }
-        for i in 0..BLOCK {
-            for ear in 0..2 {
-                let at = ear * BLOCK + i;
-                let tail_gain = if self.phase == 3 && i >= self.drain_remaining {
-                    0.
-                } else {
-                    1.
-                };
-                let mut sample =
-                    self.current.direct[at] * old_gain[i] + self.current.wet[at] * tail_gain;
-                if let Some(incoming) = &self.incoming {
-                    sample += incoming.direct[at] * new_gain[i] + incoming.wet[at];
-                }
-                self.fifo[2 * i + ear] = sample;
-            }
-        }
-        for (index, value) in self.late_input.iter_mut().enumerate() {
-            *value = if self.phase == 3 && index % BLOCK >= self.drain_remaining {
-                0.
-            } else {
-                self.current.late_output[index]
-            };
-            if let Some(next) = &self.incoming {
-                *value += next.late_output[index];
-            }
-        }
-        self.late_decoder.begin_world(&self.late_input)?;
-        let mut begin = 0;
-        while begin < BLOCK {
-            let end = (begin + 1..BLOCK).find(|i| self.marks[*i]).unwrap_or(BLOCK);
-            self.late_decoder.update(self.poses[begin])?;
-            self.late_decoder
-                .render_range(begin, end - begin, &mut self.late_output)?;
-            begin = end;
-        }
-        for i in 0..BLOCK {
-            for ear in 0..2 {
-                self.fifo[2 * i + ear] += self.late_output[ear * BLOCK + i];
-            }
-        }
+        self.fifo = self.paired.lock().unwrap().output;
         for index in &self.order {
             let slot = &mut self.slots[*index];
             if slot.description.role == 2 {

@@ -99,7 +99,7 @@ struct Node {
 pub struct HrirBank {
     pub data: Arc<HrirData>,
     pub fft_length: usize,
-    fractions: FractionalBank,
+    fractions: PlanarBank,
     spectra: PlanarBank,
     triangles: Vec<Triangle>,
     integer_phases: Vec<Complex32>,
@@ -245,7 +245,9 @@ impl HrirBank {
                 "HRIR mesh has a hole or inconsistent spherical faces",
             ));
         }
-        let fractions = FractionalBank::normalized(fft_length)?;
+        // Queries consume only the planar rows. Drop the duplicate complex table
+        // after preparation; PlanarBank fingerprints retain its original ordering.
+        let fractions = FractionalBank::normalized(fft_length)?.planar.unwrap();
         let mut fft = RealFft::new(fft_length)?;
         let bins = fft.bins();
         let length = data
@@ -480,7 +482,7 @@ impl HrirBank {
                 let position = fraction.clamp(0., 1.) * PHASES as f64;
                 let lo = (position as usize).min(PHASES - 1);
                 let alpha = (position - lo as f64) as f32;
-                let fractions = self.fractions.planar.as_ref().unwrap();
+                let fractions = &self.fractions;
                 let low = fractions.row(lo);
                 let high = fractions.row(lo + 1);
                 let start = self.data.guard as f64 + integer - 40.;
@@ -511,12 +513,8 @@ impl HrirBank {
     pub fn storage_bytes(&self) -> usize {
         self.spectra.storage_bytes()
             + self.hrir_rotations.storage_bytes()
-            + (self.fractions.spectra.len() + self.integer_phases.len()) * size_of::<Complex32>()
-            + self
-                .fractions
-                .planar
-                .as_ref()
-                .map_or(0, PlanarBank::storage_bytes)
+            + self.integer_phases.len() * size_of::<Complex32>()
+            + self.fractions.storage_bytes()
             + self.data.impulses.len() * size_of::<f32>()
     }
 

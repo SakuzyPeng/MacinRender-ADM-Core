@@ -42,9 +42,12 @@ pub struct Workers {
 }
 impl Workers {
     pub fn new() -> Result<Self> {
+        // Rust's platform query accounts for Linux CPU affinity and cgroup quota.
+        // Keep the established desktop policy; Linux can use its effective quota.
+        let maximum = if cfg!(target_os = "linux") { 32 } else { 8 };
         let default_count = std::thread::available_parallelism()
             .map_or(1, usize::from)
-            .min(8);
+            .min(maximum);
         // Preparation-only diagnostic override. Worker count never changes the
         // arithmetic or the fixed reduction order, and cannot change mid-session.
         let count = match std::env::var("MR_ADM_ROOM_WORKERS") {
@@ -140,6 +143,12 @@ impl Workers {
         self.run(self.noop.clone())
     }
     pub fn run(&self, job: Arc<dyn Work>) -> Result<()> {
+        // A canonical block job may invoke field/decoder jobs. They already own
+        // their buffers and run inside this pool; another mailbox round trip
+        // would deadlock the serial dispatcher and needlessly park its caller.
+        if self._pool.current_thread_index().is_some() {
+            return job.run();
+        }
         let _profile = super::profile::Guard::new(super::profile::Stage::WorkerRoundtrip);
         let _serial = self.serial.lock().unwrap();
         let mut state = self.shared.state.lock().unwrap();

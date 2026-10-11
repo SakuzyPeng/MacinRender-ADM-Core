@@ -3,7 +3,7 @@
 use super::{
     BLOCK,
     geometry::{Position, Rotation, WeightedPosition},
-    partition::{Dynamic, Long, LongReader, SharedLongHistory},
+    partition::{Dynamic, InputHistory, Long, LongReader, SharedLongHistory},
     prepared::{PreparedRoom, ResponseWork},
 };
 use crate::{Error, Result};
@@ -15,6 +15,8 @@ pub struct Emitter {
     direct_eq: Long,
     wet_eq: Long,
     eq_shared: bool,
+    direct_history: InputHistory,
+    wet_history: InputHistory,
     direct: Dynamic,
     early: Dynamic,
     send: Dynamic,
@@ -35,9 +37,11 @@ impl Emitter {
             direct_eq: Long::new(room.eq.clone())?,
             wet_eq: Long::new(room.eq.clone())?,
             eq_shared: true,
-            direct: Dynamic::new(2, room.short_taps)?,
-            early: Dynamic::new(2, room.short_taps)?,
-            send: Dynamic::new(1, room.send_taps)?,
+            direct_history: InputHistory::new(room.short_taps.max(room.send_taps))?,
+            wet_history: InputHistory::new(room.short_taps.max(room.send_taps))?,
+            direct: Dynamic::reader(2, room.short_taps)?,
+            early: Dynamic::reader(2, room.short_taps)?,
+            send: Dynamic::reader(1, room.send_taps)?,
             send_impulse: vec![0.; room.send_taps],
             direct_input: [0.; BLOCK],
             wet_input: [0.; BLOCK],
@@ -54,6 +58,8 @@ impl Emitter {
     pub fn reset(&mut self) {
         self.direct_eq.reset();
         self.wet_eq.reset();
+        self.direct_history.reset();
+        self.wet_history.reset();
         self.direct.reset();
         self.early.reset();
         self.send.reset();
@@ -157,23 +163,27 @@ impl Emitter {
         let unity = wet_gain.iter().all(|v| *v == 1.);
         if self.eq_shared && (!unity || !direct) {
             self.wet_eq.copy_history_from(&self.direct_eq)?;
+            self.wet_history.copy_history_from(&self.direct_history)?;
             self.eq_shared = false;
         }
         self.render_direct = direct;
         if direct {
             self.direct_eq.process(input, &mut self.direct_input)?;
-            self.direct.begin(&self.direct_input)?;
+            self.direct
+                .begin_with_history(&mut self.direct_history, &self.direct_input)?;
         }
-        if self.eq_shared {
-            self.wet_input.copy_from_slice(&self.direct_input);
-        } else {
+        if !self.eq_shared {
             for i in 0..BLOCK {
                 self.scaled[i] = input[i] * wet_gain[i];
             }
             self.wet_eq.process(&self.scaled, &mut self.wet_input)?;
+            self.early
+                .begin_with_history(&mut self.wet_history, &self.wet_input)?;
+        } else {
+            self.early.begin_shared();
         }
-        self.early.begin(&self.wet_input)?;
-        self.send.begin(&self.wet_input)
+        self.send.begin_shared();
+        Ok(())
     }
     pub fn render_range(
         &mut self,
@@ -185,14 +195,21 @@ impl Emitter {
     ) -> Result<()> {
         let _profile = super::profile::Guard::new(super::profile::Stage::EmitterConvolution);
         if self.render_direct {
-            self.direct.render_range(offset, frames, direct)?;
+            self.direct
+                .render_shared_range(&self.direct_history, offset, frames, direct)?;
         } else {
             for ear in 0..2 {
                 direct[ear * BLOCK + offset..ear * BLOCK + offset + frames].fill(0.);
             }
         }
-        self.early.render_range(offset, frames, early)?;
-        self.send.render_range(offset, frames, send)
+        let history = if self.eq_shared {
+            &self.direct_history
+        } else {
+            &self.wet_history
+        };
+        self.early
+            .render_shared_range(history, offset, frames, early)?;
+        self.send.render_shared_range(history, offset, frames, send)
     }
 }
 
