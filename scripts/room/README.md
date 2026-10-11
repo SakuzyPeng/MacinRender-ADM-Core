@@ -35,3 +35,34 @@ v1 动态切换保留相同的晚场世界方向基与算法保护延迟；生�
 新增算法类型需要新的 `kind` 及对应 Rust 实现；不要只修改版本字符串伪装兼容。当前仅
 接受 `hybrid-shoebox-v1` 和 `delay-aligned-v1`。新算法必须实现不可变准备、会话处理、
 确定尾长、reset 与双实例切换契约，并提供各平台相同资源/事件的逐位回归。
+
+## Linux 性能复测
+
+复用现有 Cargo / CMake 构建缓存，使用 Release `room_bench`。可选的 `room-profile` Cargo
+feature 启用固定大小的跨线程阶段计数器；普通构建不读计时器、不更新计数器。阶段耗时是
+各调用的墙钟时间之和，包含嵌套与并行重叠，不能相加作为 CPU 时间。`worker_roundtrip`
+与 `worker_execution` 的差包含排队、唤醒与交接；`session_process` 减 `canonical_block`
+包含输入控制、校验和状态查询。只在没有正在运行的 DSP 调用时 reset / snapshot。
+
+`room_stages ROOM_JSON [ITERATIONS=2000]` 输出单声源各阶段的平均耗时 JSON。
+`room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0]`
+可指定声源数，缺省遍历三种数量。切换周期为 0 时只切换一次，非零时交替切换两个已准备的房间，
+周期必须容纳预热、过渡和排尾。会话实例的分配与排队耗时单列为
+`preparation_outside_dsp_seconds`，不计入单次 DSP 期限；进程 CPU 仍包含这部分工作。
+这仍是内核压力测试，不模拟设备回调或异步准备线程。
+
+关闭 `room-profile` 并重新构建后才运行正式容量测试。例如，`ROOM_BIN` 指向现有 Release
+可执行文件，`ROOM_JSON` 指向固定资源：
+
+```sh
+python3 scripts/room/benchmark-linux.py "$ROOM_BIN" "$ROOM_JSON" /path/to/new-sweep \
+  --workers 8 1 4 16 32 --repeats 3 --blocks 384
+python3 scripts/room/benchmark-linux.py "$ROOM_BIN" "$ROOM_JSON" /path/to/new-long-run \
+  --workers 8 --repeats 3 --blocks 11250 --frames 512 --sources 32 --switch-period 469
+```
+
+每种状态分别输出静态、连续头姿、连续头姿加房间切换的结果。11250 次 512 帧调用对应
+每个场景 120 秒音频；469 次调用约为 5 秒。脚本串行运行各组，保存可执行文件与清单哈希、
+CPU 配额、允许的核心、限流/压力快照及子进程 CPU、缺页、上下文切换增量。
+输出目录必须不存在；不要同时运行构建或其他基准。系统/cgroup 计数也可能包含其他进程，
+不能直接把系统总量归因于 DSP，更不能把内核期限超时报告为设备欠载。

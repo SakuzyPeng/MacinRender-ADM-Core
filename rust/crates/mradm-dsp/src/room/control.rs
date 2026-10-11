@@ -163,6 +163,7 @@ pub struct Control {
     target: State,
     start: [u64; 11],
     end: [u64; 11],
+    settled: u64,
 }
 
 impl Control {
@@ -172,6 +173,7 @@ impl Control {
             target: state,
             start: [0; 11],
             end: [0; 11],
+            settled: 0,
         }
     }
     pub fn initialize(&mut self, state: State) {
@@ -198,9 +200,16 @@ impl Control {
                 self.end[field] = if mask == 256 { sample } else { end };
             }
         }
+        self.settled = self.end.iter().copied().max().unwrap_or(0);
         Ok(())
     }
+    #[inline]
     pub fn at(&self, sample: u64) -> State {
+        // Most PCM samples have no pending metadata ramps. This returns exactly
+        // the state produced by the per-field loop after its final deadline.
+        if sample >= self.settled {
+            return self.target;
+        }
         let mut output = self.target;
         for field in 0..11 {
             if sample >= self.end[field] {
@@ -245,6 +254,59 @@ impl Control {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn settled_fast_path_preserves_independent_ramps_and_historical_queries() {
+        let mut control = Control::new(State::default());
+        let mut state = State::default();
+        state.gain = 0.;
+        control
+            .apply(
+                &RoomCommand {
+                    changed: 2,
+                    duration: 100,
+                    state,
+                    ..RoomCommand::default()
+                },
+                10,
+            )
+            .unwrap();
+        state.diffuse = 1.;
+        control
+            .apply(
+                &RoomCommand {
+                    changed: 16,
+                    duration: 200,
+                    state,
+                    ..RoomCommand::default()
+                },
+                10,
+            )
+            .unwrap();
+        assert_eq!(control.at(110).gain, 0.);
+        assert_eq!(control.at(110).diffuse, 0.5);
+        assert_eq!(control.at(210).diffuse, 1.);
+        // Retarget one field immediately while another field still ramps.
+        state.gain = 0.25;
+        control
+            .apply(
+                &RoomCommand {
+                    changed: 2,
+                    state,
+                    ..RoomCommand::default()
+                },
+                110,
+            )
+            .unwrap();
+        assert_eq!(control.at(160).gain, 0.25);
+        assert_eq!(control.at(160).diffuse, 0.75);
+        let endpoint = control.at(210);
+        assert_eq!(control.at(10000), endpoint);
+        assert_eq!(control.at(160).diffuse, 0.75);
+        // Initialization must discard the previous deadline, including on seek.
+        control.initialize(State::default());
+        assert_eq!(control.at(0), State::default());
+    }
+
     #[test]
     fn independent_deadlines_and_preroll_are_identical() {
         let initial = State::default();

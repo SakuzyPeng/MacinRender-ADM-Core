@@ -5,6 +5,7 @@ pub mod geometry;
 pub mod hrir;
 pub mod partition;
 pub mod prepared;
+pub mod profile;
 pub mod resources;
 pub mod session;
 pub mod signal;

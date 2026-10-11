@@ -296,6 +296,7 @@ impl ResponseWork {
         direct: bool,
         early: bool,
     ) -> Result<()> {
+        let _profile = super::profile::Guard::new(super::profile::Stage::SourceResponse);
         let bins = room.fft_length / 2 + 1;
         let stride = room.hrir.stride();
         self.direct.fill(0.);

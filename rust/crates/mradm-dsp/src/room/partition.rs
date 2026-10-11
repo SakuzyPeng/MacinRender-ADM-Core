@@ -315,6 +315,7 @@ impl Dynamic {
     /// The caller supplies a structural FIR support bound, never an energy
     /// threshold. Input history keeps the full maximum for subsequent targets.
     pub fn set_target_support(&mut self, impulse: &[f32], support: usize) -> Result<()> {
+        let _profile = super::profile::Guard::new(super::profile::Stage::TargetFilters);
         if impulse.len() != self.last_impulse.len() || impulse.iter().any(|v| !v.is_finite()) {
             return Err(Error::InvalidArgument(
                 "Invalid room target impulse response",

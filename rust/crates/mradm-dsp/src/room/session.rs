@@ -694,6 +694,7 @@ impl Instance {
         wet_gain: &[f32; BLOCK],
         excitation: bool,
     ) -> Result<()> {
+        let profile = super::profile::Guard::new(super::profile::Stage::SourceReduction);
         let group = self.group.lock().unwrap();
         // Parallel work never reduces audio. Preserve the fixed source-ID order.
         for index in order {
@@ -717,6 +718,7 @@ impl Instance {
             }
         }
         drop(group);
+        drop(profile);
         self.field
             .process_field(&self.send, &mut self.late_output)?;
         self.lfe.process(&self.lfe_input, &mut self.lfe_output)?;
@@ -1327,6 +1329,7 @@ impl Session {
     where
         I: Iterator<Item = Option<&'a [f32]>> + Clone + ExactSizeIterator,
     {
+        let _profile = super::profile::Guard::new(super::profile::Stage::SessionProcess);
         if frames > 65536
             || output.len() < frames * 2
             || planes.len() != self.active.len()
@@ -1431,6 +1434,7 @@ impl Session {
         Ok(self.info())
     }
     fn render_block(&mut self) -> Result<()> {
+        let _profile = super::profile::Guard::new(super::profile::Stage::CanonicalBlock);
         let start = self.clock - BLOCK as u64;
         if self.phase == 0
             && self.retired.is_none()

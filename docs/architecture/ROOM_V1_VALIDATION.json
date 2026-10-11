@@ -1224,5 +1224,10 @@
     "tail_frames": 67352,
     "version": 1,
     "windows_mmcss_workers": 0
+  },
+  "follow_up": {
+    "report": "ROOM_LINUX_PERFORMANCE.json",
+    "base_commit": "606cc40107bce203fea4aee868638a42b5d8dae0",
+    "note": "Original measurements and source hashes above are historical; see the follow-up for current source hashes, control-query optimization, and repeated Linux capacity results."
   }
 }
