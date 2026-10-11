@@ -148,7 +148,10 @@ impl Uniform {
     }
 
     pub fn push(&mut self, input: &[f32]) -> Result<()> {
-        if input.len() != self.block || input.iter().any(|v| !v.is_finite()) {
+        if self.previous.len() != self.block
+            || input.len() != self.block
+            || input.iter().any(|v| !v.is_finite())
+        {
             return Err(Error::InvalidArgument("Invalid room convolution input"));
         }
         self.time[..self.block].copy_from_slice(&self.previous);
@@ -181,7 +184,11 @@ impl Uniform {
         output: &mut [f32],
     ) -> Result<()> {
         self.compatible(filters)?;
-        history.compatible(filters)?;
+        if history.block != filters.block || history.partitions < filters.partitions {
+            return Err(Error::InvalidArgument(
+                "Insufficient shared room input history",
+            ));
+        }
         Self::render_parts(
             &mut self.fft,
             &mut self.sum,
@@ -204,7 +211,7 @@ impl Uniform {
         output: &mut [f32],
     ) -> Result<()> {
         let block = filters.block;
-        if output.len() != filters.channels * block {
+        if output.len() != filters.channels * block || ring.len() != partitions * (block + 1) {
             return Err(Error::InvalidArgument("Invalid room convolution output"));
         }
         let bins = block + 1;
@@ -213,7 +220,7 @@ impl Uniform {
             for part in 0..filters.used_partitions {
                 let history = (head + partitions - part) % partitions;
                 let x = &ring[history * bins..(history + 1) * bins];
-                let begin = (channel * partitions + part) * bins;
+                let begin = (channel * filters.partitions + part) * bins;
                 let h = &filters.spectrum[begin..begin + bins];
                 for ((sum, x), h) in sum.iter_mut().zip(x).zip(h) {
                     *sum += *x * *h;
@@ -226,7 +233,11 @@ impl Uniform {
     }
 
     pub fn copy_history_from(&mut self, source: &Self) -> Result<()> {
-        if self.block != source.block || self.partitions != source.partitions {
+        if self.block != source.block
+            || self.partitions != source.partitions
+            || self.previous.len() != source.previous.len()
+            || self.ring.len() != source.ring.len()
+        {
             return Err(Error::InvalidArgument("Incompatible room input history"));
         }
         self.previous.copy_from_slice(&source.previous);
@@ -237,6 +248,64 @@ impl Uniform {
 }
 
 const MAX_TARGETS: usize = 16;
+
+/// One mono input FFT/history can feed several filters of different lengths.
+/// The owner advances it exactly once per block, before rendering any reader.
+pub struct InputHistory {
+    ring: Vec<Complex32>,
+    previous: [f32; super::BLOCK],
+    head: usize,
+    partitions: usize,
+}
+impl InputHistory {
+    pub fn new(taps: usize) -> Result<Self> {
+        if taps == 0 || taps > 1 << 20 {
+            return Err(Error::InvalidArgument(
+                "Invalid shared room history support",
+            ));
+        }
+        let partitions = taps.div_ceil(super::BLOCK);
+        let mut ring = vec![Complex32::default(); partitions * (super::BLOCK + 1)];
+        super::touch_pages(&mut ring);
+        Ok(Self {
+            ring,
+            previous: [0.; super::BLOCK],
+            head: partitions - 1,
+            partitions,
+        })
+    }
+    pub fn reset(&mut self) {
+        self.ring.fill(Complex32::default());
+        self.previous.fill(0.);
+        self.head = self.partitions - 1;
+    }
+    // Reuse a reader's existing FFT workspace instead of preparing another plan
+    // per history. No filter or cached output state is changed here.
+    fn push(&mut self, input: &[f32], work: &mut Uniform) -> Result<()> {
+        let block = super::BLOCK;
+        if work.block != block || input.len() != block || input.iter().any(|v| !v.is_finite()) {
+            return Err(Error::InvalidArgument("Invalid shared room history input"));
+        }
+        work.time[..block].copy_from_slice(&self.previous);
+        work.time[block..].copy_from_slice(input);
+        self.previous.copy_from_slice(input);
+        self.head = (self.head + 1) % self.partitions;
+        let begin = self.head * (block + 1);
+        work.fft
+            .forward(&work.time, &mut self.ring[begin..begin + block + 1])
+    }
+    pub fn copy_history_from(&mut self, source: &Self) -> Result<()> {
+        if self.partitions != source.partitions {
+            return Err(Error::InvalidArgument(
+                "Incompatible shared room input history",
+            ));
+        }
+        self.ring.copy_from_slice(&source.ring);
+        self.previous = source.previous;
+        self.head = source.head;
+        Ok(())
+    }
+}
 
 struct Target {
     filter: Filters,
@@ -263,8 +332,14 @@ pub struct Dynamic {
 
 impl Dynamic {
     pub fn new(channels: usize, taps: usize) -> Result<Self> {
+        Self::workspace(channels, taps, true)
+    }
+    pub fn reader(channels: usize, taps: usize) -> Result<Self> {
+        Self::workspace(channels, taps, false)
+    }
+    fn workspace(channels: usize, taps: usize, history: bool) -> Result<Self> {
         let filter = Filters::empty(super::BLOCK, channels, taps)?;
-        let core = Uniform::new(&filter)?;
+        let core = Uniform::workspace(&filter, history)?;
         let mut targets: Vec<Target> = (0..MAX_TARGETS)
             .map(|_| Target {
                 filter: filter.clone(),
@@ -363,16 +438,42 @@ impl Dynamic {
     }
     pub fn begin(&mut self, input: &[f32]) -> Result<()> {
         self.core.push(input)?;
+        self.begin_shared();
+        Ok(())
+    }
+    pub fn begin_with_history(&mut self, history: &mut InputHistory, input: &[f32]) -> Result<()> {
+        history.push(input, &mut self.core)?;
+        self.begin_shared();
+        Ok(())
+    }
+    pub fn begin_shared(&mut self) {
         self.block_start = self.clock;
         self.cursor = 0;
         for target in &mut self.targets {
             target.cached = false;
         }
-        Ok(())
     }
     /// Chronological subranges share one input FFT and immutable target output
     /// caches. Splitting a range cannot change the per-sample summation order.
     pub fn render_range(&mut self, offset: usize, frames: usize, output: &mut [f32]) -> Result<()> {
+        self.render_with_history(None, offset, frames, output)
+    }
+    pub fn render_shared_range(
+        &mut self,
+        history: &InputHistory,
+        offset: usize,
+        frames: usize,
+        output: &mut [f32],
+    ) -> Result<()> {
+        self.render_with_history(Some(history), offset, frames, output)
+    }
+    fn render_with_history(
+        &mut self,
+        history: Option<&InputHistory>,
+        offset: usize,
+        frames: usize,
+        output: &mut [f32],
+    ) -> Result<()> {
         let channels = self.targets[0].filter.channels;
         if offset < self.cursor
             || offset > super::BLOCK
@@ -385,7 +486,25 @@ impl Dynamic {
         for index in &self.order[..self.count] {
             let target = &mut self.targets[*index];
             if !target.cached {
-                self.core.render(&target.filter, &mut target.cache)?;
+                if let Some(history) = history {
+                    if history.partitions < target.filter.partitions {
+                        return Err(Error::InvalidArgument(
+                            "Insufficient shared room input history",
+                        ));
+                    }
+                    Uniform::render_parts(
+                        &mut self.core.fft,
+                        &mut self.core.sum,
+                        &mut self.core.time,
+                        &history.ring,
+                        history.head,
+                        history.partitions,
+                        &target.filter,
+                        &mut target.cache,
+                    )?;
+                } else {
+                    self.core.render(&target.filter, &mut target.cache)?;
+                }
                 target.cached = true;
             }
         }
@@ -678,6 +797,67 @@ mod tests {
             }
         }
         sum
+    }
+    #[test]
+    fn shared_dynamic_history_preserves_stereo_stride_retarget_and_wet_fork() {
+        const B: usize = super::super::BLOCK;
+        let mut dry_history = InputHistory::new(1703).unwrap();
+        let mut wet_history = InputHistory::new(1703).unwrap();
+        let mut shared = [
+            Dynamic::reader(2, 701).unwrap(),
+            Dynamic::reader(1, 1703).unwrap(),
+        ];
+        let mut independent = [
+            Dynamic::new(2, 701).unwrap(),
+            Dynamic::new(1, 1703).unwrap(),
+        ];
+        for block in 0..60 {
+            if block == 19 {
+                wet_history.copy_history_from(&dry_history).unwrap();
+            }
+            let dry = signal(B, block * 31);
+            let wet: Vec<_> = dry
+                .iter()
+                .map(|v| if block < 19 { *v } else { *v * 0.3 })
+                .collect();
+            dry_history.push(&dry, &mut shared[0].core).unwrap();
+            if block >= 19 {
+                wet_history.push(&wet, &mut shared[1].core).unwrap();
+            }
+            for (index, (reader, reference)) in shared.iter_mut().zip(&mut independent).enumerate()
+            {
+                let history = if index == 0 || block < 19 {
+                    &dry_history
+                } else {
+                    &wet_history
+                };
+                let input = if index == 0 { &dry } else { &wet };
+                let mut actual = vec![0.; B * if index == 0 { 2 } else { 1 }];
+                let mut expected = actual.clone();
+                reader.begin_shared();
+                reference.begin(input).unwrap();
+                // Retarget inside the block and cross ring wraps with unequal FIR lengths.
+                for (offset, frames) in [(0, 87), (87, B - 87)] {
+                    if block % 3 == 0 || block == 19 {
+                        let impulse =
+                            signal(if index == 0 { 1402 } else { 1703 }, block * 17 + offset);
+                        reader.set_target(&impulse).unwrap();
+                        reference.set_target(&impulse).unwrap();
+                    }
+                    reader
+                        .render_shared_range(history, offset, frames, &mut actual)
+                        .unwrap();
+                    reference
+                        .render_range(offset, frames, &mut expected)
+                        .unwrap();
+                }
+                assert_eq!(
+                    actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                    expected.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                    "block={block}, reader={index}"
+                );
+            }
+        }
     }
     #[test]
     fn shared_input_fft_matches_independent_direction_histories() {
