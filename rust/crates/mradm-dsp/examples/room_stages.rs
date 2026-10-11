@@ -78,13 +78,49 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         dynamic.process(&input, &mut out)?;
     }
     let stereo_convolution_us = start.elapsed().as_secs_f64() * 1e6 / count as f64;
+    // Use complete pose-dependent responses and the same structural support as
+    // Emitter. Advance the convolution clock between targets so the measurement
+    // includes slot reuse and pruning, not only replacement at one sample.
+    let mut responses = Vec::with_capacity(8);
+    for i in 0..8 {
+        work.build(&room, position, &Rotation::new([i as f32 * 0.5, 7., 0.])?)?;
+        responses.push((
+            work.impulse.clone(),
+            work.direct_support,
+            work.early_support,
+        ));
+    }
+    let mut direct = Dynamic::new(2, room.short_taps)?;
+    let mut early = Dynamic::new(2, room.short_taps)?;
+    let mut direct_seconds = 0.;
+    let mut early_seconds = 0.;
+    for i in 0..count + 32 {
+        let (impulse, direct_support, early_support) = &responses[i % responses.len()];
+        let start = Instant::now();
+        direct.set_target_support(&impulse[..2 * room.short_taps], *direct_support)?;
+        let direct_elapsed = start.elapsed().as_secs_f64();
+        let start = Instant::now();
+        early.set_target_support(&impulse[2 * room.short_taps..], *early_support)?;
+        let early_elapsed = start.elapsed().as_secs_f64();
+        if i >= 32 {
+            direct_seconds += direct_elapsed;
+            early_seconds += early_elapsed;
+        }
+        direct.process(&input, &mut out)?;
+        early.process(&input, &mut out)?;
+    }
     println!(
         "{}",
         serde_json::json!({
-            "schema":"mradm.room-stages", "version":1, "iterations":count,
+            "schema":"mradm.room-stages", "version":2, "iterations":count,
             "profiling":cfg!(feature = "room-profile"), "query_fft_length":n,
             "hrir_query_us":hrir_query_us, "source_response_us":source_response_us,
             "stereo_target_us":stereo_target_us, "stereo_convolution_us":stereo_convolution_us,
+            "short_taps":room.short_taps,
+            "supported_direct_target_us":direct_seconds * 1e6 / count as f64,
+            "supported_early_target_us":early_seconds * 1e6 / count as f64,
+            "direct_support_taps":responses.iter().map(|v|v.1).collect::<Vec<_>>(),
+            "early_support_taps":responses.iter().map(|v|v.2).collect::<Vec<_>>(),
             "note":"Single-source stage means; not realtime capacity or device latency."
         })
     );
