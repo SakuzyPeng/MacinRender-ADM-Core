@@ -28,6 +28,9 @@ struct RenderCliOptions {
     bool apac_drc_music{true};
     std::string apac_container_str{"mpeg4"};
     std::string sofa_path;
+    std::string room_path;
+    std::string room_hrir_path;
+    double room_metres_per_unit{1.5};
     std::string semantic_policy_path;
     std::string semantic_report_path;
     std::string speaker_geometry_str{"standard"};

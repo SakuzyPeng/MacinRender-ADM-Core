@@ -106,6 +106,9 @@ class ConsoleProgressSink final : public mradm::ProgressSink {
 };
 
 mradm::RendererSelection parse_renderer(const std::string& value) {
+    if (value == "room-binaural") {
+        return mradm::RendererSelection::room_binaural;
+    }
     if (value == "ear") {
         return mradm::RendererSelection::ear;
     }
@@ -172,16 +175,17 @@ std::vector<std::string> parse_input_channel_csv(const std::string& csv) {
 }
 
 CLI::Validator renderer_validator() {
-    return CLI::Validator{[](const std::string& value) {
-                              if (value == "auto" || value == "ear" || value == "saf" || value == "hoa" ||
-                                  value == "saf-binaural" || value == "apple" || value == "triple-balance") {
-                                  return std::string{};
-                              }
-                              return std::string{
-                                  "expected one of: auto, ear, saf, triple-balance, hoa, saf-binaural, apple"};
-                          },
-                          "auto,ear,saf,triple-balance,hoa,saf-binaural,apple",
-                          "renderer"};
+    return CLI::Validator{
+        [](const std::string& value) {
+            if (value == "auto" || value == "ear" || value == "saf" || value == "hoa" || value == "saf-binaural" ||
+                value == "apple" || value == "triple-balance" || value == "room-binaural") {
+                return std::string{};
+            }
+            return std::string{
+                "expected one of: auto, ear, saf, triple-balance, hoa, saf-binaural, room-binaural, apple"};
+        },
+        "auto,ear,saf,triple-balance,hoa,saf-binaural,room-binaural,apple",
+        "renderer"};
 }
 
 mradm::SpeakerSpreadMode parse_speaker_spread_mode(const std::string& value) {
@@ -278,8 +282,9 @@ void add_output_selection_options(CLI::App& render_cmd, RenderCliOptions& opts) 
                           "writes a WAVE mask or ADM AXML/CHNA; use 'mradm layouts --format <fmt>' for final "
                           "container channel order");
     render_cmd
-        .add_option(
-            "--renderer", opts.renderer, "Renderer backend: auto, ear, saf, triple-balance, hoa, saf-binaural, apple")
+        .add_option("--renderer",
+                    opts.renderer,
+                    "Renderer backend: auto, ear, saf, triple-balance, hoa, saf-binaural, room-binaural, apple")
         ->check(renderer_validator());
 }
 
@@ -354,6 +359,11 @@ CLI::App* add_render_command_impl(CLI::App& app, RenderCliOptions& opts) {
                      "APAC output container: mpeg4 (.m4a/.mp4, default) or caf (.caf)")
         ->check(CLI::IsMember({"mpeg4", "caf"}));
     render_cmd->add_option("--sofa", opts.sofa_path, "User SOFA HRIR file for binaural rendering");
+    render_cmd->add_option("--room", opts.room_path, "Room package room.json (room-binaural)");
+    render_cmd->add_option("--room-hrir", opts.room_hrir_path, "Separate prepared personal HRIR manifest");
+    render_cmd
+        ->add_option("--room-metres-per-unit", opts.room_metres_per_unit, "Room coordinate scale; default 1.5 m/unit")
+        ->check(CLI::Range(0.01, 100.0));
     render_cmd->add_option("--semantic-policy", opts.semantic_policy_path, "ADM semantic render policy JSON");
     render_cmd->add_option("--write-semantic-report",
                            opts.semantic_report_path,
@@ -506,6 +516,18 @@ int run_render_impl(const RenderCliOptions& opts) {
     SpdlogSink logs;
     std::stop_source stop_source;
     mradm::RenderRequest request = make_render_request(opts);
+    if (!opts.room_path.empty()) {
+        if (request.options.renderer != mradm::RendererSelection::room_binaural) {
+            spdlog::error("--room requires --renderer room-binaural");
+            return EXIT_FAILURE;
+        }
+        auto room = mradm::RoomProfile::load(opts.room_path);
+        if (!room) {
+            spdlog::error(room.error().message);
+            return EXIT_FAILURE;
+        }
+        request.options.room = {*room, opts.room_hrir_path, opts.room_metres_per_unit};
+    }
     request.options.cancel_token = stop_source.get_token();
     RenderInterruptScope interrupt_scope{stop_source};
     mradm::RenderResult result = service.render(request, progress, logs);

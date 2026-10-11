@@ -5,6 +5,7 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "adm/room.h"
 #include "adm/version.h"
 
 #include "commands.h"
@@ -37,6 +38,11 @@ int main(int argc, char** argv) {
     ApacEncodeCliOptions apac_encode_opts;
     const auto* apac_encode_cmd = add_apac_encode_command(app, apac_encode_opts);
 
+    auto* room_check = app.add_subcommand("room-check", "Validate and prepare a room package and its personal HRIR");
+    std::string room_path;
+    std::string room_hrir;
+    room_check->add_option("manifest", room_path, "room.json")->required();
+    room_check->add_option("--hrir", room_hrir, "Separate prepared HRIR manifest");
     app.require_subcommand(1);
 
     try {
@@ -47,6 +53,21 @@ int main(int argc, char** argv) {
 
     spdlog::set_pattern("%^[%l]%$ %v");
     spdlog::set_level(verbose ? spdlog::level::debug : spdlog::level::info);
+
+    if (*room_check) {
+        auto profile = mradm::RoomProfile::load(room_path);
+        if (!profile) {
+            spdlog::error(profile.error().message);
+            return EXIT_FAILURE;
+        }
+        auto report = mradm::inspect_room({*profile, room_hrir, 1.5});
+        if (!report) {
+            spdlog::error(report.error().message);
+            return EXIT_FAILURE;
+        }
+        fmt::print("{}\n", *report);
+        return EXIT_SUCCESS;
+    }
 
     if (*render_cmd) {
         return run_render(render_opts);

@@ -107,6 +107,7 @@ class MonitorSession {
     // apply it; other backends ignore it. Cheap — takes effect at the next worker block boundary;
     // survives a backend / output-device switch.
     void set_listener_orientation(const ListenerOrientation& orientation);
+    [[nodiscard]] std::shared_ptr<IRoomControl> room_control() const;
 
     // Hot-switch the rendering backend / layout live (e.g. EAR↔VBAP↔Apple at the same
     // layout, or binaural↔Apple-binaural), reusing the already-imported + policy-applied

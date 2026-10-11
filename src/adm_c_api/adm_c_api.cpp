@@ -16,11 +16,14 @@
 #include <utility>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "adm/c_api.h"
 #include "adm/head_tracking.h"
 #include "adm/hptf.h"
 #include "adm/monitor.h"
 #include "adm/render.h"
+#include "adm/room.h"
 
 #include "../adm_engine/scene_output_session.h"
 #include "osc_head_tracking_protocol.h"
@@ -163,6 +166,7 @@ static_assert(static_cast<int>(mradm::RendererSelection::apple) == ADM_RENDERER_
 static_assert(static_cast<int>(mradm::RendererSelection::binaural) == ADM_RENDERER_BINAURAL);
 static_assert(static_cast<int>(mradm::RendererSelection::saf_binaural) == ADM_RENDERER_SAF_BINAURAL);
 static_assert(static_cast<int>(mradm::RendererSelection::triple_balance) == ADM_RENDERER_TRIPLE_BALANCE);
+static_assert(static_cast<int>(mradm::RendererSelection::room_binaural) == ADM_RENDERER_ROOM_BINAURAL);
 static_assert(static_cast<int>(mradm::TripleBalanceMode::standard) == ADM_TRIPLE_BALANCE_STANDARD);
 static_assert(static_cast<int>(mradm::TripleBalanceMode::d) == ADM_TRIPLE_BALANCE_D);
 
@@ -353,6 +357,35 @@ struct adm_render_options_t {
     adm_cancel_token_t* cancel_token{nullptr};
 };
 
+struct adm_room_t {
+    std::shared_ptr<const mradm::RoomProfile> profile;
+    std::string manifest;
+};
+
+namespace {
+mradm::Result<mradm::RoomConfig> to_room_config(const adm_room_config_t* config) {
+    if (config == nullptr || config->struct_size < sizeof(*config) || config->reserved != 0 ||
+        config->room == nullptr || !std::isfinite(config->metres_per_unit) || config->metres_per_unit < 0.01 ||
+        config->metres_per_unit > 100) {
+        return mradm::make_error(mradm::ErrorCode::invalid_argument, "无效的房间配置");
+    }
+    mradm::RoomConfig result;
+    result.profile = config->room->profile;
+    result.metres_per_unit = config->metres_per_unit;
+    if (config->hrir_manifest != nullptr) {
+        result.hrir_manifest =
+            std::filesystem::path{std::u8string_view{reinterpret_cast<const char8_t*>(config->hrir_manifest)}};
+    }
+    return result;
+}
+void owned_room_string(const std::string& text, char** out) {
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays): C ABI transfers a char buffer.
+    auto owned = std::make_unique<char[]>(text.size() + 1);
+    std::memcpy(owned.get(), text.c_str(), text.size() + 1);
+    *out = owned.release();
+}
+} // namespace
+
 struct adm_preview_session_t {
     mradm::PreviewSession session;
 };
@@ -533,7 +566,7 @@ to_scene_renderer_config(const adm_scene_renderer_config_t* config, std::uint32_
     adm_scene_renderer_config_t input{};
     std::memcpy(&input, config, sizeof(input));
     if ((input.renderer != ADM_RENDERER_SAF && input.renderer != ADM_RENDERER_SAF_BINAURAL &&
-         input.renderer != ADM_RENDERER_TRIPLE_BALANCE) ||
+         input.renderer != ADM_RENDERER_TRIPLE_BALANCE && input.renderer != ADM_RENDERER_ROOM_BINAURAL) ||
         input.speaker_geometry < ADM_SPEAKER_GEOMETRY_STANDARD || input.speaker_geometry > ADM_SPEAKER_GEOMETRY_APPLE ||
         input.speaker_spread_mode < ADM_SPEAKER_SPREAD_AUTOMATIC ||
         input.speaker_spread_mode > ADM_SPEAKER_SPREAD_MDAP ||
@@ -543,17 +576,19 @@ to_scene_renderer_config(const adm_scene_renderer_config_t* config, std::uint32_
         input.object_smoothing_frames > 48000U) {
         return mradm::make_error(mradm::ErrorCode::invalid_argument, "invalid live Scene renderer configuration value");
     }
-    if (input.renderer != ADM_RENDERER_SAF_BINAURAL &&
+    if (input.renderer != ADM_RENDERER_SAF_BINAURAL && input.renderer != ADM_RENDERER_ROOM_BINAURAL &&
         (input.output_layout == nullptr || input.output_layout[0] == '\0')) {
         return mradm::make_error(mradm::ErrorCode::invalid_argument,
                                  "Speaker live Scene rendering requires an output layout");
     }
-    if (input.renderer != ADM_RENDERER_SAF_BINAURAL && input.sofa_path != nullptr && input.sofa_path[0] != '\0') {
+    if (input.renderer != ADM_RENDERER_SAF_BINAURAL && input.renderer != ADM_RENDERER_ROOM_BINAURAL &&
+        input.sofa_path != nullptr && input.sofa_path[0] != '\0') {
         return mradm::make_error(mradm::ErrorCode::unsupported,
                                  "a live Scene SOFA path is valid only for SAF binaural rendering");
     }
-    if (input.renderer == ADM_RENDERER_SAF_BINAURAL && input.output_layout != nullptr &&
-        input.output_layout[0] != '\0' && std::string_view{input.output_layout} != "binaural") {
+    if ((input.renderer == ADM_RENDERER_SAF_BINAURAL || input.renderer == ADM_RENDERER_ROOM_BINAURAL) &&
+        input.output_layout != nullptr && input.output_layout[0] != '\0' &&
+        std::string_view{input.output_layout} != "binaural") {
         return mradm::make_error(mradm::ErrorCode::unsupported,
                                  "SAF binaural live Scene output layout must be 'binaural'");
     }
@@ -901,7 +936,7 @@ adm_error_code_t adm_render_options_set_renderer(adm_render_options_t* opts, adm
         return ADM_ERROR_OK;
     }
     if (static_cast<int>(renderer) < ADM_RENDERER_AUTOMATIC ||
-        static_cast<int>(renderer) > ADM_RENDERER_TRIPLE_BALANCE) {
+        static_cast<int>(renderer) > ADM_RENDERER_ROOM_BINAURAL) {
         return ADM_ERROR_INVALID_ARGUMENT;
     }
     opts->opts.renderer = static_cast<mradm::RendererSelection>(renderer);
@@ -2635,6 +2670,13 @@ adm_error_code_t adm_render_support_matrix_json(adm_context_t* context, char** o
 adm_error_code_t adm_create_scene_stream(adm_context_t* context,
                                          const adm_scene_stream_config_t* config,
                                          adm_scene_stream_t** out) noexcept {
+    return adm_create_scene_stream_with_room(context, config, nullptr, out);
+}
+
+adm_error_code_t adm_create_scene_stream_with_room(adm_context_t* context,
+                                                   const adm_scene_stream_config_t* config,
+                                                   const adm_room_config_t* room,
+                                                   adm_scene_stream_t** out) noexcept {
     if (out != nullptr) {
         *out = nullptr;
     }
@@ -2653,6 +2695,17 @@ adm_error_code_t adm_create_scene_stream(adm_context_t* context,
 
         mradm::realtime::SceneStreamConfig converted;
         converted.renderer = std::move(*renderer);
+        if (room != nullptr || converted.renderer.renderer == mradm::RendererSelection::room_binaural) {
+            auto room_config = to_room_config(room);
+            if (!room_config) {
+                store_last_error(context, room_config.error());
+                return map_error(room_config.error().code);
+            }
+            if (converted.renderer.renderer != mradm::RendererSelection::room_binaural) {
+                return ADM_ERROR_INVALID_ARGUMENT;
+            }
+            converted.renderer.room = std::move(*room_config);
+        }
         converted.output_sample_rate = input.output_sample_rate;
         converted.input_queue_samples = input.input_queue_samples;
         converted.input_queue_bytes = input.input_queue_bytes;
@@ -3200,6 +3253,246 @@ adm_error_code_t adm_scene_output_set_hptf_parameters(adm_scene_output_t* output
         }
         return session.set_hptf_parameters(request->profile, request->mode, request->revision);
     });
+}
+
+namespace {
+adm_error_code_t room_switch(const std::shared_ptr<mradm::IRoomControl>& control,
+                             const adm_room_config_t* config,
+                             uint64_t* revision,
+                             char** error) {
+    if (revision == nullptr || error == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    *revision = 0;
+    *error = nullptr;
+    if (!control) {
+        return ADM_ERROR_UNSUPPORTED;
+    }
+    auto converted = to_room_config(config);
+    if (!converted) {
+        owned_room_string(converted.error().message, error);
+        return map_error(converted.error().code);
+    }
+    auto result = control->request(*converted);
+    if (!result) {
+        owned_room_string(result.error().message, error);
+        return map_error(result.error().code);
+    }
+    *revision = *result;
+    return ADM_ERROR_OK;
+}
+adm_error_code_t room_status_json(const std::shared_ptr<mradm::IRoomControl>& control, char** out) {
+    if (out == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    *out = nullptr;
+    if (!control) {
+        return ADM_ERROR_UNSUPPORTED;
+    }
+    const auto status = control->status();
+    constexpr std::array names{"applied", "preparing", "transitioning", "draining", "failed"};
+    nlohmann::json json{{"schema", "mradm.room-status"},
+                        {"version", 1},
+                        {"state", names.at(static_cast<std::size_t>(status.state))},
+                        {"requested_revision", status.requested_revision},
+                        {"applied_revision", status.applied_revision},
+                        {"transition_sample", status.transition_sample},
+                        {"material_frames", status.material_frames},
+                        {"tail_frames", status.tail_frames},
+                        {"buffer_frames", status.buffer_frames},
+                        {"material_filter_guard_frames", status.material_filter_guard_frames},
+                        {"constrained_sources", status.constrained_sources},
+                        {"message", status.message}};
+    owned_room_string(json.dump(), out);
+    return ADM_ERROR_OK;
+}
+adm_error_code_t room_source_json(const std::shared_ptr<mradm::IRoomControl>& control, uint64_t id, char** out) {
+    if (out == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    *out = nullptr;
+    if (!control) {
+        return ADM_ERROR_UNSUPPORTED;
+    }
+    const auto source = control->source_position(id);
+    nlohmann::json json{{"schema", "mradm.room-source"},
+                        {"version", 1},
+                        {"element_id", id},
+                        {"position_metres", source.position_metres},
+                        {"direction", source.direction},
+                        {"distance_metres", source.distance_metres},
+                        {"constrained", source.constrained},
+                        {"present", source.present}};
+    owned_room_string(json.dump(), out);
+    return ADM_ERROR_OK;
+}
+} // namespace
+
+adm_error_code_t adm_room_load(adm_context_t* context, const char* manifest, adm_room_t** out) noexcept {
+    if (out != nullptr) {
+        *out = nullptr;
+    }
+    if (context == nullptr || manifest == nullptr || out == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(context);
+        auto loaded = mradm::RoomProfile::load(
+            std::filesystem::path{std::u8string_view{reinterpret_cast<const char8_t*>(manifest)}});
+        if (!loaded) {
+            store_last_error(context, loaded.error());
+            return map_error(loaded.error().code);
+        }
+        auto value = std::make_unique<adm_room_t>();
+        value->profile = *loaded;
+        value->manifest = (*loaded)->manifest_json();
+        *out = value.release();
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+void adm_room_destroy(adm_room_t* room) noexcept {
+    delete room;
+}
+const char* adm_room_manifest_json(const adm_room_t* room) noexcept {
+    return room != nullptr ? room->manifest.c_str() : nullptr;
+}
+adm_error_code_t adm_room_inspect(adm_context_t* context, const adm_room_config_t* config, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (context == nullptr || out_json == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        clear_last_error(context);
+        auto converted = to_room_config(config);
+        if (!converted) {
+            store_last_error(context, converted.error());
+            return map_error(converted.error().code);
+        }
+        auto inspected = mradm::inspect_room(*converted);
+        if (!inspected) {
+            store_last_error(context, inspected.error());
+            return map_error(inspected.error().code);
+        }
+        owned_room_string(*inspected, out_json);
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+adm_error_code_t adm_render_options_set_room(adm_render_options_t* options, const adm_room_config_t* config) noexcept {
+    if (options == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        if (config == nullptr) {
+            options->opts.room = {};
+            return ADM_ERROR_OK;
+        }
+        auto converted = to_room_config(config);
+        if (!converted) {
+            return map_error(converted.error().code);
+        }
+        options->opts.room = std::move(*converted);
+        return ADM_ERROR_OK;
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+adm_error_code_t adm_monitor_switch_room(adm_monitor_t* monitor,
+                                         const adm_room_config_t* config,
+                                         uint64_t* out_request,
+                                         char** out_error) noexcept {
+    if (out_request != nullptr) {
+        *out_request = 0;
+    }
+    if (out_error != nullptr) {
+        *out_error = nullptr;
+    }
+    if (monitor == nullptr || monitor->session == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        return room_switch(monitor->session->room_control(), config, out_request, out_error);
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+adm_error_code_t adm_scene_stream_switch_room(const adm_scene_stream_t* stream,
+                                              const adm_room_config_t* config,
+                                              uint64_t* out_request,
+                                              char** out_error) noexcept {
+    if (out_request != nullptr) {
+        *out_request = 0;
+    }
+    if (out_error != nullptr) {
+        *out_error = nullptr;
+    }
+    if (stream == nullptr || stream->engine == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        return room_switch(stream->engine->room_control(), config, out_request, out_error);
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+adm_error_code_t adm_monitor_room_status_json(const adm_monitor_t* monitor, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (monitor == nullptr || monitor->session == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        return room_status_json(monitor->session->room_control(), out_json);
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+adm_error_code_t adm_scene_stream_room_status_json(const adm_scene_stream_t* stream, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (stream == nullptr || stream->engine == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        return room_status_json(stream->engine->room_control(), out_json);
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+adm_error_code_t
+adm_monitor_room_source_json(const adm_monitor_t* monitor, uint64_t element_id, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (monitor == nullptr || monitor->session == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        return room_source_json(monitor->session->room_control(), element_id, out_json);
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
+}
+adm_error_code_t
+adm_scene_stream_room_source_json(const adm_scene_stream_t* stream, uint64_t element_id, char** out_json) noexcept {
+    if (out_json != nullptr) {
+        *out_json = nullptr;
+    }
+    if (stream == nullptr || stream->engine == nullptr) {
+        return ADM_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        return room_source_json(stream->engine->room_control(), element_id, out_json);
+    } catch (...) {
+        return ADM_ERROR_INTERNAL;
+    }
 }
 
 adm_error_code_t adm_scene_output_get_status(adm_scene_output_t* output, adm_scene_output_status_t* out) noexcept {

@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "adm/room.h"
+
 namespace mradm {
 
 enum class OutputBitDepth {
@@ -23,6 +25,7 @@ enum class RendererSelection {
     binaural,
     saf_binaural,   // SAF HRTF binaural backend
     triple_balance, // Cartesian room renderer with offline and realtime monitoring
+    room_binaural,  // Native room response and 3DoF binaural rendering
 };
 
 enum class SpeakerSpreadMode {
@@ -207,6 +210,7 @@ struct RenderOptions {
     // next chunk/stage boundary and return ErrorCode::cancelled. The token only
     // references shared state, so copying RenderOptions stays cheap and safe.
     std::stop_token cancel_token;
+    RoomConfig room{};
 };
 
 struct RenderRequest {

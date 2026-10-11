@@ -106,6 +106,7 @@ class MonitorEngine {
     // ignore it. Re-applied to an incoming stream on a hot-switch so a switched backend keeps
     // the current orientation.
     void set_listener_orientation(const ListenerOrientation& orientation);
+    [[nodiscard]] std::shared_ptr<IRoomControl> room_control() const { return std::atomic_load(&room_control_); }
 
     // Hot-swap the rendering stream (e.g. a different backend / same layout) with a short
     // linear crossfade. `next` MUST report the same out_channels() and sample_rate() as the
@@ -168,6 +169,7 @@ class MonitorEngine {
     void feed_meter(const float* data, std::size_t frames);     // worker side: add to meter + refresh LUFS snapshots
 
     std::unique_ptr<IRenderStream> stream_;
+    std::shared_ptr<IRoomControl> room_control_;
     IAudioOutputDevice& device_;
     LogSink& logs_; // runtime diagnostics (worker render/seek errors); must outlive the engine
     bool pull_is_realtime_playback_{true};

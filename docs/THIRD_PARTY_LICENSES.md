@@ -117,6 +117,26 @@
 | `libadm-common-definitions` @ 0.14.0 | 嵌入 Rust 的 ADM common definitions 标准引用数据 | Apache-2.0 | 可用 | 资源来自 libadm 0.14.0；保留来源、版权与哈希。仅复用数据，不链接 libadm。 |
 | `libear-derived-rust-ear` @ 2db69f8f-subset | Rust EAR 增益算法、布局、路由与 HOA 采样数据来源 | Apache-2.0 | 可用 | 移植 EBU libear 实际使用的算法；保留上游归属与球面采样来源，不链接 libear。 |
 | `musl-derived-rust-math` @ musl-1.2.5-subset | 可移植 sin/cos（重采样 sinc 与窗函数系数表） | MIT | 可用 | 移植 musl 1.2.5 的 sin/cos 内核与中等区间约简（源自 FreeBSD msun，保留 Sun 许可声明）；只用 IEEE 基本运算，跨平台逐位一致。 |
+| `rust-block-buffer-0.10.4` @ 0.10.4 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-cfg-if-1.0.5` @ 1.0.5 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-cpufeatures-0.2.17` @ 0.2.17 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-crossbeam-deque-0.8.8` @ 0.8.8 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-crossbeam-epoch-0.9.21` @ 0.9.21 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-crossbeam-utils-0.8.23` @ 0.8.23 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-crypto-common-0.1.7` @ 0.1.7 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-digest-0.10.7` @ 0.10.7 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-either-1.19.0` @ 1.19.0 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-generic-array-0.14.7` @ 0.14.7 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT | 可用 |  |
+| `rust-libc-0.2.190` @ 0.2.190 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-rayon-1.11.0` @ 1.11.0 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-rayon-core-1.13.0` @ 1.13.0 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-sha2-0.10.9` @ 0.10.9 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-version_check-0.9.5` @ 0.9.5 | 房间资源哈希与固定工作线程的锁定 Rust 依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-paste-1.0.15` @ 1.0.15 | 房间独立频率 SIMD 的安全运行时分派依赖 | MIT OR Apache-2.0 | 可用 |  |
+| `rust-pulp-0.22.3` @ 0.22.3 | 房间独立频率 SIMD 的安全运行时分派依赖 | MIT | 可用 |  |
+| `rust-pulp-wasm-simd-flag-0.1.1` @ 0.1.1 | 房间独立频率 SIMD 的安全运行时分派依赖 | MIT | 可用 | 该子 crate 的发布包仅声明 MIT；保留 Cargo.toml，并附同一上游仓库的 pulp 0.22.3 根 LICENSE。 |
+| `rust-raw-cpuid-11.6.0` @ 11.6.0 | 房间独立频率 SIMD 的安全运行时分派依赖 | MIT | 可用 |  |
+| `rust-reborrow-0.5.5` @ 0.5.5 | 房间独立频率 SIMD 的安全运行时分派依赖 | MIT | 可用 |  |
 
 <!-- END GENERATED DEPS -->
 

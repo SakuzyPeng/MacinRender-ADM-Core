@@ -1697,6 +1697,405 @@
         ]
       },
       "notes": "移植 musl 1.2.5 的 sin/cos 内核与中等区间约简（源自 FreeBSD msun，保留 Sun 许可声明）；只用 IEEE 基本运算，跨平台逐位一致。"
+    },
+    {
+      "name": "rust-block-buffer-0.10.4",
+      "version": "0.10.4",
+      "cmake_key": null,
+      "purl": "pkg:cargo/block-buffer@0.10.4",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "block-buffer",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-cfg-if-1.0.5",
+      "version": "1.0.5",
+      "cmake_key": null,
+      "purl": "pkg:cargo/cfg-if@1.0.5",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "cfg-if",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-cpufeatures-0.2.17",
+      "version": "0.2.17",
+      "cmake_key": null,
+      "purl": "pkg:cargo/cpufeatures@0.2.17",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "cpufeatures",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-crossbeam-deque-0.8.8",
+      "version": "0.8.8",
+      "cmake_key": null,
+      "purl": "pkg:cargo/crossbeam-deque@0.8.8",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "crossbeam-deque",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-crossbeam-epoch-0.9.21",
+      "version": "0.9.21",
+      "cmake_key": null,
+      "purl": "pkg:cargo/crossbeam-epoch@0.9.21",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "crossbeam-epoch",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-crossbeam-utils-0.8.23",
+      "version": "0.8.23",
+      "cmake_key": null,
+      "purl": "pkg:cargo/crossbeam-utils@0.8.23",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "crossbeam-utils",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-crypto-common-0.1.7",
+      "version": "0.1.7",
+      "cmake_key": null,
+      "purl": "pkg:cargo/crypto-common@0.1.7",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "crypto-common",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-digest-0.10.7",
+      "version": "0.10.7",
+      "cmake_key": null,
+      "purl": "pkg:cargo/digest@0.10.7",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "digest",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-either-1.19.0",
+      "version": "1.19.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/either@1.19.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "either",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-generic-array-0.14.7",
+      "version": "0.14.7",
+      "cmake_key": null,
+      "purl": "pkg:cargo/generic-array@0.14.7",
+      "license": "MIT",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "generic-array",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-libc-0.2.190",
+      "version": "0.2.190",
+      "cmake_key": null,
+      "purl": "pkg:cargo/libc@0.2.190",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "libc",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-rayon-1.11.0",
+      "version": "1.11.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/rayon@1.11.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "rayon",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-rayon-core-1.13.0",
+      "version": "1.13.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/rayon-core@1.13.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "rayon-core",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-sha2-0.10.9",
+      "version": "0.10.9",
+      "cmake_key": null,
+      "purl": "pkg:cargo/sha2@0.10.9",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "sha2",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-version_check-0.9.5",
+      "version": "0.9.5",
+      "cmake_key": null,
+      "purl": "pkg:cargo/version_check@0.9.5",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间资源哈希与固定工作线程的锁定 Rust 依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "version_check",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-paste-1.0.15",
+      "version": "1.0.15",
+      "cmake_key": null,
+      "purl": "pkg:cargo/paste@1.0.15",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "房间独立频率 SIMD 的安全运行时分派依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "paste",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-pulp-0.22.3",
+      "version": "0.22.3",
+      "cmake_key": null,
+      "purl": "pkg:cargo/pulp@0.22.3",
+      "license": "MIT",
+      "purpose": "房间独立频率 SIMD 的安全运行时分派依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "pulp",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-pulp-wasm-simd-flag-0.1.1",
+      "version": "0.1.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/pulp-wasm-simd-flag@0.1.1",
+      "license": "MIT",
+      "purpose": "房间独立频率 SIMD 的安全运行时分派依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "pulp-wasm-simd-flag",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "Cargo.toml"
+        ],
+        "manual_notices": [
+          "LICENSE",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "该子 crate 的发布包仅声明 MIT；保留 Cargo.toml，并附同一上游仓库的 pulp 0.22.3 根 LICENSE。"
+    },
+    {
+      "name": "rust-raw-cpuid-11.6.0",
+      "version": "11.6.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/raw-cpuid@11.6.0",
+      "license": "MIT",
+      "purpose": "房间独立频率 SIMD 的安全运行时分派依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "raw-cpuid",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE.md"
+        ]
+      },
+      "notes": ""
+    },
+    {
+      "name": "rust-reborrow-0.5.5",
+      "version": "0.5.5",
+      "cmake_key": null,
+      "purl": "pkg:cargo/reborrow@0.5.5",
+      "license": "MIT",
+      "purpose": "房间独立频率 SIMD 的安全运行时分派依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "reborrow",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": ""
     }
   ]
 }

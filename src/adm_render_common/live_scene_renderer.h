@@ -139,6 +139,7 @@ struct RendererConfig {
     LfeRoutingMode lfe_routing_mode{LfeRoutingMode::direct};
     std::uint32_t object_smoothing_frames{0U};
     std::uint32_t sample_rate{48000U};
+    RoomConfig room{};
 };
 
 enum class DiagnosticCode : std::uint32_t {
@@ -177,6 +178,9 @@ class ILiveSceneRenderer {
     virtual void reset() = 0;
     [[nodiscard]] virtual Result<void> render(const Frame& frame, std::span<float> interleaved_output) = 0;
     virtual void set_listener_orientation(const ListenerOrientation& orientation) { (void) orientation; }
+    [[nodiscard]] virtual std::shared_ptr<IRoomControl> room_control() const { return {}; }
+    // Called once before EOS flushing. Existing renderers retain their established quota.
+    [[nodiscard]] virtual Result<std::uint64_t> end_input() { return std::uint64_t{0}; }
 
     [[nodiscard]] virtual std::uint32_t output_channels() const noexcept = 0;
     [[nodiscard]] virtual std::uint32_t sample_rate() const noexcept = 0;

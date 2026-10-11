@@ -31,10 +31,12 @@
 #include "../adm_render_common/consistency_trace.h"
 #include "../adm_render_common/live_scene_trace.h"
 #include "live_binaural_renderer.h"
+#include "live_room_renderer.h"
 #include "live_triple_balance_renderer.h"
 #include "live_vbap_renderer.h"
 #include "resampler.h"
 #include "ring_buffer.h"
+#include "room_worker_wait.h"
 #include "scene_transition.h"
 
 namespace mradm::realtime {
@@ -94,6 +96,9 @@ class DiagnosticStore {
 
 [[nodiscard]] Result<std::unique_ptr<live_scene::ILiveSceneRenderer>>
 create_live_renderer(const live_scene::RendererConfig& config, const live_scene::DiagnosticSink& diagnostics) {
+    if (config.renderer == RendererSelection::room_binaural) {
+        return live_scene::create_live_room_renderer(config, diagnostics);
+    }
     if (config.renderer == RendererSelection::saf) {
         return live_scene::create_live_vbap_renderer(config, diagnostics);
     }
@@ -103,7 +108,8 @@ create_live_renderer(const live_scene::RendererConfig& config, const live_scene:
     if (config.renderer == RendererSelection::triple_balance) {
         return live_scene::create_live_triple_balance_renderer(config, diagnostics);
     }
-    return make_error(ErrorCode::unsupported, "Scene streams support SAF VBAP, SAF binaural and Triple Balance");
+    return make_error(ErrorCode::unsupported,
+                      "Scene streams support SAF VBAP, SAF binaural, room-binaural and Triple Balance");
 }
 
 [[nodiscard]] live_scene::ObjectState default_state(const live_scene::ElementDescriptor& descriptor) {
@@ -224,9 +230,11 @@ class PlayerOutputEngine {
            lhs.flags == rhs.flags && semantic_identity_equal(lhs.semantic_identity, rhs.semantic_identity);
 }
 
-[[nodiscard]] bool finite_state(const live_scene::ObjectState& state) noexcept {
+[[nodiscard]] bool finite_state(const live_scene::ObjectState& state, bool room_coordinates = false) noexcept {
     const auto finite = [](float value) { return std::isfinite(value); };
-    const auto coordinate = [&](float value) { return finite(value) && value >= -1.0F && value <= 1.0F; };
+    const auto coordinate = [&](float value) {
+        return finite(value) && (room_coordinates || (value >= -1.0F && value <= 1.0F));
+    };
     if ((state.valid_fields & ~live_scene::k_known_state_fields) != 0U) {
         return false;
     }
@@ -407,6 +415,7 @@ struct SceneStreamEngine::Impl {
           resample_output(static_cast<std::size_t>(k_resampler_output_frames) * channels, 0.0F),
           zero_output(static_cast<std::size_t>(k_resampler_output_frames) * channels, 0.0F),
           transitions(channels, config.output_sample_rate, k_backend_crossfade_frames) {
+        std::atomic_store(&room_control, renderer->room_control());
         if (config.renderer.sample_rate != config.output_sample_rate) {
             auto prepared = dsp::Resampler::create(channels, config.renderer.sample_rate, config.output_sample_rate);
             if (!prepared) {
@@ -573,6 +582,7 @@ struct SceneStreamEngine::Impl {
 
         if (!has_current_generation || !current_generation_model) {
             renderer = std::move(backend->renderer);
+            std::atomic_store(&room_control, renderer->room_control());
             config.renderer = std::move(backend->config);
             return;
         }
@@ -602,6 +612,7 @@ struct SceneStreamEngine::Impl {
             return;
         }
         renderer = std::move(incoming_renderer);
+        std::atomic_store(&room_control, renderer->room_control());
         config.renderer = std::move(incoming_config);
         transitions.reset_backend();
         incoming_needs_initial_state = false;
@@ -877,10 +888,12 @@ struct SceneStreamEngine::Impl {
         }
         if (latest_backend) {
             renderer = std::move(latest_backend->renderer);
+            std::atomic_store(&room_control, renderer->room_control());
             config.renderer = std::move(latest_backend->config);
             incoming_renderer = nullptr;
         } else if (incoming_renderer) {
             renderer = std::move(incoming_renderer);
+            std::atomic_store(&room_control, renderer->room_control());
             config.renderer = std::move(incoming_config);
         }
         deferred_backend.reset();
@@ -1216,6 +1229,12 @@ struct SceneStreamEngine::Impl {
 
     [[nodiscard]] Result<void> render_slice(const live_scene::Frame& frame,
                                             const std::vector<live_scene::StateEntry>& incoming_snapshot) {
+        const bool room_active = config.renderer.renderer == RendererSelection::room_binaural ||
+                                 (incoming_renderer && incoming_config.renderer == RendererSelection::room_binaural);
+        if (room_active || room_worker_active) {
+            set_room_worker_active(room_active);
+            room_worker_active = room_active;
+        }
 #ifdef MR_ADM_CONSISTENCY_DIAGNOSTICS
         const std::string key = consistency::scene_slice_key(frame);
         for (const auto& plane : frame.pcm) {
@@ -1475,6 +1494,14 @@ struct SceneStreamEngine::Impl {
     }
 
     [[nodiscard]] Result<void> push_floats(const float* samples, std::uint64_t frames, std::uint64_t serial) {
+        const auto wait_for_space = [this] {
+            if (config.renderer.renderer == RendererSelection::room_binaural ||
+                (incoming_renderer && incoming_config.renderer == RendererSelection::room_binaural)) {
+                wait_room_worker(k_ring_wait);
+            } else {
+                std::this_thread::sleep_for(k_ring_wait);
+            }
+        };
         std::uint64_t offset = 0U;
         while (offset < frames) {
             if (reset_or_quit(serial)) {
@@ -1486,7 +1513,7 @@ struct SceneStreamEngine::Impl {
             // Publish readiness even if no further push fits under that cap.
             publish_output_readiness(buffered, lookahead);
             if (buffered >= lookahead) {
-                std::this_thread::sleep_for(k_ring_wait);
+                wait_for_space();
                 continue;
             }
             const auto permitted_frames = std::min<std::uint64_t>(frames - offset, lookahead - buffered);
@@ -1498,7 +1525,7 @@ struct SceneStreamEngine::Impl {
             output_frames_pushed += pushed_frames;
             publish_output_readiness(player_output.buffered_frames(), lookahead);
             if (pushed_frames == 0U) {
-                std::this_thread::sleep_for(k_ring_wait);
+                wait_for_space();
             }
         }
         return {};
@@ -1673,6 +1700,19 @@ struct SceneStreamEngine::Impl {
 
     [[nodiscard]] Result<void> process_end(const WorkItem& item) {
         finish_preroll();
+        auto tail = renderer->end_input();
+        if (!tail) {
+            return tl::unexpected{tail.error()};
+        }
+        if (incoming_renderer) {
+            auto incoming_tail = incoming_renderer->end_input();
+            if (!incoming_tail) {
+                return tl::unexpected{incoming_tail.error()};
+            }
+            *tail = std::max(*tail, *incoming_tail);
+        }
+        // Round the combined material + room tail once, including resampling.
+        add_timeline_samples(*tail);
         if (rational_remainder != 0U) {
             ++allowed_output_frames;
             rational_remainder = 0U;
@@ -1704,6 +1744,8 @@ struct SceneStreamEngine::Impl {
 
     SceneStreamConfig config;
     std::unique_ptr<live_scene::ILiveSceneRenderer> renderer;
+    std::shared_ptr<IRoomControl> room_control;
+    bool room_worker_active{false};
     const std::uint32_t input_sample_rate{0U};
     std::shared_ptr<DiagnosticStore> diagnostics;
     std::size_t channels{0U};
@@ -1897,6 +1939,10 @@ Result<void> SceneStreamEngine::switch_backend(live_scene::RendererConfig config
     return {};
 }
 
+std::shared_ptr<IRoomControl> SceneStreamEngine::room_control() const {
+    return std::atomic_load(&impl_->room_control);
+}
+
 void SceneStreamEngine::set_listener_orientation(const ListenerOrientation& orientation) {
     impl_->last_orientation_update_ns.store(impl_->now().time_since_epoch().count(), std::memory_order_relaxed);
     {
@@ -1984,6 +2030,7 @@ Result<void> SceneStreamEngine::begin_epoch(std::uint64_t epoch_id, std::int64_t
 Result<void> SceneStreamEngine::configure_generation(std::uint64_t epoch_id,
                                                      std::uint64_t generation_id,
                                                      std::span<const live_scene::ElementDescriptor> elements) {
+    const bool room_coordinates = static_cast<bool>(room_control());
     std::unordered_set<std::uint64_t> ids;
     ids.reserve(elements.size());
     for (const auto& element : elements) {
@@ -1995,8 +2042,9 @@ Result<void> SceneStreamEngine::configure_generation(std::uint64_t epoch_id,
             return make_error(ErrorCode::invalid_argument, "Scene generation contains a duplicate element ID");
         }
         if (element.has_position &&
-            (!std::isfinite(element.x) || !std::isfinite(element.y) || !std::isfinite(element.z) || element.x < -1.0F ||
-             element.x > 1.0F || element.y < -1.0F || element.y > 1.0F || element.z < -1.0F || element.z > 1.0F)) {
+            (!std::isfinite(element.x) || !std::isfinite(element.y) || !std::isfinite(element.z) ||
+             (!room_coordinates && (element.x < -1.0F || element.x > 1.0F || element.y < -1.0F || element.y > 1.0F ||
+                                    element.z < -1.0F || element.z > 1.0F)))) {
             return make_error(ErrorCode::invalid_argument,
                               "Scene element Cartesian position must use finite canonical [-1, 1] coordinates");
         }
@@ -2106,9 +2154,10 @@ Result<SceneSubmitStatus> SceneStreamEngine::submit_frame(const SceneFrameView& 
         }
     }
     std::unordered_set<std::uint64_t> initial_ids;
+    const bool room_coordinates = static_cast<bool>(room_control());
     const bool invalid_initial_state = std::ranges::any_of(view.initial_states, [&](const auto& initial) {
         return !element_ids.contains(initial.element_id) || !initial_ids.insert(initial.element_id).second ||
-               !finite_state(initial.state);
+               !finite_state(initial.state, room_coordinates);
     });
     if (invalid_initial_state) {
         return make_error(ErrorCode::invalid_argument,
@@ -2117,7 +2166,8 @@ Result<SceneSubmitStatus> SceneStreamEngine::submit_frame(const SceneFrameView& 
     const bool invalid_update = std::ranges::any_of(view.updates, [&](const auto& update) {
         return !element_ids.contains(update.element_id) || update.offset_samples >= view.duration_samples ||
                update.changed_fields == 0U || (update.changed_fields & ~live_scene::k_known_state_fields) != 0U ||
-               (update.changed_fields & ~update.state.valid_fields) != 0U || !finite_state(update.state);
+               (update.changed_fields & ~update.state.valid_fields) != 0U ||
+               !finite_state(update.state, room_coordinates);
     });
     if (invalid_update) {
         return make_error(ErrorCode::invalid_argument, "Scene metadata update is invalid");

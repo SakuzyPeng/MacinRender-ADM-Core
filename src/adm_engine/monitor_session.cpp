@@ -180,6 +180,7 @@ class RealtimeStreamFactory final : public realtime::IRenderStreamFactory {
         plan.output_layout = resolved->effective_output_layout;
         plan.scene = scene;
         plan.sofa_path = options.sofa_path;
+        plan.room = options.room;
         plan.default_interp_ms = options.default_interp_ms;
         plan.object_smoothing_frames = options.object_smoothing_frames;
         plan.speaker_geometry = options.speaker_geometry;
@@ -446,6 +447,10 @@ Result<void> MonitorSession::set_overrides(const LiveOverrides& overrides) {
         impl_->current_overrides = overrides;
     }
     return applied;
+}
+
+std::shared_ptr<IRoomControl> MonitorSession::room_control() const {
+    return impl_->engine ? impl_->engine->room_control() : nullptr;
 }
 
 void MonitorSession::set_listener_orientation(const ListenerOrientation& orientation) {

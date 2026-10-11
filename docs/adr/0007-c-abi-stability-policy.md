@@ -1,7 +1,7 @@
 # ADR 0007：C ABI 稳定性承诺与版本策略
 
-> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.45）
-> 日期：2026-05-17（增量记录持续更新至 2026-10-08 的 v1.45）
+> 状态：已接受（已进入阶段 2，当前 ABI 为 stable v1.46）
+> 日期：2026-05-17（增量记录持续更新至 2026-10-10 的 v1.46）
 > 适用范围：`adm_c_api` 模块（`include/adm/c_api.h` 与 `src/adm_c_api/`），以及任何通过该 ABI 的下游绑定（GUI（图形用户界面）、Rust CLI、Python/Node/Swift 绑定）。`adm_core` 与 `adm_render*` 的 C++ 内部 API 不受本 ADR 约束。
 
 ## 背景
@@ -91,6 +91,18 @@ C ABI 走 **两阶段稳定** 模型：
 - 修改 callback `adm_progress_cb` 形参或调用约定。
 - 修改宏 `ADM_API_VERSION_*` 的含义。
 - 删除导出函数（必须走 deprecation 流程，见下）。
+
+### v1.46（additive，房间模块）
+
+- 追加 `ADM_RENDERER_ROOM_BINAURAL=8`；新增 opaque `adm_room_t`、加载／检查、
+  RenderOptions 房间配置及 `adm_create_scene_stream_with_room`。原 Scene 嵌套结构布局不变。
+- `adm_room_config_t`（64 位平台为 32 字节）以 `struct_size` 开头，配置复制并持有资源；
+  创建会话后调用方可销毁资源句柄。活动资源完全在内存中。
+- Monitor／Scene 房间切换异步准备，错误保留当前房间；公开状态与实际坐标使用版本化 JSON，
+  字符串通过 `adm_free_string` 释放。头姿继续从既有 worker 接口应用。
+- 房间后端 Scene 坐标接受有限实数，再由房间射线边界约束；其它后端仍使用原 `[-1,1]` 校验。
+- 完整节目追加有限尾声；显式窗口长度保持精确。实现状态与验收证据见
+  [原生实时房间渲染](../architecture/REALTIME_ROOM_RENDERING.md)。
 
 如需任一禁止变更，必须发布 `2.0.0`（主版本升级），SONAME 同步切到 `.so.2`，旧版本可在过渡期共存。
 
