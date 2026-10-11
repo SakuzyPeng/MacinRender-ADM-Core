@@ -1,0 +1,2380 @@
+{
+  "schema": "mradm.room-target-filter-optimization",
+  "version": 1,
+  "date": "2026-10-11",
+  "baseline": {
+    "commit": "d2db9716fa7f7297106e6c3a80b3cbee651d6aa4",
+    "additional_changes": "Previously retained input-span optimization and optional profiling; the same version-2 room_stages probe is used for both variants.",
+    "source_sha256": {
+      "rust/crates/mradm-dsp/src/fft.rs": "8fec72144636c498133a138c36c346223c86a2e5775e2447fd6bfa1b11b80d8e",
+      "rust/crates/mradm-dsp/src/room/partition.rs": "b2efc31889916e25f0b2423ef589935bf63b0d81683efac9bdf67b46bb1accae"
+    },
+    "unchanged_runtime_sources_sha256": {
+      "rust/crates/mradm-dsp/src/room/control.rs": "289e4a9bd25f109c62a3dfe8118d6389d9bc40a22bf983af96f8a21a2ce09ca8",
+      "rust/crates/mradm-dsp/src/room/session.rs": "8321231ae57d7d4cbf7474bd47f394e550ad3b192f627ac9215363fcadfd3cdf",
+      "rust/crates/mradm-dsp/src/room/profile.rs": "1dd62ec03d2a16bfaa566aeae17253c84393f9d3dd091559465b0209de288d2e"
+    }
+  },
+  "candidate": {
+    "source_sha256": {
+      "rust/crates/mradm-dsp/src/fft.rs": "6b91e05e6937d03265660c58c6d3edadb58e4ca83a48f1c70676b94b44aacd5b",
+      "rust/crates/mradm-dsp/src/room/partition.rs": "9de1e262b1d90c51381561837d7bc6cfc22671405008ba7762a4b5ceba5e6b0b"
+    },
+    "changes": [
+      "Copy each FIR partition directly into the existing FFT workspace and zero only the unused suffix.",
+      "Validate the entire dynamic target once, including finite values outside structural support, before mutating target state.",
+      "Keep FFT decomposition, coefficients, operation order, positive-zero padding, input history, fade, and structural support unchanged."
+    ],
+    "no_new_runtime_allocations": true,
+    "public_c_abi_changed": false
+  },
+  "measurement": {
+    "build": "Release, Rust 1.98.0, no default features, no room-profile or room-trace in performance runs",
+    "macos": {
+      "cpu": "Apple M4 Pro, 8 performance + 4 efficiency cores",
+      "workers": 8
+    },
+    "linux": {
+      "cpu": "Intel Xeon Platinum 8352V",
+      "workers": 32,
+      "effective_cpuset": "96-127"
+    },
+    "room_manifest_sha256": "c8e62c00447923135821273aa0131809ec58ffd71696f10ae176be3f8e2f7dce",
+    "micro_method": {
+      "iterations_per_run": 6000,
+      "interleaved_repeats": 3,
+      "order": [
+        "baseline,padded",
+        "padded,baseline",
+        "baseline,padded"
+      ],
+      "supported_target_warmup": 32,
+      "supported_target_poses": 8,
+      "short_taps": 3275,
+      "direct_support": 1692,
+      "early_support": 2879,
+      "note": "Supported targets use complete precomputed responses and advance the convolution clock outside target timing. Existing stereo_target_us retains the full-support same-clock replacement workload."
+    },
+    "micro": {
+      "macos": {
+        "per_run": [
+          {
+            "variant": "baseline",
+            "repeat": 1,
+            "sha256": "bc2e1451396bba249ffac457da3538dbca3a9bcda9913aa00b6d6ed7e7b61d3d",
+            "result": {
+              "direct_support_taps": [
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692
+              ],
+              "early_support_taps": [
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879
+              ],
+              "hrir_query_us": 3.5139096666666663,
+              "iterations": 6000,
+              "note": "Single-source stage means; not realtime capacity or device latency.",
+              "profiling": false,
+              "query_fft_length": 2048,
+              "schema": "mradm.room-stages",
+              "short_taps": 3275,
+              "source_response_us": 108.12285416666667,
+              "stereo_convolution_us": 4.017611166666667,
+              "stereo_target_us": 19.073305666666666,
+              "supported_direct_target_us": 12.10259433333331,
+              "supported_early_target_us": 18.219438333333322,
+              "version": 2
+            }
+          },
+          {
+            "variant": "padded",
+            "repeat": 1,
+            "sha256": "abfbcf8f7b5cae223688d168d46285200e3c5621dc3b679eb351f6a14c5c1594",
+            "result": {
+              "direct_support_taps": [
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692
+              ],
+              "early_support_taps": [
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879
+              ],
+              "hrir_query_us": 3.3565556666666665,
+              "iterations": 6000,
+              "note": "Single-source stage means; not realtime capacity or device latency.",
+              "profiling": false,
+              "query_fft_length": 2048,
+              "schema": "mradm.room-stages",
+              "short_taps": 3275,
+              "source_response_us": 110.10266666666666,
+              "stereo_convolution_us": 4.071757,
+              "stereo_target_us": 16.6606875,
+              "supported_direct_target_us": 10.046650500000093,
+              "supported_early_target_us": 15.804973333333319,
+              "version": 2
+            }
+          },
+          {
+            "variant": "padded",
+            "repeat": 2,
+            "sha256": "abfbcf8f7b5cae223688d168d46285200e3c5621dc3b679eb351f6a14c5c1594",
+            "result": {
+              "direct_support_taps": [
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692
+              ],
+              "early_support_taps": [
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879
+              ],
+              "hrir_query_us": 3.342638833333333,
+              "iterations": 6000,
+              "note": "Single-source stage means; not realtime capacity or device latency.",
+              "profiling": false,
+              "query_fft_length": 2048,
+              "schema": "mradm.room-stages",
+              "short_taps": 3275,
+              "source_response_us": 109.90209033333333,
+              "stereo_convolution_us": 4.040013833333333,
+              "stereo_target_us": 16.715360999999998,
+              "supported_direct_target_us": 10.066068333333462,
+              "supported_early_target_us": 15.839223000000102,
+              "version": 2
+            }
+          },
+          {
+            "variant": "baseline",
+            "repeat": 2,
+            "sha256": "bc2e1451396bba249ffac457da3538dbca3a9bcda9913aa00b6d6ed7e7b61d3d",
+            "result": {
+              "direct_support_taps": [
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692
+              ],
+              "early_support_taps": [
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879
+              ],
+              "hrir_query_us": 3.3557431666666666,
+              "iterations": 6000,
+              "note": "Single-source stage means; not realtime capacity or device latency.",
+              "profiling": false,
+              "query_fft_length": 2048,
+              "schema": "mradm.room-stages",
+              "short_taps": 3275,
+              "source_response_us": 109.80222233333332,
+              "stereo_convolution_us": 4.006388833333333,
+              "stereo_target_us": 19.133659666666667,
+              "supported_direct_target_us": 12.14168533333341,
+              "supported_early_target_us": 18.207461166666548,
+              "version": 2
+            }
+          },
+          {
+            "variant": "baseline",
+            "repeat": 3,
+            "sha256": "bc2e1451396bba249ffac457da3538dbca3a9bcda9913aa00b6d6ed7e7b61d3d",
+            "result": {
+              "direct_support_taps": [
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692
+              ],
+              "early_support_taps": [
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879
+              ],
+              "hrir_query_us": 3.3424028333333338,
+              "iterations": 6000,
+              "note": "Single-source stage means; not realtime capacity or device latency.",
+              "profiling": false,
+              "query_fft_length": 2048,
+              "schema": "mradm.room-stages",
+              "short_taps": 3275,
+              "source_response_us": 108.42526383333335,
+              "stereo_convolution_us": 4.025979166666667,
+              "stereo_target_us": 19.104659666666667,
+              "supported_direct_target_us": 12.133390333333391,
+              "supported_early_target_us": 18.224039333333337,
+              "version": 2
+            }
+          },
+          {
+            "variant": "padded",
+            "repeat": 3,
+            "sha256": "abfbcf8f7b5cae223688d168d46285200e3c5621dc3b679eb351f6a14c5c1594",
+            "result": {
+              "direct_support_taps": [
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692
+              ],
+              "early_support_taps": [
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879
+              ],
+              "hrir_query_us": 3.351875,
+              "iterations": 6000,
+              "note": "Single-source stage means; not realtime capacity or device latency.",
+              "profiling": false,
+              "query_fft_length": 2048,
+              "schema": "mradm.room-stages",
+              "short_taps": 3275,
+              "source_response_us": 110.35440283333334,
+              "stereo_convolution_us": 4.060666666666667,
+              "stereo_target_us": 16.677111166666666,
+              "supported_direct_target_us": 10.049850500000055,
+              "supported_early_target_us": 15.789980999999997,
+              "version": 2
+            }
+          }
+        ],
+        "aggregates": {
+          "hrir_query_us": {
+            "baseline_median_us": 3.3557431666666666,
+            "candidate_median_us": 3.351875,
+            "reduction_percent": 0.11527004524928275
+          },
+          "source_response_us": {
+            "baseline_median_us": 108.42526383333335,
+            "candidate_median_us": 110.10266666666666,
+            "reduction_percent": -1.547059028522857
+          },
+          "stereo_target_us": {
+            "baseline_median_us": 19.104659666666667,
+            "candidate_median_us": 16.677111166666666,
+            "reduction_percent": 12.706578093278086
+          },
+          "stereo_convolution_us": {
+            "baseline_median_us": 4.017611166666667,
+            "candidate_median_us": 4.060666666666667,
+            "reduction_percent": -1.071669163935618
+          },
+          "supported_direct_target_us": {
+            "baseline_median_us": 12.133390333333391,
+            "candidate_median_us": 10.049850500000055,
+            "reduction_percent": 17.171950922977754
+          },
+          "supported_early_target_us": {
+            "baseline_median_us": 18.219438333333322,
+            "candidate_median_us": 15.804973333333319,
+            "reduction_percent": 13.252137392087581
+          }
+        }
+      },
+      "linux": {
+        "per_run": [
+          {
+            "variant": "baseline",
+            "repeat": 1,
+            "sha256": "12f5f0038926d4bdb40acfbc8a6ba466833efcafbdc908f7493dc542c82c1f36",
+            "result": {
+              "direct_support_taps": [
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692
+              ],
+              "early_support_taps": [
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879
+              ],
+              "hrir_query_us": 7.331610666666666,
+              "iterations": 6000,
+              "note": "Single-source stage means; not realtime capacity or device latency.",
+              "profiling": false,
+              "query_fft_length": 2048,
+              "schema": "mradm.room-stages",
+              "short_taps": 3275,
+              "source_response_us": 288.75819299999995,
+              "stereo_convolution_us": 13.782820500000001,
+              "stereo_target_us": 66.10358583333333,
+              "supported_direct_target_us": 27.27957133333335,
+              "supported_early_target_us": 40.624430666666655,
+              "version": 2
+            }
+          },
+          {
+            "variant": "padded",
+            "repeat": 1,
+            "sha256": "3dca1d7d7fc2d5ad568f1e66cf103a50761e5a27b77086b7593b89322d1360df",
+            "result": {
+              "direct_support_taps": [
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692
+              ],
+              "early_support_taps": [
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879
+              ],
+              "hrir_query_us": 4.711739499999999,
+              "iterations": 6000,
+              "note": "Single-source stage means; not realtime capacity or device latency.",
+              "profiling": false,
+              "query_fft_length": 2048,
+              "schema": "mradm.room-stages",
+              "short_taps": 3275,
+              "source_response_us": 191.813526,
+              "stereo_convolution_us": 7.988372833333334,
+              "stereo_target_us": 33.7014995,
+              "supported_direct_target_us": 20.927927000000015,
+              "supported_early_target_us": 32.59491483333324,
+              "version": 2
+            }
+          },
+          {
+            "variant": "padded",
+            "repeat": 2,
+            "sha256": "3dca1d7d7fc2d5ad568f1e66cf103a50761e5a27b77086b7593b89322d1360df",
+            "result": {
+              "direct_support_taps": [
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692
+              ],
+              "early_support_taps": [
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879
+              ],
+              "hrir_query_us": 7.221775166666666,
+              "iterations": 6000,
+              "note": "Single-source stage means; not realtime capacity or device latency.",
+              "profiling": false,
+              "query_fft_length": 2048,
+              "schema": "mradm.room-stages",
+              "short_taps": 3275,
+              "source_response_us": 256.2794133333333,
+              "stereo_convolution_us": 8.072308666666666,
+              "stereo_target_us": 34.6224345,
+              "supported_direct_target_us": 20.778497833333343,
+              "supported_early_target_us": 32.46368200000009,
+              "version": 2
+            }
+          },
+          {
+            "variant": "baseline",
+            "repeat": 2,
+            "sha256": "12f5f0038926d4bdb40acfbc8a6ba466833efcafbdc908f7493dc542c82c1f36",
+            "result": {
+              "direct_support_taps": [
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692
+              ],
+              "early_support_taps": [
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879
+              ],
+              "hrir_query_us": 4.7044369999999995,
+              "iterations": 6000,
+              "note": "Single-source stage means; not realtime capacity or device latency.",
+              "profiling": false,
+              "query_fft_length": 2048,
+              "schema": "mradm.room-stages",
+              "short_taps": 3275,
+              "source_response_us": 192.69941883333334,
+              "stereo_convolution_us": 8.183813166666667,
+              "stereo_target_us": 37.81319666666667,
+              "supported_direct_target_us": 24.92783366666662,
+              "supported_early_target_us": 37.192286500000115,
+              "version": 2
+            }
+          },
+          {
+            "variant": "baseline",
+            "repeat": 3,
+            "sha256": "12f5f0038926d4bdb40acfbc8a6ba466833efcafbdc908f7493dc542c82c1f36",
+            "result": {
+              "direct_support_taps": [
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692
+              ],
+              "early_support_taps": [
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879
+              ],
+              "hrir_query_us": 4.712337833333334,
+              "iterations": 6000,
+              "note": "Single-source stage means; not realtime capacity or device latency.",
+              "profiling": false,
+              "query_fft_length": 2048,
+              "schema": "mradm.room-stages",
+              "short_taps": 3275,
+              "source_response_us": 192.94917999999998,
+              "stereo_convolution_us": 8.731019666666667,
+              "stereo_target_us": 39.76370766666666,
+              "supported_direct_target_us": 24.99768049999997,
+              "supported_early_target_us": 37.23694750000015,
+              "version": 2
+            }
+          },
+          {
+            "variant": "padded",
+            "repeat": 3,
+            "sha256": "3dca1d7d7fc2d5ad568f1e66cf103a50761e5a27b77086b7593b89322d1360df",
+            "result": {
+              "direct_support_taps": [
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692,
+                1692
+              ],
+              "early_support_taps": [
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879,
+                2879
+              ],
+              "hrir_query_us": 4.706856166666666,
+              "iterations": 6000,
+              "note": "Single-source stage means; not realtime capacity or device latency.",
+              "profiling": false,
+              "query_fft_length": 2048,
+              "schema": "mradm.room-stages",
+              "short_taps": 3275,
+              "source_response_us": 191.28640116666665,
+              "stereo_convolution_us": 8.0350675,
+              "stereo_target_us": 34.13363016666666,
+              "supported_direct_target_us": 20.904962166666667,
+              "supported_early_target_us": 32.68586416666665,
+              "version": 2
+            }
+          }
+        ],
+        "aggregates": {
+          "hrir_query_us": {
+            "baseline_median_us": 4.712337833333334,
+            "candidate_median_us": 4.711739499999999,
+            "reduction_percent": 0.012697165493991136
+          },
+          "source_response_us": {
+            "baseline_median_us": 192.94917999999998,
+            "candidate_median_us": 191.813526,
+            "reduction_percent": 0.5885767433683742
+          },
+          "stereo_target_us": {
+            "baseline_median_us": 39.76370766666666,
+            "candidate_median_us": 34.13363016666666,
+            "reduction_percent": 14.15883435014691
+          },
+          "stereo_convolution_us": {
+            "baseline_median_us": 8.731019666666667,
+            "candidate_median_us": 8.0350675,
+            "reduction_percent": 7.971029653313877
+          },
+          "supported_direct_target_us": {
+            "baseline_median_us": 24.99768049999997,
+            "candidate_median_us": 20.904962166666667,
+            "reduction_percent": 16.372392363896747
+          },
+          "supported_early_target_us": {
+            "baseline_median_us": 37.23694750000015,
+            "candidate_median_us": 32.59491483333324,
+            "reduction_percent": 12.466200852437993
+          }
+        }
+      }
+    },
+    "macro_method": {
+      "sources": 32,
+      "sample_rate": 48000,
+      "call_frames": 512,
+      "pose_hz": 93.75,
+      "switch_period_calls": 469,
+      "interleaved_repeats": 3,
+      "initial_calls_per_scenario": 938,
+      "followup_calls_per_scenario": 2814,
+      "note": "Follow-up was triggered by the initial Linux switching regression, not selected to replace or hide the initial results. No device or long-duration capacity claim."
+    },
+    "initial_macro": {
+      "macos": {
+        "per_run": [
+          {
+            "variant": "baseline",
+            "repeat": 1,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 938,
+                "mean_ms": 0.6362052643923247,
+                "p99_ms": 1.905208,
+                "maximum_ms": 4.069667,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose",
+                "calls": 938,
+                "mean_ms": 1.8432130906183357,
+                "p99_ms": 2.23325,
+                "maximum_ms": 2.4139999999999997,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 938,
+                "mean_ms": 2.1494216972281466,
+                "p99_ms": 3.4277919999999997,
+                "maximum_ms": 3.9117500000000005,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              }
+            ]
+          },
+          {
+            "variant": "padded",
+            "repeat": 1,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 938,
+                "mean_ms": 0.613606382729211,
+                "p99_ms": 1.017541,
+                "maximum_ms": 1.162375,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose",
+                "calls": 938,
+                "mean_ms": 1.8151654307036245,
+                "p99_ms": 2.199417,
+                "maximum_ms": 2.623583,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 938,
+                "mean_ms": 2.169437235607679,
+                "p99_ms": 3.814291,
+                "maximum_ms": 9.614833999999998,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              }
+            ]
+          },
+          {
+            "variant": "padded",
+            "repeat": 2,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 938,
+                "mean_ms": 0.6135298987206821,
+                "p99_ms": 0.98,
+                "maximum_ms": 1.189958,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose",
+                "calls": 938,
+                "mean_ms": 1.8158635639658842,
+                "p99_ms": 2.199875,
+                "maximum_ms": 2.7862080000000002,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 938,
+                "mean_ms": 2.129052420042641,
+                "p99_ms": 3.401,
+                "maximum_ms": 3.796708,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              }
+            ]
+          },
+          {
+            "variant": "baseline",
+            "repeat": 2,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 938,
+                "mean_ms": 0.607722569296375,
+                "p99_ms": 0.964583,
+                "maximum_ms": 1.1258329999999999,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose",
+                "calls": 938,
+                "mean_ms": 1.841667731343286,
+                "p99_ms": 2.2237080000000002,
+                "maximum_ms": 2.4566660000000002,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 938,
+                "mean_ms": 2.1573382974413655,
+                "p99_ms": 3.490833,
+                "maximum_ms": 7.784875,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              }
+            ]
+          },
+          {
+            "variant": "baseline",
+            "repeat": 3,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 938,
+                "mean_ms": 0.6051981524520252,
+                "p99_ms": 0.971458,
+                "maximum_ms": 1.090583,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose",
+                "calls": 938,
+                "mean_ms": 1.8494214360341161,
+                "p99_ms": 2.2704169999999997,
+                "maximum_ms": 2.527292,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 938,
+                "mean_ms": 2.194675696162051,
+                "p99_ms": 3.6575420000000003,
+                "maximum_ms": 8.991375,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              }
+            ]
+          },
+          {
+            "variant": "padded",
+            "repeat": 3,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 938,
+                "mean_ms": 0.6061314466950953,
+                "p99_ms": 0.988166,
+                "maximum_ms": 1.1425,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose",
+                "calls": 938,
+                "mean_ms": 1.8448112164179071,
+                "p99_ms": 2.293792,
+                "maximum_ms": 3.223292,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 938,
+                "mean_ms": 2.167463501066098,
+                "p99_ms": 3.4754579999999997,
+                "maximum_ms": 6.771792,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              }
+            ]
+          }
+        ],
+        "aggregates": {
+          "static": {
+            "baseline": {
+              "mean_ms": 0.607722569296375,
+              "p99_ms": 0.971458,
+              "deadline_misses": 0,
+              "calls": 2814
+            },
+            "padded": {
+              "mean_ms": 0.6135298987206821,
+              "p99_ms": 0.988166,
+              "deadline_misses": 0,
+              "calls": 2814
+            }
+          },
+          "pose": {
+            "baseline": {
+              "mean_ms": 1.8432130906183357,
+              "p99_ms": 2.23325,
+              "deadline_misses": 0,
+              "calls": 2814
+            },
+            "padded": {
+              "mean_ms": 1.8158635639658842,
+              "p99_ms": 2.199875,
+              "deadline_misses": 0,
+              "calls": 2814
+            }
+          },
+          "pose_and_switch": {
+            "baseline": {
+              "mean_ms": 2.1573382974413655,
+              "p99_ms": 3.490833,
+              "deadline_misses": 0,
+              "calls": 2814
+            },
+            "padded": {
+              "mean_ms": 2.167463501066098,
+              "p99_ms": 3.4754579999999997,
+              "deadline_misses": 0,
+              "calls": 2814
+            }
+          }
+        }
+      },
+      "linux": {
+        "per_run": [
+          {
+            "variant": "baseline",
+            "repeat": 1,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 938,
+                "mean_ms": 2.7767431471215334,
+                "p99_ms": 4.294077000000001,
+                "maximum_ms": 10.338718,
+                "deadline_misses": 0,
+                "cpu_seconds": 46.370000000000005
+              },
+              {
+                "scenario": "pose",
+                "calls": 938,
+                "mean_ms": 3.5061987238805976,
+                "p99_ms": 5.424931,
+                "maximum_ms": 5.758933,
+                "deadline_misses": 0,
+                "cpu_seconds": 63.370000000000005
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 938,
+                "mean_ms": 4.269771744136462,
+                "p99_ms": 8.254772,
+                "maximum_ms": 10.765444,
+                "deadline_misses": 1,
+                "cpu_seconds": 77.04999999999998
+              }
+            ]
+          },
+          {
+            "variant": "padded",
+            "repeat": 1,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 938,
+                "mean_ms": 2.6916961268656716,
+                "p99_ms": 4.1383399999999995,
+                "maximum_ms": 9.203437,
+                "deadline_misses": 0,
+                "cpu_seconds": 44.339999999999996
+              },
+              {
+                "scenario": "pose",
+                "calls": 938,
+                "mean_ms": 3.6141521812366766,
+                "p99_ms": 5.329162,
+                "maximum_ms": 8.158904,
+                "deadline_misses": 0,
+                "cpu_seconds": 65.24000000000001
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 938,
+                "mean_ms": 4.213333743070367,
+                "p99_ms": 7.679955,
+                "maximum_ms": 12.687016,
+                "deadline_misses": 2,
+                "cpu_seconds": 76.04
+              }
+            ]
+          },
+          {
+            "variant": "padded",
+            "repeat": 2,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 938,
+                "mean_ms": 2.772907727078893,
+                "p99_ms": 4.097232999999999,
+                "maximum_ms": 13.963557999999999,
+                "deadline_misses": 1,
+                "cpu_seconds": 45.339999999999996
+              },
+              {
+                "scenario": "pose",
+                "calls": 938,
+                "mean_ms": 4.148811001066099,
+                "p99_ms": 7.188991,
+                "maximum_ms": 28.985744,
+                "deadline_misses": 4,
+                "cpu_seconds": 69.44999999999999
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 938,
+                "mean_ms": 4.846306657782522,
+                "p99_ms": 9.8804,
+                "maximum_ms": 12.170117,
+                "deadline_misses": 1,
+                "cpu_seconds": 83.76
+              }
+            ]
+          },
+          {
+            "variant": "baseline",
+            "repeat": 2,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 938,
+                "mean_ms": 2.7911508176972286,
+                "p99_ms": 4.431118000000001,
+                "maximum_ms": 11.604840999999999,
+                "deadline_misses": 1,
+                "cpu_seconds": 46.48
+              },
+              {
+                "scenario": "pose",
+                "calls": 938,
+                "mean_ms": 3.94118676119403,
+                "p99_ms": 5.908087999999999,
+                "maximum_ms": 12.666655,
+                "deadline_misses": 1,
+                "cpu_seconds": 70.94
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 938,
+                "mean_ms": 4.666093245202565,
+                "p99_ms": 8.170198,
+                "maximum_ms": 9.784361,
+                "deadline_misses": 0,
+                "cpu_seconds": 84.04
+              }
+            ]
+          },
+          {
+            "variant": "baseline",
+            "repeat": 3,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 938,
+                "mean_ms": 2.8261051236673778,
+                "p99_ms": 4.3709359999999995,
+                "maximum_ms": 8.048229000000001,
+                "deadline_misses": 0,
+                "cpu_seconds": 46.78
+              },
+              {
+                "scenario": "pose",
+                "calls": 938,
+                "mean_ms": 3.861100617270789,
+                "p99_ms": 5.722561,
+                "maximum_ms": 8.276138000000001,
+                "deadline_misses": 0,
+                "cpu_seconds": 69.61
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 938,
+                "mean_ms": 4.3348597324093845,
+                "p99_ms": 7.05757,
+                "maximum_ms": 8.457068,
+                "deadline_misses": 0,
+                "cpu_seconds": 78.23000000000002
+              }
+            ]
+          },
+          {
+            "variant": "padded",
+            "repeat": 3,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 938,
+                "mean_ms": 2.8090957803837955,
+                "p99_ms": 4.338216,
+                "maximum_ms": 11.209847,
+                "deadline_misses": 1,
+                "cpu_seconds": 45.769999999999996
+              },
+              {
+                "scenario": "pose",
+                "calls": 938,
+                "mean_ms": 3.661062023454155,
+                "p99_ms": 5.703253,
+                "maximum_ms": 12.646732,
+                "deadline_misses": 1,
+                "cpu_seconds": 65.88
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 938,
+                "mean_ms": 4.665671592750528,
+                "p99_ms": 8.958663,
+                "maximum_ms": 10.693775,
+                "deadline_misses": 1,
+                "cpu_seconds": 83.34
+              }
+            ]
+          }
+        ],
+        "aggregates": {
+          "static": {
+            "baseline": {
+              "mean_ms": 2.7911508176972286,
+              "p99_ms": 4.3709359999999995,
+              "deadline_misses": 1,
+              "calls": 2814
+            },
+            "padded": {
+              "mean_ms": 2.772907727078893,
+              "p99_ms": 4.1383399999999995,
+              "deadline_misses": 2,
+              "calls": 2814
+            }
+          },
+          "pose": {
+            "baseline": {
+              "mean_ms": 3.861100617270789,
+              "p99_ms": 5.722561,
+              "deadline_misses": 1,
+              "calls": 2814
+            },
+            "padded": {
+              "mean_ms": 3.661062023454155,
+              "p99_ms": 5.703253,
+              "deadline_misses": 5,
+              "calls": 2814
+            }
+          },
+          "pose_and_switch": {
+            "baseline": {
+              "mean_ms": 4.3348597324093845,
+              "p99_ms": 8.170198,
+              "deadline_misses": 1,
+              "calls": 2814
+            },
+            "padded": {
+              "mean_ms": 4.665671592750528,
+              "p99_ms": 8.958663,
+              "deadline_misses": 4,
+              "calls": 2814
+            }
+          }
+        }
+      }
+    },
+    "followup_macro": {
+      "macos": {
+        "per_run": [
+          {
+            "variant": "baseline",
+            "repeat": 1,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 2814,
+                "mean_ms": 0.6371746538734879,
+                "p99_ms": 1.0597919999999998,
+                "maximum_ms": 2.779792,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose",
+                "calls": 2814,
+                "mean_ms": 1.8696067714996458,
+                "p99_ms": 2.271792,
+                "maximum_ms": 7.862124999999999,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 2814,
+                "mean_ms": 2.194163221393039,
+                "p99_ms": 3.471792,
+                "maximum_ms": 8.213583,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              }
+            ]
+          },
+          {
+            "variant": "padded",
+            "repeat": 1,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 2814,
+                "mean_ms": 0.6085036751954497,
+                "p99_ms": 0.961333,
+                "maximum_ms": 1.1735,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose",
+                "calls": 2814,
+                "mean_ms": 1.8390162384506075,
+                "p99_ms": 2.2980829999999997,
+                "maximum_ms": 7.015124999999999,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 2814,
+                "mean_ms": 2.1632802334754775,
+                "p99_ms": 3.4189160000000003,
+                "maximum_ms": 9.079500000000001,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              }
+            ]
+          },
+          {
+            "variant": "padded",
+            "repeat": 2,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 2814,
+                "mean_ms": 0.6195522025586362,
+                "p99_ms": 1.022083,
+                "maximum_ms": 1.508458,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose",
+                "calls": 2814,
+                "mean_ms": 1.8969530682302798,
+                "p99_ms": 2.3817920000000004,
+                "maximum_ms": 8.108374999999999,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 2814,
+                "mean_ms": 2.216472586353947,
+                "p99_ms": 3.42175,
+                "maximum_ms": 7.572749999999999,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              }
+            ]
+          },
+          {
+            "variant": "baseline",
+            "repeat": 2,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 2814,
+                "mean_ms": 0.6312268926794603,
+                "p99_ms": 1.03,
+                "maximum_ms": 3.149791,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose",
+                "calls": 2814,
+                "mean_ms": 1.9459613539445628,
+                "p99_ms": 2.388625,
+                "maximum_ms": 10.081417,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 2814,
+                "mean_ms": 2.276123227434259,
+                "p99_ms": 3.5751250000000003,
+                "maximum_ms": 8.202333,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              }
+            ]
+          },
+          {
+            "variant": "baseline",
+            "repeat": 3,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 2814,
+                "mean_ms": 0.6195342295664521,
+                "p99_ms": 0.9937920000000001,
+                "maximum_ms": 1.167417,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose",
+                "calls": 2814,
+                "mean_ms": 1.9645290824449186,
+                "p99_ms": 2.423292,
+                "maximum_ms": 8.70225,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 2814,
+                "mean_ms": 2.2993845412224605,
+                "p99_ms": 3.560875,
+                "maximum_ms": 4.076917,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              }
+            ]
+          },
+          {
+            "variant": "padded",
+            "repeat": 3,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 2814,
+                "mean_ms": 0.6254197423596323,
+                "p99_ms": 1.008458,
+                "maximum_ms": 3.978583,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose",
+                "calls": 2814,
+                "mean_ms": 1.9315156670220306,
+                "p99_ms": 2.405041,
+                "maximum_ms": 6.468167,
+                "deadline_misses": 0,
+                "cpu_seconds": null
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 2814,
+                "mean_ms": 2.286993265813784,
+                "p99_ms": 3.5845830000000003,
+                "maximum_ms": 10.911166999999999,
+                "deadline_misses": 1,
+                "cpu_seconds": null
+              }
+            ]
+          }
+        ],
+        "aggregates": {
+          "static": {
+            "baseline": {
+              "mean_ms": 0.6312268926794603,
+              "p99_ms": 1.03,
+              "deadline_misses": 0,
+              "calls": 8442
+            },
+            "padded": {
+              "mean_ms": 0.6195522025586362,
+              "p99_ms": 1.008458,
+              "deadline_misses": 0,
+              "calls": 8442
+            }
+          },
+          "pose": {
+            "baseline": {
+              "mean_ms": 1.9459613539445628,
+              "p99_ms": 2.388625,
+              "deadline_misses": 0,
+              "calls": 8442
+            },
+            "padded": {
+              "mean_ms": 1.8969530682302798,
+              "p99_ms": 2.3817920000000004,
+              "deadline_misses": 0,
+              "calls": 8442
+            }
+          },
+          "pose_and_switch": {
+            "baseline": {
+              "mean_ms": 2.276123227434259,
+              "p99_ms": 3.560875,
+              "deadline_misses": 0,
+              "calls": 8442
+            },
+            "padded": {
+              "mean_ms": 2.216472586353947,
+              "p99_ms": 3.42175,
+              "deadline_misses": 1,
+              "calls": 8442
+            }
+          }
+        }
+      },
+      "linux": {
+        "per_run": [
+          {
+            "variant": "baseline",
+            "repeat": 1,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 2814,
+                "mean_ms": 2.796603858919689,
+                "p99_ms": 4.379908,
+                "maximum_ms": 10.389102000000001,
+                "deadline_misses": 0,
+                "cpu_seconds": 139.09
+              },
+              {
+                "scenario": "pose",
+                "calls": 2814,
+                "mean_ms": 3.716446294598448,
+                "p99_ms": 5.586644,
+                "maximum_ms": 9.214160000000001,
+                "deadline_misses": 0,
+                "cpu_seconds": 200.85000000000002
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 2814,
+                "mean_ms": 5.545059828358205,
+                "p99_ms": 9.94259,
+                "maximum_ms": 35.110212000000004,
+                "deadline_misses": 12,
+                "cpu_seconds": 279.71999999999997
+              }
+            ]
+          },
+          {
+            "variant": "padded",
+            "repeat": 1,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 2814,
+                "mean_ms": 2.703085240227432,
+                "p99_ms": 4.183838,
+                "maximum_ms": 13.309644,
+                "deadline_misses": 1,
+                "cpu_seconds": 131.56
+              },
+              {
+                "scenario": "pose",
+                "calls": 2814,
+                "mean_ms": 4.791514231343286,
+                "p99_ms": 7.5668109999999995,
+                "maximum_ms": 11.774635,
+                "deadline_misses": 3,
+                "cpu_seconds": 235.77
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 2814,
+                "mean_ms": 7.037290988272947,
+                "p99_ms": 11.624829,
+                "maximum_ms": 14.362812000000002,
+                "deadline_misses": 71,
+                "cpu_seconds": 310.09000000000003
+              }
+            ]
+          },
+          {
+            "variant": "padded",
+            "repeat": 2,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 2814,
+                "mean_ms": 3.1063312203269264,
+                "p99_ms": 5.150123000000001,
+                "maximum_ms": 9.990047,
+                "deadline_misses": 0,
+                "cpu_seconds": 138.94
+              },
+              {
+                "scenario": "pose",
+                "calls": 2814,
+                "mean_ms": 6.030778754442082,
+                "p99_ms": 8.391495,
+                "maximum_ms": 22.981678,
+                "deadline_misses": 4,
+                "cpu_seconds": 268.33000000000004
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 2814,
+                "mean_ms": 7.0480279132906825,
+                "p99_ms": 11.746535000000002,
+                "maximum_ms": 17.768769,
+                "deadline_misses": 89,
+                "cpu_seconds": 310.2
+              }
+            ]
+          },
+          {
+            "variant": "baseline",
+            "repeat": 2,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 2814,
+                "mean_ms": 3.345416274342584,
+                "p99_ms": 5.4354,
+                "maximum_ms": 11.439313,
+                "deadline_misses": 1,
+                "cpu_seconds": 147.89
+              },
+              {
+                "scenario": "pose",
+                "calls": 2814,
+                "mean_ms": 6.390325614783246,
+                "p99_ms": 8.879976,
+                "maximum_ms": 23.124238,
+                "deadline_misses": 9,
+                "cpu_seconds": 282.98
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 2814,
+                "mean_ms": 7.324333881663085,
+                "p99_ms": 12.374515,
+                "maximum_ms": 19.906411,
+                "deadline_misses": 113,
+                "cpu_seconds": 323.03999999999996
+              }
+            ]
+          },
+          {
+            "variant": "baseline",
+            "repeat": 3,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 2814,
+                "mean_ms": 3.2707315813788242,
+                "p99_ms": 5.376456,
+                "maximum_ms": 11.958257999999999,
+                "deadline_misses": 1,
+                "cpu_seconds": 145.69
+              },
+              {
+                "scenario": "pose",
+                "calls": 2814,
+                "mean_ms": 6.231937294598444,
+                "p99_ms": 8.723719,
+                "maximum_ms": 23.135482999999997,
+                "deadline_misses": 7,
+                "cpu_seconds": 277.6
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 2814,
+                "mean_ms": 7.23793215031982,
+                "p99_ms": 12.014572,
+                "maximum_ms": 16.478627999999997,
+                "deadline_misses": 99,
+                "cpu_seconds": 319.91
+              }
+            ]
+          },
+          {
+            "variant": "padded",
+            "repeat": 3,
+            "scenarios": [
+              {
+                "scenario": "static",
+                "calls": 2814,
+                "mean_ms": 2.971513966595591,
+                "p99_ms": 4.887497,
+                "maximum_ms": 11.169910999999999,
+                "deadline_misses": 1,
+                "cpu_seconds": 133.69
+              },
+              {
+                "scenario": "pose",
+                "calls": 2814,
+                "mean_ms": 5.954667453091697,
+                "p99_ms": 8.161331,
+                "maximum_ms": 17.004669,
+                "deadline_misses": 4,
+                "cpu_seconds": 265.71000000000004
+              },
+              {
+                "scenario": "pose_and_switch",
+                "calls": 2814,
+                "mean_ms": 6.911559355721386,
+                "p99_ms": 11.643237000000001,
+                "maximum_ms": 20.612026,
+                "deadline_misses": 69,
+                "cpu_seconds": 305.69
+              }
+            ]
+          }
+        ],
+        "aggregates": {
+          "static": {
+            "baseline": {
+              "mean_ms": 3.2707315813788242,
+              "p99_ms": 5.376456,
+              "deadline_misses": 2,
+              "calls": 8442
+            },
+            "padded": {
+              "mean_ms": 2.971513966595591,
+              "p99_ms": 4.887497,
+              "deadline_misses": 2,
+              "calls": 8442
+            }
+          },
+          "pose": {
+            "baseline": {
+              "mean_ms": 6.231937294598444,
+              "p99_ms": 8.723719,
+              "deadline_misses": 16,
+              "calls": 8442
+            },
+            "padded": {
+              "mean_ms": 5.954667453091697,
+              "p99_ms": 8.161331,
+              "deadline_misses": 11,
+              "calls": 8442
+            }
+          },
+          "pose_and_switch": {
+            "baseline": {
+              "mean_ms": 7.23793215031982,
+              "p99_ms": 12.014572,
+              "deadline_misses": 224,
+              "calls": 8442
+            },
+            "padded": {
+              "mean_ms": 7.037290988272947,
+              "p99_ms": 11.643237000000001,
+              "deadline_misses": 229,
+              "calls": 8442
+            }
+          }
+        }
+      }
+    },
+    "binary_identity": {
+      "macos": {
+        "baseline": {
+          "path": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/room-v1/filter-target-20261011/baseline-room_bench",
+          "sha256": "0b5905f98d01ef839d7aa01ab264e4a65afbbc88d65918c329fdb1137644856b"
+        },
+        "padded": {
+          "path": "/Users/Sakuzy/code/cpp/MacinRender-ADM-Core/local/room-v1/filter-target-20261011/padded-room_bench",
+          "sha256": "3a69ff821d4f4bc645a5657c96a9e48e9d870ab7045a56897748b21c01d878cc"
+        }
+      },
+      "linux": {
+        "baseline": {
+          "path": "/root/autodl-tmp/mradm-room-validation/filter-target-20261011/baseline-room_bench",
+          "sha256": "e64fa52d684f62885c1c68ba773a1dde43517b41cb4623373ef0fe866d360ba4"
+        },
+        "padded": {
+          "path": "/root/autodl-tmp/mradm-room-validation/filter-target-20261011/padded-room_bench",
+          "sha256": "22ced6faa3c62456bff34b6a0a1550c9188b6f96e9adc8ef5ff93ffa223617d0"
+        }
+      }
+    },
+    "probe_source_sha256": {
+      "rust/crates/mradm-dsp/examples/room_stages.rs": "6b907d047c47269d7cfed08c8f9d3304876f55acb0a67ff4827874576fdd5ba5"
+    },
+    "linux_load_observation": {
+      "affinity": [
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116,
+        117,
+        118,
+        119,
+        120,
+        121,
+        122,
+        123,
+        124,
+        125,
+        126,
+        127
+      ],
+      "load": "21.93 12.55 7.37 16/3533 23968\n",
+      "cpu_stat": "usage_usec 113192435578\nuser_usec 105886334542\nsystem_usec 7306101036\nnr_periods 858785\nnr_throttled 5\nthrottled_usec 177086\n",
+      "cpu_max": "3200000 100000\n",
+      "memory_stat": {
+        "memory.current": "93490200576\n",
+        "memory.max": "128849018880\n"
+      },
+      "processes": [
+        "   PID COMMAND         %CPU PSR",
+        " 23934 baseline-room_b 1492  97",
+        " 23895 NumCalc_far13    100 113",
+        " 23896 NumCalc_self_fa  100 103",
+        " 23897 NumCalc_self_fa  100 125",
+        " 23898 NumCalc_far13    100 116",
+        " 22470 NumCalc_analyti 99.9 114",
+        " 22471 NumCalc_analyti 99.9 110",
+        "   796 supervisord      2.5 105",
+        " 23894 python           0.2 127",
+        "   813 autopanel        0.1 107",
+        " 23783 python           0.1 120"
+      ]
+    },
+    "linux_retest_without_numcalc": {
+      "schema": "mradm.room-target-filter-linux-retest",
+      "version": 1,
+      "environment": {
+        "schema": "mradm.room-interleaved-retest",
+        "version": 1,
+        "utc_start": "2026-10-11T22:56:35.053266+00:00",
+        "workers": 32,
+        "blocks": 2814,
+        "call_frames": 512,
+        "sources": 32,
+        "switch_period_calls": 469,
+        "repeats": 3,
+        "affinity": [
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127
+        ],
+        "cpu_max": "3200000 100000",
+        "room_sha256": "c8e62c00447923135821273aa0131809ec58ffd71696f10ae176be3f8e2f7dce",
+        "binaries": {
+          "baseline": {
+            "path": "/root/autodl-tmp/mradm-room-validation/filter-target-20261011/baseline-room_bench",
+            "sha256": "e64fa52d684f62885c1c68ba773a1dde43517b41cb4623373ef0fe866d360ba4"
+          },
+          "padded": {
+            "path": "/root/autodl-tmp/mradm-room-validation/filter-target-20261011/padded-room_bench",
+            "sha256": "22ced6faa3c62456bff34b6a0a1550c9188b6f96e9adc8ef5ff93ffa223617d0"
+          }
+        },
+        "monitor_interval_seconds": 10,
+        "note": "No stage profiling; a separate parent-side collector samples host counters and other processes once per ten seconds."
+      },
+      "preflight": {
+        "timestamp_utc": "2026-10-11T22:55:22.977918+00:00",
+        "sample_seconds": 1.002979800105095,
+        "affinity": [
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127
+        ],
+        "loadavg": "2.28 1.94 1.49 2/3489 24122",
+        "active_processes": [],
+        "numcalc_processes": [],
+        "cgroup_cpu_cores": 0.031792265404207334,
+        "cpu_max": "3200000 100000",
+        "cpu_stat": {
+          "usage_usec": 133025985157,
+          "user_usec": 125184585911,
+          "system_usec": 7841399245,
+          "nr_periods": 1000588,
+          "nr_throttled": 5,
+          "throttled_usec": 177086
+        },
+        "memory_current_bytes": 3849912320,
+        "verified_binaries": {
+          "baseline": {
+            "path": "/root/autodl-tmp/mradm-room-validation/filter-target-20261011/baseline-room_bench",
+            "sha256": "e64fa52d684f62885c1c68ba773a1dde43517b41cb4623373ef0fe866d360ba4"
+          },
+          "padded": {
+            "path": "/root/autodl-tmp/mradm-room-validation/filter-target-20261011/padded-room_bench",
+            "sha256": "22ced6faa3c62456bff34b6a0a1550c9188b6f96e9adc8ef5ff93ffa223617d0"
+          }
+        },
+        "room_manifest_sha256": "c8e62c00447923135821273aa0131809ec58ffd71696f10ae176be3f8e2f7dce"
+      },
+      "method": {
+        "aggregate": "Median of three run means and median of three per-run P99 values; misses and call counts summed.",
+        "deadline_ms": 10.666666666666666,
+        "no_runtime_source_or_binary_change": true,
+        "other_process_cpu_threshold_cores": 0.15,
+        "profiling_features_enabled": false
+      },
+      "per_run": [
+        {
+          "variant": "baseline",
+          "repeat": 1,
+          "wall_seconds": 46.13109427690506,
+          "rusage_delta": {
+            "ru_utime": 704.606564,
+            "ru_stime": 71.468798,
+            "ru_minflt": 504252,
+            "ru_majflt": 0,
+            "ru_nvcsw": 1307481,
+            "ru_nivcsw": 204390
+          },
+          "cpu_throttle_delta": {
+            "nr_throttled": 0,
+            "throttled_usec": 0
+          },
+          "scenarios": [
+            {
+              "scenario": "static",
+              "calls": 2814,
+              "mean_ms": 3.481936025230981,
+              "p99_ms": 5.619624,
+              "maximum_ms": 12.505086,
+              "deadline_misses": 1,
+              "cpu_seconds": 148.91,
+              "preparation_outside_dsp_seconds": 0.0,
+              "room_switches": 0
+            },
+            {
+              "scenario": "pose",
+              "calls": 2814,
+              "mean_ms": 5.605053997867801,
+              "p99_ms": 8.100759,
+              "maximum_ms": 16.248673,
+              "deadline_misses": 5,
+              "cpu_seconds": 286.15999999999997,
+              "preparation_outside_dsp_seconds": 0.0,
+              "room_switches": 0
+            },
+            {
+              "scenario": "pose_and_switch",
+              "calls": 2814,
+              "mean_ms": 6.382838239161332,
+              "p99_ms": 10.097132,
+              "maximum_ms": 21.891226,
+              "deadline_misses": 13,
+              "cpu_seconds": 330.67,
+              "preparation_outside_dsp_seconds": 0.353023696,
+              "room_switches": 6
+            }
+          ]
+        },
+        {
+          "variant": "padded",
+          "repeat": 1,
+          "wall_seconds": 45.54829731583595,
+          "rusage_delta": {
+            "ru_utime": 692.8425249999999,
+            "ru_stime": 72.18178199999998,
+            "ru_minflt": 482026,
+            "ru_majflt": 0,
+            "ru_nvcsw": 1291491,
+            "ru_nivcsw": 181529
+          },
+          "cpu_throttle_delta": {
+            "nr_throttled": 0,
+            "throttled_usec": 0
+          },
+          "scenarios": [
+            {
+              "scenario": "static",
+              "calls": 2814,
+              "mean_ms": 3.498259555437094,
+              "p99_ms": 5.643148,
+              "maximum_ms": 9.310222999999999,
+              "deadline_misses": 0,
+              "cpu_seconds": 149.39000000000001,
+              "preparation_outside_dsp_seconds": 0.0,
+              "room_switches": 0
+            },
+            {
+              "scenario": "pose",
+              "calls": 2814,
+              "mean_ms": 5.510435954868514,
+              "p99_ms": 7.5896,
+              "maximum_ms": 15.912564,
+              "deadline_misses": 2,
+              "cpu_seconds": 282.34000000000003,
+              "preparation_outside_dsp_seconds": 0.0,
+              "room_switches": 0
+            },
+            {
+              "scenario": "pose_and_switch",
+              "calls": 2814,
+              "mean_ms": 6.234679568585654,
+              "p99_ms": 9.815793,
+              "maximum_ms": 16.391616000000003,
+              "deadline_misses": 9,
+              "cpu_seconds": 322.94000000000005,
+              "preparation_outside_dsp_seconds": 0.382136833,
+              "room_switches": 6
+            }
+          ]
+        },
+        {
+          "variant": "padded",
+          "repeat": 2,
+          "wall_seconds": 45.51609808206558,
+          "rusage_delta": {
+            "ru_utime": 689.9996640000002,
+            "ru_stime": 72.71807900000002,
+            "ru_minflt": 483131,
+            "ru_majflt": 0,
+            "ru_nvcsw": 1297816,
+            "ru_nivcsw": 177753
+          },
+          "cpu_throttle_delta": {
+            "nr_throttled": 0,
+            "throttled_usec": 0
+          },
+          "scenarios": [
+            {
+              "scenario": "static",
+              "calls": 2814,
+              "mean_ms": 3.516360908315566,
+              "p99_ms": 5.502912,
+              "maximum_ms": 10.101478,
+              "deadline_misses": 0,
+              "cpu_seconds": 148.17,
+              "preparation_outside_dsp_seconds": 0.0,
+              "room_switches": 0
+            },
+            {
+              "scenario": "pose",
+              "calls": 2814,
+              "mean_ms": 5.497980703269373,
+              "p99_ms": 7.4466920000000005,
+              "maximum_ms": 19.052737999999998,
+              "deadline_misses": 4,
+              "cpu_seconds": 281.86,
+              "preparation_outside_dsp_seconds": 0.0,
+              "room_switches": 0
+            },
+            {
+              "scenario": "pose_and_switch",
+              "calls": 2814,
+              "mean_ms": 6.238477381663111,
+              "p99_ms": 9.678246999999999,
+              "maximum_ms": 17.048524,
+              "deadline_misses": 8,
+              "cpu_seconds": 322.64,
+              "preparation_outside_dsp_seconds": 0.35529590800000005,
+              "room_switches": 6
+            }
+          ]
+        },
+        {
+          "variant": "baseline",
+          "repeat": 2,
+          "wall_seconds": 46.24337938427925,
+          "rusage_delta": {
+            "ru_utime": 702.3247240000001,
+            "ru_stime": 72.11468599999998,
+            "ru_minflt": 481648,
+            "ru_majflt": 0,
+            "ru_nvcsw": 1308535,
+            "ru_nivcsw": 191935
+          },
+          "cpu_throttle_delta": {
+            "nr_throttled": 0,
+            "throttled_usec": 0
+          },
+          "scenarios": [
+            {
+              "scenario": "static",
+              "calls": 2814,
+              "mean_ms": 3.4842591911869256,
+              "p99_ms": 5.4826299999999994,
+              "maximum_ms": 11.962145,
+              "deadline_misses": 1,
+              "cpu_seconds": 149.35999999999999,
+              "preparation_outside_dsp_seconds": 0.0,
+              "room_switches": 0
+            },
+            {
+              "scenario": "pose",
+              "calls": 2814,
+              "mean_ms": 5.658226890191899,
+              "p99_ms": 7.927060999999999,
+              "maximum_ms": 12.281551,
+              "deadline_misses": 3,
+              "cpu_seconds": 288.48,
+              "preparation_outside_dsp_seconds": 0.0,
+              "room_switches": 0
+            },
+            {
+              "scenario": "pose_and_switch",
+              "calls": 2814,
+              "mean_ms": 6.332743294243061,
+              "p99_ms": 9.593196,
+              "maximum_ms": 19.154731,
+              "deadline_misses": 7,
+              "cpu_seconds": 326.13000000000005,
+              "preparation_outside_dsp_seconds": 0.37336578400000003,
+              "room_switches": 6
+            }
+          ]
+        },
+        {
+          "variant": "baseline",
+          "repeat": 3,
+          "wall_seconds": 46.218421414494514,
+          "rusage_delta": {
+            "ru_utime": 697.7300849999997,
+            "ru_stime": 75.69147100000004,
+            "ru_minflt": 504221,
+            "ru_majflt": 0,
+            "ru_nvcsw": 1305926,
+            "ru_nivcsw": 193948
+          },
+          "cpu_throttle_delta": {
+            "nr_throttled": 0,
+            "throttled_usec": 0
+          },
+          "scenarios": [
+            {
+              "scenario": "static",
+              "calls": 2814,
+              "mean_ms": 3.5443905916844334,
+              "p99_ms": 5.6070649999999995,
+              "maximum_ms": 12.232934,
+              "deadline_misses": 1,
+              "cpu_seconds": 149.57,
+              "preparation_outside_dsp_seconds": 0.0,
+              "room_switches": 0
+            },
+            {
+              "scenario": "pose",
+              "calls": 2814,
+              "mean_ms": 5.620165821961609,
+              "p99_ms": 7.789804,
+              "maximum_ms": 11.712914,
+              "deadline_misses": 1,
+              "cpu_seconds": 287.08,
+              "preparation_outside_dsp_seconds": 0.0,
+              "room_switches": 0
+            },
+            {
+              "scenario": "pose_and_switch",
+              "calls": 2814,
+              "mean_ms": 6.3172428404406515,
+              "p99_ms": 9.846584,
+              "maximum_ms": 15.291401,
+              "deadline_misses": 11,
+              "cpu_seconds": 326.39000000000004,
+              "preparation_outside_dsp_seconds": 0.38233446,
+              "room_switches": 6
+            }
+          ]
+        },
+        {
+          "variant": "padded",
+          "repeat": 3,
+          "wall_seconds": 45.894756868481636,
+          "rusage_delta": {
+            "ru_utime": 691.1848019999998,
+            "ru_stime": 76.037934,
+            "ru_minflt": 503527,
+            "ru_majflt": 0,
+            "ru_nvcsw": 1311739,
+            "ru_nivcsw": 190745
+          },
+          "cpu_throttle_delta": {
+            "nr_throttled": 0,
+            "throttled_usec": 0
+          },
+          "scenarios": [
+            {
+              "scenario": "static",
+              "calls": 2814,
+              "mean_ms": 3.5066721826581455,
+              "p99_ms": 5.47106,
+              "maximum_ms": 11.069750999999998,
+              "deadline_misses": 1,
+              "cpu_seconds": 148.72,
+              "preparation_outside_dsp_seconds": 0.0,
+              "room_switches": 0
+            },
+            {
+              "scenario": "pose",
+              "calls": 2814,
+              "mean_ms": 5.592363229566459,
+              "p99_ms": 7.831790999999999,
+              "maximum_ms": 11.266217000000001,
+              "deadline_misses": 2,
+              "cpu_seconds": 283.87,
+              "preparation_outside_dsp_seconds": 0.0,
+              "room_switches": 0
+            },
+            {
+              "scenario": "pose_and_switch",
+              "calls": 2814,
+              "mean_ms": 6.275794011727077,
+              "p99_ms": 10.036972,
+              "maximum_ms": 13.148382,
+              "deadline_misses": 16,
+              "cpu_seconds": 324.28,
+              "preparation_outside_dsp_seconds": 0.364352501,
+              "room_switches": 6
+            }
+          ]
+        }
+      ],
+      "aggregates": {
+        "static": {
+          "baseline": {
+            "mean_ms": 3.4842591911869256,
+            "p99_ms": 5.6070649999999995,
+            "maximum_ms": 12.505086,
+            "deadline_misses": 3,
+            "calls": 8442
+          },
+          "padded": {
+            "mean_ms": 3.5066721826581455,
+            "p99_ms": 5.502912,
+            "maximum_ms": 11.069750999999998,
+            "deadline_misses": 1,
+            "calls": 8442
+          },
+          "mean_reduction_percent": -0.6432641844760445,
+          "p99_reduction_percent": 1.85753152496001
+        },
+        "pose": {
+          "baseline": {
+            "mean_ms": 5.620165821961609,
+            "p99_ms": 7.927060999999999,
+            "maximum_ms": 16.248673,
+            "deadline_misses": 9,
+            "calls": 8442
+          },
+          "padded": {
+            "mean_ms": 5.510435954868514,
+            "p99_ms": 7.5896,
+            "maximum_ms": 19.052737999999998,
+            "deadline_misses": 8,
+            "calls": 8442
+          },
+          "mean_reduction_percent": 1.9524311304892406,
+          "p99_reduction_percent": 4.257075856991632
+        },
+        "pose_and_switch": {
+          "baseline": {
+            "mean_ms": 6.332743294243061,
+            "p99_ms": 9.846584,
+            "maximum_ms": 21.891226,
+            "deadline_misses": 31,
+            "calls": 8442
+          },
+          "padded": {
+            "mean_ms": 6.238477381663111,
+            "p99_ms": 9.815793,
+            "maximum_ms": 17.048524,
+            "deadline_misses": 33,
+            "calls": 8442
+          },
+          "mean_reduction_percent": 1.4885478251683515,
+          "p99_reduction_percent": 0.3127074323440615
+        }
+      },
+      "paired_mean_reduction_percent": {
+        "static": [
+          -0.4688061494475759,
+          -0.9213355082721364,
+          1.0641719091225355
+        ],
+        "pose": [
+          1.6880844151595964,
+          2.8320919261880517,
+          0.4946934534655112
+        ],
+        "pose_and_switch": [
+          2.321203593515242,
+          1.4885478251683515,
+          0.6561221368321379
+        ]
+      },
+      "load_summary": {
+        "samples": 30,
+        "samples_with_numcalc": 0,
+        "samples_with_other_active_processes": 0,
+        "numcalc_observations": [],
+        "other_active_observations": [],
+        "cgroup_throttle_events": 0,
+        "cgroup_throttled_usec": 0,
+        "scope": "Samples cover visible processes at ten-second intervals; absence of a busy process does not exclude shorter disturbances, host-level scheduling, or frequency changes."
+      },
+      "raw_evidence_sha256": {
+        "environment.json": "ea78f018e316dcd084905ab346120f3a7abaee0be234d929f7da171c494d6421",
+        "summary.json": "ac11899eed97c0acb770baf1a013287fb4b533b4cea2de3f8ec3dba77f138c81",
+        "baseline-1.jsonl": "cd1e69d6c79faf8acd76e2feae825c63dfcfe24df0113c039d4da7bb39c40208",
+        "baseline-2.jsonl": "e87e77c8c9a4dbe4d9fcd21c809de6794d391690b5c921c729301da502fe9386",
+        "baseline-3.jsonl": "914690705b2d046ce9dc9ae1bb656e41762e14e88c09ae0a6fecb8a1edcda1f6",
+        "padded-1.jsonl": "76b1c81077211ff78e6d8dd36dab822785f37e5b3b537dbf431b11a1cb758dc6",
+        "padded-2.jsonl": "65e856df45c15deb09166e4db11e8ec0d1f997f4bd5894d2d3d2e4ab06ca42cf",
+        "padded-3.jsonl": "18cde4d6841d712565252e9679e23540377b500afc86b8b5d68efa81aaa986b4",
+        "baseline-1.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "baseline-2.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "baseline-3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "padded-1.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "padded-2.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "padded-3.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "collector_sha256": "496b6524091b5cbe10ca29cc46314211d58b6bfc268f7cf0360554fb241ec2a7",
+      "local_evidence_directory": "local/room-v1/filter-target-20261011/linux-retest-20261011",
+      "conclusion": {
+        "head_pose_mean_reduction_percent": 1.9524311304892406,
+        "pose_and_switch_mean_reduction_percent": 1.4885478251683515,
+        "all_three_pairs_reduce_pose_and_switch_mean": true,
+        "baseline_deadline_misses": 43,
+        "candidate_deadline_misses": 42,
+        "calls_per_variant": 25326,
+        "zero_deadline_miss_gate_passed": false,
+        "scope": "Small mean-time improvement is supported for this workload. Deadline misses persist without observed NumCalc contention; individual miss causes remain unresolved."
+      }
+    }
+  },
+  "diagnostic_profile": {
+    "feature": "room-profile",
+    "workers": 8,
+    "rows": [
+      {
+        "scenario": "static",
+        "calls": 938,
+        "target_filters": {
+          "calls": 0,
+          "worker_summed_ms": 0.0
+        },
+        "source_response": {
+          "calls": 0,
+          "worker_summed_ms": 0.0
+        },
+        "late_decoder": {
+          "calls": 1876,
+          "worker_summed_ms": 75.51936
+        }
+      },
+      {
+        "scenario": "pose",
+        "calls": 938,
+        "target_filters": {
+          "calls": 90048,
+          "worker_summed_ms": 1237.889471
+        },
+        "source_response": {
+          "calls": 30016,
+          "worker_summed_ms": 5325.689859
+        },
+        "late_decoder": {
+          "calls": 1876,
+          "worker_summed_ms": 177.652247
+        }
+      },
+      {
+        "scenario": "pose_and_switch",
+        "calls": 938,
+        "target_filters": {
+          "calls": 94016,
+          "worker_summed_ms": 1323.34086
+        },
+        "source_response": {
+          "calls": 33216,
+          "worker_summed_ms": 5797.879718
+        },
+        "late_decoder": {
+          "calls": 1876,
+          "worker_summed_ms": 188.380488
+        }
+      }
+    ],
+    "scope": "Cumulative instrumented wall time across threads. TargetFilters includes voice targets and late-decoder targets, so it is not an exclusive fraction of voice work or end-to-end wall time; nested timers are not additive."
+  },
+  "validation": {
+    "native_tests": {
+      "macos": {
+        "debug_test_counts": {
+          "library": 50,
+          "fft_columns": 2,
+          "room": 17,
+          "room_no_alloc": 1,
+          "room_profile_default": 1
+        },
+        "passed": true
+      },
+      "linux": {
+        "debug_test_counts": {
+          "library": 50,
+          "fft_columns": 2,
+          "room": 17,
+          "room_no_alloc": 1,
+          "room_profile_default": 1
+        },
+        "passed": true
+      },
+      "windows": {
+        "debug_test_counts": {
+          "library": 50,
+          "fft_columns": 2,
+          "room": 17,
+          "room_no_alloc": 1,
+          "room_profile_default": 1
+        },
+        "passed": true
+      }
+    },
+    "trace_tests": "room_profile and room_no_alloc with room-trace passed on all three platforms; macOS and Windows CTest room and trace targets passed.",
+    "replay": {
+      "all_three_platforms_complete_manifests_match_previous_baseline": true,
+      "frames_per_case": 163398,
+      "pcm_sha256": {
+        "frozen": "b3a3ec3747db934c995289036c7d65eb0224b0726ffc7b8f74aad62a1ffe453d",
+        "screens": "1f0dfebf5f8a603ce6c06ecfd9ffe76aa999f7c0792a0ad8c6646ca699883910"
+      }
+    },
+    "frozen_brir": {
+      "passed": true,
+      "positions": 28,
+      "maximum_relative_l2": 3.4903576027247285e-05,
+      "threshold": 0.0002
+    },
+    "corrected_acoustics": {
+      "passed": true,
+      "positions": 28,
+      "complete_position_reports_unchanged": true,
+      "maximum_channel_spread_db": 1.9855577169562786
+    },
+    "format_and_diff_check": true,
+    "clippy": "exit 0, ten pre-existing warnings, none added by this change",
+    "macos_release_cli": {
+      "build": "cmake --build --preset release --target mradm --parallel 8",
+      "smoke": "./build/release/mradm backends",
+      "passed": true
+    }
+  },
+  "limitations": [
+    "Stage microbenchmarks do not establish full-render capacity or deadline-tail improvements.",
+    "No new 30-minute device validation; existing zero-deadline-miss acceptance remains unresolved.",
+    "The initial Linux switching median regressed. During the follow-up, six concurrent NumCalc processes each used roughly one core in the same CPU set, and baseline timing rose substantially. Keep all runs; the observation does not establish the cause of individual misses.",
+    "The no-NumCalc retest monitors visible processes at ten-second intervals and observes no other process averaging at least 0.15 CPU core, nor cgroup CPU throttling. It does not exclude shorter disturbances, host-level scheduling or frequency variation; it is not a device or long-duration acceptance run."
+  ],
+  "local_evidence_directory": "local/room-v1/filter-target-20261011",
+  "decision": {
+    "retained": true,
+    "basis": "Repeatable 12.5–17.2% reductions in supported target construction on both platforms; all three longer macOS pairs reduced pose and switching mean times. A subsequent Linux retest without observed NumCalc contention reduced pose and switching median mean times by 1.95% and 1.49%, with all three paired means improving. Numerical and allocation contracts remain verified from the unchanged implementation. Deadline-tail improvement is not established: this retest recorded 43 baseline and 42 candidate misses in 25,326 calls per variant."
+  }
+}

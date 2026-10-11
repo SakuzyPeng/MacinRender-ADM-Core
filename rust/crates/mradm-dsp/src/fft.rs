@@ -59,6 +59,21 @@ impl RealFft {
             .map_err(|_| Error::RenderFailed("Forward FFT failed"))
     }
 
+    /// Transform a prefix followed by positive zeros without an intermediate
+    /// time buffer. The FFT destroys its workspace, so refill the entire suffix
+    /// on every call, including when the preceding prefix was longer.
+    pub(crate) fn forward_padded(&mut self, input: &[f32], output: &mut [Complex32]) -> Result<()> {
+        if input.len() > self.len() || output.len() != self.bins() {
+            return Err(Error::InvalidArgument("FFT buffer length mismatch"));
+        }
+        self.real[..input.len()].copy_from_slice(input);
+        self.real[input.len()..].fill(0.0);
+        crate::diagnostics::f32("10-fft-input.f32", &self.real);
+        self.forward
+            .process_with_scratch(&mut self.real, output, &mut self.scratch)
+            .map_err(|_| Error::RenderFailed("Forward FFT failed"))
+    }
+
     pub fn inverse(&mut self, input: &[Complex32], output: &mut [f32]) -> Result<()> {
         if input.len() != self.bins() || output.len() != self.len() {
             return Err(Error::InvalidArgument("Inverse FFT buffer length mismatch"));
@@ -114,6 +129,48 @@ impl RealFft {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn padded_forward_matches_explicit_zeros_bit_for_bit() {
+        for size in [2, 32, 512, 4096, 8192] {
+            let mut padded = RealFft::new(size).unwrap();
+            let mut reference = RealFft::new(size).unwrap();
+            let input: Vec<_> = (0..size)
+                .map(|i| match i % 7 {
+                    0 => -0.0,
+                    1 => f32::from_bits(1),
+                    _ => ((i * 73 % 127) as f32 - 63.0) / 127.0,
+                })
+                .collect();
+            let before: Vec<_> = input.iter().map(|v| v.to_bits()).collect();
+            let mut actual = vec![Complex32::default(); padded.bins()];
+            let mut expected = actual.clone();
+            // Reuse a destroyed workspace with both increasing and decreasing
+            // support, including an empty prefix and a partial final partition.
+            for count in [size, 1, size / 2, 0, size - 1, size / 2 + 1, 0] {
+                let mut explicit = vec![0.0; size];
+                explicit[..count].copy_from_slice(&input[..count]);
+                reference.forward(&explicit, &mut expected).unwrap();
+                padded.forward_padded(&input[..count], &mut actual).unwrap();
+                for (a, b) in actual.iter().zip(&expected) {
+                    assert_eq!(
+                        (a.re.to_bits(), a.im.to_bits()),
+                        (b.re.to_bits(), b.im.to_bits())
+                    );
+                }
+            }
+            assert_eq!(
+                before,
+                input.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+            );
+            assert!(
+                padded
+                    .forward_padded(&vec![0.0; size + 1], &mut actual)
+                    .is_err()
+            );
+            assert!(padded.forward_padded(&input, &mut actual[1..]).is_err());
+        }
+    }
 
     #[test]
     fn matches_independent_double_dft_and_preserves_input() {

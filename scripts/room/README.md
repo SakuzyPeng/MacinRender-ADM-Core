@@ -91,6 +91,10 @@ Linux 64 位和 macOS 同时记录执行线程 CPU 时间；其它平台的原�
 定位；容量和设备通过结论必须来自无插桩运行。需要内层墙钟细分时，单独使用 `room-profile`。
 
 `room_stages ROOM_JSON [ITERATIONS=2000]` 输出单声源各阶段的平均耗时 JSON。
+版本 2 新增 `supported_direct_target_us` / `supported_early_target_us`：预先生成八个不同头姿的
+完整响应，按实际结构支持长度构建目标；每轮推进卷积时钟，计时只包含目标更新，排除响应生成
+和卷积处理，先预热 32 轮。支持长度另列于 `direct_support_taps` / `early_support_taps`。
+原 `stereo_target_us` 仍保留整条 FIR、同一采样点替换目标的微基准，二者不可混为同一负载。
 `room_bench ROOM_JSON [CALLS=384] [FRAMES=256|512] [SOURCES=1|16|32] [SWITCH_PERIOD_CALLS=0]`
 可指定声源数，缺省遍历三种数量。切换周期为 0 时只切换一次，非零时交替切换两个已准备的房间，
 周期必须容纳预热、过渡和排尾。会话实例的分配与排队耗时单列为

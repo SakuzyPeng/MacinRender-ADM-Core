@@ -127,21 +127,30 @@ impl Uniform {
         {
             return Err(Error::InvalidArgument("Invalid room impulse response"));
         }
+        self.write_validated_filter_support(filters, impulse, support)
+    }
+    // Both callers validate the complete impulse, including values outside its
+    // structural support. Dynamic owns compatible filter slots and performs this
+    // validation before pruning or selecting a target; do not scan it again.
+    fn write_validated_filter_support(
+        &mut self,
+        filters: &mut Filters,
+        impulse: &[f32],
+        support: usize,
+    ) -> Result<()> {
         let bins = self.block + 1;
         filters.used_partitions = support.div_ceil(self.block);
         filters.support = support;
         for channel in 0..filters.channels {
             for part in 0..filters.used_partitions {
-                self.time.fill(0.);
                 let begin = part * self.block;
                 let count = self.block.min(support - begin);
-                self.time[..count].copy_from_slice(
+                let offset = (channel * self.partitions + part) * bins;
+                self.fft.forward_padded(
                     &impulse
                         [channel * filters.taps + begin..channel * filters.taps + begin + count],
-                );
-                let offset = (channel * self.partitions + part) * bins;
-                self.fft
-                    .forward(&self.time, &mut filters.spectrum[offset..offset + bins])?;
+                    &mut filters.spectrum[offset..offset + bins],
+                )?;
             }
         }
         Ok(())
@@ -426,7 +435,7 @@ impl Dynamic {
         };
         let target = &mut self.targets[index];
         self.core
-            .write_filter_support(&mut target.filter, impulse, support)?;
+            .write_validated_filter_support(&mut target.filter, impulse, support)?;
         target.start = self.clock;
         target.cached = false;
         self.last_impulse.copy_from_slice(impulse);
@@ -798,6 +807,65 @@ mod tests {
         }
         sum
     }
+    #[test]
+    fn target_support_reuse_matches_explicit_padding_and_rejects_invalid_input() {
+        const B: usize = super::super::BLOCK;
+        let taps = B * 2 + 13;
+        let impulse = signal(taps * 2, 17);
+        let mut dynamic = Dynamic::new(2, taps).unwrap();
+        let mut reference = RealFft::new(B * 2).unwrap();
+        let mut expected = vec![Complex32::default(); B + 1];
+        for support in [taps, 1, B - 1, B, B + 1, taps - 1, 1] {
+            dynamic.set_target_support(&impulse, support).unwrap();
+            let target = &dynamic.targets[dynamic.order[dynamic.count - 1]];
+            assert_eq!(target.filter.support, support);
+            assert_eq!(target.filter.used_partitions, support.div_ceil(B));
+            for channel in 0..2 {
+                for part in 0..support.div_ceil(B) {
+                    let mut explicit = vec![0.; B * 2];
+                    let count = B.min(support - part * B);
+                    let begin = channel * taps + part * B;
+                    explicit[..count].copy_from_slice(&impulse[begin..begin + count]);
+                    reference.forward(&explicit, &mut expected).unwrap();
+                    let begin = (channel * target.filter.partitions + part) * (B + 1);
+                    for (a, b) in target.filter.spectrum[begin..begin + B + 1]
+                        .iter()
+                        .zip(&expected)
+                    {
+                        assert_eq!(
+                            (a.re.to_bits(), a.im.to_bits()),
+                            (b.re.to_bits(), b.im.to_bits())
+                        );
+                    }
+                }
+            }
+            let mut out = [0.; 2 * B];
+            dynamic.process(&signal(B, support), &mut out).unwrap();
+        }
+        let order = dynamic.order;
+        let count = dynamic.count;
+        let index = order[count - 1];
+        let spectrum = dynamic.targets[index].filter.spectrum.clone();
+        for support in [0, taps + 1] {
+            assert!(dynamic.set_target_support(&impulse, support).is_err());
+        }
+        assert!(dynamic.set_target_support(&impulse[1..], 1).is_err());
+        // Nonfinite values must be rejected even outside structural support.
+        for (at, value) in [(0, f32::INFINITY), (impulse.len() - 1, f32::NAN)] {
+            let mut invalid = impulse.clone();
+            invalid[at] = value;
+            assert!(dynamic.set_target_support(&invalid, 1).is_err());
+        }
+        assert_eq!(dynamic.order, order);
+        assert_eq!(dynamic.count, count);
+        assert_eq!(dynamic.last_impulse, impulse);
+        assert_eq!(dynamic.targets[index].filter.spectrum, spectrum);
+        dynamic.reset();
+        dynamic.set_target_support(&impulse, taps).unwrap();
+        assert_eq!(dynamic.count, 1);
+        assert_eq!(dynamic.targets[dynamic.order[0]].filter.support, taps);
+    }
+
     #[test]
     fn shared_dynamic_history_preserves_stereo_stride_retarget_and_wet_fork() {
         const B: usize = super::super::BLOCK;
